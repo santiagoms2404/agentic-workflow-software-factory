@@ -1,0 +1,10 @@
+{
+  "name": "@awsf/core",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "dependencies": {
+    "@sinclair/typebox": "0.34.14",
+    "yaml": "2.6.1"
+  }
+}

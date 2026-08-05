@@ -1,0 +1,27 @@
+{
+  "name": "awsf",
+  "private": true,
+  "version": "0.0.0",
+  "description": "AWSF — Agentic Workflow Software Factory",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "workspaces": [
+    "core",
+    "dashboard"
+  ],
+  "scripts": {
+    "test": "npm run test:unit && npm run test:contract && npm run test:sim && npm run test:journeys",
+    "test:unit": "node --experimental-strip-types --test \"core/test/unit/**/*.test.ts\"",
+    "test:contract": "node --experimental-strip-types --test \"core/test/contract/**/*.test.ts\"",
+    "test:sim": "node --experimental-strip-types --test \"core/test/simulation/**/*.test.ts\"",
+    "test:journeys": "node --experimental-strip-types --test \"core/test/journeys/**/*.test.ts\"",
+    "typecheck": "tsc --build --noEmit",
+    "lint": "oxlint core dashboard"
+  },
+  "devDependencies": {
+    "typescript": "5.8.2",
+    "vue-tsc": "2.2.0",
+    "oxlint": "0.15.6"
+  }
+}
