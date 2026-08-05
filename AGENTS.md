@@ -33,11 +33,14 @@ not a judgement call. Several are mechanically enforced by meta-tests under
 10. **No runtime artifact, receipt, or manifest file is committed.** Git and the
     journal are the only evidence store; a `*receipt*` or `*manifest*` file
     landing in the repo is a bug. Enforced by the junk-drawer meta-test.
-11. **No commit ever names an agent, model, or AI tool as a co-author or
-    collaborator** — no `Co-Authored-By` trailer for an agent identity, no
-    GitHub collaborator invite for one. The owner is the sole author and sole
-    collaborator of record; a session's own completion metadata (agent name,
-    session id, `built on: <provider>:<model>`) belongs only in the plan's
+11. **No commit ever names an agent, model, or AI tool as author, committer,
+    co-author, or collaborator.** Not `git config user.name`/`user.email` at
+    commit time, not a `Co-Authored-By` trailer, not a GitHub collaborator
+    invite. Every commit's author and committer identity is the owner's own
+    (`Santiago Marin <santiagomarinsuarez@me.com>`), full stop — a session
+    must never let its own default git identity leak into a commit. A
+    session's own completion metadata (agent name, session id,
+    `built on: <provider>:<model>`) belongs only in the plan's
     `<dl>`/Amendments, never in the commit itself. Enforced by the
     no-agent-coauthor meta-test, which scans this repository's own commit
-    history.
+    history (author, committer, and message trailers alike).
