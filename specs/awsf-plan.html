@@ -179,10 +179,10 @@ figcaption { color:var(--muted); font-size:12px; margin-top:10px; font-style:ita
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-08-04</dd>
-        <dt>modified</dt>     <dd>2026-08-04, 2026-08-04</dd>
-        <dt>commits</dt>      <dd>(none — planning artifact; no repository exists yet)</dd>
-        <dt>agent name</dt>   <dd>claude-fable-5</dd>
-        <dt>session id</dt>   <dd>71858fb0-e5b1-4b9f-bf04-cb84958850b3</dd>
+        <dt>modified</dt>     <dd>2026-08-04, 2026-08-04, 2026-08-04</dd>
+        <dt>commits</dt>      <dd>9f917de (initial commit — specs unchanged), d89ea36 (T1 — workspace bootstrap and meta-tests)</dd>
+        <dt>agent name</dt>   <dd>claude-fable-5, claude-sonnet-5</dd>
+        <dt>session id</dt>   <dd>71858fb0-e5b1-4b9f-bf04-cb84958850b3, 3a246bf0-1846-49b8-b0d9-fad750719cdf</dd>
         <dt>back refs</dt>    <dd>../../awsf-architecture-proposal.md (design authority — every decision settled), ../../awsf-planf3-build-prompt.md (build prompt), ../../my-agentic-workflow/ (Source A), ../../super-simple-software-factory/ (Source B, MIT © 2026 IndyDevDan), ../../fusion-harness/ (Source C), ../../super_simple_software_factory_indydevdan_youtube_video_screenshots/ (visual spec, 37 files)</dd>
         <dt>forward refs</dt> <dd>./awsf-plan-build-prompts.md, ./awsf-plan-acceptance.md</dd>
       </dl>
@@ -1369,7 +1369,7 @@ PRAGMA user_version = 1;</code></pre>
 
     <!-- ================= M1 ================= -->
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone M1: Contracts &amp; State</h3>
+      <h3><code class="status">[wip]</code> Milestone M1: Contracts &amp; State</h3>
       <p><em>Exists because every other component depends on transition correctness, and because G1 demands the refusals be provable before anything can spawn.</em> Five tasks. Pure code plus meta-tests; no I/O beyond the config loader reading a YAML file; nothing touches a provider or a process.</p>
       <div class="card rule">
         <h5>Intra-milestone ordering gate (G1)</h5>
@@ -1384,12 +1384,12 @@ PRAGMA user_version = 1;</code></pre>
         <tr><th>Stop when</th><td><code>npm run test:unit</code> passes with every meta-test green and one baseline commit exists. <strong>Do not write any state-machine code — its tests come first, in T4.</strong></td></tr>
       </table>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>git init</code>; set the default branch explicitly; first commit carries this plan and its two companions unchanged</li>
-        <li><code class="status">[]</code> Root <code>package.json</code>: workspaces <code>["core","dashboard"]</code>; <code>"engines": {"node": "&gt;=22.12"}</code>; canonical scripts <code>test</code>, <code>test:unit</code>, <code>test:contract</code>, <code>test:sim</code>, <code>test:journeys</code>, <code>typecheck</code>, <code>lint</code> — the Validation section's interface, created here</li>
-        <li><code class="status">[]</code> Core dependencies exactly <code>@sinclair/typebox</code> + <code>yaml</code>; dashboard exactly <code>vue</code>, <code>vite</code>, <code>@vitejs/plugin-vue</code>, <code>lucide-vue-next</code>; dev exactly <code>typescript</code>, <code>vue-tsc</code>, <code>oxlint</code>; meta-test asserts the allowlist matches both <code>package.json</code> files</li>
-        <li><code class="status">[]</code> Meta-tests: no <code>shell: true</code> anywhere · no <code>node:child_process</code> import outside <code>core/src/execution/transport-broker.ts</code> · no SQLite write outside projector + migrations · <code>state/</code> imports nothing impure · no push/force/auto-delete strings in <code>core/src</code> · no committed runtime artifacts or <code>*receipt*</code>/<code>*manifest*</code> files · no credential patterns in fixtures</li>
-        <li><code class="status">[]</code> <code>AGENTS.md</code>: the ten governing invariants, mutation boundaries, and the rule that no agent session may flip a status marker it did not earn</li>
-        <li><code class="status">[]</code> Advisory LOC budget test (WARNS, never fails): <code>core/src</code> ≈ 6,000–9,000 · workflows ≈ 800 · dashboard ≈ 4,000–5,500 · per-file review threshold 350–450 logical lines</li>
+        <li><code class="status">[x]</code> <code>git init</code>; set the default branch explicitly; first commit carries this plan and its two companions unchanged</li>
+        <li><code class="status">[x]</code> Root <code>package.json</code>: workspaces <code>["core","dashboard"]</code>; <code>"engines": {"node": "&gt;=22.12"}</code>; canonical scripts <code>test</code>, <code>test:unit</code>, <code>test:contract</code>, <code>test:sim</code>, <code>test:journeys</code>, <code>typecheck</code>, <code>lint</code> — the Validation section's interface, created here</li>
+        <li><code class="status">[x]</code> Core dependencies exactly <code>@sinclair/typebox</code> + <code>yaml</code>; dashboard exactly <code>vue</code>, <code>vite</code>, <code>@vitejs/plugin-vue</code>, <code>lucide-vue-next</code>; dev exactly <code>typescript</code>, <code>vue-tsc</code>, <code>oxlint</code>; meta-test asserts the allowlist matches both <code>package.json</code> files</li>
+        <li><code class="status">[x]</code> Meta-tests: no <code>shell: true</code> anywhere · no <code>node:child_process</code> import outside <code>core/src/execution/transport-broker.ts</code> · no SQLite write outside projector + migrations · <code>state/</code> imports nothing impure · no push/force/auto-delete strings in <code>core/src</code> · no committed runtime artifacts or <code>*receipt*</code>/<code>*manifest*</code> files · no credential patterns in fixtures</li>
+        <li><code class="status">[x]</code> <code>AGENTS.md</code>: the ten governing invariants, mutation boundaries, and the rule that no agent session may flip a status marker it did not earn</li>
+        <li><code class="status">[x]</code> Advisory LOC budget test (WARNS, never fails): <code>core/src</code> ≈ 6,000–9,000 · workflows ≈ 800 · dashboard ≈ 4,000–5,500 · per-file review threshold 350–450 logical lines</li>
       </ul>
 
       <h4>2. Configuration schema and loader</h4>
@@ -1973,6 +1973,10 @@ flowchart LR
     <details>
       <summary>2026-08-04 — All nine Questionables resolved (owner review)</summary>
       <p>Owner reviewed the Questionables via the browser review layer and exported a <code>planf3-review v1</code> block recording a verdict for each of Q1–Q9. Every verdict accepted the recommended default as written; none proposed a different option or attached a note. Applied by this agent session: each Questionable's tag changed from <code>OPEN</code>/<code>BLOCKS TASK 1</code> to <code>DECIDED</code> with the chosen option recorded inline, and M0's "owner reviews the Questionables" checklist item was marked <code>[x]</code>. Resolutions: <strong>Q1</strong> ship the <code>agy</code> probe + stub, verify later; <strong>Q2</strong> dashboard in v1 as M7; <strong>Q3</strong> fresh <code>awsf</code> state namespace; <strong>Q4</strong> TypeScript modules under <code>recipes/</code>; <strong>Q5</strong> fusion adapter deferred to v1.1, contract reserved in v1; <strong>Q6</strong> macOS state root at <code>~/Library/Application Support/awsf</code>; <strong>Q7</strong> ship the pricing catalog empty; <strong>Q8</strong> per-machine worktree root outside the repo and state root; <strong>Q9</strong> pattern-reuse the SSSF visualizer with fresh code, attributing any literal ports. Consequence: M0 is now <code>[x]</code> — the architecture is owner-approved and Task 1 (M1) is unblocked with no outstanding gate. Same session as the diagram conversion (claude-fable-5).</p>
+    </details>
+    <details>
+      <summary>2026-08-04 — Milestone 1 / Task 1 complete</summary>
+      <p><code>git init</code> (default branch <code>main</code>); baseline commit <code>9f917de</code> carrying the three specs unchanged. Root <code>package.json</code> (workspaces <code>["core","dashboard"]</code>, engines <code>&gt;=22.12</code>, canonical scripts <code>test</code>/<code>test:unit</code>/<code>test:contract</code>/<code>test:sim</code>/<code>test:journeys</code>/<code>typecheck</code>/<code>lint</code>); dependencies pinned exactly per D2 (core: <code>@sinclair/typebox</code>, <code>yaml</code>; dashboard: <code>vue</code>, <code>vite</code>, <code>@vitejs/plugin-vue</code>, <code>lucide-vue-next</code>; dev: <code>typescript</code>, <code>vue-tsc</code>, <code>oxlint</code>); strict/strip-only-safe <code>tsconfig.json</code>; <code>core/</code> + <code>dashboard/</code> skeleton directories; <code>AGENTS.md</code> with the ten governing invariants; <code>justfile</code>. Added twelve meta-tests under <code>core/test/unit/meta/</code>: dependency allowlist, no-<code>shell:true</code>, <code>child_process</code> fence, SQLite-write fence, <code>state/</code> purity fence, no push/force/auto-delete strings, junk-drawer, no-land-route, no credentials in fixtures, and the advisory LOC budget (warns only). No state-machine code was written — <code>core/src/state/task-machine.ts</code> does not exist. Committed as <code>d89ea36</code>. <code>npm run test:unit</code> is green (12/12); <code>npm run lint</code> is clean; <code>npm run typecheck</code> is not yet clean — <code>node:*</code> built-in type declarations are unavailable without <code>@types/node</code>, which is outside the D2 allowlist, so several test files fail module resolution under <code>tsc</code> even though they run correctly under Node's native type stripping. Flagging this rather than silently adding the dependency; a future task (or an explicit amendment to D2) should decide whether to accept it or scope <code>typecheck</code> around it. Package installation used <code>package-lock.json</code>, which was generated but is not committed by this session (write-protected in this environment). M1 header set to <code>[wip]</code>. built on: claude:sonnet-5.</p>
     </details>
   </section>
 
