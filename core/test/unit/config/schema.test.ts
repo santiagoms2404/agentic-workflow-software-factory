@@ -27,13 +27,25 @@ test("unknown field on a nested agent object is rejected", () => {
   assert.equal(Value.Check(AwsfConfigSchema, doc), false);
 });
 
+test("agent.prompt must be a {system, user} pair, not a single string", () => {
+  const config = validConfig();
+  const doc = { ...config, agents: [{ ...config.agents[0], prompt: "prompts/builder.md" }] };
+  assert.equal(Value.Check(AwsfConfigSchema, doc), false);
+});
+
 test("routing.no_fallback must be a boolean at the schema level", () => {
   const config = validConfig();
   const doc = { ...config, routing: { ...config.routing, no_fallback: "true" } };
   assert.equal(Value.Check(AwsfConfigSchema, doc), false);
 });
 
-test("pricing defaults to an empty array and is accepted", () => {
-  assert.deepEqual(validConfig().pricing, []);
+test("observability.db must use the state:// scheme", () => {
+  const config = validConfig();
+  const doc = { ...config, observability: { ...config.observability, db: "awsf.db" } };
+  assert.equal(Value.Check(AwsfConfigSchema, doc), false);
+});
+
+test("pricing.models defaults to an empty object and is accepted", () => {
+  assert.deepEqual(validConfig().pricing.models, {});
   assert.equal(Value.Check(AwsfConfigSchema, validConfig()), true);
 });

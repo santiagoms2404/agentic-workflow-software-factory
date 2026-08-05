@@ -1,154 +1,120 @@
 # AWSF — the only committed tuning surface.
+# Shaped exactly per specs/awsf-architecture-proposal.md §7.3.5, adapted
+# from its illustrative flat src/ layout to this repo's actual two-workspace
+# File Manifest (core/src/**, dashboard/**).
 # Durable intent: no machine paths, no credentials, no PIDs, no quota fields.
 # Validated by core/src/config/{schema,load}.ts against the awsf/v1 schema.
 
 schema: awsf/v1
 
 project:
-  name: Agentic Workflow Software Factory
-  slug: awsf
+  slug: agentic-workflow-software-factory
+  default_workflow: plan-build-test
 
 runtime:
-  default_workflow: build-review
-  default_tier: 1
-  poll_ms: 2000
+  silence_timeout_seconds: 2700
+  process_grace_seconds: 2
+  max_output_bytes: 67108864
+  max_event_count: 100000
 
 adapters:
-  - id: claude-code
-    kind: claude-code
-    enabled: true
-  - id: pi-codex
-    kind: pi-codex
-    enabled: true
-  - id: antigravity
-    kind: antigravity
-    enabled: false # Q1: ships as a probe returning `blocked` with E_ADAPTER_UNVERIFIED
-  - id: stub
-    kind: stub
-    enabled: true
-  - id: fusion
-    kind: fusion
-    enabled: false # Q5: composite adapter deferred to v1.1; contract reserved now
+  claude:      { kind: claude-code, executable: claude }
+  codex:       { kind: pi-codex, executable: pi, provider: openai-codex }
+  antigravity: { kind: antigravity, executable: agy, enabled: false }
+  stub:        { kind: fixture }
+  fusion:      { kind: composite-fusion, enabled: false }
 
 routing:
+  default_worker: claude
   review: invert-provider
   no_fallback: true
 
 agents:
-  - name: scout
-    model: claude-sonnet-5
-    thinking: low
-    color: "#FBBF24"
-    purpose: Reads the repo and reports what exists, without proposing changes.
-    prompt: prompts/scout.md
-    harness: claude-code
-    tools: []
-    writes: []
   - name: planner
-    model: claude-sonnet-5
-    thinking: medium
+    model: claude:opus
+    thinking: high
     color: "#A78BFA"
-    purpose: Turns a request into goals, steps, acceptance criteria, and risks.
-    prompt: prompts/planner.md
-    harness: claude-code
-    tools: []
+    purpose: Produce an implementable plan with explicit acceptance criteria.
+    prompt: { system: prompts/planner/system.md, user: prompts/planner/user.md }
+    harness: { adapter: claude, continuity: same-session }
+    tools: { profile: readonly, allow: [read, grep, find, ls] }
     writes: []
+
   - name: builder
-    model: claude-sonnet-5
-    thinking: medium
+    model: codex:gpt-5.6-sol
+    thinking: high
     color: "#22D3EE"
-    purpose: Implements the plan's steps and reports the exact commands it ran.
-    prompt: prompts/builder.md
-    harness: claude-code
-    tools: [Read, Write, Edit, Bash]
-    writes: ["**"]
+    purpose: Implement the validated plan in the assigned worktree.
+    prompt: { system: prompts/builder/system.md, user: prompts/builder/user.md }
+    harness: { adapter: codex, continuity: same-session }
+    tools: { profile: managed-worker, allow: [read, grep, find, ls, edit, write, exec] }
+    writes: ["core/src/**", "core/test/**", "dashboard/**", "prompts/**"]
+
   - name: reviewer
-    model: pi-codex-terra
-    thinking: medium
+    model: claude:opus # inverted automatically when the builder runs on claude
+    thinking: high
     color: "#F43F5E"
-    purpose: Reviews the committed candidate diff from the opposite provider.
-    prompt: prompts/reviewer.md
-    harness: pi-codex
-    tools: [Read]
+    purpose: Find concrete defects the deterministic gates do not cover.
+    prompt: { system: prompts/reviewer/system.md, user: prompts/reviewer/user.md }
+    harness: { adapter: claude, continuity: none }
+    tools: { profile: no-tools, allow: [] }
     writes: [] # a reviewer that cannot fix cannot quietly fix
+
   - name: documenter
-    model: claude-sonnet-5
+    model: claude:sonnet
     thinking: low
     color: "#C084FC"
-    purpose: Updates docs to match a landed change; never touches source.
-    prompt: prompts/documenter.md
-    harness: claude-code
-    tools: [Read, Write, Edit]
+    purpose: Update docs to match a landed change; never touch source.
+    prompt: { system: prompts/documenter/system.md, user: prompts/documenter/user.md }
+    harness: { adapter: claude, continuity: same-session }
+    tools: { profile: managed-worker, allow: [read, grep, find, ls, edit, write] }
     writes: ["**/*.md"]
 
+  - name: scout
+    model: claude:sonnet
+    thinking: low
+    color: "#FBBF24"
+    purpose: Read the repo and report what exists, without proposing changes.
+    prompt: { system: prompts/scout/system.md, user: prompts/scout/user.md }
+    harness: { adapter: claude, continuity: none }
+    tools: { profile: readonly, allow: [read, grep, find, ls] }
+    writes: []
+
 workflows:
-  - id: scout
-    enabled: true
-  - id: plan
-    enabled: true
-  - id: build
-    enabled: true
-  - id: plan-build-test
-    enabled: true
-  - id: build-review
-    enabled: true
-  - id: simple-sdlc
-    enabled: true
+  enabled: [scout, plan, build, plan-build-test, build-review, simple-sdlc]
 
 gates:
-  envelope:
-    kind: envelope_valid
-  artifacts:
-    kind: artifacts_exist
-  files_non_empty:
-    kind: files_non_empty
-  json_parses:
-    kind: json_parses
-  diff_matches_claims:
-    kind: diff_matches_claims
-  head_advanced:
-    kind: head_advanced
-  no_protected_paths:
-    kind: no_protected_paths
-  writes_within_globs:
-    kind: writes_within_globs
-  verdict_consistent:
-    kind: verdict_consistent
-  unit_tests:
-    kind: commands_pass
-    argv: ["npm", "run", "test:unit"]
-  typecheck:
-    kind: commands_pass
-    argv: ["npm", "run", "typecheck"]
-  lint:
-    kind: commands_pass
-    argv: ["npm", "run", "lint"]
-  journey:
-    kind: journey_passes
+  test: { argv: [npm, run, test:unit], timeout_seconds: 600 }
+  typecheck: { argv: [npm, run, typecheck], timeout_seconds: 300 }
 
 risk:
-  tier_ceilings:
-    "0": 1
-    "1": 3
-    "2": 5
+  default: T1
+  call_ceiling: { T0: 1, T1: 3, T2: 5 }
+  correction_allowance: { auto: 1, owner: 1 }
   paths:
-    - pattern: "core/src/persistence/**"
-      tier: 2
-    - pattern: "core/src/execution/**"
-      tier: 2
-    - pattern: "core/src/observability/**"
-      tier: 2
-    - pattern: "core/src/policy/**"
-      tier: 2
+    "core/src/execution/**": T2
+    "core/src/policy/**": T2
+    "core/src/state/**": T2
+    "core/src/persistence/**": T2
+    "core/src/observability/**": T2
+    "dashboard/**": T1
 
 policy:
   protected_paths:
-    - AGENTS.md
     - awsf.config.yaml
-    - core/src/state/task-machine.ts
+    - AGENTS.md
+    - core/src/state/**
+    - core/src/policy/**
+    - core/src/observability/migrations/**
     - core/src/execution/transport-broker.ts
+  protected_operations: [credential-access, external-mutation, delete, migration, release-cutover, credit-billed-model]
 
 observability:
-  redaction_level_default: public
+  poll_ms: 500
+  db: state://awsf.db
+  persist_thinking_text: false
 
-pricing: []
+pricing:
+  display_mode: estimated-api-equivalent
+  effective_date: null
+  models: {} # empty by default ⇒ subscription routes render "— subscription"

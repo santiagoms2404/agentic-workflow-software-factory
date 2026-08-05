@@ -19,21 +19,21 @@ test("config_snapshot_json is valid JSON that round-trips to the effective confi
 
 test("defense-in-depth: an absolute path reaching effective-config directly is redacted", () => {
   const config = deepClone(validConfig());
-  config.agents[0]!.prompt = "/etc/awsf/private/builder.md";
+  config.agents[0]!.prompt.system = "/etc/awsf/private/builder/system.md";
   const effective = buildEffectiveConfig(config);
-  assert.equal(effective.agents[0]!.prompt, "[REDACTED]");
+  assert.equal(effective.agents[0]!.prompt.system, "[REDACTED]");
 });
 
 test("defense-in-depth: a credential-shaped value reaching effective-config directly is redacted", () => {
   const config = deepClone(validConfig());
-  config.project.name = "AKIAABCDEFGHIJKLMNOP";
+  config.routing.default_worker = "AKIAABCDEFGHIJKLMNOP";
   const effective = buildEffectiveConfig(config);
-  assert.equal(effective.project.name, "[REDACTED]");
+  assert.equal(effective.routing.default_worker, "[REDACTED]");
 });
 
 test("redaction does not mutate the input config", () => {
   const config = deepClone(validConfig());
-  config.project.name = "AKIAABCDEFGHIJKLMNOP";
+  config.routing.default_worker = "AKIAABCDEFGHIJKLMNOP";
   buildEffectiveConfig(config);
-  assert.equal(config.project.name, "AKIAABCDEFGHIJKLMNOP");
+  assert.equal(config.routing.default_worker, "AKIAABCDEFGHIJKLMNOP");
 });
