@@ -1,5 +1,5 @@
 import { Type, type Static } from "@sinclair/typebox";
-import { phaseEnvelope } from "./envelope-base.ts";
+import { phaseEnvelope, WorktreeRelativePath } from "./envelope-base.ts";
 
 export const PLAN_OUTPUT_SCHEMA_ID = "awsf.plan-output/v1";
 
@@ -13,7 +13,10 @@ export const PlanOutputSchema = phaseEnvelope(
         {
           id: Type.String({ minLength: 1 }),
           title: Type.String({ minLength: 1 }),
-          files: Type.Array(Type.String({ minLength: 1 })),
+          // Proposed paths, which need not exist yet — but they are still
+          // worktree-relative and traversal-free, on the same rule as every
+          // other declared path in every other envelope.
+          files: Type.Array(WorktreeRelativePath),
           acceptanceCriteria: Type.Array(Type.String({ minLength: 1 })),
         },
         { additionalProperties: false },

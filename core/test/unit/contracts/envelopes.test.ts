@@ -121,6 +121,59 @@ test("artifact paths must be worktree-relative, normalized, and traversal-free",
   }
 });
 
+test("every declared path field, in every envelope, obeys the same worktree rule", () => {
+  // Regression guard for a real inconsistency in T3's first pass: scout
+  // findings were strict while review findings and plan step files were bare
+  // strings, so `../../etc/passwd` was rejected in one envelope and accepted
+  // in another. One rule, everywhere.
+  const traversal = "../../etc/passwd";
+
+  const plan = VALID_ENVELOPES["awsf.plan-output/v1"]();
+  plan.implementationSteps = [{ id: "S1", title: "t", files: [traversal], acceptanceCriteria: ["a"] }];
+  assert.equal(Value.Check(ENVELOPE_SCHEMAS["awsf.plan-output/v1"], plan), false);
+
+  const review = VALID_ENVELOPES["awsf.review-output/v1"]();
+  review.findings = [
+    { id: "F1", severity: "high", file: traversal, line: null, title: "t", detail: "d", evidence: "e" },
+  ];
+  assert.equal(Value.Check(ENVELOPE_SCHEMAS["awsf.review-output/v1"], review), false);
+
+  const scout = VALID_ENVELOPES["awsf.scout-output/v1"]();
+  scout.findings = [{ file: traversal, note: "n" }];
+  assert.equal(Value.Check(ENVELOPE_SCHEMAS["awsf.scout-output/v1"], scout), false);
+
+  const build = VALID_ENVELOPES["awsf.build-output/v1"]();
+  build.changedFiles = [traversal];
+  assert.equal(Value.Check(ENVELOPE_SCHEMAS["awsf.build-output/v1"], build), false);
+
+  const doc = VALID_ENVELOPES["awsf.document-output/v1"]();
+  doc.documentedAreas = [{ subject: "s", documentPath: traversal }];
+  assert.equal(Value.Check(ENVELOPE_SCHEMAS["awsf.document-output/v1"], doc), false);
+});
+
+test("the host-owned guard list covers every StoredEnvelope field except the wire's own `schema`", () => {
+  // Keeps the deny list from silently falling behind the wrapper it guards.
+  const storedFields = [
+    "envelopeId",
+    "sessionId",
+    "phaseId",
+    "correctionRound",
+    "agent",
+    "schemaId",
+    "valid",
+    "createdAt",
+    "payload",
+    "violations",
+    "rawOutputPath",
+  ];
+  const guarded = new Set<string>(HOST_OWNED_FIELD_NAMES);
+  // `payload` is the wrapper's container for the wire envelope, not a field a
+  // wire schema could plausibly collide with; everything else must be guarded.
+  for (const field of storedFields.filter((f) => f !== "payload")) {
+    assert.ok(guarded.has(field), `HOST_OWNED_FIELD_NAMES is missing StoredEnvelope field "${field}"`);
+  }
+});
+
 test("artifact kind and producer status are closed sets", () => {
   assert.deepEqual([...ARTIFACT_KINDS], ["source", "test", "plan", "documentation", "report"]);
   assert.deepEqual([...PRODUCER_STATUSES], ["success", "failure"]);

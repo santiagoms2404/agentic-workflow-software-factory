@@ -57,7 +57,15 @@ export const ENVELOPE_BASE_PROPERTIES = {
 export const EnvelopeBaseSchema = Type.Object(ENVELOPE_BASE_PROPERTIES, { additionalProperties: false });
 export type EnvelopeBase = Static<typeof EnvelopeBaseSchema>;
 
-/** Field names the host owns. A wire schema declaring any of these is a wire/stored split violation. */
+/**
+ * Field names the host owns. A wire schema declaring any of these is a
+ * wire/stored split violation.
+ *
+ * Every field of `StoredEnvelope` appears here, in both camel and snake case,
+ * with one deliberate exception: the wire envelope legitimately carries
+ * `schema` (the schema id literal the model must emit). Its stored counterpart
+ * `schemaId` is a distinct name and is listed, so forbidding it costs nothing.
+ */
 export const HOST_OWNED_FIELD_NAMES = [
   "envelopeId",
   "envelope_id",
@@ -67,6 +75,9 @@ export const HOST_OWNED_FIELD_NAMES = [
   "phase_id",
   "correctionRound",
   "correction_round",
+  "agent",
+  "schemaId",
+  "schema_id",
   "valid",
   "violations",
   "createdAt",

@@ -1,5 +1,5 @@
 import { Type, type Static } from "@sinclair/typebox";
-import { phaseEnvelope } from "./envelope-base.ts";
+import { phaseEnvelope, WorktreeRelativePath } from "./envelope-base.ts";
 import { SHA_PATTERN } from "./test-output.ts";
 import { stringUnion, type UnionOf } from "./typebox.ts";
 
@@ -24,7 +24,10 @@ export const ReviewFindingSchema = Type.Object(
   {
     id: Type.String({ minLength: 1 }),
     severity: stringUnion(REVIEW_SEVERITIES),
-    file: Type.String({ minLength: 1 }),
+    // The `verdict_consistent` gate checks that finding paths sit inside the
+    // candidate context; this is the structural floor under that check, and
+    // the same one every other envelope's paths are held to.
+    file: WorktreeRelativePath,
     // null = the finding is about the file as a whole, not one line. Not
     // optional: an absent key would be indistinguishable from a forgotten one.
     line: Type.Union([Type.Integer({ minimum: 1 }), Type.Null()]),
