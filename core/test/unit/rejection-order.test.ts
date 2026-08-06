@@ -262,9 +262,16 @@ test("the order holds across non-adjacent pairs too", async () => {
     {
       label: "7 over 10 — the wrong actor holding only a style note",
       error: "ActorNotPermitted",
-      input: withEvidence("L16", {
-        review: { verdict: "concern", reviewedSha: CANDIDATE_SHA, findings: [styleNote()] },
-      }),
+      // T5 fix: `actor: "host"` was missing. `withEvidence` keeps the L16
+      // fixture's actor, which is `owner` — the one actor L16 permits — so as
+      // written the case carried no actor violation at all and could only ever
+      // have produced the step-10 complaint it is here to outrank.
+      input: {
+        ...withEvidence("L16", {
+          review: { verdict: "concern", reviewedSha: CANDIDATE_SHA, findings: [styleNote()] },
+        }),
+        actor: "host",
+      },
     },
     {
       label: "7 over 11 — the wrong actor at the ceiling",
