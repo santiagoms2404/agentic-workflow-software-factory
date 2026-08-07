@@ -172,3 +172,38 @@ export function openDatabase(path: string, opts: OpenDatabaseOptions = {}): Data
   }
   return db;
 }
+
+/**
+ * `PRAGMA integrity_check`, as the list of problems it found — empty when the
+ * file is sound. A database too broken to answer the question at all reports
+ * the driver's own error as the problem, because "it would not tell us" is
+ * not the same as "it is fine", and a rebuild must never be swapped in on the
+ * strength of a question that failed to run.
+ */
+export function integrityProblems(db: DatabaseSync): string[] {
+  try {
+    const rows = db.prepare("PRAGMA integrity_check").all() as { integrity_check?: string }[];
+    return rows.map((row) => row.integrity_check ?? "").filter((value) => value !== "ok");
+  } catch (err) {
+    return [err instanceof Error ? err.message : String(err)];
+  }
+}
+
+/**
+ * Checkpoints the WAL back into the main file, then closes.
+ *
+ * A rebuild's freshly written candidate is swapped in as ONE file; anything
+ * still sitting in its `-wal` at rename time would be silently dropped. This
+ * is the only correct way to finish writing a database that is about to be
+ * moved.
+ */
+export function closeDatabase(db: DatabaseSync): void {
+  try {
+    db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+  } catch {
+    // A database too corrupt to checkpoint is one we are discarding anyway;
+    // closing it is still correct, and the caller already has the integrity
+    // report that decided its fate.
+  }
+  db.close();
+}

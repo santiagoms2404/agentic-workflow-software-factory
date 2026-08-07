@@ -20,7 +20,20 @@ export interface ProjectionOutcome {
   ok: boolean;
   /** `false` when the record was already applied (idempotent no-op). */
   applied: boolean;
+  /**
+   * The session's observability is degraded — the projection no longer
+   * matches the journal. True on every failure, INCLUDING one so bad that
+   * the flag could not be written into the database itself: a session is
+   * degraded because the projection failed, not because a row says so.
+   */
   degraded: boolean;
+  /**
+   * Whether `sessions.observability_degraded` was actually set. `false` with
+   * `degraded: true` means the database could not even record its own
+   * illness — the caller's journaled notice is then the only durable flag,
+   * and `awsf db rebuild` is the only exit.
+   */
+  flagPersisted: boolean;
   notice?: { code: "sqlite-projection-failed"; message: string; detail: string | null };
 }
 
@@ -180,7 +193,8 @@ export function projectEvent(
       return {
         ok: false,
         applied: false,
-        degraded: false,
+        degraded: true,
+        flagPersisted: false,
         notice: {
           code: "sqlite-projection-failed",
           message: `no session row for ${ctx.sessionId}; cannot project`,
@@ -189,7 +203,7 @@ export function projectEvent(
       };
     }
     if (record.source_seq <= lastSeq) {
-      return { ok: true, applied: false, degraded: false };
+      return { ok: true, applied: false, degraded: false, flagPersisted: false };
     }
 
     db.exec("BEGIN IMMEDIATE");
@@ -204,12 +218,12 @@ export function projectEvent(
       db.exec("ROLLBACK");
       throw err;
     }
-    return { ok: true, applied: true, degraded: false };
+    return { ok: true, applied: true, degraded: false, flagPersisted: false };
   } catch (err) {
-    let degraded = false;
+    let flagPersisted = false;
     try {
       setDegraded(db, ctx.sessionId);
-      degraded = true;
+      flagPersisted = true;
     } catch {
       // Best-effort: if even the degraded flag can't be written, the caller
       // still gets a notice back and the provider still isn't killed.
@@ -217,7 +231,8 @@ export function projectEvent(
     return {
       ok: false,
       applied: false,
-      degraded,
+      degraded: true,
+      flagPersisted,
       notice: {
         code: "sqlite-projection-failed",
         message: `projection failed for session ${ctx.sessionId} at source_seq ${record.source_seq}`,
@@ -225,4 +240,30 @@ export function projectEvent(
       },
     };
   }
+}
+
+/**
+ * Turns a failed projection into the `notice` event the caller journals.
+ *
+ * The journal is the durable flag. A database corrupt enough to swallow its
+ * own `observability_degraded` column cannot hide the failure, because the
+ * record of it is written to the file the database is only a projection of.
+ * Returns `null` for an outcome that carries no notice — a healthy
+ * projection has nothing to say.
+ */
+export function projectionNotice(
+  outcome: ProjectionOutcome,
+  at: { seq: number; runId: string; hostAt: string },
+): NormalizedEvent | null {
+  if (outcome.notice === undefined) return null;
+  return {
+    kind: "notice",
+    seq: at.seq,
+    runId: at.runId,
+    hostAt: at.hostAt,
+    providerAt: null,
+    code: outcome.notice.code,
+    message: outcome.notice.message,
+    detail: outcome.notice.detail,
+  };
 }
