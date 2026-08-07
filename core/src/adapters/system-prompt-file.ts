@@ -16,6 +16,7 @@ import { chmod, mkdtemp, writeFile } from "node:fs/promises";
 import { statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
+import { platform } from "node:process";
 import { AdapterError } from "./interface.ts";
 
 /**
@@ -50,6 +51,22 @@ export function assertPrivateSystemPrompt(adapter: string, path: string): void {
       `the system prompt path must be absolute, got ${JSON.stringify(path)}`,
     );
   }
+  // POSIX mode bits are the mechanism, and Windows does not have them.
+  //
+  // There, `statSync().mode` reflects only the read-only attribute — 0o666, or
+  // 0o444 when read-only — no matter what the ACL says, and `chmod` toggles
+  // that one bit and nothing else. So `(mode & 0o077) !== 0` is unconditionally
+  // true on Windows, and this function would have thrown `E_REDACTION` for
+  // every system prompt including the ones `writeSystemPromptFile` had just
+  // created: no request carrying a system prompt could ever have launched.
+  //
+  // This is a documented CARVE-OUT and not a claim. On Windows the file's
+  // privacy comes from the ACL on the user profile directory it lives in, which
+  // this code neither sets nor reads, and asserting anything stronger would be
+  // a platform claim made from a machine that is not that platform — which the
+  // plan's cross-platform note forbids. Verifying what protection actually
+  // holds there is T27's, per machine.
+  if (platform === "win32") return;
   let mode: number;
   try {
     mode = statSync(path).mode;

@@ -106,30 +106,43 @@ export class ClaudeStreamDecoder {
   decode(line: string, sequencer: EventSequencer): readonly NormalizedEvent[] {
     const text = line.trim();
     if (text.length === 0) return [];
+    // Opened BEFORE the line is parsed, not after. A CLI that fails to
+    // authenticate or to read its own config prints prose to stdout and never
+    // emits a single JSON line, and that run still started — it started and
+    // then went wrong, which is a different thing from never having begun. When
+    // this lived below the parse branches, exactly that case produced a stream
+    // of notices and a terminal with no opening event, and nothing caught it:
+    // `validateEventSequence` checks terminals and tool pairing, not openings.
+    const out = [...this.#ensureStarted(sequencer)];
     let parsed: ClaudeLine;
     try {
       parsed = JSON.parse(text) as ClaudeLine;
     } catch {
       // Never silently discarded: a line the host could not read is a fact
       // about the run, and the trace has to carry it.
-      return sequencer.notice(
-        "non-json-output",
-        "the Claude CLI emitted a line that is not JSON",
-        text.slice(0, 200),
-      );
+      return [
+        ...out,
+        ...sequencer.notice(
+          "non-json-output",
+          "the Claude CLI emitted a line that is not JSON",
+          text.slice(0, 200),
+        ),
+      ];
     }
     if (parsed === null || typeof parsed !== "object") {
-      return sequencer.notice(
-        "non-json-output",
-        "the Claude CLI emitted a bare JSON value",
-        text.slice(0, 200),
-      );
+      return [
+        ...out,
+        ...sequencer.notice(
+          "non-json-output",
+          "the Claude CLI emitted a bare JSON value",
+          text.slice(0, 200),
+        ),
+      ];
     }
     if (typeof parsed.session_id === "string" && parsed.session_id.length > 0) {
       this.#session.sessionId = parsed.session_id;
     }
 
-    const out = [...this.#ensureStarted(sequencer)];
     switch (parsed.type) {
       case "system":
         return [...out, ...this.#system(parsed, sequencer)];
@@ -288,7 +301,22 @@ export class ClaudeStreamDecoder {
         message: `the ${scope} subscription window reports ${status}`,
       }),
     ];
-    if (status === "allowed") return out;
+    // `allowed` is read as a PREFIX, and the difference is a whole phase.
+    //
+    // No exhausted window has ever been captured (`PROVENANCE.md` says so), so
+    // the blocking rule cannot be an enumeration of real statuses. The first
+    // draft blocked on anything that was not the exact string `allowed`, which
+    // fails closed — but in the wrong direction: a warning-class status whose
+    // own name says the request WAS allowed would have killed a healthy run,
+    // and since quota is never a retry, the phase is simply lost.
+    //
+    // Blocking here is not the safety net it looks like. A genuinely exhausted
+    // window fails the API call, and `#result` maps that to the same
+    // `E_QUOTA_EXHAUSTED` from the error text — so the backstop exists either
+    // way, and the only thing the strict comparison bought was false positives.
+    // Anything that does not begin with `allowed` still blocks, which keeps the
+    // unknown-status case failing closed where failing closed is right.
+    if (status.startsWith("allowed")) return out;
     return [
       ...out,
       ...sequencer.fail(
@@ -309,7 +337,16 @@ export class ClaudeStreamDecoder {
    */
   #result(line: ClaudeLine, sequencer: EventSequencer): readonly NormalizedEvent[] {
     const at = providerAt(line);
-    const out = [...sequencer.usage(mapUsage(line.usage), at)];
+    // A terminal carrying NO usage block is a provider that did not report —
+    // which is not the same as a provider whose report could not be read, and
+    // must not be accused of the second. An error result normally carries none
+    // at all, so emitting an empty usage event plus a `malformed-usage` notice
+    // fired on exactly the runs that already had something else wrong with
+    // them: the "train everyone to ignore this notice" outcome `mapUsage`'s own
+    // docstring exists to prevent. A usage block that is present but unreadable
+    // still goes through and still produces the fault.
+    const reported = line.usage !== undefined && line.usage !== null;
+    const out = reported ? [...sequencer.usage(mapUsage(line.usage), at)] : [];
     if (line.is_error !== true) return [...out, ...sequencer.complete(0, at)];
 
     const message = errorMessageOf(line);
@@ -367,18 +404,23 @@ function safeJson(value: unknown): string {
  * `output_tokens` or beside them, and this harness records measured conventions
  * only.
  */
-function mapUsage(usage: Record<string, unknown> | undefined): unknown {
-  if (usage === undefined) return null;
-  const details = usage["output_tokens_details"];
+function mapUsage(usage: unknown): unknown {
+  // Anything that is not an object is forwarded UNTOUCHED so `normalizeUsage`
+  // can report it as unreadable. Mapping it here would read five fields off a
+  // string, get `undefined` five times, and turn a malformed provider report
+  // into five honest-looking nulls with no fault attached.
+  if (usage === null || typeof usage !== "object") return usage;
+  const source = usage as Record<string, unknown>;
+  const details = source["output_tokens_details"];
   const thinking =
     details !== null && typeof details === "object"
       ? (details as Record<string, unknown>)["thinking_tokens"]
       : undefined;
   return {
-    inputTokens: usage["input_tokens"] ?? null,
-    outputTokens: usage["output_tokens"] ?? null,
-    cacheReadTokens: usage["cache_read_input_tokens"] ?? null,
-    cacheWriteTokens: usage["cache_creation_input_tokens"] ?? null,
+    inputTokens: source["input_tokens"] ?? null,
+    outputTokens: source["output_tokens"] ?? null,
+    cacheReadTokens: source["cache_read_input_tokens"] ?? null,
+    cacheWriteTokens: source["cache_creation_input_tokens"] ?? null,
     reasoningTokens: thinking ?? null,
     reasoningRelation: "unknown",
   };
@@ -392,11 +434,26 @@ function mapUsage(usage: Record<string, unknown> | undefined): unknown {
  */
 const QUOTA_SHAPED = /\b(?:usage limit|rate limit|quota)\b|limit reached/i;
 
-/** `resets at 2026-08-08T00:00:00Z`, `reset_at: …` — the shapes that text uses. */
-const RESET_IN_MESSAGE = /reset(?:s| at|_at)?\s*[:=]?\s*([^,;]+)/i;
+/**
+ * `resets at 2026-08-08T00:00:00Z`, `reset at …`, `reset_at: …`, `reset: …`.
+ *
+ * The optional `s` and the optional `at` are SEPARATE groups, and they have to
+ * be. Written as one alternation — `(?:s| at|_at)?` — the engine matches `s`
+ * first on the plural form and the literal `at ` then falls inside the capture,
+ * yielding a `resetAt` of `"at 2026-08-08T00:00:00Z"`. That is a string, so it
+ * satisfies the schema's `minLength: 1` and nothing downstream complains; it is
+ * simply not a timestamp, and anything that tries to `Date.parse` it to
+ * schedule a resume gets `NaN`.
+ */
+const RESET_IN_MESSAGE = /reset(?:s)?(?:\s+at|_at)?\s*[:=]?\s*([^,;]+)/i;
 
-/** `Claude AI usage limit reached|1786147200` — the CLI's own pipe-and-epoch form. */
-const RESET_AS_EPOCH_SUFFIX = /\|\s*(\d{9,13})\s*$/;
+/**
+ * `Claude AI usage limit reached|1786147200` — the CLI's own pipe-and-epoch form.
+ *
+ * Bounded to ten digits so a millisecond epoch cannot match. Thirteen digits
+ * would, and `epochSecondsToIso` would multiply them by a thousand again.
+ */
+const RESET_AS_EPOCH_SUFFIX = /\|\s*(\d{9,10})\s*$/;
 
 function errorMessageOf(line: ClaudeLine): string {
   for (const candidate of [line.error, line.result, line.api_error_status]) {
@@ -425,9 +482,25 @@ function resetFromMessage(message: string): string | null {
   return Number.isInteger(epoch) && epoch > 0 ? epochSecondsToIso(epoch) : raw;
 }
 
-/** `resetsAt` is epoch SECONDS on the wire — milliseconds would land in 1970. */
+/**
+ * `resetsAt` is epoch SECONDS on the wire.
+ *
+ * The range check is the whole point of the function. A value outside it is not
+ * epoch seconds — a millisecond stamp is the obvious way it happens — and
+ * multiplying one by a thousand produces `+058570-10-02T00:00:00.000Z`, a
+ * `resetAt` that is well-formed, confident, and fifty-six thousand years wrong.
+ * The host declines to guess which unit it was handed: an unreported reset is a
+ * gap, while a nonsense one is a lie, and the gap is the honest failure.
+ *
+ * Bounds are 2001-09-09 and 2096-10-02 in seconds — wide enough that no real
+ * reset window is refused, narrow enough that no millisecond stamp survives.
+ */
+const EPOCH_SECONDS_MIN = 1_000_000_000;
+const EPOCH_SECONDS_MAX = 4_000_000_000;
+
 function epochSecondsToIso(value: unknown): string | null {
-  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return null;
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  if (value < EPOCH_SECONDS_MIN || value > EPOCH_SECONDS_MAX) return null;
   const at = new Date(value * 1000);
   return Number.isNaN(at.getTime()) ? null : at.toISOString();
 }

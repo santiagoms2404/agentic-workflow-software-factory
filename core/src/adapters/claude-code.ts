@@ -122,7 +122,26 @@ function permissionArgs(adapter: string, profile: string): readonly string[] {
   }
   switch (profile) {
     case "no-tools":
-      return ["--permission-mode", "dontAsk", "--tools", ""];
+      // The deny list is carried here too, which is a deliberate DEVIATION from
+      // the reviewed `fusion-harness` builder (`launch.ts:72`), where the
+      // no-tools profile passes `--tools ""` alone.
+      //
+      // The reasoning is the one the read-only profile already uses, applied to
+      // the profile that needs it most: `--tools ""` narrows only if the CLI
+      // reads an empty value as "an allowlist with nothing in it" rather than
+      // as "the flag was not set". Confirming that the flags PARSE — which is
+      // all the zero-cost probe did — says nothing about how they GATE, and if
+      // the empty string is ever treated as absent, the strictest profile in
+      // this adapter silently becomes the widest one, `Bash` included. An
+      // explicit deny list costs one argv pair and removes the assumption.
+      return [
+        "--permission-mode",
+        "dontAsk",
+        "--tools",
+        "",
+        "--disallowed-tools",
+        MUTATING_OR_SHELL_TOOLS.join(","),
+      ];
     case "managed-worker":
       return ["--permission-mode", "acceptEdits", "--tools", "Read,Glob,Grep,Bash,Edit,Write"];
     case "readonly":

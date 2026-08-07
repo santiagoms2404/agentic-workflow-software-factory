@@ -9,7 +9,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -149,7 +149,25 @@ test("every tool profile gets the exact flags its ceiling requires", () => {
     "--tools",
     "Read,Glob,Grep,Bash,Edit,Write",
   ]);
-  assert.deepEqual([...flags("no-tools")].slice(-4), ["--permission-mode", "dontAsk", "--tools", ""]);
+  assert.deepEqual([...flags("no-tools")], [
+    "--permission-mode",
+    "dontAsk",
+    "--tools",
+    "",
+    "--disallowed-tools",
+    "Bash,Write,Edit,NotebookEdit",
+  ]);
+});
+
+test("the STRICTEST profile carries the deny list too, and does not rely on `--tools \"\"`", () => {
+  // A deliberate deviation from the reviewed fusion-harness builder, which
+  // passes `--tools ""` alone. Confirming the flags PARSE says nothing about
+  // how they GATE: if an empty value is ever read as "flag not set" rather than
+  // "allowlist with nothing in it", the narrowest profile here silently becomes
+  // the widest, Bash included.
+  const spec = adapter().buildSpec({ ...REQUEST, profile: "no-tools" });
+  const deny = spec.argv[spec.argv.indexOf("--disallowed-tools") + 1] ?? "";
+  assert.deepEqual(deny.split(","), [...MUTATING_OR_SHELL_TOOLS]);
 });
 
 test("a read-only profile denies the mutating tools EXPLICITLY, never by default", () => {
@@ -634,4 +652,126 @@ test("a run whose init names no model does not silently resolve to what was aske
 
 test("the profile vocabulary matches what `awsf.config.yaml` declares", () => {
   assert.deepEqual([...CLAUDE_TOOL_PROFILES], ["readonly", "managed-worker", "no-tools"]);
+});
+
+// ---------------------------------------------------------------------------
+// Regressions. Every case below is a defect that shipped in T13's first pass
+// and that this suite did not catch, because the same session wrote the parser
+// and the tests and so confirmed its own assumptions twice. They are kept as a
+// group rather than scattered, so the shape of what a same-family review misses
+// stays visible.
+// ---------------------------------------------------------------------------
+
+/** Replays literal text as one chunk — for streams no fixture should be invented for. */
+async function replayText(text: string, session?: ClaudeSessionRecord): Promise<NormalizedEvent[]> {
+  const dir = mkdtempSync(join(tmpdir(), "awsf-claude-regress-"));
+  try {
+    const path = join(dir, "stream.jsonl");
+    writeFileSync(path, text);
+    return await replay(path, session === undefined ? {} : { session });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+const INIT_LINE = JSON.stringify({
+  type: "system",
+  subtype: "init",
+  model: "claude-sonnet-5",
+  session_id: "s-regression",
+});
+
+test("a run whose stdout is never JSON still opens — prose is how auth failures arrive", () => {
+  // The CLI prints prose to stdout when it cannot authenticate or cannot read
+  // its own config. That run started and then went wrong, which is a different
+  // fact from never having begun — and `validateEventSequence` checks terminals
+  // and tool pairing, not openings, so nothing else catches a missing one.
+  return replayText("Invalid API key. Please run /login\nnot json either\n").then((events) => {
+    assert.equal(events[0]?.kind, "run.started");
+    assert.equal(only(events, "notice").filter((n) => n.code === "non-json-output").length, 2);
+    assert.deepEqual(validateEventSequence(events), []);
+  });
+});
+
+test("a terminal with no usage block reports no usage — it is not accused of a malformed one", async () => {
+  // An error result normally carries no usage at all. Emitting an all-null
+  // usage event plus `malformed-usage` fired on exactly the runs that already
+  // had something else wrong, which is how a notice gets trained into noise.
+  const events = await replayText(
+    `${INIT_LINE}\n${JSON.stringify({ type: "result", is_error: true, error: "boom" })}\n`,
+  );
+  assert.equal(only(events, "usage").length, 0);
+  assert.equal(only(events, "notice").some((n) => n.code === "malformed-usage"), false);
+  assert.equal(events[events.length - 1]?.kind, "run.failed");
+});
+
+test("a usage block that is present but unreadable still produces its fault", async () => {
+  // The fix above must not turn every malformed report into five silent nulls.
+  const events = await replayText(
+    `${INIT_LINE}\n${JSON.stringify({ type: "result", is_error: false, usage: "lots" })}\n`,
+  );
+  assert.equal(only(events, "notice").some((n) => n.code === "malformed-usage"), true);
+  assert.deepEqual(only(events, "usage")[0]?.usage.inputTokens, null);
+});
+
+test("`resets at <timestamp>` yields a timestamp, not the word `at` glued to one", async () => {
+  // Written as one alternation, `(?:s| at|_at)?` matches the `s` first and the
+  // literal `at ` lands inside the capture. The result passes the schema's
+  // minLength and is simply not parseable as a date by anything downstream.
+  const events = await replayText(
+    `${INIT_LINE}\n${JSON.stringify({
+      type: "result",
+      is_error: true,
+      error: "Claude AI usage limit reached. resets at 2026-08-08T00:00:00Z",
+    })}\n`,
+  );
+  const resetAt = only(events, "quota")[0]?.resetAt ?? "";
+  assert.equal(resetAt, "2026-08-08T00:00:00Z");
+  assert.ok(Number.isFinite(Date.parse(resetAt)), "a resetAt nothing can parse is not a reset time");
+});
+
+test("a millisecond epoch is refused rather than multiplied into the year 58570", async () => {
+  // An unreported reset is a gap; a confident nonsense one is a lie.
+  const events = await replayText(
+    `${INIT_LINE}\n${JSON.stringify({
+      type: "result",
+      is_error: true,
+      error: "usage limit reached|1786147200000",
+    })}\n`,
+  );
+  assert.equal(only(events, "quota")[0]?.resetAt, null);
+  const terminal = events[events.length - 1];
+  assert.equal(terminal?.kind === "run.failed" ? terminal.errorCode : null, "E_QUOTA_EXHAUSTED");
+});
+
+test("a rate-limit status that says the request was ALLOWED does not kill the run", async () => {
+  // Blocking on anything but the exact string `allowed` fails closed in the
+  // wrong direction: quota is never a retry, so a warning-class status costs
+  // the whole phase. Genuine exhaustion still fails the API call, and the
+  // result path maps that to the same code — the backstop exists either way.
+  const events = await replayText(
+    `${INIT_LINE}\n` +
+      `${JSON.stringify({
+        type: "rate_limit_event",
+        rate_limit_info: { status: "allowed_warning", resetsAt: 1786147200, rateLimitType: "five_hour" },
+      })}\n` +
+      `${JSON.stringify({ type: "result", is_error: false, usage: { input_tokens: 1, output_tokens: 1 } })}\n`,
+  );
+  assert.equal(only(events, "quota")[0]?.resetAt, "2026-08-08T00:00:00.000Z");
+  assert.equal(events[events.length - 1]?.kind, "run.completed");
+});
+
+test("a rate-limit status that does NOT say allowed still blocks, with its reset", async () => {
+  // No exhausted window has ever been captured, so unknown statuses must still
+  // fail closed. Only the `allowed`-prefixed ones are exempt.
+  const events = await replayText(
+    `${INIT_LINE}\n` +
+      `${JSON.stringify({
+        type: "rate_limit_event",
+        rate_limit_info: { status: "blocked", resetsAt: 1786147200, rateLimitType: "five_hour" },
+      })}\n`,
+  );
+  const terminal = events[events.length - 1];
+  assert.equal(terminal?.kind === "run.failed" ? terminal.errorCode : null, "E_QUOTA_EXHAUSTED");
+  assert.equal(only(events, "quota")[0]?.resetAt, "2026-08-08T00:00:00.000Z");
 });
