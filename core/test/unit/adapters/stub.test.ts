@@ -22,6 +22,7 @@ import {
   validateEventSequence,
   type NormalizedEvent,
 } from "../../../src/contracts/normalized-events.ts";
+import type { OutputBudgetOptions } from "../../../src/adapters/stream/output-budget.ts";
 
 const PROVIDER_PATH = join(
   import.meta.dirname,
@@ -33,12 +34,13 @@ const PROVIDER_PATH = join(
   "stub-provider.mjs",
 );
 
-function adapterFor(sideEffectPath: string): StubAdapter {
+function adapterFor(sideEffectPath: string, limits?: OutputBudgetOptions): StubAdapter {
   let tick = 0;
   return new StubAdapter({
     providerPath: PROVIDER_PATH,
     sideEffectPath,
     now: () => `2026-08-07T00:00:${String(tick++).padStart(2, "0")}.000Z`,
+    ...(limits === undefined ? {} : { limits }),
   });
 }
 
@@ -165,14 +167,18 @@ test("availability is checked, not asserted", async () => {
 // parse: bytes to events.
 // ---------------------------------------------------------------------------
 
-function transportOf(chunks: readonly (string | Uint8Array)[]): ProcessTransport {
+/** An `Error` in the chunk list is thrown out of the iterator, as a real stream does. */
+function transportOf(chunks: readonly (string | Uint8Array | Error)[]): ProcessTransport {
   const encoder = new TextEncoder();
   return {
     runId: "run-1",
     identity: { pid: 1, pgid: 1, startIdentity: null, startIdentitySource: "test" },
     stdout: {
       async *[Symbol.asyncIterator]() {
-        for (const chunk of chunks) yield typeof chunk === "string" ? encoder.encode(chunk) : chunk;
+        for (const chunk of chunks) {
+          if (chunk instanceof Error) throw chunk;
+          yield typeof chunk === "string" ? encoder.encode(chunk) : chunk;
+        }
       },
     },
     stderr: {
@@ -190,9 +196,14 @@ function transportOf(chunks: readonly (string | Uint8Array)[]): ProcessTransport
   };
 }
 
-async function collect(chunks: readonly (string | Uint8Array)[]): Promise<NormalizedEvent[]> {
+async function collect(
+  chunks: readonly (string | Uint8Array | Error)[],
+  limits?: OutputBudgetOptions,
+): Promise<NormalizedEvent[]> {
   const events: NormalizedEvent[] = [];
-  for await (const event of adapterFor("/tmp/ran.json").parse(transportOf(chunks))) events.push(event);
+  for await (const event of adapterFor("/tmp/ran.json", limits).parse(transportOf(chunks))) {
+    events.push(event);
+  }
   return events;
 }
 
@@ -223,12 +234,17 @@ test("a line split across chunks — mid-code-point included — parses as one l
     'xt","text":"first"}\n',
     full.slice(0, cut),
     full.slice(cut),
+    // The model line is here because `run.completed` requires one: a run that
+    // never names its model fails closed. That rule has its own test below; this
+    // one is about the chunk boundaries and must not accidentally become a
+    // second copy of it.
+    '{"type":"model","model":"stub-model-1"}\n',
     '{"type":"result","exitCode":0}\n',
   ]);
 
   assert.deepEqual(
     events.map((event) => event.kind),
-    ["run.started", "text.delta", "text.delta", "run.completed"],
+    ["run.started", "text.delta", "text.delta", "model.resolved", "run.completed"],
   );
   assert.equal(events[2]?.kind === "text.delta" && events[2].text, "héllo wörld");
 });
@@ -276,4 +292,108 @@ test("a provider error becomes a terminal failure, and the trailing line without
   assert.equal(terminal?.kind, "run.failed");
   assert.match(terminal?.kind === "run.failed" ? terminal.message : "", /overload/);
   assert.deepEqual(validateEventSequence(events), []);
+});
+
+// ---------------------------------------------------------------------------
+// The three stream stages, through a real adapter.
+// ---------------------------------------------------------------------------
+
+test("the `no-model-line` script is what it is for: a run that names no model fails closed", async () => {
+  // The script exists so this rule has a provider that really produces the case.
+  const events = await collect([
+    '{"type":"started","script":"no-model-line"}\n',
+    '{"type":"text","text":"prompt:12"}\n',
+    '{"type":"result","exitCode":0}\n',
+  ]);
+  const terminal = events[events.length - 1];
+  assert.equal(terminal?.kind, "run.failed");
+  assert.equal(terminal?.kind === "run.failed" && terminal.errorCode, "E_MODEL_UNRESOLVED");
+  assert.deepEqual(validateEventSequence(events), []);
+});
+
+test("a `model` line naming nothing does not resolve to a placeholder", async () => {
+  const events = await collect([
+    '{"type":"started","script":"model-line"}\n',
+    '{"type":"model"}\n',
+    '{"type":"result","exitCode":0}\n',
+  ]);
+  const terminal = events[events.length - 1];
+  assert.equal(terminal?.kind === "run.failed" && terminal.errorCode, "E_MODEL_UNRESOLVED");
+});
+
+test("framing reads PAST the output budget, so the terminal is still observable", async () => {
+  // The budget bounds what is emitted; it never bounds what is read. A framer
+  // that stopped at the cap would misreport an over-talkative run as one that
+  // never ended — the exact silent failure this milestone exists to remove.
+  const chatter = Array.from({ length: 40 }, (_, index) => `{"type":"text","text":"line ${index}"}\n`);
+  const events = await collect(
+    [
+      '{"type":"started","script":"success"}\n',
+      '{"type":"model","model":"stub-model-1"}\n',
+      ...chatter,
+      '{"type":"result","exitCode":7}\n',
+    ],
+    { maxEventCount: 8 },
+  );
+
+  const terminal = events[events.length - 1];
+  assert.equal(terminal?.kind, "run.completed");
+  assert.equal(terminal?.kind === "run.completed" && terminal.exitCode, 7);
+  assert.ok(events.length <= 10, `the cap held at ${events.length} events`);
+  const truncated = events.filter((event) => event.kind === "notice" && event.code === "output-truncated");
+  assert.equal(truncated.length, 1, "the run says out loud that it dropped output");
+  assert.deepEqual(validateEventSequence(events), []);
+});
+
+test("a byte budget cuts text on a code point boundary rather than mid-character", async () => {
+  const events = await collect(
+    [
+      '{"type":"started","script":"success"}\n',
+      '{"type":"model","model":"stub-model-1"}\n',
+      '{"type":"text","text":"ab🙂cd"}\n',
+      '{"type":"result","exitCode":0}\n',
+    ],
+    { maxOutputBytes: 6 },
+  );
+  const delta = events.find((event) => event.kind === "text.delta");
+  assert.equal(delta?.kind === "text.delta" && delta.text, "ab🙂");
+  assert.equal(events[events.length - 1]?.kind, "run.completed");
+});
+
+test("a stream that ENDED under an aborted signal was cancelled, not terminal-less", async () => {
+  // Killing a process group closes its pipes cleanly, so a cancelled run reaches
+  // EOF exactly like a provider that stopped talking. Only the host knows which
+  // it was, and it says so with the signal it already holds.
+  const cancelling = new AbortController();
+  cancelling.abort("the owner cancelled the task");
+  const events: NormalizedEvent[] = [];
+  const transport = transportOf(['{"type":"started","script":"timeout"}\n', '{"type":"text","text":"…"}\n']);
+  for await (const event of adapterFor("/tmp/ran.json").parse(transport, cancelling.signal)) {
+    events.push(event);
+  }
+
+  const terminal = events[events.length - 1];
+  assert.equal(terminal?.kind, "run.cancelled");
+  assert.match(terminal?.kind === "run.cancelled" ? terminal.reason : "", /the owner cancelled the task/);
+  assert.deepEqual(validateEventSequence(events), []);
+});
+
+test("a stream that fails mid-run still settles: cancellation and fault are told apart", async () => {
+  const cancelled = new Error("the transport was destroyed");
+  (cancelled as { code?: string }).code = "ERR_STREAM_PREMATURE_CLOSE";
+  const events = await collect([
+    '{"type":"started","script":"success"}\n',
+    '{"type":"model","model":"stub-model-1"}\n',
+    cancelled,
+  ]);
+  assert.equal(events[events.length - 1]?.kind, "run.cancelled");
+  assert.deepEqual(validateEventSequence(events), []);
+
+  const broke = await collect([
+    '{"type":"started","script":"success"}\n',
+    new Error("read ECONNRESET"),
+  ]);
+  const terminal = broke[broke.length - 1];
+  assert.equal(terminal?.kind, "run.failed");
+  assert.equal(terminal?.kind === "run.failed" && terminal.errorCode, "E_BACKEND_FAILURE");
 });

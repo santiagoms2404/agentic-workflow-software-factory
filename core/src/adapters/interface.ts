@@ -161,7 +161,18 @@ export interface HarnessAdapter {
   getModelInfo(model: string): Promise<ModelInfo>;
   /** Pure — descriptor tests assert exact argv without starting anything. */
   buildSpec(request: ModelRequest): ProcessSpec;
-  parse(transport: ProcessTransport): AsyncIterable<NormalizedEvent>;
+  /**
+   * Bytes to normalized events.
+   *
+   * `signal` is how the parser learns that a stream which ended was CANCELLED
+   * rather than merely over. Killing a process group closes its pipes cleanly,
+   * so EOF is all the stream itself can say; only the host that cancelled knows
+   * why, and a run that reported `E_TERMINAL_MISSING` for its own deliberate
+   * cancellation would be reporting a fault where there was a decision. Absent,
+   * a stream that stops without a terminal is a failure — which is the right
+   * default, because that is what it is.
+   */
+  parse(transport: ProcessTransport, signal?: AbortSignal): AsyncIterable<NormalizedEvent>;
   execute(
     request: ModelRequest,
     broker: TransportBroker,
