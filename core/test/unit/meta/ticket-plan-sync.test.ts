@@ -139,12 +139,22 @@ test("ticket state agrees with its milestone's marker", () => {
   assert.deepEqual(offenders, []);
 });
 
+test("every plan task carries a checklist", () => {
+  // Without one, a ticket's state can only be checked against its milestone
+  // marker — a blind spot for any task alone in an unfinished milestone. Nine
+  // tasks were missing one on 2026-08-06; this keeps them from coming back.
+  const barren = planTasks()
+    .filter((t) => t.checklist.length === 0)
+    .map((t) => `task ${t.number} (${t.milestone}) has no checklist to check state against`);
+  assert.deepEqual(barren, []);
+});
+
 test("ticket state agrees with its task's own checklist", () => {
   const byNumber = new Map(planTasks().map((t) => [t.number, t]));
   const offenders: string[] = [];
   for (const ticket of tickets()) {
     const checklist = byNumber.get(ticket.number)?.checklist ?? [];
-    if (checklist.length === 0) continue; // not every task carries one
+    if (checklist.length === 0) continue; // guarded by the test above
     const allChecked = checklist.every((mark) => mark === "x");
     if (allChecked && ticket.state !== "done") {
       offenders.push(`${ticket.id}: every plan checklist box is [x] but ticket is ${ticket.state}`);

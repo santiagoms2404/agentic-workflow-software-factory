@@ -1,4 +1,4 @@
-# Tickets — AWSF T01–T30
+# Tickets — AWSF T01–T34
 
 One file per bounded task, split from
 [`../awsf-plan-build-prompts.md`](../awsf-plan-build-prompts.md) § Section B on 2026-08-06.
@@ -6,20 +6,24 @@ One file per bounded task, split from
 changed no prompt text.
 
 `awsf-plan.html` remains the authority for task content and status. These files exist so the
-thirty tasks become individually addressable, countable, and boardable — the shape a future
-`awsf backlog` (plan Milestone M9, T31–T34) consumes.
+plan's tasks become individually addressable, countable, and boardable — the shape a future
+`awsf backlog` (plan Milestone M9) consumes.
+
+**T01–T30 are v1** (milestones M1–M8). **T31–T34 are M9, post-v1** and must not be started before
+M8 is `[x]` and AWSF is adopted; their prompts were added to § Section B on 2026-08-06 alongside
+the rest.
 
 ## Frontmatter schema
 
 | Field | Type | Source |
 |---|---|---|
-| `id` | `T01`–`T30`, zero-padded | filename; maps to the plan's task number (`T05` = plan task 5) |
+| `id` | `T01`–`T34`, zero-padded | filename; maps to the plan's task number (`T05` = plan task 5) |
 | `title` | string | the Section B heading |
-| `milestone` | `M1`–`M8` | the plan's Milestones & Tasks grouping |
+| `milestone` | `M1`–`M9` | the plan's Milestones & Tasks grouping |
 | `tier` | `0` \| `1` \| `2` | **derived** — see below |
 | `state` | `todo` \| `wip` \| `done` \| `failed` | mirrors the plan's `[]` / `[wip]` / `[x]` / `[f]` markers |
 | `depends_on` | list of ids | the plan's Notes § Critical dependency chain |
-| `workflow` | one of the six recipes | **derived** from `tier` |
+| `workflow` | one of the plan's recipes | **derived** from `tier` |
 
 `tier` is an integer, not `T0`/`T1`/`T2`, because the plan's risk tiers and its task ids would
 otherwise collide (`T1` the tier vs. `T1` the task).
@@ -32,7 +36,8 @@ stated rule rather than read off the plan:
 - **tier 2** — failure is silent by nature, the ticket owns a safety boundary, or it spends live
   quota on a real repository: **T09–T12** (all of M3, which the plan itself marks ⚠), **T17**
   (permission / path / sandbox boundary, gate G4), **T21** (the human landing gate, gate G6),
-  **T29–T30** (the two live pilots).
+  **T29–T30** (the two live pilots), and **T34** (it modifies `awsf land`, the same human gate
+  T21 owns).
 - **tier 1** — every other ticket.
 - **tier 0** — none. Every ticket in this plan writes code or config.
 
@@ -63,19 +68,25 @@ chain grants parallelism:
 
 The plan's status markers are the source of truth. When a task's marker flips in
 `awsf-plan.html`, flip `state:` here in the same commit. As of 2026-08-06: **T01–T05 `done`,
-T06–T30 `todo`.**
+T06–T34 `todo`.**
 
 This is **mechanically enforced** (AGENTS.md invariant 12) by
 `core/test/unit/meta/ticket-plan-sync.test.ts`, which fails the build on drift. The plan carries
 no per-task status marker — only milestone `<h3>` markers and per-task checklists — so `state` is
 checked against both: a task in an `[x]` milestone must be `done`, a task in a `[]` milestone must
-not be, and where a task has its own checklist, all-boxes-`[x]` and `done` must agree. Two tasks
-(T28, T29) carry no checklist in the plan and are checked against their milestone marker alone.
+not be, and where a task has its own checklist, all-boxes-`[x]` and `done` must agree in both
+directions.
 
-The same test asserts each build prompt is byte-identical to its Section B block, so the tickets
-can never fork from the file they were cut from. Ticket coverage is checked as a *contiguous
-prefix* of the plan's tasks: M9's T31–T34 have no tickets yet and are legitimately uncovered;
-adding `T31.md` extends the check to them automatically.
+That second check used to be optional, because nine plan tasks carried no checklist at all
+(T18, T19, T24, T25, T28, T29, T31, T32, T33). All nine were given one on 2026-08-06, derived from
+their existing Outputs/Proves/Stop-when rows, and the test now asserts that **every** plan task
+carries a checklist — so the blind spot cannot reopen by adding a task without one.
+
+The same test asserts each build prompt and title is byte-identical to its Section B block, so the
+tickets can never fork from the file they were cut from. Coverage is checked as a *contiguous
+prefix* of the plan's tasks rather than a fixed count, so adding a task and its ticket extends the
+check with no test edit.
 
 **`title` must be quoted.** Several task titles contain `:` (`Stream layer: LineFramer…`,
-`Pilot 1: a real T1 task`), which YAML reads as a nested mapping. All thirty are double-quoted.
+`Pilot 1: a real T1 task`), which YAML reads as a nested mapping — four tickets shipped unparseable
+before this was caught. Every title is double-quoted.

@@ -179,7 +179,7 @@ figcaption { color:var(--muted); font-size:12px; margin-top:10px; font-style:ita
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-08-04</dd>
-        <dt>modified</dt>     <dd>2026-08-04, 2026-08-04, 2026-08-04, 2026-08-04, 2026-08-04, 2026-08-04, 2026-08-05, 2026-08-06, 2026-08-06, 2026-08-06, 2026-08-06</dd>
+        <dt>modified</dt>     <dd>2026-08-04, 2026-08-04, 2026-08-04, 2026-08-04, 2026-08-04, 2026-08-04, 2026-08-05, 2026-08-06, 2026-08-06, 2026-08-06, 2026-08-06, 2026-08-06</dd>
         <dt>commits</dt>      <dd>f2acbf2 (initial commit — specs unchanged), cd696fa (T1 — workspace bootstrap and meta-tests), 4671e3a (docs — T1 markers/Amendment), 5bf5fbe (T2 — configuration schema and loader), ba02a68 (docs — committed awsf-architecture-proposal.md in-repo), 4853168 (T2 — reconciled config schema/loader with proposal §7.3.5), 80fb83a (docs — T2 reconciliation Amendment), cdb81c7 (docs — AGENTS.md invariant 11, first history rewrite), d1b78e5 (docs — README grounded in the plan and proposal), e1f993d (T3 — envelope and event contracts), e0aa2f6 (T4 — task-machine contract tests, written RED), ea084b8 (chore — lockfile committed), 430f55d (test — credential meta-test extended to the repo root and the lockfile), 0016806 (docs — lockfile addendum in T4's Amendment), eda3032 (T5 — task machine, phase machine, guards, tiers, errors), 98dff1f (docs — Section B split into specs/tickets/, M9, Q10, Amendment), 56942cd (test — ticket/plan sync meta-test, AGENTS.md invariant 12) — <strong>note: the range through <code>cdb81c7</code> was rewritten twice on 2026-08-04 (trailer strip, then author/committer identity fix); these are the current, final hashes, and the ones the prose below refers to</strong></dd>
         <dt>agent name</dt>   <dd>claude-fable-5, claude-sonnet-5, claude-opus-5</dd>
         <dt>session id</dt>   <dd>71858fb0-e5b1-4b9f-bf04-cb84958850b3, 3a246bf0-1846-49b8-b0d9-fad750719cdf, e595b001-0551-4cd7-af37-85d0bc671d67, 08bfc80c-3775-400e-8586-ab058ce64208, 39951fd9-e408-4e64-b2c0-faf002494cb3</dd>
@@ -1650,6 +1650,12 @@ PRAGMA user_version = 1;</code></pre>
         <tr><th>Proves</th><td>Green gates say what they verified; <code>diff_matches_claims</code> is exact set equality including deletions.</td></tr>
         <tr><th>Stop when</th><td>Each gate has positive and negative unit coverage; the three signature negatives pass: undeclared change fails <code>diff_matches_claims</code>, success-with-no-diff fails <code>head_advanced</code>, protected-path touch fails <code>no_protected_paths</code>.</td></tr>
       </table>
+      <ul class="checklist">
+        <li><code class="status">[]</code> All eleven gates in <code>core/src/gates/</code>, each with <strong>positive and negative</strong> unit coverage</li>
+        <li><code class="status">[]</code> <code>GateReport.check()</code> records every check performed, whether or not the gate passed</li>
+        <li><code class="status">[]</code> <code>diff_matches_claims</code> is exact set equality <em>including deletions</em> — an undeclared change fails it (SSSF's one-directional defect, closed)</li>
+        <li><code class="status">[]</code> The other two signature negatives: success-with-no-diff fails <code>head_advanced</code>; a protected-path touch fails <code>no_protected_paths</code></li>
+      </ul>
 
       <h4>19. Phase engine, corrections, and schema injection</h4>
       <table class="taskmeta">
@@ -1658,6 +1664,13 @@ PRAGMA user_version = 1;</code></pre>
         <tr><th>Proves</th><td>The two-tier economics run end to end: same-session corrections cost tokens, escalations cost calls, and the earned-description rule fires at compile time.</td></tr>
         <tr><th>Stop when</th><td>Correction loop resumes the same adapter+provider+model+session (identity asserted); invalid envelopes retained with violations; parse-retry ≤ 2 in-session; correction request carries phase+round, envelope ref, schema violations, gate checks with bounded tails, remaining budget.</td></tr>
       </table>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>core/src/workflow/{compiler, engine, phase, corrections}.ts</code>; the earned-description rule fires at <em>compile</em> time, not runtime</li>
+        <li><code class="status">[]</code> Correction loop resumes the same adapter + provider + model + provider session — identity asserted, never assumed</li>
+        <li><code class="status">[]</code> Parse-retry ≤ 2 in-session; invalid envelopes retained with their violations, never silently repaired</li>
+        <li><code class="status">[]</code> The correction request carries phase + round, previous envelope ref, schema violations, gate checks with bounded output tails, and remaining budget</li>
+        <li><code class="status">[]</code> Two-tier economics end to end: a same-session correction costs tokens and no tier call; an escalation costs a reserved call</li>
+      </ul>
 
       <h4>20. The six recipes and the stub journey, plus Testing Strategy</h4>
       <table class="taskmeta">
@@ -1732,6 +1745,12 @@ PRAGMA user_version = 1;</code></pre>
         <tr><th>Proves</th><td>The <code>IMG_3271</code> grid, faithfully, over AWSF data.</td></tr>
         <tr><th>Stop when</th><td>Cadence 500 ms live / 2 s grid / 5 s idle, exponential backoff on failure, immediate poll on focus; cards collapse to <code>+N more agents</code>; cost chips carry authority; component tests cover the display-correctness rules.</td></tr>
       </table>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>AppShell</code>, <code>TopNav</code>, <code>LiveIndicator</code>, <code>DegradedObservabilityBanner</code>, <code>SessionsGrid</code>/<code>SessionCard</code> with <code>TimeRuler</code>, <code>MiniAgentTimeline</code>, <code>StateChip</code>, <code>PhaseDots</code>, <code>CallBudgetChip</code>, <code>MetricsRow</code></li>
+        <li><code class="status">[]</code> <code>usePolling</code> owns the cadence: 500 ms live · 2 s grid · 5 s idle, exponential backoff on failure, immediate poll on focus</li>
+        <li><code class="status">[]</code> Cards collapse to <code>+N more agents</code> exactly as <code>IMG_3271.PNG</code> shows</li>
+        <li><code class="status">[]</code> Cost chips carry their authority label; component tests cover the display-correctness rules rather than the layout</li>
+      </ul>
 
       <h4>25. Session route — StateRibbon, swimlanes, OwnerGateCard</h4>
       <table class="taskmeta">
@@ -1740,6 +1759,12 @@ PRAGMA user_version = 1;</code></pre>
         <tr><th>Proves</th><td>The two AWSF-only surfaces exist and the swimlane reads like <code>IMG_3271</code>/<code>IMG_3286</code>.</td></tr>
         <tr><th>Stop when</th><td>OwnerGateCard appears only in <code>AWAITING_OWNER</code>, shows diff stat, gates, verdict, exact candidate SHA, and the terminal command — with the prominent note that landing happens in a terminal; ContextMeter renders nothing when the window is unknown.</td></tr>
       </table>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>SessionHeader</code>, <code>StateRibbon</code> (each edge's actor + reason on hover), <code>AgentRoster</code>/<code>AgentCard</code> (<code>ModelBadge</code> with provenance, <code>ContextMeter</code>, <code>SandboxBadge</code>), <code>SwimlaneChart</code>, <code>OwnerGateCard</code></li>
+        <li><code class="status">[]</code> PhaseBlocks labelled by the <em>earned description</em>; gate badges cluster and the commit pill renders on the code lane</li>
+        <li><code class="status">[]</code> <code>OwnerGateCard</code> appears <strong>only</strong> in <code>AWAITING_OWNER</code>, showing diff stat, gate results, verdict, the exact candidate SHA, and the terminal command — with the prominent note that landing happens in a terminal</li>
+        <li><code class="status">[]</code> <code>ContextMeter</code> renders nothing when the window is unknown — never a zero</li>
+      </ul>
 
       <h4>26. Drawer, event log, settings, and accessibility, plus Testing Strategy</h4>
       <table class="taskmeta">
@@ -1782,6 +1807,11 @@ PRAGMA user_version = 1;</code></pre>
         <tr><th>Proves</th><td>Every documented command exists as a real package script — the validation interface cannot drift from the docs.</td></tr>
         <tr><th>Stop when</th><td>A test extracts every <code>npm run</code>/<code>awsf</code>/<code>just</code> command from README + this plan's Validation section and asserts each exists in <code>package.json</code>/the CLI table/justfile.</td></tr>
       </table>
+      <ul class="checklist">
+        <li><code class="status">[]</code> README and install/run docs; <code>justfile</code> targets wrap the canonical npm scripts and are never a second truth</li>
+        <li><code class="status">[]</code> Doc-reconciliation test extracts every <code>npm run</code> / <code>awsf</code> / <code>just</code> command from the README and this plan's Validation section</li>
+        <li><code class="status">[]</code> Every extracted command is asserted to exist in <code>package.json</code>, the CLI table, or the <code>justfile</code> — the validation interface cannot drift from the docs</li>
+      </ul>
 
       <h4>29. Pilot 1 — a real T1 task</h4>
       <table class="taskmeta">
@@ -1790,6 +1820,12 @@ PRAGMA user_version = 1;</code></pre>
         <tr><th>Proves</th><td>The factory does real work within the T1 ceiling (≤ 3 calls), lands only through the human, and counts its own costs.</td></tr>
         <tr><th>Stop when</th><td>Landed via TTY; call count ≤ 3 recorded and categorized; the dashboard showed it live; nothing was deleted.</td></tr>
       </table>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Owner picked a small, easily-reversible real task and named the provider; both recorded before the run</li>
+        <li><code class="status">[]</code> <em>live</em> — landed through <code>awsf land</code> at an interactive TTY; call count ≤ 3, recorded and categorized</li>
+        <li><code class="status">[]</code> <em>live</em> — the dashboard showed the run live, <em>before</em> it completed</li>
+        <li><code class="status">[]</code> <code>records/pilots/pilot-1.md</code> written (task, route, calls by category, tokens, duration, gates, outcome); nothing was deleted</li>
+      </ul>
 
       <h4>30. Pilot 2 — a real T2 task with opposite-provider review, plus Testing Strategy</h4>
       <table class="taskmeta">
@@ -1819,6 +1855,12 @@ PRAGMA user_version = 1;</code></pre>
         <tr><th>Proves</th><td>A ticket is a typed artifact under the same contract discipline as an envelope — not the free-text blob every surveyed prior-art system passes to its agents.</td></tr>
         <tr><th>Stop when</th><td>All thirty existing tickets validate; an invalid ticket is retained with its violations and never silently repaired; a <code>depends_on</code> cycle is rejected at load; no SQLite write appears in the store (the M1 fence test still passes unchanged).</td></tr>
       </table>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>core/src/contracts/ticket.ts</code> — one TypeBox source yielding runtime validator, static type, and JSON Schema emission</li>
+        <li><code class="status">[]</code> <code>core/src/persistence/ticket-store.ts</code> — frontmatter read/write over <code>specs/tickets/*.md</code>, no database of its own</li>
+        <li><code class="status">[]</code> Every existing ticket validates; an invalid ticket is retained with its violations, never silently repaired</li>
+        <li><code class="status">[]</code> <code>depends_on</code> cycles rejected at load; no SQLite write appears in the store (the M1 fence test still passes unchanged)</li>
+      </ul>
 
       <h4>32. The <code>intake</code> recipe and <code>awsf ticket</code></h4>
       <table class="taskmeta">
@@ -1827,6 +1869,13 @@ PRAGMA user_version = 1;</code></pre>
         <tr><th>Proves</th><td>A vague one-line intent becomes a schema-valid ticket without a human writing the acceptance criteria — the one genuinely new capability M9 adds, and the only part of the surveyed prior art that does something v1 cannot.</td></tr>
         <tr><th>Stop when</th><td>Intake output is a validated <code>Ticket</code>; an invalid one is retained with violations; the recipe fits the T0 ceiling (1 call) and is rejected by the compiler if it cannot; the intake agent's <code>writes</code> glob names <code>specs/tickets/**</code> and nothing else — verified by T17's path policy, not by prompt wording; the earned-description rule fires at compile time as it does for the other six.</td></tr>
       </table>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>core/src/workflow/recipes/intake.ts</code> (request → intake, T0) and <code>prompts/intake/{system.md, user.md}</code> with the schema injected at compile time, never handwritten</li>
+        <li><code class="status">[]</code> <code>awsf ticket new | refine | list | show</code></li>
+        <li><code class="status">[]</code> Intake output is a validated <code>Ticket</code>; an invalid one is retained with violations</li>
+        <li><code class="status">[]</code> The intake agent's <code>writes</code> glob names <code>specs/tickets/**</code> and nothing else — verified by T17's path policy, not by prompt wording</li>
+        <li><code class="status">[]</code> The recipe fits the T0 ceiling (1 call) and the compiler rejects it if it cannot; the earned-description rule fires as it does for the other six</li>
+      </ul>
 
       <h4>33. <code>awsf backlog</code> and the board route</h4>
       <table class="taskmeta">
@@ -1835,6 +1884,13 @@ PRAGMA user_version = 1;</code></pre>
         <tr><th>Proves</th><td>"How many tickets are there, which are ready, what will they cost" is answerable at a glance — and answerable <em>read-only</em>, so the glass wall stays a wall.</td></tr>
         <tr><th>Stop when</th><td>The no-land-route meta-test is extended and still green: after <code>/backlog</code> exists, the API route table still contains no landing, approval, retry, cancel, or config-mutation action. CLI and route compute the ready set from one query and two renderers — never two implementations. The projected-cost row carries an authority label under the same three-valued rule as <code>MetricsRow</code>; an unknown projection says <em>partial</em>, never <code>$0.00</code>.</td></tr>
       </table>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>awsf backlog</code> — read-only; counts by state, milestone, and tier, plus the ready set (every <code>depends_on</code> <code>done</code>)</li>
+        <li><code class="status">[]</code> <code>/backlog</code> route with <code>BacklogBoard</code>, <code>TicketCard</code>, <code>BacklogMetricsRow</code>; one new read endpoint, <code>/api/v1/tickets</code></li>
+        <li><code class="status">[]</code> CLI and route compute the ready set from one query and two renderers — never two implementations</li>
+        <li><code class="status">[]</code> The no-land-route meta-test still green: no landing, approval, retry, cancel, or config-mutation action exists after <code>/backlog</code> does</li>
+        <li><code class="status">[]</code> Projected cost carries an authority label under the <code>MetricsRow</code> rule; an unknown projection says <em>partial</em>, never <code>$0.00</code></li>
+      </ul>
 
       <h4>34. Pull-request-shaped landing summary, plus Testing Strategy</h4>
       <table class="taskmeta">
@@ -2121,6 +2177,14 @@ flowchart LR
       <p><strong>One honest limitation, stated rather than papered over.</strong> This plan carries <em>no per-task status marker</em> — only milestone <code>&lt;h3&gt;</code> markers and per-task checklists — so a ticket's <code>state</code> cannot be compared against a per-task marker that does not exist. It is checked against both signals that do: a task inside an <code>[x]</code> milestone must be <code>done</code>, a task inside a <code>[]</code> milestone must not be, and where a task carries its own checklist, all-boxes-<code>[x]</code> and <code>done</code> must agree in both directions. Two tasks (T28, T29) carry no checklist and are therefore checked against their milestone marker alone — a real, bounded blind spot, recorded here rather than hidden behind a green suite.</p>
       <p><strong>A defect the test caught on its first run.</strong> Four ticket titles contain a colon (<code>Stream layer: LineFramer…</code>, <code>Session route: StateRibbon…</code>, <code>Pilot 1: …</code>, <code>Pilot 2: …</code>), which YAML reads as a nested mapping — T12, T25, T29 and T30 shipped in the split commit with <em>frontmatter that did not parse</em>. All thirty titles are now double-quoted. The bug was invisible to the split's own verbatim check, which compared prompt bodies and never parsed the frontmatter it had just written; it surfaced within seconds of the first mechanical read. The <code>planf3</code> skill's step 9 gained the quoting rule and an instruction to parse emitted files before declaring the step done.</p>
       <p><strong>Negative-tested, not merely green.</strong> Flipping T05 from <code>done</code> to <code>todo</code> against an <code>[x]</code> M1 was verified to turn two assertions red with the offending id and both reasons named, then reverted — a sync check nobody has watched fail is decoration. Coverage is deliberately a contiguous prefix rather than a fixed thirty, so M9's T31–T34 are legitimately uncovered today and adding <code>T31.md</code> extends the check to them with no test edit. <code>npm run test:unit</code> is <strong>316/316 green</strong> (was 308; eight new), <code>npm run lint</code> clean. No production code was touched. built on: claude:opus-5.</p>
+    </details>
+    <details>
+      <summary>2026-08-06 — Checklists for nine tasks, M9 tickets, and the sync test's two blind spots closed</summary>
+      <p><strong>A miscount corrected first, because it changed the size of the work.</strong> The prior Amendment recorded the checklist blind spot as covering "two tasks (T28, T29)". That was inferred from reading one milestone closely and generalizing, not from measuring. Measured, <strong>nine</strong> tasks carried no checklist at all: T18, T19, T24, T25, T28, T29 in v1, plus M9's T31, T32, T33. Six v1 tasks were therefore checked against their milestone marker alone, not two — a materially larger hole than recorded, and the honest number is written here rather than quietly fixed.</p>
+      <p><strong>All nine now carry one.</strong> Each checklist is derived strictly from that task's existing <em>Outputs</em>, <em>Proves</em>, and <em>Stop when</em> rows — nothing invented, nothing added to a task's scope, every box <code>[]</code> because none of these tasks has been started. Two examples of the derivation: T18's four boxes restate its three named signature negatives plus the <code>GateReport.check()</code> rule from the Envelope &amp; Gate Contract; T29's four restate its recorded-provider entry condition, its ≤ 3 call ceiling, its live-dashboard requirement, and its pilot record. The plan gained no new commitments — only a mechanically checkable statement of the ones it already made.</p>
+      <p><strong>The sync test now asserts the property rather than tolerating its absence.</strong> A ninth assertion, <em>every plan task carries a checklist</em>, makes the blind spot structurally unreopenable: a future task added without one fails the suite immediately, instead of silently degrading its ticket to milestone-level checking. Both new behaviours were negative-tested before being trusted — stripping T28's checklist turns the new assertion red naming the task, and removing <code>T33.md</code> turns the coverage and <code>depends_on</code> assertions red — because an assertion nobody has watched fail is decoration.</p>
+      <p><strong>M9's four tasks now have prompts and tickets.</strong> Coverage was a contiguous prefix ending at T30, so M9's T31–T34 sat legitimately unchecked. § Section B gained four task prompts in the established format and § Section A gained an M9 milestone prompt (nine now, was eight); the file's own counts moved to thirty-four. Tickets <code>T31.md</code>–<code>T34.md</code> follow the same derivation rules as the first thirty, with <code>state: todo</code> against an <code>[]</code> M9 and <code>tier: 2</code> on T34 alone, because T34 modifies <code>awsf land</code> — the same human gate T21 owns, and the one place in M9 where a careless diff could weaken the largest invariant in the plan. Every prompt carries the post-v1 warning inline: not before M8 is <code>[x]</code>.</p>
+      <p><strong>Results.</strong> <code>npm run test:unit</code> is <strong>317/317 green</strong> (was 316; one new assertion), <code>npm run lint</code> clean. Thirty-four tickets, thirty-four plan tasks, zero tasks without a checklist, zero blind spots in the sync check. No production code was touched and no v1 invariant moved. built on: claude:opus-5.</p>
     </details>
   </section>
 

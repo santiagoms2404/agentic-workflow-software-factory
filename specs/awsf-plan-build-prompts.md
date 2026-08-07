@@ -4,8 +4,8 @@ Companion to [`awsf-plan.html`](./awsf-plan.html). Created 2026-08-04 by claude-
 
 Each prompt below is **self-contained** and written for a **fresh session with no prior context**. Copy one, paste it, let it run to completion, clear context, move to the next.
 
-- **Section A — Milestone prompts (8).** One per implementation milestone (M1–M8). Use these if you are driving a whole milestone in one session.
-- **Section B — Task prompts (30).** One per bounded task. This honours the plan's own rule — *one worker, one task, one fresh session, a bounded diff* — and **this is the recommended path.**
+- **Section A — Milestone prompts (9).** One per implementation milestone (M1–M9; M9 is post-v1). Use these if you are driving a whole milestone in one session.
+- **Section B — Task prompts (34).** One per bounded task. This honours the plan's own rule — *one worker, one task, one fresh session, a bounded diff* — and **this is the recommended path.**
 
 Do not run both for the same work. Pick a granularity and stay with it.
 
@@ -515,9 +515,51 @@ adopted only when the plan's Validation section is fully checked.
 
 ---
 
+## M9 — Work Intake (T31–T34) — POST-v1
+
+```
+[CHOOSE YOUR PROVIDER — pick by live quota; see "Model selection" for the grounding]
+  CLAUDE  claude:sonnet · /effort medium   (T34 touches the landing path — use high)
+  GPT     codex:gpt-5.6-terra · reasoning medium
+  SHAPE   contract-plus-CRUD over machinery that already exists — LEVEL. The hard
+          parts (path policy, no-land-route, cost authority) were built and tested
+          in M5/M6/M7 and are reused here, not re-derived.
+  WHY     the risk is not difficulty, it is scope: every task here is one small
+          addition that must not weaken an invariant M1–M8 spent nine milestones
+          establishing.
+  NOTE    POST-v1. Do not start M9 before M8 is [x] and AWSF is adopted. Nothing in
+          this milestone may add a push path, a daemon, or a dashboard write route.
+
+Implement Milestone M9 of specs/awsf-plan.html — "Work Intake", Tasks T31–T34.
+
+READ FIRST: specs/awsf-plan.html — the M9 block, "Envelope & Gate Contract" (the
+one-source rule the Ticket contract follows), Q10 IN FULL, "Explicitly Not Built";
+specs/tickets/README.md (the corpus and its derivation rules); AGENTS.md
+invariant 12.
+
+ENTRY: M8 is [x] and AWSF is adopted. Verify npm test green.
+
+LOCKED: Q10 (no publish/push path in v1 — the contract is reserved, not built),
+D6 (no dashboard write route), D11 (host owns Git; landing is local FF only),
+invariant 12 (tickets and plan never disagree).
+
+DELIVERABLES: T31 Ticket contract + file-backed store, T32 the intake recipe +
+awsf ticket, T33 awsf backlog + the read-only /backlog route, T34 the
+pull-request-shaped landing summary.
+
+DEFINITION OF DONE:
+  every ticket in specs/tickets/ validates · the no-land-route meta-test green
+  WITH /backlog present · the M1 no-push string scan passes UNCHANGED ·
+  ticket-plan-sync green · npm test green · git status --porcelain clean
+
+STOP WHEN the M9 checklist is green. Flip markers, metadata, Amendment.
+```
+
+---
+
 # Section B — Task prompts (recommended)
 
-Thirty prompts, one per bounded task — the granularity the plan is designed around. Every prompt assumes the shared **Conventions** above (marker discipline, completion metadata, never-do list, cross-platform note, fixture integrity, cross-building). Each prompt names the same **read-first set** unless it says otherwise:
+Thirty-four prompts, one per bounded task — the granularity the plan is designed around. T31–T34 are M9, post-v1: do not start them before M8 is `[x]`. Every prompt assumes the shared **Conventions** above (marker discipline, completion metadata, never-do list, cross-platform note, fixture integrity, cross-building). Each prompt names the same **read-first set** unless it says otherwise:
 
 > `specs/awsf-plan.html` (this task's block IN FULL, plus "The Lifecycle Contract" and the contract section the task implements), `specs/awsf-plan-acceptance.md` (rows tagged with this task's milestone), `AGENTS.md` once it exists, and the existing `core/src`.
 
@@ -1343,4 +1385,121 @@ are green; calls ≤ 5; review provider provably inverse of worker in the record
 Flip T30 + the M8 header; metadata + Amendment. AWSF is adopted.
 ```
 
+### T31 — Ticket contract and file-backed store
 
+```
+[CHOOSE YOUR PROVIDER — pick by live quota]
+  CLAUDE  claude:sonnet · /effort medium
+  GPT     codex:gpt-5.6-terra · reasoning medium
+  SHAPE   schema authoring against an existing corpus — LEVEL.
+  WHY     the shape is already fixed by thirty real files; the work is encoding it
+          once so validator, type, and JSON Schema cannot drift apart.
+
+Task T31 of specs/awsf-plan.html (M9). Read the T31 block, "Envelope & Gate
+Contract" (the one-source rule), and specs/tickets/README.md.
+
+ENTRY: M8 is [x]. specs/tickets/ holds the corpus.
+
+DO: core/src/contracts/ticket.ts — TypeBox Ticket (id, title, milestone, tier,
+state, depends_on, workflow, outcome, context, acceptance, non_goals) yielding
+runtime validator + static type + JSON Schema from ONE source ·
+core/src/persistence/ticket-store.ts — frontmatter read/write, no database.
+
+DO NOT give the store a SQLite table, a cache, or an index — the files are the
+store. DO NOT repair an invalid ticket silently.
+
+DONE WHEN: every ticket in specs/tickets/ validates · invalid tickets retained with
+violations · depends_on cycles rejected at load · the sqlite-write fence and
+ticket-plan-sync meta-tests still green. Flip T31; metadata + Amendment.
+```
+
+### T32 — The intake recipe and awsf ticket
+
+```
+[CHOOSE YOUR PROVIDER — pick by live quota]
+  CLAUDE  claude:opus · /effort medium
+  GPT     codex:gpt-5.6-sol · reasoning medium
+  SHAPE   prompt and recipe design with a write boundary — CLAUDE-FAVOURED slightly;
+          the judgement is in what a good ticket contains, not in the plumbing.
+  WHY     this is the first agent AWSF runs that writes into its OWN repository, so
+          its writes glob is the entire safety argument.
+
+Task T32 of specs/awsf-plan.html (M9). Read the T32 block, "The Phase Contract",
+and T17's path policy.
+
+ENTRY: T31 is [x].
+
+DO: core/src/workflow/recipes/intake.ts (request → intake, T0) ·
+prompts/intake/{system.md, user.md} with the JSON Schema injected at compile time ·
+awsf ticket new | refine | list | show.
+
+DO NOT hand-write the schema into the prompt (the no-handwritten-schema meta-test
+bites). DO NOT give the intake agent a writes glob beyond specs/tickets/**.
+
+DONE WHEN: intake output is a validated Ticket · invalid retained with violations ·
+the writes glob is specs/tickets/** and nothing else, proven by T17's path policy
+rather than by prompt wording · the recipe fits the T0 ceiling and the compiler
+rejects it if it cannot · the earned-description rule fires. Flip T32; metadata +
+Amendment.
+```
+
+### T33 — awsf backlog and the board route
+
+```
+[CHOOSE YOUR PROVIDER — pick by live quota]
+  CLAUDE  claude:sonnet · /effort medium
+  GPT     codex:gpt-5.6-terra · reasoning medium
+  SHAPE   one read endpoint plus one Vue route against a fixed component contract —
+          LEVEL.
+  WHY     the only trap is scope: a board invites buttons, and this one may not have
+          a single one.
+
+Task T33 of specs/awsf-plan.html (M9). Read the T33 block, the Visual Design
+Contract's two M9-reserved component rows, and T23's route table.
+
+ENTRY: T32 is [x].
+
+DO: awsf backlog (read-only; counts by state/milestone/tier plus the ready set) ·
+GET /api/v1/tickets · the /backlog route with BacklogBoard, TicketCard,
+BacklogMetricsRow · extend the no-land-route meta-test to cover the new surface.
+
+DO NOT add any write endpoint, action, or button. DO NOT compute the ready set
+twice — one query, two renderers.
+
+DONE WHEN: CLI and route report identical counts and identical ready sets ·
+no-land-route meta-test green WITH /backlog present · projected cost carries its
+authority label and says partial when mixed, never $0.00. Flip T33; metadata +
+Amendment.
+```
+
+### T34 — Pull-request-shaped landing summary
+
+```
+[CHOOSE YOUR PROVIDER — pick by live quota]
+  CLAUDE  claude:opus · /effort high
+  GPT     codex:gpt-5.6-sol · reasoning high
+  SHAPE   a small change to the most safety-bearing command in the system —
+          CLAUDE-FAVOURED.
+  WHY     awsf land is the human gate. The diff is tiny; the invariant it must not
+          break is the largest one in the plan.
+  NOTE    Q10 is DECIDED: no push, no remote, no network. If the implementation
+          reaches for a remote, it has misread the task.
+
+Task T34 of specs/awsf-plan.html (M9). Read the T34 block, Q10 IN FULL,
+"Explicitly Not Built", and T21's landing implementation.
+
+ENTRY: T33 is [x].
+
+DO: awsf land additionally writes landing-summary.md into the attempt directory —
+Problem · Changes · Verification · Risks — rendered on the OwnerGateCard · plus the
+M9 Testing Strategy checklist.
+
+DO NOT add a push, remote, fetch, or network call of any kind. DO NOT make the
+summary a gate: it is a record, and failing to write it must never block a landing
+the human already approved.
+
+DONE WHEN: the M9 checklist is green · the M1 no-push/no-destructive-paths string
+scan passes UNCHANGED · the journey test (vague intent → ticket → ready → stub run)
+passes on the stub adapter with zero spend. Flip T34 + the M9 header; metadata +
+Amendment.
+```
