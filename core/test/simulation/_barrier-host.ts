@@ -18,7 +18,7 @@ import { join } from "node:path";
 import { StubAdapter, type StubScript } from "../../src/adapters/stub.ts";
 import { CallBudget } from "../../src/execution/call-budget.ts";
 import { ProcessTransportBroker } from "../../src/execution/transport-broker.ts";
-import { groupMembers } from "../../src/execution/platform/posix.ts";
+import { groupMembers } from "../../src/execution/process-controller.ts";
 import {
   RegistrationFailed,
   type BarrierRecord,
@@ -119,7 +119,7 @@ try {
       const named = event.kind === "notice" && event.detail !== null && event.detail.includes("grandchild");
       if (named) break;
     }
-    const members = groupMembers(transport.identity.pgid);
+    const members = groupMembers(transport.identity);
     const cancellation = await transport.cancel("simulation complete");
     await journal.close();
     finish({

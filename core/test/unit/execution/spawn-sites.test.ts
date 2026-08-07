@@ -24,7 +24,7 @@ import {
   groupMembers,
   observeIdentity,
   terminateGroup,
-} from "../../../src/execution/platform/posix.ts";
+} from "../../../src/execution/process-controller.ts";
 import type { ProcessRegistration, ProcessSpec } from "../../../src/adapters/interface.ts";
 import { CallBudget } from "../../../src/execution/call-budget.ts";
 
@@ -286,7 +286,8 @@ test("a non-executable file and a relative path are both refused", () => {
 test("enumeration reports real members, and this process is one of them", { skip: process.platform !== "linux" }, () => {
   const self = observeIdentity(process.pid);
   assert.notEqual(self, null);
-  assert.ok(groupMembers(self?.pgid ?? 0).includes(process.pid));
+  if (self === null) return;
+  assert.ok(groupMembers(self).includes(process.pid));
   assert.equal(observeIdentity(2_147_483_640), null, "an unused pid has no identity to report");
 });
 

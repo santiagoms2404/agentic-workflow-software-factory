@@ -17,7 +17,7 @@
 // point — a rejection that arrives after `spawn()` has already returned has
 // already failed.
 
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { accessSync, constants } from "node:fs";
 import { delimiter, isAbsolute, join } from "node:path";
 import { IllegalSpawnSite } from "../state/errors.ts";
@@ -37,7 +37,12 @@ import {
   type ProcessIdentity,
   type ReservationLedger,
 } from "./launcher-barrier.ts";
-import { terminateGroup, type TerminateOptions } from "./platform/posix.ts";
+import {
+  ProcessController,
+  createHostPort,
+  type CommandResult,
+  type TerminateOptions,
+} from "./process-controller.ts";
 import type {
   ProcessExit,
   ProcessRegistration,
@@ -169,6 +174,42 @@ export function resolveExecutable(executable: string, env: Readonly<Record<strin
   throw new ExecutableNotFound(executable, searched);
 }
 
+/**
+ * The census capability the darwin and win32 ports need — and the second and
+ * last thing in this repository that creates a process.
+ *
+ * It is HERE for the same reason the launcher is: `node:child_process` is
+ * importable in exactly one module, and a platform port asking `ps` or CIM for
+ * the process table would need an exemption from the fence that makes the
+ * registration guarantee mean anything. So the ports take this as an injected
+ * capability instead, and a port handed nothing cannot enumerate and says so.
+ *
+ * Synchronous because the callers are: the ladder polls a census inside a grace
+ * period, and an enumeration that could interleave with its own next poll is a
+ * survivor list assembled from two different moments.
+ */
+export function runSystemCommand(
+  executable: string,
+  argv: readonly string[],
+  timeoutMs: number,
+): CommandResult {
+  const result = spawnSync(executable, [...argv], {
+    encoding: "utf8",
+    timeout: timeoutMs,
+    shell: false,
+    windowsHide: true,
+    // A process table on a busy machine is large, and a census truncated by the
+    // default 1 MB buffer would be a survivor list with the end cut off.
+    maxBuffer: 16 * 1024 * 1024,
+  });
+  return {
+    status: result.status,
+    stdout: result.stdout ?? "",
+    stderr: result.stderr ?? "",
+    error: result.error === undefined || result.error === null ? null : result.error.message,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // The broker.
 // ---------------------------------------------------------------------------
@@ -186,6 +227,8 @@ export interface BrokerOptions {
   /** How long the child has to report its identity before the launch is abandoned. */
   handshakeMs?: number;
   terminate?: TerminateOptions;
+  /** The supervisor. Defaults to this machine's port, wired to `runSystemCommand`. */
+  controller?: ProcessController;
 }
 
 export interface StartHooks {
@@ -212,10 +255,22 @@ export class LauncherExited extends Error {
 export class ProcessTransportBroker implements TransportBroker {
   readonly #options: BrokerOptions;
   readonly #launcherPath: string;
+  readonly #controller: ProcessController;
 
   constructor(options: BrokerOptions) {
     this.#options = options;
     this.#launcherPath = options.launcherPath ?? join(import.meta.dirname, "launcher.ts");
+    this.#controller =
+      options.controller ??
+      new ProcessController({
+        port: createHostPort({ command: runSystemCommand }),
+        ...(options.terminate === undefined ? {} : { terminate: options.terminate }),
+      });
+  }
+
+  /** The supervisor this broker cancels through. Exposed so a caller can read the tree it owns. */
+  get controller(): ProcessController {
+    return this.#controller;
   }
 
   /**
@@ -295,7 +350,7 @@ export class ProcessTransportBroker implements TransportBroker {
     const identify = this.#handshake(child);
     const launch: GatedLaunch = {
       identify: async () => {
-        recorded = await identify;
+        recorded = this.#withObservedIdentity(await identify);
         return recorded;
       },
       release: async () => {
@@ -317,10 +372,41 @@ export class ProcessTransportBroker implements TransportBroker {
           return { termSent: false, killSent: true, survivors: [], terminated: true, skipped: null };
         }
         void reason;
-        return terminateGroup(recorded, this.#options.terminate ?? {});
+        return this.#controller.terminateTree(recorded);
       },
     };
     return { child, launch };
+  }
+
+  /**
+   * Fills in a start identity the gated child could not read for itself.
+   *
+   * The launcher reads `/proc` and has nothing to read anywhere else, so off
+   * Linux it honestly reports `startIdentity: null` — and a null is exactly what
+   * `sameProcess` refuses to match, which would turn every later cancellation on
+   * that platform into a no-op that reported success. The host can ask the same
+   * question through its platform port.
+   *
+   * It is safe to ask HERE and nowhere later: the child is still blocked on the
+   * control channel whose write end this process holds, so it cannot have exited
+   * and its PID cannot have been recycled between its report and this
+   * observation. A port that cannot enumerate leaves the honest null in place,
+   * and the ladder refuses to signal on it rather than guessing.
+   */
+  #withObservedIdentity(identity: ProcessIdentity): ProcessIdentity {
+    if (identity.startIdentity !== null) return identity;
+    try {
+      const observed = this.#controller.observeIdentity(identity.pid);
+      if (observed === null || observed.startIdentity === null) return identity;
+      return {
+        pid: identity.pid,
+        pgid: observed.pgid,
+        startIdentity: observed.startIdentity,
+        startIdentitySource: observed.startIdentitySource,
+      };
+    } catch {
+      return identity;
+    }
   }
 
   /**
@@ -405,7 +491,7 @@ export class ProcessTransportBroker implements TransportBroker {
       exit,
       cancel: async (reason: string) => {
         void reason;
-        return terminateGroup(identity, this.#options.terminate ?? {});
+        return this.#controller.terminateTree(identity);
       },
     };
   }

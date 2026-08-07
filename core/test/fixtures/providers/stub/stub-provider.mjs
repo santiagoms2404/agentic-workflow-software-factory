@@ -82,10 +82,16 @@ function readPrompt() {
 
 /** Stays alive until something signals it. The suites cancel these on purpose. */
 function stayAlive(onTick) {
-  const timer = setInterval(() => onTick?.(), 50);
-  timer.unref?.();
-  // A second, ref'd timer far in the future keeps the loop alive without
-  // spinning: nothing here should exit on its own.
+  // Only the scripts that are supposed to be BUSY get a repeating timer. A
+  // "silent" provider that woke every 50 ms would still move the process
+  // group's cpu counter, and the silence window watches exactly that — the
+  // fixture would then be quietly disproving the thing it exists to prove.
+  if (onTick) {
+    const timer = setInterval(onTick, 50);
+    timer.unref?.();
+  }
+  // A ref'd timer far in the future keeps the loop alive without spinning:
+  // nothing here should exit on its own.
   setTimeout(() => process.exit(0), 10 * 60 * 1_000);
 }
 

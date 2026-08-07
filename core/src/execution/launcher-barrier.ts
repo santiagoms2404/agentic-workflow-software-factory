@@ -229,11 +229,18 @@ export interface TerminationReport {
   survivors: readonly number[];
   terminated: boolean;
   /**
-   * Why no signal was sent, when none was. `identity-changed` means the PID was
-   * recycled and the group was therefore already empty — see `terminateGroup`
-   * in the broker for why that inference is sound.
+   * Why no signal was sent, when none was.
+   *
+   * - `identity-changed` — the PID is held by a different process now. Under
+   *   `process-group` grouping that PROVES the group is empty (see
+   *   `ProcessController.terminateTree`); under `ancestry` it proves only that
+   *   the root is gone, so the survivors below are still enumerated.
+   * - `identity-unverifiable` — neither the record nor the observation carries a
+   *   start identity, so nothing can prove the PID is still ours. Signalling
+   *   would be a guess aimed at a stranger, so none is sent and the survivors
+   *   below are whatever the port could actually see.
    */
-  skipped: "identity-changed" | null;
+  skipped: "identity-changed" | "identity-unverifiable" | null;
 }
 
 /** Thrown by a platform port that cannot enumerate a process group. Never `[]`. */
@@ -243,6 +250,23 @@ export class EnumerationUnavailable extends Error {
   constructor(platform: string, detail: string) {
     super(`cannot enumerate survivors on ${platform}: ${detail}; an empty list would be a lie`);
     this.name = "EnumerationUnavailable";
+    this.platform = platform;
+  }
+}
+
+/**
+ * Thrown by a port asked to deliver a signal it cannot deliver.
+ *
+ * Distinct from "the group was already gone", which is a `false` return and a
+ * success. This is "the mechanism did not work", and a `terminated: true` on top
+ * of it would be the same class of lie as an empty survivor list.
+ */
+export class SignalUnavailable extends Error {
+  readonly platform: string;
+
+  constructor(platform: string, detail: string) {
+    super(`cannot signal a process group on ${platform}: ${detail}; reporting success would be a lie`);
+    this.name = "SignalUnavailable";
     this.platform = platform;
   }
 }
