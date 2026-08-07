@@ -64,3 +64,18 @@ chain grants parallelism:
 The plan's status markers are the source of truth. When a task's marker flips in
 `awsf-plan.html`, flip `state:` here in the same commit. As of 2026-08-06: **T01–T05 `done`,
 T06–T30 `todo`.**
+
+This is **mechanically enforced** (AGENTS.md invariant 12) by
+`core/test/unit/meta/ticket-plan-sync.test.ts`, which fails the build on drift. The plan carries
+no per-task status marker — only milestone `<h3>` markers and per-task checklists — so `state` is
+checked against both: a task in an `[x]` milestone must be `done`, a task in a `[]` milestone must
+not be, and where a task has its own checklist, all-boxes-`[x]` and `done` must agree. Two tasks
+(T28, T29) carry no checklist in the plan and are checked against their milestone marker alone.
+
+The same test asserts each build prompt is byte-identical to its Section B block, so the tickets
+can never fork from the file they were cut from. Ticket coverage is checked as a *contiguous
+prefix* of the plan's tasks: M9's T31–T34 have no tickets yet and are legitimately uncovered;
+adding `T31.md` extends the check to them automatically.
+
+**`title` must be quoted.** Several task titles contain `:` (`Stream layer: LineFramer…`,
+`Pilot 1: a real T1 task`), which YAML reads as a nested mapping. All thirty are double-quoted.

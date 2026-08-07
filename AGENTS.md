@@ -44,3 +44,11 @@ not a judgement call. Several are mechanically enforced by meta-tests under
     `<dl>`/Amendments, never in the commit itself. Enforced by the
     no-agent-coauthor meta-test, which scans this repository's own commit
     history (author, committer, and message trailers alike).
+12. **`specs/tickets/` and `specs/awsf-plan.html` never disagree.** The plan's
+    status markers are the source of truth; a ticket's `state` mirrors them and
+    is flipped in the *same commit*, never a later one. A ticket's build prompt
+    stays byte-identical to its `awsf-plan-build-prompts.md` § Section B block —
+    the tickets are a re-cut of that file, never a fork of it. Enforced by the
+    ticket/plan-sync meta-test: task coverage, milestone grouping, `state`
+    against both the milestone marker and the task's own checklist, prompt and
+    title integrity, `depends_on` ordering, and the frontmatter vocabularies.
