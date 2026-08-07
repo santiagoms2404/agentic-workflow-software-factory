@@ -72,6 +72,15 @@ export interface ModelRequest {
   env: Readonly<Record<string, string>>;
   effort?: string;
   tools?: readonly string[];
+  /**
+   * The tool profile the agent is configured with — `awsf.config.yaml`
+   * § `agents[].tools.profile`.
+   *
+   * A profile NAME rather than the resolved flags, because what "read-only"
+   * costs in argv is a fact about one provider's CLI and changes when that CLI
+   * does. The adapter owns the translation; the config owns the intent.
+   */
+  profile?: string;
 }
 
 /**

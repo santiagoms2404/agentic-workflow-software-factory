@@ -31,9 +31,14 @@ const AUTH_KEYS = ["_auth", "_authToken", "auth", "authToken", "password", "toke
 const ABSOLUTE_PATH = /^(\/|[A-Za-z]:[\\/]|\\\\|~\/|file:)/;
 
 test("no credential-shaped values in test fixtures", () => {
+  // `.jsonl` and `.md` are on this list because M4's real-adapter fixtures are
+  // CAPTURED provider output plus a provenance note beside it. Bytes nobody
+  // wrote by hand are exactly the bytes this sweep exists for.
   const files = walkFiles(join(repoRoot(), "core", "test", "fixtures"), [
     ".ts",
     ".json",
+    ".jsonl",
+    ".md",
     ".txt",
     ".yaml",
     ".yml",
