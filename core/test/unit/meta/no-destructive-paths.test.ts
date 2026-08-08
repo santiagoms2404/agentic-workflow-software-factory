@@ -13,6 +13,7 @@ const FORBIDDEN = [
   /rmdirSync\s*\(/,
   /unlinkSync\s*\(/,
   /\bauto[-_]?delete\b/i,
+  /worktree\s+(?:remove|prune)\b/,
 ];
 
 test("no push/force/auto-delete strings in core/src", () => {
