@@ -42,11 +42,17 @@ import {
 import { filterEnv } from "./env.ts";
 import { assertPrivateSystemPrompt } from "./system-prompt-file.ts";
 import { ClaudeStreamDecoder, type ClaudeSessionRecord } from "./claude-code-stream.ts";
-import type { NormalizedEvent } from "../contracts/normalized-events.ts";
+import { isTerminalKind, type NormalizedEvent } from "../contracts/normalized-events.ts";
 import type { UnionOf } from "../contracts/typebox.ts";
 import { LineFramer } from "./stream/line-framer.ts";
 import { EventSequencer } from "./stream/event-sequencer.ts";
 import { OutputBudget, type OutputBudgetOptions } from "./stream/output-budget.ts";
+import {
+  DEFAULT_EXIT_WAIT_MS,
+  awaitExit,
+  drainStderr,
+  stderrSuffix,
+} from "./stream/transport-loop.ts";
 
 export { writeSystemPromptFile } from "./system-prompt-file.ts";
 export type { ClaudeSessionRecord } from "./claude-code-stream.ts";
@@ -237,6 +243,12 @@ export interface ClaudeCodeAdapterOptions {
   /** Host observation time. Injected so a replayed transcript is byte-stable. */
   now?: () => string;
   limits?: OutputBudgetOptions;
+  /**
+   * How long a settled run waits for the process to actually exit, so its exit
+   * code is measured rather than assumed. Injected only so the expiry path — a
+   * child that closes stdout and then hangs — is a test rather than a hope.
+   */
+  exitWaitMs?: number;
 }
 
 export class ClaudeCodeAdapter implements HarnessAdapter {
@@ -244,11 +256,13 @@ export class ClaudeCodeAdapter implements HarnessAdapter {
   readonly #executable: string;
   readonly #now: () => string;
   readonly #limits: OutputBudgetOptions;
+  readonly #exitWaitMs: number;
 
   constructor(options: ClaudeCodeAdapterOptions = {}) {
     this.#executable = options.executable ?? "claude";
     this.#now = options.now ?? ((): string => new Date().toISOString());
     this.#limits = options.limits ?? {};
+    this.#exitWaitMs = options.exitWaitMs ?? DEFAULT_EXIT_WAIT_MS;
   }
 
   /**
@@ -376,30 +390,78 @@ export class ClaudeCodeAdapter implements HarnessAdapter {
       ...(options.session === undefined ? {} : { session: options.session }),
     });
 
+    // Started BEFORE the first byte is read, and never stopped. A child that
+    // blocks writing to a full stderr pipe never reaches the part where it
+    // writes its result — the broker drains stderr only for its handshake and
+    // then removes that listener on purpose, so this is the only reader there
+    // is.
+    const stderr = drainStderr(transport);
+    /** The decoder's terminal, held back so the exit code can be measured. */
+    let held: NormalizedEvent | null = null;
+
     try {
       for await (const chunk of transport.stdout) {
-        for (const line of framer.push(chunk)) yield* decoder.decode(line, sequencer);
+        for (const line of framer.push(chunk)) {
+          for (const event of decoder.decode(line, sequencer)) {
+            if (isTerminalKind(event.kind)) held = event;
+            else yield event;
+          }
+        }
       }
       // Abrupt EOF: the tail a provider died in the middle of writing is
       // released as a line, and stays visible as a malformed one.
-      for (const line of framer.flush()) yield* decoder.decode(line, sequencer);
+      for (const line of framer.flush()) {
+        for (const event of decoder.decode(line, sequencer)) {
+          if (isTerminalKind(event.kind)) held = event;
+          else yield event;
+        }
+      }
     } catch (error) {
       // The stream itself failed. A run whose bytes stopped arriving still owes
-      // exactly one terminal, and a settlement for every tool call it left open.
+      // exactly one terminal, a settlement for every tool call it left open,
+      // and a report of the tokens it had already spent.
+      await stderr.done;
+      yield* decoder.ensureStarted(sequencer);
+      yield* decoder.flushUsage(sequencer);
       yield* isCancellation(error) || signal?.aborted === true
         ? sequencer.cancel(cancellationReason(signal, error))
-        : sequencer.fail("E_BACKEND_FAILURE", `the provider's output stream failed: ${describe(error)}`);
+        : sequencer.fail(
+            "E_BACKEND_FAILURE",
+            `the provider's output stream failed: ${describe(error)}${stderrSuffix(stderr)}`,
+          );
       return;
     }
 
+    await stderr.done;
+    if (held !== null) {
+      // The exit code is MEASURED here rather than assumed at the moment the
+      // decoder saw a `result` line: a CLI that prints a success result and
+      // then exits non-zero was being recorded as clean. Holding the terminal
+      // costs nothing in ordering — the sequencer emits nothing after one — and
+      // `null` stays `null` when the process does not exit in time, because a
+      // run whose exit nobody saw did not exit cleanly, it exited unobserved.
+      const exit = await awaitExit(transport, this.#exitWaitMs);
+      yield held.kind === "run.completed" ? { ...held, exitCode: exit?.code ?? null } : held;
+      return;
+    }
+
+    // Nothing decoded a terminal. The run still owes an opening — a process
+    // that wrote nothing at all to stdout and died with its reason on stderr
+    // never reached `decode` — and it owes a report of what it spent getting
+    // there.
+    yield* decoder.ensureStarted(sequencer);
+    yield* decoder.flushUsage(sequencer);
     // A killed process group closes its pipes cleanly, so a cancelled run and a
     // provider that simply stopped talking look identical from here. The signal
     // is the only thing that can tell them apart, and it is the host's own.
-    if (sequencer.terminal === null && signal?.aborted === true) {
+    if (signal?.aborted === true) {
       yield* sequencer.cancel(cancellationReason(signal, null));
       return;
     }
-    yield* sequencer.finish();
+    yield* sequencer.fail(
+      "E_TERMINAL_MISSING",
+      `the provider's stream ended without a terminal event${stderrSuffix(stderr)}`,
+    );
   }
 }
 

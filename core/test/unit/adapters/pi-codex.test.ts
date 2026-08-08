@@ -30,6 +30,7 @@ import {
 } from "../../../src/adapters/pi-codex-stream.ts";
 import { ENV_ALLOWLIST, ENV_INJECTED, filterEnv } from "../../../src/adapters/env.ts";
 import { formatCost } from "../../../src/adapters/cost-display.ts";
+import { assertPrivateSystemPrompt } from "../../../src/adapters/system-prompt-file.ts";
 import {
   AdapterError,
   type ProcessRegistration,
@@ -60,6 +61,9 @@ function adapter(): PiCodexAdapter {
   let tick = 0;
   return new PiCodexAdapter({
     now: () => `2026-08-08T00:00:${String(tick++).padStart(2, "0")}.000Z`,
+    // Short, so the "the process never exited" path is a test that runs in
+    // milliseconds rather than a timeout nobody waits for.
+    exitWaitMs: 25,
   });
 }
 
@@ -345,18 +349,30 @@ test("the profile vocabulary matches what `awsf.config.yaml` declares", () => {
 /** Replays a fixture file through the adapter, in one chunk unless asked otherwise. */
 async function replay(
   file: string,
-  options: { signal?: AbortSignal; session?: PiSessionRecord; chunkSize?: number } = {},
+  options: {
+    signal?: AbortSignal;
+    session?: PiSessionRecord;
+    chunkSize?: number;
+    exit?: { code: number | null; signal: string | null } | "never";
+    stderr?: string;
+  } = {},
 ): Promise<NormalizedEvent[]> {
   const bytes = readFileSync(file);
   const size = options.chunkSize ?? bytes.length;
+  const stderrText = options.stderr ?? "";
   const transport = {
     runId: "run-pi-1",
     identity: { pid: 1, pgid: 1, startedAt: "2026-08-08T00:00:00.000Z" },
     async *stdout(): AsyncIterable<Uint8Array> {
       for (let at = 0; at < bytes.length; at += size) yield bytes.subarray(at, at + size);
     },
-    stderr: (async function* () {})(),
-    exit: Promise.resolve({ code: 0, signal: null }),
+    stderr: (async function* () {
+      if (stderrText.length > 0) yield new TextEncoder().encode(stderrText);
+    })(),
+    exit:
+      options.exit === "never"
+        ? new Promise(() => {})
+        : Promise.resolve(options.exit ?? { code: 0, signal: null }),
     cancel: async () => ({ termSent: true, killSent: false, survivors: [], terminated: [] }),
   } as unknown as ProcessTransport;
   transport.stdout = (transport as unknown as { stdout: () => AsyncIterable<Uint8Array> }).stdout();
@@ -515,11 +531,25 @@ test("`agent_end` is not the terminal — `agent_settled` is", async () => {
   assert.equal(events.filter((e) => e.kind === "run.completed").length, 1);
 });
 
-test("a completed run reports no exit code rather than asserting a zero", async () => {
-  // The process's real code is on `transport.exit` and the decoder never sees
-  // it. `0` would be a measurement it did not take.
+test("the exit code on a completed run is MEASURED, not assumed", async () => {
+  // The decoder mints the terminal when it sees `agent_settled`; the process's
+  // real code arrives later, on `transport.exit`. The terminal is held back
+  // until it does.
   const terminal = (await replay(CAPTURED)).at(-1);
   assert.equal(terminal?.kind, "run.completed");
+  assert.equal(terminal?.kind === "run.completed" ? terminal.exitCode : "unset", 0);
+});
+
+test("a CLI that reports success and then exits non-zero is not recorded as clean", async () => {
+  const terminal = (await replay(CAPTURED, { exit: { code: 1, signal: null } })).at(-1);
+  assert.equal(terminal?.kind, "run.completed");
+  assert.equal(terminal?.kind === "run.completed" ? terminal.exitCode : "unset", 1);
+});
+
+test("an exit nobody saw is `null` — never a substituted zero", async () => {
+  // A child that closed stdout and then hung must not hang `parse` with it, and
+  // the code it never reported is not `0`; it is unobserved.
+  const terminal = (await replay(CAPTURED, { exit: "never" })).at(-1);
   assert.equal(terminal?.kind === "run.completed" ? terminal.exitCode : "unset", null);
 });
 
@@ -744,12 +774,15 @@ test("a correction answered by a different model is a mismatch, not a continuati
 // ---------------------------------------------------------------------------
 
 /** Replays literal text as one chunk. */
-async function replayText(text: string, session?: PiSessionRecord): Promise<NormalizedEvent[]> {
+async function replayText(
+  text: string,
+  options: { session?: PiSessionRecord; signal?: AbortSignal; stderr?: string } = {},
+): Promise<NormalizedEvent[]> {
   const dir = mkdtempSync(join(tmpdir(), "awsf-pi-stream-"));
   try {
     const path = join(dir, "stream.jsonl");
     writeFileSync(path, text);
-    return await replay(path, session === undefined ? {} : { session });
+    return await replay(path, options);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -946,11 +979,90 @@ test("a cost the provider did not report stays null — never zero", async () =>
         message: { role: "assistant", stopReason: "stop", usage: { input: 1, output: 1 } },
       })}\n` +
       `${SETTLED_LINE}\n`,
-    session,
+    { session },
   );
   assert.equal(session.costUsd, null);
   // And an unpriced run renders as a dash, not as free.
   assert.equal(formatCost("provider", session.costUsd), "—");
+});
+
+// ---------------------------------------------------------------------------
+// The cross-building review pass, on this route. Every case below is a defect
+// the GPT review found in T13's decoder that this one shares or mirrors —
+// landed here in the same pass, because a fix applied to one adapter and not
+// the other is a fix that has to be found twice.
+// ---------------------------------------------------------------------------
+
+test("stderr is DRAINED, so a chatty provider cannot block itself into a hang", async () => {
+  // A pipe nobody reads fills at 64 KiB, and a child that blocks writing to a
+  // full stderr never reaches the part where it writes its result.
+  const events = await replay(CAPTURED, { stderr: "x".repeat(64 * 1024) });
+  assert.equal(events[events.length - 1]?.kind, "run.completed");
+  assert.deepEqual(validateEventSequence(events), []);
+});
+
+test("what a dying provider said on stderr survives into the failure", async () => {
+  const events = await replayText("", { stderr: "pi: not authenticated" });
+  const terminal = events[events.length - 1];
+  assert.equal(terminal?.kind === "run.failed" ? terminal.errorCode : null, "E_TERMINAL_MISSING");
+  assert.ok(terminal?.kind === "run.failed" && terminal.message.includes("not authenticated"));
+});
+
+test("a process that writes nothing to stdout still OPENS its run", async () => {
+  const events = await replayText("", { stderr: "pi: not authenticated" });
+  assert.equal(events[0]?.kind, "run.started");
+  assert.deepEqual(validateEventSequence(events), []);
+});
+
+test("`context token limit reached` is a backend failure, not an exhausted subscription", async () => {
+  // A full context window is fixed by sending less; a spent subscription is
+  // fixed by waiting. Quota is structurally never a retry, so mislabelling the
+  // first costs a phase that could have recovered.
+  const events = await replayText(
+    `${START_LINE}\n` +
+      `${JSON.stringify({
+        type: "turn_end",
+        message: { role: "assistant", stopReason: "error", errorMessage: "context token limit reached" },
+      })}\n` +
+      `${SETTLED_LINE}\n`,
+  );
+  const terminal = events[events.length - 1];
+  assert.equal(terminal?.kind === "run.failed" ? terminal.errorCode : null, "E_BACKEND_FAILURE");
+  assert.equal(only(events, "quota").length, 0);
+});
+
+test("this route's own refusal texts still map to quota", async () => {
+  for (const message of [
+    "You have hit your ChatGPT usage limit (plus plan). Try again in ~37 min.",
+    "Monthly usage limit reached",
+    "insufficient_quota",
+  ]) {
+    const events = await replayText(
+      `${START_LINE}\n` +
+        `${JSON.stringify({
+          type: "turn_end",
+          message: { role: "assistant", stopReason: "error", errorMessage: message },
+        })}\n` +
+        `${SETTLED_LINE}\n`,
+    );
+    const terminal = events[events.length - 1];
+    assert.equal(
+      terminal?.kind === "run.failed" ? terminal.errorCode : null,
+      "E_QUOTA_EXHAUSTED",
+      `${JSON.stringify(message)} should read as exhaustion`,
+    );
+  }
+});
+
+test("a system prompt that does not exist is refused before any child starts", () => {
+  // Load-bearing on THIS route in a way it is not on T13's: pi's
+  // `--append-system-prompt` takes text or a path and decides with `existsSync`,
+  // so a missing file is not an error — the run goes out with the path string
+  // itself as its system prompt, and nothing says so.
+  assert.throws(
+    () => assertPrivateSystemPrompt(PI_ADAPTER_ID, "/nonexistent/awsf/system-prompt.md"),
+    (error: unknown) => error instanceof AdapterError && error.code === "E_INVALID_REQUEST",
+  );
 });
 
 test("a zero cost the provider DID report is a price, and renders as one", async () => {
@@ -962,7 +1074,7 @@ test("a zero cost the provider DID report is a price, and renders as one", async
         message: { role: "assistant", stopReason: "stop", usage: { input: 1, output: 1, cost: { total: 0 } } },
       })}\n` +
       `${SETTLED_LINE}\n`,
-    session,
+    { session },
   );
   assert.equal(session.costUsd, 0);
   assert.equal(formatCost("provider", session.costUsd), "$0.00");

@@ -54,7 +54,7 @@ interface ClaudeLine {
   api_error_status?: unknown;
   usage?: Record<string, unknown>;
   message?: { model?: string; content?: readonly ClaudeContentBlock[] };
-  event?: { type?: string; delta?: ClaudeStreamDelta };
+  event?: { type?: string; delta?: ClaudeStreamDelta; usage?: Record<string, unknown> };
   rate_limit_info?: { status?: string; resetsAt?: unknown; rateLimitType?: string };
 }
 
@@ -91,6 +91,18 @@ export class ClaudeStreamDecoder {
    */
   readonly #openTools = new Set<string>();
   #started = false;
+  /**
+   * The per-API-call usage the `message_delta` events report, accumulated.
+   *
+   * Kept, but NOT emitted alongside the terminal's own block: on the captured
+   * probe these two reports sum to exactly the terminal's totals — 2+2 input,
+   * 5479+70 cache-creation, 6271+11750 cache-read, 49+3 output — so a run that
+   * emitted both would double every figure. It exists for the two things the
+   * terminal cannot supply: `thinking_tokens`, which only the deltas carry, and
+   * a usage report for a run that never reaches a terminal at all.
+   */
+  #deltaUsage: { totals: Record<string, number>; reasoning: number | null } | null = null;
+  #usageReported = false;
 
   constructor(options: ClaudeStreamDecoderOptions) {
     this.#adapter = options.adapter;
@@ -114,7 +126,7 @@ export class ClaudeStreamDecoder {
     // this lived below the parse branches, exactly that case produced a stream
     // of notices and a terminal with no opening event, and nothing caught it:
     // `validateEventSequence` checks terminals and tool pairing, not openings.
-    const out = [...this.#ensureStarted(sequencer)];
+    const out = [...this.ensureStarted(sequencer)];
     let parsed: ClaudeLine;
     try {
       parsed = JSON.parse(text) as ClaudeLine;
@@ -180,10 +192,61 @@ export class ClaudeStreamDecoder {
    * name its model" a separate question, answered by `model.resolved` or by
    * failing closed at the terminal.
    */
-  #ensureStarted(sequencer: EventSequencer): readonly NormalizedEvent[] {
+  ensureStarted(sequencer: EventSequencer): readonly NormalizedEvent[] {
     if (this.#started) return [];
     this.#started = true;
     return sequencer.started({ adapter: this.#adapter, requestedModel: this.#requestedModel });
+  }
+
+  /**
+   * The usage a run consumed but never got to report, emitted before its
+   * terminal.
+   *
+   * A run cancelled mid-answer has already spent the tokens its `message_delta`
+   * events reported, and the `result` line that would have totalled them never
+   * arrives. Reporting nothing there says the run cost nothing, which is the
+   * one thing it definitely did not. Called by `parse` on the paths where a
+   * terminal is minted by the HOST rather than decoded from the stream; a no-op
+   * on a run that reached its own terminal, so it can never double-count.
+   */
+  flushUsage(sequencer: EventSequencer): readonly NormalizedEvent[] {
+    const pending = this.#deltaUsage;
+    if (this.#usageReported || pending === null) return [];
+    this.#usageReported = true;
+    return sequencer.usage({
+      inputTokens: pending.totals["input_tokens"] ?? null,
+      outputTokens: pending.totals["output_tokens"] ?? null,
+      cacheReadTokens: pending.totals["cache_read_input_tokens"] ?? null,
+      cacheWriteTokens: pending.totals["cache_creation_input_tokens"] ?? null,
+      reasoningTokens: pending.reasoning,
+      reasoningRelation: "unknown",
+    });
+  }
+
+  /**
+   * Sums one `message_delta`'s usage into the running total.
+   *
+   * Only well-formed counts are added. A field the provider reported as
+   * something other than a count is left out of the sum rather than coerced,
+   * because a sum with a guess in it is worse than a sum with a gap.
+   */
+  #accumulate(usage: Record<string, unknown> | undefined): void {
+    if (usage === undefined || usage === null) return;
+    const state = this.#deltaUsage ?? { totals: {}, reasoning: null };
+    for (const field of DELTA_USAGE_FIELDS) {
+      const value = usage[field];
+      if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) continue;
+      state.totals[field] = (state.totals[field] ?? 0) + value;
+    }
+    const details = usage["output_tokens_details"];
+    const thinking =
+      details !== null && typeof details === "object"
+        ? (details as Record<string, unknown>)["thinking_tokens"]
+        : undefined;
+    if (typeof thinking === "number" && Number.isSafeInteger(thinking) && thinking >= 0) {
+      state.reasoning = (state.reasoning ?? 0) + thinking;
+    }
+    this.#deltaUsage = state;
   }
 
   #system(line: ClaudeLine, sequencer: EventSequencer): readonly NormalizedEvent[] {
@@ -217,7 +280,12 @@ export class ClaudeStreamDecoder {
    */
   #streamEvent(line: ClaudeLine, sequencer: EventSequencer): readonly NormalizedEvent[] {
     const event = line.event;
-    if (event === undefined || event.type !== "content_block_delta") return [];
+    if (event === undefined) return [];
+    if (event.type === "message_delta") {
+      this.#accumulate(event.usage);
+      return [];
+    }
+    if (event.type !== "content_block_delta") return [];
     const delta = event.delta;
     if (delta === undefined) return [];
     if (delta.type === "text_delta" && typeof delta.text === "string") {
@@ -234,15 +302,34 @@ export class ClaudeStreamDecoder {
    * A completed assistant message. Its `tool_use` blocks open tool calls; its
    * `text` blocks are the deltas again and are skipped.
    *
-   * Model identity is deliberately NOT re-read here. `message.model` is present
-   * and correct, but the CLI also issues internal sub-requests on other models
-   * (the probe's own `result` records a `claude-haiku-4-5` alongside the
-   * `claude-sonnet-5` that answered), and a second identity claim would risk
-   * `E_MODEL_MISMATCH` on a run that never changed models. `system/init` is the
-   * CLI's own statement of the session model and is the only one read.
+   * Model identity IS re-read here, reversing this decoder's first pass.
+   *
+   * That pass declined to, reasoning that the CLI issues internal sub-requests
+   * on other models and a second identity claim would risk `E_MODEL_MISMATCH`
+   * on a run that never changed models. The captured probe refutes it: both of
+   * its top-level `assistant` messages name `claude-sonnet-5`, and the
+   * `claude-haiku-4-5` that also ran appears ONLY under `result.modelUsage` —
+   * never as a top-level identity. So there was no false-positive risk to
+   * avoid, and what the rule actually did was discard the one signal that would
+   * catch a run whose model changed under it. `system/init` and the assistant
+   * turns now have to agree, and the sequencer raises `E_MODEL_MISMATCH` if
+   * they do not.
    */
   #assistant(line: ClaudeLine, sequencer: EventSequencer): readonly NormalizedEvent[] {
     const out: NormalizedEvent[] = [];
+    const model = line.message?.model;
+    if (typeof model === "string" && model.length > 0) {
+      out.push(
+        ...sequencer.resolveModel({
+          adapter: this.#adapter,
+          provider: this.#provider,
+          requestedModel: this.#requestedModel,
+          resolvedModel: model,
+          provenance: "stream-authoritative",
+          providerAt: providerAt(line),
+        }),
+      );
+    }
     for (const block of line.message?.content ?? []) {
       if (block.type !== "tool_use" || typeof block.id !== "string" || block.id.length === 0) continue;
       if (this.#openTools.has(block.id)) continue;
@@ -317,7 +404,18 @@ export class ClaudeStreamDecoder {
     // way, and the only thing the strict comparison bought was false positives.
     // Anything that does not begin with `allowed` still blocks, which keeps the
     // unknown-status case failing closed where failing closed is right.
-    if (status.startsWith("allowed")) return out;
+    // ...but a status that BEGINS with `allowed` and also reads as exhausted —
+    // `allowed_limit_reached` is the shape to worry about — is not exempt. The
+    // prefix rule exists so a warning-class status does not cost a phase; it was
+    // never meant to let the word `allowed` outrank the rest of the sentence,
+    // and reading it that way is fail-open on an invented vocabulary in the one
+    // direction that matters.
+    // The status is a snake_case identifier and `QUOTA_SHAPED` reads prose, so
+    // the separators are normalized before the two meet — without it,
+    // `allowed_usage_limit_reached` is one long word that matches nothing.
+    if (status.startsWith("allowed") && !QUOTA_SHAPED.test(status.replace(/[_-]+/g, " "))) {
+      return out;
+    }
     return [
       ...out,
       ...sequencer.fail(
@@ -347,7 +445,10 @@ export class ClaudeStreamDecoder {
     // docstring exists to prevent. A usage block that is present but unreadable
     // still goes through and still produces the fault.
     const reported = line.usage !== undefined && line.usage !== null;
-    const out = reported ? [...sequencer.usage(mapUsage(line.usage), at)] : [];
+    if (reported) this.#usageReported = true;
+    const out = reported
+      ? [...sequencer.usage(mapUsage(line.usage, this.#deltaUsage?.reasoning ?? null), at)]
+      : [];
     // `null`, not `0`. The process's real exit code lives on `transport.exit`
     // and this decoder never sees it, so a `0` here would be a measurement it
     // did not take — and a CLI that emits a success result and then exits
@@ -398,7 +499,14 @@ function providerAt(line: ClaudeLine): string | null {
  * `output_tokens` or beside them, and this harness records measured conventions
  * only.
  */
-function mapUsage(usage: unknown): unknown {
+const DELTA_USAGE_FIELDS = [
+  "input_tokens",
+  "output_tokens",
+  "cache_read_input_tokens",
+  "cache_creation_input_tokens",
+] as const;
+
+function mapUsage(usage: unknown, reasoningFromDeltas: number | null): unknown {
   // Anything that is not an object is forwarded UNTOUCHED so `normalizeUsage`
   // can report it as unreadable. Mapping it here would read five fields off a
   // string, get `undefined` five times, and turn a malformed provider report
@@ -415,7 +523,13 @@ function mapUsage(usage: unknown): unknown {
     outputTokens: source["output_tokens"] ?? null,
     cacheReadTokens: source["cache_read_input_tokens"] ?? null,
     cacheWriteTokens: source["cache_creation_input_tokens"] ?? null,
-    reasoningTokens: thinking ?? null,
+    // The terminal block carries no `output_tokens_details` at all — the
+    // captured probe proves it — while every `message_delta` on the way there
+    // carries one and reports `thinking_tokens`. Recording `null` because the
+    // LAST report omitted a field the run had already reported is the `null ≠ 0`
+    // rule failing in its own name: on the capture the provider said `0` twice
+    // and the host said "not reported".
+    reasoningTokens: thinking ?? reasoningFromDeltas,
     reasoningRelation: "unknown",
   };
 }
@@ -426,7 +540,22 @@ function mapUsage(usage: unknown): unknown {
  * Carried from `my-agentic-workflow/src/providers/claude-code.mjs:15`, which is
  * the reviewed reading of this same CLI's error results.
  */
-const QUOTA_SHAPED = /\b(?:usage limit|rate limit|quota)\b|limit reached/i;
+const QUOTA_SHAPED =
+  /\b(?:usage limit|rate limit|quota)\b|\b(?:usage|plan|subscription|account) limit reached\b/i;
+
+/**
+ * The bare `limit reached` alternation this pattern used to carry is GONE, and
+ * its absence is the fix.
+ *
+ * It matched "context token limit reached" — a full context window, which is a
+ * `E_BACKEND_FAILURE` the operator fixes by sending less, not a subscription
+ * the operator fixes by waiting. Calling it quota produced a `quota` event with
+ * a reset time for a window that was never exhausted, and, because quota is
+ * structurally never a retry, ended the phase for a reason the phase could
+ * have recovered from. Nothing was lost by removing it: the CLI's own message
+ * is "Claude AI usage limit reached", which the first alternation already
+ * matches on `usage limit`.
+ */
 
 /**
  * `resets at 2026-08-08T00:00:00Z`, `reset at …`, `reset_at: …`, `reset: …`.

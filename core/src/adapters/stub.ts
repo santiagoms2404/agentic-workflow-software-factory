@@ -34,6 +34,7 @@ import type { UnionOf } from "../contracts/typebox.ts";
 import { LineFramer } from "./stream/line-framer.ts";
 import { EventSequencer } from "./stream/event-sequencer.ts";
 import { OutputBudget, type OutputBudgetOptions } from "./stream/output-budget.ts";
+import { drainStderr } from "./stream/transport-loop.ts";
 
 /**
  * The eight behaviours. Each is a real failure mode of a real provider:
@@ -205,6 +206,13 @@ export class StubAdapter implements HarnessAdapter {
     // re-read per line: a real provider names the model it RESOLVED, and the
     // host is the one that remembers what it asked for.
     const context: ParseContext = { requestedModel: `${STUB_MODEL_PREFIX}unknown` };
+    // Drained for the same reason the real adapters drain it: a pipe nobody
+    // reads fills, and a child blocked writing to a full stderr never reaches
+    // the part where it writes its result. The stub is where every journey test
+    // runs, so it is the last place that should be able to hang on plumbing the
+    // production routes have fixed. The capture is not used here — this adapter
+    // has no provider whose diagnostics are worth quoting.
+    const stderr = drainStderr(transport);
 
     try {
       for await (const chunk of transport.stdout) {
@@ -218,12 +226,14 @@ export class StubAdapter implements HarnessAdapter {
       // exactly one terminal, and it still owes a settlement for every tool call
       // it left open — which is what makes cancellation legible rather than a
       // stream that simply stops.
+      await stderr.done;
       yield* isCancellation(error) || signal?.aborted === true
         ? sequencer.cancel(cancellationReason(signal, error))
         : sequencer.fail("E_BACKEND_FAILURE", `the provider's output stream failed: ${describe(error)}`);
       return;
     }
 
+    await stderr.done;
     // A killed process group closes its pipes cleanly, so a cancelled run and a
     // provider that simply stopped talking look identical from here. The signal
     // is the only thing that can tell them apart, and it is the host's own.

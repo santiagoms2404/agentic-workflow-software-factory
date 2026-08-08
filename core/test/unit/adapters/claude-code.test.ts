@@ -63,6 +63,9 @@ function adapter(): ClaudeCodeAdapter {
   let tick = 0;
   return new ClaudeCodeAdapter({
     now: () => `2026-08-07T00:00:${String(tick++).padStart(2, "0")}.000Z`,
+    // Short, so the "the process never exited" path is a test that runs in
+    // milliseconds rather than a timeout nobody waits for.
+    exitWaitMs: 25,
   });
 }
 
@@ -354,18 +357,30 @@ test("the adapter never spawns to answer `isAvailable`", async () => {
 /** Replays a fixture file through the adapter, in one chunk. */
 async function replay(
   file: string,
-  options: { signal?: AbortSignal; session?: ClaudeSessionRecord; chunkSize?: number } = {},
+  options: {
+    signal?: AbortSignal;
+    session?: ClaudeSessionRecord;
+    chunkSize?: number;
+    exit?: { code: number | null; signal: string | null } | "never";
+    stderr?: string;
+  } = {},
 ): Promise<NormalizedEvent[]> {
   const bytes = readFileSync(file);
   const size = options.chunkSize ?? bytes.length;
+  const stderrText = options.stderr ?? "";
   const transport = {
     runId: "run-claude-1",
     identity: { pid: 1, pgid: 1, startedAt: "2026-08-07T00:00:00.000Z" },
     async *stdout(): AsyncIterable<Uint8Array> {
       for (let at = 0; at < bytes.length; at += size) yield bytes.subarray(at, at + size);
     },
-    stderr: (async function* () {})(),
-    exit: Promise.resolve({ code: 0, signal: null }),
+    stderr: (async function* () {
+      if (stderrText.length > 0) yield new TextEncoder().encode(stderrText);
+    })(),
+    exit:
+      options.exit === "never"
+        ? new Promise(() => {})
+        : Promise.resolve(options.exit ?? { code: 0, signal: null }),
     cancel: async () => ({ termSent: true, killSent: false, survivors: [], terminated: [] }),
   } as unknown as ProcessTransport;
   transport.stdout = (transport as unknown as { stdout: () => AsyncIterable<Uint8Array> }).stdout();
@@ -434,7 +449,9 @@ test("the provider's own tool id reaches no event", async () => {
 
 test("usage is reported once, from the terminal — never summed across messages", async () => {
   // Every `message_delta` carries usage too, and the probe made two API calls to
-  // answer one prompt. Summing them would double-count the run.
+  // answer one prompt. Summing them would double-count the run: on this capture
+  // the two delta reports add up to exactly the terminal's totals (2+2 input,
+  // 5479+70 cache-creation, 6271+11750 cache-read, 49+3 output).
   const usage = only(await replay(CAPTURED), "usage");
   assert.equal(usage.length, 1);
   assert.deepEqual(usage[0]?.usage, {
@@ -442,12 +459,61 @@ test("usage is reported once, from the terminal — never summed across messages
     outputTokens: 52,
     cacheReadTokens: 18021,
     cacheWriteTokens: 5549,
-    // Not reported at the terminal, so null — never 0.
-    reasoningTokens: null,
-    // Anthropic does not state whether thinking tokens sit inside output or
-    // beside it, and this harness records measured conventions only.
+    // 0, not null — and the difference is the whole `null ≠ 0` rule applied to
+    // its own author. The terminal block carries no `output_tokens_details` at
+    // all, but both `message_delta` reports carry one and both say
+    // `thinking_tokens: 0`. Reading only the terminal recorded "not reported"
+    // for a metric the provider had reported twice.
+    reasoningTokens: 0,
+    // Still `unknown`: 0 is consistent with either relation, so the capture
+    // says nothing about whether thinking tokens sit inside output or beside
+    // it, and this harness records measured conventions only.
     reasoningRelation: "unknown",
   });
+});
+
+test("the delta reports are carried, not added — the totals stay the terminal's", async () => {
+  // The guard on the fix above: if the sum were emitted alongside the terminal
+  // block, every figure in this run would double.
+  const usage = only(await replay(CAPTURED), "usage");
+  assert.equal(usage.length, 1);
+  assert.equal(usage[0]?.usage.outputTokens, 52);
+  assert.notEqual(usage[0]?.usage.outputTokens, 104);
+});
+
+test("the committed cancelled prefix reports no usage, because it reached none", async () => {
+  // It cuts inside the first content block, before any `message_delta`. The
+  // honest answer for this fixture is silence, and a flush that invented a
+  // report here would be worse than the gap it filled.
+  const controller = new AbortController();
+  controller.abort(new Error("owner cancelled the phase"));
+  const events = await replay(CANCELLED, { signal: controller.signal });
+  assert.equal(only(events, "usage").length, 0);
+  assert.deepEqual(validateEventSequence(events), []);
+});
+
+test("the assistant turns and `system/init` have to agree on the model", async () => {
+  // The first pass declined to re-read `message.model`, reasoning that the CLI
+  // issues internal sub-requests on other models. The capture refutes it: both
+  // top-level assistant messages name `claude-sonnet-5`, and the
+  // `claude-haiku-4-5` that also ran appears ONLY under `result.modelUsage`.
+  const raw = readFileSync(CAPTURED, "utf8");
+  assert.ok(raw.includes("claude-haiku-4-5"), "the fixture must carry the sub-request model");
+  const events = await replay(CAPTURED);
+  assert.equal(only(events, "model.resolved").length, 1, "agreement re-resolves nothing");
+  assert.equal(events[events.length - 1]?.kind, "run.completed");
+});
+
+test("an assistant turn that answers on a DIFFERENT model is a mismatch, not a shrug", async () => {
+  const capture = readFileSync(CAPTURED, "utf8").split("\n").filter(Boolean);
+  const assistant = capture.find(
+    (line: string) => (JSON.parse(line) as { type?: string }).type === "assistant",
+  );
+  const swapped = (assistant ?? "").replace('"model":"claude-sonnet-5"', '"model":"claude-haiku-4-5"');
+  assert.notEqual(swapped, assistant, "the substitution must apply");
+  const events = await replayText(`${capture[0]}\n${swapped}\n`);
+  const terminal = events[events.length - 1];
+  assert.equal(terminal?.kind === "run.failed" ? terminal.errorCode : null, "E_MODEL_MISMATCH");
 });
 
 test("the CLI's healthy usage block produces no malformed-usage notice", async () => {
@@ -663,12 +729,20 @@ test("the profile vocabulary matches what `awsf.config.yaml` declares", () => {
 // ---------------------------------------------------------------------------
 
 /** Replays literal text as one chunk — for streams no fixture should be invented for. */
-async function replayText(text: string, session?: ClaudeSessionRecord): Promise<NormalizedEvent[]> {
+async function replayText(
+  text: string,
+  options: {
+    session?: ClaudeSessionRecord;
+    signal?: AbortSignal;
+    exit?: { code: number | null; signal: string | null } | "never";
+    stderr?: string;
+  } = {},
+): Promise<NormalizedEvent[]> {
   const dir = mkdtempSync(join(tmpdir(), "awsf-claude-regress-"));
   try {
     const path = join(dir, "stream.jsonl");
     writeFileSync(path, text);
-    return await replay(path, session === undefined ? {} : { session });
+    return await replay(path, options);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -759,6 +833,152 @@ test("a rate-limit status that says the request was ALLOWED does not kill the ru
   );
   assert.equal(only(events, "quota")[0]?.resetAt, "2026-08-08T00:00:00.000Z");
   assert.equal(events[events.length - 1]?.kind, "run.completed");
+});
+
+// ---------------------------------------------------------------------------
+// The cross-building review pass. Every case below is a defect a GPT session
+// found reading this decoder against its own committed fixture — the review the
+// Conventions' cross-building rule asks for, and the one a same-family session
+// had already missed twice.
+// ---------------------------------------------------------------------------
+
+test("stderr is DRAINED, so a chatty provider cannot block itself into a hang", async () => {
+  // A pipe nobody reads fills at 64 KiB, and a child that blocks writing to a
+  // full stderr never reaches the part where it writes its result. The broker
+  // reads stderr only for its handshake and removes that listener on purpose,
+  // so `parse` is the only reader there is. More than the capture limit is used
+  // deliberately: the drain must keep consuming after it stops keeping.
+  const events = await replay(CAPTURED, { stderr: "x".repeat(64 * 1024) });
+  assert.equal(events[events.length - 1]?.kind, "run.completed");
+  assert.deepEqual(validateEventSequence(events), []);
+});
+
+test("what a dying provider said on stderr survives into the failure", async () => {
+  // A run that reports `E_TERMINAL_MISSING` and nothing else has thrown away
+  // the only explanation there was.
+  const events = await replayText("", { stderr: "claude: command not found" });
+  const terminal = events[events.length - 1];
+  assert.equal(terminal?.kind === "run.failed" ? terminal.errorCode : null, "E_TERMINAL_MISSING");
+  assert.ok(terminal?.kind === "run.failed" && terminal.message.includes("command not found"));
+});
+
+test("a process that writes nothing to stdout still OPENS its run", async () => {
+  // It never reaches `decode`, so the opening the decoder mints on the first
+  // readable line never happens. A `run.failed` with no `run.started` in front
+  // of it is a run the trace cannot describe, and `validateEventSequence`
+  // checks terminals and tool pairing, not openings.
+  const events = await replayText("", { stderr: "not logged in" });
+  assert.equal(events[0]?.kind, "run.started");
+  assert.deepEqual(validateEventSequence(events), []);
+});
+
+test("the exit code on a completed run is MEASURED, not assumed", async () => {
+  const clean = (await replay(CAPTURED)).at(-1);
+  assert.equal(clean?.kind === "run.completed" ? clean.exitCode : "unset", 0);
+  // A CLI that prints a success result and then exits non-zero was being
+  // recorded as clean.
+  const dirty = (await replay(CAPTURED, { exit: { code: 1, signal: null } })).at(-1);
+  assert.equal(dirty?.kind === "run.completed" ? dirty.exitCode : "unset", 1);
+  // And an exit nobody saw is `null`, never a substituted zero — nor a `parse`
+  // that hangs with the child.
+  const unseen = (await replay(CAPTURED, { exit: "never" })).at(-1);
+  assert.equal(unseen?.kind === "run.completed" ? unseen.exitCode : "unset", null);
+});
+
+test("a run cancelled after a message_delta reports the tokens it already spent", async () => {
+  // The `result` line that would have totalled them never arrives. Reporting
+  // nothing says the run cost nothing, which is the one thing it did not.
+  const controller = new AbortController();
+  controller.abort(new Error("owner cancelled the phase"));
+  const events = await replayText(
+    `${INIT_LINE}\n` +
+      `${JSON.stringify({
+        type: "stream_event",
+        event: {
+          type: "message_delta",
+          usage: { input_tokens: 7, output_tokens: 11, output_tokens_details: { thinking_tokens: 3 } },
+        },
+      })}\n`,
+    { signal: controller.signal },
+  );
+  const usage = only(events, "usage");
+  assert.equal(usage.length, 1);
+  assert.equal(usage[0]?.usage.inputTokens, 7);
+  assert.equal(usage[0]?.usage.outputTokens, 11);
+  assert.equal(usage[0]?.usage.reasoningTokens, 3);
+  assert.equal(events[events.length - 1]?.kind, "run.cancelled");
+  assert.deepEqual(validateEventSequence(events), []);
+});
+
+test("a run that reached its own terminal never flushes a second usage event", async () => {
+  // The guard on the flush: it must be impossible for it to double-count.
+  assert.equal(only(await replay(CAPTURED), "usage").length, 1);
+});
+
+test("`context token limit reached` is a backend failure, not an exhausted subscription", async () => {
+  // A full context window is fixed by sending less; a spent subscription is
+  // fixed by waiting. Calling the first one quota ends a phase that could have
+  // recovered, because quota is structurally never a retry.
+  const events = await replayText(
+    `${INIT_LINE}\n${JSON.stringify({
+      type: "result",
+      is_error: true,
+      error: "context token limit reached",
+    })}\n`,
+  );
+  const terminal = events[events.length - 1];
+  assert.equal(terminal?.kind === "run.failed" ? terminal.errorCode : null, "E_BACKEND_FAILURE");
+  assert.equal(only(events, "quota").length, 0);
+  // The CLI's real exhaustion message still maps, on `usage limit`.
+  const real = await replayText(
+    `${INIT_LINE}\n${JSON.stringify({
+      type: "result",
+      is_error: true,
+      error: "Claude AI usage limit reached|1786147200",
+    })}\n`,
+  );
+  const realTerminal = real[real.length - 1];
+  assert.equal(
+    realTerminal?.kind === "run.failed" ? realTerminal.errorCode : null,
+    "E_QUOTA_EXHAUSTED",
+  );
+});
+
+test("an `allowed`-prefixed status that ALSO reads as exhausted is not exempt", async () => {
+  // The prefix rule exists so a warning-class status does not cost a phase. It
+  // was never meant to let the word `allowed` outrank the rest of the sentence.
+  const events = await replayText(
+    `${INIT_LINE}\n${JSON.stringify({
+      type: "rate_limit_event",
+      rate_limit_info: { status: "allowed_usage_limit_reached", resetsAt: 1786147200, rateLimitType: "five_hour" },
+    })}\n`,
+  );
+  const terminal = events[events.length - 1];
+  assert.equal(terminal?.kind === "run.failed" ? terminal.errorCode : null, "E_QUOTA_EXHAUSTED");
+});
+
+test("a system prompt that does not exist is refused on EVERY platform", () => {
+  // The win32 carve-out is for the mode bits and nothing else. When it sat
+  // above the stat it skipped the existence check too — and on the pi route
+  // that is not a missing safeguard but a silent substitution, because
+  // `--append-system-prompt` appends its value as literal text when the path is
+  // not there.
+  assert.throws(
+    () => assertPrivateSystemPrompt(CLAUDE_ADAPTER_ID, "/nonexistent/awsf/system-prompt.md"),
+    (error: unknown) => error instanceof AdapterError && error.code === "E_INVALID_REQUEST",
+  );
+});
+
+test("the credential scan knows the shapes the fixture sweep knows", () => {
+  // A value scan that recognized fewer shapes than the committed-bytes sweep
+  // would be the weaker of the two guards standing in the more dangerous place.
+  for (const value of ["AKIAIOSFODNN7EXAMPLE", "ghp_0123456789abcdefghij", "sk-abcdefghijklmnop"]) {
+    assert.throws(
+      () => filterEnv(CLAUDE_ADAPTER_ID, { PATH: `/usr/bin:/opt/${value}/bin` }),
+      (error: unknown) => error instanceof AdapterError && error.code === "E_REDACTION",
+      `${value} should be refused`,
+    );
+  }
 });
 
 test("a rate-limit status that does NOT say allowed still blocks, with its reset", async () => {

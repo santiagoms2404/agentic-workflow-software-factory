@@ -36,8 +36,18 @@ export const ENV_INJECTED: Readonly<Record<string, string>> = Object.freeze({
   TERM: "dumb",
 });
 
+/**
+ * Credential SHAPES, widened past the ported list.
+ *
+ * `fusion-harness` carried three; the two added here — AWS access key ids and
+ * GitHub's token family — are the ones this repository's own credential
+ * meta-test already sweeps fixtures for, and a value scan that recognized fewer
+ * shapes than the fixture sweep would have been the weaker of the two guards
+ * standing in the more dangerous place. The fixture sweep protects bytes that
+ * are already committed; this protects bytes on their way to a provider.
+ */
 const ENV_CREDENTIAL_VALUE =
-  /(?:\bsk-[A-Za-z0-9_-]{8,}|\bBearer\s+\S+|-----BEGIN [A-Z ]+PRIVATE KEY-----)/i;
+  /(?:\bsk-[A-Za-z0-9_-]{8,}|\bBearer\s+\S+|-----BEGIN [A-Z ]+PRIVATE KEY-----|\bAKIA[0-9A-Z]{16}\b|\bgh[pousr]_[A-Za-z0-9]{16,})/i;
 const ENV_CREDENTIAL_KEY = /(?:key|token|secret|password|credential|auth|session)/i;
 
 /**

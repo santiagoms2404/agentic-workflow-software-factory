@@ -51,6 +51,25 @@ export function assertPrivateSystemPrompt(adapter: string, path: string): void {
       `the system prompt path must be absolute, got ${JSON.stringify(path)}`,
     );
   }
+  // EXISTENCE IS CHECKED ON EVERY PLATFORM. The carve-out below is for the
+  // mode bits and for nothing else, and the order matters: when the `win32`
+  // return sat above this stat, a Windows launch skipped the existence check
+  // too — and on the pi route that is not a missing safeguard but a silent
+  // substitution, because `--append-system-prompt` falls back to treating its
+  // value as literal TEXT when the path does not exist. The run would have gone
+  // out with the string `C:\…\system-prompt.md` as its system prompt and
+  // nothing anywhere would have said so.
+  let mode: number;
+  try {
+    mode = statSync(path).mode;
+  } catch (error) {
+    throw new AdapterError(
+      adapter,
+      "E_INVALID_REQUEST",
+      `the system prompt file ${path} cannot be read: ` +
+        `${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
   // POSIX mode bits are the mechanism, and Windows does not have them.
   //
   // There, `statSync().mode` reflects only the read-only attribute — 0o666, or
@@ -65,19 +84,10 @@ export function assertPrivateSystemPrompt(adapter: string, path: string): void {
   // this code neither sets nor reads, and asserting anything stronger would be
   // a platform claim made from a machine that is not that platform — which the
   // plan's cross-platform note forbids. Verifying what protection actually
-  // holds there is T27's, per machine.
+  // holds there is T27's, per machine — and a file the operator placed
+  // somewhere world-readable, `C:\Users\Public\` being the obvious way, is
+  // exactly what that verification owes an answer about.
   if (platform === "win32") return;
-  let mode: number;
-  try {
-    mode = statSync(path).mode;
-  } catch (error) {
-    throw new AdapterError(
-      adapter,
-      "E_INVALID_REQUEST",
-      `the system prompt file ${path} cannot be read: ` +
-        `${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
   if ((mode & 0o077) !== 0) {
     throw new AdapterError(
       adapter,

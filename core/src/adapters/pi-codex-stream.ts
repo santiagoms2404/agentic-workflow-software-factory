@@ -154,7 +154,7 @@ export class PiStreamDecoder {
     // it started and then went wrong, which is a different fact from never
     // having begun. `validateEventSequence` checks terminals and tool pairing,
     // not openings, so nothing downstream would catch a missing one.
-    const out = [...this.#ensureStarted(sequencer)];
+    const out = [...this.ensureStarted(sequencer)];
     let parsed: PiLine;
     try {
       parsed = JSON.parse(text) as PiLine;
@@ -225,7 +225,7 @@ export class PiStreamDecoder {
    * stream of deltas with no opening event would be a run the trace could not
    * even describe.
    */
-  #ensureStarted(sequencer: EventSequencer): readonly NormalizedEvent[] {
+  ensureStarted(sequencer: EventSequencer): readonly NormalizedEvent[] {
     if (this.#started) return [];
     this.#started = true;
     return sequencer.started({ adapter: this.#adapter, requestedModel: this.#requestedModel });
@@ -603,9 +603,16 @@ function mapUsage(usage: unknown): unknown {
  * the function pi itself uses to decide that a 429 is final rather than
  * retryable — plus the sentence pi builds for the operator at line 1477, "You
  * have hit your ChatGPT usage limit".
+ *
+ * A bare `limit reached` alternation is deliberately NOT here, for the reason
+ * T13's copy of this rule now records: it matches "context token limit
+ * reached", which is a full context window — an `E_BACKEND_FAILURE` the
+ * operator fixes by sending less, not a subscription they fix by waiting, and
+ * quota is structurally never a retry, so mislabelling it costs the phase.
+ * Both of this route's real refusal texts still match, on `usage limit`.
  */
 const QUOTA_SHAPED =
-  /\b(?:usage limit|rate limit|quota|insufficient_quota|out of budget)\b|limit reached|available balance|UsageLimitError/i;
+  /\b(?:usage limit|rate limit|quota|insufficient_quota|out of budget)\b|\b(?:usage|plan|subscription|account) limit reached\b|available balance|UsageLimitError/i;
 
 /** `Try again in ~37 min.` — pi's rendering of the provider's `resets_at`. */
 const RESET_IN_MINUTES = /try again in\s*~?\s*(\d{1,6})\s*min/i;
