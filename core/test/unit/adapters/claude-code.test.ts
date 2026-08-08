@@ -995,3 +995,46 @@ test("a rate-limit status that does NOT say allowed still blocks, with its reset
   assert.equal(terminal?.kind === "run.failed" ? terminal.errorCode : null, "E_QUOTA_EXHAUSTED");
   assert.equal(only(events, "quota")[0]?.resetAt, "2026-08-08T00:00:00.000Z");
 });
+
+test("the terminal survives a stream that breaks AFTER the provider settled", async () => {
+  // The same regression the pi suite pins, on the adapter that shares the fix:
+  // holding the terminal to measure the exit code lost it entirely when the
+  // pipe broke on the way out, because the sequencer was already terminal and
+  // the catch path's cancel and fail both returned nothing.
+  const bytes = readFileSync(CAPTURED);
+  const transport = {
+    runId: "run-claude-3",
+    identity: { pid: 1, pgid: 1, startedAt: "2026-08-07T00:00:00.000Z" },
+    stdout: (async function* () {
+      yield bytes;
+      throw new Error("pipe reset after settlement");
+    })(),
+    stderr: (async function* () {})(),
+    exit: Promise.resolve({ code: 0, signal: null }),
+    cancel: async () => ({ termSent: true, killSent: false, survivors: [], terminated: [] }),
+  } as unknown as ProcessTransport;
+
+  const events: NormalizedEvent[] = [];
+  for await (const event of adapter().parse(transport)) events.push(event);
+  assert.equal(events[events.length - 1]?.kind, "run.completed");
+  assert.deepEqual(validateEventSequence(events), []);
+});
+
+test("Claude's route keeps `rate limit`, where pi's drops it — a divergence on purpose", async () => {
+  // The pi decoder no longer treats a bare `rate limit` as exhaustion, because
+  // pi has an explicit `isTerminalRateLimitError` that separates a plain 429 it
+  // RETRIES from the usage and billing forms it treats as final. This CLI has
+  // no such split, and `my-agentic-workflow`'s reviewed reading of its error
+  // results maps rate-limit text to exhaustion. Two providers, two readings,
+  // and neither inherited from the other — which is exactly what the shared
+  // rule that used to span both of them was hiding.
+  const events = await replayText(
+    `${INIT_LINE}\n${JSON.stringify({
+      type: "result",
+      is_error: true,
+      error: "rate limit exceeded for this subscription",
+    })}\n`,
+  );
+  const terminal = events[events.length - 1];
+  assert.equal(terminal?.kind === "run.failed" ? terminal.errorCode : null, "E_QUOTA_EXHAUSTED");
+});

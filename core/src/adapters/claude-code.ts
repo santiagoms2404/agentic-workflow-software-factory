@@ -362,6 +362,28 @@ export class ClaudeCodeAdapter implements HarnessAdapter {
   }
 
   /**
+   * Yields a decoded terminal with the process's real exit code in it.
+   *
+   * The exit code is MEASURED rather than assumed at the moment the decoder saw
+   * a `result` line: a CLI that prints a success result and then exits non-zero
+   * was being recorded as clean. Holding the terminal costs nothing in ordering
+   * — the sequencer emits nothing after one — and `null` stays `null` when the
+   * process does not exit in time, because a run whose exit nobody saw did not
+   * exit cleanly, it exited unobserved.
+   *
+   * It is a method rather than two inline copies because BOTH exits from the
+   * read loop have to go through it. When only the happy path did, a stream
+   * that broke after the provider had already settled lost its terminal.
+   */
+  async *#settleHeld(
+    transport: ProcessTransport,
+    held: NormalizedEvent,
+  ): AsyncIterable<NormalizedEvent> {
+    const exit = await awaitExit(transport, this.#exitWaitMs);
+    yield held.kind === "run.completed" ? { ...held, exitCode: exit?.code ?? null } : held;
+  }
+
+  /**
    * Bytes to normalized events, through the three stream-layer stages.
    *
    *   `LineFramer` frames — and bounds nothing, so a run that overruns its
@@ -421,6 +443,16 @@ export class ClaudeCodeAdapter implements HarnessAdapter {
       // exactly one terminal, a settlement for every tool call it left open,
       // and a report of the tokens it had already spent.
       await stderr.done;
+      // The run may ALREADY have settled — the provider printed its terminal
+      // and the pipe broke on the way out. Holding the terminal to measure the
+      // exit code made that case lose it entirely: the sequencer is terminal,
+      // so `cancel`/`fail` below return nothing, and the run reached a consumer
+      // with no terminal event at all. Whatever else happens, a decoded
+      // terminal is yielded.
+      if (held !== null) {
+        yield* this.#settleHeld(transport, held);
+        return;
+      }
       yield* decoder.ensureStarted(sequencer);
       yield* decoder.flushUsage(sequencer);
       yield* isCancellation(error) || signal?.aborted === true
@@ -434,14 +466,7 @@ export class ClaudeCodeAdapter implements HarnessAdapter {
 
     await stderr.done;
     if (held !== null) {
-      // The exit code is MEASURED here rather than assumed at the moment the
-      // decoder saw a `result` line: a CLI that prints a success result and
-      // then exits non-zero was being recorded as clean. Holding the terminal
-      // costs nothing in ordering — the sequencer emits nothing after one — and
-      // `null` stays `null` when the process does not exit in time, because a
-      // run whose exit nobody saw did not exit cleanly, it exited unobserved.
-      const exit = await awaitExit(transport, this.#exitWaitMs);
-      yield held.kind === "run.completed" ? { ...held, exitCode: exit?.code ?? null } : held;
+      yield* this.#settleHeld(transport, held);
       return;
     }
 

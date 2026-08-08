@@ -20,18 +20,25 @@
 //   `tool_execution_start`, `tool_execution_end`, `turn_end`, `agent_end`,
 //   `agent_settled` — appears in it, with the field names used here.
 //
-//   REVIEWED READING of pi 0.81.1's own committed type definitions, NOT of
-//   documentation and NOT of a guess, for four shapes the capture could not
-//   produce: `thinking_delta` (a reasoning model that emitted no reasoning
-//   summary), the `error`/`aborted` stop reasons, `errorMessage`, and
-//   `responseModel`. Sources: `packages/ai/src/types.ts:413-466` for the event
-//   union and `AssistantMessage`, `packages/ai/src/api/openai-codex-responses.ts:
-//   115, 1471-1477` for the quota-shaped error text this route actually
-//   produces. `PROVENANCE.md` beside the fixtures says the same thing, and the
-//   tests that exercise those four paths replay hand-built streams that make no
-//   claim about the provider's protocol — only about the host's handling of it.
+//   REVIEWED READING of pi's own committed source, NOT of documentation and NOT
+//   of a guess, for four shapes the capture could not produce: `thinking_delta`
+//   (a reasoning model that emitted no reasoning summary), the `error`/`aborted`
+//   stop reasons, `errorMessage`, and `responseModel`. Sources:
+//   `packages/ai/src/types.ts` for the event union and `AssistantMessage`,
+//   `packages/ai/src/api/openai-codex-responses.ts` for this route's identity
+//   and error paths, `packages/ai/src/models.ts` for how cost is computed.
 //
-// The line between the two is kept in the comments below, per branch.
+//   TWO VERSIONS ARE IN PLAY AND THEY ARE NOT THE SAME NUMBER. The CLI that
+//   produced the capture, and whose `--help` the argv is reconciled against, is
+//   the installed **0.81.1**. The source read for every citation above is the
+//   local checkout, which is **0.80.3** — the cross-building review caught the
+//   first pass calling both of them 0.81.1. Line numbers therefore belong to
+//   0.80.3 and are given as file references rather than line references where
+//   the exact line would go stale first. Anything the two versions disagree
+//   about is unverified by definition, and the safest reading of that is: these
+//   four shapes are read from 0.80.3 and the bytes are from 0.81.1.
+//
+// The line between captured and read is kept in the comments below, per branch.
 // ---------------------------------------------------------------------------
 
 import type { NormalizedEvent } from "../contracts/normalized-events.ts";
@@ -83,23 +90,31 @@ interface PiLine {
 }
 
 /**
- * Which provider session answered, as what, and for how much.
+ * Which provider session answered, as what, and for roughly how much.
  *
  * None of the three is on the normalized events, and each is absent for its own
  * reason. A provider session id is a transport fact rather than part of the
  * twelve-kind vocabulary — but it is the fact a same-session correction has to
  * assert. And MONEY is not an event kind at all: the twelve carry tokens, never
- * a price, because most routes cannot report one. This route can, so its figure
- * is recorded here and rendered through `formatCost(costAuthority, costUsd)`.
+ * a price, because most routes cannot report one.
+ *
+ * `costUsd` is an ESTIMATE and is labelled as one everywhere it is rendered.
+ * pi computes it locally with `calculateCost` (`packages/ai/src/models.ts`):
+ * rate per million from the model's entry in pi's own model store, multiplied
+ * by the token counts. OpenAI reports the tokens and reports no charge. So the
+ * adapter carries `costAuthority: "catalog-estimate"` and `formatCost` renders
+ * `≈ $0.01` — the first pass called it `"provider"` and printed it as a
+ * confirmed price, which is the exact confusion `cost-display.ts` was written
+ * to prevent.
  */
 export interface PiSessionRecord {
   sessionId: string | null;
   resolvedModel: string | null;
   /**
-   * The provider's own cost for the run, in USD, summed over its turns.
+   * The rate-card estimate for the run, in USD, summed over its turns.
    *
-   * `null` means no turn reported one — never `0`, which is a price the
-   * provider quoted. Same discipline as `TokenUsage`.
+   * `null` means no turn carried one — never `0`, which is an estimate of zero.
+   * Same discipline as `TokenUsage`.
    */
   costUsd: number | null;
 }
@@ -131,6 +146,8 @@ export class PiStreamDecoder {
   /** The last stop reason any assistant turn reported. Decides the terminal. */
   #stopReason: string | null = null;
   #errorMessage: string | null = null;
+  /** Host clock at the moment the refusal was read — the reset's anchor. */
+  #errorAt: string | null = null;
 
   constructor(options: PiStreamDecoderOptions) {
     this.#adapter = options.adapter;
@@ -194,6 +211,20 @@ export class PiStreamDecoder {
         return [...out, ...this.#turnEnd(parsed, sequencer)];
       case "agent_settled":
         return [...out, ...this.#settle(sequencer)];
+      case "compaction_start":
+      case "compaction_end":
+        // Recognized so an automatic compaction does not arrive as an unknown
+        // event, and NOT decoded for usage — which is a known gap, stated here
+        // rather than papered over. Compaction runs a summarization call that
+        // spends tokens this decoder's per-turn sum will miss. The review named
+        // `compaction_end.result.usage` as the place to read it; the
+        // `CompactionResult` in the source available here (0.80.3) has
+        // `summary`, `firstKeptEntryId`, `tokensBefore`, `estimatedTokensAfter`
+        // and `details`, and no `usage` at all. Decoding a field path that is
+        // not in the source I can read is precisely the invented-shape failure
+        // the fixture-integrity rule forbids, so the gap stays open until
+        // someone captures a compacting run or reads 0.81.1's own source.
+        return out;
       case "agent_start":
       case "turn_start":
       case "tool_execution_update":
@@ -240,18 +271,31 @@ export class PiStreamDecoder {
   }
 
   /**
-   * The identity, taken from the first assistant message.
+   * The identity, taken from the first assistant message — and marked
+   * `route-attributed`, NOT `stream-authoritative`.
    *
-   * `responseModel` wins over `model` where pi sets it: pi's own type calls it
-   * "the concrete `chunk.model` when different from the requested `model`", so
-   * preferring `model` would record the selector the host asked for as though
-   * the provider had confirmed it — which is exactly the inferred-identity-worn-
-   * as-confirmed failure `provenance` exists to prevent.
+   * The first pass had this exactly backwards, and the cross-building review
+   * caught it. On this route the CLI's `message.model` and `message.provider`
+   * are not evidence of anything: `openai-codex-responses.ts:229-234` builds
+   * the assistant message with `model: model.id` and `provider: model.provider`
+   * — the values from pi's own LOCAL model configuration, the ones this
+   * adapter's argv just supplied — and never reads `response.model` back off
+   * the API. `responseModel`, the field pi documents as "the concrete
+   * `chunk.model` when different from the requested model", is set only on the
+   * `openai-completions` path and never on this one.
    *
-   * The provider is the STREAM's, not this adapter's constant, for the same
-   * reason. A stream that names a different route than the one on argv is a
-   * fact worth a notice — but the identity still records what actually
-   * answered, because that is what identity means.
+   * So what the stream says is the argv coming back. Calling that
+   * `stream-authoritative` would be the harness presenting an inferred identity
+   * as a confirmed one, which is the single failure `provenance` exists to
+   * prevent — and the first pass shipped a test whose name asserted the
+   * opposite ("comes from the STREAM, not from the argv that asked").
+   *
+   * It is still read from the message rather than from the request, and it
+   * still fails closed on an unrepresentable value: `responseModel` is
+   * preferred in case a later pi version starts setting it, and a mismatch
+   * between the stream's provider and the pinned route still raises a notice —
+   * that would now mean pi's local store disagrees with the route on argv,
+   * which is worth saying out loud even though the API cannot cause it.
    */
   #messageStart(line: PiLine, sequencer: EventSequencer): readonly NormalizedEvent[] {
     const message = line.message;
@@ -285,7 +329,7 @@ export class PiStreamDecoder {
         provider,
         requestedModel: this.#requestedModel,
         resolvedModel: resolved,
-        provenance: "stream-authoritative",
+        provenance: "route-attributed",
         providerAt: providerAt(message),
       }),
     ];
@@ -300,6 +344,18 @@ export class PiStreamDecoder {
    * would double every answer in the trace; a partial `{"pat` of a tool's
    * arguments is not a summary of anything, and the complete arguments arrive
    * on `toolcall_end`.
+   *
+   * `toolcall_start` is not decoded either, and that one is a TRADE-OFF taken
+   * knowingly rather than an omission — the cross-building review raised it and
+   * it is declined with its cost stated. Opening there would make a tool call
+   * abandoned mid-arguments (cancelled between `toolcall_start` and
+   * `toolcall_end`) visible in the trace, which it currently is not. But the id
+   * is all that exists at that point: the arguments arrive over the deltas that
+   * follow, so opening early would give EVERY run an empty `inputSummary`,
+   * since the sequencer mints the request once and there is no path to enrich
+   * it afterwards. Trading every run's tool inputs for visibility into a rare
+   * mid-argument cancellation is the wrong side of that bargain. The gap is
+   * real and this is where it is written down.
    */
   #messageUpdate(line: PiLine, sequencer: EventSequencer): readonly NormalizedEvent[] {
     const event = line.assistantMessageEvent;
@@ -437,6 +493,14 @@ export class PiStreamDecoder {
     }
     if (typeof message.errorMessage === "string" && message.errorMessage.trim().length > 0) {
       this.#errorMessage = message.errorMessage.trim();
+      // Stamped HERE, when the refusal is read, and not at `agent_settled`.
+      // pi's reset is a RELATIVE phrase computed against its clock at the moment
+      // of the refusal, so the anchor has to be the host's clock at the nearest
+      // moment it can observe — anything later adds the intervening time to a
+      // deadline that was already counting down. A stream paused ten minutes
+      // between the error and the terminal would otherwise report a reset ten
+      // minutes late.
+      this.#errorAt = this.#now();
     }
   }
 
@@ -491,7 +555,7 @@ export class PiStreamDecoder {
   #resetFrom(message: string): string | null {
     const minutes = Number(RESET_IN_MINUTES.exec(message)?.[1]);
     if (!Number.isFinite(minutes)) return null;
-    const from = Date.parse(this.#now());
+    const from = Date.parse(this.#errorAt ?? this.#now());
     if (!Number.isFinite(from)) return null;
     return new Date(from + minutes * 60_000).toISOString();
   }
@@ -604,15 +668,24 @@ function mapUsage(usage: unknown): unknown {
  * retryable — plus the sentence pi builds for the operator at line 1477, "You
  * have hit your ChatGPT usage limit".
  *
- * A bare `limit reached` alternation is deliberately NOT here, for the reason
- * T13's copy of this rule now records: it matches "context token limit
- * reached", which is a full context window — an `E_BACKEND_FAILURE` the
- * operator fixes by sending less, not a subscription they fix by waiting, and
- * quota is structurally never a retry, so mislabelling it costs the phase.
+ * TWO alternations T13's copy carries are deliberately absent here, and both
+ * absences are this route's own reading rather than a simplification:
+ *
+ *   · bare `limit reached` matches "context token limit reached", which is a
+ *     full context window — an `E_BACKEND_FAILURE` the operator fixes by
+ *     sending less, not a subscription they fix by waiting.
+ *   · bare `rate limit` is worse here than it is on T13's route, because pi
+ *     itself disagrees with it. `isTerminalRateLimitError` exists precisely to
+ *     separate a plain 429, which pi RETRIES, from the usage/billing forms it
+ *     treats as final. Classifying "Rate limit exceeded" as exhaustion tells
+ *     the host a transient throttle is a spent subscription — and since quota
+ *     is structurally never a retry, the phase is lost to a condition that
+ *     would have cleared on its own.
+ *
  * Both of this route's real refusal texts still match, on `usage limit`.
  */
 const QUOTA_SHAPED =
-  /\b(?:usage limit|rate limit|quota|insufficient_quota|out of budget)\b|\b(?:usage|plan|subscription|account) limit reached\b|available balance|UsageLimitError/i;
+  /\b(?:usage limit|quota|insufficient_quota|out of budget|billing)\b|\b(?:usage|plan|subscription|account) limit reached\b|available balance|UsageLimitError/i;
 
 /** `Try again in ~37 min.` — pi's rendering of the provider's `resets_at`. */
 const RESET_IN_MINUTES = /try again in\s*~?\s*(\d{1,6})\s*min/i;

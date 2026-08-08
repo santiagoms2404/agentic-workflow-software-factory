@@ -30,7 +30,7 @@ What it ran:
 
 It was deliberately shaped to exercise the whole vocabulary in one call: a tool request
 *and* its execution and result, streamed text deltas, two turns (so the per-turn usage
-rule had something to be wrong about), provider-reported cost, and a settled terminal.
+rule had something to be wrong about), a per-turn cost figure, and a settled terminal.
 
 ### `probe-readonly-tool.jsonl` — CAPTURED, verbatim
 
@@ -79,7 +79,7 @@ the `usage` block it still carries are captured. The error *text* is **represent
 not captured**: this subscription was not exhausted, so nobody has read a real refusal.
 It is not invented either — it is the exact sentence pi builds for the operator on a
 `usage_limit_reached` / `rate_limit_exceeded` / 429 response, from
-`packages/ai/src/api/openai-codex-responses.ts:1471-1477` in the pinned 0.81.1 source,
+`packages/ai/src/api/openai-codex-responses.ts` in the 0.80.3 checkout,
 including the `(plus plan)` parenthetical and the `Try again in ~N min.` rendering of the
 provider's absolute `resets_at`. What the suite proves is the **host's** mapping — quota-
 shaped text ends the run with `E_QUOTA_EXHAUSTED` carrying a reset, and never with a
@@ -95,31 +95,61 @@ worth keeping exercised.
 `reasoningRelation: "included-in-output"` is the one relation this harness states rather
 than recording as `unknown`, and **the capture does not confirm it**: the probe ran at
 `--thinking low` and every turn reported `reasoning: 0`, so the arithmetic is consistent
-with either relation. The claim rests on pi's own mapping, read in the pinned source and
-cited in `core/src/adapters/pi-codex-stream.ts`:
+with either relation. The claim rests on pi's own mapping, read in the 0.80.3
+checkout and cited in `core/src/adapters/pi-codex-stream.ts`:
 
 - `reasoning` is read from `output_tokens_details.reasoning_tokens`, which is a
   *breakdown of* `output_tokens` — the field `output` is read from
-  (`packages/ai/src/api/openai-responses-shared.ts:364-370`);
+  (`packages/ai/src/api/openai-responses-shared.ts`);
 - pi states it in words for the sibling API it shares the vendor's semantics with:
   *"OpenAI completion_tokens already includes reasoning_tokens"*
-  (`packages/ai/src/api/openai-completions.ts:1134`).
+  (`packages/ai/src/api/openai-completions.ts`).
 
 A future capture on a run that actually spends reasoning tokens would turn this from a
 reviewed reading into a measurement. Until then it is labelled as what it is.
 
-Four decoded shapes are in the same position — read from pi 0.81.1's own committed type
-definitions rather than from these bytes, because the probe could not produce them:
+Four decoded shapes are in the same position — read from pi's own committed source
+rather than from these bytes, because the probe could not produce them:
 `thinking_delta`, the `error` and `aborted` stop reasons, `errorMessage`, and
 `responseModel`. The tests covering them replay hand-built streams and assert only the
 host's handling; none of them claims to be a recording of pi.
+
+**Two versions are in play, and the first pass wrote them both down as one.** The CLI
+that produced the capture, and whose `--help` the argv was reconciled against, is the
+installed **0.81.1**. Every source citation — in this file and in
+`core/src/adapters/pi-codex-stream.ts` — is from the local checkout at
+`../../../../../pi`, which is **0.80.3**. The cross-building review caught the
+conflation. Anything the two versions disagree about is unverified by definition.
+
+### Two claims this file made that the review refuted, corrected here
+
+**The stream's model identity is NOT provider evidence on this route.**
+`packages/ai/src/api/openai-codex-responses.ts` builds the assistant message with
+`model: model.id` and `provider: model.provider` — pi's own local configuration, the
+values the adapter's own argv supplied — and never reads `response.model` back off the
+API. `responseModel`, which pi documents as the concrete model "when different from the
+requested model", is set only on the `openai-completions` path, never on this one. So
+`model.resolved` from this route carries `provenance: "route-attributed"`, not
+`"stream-authoritative"`. The capture cannot show this — it names the model that was
+asked for, which is what both readings predict — and that is exactly why it took a
+reader from the other provider family to catch.
+
+**The cost is an ESTIMATE, not a provider-reported price.** `calculateCost`
+(`packages/ai/src/models.ts`) multiplies rate-per-million from the model's entry in
+pi's local model store by the token counts. OpenAI reports the tokens; it reports no
+charge. The adapter therefore carries `costAuthority: "catalog-estimate"` and the
+figures render `≈ $0.01`. The first pass called it `"provider"` and printed it as a
+confirmed price — on the adapter whose whole point was making cost authority visible.
 
 ## Rules for whoever reads this next
 
 - **These fixtures are replayed, never regenerated.** Re-running `capture-probe.ts` to
   "refresh" one spends live quota to prove something already provable from files, which
   the plan's never-do list forbids.
-- A second live call is only warranted by a *new* fact nobody has captured. The two
+- A second live call is only warranted by a *new* fact nobody has captured. The three
   obvious ones: a run that actually spends reasoning tokens (which would settle the
-  paragraph above), and a genuinely exhausted ChatGPT window (which would replace
-  `derived-quota-error.jsonl` with real bytes and delete its caveat).
+  paragraph above), a genuinely exhausted ChatGPT window (which would replace
+  `derived-quota-error.jsonl` with real bytes and delete its caveat), and a run long
+  enough to trigger automatic compaction (which would settle whether a compaction's
+  summarization call reports usage anywhere the decoder can sum it — the review says
+  `compaction_end.result.usage`, and no such field exists in the 0.80.3 source).

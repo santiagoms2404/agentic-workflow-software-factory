@@ -308,28 +308,36 @@ test("an allowlisted key holding credential-shaped bytes is a hard E_REDACTION",
 // What this route can and cannot say about itself.
 // ---------------------------------------------------------------------------
 
-test("ChatGPT Plus measures tokens AND prices them — and says both", async () => {
+test("ChatGPT Plus MEASURES tokens and only ESTIMATES the price — and says both", async () => {
   const info = await adapter().getModelInfo("codex:gpt-5.6-sol");
   assert.equal(info.adapter, PI_ADAPTER_ID);
   assert.equal(info.provider, PI_PROVIDER);
   assert.equal(info.requestedModel, "gpt-5.6-sol");
+  // The tokens are the provider's own count.
   assert.equal(info.usageAuthority, "provider");
-  // The whole difference from T13's route, in one field.
-  assert.equal(info.costAuthority, "provider");
-  assert.equal(info.continuity, "same-session-correction");
+  // The money is not. `calculateCost` is rate-per-million from pi's LOCAL model
+  // store times the token counts; OpenAI reports tokens and no charge. The
+  // first pass called this `"provider"` and rendered an arithmetic estimate as
+  // a confirmed price — on the very adapter built to show authority.
+  assert.equal(info.costAuthority, "catalog-estimate");
+  assert.notEqual(info.costAuthority, "provider");
+  // A promise withdrawn rather than a capability lost: `--no-session` forecloses
+  // re-entry, so a correction through this adapter is necessarily a cold start,
+  // and M5's ladder must not be told otherwise.
+  assert.equal(info.continuity, "none");
   // `null` = this adapter declares no ceiling. Not a ceiling of zero.
   assert.equal(info.contextWindow, null);
 });
 
-test("a priced route renders money, where the subscription route renders a dash", () => {
-  // `formatCost`'s money branch, first exercised for real by this adapter.
-  assert.equal(formatCost("provider", 0.0123), "$0.01");
+test("an estimate is rendered as an estimate, and a subscription as a dash", () => {
+  // The three authorities read differently on purpose, and this route is the
+  // middle one — which is the whole reason the middle one exists.
+  assert.equal(formatCost("catalog-estimate", 0.0123), "≈ $0.01");
+  assert.equal(formatCost("catalog-estimate", 1.5), "≈ $1.50");
   assert.equal(formatCost("provider", 1.5), "$1.50");
-  // A provider that reported zero cost reported DATA, and `provider` is the one
-  // authority allowed to say `$0.00` — because it measured it.
-  assert.equal(formatCost("provider", 0), "$0.00");
-  // Not yet reported is still a dash, even on an authority that has figures.
-  assert.equal(formatCost("provider", null), "—");
+  assert.equal(formatCost("unavailable", 1.5), "— subscription");
+  // Not yet computed is still a dash, even on an authority that has figures.
+  assert.equal(formatCost("catalog-estimate", null), "—");
 });
 
 test("the adapter never spawns to answer `isAvailable`", async () => {
@@ -401,15 +409,21 @@ test("the captured probe replays into a well-formed run", async () => {
   assert.equal(events[events.length - 1]?.kind, "run.completed");
 });
 
-test("the model that answered comes from the STREAM, not from the argv that asked", async () => {
+test("the model on this route is ROUTE-ATTRIBUTED, because the stream only echoes the argv", async () => {
+  // The first pass had this backwards and named the test after the mistake.
+  // `openai-codex-responses.ts` builds the assistant message with
+  // `model: model.id` and `provider: model.provider` — pi's own local config,
+  // the values this adapter's argv just supplied — and never reads
+  // `response.model` back off the API. Calling that `stream-authoritative`
+  // presents an inferred identity as a confirmed one, which is the single thing
+  // `provenance` exists to prevent.
   const events = await replay(CAPTURED);
   const [resolved] = only(events, "model.resolved");
   assert.equal(resolved?.resolvedModel, "gpt-5.6-sol");
   assert.equal(resolved?.requestedModel, "gpt-5.6-sol");
-  // The stream names its own provider, and this is that value — not the
-  // constant this adapter pinned on the command line.
   assert.equal(resolved?.provider, "openai-codex");
-  assert.equal(resolved?.provenance, "stream-authoritative");
+  assert.equal(resolved?.provenance, "route-attributed");
+  assert.notEqual(resolved?.provenance, "stream-authoritative");
 });
 
 test("the run answers on ONE model across both of its turns", async () => {
@@ -501,14 +515,15 @@ test("pi's healthy usage block produces no malformed-usage notice", async () => 
   assert.equal(notices.includes("non-json-output"), false);
 });
 
-test("the provider's own price is summed across turns and rendered as money", async () => {
-  // The first route in this harness whose cost is a figure rather than a dash.
+test("the rate-card estimate is summed across turns and rendered as an estimate", async () => {
+  // The first route in this harness whose cost is a figure rather than a dash —
+  // but a figure pi computed on this machine, not one OpenAI charged.
   const session: PiSessionRecord = { sessionId: null, resolvedModel: null, costUsd: null };
   await replay(CAPTURED, { session });
   assert.ok(session.costUsd !== null);
-  // 0.005345… + 0.005240… — both figures pi computed and reported.
+  // 0.005345… + 0.005240… — both figures pi derived from its own rate card.
   assert.ok(Math.abs((session.costUsd ?? 0) - 0.010585) < 1e-9, String(session.costUsd));
-  assert.equal(formatCost("provider", session.costUsd), "$0.01");
+  assert.equal(formatCost("catalog-estimate", session.costUsd), "≈ $0.01");
 });
 
 test("money is not an event kind — no normalized event carries a price", async () => {
@@ -662,12 +677,14 @@ test("a quota-shaped error maps to E_QUOTA_EXHAUSTED and carries its reset", asy
   const events = await replay(QUOTA);
   const [quota] = only(events, "quota");
   assert.equal(quota?.scope, "provider");
-  // pi states the reset as a RELATIVE phrase computed against its own clock, so
-  // the host adds the minutes back to its own — 37 minutes past the injected
-  // `now` of the second stamped event.
+  // pi states the reset as a RELATIVE phrase computed against its own clock at
+  // the moment of the refusal, so the host adds the minutes back to its own —
+  // anchored at the moment it READ the refusal, not at the terminal. The
+  // difference is the time between the two, which on a paused or slow stream is
+  // not small, and it always runs in the direction of reporting the reset late.
   assert.ok(quota?.resetAt !== null && quota?.resetAt !== undefined);
   assert.ok(Number.isFinite(Date.parse(quota?.resetAt ?? "")), "a resetAt nothing can parse is not a reset time");
-  assert.equal(quota?.resetAt, "2026-08-08T00:37:03.000Z");
+  assert.equal(quota?.resetAt, "2026-08-08T00:37:02.000Z");
 
   const terminal = events[events.length - 1];
   assert.equal(terminal?.kind, "run.failed");
@@ -930,11 +947,32 @@ test("an error with no reset phrase blocks with a null reset rather than a guess
 
 test("an unrecognized line type is reported, never dropped", async () => {
   const events = await replayText(
-    `${JSON.stringify({ type: "compaction_start", reason: "threshold" })}\n`,
+    `${JSON.stringify({ type: "queue_update", steering: [], followUp: [] })}\n`,
   );
   const [notice] = only(events, "notice");
   assert.equal(notice?.code, "unknown-provider-event");
-  assert.ok(notice?.message.includes("compaction_start"));
+  assert.ok(notice?.message.includes("queue_update"));
+});
+
+test("compaction is recognized and silent, and its usage is a stated gap", async () => {
+  // Recognized so an automatic compaction does not arrive as an unknown event
+  // on every long run. NOT decoded for usage: the review named
+  // `compaction_end.result.usage`, and `CompactionResult` in the source
+  // available here has no `usage` field at all — decoding a path I cannot see
+  // would be the invented-shape failure the fixture-integrity rule forbids.
+  const events = await replayText(
+    `${START_LINE}\n` +
+      `${JSON.stringify({ type: "compaction_start", reason: "threshold" })}\n` +
+      `${JSON.stringify({ type: "compaction_end", reason: "threshold", aborted: false, willRetry: false })}\n` +
+      `${JSON.stringify({ type: "turn_end", message: { role: "assistant", stopReason: "stop" } })}\n` +
+      `${SETTLED_LINE}\n`,
+  );
+  assert.equal(
+    only(events, "notice").some((n) => n.code === "unknown-provider-event"),
+    false,
+    "a compacting run must not fill the trace with unknown-event notices",
+  );
+  assert.equal(events[events.length - 1]?.kind, "run.completed");
 });
 
 test("a settlement for a call the host never opened is a notice, not an unpaired event", async () => {
@@ -983,7 +1021,7 @@ test("a cost the provider did not report stays null — never zero", async () =>
   );
   assert.equal(session.costUsd, null);
   // And an unpriced run renders as a dash, not as free.
-  assert.equal(formatCost("provider", session.costUsd), "—");
+  assert.equal(formatCost("catalog-estimate", session.costUsd), "—");
 });
 
 // ---------------------------------------------------------------------------
@@ -1054,6 +1092,49 @@ test("this route's own refusal texts still map to quota", async () => {
   }
 });
 
+test("a transient `rate limit` is a backend failure, because pi itself retries those", async () => {
+  // pi's own `isTerminalRateLimitError` exists to separate a plain 429, which
+  // it RETRIES, from the usage and billing forms it treats as final. Calling a
+  // transient throttle exhaustion tells the host a spent subscription, and
+  // since quota is structurally never a retry, the phase is lost to a condition
+  // that would have cleared on its own.
+  const events = await replayText(
+    `${START_LINE}\n` +
+      `${JSON.stringify({
+        type: "turn_end",
+        message: { role: "assistant", stopReason: "error", errorMessage: "Rate limit exceeded" },
+      })}\n` +
+      `${SETTLED_LINE}\n`,
+  );
+  const terminal = events[events.length - 1];
+  assert.equal(terminal?.kind === "run.failed" ? terminal.errorCode : null, "E_BACKEND_FAILURE");
+  assert.equal(only(events, "quota").length, 0);
+});
+
+test("the terminal survives a stream that breaks AFTER the provider settled", async () => {
+  // Holding the terminal back to measure the exit code made this case lose it
+  // entirely: the sequencer is already terminal, so the catch path's cancel and
+  // fail both return nothing, and the run reached its consumer with no terminal
+  // event at all — a `terminal-missing` violation the host caused itself.
+  const bytes = readFileSync(CAPTURED);
+  const transport = {
+    runId: "run-pi-3",
+    identity: { pid: 1, pgid: 1, startedAt: "2026-08-08T00:00:00.000Z" },
+    stdout: (async function* () {
+      yield bytes;
+      throw new Error("pipe reset after settlement");
+    })(),
+    stderr: (async function* () {})(),
+    exit: Promise.resolve({ code: 0, signal: null }),
+    cancel: async () => ({ termSent: true, killSent: false, survivors: [], terminated: [] }),
+  } as unknown as ProcessTransport;
+
+  const events: NormalizedEvent[] = [];
+  for await (const event of adapter().parse(transport)) events.push(event);
+  assert.equal(events[events.length - 1]?.kind, "run.completed");
+  assert.deepEqual(validateEventSequence(events), []);
+});
+
 test("a system prompt that does not exist is refused before any child starts", () => {
   // Load-bearing on THIS route in a way it is not on T13's: pi's
   // `--append-system-prompt` takes text or a path and decides with `existsSync`,
@@ -1077,5 +1158,5 @@ test("a zero cost the provider DID report is a price, and renders as one", async
     { session },
   );
   assert.equal(session.costUsd, 0);
-  assert.equal(formatCost("provider", session.costUsd), "$0.00");
+  assert.equal(formatCost("catalog-estimate", session.costUsd), "≈ $0.00");
 });

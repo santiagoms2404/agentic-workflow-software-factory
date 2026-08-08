@@ -1,7 +1,7 @@
 // The pi/Codex adapter: ChatGPT Plus as the second first-class worker route,
 // through the `pi` CLI on its `openai-codex` provider, with the prompt on stdin
-// and the model identity taken from the stream rather than from the argv that
-// asked for it.
+// and the model identity recorded for exactly as much as it is worth — which on
+// this route is less than the first pass claimed. See below.
 //
 // Two halves, and the split is the same discipline T13's adapter follows:
 //
@@ -19,18 +19,27 @@
 //   decoder inherit them rather than re-implementing them.
 //
 // ---------------------------------------------------------------------------
-// What makes this route DIFFERENT from T13's, in the two places it matters:
+// What makes this route DIFFERENT from T13's — as corrected by the GPT
+// cross-building review, which found this header asserting two things that are
+// not true. Both corrections run in the same direction, and it is worth naming
+// the direction: a same-family session wrote down the STRONGEST reading of the
+// evidence each time, and the reviewer from the other family found the evidence
+// did not reach that far.
 //
-//   · `costAuthority: "provider"`. pi prices its own runs from a rate card it
-//     ships, and reports a figure per assistant turn. That figure is a real
-//     number with a real authority behind it, so it renders as money — the
-//     first route in this harness that does. Contrast Claude Pro, which
-//     measures tokens and cannot price them at all. See `cost-display.ts`.
-//   · `reasoningRelation: "included-in-output"`. This is pi's MEASURED
-//     convention, not an assumption: `usage.output` on a reasoning model counts
-//     the reasoning tokens the same block reports under `usage.reasoning`.
-//     Recorded as measured because the capture shows it; nowhere else in this
-//     harness is a relation asserted without one.
+//   · `costAuthority: "catalog-estimate"`, not `"provider"`. pi does report a
+//     per-turn figure, but `calculateCost` computes it here — rate per million
+//     from the model's entry in pi's LOCAL store, times the token counts.
+//     OpenAI reports tokens and no charge. So this route renders `≈ $0.01`, an
+//     estimate marked as one, and the only thing it has over Claude Pro's
+//     `— subscription` is a number. See `cost-display.ts`.
+//   · `reasoningRelation: "included-in-output"` stands, but as a READING of
+//     pi's own mapping rather than as a measurement. The capture reported
+//     `reasoning: 0` on every turn, which is consistent with either relation
+//     and therefore confirms neither.
+//
+// The third correction is in the decoder: `model.resolved` from this route is
+// `route-attributed`, because pi builds the assistant message from its local
+// model config and never reads the API's own `response.model` back.
 // ---------------------------------------------------------------------------
 
 import {
@@ -128,7 +137,9 @@ const THINKING_ALIASES: Readonly<Record<string, PiThinking>> = Object.freeze({
 
 /**
  * pi's built-in tool names, read off the CLI's own tool definitions
- * (`packages/coding-agent/src/core/tools/*.ts`, 0.81.1) rather than guessed:
+ * (`packages/coding-agent/src/core/tools/*.ts` in the 0.80.3 checkout — the
+ * installed CLI is 0.81.1; see the decoder's header on why the two are kept
+ * apart) rather than guessed:
  * `bash`, `edit`, `find`, `grep`, `ls`, `read`, `write`. Lowercase, and not
  * interchangeable with the Claude adapter's `Read,Glob,Grep`.
  */
@@ -308,10 +319,35 @@ export class PiCodexAdapter implements HarnessAdapter {
   }
 
   /**
-   * `costAuthority: "provider"` is the whole difference between this route and
-   * T13's, and it is a claim this adapter can actually back: pi computes a cost
-   * per assistant turn from the rate card it ships for the model, and reports
-   * it on the stream. It is the provider's own figure, so it renders as money.
+   * `costAuthority: "catalog-estimate"`, and the demotion from `"provider"` is
+   * the single most important correction the cross-building review produced.
+   *
+   * The first pass read pi's per-turn `cost` block, saw a real number with a
+   * provider's name on it, and called it a provider-reported price — the first
+   * route in this harness whose cost rendered as money. It is not one.
+   * `calculateCost` (`packages/ai/src/models.ts:385`) is arithmetic and nothing
+   * else: rate per million from the model's entry in pi's LOCAL model store,
+   * multiplied by the token counts. OpenAI reports tokens; it reports no charge.
+   * So the figure is an estimate computed on this machine from a rate card that
+   * ships with the CLI, which is precisely what `catalog-estimate` means — and
+   * it now renders `≈ $0.01` rather than `$0.01`.
+   *
+   * The distinction is the entire reason `cost-display.ts` exists. Having built
+   * that file to stop a subscription route showing `$0.00`, the first pass then
+   * let an arithmetic estimate wear a confirmed price's clothes on the very next
+   * adapter. `usageAuthority` stays `"provider"`: the TOKENS are measured and
+   * reported: only the money is derived.
+   *
+   * `continuity: "none"` is the second correction, and it is a promise being
+   * withdrawn rather than a capability being lost. This adapter pins
+   * `--no-session`, which forecloses `--continue`/`--resume`, and
+   * `ProcessSpec.stdin` is one string written once — so there is no way to
+   * re-enter a session, and a correction through this adapter is necessarily a
+   * cold start. Declaring otherwise would have told M5's escalation ladder that
+   * a correction here costs tokens rather than a tier call, which is a pricing
+   * decision made on a capability that does not exist. `assertSameSession` and
+   * the session record stay: they are what a correction transport will need on
+   * the day one is built, and they are what makes this value re-earnable.
    *
    * `contextWindow: null` means this adapter declares no ceiling — not that the
    * ceiling is zero. pi's local model store knows the real number; reading it
@@ -327,9 +363,9 @@ export class PiCodexAdapter implements HarnessAdapter {
       supportsThinking: true,
       supportsTools: true,
       supportsImages: true,
-      continuity: "same-session-correction",
+      continuity: "none",
       usageAuthority: "provider",
-      costAuthority: "provider",
+      costAuthority: "catalog-estimate",
     };
   }
 
@@ -415,6 +451,28 @@ export class PiCodexAdapter implements HarnessAdapter {
   }
 
   /**
+   * Yields a decoded terminal with the process's real exit code in it.
+   *
+   * The exit code is MEASURED rather than assumed at the moment the decoder saw
+   * a terminal line: a CLI that prints a success terminal and then exits
+   * non-zero was being recorded as clean. Holding the terminal costs nothing in
+   * ordering — the sequencer emits nothing after one — and `null` stays `null`
+   * when the process does not exit in time, because a run whose exit nobody saw
+   * did not exit cleanly, it exited unobserved.
+   *
+   * It is a method rather than two inline copies because BOTH exits from the
+   * read loop have to go through it. When only the happy path did, a stream
+   * that broke after the provider had already settled lost its terminal.
+   */
+  async *#settleHeld(
+    transport: ProcessTransport,
+    held: NormalizedEvent,
+  ): AsyncIterable<NormalizedEvent> {
+    const exit = await awaitExit(transport, this.#exitWaitMs);
+    yield held.kind === "run.completed" ? { ...held, exitCode: exit?.code ?? null } : held;
+  }
+
+  /**
    * Bytes to normalized events, through the three stream-layer stages.
    *
    *   `LineFramer` frames — and bounds nothing, so a run that overruns its
@@ -472,6 +530,16 @@ export class PiCodexAdapter implements HarnessAdapter {
       // The stream itself failed. A run whose bytes stopped arriving still owes
       // exactly one terminal, and a settlement for every tool call it left open.
       await stderr.done;
+      // The run may ALREADY have settled — the provider printed its terminal
+      // and the pipe broke on the way out. Holding the terminal to measure the
+      // exit code made that case lose it entirely: the sequencer is terminal,
+      // so `cancel`/`fail` below return nothing, and the run reached a consumer
+      // with no terminal event at all. Whatever else happens, a decoded
+      // terminal is yielded.
+      if (held !== null) {
+        yield* this.#settleHeld(transport, held);
+        return;
+      }
       yield* decoder.ensureStarted(sequencer);
       yield* isCancellation(error) || signal?.aborted === true
         ? sequencer.cancel(cancellationReason(signal, error))
@@ -484,14 +552,7 @@ export class PiCodexAdapter implements HarnessAdapter {
 
     await stderr.done;
     if (held !== null) {
-      // The exit code is MEASURED here rather than assumed at the moment the
-      // decoder saw a result line: a CLI that prints a success terminal and
-      // then exits non-zero was being recorded as clean. Holding the terminal
-      // costs nothing in ordering — the sequencer emits nothing after one — and
-      // `null` stays `null` when the process does not exit in time, because a
-      // run whose exit nobody saw did not exit cleanly, it exited unobserved.
-      const exit = await awaitExit(transport, this.#exitWaitMs);
-      yield held.kind === "run.completed" ? { ...held, exitCode: exit?.code ?? null } : held;
+      yield* this.#settleHeld(transport, held);
       return;
     }
 
