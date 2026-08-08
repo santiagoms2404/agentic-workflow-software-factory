@@ -9,6 +9,7 @@ import {
   ConfigAbsolutePathError,
   ConfigCredentialShapedError,
   ConfigUnknownAdapterError,
+  ConfigUnverifiedAdapterError,
   ConfigUnknownAdapterReferenceError,
   ConfigUnknownWorkflowError,
   ConfigUnknownGateError,
@@ -76,6 +77,18 @@ test("rejects an unknown adapter kind", () => {
   const doc = deepClone(validConfig());
   doc.adapters.mystery = { kind: "not-a-real-adapter" };
   assert.throws(() => loadConfig(toYaml(doc)), ConfigUnknownAdapterError);
+});
+
+test("rejects enabled Antigravity without the explicit verification flag", () => {
+  const doc = deepClone(validConfig());
+  doc.adapters.antigravity = { kind: "antigravity", executable: "agy", enabled: true };
+  assert.throws(() => loadConfig(toYaml(doc)), ConfigUnverifiedAdapterError);
+});
+
+test("accepts enabled Antigravity only with explicit verification", () => {
+  const doc = deepClone(validConfig());
+  doc.adapters.antigravity = { kind: "antigravity", executable: "agy", enabled: true, verified: true };
+  assert.equal(loadConfig(toYaml(doc)).adapters.antigravity?.verified, true);
 });
 
 test("rejects routing.default_worker naming an undeclared adapter", () => {

@@ -52,6 +52,16 @@ export class ConfigUnknownAdapterError extends ConfigError {
   }
 }
 
+export class ConfigUnverifiedAdapterError extends ConfigError {
+  constructor(adapterId: string) {
+    super(
+      "E_CONFIG_ADAPTER_UNVERIFIED",
+      `adapters.${adapterId} enables antigravity without verified: true; capture and read one bounded agy stream first`,
+    );
+    this.name = "ConfigUnverifiedAdapterError";
+  }
+}
+
 export class ConfigUnknownWorkflowError extends ConfigError {
   constructor(id: string) {
     super("E_CONFIG_UNKNOWN_WORKFLOW", `unknown workflow id: "${id}"`);
@@ -176,9 +186,15 @@ function assertNoCredentialShapedValues(doc: unknown): void {
 function assertKnownReferences(config: AwsfConfig): void {
   const declaredAdapterIds = new Set(Object.keys(config.adapters));
 
-  for (const adapter of Object.values(config.adapters)) {
+  for (const [adapterId, adapter] of Object.entries(config.adapters)) {
     if (!(KNOWN_ADAPTER_KINDS as readonly string[]).includes(adapter.kind)) {
       throw new ConfigUnknownAdapterError(adapter.kind);
+    }
+    // Q1's default is a shipped but inert slot. `enabled: true` therefore
+    // needs a separate, explicit attestation; otherwise a typo turns an
+    // unread provider protocol into a run path.
+    if (adapter.kind === "antigravity" && adapter.enabled === true && adapter.verified !== true) {
+      throw new ConfigUnverifiedAdapterError(adapterId);
     }
   }
 
@@ -238,8 +254,8 @@ function assertThinkingNeverPersisted(config: AwsfConfig): void {
  * Parses and validates `awsf.config.yaml` text against the `awsf/v1`
  * schema (specs/awsf-architecture-proposal.md §7.3.5), then applies the
  * loader's own hard rejections in this order: TypeBox structural
- * validation, absolute machine paths, credential-shaped values, unknown
- * adapter/workflow/gate/protected-operation references, tier ceilings
+ * validation, absolute machine paths, credential-shaped values, unknown or
+ * unverified adapter references, workflow/gate/protected-operation references, tier ceilings
  * outside {1,3,5}, `routing.no_fallback` other than `true`, and
  * `observability.persist_thinking_text` other than `false`.
  */

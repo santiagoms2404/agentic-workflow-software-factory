@@ -78,6 +78,9 @@ const AdapterEntrySchema = Type.Object(
     executable: Type.Optional(NonEmptyString),
     provider: Type.Optional(NonEmptyString),
     enabled: Type.Optional(Type.Boolean()),
+    // `verified` is meaningful only for Antigravity today. It is an explicit
+    // operator attestation that the documented capture-and-read procedure ran.
+    verified: Type.Optional(Type.Boolean()),
   },
   { additionalProperties: false },
 );
