@@ -23,6 +23,7 @@
 
 import type { NormalizedEvent } from "../contracts/normalized-events.ts";
 import type { EventSequencer } from "./stream/event-sequencer.ts";
+import { summarize } from "./stream/snippet.ts";
 
 interface ClaudeContentBlock {
   type?: string;
@@ -347,7 +348,15 @@ export class ClaudeStreamDecoder {
     // still goes through and still produces the fault.
     const reported = line.usage !== undefined && line.usage !== null;
     const out = reported ? [...sequencer.usage(mapUsage(line.usage), at)] : [];
-    if (line.is_error !== true) return [...out, ...sequencer.complete(0, at)];
+    // `null`, not `0`. The process's real exit code lives on `transport.exit`
+    // and this decoder never sees it, so a `0` here would be a measurement it
+    // did not take — and a CLI that emits a success result and then exits
+    // non-zero would be recorded as clean. `null ≠ 0` applies to exit codes for
+    // the same reason it applies to tokens. Measuring it properly means
+    // awaiting the exit inside the read loop, which is a shape change to
+    // `parse` rather than a patch; until then this says "not reported" instead
+    // of asserting a number.
+    if (line.is_error !== true) return [...out, ...sequencer.complete(null, at)];
 
     const message = errorMessageOf(line);
     if (QUOTA_SHAPED.test(message)) {
@@ -372,21 +381,6 @@ export class ClaudeStreamDecoder {
  */
 function providerAt(line: ClaudeLine): string | null {
   return typeof line.timestamp === "string" && line.timestamp.length > 0 ? line.timestamp : null;
-}
-
-/** A bounded, printable stand-in for a tool input or result of any shape. */
-function summarize(value: unknown): string {
-  if (value === undefined || value === null) return "";
-  const text = typeof value === "string" ? value : safeJson(value);
-  return text.length > 400 ? `${text.slice(0, 400)}…` : text;
-}
-
-function safeJson(value: unknown): string {
-  try {
-    return JSON.stringify(value) ?? "";
-  } catch {
-    return "[unserializable]";
-  }
 }
 
 /**
