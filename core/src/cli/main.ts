@@ -88,7 +88,11 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       else for (const candidate of candidates) out(candidate);
       return 0;
     }
-    if (command === "dash") return (await dashCommand({ cwd, write: out })) === "not-built" ? 1 : 0;
+    if (command === "dash") {
+      const configPath = resolve(parsed.flags.config ?? `${cwd}/awsf.config.yaml`);
+      const config = loadConfig(await readFile(configPath, "utf8"));
+      return (await dashCommand({ cwd, write: out, config, dbPath: resolve(stateRoot, "awsf.db") })) === "not-built" ? 1 : 0;
+    }
     if (command === "db") {
       if (parsed.positionals[0] !== "rebuild" || parsed.positionals.length !== 1) throw new Error("usage: awsf db rebuild [--state-root PATH]");
       const report = await rebuildCommand(stateRoot);

@@ -1,6 +1,9 @@
 import { access, readdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { createServer } from "node:http";
+import type { AwsfConfig } from "../../config/schema.ts";
+import { createApiRouter, type ApiRouter } from "../../api/routes.ts";
+import { sendResponse } from "../../api/responses.ts";
 import { ceilingFor } from "../../state/tiers.ts";
 import { discoverAttempts, rebuildDatabase, type RebuildReport, type RebuildSource } from "../../observability/rebuild.ts";
 import { journalFilePath } from "../../persistence/platform-paths.ts";
@@ -64,7 +67,7 @@ export async function gcCommand(stateRoot: string): Promise<readonly string[]> {
   return Object.freeze(candidates.sort());
 }
 
-export interface DashOptions { readonly cwd: string; readonly write: (line: string) => void; readonly port?: number; }
+export interface DashOptions { readonly cwd: string; readonly write: (line: string) => void; readonly port?: number; readonly dbPath?: string; readonly config?: AwsfConfig; }
 
 /** Serve only an already-built dashboard; building belongs to the owner, never this command. */
 export async function dashCommand(options: DashOptions): Promise<"not-built" | "serving"> {
@@ -74,7 +77,13 @@ export async function dashCommand(options: DashOptions): Promise<"not-built" | "
     options.write("Dashboard is not built yet. Run the dashboard build first; awsf dash never builds it.");
     return "not-built";
   }
+  const router: ApiRouter | null = options.dbPath !== undefined && options.config !== undefined
+    ? createApiRouter({ dbPath: options.dbPath, config: options.config }) : null;
   const server = createServer(async (request, response) => {
+    if (router !== null && request.url?.startsWith("/api/")) {
+      sendResponse(response, await router.dispatch({ method: request.method ?? "GET", url: request.url, headers: request.headers }));
+      return;
+    }
     const path = request.url === "/" || request.url === undefined ? index : join(root, request.url.replace(/^\//, ""));
     if (!resolve(path).startsWith(`${root}/`) && resolve(path) !== index) { response.writeHead(404); response.end(); return; }
     try { response.writeHead(200); response.end(await (await import("node:fs/promises")).readFile(path)); }

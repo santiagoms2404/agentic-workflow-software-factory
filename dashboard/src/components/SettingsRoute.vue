@@ -1,0 +1,6 @@
+<script setup lang="ts">
+import type { AdapterHealth, HealthResponse } from "../../shared/types.ts";
+defineProps<{ settings: unknown; adapters: AdapterHealth[]; health: HealthResponse | null }>();
+function json(value: unknown) { return JSON.stringify(value, null, 2); }
+</script>
+<template><main class="settings-route"><a class="back-link" href="#/sessions">← All sessions</a><section><p class="eyebrow">Read-only configuration</p><h1>Settings</h1><h2>Effective config</h2><pre>{{ json(settings) }}</pre></section><section><h2>Adapter health</h2><ul class="adapter-list"><li v-for="adapter in adapters" :key="adapter.id"><strong>{{ adapter.id }}</strong><span>{{ adapter.kind }} · {{ adapter.provider ?? "no provider" }}</span><b :class="adapter.status">{{ adapter.status }}</b><small v-if="adapter.code">{{ adapter.code }}</small></li></ul></section><section><h2>Database health</h2><dl><dt>Journal mode</dt><dd>{{ health?.journalMode ?? "unavailable" }}</dd><dt>Schema version</dt><dd>{{ health?.schemaVersion ?? "unavailable" }}</dd><dt>Projector lag</dt><dd>{{ health?.projectorLag ?? "unavailable" }}</dd><dt>Degraded sessions</dt><dd>{{ health?.degradedSessions ?? "unavailable" }}</dd></dl></section></main></template>
