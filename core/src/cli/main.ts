@@ -8,15 +8,18 @@ import { resolveStateRoot } from "../persistence/platform-paths.ts";
 import type { Tier } from "../state/tiers.ts";
 import { processOwnerTerminal, type OwnerTerminal } from "./tty.ts";
 import { cancelCommand } from "./commands/cancel.ts";
+import { doctorCommand } from "./commands/doctor.ts";
+import { dashCommand, gcCommand, rebuildCommand } from "./commands/operator.ts";
 import { landCommand } from "./commands/land.ts";
 import { newCommand } from "./commands/new.ts";
 import { locateAttempt } from "./commands/attempt.ts";
 import { retryCommand } from "./commands/retry.ts";
+import { runStubCommand } from "./commands/run.ts";
 import { defaultWorktreeRoot, startCommand } from "./commands/start.ts";
 import { statusCommand } from "./commands/status.ts";
 import { watchCommand } from "./commands/watch.ts";
 
-const USAGE = "usage: awsf <new|start|status|watch|land|cancel|retry> <task> [options]";
+const USAGE = "usage: awsf <new|start|run|status|watch|land|cancel|retry|doctor|gc|dash|db rebuild> [task] [options]";
 
 interface ParsedArgs {
   readonly positionals: readonly string[];
@@ -71,15 +74,37 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
     const command = argv[0];
     if (command === undefined) throw new Error(USAGE);
     const parsed = parseArgs(argv.slice(1));
-    const taskId = parsed.positionals[0];
-    if (taskId === undefined) throw new Error(USAGE);
-
-    const configPath = resolve(parsed.flags.config ?? `${cwd}/awsf.config.yaml`);
-    const config = loadConfig(await readFile(configPath, "utf8"));
-    const project = parsed.flags.project ?? config.project.slug;
     const stateRoot = parsed.flags["state-root"] === undefined
       ? resolveStateRoot(env)
       : resolve(parsed.flags["state-root"]);
+    if (command === "doctor") {
+      const report = await doctorCommand(stateRoot);
+      for (const line of report.lines) out(line);
+      return report.healthy ? 0 : 1;
+    }
+    if (command === "gc") {
+      const candidates = await gcCommand(stateRoot);
+      if (candidates.length === 0) out("No cleanup candidates. awsf gc lists only and deletes nothing.");
+      else for (const candidate of candidates) out(candidate);
+      return 0;
+    }
+    if (command === "dash") return (await dashCommand({ cwd, write: out })) === "not-built" ? 1 : 0;
+    if (command === "db") {
+      if (parsed.positionals[0] !== "rebuild" || parsed.positionals.length !== 1) throw new Error("usage: awsf db rebuild [--state-root PATH]");
+      const report = await rebuildCommand(stateRoot);
+      if (report.ok) {
+        out(`Rebuilt ${report.targetPath}: ${report.sessions} session(s), ${report.records} record(s).`);
+        return 0;
+      }
+      out(`Rebuild refused: ${report.reason}; candidate retained at ${report.candidatePath}`);
+      return 1;
+    }
+
+    const taskId = parsed.positionals[0];
+    if (taskId === undefined) throw new Error(USAGE);
+    const configPath = resolve(parsed.flags.config ?? `${cwd}/awsf.config.yaml`);
+    const config = loadConfig(await readFile(configPath, "utf8"));
+    const project = parsed.flags.project ?? config.project.slug;
     const selectedAttempt = parsed.flags.attempt === undefined ? undefined : Number(parsed.flags.attempt);
 
     if (command === "new") {
@@ -107,9 +132,16 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
           attemptDir: located.attemptDir,
           worktreeRoot: resolve(parsed.flags["worktree-root"] ?? env.AWSF_WORKTREE_ROOT ?? defaultWorktreeRoot(stateRoot)),
           configPath,
+          ...(parsed.flags.stub === "true" ? { preflight: () => ({ adapter: true, sandbox: true, observability: true }) } : {}),
         });
         out(`Prepared ${taskId} at ${status.baseSha}.`);
         out(status.nextAction);
+        return 0;
+      }
+      case "run": {
+        if (parsed.flags.stub !== "true") throw new Error("only `awsf run <task> --stub true` is available");
+        const status = await runStubCommand(located.attemptDir);
+        out(`${status.lifecycleState}: ${status.nextAction}`);
         return 0;
       }
       case "status":

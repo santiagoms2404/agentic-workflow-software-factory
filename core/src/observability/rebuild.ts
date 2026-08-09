@@ -104,6 +104,8 @@ export function observabilityDegraded(db: DatabaseSync, sessionId: string): bool
 export interface RebuildSource {
   session: SessionInit;
   journalPath: string;
+  /** Adapts a durable journal vocabulary at its owning boundary for projection. */
+  normalize?: (record: JournalRecord<unknown>) => NormalizedEvent;
 }
 
 export interface RebuildOptions {
@@ -236,14 +238,17 @@ export async function rebuildDatabase(options: RebuildOptions): Promise<RebuildR
   // than refusing with one to explain.
   const loaded: { source: RebuildSource; records: readonly JournalRecord<NormalizedEvent>[] }[] = [];
   for (const source of options.sources) {
-    const scan = await scanJournal<NormalizedEvent>(source.journalPath);
+    const scan = await scanJournal<unknown>(source.journalPath);
     if (!scan.ok) {
       return refuse(
         `${source.journalPath} cannot be replayed: ${scan.detail}`,
         scan.badKey,
       );
     }
-    loaded.push({ source, records: scan.records });
+    const records = source.normalize === undefined
+      ? scan.records as readonly JournalRecord<NormalizedEvent>[]
+      : scan.records.map((record) => ({ ...record, event: source.normalize?.(record) as NormalizedEvent }));
+    loaded.push({ source, records });
   }
 
   // Sessions in the order they started, then every record of every journal
