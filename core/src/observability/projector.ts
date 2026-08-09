@@ -8,6 +8,7 @@ import type { JournalRecord } from "../persistence/journal.ts";
 import type { NormalizedEvent } from "../contracts/normalized-events.ts";
 import { isPersistableKind } from "../contracts/normalized-events.ts";
 import type { DatabaseSync } from "./sqlite.ts";
+import type { AttemptEvidence } from "./attempt-evidence.ts";
 import {
   scrubCredentialString,
   scrubCredentials,
@@ -76,6 +77,7 @@ export interface AttemptStatusProjection extends SessionInit {
   updatedAt: string;
   endedAt: string | null;
   stateRevision: number;
+  evidence?: AttemptEvidence;
 }
 
 /**
@@ -106,6 +108,7 @@ export function projectAttemptStatus(
 
     db.exec("BEGIN IMMEDIATE");
     try {
+      if (status.evidence !== undefined) applyAttemptEvidence(db, status.sessionId, sourceSeq, status.evidence);
       db.prepare(`UPDATE sessions SET
           lifecycle_state = ?, base_sha = ?, candidate_sha = ?, calls_spent = ?, calls_reserved = ?,
           corrections_auto = ?, corrections_owner = ?, worker_model_resolved = ?, updated_at = ?,
@@ -188,6 +191,140 @@ function setDegraded(db: DatabaseSync, sessionId: string): void {
     new Date().toISOString(),
     sessionId,
   );
+}
+
+function totalTokens(usage: { inputTokens: number | null; outputTokens: number | null; reasoningTokens: number | null; reasoningRelation: string }): number | null {
+  if (usage.inputTokens === null && usage.outputTokens === null && usage.reasoningTokens === null) return null;
+  const base = (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0);
+  return usage.reasoningRelation === "additive" ? base + (usage.reasoningTokens ?? 0) : base;
+}
+
+function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: number, evidence: AttemptEvidence): void {
+  switch (evidence.type) {
+    case "transition":
+      db.prepare(`INSERT OR IGNORE INTO transitions
+        (transition_id, session_id, seq, from_state, to_state, actor, edge_id, reason_source,
+         reason_code, reason_detail, spawn_site, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(evidence.id, sessionId, evidence.seq, evidence.from, evidence.to, evidence.actor,
+          evidence.edgeId, evidence.reasonSource, evidence.reasonCode, evidence.reasonDetail,
+          evidence.spawnSite ? 1 : 0, evidence.at);
+      return;
+    case "phase": {
+      const phase = evidence.phase;
+      db.prepare(`INSERT INTO phases
+        (phase_id, session_id, ordinal, phase_key, name, kind, owner, description, status,
+         correction_count, max_corrections, error_code, error_message, started_at, ended_at, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(phase_id) DO UPDATE SET status=excluded.status,
+          correction_count=excluded.correction_count, error_code=excluded.error_code,
+          error_message=excluded.error_message, started_at=excluded.started_at, ended_at=excluded.ended_at`)
+        .run(phase.phaseId, sessionId, phase.ordinal, phase.key, phase.name, phase.kind, phase.owner,
+          phase.description, phase.status, phase.correctionCount, phase.maxCorrections, phase.errorCode,
+          phase.errorMessage, phase.startedAt, phase.endedAt, phase.createdAt);
+      return;
+    }
+    case "normalized-event":
+      applyEvent(db, { sessionId, runId: evidence.event.runId, phaseId: evidence.phaseId }, {
+        source_seq: sourceSeq,
+        recorded_at: evidence.event.hostAt,
+        event: evidence.event,
+      });
+      return;
+    case "compiled-prompt":
+      db.prepare(`INSERT OR IGNORE INTO events
+        (event_id, session_id, phase_id, first_source_seq, last_source_seq, type, name,
+         payload_json, started_at) VALUES (?, ?, ?, ?, ?, 'compiled_prompt', ?, ?, ?)`)
+        .run(`${sessionId}:prompt:${sourceSeq}`, sessionId, evidence.phaseId, sourceSeq, sourceSeq,
+          evidence.name, stringifyRedacted({ text: evidence.text, lineCount: evidence.lineCount }), evidence.at);
+      return;
+    case "process": {
+      const record = evidence.record;
+      db.prepare(`INSERT INTO processes
+        (process_id, session_id, phase_id, run_id, adapter_id, role, transport, pid, pgid,
+         process_start_identity, status, command_json, cwd_display, registered_at, released_at,
+         ended_at, exit_code, exit_signal)
+        VALUES (?, ?, ?, ?, ?, ?, 'process', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(process_id) DO UPDATE SET status=excluded.status, released_at=excluded.released_at,
+          ended_at=excluded.ended_at, exit_code=excluded.exit_code, exit_signal=excluded.exit_signal`)
+        .run(`${sessionId}:${record.runId}`, sessionId, evidence.phaseId, record.runId,
+          evidence.adapterId, evidence.role, record.identity.pid,
+          record.identity.pgid, record.identity.startIdentity, evidence.status,
+          stringifyRedacted(record.command), scrubCredentialString(record.cwd), evidence.registeredAt,
+          evidence.releasedAt, evidence.endedAt, evidence.exitCode, evidence.exitSignal);
+      return;
+    }
+    case "envelope": {
+      const envelope = evidence.envelope;
+      db.prepare(`INSERT OR IGNORE INTO envelopes
+        (envelope_id, session_id, phase_id, agent, schema_id, correction_round, valid,
+         producer_status, payload_json, violations_json, file_path, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(envelope.envelopeId, sessionId, evidence.phaseId, scrubCredentialString(envelope.agent),
+          envelope.schemaId, envelope.correctionRound, envelope.valid ? 1 : 0,
+          envelope.payload?.producerStatus ?? null, stringifyRedacted(envelope.payload),
+          stringifyRedacted(envelope.violations), scrubCredentialString(envelope.rawOutputPath), envelope.createdAt);
+      return;
+    }
+    case "gate":
+      db.prepare(`INSERT OR REPLACE INTO gate_results
+        (gate_result_id, session_id, phase_id, correction_round, gate_id, gate_kind, candidate_sha,
+         passed, exit_code, checks_json, violations_json, output_path, started_at, ended_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(evidence.id, sessionId, evidence.phaseId, evidence.round, evidence.gateId, evidence.kind,
+          evidence.candidateSha, evidence.passed ? 1 : 0, evidence.exitCode,
+          stringifyRedacted(evidence.checks), stringifyRedacted(evidence.violations),
+          evidence.outputPath === null ? null : scrubCredentialString(evidence.outputPath),
+          evidence.startedAt, evidence.endedAt);
+      return;
+    case "agent": {
+      const usage = evidence.usage;
+      const total = totalTokens(usage);
+      db.prepare(`INSERT INTO agent_sessions
+        (session_id, agent, adapter_id, provider, color, requested_model, resolved_model,
+         model_provenance, context_tokens, context_window, call_count, input_tokens, output_tokens,
+         cache_read_tokens, cache_write_tokens, reasoning_tokens, total_tokens, estimated_cost_usd,
+         cost_authority, created_at, last_used_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(session_id, agent) DO UPDATE SET resolved_model=excluded.resolved_model,
+          model_provenance=excluded.model_provenance, context_tokens=excluded.context_tokens,
+          context_window=excluded.context_window, call_count=agent_sessions.call_count + 1,
+          input_tokens=excluded.input_tokens, output_tokens=excluded.output_tokens,
+          cache_read_tokens=excluded.cache_read_tokens, cache_write_tokens=excluded.cache_write_tokens,
+          reasoning_tokens=excluded.reasoning_tokens, total_tokens=excluded.total_tokens,
+          estimated_cost_usd=excluded.estimated_cost_usd, cost_authority=excluded.cost_authority,
+          last_used_at=excluded.last_used_at`)
+        .run(sessionId, evidence.agent, evidence.adapterId, evidence.provider, evidence.color,
+          evidence.requestedModel, evidence.resolvedModel, evidence.modelProvenance,
+          evidence.contextTokens, evidence.contextWindow, usage.inputTokens, usage.outputTokens,
+          usage.cacheReadTokens, usage.cacheWriteTokens, usage.reasoningTokens, total,
+          evidence.costUsd, evidence.costAuthority, evidence.at, evidence.at);
+      const current = db.prepare(`SELECT input_tokens, output_tokens, cache_read_tokens,
+          cache_write_tokens, reasoning_tokens, total_tokens, estimated_cost_usd, cost_authority,
+          cost_partial, usage_authority FROM sessions WHERE session_id=?`).get(sessionId) as {
+            input_tokens: number | null; output_tokens: number | null; cache_read_tokens: number | null;
+            cache_write_tokens: number | null; reasoning_tokens: number | null; total_tokens: number | null;
+            estimated_cost_usd: number | null; cost_authority: "provider" | "catalog-estimate" | "unavailable";
+            cost_partial: number; usage_authority: "provider" | "partial" | "none";
+          };
+      const add = (left: number | null, right: number | null): number | null =>
+        right === null ? left : (left ?? 0) + right;
+      const hadPrior = current.input_tokens !== null || current.output_tokens !== null || current.usage_authority !== "none";
+      const mixedCost = current.cost_partial === 1 || (hadPrior && current.cost_authority !== evidence.costAuthority);
+      const usageAuthority = current.usage_authority === "none"
+        ? evidence.usageAuthority
+        : current.usage_authority === evidence.usageAuthority ? current.usage_authority : "partial";
+      db.prepare(`UPDATE sessions SET worker_provider=?, worker_model_requested=?, worker_model_resolved=?,
+          input_tokens=?, output_tokens=?, cache_read_tokens=?, cache_write_tokens=?, reasoning_tokens=?,
+          total_tokens=?, reasoning_relation=?, usage_authority=?, estimated_cost_usd=?, cost_authority=?, cost_partial=?
+        WHERE session_id=?`).run(evidence.provider, evidence.requestedModel, evidence.resolvedModel,
+          add(current.input_tokens, usage.inputTokens), add(current.output_tokens, usage.outputTokens),
+          add(current.cache_read_tokens, usage.cacheReadTokens), add(current.cache_write_tokens, usage.cacheWriteTokens),
+          add(current.reasoning_tokens, usage.reasoningTokens), add(current.total_tokens, total),
+          usage.reasoningRelation, usageAuthority, add(current.estimated_cost_usd, evidence.costUsd),
+          evidence.costAuthority, mixedCost ? 1 : 0, sessionId);
+      return;
+    }
+  }
 }
 
 function toolCallEventId(runId: string, toolCallId: string): string {

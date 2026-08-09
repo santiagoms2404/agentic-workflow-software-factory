@@ -24,7 +24,7 @@ import {
   type HarnessAdapter,
   type ModelInfo,
   type ModelRequest,
-  type ProcessRegistration,
+  type BrokerProcessRegistration,
   type ProcessSpec,
   type ProcessTransport,
   type TransportBroker,
@@ -297,7 +297,7 @@ export class StubAdapter implements HarnessAdapter {
   async *execute(
     request: ModelRequest,
     broker: TransportBroker,
-    registration: ProcessRegistration,
+    registration: BrokerProcessRegistration,
     signal: AbortSignal,
   ): AsyncIterable<NormalizedEvent> {
     const transport = await broker.startProcess(registration, this.buildSpec(request), signal);

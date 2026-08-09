@@ -344,6 +344,8 @@ export interface LauncherBarrierOptions {
    * evidence, and when it rejects, nothing may run.
    */
   register: (record: BarrierRecord) => Promise<void>;
+  /** Durable spend evidence, after charging and before the release token. */
+  onSpent?: (record: BarrierRecord, reservation: Reservation) => Promise<void>;
   ledger: ReservationLedger;
   signal?: AbortSignal;
   onStep?: (step: BarrierStep) => Promise<void> | void;
@@ -417,7 +419,7 @@ export class RegistrationFailed extends Error {
  * PROVABLY never ran is returned, and a call that may have run is billed.
  */
 export async function runLauncherBarrier(options: LauncherBarrierOptions): Promise<BarrierOutcome> {
-  const { start, record, register, ledger, signal, onStep } = options;
+  const { start, record, register, onSpent, ledger, signal, onStep } = options;
   const step = async (name: BarrierStep): Promise<void> => {
     await onStep?.(name);
   };
@@ -473,6 +475,7 @@ export async function runLauncherBarrier(options: LauncherBarrierOptions): Promi
     const reservation = ledger.spendOnGo(record.reservationId);
     spent = true;
     at = "spent";
+    await onSpent?.({ ...record, identity }, reservation);
     await step("spent");
 
     await launch.release();

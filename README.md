@@ -4,12 +4,11 @@ A single-operator agentic software factory: a host-owned state machine governs
 a task's lifecycle, a typed phase engine governs the work inside each
 executing state, and a human is the only path to landed code.
 
-> **Status: pre-alpha, actively under construction.** Nothing in this
-> repository executes an agent, a workflow, or a landing yet. What exists
-> today is a validated configuration layer and a scaffolded workspace. See
-> [Status](#status) below for exactly what is and isn't real. Every claim in
-> this README is backed by a command you can run yourself — see
-> [Verifying these claims](#verifying-these-claims).
+> **Status: pre-alpha, actively under construction.** The T1 `build` and
+> `plan-build-test` workflows now have a production runner; T2 production review
+> and both adoption pilots remain outstanding. See [Status](#status) below for
+> exactly what is and isn't real. Every claim in this README is backed by a
+> command you can run yourself — see [Verifying these claims](#verifying-these-claims).
 
 ## What this is
 
@@ -123,11 +122,13 @@ markers are earned, never pre-declared. As of this README:
 
 **Concretely, right now:** the lifecycle, persistence, execution kernel,
 adapters, workflows, gates, permissions, owner CLI, and read-only dashboard are
-implemented. The CLI exposes `new`, `start`, `run`, `status`, `watch`, `land`,
-`cancel`, `retry`, `doctor`, `gc`, `dash`, and `db rebuild`; landing has one
-human+TTY authorization site and mutates the canonical checkout only by a
-verified local fast-forward. The portability matrix is evidence-backed only
-where it says so; the two real pilots remain outstanding.
+implemented. `awsf run TASK` drives configured T1 `build` and `plan-build-test`
+workflows from `PREPARED`; unsupported production recipes fail closed. The
+explicit `awsf run TASK --stub true` simple-SDLC demonstration is unchanged.
+T2 review is not yet production-bound. Landing has one human+TTY authorization
+site and mutates the canonical checkout only by a verified local fast-forward.
+The portability matrix is evidence-backed only where it says so; the two real
+pilots remain outstanding.
 
 ## Install and usage
 
@@ -140,13 +141,23 @@ npm run awsf -- doctor
 npm run awsf -- db rebuild
 ```
 
-Create and drive a fixture-backed task without a provider call:
+Drive a configured T1 workflow, with landing performed only by the owner at an
+interactive terminal:
 
 ```bash
-npm run awsf -- new T01 "describe the task" --workflow simple-sdlc --tier 1
-npm run awsf -- start T01 --stub true
-npm run awsf -- run T01 --stub true
+npm run awsf -- new T01 "describe the task" --workflow build --tier 1
+npm run awsf -- start T01
+npm run awsf -- run T01
 npm run awsf -- status T01
+npm run awsf -- land T01
+```
+
+The explicit zero-quota fixture demonstration remains available:
+
+```bash
+npm run awsf -- new T01-fixture "describe the task" --workflow simple-sdlc --tier 1
+npm run awsf -- start T01-fixture --stub true
+npm run awsf -- run T01-fixture --stub true
 ```
 
 The [`justfile`](justfile) is optional convenience only; each target delegates
@@ -190,11 +201,11 @@ specs/                    the planning artifacts — read these first
 core/                     @awsf/core — the host: state machine, adapters, gates, persistence, API
   src/config/                awsf/v1 schema, loader, redacted effective-config snapshot   (built)
   src/{state,contracts,workflow,gates,git,policy,persistence,observability,execution,adapters,cli}/
-                              implemented host boundaries through T21
-  src/api/                    reserved for the read-only M7 server
+                              implemented host boundaries and the T1 production runner
+  src/api/                    read-only M7 server
   test/{unit,contract,simulation,journeys}/
                               four executable proof layers
-dashboard/                Vue 3 + Vite, loopback-only, cursor-polling — not started (M7)
+dashboard/                Vue 3 + Vite, loopback-only, cursor-polling dashboard
 prompts/<agent>/          system.md / user.md pairs per agent, referenced by awsf.config.yaml
 justfile                  thin wrappers over the npm scripts — never a second source of truth
 ```

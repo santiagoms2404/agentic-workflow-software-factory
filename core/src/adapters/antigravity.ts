@@ -12,7 +12,7 @@ import {
   type HarnessAdapter,
   type ModelInfo,
   type ModelRequest,
-  type ProcessRegistration,
+  type BrokerProcessRegistration,
   type ProcessSpec,
   type ProcessTransport,
   type TransportBroker,
@@ -61,7 +61,7 @@ export class AntigravityAdapter implements HarnessAdapter {
   async *execute(
     _request: ModelRequest,
     _broker: TransportBroker,
-    _registration: ProcessRegistration,
+    _registration: BrokerProcessRegistration,
     _signal: AbortSignal,
   ): AsyncIterable<NormalizedEvent> {
     yield* [] as NormalizedEvent[];

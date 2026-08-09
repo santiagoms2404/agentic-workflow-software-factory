@@ -17,6 +17,7 @@ import { newCommand } from "./commands/new.ts";
 import { locateAttempt } from "./commands/attempt.ts";
 import { retryCommand } from "./commands/retry.ts";
 import { runStubCommand } from "./commands/run.ts";
+import { runProductionCommand } from "./commands/production-run.ts";
 import { defaultWorktreeRoot, startCommand } from "./commands/start.ts";
 import { statusCommand } from "./commands/status.ts";
 import { watchCommand } from "./commands/watch.ts";
@@ -158,16 +159,27 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         return 0;
       }
       case "run": {
-        if (parsed.flags.stub !== "true") throw new Error("only `awsf run <task> --stub true` is available");
-        const liveMs = parsed.flags["live-ms"] === undefined ? 0 : Number(parsed.flags["live-ms"]);
-        if (!Number.isInteger(liveMs) || liveMs < 0 || liveMs > 60_000) throw new Error("--live-ms must be an integer from 0 through 60000");
-        const status = await runStubCommand(located.attemptDir, {
-          liveMs,
+        if (parsed.flags.stub === "true") {
+          const liveMs = parsed.flags["live-ms"] === undefined ? 0 : Number(parsed.flags["live-ms"]);
+          if (!Number.isInteger(liveMs) || liveMs < 0 || liveMs > 60_000) throw new Error("--live-ms must be an integer from 0 through 60000");
+          const status = await runStubCommand(located.attemptDir, {
+            liveMs,
+            projectRecord: projection.project,
+            assertAdvancement: projection.assertAdvancement,
+          });
+          out(`${status.lifecycleState}: ${status.nextAction}`);
+          return 0;
+        }
+        const status = await runProductionCommand({
+          attemptDir: located.attemptDir,
+          config,
+          configPath,
           projectRecord: projection.project,
           assertAdvancement: projection.assertAdvancement,
+          assertLaunchProjection: projection.assertLaunchPermitted,
         });
         out(`${status.lifecycleState}: ${status.nextAction}`);
-        return 0;
+        return status.lifecycleState === "AWAITING_OWNER" ? 0 : 1;
       }
       case "status":
         for (const line of await statusCommand(located.attemptDir)) out(line);

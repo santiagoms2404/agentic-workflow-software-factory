@@ -191,6 +191,12 @@ export function pollPhaseEvents(db: DatabaseSync, phaseId: string, afterEventRow
     .all(phaseId, afterEventRow, limit) as unknown as EventRow[];
 }
 
+export function compiledPromptEvents(db: DatabaseSync, phaseId: string): Pick<EventRow, "name" | "payload_json">[] {
+  return db.prepare(`SELECT name, payload_json FROM events
+    WHERE phase_id = ? AND type = 'compiled_prompt' ORDER BY event_row`)
+    .all(phaseId) as unknown as Pick<EventRow, "name" | "payload_json">[];
+}
+
 export interface TransitionRow {
   transition_id: string;
   seq: number;

@@ -48,7 +48,7 @@ import {
   type HarnessAdapter,
   type ModelInfo,
   type ModelRequest,
-  type ProcessRegistration,
+  type BrokerProcessRegistration,
   type ProcessSpec,
   type ProcessTransport,
   type TransportBroker,
@@ -442,7 +442,7 @@ export class PiCodexAdapter implements HarnessAdapter {
   async *execute(
     request: ModelRequest,
     broker: TransportBroker,
-    registration: ProcessRegistration,
+    registration: BrokerProcessRegistration,
     signal: AbortSignal,
   ): AsyncIterable<NormalizedEvent> {
     if (request.systemPromptPath !== undefined) {

@@ -14,6 +14,7 @@ import { tryReadStatus } from "../../persistence/status-store.ts";
 import { TERMINAL_STATES, type BudgetState, type TaskState } from "../../state/task-machine.ts";
 import type { ModelResolutionProvenance } from "../../contracts/normalized-events.ts";
 import type { ProcessIdentity } from "../../execution/launcher-barrier.ts";
+import type { AttemptEvidence } from "../../observability/attempt-evidence.ts";
 import type { Tier } from "../../state/tiers.ts";
 
 export interface PhaseMeter {
@@ -77,6 +78,7 @@ export interface AttemptStatus {
 export interface AttemptEvent {
   readonly kind: "attempt.created" | "attempt.updated" | "attempt.transitioned" | "attempt.retried";
   readonly next: AttemptStatus;
+  readonly evidence?: AttemptEvidence;
 }
 
 /** The observability callback occupying the write protocol's project step. */
@@ -188,7 +190,7 @@ export function nextRevision(status: AttemptStatus, update: Partial<AttemptStatu
 export function nextActionFor(state: TaskState, taskId: string): string {
   switch (state) {
     case "DRAFT": return `run \`awsf start ${taskId}\``;
-    case "PREPARED": return `start the compiled workflow for ${taskId}`;
+    case "PREPARED": return `run \`awsf run ${taskId}\``;
     case "RUNNING": return `run \`awsf watch ${taskId}\` or \`awsf cancel ${taskId}\``;
     case "GATING": return `inspect gate output with \`awsf watch ${taskId}\``;
     case "REVIEWING": return `wait for the mandatory review; use \`awsf watch ${taskId}\``;

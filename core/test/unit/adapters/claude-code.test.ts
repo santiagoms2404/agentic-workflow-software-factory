@@ -336,7 +336,7 @@ test("Claude Pro measures tokens and cannot price them — and says both", async
   assert.equal(info.requestedModel, "opus");
   assert.equal(info.usageAuthority, "provider");
   assert.equal(info.costAuthority, "unavailable");
-  assert.equal(info.continuity, "same-session-correction");
+  assert.equal(info.continuity, "none");
   // `null` = this adapter declares no ceiling. Not a ceiling of zero.
   assert.equal(info.contextWindow, null);
 });

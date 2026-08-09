@@ -126,6 +126,8 @@ interface PhaseDefinition<TOutput> {
 | `build-review` | request → builder → tests → reviewer | T2 |
 | `simple-sdlc` | planner → builder → tests → documenter → final tests → reviewer | T2 |
 
+**Production v1 binding is deliberately narrower than recipe declaration.** `awsf start` performs L1 preparation only. From `PREPARED`, `awsf run TASK` may production-bind `build` and `plan-build-test` at T1; it compiles and resolves every explicit phase route before launch, uses L4 for the first provider and compiled-phase authorization for later ordinary agents, then reaches L7/L12 only after host commits and exact candidate gates. A recipe without a complete production binding fails before lifecycle mutation or provider launch. `awsf run TASK --stub true` remains the explicit `simple-sdlc` fixture demonstration; it is not a production fallback. T2 review remains unbound until its own production checkpoint.
+
 ### 7.3.4 Risk tiers and call budgets
 
 | Tier | Meaning | Call ceiling | Required controls |
@@ -1333,6 +1335,7 @@ At minimum:
   in the *correct* rejection order.
 - Kill the host between registration and release: **no provider process exists.** All platforms.
 - The five task-edge spawn sites remain L4/L10/L11/L16/L19; a valid second compiled agent phase launches under durable `RUNNING` only through the separate host-verified phase authorization, spends its held call on `GO`, and wrong-state/unknown/local/mismatched/unreserved registrations create no child.
+- The zero-quota production-runner journey drives the same `awsf run` command seam with injected fixture infrastructure: `build` spends one call, `plan-build-test` spends two, the dashboard sees `RUNNING` and the current phase before completion, exact host gates reach `AWAITING_OWNER`, and unavailable/malformed/breach/gate/command/registration/projector negatives fail without fallback or held reservation.
 - Cancel a run with a grandchild: **the grandchild is reaped and survivors are reported
   truthfully.** A supervisor that cannot enumerate must error, not return `[]`.
 - Crash mid-`LANDING`: recovery is unambiguous, and an ambiguous recovery blocks.

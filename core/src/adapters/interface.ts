@@ -229,7 +229,7 @@ export interface HarnessAdapter {
   execute(
     request: ModelRequest,
     broker: TransportBroker,
-    registration: ProcessRegistration,
+    registration: BrokerProcessRegistration,
     signal: AbortSignal,
   ): AsyncIterable<NormalizedEvent>;
 }

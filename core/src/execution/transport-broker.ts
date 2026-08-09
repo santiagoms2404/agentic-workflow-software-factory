@@ -194,19 +194,31 @@ export function resolveExecutable(executable: string, env: Readonly<Record<strin
  * period, and an enumeration that could interleave with its own next poll is a
  * survivor list assembled from two different moments.
  */
+export interface SystemCommandOptions {
+  readonly timeoutMs: number;
+  readonly cwd?: string;
+  readonly maxBuffer?: number;
+  readonly env?: Readonly<Record<string, string>>;
+}
+
 export function runSystemCommand(
   executable: string,
   argv: readonly string[],
-  timeoutMs: number,
+  timeoutOrOptions: number | SystemCommandOptions,
 ): CommandResult {
+  const options = typeof timeoutOrOptions === "number"
+    ? { timeoutMs: timeoutOrOptions }
+    : timeoutOrOptions;
   const result = spawnSync(executable, [...argv], {
     encoding: "utf8",
-    timeout: timeoutMs,
+    timeout: options.timeoutMs,
     shell: false,
     windowsHide: true,
-    // A process table on a busy machine is large, and a census truncated by the
-    // default 1 MB buffer would be a survivor list with the end cut off.
-    maxBuffer: 16 * 1024 * 1024,
+    ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
+    ...(options.env === undefined ? {} : { env: { ...options.env } }),
+    // A process table on a busy machine is large, and configured gate output is
+    // bounded at this sole command boundary rather than after unbounded capture.
+    maxBuffer: options.maxBuffer ?? 16 * 1024 * 1024,
   });
   return {
     status: result.status,
@@ -232,6 +244,8 @@ export interface BrokerOptions {
    * only what varies per launch.
    */
   register: (record: BarrierRecord) => Promise<void>;
+  /** Persists reservation spend after the ledger charges it and before GO. */
+  onSpent?: (record: BarrierRecord, reservation: Reservation) => Promise<void>;
   ledger: BrokerReservationLedger;
   /** Trusted host proof for intra-workflow phases. Absent means phase launches are disabled. */
   phaseLaunchVerifier?: AgentPhaseLaunchVerifier;
@@ -333,6 +347,7 @@ export class ProcessTransportBroker implements TransportBroker {
         cwd: spec.cwd,
       },
       register: this.#options.register,
+      ...(this.#options.onSpent === undefined ? {} : { onSpent: this.#options.onSpent }),
       ledger: this.#options.ledger,
       signal,
       ...(hooks.onStep === undefined ? {} : { onStep: hooks.onStep }),

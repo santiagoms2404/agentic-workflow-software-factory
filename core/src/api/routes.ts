@@ -2,6 +2,7 @@ import type { DatabaseSync } from "../observability/sqlite.ts";
 import { openDatabase, setSessionArchived } from "../observability/sqlite.ts";
 import {
   agentsForSession,
+  compiledPromptEvents,
   configSnapshotForSession,
   envelopesForPhase,
   gatesForSession,
@@ -362,7 +363,12 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
         sessionId,
         phase: phase(found),
         effectiveConfig: snapshot === null ? {} : parseJson(snapshot),
-        compiledPrompts: [],
+        compiledPrompts: compiledPromptEvents(readDb, found.phase_id).flatMap((item) => {
+          const payload = parseJson(item.payload_json) as { text?: unknown; lineCount?: unknown } | null;
+          return payload !== null && typeof payload.text === "string" && typeof payload.lineCount === "number"
+            ? [{ name: item.name, text: payload.text, lineCount: payload.lineCount }]
+            : [];
+        }),
         envelopes,
         gates: gatesForSession(readDb, sessionId, phaseId).map(gate),
         usage: usage(session),

@@ -25,6 +25,7 @@ export async function rebuildCommand(stateRoot: string): Promise<RebuildReport> 
       attemptStatus: (record) => toAttemptStatusProjection(
         stateRoot,
         (record.event as AttemptEvent).next,
+        record.event as AttemptEvent,
       ),
       session: {
         sessionId: status.sessionId,

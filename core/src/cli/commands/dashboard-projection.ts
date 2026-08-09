@@ -11,6 +11,8 @@ import { toAttemptStatusProjection } from "./attempt-projection.ts";
 export interface DashboardProjection {
   readonly project: AttemptProjector;
   readonly assertAdvancement: AttemptAdvancementGuard;
+  /** Barrier precondition: projection must acknowledge registration before GO. */
+  assertLaunchPermitted(sessionId: string): void;
   close(): void;
 }
 
@@ -43,7 +45,7 @@ export function createDashboardProjection(
         const writer = database();
         const outcome = projectAttemptStatus(
           writer,
-          toAttemptStatusProjection(stateRoot, status),
+          toAttemptStatusProjection(stateRoot, status, record.event),
           record.source_seq,
         );
         if (!outcome.ok) reportUnavailable(status.sessionId);
@@ -62,6 +64,14 @@ export function createDashboardProjection(
         }
       }
       assertAdvancementPermitted({ sessionId, to, degraded: isDegraded });
+    },
+    assertLaunchPermitted(sessionId): void {
+      let isDegraded = degraded.has(sessionId);
+      if (!isDegraded) {
+        try { isDegraded = observabilityDegraded(database(), sessionId); }
+        catch { isDegraded = true; }
+      }
+      if (isDegraded) throw new Error(`session ${sessionId} process registration was not acknowledged by SQLite before GO`);
     },
     close(): void {
       if (db === null) return;

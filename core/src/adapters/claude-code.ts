@@ -34,7 +34,7 @@ import {
   type HarnessAdapter,
   type ModelInfo,
   type ModelRequest,
-  type ProcessRegistration,
+  type BrokerProcessRegistration,
   type ProcessSpec,
   type ProcessTransport,
   type TransportBroker,
@@ -323,7 +323,7 @@ export class ClaudeCodeAdapter implements HarnessAdapter {
       supportsThinking: true,
       supportsTools: true,
       supportsImages: true,
-      continuity: "same-session-correction",
+      continuity: "none",
       usageAuthority: "provider",
       costAuthority: "unavailable",
     };
@@ -372,7 +372,7 @@ export class ClaudeCodeAdapter implements HarnessAdapter {
   async *execute(
     request: ModelRequest,
     broker: TransportBroker,
-    registration: ProcessRegistration,
+    registration: BrokerProcessRegistration,
     signal: AbortSignal,
   ): AsyncIterable<NormalizedEvent> {
     if (request.systemPromptPath !== undefined) {

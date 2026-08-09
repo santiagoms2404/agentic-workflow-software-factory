@@ -4,10 +4,14 @@ import {
   attemptDir as attemptDirectory,
   journalFilePath,
 } from "../../persistence/platform-paths.ts";
-import { isTerminalStatus, type AttemptStatus } from "./attempt.ts";
+import { isTerminalStatus, type AttemptEvent, type AttemptStatus } from "./attempt.ts";
 
 /** Maps a durable CLI snapshot to its rebuildable SQLite session summary. */
-export function toAttemptStatusProjection(stateRoot: string, status: AttemptStatus): AttemptStatusProjection {
+export function toAttemptStatusProjection(
+  stateRoot: string,
+  status: AttemptStatus,
+  event?: AttemptEvent,
+): AttemptStatusProjection {
   const dir = attemptDirectory(
     stateRoot,
     status.project,
@@ -38,5 +42,6 @@ export function toAttemptStatusProjection(stateRoot: string, status: AttemptStat
     updatedAt: status.lastActivityAt,
     endedAt: isTerminalStatus(status) ? status.lastActivityAt : null,
     stateRevision: status.revision,
+    ...(event?.evidence === undefined ? {} : { evidence: event.evidence }),
   };
 }
