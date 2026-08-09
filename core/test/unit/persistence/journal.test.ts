@@ -74,6 +74,21 @@ test("source_seq recovers from the file itself across a fresh Journal instance",
   }
 });
 
+test("credential-shaped values are scrubbed before the canonical journal write", async () => {
+  const dir = tempDir();
+  try {
+    const path = join(dir, "journal.jsonl");
+    const journal = new Journal<{ detail: string }>(path);
+    const shaped = `AK${"IA"}${"A".repeat(16)}`;
+    const record = await journal.append({ detail: `provider said ${shaped}` });
+    await journal.close();
+    assert.equal(record.event.detail, "[REDACTED]");
+    assert.equal(readFileSync(path, "utf8").includes(shaped), false);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("raw stream capture appends chunks verbatim and fsyncs", async () => {
   const dir = tempDir();
   try {

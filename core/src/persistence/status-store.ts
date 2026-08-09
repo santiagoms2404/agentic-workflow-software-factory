@@ -7,6 +7,7 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import { dirname, join } from "node:path";
+import { scrubCredentials } from "../policy/redaction.ts";
 
 async function writeAtomic(path: string, value: unknown, mode: number): Promise<void> {
   const dir = dirname(path);
@@ -31,7 +32,7 @@ async function tryReadJson<T>(path: string): Promise<T | null> {
 
 /** Replaces `status.json` atomically. Never truncated-then-written in place. */
 export function writeStatus(path: string, status: unknown): Promise<void> {
-  return writeAtomic(path, status, 0o644);
+  return writeAtomic(path, scrubCredentials(status), 0o644);
 }
 
 export function readStatus<T>(path: string): Promise<T> {
@@ -45,7 +46,7 @@ export function tryReadStatus<T>(path: string): Promise<T | null> {
 
 /** `private/continuity.json`, mode 0600 — never world- or group-readable. */
 export function writeContinuity(path: string, continuity: unknown): Promise<void> {
-  return writeAtomic(path, continuity, 0o600);
+  return writeAtomic(path, scrubCredentials(continuity), 0o600);
 }
 
 export function readContinuity<T>(path: string): Promise<T> {

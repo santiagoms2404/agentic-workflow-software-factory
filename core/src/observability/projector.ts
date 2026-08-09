@@ -8,6 +8,12 @@ import type { JournalRecord } from "../persistence/journal.ts";
 import type { NormalizedEvent } from "../contracts/normalized-events.ts";
 import { isPersistableKind } from "../contracts/normalized-events.ts";
 import type { DatabaseSync } from "./sqlite.ts";
+import {
+  scrubCredentialString,
+  scrubCredentials,
+  scrubJsonText,
+  stringifyRedacted,
+} from "../policy/redaction.ts";
 
 export interface ProjectionContext {
   sessionId: string;
@@ -66,18 +72,18 @@ export function createSession(db: DatabaseSync, init: SessionInit): void {
      VALUES (?, ?, ?, ?, ?, ?, ?, 'DRAFT', ?, ?, ?, ?, ?, ?)`,
   ).run(
     init.sessionId,
-    init.projectSlug,
-    init.taskId,
+    scrubCredentialString(init.projectSlug),
+    scrubCredentialString(init.taskId),
     init.attempt,
-    init.workflowId,
+    scrubCredentialString(init.workflowId),
     init.riskTier,
     init.isProtected ? 1 : 0,
-    init.requestText,
+    scrubCredentialString(init.requestText),
     init.callCeiling,
     init.startedAt,
     init.startedAt,
-    init.configSnapshotJson,
-    init.journalPath,
+    scrubJsonText(init.configSnapshotJson),
+    scrubCredentialString(init.journalPath),
   );
 }
 
@@ -109,7 +115,7 @@ function applyEvent(
   ctx: ProjectionContext,
   record: JournalRecord<NormalizedEvent>,
 ): void {
-  const event = record.event;
+  const event = scrubCredentials(record.event);
 
   if (!isPersistableKind(event.kind)) {
     // Invariant 9: thinking is never persisted, streamed only. Still counts
@@ -131,7 +137,7 @@ function applyEvent(
       record.source_seq,
       record.source_seq,
       event.name,
-      JSON.stringify({ toolCallId: event.toolCallId, inputSummary: event.inputSummary }),
+      stringifyRedacted({ toolCallId: event.toolCallId, inputSummary: event.inputSummary }),
       event.hostAt,
     );
     return;
@@ -147,7 +153,7 @@ function applyEvent(
       event.outcome,
       record.source_seq,
       event.hostAt,
-      JSON.stringify({ outcome: event.outcome, durationMs: event.durationMs, resultSnippet: event.resultSnippet }),
+      stringifyRedacted({ outcome: event.outcome, durationMs: event.durationMs, resultSnippet: event.resultSnippet }),
       toolCallEventId(ctx.runId, event.toolCallId),
     );
     return;
@@ -166,7 +172,7 @@ function applyEvent(
     record.source_seq,
     record.source_seq,
     event.kind,
-    JSON.stringify(event),
+    stringifyRedacted(event),
     event.hostAt,
   );
 }

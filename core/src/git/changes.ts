@@ -35,12 +35,21 @@ export function runGit(runner: GitRunner, argv: readonly string[]): string {
  */
 export function captureChangeSet(repository: string, runner = systemGitRunner(repository)): ChangeSetFingerprint {
   const fingerprint: Record<string, string> = {};
-  for (const line of runGit(runner, ["diff", "HEAD", "--numstat"]).split(/\r?\n/)) {
-    if (!line) continue;
-    const fields = line.split("\t");
-    if (fields.length >= 3) fingerprint[fields.at(-1)!] = `${fields[0]},${fields[1]}`;
+  // `-z` is a safety property, not an optimization: newline, tab, quotes and
+  // non-ASCII bytes in a filename must reach path policy as the path Git saw,
+  // never as a display-quoted approximation. Disabling rename detection makes
+  // both sides explicit (one removal plus one appearance).
+  for (const record of runGit(runner, ["diff", "HEAD", "--numstat", "--no-renames", "-z"]).split("\0")) {
+    if (!record) continue;
+    const first = record.indexOf("\t");
+    const second = first < 0 ? -1 : record.indexOf("\t", first + 1);
+    if (first < 0 || second < 0) continue;
+    const added = record.slice(0, first);
+    const deleted = record.slice(first + 1, second);
+    const path = record.slice(second + 1);
+    if (path) fingerprint[path] = `${added},${deleted}`;
   }
-  for (const path of runGit(runner, ["ls-files", "--others", "--exclude-standard"]).split(/\r?\n/)) {
+  for (const path of runGit(runner, ["ls-files", "--others", "--exclude-standard", "-z"]).split("\0")) {
     if (path) fingerprint[path] = "untracked";
   }
   return Object.freeze(fingerprint);

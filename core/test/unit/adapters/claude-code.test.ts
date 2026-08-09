@@ -162,6 +162,15 @@ test("every tool profile gets the exact flags its ceiling requires", () => {
   ]);
 });
 
+test("the configured capability allowlist narrows the provider profile exactly", () => {
+  const spec = adapter().buildSpec({ ...REQUEST, profile: "readonly", tools: ["read", "find"] });
+  assert.equal(spec.argv[spec.argv.indexOf("--tools") + 1], "Read,Glob");
+  assert.throws(
+    () => adapter().buildSpec({ ...REQUEST, profile: "readonly", tools: ["exec"] }),
+    /profile ceiling/,
+  );
+});
+
 test("the STRICTEST profile carries the deny list too, and does not rely on `--tools \"\"`", () => {
   // A deliberate deviation from the reviewed fusion-harness builder, which
   // passes `--tools ""` alone. Confirming the flags PARSE says nothing about

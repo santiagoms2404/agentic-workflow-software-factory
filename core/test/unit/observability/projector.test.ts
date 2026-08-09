@@ -56,6 +56,33 @@ test("a run.started event is projected as one events row", () => {
   assert.deepEqual(rows, [{ type: "run.started", run_id: "run1" }]);
 });
 
+test("credential-shaped request and event values are scrubbed before SQLite", () => {
+  const db = freshDb();
+  const shaped = `AK${"IA"}${"A".repeat(16)}`;
+  createSession(db, {
+    ...SESSION,
+    requestText: `inspect ${shaped}`,
+    configSnapshotJson: JSON.stringify({ safe: true, auth_token: shaped }),
+  });
+  projectEvent(db, ctx, record(1, {
+    seq: 1,
+    runId: "run1",
+    hostAt: "t0",
+    providerAt: null,
+    kind: "text.delta",
+    text: `provider echoed ${shaped}`,
+  }));
+  const session = db.prepare("SELECT request_text, config_snapshot_json FROM sessions WHERE session_id = 's1'").get() as {
+    request_text: string;
+    config_snapshot_json: string;
+  };
+  const event = db.prepare("SELECT payload_json FROM events").get() as { payload_json: string };
+  assert.equal(session.request_text, "[REDACTED]");
+  assert.equal(session.config_snapshot_json.includes(shaped), false);
+  assert.equal(event.payload_json.includes(shaped), false);
+  assert.equal(event.payload_json.includes("[REDACTED]"), true);
+});
+
 test("re-applying the exact same record is a no-op (idempotent double-apply)", () => {
   const db = seededDb();
   const rec = record(1, { seq: 1, runId: "run1", hostAt: "t0", providerAt: null, kind: "run.started", adapter: "claude-code", requestedModel: "sonnet-5" });

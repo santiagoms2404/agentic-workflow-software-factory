@@ -3,14 +3,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { repoRoot, walkFiles, relRepo } from "./_walk.ts";
-
-const CREDENTIAL_PATTERNS = [
-  /sk-[A-Za-z0-9]{20,}/,
-  /AKIA[0-9A-Z]{16}/,
-  /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
-  /ghp_[A-Za-z0-9]{36}/,
-  /xox[baprs]-[A-Za-z0-9-]{10,}/,
-];
+import { CREDENTIAL_PATTERNS } from "../../../src/policy/redaction.ts";
 
 /**
  * AGENTS.md invariant 9 says "in fixtures **or anywhere else**", and the

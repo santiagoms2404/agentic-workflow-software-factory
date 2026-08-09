@@ -173,6 +173,19 @@ test("every tool profile gets the exact flags its ceiling requires", () => {
   assert.equal(adapter().buildSpec({ ...REQUEST, profile: "no-tools" }).argv.includes("--tools"), false);
 });
 
+test("the configured capability allowlist narrows the provider profile exactly", () => {
+  const spec = adapter().buildSpec({
+    ...REQUEST,
+    profile: "managed-worker",
+    tools: ["read", "exec", "write"],
+  });
+  assert.equal(spec.argv[spec.argv.indexOf("--tools") + 1], "read,bash,write");
+  assert.throws(
+    () => adapter().buildSpec({ ...REQUEST, profile: "readonly", tools: ["write"] }),
+    /profile ceiling/,
+  );
+});
+
 test("the tool names are pi's own, not the Claude adapter's", () => {
   // `read,grep,find,ls` and `Read,Glob,Grep` are two CLIs' vocabularies. A
   // profile that shipped one provider's names to the other would narrow

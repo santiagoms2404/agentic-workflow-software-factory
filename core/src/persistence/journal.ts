@@ -4,6 +4,7 @@
 
 import { mkdir, open, readFile, type FileHandle } from "node:fs/promises";
 import { dirname } from "node:path";
+import { scrubCredentials, stringifyRedacted } from "../policy/redaction.ts";
 
 /**
  * One line of `journal.jsonl`: the canonical event plus the journal's own
@@ -96,8 +97,12 @@ export class Journal<T = unknown> {
   /** Appends the next canonical event, fsyncs, and returns the stamped record. */
   async append(event: T): Promise<JournalRecord<T>> {
     const source_seq = await this.ensureNextSeq();
-    const record: JournalRecord<T> = { source_seq, recorded_at: new Date().toISOString(), event };
-    await this.log.appendLine(JSON.stringify(record));
+    const record: JournalRecord<T> = {
+      source_seq,
+      recorded_at: new Date().toISOString(),
+      event: scrubCredentials(event),
+    };
+    await this.log.appendLine(stringifyRedacted(record));
     this.nextSeq = source_seq + 1;
     return record;
   }

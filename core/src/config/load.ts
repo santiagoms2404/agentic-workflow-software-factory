@@ -1,5 +1,6 @@
 import { Value } from "@sinclair/typebox/value";
 import { parse as parseYaml } from "yaml";
+import { containsCredential } from "../policy/redaction.ts";
 import {
   AwsfConfigSchema,
   KNOWN_ADAPTER_KINDS,
@@ -125,24 +126,8 @@ export class ConfigInvalidPersistThinkingError extends ConfigError {
 // never encode where anything lives on any one machine.
 const ABSOLUTE_PATH_PATTERN = /^(\/|[A-Za-z]:[\\/]|\\\\|~)/;
 
-// Deliberately conservative and shared in spirit with the credential-pattern
-// meta-test: this is a loader-side hard rejection, not a redaction scrubber.
-const CREDENTIAL_SHAPED_PATTERNS = [
-  /sk-[A-Za-z0-9]{20,}/,
-  /AKIA[0-9A-Z]{16}/,
-  /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
-  /ghp_[A-Za-z0-9]{36}/,
-  /xox[baprs]-[A-Za-z0-9-]{10,}/,
-  /^Bearer\s+\S+/,
-  /^ey[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}$/, // JWT-shaped
-];
-
 function isAbsoluteMachinePath(value: string): boolean {
   return ABSOLUTE_PATH_PATTERN.test(value);
-}
-
-function isCredentialShaped(value: string): boolean {
-  return CREDENTIAL_SHAPED_PATTERNS.some((pattern) => pattern.test(value));
 }
 
 // Walks every string leaf in the parsed document — object keys AND values,
@@ -177,7 +162,7 @@ function assertNoAbsolutePaths(doc: unknown): void {
 
 function assertNoCredentialShapedValues(doc: unknown): void {
   scanStrings(doc, "", (path, value) => {
-    if (isCredentialShaped(value)) {
+    if (containsCredential(value)) {
       throw new ConfigCredentialShapedError(path);
     }
   });

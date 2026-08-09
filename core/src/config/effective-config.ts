@@ -1,30 +1,21 @@
 import type { AwsfConfig } from "./schema.ts";
+import {
+  REDACTED_VALUE,
+  containsCredential,
+} from "../policy/redaction.ts";
 
-const REDACTED = "[REDACTED]";
-
-// Same shapes the loader already refuses to accept into a committed config.
-// Kept here too as a defense-in-depth net: effective-config is what the API
-// and dashboard actually render, and it must stay safe even if it is one day
-// fed a config merged with runtime data (continuity refs, resolved paths)
-// rather than only the loader's own output.
+// Same path shape the loader refuses in committed config. Credentials use the
+// shared policy scrubber; effective config adds machine-path redaction because
+// settings responses must not expose either class of runtime detail.
 const ABSOLUTE_PATH_PATTERN = /^(\/|[A-Za-z]:[\\/]|\\\\|~)/;
-const CREDENTIAL_SHAPED_PATTERNS = [
-  /sk-[A-Za-z0-9]{20,}/,
-  /AKIA[0-9A-Z]{16}/,
-  /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
-  /ghp_[A-Za-z0-9]{36}/,
-  /xox[baprs]-[A-Za-z0-9-]{10,}/,
-  /^Bearer\s+\S+/,
-  /^ey[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}$/,
-];
 
 function shouldRedact(value: string): boolean {
-  return ABSOLUTE_PATH_PATTERN.test(value) || CREDENTIAL_SHAPED_PATTERNS.some((p) => p.test(value));
+  return ABSOLUTE_PATH_PATTERN.test(value) || containsCredential(value);
 }
 
 function redactDeep(node: unknown): unknown {
   if (typeof node === "string") {
-    return shouldRedact(node) ? REDACTED : node;
+    return shouldRedact(node) ? REDACTED_VALUE : node;
   }
   if (Array.isArray(node)) {
     return node.map(redactDeep);

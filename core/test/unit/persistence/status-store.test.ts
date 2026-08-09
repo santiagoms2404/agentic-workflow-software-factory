@@ -27,6 +27,18 @@ test("status round-trips through the atomic write", async () => {
   }
 });
 
+test("status is scrubbed before it can feed a later API response", async () => {
+  const dir = tempDir();
+  try {
+    const path = join(dir, "status.json");
+    const shaped = `AK${"IA"}${"A".repeat(16)}`;
+    await writeStatus(path, { state: "BLOCKED", detail: `provider echoed ${shaped}` });
+    assert.deepEqual(await readStatus(path), { state: "BLOCKED", detail: "[REDACTED]" });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("tryReadStatus returns null before any status exists", async () => {
   const dir = tempDir();
   try {

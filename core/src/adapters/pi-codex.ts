@@ -55,6 +55,7 @@ import {
 } from "./interface.ts";
 import { filterEnv } from "./env.ts";
 import { assertPrivateSystemPrompt } from "./system-prompt-file.ts";
+import { resolvePermissionProfile } from "../policy/permission-profiles.ts";
 import { PiStreamDecoder, type PiSessionRecord } from "./pi-codex-stream.ts";
 import { isTerminalKind, type NormalizedEvent } from "../contracts/normalized-events.ts";
 import type { UnionOf } from "../contracts/typebox.ts";
@@ -179,7 +180,7 @@ const HOST_ONLY_PROFILE = "gate-execute";
  * string to be misread, so there is nothing for a second flag to remove. The
  * reviewed argv is kept exactly.
  */
-function permissionArgs(adapter: string, profile: string): readonly string[] {
+function permissionArgs(adapter: string, profile: string, configuredTools?: readonly string[]): readonly string[] {
   if (profile === HOST_ONLY_PROFILE) {
     throw new AdapterError(
       adapter,
@@ -187,13 +188,19 @@ function permissionArgs(adapter: string, profile: string): readonly string[] {
       "gate execution is host-only; no provider profile can enforce it",
     );
   }
+  const exactTools = configuredTools === undefined
+    ? undefined
+    : resolvePermissionProfile(profile, configuredTools, []).tools;
+  const piTools = exactTools === undefined
+    ? undefined
+    : [...new Set(exactTools.map((tool) => tool === "exec" ? "bash" : tool))];
   switch (profile) {
     case "no-tools":
       return ["--no-tools"];
     case "managed-worker":
-      return ["--tools", PI_MANAGED_WORKER_TOOLS.join(",")];
+      return ["--tools", piTools?.join(",") ?? PI_MANAGED_WORKER_TOOLS.join(",")];
     case "readonly":
-      return ["--tools", PI_READONLY_TOOLS.join(",")];
+      return ["--tools", piTools?.join(",") ?? PI_READONLY_TOOLS.join(",")];
     default:
       throw new AdapterError(
         adapter,
@@ -411,7 +418,7 @@ export class PiCodexAdapter implements HarnessAdapter {
       "--no-themes",
       "--no-context-files",
     );
-    argv.push(...permissionArgs(this.id, request.profile ?? DEFAULT_TOOL_PROFILE));
+    argv.push(...permissionArgs(this.id, request.profile ?? DEFAULT_TOOL_PROFILE, request.tools));
     return {
       executable: this.#executable,
       argv: Object.freeze(argv),

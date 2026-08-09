@@ -41,6 +41,7 @@ import {
 } from "./interface.ts";
 import { filterEnv } from "./env.ts";
 import { assertPrivateSystemPrompt } from "./system-prompt-file.ts";
+import { resolvePermissionProfile } from "../policy/permission-profiles.ts";
 import { ClaudeStreamDecoder, type ClaudeSessionRecord } from "./claude-code-stream.ts";
 import { isTerminalKind, type NormalizedEvent } from "../contracts/normalized-events.ts";
 import type { UnionOf } from "../contracts/typebox.ts";
@@ -118,7 +119,7 @@ export const DEFAULT_TOOL_PROFILE: ClaudeToolProfile = "readonly";
  */
 const HOST_ONLY_PROFILE = "gate-execute";
 
-function permissionArgs(adapter: string, profile: string): readonly string[] {
+function permissionArgs(adapter: string, profile: string, configuredTools?: readonly string[]): readonly string[] {
   if (profile === HOST_ONLY_PROFILE) {
     throw new AdapterError(
       adapter,
@@ -126,6 +127,21 @@ function permissionArgs(adapter: string, profile: string): readonly string[] {
       "gate execution is host-only; no provider profile can enforce it",
     );
   }
+  const exactTools = configuredTools === undefined
+    ? undefined
+    : resolvePermissionProfile(profile, configuredTools, []).tools;
+  const claudeTools = exactTools === undefined
+    ? undefined
+    : [...new Set(exactTools.map((tool) => ({
+      read: "Read",
+      grep: "Grep",
+      find: "Glob",
+      ls: "Glob",
+      exec: "Bash",
+      bash: "Bash",
+      edit: "Edit",
+      write: "Write",
+    })[tool]!))];
   switch (profile) {
     case "no-tools":
       // The deny list is carried here too, which is a deliberate DEVIATION from
@@ -149,13 +165,18 @@ function permissionArgs(adapter: string, profile: string): readonly string[] {
         MUTATING_OR_SHELL_TOOLS.join(","),
       ];
     case "managed-worker":
-      return ["--permission-mode", "acceptEdits", "--tools", "Read,Glob,Grep,Bash,Edit,Write"];
+      return [
+        "--permission-mode",
+        "acceptEdits",
+        "--tools",
+        claudeTools?.join(",") ?? "Read,Glob,Grep,Bash,Edit,Write",
+      ];
     case "readonly":
       return [
         "--permission-mode",
         "dontAsk",
         "--tools",
-        "Read,Glob,Grep",
+        claudeTools?.join(",") ?? "Read,Glob,Grep",
         "--disallowed-tools",
         MUTATING_OR_SHELL_TOOLS.join(","),
       ];
@@ -330,7 +351,7 @@ export class ClaudeCodeAdapter implements HarnessAdapter {
     if (request.systemPromptPath !== undefined) {
       argv.push("--append-system-prompt-file", request.systemPromptPath);
     }
-    argv.push(...permissionArgs(this.id, request.profile ?? DEFAULT_TOOL_PROFILE));
+    argv.push(...permissionArgs(this.id, request.profile ?? DEFAULT_TOOL_PROFILE, request.tools));
     return {
       executable: this.#executable,
       argv: Object.freeze(argv),

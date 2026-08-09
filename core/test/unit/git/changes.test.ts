@@ -21,10 +21,21 @@ function runner(outputs: Record<string, string[]>): GitRunner {
 
 test("fingerprint records numstat and untracked paths", () => {
   const git = runner({
-    "diff HEAD --numstat": ["3\t1\tsrc/a.ts\n"],
-    "ls-files --others --exclude-standard": ["notes.txt\n"],
+    "diff HEAD --numstat --no-renames -z": ["3\t1\tsrc/a.ts\0"],
+    "ls-files --others --exclude-standard -z": ["notes.txt\0"],
   });
   assert.deepEqual(captureChangeSet("/repo", git), { "src/a.ts": "3,1", "notes.txt": "untracked" });
+});
+
+test("NUL framing preserves tabs and newlines in paths for fail-closed policy", () => {
+  const git = runner({
+    "diff HEAD --numstat --no-renames -z": ["1\t0\todd\tname\n.ts\0"],
+    "ls-files --others --exclude-standard -z": ["loose\nfile\0"],
+  });
+  assert.deepEqual(captureChangeSet("/repo", git), {
+    "odd\tname\n.ts": "1,0",
+    "loose\nfile": "untracked",
+  });
 });
 
 test("a reversion is a change even when it makes a prior dirty path vanish", () => {
@@ -40,8 +51,8 @@ test("appearances, rewrites, and removals are all changes", () => {
 
 test("a post-gate mutation invalidates both gates and review", () => {
   const git = runner({
-    "diff HEAD --numstat": ["", "1\t0\tsrc/new.ts\n"],
-    "ls-files --others --exclude-standard": ["", ""],
+    "diff HEAD --numstat --no-renames -z": ["", "1\t0\tsrc/new.ts\0"],
+    "ls-files --others --exclude-standard -z": ["", ""],
   });
   const freshness = recordGateFreshness("/repo", git);
   assert.deepEqual(invalidateStaleResults(freshness, "/repo", git), ["src/new.ts"]);
