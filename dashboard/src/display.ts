@@ -1,4 +1,4 @@
-import type { CostAuthority, LifecycleState, UsageTotals } from "../shared/types.ts";
+import type { CostAuthority, LifecycleState, ModelProvenance, UsageTotals } from "../shared/types.ts";
 
 export function formatCost(authority: CostAuthority, usd: number | null): string {
   if (authority === "unavailable") return "— subscription";
@@ -22,6 +22,14 @@ export function formatDuration(startedAt: string, endedAt: string | null, now = 
   const milliseconds = Math.max(0, (endedAt ? Date.parse(endedAt) : now) - Date.parse(startedAt));
   const seconds = Math.floor(milliseconds / 1000);
   return seconds >= 60 ? `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, "0")}s` : `${seconds}s`;
+}
+
+export function modelProvenanceLabel(provenance: ModelProvenance): string {
+  return provenance ?? "unrecorded";
+}
+
+export function contextMeterPercent(tokens: number | null, window: number | null): number | null {
+  return window === null ? null : Math.min(100, ((tokens ?? 0) / window) * 100);
 }
 
 export function stateTone(state: LifecycleState): "ok" | "running" | "error" | "warn" {

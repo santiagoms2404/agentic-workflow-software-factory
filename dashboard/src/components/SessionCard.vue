@@ -12,14 +12,14 @@ function agentWidth(agent: AgentSummary) { return `${Math.max(3, Math.min(90, ((
 </script>
 <template>
   <article class="session-card">
-    <div class="card-heading"><code>{{ session.sessionId.slice(0, 8) }}</code><span class="workflow">{{ session.workflowId }}</span></div>
+    <div class="card-heading"><a :href="`#/sessions/${session.sessionId}`"><code>{{ session.sessionId.slice(0, 8) }}</code></a><span class="workflow">{{ session.workflowId }}</span></div>
     <p class="request">{{ session.request }}</p>
     <div class="time-ruler"><span>0s</span><span>{{ Math.round(duration / 3) }}s</span><span>{{ Math.round(duration * 2 / 3) }}s</span><span>{{ Math.round(duration) }}s</span></div>
     <div class="mini-timeline" aria-label="Agent timeline">
       <div v-for="(agent, index) in visibleAgents" :key="agent.agent" class="agent-lane"><span>{{ agent.agent }}</span><b :style="{ backgroundColor: agentColor(agent, index), left: agentOffset(agent), width: agentWidth(agent) }" /></div>
       <div v-if="hiddenAgents" class="more-agents">+{{ hiddenAgents }} more agents</div>
     </div>
-    <div class="card-status"><span class="state-chip" :class="stateTone(session.state)">{{ session.state === "LANDED" ? "✓ success" : session.state }}</span><span class="phase-dots" :aria-label="`${session.phases.length} phases`"><i v-for="phase in session.phases" :key="phase.phaseId" :class="phase.status.toLowerCase()" /></span><span class="call-budget">calls {{ session.callsSpent }}/{{ session.callCeiling }}</span></div>
+    <div class="card-status"><span class="state-chip" :class="stateTone(session.state)">{{ session.state === "LANDED" ? "✓ success" : session.state }}</span><span class="phase-dots" :aria-label="`Phase statuses: ${session.phases.map((phase) => phase.status).join(', ')}`"><i v-for="phase in session.phases" :key="phase.phaseId" :class="phase.status.toLowerCase()" /></span><span class="call-budget">calls {{ session.callsSpent }}/{{ session.callCeiling }}</span></div>
     <div class="metrics-row"><span>{{ formatCost(session.usage.costAuthority, session.usage.estimatedCostUsd) }} <small>· {{ costAuthorityLabel(session.usage.costAuthority) }}</small></span><span>{{ formatDuration(session.startedAt, session.endedAt) }}</span><span>{{ formatUsage(session.usage) }}</span><em v-if="session.usage.costPartial">total: partial</em></div>
   </article>
 </template>

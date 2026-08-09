@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { costAuthorityLabel, formatCost, formatUsage } from "../../../dashboard/src/display.ts";
+import { contextMeterPercent, costAuthorityLabel, formatCost, formatUsage, modelProvenanceLabel } from "../../../dashboard/src/display.ts";
 
 test("dashboard never turns a subscription cost into a bare number", () => {
   assert.equal(formatCost("unavailable", 0), "— subscription");
@@ -16,4 +16,12 @@ test("dashboard marks catalog arithmetic as an estimate with its authority", () 
 test("dashboard exposes partial totals rather than inventing a token total", () => {
   assert.equal(formatUsage({ totalTokens: null } as never), "—");
   assert.equal(formatUsage({ totalTokens: 3_480_000 } as never), "3.48M");
+});
+
+test("dashboard labels model provenance and does not draw an unknown context window", () => {
+  assert.equal(modelProvenanceLabel("stream-authoritative"), "stream-authoritative");
+  assert.equal(modelProvenanceLabel("route-attributed"), "route-attributed");
+  assert.equal(modelProvenanceLabel(null), "unrecorded");
+  assert.equal(contextMeterPercent(100, null), null);
+  assert.equal(contextMeterPercent(50, 100), 50);
 });
