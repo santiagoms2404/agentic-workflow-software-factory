@@ -9,6 +9,7 @@ import {
   persistAttempt,
   readAttempt,
   taskRoot,
+  type AttemptProjector,
   type AttemptStatus,
 } from "./attempt.ts";
 
@@ -17,6 +18,7 @@ export interface RetryCommandOptions {
   readonly stateRoot: string;
   readonly now?: () => string;
   readonly sessionId?: () => string;
+  readonly projectRecord?: AttemptProjector;
 }
 
 /** Retry is not a state transition: it mints attempt n+1 and carries spend. */
@@ -62,5 +64,8 @@ export async function retryCommand(options: RetryCommandOptions): Promise<{ atte
     revision: 1,
     lastSourceSeq: 1,
   };
-  return { attemptDir: join(root, String(attempt)), status: await persistAttempt(dir, null, { kind: "attempt.retried", next }) };
+  return {
+    attemptDir: join(root, String(attempt)),
+    status: await persistAttempt(dir, null, { kind: "attempt.retried", next }, options.projectRecord),
+  };
 }

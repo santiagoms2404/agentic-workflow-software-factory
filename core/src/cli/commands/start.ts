@@ -10,6 +10,7 @@ import {
   nextRevision,
   persistAttempt,
   readAttempt,
+  type AttemptProjector,
   type AttemptStatus,
 } from "./attempt.ts";
 
@@ -26,6 +27,7 @@ export interface StartCommandOptions {
   readonly configPath?: string;
   readonly preflight?: (status: AttemptStatus) => Promise<StartPreflight> | StartPreflight;
   readonly now?: () => string;
+  readonly projectRecord?: AttemptProjector;
 }
 
 async function defaultPreflight(status: AttemptStatus, configPath: string): Promise<StartPreflight> {
@@ -99,7 +101,12 @@ export async function startCommand(options: StartCommandOptions): Promise<Attemp
     lastActivity: `L1 prepared detached worktree at ${managed.path}`,
     nextAction: nextActionFor(decision.to, current.taskId),
   });
-  return persistAttempt(options.attemptDir, current.revision, { kind: "attempt.transitioned", next });
+  return persistAttempt(
+    options.attemptDir,
+    current.revision,
+    { kind: "attempt.transitioned", next },
+    options.projectRecord,
+  );
 }
 
 /** Useful to derive the conventional machine-local worktree root from a state root sibling. */

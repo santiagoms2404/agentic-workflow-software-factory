@@ -3,6 +3,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { toConfigSnapshotJson } from "../config/effective-config.ts";
 import { loadConfig } from "../config/load.ts";
 import { resolveStateRoot } from "../persistence/platform-paths.ts";
 import type { Tier } from "../state/tiers.ts";
@@ -10,6 +11,7 @@ import { processOwnerTerminal, type OwnerTerminal } from "./tty.ts";
 import { cancelCommand } from "./commands/cancel.ts";
 import { doctorCommand } from "./commands/doctor.ts";
 import { dashCommand, gcCommand, rebuildCommand } from "./commands/operator.ts";
+import { createDashboardProjection } from "./commands/dashboard-projection.ts";
 import { landCommand } from "./commands/land.ts";
 import { newCommand } from "./commands/new.ts";
 import { locateAttempt } from "./commands/attempt.ts";
@@ -91,7 +93,9 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
     if (command === "dash") {
       const configPath = resolve(parsed.flags.config ?? `${cwd}/awsf.config.yaml`);
       const config = loadConfig(await readFile(configPath, "utf8"));
-      return (await dashCommand({ cwd, write: out, config, dbPath: resolve(stateRoot, "awsf.db") })) === "not-built" ? 1 : 0;
+      const port = parsed.flags.port === undefined ? undefined : Number(parsed.flags.port);
+      if (port !== undefined && (!Number.isInteger(port) || port < 1 || port > 65_535)) throw new Error("--port must be an integer from 1 through 65535");
+      return (await dashCommand({ cwd, write: out, config, dbPath: resolve(stateRoot, "awsf.db"), ...(port === undefined ? {} : { port }) })) === "not-built" ? 1 : 0;
     }
     if (command === "db") {
       if (parsed.positionals[0] !== "rebuild" || parsed.positionals.length !== 1) throw new Error("usage: awsf db rebuild [--state-root PATH]");
@@ -110,7 +114,9 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
     const config = loadConfig(await readFile(configPath, "utf8"));
     const project = parsed.flags.project ?? config.project.slug;
     const selectedAttempt = parsed.flags.attempt === undefined ? undefined : Number(parsed.flags.attempt);
+    const projection = createDashboardProjection(stateRoot, err);
 
+    try {
     if (command === "new") {
       const request = parsed.positionals.slice(1).join(" ").trim();
       if (request.length === 0) throw new Error("awsf new requires a request after the task id");
@@ -122,7 +128,9 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         request,
         workflow: parsed.flags.workflow ?? config.project.default_workflow,
         tier: tierOf(parsed.flags.tier ?? config.risk.default),
+        configSnapshotJson: toConfigSnapshotJson(config),
         allowance: config.risk.correction_allowance,
+        projectRecord: projection.project,
       });
       out(`Created ${project}/${taskId} attempt ${result.status.attempt} in DRAFT.`);
       out(result.status.nextAction);
@@ -137,6 +145,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
           worktreeRoot: resolve(parsed.flags["worktree-root"] ?? env.AWSF_WORKTREE_ROOT ?? defaultWorktreeRoot(stateRoot)),
           configPath,
           ...(parsed.flags.stub === "true" ? { preflight: () => ({ adapter: true, sandbox: true, observability: true }) } : {}),
+          projectRecord: projection.project,
         });
         out(`Prepared ${taskId} at ${status.baseSha}.`);
         out(status.nextAction);
@@ -144,7 +153,13 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       }
       case "run": {
         if (parsed.flags.stub !== "true") throw new Error("only `awsf run <task> --stub true` is available");
-        const status = await runStubCommand(located.attemptDir);
+        const liveMs = parsed.flags["live-ms"] === undefined ? 0 : Number(parsed.flags["live-ms"]);
+        if (!Number.isInteger(liveMs) || liveMs < 0 || liveMs > 60_000) throw new Error("--live-ms must be an integer from 0 through 60000");
+        const status = await runStubCommand(located.attemptDir, {
+          liveMs,
+          projectRecord: projection.project,
+          assertAdvancement: projection.assertAdvancement,
+        });
         out(`${status.lifecycleState}: ${status.nextAction}`);
         return 0;
       }
@@ -158,6 +173,8 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         const result = await landCommand({
           attemptDir: located.attemptDir,
           terminal: options.terminal ?? processOwnerTerminal(),
+          projectRecord: projection.project,
+          assertAdvancement: projection.assertAdvancement,
         });
         if (!result.confirmed) {
           out("Landing declined; state remains AWAITING_OWNER.");
@@ -170,18 +187,26 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         const result = await cancelCommand({
           attemptDir: located.attemptDir,
           terminal: options.terminal ?? processOwnerTerminal(),
+          projectRecord: projection.project,
         });
         out(`${result.status.lifecycleState}: survivors [${result.report.survivors.join(", ")}]`);
         return result.status.lifecycleState === "CANCELLED" ? 0 : 1;
       }
       case "retry": {
-        const result = await retryCommand({ attemptDir: located.attemptDir, stateRoot });
+        const result = await retryCommand({
+          attemptDir: located.attemptDir,
+          stateRoot,
+          projectRecord: projection.project,
+        });
         out(`Created attempt ${result.status.attempt} in DRAFT with ${result.status.budget.callsSpent} spent call(s) carried.`);
         out(result.status.nextAction);
         return 0;
       }
       default:
         throw new Error(USAGE);
+    }
+    } finally {
+      projection.close();
     }
   } catch (error) {
     err(error instanceof Error ? `${error.name}: ${error.message}` : String(error));

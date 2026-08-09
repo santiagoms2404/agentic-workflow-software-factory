@@ -1,13 +1,15 @@
 import { access, readdir } from "node:fs/promises";
-import { join, resolve } from "node:path";
-import { createServer } from "node:http";
+import { isAbsolute, join, relative, resolve } from "node:path";
+import { createServer, type Server } from "node:http";
 import type { AwsfConfig } from "../../config/schema.ts";
 import { createApiRouter, type ApiRouter } from "../../api/routes.ts";
 import { sendResponse } from "../../api/responses.ts";
+import { SECURITY_HEADERS, validateAuthority } from "../../api/security.ts";
 import { ceilingFor } from "../../state/tiers.ts";
 import { discoverAttempts, rebuildDatabase, type RebuildReport, type RebuildSource } from "../../observability/rebuild.ts";
 import { journalFilePath } from "../../persistence/platform-paths.ts";
-import { readAttempt } from "./attempt.ts";
+import { toAttemptStatusProjection } from "./attempt-projection.ts";
+import { readAttempt, type AttemptEvent } from "./attempt.ts";
 
 async function exists(path: string): Promise<boolean> {
   try { await access(path); return true; } catch { return false; }
@@ -20,19 +22,10 @@ export async function rebuildCommand(stateRoot: string): Promise<RebuildReport> 
     const status = await readAttempt(dir);
     return {
       journalPath: journalFilePath(dir),
-      normalize: (record) => ({
-        // T8 projects the normalized provider vocabulary. The CLI's own
-        // durable events have no provider event equivalent, so retain each
-        // record as a host run-started envelope rather than pretending it was
-        // provider output; its sequence and journal cursor stay exact.
-        kind: "run.started",
-        seq: record.source_seq,
-        runId: status.sessionId,
-        hostAt: record.recorded_at,
-        providerAt: null,
-        adapter: "host-cli",
-        requestedModel: "not-a-provider-event",
-      }),
+      attemptStatus: (record) => toAttemptStatusProjection(
+        stateRoot,
+        (record.event as AttemptEvent).next,
+      ),
       session: {
         sessionId: status.sessionId,
         projectSlug: status.project,
@@ -43,7 +36,7 @@ export async function rebuildCommand(stateRoot: string): Promise<RebuildReport> 
         isProtected: false,
         requestText: status.request,
         callCeiling: ceilingFor(status.tier),
-        configSnapshotJson: "{}",
+        configSnapshotJson: status.configSnapshotJson,
         journalPath: journalFilePath(dir),
         startedAt: status.lastActivityAt,
       },
@@ -67,11 +60,23 @@ export async function gcCommand(stateRoot: string): Promise<readonly string[]> {
   return Object.freeze(candidates.sort());
 }
 
-export interface DashOptions { readonly cwd: string; readonly write: (line: string) => void; readonly port?: number; readonly dbPath?: string; readonly config?: AwsfConfig; }
+export interface DashOptions {
+  readonly cwd: string;
+  readonly write: (line: string) => void;
+  readonly port?: number;
+  /** Defaults to the dashboard workspace beside the installed core package. */
+  readonly assetRoot?: string;
+  readonly dbPath?: string;
+  readonly config?: AwsfConfig;
+  /** Test seam; production keeps the server alive until the process exits. */
+  readonly onListening?: (server: Server) => void;
+}
 
 /** Serve only an already-built dashboard; building belongs to the owner, never this command. */
 export async function dashCommand(options: DashOptions): Promise<"not-built" | "serving"> {
-  const root = resolve(options.cwd, "dashboard", "dist");
+  const root = resolve(
+    options.assetRoot ?? resolve(import.meta.dirname, "../../../../dashboard/dist"),
+  );
   const index = join(root, "index.html");
   if (!await exists(index)) {
     options.write("Dashboard is not built yet. Run the dashboard build first; awsf dash never builds it.");
@@ -79,19 +84,51 @@ export async function dashCommand(options: DashOptions): Promise<"not-built" | "
   }
   const router: ApiRouter | null = options.dbPath !== undefined && options.config !== undefined
     ? createApiRouter({ dbPath: options.dbPath, config: options.config }) : null;
+  const contentType = (path: string): string => {
+    if (path.endsWith(".html")) return "text/html; charset=utf-8";
+    if (path.endsWith(".js")) return "text/javascript; charset=utf-8";
+    if (path.endsWith(".css")) return "text/css; charset=utf-8";
+    if (path.endsWith(".svg")) return "image/svg+xml";
+    if (path.endsWith(".json")) return "application/json; charset=utf-8";
+    return "application/octet-stream";
+  };
   const server = createServer(async (request, response) => {
+    try {
+      validateAuthority(request.headers);
+    } catch {
+      response.writeHead(400, SECURITY_HEADERS);
+      response.end("invalid loopback authority");
+      return;
+    }
     if (router !== null && request.url?.startsWith("/api/")) {
       sendResponse(response, await router.dispatch({ method: request.method ?? "GET", url: request.url, headers: request.headers }));
       return;
     }
-    const path = request.url === "/" || request.url === undefined ? index : join(root, request.url.replace(/^\//, ""));
-    if (!resolve(path).startsWith(`${root}/`) && resolve(path) !== index) { response.writeHead(404); response.end(); return; }
-    try { response.writeHead(200); response.end(await (await import("node:fs/promises")).readFile(path)); }
-    catch { response.writeHead(404); response.end("not found"); }
+    const target = request.url === undefined ? "/" : new URL(request.url, "http://127.0.0.1").pathname;
+    const path = target === "/" ? index : join(root, target.replace(/^\//, ""));
+    const fromRoot = relative(root, resolve(path));
+    if (fromRoot.startsWith("..") || isAbsolute(fromRoot)) {
+      response.writeHead(404, SECURITY_HEADERS);
+      response.end("not found");
+      return;
+    }
+    try {
+      const bytes = await (await import("node:fs/promises")).readFile(path);
+      response.writeHead(200, { ...SECURITY_HEADERS, "content-type": contentType(path) });
+      response.end(bytes);
+    } catch {
+      response.writeHead(404, SECURITY_HEADERS);
+      response.end("not found");
+    }
   });
-  await new Promise<void>((done) => server.listen(options.port ?? 0, "127.0.0.1", done));
+  server.once("close", () => router?.close());
+  await new Promise<void>((done, reject) => {
+    server.once("error", reject);
+    server.listen(options.port ?? 0, "127.0.0.1", done);
+  });
   const address = server.address();
   const port = typeof address === "object" && address !== null ? address.port : options.port;
   options.write(`Dashboard serving at http://127.0.0.1:${port}/`);
+  options.onListening?.(server);
   return "serving";
 }

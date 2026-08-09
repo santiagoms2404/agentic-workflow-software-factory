@@ -42,6 +42,7 @@ async function fixture(root: string): Promise<{ attemptDir: string; repository: 
     workflow: "build-review",
     tier: 2,
     request: "prove persisted landing recovery",
+    configSnapshotJson: "{}",
     lifecycleState: "AWAITING_OWNER",
     baseSha: base,
     candidateSha: candidate,

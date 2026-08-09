@@ -8,6 +8,7 @@ import {
   nextRevision,
   persistAttempt,
   readAttempt,
+  type AttemptProjector,
   type AttemptStatus,
 } from "./attempt.ts";
 
@@ -16,6 +17,7 @@ export interface CancelCommandOptions {
   readonly terminal: OwnerTerminal;
   readonly terminate?: (status: AttemptStatus) => Promise<TerminationReport>;
   readonly now?: () => string;
+  readonly projectRecord?: AttemptProjector;
 }
 
 function noTree(): TerminationReport {
@@ -77,7 +79,12 @@ export async function cancelCommand(options: CancelCommandOptions): Promise<{ st
     nextAction: nextActionFor(decision.to, current.taskId),
   });
   return {
-    status: await persistAttempt(options.attemptDir, current.revision, { kind: "attempt.transitioned", next }),
+    status: await persistAttempt(
+      options.attemptDir,
+      current.revision,
+      { kind: "attempt.transitioned", next },
+      options.projectRecord,
+    ),
     report,
   };
 }

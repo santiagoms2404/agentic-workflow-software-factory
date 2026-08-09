@@ -64,6 +64,95 @@ export interface SessionInit {
  * `INSERT OR IGNORE` so re-running session creation for the same id is a
  * no-op rather than a constraint-violation throw.
  */
+export interface AttemptStatusProjection extends SessionInit {
+  lifecycleState: string;
+  baseSha: string | null;
+  candidateSha: string | null;
+  callsSpent: number;
+  callsReserved: number;
+  correctionsAuto: number;
+  correctionsOwner: number;
+  workerModelResolved: string | null;
+  updatedAt: string;
+  endedAt: string | null;
+  stateRevision: number;
+}
+
+/**
+ * Projects one canonical CLI attempt record into its session summary.
+ *
+ * The journal sequence is also the projection cursor. Re-applying a record is
+ * a no-op; skipping a record degrades rather than manufacturing a complete
+ * summary. Like provider-event projection, failure never throws into the
+ * lifecycle command that already durably journaled its transition.
+ */
+export function projectAttemptStatus(
+  db: DatabaseSync,
+  status: AttemptStatusProjection,
+  sourceSeq: number,
+): ProjectionOutcome {
+  try {
+    createSession(db, status);
+    const lastSeq = getLastProjectedSeq(db, status.sessionId);
+    if (lastSeq === null) throw new Error(`no session row for ${status.sessionId}`);
+    if (sourceSeq <= lastSeq) {
+      return { ok: true, applied: false, degraded: false, flagPersisted: false };
+    }
+    if (sourceSeq !== lastSeq + 1 || status.stateRevision !== sourceSeq) {
+      throw new Error(
+        `non-contiguous attempt projection: cursor ${lastSeq}, source_seq ${sourceSeq}, revision ${status.stateRevision}`,
+      );
+    }
+
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      db.prepare(`UPDATE sessions SET
+          lifecycle_state = ?, base_sha = ?, candidate_sha = ?, calls_spent = ?, calls_reserved = ?,
+          corrections_auto = ?, corrections_owner = ?, worker_model_resolved = ?, updated_at = ?,
+          ended_at = ?, state_revision = ?, last_projected_seq = ?
+        WHERE session_id = ?`).run(
+        status.lifecycleState,
+        status.baseSha,
+        status.candidateSha,
+        status.callsSpent,
+        status.callsReserved,
+        status.correctionsAuto,
+        status.correctionsOwner,
+        status.workerModelResolved === null ? null : scrubCredentialString(status.workerModelResolved),
+        status.updatedAt,
+        status.endedAt,
+        status.stateRevision,
+        sourceSeq,
+        status.sessionId,
+      );
+      db.exec("COMMIT");
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+    return { ok: true, applied: true, degraded: false, flagPersisted: false };
+  } catch (error) {
+    let flagPersisted = false;
+    try {
+      setDegraded(db, status.sessionId);
+      flagPersisted = true;
+    } catch {
+      // The journal still owns the failed record when SQLite cannot flag itself.
+    }
+    return {
+      ok: false,
+      applied: false,
+      degraded: true,
+      flagPersisted,
+      notice: {
+        code: "sqlite-projection-failed",
+        message: `attempt projection failed for session ${status.sessionId} at source_seq ${sourceSeq}`,
+        detail: error instanceof Error ? error.message : String(error),
+      },
+    };
+  }
+}
+
 export function createSession(db: DatabaseSync, init: SessionInit): void {
   db.prepare(
     `INSERT OR IGNORE INTO sessions

@@ -41,7 +41,11 @@ test("session and phase detail expose summaries but no private file, process, or
     const phaseResponse = await router.dispatch(request("/api/v1/sessions/session-1/phases/phase-1"));
     assert.equal(phaseResponse.status, 200);
     const phase = phaseResponse.body as PhaseDetailResponse;
-    assert.equal(phase.envelopes.length, 1);
+    assert.deepEqual(
+      phase.envelopes.map((envelope) => ({ round: envelope.correctionRound, valid: envelope.valid })),
+      [{ round: 0, valid: true }, { round: 1, valid: false }],
+      "all rounds, including invalid retained output, stay inspectable",
+    );
     const serialized = JSON.stringify(phase);
     assert.equal(serialized.includes("must-not-leak"), false);
     assert.equal(serialized.includes("private/envelope.json"), false);

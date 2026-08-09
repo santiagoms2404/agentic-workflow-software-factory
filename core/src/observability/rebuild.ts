@@ -20,7 +20,13 @@ import { scanJournal } from "../persistence/replay.ts";
 import type { NormalizedEvent } from "../contracts/normalized-events.ts";
 import type { TaskState } from "../state/task-machine.ts";
 import { closeDatabase, integrityProblems, openDatabase, type DatabaseSync } from "./sqlite.ts";
-import { createSession, projectEvent, type SessionInit } from "./projector.ts";
+import {
+  createSession,
+  projectAttemptStatus,
+  projectEvent,
+  type AttemptStatusProjection,
+  type SessionInit,
+} from "./projector.ts";
 import { getSession } from "./queries.ts";
 
 // ---------------------------------------------------------------------------
@@ -104,8 +110,10 @@ export function observabilityDegraded(db: DatabaseSync, sessionId: string): bool
 export interface RebuildSource {
   session: SessionInit;
   journalPath: string;
-  /** Adapts a durable journal vocabulary at its owning boundary for projection. */
+  /** Adapts a durable provider journal vocabulary at its owning boundary. */
   normalize?: (record: JournalRecord<unknown>) => NormalizedEvent;
+  /** Replays a CLI attempt journal into the session summary, not fake provider events. */
+  attemptStatus?: (record: JournalRecord<unknown>) => AttemptStatusProjection;
 }
 
 export interface RebuildOptions {
@@ -236,7 +244,7 @@ export async function rebuildDatabase(options: RebuildOptions): Promise<RebuildR
   // Read every journal BEFORE opening the candidate: a corrupt journal is a
   // refusal, and refusing without having created a file at all is tidier
   // than refusing with one to explain.
-  const loaded: { source: RebuildSource; records: readonly JournalRecord<NormalizedEvent>[] }[] = [];
+  const loaded: { source: RebuildSource; records: readonly JournalRecord<unknown>[] }[] = [];
   for (const source of options.sources) {
     const scan = await scanJournal<unknown>(source.journalPath);
     if (!scan.ok) {
@@ -245,10 +253,10 @@ export async function rebuildDatabase(options: RebuildOptions): Promise<RebuildR
         scan.badKey,
       );
     }
-    const records = source.normalize === undefined
-      ? scan.records as readonly JournalRecord<NormalizedEvent>[]
-      : scan.records.map((record) => ({ ...record, event: source.normalize?.(record) as NormalizedEvent }));
-    loaded.push({ source, records });
+    if (source.normalize !== undefined && source.attemptStatus !== undefined) {
+      return refuse(`${source.journalPath} declares two incompatible projection adapters`);
+    }
+    loaded.push({ source, records: scan.records });
   }
 
   // Sessions in the order they started, then every record of every journal
@@ -260,7 +268,7 @@ export async function rebuildDatabase(options: RebuildOptions): Promise<RebuildR
   loaded.sort((a, b) => order(a.source.session.startedAt, b.source.session.startedAt, a.source.session.sessionId, b.source.session.sessionId));
   const merged = loaded
     .flatMap(({ source, records: journalRecords }) =>
-      journalRecords.map((record) => ({ sessionId: source.session.sessionId, record })),
+      journalRecords.map((record) => ({ source, sessionId: source.session.sessionId, record })),
     )
     .sort((a, b) =>
       order(a.record.recorded_at, b.record.recorded_at, `${a.sessionId}:${a.record.source_seq}`, `${b.sessionId}:${b.record.source_seq}`),
@@ -274,11 +282,22 @@ export async function rebuildDatabase(options: RebuildOptions): Promise<RebuildR
   let records = 0;
   try {
     for (const { source } of loaded) {
-      createSession(db, source.session);
+      if (source.attemptStatus === undefined) createSession(db, source.session);
     }
-    for (const { sessionId, record } of merged) {
+    for (const { source, sessionId, record } of merged) {
       records += 1;
-      const outcome = projectEvent(db, { sessionId, runId: record.event.runId, phaseId: null }, record);
+      const outcome = source.attemptStatus === undefined
+        ? (() => {
+            const event = source.normalize === undefined
+              ? record.event as NormalizedEvent
+              : source.normalize(record);
+            return projectEvent(
+              db,
+              { sessionId, runId: event.runId, phaseId: null },
+              { ...record, event },
+            );
+          })()
+        : projectAttemptStatus(db, source.attemptStatus(record), record.source_seq);
       if (!outcome.ok) {
         return refuse(
           `projection failed rebuilding ${sessionId} at source_seq ${record.source_seq}: ` +

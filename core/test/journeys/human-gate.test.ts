@@ -45,6 +45,7 @@ function awaiting(repository: string, candidate: string): AttemptStatus {
     workflow: "build-review",
     tier: 2,
     request: "land the exact tested candidate",
+    configSnapshotJson: "{}",
     lifecycleState: "AWAITING_OWNER",
     baseSha: git(repository, "rev-parse", "HEAD"),
     candidateSha: candidate,

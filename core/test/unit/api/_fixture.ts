@@ -63,6 +63,12 @@ export function apiFixture(): {
     VALUES ('envelope-1','session-1','phase-1','builder','awsf.build-output/v1',0,1,
       'success','{"summary":"done","raw_provider_log":"must-not-leak"}','[]',
       'private/envelope.json','2026-08-08T12:00:03.000Z')`).run();
+  writer.prepare(`INSERT INTO envelopes
+    (envelope_id, session_id, phase_id, agent, schema_id, correction_round, valid,
+     producer_status, payload_json, violations_json, file_path, created_at)
+    VALUES ('envelope-2','session-1','phase-1','builder','awsf.build-output/v1',1,0,
+      'failure','{"summary":"invalid round retained"}','["missing evidence"]',
+      'private/envelope-invalid.json','2026-08-08T12:00:04.000Z')`).run();
   for (let index = 1; index <= 3; index += 1) {
     writer.prepare(`INSERT INTO events
       (event_id, session_id, phase_id, run_id, first_source_seq, last_source_seq, type,

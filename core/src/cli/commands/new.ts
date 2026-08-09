@@ -7,6 +7,7 @@ import {
   nextActionFor,
   persistAttempt,
   taskRoot,
+  type AttemptProjector,
   type AttemptStatus,
 } from "./attempt.ts";
 
@@ -18,7 +19,9 @@ export interface NewCommandOptions {
   readonly request: string;
   readonly workflow: string;
   readonly tier: Tier;
+  readonly configSnapshotJson?: string;
   readonly allowance?: { auto: number; owner: number };
+  readonly projectRecord?: AttemptProjector;
   readonly now?: () => string;
   readonly sessionId?: () => string;
 }
@@ -44,6 +47,7 @@ export async function newCommand(options: NewCommandOptions): Promise<{ attemptD
     workflow: options.workflow,
     tier: options.tier,
     request: options.request,
+    configSnapshotJson: options.configSnapshotJson ?? "{}",
     lifecycleState: "DRAFT",
     baseSha: null,
     candidateSha: null,
@@ -73,5 +77,8 @@ export async function newCommand(options: NewCommandOptions): Promise<{ attemptD
   // Calling this also pins the configured ceiling at creation time through the
   // budget vocabulary; it throws if tier is not one of 0/1/2.
   ceilingFor(options.tier);
-  return { attemptDir: dir, status: await persistAttempt(dir, null, { kind: "attempt.created", next: status }) };
+  return {
+    attemptDir: dir,
+    status: await persistAttempt(dir, null, { kind: "attempt.created", next: status }, options.projectRecord),
+  };
 }

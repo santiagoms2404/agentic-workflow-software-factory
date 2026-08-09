@@ -17,6 +17,8 @@ import {
   nextRevision,
   persistAttempt,
   readAttempt,
+  type AttemptAdvancementGuard,
+  type AttemptProjector,
   type AttemptStatus,
 } from "./attempt.ts";
 
@@ -25,6 +27,8 @@ export interface LandCommandOptions {
   readonly terminal: OwnerTerminal;
   readonly actor?: Actor;
   readonly now?: () => string;
+  readonly projectRecord?: AttemptProjector;
+  readonly assertAdvancement?: AttemptAdvancementGuard;
   /** Crash-injection boundary: L20 is durable and Git has not yet moved. */
   readonly afterLandingPersisted?: (status: AttemptStatus) => Promise<void> | void;
 }
@@ -105,6 +109,7 @@ async function persistBlocked(
   status: AttemptStatus,
   error: LandingBlocked,
   now: string,
+  project?: AttemptProjector,
 ): Promise<AttemptStatus> {
   const decision = decideBlock(status, error);
   const next = nextRevision(status, {
@@ -119,7 +124,12 @@ async function persistBlocked(
       behind: error.behind,
     },
   });
-  return persistAttempt(attemptDir, status.revision, { kind: "attempt.transitioned", next });
+  return persistAttempt(
+    attemptDir,
+    status.revision,
+    { kind: "attempt.transitioned", next },
+    project,
+  );
 }
 
 async function finish(
@@ -134,8 +144,10 @@ async function finish(
       status,
       new LandingBlocked("ambiguous-recovery", "LANDING record has no candidate SHA; recovery cannot guess"),
       (options.now ?? ((): string => new Date().toISOString()))(),
+      options.projectRecord,
     );
   }
+  options.assertAdvancement?.(status.sessionId, "LANDED");
   try {
     const outcome = recover
       ? recoverLanding(status.repository, candidate)
@@ -149,7 +161,12 @@ async function finish(
       nextAction: nextActionFor(decision.to, status.taskId),
       blocker: null,
     });
-    return persistAttempt(options.attemptDir, status.revision, { kind: "attempt.transitioned", next });
+    return persistAttempt(
+      options.attemptDir,
+      status.revision,
+      { kind: "attempt.transitioned", next },
+      options.projectRecord,
+    );
   } catch (error) {
     const blocked = error instanceof LandingBlocked
       ? error
@@ -159,6 +176,7 @@ async function finish(
       status,
       blocked,
       (options.now ?? ((): string => new Date().toISOString()))(),
+      options.projectRecord,
     );
   }
 }
@@ -202,6 +220,7 @@ export async function landCommand(options: LandCommandOptions): Promise<LandComm
   const confirmed = await options.terminal.confirm(`Land exact candidate ${current.candidateSha}?`);
   if (!confirmed) return { status: current, confirmed: false };
 
+  options.assertAdvancement?.(current.sessionId, "LANDING");
   const decision = authorizeLanding(current, actor, true, inspection, true);
   const now = (options.now ?? ((): string => new Date().toISOString()))();
   const landing = nextRevision(current, {
@@ -215,10 +234,12 @@ export async function landCommand(options: LandCommandOptions): Promise<LandComm
       approvedAt: now,
     },
   });
-  const persisted = await persistAttempt(options.attemptDir, current.revision, {
-    kind: "attempt.transitioned",
-    next: landing,
-  });
+  const persisted = await persistAttempt(
+    options.attemptDir,
+    current.revision,
+    { kind: "attempt.transitioned", next: landing },
+    options.projectRecord,
+  );
   await options.afterLandingPersisted?.(persisted);
   return { status: await finish(options, persisted, false), confirmed: true };
 }

@@ -52,6 +52,8 @@ export interface AttemptStatus {
   readonly workflow: string;
   readonly tier: Tier;
   readonly request: string;
+  /** Redacted at creation and journaled so SQLite rebuild never needs live config. */
+  readonly configSnapshotJson: string;
   readonly lifecycleState: TaskState;
   readonly baseSha: string | null;
   readonly candidateSha: string | null;
@@ -77,6 +79,15 @@ export interface AttemptEvent {
   readonly next: AttemptStatus;
 }
 
+/** The observability callback occupying the write protocol's project step. */
+export type AttemptProjector = (
+  record: JournalRecord<AttemptEvent>,
+  status: AttemptStatus,
+) => Promise<void> | void;
+
+/** A degraded projection may halt, but may not let work complete invisibly. */
+export type AttemptAdvancementGuard = (sessionId: string, to: TaskState) => void;
+
 export function deriveAttemptStatus(records: readonly JournalRecord<AttemptEvent>[]): AttemptStatus | null {
   return records.length === 0 ? null : records[records.length - 1]?.event.next ?? null;
 }
@@ -101,6 +112,7 @@ export async function persistAttempt(
   attemptDir: string,
   expectedRevision: number | null,
   event: AttemptEvent,
+  project?: AttemptProjector,
 ): Promise<AttemptStatus> {
   const journal = new Journal<AttemptEvent>(journalFilePath(attemptDir));
   const lock = new AttemptLock(lockFilePath(attemptDir));
@@ -126,6 +138,7 @@ export async function persistAttempt(
         }
         return { event, nextStatus: event.next };
       },
+      ...(project === undefined ? {} : { project }),
       sealWhenTerminal: (status) => isTerminalStatus(status) ? status.lifecycleState : null,
     });
   } finally {
