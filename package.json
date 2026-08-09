@@ -10,6 +10,9 @@
     "core",
     "dashboard"
   ],
+  "bin": {
+    "awsf": "core/src/cli/main.ts"
+  },
   "scripts": {
     "test": "npm run test:unit && npm run test:contract && npm run test:sim && npm run test:journeys",
     "test:unit": "node --experimental-strip-types --test \"core/test/unit/**/*.test.ts\"",
@@ -17,6 +20,8 @@
     "test:sim": "node --experimental-strip-types --test \"core/test/simulation/**/*.test.ts\"",
     "test:journeys": "node --experimental-strip-types --test \"core/test/journeys/**/*.test.ts\"",
     "awsf": "node --experimental-strip-types core/src/cli/main.ts",
+    "dash": "npm --workspace dashboard run dev",
+    "dash:build": "npm --workspace dashboard exec vite build",
     "typecheck": "tsc --build --noEmit",
     "lint": "oxlint core dashboard"
   },

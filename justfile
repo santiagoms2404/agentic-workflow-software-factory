@@ -1,19 +1,31 @@
-# Thin wrappers over the npm scripts — never a second truth.
+# Thin wrappers over root package scripts — never a second source of truth.
 
-plan:
-    @echo "plan workflow not implemented yet (M5)"
+test:
+    npm test
 
-build:
-    @echo "build workflow not implemented yet (M5)"
+unit:
+    npm run test:unit
 
-sdlc:
-    @echo "simple-sdlc workflow not implemented yet (M5)"
+contract:
+    npm run test:contract
+
+sim:
+    npm run test:sim
+
+journeys:
+    npm run test:journeys
+
+lint:
+    npm run lint
+
+typecheck:
+    npm run typecheck
 
 dash:
-    npm --workspace dashboard run dev
+    npm run dash
 
-doctor:
-    @echo "doctor command not implemented yet (M1 cli)"
+dash-build:
+    npm run dash:build
 
-rebuild:
-    node --experimental-strip-types core/src/observability/rebuild.ts
+awsf *args:
+    npm run awsf -- {{args}}

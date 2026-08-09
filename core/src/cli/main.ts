@@ -21,7 +21,13 @@ import { defaultWorktreeRoot, startCommand } from "./commands/start.ts";
 import { statusCommand } from "./commands/status.ts";
 import { watchCommand } from "./commands/watch.ts";
 
-const USAGE = "usage: awsf <new|start|run|status|watch|land|cancel|retry|doctor|gc|dash|db rebuild> [task] [options]";
+/** The complete owner-facing command table; documentation reconciles against it. */
+export const CLI_COMMANDS = Object.freeze([
+  "new", "start", "run", "status", "watch", "land", "cancel", "retry",
+  "doctor", "gc", "dash", "db rebuild",
+]);
+
+const USAGE = `usage: awsf <${CLI_COMMANDS.join("|")}> [task] [options]`;
 
 interface ParsedArgs {
   readonly positionals: readonly string[];

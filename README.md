@@ -117,16 +117,42 @@ markers are earned, never pre-declared. As of this README:
 | **M3** — Execution Kernel ⚠ | `[x]` | Process supervision, the PID-before-spawn barrier, call-budget reservations |
 | **M4** — Real Adapters | `[x]` | `claude-code`, `pi-codex` adapters against captured real provider streams |
 | **M5** — Workflows & Gates | `[x]` | The six workflows, eleven gates, permissions, and correction loop |
-| **M6** — Owner Controls | `[wip]` — T21 done; T22 outstanding | CLI commands, TTY-only persisted landing, cancel, retry; doctor/rebuild/gc next |
-| **M7** — API & Dashboard | `[]` | Read-only HTTP API, the Vue dashboard |
-| **M8** — Platform & Pilots | `[]` | Cross-platform verification, two real pilot tasks |
+| **M6** — Owner Controls | `[x]` | CLI commands, TTY-only persisted landing, cancel, retry, doctor, rebuild, and list-only gc |
+| **M7** — API & Dashboard | `[x]` | Read-only HTTP API and the loopback Vue dashboard |
+| **M8** — Platform & Pilots | `[wip]` | WSL2 matrix evidence and explicit destination-machine deferrals; two real pilot tasks remain |
 
 **Concretely, right now:** the lifecycle, persistence, execution kernel,
-adapters, workflows, gates, permissions, and owner CLI are implemented. The
-CLI exposes `new`, `start`, `status`, `watch`, `land`, `cancel`, and `retry`;
-landing has one human+TTY authorization site and mutates the canonical checkout
-only by a verified local fast-forward. The read-only operator commands, API,
-dashboard, platform matrix, and pilots remain outstanding.
+adapters, workflows, gates, permissions, owner CLI, and read-only dashboard are
+implemented. The CLI exposes `new`, `start`, `run`, `status`, `watch`, `land`,
+`cancel`, `retry`, `doctor`, `gc`, `dash`, and `db rebuild`; landing has one
+human+TTY authorization site and mutates the canonical checkout only by a
+verified local fast-forward. The portability matrix is evidence-backed only
+where it says so; the two real pilots remain outstanding.
+
+## Install and usage
+
+AWSF runs from a checked-out repository on Node 22.12 or newer:
+
+```bash
+npm install
+npm test
+npm run awsf -- doctor
+npm run awsf -- db rebuild
+```
+
+Create and drive a fixture-backed task without a provider call:
+
+```bash
+npm run awsf -- new T01 "describe the task" --workflow simple-sdlc --tier 1
+npm run awsf -- start T01 --stub true
+npm run awsf -- run T01 --stub true
+npm run awsf -- status T01
+```
+
+The [`justfile`](justfile) is optional convenience only; each target delegates
+to a root npm script. For example, `just test`, `just lint`, and
+`just awsf doctor` are equivalent wrappers. Build the dashboard before serving
+it with `npm run dash:build`, then run `npm run awsf -- dash`.
 
 ## Verifying these claims
 
@@ -138,6 +164,8 @@ npm test              # unit + contract + simulation + zero-quota journeys
 npm run lint          # oxlint over core/ and dashboard/
 npm run typecheck     # known missing-Node-declarations gap; see plan Amendments
 npm run awsf -- status <task-id>
+npm run awsf -- doctor
+npm run awsf -- db rebuild
 ```
 
 Do not take a green unit suite as evidence about process trees or Git landing:
