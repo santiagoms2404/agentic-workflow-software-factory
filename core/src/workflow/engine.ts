@@ -55,7 +55,7 @@ export function createHostPhaseGit<T extends EnvelopeBase>(options: {
   let observed: readonly string[] | null = null;
   return {
     captureDiff(): readonly string[] {
-      observed = changedPaths(before, captureChangeSet(options.repository, options.git));
+      observed = Object.freeze(changedPaths(before, captureChangeSet(options.repository, options.git)));
       return observed;
     },
     commit(envelope: T, paths: readonly string[]): string | null {
@@ -293,7 +293,7 @@ export async function runAgentPhase<T extends EnvelopeBase>(
     // Ordering is safety-significant: gate mistakes are correctable; permission
     // breaches are observed only after the loop and abort without another send.
     const permission = options.permissions.enforce();
-    const changedPaths = Object.freeze([...options.hostGit.captureDiff()]);
+    const changedPaths = options.hostGit.captureDiff();
     const candidateSha = options.hostGit.commit(accepted.payload!, changedPaths);
     execution.succeed();
     const phaseUsage = usage.snapshot();

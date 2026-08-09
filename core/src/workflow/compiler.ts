@@ -105,6 +105,11 @@ export interface WorkflowDefinition {
   readonly phases: readonly PhaseDefinition[];
 }
 
+/** A shipped recipe declares the tier whose controls and ceiling it was designed for. */
+export interface WorkflowRecipe extends WorkflowDefinition {
+  readonly tier: Tier;
+}
+
 export interface CompiledWorkflow {
   readonly id: string;
   readonly minimumCalls: number;
