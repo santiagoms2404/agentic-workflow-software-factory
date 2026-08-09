@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createApiRouter } from "../../../src/api/routes.ts";
+import { processesForSession } from "../../../src/observability/queries.ts";
 import { openDatabase, type OpenDatabaseOptions } from "../../../src/observability/sqlite.ts";
 import type { SessionsResponse, SessionDetailResponse, PhaseDetailResponse, EventsResponse } from "../../../../dashboard/shared/types.ts";
 import { apiFixture } from "./_fixture.ts";
@@ -46,11 +47,22 @@ test("session and phase detail expose summaries but no private file, process, or
       [{ round: 0, valid: true }, { round: 1, valid: false }],
       "all rounds, including invalid retained output, stay inspectable",
     );
-    const serialized = JSON.stringify(phase);
+    const privateSystemPromptPath = "/home/operator/.local/state/awsf/private/system-prompt.md";
+    const privateWorktreePath = "/home/operator/.local/state/awsf/worktrees/session-1";
+    const queryRows = processesForSession(fixture.writer, "session-1");
+    assert.equal(JSON.stringify(queryRows).includes(privateSystemPromptPath), false);
+    assert.equal(JSON.stringify(queryRows).includes(privateWorktreePath), false);
+    assert.equal(Object.hasOwn(queryRows[0] ?? {}, "command_json"), false);
+    assert.equal(Object.hasOwn(queryRows[0] ?? {}, "cwd_display"), false);
+
+    const serialized = JSON.stringify({ session, phase });
     assert.equal(serialized.includes("must-not-leak"), false);
     assert.equal(serialized.includes("private/envelope.json"), false);
     assert.equal(serialized.includes("private://continuity-1"), false);
     assert.equal(serialized.includes("command_json"), false);
+    assert.equal(serialized.includes("cwd_display"), false);
+    assert.equal(serialized.includes(privateSystemPromptPath), false);
+    assert.equal(serialized.includes(privateWorktreePath), false);
   } finally {
     router.close();
     fixture.close();

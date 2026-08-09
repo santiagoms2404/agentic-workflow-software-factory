@@ -84,6 +84,17 @@ export class ProductionRouteUnavailable extends Error {
   }
 }
 
+export class ProductionContinuityMismatch extends ProductionRouteUnavailable {
+  readonly configured: AgentDefinition["harness"]["continuity"];
+  readonly supported: ModelInfo["continuity"];
+  constructor(adapterId: string, configured: AgentDefinition["harness"]["continuity"], supported: ModelInfo["continuity"]) {
+    super(adapterId, `configured continuity ${JSON.stringify(configured)} does not match verified adapter capability ${JSON.stringify(supported)}`);
+    this.name = "ProductionContinuityMismatch";
+    this.configured = configured;
+    this.supported = supported;
+  }
+}
+
 export class CommandPhaseFailure extends Error {
   readonly output: TestOutput;
   constructor(output: TestOutput) {
@@ -331,6 +342,14 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
       const available = await adapter.isAvailable();
       if (available.status !== "available") throw new ProductionRouteUnavailable(agent.harness.adapter, available.detail ?? available.code ?? "blocked");
       const model = await adapter.getModelInfo(agent.model);
+      const configuredContinuity = agent.harness.continuity;
+      const supportedContinuity = model.continuity === "same-session-correction" ? "same-session" : "none";
+      if (configuredContinuity !== supportedContinuity) {
+        throw new ProductionContinuityMismatch(agent.harness.adapter, configuredContinuity, model.continuity);
+      }
+      if (configuredContinuity !== "none") {
+        throw new ProductionRouteUnavailable(agent.harness.adapter, "the production runner has no verified same-session correction transport");
+      }
       // Pure descriptor construction validates model/thinking/profile/tools before lifecycle mutation.
       adapter.buildSpec({
         model: agent.model,
@@ -551,7 +570,7 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
     const session: CorrectionSession = {
       identity: { adapter: route.adapter.id, provider: route.model.provider, model: route.model.requestedModel, sessionId: `none:${runId}` },
       send: async (prompt): Promise<AgentTurn> => {
-        if (sent) throw new Error("this adapter advertises no continuity; a second turn is not authorized");
+        if (sent) throw new Error("configured and verified continuity is none; a second turn is not authorized");
         sent = true;
         await phaseQueue;
         const controller = new HOST.AbortController();
@@ -642,7 +661,8 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
         persistence: { persist: (envelope, raw) => persistEnvelope(phase.id, runId, envelope, raw) },
         agentSessionId: status.sessionId,
         onPhaseState,
-        // Both production adapters have continuity none: invalid schema or a failed gate blocks on turn one.
+        // Preflight proved durable config and adapter capability both say none.
+        // Invalid schema or a failed gate therefore blocks on turn one.
         authorizeCorrection: () => null,
       });
       await phaseQueue;

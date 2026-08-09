@@ -56,7 +56,8 @@ export function apiFixture(): {
     (process_id, session_id, phase_id, run_id, adapter_id, role, transport, status,
      command_json, cwd_display, registered_at)
     VALUES ('process-1','session-1','phase-1','run-1','pi-codex','worker','process','RUNNING',
-      '["pi"]','worktree','2026-08-08T12:00:01.000Z')`).run();
+      '["/usr/bin/pi","--append-system-prompt","/home/operator/.local/state/awsf/private/system-prompt.md"]',
+      '/home/operator/.local/state/awsf/worktrees/session-1','2026-08-08T12:00:01.000Z')`).run();
   writer.prepare(`INSERT INTO envelopes
     (envelope_id, session_id, phase_id, agent, schema_id, correction_round, valid,
      producer_status, payload_json, violations_json, file_path, created_at)

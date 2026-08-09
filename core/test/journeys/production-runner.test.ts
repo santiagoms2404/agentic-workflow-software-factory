@@ -3,9 +3,11 @@ import { test } from "node:test";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
 import type { AwsfConfig, AdapterEntry } from "../../src/config/schema.ts";
 import { loadConfig } from "../../src/config/load.ts";
+import { PiCodexAdapter } from "../../src/adapters/pi-codex.ts";
+import { createApiRouter } from "../../src/api/routes.ts";
 import type { BuildOutput } from "../../src/contracts/build-output.ts";
 import type { PlanOutput } from "../../src/contracts/plan-output.ts";
 import type { NormalizedEvent } from "../../src/contracts/normalized-events.ts";
@@ -19,13 +21,13 @@ import type {
   ProcessTransport,
   TransportBroker,
 } from "../../src/adapters/interface.ts";
-import type { BrokerOptions } from "../../src/execution/transport-broker.ts";
+import { ProcessTransportBroker, type BrokerOptions } from "../../src/execution/transport-broker.ts";
 import { createDashboardProjection } from "../../src/cli/commands/dashboard-projection.ts";
 import { newCommand } from "../../src/cli/commands/new.ts";
 import { startCommand } from "../../src/cli/commands/start.ts";
 import { runProductionCommand, ProductionWorkflowUnsupported } from "../../src/cli/commands/production-run.ts";
 import { readAttempt } from "../../src/cli/commands/attempt.ts";
-import { agentsForSession, gatesForSession, getSession, phasesForSession, pollEvents } from "../../src/observability/queries.ts";
+import { agentsForSession, gatesForSession, getSession, phasesForSession, pollEvents, processesForSession } from "../../src/observability/queries.ts";
 import { openDatabase } from "../../src/observability/sqlite.ts";
 
 function git(repository: string, ...argv: string[]): string {
@@ -86,6 +88,23 @@ class ScriptedAdapter implements HarnessAdapter {
   }
 }
 
+class CapturedPiAdapter extends PiCodexAdapter {
+  readonly #fixtureMode: "success" | "parser-failure";
+  constructor(fixtureMode: "success" | "parser-failure" = "success") {
+    super({ executable: "production-runner-fixture" });
+    this.#fixtureMode = fixtureMode;
+  }
+  override async isAvailable(): Promise<Availability> { return { status: "available" }; }
+  override buildSpec(request: ModelRequest): ProcessSpec {
+    const spec = super.buildSpec(request);
+    return {
+      ...spec,
+      executable: CAPTURED_PROVIDER,
+      argv: [...spec.argv, "--awsf-fixture-mode", this.#fixtureMode],
+    };
+  }
+}
+
 function fakeBroker(options: BrokerOptions): TransportBroker {
   return {
     async startProcess(registration, spec) {
@@ -109,12 +128,14 @@ function fakeBroker(options: BrokerOptions): TransportBroker {
   };
 }
 
-function configWithCommand(exitCode = 0): AwsfConfig {
-  const text = readFileSync(resolve("awsf.config.yaml"), "utf8").replace(
+const CAPTURED_PROVIDER = resolve("core/test/fixtures/providers/codex/production-runner-fixture.mjs");
+const SYSTEM_PROMPT_SENTINEL = "SYSTEM_PROMPT_CONTENT_MUST_NOT_RIDE_ARGV";
+
+function configTextWithCommand(exitCode = 0): string {
+  return readFileSync(resolve("awsf.config.yaml"), "utf8").replace(
     "test: { argv: [npm, run, test:unit], timeout_seconds: 600 }",
     `test: { argv: [node, -e, process.exit(${exitCode})], timeout_seconds: 10 }`,
   ).replace("typecheck: { argv: [npm, run, typecheck], timeout_seconds: 300 }\n", "");
-  return loadConfig(text);
 }
 
 async function fixture(workflow: "build" | "plan-build-test" | "simple-sdlc", commandExit = 0) {
@@ -125,11 +146,22 @@ async function fixture(workflow: "build" | "plan-build-test" | "simple-sdlc", co
   writeFileSync(join(canonical, "README.md"), "base\n");
   git(canonical, "add", "README.md");
   git(canonical, "-c", "user.name=Santiago Marin", "-c", "user.email=santiagomarinsuarez@me.com", "commit", "-m", "test: seed production runner");
-  const config = configWithCommand(commandExit);
+  const configText = configTextWithCommand(commandExit);
+  const config = loadConfig(configText);
+  const configPath = join(root, "awsf.config.yaml");
+  writeFileSync(configPath, configText);
+  for (const agent of config.agents) {
+    for (const promptPath of [agent.prompt.system, agent.prompt.user]) {
+      const destination = join(root, promptPath);
+      mkdirSync(resolve(destination, ".."), { recursive: true });
+      const marker = promptPath === "prompts/builder/system.md" ? `\n${SYSTEM_PROMPT_SENTINEL}\n` : "";
+      writeFileSync(destination, `${readFileSync(resolve(promptPath), "utf8")}${marker}`);
+    }
+  }
   const projection = createDashboardProjection(stateRoot);
   const created = await newCommand({ stateRoot, project: config.project.slug, taskId: `fixture-${workflow}`, repository: canonical, request: "write one bounded source", workflow, tier: 1, configSnapshotJson: JSON.stringify(config), projectRecord: projection.project });
-  await startCommand({ attemptDir: created.attemptDir, worktreeRoot: join(root, "worktrees"), configPath: resolve("awsf.config.yaml"), preflight: () => ({ adapter: true, sandbox: true, observability: true }), projectRecord: projection.project });
-  return { root, canonical, stateRoot, config, projection, created };
+  await startCommand({ attemptDir: created.attemptDir, worktreeRoot: join(root, "worktrees"), configPath, preflight: () => ({ adapter: true, sandbox: true, observability: true }), projectRecord: projection.project });
+  return { root, canonical, stateRoot, config, configPath, projection, created };
 }
 
 for (const [workflow, expectedCalls] of [["build", 1], ["plan-build-test", 2]] as const) {
@@ -140,7 +172,7 @@ for (const [workflow, expectedCalls] of [["build", 1], ["plan-build-test", 2]] a
     try {
       const prepared = await readAttempt(world.created.attemptDir);
       const status = await runProductionCommand({
-        attemptDir: world.created.attemptDir, config: world.config, configPath: resolve("awsf.config.yaml"),
+        attemptDir: world.created.attemptDir, config: world.config, configPath: world.configPath,
         projectRecord: world.projection.project, assertAdvancement: world.projection.assertAdvancement,
         assertLaunchProjection: world.projection.assertLaunchPermitted,
         infrastructure: {
@@ -182,8 +214,145 @@ for (const [workflow, expectedCalls] of [["build", 1], ["plan-build-test", 2]] a
   });
 }
 
+test("process-backed production build crosses the real barrier, parser, audit, and API privacy boundaries", async () => {
+  const world = await fixture("build");
+  try {
+    const prepared = await readAttempt(world.created.attemptDir);
+    const status = await runProductionCommand({
+      attemptDir: world.created.attemptDir,
+      config: world.config,
+      configPath: world.configPath,
+      projectRecord: world.projection.project,
+      assertLaunchProjection: world.projection.assertLaunchPermitted,
+      assertAdvancement: world.projection.assertAdvancement,
+      infrastructure: {
+        adapterFor: () => new CapturedPiAdapter(),
+        createBroker: (options) => new ProcessTransportBroker(options),
+        sandboxProbe: () => false,
+      },
+    });
+    assert.equal(status.lifecycleState, "AWAITING_OWNER", status.blocker?.detail);
+    assert.equal(status.budget.callsSpent, 1);
+    assert.equal(status.budget.callsReserved, 0);
+    assert.equal(git(prepared.worktree!, "status", "--porcelain"), "");
+    assert.equal(git(prepared.worktree!, "rev-parse", "HEAD"), status.candidateSha);
+
+    const systemPromptPath = join(world.created.attemptDir, "private", "builder", "system-prompt.md");
+    const probe = JSON.parse(readFileSync(join(world.created.attemptDir, "private", "builder", "provider-probe.json"), "utf8")) as {
+      argv: string[];
+      promptContentInArgv: boolean;
+      systemPromptContentInArgv: boolean;
+      registeredBeforeProviderStart: boolean;
+      spentBeforeProviderStart: boolean;
+      journalSourceSeqsAtProviderStart: number[];
+    };
+    assert.equal(probe.registeredBeforeProviderStart, true, "the provider observed durable registration before it began");
+    assert.equal(probe.spentBeforeProviderStart, true, "the provider observed durable spend before GO");
+    assert.equal(probe.promptContentInArgv, false);
+    assert.equal(probe.systemPromptContentInArgv, false);
+    assert.equal(probe.argv.includes(SYSTEM_PROMPT_SENTINEL), false);
+    assert.deepEqual(probe.journalSourceSeqsAtProviderStart, probe.journalSourceSeqsAtProviderStart.map((_value, index) => index + 1));
+
+    const journal: string = readFileSync(join(world.created.attemptDir, "journal.jsonl"), "utf8");
+    const records: { source_seq: number }[] = journal.split("\n").filter(Boolean).map((line: string) => JSON.parse(line) as { source_seq: number });
+    assert.deepEqual(records.map((record: { source_seq: number }) => record.source_seq), records.map((_record: { source_seq: number }, index: number) => index + 1), "register, spend, and events must serialize without a status revision race");
+
+    const dbPath = join(world.stateRoot, "awsf.db");
+    const db = openDatabase(dbPath, { readonly: true });
+    try {
+      const audit = db.prepare("SELECT command_json, cwd_display FROM processes WHERE session_id = ?").get(status.sessionId) as { command_json: string; cwd_display: string };
+      const exactCommand = JSON.parse(audit.command_json) as string[];
+      assert.equal(exactCommand.includes(systemPromptPath), true, "machine-local audit retains exact system-prompt path evidence");
+      assert.equal(exactCommand.includes(SYSTEM_PROMPT_SENTINEL), false, "system-prompt content never rides argv");
+      assert.equal(audit.cwd_display, prepared.worktree);
+      const publicProcesses = processesForSession(db, status.sessionId);
+      assert.equal(JSON.stringify(publicProcesses).includes(systemPromptPath), false);
+      assert.equal(JSON.stringify(publicProcesses).includes(prepared.worktree!), false);
+      assert.equal(publicProcesses[0]?.status, "EXITED");
+      const usageEvents = pollEvents(db, status.sessionId, 0).filter((event) => event.type === "usage");
+      assert.equal(usageEvents.length, 1);
+      assert.equal(agentsForSession(db, status.sessionId)[0]?.input_tokens, 7);
+      assert.equal(agentsForSession(db, status.sessionId)[0]?.output_tokens, 11);
+      assert.equal(getSession(db, status.sessionId)?.input_tokens, 7, "one provider usage report is counted once");
+      assert.equal(getSession(db, status.sessionId)?.output_tokens, 11, "one provider usage report is counted once");
+      assert.ok(gatesForSession(db, status.sessionId).every((gate) => gate.passed === 1));
+      const envelopeRefs = db.prepare("SELECT file_path FROM envelopes WHERE session_id = ?").all(status.sessionId) as unknown as { file_path: string }[];
+      assert.ok(envelopeRefs.every((row) => !isAbsolute(row.file_path) && !row.file_path.includes(world.created.attemptDir)));
+      const outputRefs = db.prepare("SELECT output_path FROM gate_results WHERE session_id = ? AND output_path IS NOT NULL").all(status.sessionId) as unknown as { output_path: string }[];
+      assert.ok(outputRefs.every((row) => !isAbsolute(row.output_path) && !row.output_path.includes(world.created.attemptDir)));
+    } finally {
+      db.close();
+    }
+
+    const router = createApiRouter({ dbPath, config: world.config });
+    try {
+      const response = await router.dispatch({ method: "GET", url: `/api/v1/sessions/${status.sessionId}`, headers: { host: "127.0.0.1:4600" } });
+      assert.equal(response.status, 200);
+      const publicJson = JSON.stringify(response.body);
+      for (const privatePath of [world.root, world.created.attemptDir, prepared.worktree!, systemPromptPath, CAPTURED_PROVIDER]) {
+        assert.equal(publicJson.includes(privatePath), false, `API leaked private path ${privatePath}`);
+      }
+      assert.equal(publicJson.includes("command_json"), false);
+      assert.equal(publicJson.includes("cwd_display"), false);
+    } finally {
+      router.close();
+    }
+
+    const processList = execFileSync("ps", ["-eo", "args="], { encoding: "utf8" });
+    assert.equal(processList.includes(systemPromptPath), false, "the provider process must leave no residue");
+  } finally {
+    world.projection.close();
+    rmSync(world.root, { recursive: true, force: true });
+  }
+});
+
+test("process-backed parser failure bills the spent call but leaves no held reservation", async () => {
+  const world = await fixture("build");
+  try {
+    const status = await runProductionCommand({
+      attemptDir: world.created.attemptDir,
+      config: world.config,
+      configPath: world.configPath,
+      projectRecord: world.projection.project,
+      assertLaunchProjection: world.projection.assertLaunchPermitted,
+      infrastructure: {
+        adapterFor: () => new CapturedPiAdapter("parser-failure"),
+        createBroker: (options) => new ProcessTransportBroker(options),
+        sandboxProbe: () => false,
+      },
+    });
+    assert.equal(status.lifecycleState, "BLOCKED");
+    assert.equal(status.budget.callsSpent, 1);
+    assert.equal(status.budget.callsReserved, 0);
+    const probe = JSON.parse(readFileSync(join(world.created.attemptDir, "private", "builder", "provider-probe.json"), "utf8")) as { registeredBeforeProviderStart: boolean; spentBeforeProviderStart: boolean };
+    assert.equal(probe.registeredBeforeProviderStart, true);
+    assert.equal(probe.spentBeforeProviderStart, true);
+    const db = openDatabase(join(world.stateRoot, "awsf.db"), { readonly: true });
+    try { assert.equal(processesForSession(db, status.sessionId)[0]?.status, "FAILED"); }
+    finally { db.close(); }
+  } finally {
+    world.projection.close();
+    rmSync(world.root, { recursive: true, force: true });
+  }
+});
+
 class UnavailableAdapter extends ScriptedAdapter {
   override async isAvailable(): Promise<Availability> { return { status: "blocked", code: "E_INVALID_REQUEST", detail: "fixture unavailable" }; }
+}
+
+class SameSessionAdapter extends ScriptedAdapter {
+  override async getModelInfo(model: string): Promise<ModelInfo> {
+    return { ...(await super.getModelInfo(model)), continuity: "same-session-correction" };
+  }
+}
+
+function withBuilderContinuity(config: AwsfConfig, continuity: "same-session" | "none"): AwsfConfig {
+  return {
+    ...config,
+    agents: config.agents.map((agent) => agent.name === "builder"
+      ? { ...agent, harness: { ...agent.harness, continuity } }
+      : agent),
+  };
 }
 
 function registrationFailingBroker(options: BrokerOptions): TransportBroker {
@@ -201,7 +370,7 @@ for (const scenario of ["malformed", "permission", "gate"] as const) {
     try {
       const prepared = await readAttempt(world.created.attemptDir);
       const status = await runProductionCommand({
-        attemptDir: world.created.attemptDir, config: world.config, configPath: resolve("awsf.config.yaml"),
+        attemptDir: world.created.attemptDir, config: world.config, configPath: world.configPath,
         projectRecord: world.projection.project, assertLaunchProjection: world.projection.assertLaunchPermitted,
         infrastructure: {
           adapterFor: (_entry: AdapterEntry, id: string) => new ScriptedAdapter(id, prepared.worktree!, () => {}, scenario),
@@ -227,7 +396,7 @@ test("unavailable configured adapter blocks before provider launch", async () =>
   try {
     const prepared = await readAttempt(world.created.attemptDir);
     const status = await runProductionCommand({
-      attemptDir: world.created.attemptDir, config: world.config, configPath: resolve("awsf.config.yaml"),
+      attemptDir: world.created.attemptDir, config: world.config, configPath: world.configPath,
       projectRecord: world.projection.project,
       infrastructure: { adapterFor: (_entry: AdapterEntry, id: string) => new UnavailableAdapter(id, prepared.worktree!, () => { launches += 1; }) },
     });
@@ -241,13 +410,94 @@ test("unavailable configured adapter blocks before provider launch", async () =>
   }
 });
 
+test("configured continuity mismatch fails closed before broker creation or provider launch", async () => {
+  const world = await fixture("build");
+  let brokerCreated = false;
+  const mismatchConfig = withBuilderContinuity(world.config, "same-session");
+  try {
+    const prepared = await readAttempt(world.created.attemptDir);
+    const status = await runProductionCommand({
+      attemptDir: world.created.attemptDir,
+      config: mismatchConfig,
+      configPath: world.configPath,
+      projectRecord: world.projection.project,
+      infrastructure: {
+        adapterFor: (_entry: AdapterEntry, id: string) => new ScriptedAdapter(id, prepared.worktree!, () => assert.fail("provider launched")),
+        createBroker: (options) => { brokerCreated = true; return new ProcessTransportBroker(options); },
+      },
+    });
+    assert.equal(status.lifecycleState, "BLOCKED");
+    assert.equal(status.budget.callsSpent, 0);
+    assert.equal(status.budget.callsReserved, 0);
+    assert.equal(brokerCreated, false);
+    assert.match(status.blocker?.detail ?? "", /ProductionContinuityMismatch/);
+    assert.match(status.blocker?.detail ?? "", /same-session.*none/);
+    const journal = readFileSync(join(world.created.attemptDir, "journal.jsonl"), "utf8");
+    assert.equal(journal.includes('"type":"process"'), false);
+  } finally {
+    world.projection.close();
+    rmSync(world.root, { recursive: true, force: true });
+  }
+});
+
+test("adapter continuity above configured none is also a pre-launch mismatch", async () => {
+  const world = await fixture("build");
+  let brokerCreated = false;
+  try {
+    const prepared = await readAttempt(world.created.attemptDir);
+    const status = await runProductionCommand({
+      attemptDir: world.created.attemptDir,
+      config: world.config,
+      configPath: world.configPath,
+      projectRecord: world.projection.project,
+      infrastructure: {
+        adapterFor: (_entry: AdapterEntry, id: string) => new SameSessionAdapter(id, prepared.worktree!, () => assert.fail("provider launched")),
+        createBroker: (options) => { brokerCreated = true; return new ProcessTransportBroker(options); },
+      },
+    });
+    assert.equal(status.lifecycleState, "BLOCKED");
+    assert.equal(status.budget.callsSpent, 0);
+    assert.equal(brokerCreated, false);
+    assert.match(status.blocker?.detail ?? "", /ProductionContinuityMismatch/);
+    assert.match(status.blocker?.detail ?? "", /none.*same-session-correction/);
+  } finally {
+    world.projection.close();
+    rmSync(world.root, { recursive: true, force: true });
+  }
+});
+
+test("matching same-session declarations remain blocked until a real correction transport exists", async () => {
+  const world = await fixture("build");
+  let brokerCreated = false;
+  try {
+    const prepared = await readAttempt(world.created.attemptDir);
+    const status = await runProductionCommand({
+      attemptDir: world.created.attemptDir,
+      config: withBuilderContinuity(world.config, "same-session"),
+      configPath: world.configPath,
+      projectRecord: world.projection.project,
+      infrastructure: {
+        adapterFor: (_entry: AdapterEntry, id: string) => new SameSessionAdapter(id, prepared.worktree!, () => assert.fail("provider launched")),
+        createBroker: (options) => { brokerCreated = true; return new ProcessTransportBroker(options); },
+      },
+    });
+    assert.equal(status.lifecycleState, "BLOCKED");
+    assert.equal(status.budget.callsSpent, 0);
+    assert.equal(brokerCreated, false);
+    assert.match(status.blocker?.detail ?? "", /no verified same-session correction transport/);
+  } finally {
+    world.projection.close();
+    rmSync(world.root, { recursive: true, force: true });
+  }
+});
+
 test("registration failure refunds the held call and blocks without provider execution", async () => {
   const world = await fixture("build");
   let providerRan = false;
   try {
     const prepared = await readAttempt(world.created.attemptDir);
     const status = await runProductionCommand({
-      attemptDir: world.created.attemptDir, config: world.config, configPath: resolve("awsf.config.yaml"),
+      attemptDir: world.created.attemptDir, config: world.config, configPath: world.configPath,
       projectRecord: world.projection.project,
       infrastructure: {
         adapterFor: (_entry: AdapterEntry, id: string) => new ScriptedAdapter(id, prepared.worktree!, () => { providerRan = true; }),
@@ -269,7 +519,7 @@ test("configured command failure retains exact evidence and blocks", async () =>
   try {
     const prepared = await readAttempt(world.created.attemptDir);
     const status = await runProductionCommand({
-      attemptDir: world.created.attemptDir, config: world.config, configPath: resolve("awsf.config.yaml"),
+      attemptDir: world.created.attemptDir, config: world.config, configPath: world.configPath,
       projectRecord: world.projection.project, assertLaunchProjection: world.projection.assertLaunchPermitted,
       infrastructure: {
         adapterFor: (_entry: AdapterEntry, id: string) => new ScriptedAdapter(id, prepared.worktree!, () => {}),
@@ -293,7 +543,7 @@ test("projector degradation holds successful work at GATING rather than killing 
   try {
     const prepared = await readAttempt(world.created.attemptDir);
     const status = await runProductionCommand({
-      attemptDir: world.created.attemptDir, config: world.config, configPath: resolve("awsf.config.yaml"),
+      attemptDir: world.created.attemptDir, config: world.config, configPath: world.configPath,
       projectRecord: world.projection.project, assertLaunchProjection: world.projection.assertLaunchPermitted,
       assertAdvancement: (_sessionId, to) => { if (to === "AWAITING_OWNER") throw new Error("fixture degraded projection hold"); },
       infrastructure: {
@@ -315,7 +565,7 @@ test("unsupported production workflow fails before lifecycle mutation", async ()
   const world = await fixture("simple-sdlc");
   try {
     const before = readFileSync(join(world.created.attemptDir, "journal.jsonl"), "utf8");
-    await assert.rejects(runProductionCommand({ attemptDir: world.created.attemptDir, config: world.config, configPath: resolve("awsf.config.yaml") }), ProductionWorkflowUnsupported);
+    await assert.rejects(runProductionCommand({ attemptDir: world.created.attemptDir, config: world.config, configPath: world.configPath }), ProductionWorkflowUnsupported);
     assert.equal(readFileSync(join(world.created.attemptDir, "journal.jsonl"), "utf8"), before);
     assert.equal((await readAttempt(world.created.attemptDir)).lifecycleState, "PREPARED");
   } finally {

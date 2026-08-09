@@ -36,7 +36,7 @@ agents:
     color: "#A78BFA"
     purpose: Produce an implementable plan with explicit acceptance criteria.
     prompt: { system: prompts/planner/system.md, user: prompts/planner/user.md }
-    harness: { adapter: claude, continuity: same-session }
+    harness: { adapter: claude, continuity: none }
     tools: { profile: readonly, allow: [read, grep, find, ls] }
     writes: []
 
@@ -46,7 +46,7 @@ agents:
     color: "#22D3EE"
     purpose: Implement the validated plan in the assigned worktree.
     prompt: { system: prompts/builder/system.md, user: prompts/builder/user.md }
-    harness: { adapter: codex, continuity: same-session }
+    harness: { adapter: codex, continuity: none }
     tools: { profile: managed-worker, allow: [read, grep, find, ls, edit, write, exec] }
     writes: ["core/src/**", "core/test/**", "dashboard/**", "prompts/**"]
 
@@ -66,7 +66,7 @@ agents:
     color: "#C084FC"
     purpose: Update docs to match a landed change; never touch source.
     prompt: { system: prompts/documenter/system.md, user: prompts/documenter/user.md }
-    harness: { adapter: claude, continuity: same-session }
+    harness: { adapter: claude, continuity: none }
     tools: { profile: managed-worker, allow: [read, grep, find, ls, edit, write] }
     writes: ["**/*.md"]
 

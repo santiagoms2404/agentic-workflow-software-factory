@@ -178,7 +178,7 @@ agents:
     color: "#A78BFA"
     purpose: Produce an implementable plan with explicit acceptance criteria.
     prompt: { system: prompts/planner/system.md, user: prompts/planner/user.md }
-    harness: { adapter: claude, continuity: same-session }
+    harness: { adapter: claude, continuity: none }
     tools: { profile: readonly, allow: [read, grep, find, ls] }
     writes: []
 
@@ -188,7 +188,7 @@ agents:
     color: "#22D3EE"
     purpose: Implement the validated plan in the assigned worktree.
     prompt: { system: prompts/builder/system.md, user: prompts/builder/user.md }
-    harness: { adapter: codex, continuity: same-session }
+    harness: { adapter: codex, continuity: none }
     tools: { profile: managed-worker, allow: [read, grep, find, ls, edit, write, exec] }
     writes: ["src/**", "test/**", "dashboard/**", "docs/**"]
 
@@ -685,6 +685,8 @@ Liveness while running (`run.mjs:139-146`): a monitor watches process-group CPU,
 ## 7.8 SQLite Schema
 
 BUILDER's DDL is markedly better engineered — `STRICT` tables, `CHECK` constraints, `json_valid()`, partial indexes — and is adopted as the base. Merged in from ARCHITECT: a **`transitions` table**, which BUILDER omits and which is the state machine's audit trail (SSSF has no equivalent because it has no state machine), and **`checks_json`** on gate results, recording what a gate verified whether or not it passed.
+
+**Process command evidence is exact but machine-local.** The canonical journal and its SQLite projection live under the machine-local lifecycle state root (§7.2); `processes.command_json` and `cwd_display` retain the executable, exact argv, and managed cwd needed to audit the registration-before-GO record. That includes a private system-prompt file path when an adapter's reviewed CLI requires one, but never the prompt text, which remains stdin/file content rather than argv. This audit shape stops at the read-side boundary: §7.9 returns only a process summary, and the explicit-column query excludes command, cwd, PID, process identity, and private paths.
 
 ```sql
 PRAGMA journal_mode = WAL;
@@ -1335,7 +1337,7 @@ At minimum:
   in the *correct* rejection order.
 - Kill the host between registration and release: **no provider process exists.** All platforms.
 - The five task-edge spawn sites remain L4/L10/L11/L16/L19; a valid second compiled agent phase launches under durable `RUNNING` only through the separate host-verified phase authorization, spends its held call on `GO`, and wrong-state/unknown/local/mismatched/unreserved registrations create no child.
-- The zero-quota production-runner journey drives the same `awsf run` command seam with injected fixture infrastructure: `build` spends one call, `plan-build-test` spends two, the dashboard sees `RUNNING` and the current phase before completion, exact host gates reach `AWAITING_OWNER`, and unavailable/malformed/breach/gate/command/registration/projector negatives fail without fallback or held reservation.
+- The zero-quota production-runner journey drives the same `awsf run` command seam: fast injected orchestration cases prove `build` spends one call and `plan-build-test` spends two, while a process-backed case uses the real `ProcessTransportBroker`, gated launcher, executable resolution, and captured-stream pi parser fixture to prove registration and spend are durable before provider start, normalized parsing and usage are counted once, exact host gates reach `AWAITING_OWNER`, machine-local command/cwd evidence stays out of API query shapes, and no process or reservation remains. Unavailable, continuity-mismatch, unimplemented matching multi-turn, malformed, breach, gate, command, registration, and projector negatives fail without fallback or held reservation.
 - Cancel a run with a grandchild: **the grandchild is reaped and survivors are reported
   truthfully.** A supervisor that cannot enumerate must error, not return `[]`.
 - Crash mid-`LANDING`: recovery is unambiguous, and an ambiguous recovery blocks.

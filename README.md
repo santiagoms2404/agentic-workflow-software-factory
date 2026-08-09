@@ -123,8 +123,10 @@ markers are earned, never pre-declared. As of this README:
 **Concretely, right now:** the lifecycle, persistence, execution kernel,
 adapters, workflows, gates, permissions, owner CLI, and read-only dashboard are
 implemented. `awsf run TASK` drives configured T1 `build` and `plan-build-test`
-workflows from `PREPARED`; unsupported production recipes fail closed. The
-explicit `awsf run TASK --stub true` simple-SDLC demonstration is unchanged.
+workflows from `PREPARED`; unsupported production recipes and any configured
+continuity that disagrees with the selected adapter's verified capability fail
+closed before launch. The explicit `awsf run TASK --stub true` simple-SDLC
+demonstration is unchanged.
 T2 review is not yet production-bound. Landing has one human+TTY authorization
 site and mutates the canonical checkout only by a verified local fast-forward.
 The portability matrix is evidence-backed only where it says so; the two real
