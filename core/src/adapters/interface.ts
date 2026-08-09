@@ -141,6 +141,8 @@ export interface ProcessTransport {
  * without them is a provider launched off the books.
  */
 export interface ProcessRegistration {
+  /** Optional for source compatibility; an omitted kind is the original strict task-edge registration. */
+  kind?: "task-edge";
   runId: string;
   sessionId: string;
   from: TaskState;
@@ -152,9 +154,51 @@ export interface ProcessRegistration {
   role: string;
 }
 
+/**
+ * A provider launch inside an already-running compiled workflow. This is not a
+ * task transition: it carries no from/to pair and can never manufacture the
+ * forbidden RUNNING -> RUNNING self-transition.
+ */
+export interface AgentPhaseProcessRegistration {
+  readonly kind: "agent-phase";
+  readonly runId: string;
+  readonly taskSessionId: string;
+  readonly workflowId: string;
+  readonly phaseId: string;
+  /** One-based position in the compiled workflow, including local phases. */
+  readonly phaseOrdinal: number;
+  readonly reservationId: string;
+  readonly adapterId: string;
+  readonly role: string;
+}
+
+export interface AgentPhaseLaunchEvidence {
+  readonly taskSessionId: string;
+  readonly taskState: "RUNNING";
+  readonly workflowId: string;
+  readonly phaseId: string;
+  readonly phaseOrdinal: number;
+  readonly phaseKind: "agent";
+  readonly adapterId: string;
+  readonly role: string;
+  /** Explicit config decides whether this phase uses this authorization class. */
+  readonly launchAuthorization: "agent-phase";
+}
+
+/**
+ * Trusted host port. Its implementation checks durable task status, compiled
+ * workflow identity, and explicit route config. The broker owns no state I/O;
+ * without this injected verifier an agent-phase registration is unusable.
+ */
+export interface AgentPhaseLaunchVerifier {
+  verify(registration: AgentPhaseProcessRegistration): AgentPhaseLaunchEvidence;
+}
+
+export type BrokerProcessRegistration = ProcessRegistration | AgentPhaseProcessRegistration;
+
 export interface TransportBroker {
   startProcess(
-    registration: ProcessRegistration,
+    registration: BrokerProcessRegistration,
     spec: ProcessSpec,
     signal: AbortSignal,
   ): Promise<ProcessTransport>;

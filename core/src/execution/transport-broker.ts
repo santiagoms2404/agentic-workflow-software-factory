@@ -9,7 +9,8 @@
 //
 // The broker's job is narrow and entirely pre-flight:
 //
-//   1. refuse a launch that is not at one of the five spawn sites,
+//   1. validate either one of the five task-edge sites or a separately proven
+//      agent phase inside the durable RUNNING sojourn,
 //   2. refuse a spec that could execute something other than what it names,
 //   3. create the gated child, and hand the sequencing to the barrier.
 //
@@ -44,15 +45,20 @@ import {
   type TerminateOptions,
 } from "./process-controller.ts";
 import type {
+  AgentPhaseLaunchEvidence,
+  AgentPhaseLaunchVerifier,
+  AgentPhaseProcessRegistration,
+  BrokerProcessRegistration,
   ProcessExit,
   ProcessRegistration,
   ProcessSpec,
   ProcessTransport,
   TransportBroker,
 } from "../adapters/interface.ts";
+import type { Reservation } from "./call-budget.ts";
 
 // ---------------------------------------------------------------------------
-// The five spawn sites.
+// The five task-edge spawn sites.
 // ---------------------------------------------------------------------------
 
 /**
@@ -120,7 +126,7 @@ function assertSpawnSite(registration: ProcessRegistration): LegalEdge {
  * `false`: the type is erased at run time, and this is the last gate a
  * JavaScript caller passes through.
  */
-function assertSpecSafe(registration: ProcessRegistration, spec: ProcessSpec): void {
+function assertSpecSafe(registration: BrokerProcessRegistration, spec: ProcessSpec): void {
   const refuse = (detail: string): never => {
     throw new SpawnRegistrationInvalid(registration.runId, detail);
   };
@@ -214,6 +220,11 @@ export function runSystemCommand(
 // The broker.
 // ---------------------------------------------------------------------------
 
+export interface BrokerReservationLedger extends ReservationLedger {
+  /** Required by agent-phase preflight: the reservation must still be held before a child exists. */
+  reservation(id: string): Reservation | undefined;
+}
+
 export interface BrokerOptions {
   /**
    * Makes the registration durable — journal append + fsync, atomic status
@@ -221,7 +232,9 @@ export interface BrokerOptions {
    * only what varies per launch.
    */
   register: (record: BarrierRecord) => Promise<void>;
-  ledger: ReservationLedger;
+  ledger: BrokerReservationLedger;
+  /** Trusted host proof for intra-workflow phases. Absent means phase launches are disabled. */
+  phaseLaunchVerifier?: AgentPhaseLaunchVerifier;
   /** Absolute path to the gated child. Defaults to the sibling `launcher.ts`. */
   launcherPath?: string;
   /** How long the child has to report its identity before the launch is abandoned. */
@@ -276,17 +289,22 @@ export class ProcessTransportBroker implements TransportBroker {
   /**
    * The sole provider-process entry point.
    *
-   * Everything before `runLauncherBarrier` is a refusal that costs nothing;
-   * everything inside it either produces a registered, released provider or
-   * destroys the tree and returns the reservation.
+   * Task-edge and agent-phase registrations take distinct validators; neither
+   * path can fall through to the other. Everything before
+   * `runLauncherBarrier` is a refusal that costs nothing; everything inside it
+   * either produces a registered, released provider or destroys the tree and
+   * returns the reservation.
    */
   async startProcess(
-    registration: ProcessRegistration,
+    registration: BrokerProcessRegistration,
     spec: ProcessSpec,
     signal: AbortSignal,
     hooks: StartHooks = {},
   ): Promise<ProcessTransport> {
-    const edge = assertSpawnSite(registration);
+    const phaseEvidence = registration.kind === "agent-phase"
+      ? this.#assertAgentPhaseLaunch(registration)
+      : null;
+    const edge = phaseEvidence === null ? assertSpawnSite(registration as ProcessRegistration) : null;
     assertSpecSafe(registration, spec);
     const executable = resolveExecutable(spec.executable, spec.env);
 
@@ -299,7 +317,17 @@ export class ProcessTransportBroker implements TransportBroker {
       },
       record: {
         runId: registration.runId,
-        edge: edge.id,
+        edge: edge?.id ?? null,
+        ...(phaseEvidence === null ? {} : {
+          phase: {
+            taskSessionId: phaseEvidence.taskSessionId,
+            workflowId: phaseEvidence.workflowId,
+            phaseId: phaseEvidence.phaseId,
+            phaseOrdinal: phaseEvidence.phaseOrdinal,
+            adapterId: phaseEvidence.adapterId,
+            role: phaseEvidence.role,
+          },
+        }),
         reservationId: registration.reservationId,
         command: [executable, ...spec.argv],
         cwd: spec.cwd,
@@ -313,6 +341,42 @@ export class ProcessTransportBroker implements TransportBroker {
     // Non-null by construction: the barrier only returns after `start` resolved.
     if (held.child === null) throw new SpawnRegistrationInvalid(registration.runId, "the barrier released a launch that never started");
     return this.#transportFor(held.child, registration.runId, outcome.identity, spec);
+  }
+
+  /** Distinct validator for launches that are not task transitions. Runs before spawn(). */
+  #assertAgentPhaseLaunch(registration: AgentPhaseProcessRegistration): AgentPhaseLaunchEvidence {
+    const refuse = (detail: string): never => {
+      throw new SpawnRegistrationInvalid(registration.runId, `invalid agent-phase authorization: ${detail}`);
+    };
+    if (typeof registration.runId !== "string" || registration.runId.length === 0) refuse("runId is missing");
+    if (typeof registration.taskSessionId !== "string" || registration.taskSessionId.length === 0) refuse("taskSessionId is missing");
+    if (typeof registration.workflowId !== "string" || registration.workflowId.length === 0) refuse("workflowId is missing");
+    if (typeof registration.phaseId !== "string" || registration.phaseId.length === 0) refuse("phaseId is missing");
+    if (!Number.isInteger(registration.phaseOrdinal) || registration.phaseOrdinal < 1) refuse("phaseOrdinal must be a positive integer");
+    if (typeof registration.adapterId !== "string" || registration.adapterId.length === 0) refuse("adapterId is missing");
+    if (typeof registration.role !== "string" || registration.role.length === 0) refuse("role is missing");
+    if (typeof registration.reservationId !== "string" || registration.reservationId.length === 0) refuse("one held reservation is required");
+
+    const verifier = this.#options.phaseLaunchVerifier;
+    if (verifier === undefined) return refuse("the trusted host verifier is not installed");
+    const evidence = verifier.verify(registration);
+    const exact =
+      evidence.taskSessionId === registration.taskSessionId &&
+      evidence.taskState === "RUNNING" &&
+      evidence.workflowId === registration.workflowId &&
+      evidence.phaseId === registration.phaseId &&
+      evidence.phaseOrdinal === registration.phaseOrdinal &&
+      evidence.phaseKind === "agent" &&
+      evidence.adapterId === registration.adapterId &&
+      evidence.role === registration.role &&
+      evidence.launchAuthorization === "agent-phase";
+    if (!exact) refuse("the trusted verifier returned evidence for a different launch");
+
+    const reservation = this.#options.ledger.reservation(registration.reservationId);
+    if (reservation === undefined || reservation.state !== "held" || reservation.cost !== 1) {
+      refuse("reservation is unknown, settled, or not exactly one held call");
+    }
+    return evidence;
   }
 
   /**

@@ -6,7 +6,13 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { ActorNotPermitted, InteractiveOwnerRequired } from "../../src/state/errors.ts";
 import { landCommand } from "../../src/cli/commands/land.ts";
-import { persistAttempt, readAttempt, type AttemptStatus } from "../../src/cli/commands/attempt.ts";
+import {
+  nextRevision,
+  persistAttempt,
+  readAttempt,
+  type AttemptStatus,
+} from "../../src/cli/commands/attempt.ts";
+import { createDashboardProjection } from "../../src/cli/commands/dashboard-projection.ts";
 import { main } from "../../src/cli/main.ts";
 import type { OwnerTerminal } from "../../src/cli/tty.ts";
 
@@ -82,10 +88,40 @@ function terminal(interactive: boolean, answer: boolean, lines: string[] = []): 
   };
 }
 
-async function seed(root: string): Promise<{ attemptDir: string; repository: string; base: string; candidate: string }> {
+async function seed(
+  root: string,
+  observability: "healthy" | "degraded" = "healthy",
+): Promise<{ attemptDir: string; repository: string; base: string; candidate: string }> {
   const fixture = makeCandidate(root);
-  const attemptDir = join(root, "state", "projects", PROJECT, "tasks", TASK, "1");
-  await persistAttempt(attemptDir, null, { kind: "attempt.created", next: awaiting(fixture.repository, fixture.candidate) });
+  const stateRoot = join(root, "state");
+  const attemptDir = join(stateRoot, "projects", PROJECT, "tasks", TASK, "1");
+  const projection = createDashboardProjection(stateRoot);
+  const initial = awaiting(fixture.repository, fixture.candidate);
+  await persistAttempt(
+    attemptDir,
+    null,
+    { kind: "attempt.created", next: initial },
+    projection.project,
+  );
+  if (observability === "degraded") {
+    // Reproduce a real projection lifecycle gap: revision 2 is durable in the
+    // journal/status but not projected, so revision 3 cannot be projected
+    // contiguously and the writer marks this session degraded without throwing.
+    const skipped = nextRevision(initial, {
+      lastActivity: "durable fixture update intentionally skipped by projection",
+    });
+    await persistAttempt(attemptDir, initial.revision, { kind: "attempt.updated", next: skipped });
+    const failed = nextRevision(skipped, {
+      lastActivity: "projection receives a non-contiguous source sequence",
+    });
+    await persistAttempt(
+      attemptDir,
+      skipped.revision,
+      { kind: "attempt.updated", next: failed },
+      projection.project,
+    );
+  }
+  projection.close();
   return { attemptDir, ...fixture };
 }
 
@@ -142,7 +178,9 @@ test("the real process.stdin pipe is refused even when it contains yes", async (
       cwd: fixture.repository,
       input: "yes\n",
       encoding: "utf8",
-      timeout: 20_000,
+      // A cold WSL2 strip-types + SQLite startup can exceed 20 s under the
+      // full parallel suite; this is a refusal proof, not a startup benchmark.
+      timeout: 60_000,
     });
     assert.equal(child.status, 1, child.stderr);
     assert.match(child.stderr, /InteractiveOwnerRequired/);
@@ -176,6 +214,28 @@ test("the actual CLI path shows the exact SHA, persists LANDING, fast-forwards, 
     const journal = readFileSync(join(fixture.attemptDir, "journal.jsonl"), "utf8");
     assert.match(journal, /"lifecycleState":"LANDING"/);
     assert.match(journal, /"lifecycleState":"LANDED"/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a real degraded projection still blocks landing while the healthy fixture above lands", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-human-degraded-"));
+  try {
+    const fixture = await seed(root, "degraded");
+    const lines: string[] = [];
+    const code = await main({
+      argv: ["land", TASK, "--state-root", join(root, "state"), "--config", resolve("awsf.config.yaml")],
+      cwd: fixture.repository,
+      terminal: terminal(true, true, lines),
+      writeOut: (line) => { lines.push(line); },
+      writeError: (line) => { lines.push(`ERR ${line}`); },
+    });
+    assert.equal(code, 1);
+    assert.ok(lines.some((line) => line.includes("DegradedObservabilityHold")));
+    assert.equal((await readAttempt(fixture.attemptDir)).lifecycleState, "AWAITING_OWNER");
+    assert.equal(git(fixture.repository, "rev-parse", "HEAD"), fixture.base);
+    assert.doesNotMatch(readFileSync(join(fixture.attemptDir, "journal.jsonl"), "utf8"), /"lifecycleState":"LANDING"/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

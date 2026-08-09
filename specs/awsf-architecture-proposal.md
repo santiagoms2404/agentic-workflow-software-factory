@@ -14,7 +14,7 @@
 
 `my-agentic-workflow` (MAW) and `super-simple-software-factory` (SSSF) are not competitors — **they each solved the problem the other ignored** [ARCHITECT]. MAW owns the *task lifecycle*: states, guarded transitions, a PID-before-spawn barrier that makes hidden processes structurally impossible (`src/run.mjs:80-112`), and a human-only landing edge. SSSF owns the *work inside a single unit of execution*: typed phases, runtime-validated envelopes, postcondition gates with same-session correction loops, and a real-time SQLite trace. MAW has no idea what happens between `RUNNING` and `GATING`. SSSF has no idea what a task *is*.
 
-The fusion is one sentence: **the state machine governs the task; the phase engine governs the sojourn inside the executing states.** A workflow is a sequence of typed phases; gate failures inside a phase are corrected the SSSF way — re-prompt the *same* session with the violations, context intact, cheap (`agents.py:148-173`). Only when a phase's intra-phase budget is exhausted does the failure escalate to a *state transition*, which is expensive, counted against the tier ceiling, and governed by MAW's evidence rules (`state.mjs:118`). That yields **two-tier correction economics** [ARCHITECT]: cheap corrections that preserve the context window, and expensive corrections that the state machine rations — with **call reservations** so concurrent paths and composite adapters cannot overrun a ceiling [BUILDER].
+The fusion is one sentence: **the state machine governs the task; the phase engine governs the sojourn inside the executing states.** A workflow is a sequence of typed phases; gate failures inside a phase are corrected the SSSF way — re-prompt the *same* session with the violations, context intact, cheap (`agents.py:148-173`). Only when a phase's intra-phase budget is exhausted does the failure escalate to a *state transition*, which is expensive, counted against the tier ceiling, and governed by MAW's evidence rules (`state.mjs:118`). That yields **two-tier correction economics** [ARCHITECT]: cheap corrections that preserve the context window, and expensive corrections that the state machine rations — with **call reservations** so concurrent paths and composite adapters cannot overrun a ceiling [BUILDER]. A compiled workflow may contain several sequential agent phases; each is its own configured provider process and call. L4 authorizes the first launch after `PREPARED → RUNNING` is durable, while later ordinary agent phases are authorized by compiled-phase evidence during the same durable `RUNNING` sojourn — never by a fictitious `RUNNING → RUNNING` transition.
 
 Four further decisions carry the design:
 
@@ -399,7 +399,7 @@ DRAFT → PREPARED → RUNNING → GATING → REVIEWING → AWAITING_OWNER → L
 | L23 | LANDING → LANDED | host | canonical `HEAD` equals candidate; checkout clean | — |
 | L24 | LANDING → BLOCKED | host | non-FF, dirty canonical tree, Git failure, ambiguous crash recovery | — |
 
-**Four spawn sites, and only four:** L4, L10, L11, L16 — plus L19, which enters `RUNNING` and therefore permits a spawn under the same reservation rules. Any other from/to pair attempting a spawn raises `IllegalSpawnSite`. (ARCHITECT listed three sites but also allowed L16 to re-enter `RUNNING`, which is a hole; defining "spawn is permitted only on transitions into `RUNNING` or `REVIEWING`" closes it.)
+**Five task-edge spawn sites, and only five:** L4, L10, L11, L16, L19. Any other task-state from/to pair attempting a task-edge spawn raises `IllegalSpawnSite`. This enumeration is unchanged by intra-workflow phase launches: after L4 has durably entered `RUNNING`, a later ordinary compiled `agent` phase uses a distinct `agent-phase` registration and validator, not a task transition. The verifier must establish durable state `RUNNING`, exact task session + workflow id + phase id + one-based ordinal, `kind: agent`, the explicit configured adapter/role route, and one held call reservation before the broker creates a child. `code`/`engineer` phases, mandatory review, and the first owner-rework launch are ineligible; review and rework remain L11/L16/L19 task-edge launches. `RUNNING → RUNNING` remains `AlreadyInState`, preserving the 24/76 matrix and its rejection order.
 
 **L21 is deliberately narrow.** `AWAITING_OWNER` has no timeout, so **no clock may produce this edge** — only a corrupt record or an unreadable worktree (`state.mjs:55-60`). A task waiting on you waits forever. That is the point. [ARCHITECT]
 
@@ -609,11 +609,23 @@ interface HarnessAdapter {
   execute(request: ModelRequest, broker: TransportBroker, signal: AbortSignal): AsyncIterable<NormalizedEvent>;
 }
 
+interface TaskEdgeProcessRegistration {
+  kind?: "task-edge";             // omission preserves the original ProcessRegistration form
+  runId: string; sessionId: string; from: TaskState; to: TaskState; edge: EdgeId;
+  reservationId: string; adapterId: string; role: string;
+}
+interface AgentPhaseProcessRegistration {
+  kind: "agent-phase"; runId: string; taskSessionId: string; workflowId: string;
+  phaseId: string; phaseOrdinal: number; reservationId: string; adapterId: string; role: string;
+}
 interface TransportBroker {
-  startProcess(registration: ProcessRegistration, spec: ProcessSpec, signal: AbortSignal): Promise<ProcessTransport>;
+  startProcess(registration: TaskEdgeProcessRegistration | AgentPhaseProcessRegistration,
+               spec: ProcessSpec, signal: AbortSignal): Promise<ProcessTransport>;
   startHttp?(registration: DispatchRegistration, spec: HttpRequestSpec, signal: AbortSignal): Promise<HttpTransport>;
 }
 ```
+
+The phase registration is not a bearer token. The trusted host injects a verifier that reads durable status and retained compiled/configured workflow evidence; the execution layer receives only that port and imports no impure state store. The broker cross-checks the returned evidence and the live held reservation before `spawn()`. With no verifier, a phase registration is unusable. This is the trust boundary: host composition is trusted; launch callers and registration fields are not.
 
 **Architecture tests enforce:** no module under `adapters/` imports `node:child_process` or calls global `fetch`; only `transport-broker.ts` spawns.
 
@@ -646,6 +658,7 @@ Notice codes: `unknown-provider-event`, `non-json-output`, `clock-skew`, `malfor
 
 ```
 host                                             launcher child            provider
+ │ validate task-edge OR compiled-phase proof     │
  │ broker.startProcess(registration, spec) ────▶  │
  │                                                │ report {pid, pgid} on the control channel
  │ ◀──────────── {pid, pgid} ────────────────────│ block awaiting GO
@@ -1319,6 +1332,7 @@ At minimum:
 - All 24 legal transitions succeed; all 76 illegal pairs throw, each with the *correct* error,
   in the *correct* rejection order.
 - Kill the host between registration and release: **no provider process exists.** All platforms.
+- The five task-edge spawn sites remain L4/L10/L11/L16/L19; a valid second compiled agent phase launches under durable `RUNNING` only through the separate host-verified phase authorization, spends its held call on `GO`, and wrong-state/unknown/local/mismatched/unreserved registrations create no child.
 - Cancel a run with a grandchild: **the grandchild is reaped and survivors are reported
   truthfully.** A supervisor that cannot enumerate must error, not return `[]`.
 - Crash mid-`LANDING`: recovery is unambiguous, and an ambiguous recovery blocks.
