@@ -173,6 +173,12 @@ export function openDatabase(path: string, opts: OpenDatabaseOptions = {}): Data
   return db;
 }
 
+/** The dashboard process's sole mutation, kept inside the SQLite write boundary. */
+export function setSessionArchived(db: DatabaseSync, sessionId: string): boolean {
+  const result = db.prepare("UPDATE sessions SET archived = 1 WHERE session_id = ?").run(sessionId);
+  return Number(result.changes) > 0;
+}
+
 /**
  * `PRAGMA integrity_check`, as the list of problems it found — empty when the
  * file is sound. A database too broken to answer the question at all reports

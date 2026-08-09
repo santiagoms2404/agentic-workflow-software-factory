@@ -9,6 +9,7 @@ const BOUNDARIES = [
   "core/src/persistence/status-store.ts",
   "core/src/observability/projector.ts",
   "core/src/config/effective-config.ts",
+  "core/src/api/responses.ts",
   "core/src/adapters/env.ts",
 ];
 
