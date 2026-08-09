@@ -16,6 +16,7 @@
     "test:contract": "node --experimental-strip-types --test \"core/test/contract/**/*.test.ts\"",
     "test:sim": "node --experimental-strip-types --test \"core/test/simulation/**/*.test.ts\"",
     "test:journeys": "node --experimental-strip-types --test \"core/test/journeys/**/*.test.ts\"",
+    "awsf": "node --experimental-strip-types core/src/cli/main.ts",
     "typecheck": "tsc --build --noEmit",
     "lint": "oxlint core dashboard"
   },
