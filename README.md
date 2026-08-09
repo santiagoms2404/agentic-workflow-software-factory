@@ -195,29 +195,20 @@ defense-in-depth redaction pass on top of what the loader already guarantees.
 
 ## Portability
 
-One row per platform-dependent behaviour, one column per platform. Every
-cell starts `PENDING` and may only be filled with evidence produced *on the
-machine the column names* — a passing Linux suite is not evidence about
-Darwin. This table is reproduced verbatim from the plan's own
-[Portability Matrix](specs/awsf-plan.html#portability); **the filled matrix,
-with per-cell dates and command output, is the only artifact allowed to back
-a portability claim, and this README will not get ahead of it.**
+Every cell may only be filled with evidence produced *on the machine the
+column names* — a passing Linux suite is not evidence about Darwin. Status is
+not duplicated here: the plan's [Portability Matrix](specs/awsf-plan.html#portability)
+is the sole authoritative table, including per-cell dates, deferrals, and the
+command output behind each claim.
 
-| Behaviour | Linux | macOS | Windows-native | WSL2 |
-|---|---|---|---|---|
-| State root resolution | PENDING | PENDING | PENDING | PENDING |
-| Process-group enumeration (survivors) | PENDING | PENDING | PENDING | PENDING |
-| Tree cancellation (TERM → grace → KILL → report) | PENDING | PENDING | PENDING | PENDING |
-| Launcher barrier (register → GO → exec/resume) | PENDING | PENDING | PENDING | PENDING |
-| Sandbox broker (bwrap / Seatbelt / none) | PENDING | PENDING | N/A — `unavailable` shown | PENDING |
-| Worktree containment on case-insensitive filesystems | PENDING | PENDING (APFS default) | PENDING (NTFS) | PENDING (drvfs) |
-| Provider CLI launch (`claude`, `pi`, `agy`) | PENDING | PENDING | PENDING | PENDING |
-| TTY detection for `awsf land` | PENDING | PENDING | PENDING | PENDING |
-| Installed-vs-portable consistency | PENDING | PENDING | PENDING | PENDING |
-| `node:sqlite` feature probe (WAL, STRICT, json_valid) | PENDING | PENDING | PENDING | PENDING |
-| Write-capable workflows end-to-end | PENDING | PENDING | BLOCKED by design (v1 routes through WSL2) | PENDING |
+| Destination machine | Authoritative status and evidence |
+|---|---|
+| Linux desktop | [Portability Matrix](specs/awsf-plan.html#portability) |
+| M5 MacBook Pro (macOS) | [Portability Matrix](specs/awsf-plan.html#portability) |
+| Windows-native (dashboard/read-only only) | [Portability Matrix](specs/awsf-plan.html#portability) |
+| WSL2 development machine | [Portability Matrix](specs/awsf-plan.html#portability) |
 
-This repository has so far only ever been touched from WSL2/Linux.
+No native-Windows write parity is claimed.
 
 ## Governance
 
