@@ -98,9 +98,9 @@ stateDiagram-v2
   end note
 ```
 
-None of this diagram is implemented yet — it is the contract T4 will encode
-as an exhaustive, RED test suite before T5 implements a single line against
-it. See [Status](#status).
+This lifecycle is implemented and exhaustively tested: all 24 legal edges,
+all 76 rejected pairs, and the ordered rejection contract are green. The
+owner CLI now supplies the persisted, TTY-only L20/L23/L24 landing path.
 
 ## Status
 
@@ -112,22 +112,21 @@ markers are earned, never pre-declared. As of this README:
 | Milestone | State | What it covers |
 |---|---|---|
 | **M0** — PlanF3 (this document) | `[x]` | Architecture accepted, plan authored, all nine Questionables resolved by the owner |
-| **M1** — Contracts & State | `[wip]` — T1, T2 done; T3–T5 outstanding | Workspace bootstrap, config schema/loader, envelope contracts, the task-machine test suite and its implementation |
-| **M2** — Durable Persistence | `[]` | Journal, status store, SQLite projector, crash-recovery/rebuild |
-| **M3** — Execution Kernel ⚠ | `[]` | Process supervision, the PID-before-spawn barrier, call-budget reservations |
-| **M4** — Real Adapters | `[]` | `claude-code`, `pi-codex` adapters against real provider streams |
-| **M5** — Workflows & Gates | `[]` | The six workflows, the eleven gates, the correction loop |
-| **M6** — Owner Controls | `[]` | CLI commands, landing, cancel, retry |
+| **M1** — Contracts & State | `[x]` | Workspace, config and envelope contracts, exhaustive lifecycle and phase machines |
+| **M2** — Durable Persistence | `[x]` | Journal, status store, SQLite projector, crash-recovery/rebuild |
+| **M3** — Execution Kernel ⚠ | `[x]` | Process supervision, the PID-before-spawn barrier, call-budget reservations |
+| **M4** — Real Adapters | `[x]` | `claude-code`, `pi-codex` adapters against captured real provider streams |
+| **M5** — Workflows & Gates | `[x]` | The six workflows, eleven gates, permissions, and correction loop |
+| **M6** — Owner Controls | `[wip]` — T21 done; T22 outstanding | CLI commands, TTY-only persisted landing, cancel, retry; doctor/rebuild/gc next |
 | **M7** — API & Dashboard | `[]` | Read-only HTTP API, the Vue dashboard |
 | **M8** — Platform & Pilots | `[]` | Cross-platform verification, two real pilot tasks |
 
-**Concretely, right now:** there is no CLI, no dashboard, no workflow that
-runs, no agent that gets spawned, and no code that touches Git beyond
-scaffolding. What's real is a validated `awsf/v1` configuration schema and
-loader (`core/src/config/`), a committed default `awsf.config.yaml`, twelve
-meta-tests enforcing this repository's own architectural invariants, and the
-plan itself. Everything else in the [repository layout](#repository-layout)
-below is a directory placeholder (`.gitkeep`) waiting on its task.
+**Concretely, right now:** the lifecycle, persistence, execution kernel,
+adapters, workflows, gates, permissions, and owner CLI are implemented. The
+CLI exposes `new`, `start`, `status`, `watch`, `land`, `cancel`, and `retry`;
+landing has one human+TTY authorization site and mutates the canonical checkout
+only by a verified local fast-forward. The read-only operator commands, API,
+dashboard, platform matrix, and pilots remain outstanding.
 
 ## Verifying these claims
 
@@ -135,15 +134,15 @@ Every status claim above is backed by a command, not an assertion:
 
 ```bash
 npm install
-npm run test:unit    # meta-tests + config schema/loader tests — currently 50/50
+npm test              # unit + contract + simulation + zero-quota journeys
 npm run lint          # oxlint over core/ and dashboard/
-npm run typecheck     # tsc --build --noEmit
+npm run typecheck     # known missing-Node-declarations gap; see plan Amendments
+npm run awsf -- status <task-id>
 ```
 
-`npm run test:contract`, `npm run test:sim`, and `npm run test:journeys` are
-wired as canonical scripts but their directories are currently empty — they
-will gain content starting M2/M3/M5. Don't take a green `test:unit` run as
-evidence about the other three; run them yourself once they exist.
+Do not take a green unit suite as evidence about process trees or Git landing:
+`npm test` runs all four layers. The journey suite is fixture-backed and spends
+no provider quota.
 
 ## Repository layout
 
@@ -162,10 +161,11 @@ specs/                    the planning artifacts — read these first
   awsf-plan-acceptance.md         every claim mapped to the mechanism that proves it
 core/                     @awsf/core — the host: state machine, adapters, gates, persistence, API
   src/config/                awsf/v1 schema, loader, redacted effective-config snapshot   (built)
-  src/{state,contracts,workflow,gates,git,policy,persistence,observability,execution,adapters,api,cli}/
-                              scaffolded, empty — one directory per future task
-  test/{unit,contract,sim,journeys}/
-                              unit/ has content (meta-tests + config tests); the rest are empty
+  src/{state,contracts,workflow,gates,git,policy,persistence,observability,execution,adapters,cli}/
+                              implemented host boundaries through T21
+  src/api/                    reserved for the read-only M7 server
+  test/{unit,contract,simulation,journeys}/
+                              four executable proof layers
 dashboard/                Vue 3 + Vite, loopback-only, cursor-polling — not started (M7)
 prompts/<agent>/          system.md / user.md pairs per agent, referenced by awsf.config.yaml
 justfile                  thin wrappers over the npm scripts — never a second source of truth
