@@ -99,7 +99,8 @@ stateDiagram-v2
 
 This lifecycle is implemented and exhaustively tested: all 24 legal edges,
 all 76 rejected pairs, and the ordered rejection contract are green. The
-owner CLI now supplies the persisted, TTY-only L20/L23/L24 landing path.
+owner CLI now supplies both the interactive L19 `awsf rework TASK "<concrete defect>"`
+path and the persisted, TTY-only L20/L23/L24 landing path.
 
 ## Status
 
@@ -123,9 +124,12 @@ markers are earned, never pre-declared. As of this README:
 **Concretely, right now:** the lifecycle, persistence, execution kernel,
 adapters, workflows, gates, permissions, owner CLI, and read-only dashboard are
 implemented. `awsf run TASK` drives configured T1 `build` and `plan-build-test`
-workflows from `PREPARED`; unsupported production recipes and any configured
-continuity that disagrees with the selected adapter's verified capability fail
-closed before launch. The explicit `awsf run TASK --stub true` simple-SDLC
+workflows from `PREPARED`; at `AWAITING_OWNER`, `awsf rework TASK "<concrete defect>"`
+uses the same configured writable builder route for one fresh L19 call, creates
+a new host-owned candidate on the prior candidate, and reruns fresh gates.
+Unsupported production recipes and any configured continuity that disagrees
+with the selected adapter's verified capability fail closed before launch. The
+explicit `awsf run TASK --stub true` simple-SDLC
 demonstration is unchanged.
 T2 review is not yet production-bound. Landing has one human+TTY authorization
 site and mutates the canonical checkout only by a verified local fast-forward.
@@ -151,6 +155,8 @@ npm run awsf -- new T01 "describe the task" --workflow build --tier 1
 npm run awsf -- start T01
 npm run awsf -- run T01
 npm run awsf -- status T01
+# If inspection finds a concrete defect:
+npm run awsf -- rework T01 "remove the duplicate whitespace in core/src/generated.ts"
 npm run awsf -- land T01
 ```
 

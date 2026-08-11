@@ -51,17 +51,21 @@ if (mode === "parser-failure") {
   process.exit(0);
 }
 
+const ownerRework = prompt.includes("Owner-authorized fresh rework call (L19)");
 fs.mkdirSync(path.join(process.cwd(), "core", "src"), { recursive: true });
-fs.writeFileSync(path.join(process.cwd(), "core", "src", "generated.ts"), "export const generated = true;\n");
+fs.writeFileSync(
+  path.join(process.cwd(), "core", "src", "generated.ts"),
+  ownerRework ? "export const generated = true;\n" : "export  const generated = true;\n",
+);
 
 const envelope = {
   schema: "awsf.build-output/v1",
   producerStatus: "success",
-  summary: "wrote one source through the process-backed fixture",
+  summary: ownerRework ? "repaired the owner-named whitespace defect" : "wrote one source through the process-backed fixture",
   artifacts: [{ path: "core/src/generated.ts", kind: "source", description: "bounded source" }],
   notesForNextPhase: "run exact host gates",
   changedFiles: ["core/src/generated.ts"],
-  implementationNotes: ["captured-stream process fixture"],
+  implementationNotes: [ownerRework ? "removed the named duplicate whitespace" : "captured-stream process fixture"],
   commandsRun: [],
   proposedCommitMessage: "feat: add generated source",
 };

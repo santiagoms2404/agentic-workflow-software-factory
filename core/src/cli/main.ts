@@ -16,6 +16,7 @@ import { landCommand } from "./commands/land.ts";
 import { newCommand } from "./commands/new.ts";
 import { locateAttempt } from "./commands/attempt.ts";
 import { retryCommand } from "./commands/retry.ts";
+import { reworkCommand } from "./commands/rework.ts";
 import { runStubCommand } from "./commands/run.ts";
 import { runProductionCommand } from "./commands/production-run.ts";
 import { defaultWorktreeRoot, startCommand } from "./commands/start.ts";
@@ -24,7 +25,7 @@ import { watchCommand } from "./commands/watch.ts";
 
 /** The complete owner-facing command table; documentation reconciles against it. */
 export const CLI_COMMANDS = Object.freeze([
-  "new", "start", "run", "status", "watch", "land", "cancel", "retry",
+  "new", "start", "run", "status", "watch", "rework", "land", "cancel", "retry",
   "doctor", "gc", "dash", "db rebuild",
 ]);
 
@@ -187,6 +188,25 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       case "watch":
         await watchCommand({ attemptDir: located.attemptDir, pollMs: config.observability.poll_ms, write: out });
         return 0;
+      case "rework": {
+        const defect = parsed.positionals.slice(1).join(" ");
+        const result = await reworkCommand({
+          attemptDir: located.attemptDir,
+          defect,
+          terminal: options.terminal ?? processOwnerTerminal(),
+          config,
+          configPath,
+          projectRecord: projection.project,
+          assertAdvancement: projection.assertAdvancement,
+          assertLaunchProjection: projection.assertLaunchPermitted,
+        });
+        if (!result.confirmed) {
+          out("Rework declined; state remains AWAITING_OWNER and no call was spent.");
+          return 1;
+        }
+        out(`${result.status.lifecycleState}: ${result.status.nextAction}`);
+        return result.status.lifecycleState === "AWAITING_OWNER" ? 0 : 1;
+      }
       case "land": {
         const result = await landCommand({
           attemptDir: located.attemptDir,

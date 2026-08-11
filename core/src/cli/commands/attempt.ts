@@ -194,7 +194,7 @@ export function nextActionFor(state: TaskState, taskId: string): string {
     case "RUNNING": return `run \`awsf watch ${taskId}\` or \`awsf cancel ${taskId}\``;
     case "GATING": return `inspect gate output with \`awsf watch ${taskId}\``;
     case "REVIEWING": return `wait for the mandatory review; use \`awsf watch ${taskId}\``;
-    case "AWAITING_OWNER": return `run \`awsf land ${taskId}\`, request rework, or \`awsf cancel ${taskId}\``;
+    case "AWAITING_OWNER": return `run \`awsf rework ${taskId} "<concrete defect>"\`, \`awsf land ${taskId}\`, or \`awsf cancel ${taskId}\``;
     case "LANDING": return `rerun \`awsf land ${taskId}\` to recover the persisted landing`;
     case "LANDED": return "no action required; the approved candidate is canonical HEAD";
     case "BLOCKED": return `resolve the blocker, then run \`awsf retry ${taskId}\``;
