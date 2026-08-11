@@ -1,12 +1,23 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import type { ActivityPoint, AgentSummary, PhaseSummary, SessionCard as Session } from "../../shared/types.ts";
-import { axisTicks, costAuthorityLabel, formatCost, formatDate, formatDuration, formatUsage, stateLabel, stateTone } from "../display.ts";
+import { axisTicks, costAuthorityLabel, formatCost, formatDate, formatDuration, formatTokens, formatUsage, stateLabel, stateTone } from "../display.ts";
 
 const props = defineProps<{ session: Session }>();
+const archived = ref(false);
+const archiving = ref(false);
+const archiveError = ref<string | null>(null);
 const start = computed(() => Date.parse(props.session.startedAt));
-const end = computed(() => Date.parse(props.session.endedAt ?? new Date().toISOString()));
+const end = computed(() => {
+  const observed = Math.max(
+    Date.parse(props.session.updatedAt),
+    ...props.session.activity.map((point) => Date.parse(point.endedAt ?? point.startedAt)),
+  );
+  const live = ["RUNNING", "GATING", "REVIEWING", "LANDING"].includes(props.session.state);
+  return Math.max(start.value + 1_000, props.session.endedAt ? Date.parse(props.session.endedAt) : live ? Date.now() : observed);
+});
 const span = computed(() => Math.max(1_000, end.value - start.value));
+const runtimeEnd = computed(() => new Date(end.value).toISOString());
 const ticks = computed(() => axisTicks(span.value, 4));
 const phaseById = computed(() => new Map(props.session.phases.map((phase) => [phase.phaseId, phase])));
 const palette = ["var(--purple)", "var(--cyan)", "var(--red)", "var(--amber)", "var(--violet)"];
@@ -53,9 +64,25 @@ function phaseGlyph(phase: PhaseSummary): string {
   if (["RUNNING", "VALIDATING", "CORRECTING"].includes(phase.status)) return "◐";
   return "○";
 }
+
+async function archiveSession(): Promise<void> {
+  if (archiving.value) return;
+  archiving.value = true;
+  archiveError.value = null;
+  try {
+    const response = await fetch(`/api/v1/sessions/${encodeURIComponent(props.session.sessionId)}/archive`, { method: "POST" });
+    if (!response.ok) throw new Error("Archive action unavailable");
+    archived.value = true;
+  } catch (reason) {
+    archiveError.value = reason instanceof Error ? reason.message : "Archive action unavailable";
+  } finally {
+    archiving.value = false;
+  }
+}
 </script>
 
 <template>
+  <div v-if="!archived" class="card-wrap">
   <a class="session-card" :class="stateTone(session.state)" :href="`#/sessions/${session.sessionId}`">
     <span class="card-id">{{ session.sessionId.slice(0, 8) }}</span>
     <span class="card-workflow" :title="session.workflowId">{{ session.workflowId }}</span>
@@ -98,12 +125,22 @@ function phaseGlyph(phase: PhaseSummary): string {
       </span>
       <span class="started-date">{{ formatDate(session.startedAt) }}</span>
     </div>
-    <div class="card-stats">
-      <span title="Cost and authority">{{ formatCost(session.usage.costAuthority, session.usage.estimatedCostUsd) }} <small>{{ costAuthorityLabel(session.usage.costAuthority) }}</small></span>
-      <span title="Wall-clock runtime">{{ formatDuration(session.startedAt, session.endedAt) }}</span>
-      <span title="Provider-reported token total">{{ formatUsage(session.usage) }} <small>{{ session.usage.usageAuthority }}</small></span>
-      <span title="Calls spent against the host ceiling">calls {{ session.callsSpent }}/{{ session.callCeiling }}</span>
-      <em v-if="session.usage.costPartial">partial total</em>
-    </div>
+    <dl class="card-metrics-grid">
+      <div title="Cost and authority"><dt>cost</dt><dd>{{ formatCost(session.usage.costAuthority, session.usage.estimatedCostUsd) }} <small>{{ costAuthorityLabel(session.usage.costAuthority) }}</small></dd></div>
+      <div title="Wall-clock runtime"><dt>runtime</dt><dd>{{ formatDuration(session.startedAt, runtimeEnd) }}</dd></div>
+      <div title="Provider-reported token total"><dt>usage</dt><dd>{{ formatUsage(session.usage) }} <small>{{ session.usage.usageAuthority }}<template v-if="session.usage.cacheReadTokens !== null"> · cache {{ formatTokens(session.usage.cacheReadTokens) }}</template></small></dd></div>
+      <div title="Calls spent against the host ceiling"><dt>calls</dt><dd>{{ session.callsSpent }}/{{ session.callCeiling }}</dd></div>
+      <div v-if="session.usage.costPartial" class="partial-metric"><dt>authority</dt><dd>partial total</dd></div>
+    </dl>
   </a>
+  <button
+    type="button"
+    class="archive-control"
+    :disabled="archiving"
+    :aria-label="`Archive session ${session.sessionId.slice(0, 8)} from this review list`"
+    title="Archive from dashboard list; lifecycle, Git, and configuration are unchanged"
+    @click="archiveSession"
+  >{{ archiving ? "…" : "archive" }}</button>
+  <p v-if="archiveError" class="card-action-error" role="alert">{{ archiveError }}</p>
+  </div>
 </template>

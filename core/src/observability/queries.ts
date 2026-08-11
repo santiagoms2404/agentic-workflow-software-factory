@@ -110,8 +110,11 @@ export function phasesForSession(db: DatabaseSync, sessionId: string): PhaseRow[
   return db.prepare("SELECT * FROM phases WHERE session_id = ? ORDER BY ordinal LIMIT 100").all(sessionId) as unknown as PhaseRow[];
 }
 
-export function phaseForSession(db: DatabaseSync, sessionId: string, phaseId: string): PhaseRow | null {
-  const row = db.prepare("SELECT * FROM phases WHERE session_id = ? AND phase_id = ?").get(sessionId, phaseId) as PhaseRow | undefined;
+export function phaseForSession(db: DatabaseSync, sessionId: string, phaseReference: string): PhaseRow | null {
+  const row = db.prepare(`SELECT * FROM phases WHERE session_id = ?
+    AND (phase_id = ? OR phase_key = ?)
+    ORDER BY CASE WHEN phase_id = ? THEN 0 ELSE 1 END, ordinal LIMIT 1`)
+    .get(sessionId, phaseReference, phaseReference, phaseReference) as PhaseRow | undefined;
   return row ?? null;
 }
 

@@ -58,7 +58,7 @@ onUnmounted(() => clearInterval(timer));
         <strong>{{ event.type }}</strong>
         <span :title="summary(event)">{{ summary(event) }}</span>
         <em>{{ event.status ?? "recorded" }}</em>
-        <small>{{ formatDuration(event.startedAt, event.endedAt) }}</small>
+        <small>{{ event.endedAt ? formatDuration(event.startedAt, event.endedAt) : "point event" }}</small>
       </button>
       <pre v-if="expanded.has(event.id)">{{ json(event.payload) }}</pre>
     </article>

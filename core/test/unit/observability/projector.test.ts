@@ -36,7 +36,7 @@ function record(seq: number, event: NormalizedEvent): JournalRecord<NormalizedEv
 
 const ctx: ProjectionContext = { sessionId: "s1", runId: "run1", phaseId: null };
 
-function attempt(evidence: AttemptStatusProjection["evidence"]): AttemptStatusProjection {
+function attempt(evidence: NonNullable<AttemptStatusProjection["evidence"]>): AttemptStatusProjection {
   return {
     ...SESSION,
     lifecycleState: "RUNNING",

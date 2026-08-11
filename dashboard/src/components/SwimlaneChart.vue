@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import type { AgentSummary, PhaseSummary, SessionDetailResponse } from "../../shared/types.ts";
 import { axisTicks, contextMeterPercent, formatDuration, formatTokens, providerMark } from "../display.ts";
 import { layoutTimeline } from "../timeline.ts";
@@ -8,8 +8,16 @@ const props = defineProps<{ session: SessionDetailResponse; selectedPhaseId: str
 const emit = defineEmits<{ inspect: [phaseId: string] }>();
 const palette = ["var(--purple)", "var(--cyan)", "var(--red)", "var(--violet)", "var(--amber)"];
 
+const scroller = ref<HTMLElement | null>(null);
 const start = computed(() => Date.parse(props.session.startedAt));
-const end = computed(() => Date.parse(props.session.endedAt ?? new Date().toISOString()));
+const end = computed(() => {
+  const observed = Math.max(
+    Date.parse(props.session.updatedAt),
+    ...props.session.activity.map((point) => Date.parse(point.endedAt ?? point.startedAt)),
+  );
+  const live = ["RUNNING", "GATING", "REVIEWING", "LANDING"].includes(props.session.state);
+  return Math.max(start.value + 1_000, props.session.endedAt ? Date.parse(props.session.endedAt) : live ? Date.now() : observed);
+});
 const span = computed(() => Math.max(1_000, end.value - start.value));
 const requestPhase = computed(() => props.session.phases.find((phase) => phase.kind === "engineer" && phase.startedAt !== null) ?? null);
 const leadingZone = computed(() => requestPhase.value ? 16 : 0);
@@ -37,9 +45,9 @@ const layout = computed(() => layoutTimeline(
     .map((phase) => ({
       id: phase.phaseId,
       start: Date.parse(phase.startedAt!),
-      end: Date.parse(phase.endedAt ?? new Date().toISOString()),
+      end: phase.endedAt ? Date.parse(phase.endedAt) : end.value,
     })),
-  { start: start.value, end: end.value, leadingZonePercent: leadingZone.value, minimumWidthPercent: 3.5 },
+  { start: start.value, end: end.value, leadingZonePercent: leadingZone.value, minimumWidthPercent: 9 },
 ));
 function geometry(phase: PhaseSummary): { left: string; width: string } | null {
   if (phase.phaseId === requestPhase.value?.phaseId) return { left: "0.4%", width: `${leadingZone.value - 0.8}%` };
@@ -77,33 +85,45 @@ function context(agent: AgentSummary | null): number | null {
   return agent ? contextMeterPercent(agent.contextTokens, agent.contextWindow) : null;
 }
 function queued(lane: Lane): PhaseSummary[] { return lane.phases.filter((phase) => phase.startedAt === null); }
+function scrollTimeline(direction: -1 | 1): void {
+  scroller.value?.scrollBy({ left: direction * Math.max(280, scroller.value.clientWidth * 0.7), behavior: "smooth" });
+}
 </script>
 
 <template>
   <section class="waterfall-section" aria-labelledby="waterfall-title">
     <div class="waterfall-heading">
       <div><span class="eyebrow">Journal-backed execution</span><h2 id="waterfall-title">Waterfall</h2></div>
-      <span>{{ ticks[0]?.label }} → {{ ticks.at(-1)?.label }}</span>
+      <div class="timeline-access">
+        <span>{{ ticks[0]?.label }} → {{ ticks.at(-1)?.label }}</span>
+        <span class="scroll-cue">↔ scroll timeline</span>
+        <button type="button" aria-label="Scroll timeline left" title="Scroll timeline left" @click="scrollTimeline(-1)">←</button>
+        <button type="button" aria-label="Scroll timeline right" title="Scroll timeline right" @click="scrollTimeline(1)">→</button>
+      </div>
     </div>
-    <div class="waterfall-scroll" tabindex="0" aria-label="Execution timeline; horizontally scrollable on narrow screens">
+    <div ref="scroller" class="waterfall-scroll" tabindex="0" aria-label="Execution timeline; use horizontal scrolling or the arrow controls to reach all evidence">
       <div class="waterfall">
         <div class="waterfall-row axis-row">
           <div class="waterfall-label" />
           <div class="waterfall-track">
             <span v-if="leadingZone" class="request-zone-label" :style="{ width: `${leadingZone}%` }">request</span>
-            <span v-for="tick in ticks" :key="tick.percent" class="axis-label" :style="{ left: `${tick.percent}%` }">{{ tick.label }}</span>
+            <span v-for="(tick, index) in ticks" :key="tick.percent" class="axis-label" :class="{ 'edge-start': index === 0, 'edge-end': index === ticks.length - 1 }" :style="{ left: `${tick.percent}%` }">{{ tick.label }}</span>
           </div>
         </div>
-        <div v-for="lane in lanes" :key="lane.key" class="waterfall-row lane-row">
+        <div v-for="lane in lanes" :key="lane.key" class="waterfall-row lane-row" :class="{ 'evidence-lane': lane.key === 'code' && (session.gates.length > 0 || Boolean(session.candidateSha)) }">
           <div class="waterfall-label">
             <strong :style="{ color: lane.color }"><span aria-hidden="true">{{ lane.agent ? "▣" : lane.key === "code" ? "⌘" : "♙" }}</span>{{ lane.label }}</strong>
             <span>{{ lane.role }}</span>
             <template v-if="lane.agent">
               <span class="lane-provider"><b aria-hidden="true">{{ providerMark(lane.agent.provider) }}</b>{{ lane.agent.provider }}</span>
               <span class="lane-model" :title="`${lane.agent.resolvedModel ?? lane.agent.requestedModel} · ${lane.agent.modelProvenance ?? 'unrecorded'}`">{{ lane.agent.resolvedModel ?? lane.agent.requestedModel }}</span>
-              <span v-if="context(lane.agent) !== null" class="lane-context" :title="`${lane.agent.contextTokens} / ${lane.agent.contextWindow} tokens`">
+              <span v-if="context(lane.agent) !== null" class="lane-context" :title="`${formatTokens(lane.agent.contextTokens)} / ${formatTokens(lane.agent.contextWindow)} tokens`">
                 <span>Context <b>{{ Math.round(context(lane.agent)!) }}%</b></span>
                 <i><b :style="{ width: `${Math.max(context(lane.agent)!, 2)}%`, background: lane.color }" /></i>
+              </span>
+              <span class="lane-sandbox" :class="lane.agent.sandboxBadge ?? 'legacy'" :title="lane.agent.sandboxMechanism ?? 'mechanism not recorded'">
+                <b>sandbox {{ lane.agent.sandboxBadge ?? "not recorded" }}</b>
+                <small>{{ lane.agent.sandboxMechanism ?? "unknown mechanism" }}</small>
               </span>
             </template>
           </div>
@@ -115,11 +135,11 @@ function queued(lane: Lane): PhaseSummary[] { return lane.phases.filter((phase) 
                 v-if="geometry(phase)"
                 type="button"
                 class="phase-block"
-                :class="[phase.status.toLowerCase(), { selected: selectedPhaseId === phase.phaseId }]"
+                :class="[phase.status.toLowerCase(), { selected: selectedPhaseId === phase.phaseId || selectedPhaseId === phase.key }]"
                 :style="blockStyle(phase, lane)"
                 :aria-label="`Inspect ${phase.name}: ${phase.description}; ${phase.status}; ${phaseDuration(phase)}`"
                 :title="`${phase.name} — ${phase.status}\n${phase.description}`"
-                @click="emit('inspect', phase.phaseId)"
+                @click="emit('inspect', phase.key)"
               >
                 <span class="phase-block-top"><b :class="phase.status.toLowerCase()">{{ statusGlyph(phase.status) }}</b><strong>{{ phase.name }}</strong><small>{{ phaseDuration(phase) }}</small></span>
                 <span class="phase-description">{{ phase.description }}</span>
@@ -131,10 +151,10 @@ function queued(lane: Lane): PhaseSummary[] { return lane.phases.filter((phase) 
               :key="phase.phaseId"
               type="button"
               class="phase-block queued"
-              :class="{ selected: selectedPhaseId === phase.phaseId }"
+              :class="{ selected: selectedPhaseId === phase.phaseId || selectedPhaseId === phase.key }"
               :style="{ right: `${index * 13 + 1}%`, width: '12%' }"
               :aria-label="`Inspect queued phase ${phase.name}`"
-              @click="emit('inspect', phase.phaseId)"
+              @click="emit('inspect', phase.key)"
             ><span class="phase-block-top"><b>○</b><strong>{{ phase.name }}</strong></span><span class="phase-description">queued · {{ phase.description }}</span></button>
             <div v-if="lane.key === 'code'" class="code-evidence">
               <span v-if="session.candidateSha" class="commit-pill" :title="session.candidateSha">commit {{ session.candidateSha.slice(0, 10) }}</span>

@@ -27,7 +27,7 @@ function onHashChange(): void { readRoute(); void load(); }
 onMounted(() => { readRoute(); addEventListener("hashchange", onHashChange); });
 onUnmounted(() => removeEventListener("hashchange", onHashChange));
 
-const phaseName = computed(() => detail.value?.phases.find((phase) => phase.phaseId === selectedPhaseId.value)?.name ?? null);
+const phaseName = computed(() => detail.value?.phases.find((phase) => phase.phaseId === selectedPhaseId.value || phase.key === selectedPhaseId.value)?.name ?? null);
 const mode = computed<PollMode>(() => health.value?.activeSessions ? "live" : sessions.value.sessions.length ? "grid" : "idle");
 
 async function load(): Promise<void> {

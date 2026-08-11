@@ -16,6 +16,10 @@ test("phase inspection is routed inline, closes on Escape, and restores its open
   assert.match(detail, /document\.activeElement instanceof HTMLElement/);
   assert.match(detail, /opener\?\.focus\(\)/);
   assert.match(route, /\/phases\/\$\{encodeURIComponent\(phaseId\)\}/);
+  assert.match(route, /await nextTick\(\)/);
+  assert.match(route, /lastScrolledPhaseId !== phaseId/);
+  assert.match(route, /scrollIntoView\(\{ block: "start", behavior: "auto" \}\)/);
+  assert.match(route, /sequence !== requestSequence/);
 });
 
 test("phase inspection retains every envelope round and labels evidence and authority in text", () => {
@@ -60,5 +64,12 @@ test("motion, live growth, focus, responsive containment, and typed event labels
   assert.match(css, /button:focus-visible/);
   assert.match(css, /\.event-tool_call strong/);
   assert.match(css, /\.event-agent_start strong/);
-  assert.match(css, /\.waterfall-scroll \{ overflow-x: auto/);
+  assert.match(css, /\.waterfall-scroll[^}]*overflow-x: auto/s);
+  const waterfall = source("dashboard/src/components/SwimlaneChart.vue");
+  assert.match(waterfall, /aria-label="Scroll timeline left"/);
+  assert.match(waterfall, /aria-label="Scroll timeline right"/);
+  assert.match(waterfall, /scrollBy\(\{/);
+  assert.match(waterfall, /lane\.agent\.sandboxBadge/);
+  assert.match(css, /\.axis-label\.edge-end[^}]*translateX\(-100%\)/s);
+  assert.match(css, /\.code-evidence[^}]*flex-wrap: wrap/s);
 });

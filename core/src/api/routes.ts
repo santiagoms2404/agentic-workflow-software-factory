@@ -367,10 +367,11 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
     }),
     phase: safely((_request, params) => {
       const sessionId = params.id ?? "";
-      const phaseId = params.phaseId ?? "";
+      const phaseReference = params.phaseId ?? "";
       const session = requireSession(readDb, sessionId);
-      const found = phaseForSession(readDb, sessionId, phaseId);
+      const found = phaseForSession(readDb, sessionId, phaseReference);
       if (found === null) throw new ApiRequestError(404, "phase-not-found", "phase not found");
+      const phaseId = found.phase_id;
       const snapshot = configSnapshotForSession(readDb, sessionId);
       const envelopes: EnvelopeRound[] = envelopesForPhase(readDb, sessionId, phaseId).map((item) => ({
         id: item.envelope_id,

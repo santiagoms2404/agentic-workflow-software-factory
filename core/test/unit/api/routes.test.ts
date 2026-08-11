@@ -30,6 +30,16 @@ test("sessions embeds ordered phases and agents in one response", async () => {
       body.sessions[0]?.activity.map((point) => point.startedAt),
       body.sessions[0]?.activity.map((point) => point.startedAt).toSorted(),
     );
+    const eventPoints = body.sessions[0]?.activity.filter((point) => point.source === "event") ?? [];
+    assert.deepEqual(eventPoints.map((point) => point.startedAt), [
+      "2026-08-08T12:00:01.000Z",
+      "2026-08-08T12:05:00.000Z",
+      "2026-08-08T12:10:00.000Z",
+    ]);
+    const start = Date.parse(body.sessions[0]!.startedAt);
+    const end = Date.parse(body.sessions[0]!.updatedAt);
+    const positions = eventPoints.map((point) => (Date.parse(point.startedAt) - start) / (end - start));
+    assert.ok(positions[1]! > 0.4 && positions[2]! > 0.8, "later canonical events occupy later timeline positions");
     assert.equal(JSON.stringify(body).includes("continuity"), false);
   } finally {
     router.close();
@@ -61,7 +71,10 @@ test("session and phase detail expose summaries but no private file, process, or
 
     const phaseResponse = await router.dispatch(request("/api/v1/sessions/session-1/phases/phase-1"));
     assert.equal(phaseResponse.status, 200);
+    const keyResponse = await router.dispatch(request("/api/v1/sessions/session-1/phases/builder"));
+    assert.equal(keyResponse.status, 200, "safe phase keys support direct dashboard URLs when durable IDs contain punctuation");
     const phase = phaseResponse.body as PhaseDetailResponse;
+    assert.equal((keyResponse.body as PhaseDetailResponse).phase.phaseId, phase.phase.phaseId);
     assert.deepEqual(
       phase.envelopes.map((envelope) => ({ round: envelope.correctionRound, valid: envelope.valid })),
       [{ round: 0, valid: true }, { round: 1, valid: false }],
@@ -170,6 +183,20 @@ test("the read connection is readonly and the archive connection opens lazily an
     router.close();
     fixture.close();
   }
+});
+
+test("archive changes only review-list visibility, never lifecycle, Git, or configuration evidence", async () => {
+  const fixture = apiFixture();
+  const router = createApiRouter({ dbPath: fixture.path, config: fixture.config });
+  try {
+    const before = fixture.writer.prepare(`SELECT lifecycle_state, state_revision, base_sha,
+      head_sha, candidate_sha, config_snapshot_json, archived FROM sessions WHERE session_id='session-1'`).get() as Record<string, unknown>;
+    const response = await router.dispatch(request("/api/v1/sessions/session-1/archive", "POST"));
+    assert.equal(response.status, 200);
+    const after = fixture.writer.prepare(`SELECT lifecycle_state, state_revision, base_sha,
+      head_sha, candidate_sha, config_snapshot_json, archived FROM sessions WHERE session_id='session-1'`).get() as Record<string, unknown>;
+    assert.deepEqual({ ...after }, { ...before, archived: 1 });
+  } finally { router.close(); fixture.close(); }
 });
 
 test("settings are redacted and adapter health is a read-only configured view", async () => {

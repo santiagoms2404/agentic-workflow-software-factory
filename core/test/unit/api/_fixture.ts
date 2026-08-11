@@ -28,14 +28,16 @@ export function apiFixture(): {
     journalPath: "state://journal.jsonl",
     startedAt: "2026-08-08T12:00:00.000Z",
   });
-  writer.prepare(`UPDATE sessions SET lifecycle_state = 'RUNNING', state_revision = 3,
+  writer.prepare(`UPDATE sessions SET lifecycle_state = 'AWAITING_OWNER', state_revision = 3,
     worker_provider = 'openai-codex', worker_model_requested = 'codex:gpt-5.6-sol',
-    total_tokens = 123, usage_authority = 'provider' WHERE session_id = 'session-1'`).run();
+    total_tokens = 123, usage_authority = 'provider', updated_at = '2026-08-08T12:12:00.000Z'
+    WHERE session_id = 'session-1'`).run();
   writer.prepare(`INSERT INTO phases
     (phase_id, session_id, ordinal, phase_key, name, kind, owner, description, status,
-     correction_count, max_corrections, started_at, created_at)
+     correction_count, max_corrections, started_at, ended_at, created_at)
     VALUES ('phase-1','session-1',1,'builder','Build','agent','builder',
-      'Implement the read surface','RUNNING',0,1,'2026-08-08T12:00:01.000Z','2026-08-08T12:00:00.000Z')`).run();
+      'Implement the read surface','SUCCEEDED',0,1,'2026-08-08T12:00:01.000Z',
+      '2026-08-08T12:10:00.000Z','2026-08-08T12:00:00.000Z')`).run();
   writer.prepare(`INSERT INTO agent_sessions
     (session_id, agent, adapter_id, provider, color, requested_model, resolved_model,
      model_provenance, host_continuity_ref, call_count, cost_authority, sandbox_badge,
@@ -55,10 +57,11 @@ export function apiFixture(): {
       '[{"name":"tests","passed":true}]','[]','2026-08-08T12:00:02.000Z','2026-08-08T12:00:03.000Z')`).run();
   writer.prepare(`INSERT INTO processes
     (process_id, session_id, phase_id, run_id, adapter_id, role, transport, status,
-     command_json, cwd_display, registered_at)
-    VALUES ('process-1','session-1','phase-1','run-1','pi-codex','worker','process','RUNNING',
+     command_json, cwd_display, registered_at, released_at, ended_at, exit_code)
+    VALUES ('process-1','session-1','phase-1','run-1','pi-codex','worker','process','EXITED',
       '["/usr/bin/pi","--append-system-prompt","/home/operator/.local/state/awsf/private/system-prompt.md"]',
-      '/home/operator/.local/state/awsf/worktrees/session-1','2026-08-08T12:00:01.000Z')`).run();
+      '/home/operator/.local/state/awsf/worktrees/session-1','2026-08-08T12:00:01.000Z',
+      '2026-08-08T12:00:02.000Z','2026-08-08T12:10:00.000Z',0)`).run();
   writer.prepare(`INSERT INTO envelopes
     (envelope_id, session_id, phase_id, agent, schema_id, correction_round, valid,
      producer_status, payload_json, violations_json, file_path, created_at)
@@ -71,6 +74,11 @@ export function apiFixture(): {
     VALUES ('envelope-2','session-1','phase-1','builder','awsf.build-output/v1',1,0,
       'failure','{"summary":"invalid round retained"}','["missing evidence"]',
       'private/envelope-invalid.json','2026-08-08T12:00:04.000Z')`).run();
+  const eventTimes = [
+    "2026-08-08T12:00:01.000Z",
+    "2026-08-08T12:05:00.000Z",
+    "2026-08-08T12:10:00.000Z",
+  ];
   for (let index = 1; index <= 3; index += 1) {
     writer.prepare(`INSERT INTO events
       (event_id, session_id, phase_id, run_id, first_source_seq, last_source_seq, type,
@@ -83,7 +91,7 @@ export function apiFixture(): {
         JSON.stringify(index === 1
           ? { name: "read", raw_provider_log: "must-not-leak", host_continuity_ref: "private://ref" }
           : { name: `event-${index}` }),
-        `2026-08-08T12:00:0${index}.000Z`,
+        eventTimes[index - 1],
         index === 3 ? "private-ref" : "public",
       );
   }

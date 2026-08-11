@@ -13,6 +13,7 @@ const valueAfter = (flag) => {
 const systemPromptPath = valueAfter("--append-system-prompt");
 const mode = valueAfter("--awsf-fixture-mode") ?? "success";
 const liveMs = Math.max(0, Math.min(10_000, Number(valueAfter("--awsf-fixture-live-ms") ?? 0) || 0));
+const eventGapMs = Math.max(0, Math.min(2_000, Number(valueAfter("--awsf-fixture-event-gap-ms") ?? 0) || 0));
 
 if (systemPromptPath === null || !path.isAbsolute(systemPromptPath)) {
   process.stderr.write("production-runner-fixture: missing absolute system prompt path\n");
@@ -89,11 +90,14 @@ const message = {
   stopReason: "stop",
   timestamp: 1786218992997,
 };
-const emit = (value) => process.stdout.write(`${JSON.stringify(value)}\n`);
-emit({ type: "session", version: 3, id: "production-runner-fixture-session", timestamp: "2026-08-11T00:00:00.000Z", cwd: process.cwd() });
-emit({ type: "agent_start" });
-emit({ type: "message_start", message: { ...message, content: [], usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { total: 0 } } } });
-emit({ type: "message_update", assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: JSON.stringify(envelope) }, message });
-emit({ type: "turn_end", message, toolResults: [] });
-emit({ type: "agent_end", messages: [message], willRetry: false });
-emit({ type: "agent_settled" });
+const emit = async (value) => {
+  process.stdout.write(`${JSON.stringify(value)}\n`);
+  if (eventGapMs > 0) await new Promise((resolve) => setTimeout(resolve, eventGapMs));
+};
+await emit({ type: "session", version: 3, id: "production-runner-fixture-session", timestamp: "2026-08-11T00:00:00.000Z", cwd: process.cwd() });
+await emit({ type: "agent_start" });
+await emit({ type: "message_start", message: { ...message, content: [], usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { total: 0 } } } });
+await emit({ type: "message_update", assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: JSON.stringify(envelope) }, message });
+await emit({ type: "turn_end", message, toolResults: [] });
+await emit({ type: "agent_end", messages: [message], willRetry: false });
+await emit({ type: "agent_settled" });

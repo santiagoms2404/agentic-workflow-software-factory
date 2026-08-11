@@ -25,14 +25,38 @@ test("minimum-width timeline geometry remains ordered and non-overlapping", () =
 
 test("dashboard uses routed inline phase detail and keeps owner/state evidence", () => {
   const route = source("dashboard/src/components/SessionRoute.vue");
+  const header = source("dashboard/src/components/SessionHeader.vue");
   const detail = source("dashboard/src/components/PhaseDetailDrawer.vue");
   assert.match(route, /#\/sessions\/\$\{encodeURIComponent\(props\.session\.sessionId\)\}\/phases\//);
-  assert.match(route, /StateRibbon/);
+  assert.match(header, /StateRibbon/);
+  assert.match(header, /lifecycle-disclosure/);
   assert.match(route, /OwnerGateCard/);
   assert.match(route, /PhaseDetailDrawer/);
   assert.doesNotMatch(detail, /aria-modal|role="dialog"|drawer-backdrop/);
   assert.match(detail, /Escape/);
   assert.match(detail, /inline-phase-detail/);
+});
+
+test("compact strip flows directly into waterfall with no duplicate standalone roster", () => {
+  const route = source("dashboard/src/components/SessionRoute.vue");
+  assert.ok(route.indexOf("<SessionHeader") < route.indexOf("<SwimlaneChart"));
+  assert.doesNotMatch(route, /AgentRoster|<StateRibbon/);
+  const between = route.slice(route.indexOf("<SessionHeader"), route.indexOf("<SwimlaneChart"));
+  assert.doesNotMatch(between, /<section|Agent roster|Lifecycle/);
+});
+
+test("card footer uses a bounded two-column metrics grid and an accessible archive action", () => {
+  const card = source("dashboard/src/components/SessionCard.vue");
+  const css = source("dashboard/src/styles/dashboard.css");
+  assert.match(card, /card-metrics-grid/);
+  assert.match(card, /<dt>cost<\/dt>/);
+  assert.match(card, /<dt>runtime<\/dt>/);
+  assert.match(card, /<dt>usage<\/dt>/);
+  assert.match(card, /<dt>calls<\/dt>/);
+  assert.match(css, /\.card-metrics-grid[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/s);
+  assert.doesNotMatch(css, /\.card-metrics-grid[^}]*overflow(?:-x)?:\s*(?:hidden|auto)/s);
+  assert.match(card, /aria-label="`Archive session/);
+  assert.match(card, /method: "POST"/);
 });
 
 test("dashboard clamps requests, has 3/2/1 responsive cards, and a 16px floor", () => {
@@ -60,6 +84,7 @@ test("strict local-only assets, accessibility hooks, and read-only route boundar
   assert.match(css, /prefers-reduced-motion:\s*reduce/);
   assert.match(css, /:focus-visible/);
   assert.match(css, /overflow-x:\s*auto/);
+  assert.match(css, /scrollbar-gutter:\s*stable/);
   assert.match(security, /default-src 'none'/);
   assert.match(security, /img-src 'self' data:/);
   assert.doesNotMatch(dashboard, /https?:\/\//);
