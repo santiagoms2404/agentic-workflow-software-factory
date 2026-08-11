@@ -11,6 +11,7 @@ const BOUNDARIES = [
   "core/src/config/effective-config.ts",
   "core/src/api/responses.ts",
   "core/src/adapters/env.ts",
+  "core/src/cli/commands/rework.ts",
 ];
 
 test("every current persistence/display/provider boundary uses the shared credential scrubber", () => {

@@ -10,12 +10,13 @@ import type {
   HarnessAdapter,
   ModelInfo,
   ModelRequest,
+  ProcessSpec,
   ProcessTransport,
   TransportBroker,
 } from "../../adapters/interface.ts";
 import { AdapterError } from "../../adapters/interface.ts";
 import { registeredAdapter } from "../../adapters/registry.ts";
-import { writeSystemPromptFile } from "../../adapters/system-prompt-file.ts";
+import { assertPrivateSystemPrompt, writeSystemPromptFile } from "../../adapters/system-prompt-file.ts";
 import { toConfigSnapshotJson } from "../../config/effective-config.ts";
 import { injectOutputSchema } from "../../contracts/json-schema.ts";
 import { parseEnvelope } from "../../contracts/parse-envelope.ts";
@@ -47,6 +48,11 @@ import { assertClean, captureChangeSet, changedPaths, runGit, systemGitRunner } 
 import { commitAsHost, HOST_AUTHOR } from "../../git/commit.ts";
 import type { AttemptEvidence, PhaseEvidenceRecord } from "../../observability/attempt-evidence.ts";
 import { PermissionBreach } from "../../policy/path-policy.ts";
+import {
+  REDACTED_VALUE,
+  scrubCredentialString,
+  scrubCredentials,
+} from "../../policy/redaction.ts";
 import { openPermissionSession, type SandboxProbe } from "../../policy/sandbox-broker.ts";
 import { transition, type EdgeId, type TaskState } from "../../state/task-machine.ts";
 import { ceilingFor } from "../../state/tiers.ts";
@@ -78,6 +84,13 @@ export class OwnerReworkDefectRequired extends Error {
   constructor() {
     super("awsf rework requires a concrete named defect, not blank or generic retry text");
     this.name = "OwnerReworkDefectRequired";
+  }
+}
+
+export class OwnerReworkCredentialRejected extends Error {
+  constructor(source: string) {
+    super(`owner rework rejected ${source}: credential-shaped data is never persisted or sent to a provider`);
+    this.name = "OwnerReworkCredentialRejected";
   }
 }
 
@@ -153,13 +166,36 @@ function bounded(value: string, maximum = MAX_EVIDENCE): string {
   return value.length <= maximum ? value : value.slice(0, maximum);
 }
 
+function credentialSafeText(value: string, source: string, rejectPriorRedaction = false): string {
+  const scrubbed = scrubCredentialString(value);
+  if (scrubbed !== value || (rejectPriorRedaction && value.includes(REDACTED_VALUE))) {
+    throw new OwnerReworkCredentialRejected(source);
+  }
+  return scrubbed;
+}
+
+function credentialSafeValue<T>(value: T, source: string): T {
+  const scrubbed = scrubCredentials(value);
+  if (JSON.stringify(scrubbed) !== JSON.stringify(value)) {
+    throw new OwnerReworkCredentialRejected(source);
+  }
+  return scrubbed;
+}
+
+function safeFailure(error: unknown): Error {
+  const failure = error instanceof Error ? error : new Error(String(error));
+  return scrubCredentialString(`${failure.name}: ${failure.message}`) === `${failure.name}: ${failure.message}`
+    ? failure
+    : new OwnerReworkCredentialRejected("failure detail");
+}
+
 export function assertConcreteReworkDefect(defect: string): string {
   const normalized = defect.trim().replace(/\s+/g, " ");
   const generic = /^(?:please\s+)?(?:fix(?:\s+it)?|retry|try\s+again|rework|redo|do\s+better|make\s+it\s+better)[.!]?$/i;
   if (normalized.length < 8 || normalized.split(" ").length < 2 || generic.test(normalized)) {
     throw new OwnerReworkDefectRequired();
   }
-  return normalized;
+  return credentialSafeText(normalized, "owner defect");
 }
 
 async function readCommittedPrompt(configPath: string, path: string): Promise<string> {
@@ -186,9 +222,10 @@ async function priorBuild(attemptDir: string): Promise<PriorBuild> {
     if (envelope.schemaId !== "awsf.build-output/v1" || !envelope.valid || envelope.payload === null) continue;
     const payload = envelope.payload as BuildOutput;
     return {
-      envelopeId: envelope.envelopeId,
-      summary: bounded(payload.summary, 1_000),
-      changedFiles: Object.freeze(payload.changedFiles.slice(0, 100)),
+      envelopeId: credentialSafeText(envelope.envelopeId, "prior envelope reference", true),
+      summary: bounded(credentialSafeText(payload.summary, "prior envelope summary", true), 1_000),
+      changedFiles: Object.freeze(payload.changedFiles.slice(0, 100).map((path) =>
+        credentialSafeText(path, "prior envelope file declaration", true))),
     };
   }
   throw new Error("owner rework requires the retained valid prior build envelope; none was found in the journal");
@@ -219,7 +256,11 @@ function inspectCandidate(status: AttemptStatus): CandidateInspection {
   if (identities !== `${OWNER}|${OWNER}`) throw new ReworkCandidateMismatch(`prior candidate is not host-created under the owner identity: ${identities}`);
   return {
     candidate: status.candidateSha,
-    summary: bounded(runGit(worktree, ["show", "--stat", "--oneline", "--format=%s", status.candidateSha]).trim(), 2_000),
+    summary: bounded(credentialSafeText(
+      runGit(worktree, ["show", "--stat", "--oneline", "--format=%s", status.candidateSha]).trim(),
+      "candidate summary",
+      true,
+    ), 2_000),
   };
 }
 
@@ -240,28 +281,28 @@ async function resolveRoute(status: AttemptStatus, config: AwsfConfig, configPat
   if (adapter === null) throw new ProductionRouteUnavailable(agent.harness.adapter, "adapter kind has no production binding");
   const available = await adapter.isAvailable();
   if (available.status !== "available") throw new ProductionRouteUnavailable(agent.harness.adapter, available.detail ?? available.code ?? "blocked");
-  const model = await adapter.getModelInfo(agent.model);
+  const model = credentialSafeValue(await adapter.getModelInfo(agent.model), "configured model route");
   if (model.adapter !== adapter.id) throw new ReworkRouteMismatch(`adapter descriptor says ${model.adapter}, selected adapter is ${adapter.id}`);
-  adapter.buildSpec({
-    model: agent.model,
-    prompt: "owner-rework-preflight",
-    cwd: status.worktree!,
-    env: HOST.process.env,
-    effort: agent.thinking,
-    profile: agent.tools.profile,
-    tools: agent.tools.allow,
-  });
   return {
     agent,
     adapterId: agent.harness.adapter,
     adapter,
     model,
-    userPrompt: await readCommittedPrompt(configPath, agent.prompt.user),
-    systemPrompt: await readCommittedPrompt(configPath, agent.prompt.system),
+    userPrompt: credentialSafeText(
+      await readCommittedPrompt(configPath, agent.prompt.user),
+      "configured user prompt",
+      true,
+    ),
+    systemPrompt: credentialSafeText(
+      await readCommittedPrompt(configPath, agent.prompt.system),
+      "configured system prompt",
+      true,
+    ),
   };
 }
 
 function reworkPrompt(status: AttemptStatus, defect: string, prior: PriorBuild, route: Route): string {
+  const request = bounded(credentialSafeText(status.request, "persisted original request", true), 2_000);
   const handoff = [
     route.userPrompt,
     "",
@@ -271,11 +312,64 @@ function reworkPrompt(status: AttemptStatus, defect: string, prior: PriorBuild, 
     `Prior build envelope reference: ${prior.envelopeId}`,
     `Bounded prior build summary: ${prior.summary}`,
     `Prior declared files: ${prior.changedFiles.join(", ") || "(none)"}`,
-    `Original bounded request: ${bounded(status.request, 2_000)}`,
+    `Original bounded request: ${request}`,
     `Write policy: ${route.agent.writes.join(", ")}`,
     "Edit only the named defect on top of the exact prior candidate. Do not commit, change HEAD, route work, broaden scope, or touch protected paths. The host owns Git and all gates.",
   ].join("\n");
-  return injectOutputSchema(handoff, "awsf.build-output/v1").replaceAll("{previous_envelope}", "See the exact retained envelope reference and bounded summary above.");
+  return credentialSafeText(
+    injectOutputSchema(handoff, "awsf.build-output/v1")
+      .replaceAll("{previous_envelope}", "See the exact retained envelope reference and bounded summary above."),
+    "final provider prompt",
+    true,
+  );
+}
+
+async function validateMaterializedSystemPrompt(
+  adapterId: string,
+  runtimeDir: string,
+  systemPromptPath: string,
+  expectedText: string,
+): Promise<void> {
+  credentialSafeText(systemPromptPath, "private system prompt path", true);
+  assertPrivateSystemPrompt(adapterId, systemPromptPath);
+  const runtimePhysical = await realpath(runtimeDir);
+  const promptPhysical = await realpath(systemPromptPath);
+  const fromRuntime = relative(runtimePhysical, promptPhysical);
+  if (fromRuntime.startsWith("..") || isAbsolute(fromRuntime)) {
+    throw new AdapterError(adapterId, "E_REDACTION", "the private system prompt file is outside its session runtime");
+  }
+  const materialized = credentialSafeText(
+    await readFile(promptPhysical, "utf8"),
+    "materialized system prompt",
+    true,
+  );
+  if (materialized !== expectedText) {
+    throw new AdapterError(adapterId, "E_REDACTION", "the materialized system prompt differs from the credential-checked prompt");
+  }
+}
+
+function preflightDescriptor(
+  route: Route,
+  request: ModelRequest,
+  finalize: (spec: ProcessSpec) => ProcessSpec,
+): ProcessSpec {
+  const path = request.systemPromptPath;
+  if (path === undefined) throw new Error("owner rework requires a private system prompt path");
+  credentialSafeText(path, "private system prompt path", true);
+  assertPrivateSystemPrompt(route.adapter.id, path);
+  const spec = credentialSafeValue(finalize(route.adapter.buildSpec(request)), "final process descriptor");
+  if (spec.shell !== false || spec.stdin !== request.prompt || spec.cwd !== request.cwd) {
+    throw new AdapterError(route.adapter.id, "E_REDACTION", "the final owner-rework descriptor changed its prompt, cwd, or shell policy");
+  }
+  if (spec.argv.filter((argument) => argument === path).length !== 1) {
+    throw new AdapterError(route.adapter.id, "E_REDACTION", "the final owner-rework descriptor must reference the one validated private system prompt path exactly once");
+  }
+  const privateText = [request.prompt, route.systemPrompt, route.userPrompt];
+  if (spec.argv.some((argument) => privateText.some((text) =>
+    text.length > 0 && (argument === text || (text.length >= 32 && argument.includes(text)))))) {
+    throw new AdapterError(route.adapter.id, "E_REDACTION", "private prompt content appeared in argv");
+  }
+  return spec;
 }
 
 function artifactReader(worktree: string): (path: string) => ArtifactObservation {
@@ -339,19 +433,22 @@ function routeEventExact(event: NormalizedEvent, route: Route): void {
 }
 
 function blocker(error: unknown): { code: string; detail: string } {
-  const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-  if (error instanceof PermissionBreach) return { code: "permission-breach", detail };
-  if (error instanceof AdapterError && error.code === "E_QUOTA_EXHAUSTED") return { code: "quota-exhausted", detail };
+  const failure = safeFailure(error);
+  const detail = `${failure.name}: ${failure.message}`;
+  if (failure instanceof PermissionBreach) return { code: "permission-breach", detail };
+  if (failure instanceof AdapterError && failure.code === "E_QUOTA_EXHAUSTED") return { code: "quota-exhausted", detail };
   if (/ceiling|budget|allowance/i.test(detail)) return { code: "budget-exhausted", detail };
   if (/silence|timeout/i.test(detail)) return { code: "silence", detail };
   return { code: "phase-abort", detail };
 }
 
 /** Owner-facing production implementation of the literal L19 spawn edge. */
-export async function reworkCommand(options: ReworkCommandOptions): Promise<ReworkCommandResult> {
+async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCommandResult> {
   const defect = assertConcreteReworkDefect(options.defect);
+  credentialSafeValue(options.config, "configured owner rework data");
   const infra: ReworkInfrastructure = { ...DEFAULT_INFRASTRUCTURE, ...options.infrastructure };
   let status = await readAttempt(options.attemptDir);
+  credentialSafeText(status.request, "persisted original request", true);
 
   // Ask the normative machine before Git or route I/O. This is a decision only;
   // the reservation is not made until after the human confirms.
@@ -377,12 +474,16 @@ export async function reworkCommand(options: ReworkCommandOptions): Promise<Rewo
 
   // Close every display-to-launch race before the L19 record becomes durable.
   status = await readAttempt(options.attemptDir);
+  credentialSafeText(status.request, "persisted original request", true);
   validateAttempt(status, options.config);
   const secondInspection = inspectCandidate(status);
   if (secondInspection.candidate !== firstInspection.candidate) throw new ReworkCandidateMismatch("candidate changed after confirmation");
   const available = await route.adapter.isAvailable();
   if (available.status !== "available") throw new ProductionRouteUnavailable(route.adapterId, available.detail ?? available.code ?? "route became unavailable");
-  const repeatedModel = await route.adapter.getModelInfo(route.agent.model);
+  const repeatedModel = credentialSafeValue(
+    await route.adapter.getModelInfo(route.agent.model),
+    "post-confirmation model route",
+  );
   if (
     repeatedModel.adapter !== route.model.adapter ||
     repeatedModel.provider !== route.model.provider ||
@@ -391,10 +492,11 @@ export async function reworkCommand(options: ReworkCommandOptions): Promise<Rewo
     throw new ReworkRouteMismatch("adapter/provider/model changed after confirmation");
   }
 
+  const prompt = reworkPrompt(status, defect, prior, route);
   const runtimeDir = join(options.attemptDir, "private", `owner-rework-${status.budget.correctionsOwner + 1}`);
   await mkdir(runtimeDir, { recursive: true });
   const systemPromptPath = await infra.writeSystemPrompt(route.systemPrompt, runtimeDir);
-  const prompt = reworkPrompt(status, defect, prior, route);
+  await validateMaterializedSystemPrompt(route.adapter.id, runtimeDir, systemPromptPath, route.systemPrompt);
   const permission = openPermissionSession({
     canonicalRepository: status.repository,
     worktree: status.worktree!,
@@ -405,6 +507,13 @@ export async function reworkCommand(options: ReworkCommandOptions): Promise<Rewo
     protectedPaths: options.config.policy.protected_paths,
     ...(infra.sandboxProbe === undefined ? {} : { sandboxProbe: infra.sandboxProbe }),
   });
+  const request: ModelRequest = {
+    model: route.agent.model, prompt, systemPromptPath, cwd: status.worktree!, env: HOST.process.env,
+    effort: route.agent.thinking, profile: route.agent.tools.profile, tools: route.agent.tools.allow,
+  };
+  // This is the actual final request and sandboxed descriptor, including the
+  // materialized private path. It is validated before L19 can become durable.
+  const preflightSpec = preflightDescriptor(route, request, (spec) => permission.sandbox(spec).spec);
   const budget = new CallBudget({
     taskId: status.taskId, tier: 1, allowance: status.budget.allowance,
     carried: {
@@ -433,6 +542,7 @@ export async function reworkCommand(options: ReworkCommandOptions): Promise<Rewo
     startedAt: null, endedAt: null, createdAt,
   };
   let processRecord: BarrierRecord | null = null;
+  let processSettled = false;
   let releasedAt: string | null = null;
   const activeTransport: { current: ProcessTransport | null } = { current: null };
   let transitionOrdinal = status.revision + 1;
@@ -481,8 +591,9 @@ export async function reworkCommand(options: ReworkCommandOptions): Promise<Rewo
     });
   };
 
-  // L19 and its held reservation are durable before createBroker can create a child.
-  await persistTransition(authorization.result.from, "RUNNING", authorization.result.edge, "human", "human", null, defect, true, {
+  try {
+    // L19 and its held reservation are durable before createBroker can create a child.
+    await persistTransition(authorization.result.from, "RUNNING", authorization.result.edge, "human", "human", null, defect, true, {
     budget: budget.snapshot(), gatesPass: false, requiredReviewPresent: false,
     journeyApproved: false, protectedApprovalsValid: false, blocker: null, phase: null,
     lastActivity: `L19 human rework request accepted; call ${reservation.id} held before launch`,
@@ -517,20 +628,19 @@ export async function reworkCommand(options: ReworkCommandOptions): Promise<Rewo
 
   const capturingBroker: TransportBroker = {
     startProcess: async (registration, spec, signal) => {
-      activeTransport.current = await broker.startProcess(registration, permission.sandbox(spec).spec, signal);
+      const finalSpec = credentialSafeValue(permission.sandbox(spec).spec, "launch process descriptor");
+      if (JSON.stringify(finalSpec) !== JSON.stringify(preflightSpec)) {
+        throw new ReworkRouteMismatch("launch descriptor changed after its privacy preflight");
+      }
+      activeTransport.current = await broker.startProcess(registration, finalSpec, signal);
       return activeTransport.current;
     },
   };
 
-  try {
     await persistPhase("RUNNING");
     const registration: BrokerProcessRegistration = {
       runId, sessionId: status.sessionId, from: "AWAITING_OWNER", to: "RUNNING", edge: "L19",
       reservationId: reservation.id, adapterId: route.adapterId, role: route.agent.name,
-    };
-    const request: ModelRequest = {
-      model: route.agent.model, prompt, systemPromptPath, cwd: status.worktree!, env: HOST.process.env,
-      effort: route.agent.thinking, profile: route.agent.tools.profile, tools: route.agent.tools.allow,
     };
     const controller = new HOST.AbortController();
     const events: NormalizedEvent[] = [];
@@ -538,16 +648,21 @@ export async function reworkCommand(options: ReworkCommandOptions): Promise<Rewo
     let resolved: { model: string; provenance: ModelResolutionProvenance } | null = null;
     let terminal: NormalizedEvent | null = null;
     for await (const event of route.adapter.execute(request, capturingBroker, registration, controller.signal)) {
-      routeEventExact(event, route);
-      events.push(event);
-      if (event.kind === "text.delta") output += event.text;
-      if (event.kind === "model.resolved") resolved = { model: event.resolvedModel, provenance: event.provenance };
-      if (["run.completed", "run.failed", "run.cancelled"].includes(event.kind)) terminal = event;
-      if (isPersistableKind(event.kind)) {
-        await persist("attempt.updated", { lastActivityAt: event.hostAt, lastActivity: `${phaseKey}: ${event.kind}` }, {
-          type: "normalized-event", phaseId, event,
-        });
-      }
+      const safeEvent = credentialSafeValue(event, "provider event");
+      routeEventExact(safeEvent, route);
+      events.push(safeEvent);
+      if (safeEvent.kind === "text.delta") output += safeEvent.text;
+      if (safeEvent.kind === "model.resolved") resolved = { model: safeEvent.resolvedModel, provenance: safeEvent.provenance };
+      if (["run.completed", "run.failed", "run.cancelled"].includes(safeEvent.kind)) terminal = safeEvent;
+    }
+    // Deltas may split a credential shape across arbitrary stream boundaries.
+    // Validate the reassembled output before any provider event is journaled.
+    credentialSafeText(output, "provider output");
+    for (const event of events) {
+      if (!isPersistableKind(event.kind)) continue;
+      await persist("attempt.updated", { lastActivityAt: event.hostAt, lastActivity: `${phaseKey}: ${event.kind}` }, {
+        type: "normalized-event", phaseId, event,
+      });
     }
     const endedAt = infra.now();
     const exitCode = terminal?.kind === "run.completed" ? terminal.exitCode : null;
@@ -557,6 +672,7 @@ export async function reworkCommand(options: ReworkCommandOptions): Promise<Rewo
         record: processRecord, status: terminal?.kind === "run.completed" && exitCode === 0 ? "EXITED" : "FAILED",
         registeredAt: releasedAt ?? endedAt, releasedAt, endedAt, exitCode, exitSignal: null,
       });
+      processSettled = true;
     }
     if (terminal?.kind === "run.failed") throw new AdapterError(route.adapter.id, terminal.errorCode, terminal.message);
     if (terminal?.kind === "run.cancelled") throw new AdapterError(route.adapter.id, "E_CANCELLED", terminal.reason);
@@ -654,7 +770,9 @@ export async function reworkCommand(options: ReworkCommandOptions): Promise<Rewo
       const result = infra.runCommand(executable!, argv, {
         timeoutMs: configured.timeout_seconds * 1_000, cwd: status.worktree!, maxBuffer: options.config.runtime.max_output_bytes,
       });
-      const commandOutput = bounded(`${result.stdout}${result.stderr}${result.error === null ? "" : `\n${result.error}`}`);
+      const rawCommandOutput = `${result.stdout}${result.stderr}${result.error === null ? "" : `\n${result.error}`}`;
+      credentialSafeText(rawCommandOutput, "configured gate output");
+      const commandOutput = bounded(rawCommandOutput);
       const outputRelative = join("raw", `command-${phaseKey}-${gateId}.txt`);
       await writeFile(join(options.attemptDir, outputRelative), commandOutput, { mode: 0o600 });
       const exit = result.status ?? -1;
@@ -705,36 +823,126 @@ export async function reworkCommand(options: ReworkCommandOptions): Promise<Rewo
     return { status, confirmed: true };
   } catch (error) {
     await writeQueue;
+    const failure = safeFailure(error);
     let survivorReport: TerminationReport | null = null;
     if (activeTransport.current !== null) {
-      try { survivorReport = await activeTransport.current.cancel("owner rework failed closed"); } catch { survivorReport = null; }
+      try { survivorReport = await activeTransport.current.cancel("owner rework failed closed"); }
+      catch { survivorReport = null; }
     }
+    // A reservation that did not reach GO is released even when L19's projector,
+    // queued-phase persistence, or broker construction was the failing boundary.
     for (const held of budget.outstanding()) budget.releaseOnRegistrationFailure(held.id);
-    const failure = error instanceof Error ? error : new Error(String(error));
+
+    // persistAttempt may throw after journal+status are already durable (the
+    // projector is deliberately the last fallible step). Always recover the
+    // observed revision before deciding which legal halt remains available.
+    status = await readAttempt(options.attemptDir);
+    const recoveryAt = (() => {
+      try { return credentialSafeText(infra.now(), "recovery timestamp"); }
+      catch { return createdAt; }
+    })();
+    const recoverPersist = async (
+      kind: AttemptEvent["kind"],
+      update: Partial<AttemptStatus>,
+      evidence?: AttemptEvidence,
+    ): Promise<void> => {
+      const current = await readAttempt(options.attemptDir);
+      const next = nextRevision(current, update);
+      const event = { kind, next, ...(evidence === undefined ? {} : { evidence }) } as AttemptEvent;
+      try {
+        status = await persistAttempt(options.attemptDir, current.revision, event, options.projectRecord);
+      } catch {
+        const observed = await readAttempt(options.attemptDir);
+        if (observed.revision === next.revision) {
+          status = observed;
+          return;
+        }
+        if (observed.revision !== current.revision) {
+          throw new Error("owner rework recovery found an unexpected durable revision");
+        }
+        status = await persistAttempt(options.attemptDir, current.revision, event);
+      }
+    };
+
     if (status.lifecycleState === "RUNNING") {
-      try { await persistPhase("FAILED", failure); } catch { /* the transition below remains the primary durable halt */ }
-      const reason = blocker(survivorReport !== null && !survivorReport.terminated
-        ? new Error(`${failure.message}; surviving processes [${survivorReport.survivors.join(", ")}]`)
-        : failure);
-      const l8 = transition({
-        from: "RUNNING", to: "BLOCKED", actor: "host", tier: 1,
-        reason: { source: "process", code: reason.code, detail: reason.detail }, interactive: false, budget: budget.snapshot(),
-      });
-      await persistTransition("RUNNING", "BLOCKED", l8.edge, "host", "process", reason.code, reason.detail, false, {
-        budget: budget.snapshot(), process: null,
-        blocker: { code: reason.code, detail: reason.detail, ahead: null, behind: null },
-        lastActivity: reason.detail,
-      });
+      const failedPhase: PhaseEvidenceRecord = {
+        ...phase, status: "FAILED", startedAt: phase.startedAt ?? recoveryAt, endedAt: recoveryAt,
+        errorCode: failure.name, errorMessage: failure.message,
+      };
+      try {
+        await recoverPersist("attempt.updated", {
+          phase: { name: failedPhase.name, state: "FAILED", round: 0, maximumRounds: 0 },
+          budget: budget.snapshot(), process: null, lastActivityAt: recoveryAt,
+          lastActivity: `${failedPhase.key} failed closed`,
+        }, { type: "phase", phase: failedPhase });
+      } catch { /* L8 below is the mandatory durable settlement. */ }
+
+      // Refresh again because even a thrown phase projection may have committed.
+      status = await readAttempt(options.attemptDir);
+      if (status.lifecycleState === "RUNNING" && processRecord !== null && !processSettled) {
+        const processStatus = survivorReport?.terminated === true ? "CANCELLED" : "FAILED";
+        try {
+          await recoverPersist("attempt.updated", {
+            budget: budget.snapshot(), process: null, lastActivityAt: recoveryAt,
+            lastActivity: `registered process ${processRecord.runId} settled ${processStatus}`,
+          }, {
+            type: "process", phaseId, adapterId: route.adapterId, role: route.agent.name,
+            record: processRecord, status: processStatus,
+            registeredAt: releasedAt ?? recoveryAt, releasedAt, endedAt: recoveryAt,
+            exitCode: null, exitSignal: null,
+          });
+        } catch { /* L8 below remains the mandatory durable settlement. */ }
+      }
+
+      status = await readAttempt(options.attemptDir);
+      if (status.lifecycleState === "RUNNING") {
+        const terminationFailure = activeTransport.current !== null && survivorReport === null
+          ? new Error(`${failure.message}; registered process termination could not be verified`)
+          : survivorReport !== null && !survivorReport.terminated
+            ? new Error(`${failure.message}; surviving processes [${survivorReport.survivors.join(", ")}]`)
+            : failure;
+        const reason = blocker(terminationFailure);
+        const l8 = transition({
+          from: "RUNNING", to: "BLOCKED", actor: "host", tier: 1,
+          reason: { source: "process", code: reason.code, detail: reason.detail }, interactive: false,
+          budget: budget.snapshot(),
+        });
+        const seq = transitionOrdinal++;
+        await recoverPersist("attempt.transitioned", {
+          lifecycleState: "BLOCKED", budget: budget.snapshot(), process: null,
+          blocker: { code: reason.code, detail: reason.detail, ahead: null, behind: null },
+          lastActivityAt: recoveryAt, lastActivity: reason.detail,
+          nextAction: nextActionFor("BLOCKED", status.taskId),
+        }, {
+          type: "transition", id: `${status.sessionId}:L8:${seq}`, seq,
+          from: "RUNNING", to: "BLOCKED", actor: "host", edgeId: l8.edge,
+          reasonSource: "process", reasonCode: reason.code, reasonDetail: reason.detail,
+          spawnSite: false, at: recoveryAt,
+        });
+      }
+      status = await readAttempt(options.attemptDir);
+      if (status.lifecycleState !== "BLOCKED" || status.budget.callsReserved !== 0 || status.process !== null) {
+        throw new Error("owner rework recovery did not reach an unreserved BLOCKED halt");
+      }
       return { status, confirmed: true };
     }
     if (status.lifecycleState === "GATING") {
-      await persist("attempt.updated", {
+      await recoverPersist("attempt.updated", {
         budget: budget.snapshot(), blocker: { code: "sqlite-projection-failed", detail: failure.message, ahead: null, behind: null },
-        lastActivityAt: infra.now(), lastActivity: "owner rework advancement held at GATING until observability rebuild",
+        lastActivityAt: recoveryAt, lastActivity: "owner rework advancement held at GATING until observability rebuild",
         nextAction: "run `awsf db rebuild`, then retry advancement",
       });
       return { status, confirmed: true };
     }
-    throw error;
+    if (status.lifecycleState === "BLOCKED") return { status, confirmed: true };
+    throw failure;
+  }
+}
+
+export async function reworkCommand(options: ReworkCommandOptions): Promise<ReworkCommandResult> {
+  try {
+    return await runReworkCommand(options);
+  } catch (error) {
+    throw safeFailure(error);
   }
 }

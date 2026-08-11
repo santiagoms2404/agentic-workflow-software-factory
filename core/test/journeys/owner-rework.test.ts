@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import type {
@@ -14,6 +14,7 @@ import type {
   TransportBroker,
 } from "../../src/adapters/interface.ts";
 import { PiCodexAdapter } from "../../src/adapters/pi-codex.ts";
+import { publicApiValue } from "../../src/api/responses.ts";
 import type { BuildOutput } from "../../src/contracts/build-output.ts";
 import type { NormalizedEvent } from "../../src/contracts/normalized-events.ts";
 import type { StoredEnvelope } from "../../src/contracts/stored-envelope.ts";
@@ -23,6 +24,7 @@ import { main } from "../../src/cli/main.ts";
 import { newCommand } from "../../src/cli/commands/new.ts";
 import {
   reworkCommand,
+  OwnerReworkCredentialRejected,
   OwnerReworkDefectRequired,
   type ReworkInfrastructure,
 } from "../../src/cli/commands/rework.ts";
@@ -48,6 +50,19 @@ function terminal(answer: boolean, interactive = true, lines: string[] = []): Ow
   return { interactive, write: (line) => { lines.push(line); }, confirm: async () => answer };
 }
 
+function filesUnder(root: string): string[] {
+  const files: string[] = [];
+  const visit = (directory: string): void => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) visit(path);
+      else if (entry.isFile()) files.push(path);
+    }
+  };
+  visit(root);
+  return files;
+}
+
 function configText(commandExit = 0): string {
   return readFileSync(resolve("awsf.config.yaml"), "utf8")
     .replace("  seed_paths: [node_modules]", "  seed_paths: []")
@@ -68,7 +83,7 @@ interface World {
   status: AttemptStatus;
 }
 
-async function world(options: { commandExit?: number; workflow?: "build" | "plan-build-test" } = {}): Promise<World> {
+async function world(options: { commandExit?: number; workflow?: "build" | "plan-build-test"; request?: string } = {}): Promise<World> {
   const root = mkdtempSync(join(tmpdir(), "awsf-owner-rework-"));
   const canonical = join(root, "canonical");
   const stateRoot = join(root, "state");
@@ -90,7 +105,7 @@ async function world(options: { commandExit?: number; workflow?: "build" | "plan
   const projection = createDashboardProjection(stateRoot);
   const created = await newCommand({
     stateRoot, project: config.project.slug, taskId: `rework-${options.workflow ?? "build"}`,
-    repository: canonical, request: "write the bounded generated source", workflow: options.workflow ?? "build", tier: 1,
+    repository: canonical, request: options.request ?? "write the bounded generated source", workflow: options.workflow ?? "build", tier: 1,
     configSnapshotJson: toConfigSnapshotJson(config), allowance: config.risk.correction_allowance,
     projectRecord: projection.project,
   });
@@ -161,7 +176,13 @@ class AvailableAdapter implements HarnessAdapter {
   async getModelInfo(model: string): Promise<ModelInfo> {
     return { adapter: this.id, provider: "openai-codex", requestedModel: model.replace(/^codex:/, ""), contextWindow: null, supportsThinking: true, supportsTools: true, supportsImages: false, continuity: "none", usageAuthority: "provider", costAuthority: "unavailable" };
   }
-  buildSpec(request: ModelRequest): ProcessSpec { return { executable: "node", argv: ["-e", ""], cwd: request.cwd, env: request.env, stdin: request.prompt, shell: false }; }
+  buildSpec(request: ModelRequest): ProcessSpec {
+    return {
+      executable: "node",
+      argv: ["-e", "", "--append-system-prompt", request.systemPromptPath!],
+      cwd: request.cwd, env: request.env, stdin: request.prompt, shell: false,
+    };
+  }
   async *parse(): AsyncIterable<never> { yield* []; }
   async *execute(
     _request: ModelRequest,
@@ -250,6 +271,28 @@ class EvidenceAdapter extends AvailableAdapter {
   }
 }
 
+class CredentialOutputAdapter extends AvailableAdapter {
+  readonly credential: string;
+  constructor(credential: string) { super(); this.credential = credential; }
+  override async *execute(
+    request: ModelRequest,
+    broker: TransportBroker,
+    registration: BrokerProcessRegistration,
+    signal: Parameters<TransportBroker["startProcess"]>[2],
+  ): AsyncIterable<NormalizedEvent> {
+    await broker.startProcess(registration, this.buildSpec(request), signal);
+    this.launches += 1;
+    const at = "2026-08-12T01:00:00.000Z";
+    const requestedModel = request.model.replace(/^codex:/, "");
+    yield { kind: "run.started" as const, seq: 1, runId: registration.runId, hostAt: at, providerAt: null, adapter: this.id, requestedModel };
+    yield { kind: "model.resolved" as const, seq: 2, runId: registration.runId, hostAt: at, providerAt: null, adapter: this.id, provider: "openai-codex", requestedModel, resolvedModel: requestedModel, provenance: "route-attributed" as const };
+    const middle = Math.floor(this.credential.length / 2);
+    yield { kind: "text.delta" as const, seq: 3, runId: registration.runId, hostAt: at, providerAt: null, text: this.credential.slice(0, middle) };
+    yield { kind: "text.delta" as const, seq: 4, runId: registration.runId, hostAt: at, providerAt: null, text: this.credential.slice(middle) };
+    yield { kind: "run.completed" as const, seq: 5, runId: registration.runId, hostAt: at, providerAt: null, exitCode: 0 };
+  }
+}
+
 async function cleanup(world: World): Promise<void> {
   world.projection.close();
   rmSync(world.root, { recursive: true, force: true });
@@ -279,6 +322,104 @@ test("owner rework rejects non-TTY, decline, blank defect, and wrong state witho
       assert.equal(adapter.launches, 0);
     } finally { await cleanup(fixture); }
   }
+});
+
+test("credential-shaped owner and retained inputs fail before confirmation with no byte crossing any boundary", async () => {
+  const credential = ["sk", "owner-rework-verifier-12345678"].join("-");
+  for (const source of ["defect", "request"] as const) {
+    const fixture = await world(source === "request" ? { request: `write source using ${credential}` } : {});
+    const adapter = new AvailableAdapter();
+    const lines: string[] = [];
+    const argv: string[][] = [];
+    let confirmations = 0;
+    let promptWrites = 0;
+    let failure: unknown;
+    try {
+      const action = reworkCommand({
+        attemptDir: fixture.attemptDir,
+        defect: source === "defect" ? `${DEFECT}; observed ${credential}` : DEFECT,
+        terminal: {
+          interactive: true,
+          write: (line) => { lines.push(line); },
+          confirm: async () => { confirmations += 1; return true; },
+        },
+        config: fixture.config, configPath: fixture.configPath,
+        projectRecord: fixture.projection.project,
+        infrastructure: {
+          ...infra(adapter, () => ({
+            async startProcess(_registration, spec) {
+              argv.push([...spec.argv]);
+              throw new Error("provider must not start");
+            },
+          })),
+          writeSystemPrompt: async () => { promptWrites += 1; throw new Error("prompt must not be materialized"); },
+        },
+      });
+      try { await action; } catch (error) { failure = error; }
+      assert.ok(failure instanceof OwnerReworkCredentialRejected);
+      assert.equal(String(failure).includes(credential), false);
+      assert.equal(lines.join("\n").includes(credential), false);
+      assert.equal(confirmations, 0);
+      assert.equal(promptWrites, 0);
+      assert.deepEqual(argv, []);
+      assert.equal(adapter.launches, 0);
+
+      const status = await readAttempt(fixture.attemptDir);
+      assert.equal(status.lifecycleState, "AWAITING_OWNER");
+      assert.equal(status.budget.callsSpent, 1);
+      assert.equal(status.budget.callsReserved, 0);
+      assert.equal(status.revision, fixture.status.revision);
+      assert.equal(existsSync(join(fixture.attemptDir, "private", "owner-rework-1")), false);
+      assert.equal(existsSync(join(fixture.attemptDir, "raw", "owner-rework-1.txt")), false);
+      for (const file of filesUnder(fixture.attemptDir)) {
+        assert.equal(readFileSync(file).includes(credential), false, `credential reached ${file}`);
+      }
+
+      const db = openDatabase(join(fixture.stateRoot, "awsf.db"), { readonly: true });
+      try {
+        const api = publicApiValue({
+          session: getSession(db, status.sessionId),
+          transitions: transitionsForSession(db, status.sessionId),
+          processes: processesForSession(db, status.sessionId),
+          gates: gatesForSession(db, status.sessionId),
+          agents: agentsForSession(db, status.sessionId),
+        });
+        assert.equal(JSON.stringify(api).includes(credential), false);
+      } finally { db.close(); }
+    } finally { await cleanup(fixture); }
+  }
+});
+
+test("credential-shaped provider output split across deltas reaches no raw, journal, error, argv, or API boundary", async () => {
+  const credential = ["ghp", "ProviderOutputVerifier123456789"].join("_");
+  const fixture = await world();
+  const adapter = new CredentialOutputAdapter(credential);
+  try {
+    const result = await reworkCommand({
+      attemptDir: fixture.attemptDir, defect: DEFECT, terminal: terminal(true),
+      config: fixture.config, configPath: fixture.configPath,
+      projectRecord: fixture.projection.project,
+      infrastructure: infra(adapter, (options) => releasedBroker(options)),
+    });
+    assert.equal(result.status.lifecycleState, "BLOCKED");
+    assert.equal(result.status.budget.callsSpent, 2);
+    assert.equal(result.status.budget.callsReserved, 0);
+    assert.equal(result.status.blocker?.detail.includes(credential), false);
+    assert.match(result.status.blocker?.detail ?? "", /OwnerReworkCredentialRejected/);
+    assert.equal(existsSync(join(fixture.attemptDir, "raw", "owner-rework-1.txt")), false);
+    for (const file of filesUnder(fixture.attemptDir)) {
+      assert.equal(readFileSync(file).includes(credential), false, `credential reached ${file}`);
+    }
+    const db = openDatabase(join(fixture.stateRoot, "awsf.db"), { readonly: true });
+    try {
+      const api = publicApiValue({
+        session: getSession(db, result.status.sessionId),
+        transitions: transitionsForSession(db, result.status.sessionId),
+        processes: processesForSession(db, result.status.sessionId),
+      });
+      assert.equal(JSON.stringify(api).includes(credential), false);
+    } finally { db.close(); }
+  } finally { await cleanup(fixture); }
 });
 
 test("the CLI accepts ordinary attempt/config/state-root handling and rejects generic defect text before mutation", async () => {
@@ -341,6 +482,45 @@ test("dirty or mismatched candidate and unavailable fixed route refuse before L1
   }
 });
 
+test("the actual private prompt descriptor rejects invalid, unreadable, and insecure paths before L19", async () => {
+  for (const scenario of ["relative", "missing", "insecure"] as const) {
+    const fixture = await world();
+    const adapter = new AvailableAdapter();
+    let brokers = 0;
+    try {
+      const before = await readAttempt(fixture.attemptDir);
+      const promptPath = scenario === "relative"
+        ? "relative-system-prompt.md"
+        : join(fixture.root, `${scenario}-system-prompt.md`);
+      await assert.rejects(reworkCommand({
+        attemptDir: fixture.attemptDir, defect: DEFECT, terminal: terminal(true),
+        config: fixture.config, configPath: fixture.configPath,
+        projectRecord: fixture.projection.project,
+        infrastructure: {
+          ...infra(adapter, () => { brokers += 1; throw new Error("broker must not be constructed"); }),
+          writeSystemPrompt: async (text) => {
+            if (scenario === "insecure") {
+              writeFileSync(promptPath, text, { mode: 0o644 });
+              chmodSync(promptPath, 0o644);
+            }
+            return promptPath;
+          },
+        },
+      }), /system prompt/);
+      const status = await readAttempt(fixture.attemptDir);
+      assert.equal(status.revision, before.revision);
+      assert.equal(status.lifecycleState, "AWAITING_OWNER");
+      assert.equal(status.budget.callsSpent, 1);
+      assert.equal(status.budget.callsReserved, 0);
+      assert.equal(status.process, null);
+      assert.equal(adapter.launches, 0);
+      assert.equal(brokers, 0);
+      const journal = readFileSync(join(fixture.attemptDir, "journal.jsonl"), "utf8");
+      assert.equal(journal.includes('"edgeId":"L19"'), false);
+    } finally { await cleanup(fixture); }
+  }
+});
+
 test("L19 reservation is durable before registration and a pre-GO registration refusal spends no call", async () => {
   const fixture = await world();
   const adapter = new AvailableAdapter();
@@ -373,7 +553,70 @@ test("L19 reservation is durable before registration and a pre-GO registration r
     assert.equal(checkedBeforeRegister, true);
     assert.equal(checkedAfterRegister, true);
     assert.equal(adapter.launches, 0);
+    const db = openDatabase(join(fixture.stateRoot, "awsf.db"), { readonly: true });
+    try {
+      const process = processesForSession(db, result.status.sessionId).at(-1);
+      assert.equal(process?.status, "FAILED");
+      assert.notEqual(process?.ended_at, null);
+    } finally { db.close(); }
   } finally { await cleanup(fixture); }
+});
+
+test("every post-L19 setup boundary settles the reservation and reaches a legal process-free halt", async () => {
+  const scenarios = [
+    { name: "l19-projection", failProjectionAt: 1 },
+    { name: "queued-phase-projection", failProjectionAt: 2 },
+    { name: "broker-constructor", failProjectionAt: 0 },
+    { name: "running-phase-projection", failProjectionAt: 3 },
+    { name: "broker-setup", failProjectionAt: 0 },
+  ] as const;
+  for (const scenario of scenarios) {
+    const fixture = await world();
+    const adapter = new AvailableAdapter();
+    let projections = 0;
+    let brokerStarts = 0;
+    let registrations = 0;
+    try {
+      const result = await reworkCommand({
+        attemptDir: fixture.attemptDir, defect: DEFECT, terminal: terminal(true),
+        config: fixture.config, configPath: fixture.configPath,
+        projectRecord: async (record, status) => {
+          projections += 1;
+          await fixture.projection.project(record, status);
+          if (projections === scenario.failProjectionAt) throw new Error(`injected ${scenario.name}`);
+        },
+        infrastructure: infra(adapter, () => {
+          if (scenario.name === "broker-constructor") throw new Error("injected broker constructor failure");
+          return {
+            async startProcess(registration) {
+              brokerStarts += 1;
+              if (scenario.name === "broker-setup") throw new Error("injected broker setup failure");
+              registrations += 1;
+              throw new Error(`unexpected process boundary ${registration.runId}`);
+            },
+          };
+        }),
+      });
+      assert.equal(result.status.lifecycleState, "BLOCKED", scenario.name);
+      assert.equal(result.status.budget.callsSpent, 1, scenario.name);
+      assert.equal(result.status.budget.callsReserved, 0, scenario.name);
+      assert.equal(result.status.budget.correctionsOwner, 1, scenario.name);
+      assert.equal(result.status.process, null, scenario.name);
+      assert.equal(adapter.launches, 0, scenario.name);
+      assert.equal(registrations, 0, scenario.name);
+      assert.equal(brokerStarts, scenario.name === "broker-setup" ? 1 : 0, scenario.name);
+      type TransitionEvidence = { type?: string; edgeId?: string };
+      type TransitionRecord = { event?: { evidence?: TransitionEvidence } };
+      const transitions = readFileSync(join(fixture.attemptDir, "journal.jsonl"), "utf8")
+        .split("\n").filter(Boolean)
+        .map((line: string): TransitionRecord => JSON.parse(line) as TransitionRecord)
+        .map((record: TransitionRecord) => record.event?.evidence)
+        .filter((evidence: TransitionEvidence | undefined) => evidence?.type === "transition")
+        .map((evidence: TransitionEvidence | undefined) => evidence?.edgeId);
+      assert.deepEqual(transitions.slice(-2), ["L19", "L8"], scenario.name);
+      assert.equal(readFileSync(join(fixture.attemptDir, "status.json"), "utf8").includes('"callsReserved":1'), false);
+    } finally { await cleanup(fixture); }
+  }
 });
 
 test("malformed output, permission breach, route mismatch, cancellation, and survivors block after GO without fallback", async () => {
@@ -422,9 +665,11 @@ test("process-backed L19 repairs candidate A, commits B on top, projects fresh e
     assert.ok(lines.some((line) => line.includes("openai-codex")));
 
     const probe = JSON.parse(readFileSync(join(fixture.attemptDir, "private", "owner-rework-1", "provider-probe.json"), "utf8")) as {
-      promptContentInArgv: boolean; registeredBeforeProviderStart: boolean; spentBeforeProviderStart: boolean;
+      promptContentInArgv: boolean; systemPromptContentInArgv: boolean;
+      registeredBeforeProviderStart: boolean; spentBeforeProviderStart: boolean;
     };
     assert.equal(probe.promptContentInArgv, false);
+    assert.equal(probe.systemPromptContentInArgv, false);
     assert.equal(probe.registeredBeforeProviderStart, true);
     assert.equal(probe.spentBeforeProviderStart, true);
 
