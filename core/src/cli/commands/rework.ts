@@ -162,6 +162,32 @@ interface CandidateInspection {
   readonly summary: string;
 }
 
+interface ObservedProcessOutcome {
+  readonly status: "EXITED" | "FAILED" | "CANCELLED";
+  readonly exitCode: number | null;
+  readonly endedAt: string;
+  /** True only when the adapter already settled the process outcome. */
+  readonly settled: boolean;
+}
+
+function observedProcessOutcome(event: NormalizedEvent, endedAt: string): ObservedProcessOutcome | null {
+  switch (event.kind) {
+    case "run.completed":
+      return {
+        status: event.exitCode === null ? "FAILED" : "EXITED",
+        exitCode: event.exitCode,
+        endedAt,
+        settled: event.exitCode !== null,
+      };
+    case "run.failed":
+      return { status: "FAILED", exitCode: null, endedAt, settled: true };
+    case "run.cancelled":
+      return { status: "CANCELLED", exitCode: null, endedAt, settled: true };
+    default:
+      return null;
+  }
+}
+
 function bounded(value: string, maximum = MAX_EVIDENCE): string {
   return value.length <= maximum ? value : value.slice(0, maximum);
 }
@@ -543,6 +569,7 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
   };
   let processRecord: BarrierRecord | null = null;
   let processSettled = false;
+  let observedProcess: ObservedProcessOutcome | null = null;
   let releasedAt: string | null = null;
   const activeTransport: { current: ProcessTransport | null } = { current: null };
   let transitionOrdinal = status.revision + 1;
@@ -653,8 +680,14 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
       events.push(safeEvent);
       if (safeEvent.kind === "text.delta") output += safeEvent.text;
       if (safeEvent.kind === "model.resolved") resolved = { model: safeEvent.resolvedModel, provenance: safeEvent.provenance };
-      if (["run.completed", "run.failed", "run.cancelled"].includes(safeEvent.kind)) terminal = safeEvent;
+      const outcome = observedProcessOutcome(safeEvent, safeEvent.hostAt);
+      if (outcome !== null) {
+        terminal = safeEvent;
+        observedProcess = outcome;
+      }
     }
+    const endedAt = infra.now();
+    if (observedProcess !== null) observedProcess = { ...observedProcess, endedAt };
     // Deltas may split a credential shape across arbitrary stream boundaries.
     // Validate the reassembled output before any provider event is journaled.
     credentialSafeText(output, "provider output");
@@ -664,13 +697,15 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
         type: "normalized-event", phaseId, event,
       });
     }
-    const endedAt = infra.now();
-    const exitCode = terminal?.kind === "run.completed" ? terminal.exitCode : null;
     if (processRecord !== null) {
-      await persist("attempt.updated", { process: null, lastActivityAt: endedAt }, {
+      const outcome = observedProcess ?? {
+        status: "FAILED" as const, exitCode: null, endedAt, settled: false,
+      };
+      await persist("attempt.updated", { process: null, lastActivityAt: outcome.endedAt }, {
         type: "process", phaseId, adapterId: route.adapterId, role: route.agent.name,
-        record: processRecord, status: terminal?.kind === "run.completed" && exitCode === 0 ? "EXITED" : "FAILED",
-        registeredAt: releasedAt ?? endedAt, releasedAt, endedAt, exitCode, exitSignal: null,
+        record: processRecord, status: outcome.status,
+        registeredAt: releasedAt ?? outcome.endedAt, releasedAt, endedAt: outcome.endedAt,
+        exitCode: outcome.exitCode, exitSignal: null,
       });
       processSettled = true;
     }
@@ -825,7 +860,8 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
     await writeQueue;
     const failure = safeFailure(error);
     let survivorReport: TerminationReport | null = null;
-    if (activeTransport.current !== null) {
+    const processExitAlreadyObserved = observedProcess?.settled === true && observedProcess.status === "EXITED";
+    if (activeTransport.current !== null && !processExitAlreadyObserved) {
       try { survivorReport = await activeTransport.current.cancel("owner rework failed closed"); }
       catch { survivorReport = null; }
     }
@@ -879,26 +915,33 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
 
       // Refresh again because even a thrown phase projection may have committed.
       status = await readAttempt(options.attemptDir);
-      if (status.lifecycleState === "RUNNING" && processRecord !== null && !processSettled) {
-        const processStatus = survivorReport?.terminated === true ? "CANCELLED" : "FAILED";
+      if (
+        status.lifecycleState === "RUNNING" && processRecord !== null &&
+        (!processSettled || observedProcess?.settled === false)
+      ) {
+        const recoveryOutcome: ObservedProcessOutcome = observedProcess?.settled === true
+          ? observedProcess
+          : survivorReport?.terminated === true
+            ? { status: "CANCELLED", exitCode: null, endedAt: recoveryAt, settled: true }
+            : { status: "FAILED", exitCode: observedProcess?.exitCode ?? null, endedAt: recoveryAt, settled: false };
         try {
           await recoverPersist("attempt.updated", {
-            budget: budget.snapshot(), process: null, lastActivityAt: recoveryAt,
-            lastActivity: `registered process ${processRecord.runId} settled ${processStatus}`,
+            budget: budget.snapshot(), process: null, lastActivityAt: recoveryOutcome.endedAt,
+            lastActivity: `registered process ${processRecord.runId} settled ${recoveryOutcome.status}`,
           }, {
             type: "process", phaseId, adapterId: route.adapterId, role: route.agent.name,
-            record: processRecord, status: processStatus,
-            registeredAt: releasedAt ?? recoveryAt, releasedAt, endedAt: recoveryAt,
-            exitCode: null, exitSignal: null,
+            record: processRecord, status: recoveryOutcome.status,
+            registeredAt: releasedAt ?? recoveryOutcome.endedAt, releasedAt, endedAt: recoveryOutcome.endedAt,
+            exitCode: recoveryOutcome.exitCode, exitSignal: null,
           });
         } catch { /* L8 below remains the mandatory durable settlement. */ }
       }
 
       status = await readAttempt(options.attemptDir);
       if (status.lifecycleState === "RUNNING") {
-        const terminationFailure = activeTransport.current !== null && survivorReport === null
+        const terminationFailure = !processExitAlreadyObserved && activeTransport.current !== null && survivorReport === null
           ? new Error(`${failure.message}; registered process termination could not be verified`)
-          : survivorReport !== null && !survivorReport.terminated
+          : !processExitAlreadyObserved && survivorReport !== null && !survivorReport.terminated
             ? new Error(`${failure.message}; surviving processes [${survivorReport.survivors.join(", ")}]`)
             : failure;
         const reason = blocker(terminationFailure);

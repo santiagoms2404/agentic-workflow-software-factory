@@ -212,7 +212,11 @@ function infra(adapter: HarnessAdapter, createBroker?: (options: BrokerOptions) 
   };
 }
 
-function releasedBroker(options: BrokerOptions, survivors: readonly number[] = []): TransportBroker {
+function releasedBroker(
+  options: BrokerOptions,
+  survivors: readonly number[] = [],
+  onCancel: () => void = () => {},
+): TransportBroker {
   return {
     async startProcess(registration, spec) {
       const record = {
@@ -226,10 +230,13 @@ function releasedBroker(options: BrokerOptions, survivors: readonly number[] = [
       return {
         runId: registration.runId, identity: record.identity,
         stdout: (async function* () {})(), stderr: (async function* () {})(), exit: Promise.resolve({ code: 0, signal: null }),
-        cancel: async () => ({
-          termSent: survivors.length > 0, killSent: survivors.length > 0, survivors,
-          terminated: survivors.length === 0, skipped: null,
-        }),
+        cancel: async () => {
+          onCancel();
+          return {
+            termSent: survivors.length > 0, killSent: survivors.length > 0, survivors,
+            terminated: survivors.length === 0, skipped: null,
+          };
+        },
       };
     },
   };
@@ -619,6 +626,60 @@ test("every post-L19 setup boundary settles the reservation and reaches a legal 
   }
 });
 
+test("persistence failures after a known successful exit retain EXITED/code 0 without cancellation or survivor claims", async () => {
+  for (const boundary of ["terminal-event", "process-terminal"] as const) {
+    const fixture = await world();
+    const adapter = new EvidenceAdapter("permission");
+    let cancellations = 0;
+    let injected = false;
+    try {
+      const result = await reworkCommand({
+        attemptDir: fixture.attemptDir, defect: DEFECT, terminal: terminal(true),
+        config: fixture.config, configPath: fixture.configPath,
+        projectRecord: async (record, status) => {
+          await fixture.projection.project(record, status);
+          const evidence = record.event.evidence;
+          const selected = boundary === "terminal-event"
+            ? evidence?.type === "normalized-event" && evidence.event.kind === "run.completed"
+            : evidence?.type === "process" && evidence.status === "EXITED";
+          if (selected && !injected) {
+            injected = true;
+            throw new Error(`injected ${boundary} persistence failure`);
+          }
+        },
+        infrastructure: infra(adapter, (options) =>
+          releasedBroker(options, [], () => { cancellations += 1; })),
+      });
+      assert.equal(injected, true, boundary);
+      assert.equal(result.status.lifecycleState, "BLOCKED", boundary);
+      assert.equal(result.status.budget.callsSpent, 2, boundary);
+      assert.equal(result.status.budget.callsReserved, 0, boundary);
+      assert.equal(result.status.process, null, boundary);
+      assert.equal(cancellations, 0, `${boundary}: an observed exit is not cancelled`);
+      assert.doesNotMatch(result.status.blocker?.detail ?? "", /surviv|termination could not be verified/i);
+
+      const db = openDatabase(join(fixture.stateRoot, "awsf.db"), { readonly: true });
+      try {
+        const process = processesForSession(db, result.status.sessionId).at(-1);
+        assert.equal(process?.status, "EXITED", boundary);
+        assert.equal(process?.exit_code, 0, boundary);
+        assert.notEqual(process?.ended_at, null, boundary);
+      } finally { db.close(); }
+      const processEvidence = readFileSync(join(fixture.attemptDir, "journal.jsonl"), "utf8")
+        .split("\n").filter(Boolean)
+        .map((line: string) => JSON.parse(line) as { event?: { evidence?: AttemptEvidence } })
+        .map((record: { event?: { evidence?: AttemptEvidence } }) => record.event?.evidence)
+        .filter((evidence: AttemptEvidence | undefined) => evidence?.type === "process");
+      const terminalEvidence = processEvidence.at(-1);
+      assert.equal(terminalEvidence?.type, "process");
+      if (terminalEvidence?.type === "process") {
+        assert.equal(terminalEvidence.status, "EXITED", boundary);
+        assert.equal(terminalEvidence.exitCode, 0, boundary);
+      }
+    } finally { await cleanup(fixture); }
+  }
+});
+
 test("malformed output, permission breach, route mismatch, cancellation, and survivors block after GO without fallback", async () => {
   for (const scenario of ["malformed", "permission", "route", "cancelled"] as const) {
     const fixture = await world();
@@ -678,7 +739,9 @@ test("process-backed L19 repairs candidate A, commits B on top, projects fresh e
       assert.equal(getSession(db, status.sessionId)?.candidate_sha, status.candidateSha);
       assert.equal(getSession(db, status.sessionId)?.lifecycle_state, "AWAITING_OWNER");
       assert.deepEqual(transitionsForSession(db, status.sessionId).slice(-3).map((row) => row.edge_id), ["L19", "L7", "L12"]);
-      assert.ok(processesForSession(db, status.sessionId).some((row) => row.run_id.includes("owner-rework-1")));
+      const process = processesForSession(db, status.sessionId).find((row) => row.run_id.includes("owner-rework-1"));
+      assert.equal(process?.status, "EXITED");
+      assert.equal(process?.exit_code, 0);
       assert.equal(agentsForSession(db, status.sessionId).find((row) => row.agent === "builder")?.call_count, 1);
       const fresh = gatesForSession(db, status.sessionId).filter((gate) => gate.phase_id.includes("owner-rework-1"));
       assert.ok(fresh.length >= 10);
