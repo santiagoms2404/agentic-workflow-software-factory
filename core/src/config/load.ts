@@ -1,5 +1,6 @@
 import { Value } from "@sinclair/typebox/value";
 import { parse as parseYaml } from "yaml";
+import { normalizeRepositoryPath } from "../policy/path-policy.ts";
 import { containsCredential } from "../policy/redaction.ts";
 import {
   AwsfConfigSchema,
@@ -121,6 +122,13 @@ export class ConfigInvalidPersistThinkingError extends ConfigError {
   }
 }
 
+export class ConfigInvalidSeedPathError extends ConfigError {
+  constructor(path: string, detail: string) {
+    super("E_CONFIG_INVALID_SEED_PATH", `runtime.seed_paths entry ${JSON.stringify(path)} is invalid: ${detail}`);
+    this.name = "ConfigInvalidSeedPathError";
+  }
+}
+
 // Absolute POSIX paths, Windows drive-letter paths, UNC paths, and
 // home-relative paths. A committed config is "durable intent" — it must
 // never encode where anything lives on any one machine.
@@ -166,6 +174,29 @@ function assertNoCredentialShapedValues(doc: unknown): void {
       throw new ConfigCredentialShapedError(path);
     }
   });
+}
+
+function assertValidSeedPaths(config: AwsfConfig): void {
+  const normalized: string[] = [];
+  for (const path of config.runtime.seed_paths) {
+    try {
+      normalized.push(normalizeRepositoryPath(path));
+    } catch (error) {
+      throw new ConfigInvalidSeedPathError(path, error instanceof Error ? error.message : String(error));
+    }
+  }
+  for (let left = 0; left < normalized.length; left += 1) {
+    for (let right = left + 1; right < normalized.length; right += 1) {
+      const a = normalized[left]!;
+      const b = normalized[right]!;
+      if (a === b || a.startsWith(`${b}/`) || b.startsWith(`${a}/`)) {
+        throw new ConfigInvalidSeedPathError(
+          config.runtime.seed_paths[right]!,
+          `seed paths may not duplicate or overlap ${JSON.stringify(config.runtime.seed_paths[left])}`,
+        );
+      }
+    }
+  }
 }
 
 function assertKnownReferences(config: AwsfConfig): void {
@@ -239,8 +270,9 @@ function assertThinkingNeverPersisted(config: AwsfConfig): void {
  * Parses and validates `awsf.config.yaml` text against the `awsf/v1`
  * schema (specs/awsf-architecture-proposal.md §7.3.5), then applies the
  * loader's own hard rejections in this order: TypeBox structural
- * validation, absolute machine paths, credential-shaped values, unknown or
- * unverified adapter references, workflow/gate/protected-operation references, tier ceilings
+ * validation, absolute machine paths, credential-shaped values, normalized
+ * non-overlapping repository seed paths, unknown or unverified adapter references,
+ * workflow/gate/protected-operation references, tier ceilings
  * outside {1,3,5}, `routing.no_fallback` other than `true`, and
  * `observability.persist_thinking_text` other than `false`.
  */
@@ -255,6 +287,7 @@ export function loadConfig(yamlText: string): AwsfConfig {
 
   assertNoAbsolutePaths(doc);
   assertNoCredentialShapedValues(doc);
+  assertValidSeedPaths(config);
   assertKnownReferences(config);
   assertValidCeilings(config);
   assertNoFallbackIsTrue(config);

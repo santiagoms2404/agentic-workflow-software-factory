@@ -50,3 +50,8 @@ export function buildEffectiveConfig(config: AwsfConfig): EffectiveConfig {
 export function toConfigSnapshotJson(config: AwsfConfig): string {
   return JSON.stringify(buildEffectiveConfig(config));
 }
+
+/** Defense-in-depth for command boundaries that receive an already-redacted snapshot. */
+export function redactConfigSnapshotJson(snapshotJson: string): string {
+  return JSON.stringify(redactDeep(JSON.parse(snapshotJson) as unknown));
+}

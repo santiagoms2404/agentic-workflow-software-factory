@@ -11,6 +11,7 @@ export function validConfig(): AwsfConfig {
       process_grace_seconds: 2,
       max_output_bytes: 67108864,
       max_event_count: 100000,
+      seed_paths: [],
     },
     adapters: {
       claude: { kind: "claude-code", executable: "claude" },

@@ -27,11 +27,11 @@ export const KNOWN_WORKFLOW_IDS = [
   "build-review",
   "simple-sdlc",
 ] as const;
-// §7.3.5 configures exactly two argv-driven gates; the other nine (envelope
-// validation, artifact/diff/write checks, review verdict, journey) are
+// §7.3.5 configures the argv-driven gates; the others (envelope validation,
+// artifact/diff/write/hygiene checks, review verdict, journey) are
 // structural and take no configuration. This set is loader-checked, not
 // schema-closed, so a later task can extend it without touching schema.ts.
-export const KNOWN_GATE_IDS = ["test", "typecheck"] as const;
+export const KNOWN_GATE_IDS = ["test", "typecheck", "lint"] as const;
 export const KNOWN_RISK_TIERS = ["T0", "T1", "T2"] as const;
 export const VALID_TIER_CEILINGS = [1, 3, 5] as const;
 // Per the Ownership section and the Envelope & Gate Contract: `protected` is
@@ -64,6 +64,10 @@ const RuntimeSchema = Type.Object(
     process_grace_seconds: Type.Integer({ minimum: 0 }),
     max_output_bytes: Type.Integer({ minimum: 1 }),
     max_event_count: Type.Integer({ minimum: 1 }),
+    // Repository-relative ignored paths copied into each detached worktree
+    // before PREPARED. Machine-local source roots and install commands do not
+    // belong in durable config.
+    seed_paths: Type.Array(NonEmptyString, { uniqueItems: true }),
   },
   { additionalProperties: false },
 );
@@ -107,6 +111,7 @@ const AgentDefinitionSchema = Type.Object(
       Type.Literal("low"),
       Type.Literal("medium"),
       Type.Literal("high"),
+      Type.Literal("xhigh"),
     ]),
     color: Type.String({ pattern: "^#[0-9A-Fa-f]{6}$" }),
     purpose: NonEmptyString,

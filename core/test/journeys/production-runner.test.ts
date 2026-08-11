@@ -25,7 +25,7 @@ import { ProcessTransportBroker, type BrokerOptions } from "../../src/execution/
 import { createDashboardProjection } from "../../src/cli/commands/dashboard-projection.ts";
 import { newCommand } from "../../src/cli/commands/new.ts";
 import { startCommand } from "../../src/cli/commands/start.ts";
-import { runProductionCommand, ProductionWorkflowUnsupported } from "../../src/cli/commands/production-run.ts";
+import { runProductionCommand, ProductionConfigSnapshotMismatch, ProductionWorkflowUnsupported } from "../../src/cli/commands/production-run.ts";
 import { readAttempt } from "../../src/cli/commands/attempt.ts";
 import { agentsForSession, gatesForSession, getSession, phasesForSession, pollEvents, processesForSession } from "../../src/observability/queries.ts";
 import { openDatabase } from "../../src/observability/sqlite.ts";
@@ -43,16 +43,16 @@ function plan(): PlanOutput {
   };
 }
 
-function build(): BuildOutput {
+function build(path = "core/src/generated.ts"): BuildOutput {
   return {
     schema: "awsf.build-output/v1", producerStatus: "success", summary: "wrote one source",
-    artifacts: [{ path: "core/src/generated.ts", kind: "source", description: "bounded source" }],
-    notesForNextPhase: "run host commands", changedFiles: ["core/src/generated.ts"],
+    artifacts: [{ path, kind: "source", description: "bounded source" }],
+    notesForNextPhase: "run host commands", changedFiles: [path],
     implementationNotes: ["fixture implementation"], commandsRun: [], proposedCommitMessage: "feat: add generated source",
   };
 }
 
-type Scenario = "success" | "malformed" | "permission" | "gate";
+type Scenario = "success" | "malformed" | "permission" | "gate" | "hygiene";
 
 class ScriptedAdapter implements HarnessAdapter {
   readonly id: string;
@@ -76,7 +76,12 @@ class ScriptedAdapter implements HarnessAdapter {
     let payload: PlanOutput | BuildOutput = model.startsWith("claude:") ? plan() : build();
     if (!model.startsWith("claude:")) {
       mkdirSync(join(this.#worktree, "core", "src"), { recursive: true });
-      writeFileSync(join(this.#worktree, "core", "src", "generated.ts"), "export const generated = true;\n");
+      if (this.#scenario === "hygiene") {
+        writeFileSync(join(this.#worktree, "core", "src", "generated.md"), "intentional Markdown break  \n");
+        payload = build("core/src/generated.md");
+      } else {
+        writeFileSync(join(this.#worktree, "core", "src", "generated.ts"), "export const generated = true;\n");
+      }
       if (this.#scenario === "permission") writeFileSync(join(this.#worktree, "outside.ts"), "breach\n");
       if (this.#scenario === "gate") payload = { ...build(), changedFiles: ["core/src/invented.ts"] };
     }
@@ -133,12 +138,20 @@ const SYSTEM_PROMPT_SENTINEL = "SYSTEM_PROMPT_CONTENT_MUST_NOT_RIDE_ARGV";
 
 function configTextWithCommand(exitCode = 0): string {
   return readFileSync(resolve("awsf.config.yaml"), "utf8").replace(
+    "  seed_paths: [node_modules]",
+    "  seed_paths: []",
+  ).replace(
     "test: { argv: [npm, run, test:unit], timeout_seconds: 600 }",
     `test: { argv: [node, -e, process.exit(${exitCode})], timeout_seconds: 10 }`,
-  ).replace("typecheck: { argv: [npm, run, typecheck], timeout_seconds: 300 }\n", "");
+  ).replace("  typecheck: { argv: [npm, run, typecheck], timeout_seconds: 300 }\n", "")
+    .replace("  lint: { argv: [npm, run, lint], timeout_seconds: 300 }\n", "");
 }
 
-async function fixture(workflow: "build" | "plan-build-test" | "simple-sdlc", commandExit = 0) {
+async function fixture(
+  workflow: "build" | "plan-build-test" | "simple-sdlc",
+  commandExit = 0,
+  configure: (config: AwsfConfig) => AwsfConfig = (config) => config,
+) {
   const root = mkdtempSync(join(tmpdir(), "awsf-production-runner-"));
   const canonical = join(root, "canonical");
   const stateRoot = join(root, "state");
@@ -147,7 +160,7 @@ async function fixture(workflow: "build" | "plan-build-test" | "simple-sdlc", co
   git(canonical, "add", "README.md");
   git(canonical, "-c", "user.name=Santiago Marin", "-c", "user.email=santiagomarinsuarez@me.com", "commit", "-m", "test: seed production runner");
   const configText = configTextWithCommand(commandExit);
-  const config = loadConfig(configText);
+  const config = configure(loadConfig(configText));
   const configPath = join(root, "awsf.config.yaml");
   writeFileSync(configPath, configText);
   for (const agent of config.agents) {
@@ -197,7 +210,11 @@ for (const [workflow, expectedCalls] of [["build", 1], ["plan-build-test", 2]] a
       const db = openDatabase(join(world.stateRoot, "awsf.db"), { readonly: true });
       try {
         assert.equal(phasesForSession(db, status.sessionId).at(-1)?.status, "SUCCEEDED");
-        assert.ok(gatesForSession(db, status.sessionId).every((gate) => gate.passed === 1));
+        const gates = gatesForSession(db, status.sessionId);
+        assert.ok(gates.every((gate) => gate.passed === 1));
+        const hygiene = gates.find((gate) => gate.gate_id === "candidate_hygiene");
+        assert.equal(hygiene?.candidate_sha, status.candidateSha);
+        assert.equal(hygiene?.gate_kind, "git");
         const agents = agentsForSession(db, status.sessionId);
         assert.equal(agents.length, expectedCalls);
         assert.ok(agents.every((agent) => agent.input_tokens === 10 && agent.output_tokens === 20));
@@ -411,14 +428,13 @@ test("unavailable configured adapter blocks before provider launch", async () =>
 });
 
 test("configured continuity mismatch fails closed before broker creation or provider launch", async () => {
-  const world = await fixture("build");
+  const world = await fixture("build", 0, (config) => withBuilderContinuity(config, "same-session"));
   let brokerCreated = false;
-  const mismatchConfig = withBuilderContinuity(world.config, "same-session");
   try {
     const prepared = await readAttempt(world.created.attemptDir);
     const status = await runProductionCommand({
       attemptDir: world.created.attemptDir,
-      config: mismatchConfig,
+      config: world.config,
       configPath: world.configPath,
       projectRecord: world.projection.project,
       infrastructure: {
@@ -467,13 +483,13 @@ test("adapter continuity above configured none is also a pre-launch mismatch", a
 });
 
 test("matching same-session declarations remain blocked until a real correction transport exists", async () => {
-  const world = await fixture("build");
+  const world = await fixture("build", 0, (config) => withBuilderContinuity(config, "same-session"));
   let brokerCreated = false;
   try {
     const prepared = await readAttempt(world.created.attemptDir);
     const status = await runProductionCommand({
       attemptDir: world.created.attemptDir,
-      config: withBuilderContinuity(world.config, "same-session"),
+      config: world.config,
       configPath: world.configPath,
       projectRecord: world.projection.project,
       infrastructure: {
@@ -508,6 +524,43 @@ test("registration failure refunds the held call and blocks without provider exe
     assert.equal(status.budget.callsSpent, 0);
     assert.equal(status.budget.callsReserved, 0);
     assert.equal(providerRan, false);
+  } finally {
+    world.projection.close();
+    rmSync(world.root, { recursive: true, force: true });
+  }
+});
+
+test("immutable candidate hygiene blocks Markdown trailing spaces before configured commands", async () => {
+  const world = await fixture("build");
+  let configuredCommandRan = false;
+  try {
+    const prepared = await readAttempt(world.created.attemptDir);
+    const status = await runProductionCommand({
+      attemptDir: world.created.attemptDir, config: world.config, configPath: world.configPath,
+      projectRecord: world.projection.project, assertLaunchProjection: world.projection.assertLaunchPermitted,
+      infrastructure: {
+        adapterFor: (_entry: AdapterEntry, id: string) => new ScriptedAdapter(id, prepared.worktree!, () => {}, "hygiene"),
+        createBroker: fakeBroker, sandboxProbe: () => false,
+        runCommand: () => { configuredCommandRan = true; throw new Error("configured command must not run after structural hygiene fails"); },
+      },
+    });
+    assert.equal(status.lifecycleState, "BLOCKED");
+    assert.equal(status.blocker?.code, "phase-abort");
+    assert.equal(configuredCommandRan, false);
+    assert.match(status.blocker?.detail ?? "", /candidate_hygiene|CandidateHygiene|PhaseGateFailure/);
+    assert.ok(status.candidateSha !== null);
+    assert.equal(git(prepared.worktree!, "rev-parse", "HEAD"), status.candidateSha);
+    assert.equal(git(prepared.worktree!, "status", "--porcelain"), "");
+    assert.equal(git(world.canonical, "status", "--porcelain"), "");
+    const db = openDatabase(join(world.stateRoot, "awsf.db"), { readonly: true });
+    try {
+      const hygiene = gatesForSession(db, status.sessionId).find((gate) => gate.gate_id === "candidate_hygiene");
+      assert.equal(hygiene?.candidate_sha, status.candidateSha);
+      assert.equal(hygiene?.passed, 0);
+      assert.match(hygiene?.violations_json ?? "", /generated\.md:1: trailing whitespace/);
+    } finally { db.close(); }
+    assert.equal(git(prepared.worktree!, "rev-parse", "HEAD"), status.candidateSha, "failed hygiene retains the exact candidate");
+    assert.equal(git(prepared.worktree!, "status", "--porcelain"), "", "hygiene leaves the candidate worktree clean");
   } finally {
     world.projection.close();
     rmSync(world.root, { recursive: true, force: true });
@@ -555,6 +608,33 @@ test("projector degradation holds successful work at GATING rather than killing 
     assert.equal(status.lifecycleState, "GATING");
     assert.equal(status.budget.callsReserved, 0);
     assert.equal(status.blocker?.code, "sqlite-projection-failed");
+  } finally {
+    world.projection.close();
+    rmSync(world.root, { recursive: true, force: true });
+  }
+});
+
+test("production refuses a current config that differs from durable attempt evidence", async () => {
+  const world = await fixture("build");
+  let routeResolved = false;
+  try {
+    const changedConfig: AwsfConfig = {
+      ...world.config,
+      gates: { ...world.config.gates, lint: { argv: ["node", "-e", "process.exit(0)"], timeout_seconds: 10 } },
+    };
+    const before = readFileSync(join(world.created.attemptDir, "journal.jsonl"), "utf8");
+    await assert.rejects(
+      runProductionCommand({
+        attemptDir: world.created.attemptDir,
+        config: changedConfig,
+        configPath: world.configPath,
+        infrastructure: { adapterFor: () => { routeResolved = true; return null; } },
+      }),
+      ProductionConfigSnapshotMismatch,
+    );
+    assert.equal(routeResolved, false);
+    assert.equal(readFileSync(join(world.created.attemptDir, "journal.jsonl"), "utf8"), before);
+    assert.equal((await readAttempt(world.created.attemptDir)).lifecycleState, "PREPARED");
   } finally {
     world.projection.close();
     rmSync(world.root, { recursive: true, force: true });

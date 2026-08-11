@@ -172,6 +172,13 @@ export class StubAdapter implements HarnessAdapter {
 
   /** PURE. Spawns nothing, reads nothing, and is asserted down to exact argv. */
   buildSpec(request: ModelRequest): ProcessSpec {
+    if (request.effort !== undefined && request.effort !== "none") {
+      throw new AdapterError(
+        this.id,
+        "E_INVALID_REQUEST",
+        `fixture adapter cannot honor thinking level ${JSON.stringify(request.effort)}; only none is representable`,
+      );
+    }
     return {
       executable: this.#providerPath,
       argv: [scriptFor(request.model), this.#sideEffectPath],

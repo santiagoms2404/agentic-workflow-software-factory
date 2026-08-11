@@ -16,6 +16,9 @@ runtime:
   process_grace_seconds: 2
   max_output_bytes: 67108864
   max_event_count: 100000
+  # Local provisioning only: copied from canonical after worktree creation.
+  # Every entry is repository-relative, Git-ignored, and snapshot-safe.
+  seed_paths: [node_modules]
 
 adapters:
   claude:      { kind: claude-code, executable: claude }
@@ -42,7 +45,7 @@ agents:
 
   - name: builder
     model: codex:gpt-5.6-sol
-    thinking: high
+    thinking: xhigh
     color: "#22D3EE"
     purpose: Implement the validated plan in the assigned worktree.
     prompt: { system: prompts/builder/system.md, user: prompts/builder/user.md }
@@ -86,6 +89,7 @@ workflows:
 gates:
   test: { argv: [npm, run, test:unit], timeout_seconds: 600 }
   typecheck: { argv: [npm, run, typecheck], timeout_seconds: 300 }
+  lint: { argv: [npm, run, lint], timeout_seconds: 300 }
 
 risk:
   default: T1

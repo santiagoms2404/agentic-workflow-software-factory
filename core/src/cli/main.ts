@@ -214,6 +214,8 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         const result = await retryCommand({
           attemptDir: located.attemptDir,
           stateRoot,
+          configSnapshotJson: toConfigSnapshotJson(config),
+          allowance: config.risk.correction_allowance,
           projectRecord: projection.project,
         });
         out(`Created attempt ${result.status.attempt} in DRAFT with ${result.status.budget.callsSpent} spent call(s) carried.`);

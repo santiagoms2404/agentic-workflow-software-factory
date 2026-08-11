@@ -3,7 +3,7 @@ import { dirname, join, resolve } from "node:path";
 import { registeredAdapter } from "../../adapters/registry.ts";
 import { loadConfig } from "../../config/load.ts";
 import { runGit, systemGitRunner } from "../../git/changes.ts";
-import { createWorktree } from "../../git/worktrees.ts";
+import { createWorktree, seedWorktreePaths } from "../../git/worktrees.ts";
 import { transition } from "../../state/task-machine.ts";
 import {
   nextActionFor,
@@ -76,6 +76,42 @@ export async function startCommand(options: StartCommandOptions): Promise<Attemp
     attemptId: current.sessionId,
     baseSha,
   });
+  try {
+    await seedWorktreePaths({
+      repository: current.repository,
+      worktree: managed.path,
+      seedPaths: config.runtime.seed_paths,
+      protectedPaths: config.policy.protected_paths,
+    });
+  } catch (error) {
+    const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+    const decision = transition({
+      from: current.lifecycleState,
+      to: "BLOCKED",
+      actor: "host",
+      tier: current.tier,
+      reason: { source: "git", code: "preflight-failed", detail },
+      interactive: false,
+      budget: current.budget,
+    });
+    const failedAt = (options.now ?? ((): string => new Date().toISOString()))();
+    const blocked = nextRevision(current, {
+      lifecycleState: decision.to,
+      baseSha,
+      worktree: managed.path,
+      lastActivityAt: failedAt,
+      lastActivity: detail,
+      nextAction: nextActionFor(decision.to, current.taskId),
+      blocker: { code: "preflight-failed", detail, ahead: null, behind: null },
+    });
+    await persistAttempt(
+      options.attemptDir,
+      current.revision,
+      { kind: "attempt.transitioned", next: blocked },
+      options.projectRecord,
+    );
+    throw error;
+  }
   const preflight = await (options.preflight ?? ((status) => defaultPreflight(status, configPath)))(current);
   const decision = transition({
     from: current.lifecycleState,

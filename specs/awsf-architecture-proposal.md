@@ -158,6 +158,7 @@ runtime:
   process_grace_seconds: 2
   max_output_bytes: 67108864
   max_event_count: 100000
+  seed_paths: [node_modules] # repository-relative ignored paths copied into managed worktrees
 
 adapters:
   claude:      { kind: claude-code, executable: claude }
@@ -184,7 +185,7 @@ agents:
 
   - name: builder
     model: codex:gpt-5.6-sol
-    thinking: high
+    thinking: xhigh
     color: "#22D3EE"
     purpose: Implement the validated plan in the assigned worktree.
     prompt: { system: prompts/builder/system.md, user: prompts/builder/user.md }
@@ -208,6 +209,7 @@ workflows:
 gates:
   test:      { argv: [node, --test], timeout_seconds: 600 }
   typecheck: { argv: [npm, run, typecheck], timeout_seconds: 300 }
+  lint:      { argv: [npm, run, lint], timeout_seconds: 300 }
 
 risk:
   default: T1
@@ -237,6 +239,10 @@ pricing:
   effective_date: null
   models: {}            # empty by default ⇒ subscription routes render "— subscription"
 ```
+
+`runtime.seed_paths` contains normalized repository-relative paths only. After the detached worktree exists and before `PREPARED`, the host copies each configured, present, Git-ignored seed into the same relative location. This is dependency provisioning, never installation or network access. Tracked/protected paths, traversal, existing destinations, unsupported source types, and symlinks that escape the canonical repository or would point back out of the managed worktree are refused; safe relative npm workspace and `.bin` links retain their relative spelling and therefore rebase into the worktree.
+
+`thinking: xhigh` is part of the shared agent vocabulary because the pi route supports it. The selected adapter must preserve that level exactly or reject the descriptor; it may never silently floor or translate `xhigh` to `high`.
 
 Two rules carried over because they were learned the hard way [ARCHITECT, from `permissions.py:3-11` and `sssf.config.yaml:9-11`]: **`tools` is a capability list, not a sandbox** — `exec` runs anything and `write` reaches any path, so `writes` is the enforced statement; and **`--tools` filters extension tools too**, so an agent whose harness extension registers a tool must name that tool or the extension loads and its tool is silently filtered out. `writes: []` restricts the repository, never the session runtime — every agent can always write its own report under the attempt directory.
 
@@ -547,6 +553,7 @@ Final assistant content must be exactly one JSON object; prose and code fences a
 | `json_parses` | any phase declaring `.json` artifacts | it parses; note carries the top-level type |
 | `diff_matches_claims` ★ | build, fix, document | **exact set equality** between the host-captured diff (including deletions) and `changedFiles` — closing SSSF's one-directional hole at `gates.py:61-68`, which never notices files the agent changed and did not report |
 | `head_advanced` | build | a host commit exists and differs from base — the "said done, wrote nothing" gate |
+| `candidate_hygiene` ★ | every host-created candidate | immutable `git diff --check base..candidate` over the exact clean candidate; bounded findings block before configured commands |
 | `no_protected_paths` ★ | every agent phase | no `policy.protected_paths` entry in the change-set |
 | `writes_within_globs` | every write-capable phase | every changed path matches the agent's `writes` |
 | `verdict_consistent` | review | `accept` ⇒ no high/critical findings; `concern` ⇒ at least one concrete finding; reviewed SHA equals candidate |
@@ -555,7 +562,7 @@ Final assistant content must be exactly one JSON object; prose and code fences a
 
 ★ = strengthened or new in AWSF.
 
-**Gates by phase:** Plan — envelope, non-empty goals/steps/acceptance, no blocking questions. Build — envelope, exact diff match, writes allowed, protected machinery unchanged, head advanced. Test — configured argv, exact candidate SHA, clean before/after, all required exit codes zero. Review — opposite provider, exact reviewed SHA, verdict consistent, finding paths inside candidate context. Document — docs allowlist, non-empty files, exact diff match, final tests re-run afterward. Final task — required phases complete, budget valid, exact SHA gated, required review present, journey passing for T2/protected, FF possible.
+**Gates by phase:** Plan — envelope, non-empty goals/steps/acceptance, no blocking questions. Build — envelope, exact diff match, writes allowed, protected machinery unchanged, head advanced. Candidate — immutable whitespace hygiene over the exact base-to-candidate range, which configuration cannot disable or rename. Test — configured executable-plus-argv entries, exact candidate SHA, clean before/after, all required exit codes zero. Review — opposite provider, exact reviewed SHA, verdict consistent, finding paths inside candidate context. Document — docs allowlist, non-empty files, exact diff match, final tests re-run afterward. Final task — required phases complete, budget valid, exact SHA gated, required review present, journey passing for T2/protected, FF possible.
 
 ### Correction loop
 
@@ -1247,7 +1254,7 @@ Required sections, in order:
    success-must-be-earned, the full agent-call pipeline, and the escalation ladder from
    intra-phase correction to inter-state transition.
 10. **Envelope & Gate Contract** — every schema; wire vs stored; validation and parse-retry;
-    all eleven gates and which phases they apply to; why a permission breach is not a gate
+    all twelve gates and which phases they apply to; why a permission breach is not a gate
     violation; the schema-injection-into-prompts mechanism.
 11. **Adapter & Launcher Contract** — the interface, the broker separation, the 12 event kinds
     and their invariants, the barrier as a sequence diagram, the per-platform cancellation

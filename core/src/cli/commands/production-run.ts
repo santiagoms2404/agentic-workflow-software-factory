@@ -13,6 +13,7 @@ import type {
 import { AdapterError } from "../../adapters/interface.ts";
 import { registeredAdapter } from "../../adapters/registry.ts";
 import { writeSystemPromptFile } from "../../adapters/system-prompt-file.ts";
+import { toConfigSnapshotJson } from "../../config/effective-config.ts";
 import type { AwsfConfig, AgentDefinition, AdapterEntry } from "../../config/schema.ts";
 import type { BuildOutput } from "../../contracts/build-output.ts";
 import type { EnvelopeBase } from "../../contracts/envelope-base.ts";
@@ -25,6 +26,7 @@ import { CallBudget, type Reservation } from "../../execution/call-budget.ts";
 import type { BarrierRecord } from "../../execution/launcher-barrier.ts";
 import { ProcessTransportBroker, runSystemCommand, type BrokerOptions, type SystemCommandOptions } from "../../execution/transport-broker.ts";
 import { artifactsExist, filesNonEmpty, jsonParses, type ArtifactObservation } from "../../gates/artifacts.ts";
+import { candidateHygiene } from "../../gates/candidate-hygiene.ts";
 import { commandsPass } from "../../gates/commands.ts";
 import { envelopeValid } from "../../gates/envelope.ts";
 import { diffMatchesClaims, headAdvanced, noProtectedPaths, writesWithinGlobs } from "../../gates/git-diff.ts";
@@ -81,6 +83,13 @@ export class ProductionRouteUnavailable extends Error {
     super(`configured adapter ${JSON.stringify(adapterId)} is unavailable: ${detail}`);
     this.name = "ProductionRouteUnavailable";
     this.adapterId = adapterId;
+  }
+}
+
+export class ProductionConfigSnapshotMismatch extends Error {
+  constructor() {
+    super("current effective config differs from the durable attempt snapshot; cancel and retry under the intended config before execution");
+    this.name = "ProductionConfigSnapshotMismatch";
   }
 }
 
@@ -281,7 +290,7 @@ function phaseGates(
 
 function gateKind(gateId: GateId): "pure" | "filesystem" | "git" | "subprocess" | "journey" {
   if (gateId === "commands_pass") return "subprocess";
-  if (gateId === "head_advanced" || gateId === "diff_matches_claims") return "git";
+  if (gateId === "head_advanced" || gateId === "diff_matches_claims" || gateId === "candidate_hygiene") return "git";
   if (["artifacts_exist", "files_non_empty", "json_parses", "no_protected_paths", "writes_within_globs"].includes(gateId)) return "filesystem";
   if (gateId === "journey_passes") return "journey";
   return "pure";
@@ -310,6 +319,9 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
   }
   if (status.worktree === null || status.baseSha === null) throw new Error("PREPARED attempt has no managed worktree or base SHA");
   if (options.config.project.slug !== status.project) throw new Error("attempt and config project do not match");
+  if (toConfigSnapshotJson(options.config) !== status.configSnapshotJson) {
+    throw new ProductionConfigSnapshotMismatch();
+  }
 
   const agents = new Map(options.config.agents.map((agent) => [agent.name, agent]));
   const routePrompts = new Map<string, { user: string; system: string }>();
@@ -719,14 +731,42 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
         }
         const result = await runAgent(phase, index + 1, previous, reservation, agentOrdinal === 1);
         previous = result.envelope;
-        if (result.candidateSha !== null) candidateSha = result.candidateSha;
+        if (result.candidateSha !== null) {
+          candidateSha = result.candidateSha;
+          await persist("attempt.updated", {
+            candidateSha,
+            lastActivityAt: infra.now(),
+            lastActivity: `host retained exact candidate ${candidateSha}`,
+          });
+        }
         continue;
       }
 
       await persistPhase(phase.id, "RUNNING");
       if (candidateSha === null) throw new Error("code phase requires a host-created candidate SHA");
+      const gitRunner = systemGitRunner(status.worktree!);
+      const observedBase = runGit(gitRunner, ["rev-parse", status.baseSha!]).trim();
+      const headBeforeHygiene = runGit(gitRunner, ["rev-parse", "HEAD"]).trim();
+      const cleanBeforeHygiene = runGit(gitRunner, ["status", "--porcelain"]).trim().length === 0;
+      const hygieneResult = gitRunner(["diff", "--check", `${status.baseSha!}..${candidateSha}`, "--"]);
+      const headAfterHygiene = runGit(gitRunner, ["rev-parse", "HEAD"]).trim();
+      const cleanAfterHygiene = runGit(gitRunner, ["status", "--porcelain"]).trim().length === 0;
+      const hygiene = candidateHygiene({
+        expectedBaseSha: status.baseSha!, observedBaseSha: observedBase,
+        expectedCandidateSha: candidateSha, headBefore: headBeforeHygiene, headAfter: headAfterHygiene,
+        cleanBefore: cleanBeforeHygiene, cleanAfter: cleanAfterHygiene,
+        exitCode: hygieneResult.status ?? -1,
+        output: `${hygieneResult.stdout}${hygieneResult.stderr}${hygieneResult.error === null ? "" : `\n${hygieneResult.error}`}`,
+      });
+      await persistGate(phase.id, hygiene, candidateSha, 0, hygieneResult.status ?? -1);
+      if (!hygiene.passed) {
+        const failure = new PhaseGateFailure(phase.id, [hygiene]);
+        await persistPhase(phase.id, "FAILED", failure);
+        throw failure;
+      }
+
       assertClean(status.worktree!, "before");
-      const observedHead = runGit(systemGitRunner(status.worktree!), ["rev-parse", "HEAD"]).trim();
+      const observedHead = runGit(gitRunner, ["rev-parse", "HEAD"]).trim();
       if (observedHead !== candidateSha) throw new Error(`candidate moved before commands: ${observedHead} != ${candidateSha}`);
       const commands: TestOutput["commands"] = [];
       const failures: string[] = [];

@@ -17,6 +17,7 @@ import {
   ConfigInvalidCeilingError,
   ConfigInvalidNoFallbackError,
   ConfigInvalidPersistThinkingError,
+  ConfigInvalidSeedPathError,
 } from "../../../src/config/load.ts";
 import { repoRoot } from "../meta/_walk.ts";
 import { validConfig, deepClone } from "./fixture.ts";
@@ -115,6 +116,12 @@ test("rejects project.default_workflow pointing at an unknown workflow", () => {
   assert.throws(() => loadConfig(toYaml(doc)), ConfigUnknownWorkflowError);
 });
 
+test("accepts lint as an argv-driven host gate id", () => {
+  const doc = deepClone(validConfig());
+  doc.gates.lint = { argv: ["npm", "run", "lint"], timeout_seconds: 60 };
+  assert.deepEqual(loadConfig(toYaml(doc)).gates.lint?.argv, ["npm", "run", "lint"]);
+});
+
 test("rejects an unknown gate id", () => {
   const doc = deepClone(validConfig());
   doc.gates.mystery_gate = { argv: ["echo", "hi"], timeout_seconds: 5 };
@@ -145,6 +152,24 @@ test("rejects routing.no_fallback: false", () => {
   const doc = deepClone(validConfig());
   doc.routing.no_fallback = false;
   assert.throws(() => loadConfig(toYaml(doc)), ConfigInvalidNoFallbackError);
+});
+
+test("rejects traversal, ambiguous separators, and overlapping runtime seed paths", () => {
+  for (const paths of [
+    ["../node_modules"],
+    ["vendor\\modules"],
+    ["node_modules", "node_modules/pkg"],
+  ]) {
+    const doc = deepClone(validConfig());
+    doc.runtime.seed_paths = paths;
+    assert.throws(() => loadConfig(toYaml(doc)), ConfigInvalidSeedPathError, JSON.stringify(paths));
+  }
+});
+
+test("accepts normalized repository-relative runtime seed paths", () => {
+  const doc = deepClone(validConfig());
+  doc.runtime.seed_paths = ["node_modules", "vendor/cache"];
+  assert.deepEqual(loadConfig(toYaml(doc)).runtime.seed_paths, ["node_modules", "vendor/cache"]);
 });
 
 test("rejects observability.persist_thinking_text: true", () => {

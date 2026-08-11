@@ -5,6 +5,7 @@ export const GATE_IDS = [
   "json_parses",
   "diff_matches_claims",
   "head_advanced",
+  "candidate_hygiene",
   "no_protected_paths",
   "writes_within_globs",
   "verdict_consistent",

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { attemptDir as attemptDirectory } from "../../persistence/platform-paths.ts";
+import { redactConfigSnapshotJson } from "../../config/effective-config.ts";
 import { ReservationOutstanding } from "../../execution/call-budget.ts";
 import {
   isTerminalStatus,
@@ -16,6 +17,10 @@ import {
 export interface RetryCommandOptions {
   readonly attemptDir: string;
   readonly stateRoot: string;
+  /** The currently loaded effective config, never the prior attempt's snapshot. */
+  readonly configSnapshotJson: string;
+  /** The currently configured correction allowance for attempt n+1. */
+  readonly allowance: { readonly auto: number; readonly owner: number };
   readonly now?: () => string;
   readonly sessionId?: () => string;
   readonly projectRecord?: AttemptProjector;
@@ -39,6 +44,7 @@ export async function retryCommand(options: RetryCommandOptions): Promise<{ atte
     sessionId: (options.sessionId ?? randomUUID)(),
     attempt,
     lifecycleState: "DRAFT",
+    configSnapshotJson: redactConfigSnapshotJson(options.configSnapshotJson),
     worktree: null,
     baseSha: null,
     candidateSha: null,
@@ -49,6 +55,7 @@ export async function retryCommand(options: RetryCommandOptions): Promise<{ atte
       callsReserved: 0,
       correctionsAuto: 0,
       correctionsOwner: 0,
+      allowance: { ...options.allowance },
     },
     model: null,
     lastActivityAt: now,

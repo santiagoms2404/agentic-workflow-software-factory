@@ -467,7 +467,7 @@ flowchart LR
       <thead><tr><th>State</th><th>Meaning</th><th>Provider may run</th></tr></thead>
       <tbody>
         <tr><td><code>DRAFT</code></td><td>Intent, tier, and route recorded. No worktree.</td><td class="no">no</td></tr>
-        <tr><td><code>PREPARED</code></td><td>Worktree materialized, base SHA pinned, roster resolved, adapter/sandbox/observability preflight passed.</td><td class="no">no</td></tr>
+        <tr><td><code>PREPARED</code></td><td>Worktree materialized, configured ignored dependency seeds copied into it, base SHA pinned, roster resolved, adapter/sandbox/observability preflight passed.</td><td class="no">no</td></tr>
         <tr><td><code>RUNNING</code></td><td>Phase engine active; each ordinary agent phase runs as its own registered configured provider process under task-edge or compiled-phase authorization.</td><td class="ok">yes</td></tr>
         <tr><td><code>GATING</code></td><td>Host runs postcondition gates on the committed candidate SHA, outside model control.</td><td class="no">no</td></tr>
         <tr><td><code>REVIEWING</code></td><td>T2 only. Cross-provider reviewer, diff-scoped, advisory.</td><td class="ok">yes</td></tr>
@@ -521,7 +521,7 @@ stateDiagram-v2
     <table>
       <thead><tr><th>#</th><th>From → To</th><th>Actor</th><th>Trigger</th><th>Guard (evidence that must be present)</th><th>Spawn</th></tr></thead>
       <tbody>
-        <tr><td>L1</td><td>DRAFT → PREPARED</td><td>host</td><td><code>awsf start</code></td><td>worktree created, base SHA pinned, config validates, adapter/sandbox/observability preflight passes</td><td class="no">—</td></tr>
+        <tr><td>L1</td><td>DRAFT → PREPARED</td><td>host</td><td><code>awsf start</code></td><td>worktree created, every configured repository-relative ignored seed safely copied, base SHA pinned, config validates, adapter/sandbox/observability preflight passes</td><td class="no">—</td></tr>
         <tr><td>L2</td><td>DRAFT → BLOCKED</td><td>host</td><td>preflight failure</td><td><code>reason.code ∈ BLOCKER_CODES</code></td><td class="no">—</td></tr>
         <tr><td>L3</td><td>DRAFT → CANCELLED</td><td>human</td><td><code>awsf cancel</code></td><td>explicit, interactive</td><td class="no">—</td></tr>
         <tr><td>L4</td><td>PREPARED → RUNNING</td><td>host</td><td>workflow start</td><td>workflow compiled; tier ceiling has headroom; call reserved</td><td class="ok">✦</td></tr>
@@ -598,7 +598,7 @@ stateDiagram-v2
     </table>
     <ul>
       <li><code>protected</code> is orthogonal to tier: credential access, external mutation, deletion, migration, release/cutover, credit-billed execution.</li>
-      <li><strong>Reservations:</strong> reserve before launch so concurrent paths cannot exceed the ceiling; convert to spent when the launcher receives <code>GO</code>; release if registration fails and the provider never ran. <strong>Spend carries across attempts of the same task.</strong> A composite (fusion) adapter declares its full cost in advance — two workers plus a fuser reserve three calls. A workflow whose minimum call count cannot fit the selected tier is rejected before execution.</li>
+      <li><strong>Reservations:</strong> reserve before launch so concurrent paths cannot exceed the ceiling; convert to spent when the launcher receives <code>GO</code>; release if registration fails and the provider never ran. <strong>Spend carries across attempts of the same task.</strong> Retry clears attempt-local reservations/corrections but records the currently loaded redacted effective-config snapshot and correction allowance, never the prior attempt's stale gate configuration. A composite (fusion) adapter declares its full cost in advance — two workers plus a fuser reserve three calls. A workflow whose minimum call count cannot fit the selected tier is rejected before execution.</li>
       <li><strong>Correction allowances:</strong> one automatic correction per phase plus at most one owner-authorized correction if the task ceiling has room (<code>correction_allowance: {auto: 1, owner: 1}</code>). Intra-phase corrections cost tokens, not calls; <code>GATING → RUNNING</code> costs a call. The dashboard must show both meters.</li>
       <li><strong>Routing may never read quota.</strong> The owner picks the provider; the runner never picks it because a subscription was running low. Quota exhaustion blocks with the reset time — it is never a retry and never a substitution.</li>
     </ul>
@@ -792,7 +792,7 @@ interface ScoutOutput extends EnvelopeBase {
       <li>Downstream phases receive validated payloads by host rendering into <code>{previous_envelope}</code> in the compiled prompt — never via conversational memory.</li>
     </ul>
 
-    <h3>The eleven gates</h3>
+    <h3>The twelve gates</h3>
     <p><code>gate(envelope, ctx) ⇒ GateReport</code>, where <code>report.check(item, ok, note)</code> appends and returns <code>this</code> (ported from <code>data_types.py:264-283</code>). <strong>Every check is recorded whether or not it passed</strong> — a green gate says <em>what it verified</em>, not merely that it passed.</p>
     <table>
       <thead><tr><th>Gate</th><th>Applies to</th><th>What it checks</th></tr></thead>
@@ -803,6 +803,7 @@ interface ScoutOutput extends EnvelopeBase {
         <tr><td><code>json_parses</code></td><td>any phase declaring <code>.json</code> artifacts</td><td>it parses; note carries the top-level type</td></tr>
         <tr><td><code>diff_matches_claims</code> ★</td><td>build, fix, document</td><td><strong>exact set equality</strong> between the host-captured diff (including deletions) and <code>changedFiles</code> — closing SSSF's one-directional hole at <code>gates.py:61-68</code>, which never notices files the agent changed and did not report</td></tr>
         <tr><td><code>head_advanced</code></td><td>build</td><td>a host commit exists and differs from base — the "said done, wrote nothing" gate</td></tr>
+        <tr><td><code>candidate_hygiene</code> ★</td><td>every host-created candidate</td><td>non-configurable <code>git diff --check base..candidate</code> against the exact clean candidate; bounded findings block before configured commands</td></tr>
         <tr><td><code>no_protected_paths</code> ★</td><td>every agent phase</td><td>no <code>policy.protected_paths</code> entry in the change-set</td></tr>
         <tr><td><code>writes_within_globs</code></td><td>every write-capable phase</td><td>every changed path matches the agent's <code>writes</code></td></tr>
         <tr><td><code>verdict_consistent</code></td><td>review</td><td><code>accept</code> ⇒ no high/critical findings; <code>concern</code> ⇒ at least one concrete finding; reviewed SHA equals candidate</td></tr>
@@ -810,7 +811,7 @@ interface ScoutOutput extends EnvelopeBase {
         <tr><td><code>journey_passes</code></td><td>T2 / protected</td><td>the recorded end-user journey ran against the exact candidate SHA</td></tr>
       </tbody>
     </table>
-    <p class="sub">★ = strengthened or new in AWSF. Gates by phase: <strong>Plan</strong> — envelope, non-empty goals/steps/acceptance, no blocking questions. <strong>Build</strong> — envelope, exact diff match, writes allowed, protected machinery unchanged, head advanced. <strong>Test</strong> — configured argv, exact candidate SHA, clean before/after, all required exit codes zero. <strong>Review</strong> — opposite provider, exact reviewed SHA, verdict consistent, finding paths inside candidate context. <strong>Document</strong> — docs allowlist, non-empty files, exact diff match, final tests re-run afterward. <strong>Final task</strong> — required phases complete, budget valid, exact SHA gated, required review present, journey passing for T2/protected, FF possible.</p>
+    <p class="sub">★ = strengthened or new in AWSF. Gates by phase: <strong>Plan</strong> — envelope, non-empty goals/steps/acceptance, no blocking questions. <strong>Build</strong> — envelope, exact diff match, writes allowed, protected machinery unchanged, head advanced. <strong>Candidate</strong> — immutable whitespace hygiene over the exact base-to-candidate commit range. <strong>Test</strong> — configured executable-plus-argv entries, exact candidate SHA, clean before/after, all required exit codes zero. <strong>Review</strong> — opposite provider, exact reviewed SHA, verdict consistent, finding paths inside candidate context. <strong>Document</strong> — docs allowlist, non-empty files, exact diff match, final tests re-run afterward. <strong>Final task</strong> — required phases complete, budget valid, exact SHA gated, required review present, journey passing for T2/protected, FF possible.</p>
 
     <div class="card warn">
       <h5>Why a permission breach is not a gate violation</h5>
@@ -1334,8 +1335,8 @@ PRAGMA user_version = 1;</code></pre>
       <li><span class="tag dir">core/</span> <code>core/src/persistence/{journal.ts, status-store.ts, attempt-lock.ts, replay.ts, platform-paths.ts}</code> — append-only fsynced journal; atomic status; locks; replay; state-root resolution</li>
       <li><span class="tag dir">core/</span> <code>core/src/observability/{sqlite.ts, projector.ts, rebuild.ts, queries.ts}</code> — driver boundary + feature probe; <strong>the only SQLite writers</strong>; rebuild with retained prior file; read queries for API</li>
       <li><span class="tag dir">core/</span> <code>core/src/observability/migrations/0001-initial.sql</code> — the DDL above; <code>user_version</code> stamped</li>
-      <li><span class="tag dir">core/</span> <code>core/src/gates/{interface.ts, envelope.ts, artifacts.ts, git-diff.ts, commands.ts, review.ts, journey.ts}</code> — the eleven gates; <code>GateReport.check()</code> records every check</li>
-      <li><span class="tag dir">core/</span> <code>core/src/git/{worktrees.ts, changes.ts, commit.ts, land.ts}</code> — host-owned Git: worktree create/list (no delete), change-set capture, deterministic commits, FF-only landing</li>
+      <li><span class="tag dir">core/</span> <code>core/src/gates/{interface.ts, envelope.ts, artifacts.ts, git-diff.ts, candidate-hygiene.ts, commands.ts, review.ts, journey.ts}</code> — the twelve gates; <code>GateReport.check()</code> records every check</li>
+      <li><span class="tag dir">core/</span> <code>core/src/git/{worktrees.ts, changes.ts, commit.ts, land.ts}</code> — host-owned Git: worktree create/list (no delete), safe filesystem-only provisioning of configured ignored dependency seeds, change-set capture, deterministic commits, FF-only landing</li>
       <li><span class="tag dir">core/</span> <code>core/src/policy/{permission-profiles.ts, path-policy.ts, sandbox-broker.ts, risk.ts, redaction.ts}</code> — tool profiles; write-glob + protected paths; OS sandbox grants; tier classification; credential scrubbing</li>
       <li><span class="tag dir">core/</span> <code>core/src/api/{server.ts, routes.ts, responses.ts, security.ts}</code> — <code>node:http</code>, loopback-only, Host/Origin validation, strict CSP, the seven read routes + one archive write</li>
       <li><span class="tag dir">core/</span> <code>core/test/{unit, contract, simulation, journeys, platform, fixtures/{providers, permissions}}/</code> — the pyramid; fixtures include captured real provider streams (M4) and permission cases</li>

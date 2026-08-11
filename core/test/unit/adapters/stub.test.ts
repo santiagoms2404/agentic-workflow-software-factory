@@ -132,6 +132,13 @@ test("every script builds a spec, and the script is the only thing that differs"
   }
 });
 
+test("a non-thinking adapter refuses xhigh rather than flooring or ignoring it", () => {
+  assert.throws(
+    () => adapterFor("/tmp/ran.json").buildSpec({ ...REQUEST, effort: "xhigh" }),
+    (error: unknown) => error instanceof AdapterError && error.code === "E_INVALID_REQUEST" && /cannot honor thinking level "xhigh"/.test(error.message),
+  );
+});
+
 test("the stub reports no usage and no cost, and says so rather than reporting zeros", async () => {
   const info = await adapterFor("/tmp/ran.json").getModelInfo("stub/success");
   assert.equal(info.usageAuthority, "none");

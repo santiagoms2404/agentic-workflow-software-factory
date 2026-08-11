@@ -114,8 +114,11 @@ test("the fixture simple-sdlc reaches the interactive owner boundary without a p
     const canonical = join(root, "canonical");
     execFileSync("git", ["init", "-b", "main", canonical], { stdio: "ignore" });
     writeFileSync(join(canonical, "README.md"), "base\n");
-    execFileSync("git", ["-C", canonical, "add", "README.md"]);
+    writeFileSync(join(canonical, ".gitignore"), "node_modules/\n");
+    execFileSync("git", ["-C", canonical, "add", "README.md", ".gitignore"]);
     execFileSync("git", ["-C", canonical, "-c", "user.name=Santiago Marin", "-c", "user.email=santiagomarinsuarez@me.com", "commit", "-m", "test: seed stub sdlc"], { stdio: "ignore" });
+    mkdirSync(join(canonical, "node_modules", "fixture"), { recursive: true });
+    writeFileSync(join(canonical, "node_modules", "fixture", "index.js"), "dependency\n");
     const created = await newCommand({ stateRoot: join(root, "state"), project: "agentic-workflow-software-factory", taskId: "T22", repository: canonical, request: "stub", workflow: "simple-sdlc", tier: 2 });
     await startCommand({ attemptDir: created.attemptDir, worktreeRoot: join(root, "worktrees"), configPath: "awsf.config.yaml", preflight: () => ({ adapter: true, sandbox: true, observability: true }) });
     const status = await runStubCommand(created.attemptDir);
@@ -135,8 +138,11 @@ test("the bounded fixture window is RUNNING in WAL and rebuild preserves its fin
     const canonical = join(root, "canonical");
     execFileSync("git", ["init", "-b", "main", canonical], { stdio: "ignore" });
     writeFileSync(join(canonical, "README.md"), "base\n");
-    execFileSync("git", ["-C", canonical, "add", "README.md"]);
+    writeFileSync(join(canonical, ".gitignore"), "node_modules/\n");
+    execFileSync("git", ["-C", canonical, "add", "README.md", ".gitignore"]);
     execFileSync("git", ["-C", canonical, "-c", "user.name=Santiago Marin", "-c", "user.email=santiagomarinsuarez@me.com", "commit", "-m", "test: seed live stub"], { stdio: "ignore" });
+    mkdirSync(join(canonical, "node_modules", "fixture"), { recursive: true });
+    writeFileSync(join(canonical, "node_modules", "fixture", "index.js"), "dependency\n");
     const created = await newCommand({
       stateRoot, project: "agentic-workflow-software-factory", taskId: "T26-live",
       repository: canonical, request: "bounded live fixture", workflow: "simple-sdlc", tier: 1,

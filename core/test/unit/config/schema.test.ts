@@ -45,6 +45,19 @@ test("observability.db must use the state:// scheme", () => {
   assert.equal(Value.Check(AwsfConfigSchema, doc), false);
 });
 
+test("runtime seed paths and pi xhigh thinking are valid schema vocabulary", () => {
+  const config = validConfig();
+  config.runtime.seed_paths = ["node_modules"];
+  config.agents[0]!.thinking = "xhigh";
+  assert.equal(Value.Check(AwsfConfigSchema, config), true);
+});
+
+test("runtime seed paths remain repository-relative strings", () => {
+  const config = validConfig();
+  const absolute = { ...config, runtime: { ...config.runtime, seed_paths: ["/tmp/node_modules"] } };
+  assert.equal(Value.Check(AwsfConfigSchema, absolute), true, "loader, not TypeBox shape, owns machine-path rejection");
+});
+
 test("pricing.models defaults to an empty object and is accepted", () => {
   assert.deepEqual(validConfig().pricing.models, {});
   assert.equal(Value.Check(AwsfConfigSchema, validConfig()), true);

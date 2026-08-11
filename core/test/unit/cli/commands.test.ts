@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { main } from "../../../src/cli/main.ts";
+import { toConfigSnapshotJson } from "../../../src/config/effective-config.ts";
+import { loadConfig } from "../../../src/config/load.ts";
 import { cancelCommand } from "../../../src/cli/commands/cancel.ts";
 import { AlreadyInState } from "../../../src/state/errors.ts";
 import { SealedAttempt } from "../../../src/persistence/attempt-lock.ts";
@@ -21,12 +24,87 @@ function repository(root: string): string {
   const repo = join(root, "canonical");
   execFileSync("git", ["init", "-b", "main", repo], { stdio: "ignore" });
   writeFileSync(join(repo, "README.md"), "base\n");
-  git(repo, "add", "README.md");
+  writeFileSync(join(repo, ".gitignore"), "node_modules/\n");
+  git(repo, "add", "README.md", ".gitignore");
   git(repo, "-c", "user.name=Santiago Marin", "-c", "user.email=santiagomarinsuarez@me.com", "commit", "-m", "test: seed cli commands");
+  mkdirSync(join(repo, "node_modules", "fixture"), { recursive: true });
+  writeFileSync(join(repo, "node_modules", "fixture", "index.js"), "dependency\n");
   return repo;
 }
 
 const yesTerminal = { interactive: true, write: () => {}, confirm: async () => true } as const;
+
+test("a missing configured seed fails actionably before PREPARED", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-cli-missing-seed-"));
+  try {
+    const repo = repository(root);
+    const stateRoot = join(root, "state");
+    const created = await newCommand({
+      stateRoot, project: "agentic-workflow-software-factory", taskId: "missing-seed",
+      repository: repo, request: "prove preparation refusal", workflow: "build", tier: 1,
+    });
+    const configPath = join(root, "awsf.config.yaml");
+    writeFileSync(configPath, readFileSync(resolve("awsf.config.yaml"), "utf8").replace("seed_paths: [node_modules]", "seed_paths: [missing-cache]"));
+    await assert.rejects(
+      startCommand({
+        attemptDir: created.attemptDir,
+        worktreeRoot: join(root, "worktrees"),
+        configPath,
+        preflight: () => ({ adapter: true, sandbox: true, observability: true }),
+      }),
+      /cannot seed "missing-cache" before PREPARED: configured source is missing in the canonical repository/,
+    );
+    const blocked = await readAttempt(created.attemptDir);
+    assert.equal(blocked.lifecycleState, "BLOCKED");
+    assert.equal(blocked.blocker?.code, "preflight-failed");
+    assert.match(blocked.nextAction, /awsf retry missing-seed/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("the retry CLI snapshots the currently loaded effective config and allowance", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-cli-retry-config-"));
+  try {
+    const stateRoot = join(root, "state");
+    const configPath = join(root, "corrected.config.yaml");
+    const correctedText = readFileSync(resolve("awsf.config.yaml"), "utf8")
+      .replace("test: { argv: [npm, run, test:unit], timeout_seconds: 600 }", "test: { argv: [npm, run, test:journeys], timeout_seconds: 600 }")
+      .replace("correction_allowance: { auto: 1, owner: 1 }", "correction_allowance: { auto: 2, owner: 0 }");
+    writeFileSync(configPath, correctedText);
+    const created = await newCommand({
+      stateRoot, project: "agentic-workflow-software-factory", taskId: "retry-current-config",
+      repository: resolve("."), request: "retain task identity", workflow: "build", tier: 1,
+      configSnapshotJson: JSON.stringify({ gates: { test: { argv: ["npm", "run", "old"] } } }),
+      allowance: { auto: 1, owner: 1 }, sessionId: () => "prior-cli-session",
+    });
+    const blocked = nextRevision(created.status, {
+      lifecycleState: "BLOCKED",
+      budget: { ...created.status.budget, callsSpent: 1, correctionsAuto: 1 },
+      blocker: { code: "phase-abort", detail: "owner corrected config", ahead: null, behind: null },
+    });
+    await persistAttempt(created.attemptDir, created.status.revision, { kind: "attempt.transitioned", next: blocked });
+
+    const errors: string[] = [];
+    assert.equal(await main({
+      argv: ["retry", "retry-current-config", "--state-root", stateRoot, "--config", configPath],
+      cwd: resolve("."), writeOut: () => {}, writeError: (line) => errors.push(line),
+    }), 0, errors.join("\n"));
+    const retried = await readAttempt(join(stateRoot, "projects", created.status.project, "tasks", created.status.taskId, "2"));
+    assert.equal(retried.configSnapshotJson, toConfigSnapshotJson(loadConfig(correctedText)));
+    assert.match(retried.configSnapshotJson, /test:journeys/);
+    assert.doesNotMatch(retried.configSnapshotJson, /\["npm","run","old"\]/);
+    assert.deepEqual(retried.budget.allowance, { auto: 2, owner: 0 });
+    assert.equal(retried.budget.callsSpent, 1);
+    assert.equal(retried.budget.callsReserved, 0);
+    assert.equal(retried.project, created.status.project);
+    assert.equal(retried.taskId, created.status.taskId);
+    assert.equal(retried.workflow, created.status.workflow);
+    assert.equal(retried.request, created.status.request);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test("new, start, status, cancel, and retry preserve the lifecycle and task-lifetime budget", async () => {
   const root = mkdtempSync(join(tmpdir(), "awsf-cli-commands-"));
@@ -41,6 +119,8 @@ test("new, start, status, cancel, and retry preserve the lifecycle and task-life
       request: "exercise owner commands",
       workflow: "build-review",
       tier: 2,
+      configSnapshotJson: JSON.stringify({ gates: { test: { argv: ["npm", "run", "old-test"] } } }),
+      allowance: { auto: 1, owner: 1 },
       sessionId: () => "cli-command-session",
       now: () => "2026-08-07T00:00:00.000Z",
     });
@@ -59,6 +139,8 @@ test("new, start, status, cancel, and retry preserve the lifecycle and task-life
     });
     assert.equal(prepared.lifecycleState, "PREPARED");
     assert.equal(prepared.baseSha, git(repo, "rev-parse", "HEAD"));
+    assert.equal(readFileSync(join(prepared.worktree!, "node_modules", "fixture", "index.js"), "utf8"), "dependency\n");
+    assert.equal(git(prepared.worktree!, "status", "--porcelain"), "");
     await assert.rejects(
       startCommand({
         attemptDir: created.attemptDir,
@@ -111,15 +193,27 @@ test("new, start, status, cancel, and retry preserve the lifecycle and task-life
       SealedAttempt,
     );
 
+    const currentSnapshot = JSON.stringify({ gates: { lint: { argv: ["npm", "run", "lint"] } } });
     const retried = await retryCommand({
       attemptDir: created.attemptDir,
       stateRoot,
+      configSnapshotJson: currentSnapshot,
+      allowance: { auto: 2, owner: 0 },
       sessionId: () => "cli-retry-session",
       now: () => "2026-08-07T00:03:00.000Z",
     });
     assert.equal(retried.status.attempt, 2);
     assert.equal(retried.status.lifecycleState, "DRAFT");
     assert.equal(retried.status.budget.callsSpent, 2);
+    assert.equal(retried.status.budget.callsReserved, 0);
+    assert.equal(retried.status.budget.correctionsAuto, 0);
+    assert.equal(retried.status.budget.correctionsOwner, 0);
+    assert.deepEqual(retried.status.budget.allowance, { auto: 2, owner: 0 });
+    assert.equal(retried.status.configSnapshotJson, currentSnapshot);
+    assert.notEqual(retried.status.configSnapshotJson, created.status.configSnapshotJson);
+    for (const field of ["project", "taskId", "repository", "workflow", "tier", "request"] as const) {
+      assert.equal(retried.status[field], created.status[field], `${field} is task identity and must not change`);
+    }
     assert.equal((await readAttempt(retried.attemptDir)).sessionId, "cli-retry-session");
   } finally {
     rmSync(root, { recursive: true, force: true });

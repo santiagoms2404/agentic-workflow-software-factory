@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildEffectiveConfig, toConfigSnapshotJson } from "../../../src/config/effective-config.ts";
+import { buildEffectiveConfig, redactConfigSnapshotJson, toConfigSnapshotJson } from "../../../src/config/effective-config.ts";
 import { validConfig, deepClone } from "./fixture.ts";
 
 test("effective config is structurally identical to a config with nothing to redact", () => {
@@ -29,6 +29,16 @@ test("defense-in-depth: a credential-shaped value reaching effective-config dire
   config.routing.default_worker = "AKIAABCDEFGHIJKLMNOP";
   const effective = buildEffectiveConfig(config);
   assert.equal(effective.routing.default_worker, "[REDACTED]");
+});
+
+test("retry snapshot defense redacts credential and absolute machine path leaves", () => {
+  const snapshot = redactConfigSnapshotJson(JSON.stringify({
+    gate: ["/machine/private/tool"],
+    bearer: "AKIAABCDEFGHIJKLMNOP",
+  }));
+  assert.equal(snapshot.includes("/machine/private/tool"), false);
+  assert.equal(snapshot.includes("AKIAABCDEFGHIJKLMNOP"), false);
+  assert.deepEqual(JSON.parse(snapshot), { gate: ["[REDACTED]"], bearer: "[REDACTED]" });
 });
 
 test("redaction does not mutate the input config", () => {

@@ -115,7 +115,7 @@ markers are earned, never pre-declared. As of this README:
 | **M2** — Durable Persistence | `[x]` | Journal, status store, SQLite projector, crash-recovery/rebuild |
 | **M3** — Execution Kernel ⚠ | `[x]` | Process supervision, the PID-before-spawn barrier, call-budget reservations |
 | **M4** — Real Adapters | `[x]` | `claude-code`, `pi-codex` adapters against captured real provider streams |
-| **M5** — Workflows & Gates | `[x]` | The six workflows, eleven gates, permissions, and correction loop |
+| **M5** — Workflows & Gates | `[x]` | The six workflows, twelve gates, permissions, and correction loop |
 | **M6** — Owner Controls | `[x]` | CLI commands, TTY-only persisted landing, cancel, retry, doctor, rebuild, and list-only gc |
 | **M7** — API & Dashboard | `[x]` | Read-only HTTP API and the loopback Vue dashboard |
 | **M8** — Platform & Pilots | `[wip]` | WSL2 matrix evidence and explicit destination-machine deferrals; two real pilot tasks remain |
@@ -216,7 +216,15 @@ justfile                  thin wrappers over the npm scripts — never a second 
 
 `awsf.config.yaml` at the repository root is the only committed tuning
 surface — adapters, routing, the per-agent Model·Prompt·Harness·Tools dial,
-workflows, gates, risk tiers, policy, observability, and pricing. It is
+workflows, gates, risk tiers, policy, observability, and pricing. Runtime
+`seed_paths` are normalized repository-relative paths only: after creating a
+detached worktree, `awsf start` copies each present Git-ignored seed from the
+canonical repository into the same worktree-relative location. This is local
+provisioning, never installation or a network action; this repository seeds
+`node_modules` so host gates run with project dependencies isolated from the
+canonical checkout. Agent `thinking: xhigh` is valid shared vocabulary, but
+each selected adapter must represent it exactly or reject the descriptor; no
+adapter may floor it to `high`. It is
 validated against the `awsf/v1` TypeBox schema in `core/src/config/schema.ts`
 by the loader in `core/src/config/load.ts`, which hard-rejects:
 
@@ -224,15 +232,25 @@ by the loader in `core/src/config/load.ts`, which hard-rejects:
   this file is "durable intent," committed and versioned forever, and must
   never encode where anything lives on any one machine
 - any credential-shaped value
-- adapter, workflow, or gate identifiers outside the known set
+- traversal, ambiguous separators, overlap, or absolute machine paths in
+  `runtime.seed_paths`; start also refuses missing, tracked/non-ignored,
+  protected, already-present, unsupported, or escaping-link seed material
+- adapter, workflow, or gate identifiers outside the known set (`lint` is a
+  configured host gate; candidate whitespace hygiene is immutable and is not)
 - a risk-tier call ceiling that isn't `{1, 3, 5}`
 - `routing.no_fallback` set to anything but `true`
 - `observability.persist_thinking_text` set to anything but `false` — model
   reasoning is streamed for live display and never persisted
 
 `core/src/config/effective-config.ts` produces the redacted snapshot that
-will back the API/UI and the `sessions.config_snapshot_json` column, with a
+backs the API/UI and the `sessions.config_snapshot_json` column, with a
 defense-in-depth redaction pass on top of what the loader already guarantees.
+`awsf retry` snapshots the currently loaded effective configuration and
+correction allowance into attempt n+1 while preserving task-lifetime call spend;
+it never carries the prior attempt's gate snapshot into execution under a new
+configuration. Every candidate also passes the non-configurable
+`candidate_hygiene` gate (`git diff --check base..candidate`) before any
+configured host command can authorize the owner gate.
 
 ## Portability
 
