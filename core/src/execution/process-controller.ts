@@ -42,7 +42,7 @@ export interface ProcessRow {
   ppid: number;
   /** The process group, or `null` on a platform that has none. */
   pgid: number | null;
-  /** `false` for a zombie: reaped-but-uncollected bookkeeping is not a survivor. */
+  /** `false` for a zombie: exited-but-not-yet-reaped bookkeeping is not a running survivor. */
   alive: boolean;
   /** A MONOTONIC cpu counter in whatever units the port reads. Only deltas mean anything. */
   cpu: number;

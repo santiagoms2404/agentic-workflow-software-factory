@@ -60,7 +60,7 @@ async function watch(
   return { run, monitor, text: () => collected, settled: monitor.finished };
 }
 
-/** Polls a predicate to a deadline. */
+/** Polls a predicate to a deadline, returning as soon as observed state changes. */
 async function until(deadlineMs: number, predicate: () => boolean): Promise<boolean> {
   const stop = Date.now() + deadlineMs;
   for (;;) {
@@ -68,6 +68,21 @@ async function until(deadlineMs: number, predicate: () => boolean): Promise<bool
     if (Date.now() >= stop) return false;
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
+}
+
+/**
+ * The controller truthfully excludes zombies from survivors: they are dead,
+ * not running tree members. Node reaps the direct child on its `exit` event,
+ * which can arrive one event-loop turn after the controller's final `/proc`
+ * census under parallel suite load. Await that event before making the
+ * stronger PID-gone assertion; do not turn a scheduler race into a sleep.
+ */
+async function assertProviderReaped(watched: Watched, pid: number, message: string): Promise<void> {
+  let exitObserved = false;
+  void watched.run.transport.exit.then(() => { exitObserved = true; });
+  const eventArrived = await until(5_000, () => exitObserved);
+  assert.equal(eventArrived, true, "the provider exit event missed its bounded deadline");
+  assert.equal(isRunning(pid), false, message);
 }
 
 test("a provider that says nothing and does nothing trips the silence window and is ended", async () => {
@@ -81,7 +96,7 @@ test("a provider that says nothing and does nothing trips the silence window and
     assert.equal(outcome.error, null);
     assert.equal(outcome.cancellation?.terminated, true);
     assert.deepEqual([...(outcome.cancellation?.survivors ?? [])], []);
-    assert.equal(isRunning(provider), false, "the tree the monitor reported dead is dead");
+    await assertProviderReaped(watched, provider, "the dead provider was not reaped after its exit event");
     assert.deepEqual(processesMentioning(watched.run.runId), []);
   } finally {
     await watched.run.end();
@@ -98,7 +113,11 @@ test("a provider that never stops talking trips the TIMEOUT, never the silence w
     assert.equal(outcome.reason, "timeout");
     assert.equal(outcome.cancellation?.terminated, true);
     assert.ok(watched.text().includes("still working"), "the provider really was producing output");
-    assert.equal(isRunning(watched.run.transport.identity.pid), false);
+    await assertProviderReaped(
+      watched,
+      watched.run.transport.identity.pid,
+      "the timed-out provider was not reaped after its exit event",
+    );
   } finally {
     await watched.run.end();
   }
@@ -121,8 +140,13 @@ test("a record-update failure ends the tree, grandchild included", async () => {
     assert.equal(outcome.reason, "record-update-failed");
     assert.equal(outcome.cancellation?.terminated, true);
     assert.deepEqual([...(outcome.cancellation?.survivors ?? [])], []);
-    assert.equal(isRunning(provider), false, "the provider survived a record-update failure");
-    assert.equal(isRunning(grandchild), false, "the grandchild survived a record-update failure");
+    await assertProviderReaped(
+      watched,
+      provider,
+      "the dead provider was not reaped after the record-update cancellation",
+    );
+    const grandchildReaped = await until(5_000, () => !isRunning(grandchild));
+    assert.equal(grandchildReaped, true, "the dead grandchild was not reaped before the bounded deadline");
   } finally {
     await watched.run.end();
   }
