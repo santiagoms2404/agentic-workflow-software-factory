@@ -7,6 +7,7 @@ import { sendResponse } from "../../api/responses.ts";
 import { SECURITY_HEADERS, validateAuthority } from "../../api/security.ts";
 import { ceilingFor } from "../../state/tiers.ts";
 import { discoverAttempts, rebuildDatabase, type RebuildReport, type RebuildSource } from "../../observability/rebuild.ts";
+import { prepareDatabaseForReadonly } from "../../observability/sqlite.ts";
 import { journalFilePath } from "../../persistence/platform-paths.ts";
 import { toAttemptStatusProjection } from "./attempt-projection.ts";
 import { readAttempt, type AttemptEvent } from "./attempt.ts";
@@ -82,6 +83,9 @@ export async function dashCommand(options: DashOptions): Promise<"not-built" | "
   if (!await exists(index)) {
     options.write("Dashboard is not built yet. Run the dashboard build first; awsf dash never builds it.");
     return "not-built";
+  }
+  if (options.dbPath !== undefined && options.config !== undefined) {
+    prepareDatabaseForReadonly(options.dbPath);
   }
   const router: ApiRouter | null = options.dbPath !== undefined && options.config !== undefined
     ? createApiRouter({ dbPath: options.dbPath, config: options.config }) : null;

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { doctorCommand } from "../../../src/cli/commands/doctor.ts";
 import { dashCommand, gcCommand, rebuildCommand } from "../../../src/cli/commands/operator.ts";
 import { createDashboardProjection } from "../../../src/cli/commands/dashboard-projection.ts";
@@ -14,7 +14,8 @@ import { landCommand } from "../../../src/cli/commands/land.ts";
 import { execFileSync } from "node:child_process";
 import { get, type Server } from "node:http";
 import { getSession, pollEvents, projectionHealth } from "../../../src/observability/queries.ts";
-import { openDatabase } from "../../../src/observability/sqlite.ts";
+import { DatabaseNewerThanBinary, openDatabase } from "../../../src/observability/sqlite.ts";
+import { validConfig } from "../config/fixture.ts";
 
 function bytes(path: string): string { return readFileSync(path, "utf8"); }
 
@@ -79,14 +80,38 @@ test("dash gives a clear message rather than building or serving a missing dashb
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
+function builtDashboard(root: string): string {
+  const dist = join(root, "dashboard", "dist");
+  mkdirSync(join(dist, "assets"), { recursive: true });
+  writeFileSync(join(dist, "index.html"), "<script type=\"module\" src=\"/assets/app.js\"></script>");
+  writeFileSync(join(dist, "assets", "app.js"), "document.body.dataset.ready = 'true';\n");
+  return dist;
+}
+
+function v1Projection(dbPath: string): void {
+  const legacyMigrations = join(dbPath, "..", "legacy-migrations");
+  mkdirSync(legacyMigrations);
+  writeFileSync(
+    join(legacyMigrations, "0001-initial.sql"),
+    readFileSync(resolve("core/src/observability/migrations/0001-initial.sql"), "utf8"),
+  );
+  const db = openDatabase(dbPath, { migrationsDir: legacyMigrations });
+  try {
+    db.prepare(`INSERT INTO sessions
+      (session_id, project_slug, task_id, attempt, workflow_id, risk_tier, is_protected,
+       lifecycle_state, request_text, call_ceiling, started_at, updated_at, config_snapshot_json, journal_path)
+      VALUES ('legacy','p','T',1,'build',1,0,'RUNNING','request',3,'t','t','{}','journal')`).run();
+    db.prepare(`INSERT INTO agent_sessions
+      (session_id, agent, adapter_id, provider, requested_model, created_at, last_used_at)
+      VALUES ('legacy','builder','pi-codex','openai-codex','gpt','t','t')`).run();
+  } finally { db.close(); }
+}
+
 test("dash serves built modules with security headers from loopback only", async () => {
   const root = mkdtempSync(join(tmpdir(), "awsf-dash-built-"));
   let server: Server | null = null;
   try {
-    const dist = join(root, "dashboard", "dist");
-    mkdirSync(join(dist, "assets"), { recursive: true });
-    writeFileSync(join(dist, "index.html"), "<script type=\"module\" src=\"/assets/app.js\"></script>");
-    writeFileSync(join(dist, "assets", "app.js"), "document.body.dataset.ready = 'true';\n");
+    const dist = builtDashboard(root);
     assert.equal(await dashCommand({
       cwd: root,
       assetRoot: dist,
@@ -106,6 +131,63 @@ test("dash serves built modules with security headers from loopback only", async
     if (server?.listening) await new Promise<void>((resolve) => server?.close(() => resolve()));
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("dash migrates a v1 projection before its readonly API opens it", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-dash-v1-"));
+  let server: Server | null = null;
+  try {
+    const dbPath = join(root, "awsf.db");
+    v1Projection(dbPath);
+    assert.equal(await dashCommand({
+      cwd: root, assetRoot: builtDashboard(root), dbPath, config: validConfig(), port: 0, write: () => {},
+      onListening: (running) => { server = running; },
+    }), "serving");
+    const address = server?.address();
+    if (address === null || address === undefined || typeof address === "string") throw new Error("missing dashboard address");
+    const response = await httpGet(address.port, "/api/v1/sessions");
+    assert.equal(response.status, 200);
+    const agent = (JSON.parse(response.body) as { sessions: Array<{ agents: Array<{ sandboxBadge: unknown; sandboxMechanism: unknown }> }> }).sessions[0]?.agents[0];
+    assert.equal(agent?.sandboxBadge, null);
+    assert.equal(agent?.sandboxMechanism, null);
+  } finally {
+    if (server?.listening) await new Promise<void>((done) => server?.close(() => done()));
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("dash initializes an absent disposable projection before listening", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-dash-fresh-"));
+  let server: Server | null = null;
+  try {
+    const dbPath = join(root, "awsf.db");
+    assert.equal(await dashCommand({
+      cwd: root, assetRoot: builtDashboard(root), dbPath, config: validConfig(), port: 0, write: () => {},
+      onListening: (running) => { server = running; },
+    }), "serving");
+    const address = server?.address();
+    if (address === null || address === undefined || typeof address === "string") throw new Error("missing dashboard address");
+    const response = await httpGet(address.port, "/api/v1/sessions");
+    assert.equal(response.status, 200);
+    assert.deepEqual(JSON.parse(response.body), { sessions: [] });
+  } finally {
+    if (server?.listening) await new Promise<void>((done) => server?.close(() => done()));
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("dash refuses a projection newer than this binary before listening", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-dash-newer-"));
+  try {
+    const dbPath = join(root, "awsf.db");
+    const db = openDatabase(dbPath);
+    db.exec("PRAGMA user_version = 99");
+    db.close();
+    await assert.rejects(
+      dashCommand({ cwd: root, assetRoot: builtDashboard(root), dbPath, config: validConfig(), write: () => {}, onListening: () => assert.fail("must not listen") }),
+      DatabaseNewerThanBinary,
+    );
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
 test("the fixture simple-sdlc reaches the interactive owner boundary without a provider", async () => {

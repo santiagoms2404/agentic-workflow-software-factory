@@ -166,11 +166,16 @@ export function runMigrations(db: DatabaseSync, migrationsDir: string = DEFAULT_
 export function openDatabase(path: string, opts: OpenDatabaseOptions = {}): DatabaseSync {
   const readOnly = opts.readonly === true;
   const db = new DatabaseSync(path, { readOnly, enableForeignKeyConstraints: true });
-  if (!readOnly) {
-    probeFeatures();
-    runMigrations(db, opts.migrationsDir);
+  try {
+    if (!readOnly) {
+      probeFeatures();
+      runMigrations(db, opts.migrationsDir);
+    }
+    return db;
+  } catch (err) {
+    db.close();
+    throw err;
   }
-  return db;
 }
 
 /** The dashboard process's sole mutation, kept inside the SQLite write boundary. */
@@ -212,4 +217,14 @@ export function closeDatabase(db: DatabaseSync): void {
     // report that decided its fate.
   }
   db.close();
+}
+
+/**
+ * Brings a disposable projection forward, checkpoints it, and releases the
+ * writer before a dashboard API reader opens it. This is the dashboard's only
+ * schema-readiness operation; its long-lived router remains readonly.
+ */
+export function prepareDatabaseForReadonly(path: string): void {
+  const db = openDatabase(path);
+  closeDatabase(db);
 }
