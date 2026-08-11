@@ -22,11 +22,31 @@ test("sessions embeds ordered phases and agents in one response", async () => {
     assert.equal(body.sessions.length, 1);
     assert.equal(body.sessions[0]?.phases[0]?.phaseId, "phase-1");
     assert.equal(body.sessions[0]?.agents[0]?.agent, "builder");
+    assert.equal(body.sessions[0]?.agents[0]?.sandboxBadge, "tool-policy");
+    assert.equal(body.sessions[0]?.agents[0]?.sandboxMechanism, "adapter-tool-policy");
+    assert.ok((body.sessions[0]?.activity.length ?? 0) > 0);
+    assert.ok((body.sessions[0]?.activity.length ?? 0) <= 96);
+    assert.deepEqual(
+      body.sessions[0]?.activity.map((point) => point.startedAt),
+      body.sessions[0]?.activity.map((point) => point.startedAt).toSorted(),
+    );
     assert.equal(JSON.stringify(body).includes("continuity"), false);
   } finally {
     router.close();
     fixture.close();
   }
+});
+
+test("legacy null sandbox columns stay null at the API boundary", async () => {
+  const fixture = apiFixture();
+  fixture.writer.prepare("UPDATE agent_sessions SET sandbox_badge=NULL, sandbox_mechanism=NULL WHERE session_id='session-1'").run();
+  const router = createApiRouter({ dbPath: fixture.path, config: fixture.config });
+  try {
+    const response = await router.dispatch(request("/api/v1/sessions"));
+    const agent = (response.body as SessionsResponse).sessions[0]?.agents[0];
+    assert.equal(agent?.sandboxBadge, null);
+    assert.equal(agent?.sandboxMechanism, null);
+  } finally { router.close(); fixture.close(); }
 });
 
 test("session and phase detail expose summaries but no private file, process, or continuity references", async () => {

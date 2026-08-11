@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import type { JournalRecord } from "../../../src/persistence/journal.ts";
 import type { NormalizedEvent } from "../../../src/contracts/normalized-events.ts";
 import { openDatabase } from "../../../src/observability/sqlite.ts";
-import { createSession, projectEvent, type ProjectionContext, type SessionInit } from "../../../src/observability/projector.ts";
+import { createSession, projectAttemptStatus, projectEvent, type AttemptStatusProjection, type ProjectionContext, type SessionInit } from "../../../src/observability/projector.ts";
 
 function freshDb() {
   return openDatabase(":memory:");
@@ -36,6 +36,24 @@ function record(seq: number, event: NormalizedEvent): JournalRecord<NormalizedEv
 
 const ctx: ProjectionContext = { sessionId: "s1", runId: "run1", phaseId: null };
 
+function attempt(evidence: AttemptStatusProjection["evidence"]): AttemptStatusProjection {
+  return {
+    ...SESSION,
+    lifecycleState: "RUNNING",
+    baseSha: null,
+    candidateSha: null,
+    callsSpent: 0,
+    callsReserved: 1,
+    correctionsAuto: 0,
+    correctionsOwner: 0,
+    workerModelResolved: null,
+    updatedAt: SESSION.startedAt,
+    endedAt: null,
+    stateRevision: 1,
+    evidence,
+  };
+}
+
 test("createSession is idempotent (INSERT OR IGNORE) and safe to call twice", () => {
   const db = freshDb();
   createSession(db, SESSION);
@@ -54,6 +72,35 @@ test("a run.started event is projected as one events row", () => {
     ...r,
   }));
   assert.deepEqual(rows, [{ type: "run.started", run_id: "run1" }]);
+});
+
+test("agent launch evidence creates a route-attributed null-usage row with exact broker grant", () => {
+  const db = freshDb();
+  const outcome = projectAttemptStatus(db, attempt({
+    type: "agent-start",
+    phaseId: "phase-1",
+    agent: "builder",
+    adapterId: "pi-codex",
+    provider: "openai-codex",
+    color: "#22D3EE",
+    requestedModel: "gpt-5.6-sol",
+    sandboxBadge: "tool-policy",
+    sandboxMechanism: "adapter-tool-policy",
+    at: SESSION.startedAt,
+  }), 1);
+  assert.equal(outcome.ok, true);
+  const row = db.prepare(`SELECT provider, requested_model, resolved_model, model_provenance,
+      call_count, input_tokens, sandbox_badge, sandbox_mechanism FROM agent_sessions`).get();
+  assert.deepEqual({ ...row as object }, {
+    provider: "openai-codex",
+    requested_model: "gpt-5.6-sol",
+    resolved_model: null,
+    model_provenance: "route-attributed",
+    call_count: 0,
+    input_tokens: null,
+    sandbox_badge: "tool-policy",
+    sandbox_mechanism: "adapter-tool-policy",
+  });
 });
 
 test("credential-shaped request and event values are scrubbed before SQLite", () => {

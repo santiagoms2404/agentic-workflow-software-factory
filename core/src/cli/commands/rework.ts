@@ -539,7 +539,8 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
   };
   // This is the actual final request and sandboxed descriptor, including the
   // materialized private path. It is validated before L19 can become durable.
-  const preflightSpec = preflightDescriptor(route, request, (spec) => permission.sandbox(spec).spec);
+  const preflightGrant = permission.sandbox(route.adapter.buildSpec(request));
+  const preflightSpec = preflightDescriptor(route, request, () => preflightGrant.spec);
   const budget = new CallBudget({
     taskId: status.taskId, tier: 1, allowance: status.budget.allowance,
     carried: {
@@ -655,10 +656,24 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
 
   const capturingBroker: TransportBroker = {
     startProcess: async (registration, spec, signal) => {
-      const finalSpec = credentialSafeValue(permission.sandbox(spec).spec, "launch process descriptor");
-      if (JSON.stringify(finalSpec) !== JSON.stringify(preflightSpec)) {
-        throw new ReworkRouteMismatch("launch descriptor changed after its privacy preflight");
+      const launchGrant = permission.sandbox(spec);
+      const finalSpec = credentialSafeValue(launchGrant.spec, "launch process descriptor");
+      if (
+        JSON.stringify(finalSpec) !== JSON.stringify(preflightSpec) ||
+        launchGrant.badge !== preflightGrant.badge ||
+        launchGrant.mechanism !== preflightGrant.mechanism
+      ) {
+        throw new ReworkRouteMismatch("launch descriptor or sandbox grant changed after its privacy preflight");
       }
+      const launchAt = infra.now();
+      await persist("attempt.updated", {
+        lastActivityAt: launchAt,
+        lastActivity: `${phaseKey}: route and sandbox grant recorded before GO`,
+      }, {
+        type: "agent-start", phaseId, agent: route.agent.name, adapterId: route.adapterId,
+        provider: route.model.provider, color: route.agent.color, requestedModel: route.agent.model,
+        sandboxBadge: launchGrant.badge, sandboxMechanism: launchGrant.mechanism, at: launchAt,
+      });
       activeTransport.current = await broker.startProcess(registration, finalSpec, signal);
       return activeTransport.current;
     },

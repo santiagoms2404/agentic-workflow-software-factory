@@ -276,6 +276,25 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
           evidence.outputPath === null ? null : scrubCredentialString(evidence.outputPath),
           evidence.startedAt, evidence.endedAt);
       return;
+    case "agent-start":
+      db.prepare(`INSERT INTO agent_sessions
+        (session_id, agent, adapter_id, provider, color, requested_model, resolved_model,
+         model_provenance, call_count, sandbox_badge, sandbox_mechanism, created_at, last_used_at)
+        VALUES (?, ?, ?, ?, ?, ?, NULL, 'route-attributed', 0, ?, ?, ?, ?)
+        ON CONFLICT(session_id, agent) DO UPDATE SET adapter_id=excluded.adapter_id,
+          provider=excluded.provider, color=excluded.color, requested_model=excluded.requested_model,
+          resolved_model=NULL, model_provenance='route-attributed', context_tokens=NULL,
+          context_window=NULL, input_tokens=NULL, output_tokens=NULL, cache_read_tokens=NULL,
+          cache_write_tokens=NULL, reasoning_tokens=NULL, total_tokens=NULL, estimated_cost_usd=NULL,
+          cost_authority='unavailable', sandbox_badge=excluded.sandbox_badge,
+          sandbox_mechanism=excluded.sandbox_mechanism, last_used_at=excluded.last_used_at`)
+        .run(sessionId, scrubCredentialString(evidence.agent), scrubCredentialString(evidence.adapterId),
+          scrubCredentialString(evidence.provider), evidence.color, scrubCredentialString(evidence.requestedModel),
+          evidence.sandboxBadge, evidence.sandboxMechanism, evidence.at, evidence.at);
+      db.prepare(`UPDATE sessions SET worker_provider=?, worker_model_requested=?, worker_model_resolved=NULL
+        WHERE session_id=?`).run(scrubCredentialString(evidence.provider),
+          scrubCredentialString(evidence.requestedModel), sessionId);
+      return;
     case "agent": {
       const usage = evidence.usage;
       const total = totalTokens(usage);

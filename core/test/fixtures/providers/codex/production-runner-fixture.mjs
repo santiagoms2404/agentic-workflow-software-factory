@@ -12,6 +12,7 @@ const valueAfter = (flag) => {
 };
 const systemPromptPath = valueAfter("--append-system-prompt");
 const mode = valueAfter("--awsf-fixture-mode") ?? "success";
+const liveMs = Math.max(0, Math.min(10_000, Number(valueAfter("--awsf-fixture-live-ms") ?? 0) || 0));
 
 if (systemPromptPath === null || !path.isAbsolute(systemPromptPath)) {
   process.stderr.write("production-runner-fixture: missing absolute system prompt path\n");
@@ -45,6 +46,8 @@ const probe = {
   journalSourceSeqsAtProviderStart: journalAtProviderStart.map((record) => record.source_seq),
 };
 fs.writeFileSync(path.join(path.dirname(systemPromptPath), "provider-probe.json"), JSON.stringify(probe), { mode: 0o600 });
+
+if (liveMs > 0) await new Promise((resolve) => setTimeout(resolve, liveMs));
 
 if (mode === "parser-failure") {
   process.stdout.write("not-json-from-captured-stream-fixture\n");

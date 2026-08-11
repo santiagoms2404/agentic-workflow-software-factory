@@ -23,6 +23,8 @@ export type PhaseStatus =
 export type CostAuthority = "provider" | "catalog-estimate" | "unavailable";
 export type UsageAuthority = "provider" | "partial" | "none";
 export type ModelProvenance = "stream-authoritative" | "route-attributed" | null;
+export type SandboxBadge = "os-enforced" | "tool-policy" | "unavailable";
+export type SandboxMechanism = "linux-bwrap" | "adapter-tool-policy" | "none";
 
 export interface ApiError {
   error: string;
@@ -79,8 +81,20 @@ export interface AgentSummary {
   totalTokens: number | null;
   estimatedCostUsd: number | null;
   costAuthority: CostAuthority;
+  sandboxBadge: SandboxBadge | null;
+  sandboxMechanism: SandboxMechanism | null;
   createdAt: string;
   lastUsedAt: string;
+}
+
+export interface ActivityPoint {
+  id: string;
+  phaseId: string | null;
+  source: "phase" | "event";
+  type: string;
+  status: string | null;
+  startedAt: string;
+  endedAt: string | null;
 }
 
 export interface SessionCard {
@@ -104,6 +118,8 @@ export interface SessionCard {
   usage: UsageTotals;
   phases: PhaseSummary[];
   agents: AgentSummary[];
+  /** Bounded chronological timestamps from canonical phase/event evidence. */
+  activity: ActivityPoint[];
 }
 
 export interface SessionsResponse {
@@ -190,6 +206,7 @@ export interface CompiledPrompt {
 
 export interface PhaseDetailResponse {
   sessionId: string;
+  requestText: string | null;
   phase: PhaseSummary;
   effectiveConfig: unknown;
   compiledPrompts: CompiledPrompt[];

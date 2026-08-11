@@ -38,10 +38,11 @@ export function apiFixture(): {
       'Implement the read surface','RUNNING',0,1,'2026-08-08T12:00:01.000Z','2026-08-08T12:00:00.000Z')`).run();
   writer.prepare(`INSERT INTO agent_sessions
     (session_id, agent, adapter_id, provider, color, requested_model, resolved_model,
-     model_provenance, host_continuity_ref, call_count, cost_authority, created_at, last_used_at)
+     model_provenance, host_continuity_ref, call_count, cost_authority, sandbox_badge,
+     sandbox_mechanism, created_at, last_used_at)
     VALUES ('session-1','builder','pi-codex','openai-codex','#22D3EE','codex:gpt-5.6-sol',
       'gpt-5.6-sol','route-attributed','private://continuity-1',1,'catalog-estimate',
-      '2026-08-08T12:00:00.000Z','2026-08-08T12:00:01.000Z')`).run();
+      'tool-policy','adapter-tool-policy','2026-08-08T12:00:00.000Z','2026-08-08T12:00:01.000Z')`).run();
   writer.prepare(`INSERT INTO transitions
     (transition_id, session_id, seq, from_state, to_state, actor, edge_id, reason_source,
      reason_detail, spawn_site, at)

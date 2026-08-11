@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import type { AwsfConfig, AdapterEntry } from "../../src/config/schema.ts";
@@ -95,9 +95,11 @@ class ScriptedAdapter implements HarnessAdapter {
 
 class CapturedPiAdapter extends PiCodexAdapter {
   readonly #fixtureMode: "success" | "parser-failure";
-  constructor(fixtureMode: "success" | "parser-failure" = "success") {
+  readonly #liveMs: number;
+  constructor(fixtureMode: "success" | "parser-failure" = "success", liveMs = 0) {
     super({ executable: "production-runner-fixture" });
     this.#fixtureMode = fixtureMode;
+    this.#liveMs = liveMs;
   }
   override async isAvailable(): Promise<Availability> { return { status: "available" }; }
   override buildSpec(request: ModelRequest): ProcessSpec {
@@ -105,7 +107,7 @@ class CapturedPiAdapter extends PiCodexAdapter {
     return {
       ...spec,
       executable: CAPTURED_PROVIDER,
-      argv: [...spec.argv, "--awsf-fixture-mode", this.#fixtureMode],
+      argv: [...spec.argv, "--awsf-fixture-mode", this.#fixtureMode, "--awsf-fixture-live-ms", String(this.#liveMs)],
     };
   }
 }
@@ -182,6 +184,8 @@ for (const [workflow, expectedCalls] of [["build", 1], ["plan-build-test", 2]] a
     const world = await fixture(workflow);
     let launches = 0;
     let sawRunning = false;
+    let sawLiveAgent = false;
+    let sawLiveSandbox = false;
     try {
       const prepared = await readAttempt(world.created.attemptDir);
       const status = await runProductionCommand({
@@ -192,8 +196,12 @@ for (const [workflow, expectedCalls] of [["build", 1], ["plan-build-test", 2]] a
           adapterFor: (_entry: AdapterEntry, id: string) => new ScriptedAdapter(id, prepared.worktree!, () => {
             launches += 1;
             const db = openDatabase(join(world.stateRoot, "awsf.db"), { readonly: true });
-            try { sawRunning ||= getSession(db, world.created.status.sessionId)?.lifecycle_state === "RUNNING"; }
-            finally { db.close(); }
+            try {
+              sawRunning ||= getSession(db, world.created.status.sessionId)?.lifecycle_state === "RUNNING";
+              const live = agentsForSession(db, world.created.status.sessionId).find((agent) => agent.resolved_model === null);
+              sawLiveAgent ||= live?.requested_model !== null && live?.resolved_model === null && live?.input_tokens === null;
+              sawLiveSandbox ||= live?.sandbox_badge === "tool-policy" && live?.sandbox_mechanism === "adapter-tool-policy";
+            } finally { db.close(); }
           }),
           createBroker: fakeBroker,
           sandboxProbe: () => false,
@@ -204,6 +212,8 @@ for (const [workflow, expectedCalls] of [["build", 1], ["plan-build-test", 2]] a
       assert.equal(status.budget.callsReserved, 0);
       assert.equal(launches, expectedCalls);
       assert.equal(sawRunning, true, "dashboard projection must see RUNNING before provider completion");
+      assert.equal(sawLiveAgent, true, "route-attributed agent evidence must be visible before provider completion");
+      assert.equal(sawLiveSandbox, true, "the broker grant must be visible before provider completion");
       assert.equal(git(prepared.worktree!, "status", "--porcelain"), "");
       assert.equal(git(prepared.worktree!, "rev-parse", "HEAD"), status.candidateSha);
       assert.match(git(prepared.worktree!, "show", "-s", "--format=%an <%ae>", "HEAD"), /Santiago Marin <santiagomarinsuarez@me.com>/);
@@ -235,7 +245,7 @@ test("process-backed production build crosses the real barrier, parser, audit, a
   const world = await fixture("build");
   try {
     const prepared = await readAttempt(world.created.attemptDir);
-    const status = await runProductionCommand({
+    const running = runProductionCommand({
       attemptDir: world.created.attemptDir,
       config: world.config,
       configPath: world.configPath,
@@ -243,11 +253,36 @@ test("process-backed production build crosses the real barrier, parser, audit, a
       assertLaunchProjection: world.projection.assertLaunchPermitted,
       assertAdvancement: world.projection.assertAdvancement,
       infrastructure: {
-        adapterFor: () => new CapturedPiAdapter(),
+        adapterFor: () => new CapturedPiAdapter("success", 1_200),
         createBroker: (options) => new ProcessTransportBroker(options),
         sandboxProbe: () => false,
       },
     });
+
+    const probePath = join(world.created.attemptDir, "private", "builder", "provider-probe.json");
+    const deadline = Date.now() + 5_000;
+    while (!existsSync(probePath) && Date.now() < deadline) {
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 25));
+    }
+    assert.equal(existsSync(probePath), true, "process-backed fixture must enter its live window");
+    const liveRouter = createApiRouter({ dbPath: join(world.stateRoot, "awsf.db"), config: world.config });
+    try {
+      const response = await liveRouter.dispatch({ method: "GET", url: `/api/v1/sessions/${world.created.status.sessionId}`, headers: { host: "127.0.0.1:4600" } });
+      assert.equal(response.status, 200);
+      const candidate = response.body as import("../../../dashboard/shared/types.ts").SessionDetailResponse;
+      assert.equal(candidate.state, "RUNNING");
+      const builder = candidate.agents.find((agent) => agent.agent === "builder");
+      assert.equal(builder?.provider, "openai-codex");
+      assert.equal(builder?.requestedModel, "codex:gpt-5.6-sol");
+      assert.equal(builder?.resolvedModel, null);
+      assert.equal(builder?.inputTokens, null);
+      assert.equal(builder?.sandboxBadge, "tool-policy");
+      assert.equal(builder?.sandboxMechanism, "adapter-tool-policy");
+      assert.ok(candidate.activity.length > 0, "real phase/event timestamps advance during RUNNING");
+      assert.ok(candidate.processes.some((process) => process.status === "RUNNING"));
+    } finally { liveRouter.close(); }
+
+    const status = await running;
     assert.equal(status.lifecycleState, "AWAITING_OWNER", status.blocker?.detail);
     assert.equal(status.budget.callsSpent, 1);
     assert.equal(status.budget.callsReserved, 0);

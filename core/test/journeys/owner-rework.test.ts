@@ -704,15 +704,30 @@ test("malformed output, permission breach, route mismatch, cancellation, and sur
 test("process-backed L19 repairs candidate A, commits B on top, projects fresh evidence, and spends exactly one call", async () => {
   const fixture = await world({ workflow: "build" });
   const lines: string[] = [];
+  let sawLiveRoute = false;
+  let sawLiveSandbox = false;
   try {
     const result = await reworkCommand({
       attemptDir: fixture.attemptDir, defect: DEFECT, terminal: terminal(true, true, lines),
       config: fixture.config, configPath: fixture.configPath, projectRecord: fixture.projection.project,
       assertAdvancement: fixture.projection.assertAdvancement, assertLaunchProjection: fixture.projection.assertLaunchPermitted,
-      infrastructure: infra(new CapturedPiAdapter(), (options) => new ProcessTransportBroker(options)),
+      infrastructure: infra(new CapturedPiAdapter(), (options) => new ProcessTransportBroker({
+        ...options,
+        register: async (record) => {
+          await options.register(record);
+          const liveDb = openDatabase(join(fixture.stateRoot, "awsf.db"), { readonly: true });
+          try {
+            const live = agentsForSession(liveDb, fixture.status.sessionId).find((row) => row.agent === "builder");
+            sawLiveRoute = live?.requested_model === "codex:gpt-5.6-sol" && live.resolved_model === null;
+            sawLiveSandbox = live?.sandbox_badge === "tool-policy" && live.sandbox_mechanism === "adapter-tool-policy";
+          } finally { liveDb.close(); }
+        },
+      })),
     });
     const status = result.status;
     assert.equal(status.lifecycleState, "AWAITING_OWNER", status.blocker?.detail);
+    assert.equal(sawLiveRoute, true, "L19 route evidence must project before provider completion");
+    assert.equal(sawLiveSandbox, true, "L19 broker grant must project before provider completion");
     assert.equal(status.budget.callsSpent, 2);
     assert.equal(status.budget.callsReserved, 0);
     assert.equal(status.budget.correctionsOwner, 1);

@@ -597,7 +597,14 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
         };
         const sandboxingBroker: TransportBroker = {
           startProcess: async (registration, spec, signal) => {
-            const transport = await broker.startProcess(registration, permission.sandbox(spec).spec, signal);
+            const grant = permission.sandbox(spec);
+            const launchAt = infra.now();
+            await persist("attempt.updated", { lastActivityAt: launchAt, lastActivity: `${phase.id}: route and sandbox grant recorded before GO` }, {
+              type: "agent-start", phaseId: phaseDb, agent: route.agent.name, adapterId: route.adapterId,
+              provider: route.model.provider, color: route.agent.color, requestedModel: route.agent.model,
+              sandboxBadge: grant.badge, sandboxMechanism: grant.mechanism, at: launchAt,
+            });
+            const transport = await broker.startProcess(registration, grant.spec, signal);
             launch.transport = transport;
             return transport;
           },

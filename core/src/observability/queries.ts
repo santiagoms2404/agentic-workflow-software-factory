@@ -107,7 +107,7 @@ export interface PhaseRow {
 }
 
 export function phasesForSession(db: DatabaseSync, sessionId: string): PhaseRow[] {
-  return db.prepare("SELECT * FROM phases WHERE session_id = ? ORDER BY ordinal").all(sessionId) as unknown as PhaseRow[];
+  return db.prepare("SELECT * FROM phases WHERE session_id = ? ORDER BY ordinal LIMIT 100").all(sessionId) as unknown as PhaseRow[];
 }
 
 export function phaseForSession(db: DatabaseSync, sessionId: string, phaseId: string): PhaseRow | null {
@@ -135,6 +135,8 @@ export interface AgentRow {
   total_tokens: number | null;
   estimated_cost_usd: number | null;
   cost_authority: "provider" | "catalog-estimate" | "unavailable";
+  sandbox_badge: "os-enforced" | "tool-policy" | "unavailable" | null;
+  sandbox_mechanism: "linux-bwrap" | "adapter-tool-policy" | "none" | null;
   created_at: string;
   last_used_at: string;
 }
@@ -143,8 +145,9 @@ export function agentsForSession(db: DatabaseSync, sessionId: string): AgentRow[
   return db.prepare(`SELECT session_id, agent, adapter_id, provider, color, requested_model,
       resolved_model, model_provenance, context_tokens, context_window, call_count,
       input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens,
-      total_tokens, estimated_cost_usd, cost_authority, created_at, last_used_at
-    FROM agent_sessions WHERE session_id = ? ORDER BY created_at, agent`).all(sessionId) as unknown as AgentRow[];
+      total_tokens, estimated_cost_usd, cost_authority, sandbox_badge, sandbox_mechanism,
+      created_at, last_used_at
+    FROM agent_sessions WHERE session_id = ? ORDER BY created_at, agent LIMIT 50`).all(sessionId) as unknown as AgentRow[];
 }
 
 export interface EventRow {
@@ -171,6 +174,24 @@ export interface EventRow {
   estimated_cost_usd: number | null;
   cost_authority: "provider" | "catalog-estimate" | "unavailable" | null;
   redaction_level: "public" | "private-ref";
+}
+
+export interface ActivityRow {
+  event_row: number;
+  phase_id: string | null;
+  type: string;
+  status: string | null;
+  started_at: string;
+  ended_at: string | null;
+}
+
+/** Latest canonical event evidence for compact cards and waterfall ticks, returned chronologically. */
+export function compactActivityForSession(db: DatabaseSync, sessionId: string, limit = 80): ActivityRow[] {
+  const bounded = Math.max(1, Math.min(80, Math.trunc(limit)));
+  return db.prepare(`SELECT event_row, phase_id, type, status, started_at, ended_at FROM (
+      SELECT event_row, phase_id, type, status, started_at, ended_at
+      FROM events WHERE session_id = ? ORDER BY event_row DESC LIMIT ?
+    ) ORDER BY event_row`).all(sessionId, bounded) as unknown as ActivityRow[];
 }
 
 export function pollEvents(db: DatabaseSync, sessionId: string, afterEventRow: number, limit = 200): EventRow[] {

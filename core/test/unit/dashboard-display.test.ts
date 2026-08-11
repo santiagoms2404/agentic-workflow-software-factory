@@ -23,5 +23,6 @@ test("dashboard labels model provenance and does not draw an unknown context win
   assert.equal(modelProvenanceLabel("route-attributed"), "route-attributed");
   assert.equal(modelProvenanceLabel(null), "unrecorded");
   assert.equal(contextMeterPercent(100, null), null);
+  assert.equal(contextMeterPercent(null, 100), null);
   assert.equal(contextMeterPercent(50, 100), 50);
 });

@@ -11,17 +11,47 @@ export function costAuthorityLabel(authority: CostAuthority): string {
   return authority === "provider" ? "provider" : authority === "catalog-estimate" ? "estimate" : "subscription";
 }
 
+export function formatTokens(value: number | null): string {
+  if (value === null) return "—";
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}k`;
+  return String(value);
+}
+
 export function formatUsage(usage: UsageTotals): string {
-  if (usage.totalTokens === null) return "—";
-  if (usage.totalTokens >= 1_000_000) return `${(usage.totalTokens / 1_000_000).toFixed(2)}M`;
-  if (usage.totalTokens >= 1_000) return `${(usage.totalTokens / 1_000).toFixed(1)}k`;
-  return String(usage.totalTokens);
+  return formatTokens(usage.totalTokens);
 }
 
 export function formatDuration(startedAt: string, endedAt: string | null, now = Date.now()): string {
   const milliseconds = Math.max(0, (endedAt ? Date.parse(endedAt) : now) - Date.parse(startedAt));
   const seconds = Math.floor(milliseconds / 1000);
-  return seconds >= 60 ? `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, "0")}s` : `${seconds}s`;
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ${String(seconds % 60).padStart(2, "0")}s`;
+  return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, "0")}m`;
+}
+
+export function formatOffset(milliseconds: number): string {
+  const seconds = Math.max(0, Math.round(milliseconds / 1000));
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  return remainder === 0 ? `${minutes}m` : `${minutes}m${String(remainder).padStart(2, "0")}s`;
+}
+
+export function axisTicks(spanMs: number, count = 5): Array<{ percent: number; label: string }> {
+  const span = Math.max(1, spanMs);
+  return Array.from({ length: count }, (_unused, index) => {
+    const percent = count === 1 ? 0 : (index / (count - 1)) * 100;
+    return { percent, label: formatOffset(span * percent / 100) };
+  });
+}
+
+export function formatDate(value: string): string {
+  const time = Date.parse(value);
+  if (!Number.isFinite(time)) return "—";
+  const date = new Date(time);
+  return `${date.toLocaleDateString([], { month: "short", day: "numeric" })} ${date.toLocaleTimeString([], { hour12: false })}`;
 }
 
 export function modelProvenanceLabel(provenance: ModelProvenance): string {
@@ -29,7 +59,8 @@ export function modelProvenanceLabel(provenance: ModelProvenance): string {
 }
 
 export function contextMeterPercent(tokens: number | null, window: number | null): number | null {
-  return window === null ? null : Math.min(100, ((tokens ?? 0) / window) * 100);
+  if (tokens === null || window === null || window <= 0) return null;
+  return Math.min(100, (tokens / window) * 100);
 }
 
 export function stateTone(state: LifecycleState): "ok" | "running" | "error" | "warn" {
@@ -37,4 +68,24 @@ export function stateTone(state: LifecycleState): "ok" | "running" | "error" | "
   if (state === "BLOCKED" || state === "CANCELLED") return "error";
   if (state === "AWAITING_OWNER") return "warn";
   return "running";
+}
+
+export function stateLabel(state: LifecycleState): string {
+  if (state === "LANDED") return "✓ landed";
+  if (state === "RUNNING") return "◌ running";
+  if (state === "AWAITING_OWNER") return "! owner review";
+  if (state === "BLOCKED") return "× blocked";
+  if (state === "CANCELLED") return "× cancelled";
+  return state.toLowerCase().replaceAll("_", " ");
+}
+
+/** Exact recorded provider IDs only; unknown providers keep their full label. */
+export function providerMark(provider: string): string {
+  const marks: Readonly<Record<string, string>> = {
+    "anthropic": "A",
+    "openai": "O",
+    "openai-codex": "O",
+    "google": "G",
+  };
+  return marks[provider] ?? "◆";
 }

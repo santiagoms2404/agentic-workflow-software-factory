@@ -2,6 +2,7 @@ import type { DatabaseSync } from "../observability/sqlite.ts";
 import { openDatabase, setSessionArchived } from "../observability/sqlite.ts";
 import {
   agentsForSession,
+  compactActivityForSession,
   compiledPromptEvents,
   configSnapshotForSession,
   envelopesForPhase,
@@ -24,6 +25,7 @@ import {
 import { buildEffectiveConfig } from "../config/effective-config.ts";
 import type { AwsfConfig } from "../config/schema.ts";
 import type {
+  ActivityPoint,
   AdapterHealth,
   AdaptersResponse,
   AgentSummary,
@@ -127,12 +129,33 @@ function agent(row: AgentRow): AgentSummary {
     totalTokens: row.total_tokens,
     estimatedCostUsd: row.estimated_cost_usd,
     costAuthority: row.cost_authority,
+    sandboxBadge: row.sandbox_badge,
+    sandboxMechanism: row.sandbox_mechanism,
     createdAt: row.created_at,
     lastUsedAt: row.last_used_at,
   };
 }
 
+function activity(db: DatabaseSync, sessionId: string, phases: readonly PhaseSummary[]): ActivityPoint[] {
+  const points: ActivityPoint[] = [];
+  for (const item of phases) {
+    if (item.startedAt === null) {
+      points.push({ id: `${item.phaseId}:queued`, phaseId: item.phaseId, source: "phase", type: "phase_queued", status: item.status, startedAt: item.createdAt, endedAt: null });
+    } else {
+      points.push({ id: `${item.phaseId}:start`, phaseId: item.phaseId, source: "phase", type: "phase_start", status: "RUNNING", startedAt: item.startedAt, endedAt: null });
+    }
+    if (item.endedAt !== null) points.push({ id: `${item.phaseId}:end`, phaseId: item.phaseId, source: "phase", type: "phase_end", status: item.status, startedAt: item.endedAt, endedAt: item.endedAt });
+  }
+  for (const item of compactActivityForSession(db, sessionId, 80)) {
+    points.push({ id: `event:${item.event_row}`, phaseId: item.phase_id, source: "event", type: item.type, status: item.status, startedAt: item.started_at, endedAt: item.ended_at });
+  }
+  return points
+    .sort((left, right) => left.startedAt.localeCompare(right.startedAt) || left.id.localeCompare(right.id))
+    .slice(-96);
+}
+
 function card(db: DatabaseSync, row: SessionRow): SessionCard {
+  const phases = phasesForSession(db, row.session_id).map(phase);
   return {
     sessionId: row.session_id,
     project: row.project_slug,
@@ -152,8 +175,9 @@ function card(db: DatabaseSync, row: SessionRow): SessionCard {
     updatedAt: row.updated_at,
     endedAt: row.ended_at,
     usage: usage(row),
-    phases: phasesForSession(db, row.session_id).map(phase),
+    phases,
     agents: agentsForSession(db, row.session_id).map(agent),
+    activity: activity(db, row.session_id, phases),
   };
 }
 
@@ -361,6 +385,7 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
       }));
       const response: PhaseDetailResponse = {
         sessionId,
+        requestText: found.kind === "engineer" ? session.request_text : null,
         phase: phase(found),
         effectiveConfig: snapshot === null ? {} : parseJson(snapshot),
         compiledPrompts: compiledPromptEvents(readDb, found.phase_id).flatMap((item) => {
