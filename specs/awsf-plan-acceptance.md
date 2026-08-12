@@ -111,7 +111,7 @@ Conventions: test paths are relative to the repository root; `unit | contract | 
 - [ ] **The portability matrix has been filled on each machine it names, from that machine** — per-cell dates and command evidence; no cell filled remotely; macOS cells stay `PENDING` until the Mac runs them locally. — matrix cells in `specs/awsf-plan.html` + per-machine Amendment entries.
 - [ ] **The kill-host and grandchild proofs pass on every write-capable platform, run locally.** — `sim` + `contract` executed per machine in T27.
 - [ ] **Native Windows makes no write-capable claim**: write rows recorded BLOCKED-by-design; dashboard and read-only rows only. — matrix + README consistency check.
-- [ ] **Pilot 1 landed a real T1 task with ≤ 3 calls, counted and categorized, via TTY landing.** — `records/pilots/pilot-1.md` + journal evidence.
+- [x] **Pilot 1 landed a real T1 task with ≤ 3 calls, counted and categorized, via TTY landing.** — `records/pilots/pilot-1.md` + journal evidence.
 - [ ] **Pilot 2 landed a real T2 task with ≤ 5 calls; the review provider is provably the inverse of the worker provider in the session record; the end-user journey ran against the exact candidate SHA.** — `records/pilots/pilot-2.md` + `sessions.review_provider` vs `worker_provider` + `journey_passes` gate row.
 - [ ] **Nothing was deleted and nothing was pushed during either pilot.** — journal sweep + `git reflog` of the target repo.
 
