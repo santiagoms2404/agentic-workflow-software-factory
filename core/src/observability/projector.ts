@@ -291,9 +291,17 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
         .run(sessionId, scrubCredentialString(evidence.agent), scrubCredentialString(evidence.adapterId),
           scrubCredentialString(evidence.provider), evidence.color, scrubCredentialString(evidence.requestedModel),
           evidence.sandboxBadge, evidence.sandboxMechanism, evidence.at, evidence.at);
-      db.prepare(`UPDATE sessions SET worker_provider=?, worker_model_requested=?, worker_model_resolved=NULL
-        WHERE session_id=?`).run(scrubCredentialString(evidence.provider),
-          scrubCredentialString(evidence.requestedModel), sessionId);
+      // The worker columns belong to the worker. A review call reaching them
+      // would overwrite the very fact the inversion is proved from, leaving a
+      // session whose worker and reviewer both read as the reviewer.
+      if ((evidence.purpose ?? "worker") === "worker") {
+        db.prepare(`UPDATE sessions SET worker_provider=?, worker_model_requested=?, worker_model_resolved=NULL
+          WHERE session_id=?`).run(scrubCredentialString(evidence.provider),
+            scrubCredentialString(evidence.requestedModel), sessionId);
+      } else {
+        db.prepare(`UPDATE sessions SET review_provider=? WHERE session_id=?`)
+          .run(scrubCredentialString(evidence.provider), sessionId);
+      }
       return;
     case "agent": {
       const usage = evidence.usage;
@@ -332,17 +340,32 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
       const usageAuthority = current.usage_authority === "none"
         ? evidence.usageAuthority
         : current.usage_authority === evidence.usageAuthority ? current.usage_authority : "partial";
-      db.prepare(`UPDATE sessions SET worker_provider=?, worker_model_requested=?, worker_model_resolved=?,
+      // Usage accumulates across every call the session made, because the
+      // session's cost is the sum of both sides. Route identity does not: only
+      // the worker names the worker columns, and only a review names its own.
+      db.prepare(`UPDATE sessions SET
           input_tokens=?, output_tokens=?, cache_read_tokens=?, cache_write_tokens=?, reasoning_tokens=?,
           total_tokens=?, reasoning_relation=?, usage_authority=?, estimated_cost_usd=?, cost_authority=?, cost_partial=?
-        WHERE session_id=?`).run(evidence.provider, evidence.requestedModel, evidence.resolvedModel,
+        WHERE session_id=?`).run(
           add(current.input_tokens, usage.inputTokens), add(current.output_tokens, usage.outputTokens),
           add(current.cache_read_tokens, usage.cacheReadTokens), add(current.cache_write_tokens, usage.cacheWriteTokens),
           add(current.reasoning_tokens, usage.reasoningTokens), add(current.total_tokens, total),
           usage.reasoningRelation, usageAuthority, add(current.estimated_cost_usd, evidence.costUsd),
           evidence.costAuthority, mixedCost ? 1 : 0, sessionId);
+      if ((evidence.purpose ?? "worker") === "worker") {
+        db.prepare(`UPDATE sessions SET worker_provider=?, worker_model_requested=?, worker_model_resolved=?
+          WHERE session_id=?`).run(evidence.provider, evidence.requestedModel, evidence.resolvedModel, sessionId);
+      } else {
+        db.prepare(`UPDATE sessions SET review_provider=? WHERE session_id=?`).run(evidence.provider, sessionId);
+      }
       return;
     }
+    case "review":
+      // The verdict is the reviewer's own finding, recorded beside the provider
+      // that produced it so the inversion is checkable from one row.
+      db.prepare(`UPDATE sessions SET review_provider=?, review_verdict=? WHERE session_id=?`)
+        .run(scrubCredentialString(evidence.provider), evidence.verdict, sessionId);
+      return;
   }
 }
 

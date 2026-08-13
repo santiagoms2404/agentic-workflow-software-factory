@@ -108,6 +108,27 @@ export class ReworkRouteMismatch extends Error {
   }
 }
 
+/**
+ * Rework re-runs one writable builder phase and produces a new candidate. At T2
+ * that new candidate has never been reviewed, and `verdict_consistent` binds a
+ * review to the exact SHA it read — so landing it would need a review this
+ * command cannot perform, and letting it through would leave an attempt that
+ * gates cleanly and can never satisfy L20. Refusing here is the honest outcome:
+ * the whole pipeline, review included, re-runs through cancel + retry, which
+ * carries the spend forward rather than refunding it.
+ */
+export class ReworkTierUnsupported extends Error {
+  readonly tier: number;
+  constructor(tier: number, taskId: string) {
+    super(
+      `owner rework re-runs only the builder phase, so a tier-${tier} attempt would land a candidate no review has read; ` +
+        `cancel and \`awsf retry ${taskId}\` to re-run the full workflow, including its opposite-provider review, carrying the spend forward`,
+    );
+    this.name = "ReworkTierUnsupported";
+    this.tier = tier;
+  }
+}
+
 export interface ReworkInfrastructure {
   adapterFor(entry: AdapterEntry, adapterId: string, config: AwsfConfig): HarnessAdapter | null;
   createBroker(options: BrokerOptions): TransportBroker;
@@ -291,9 +312,13 @@ function inspectCandidate(status: AttemptStatus): CandidateInspection {
 }
 
 function validateAttempt(status: AttemptStatus, config: AwsfConfig): void {
-  if (!SUPPORTED.has(status.workflow) || status.tier !== 1 || !config.workflows.enabled.includes(status.workflow)) {
-    throw new ProductionWorkflowUnsupported(status.workflow);
+  if (!SUPPORTED.has(status.workflow)) {
+    throw new ProductionWorkflowUnsupported(status.workflow, "owner rework re-runs a single writable builder phase");
   }
+  if (!config.workflows.enabled.includes(status.workflow)) {
+    throw new ProductionWorkflowUnsupported(status.workflow, "not enabled by the effective config");
+  }
+  if (status.tier !== 1) throw new ReworkTierUnsupported(status.tier, status.taskId);
   if (config.project.slug !== status.project) throw new Error("attempt and config project do not match");
   if (toConfigSnapshotJson(config) !== status.configSnapshotJson) throw new ProductionConfigSnapshotMismatch();
 }

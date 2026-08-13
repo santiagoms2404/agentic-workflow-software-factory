@@ -123,15 +123,27 @@ markers are earned, never pre-declared. As of this README:
 
 **Concretely, right now:** the lifecycle, persistence, execution kernel,
 adapters, workflows, gates, permissions, owner CLI, and read-only dashboard are
-implemented. `awsf run TASK` drives configured T1 `build` and `plan-build-test`
-workflows from `PREPARED`; at `AWAITING_OWNER`, `awsf rework TASK "<concrete defect>"`
+implemented. `awsf run TASK` drives configured `build` and `plan-build-test` at
+T1 and `build-review` and `simple-sdlc` at T2 from `PREPARED`; at
+`AWAITING_OWNER`, `awsf rework TASK "<concrete defect>"`
 uses the same configured writable builder route for one fresh L19 call, creates
 a new host-owned candidate on the prior candidate, and reruns fresh gates.
+Rework stays T1-only on purpose: it re-runs one builder phase, and the candidate
+that produces has not been reviewed, so a T2 attempt is told to cancel and
+`awsf retry TASK` — which re-runs the whole workflow, review included, carrying
+the spend forward.
 Unsupported production recipes and any configured continuity that disagrees
 with the selected adapter's verified capability fail closed before launch. The
 explicit `awsf run TASK --stub true` simple-SDLC
 demonstration is unchanged.
-T2 review is not yet production-bound. Landing has one human+TTY authorization
+A T2 run reaches the owner only through `REVIEWING`: the review provider is
+resolved by exclusion from the worker's, a configuration that disagrees is
+refused before any call is spent, and an unreachable reviewer blocks after one
+transport retry rather than substituting. The owner then records the end-user
+journey with `awsf journey TASK --journey ID --sha REVISION` at a TTY — the
+`journey_passes` gate checks separately that it ran, that it passed, and that
+the revision is the exact candidate — and only then may land. Landing has one
+human+TTY authorization
 site and mutates the canonical checkout only by a verified local fast-forward.
 The portability matrix is evidence-backed only where it says so; the two real
 pilots remain outstanding.

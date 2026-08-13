@@ -26,6 +26,24 @@ export class MandatoryReviewUnavailable extends Error {
   }
 }
 
+/**
+ * The exclusion above needs a pair, and the pair is a property of the configured
+ * route surface rather than of any one agent. Blank names are dropped because an
+ * adapter kind with no provider (the fixture route) names no provider at all;
+ * anything other than exactly two distinct providers leaves inversion undefined,
+ * and an undefined inversion must be refused rather than guessed.
+ */
+export function providerPairFrom(providers: readonly string[]): readonly [string, string] {
+  const distinct = [...new Set(providers.map((provider) => provider.trim()).filter((provider) => provider.length > 0))];
+  if (distinct.length !== 2) {
+    throw new InvalidReviewInversion(
+      `inversion needs exactly two distinct providers on the configured route surface; found ${distinct.length}` +
+        (distinct.length === 0 ? "" : ` (${distinct.join(", ")})`),
+    );
+  }
+  return [distinct[0]!, distinct[1]!] as const;
+}
+
 /** Resolves a two-provider route by exclusion; quota and availability are never inputs. */
 export function oppositeProvider(
   workerProvider: string,

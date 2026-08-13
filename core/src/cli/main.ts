@@ -12,6 +12,7 @@ import { cancelCommand } from "./commands/cancel.ts";
 import { doctorCommand } from "./commands/doctor.ts";
 import { dashCommand, gcCommand, rebuildCommand } from "./commands/operator.ts";
 import { createDashboardProjection } from "./commands/dashboard-projection.ts";
+import { journeyCommand } from "./commands/journey.ts";
 import { landCommand } from "./commands/land.ts";
 import { newCommand } from "./commands/new.ts";
 import { locateAttempt } from "./commands/attempt.ts";
@@ -25,7 +26,7 @@ import { watchCommand } from "./commands/watch.ts";
 
 /** The complete owner-facing command table; documentation reconciles against it. */
 export const CLI_COMMANDS = Object.freeze([
-  "new", "start", "run", "status", "watch", "rework", "land", "cancel", "retry",
+  "new", "start", "run", "status", "watch", "rework", "journey", "land", "cancel", "retry",
   "doctor", "gc", "dash", "db rebuild",
 ]);
 
@@ -206,6 +207,26 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         }
         out(`${result.status.lifecycleState}: ${result.status.nextAction}`);
         return result.status.lifecycleState === "AWAITING_OWNER" ? 0 : 1;
+      }
+      case "journey": {
+        const journeyId = parsed.flags["journey"] ?? "";
+        const observedSha = parsed.flags["sha"] ?? "";
+        if (journeyId.trim().length === 0 || observedSha.trim().length === 0) {
+          throw new Error("usage: awsf journey <task> --journey <id> --sha <revision you exercised>");
+        }
+        const result = await journeyCommand({
+          attemptDir: located.attemptDir,
+          terminal: options.terminal ?? processOwnerTerminal(),
+          journeyId,
+          observedSha,
+          projectRecord: projection.project,
+        });
+        if (!result.confirmed) {
+          out("Journey not attested; journeyApproved remains false and nothing was recorded.");
+          return 1;
+        }
+        out(`journey recorded: ${result.status.nextAction}`);
+        return 0;
       }
       case "land": {
         const result = await landCommand({

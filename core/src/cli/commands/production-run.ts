@@ -31,6 +31,15 @@ import { commandsPass } from "../../gates/commands.ts";
 import { envelopeValid } from "../../gates/envelope.ts";
 import { diffMatchesClaims, headAdvanced, noProtectedPaths, writesWithinGlobs } from "../../gates/git-diff.ts";
 import { GateReport, type GateId } from "../../gates/interface.ts";
+import { verdictConsistent } from "../../gates/review.ts";
+import { REVIEW_OUTPUT_SCHEMA_ID, type ReviewOutput } from "../../contracts/review-output.ts";
+import {
+  InvalidReviewInversion,
+  MandatoryReviewUnavailable,
+  oppositeProvider,
+  providerPairFrom,
+  runMandatoryReview,
+} from "../../workflow/review-routing.ts";
 import { assertClean, captureChangeSet, changedPaths, runGit, systemGitRunner } from "../../git/changes.ts";
 import type { AttemptEvidence, PhaseEvidenceRecord } from "../../observability/attempt-evidence.ts";
 import { PermissionBreach } from "../../policy/path-policy.ts";
@@ -44,7 +53,9 @@ import { EnvelopeValidationFailure, PhaseGateFailure, createHostPhaseGit, runAge
 import type { GateDefinition } from "../../workflow/phase.ts";
 import type { PhaseState } from "../../state/phase-machine.ts";
 import { buildWorkflow } from "../../workflow/recipes/build.ts";
+import { buildReviewWorkflow } from "../../workflow/recipes/build-review.ts";
 import { planBuildTestWorkflow } from "../../workflow/recipes/plan-build-test.ts";
+import { simpleSdlcWorkflow } from "../../workflow/recipes/simple-sdlc.ts";
 import {
   nextActionFor,
   nextRevision,
@@ -68,11 +79,20 @@ const HOST = globalThis as unknown as {
 const SUPPORTED = new Map<string, WorkflowRecipe>([
   [buildWorkflow.id, buildWorkflow],
   [planBuildTestWorkflow.id, planBuildTestWorkflow],
+  [buildReviewWorkflow.id, buildReviewWorkflow],
+  [simpleSdlcWorkflow.id, simpleSdlcWorkflow],
 ]);
 
+const SUPPORTED_NAMES = [...SUPPORTED.keys()].join(", ");
+
+/** A review phase is one that produces a review envelope; the id is not the evidence. */
+function isReviewPhase(phase: { readonly kind: string; readonly schemaId?: string }): boolean {
+  return phase.kind === "agent" && phase.schemaId === REVIEW_OUTPUT_SCHEMA_ID;
+}
+
 export class ProductionWorkflowUnsupported extends Error {
-  constructor(workflow: string) {
-    super(`workflow ${JSON.stringify(workflow)} has no complete T1 production binding; supported: build, plan-build-test`);
+  constructor(workflow: string, detail: string) {
+    super(`workflow ${JSON.stringify(workflow)} has no production binding here: ${detail}; supported: ${SUPPORTED_NAMES}`);
     this.name = "ProductionWorkflowUnsupported";
   }
 }
@@ -255,6 +275,7 @@ function phaseGates(
   permission: PermissionSession,
   worktree: string,
   config: AwsfConfig,
+  review: { readonly candidateSha: string | null; readonly candidatePaths: readonly string[] } | null,
 ): readonly GateDefinition[] {
   const observe = (): readonly string[] => changedPaths(permission.before, captureChangeSet(worktree));
   const read = artifactReader(worktree);
@@ -285,7 +306,44 @@ function phaseGates(
       { id: "writes_within_globs", run: () => writesWithinGlobs(observe(), permission.profile.writes) },
     );
   }
+  if (review !== null) {
+    // A review of a different tree is not a review of this change, so the gate
+    // is given the candidate the host actually built rather than the SHA the
+    // reviewer says it read.
+    common.push({
+      id: "verdict_consistent",
+      run: ({ envelope }) => review.candidateSha === null
+        ? new GateReport("verdict_consistent").check("candidate exists to review", false, "no host candidate was created before the review phase")
+        : verdictConsistent(envelope as ReviewOutput, { candidateSha: review.candidateSha, candidatePaths: review.candidatePaths }),
+    });
+    // A reviewer that edits is not a reviewer. `writes: []` makes any observed
+    // path a breach, and this states it as a gate rather than leaving it to the
+    // permission session alone.
+    common.push({ id: "writes_within_globs", run: () => writesWithinGlobs(observe(), permission.profile.writes) });
+  }
   return Object.freeze(common);
+}
+
+/**
+ * The paths the candidate actually changed, read from Git rather than from the
+ * builder's claims — `verdict_consistent` uses this to reject a finding about a
+ * file outside the change under review, so a claimed set would let a reviewer
+ * and a builder agree with each other about a file neither touched. `-z` keeps
+ * unusual bytes in a filename intact, and `--no-renames` makes both sides of a
+ * rename explicit.
+ */
+function candidatePathsBetween(worktree: string, baseSha: string, candidateSha: string): readonly string[] {
+  const output = runGit(systemGitRunner(worktree), ["diff", "--name-only", "--no-renames", "-z", `${baseSha}..${candidateSha}`]);
+  return Object.freeze([...new Set(output.split("\0").filter((path) => path.length > 0))].sort());
+}
+
+/** Transport faults earn the one retry; a refusal, a breach, or exhausted quota never does. */
+function isReviewTransportFailure(error: unknown): boolean {
+  if (error instanceof ProductionRouteUnavailable) return true;
+  if (!(error instanceof AdapterError)) return false;
+  // Quota is structurally never a retry, and a permission or contract failure
+  // would fail identically the second time at the cost of another call.
+  return ["E_TERMINAL_MISSING", "E_BACKEND_FAILURE", "E_TRANSPORT"].includes(error.code);
 }
 
 function gateKind(gateId: GateId): "pure" | "filesystem" | "git" | "subprocess" | "journey" {
@@ -300,6 +358,16 @@ function closestBlocker(error: unknown): { code: string; detail: string } {
   const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
   if (error instanceof PermissionBreach) return { code: "permission-breach", detail };
   if (error instanceof AdapterError && error.code === "E_QUOTA_EXHAUSTED") return { code: "quota-exhausted", detail };
+  // Both review failures classify as `phase-abort`, the same code every other
+  // route failure already carries. Giving them codes of their own would mean
+  // widening L5's blocker vocabulary — a lifecycle-contract change, in a
+  // protected path, made as a side effect of binding a workflow. The detail
+  // string still names `InvalidReviewInversion` or `MandatoryReviewUnavailable`,
+  // so an operator can tell a misconfigured inversion from an unreachable
+  // reviewer without the state machine learning two new words.
+  if (error instanceof InvalidReviewInversion || error instanceof MandatoryReviewUnavailable) {
+    return { code: "phase-abort", detail };
+  }
   if (error instanceof EnvelopeValidationFailure || error instanceof PhaseGateFailure || error instanceof CommandPhaseFailure) {
     return { code: "phase-abort", detail };
   }
@@ -314,8 +382,16 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
   let status = await readAttempt(options.attemptDir);
   if (status.lifecycleState !== "PREPARED") throw new Error(`production run requires PREPARED, got ${status.lifecycleState}`);
   const recipe = SUPPORTED.get(status.workflow);
-  if (recipe === undefined || status.tier !== 1 || recipe.tier !== 1 || !options.config.workflows.enabled.includes(status.workflow)) {
-    throw new ProductionWorkflowUnsupported(status.workflow);
+  // The attempt's tier and the recipe's tier must agree, and the tier is then
+  // carried rather than assumed: a workflow that buys a review and a journey is
+  // not the same product as one that does not, and recording it as T1 would
+  // hand the landing guard a tier whose controls it never asks for.
+  if (recipe === undefined) throw new ProductionWorkflowUnsupported(status.workflow, "no compiled recipe");
+  if (recipe.tier !== status.tier) {
+    throw new ProductionWorkflowUnsupported(status.workflow, `recipe is tier ${recipe.tier} but the attempt is tier ${status.tier}`);
+  }
+  if (!options.config.workflows.enabled.includes(status.workflow)) {
+    throw new ProductionWorkflowUnsupported(status.workflow, "not enabled by the effective config");
   }
   if (status.worktree === null || status.baseSha === null) throw new Error("PREPARED attempt has no managed worktree or base SHA");
   if (options.config.project.slug !== status.project) throw new Error("attempt and config project do not match");
@@ -343,6 +419,12 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
   // Compilation, route shape, prompts, and minimum-call admission all finish before any process.
   const compiled = compileWorkflow(configuredRecipe, status.tier, status.budget.callsSpent);
   const routes = new Map<string, Route>();
+  let inversion: {
+    readonly workerProvider: string;
+    readonly reviewProvider: string;
+    readonly pair: readonly [string, string];
+    readonly reviewPhaseId: string;
+  } | null = null;
   try {
     for (const phase of compiled.phases) {
       if (phase.kind !== "agent") continue;
@@ -381,11 +463,36 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
         systemPrompt: routePrompts.get(phase.id)!.system,
       });
     }
+    // D10: the router decides the review provider by exclusion from the worker's,
+    // and configuration is checked against that answer rather than consulted for
+    // it. This runs before the first process so a config that disagrees costs
+    // nothing — a review that never happened must not be paid for.
+    //
+    // The pair is built from what the adapters *report*, never from the config's
+    // optional `provider` label: that field is decoration a config may omit (the
+    // committed default omits it on the Claude route), while `getModelInfo`
+    // returns the provider the adapter will actually reach.
+    const reviewPhase = compiled.phases.find(isReviewPhase);
+    if (reviewPhase !== undefined) {
+      const workerPhase = compiled.phases.find((phase) => phase.kind === "agent" && !isReviewPhase(phase));
+      if (workerPhase === undefined) throw new ProductionRouteUnavailable(reviewPhase.id, "a review phase has no worker phase to invert against");
+      const workerProvider = routes.get(workerPhase.id)!.model.provider;
+      const pair = providerPairFrom([...routes.values()].map((route) => route.model.provider));
+      const required = oppositeProvider(workerProvider, pair);
+      const configured = routes.get(reviewPhase.id)!.model.provider;
+      if (configured !== required) {
+        throw new InvalidReviewInversion(
+          `worker runs on ${JSON.stringify(workerProvider)}, so the review must run on ${JSON.stringify(required)}; ` +
+            `the configured reviewer route resolves to ${JSON.stringify(configured)}`,
+        );
+      }
+      inversion = { workerProvider, reviewProvider: required, pair, reviewPhaseId: reviewPhase.id };
+    }
   } catch (error) {
     const now = infra.now();
     const reason = closestBlocker(error);
     const decision = transition({
-      from: "PREPARED", to: "BLOCKED", actor: "host", tier: 1,
+      from: "PREPARED", to: "BLOCKED", actor: "host", tier: status.tier,
       reason: { source: "process", code: reason.code, detail: reason.detail }, interactive: false,
       budget: status.budget,
     });
@@ -399,7 +506,7 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
 
   const budget = new CallBudget({
     taskId: status.taskId,
-    tier: 1,
+    tier: status.tier,
     allowance: status.budget.allowance,
     carried: { attempt: status.attempt, callsSpent: status.budget.callsSpent },
   });
@@ -535,13 +642,38 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
     });
   };
 
-  const registrationFor = (phase: CompiledAgentPhase, ordinal: number, route: Route, reservation: Reservation, runId: string, first: boolean): BrokerProcessRegistration => first
-    ? ({ runId, sessionId: status.sessionId, from: "PREPARED", to: "RUNNING", edge: "L4", reservationId: reservation.id, adapterId: route.adapterId, role: route.agent.name } satisfies ProcessRegistration)
-    : ({ kind: "agent-phase", runId, taskSessionId: status.sessionId, workflowId: compiled.id, phaseId: phase.id, phaseOrdinal: ordinal, reservationId: reservation.id, adapterId: route.adapterId, role: route.agent.name } satisfies AgentPhaseProcessRegistration);
+  /**
+   * A phase launched inside RUNNING registers against the compiled workflow; a
+   * phase that IS a lifecycle spawn site registers against its edge. The review
+   * is the second kind — it is the L11 spawn out of GATING, and the phase-launch
+   * verifier correctly refuses an agent-phase registration from any state but
+   * RUNNING.
+   */
+  const registrationFor = (phase: CompiledAgentPhase, ordinal: number, route: Route, reservation: Reservation, runId: string, first: boolean, review: boolean): BrokerProcessRegistration => {
+    if (first) {
+      return { runId, sessionId: status.sessionId, from: "PREPARED", to: "RUNNING", edge: "L4", reservationId: reservation.id, adapterId: route.adapterId, role: route.agent.name } satisfies ProcessRegistration;
+    }
+    if (review) {
+      return { runId, sessionId: status.sessionId, from: "GATING", to: "REVIEWING", edge: "L11", reservationId: reservation.id, adapterId: route.adapterId, role: route.agent.name } satisfies ProcessRegistration;
+    }
+    return { kind: "agent-phase", runId, taskSessionId: status.sessionId, workflowId: compiled.id, phaseId: phase.id, phaseOrdinal: ordinal, reservationId: reservation.id, adapterId: route.adapterId, role: route.agent.name } satisfies AgentPhaseProcessRegistration;
+  };
 
-  const runAgent = async (phase: CompiledAgentPhase, ordinal: number, previous: EnvelopeBase | null, reservation: Reservation, first: boolean): Promise<{ envelope: EnvelopeBase; candidateSha: string | null }> => {
+  const runAgent = async (
+    phase: CompiledAgentPhase,
+    ordinal: number,
+    previous: EnvelopeBase | null,
+    reservation: Reservation,
+    first: boolean,
+    reviewContext: { readonly candidateSha: string | null; readonly candidatePaths: readonly string[] } | null,
+    attempt = 1,
+  ): Promise<{ envelope: EnvelopeBase; candidateSha: string | null }> => {
     const route = routes.get(phase.id)!;
-    const runId = `${status.sessionId}:${phase.id}:run`;
+    const purpose = reviewContext === null ? "worker" : "review";
+    // A retried review is a distinct process and a distinct spent call, so it
+    // needs its own run id; reusing one would collide with the retained raw
+    // output and envelope of the attempt that failed.
+    const runId = `${status.sessionId}:${phase.id}:run${attempt === 1 ? "" : `-${attempt}`}`;
     const phaseDb = dbPhaseId(status.sessionId, phase.id);
     const registeredAt = infra.now();
     const launch: LaunchRecord = { phaseId: phaseDb, adapterId: route.adapterId, role: route.agent.name, registeredAt };
@@ -572,12 +704,12 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
         lineCount: text.split(/\r?\n/).length, at: infra.now(),
       });
     }
-    const gatedPhase = { ...phase, gates: phaseGates(phase.id, permission, status.worktree!, options.config) };
+    const gatedPhase = { ...phase, gates: phaseGates(phase.id, permission, status.worktree!, options.config, reviewContext) };
     let phaseQueue = Promise.resolve();
     const onPhaseState = (next: PhaseState): void => {
       phaseQueue = phaseQueue.then(() => persistPhase(phase.id, next));
     };
-    const realRegistration = registrationFor(phase, ordinal, route, reservation, runId, first);
+    const realRegistration = registrationFor(phase, ordinal, route, reservation, runId, first, reviewContext !== null);
     let sent = false;
     const session: CorrectionSession = {
       identity: { adapter: route.adapter.id, provider: route.model.provider, model: route.model.requestedModel, sessionId: `none:${runId}` },
@@ -602,7 +734,7 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
             await persist("attempt.updated", { lastActivityAt: launchAt, lastActivity: `${phase.id}: route and sandbox grant recorded before GO` }, {
               type: "agent-start", phaseId: phaseDb, agent: route.agent.name, adapterId: route.adapterId,
               provider: route.model.provider, color: route.agent.color, requestedModel: route.agent.model,
-              sandboxBadge: grant.badge, sandboxMechanism: grant.mechanism, at: launchAt,
+              sandboxBadge: grant.badge, sandboxMechanism: grant.mechanism, purpose, at: launchAt,
             });
             const transport = await broker.startProcess(registration, grant.spec, signal);
             launch.transport = transport;
@@ -657,7 +789,7 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
           type: "agent", phaseId: phaseDb, agent: route.agent.name, adapterId: route.adapterId,
           provider: route.model.provider, color: route.agent.color, requestedModel: route.agent.model,
           resolvedModel: resolved.model, modelProvenance: resolved.provenance, contextWindow: route.model.contextWindow,
-          usageAuthority: route.model.usageAuthority, usage, contextTokens: contextTokens(usage), costUsd: null, costAuthority: route.model.costAuthority, at: endedAt,
+          usageAuthority: route.model.usageAuthority, usage, contextTokens: contextTokens(usage), costUsd: null, costAuthority: route.model.costAuthority, purpose, at: endedAt,
         });
         return {
           identity: session.identity,
@@ -685,11 +817,20 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
         authorizeCorrection: () => null,
       });
       await phaseQueue;
-      for (const report of result.gateReports) await persistGate(phase.id, report, result.candidateSha);
+      const gatedSha = reviewContext === null ? result.candidateSha : reviewContext.candidateSha;
+      for (const report of result.gateReports) await persistGate(phase.id, report, gatedSha);
       if (phase.id === "builder") {
         const report = headAdvanced({ baseSha: status.baseSha!, headSha: result.candidateSha, hostCommitExists: result.candidateSha !== null });
         await persistGate(phase.id, report, result.candidateSha);
         if (!report.passed) throw new PhaseGateFailure(phase.id, [report]);
+      }
+      if (reviewContext !== null) {
+        const review = result.envelope.payload! as ReviewOutput;
+        await persist("attempt.updated", { lastActivityAt: infra.now(), lastActivity: `${phase.id}: ${route.model.provider} returned ${review.verdict}` }, {
+          type: "review", phaseId: phaseDb, adapterId: route.adapterId, provider: route.model.provider,
+          verdict: review.verdict, reviewedSha: review.reviewedSha, findingCount: review.findings.length,
+          at: infra.now(),
+        });
       }
       return { envelope: result.envelope.payload!, candidateSha: result.candidateSha };
     } catch (error) {
@@ -719,6 +860,8 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
   let previous: EnvelopeBase | null = null;
   let candidateSha: string | null = null;
   let agentOrdinal = 0;
+  let reviewPhase: { readonly phase: CompiledAgentPhase; readonly ordinal: number } | null = null;
+  let reviewTransportRetries = 0;
   try {
     for (const [index, phase] of compiled.phases.entries()) {
       if (phase.kind === "engineer") {
@@ -729,6 +872,13 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
         continue;
       }
       if (phase.kind === "agent") {
+        // The review is not a RUNNING phase. It is the L11 spawn site out of
+        // GATING, so it is deferred until the host gates have actually passed
+        // and run below against the exact candidate they cleared.
+        if (isReviewPhase(phase)) {
+          reviewPhase = { phase, ordinal: index + 1 };
+          continue;
+        }
         agentOrdinal += 1;
         const reservation = agentOrdinal === 1
           ? firstReservation
@@ -736,7 +886,7 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
         if (agentOrdinal > 1) {
           await persist("attempt.updated", { budget: budget.snapshot(), lastActivityAt: infra.now(), lastActivity: `held one call for ${phase.id}` });
         }
-        const result = await runAgent(phase, index + 1, previous, reservation, agentOrdinal === 1);
+        const result = await runAgent(phase, index + 1, previous, reservation, agentOrdinal === 1, null);
         previous = result.envelope;
         if (result.candidateSha !== null) {
           candidateSha = result.candidateSha;
@@ -823,21 +973,92 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
 
     if (candidateSha === null) throw new Error("workflow completed without a host candidate");
     const l7 = transition({
-      from: "RUNNING", to: "GATING", actor: "host", tier: 1, reason: { source: "git" }, interactive: false,
+      from: "RUNNING", to: "GATING", actor: "host", tier: status.tier, reason: { source: "git" }, interactive: false,
       budget: budget.snapshot(), evidence: { requiredPhasesTerminalSuccess: true, hostCommitCreated: true, baseSha: status.baseSha!, candidateSha },
     });
     await persistTransition("RUNNING", "GATING", l7.edge, "git", null, "all required phases and exact candidate gates succeeded", false, {
       candidateSha, budget: budget.snapshot(), phase: null, lastActivity: "L7 entered host gating on the exact candidate",
     });
     options.assertAdvancement?.(status.sessionId, "AWAITING_OWNER");
-    const l12 = transition({
-      from: "GATING", to: "AWAITING_OWNER", actor: "host", tier: 1, reason: { source: "gate" }, interactive: false,
-      budget: budget.snapshot(), evidence: { gatesPass: true, candidateSha },
+    // Below T2 the gates are the whole story and L12 carries the task to the
+    // owner. At T2 the contract routes through REVIEWING instead: L12 refuses a
+    // T2 task outright, because a tier that bought a review may not reach the
+    // human without one.
+    const t2 = status.tier >= 2;
+    if (t2 && reviewPhase === null) {
+      throw new InvalidReviewInversion(`workflow ${JSON.stringify(compiled.id)} is tier 2 but declares no review phase to invert`);
+    }
+    if (reviewPhase === null) {
+      const l12 = transition({
+        from: "GATING", to: "AWAITING_OWNER", actor: "host", tier: status.tier, reason: { source: "gate" }, interactive: false,
+        budget: budget.snapshot(), evidence: { gatesPass: true, candidateSha },
+      });
+      await persistTransition("GATING", "AWAITING_OWNER", l12.edge, "gate", null, `all required T${status.tier} gates passed`, false, {
+        candidateSha, budget: budget.snapshot(), gatesPass: true,
+        requiredReviewPresent: false, journeyApproved: true, protectedApprovalsValid: true, blocker: null,
+        lastActivity: `all T${status.tier} production phases and gates passed; awaiting owner`,
+      });
+      return status;
+    }
+
+    // L11 is a spawn site: the review call is held here, on the exact candidate
+    // the host gates just cleared, and the provider is the one the preflight
+    // derived by exclusion.
+    const reviewed = candidateSha;
+    const reviewRoute = routes.get(reviewPhase.phase.id)!;
+    const l11 = budget.authorize({
+      from: "GATING", to: "REVIEWING", actor: "host", reason: { source: "gate" }, interactive: false,
+      evidence: { gatesPass: true, candidateSha: reviewed }, spawn: { cost: 1 },
     });
-    await persistTransition("GATING", "AWAITING_OWNER", l12.edge, "gate", null, "all required T1 gates passed", false, {
-      candidateSha, budget: budget.snapshot(), gatesPass: true, requiredReviewPresent: false,
-      journeyApproved: true, protectedApprovalsValid: true, blocker: null,
-      lastActivity: "all T1 production phases and gates passed; awaiting owner",
+    await persistTransition("GATING", "REVIEWING", l11.result.edge, "gate", null, `held one call for the ${inversion!.reviewProvider} review`, true, {
+      candidateSha: reviewed, budget: budget.snapshot(),
+      lastActivity: `L11 held one call for the mandatory ${inversion!.reviewProvider} review of ${reviewed}`,
+    });
+
+    const reviewContext = { candidateSha: reviewed, candidatePaths: candidatePathsBetween(status.worktree!, status.baseSha!, reviewed) };
+    // One fixed-route attempt plus one transport retry, then BLOCKED. The route
+    // is never widened, and a retry holds its own call because the first one was
+    // genuinely spent.
+    const reviewResult = await runMandatoryReview({
+      workerProvider: inversion!.workerProvider,
+      providers: inversion!.pair,
+      isTransportFailure: (error) => {
+        const transport = isReviewTransportFailure(error);
+        if (transport) reviewTransportRetries += 1;
+        return transport;
+      },
+      execute: async (reviewProvider, attempt) => {
+        if (reviewProvider !== reviewRoute.model.provider) {
+          throw new InvalidReviewInversion(`the routed review provider ${JSON.stringify(reviewProvider)} is not the preflighted reviewer route`);
+        }
+        const held = attempt === 1
+          ? l11.reservation!
+          : budget.reserve({ cost: 1, subject: `${compiled.id}:${reviewPhase!.phase.id}:retry` });
+        if (attempt !== 1) {
+          await persist("attempt.updated", { budget: budget.snapshot(), lastActivityAt: infra.now(), lastActivity: `held one call for the single permitted review retry` });
+        }
+        return runAgent(reviewPhase!.phase, reviewPhase!.ordinal, previous, held, false, reviewContext, attempt);
+      },
+    });
+    const reviewOutput = reviewResult.envelope as ReviewOutput;
+
+    const l15 = transition({
+      from: "REVIEWING", to: "AWAITING_OWNER", actor: "host", tier: status.tier, reason: { source: "gate" }, interactive: false,
+      budget: budget.snapshot(),
+      evidence: {
+        gatesPass: true, candidateSha: reviewed,
+        review: { verdict: reviewOutput.verdict, reviewedSha: reviewOutput.reviewedSha, findings: reviewOutput.findings },
+      },
+    });
+    // The review is present because it ran; the journey has not happened yet and
+    // is never assumed. It is the owner's own step against this candidate, and
+    // `awsf journey` is the only thing that records it.
+    await persistTransition("REVIEWING", "AWAITING_OWNER", l15.edge, "gate", null, `${inversion!.reviewProvider} review returned ${reviewOutput.verdict}`, false, {
+      candidateSha: reviewed, budget: budget.snapshot(), gatesPass: true,
+      requiredReviewPresent: true, journeyApproved: false, protectedApprovalsValid: true, blocker: null,
+      phase: null,
+      lastActivity: `opposite-provider review on ${inversion!.reviewProvider} returned ${reviewOutput.verdict} with ${reviewOutput.findings.length} finding(s)`,
+      nextAction: `run \`awsf journey ${status.taskId}\` at a TTY, then \`awsf land ${status.taskId}\``,
     });
     return status;
   } catch (error) {
@@ -851,12 +1072,36 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
       });
       return status;
     }
+    // L17 is the only REVIEWING → BLOCKED edge and its vocabulary is one word,
+    // `review-unavailable`, guarded by a retry count. That is deliberate: the
+    // reviewer being unreachable is the one review failure the contract lets the
+    // host declare terminal. A review that DID answer but answered
+    // inconsistently is refused by L15's own guard instead, and the attempt is
+    // left in REVIEWING with its failed gate recorded, because inventing a
+    // terminal state for it would mean the host deciding what a bad review means.
+    // The owner's exits from there are L18 cancel and L16 rework.
+    if (failedFrom === "REVIEWING") {
+      if (!(error instanceof MandatoryReviewUnavailable)) throw error;
+      const detail = `${error.name}: ${error.message}`;
+      const decision = transition({
+        from: "REVIEWING", to: "BLOCKED", actor: "host", tier: status.tier,
+        reason: { source: "process", code: "review-unavailable", detail },
+        interactive: false, budget: budget.snapshot(),
+        evidence: { reviewTransportRetries },
+      });
+      await persistTransition("REVIEWING", "BLOCKED", decision.edge, "process", "review-unavailable", detail, false, {
+        budget: budget.snapshot(), process: null,
+        blocker: { code: "review-unavailable", detail, ahead: null, behind: null },
+        lastActivity: detail,
+      });
+      return status;
+    }
     if (failedFrom !== "RUNNING" && failedFrom !== "PREPARED") throw error;
     const from = failedFrom;
     const reason = closestBlocker(error);
     const to: TaskState = "BLOCKED";
     const decision = transition({
-      from, to, actor: "host", tier: 1, reason: { source: "process", code: reason.code, detail: reason.detail },
+      from, to, actor: "host", tier: status.tier, reason: { source: "process", code: reason.code, detail: reason.detail },
       interactive: false, budget: budget.snapshot(),
     });
     await persistTransition(from, to, decision.edge, "process", reason.code, reason.detail, false, {
