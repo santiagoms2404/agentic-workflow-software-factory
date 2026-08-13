@@ -1357,28 +1357,44 @@ DONE WHEN: landed via TTY; calls ≤ 3 counted and categorized; dashboard showed
 live; nothing deleted. Markers/metadata/Amendment.
 ```
 
-### T30 — Pilot 2: a real T2 task with opposite-provider review
+### T30 — Pilot 2: the live T2 binding, then a real T2 task with opposite-provider review
 
 ```
 [CHOOSE YOUR PROVIDER — pick by live quota]
   CLAUDE  claude:opus · /effort medium
   GPT     codex:gpt-5.6-sol · reasoning medium
-  SHAPE   operational driving — GPT-FAVOURED for the driving session.
+  SHAPE   operational driving — GPT-FAVOURED for the driving session, EXCEPT when the
+          pilot's own worker runs on GPT: the driving session is the larger consumer
+          by far, and starving the worker's pool blocks a leg D16 forbids rerouting.
   WHY     G6 closes here: the end-user journey against the exact candidate SHA and
           the live review inversion are the two things no stub can prove.
   NOTE    THE INTERNAL PAIRING IS FIXED BY DESIGN: whichever provider builds, the
           other reviews. That inversion IS the experiment — do not substitute, do not
-          soften a routing failure into a same-provider review. HARD CEILING: ≤ 5 calls.
+          soften a routing failure into a same-provider review. HARD CEILING: ≤ 5 calls
+          for PART 2. PART 1 is hand-built and spends none.
 
 Task T30 of specs/awsf-plan.html (M8). Read the T30 block and D10.
 
 ENTRY: T29 is [x]. Owner has named a genuinely tricky task + worker provider.
+The live tier-2 production binding does not exist: T20 proved the inversion on
+stubs and acceptance scoped the delivered production seam to T1, so `awsf run`
+and `awsf rework` refuse a tier-2 recipe and review-routing, verdict_consistent,
+and journey_passes are imported by nothing outside core/test.
 
-DO: drive build-review or simple-sdlc · record the end-user journey and run it
-against the exact candidate SHA (journey_passes gate) · owner reads findings, lands
-via TTY (or exercises L19 rework — also a valid pilot outcome) · write
-records/pilots/pilot-2.md incl. whether the review found anything the gates did not
-(the first datum for the review-yield question).
+DO — PART 1, by hand, zero AWSF calls: admit tier-2 recipes and stop hardcoding
+tier in persisted transitions · route the reviewer phase through
+runMandatoryReview/oppositeProvider, never adapter config alone · apply
+verdict_consistent to the review envelope · write sessions.review_provider and
+review_verdict, which the dashboard already reads · source requiredReviewPresent
+and journeyApproved from measured evidence instead of constants · journeys for
+each, incl. inversion blocking after one transport retry, a refused stale journey
+SHA, and a refused landing when the review is absent.
+
+DO — PART 2: drive build-review or simple-sdlc · record the end-user journey
+BEFORE the build and run it against the exact candidate SHA (journey_passes gate)
+· owner reads findings, lands via TTY (or exercises L19 rework — also a valid
+pilot outcome) · write records/pilots/pilot-2.md incl. whether the review found
+anything the gates did not (the first datum for the review-yield question).
 
 DONE WHEN: the M8 checklist AND the plan's Validation section rows this pilot proves
 are green; calls ≤ 5; review provider provably inverse of worker in the record.
