@@ -9,6 +9,7 @@ export * from "./plan-output.ts";
 export * from "./build-output.ts";
 export * from "./test-output.ts";
 export * from "./review-output.ts";
+export * from "./review-context.ts";
 export * from "./document-output.ts";
 export * from "./scout-output.ts";
 export * from "./normalized-events.ts";

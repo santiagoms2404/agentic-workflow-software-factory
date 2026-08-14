@@ -156,7 +156,9 @@ test("mandatory review and owner-rework routes cannot be converted into phase au
         ...value,
         workflowId: "build-review",
         phaseId: "reviewer",
-        phaseOrdinal: 4,
+        // Fifth, not fourth: `build-review` composes host review evidence
+        // between `tests` and `reviewer`.
+        phaseOrdinal: 5,
         role: "reviewer",
       };
     },

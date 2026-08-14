@@ -53,6 +53,7 @@ test("stub writes outside its globs block with named paths, no correction, and a
       canonicalRepository: canonical,
       worktree,
       sessionRuntime: runtime,
+      stateRoot: join(root, "state"),
       profile: "managed-worker",
       tools: ["read", "write"],
       writes: ["allowed/**"],

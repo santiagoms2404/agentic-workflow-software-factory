@@ -60,7 +60,11 @@ agents:
     purpose: Find concrete defects the deterministic gates do not cover.
     prompt: { system: prompts/reviewer/system.md, user: prompts/reviewer/user.md }
     harness: { adapter: claude, continuity: none }
-    tools: { profile: no-tools, allow: [] }
+    # Judge the code on disk, not the builder's summary of it. `readonly` is
+    # read/grep/find/ls and nothing else — it carries no exec, so the reviewer
+    # still cannot run `git diff` and the host-composed diff is retained
+    # alongside this rather than replaced by it.
+    tools: { profile: readonly, allow: [read, grep, find, ls] }
     writes: [] # a reviewer that cannot fix cannot quietly fix
 
   - name: documenter

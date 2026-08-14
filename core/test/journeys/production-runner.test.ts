@@ -190,7 +190,7 @@ for (const [workflow, expectedCalls] of [["build", 1], ["plan-build-test", 2]] a
     try {
       const prepared = await readAttempt(world.created.attemptDir);
       const status = await runProductionCommand({
-        attemptDir: world.created.attemptDir, config: world.config, configPath: world.configPath,
+        attemptDir: world.created.attemptDir, stateRoot: world.stateRoot, config: world.config, configPath: world.configPath,
         projectRecord: world.projection.project, assertAdvancement: world.projection.assertAdvancement,
         assertLaunchProjection: world.projection.assertLaunchPermitted,
         infrastructure: {
@@ -247,7 +247,7 @@ test("process-backed production build crosses the real barrier, parser, audit, a
   try {
     const prepared = await readAttempt(world.created.attemptDir);
     const running = runProductionCommand({
-      attemptDir: world.created.attemptDir,
+      attemptDir: world.created.attemptDir, stateRoot: world.stateRoot,
       config: world.config,
       configPath: world.configPath,
       projectRecord: world.projection.project,
@@ -363,7 +363,7 @@ test("process-backed parser failure bills the spent call but leaves no held rese
   const world = await fixture("build");
   try {
     const status = await runProductionCommand({
-      attemptDir: world.created.attemptDir,
+      attemptDir: world.created.attemptDir, stateRoot: world.stateRoot,
       config: world.config,
       configPath: world.configPath,
       projectRecord: world.projection.project,
@@ -423,7 +423,7 @@ for (const scenario of ["malformed", "permission", "gate"] as const) {
     try {
       const prepared = await readAttempt(world.created.attemptDir);
       const status = await runProductionCommand({
-        attemptDir: world.created.attemptDir, config: world.config, configPath: world.configPath,
+        attemptDir: world.created.attemptDir, stateRoot: world.stateRoot, config: world.config, configPath: world.configPath,
         projectRecord: world.projection.project, assertLaunchProjection: world.projection.assertLaunchPermitted,
         infrastructure: {
           adapterFor: (_entry: AdapterEntry, id: string) => new ScriptedAdapter(id, prepared.worktree!, () => {}, scenario),
@@ -449,7 +449,7 @@ test("unavailable configured adapter blocks before provider launch", async () =>
   try {
     const prepared = await readAttempt(world.created.attemptDir);
     const status = await runProductionCommand({
-      attemptDir: world.created.attemptDir, config: world.config, configPath: world.configPath,
+      attemptDir: world.created.attemptDir, stateRoot: world.stateRoot, config: world.config, configPath: world.configPath,
       projectRecord: world.projection.project,
       infrastructure: { adapterFor: (_entry: AdapterEntry, id: string) => new UnavailableAdapter(id, prepared.worktree!, () => { launches += 1; }) },
     });
@@ -469,7 +469,7 @@ test("configured continuity mismatch fails closed before broker creation or prov
   try {
     const prepared = await readAttempt(world.created.attemptDir);
     const status = await runProductionCommand({
-      attemptDir: world.created.attemptDir,
+      attemptDir: world.created.attemptDir, stateRoot: world.stateRoot,
       config: world.config,
       configPath: world.configPath,
       projectRecord: world.projection.project,
@@ -502,7 +502,7 @@ test("configured none on a CAPABLE adapter is a narrowing the owner may make, no
   try {
     const prepared = await readAttempt(world.created.attemptDir);
     const status = await runProductionCommand({
-      attemptDir: world.created.attemptDir,
+      attemptDir: world.created.attemptDir, stateRoot: world.stateRoot,
       config: world.config,
       configPath: world.configPath,
       projectRecord: world.projection.project,
@@ -533,7 +533,7 @@ test("a route that CLAIMS same-session correction without the transport is refus
   try {
     const prepared = await readAttempt(world.created.attemptDir);
     const status = await runProductionCommand({
-      attemptDir: world.created.attemptDir,
+      attemptDir: world.created.attemptDir, stateRoot: world.stateRoot,
       config: world.config,
       configPath: world.configPath,
       projectRecord: world.projection.project,
@@ -558,7 +558,7 @@ test("registration failure refunds the held call and blocks without provider exe
   try {
     const prepared = await readAttempt(world.created.attemptDir);
     const status = await runProductionCommand({
-      attemptDir: world.created.attemptDir, config: world.config, configPath: world.configPath,
+      attemptDir: world.created.attemptDir, stateRoot: world.stateRoot, config: world.config, configPath: world.configPath,
       projectRecord: world.projection.project,
       infrastructure: {
         adapterFor: (_entry: AdapterEntry, id: string) => new ScriptedAdapter(id, prepared.worktree!, () => { providerRan = true; }),
@@ -581,7 +581,7 @@ test("immutable candidate hygiene blocks Markdown trailing spaces before configu
   try {
     const prepared = await readAttempt(world.created.attemptDir);
     const status = await runProductionCommand({
-      attemptDir: world.created.attemptDir, config: world.config, configPath: world.configPath,
+      attemptDir: world.created.attemptDir, stateRoot: world.stateRoot, config: world.config, configPath: world.configPath,
       projectRecord: world.projection.project, assertLaunchProjection: world.projection.assertLaunchPermitted,
       infrastructure: {
         adapterFor: (_entry: AdapterEntry, id: string) => new ScriptedAdapter(id, prepared.worktree!, () => {}, "hygiene"),
@@ -617,7 +617,7 @@ test("configured command failure retains exact evidence and blocks", async () =>
   try {
     const prepared = await readAttempt(world.created.attemptDir);
     const status = await runProductionCommand({
-      attemptDir: world.created.attemptDir, config: world.config, configPath: world.configPath,
+      attemptDir: world.created.attemptDir, stateRoot: world.stateRoot, config: world.config, configPath: world.configPath,
       projectRecord: world.projection.project, assertLaunchProjection: world.projection.assertLaunchPermitted,
       infrastructure: {
         adapterFor: (_entry: AdapterEntry, id: string) => new ScriptedAdapter(id, prepared.worktree!, () => {}),
@@ -641,7 +641,7 @@ test("projector degradation holds successful work at GATING rather than killing 
   try {
     const prepared = await readAttempt(world.created.attemptDir);
     const status = await runProductionCommand({
-      attemptDir: world.created.attemptDir, config: world.config, configPath: world.configPath,
+      attemptDir: world.created.attemptDir, stateRoot: world.stateRoot, config: world.config, configPath: world.configPath,
       projectRecord: world.projection.project, assertLaunchProjection: world.projection.assertLaunchPermitted,
       assertAdvancement: (_sessionId, to) => { if (to === "AWAITING_OWNER") throw new Error("fixture degraded projection hold"); },
       infrastructure: {
@@ -670,7 +670,7 @@ test("production refuses a current config that differs from durable attempt evid
     const before = readFileSync(join(world.created.attemptDir, "journal.jsonl"), "utf8");
     await assert.rejects(
       runProductionCommand({
-        attemptDir: world.created.attemptDir,
+        attemptDir: world.created.attemptDir, stateRoot: world.stateRoot,
         config: changedConfig,
         configPath: world.configPath,
         infrastructure: { adapterFor: () => { routeResolved = true; return null; } },
@@ -690,7 +690,7 @@ test("unsupported production workflow fails before lifecycle mutation", async ()
   const world = await fixture("simple-sdlc");
   try {
     const before = readFileSync(join(world.created.attemptDir, "journal.jsonl"), "utf8");
-    await assert.rejects(runProductionCommand({ attemptDir: world.created.attemptDir, config: world.config, configPath: world.configPath }), ProductionWorkflowUnsupported);
+    await assert.rejects(runProductionCommand({ attemptDir: world.created.attemptDir, stateRoot: world.stateRoot, config: world.config, configPath: world.configPath }), ProductionWorkflowUnsupported);
     assert.equal(readFileSync(join(world.created.attemptDir, "journal.jsonl"), "utf8"), before);
     assert.equal((await readAttempt(world.created.attemptDir)).lifecycleState, "PREPARED");
   } finally {

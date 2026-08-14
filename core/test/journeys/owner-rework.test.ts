@@ -315,7 +315,7 @@ test("owner rework rejects non-TTY, decline, blank defect, and wrong state witho
       if (scenario === "wrong-state") await update(fixture, { lifecycleState: "GATING" });
       const before = (await readAttempt(fixture.attemptDir)).revision;
       const action = reworkCommand({
-        attemptDir: fixture.attemptDir, defect: scenario === "blank" ? "   " : scenario === "generic" ? "try again" : DEFECT,
+        attemptDir: fixture.attemptDir, stateRoot: fixture.stateRoot, defect: scenario === "blank" ? "   " : scenario === "generic" ? "try again" : DEFECT,
         terminal: terminal(scenario !== "decline", scenario !== "non-tty"), config: fixture.config, configPath: fixture.configPath,
         projectRecord: fixture.projection.project, infrastructure: infra(adapter),
       });
@@ -344,7 +344,7 @@ test("credential-shaped owner and retained inputs fail before confirmation with 
     let failure: unknown;
     try {
       const action = reworkCommand({
-        attemptDir: fixture.attemptDir,
+        attemptDir: fixture.attemptDir, stateRoot: fixture.stateRoot,
         defect: source === "defect" ? `${DEFECT}; observed ${credential}` : DEFECT,
         terminal: {
           interactive: true,
@@ -404,7 +404,7 @@ test("credential-shaped provider output split across deltas reaches no raw, jour
   const adapter = new CredentialOutputAdapter(credential);
   try {
     const result = await reworkCommand({
-      attemptDir: fixture.attemptDir, defect: DEFECT, terminal: terminal(true),
+      attemptDir: fixture.attemptDir, stateRoot: fixture.stateRoot, defect: DEFECT, terminal: terminal(true),
       config: fixture.config, configPath: fixture.configPath,
       projectRecord: fixture.projection.project,
       infrastructure: infra(adapter, (options) => releasedBroker(options)),
@@ -457,7 +457,7 @@ test("exhausted owner allowance and exhausted call ceiling are refused before pr
         ? { ...fixture.status.budget, correctionsOwner: fixture.status.budget.allowance.owner }
         : { ...fixture.status.budget, callsSpent: 3 } });
       const action = reworkCommand({
-        attemptDir: fixture.attemptDir, defect: DEFECT, terminal: terminal(true),
+        attemptDir: fixture.attemptDir, stateRoot: fixture.stateRoot, defect: DEFECT, terminal: terminal(true),
         config: fixture.config, configPath: fixture.configPath, infrastructure: infra(adapter),
       });
       if (scenario === "allowance") await assert.rejects(action, CorrectionAllowanceExhausted);
@@ -478,7 +478,7 @@ test("dirty or mismatched candidate and unavailable fixed route refuse before L1
       if (scenario === "mismatch") await update(fixture, { candidateSha: "a".repeat(40) });
       if (scenario === "unavailable") adapter.isAvailable = async () => ({ status: "blocked", detail: "selected route unavailable" });
       await assert.rejects(reworkCommand({
-        attemptDir: fixture.attemptDir, defect: DEFECT, terminal: terminal(true), config: fixture.config, configPath: fixture.configPath,
+        attemptDir: fixture.attemptDir, stateRoot: fixture.stateRoot, defect: DEFECT, terminal: terminal(true), config: fixture.config, configPath: fixture.configPath,
         infrastructure: { ...infra(adapter), createBroker: () => { routeCalls += 1; throw new Error("must not create broker"); } },
       }));
       const status = await readAttempt(fixture.attemptDir);
@@ -501,7 +501,7 @@ test("the actual private prompt descriptor rejects invalid, unreadable, and inse
         ? "relative-system-prompt.md"
         : join(fixture.root, `${scenario}-system-prompt.md`);
       await assert.rejects(reworkCommand({
-        attemptDir: fixture.attemptDir, defect: DEFECT, terminal: terminal(true),
+        attemptDir: fixture.attemptDir, stateRoot: fixture.stateRoot, defect: DEFECT, terminal: terminal(true),
         config: fixture.config, configPath: fixture.configPath,
         projectRecord: fixture.projection.project,
         infrastructure: {
@@ -536,7 +536,7 @@ test("L19 reservation is durable before registration and a pre-GO registration r
   let checkedAfterRegister = false;
   try {
     const result = await reworkCommand({
-      attemptDir: fixture.attemptDir, defect: DEFECT, terminal: terminal(true), config: fixture.config, configPath: fixture.configPath,
+      attemptDir: fixture.attemptDir, stateRoot: fixture.stateRoot, defect: DEFECT, terminal: terminal(true), config: fixture.config, configPath: fixture.configPath,
       projectRecord: fixture.projection.project, assertLaunchProjection: fixture.projection.assertLaunchPermitted,
       infrastructure: infra(adapter, (options) => ({
         async startProcess(registration, spec) {
@@ -586,7 +586,7 @@ test("every post-L19 setup boundary settles the reservation and reaches a legal 
     let registrations = 0;
     try {
       const result = await reworkCommand({
-        attemptDir: fixture.attemptDir, defect: DEFECT, terminal: terminal(true),
+        attemptDir: fixture.attemptDir, stateRoot: fixture.stateRoot, defect: DEFECT, terminal: terminal(true),
         config: fixture.config, configPath: fixture.configPath,
         projectRecord: async (record, status) => {
           projections += 1;
@@ -635,7 +635,7 @@ test("persistence failures after a known successful exit retain EXITED/code 0 wi
     let injected = false;
     try {
       const result = await reworkCommand({
-        attemptDir: fixture.attemptDir, defect: DEFECT, terminal: terminal(true),
+        attemptDir: fixture.attemptDir, stateRoot: fixture.stateRoot, defect: DEFECT, terminal: terminal(true),
         config: fixture.config, configPath: fixture.configPath,
         projectRecord: async (record, status) => {
           await fixture.projection.project(record, status);
@@ -687,7 +687,7 @@ test("malformed output, permission breach, route mismatch, cancellation, and sur
     const adapter = new EvidenceAdapter(scenario);
     try {
       const result = await reworkCommand({
-        attemptDir: fixture.attemptDir, defect: DEFECT, terminal: terminal(true), config: fixture.config, configPath: fixture.configPath,
+        attemptDir: fixture.attemptDir, stateRoot: fixture.stateRoot, defect: DEFECT, terminal: terminal(true), config: fixture.config, configPath: fixture.configPath,
         projectRecord: fixture.projection.project, assertLaunchProjection: fixture.projection.assertLaunchPermitted,
         infrastructure: infra(adapter, (options) => releasedBroker(options, scenario === "cancelled" ? [9001] : [])),
       });
@@ -709,7 +709,7 @@ test("process-backed L19 repairs candidate A, commits B on top, projects fresh e
   let sawLiveSandbox = false;
   try {
     const result = await reworkCommand({
-      attemptDir: fixture.attemptDir, defect: DEFECT, terminal: terminal(true, true, lines),
+      attemptDir: fixture.attemptDir, stateRoot: fixture.stateRoot, defect: DEFECT, terminal: terminal(true, true, lines),
       config: fixture.config, configPath: fixture.configPath, projectRecord: fixture.projection.project,
       assertAdvancement: fixture.projection.assertAdvancement, assertLaunchProjection: fixture.projection.assertLaunchPermitted,
       infrastructure: infra(new CapturedPiAdapter(), (options) => new ProcessTransportBroker({
@@ -773,7 +773,7 @@ test("projection hold retains the freshly gated candidate at GATING instead of r
   const fixture = await world();
   try {
     const result = await reworkCommand({
-      attemptDir: fixture.attemptDir, defect: DEFECT, terminal: terminal(true), config: fixture.config, configPath: fixture.configPath,
+      attemptDir: fixture.attemptDir, stateRoot: fixture.stateRoot, defect: DEFECT, terminal: terminal(true), config: fixture.config, configPath: fixture.configPath,
       projectRecord: fixture.projection.project, assertLaunchProjection: fixture.projection.assertLaunchPermitted,
       assertAdvancement: (_sessionId, to) => { if (to === "AWAITING_OWNER") throw new Error("fixture projection hold"); },
       infrastructure: infra(new CapturedPiAdapter(), (options) => new ProcessTransportBroker(options)),
@@ -789,7 +789,7 @@ test("configured gate failure retains candidate B and preserves candidate A gate
   const fixture = await world({ commandExit: 7 });
   try {
     const result = await reworkCommand({
-      attemptDir: fixture.attemptDir, defect: DEFECT, terminal: terminal(true), config: fixture.config, configPath: fixture.configPath,
+      attemptDir: fixture.attemptDir, stateRoot: fixture.stateRoot, defect: DEFECT, terminal: terminal(true), config: fixture.config, configPath: fixture.configPath,
       projectRecord: fixture.projection.project, assertLaunchProjection: fixture.projection.assertLaunchPermitted,
       infrastructure: infra(new CapturedPiAdapter(), (options) => new ProcessTransportBroker(options)),
     });

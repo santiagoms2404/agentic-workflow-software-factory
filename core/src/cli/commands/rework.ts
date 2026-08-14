@@ -148,6 +148,8 @@ const DEFAULT_INFRASTRUCTURE: ReworkInfrastructure = {
 
 export interface ReworkCommandOptions {
   readonly attemptDir: string;
+  /** Masked inside the sandbox namespace; see `policy/sandbox-broker.ts`. */
+  readonly stateRoot: string;
   readonly defect: string;
   readonly terminal: OwnerTerminal;
   readonly config: AwsfConfig;
@@ -552,6 +554,7 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
     canonicalRepository: status.repository,
     worktree: status.worktree!,
     sessionRuntime: runtimeDir,
+    stateRoot: options.stateRoot,
     profile: route.agent.tools.profile,
     tools: route.agent.tools.allow,
     writes: route.agent.writes,

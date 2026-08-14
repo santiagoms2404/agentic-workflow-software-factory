@@ -2,12 +2,14 @@ import type {
   BuildOutput,
   DocumentOutput,
   PlanOutput,
+  ReviewContext,
   ReviewOutput,
   ScoutOutput,
   TestOutput,
 } from "../../../src/contracts/index.ts";
 
 const SHA_A = "a".repeat(40);
+const SHA_B = "b".repeat(40);
 
 export function validPlanOutput(): PlanOutput {
   return {
@@ -93,6 +95,44 @@ export function validReviewOutput(): ReviewOutput {
   };
 }
 
+export function validReviewContext(): ReviewContext {
+  return {
+    schema: "awsf.review-context/v1",
+    producerStatus: "success",
+    summary: "Candidate against base: 1 file, +2/-1.",
+    artifacts: [],
+    notesForNextPhase: "Judge this candidate against the recorded request.",
+    request: "Reject unknown envelope fields at every depth.",
+    goals: ["Unknown fields are rejected."],
+    nonGoals: ["A second YAML workflow format."],
+    acceptanceCriteria: ["Unknown fields are rejected at every depth."],
+    testStrategy: ["Unit tests under core/test/unit/contracts/."],
+    baseSha: SHA_B,
+    candidateSha: SHA_A,
+    changedFiles: ["core/src/contracts/index.ts"],
+    insertions: 2,
+    deletions: 1,
+    stat: " core/src/contracts/index.ts | 3 ++-\n 1 file changed, 2 insertions(+), 1 deletion(-)\n",
+    diff: [
+      "diff --git a/core/src/contracts/index.ts b/core/src/contracts/index.ts",
+      "--- a/core/src/contracts/index.ts",
+      "+++ b/core/src/contracts/index.ts",
+      "@@ -1,2 +1,3 @@",
+      " export * from \"./typebox.ts\";",
+      "-export * from \"./old.ts\";",
+      "+export * from \"./envelope-base.ts\";",
+      "+export * from \"./registry.ts\";",
+      "",
+    ].join("\n"),
+    diffTruncated: false,
+    diffOmittedChars: 0,
+    diffOmittedFiles: [],
+    diffSha256: "c".repeat(64),
+    diffRef: `raw/review-context-${SHA_A}.diff`,
+    testOutput: validTestOutput(),
+  };
+}
+
 export function validDocumentOutput(): DocumentOutput {
   return {
     schema: "awsf.document-output/v1",
@@ -117,12 +157,13 @@ export function validScoutOutput(): ScoutOutput {
   };
 }
 
-/** Every envelope fixture, keyed by schema id — so suites can iterate all six uniformly. */
+/** Every envelope fixture, keyed by schema id — so suites can iterate all seven uniformly. */
 export const VALID_ENVELOPES = {
   "awsf.plan-output/v1": validPlanOutput,
   "awsf.build-output/v1": validBuildOutput,
   "awsf.test-output/v1": validTestOutput,
   "awsf.review-output/v1": validReviewOutput,
+  "awsf.review-context/v1": validReviewContext,
   "awsf.document-output/v1": validDocumentOutput,
   "awsf.scout-output/v1": validScoutOutput,
 } as const;

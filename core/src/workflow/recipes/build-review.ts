@@ -1,5 +1,6 @@
 import { BuildOutputSchema } from "../../contracts/build-output.ts";
 import { PlanOutputSchema } from "../../contracts/plan-output.ts";
+import { ReviewContextSchema } from "../../contracts/review-context.ts";
 import { ReviewOutputSchema } from "../../contracts/review-output.ts";
 import { TestOutputSchema } from "../../contracts/test-output.ts";
 import type { WorkflowRecipe } from "../compiler.ts";
@@ -41,6 +42,20 @@ export const buildReviewWorkflow = {
       maxCorrections: 0,
       gates: [],
       execute: (context) => requireHostExecution("tests", context),
+    },
+    {
+      // A host phase, so it adds no agent call and no tier ceiling moves. It
+      // exists because the reviewer has exactly one envelope slot and needs
+      // more than one phase's output in it.
+      id: "review-context",
+      kind: "code",
+      owner: "host",
+      description: "Compose the host-observed diff, intent, and gate evidence the reviewer must judge against",
+      schemaId: "awsf.review-context/v1",
+      outputSchema: ReviewContextSchema,
+      maxCorrections: 0,
+      gates: [],
+      execute: (context) => requireHostExecution("review-context", context),
     },
     {
       id: "reviewer",

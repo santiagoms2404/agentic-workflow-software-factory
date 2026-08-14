@@ -12,6 +12,7 @@ const ROOTS = {
   canonicalRepository: "/srv/repos/project",
   worktree: "/srv/awsf-worktrees/attempt-1",
   sessionRuntime: "/srv/awsf-state/sessions/s1/attempts/1",
+  stateRoot: "/srv/awsf-state",
 };
 
 const SPEC = {
@@ -53,16 +54,45 @@ test("the badge distinguishes Linux tool policy from an unverified Darwin sandbo
   assert.equal(darwin.spec, SPEC);
 });
 
+test("the bwrap namespace masks the state root before it rebinds this phase's runtime", () => {
+  // `--ro-bind / /` makes the WHOLE host filesystem readable, and `writes: []`
+  // confines writes only. A readonly reviewer holding a model-driven Read that
+  // can name an absolute path would otherwise reach every other attempt's
+  // directory and this attempt's own `private/`. bwrap applies binds in argv
+  // order, so the ORDER below is the control and is asserted exactly.
+  const grant = grantSandbox(SPEC, { ...ROOTS, writes: [], platform: "linux" }, () => true);
+  const argv = grant.spec.argv;
+  const rootBind = argv.indexOf("--ro-bind");
+  const mask = argv.indexOf("--tmpfs");
+  const runtime = argv.lastIndexOf(ROOTS.sessionRuntime);
+
+  assert.equal(argv[mask + 1], ROOTS.stateRoot, "the mask covers the state root itself");
+  assert.ok(mask > rootBind, "the mask must come after the whole-filesystem read bind it narrows");
+  assert.equal(argv[rootBind + 1], "/");
+  assert.ok(runtime > mask, "this phase's own runtime is rebound after the mask, or it would be hidden too");
+  assert.equal(argv[argv.indexOf(ROOTS.sessionRuntime) - 1], "--bind", "the runtime stays writable");
+  assert.deepEqual(argv.slice(0, mask + 2), [
+    "--die-with-parent", "--new-session", "--unshare-all", "--share-net",
+    "--ro-bind", "/", "/",
+    "--tmpfs", ROOTS.stateRoot,
+  ]);
+});
+
 test("the canonical checkout cannot overlap any sandbox writable root", () => {
   assert.throws(() => assertSandboxRoots({
     canonicalRepository: "/srv/repos/project",
     worktree: "/srv/repos/project/.worktrees/a",
     sessionRuntime: ROOTS.sessionRuntime,
+    stateRoot: ROOTS.stateRoot,
   }), /disjoint/);
   assert.throws(() => assertSandboxRoots({
     ...ROOTS,
     sessionRuntime: "/srv/repos/project/runtime",
   }), /canonical repository writable/);
+  assert.throws(() => assertSandboxRoots({
+    ...ROOTS,
+    stateRoot: "relative/state",
+  }), /absolute machine-local path/);
 });
 
 function gitRunner(outputs: Record<string, string[]>): GitRunner {
@@ -117,6 +147,35 @@ test("a reviewer configured writes: [] aborts if it edits a repository file", ()
     sandboxProbe: () => false,
     git,
   });
+  assert.throws(() => reviewer.enforce(), (error: Error) => {
+    if (!(error instanceof PermissionBreach)) return false;
+    assert.deepEqual(error.offendingPaths, ["quiet-fix.ts"]);
+    return true;
+  });
+});
+
+test("the widened readonly reviewer may read the worktree and still may not write to it", () => {
+  const git = gitRunner({
+    "status --porcelain": [""],
+    "diff HEAD --numstat --no-renames -z": ["", "1\t0\tquiet-fix.ts\0"],
+    "ls-files --others --exclude-standard -z": ["", ""],
+  });
+  const reviewer = new PermissionSession({
+    ...ROOTS,
+    writes: [],
+    protectedPaths: [],
+    profile: "readonly",
+    tools: ["read", "grep", "find", "ls"],
+    platform: "linux",
+    sandboxProbe: () => true,
+    git,
+  });
+  // Reading is the point of the widening; `writes: []` is what keeps it from
+  // becoming a second builder, and the worktree bind stays read-only with it.
+  assert.equal(reviewer.profile.repositoryReadOnly, true);
+  const grant = reviewer.sandbox(SPEC);
+  assert.deepEqual(grant.writableRoots, [ROOTS.sessionRuntime]);
+  assert.equal(grant.spec.argv[grant.spec.argv.indexOf(ROOTS.worktree) - 1], "--ro-bind");
   assert.throws(() => reviewer.enforce(), (error: Error) => {
     if (!(error instanceof PermissionBreach)) return false;
     assert.deepEqual(error.offendingPaths, ["quiet-fix.ts"]);

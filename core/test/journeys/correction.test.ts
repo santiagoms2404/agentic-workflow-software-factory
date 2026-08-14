@@ -139,6 +139,7 @@ test("plan-build-test corrects one injected failure in-session and gates the exa
       canonicalRepository: canonical,
       worktree,
       sessionRuntime: runtime,
+      stateRoot: join(root, "state"),
       profile: "managed-worker",
       tools: ["read", "write"],
       writes: ["src/**"],

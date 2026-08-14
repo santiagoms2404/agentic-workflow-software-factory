@@ -116,7 +116,7 @@ markers are earned, never pre-declared. As of this README:
 | **M2** — Durable Persistence | `[x]` | Journal, status store, SQLite projector, crash-recovery/rebuild |
 | **M3** — Execution Kernel ⚠ | `[x]` | Process supervision, the PID-before-spawn barrier, call-budget reservations |
 | **M4** — Real Adapters | `[x]` | `claude-code`, `pi-codex` adapters against captured real provider streams |
-| **M5** — Workflows & Gates | `[x]` | The six workflows, twelve gates, permissions, and correction loop |
+| **M5** — Workflows & Gates | `[x]` | The six workflows, thirteen gates, permissions, and correction loop |
 | **M6** — Owner Controls | `[x]` | CLI commands, TTY-only persisted landing, cancel, retry, doctor, rebuild, and list-only gc |
 | **M7** — API & Dashboard | `[x]` | Read-only HTTP API and the loopback Vue dashboard |
 | **M8** — Platform & Pilots | `[wip]` | WSL2 matrix evidence and explicit destination-machine deferrals; two real pilot tasks remain |
@@ -139,7 +139,14 @@ demonstration is unchanged.
 A T2 run reaches the owner only through `REVIEWING`: the review provider is
 resolved by exclusion from the worker's, a configuration that disagrees is
 refused before any call is spent, and an unreachable reviewer blocks after one
-transport retry rather than substituting. The owner then records the end-user
+transport retry rather than substituting. The reviewer is read-only over the
+worktree and is handed host-composed evidence — the owner's request and
+acceptance criteria, the exact base and candidate SHAs, the Git-observed
+changed-file list, a bounded whole-hunk diff with the digest of the full one,
+and the complete command results — because a review that saw nothing is not a
+review; `review_evidence_present` refuses evidence that could not be evidence
+before the call is spent, and refuses the phase whose prompt did not carry it.
+The owner then records the end-user
 journey with `awsf journey TASK --journey ID --sha REVISION` at a TTY — the
 `journey_passes` gate checks separately that it ran, that it passed, and that
 the revision is the exact candidate — and only then may land. Landing has one

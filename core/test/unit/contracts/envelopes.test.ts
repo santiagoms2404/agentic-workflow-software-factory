@@ -20,13 +20,14 @@ import { VALID_ENVELOPES } from "./fixtures.ts";
 
 const SCHEMA_IDS = Object.keys(VALID_ENVELOPES) as (keyof typeof VALID_ENVELOPES)[];
 
-test("the registry holds exactly the six phase envelopes", () => {
+test("the registry holds exactly the seven phase envelopes", () => {
   assert.deepEqual(
     [...ENVELOPE_SCHEMA_IDS].sort(),
     [
       "awsf.build-output/v1",
       "awsf.document-output/v1",
       "awsf.plan-output/v1",
+      "awsf.review-context/v1",
       "awsf.review-output/v1",
       "awsf.scout-output/v1",
       "awsf.test-output/v1",
@@ -40,7 +41,11 @@ for (const schemaId of SCHEMA_IDS) {
   });
 
   test(`${schemaId}: an unknown top-level field is rejected`, () => {
-    const doc = { ...VALID_ENVELOPES[schemaId](), candidateSha: "deadbeef" };
+    // A name no envelope declares, so this proves `additionalProperties: false`
+    // rather than accidentally proving a declared field's own pattern. The
+    // narrower claim — that BuildOutput does not ask for `candidateSha` — has
+    // its own test below.
+    const doc = { ...VALID_ENVELOPES[schemaId](), hostOnlyExtra: "deadbeef" };
     assert.equal(Value.Check(ENVELOPE_SCHEMAS[schemaId], doc), false);
   });
 
@@ -149,6 +154,48 @@ test("every declared path field, in every envelope, obeys the same worktree rule
   const doc = VALID_ENVELOPES["awsf.document-output/v1"]();
   doc.documentedAreas = [{ subject: "s", documentPath: traversal }];
   assert.equal(Value.Check(ENVELOPE_SCHEMAS["awsf.document-output/v1"], doc), false);
+
+  const changed = VALID_ENVELOPES["awsf.review-context/v1"]();
+  changed.changedFiles = [traversal];
+  assert.equal(Value.Check(ENVELOPE_SCHEMAS["awsf.review-context/v1"], changed), false);
+
+  const omitted = VALID_ENVELOPES["awsf.review-context/v1"]();
+  omitted.diffOmittedFiles = [traversal];
+  assert.equal(Value.Check(ENVELOPE_SCHEMAS["awsf.review-context/v1"], omitted), false);
+});
+
+test("ReviewContext nests the WHOLE TestOutput — a curated one is rejected", () => {
+  // The reviewer used to receive the test envelope and now receives this
+  // instead, so anything dropped here is evidence the reviewer stopped getting.
+  // Nesting the schema whole is what makes that impossible to do by accident.
+  const schema = ENVELOPE_SCHEMAS["awsf.review-context/v1"];
+  const base = VALID_ENVELOPES["awsf.review-context/v1"]();
+  assert.equal(Value.Check(schema, base), true);
+
+  const { outputTail: _tail, ...withoutTail } = base.testOutput;
+  assert.equal(Value.Check(schema, { ...base, testOutput: withoutTail }), false);
+
+  const { failures: _failures, ...withoutFailures } = base.testOutput;
+  assert.equal(Value.Check(schema, { ...base, testOutput: withoutFailures }), false);
+
+  const commands = base.testOutput.commands.map(({ durationMs: _duration, ...rest }) => rest);
+  assert.equal(Value.Check(schema, { ...base, testOutput: { ...base.testOutput, commands } }), false);
+});
+
+test("ReviewContext binds its evidence to exact identities, not to shapes", () => {
+  const schema = ENVELOPE_SCHEMAS["awsf.review-context/v1"];
+  const base = VALID_ENVELOPES["awsf.review-context/v1"]();
+  for (const bad of ["", "HEAD", "a".repeat(39), "A".repeat(40)]) {
+    assert.equal(Value.Check(schema, { ...base, candidateSha: bad }), false);
+    assert.equal(Value.Check(schema, { ...base, baseSha: bad }), false);
+  }
+  // The digest is of the FULL diff, so it is a SHA-256 and not a git object id.
+  for (const bad of ["", "c".repeat(40), "C".repeat(64), `${"c".repeat(64)}0`]) {
+    assert.equal(Value.Check(schema, { ...base, diffSha256: bad }), false);
+  }
+  assert.equal(Value.Check(schema, { ...base, request: "" }), false);
+  assert.equal(Value.Check(schema, { ...base, insertions: -1 }), false);
+  assert.equal(Value.Check(schema, { ...base, diffOmittedChars: -1 }), false);
 });
 
 test("the host-owned guard list covers every StoredEnvelope field except the wire's own `schema`", () => {

@@ -30,6 +30,14 @@ export interface SandboxRequest {
   readonly canonicalRepository: string;
   readonly worktree: string;
   readonly sessionRuntime: string;
+  /**
+   * The root of AWSF's machine-local state tree, masked inside the namespace.
+   *
+   * Required, not optional: a phase that forgot to supply it would silently run
+   * with every other attempt's private material readable, which is exactly the
+   * exposure the mask exists to remove.
+   */
+  readonly stateRoot: string;
   readonly writes: readonly string[];
   readonly platform?: NodeJS.Platform;
 }
@@ -56,6 +64,7 @@ export function assertSandboxRoots(request: Omit<SandboxRequest, "writes" | "pla
     canonicalRepository: request.canonicalRepository,
     worktree: request.worktree,
     sessionRuntime: request.sessionRuntime,
+    stateRoot: request.stateRoot,
   };
   for (const [name, path] of Object.entries(roots)) {
     if (!isAbsolute(path)) throw new Error(`${name} must be an absolute machine-local path`);
@@ -84,6 +93,16 @@ function bwrapSpec(spec: ProcessSpec, request: SandboxRequest): ProcessSpec {
       "--unshare-all",
       "--share-net",
       "--ro-bind", "/", "/",
+      // The whole host filesystem is readable above; `writes: []` confines
+      // WRITES and confines reads not at all. A profile carrying a model-driven
+      // `Read` that can name an absolute path therefore reaches every other
+      // attempt's directory and this attempt's own `private/` — including the
+      // continuity locator, whose 0600 is protection against other users, not
+      // against a process running as the owner. bwrap applies binds in argv
+      // ORDER, so an empty tmpfs over the state root here, before the runtime
+      // bind below, hides all of it while leaving this phase's own writable
+      // runtime intact. The order is asserted by the descriptor test.
+      "--tmpfs", request.stateRoot,
       "--proc", "/proc",
       "--dev", "/dev",
       worktreeBind, request.worktree, request.worktree,

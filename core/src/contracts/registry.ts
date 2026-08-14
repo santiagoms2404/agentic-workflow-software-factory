@@ -2,6 +2,7 @@ import type { TObject } from "@sinclair/typebox";
 import { BuildOutputSchema, BUILD_OUTPUT_SCHEMA_ID, type BuildOutput } from "./build-output.ts";
 import { DocumentOutputSchema, DOCUMENT_OUTPUT_SCHEMA_ID, type DocumentOutput } from "./document-output.ts";
 import { PlanOutputSchema, PLAN_OUTPUT_SCHEMA_ID, type PlanOutput } from "./plan-output.ts";
+import { ReviewContextSchema, REVIEW_CONTEXT_SCHEMA_ID, type ReviewContext } from "./review-context.ts";
 import { ReviewOutputSchema, REVIEW_OUTPUT_SCHEMA_ID, type ReviewOutput } from "./review-output.ts";
 import { ScoutOutputSchema, SCOUT_OUTPUT_SCHEMA_ID, type ScoutOutput } from "./scout-output.ts";
 import { TestOutputSchema, TEST_OUTPUT_SCHEMA_ID, type TestOutput } from "./test-output.ts";
@@ -18,6 +19,7 @@ export const ENVELOPE_SCHEMAS = {
   [BUILD_OUTPUT_SCHEMA_ID]: BuildOutputSchema,
   [TEST_OUTPUT_SCHEMA_ID]: TestOutputSchema,
   [REVIEW_OUTPUT_SCHEMA_ID]: ReviewOutputSchema,
+  [REVIEW_CONTEXT_SCHEMA_ID]: ReviewContextSchema,
   [DOCUMENT_OUTPUT_SCHEMA_ID]: DocumentOutputSchema,
   [SCOUT_OUTPUT_SCHEMA_ID]: ScoutOutputSchema,
 } as const;
@@ -30,6 +32,7 @@ export interface EnvelopeTypeById {
   [BUILD_OUTPUT_SCHEMA_ID]: BuildOutput;
   [TEST_OUTPUT_SCHEMA_ID]: TestOutput;
   [REVIEW_OUTPUT_SCHEMA_ID]: ReviewOutput;
+  [REVIEW_CONTEXT_SCHEMA_ID]: ReviewContext;
   [DOCUMENT_OUTPUT_SCHEMA_ID]: DocumentOutput;
   [SCOUT_OUTPUT_SCHEMA_ID]: ScoutOutput;
 }

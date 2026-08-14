@@ -174,6 +174,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         }
         const status = await runProductionCommand({
           attemptDir: located.attemptDir,
+          stateRoot,
           config,
           configPath,
           projectRecord: projection.project,
@@ -193,6 +194,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         const defect = parsed.positionals.slice(1).join(" ");
         const result = await reworkCommand({
           attemptDir: located.attemptDir,
+          stateRoot,
           defect,
           terminal: options.terminal ?? processOwnerTerminal(),
           config,

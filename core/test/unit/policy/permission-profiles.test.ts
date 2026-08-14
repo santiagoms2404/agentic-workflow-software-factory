@@ -26,3 +26,18 @@ test("writes: [] affects the repository only", () => {
   assert.equal(reviewer.repositoryReadOnly, true);
   assert.equal(reviewer.sessionRuntimeWritable, true);
 });
+
+test("the widened reviewer may read the code on disk and may still not run or write", () => {
+  // The committed reviewer route, as configured. Widening it to `readonly` is
+  // what lets it judge the code rather than the builder's summary; the ceiling
+  // is what keeps that from becoming a shell, and `writes: []` is what keeps a
+  // reviewer that cannot fix from quietly fixing.
+  const reviewer = resolvePermissionProfile("readonly", ["read", "grep", "find", "ls"], []);
+  assert.deepEqual(reviewer.tools, ["read", "grep", "find", "ls"]);
+  assert.equal(toolAllowed(reviewer, "read"), true);
+  assert.equal(reviewer.repositoryReadOnly, true);
+  for (const forbidden of ["exec", "bash", "edit", "write"]) {
+    assert.equal(toolAllowed(reviewer, forbidden), false, `${forbidden} must not be dispatchable`);
+    assert.throws(() => resolvePermissionProfile("readonly", ["read", forbidden], []), PermissionProfileInvalid);
+  }
+});

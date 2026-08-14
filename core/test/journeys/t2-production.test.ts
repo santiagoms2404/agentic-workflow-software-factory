@@ -6,7 +6,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import type { AwsfConfig, AdapterEntry } from "../../src/config/schema.ts";
@@ -33,12 +34,13 @@ import { runProductionCommand } from "../../src/cli/commands/production-run.ts";
 import { journeyCommand, JourneyEvidenceRejected, JourneyNotApplicable } from "../../src/cli/commands/journey.ts";
 import { landCommand } from "../../src/cli/commands/land.ts";
 import { readAttempt } from "../../src/cli/commands/attempt.ts";
-import { gatesForSession, getSession } from "../../src/observability/queries.ts";
+import { compiledPromptEvents, gatesForSession, getSession } from "../../src/observability/queries.ts";
 import { openDatabase } from "../../src/observability/sqlite.ts";
 import type { OwnerTerminal } from "../../src/cli/tty.ts";
 
 const AT = "2026-08-13T00:00:00.000Z";
 const SOURCE = "core/src/generated.ts";
+const REMOVABLE = "core/src/removable.ts";
 
 function git(repository: string, ...argv: string[]): string {
   return execFileSync("git", ["-C", repository, ...argv], { encoding: "utf8" }).trim();
@@ -75,19 +77,31 @@ class RouteLog {
   readonly launches: string[] = [];
 }
 
+/** What the scripted builder does to the tree — an addition, or a removal only. */
+type BuilderBehaviour = "adds-a-file" | "deletes-a-file";
+
 class ScriptedT2Adapter implements HarnessAdapter {
   readonly id: string;
   readonly #worktree: string;
   readonly #log: RouteLog;
   readonly #behaviour: ReviewBehaviour;
   readonly #candidateSha: () => string | null;
+  readonly #builds: BuilderBehaviour;
 
-  constructor(id: string, worktree: string, log: RouteLog, behaviour: ReviewBehaviour, candidateSha: () => string | null) {
+  constructor(
+    id: string,
+    worktree: string,
+    log: RouteLog,
+    behaviour: ReviewBehaviour,
+    candidateSha: () => string | null,
+    builds: BuilderBehaviour = "adds-a-file",
+  ) {
     this.id = id;
     this.#worktree = worktree;
     this.#log = log;
     this.#behaviour = behaviour;
     this.#candidateSha = candidateSha;
+    this.#builds = builds;
   }
 
   async isAvailable(): Promise<Availability> { return { status: "available" }; }
@@ -137,6 +151,9 @@ class ScriptedT2Adapter implements HarnessAdapter {
       } else if (this.#behaviour.kind === "concern") {
         payload = review(candidate, [{ id: "f1", severity: "high", file: SOURCE, line: 1, title: "concrete defect", detail: "the gates would not have caught this", evidence: "fixture evidence" }]);
       } else payload = review(candidate);
+    } else if (this.#builds === "deletes-a-file") {
+      rmSync(join(this.#worktree, REMOVABLE));
+      payload = { ...build(), summary: "removed one source", artifacts: [], changedFiles: [REMOVABLE], proposedCommitMessage: "refactor: drop the unused module" };
     } else {
       mkdirSync(join(this.#worktree, "core", "src"), { recursive: true });
       writeFileSync(join(this.#worktree, "core", "src", "generated.ts"), "export const generated = true;\n");
@@ -189,7 +206,11 @@ async function fixture(tier: 1 | 2 = 2, configure: (config: AwsfConfig) => AwsfC
   const stateRoot = join(root, "state");
   execFileSync("git", ["init", "-b", "main", canonical], { stdio: "ignore" });
   writeFileSync(join(canonical, "README.md"), "base\n");
-  git(canonical, "add", "README.md");
+  // A second seeded file exists so a scripted builder can produce a candidate
+  // that only REMOVES lines — the shape a bounded diff is most tempted to lose.
+  mkdirSync(join(canonical, "core", "src"), { recursive: true });
+  writeFileSync(join(canonical, REMOVABLE), "export const removable = 1;\nexport const alsoRemovable = 2;\n");
+  git(canonical, "add", "README.md", REMOVABLE);
   git(canonical, "-c", "user.name=Santiago Marin", "-c", "user.email=santiagomarinsuarez@me.com", "commit", "-m", "test: seed t2 runner");
   const text = configText();
   const config = configure(loadConfig(text));
@@ -220,7 +241,7 @@ async function runT2(world: Awaited<ReturnType<typeof fixture>>, behaviour: Revi
   const prepared = await readAttempt(world.created.attemptDir);
   let candidate: string | null = null;
   const status = await runProductionCommand({
-    attemptDir: world.created.attemptDir, config: world.config, configPath: world.configPath,
+    attemptDir: world.created.attemptDir, stateRoot: world.stateRoot, config: world.config, configPath: world.configPath,
     projectRecord: world.projection.project, assertAdvancement: world.projection.assertAdvancement,
     assertLaunchProjection: world.projection.assertLaunchPermitted,
     infrastructure: {
@@ -234,23 +255,38 @@ async function runT2(world: Awaited<ReturnType<typeof fixture>>, behaviour: Revi
 }
 
 /** Re-reads the candidate from the worktree, since the review sees it before the status does. */
-function withLiveCandidate(world: Awaited<ReturnType<typeof fixture>>, behaviour: ReviewBehaviour) {
+function withLiveCandidate(
+  world: Awaited<ReturnType<typeof fixture>>,
+  behaviour: ReviewBehaviour,
+  builds: BuilderBehaviour = "adds-a-file",
+) {
   return async () => {
     const prepared = await readAttempt(world.created.attemptDir);
     const log = new RouteLog();
     const status = await runProductionCommand({
-      attemptDir: world.created.attemptDir, config: world.config, configPath: world.configPath,
+      attemptDir: world.created.attemptDir, stateRoot: world.stateRoot, config: world.config, configPath: world.configPath,
       projectRecord: world.projection.project, assertAdvancement: world.projection.assertAdvancement,
       assertLaunchProjection: world.projection.assertLaunchPermitted,
       infrastructure: {
         adapterFor: (_entry: AdapterEntry, id: string) => new ScriptedT2Adapter(id, prepared.worktree!, log, behaviour,
-          () => { try { return git(prepared.worktree!, "rev-parse", "HEAD"); } catch { return null; } }),
+          () => { try { return git(prepared.worktree!, "rev-parse", "HEAD"); } catch { return null; } }, builds),
         createBroker: fakeBroker,
         sandboxProbe: () => false,
       },
     });
     return { status, prepared, log };
   };
+}
+
+/** The exact user prompt the reviewer phase was compiled with, read back from the projection. */
+function reviewerPrompt(stateRoot: string, sessionId: string): string {
+  const db = openDatabase(join(stateRoot, "awsf.db"), { readonly: true });
+  try {
+    const events = compiledPromptEvents(db, `${sessionId}:reviewer`);
+    const user = events.find((event) => event.name === "user");
+    if (user === undefined) throw new Error("the reviewer phase recorded no compiled user prompt");
+    return (JSON.parse(user.payload_json) as { text: string }).text;
+  } finally { db.close(); }
 }
 
 function terminal(answer: boolean, lines: string[] = []): OwnerTerminal {
@@ -287,6 +323,82 @@ test("a tier-2 build-review reaches the owner with the review provider inverse o
       assert.equal(verdict?.passed, 1);
       assert.equal(verdict?.candidate_sha, status.candidateSha, "the review is gated against the exact candidate");
     } finally { db.close(); }
+  } finally {
+    world.projection.close();
+    rmSync(world.root, { recursive: true, force: true });
+  }
+});
+
+test("the reviewer's compiled prompt carries the request, the changed files, and the diff", async () => {
+  // The plan promised a diff-scoped reviewer and the implementation supplied a
+  // test-command exit code and a truncated tail: no diff, no file list, no
+  // statement of what was asked for. This is that promise, asserted against the
+  // exact text the provider was given rather than against the host's intention.
+  const world = await fixture(2);
+  try {
+    const { status } = await withLiveCandidate(world, { kind: "accept" })();
+    assert.equal(status.lifecycleState, "AWAITING_OWNER", status.blocker?.detail);
+    assert.equal(status.budget.callsSpent, 2, "composing evidence is host work and buys no call");
+
+    const prompt = reviewerPrompt(world.stateRoot, status.sessionId);
+    assert.ok(prompt.includes("write one bounded source"), "the owner's own request reached the reviewer");
+    assert.ok(prompt.includes(SOURCE), "the host-observed changed-file list reached the reviewer");
+    assert.ok(prompt.includes(status.candidateSha!), "the candidate under review is named");
+    assert.ok(prompt.includes(status.baseSha!), "so is the base it is measured from");
+    assert.match(prompt, /@@ -0,0 \+1 @@/, "real diff hunks reached the reviewer");
+    assert.ok(prompt.includes("+export const generated = true;"), "and the added line itself");
+    assert.ok(prompt.includes("The exact configured host gates pass"), "the acceptance criteria reached it too");
+
+    const db = openDatabase(join(world.stateRoot, "awsf.db"), { readonly: true });
+    try {
+      const evidence = gatesForSession(db, status.sessionId).find((gate) => gate.gate_id === "review_evidence_present");
+      assert.ok(evidence, "the review phase carries an evidence gate row");
+      assert.equal(evidence?.passed, 1);
+      assert.equal(evidence?.candidate_sha, status.candidateSha, "bound to the exact candidate");
+      assert.match(String(evidence?.checks_json), /serialized into the compiled prompt/);
+    } finally { db.close(); }
+  } finally {
+    world.projection.close();
+    rmSync(world.root, { recursive: true, force: true });
+  }
+});
+
+test("a candidate that only deletes lines shows the reviewer what it removed", async () => {
+  // Removal is where the defects hide, and it is what a bounded diff or a
+  // changed-file list alone would silently render invisible.
+  const world = await fixture(2);
+  try {
+    const { status } = await withLiveCandidate(world, { kind: "accept" }, "deletes-a-file")();
+    assert.equal(status.lifecycleState, "AWAITING_OWNER", status.blocker?.detail);
+
+    const prompt = reviewerPrompt(world.stateRoot, status.sessionId);
+    assert.ok(prompt.includes(REMOVABLE), "the removed file is named");
+    assert.ok(prompt.includes("-export const removable = 1;"), "and its removed lines are shown");
+    assert.equal(prompt.includes("+export const removable = 1;"), false, "a removal is not rendered as an addition");
+    assert.match(prompt, /"deletions": 2/, "the host counted what was removed");
+    assert.match(prompt, /"insertions": 0/);
+  } finally {
+    world.projection.close();
+    rmSync(world.root, { recursive: true, force: true });
+  }
+});
+
+test("the full diff is retained host-private at 0600 and is never handed to the reviewer", async () => {
+  const world = await fixture(2);
+  try {
+    const { status } = await withLiveCandidate(world, { kind: "accept" })();
+    const relative = join("raw", `review-context-${status.candidateSha!}.diff`);
+    const absolute = join(world.created.attemptDir, relative);
+    assert.equal(existsSync(absolute), true, "the complete diff is retained");
+    assert.equal(statSync(absolute).mode & 0o777, 0o600, "host-private, like every other raw capture");
+    // The digest is what ties the bounded rendering to this file. The PATH is
+    // provenance for the host: it resolves against the attempt directory, which
+    // the reviewer's own namespace masks, so an absolute one would be both
+    // unopenable and a hole in that mask.
+    const prompt = reviewerPrompt(world.stateRoot, status.sessionId);
+    assert.ok(prompt.includes(relative.split("\\").join("/")), "the reference is recorded as attempt-relative");
+    assert.equal(prompt.includes(world.created.attemptDir), false, "no absolute path into the attempt directory");
+    assert.ok(prompt.includes(createHash("sha256").update(readFileSync(absolute, "utf8"), "utf8").digest("hex")));
   } finally {
     world.projection.close();
     rmSync(world.root, { recursive: true, force: true });
@@ -457,7 +569,7 @@ test("a tier-1 attempt may not run a tier-2 recipe", async () => {
   try {
     await assert.rejects(
       runProductionCommand({
-        attemptDir: world.created.attemptDir, config: world.config, configPath: world.configPath,
+        attemptDir: world.created.attemptDir, stateRoot: world.stateRoot, config: world.config, configPath: world.configPath,
         projectRecord: world.projection.project,
       }),
       (error: Error) => /recipe is tier 2 but the attempt is tier 1/.test(error.message),

@@ -9,6 +9,7 @@ export const GATE_IDS = [
   "no_protected_paths",
   "writes_within_globs",
   "verdict_consistent",
+  "review_evidence_present",
   "commands_pass",
   "journey_passes",
 ] as const;

@@ -428,7 +428,7 @@ async function run(
   const workerAdapterId = world.direction === "codex-builds" ? "codex" : "claude";
   const adapters = new Map<string, ScriptedContinuityAdapter>();
   const status = await runProductionCommand({
-    attemptDir: world.created.attemptDir, config: world.config, configPath: world.configPath,
+    attemptDir: world.created.attemptDir, stateRoot: world.stateRoot, config: world.config, configPath: world.configPath,
     projectRecord: world.projection.project, assertAdvancement: world.projection.assertAdvancement,
     assertLaunchProjection: world.projection.assertLaunchPermitted,
     infrastructure: {

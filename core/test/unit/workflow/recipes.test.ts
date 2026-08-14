@@ -23,8 +23,11 @@ const expected = {
   plan: { tier: 0, phases: ["request:engineer", "planner:agent"], calls: 1 },
   build: { tier: 1, phases: ["request:engineer", "builder:agent", "tests:code"], calls: 1 },
   "plan-build-test": { tier: 1, phases: ["request:engineer", "planner:agent", "builder:agent", "tests:code"], calls: 2 },
-  "build-review": { tier: 2, phases: ["request:engineer", "builder:agent", "tests:code", "reviewer:agent"], calls: 2 },
-  "simple-sdlc": { tier: 2, phases: ["planner:agent", "builder:agent", "tests:code", "documenter:agent", "final-tests:code", "reviewer:agent"], calls: 4 },
+  // `review-context` is a code phase in both T2 recipes: it composes the
+  // evidence the reviewer is judged against and buys no call, so `calls` — and
+  // therefore every tier ceiling — is unchanged by its presence.
+  "build-review": { tier: 2, phases: ["request:engineer", "builder:agent", "tests:code", "review-context:code", "reviewer:agent"], calls: 2 },
+  "simple-sdlc": { tier: 2, phases: ["planner:agent", "builder:agent", "tests:code", "documenter:agent", "final-tests:code", "review-context:code", "reviewer:agent"], calls: 4 },
 } as const;
 
 test("the shipped catalog is exactly six data-shaped recipes with the Phase Contract order", () => {
@@ -47,7 +50,11 @@ test("all recipe prompts compile from TypeBox schemas and render their handoff",
       assert.ok(phase.promptTemplate.includes('"additionalProperties": false'));
       const rendered = phase.renderPrompt(null);
       assert.ok(!rendered.includes(PREVIOUS_ENVELOPE_PLACEHOLDER));
-      assert.match(rendered, /Previous phase envelope:\s*null/);
+      // Each prompt labels the slot in its own words — the reviewer's handoff
+      // is host-composed evidence rather than the phase before it, and says so.
+      // The claim under test is that the HOST renders the slot, not that every
+      // phase calls it the same thing.
+      assert.match(rendered, /(?:Previous phase envelope|Host evidence):\s*null/);
     }
   }
 });
