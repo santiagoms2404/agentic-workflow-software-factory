@@ -384,14 +384,13 @@ export class ProcessTransportBroker implements TransportBroker {
       ...(correctionEvidence === null ? {} : { settlement: "correction" as const }),
       register: this.#options.register,
       ...(this.#options.onSpent === undefined ? {} : { onSpent: this.#options.onSpent }),
+      ...(correctionEvidence === null || this.#options.onCorrection === undefined ? {} : {
+        onCorrection: (durableRecord: BarrierRecord) => this.#options.onCorrection!(durableRecord, correctionEvidence),
+      }),
       ledger: this.#options.ledger,
       signal,
       ...(hooks.onStep === undefined ? {} : { onStep: hooks.onStep }),
     });
-    if (correctionEvidence !== null) {
-      await this.#options.onCorrection?.({ ...record, identity: outcome.identity }, correctionEvidence);
-    }
-
     // Non-null by construction: the barrier only returns after `start` resolved.
     if (held.child === null) throw new SpawnRegistrationInvalid(registration.runId, "the barrier released a launch that never started");
     return this.#transportFor(held.child, registration.runId, outcome.identity, spec);

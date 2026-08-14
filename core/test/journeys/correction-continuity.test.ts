@@ -143,6 +143,8 @@ type Misbehaviour =
   | { readonly kind: "switched-session" }
   /** Answers the correction on a different model. */
   | { readonly kind: "switched-model" }
+  /** The first turn omits the provider session identity the continuity proof requires. */
+  | { readonly kind: "missing-first-session" }
   /** The resume transport itself fails. */
   | { readonly kind: "resume-transport-failure" }
   /** Never fixes the defect, so the allowance is what has to stop it. */
@@ -256,9 +258,11 @@ class ScriptedContinuityAdapter implements ContinuityCapableAdapter {
     const resolvedModel = turn > 0 && this.#misbehaviour.kind === "switched-model"
       ? "a-different-model"
       : `${request.model}-resolved`;
-    const answeringSession = turn > 0 && this.#misbehaviour.kind === "switched-session"
-      ? "00000000-0000-4000-8000-0000deadbeef"
-      : locator;
+    const answeringSession = turn === 0 && this.#misbehaviour.kind === "missing-first-session"
+      ? null
+      : turn > 0 && this.#misbehaviour.kind === "switched-session"
+        ? "00000000-0000-4000-8000-0000deadbeef"
+        : locator;
 
     let payload: BuildOutput | ReviewOutput;
     if (this.#isWorker) {
@@ -609,6 +613,20 @@ test("the complete command output is retained privately, unwindowed and mode 060
 // ---------------------------------------------------------------------------
 // Fail closed: every way a correction could have become a cold restart.
 // ---------------------------------------------------------------------------
+
+for (const direction of ["codex-builds", "claude-builds"] as const) {
+  test(`[${direction}] a first turn with no provider session identity blocks before correction`, async () => {
+    const world = await fixture(direction);
+    try {
+      const { status, journal } = await run(world, { kind: "missing-first-session" });
+      assert.equal(status.lifecycleState, "BLOCKED");
+      assert.match(status.blocker?.detail ?? "", /did not report which provider session answered/);
+      assert.equal(status.budget.callsSpent, 1, "the initial call ran, but no call-neutral correction was authorized");
+      assert.equal(journal.turns.filter((record) => record.phase === "builder").length, 1);
+      assert.equal(journal.providers.length, 1, "a missing identity cannot reach correction or review");
+    } finally { close(world); }
+  });
+}
 
 for (const misbehaviour of [
   { kind: "switched-session", expect: /different provider session/ },

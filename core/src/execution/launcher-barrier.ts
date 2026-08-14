@@ -366,6 +366,8 @@ export interface LauncherBarrierOptions {
   register: (record: BarrierRecord) => Promise<void>;
   /** Durable spend evidence, after charging and before the release token. */
   onSpent?: (record: BarrierRecord, reservation: Reservation) => Promise<void>;
+  /** Durable call-neutral evidence for a correction, likewise before the release token. */
+  onCorrection?: (record: BarrierRecord) => Promise<void>;
   ledger: ReservationLedger;
   signal?: AbortSignal;
   onStep?: (step: BarrierStep) => Promise<void> | void;
@@ -439,7 +441,7 @@ export class RegistrationFailed extends Error {
  * PROVABLY never ran is returned, and a call that may have run is billed.
  */
 export async function runLauncherBarrier(options: LauncherBarrierOptions): Promise<BarrierOutcome> {
-  const { start, record, register, onSpent, ledger, signal, onStep } = options;
+  const { start, record, register, onSpent, onCorrection, ledger, signal, onStep } = options;
   const settlement: BarrierSettlement = options.settlement ?? "reservation";
   // A correction charges nothing, so there is nothing to give back either. The
   // refund path is skipped rather than allowed to run and fail: releasing the
@@ -503,7 +505,9 @@ export async function runLauncherBarrier(options: LauncherBarrierOptions): Promi
     const reservation = refundable ? ledger.spendOnGo(record.reservationId) : null;
     spent = true;
     at = "spent";
-    if (reservation !== null) await onSpent?.({ ...record, identity }, reservation);
+    const durableRecord = { ...record, identity };
+    if (reservation !== null) await onSpent?.(durableRecord, reservation);
+    else await onCorrection?.(durableRecord);
     await step("spent");
 
     await launch.release();

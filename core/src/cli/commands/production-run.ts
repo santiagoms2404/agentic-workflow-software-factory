@@ -1215,7 +1215,14 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
         if (route.continuity) {
           const capable = route.adapter as ContinuityCapableAdapter;
           if (turn === 0) {
-            if (observed.sessionId !== null && observed.sessionId !== conversationRef!.providerSessionId) {
+            if (observed.sessionId === null) {
+              throw new AdapterError(
+                route.adapter.id,
+                "E_BACKEND_FAILURE",
+                `${handle} did not report which provider session answered; continuity requires exact stream identity`,
+              );
+            }
+            if (observed.sessionId !== conversationRef!.providerSessionId) {
               throw new AdapterError(
                 route.adapter.id,
                 "E_BACKEND_FAILURE",

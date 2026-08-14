@@ -46,6 +46,7 @@ function world(overrides: {
   allowance?: CorrectionAllowanceState;
   spendOrigin?: boolean;
   installVerifier?: boolean;
+  correctionPersistenceFailure?: Error;
 } = {}): World {
   const root = mkdtempSync(join(tmpdir(), "awsf-correction-"));
   const sideEffect = join(root, "correction-ran.json");
@@ -77,7 +78,10 @@ function world(overrides: {
   const broker = new ProcessTransportBroker({
     register: async (record) => { records.push(record); },
     onSpent: async () => { assert.fail("a correction must never settle a reservation"); },
-    onCorrection: async (record) => { corrections.push(record); },
+    onCorrection: async (record) => {
+      corrections.push(record);
+      if (overrides.correctionPersistenceFailure !== undefined) throw overrides.correctionPersistenceFailure;
+    },
     ledger: budget,
     ...(overrides.installVerifier === false ? {} : { correctionLaunchVerifier: verifier }),
   });
@@ -171,6 +175,21 @@ test("the correction's identity is registered with a PID the host can later kill
     // host could not stop.
     assert.notEqual(identity.startIdentity, null);
     assert.ok(identity.startIdentitySource.length > 0);
+  } finally { w.close(); }
+});
+
+test("a correction persistence failure happens before GO and destroys the registered process", async () => {
+  const w = world({ correctionPersistenceFailure: new Error("durable correction persistence failed") });
+  try {
+    const before = w.budget.callsSpent;
+    await assert.rejects(() => launch(w), /durable correction persistence failed/);
+
+    assert.equal(w.records.length, 1, "the process identity was durable before correction evidence failed");
+    assert.equal(w.corrections.length, 1, "the call-neutral persistence hook was attempted");
+    assert.deepEqual(w.broker.controller.groupMembers(w.records[0]!.identity), [], "the failed launch left a live process group");
+    assert.equal(existsSync(w.sideEffect), false, "the provider crossed GO despite failed durable evidence");
+    assert.equal(w.budget.callsSpent, before, "a failed correction persistence path cannot charge a call");
+    assert.equal(w.budget.reservation(w.origin.id)?.state, "spent", "the origin call remains honestly spent");
   } finally { w.close(); }
 });
 
