@@ -37,6 +37,7 @@ import {
   type ProcessSpec,
   type ProcessTransport,
 } from "../../../src/adapters/interface.ts";
+import { isContinuityCapable } from "../../../src/adapters/interface.ts";
 import {
   validateEventSequence,
   type NormalizedEvent,
@@ -334,10 +335,13 @@ test("ChatGPT Plus MEASURES tokens and only ESTIMATES the price — and says bot
   // a confirmed price — on the very adapter built to show authority.
   assert.equal(info.costAuthority, "catalog-estimate");
   assert.notEqual(info.costAuthority, "provider");
-  // A promise withdrawn rather than a capability lost: `--no-session` forecloses
-  // re-entry, so a correction through this adapter is necessarily a cold start,
-  // and M5's ladder must not be told otherwise.
-  assert.equal(info.continuity, "none");
+  // The promise that was withdrawn when this adapter pinned `--no-session`, now
+  // re-earned rather than restored on trust. Two assertions, because the
+  // declaration and the transport are two different claims and the pilot that
+  // forced this work stopped because they had drifted apart.
+  assert.equal(info.continuity, "same-session-correction");
+  assert.equal(adapter().supportsSameSessionCorrection, true);
+  assert.ok(isContinuityCapable(adapter()));
   // `null` = this adapter declares no ceiling. Not a ceiling of zero.
   assert.equal(info.contextWindow, null);
 });
@@ -1172,4 +1176,193 @@ test("a zero cost the provider DID report is a price, and renders as one", async
   );
   assert.equal(session.costUsd, 0);
   assert.equal(formatCost("catalog-estimate", session.costUsd), "≈ $0.00");
+});
+
+// ---------------------------------------------------------------------------
+// Continuity — the `--session-id` / `--session-dir` protocol, read off the
+// installed CLI rather than inferred. See the adapter's `getModelInfo` header
+// for the exact `pi --help` and `main.js` citations.
+// ---------------------------------------------------------------------------
+
+const LOCATOR = "9b1f0c2a-3d4e-4f50-8a61-72b83c94d5e6";
+
+function sessionStore(): { dir: string; close: () => void } {
+  const dir = mkdtempSync(join(tmpdir(), "awsf-pi-sessions-"));
+  return { dir, close: () => rmSync(dir, { recursive: true, force: true }) };
+}
+
+/** One pi session file, in the documented JSONL shape (`docs/session-format.md`). */
+function writeSession(
+  dir: string,
+  options: { id?: string; cwd?: string; assistantTurns?: number; name?: string } = {},
+): string {
+  const id = options.id ?? LOCATOR;
+  const lines = [
+    JSON.stringify({ type: "session", version: 3, id, timestamp: "2026-08-13T00:00:00.000Z", cwd: options.cwd ?? "/tmp/work" }),
+    JSON.stringify({ type: "message", id: "aaaaaaaa", parentId: null, timestamp: "2026-08-13T00:00:01.000Z", message: { role: "user", content: "build it" } }),
+  ];
+  for (let turn = 0; turn < (options.assistantTurns ?? 1); turn += 1) {
+    lines.push(JSON.stringify({
+      type: "message", id: `bbbbbbb${String(turn)}`, parentId: "aaaaaaaa", timestamp: "2026-08-13T00:00:02.000Z",
+      message: { role: "assistant", content: [{ type: "text", text: "done" }], provider: "openai-codex", model: "gpt-5.6-sol", stopReason: "stop" },
+    }));
+  }
+  const path = join(dir, options.name ?? `2026-08-13T00-00-00-000Z_${id}.jsonl`);
+  writeFileSync(path, `${lines.join("\n")}\n`);
+  return path;
+}
+
+test("without continuity the argv is byte-identical to the ephemeral one it always was", () => {
+  const spec = adapter().buildSpec(REQUEST);
+  assert.ok(spec.argv.includes("--no-session"));
+  assert.equal(spec.argv.includes("--session-id"), false);
+  assert.equal(spec.argv.includes("--session-dir"), false);
+});
+
+test("continuity swaps `--no-session` for the exact session flags, in place", () => {
+  const spec = adapter().buildSpec({
+    ...REQUEST,
+    continuity: { ref: { providerSessionId: LOCATOR, storeDir: "/state/private/builder/pi-sessions" }, turn: "open" },
+  });
+  assert.deepEqual([...spec.argv], [
+    "--mode", "json", "-p",
+    "--provider", "openai-codex",
+    "--model", "gpt-5.6-sol",
+    "--session-id", LOCATOR,
+    "--session-dir", "/state/private/builder/pi-sessions",
+    "--thinking", "high",
+    "--no-extensions", "--no-skills", "--no-prompt-templates", "--no-themes", "--no-context-files",
+    "--tools", "read,grep,find,ls",
+  ]);
+  // `--no-session` WINS over `--session-id` inside the CLI (`main.js:206-208`
+  // returns an in-memory session before `--session-id` is consulted), so its
+  // absence here is load-bearing rather than tidy.
+  assert.equal(spec.argv.includes("--no-session"), false);
+});
+
+test("open and resume produce the SAME argv, because `--session-id` both creates and opens", () => {
+  const build = (turn: "open" | "resume"): readonly string[] => adapter().buildSpec({
+    ...REQUEST,
+    continuity: { ref: { providerSessionId: LOCATOR, storeDir: "/store" }, turn },
+  }).argv;
+  assert.deepEqual([...build("open")], [...build("resume")]);
+});
+
+test("the prompt still rides stdin on a correction turn", () => {
+  const spec = adapter().buildSpec({
+    ...REQUEST,
+    prompt: "the configured command failed; fix it",
+    continuity: { ref: { providerSessionId: LOCATOR, storeDir: "/store" }, turn: "resume" },
+  });
+  assert.equal(spec.stdin, "the configured command failed; fix it");
+  for (const argument of spec.argv) assert.equal(argument.includes("configured command"), false);
+});
+
+test("a session id this CLI would reject never reaches argv", () => {
+  for (const bad of ["", "-leading-dash", "trailing-dash-", "has space", "has/slash", "has:colon"]) {
+    assert.throws(
+      () => adapter().buildSpec({ ...REQUEST, continuity: { ref: { providerSessionId: bad, storeDir: "/store" }, turn: "open" } }),
+      /is not a session id this CLI accepts/,
+      `accepted ${JSON.stringify(bad)}`,
+    );
+  }
+});
+
+test("this route refuses to run without the host-owned session directory", () => {
+  // Without `--session-dir` the transcript lands in the operator's home for the
+  // life of the machine, and the host loses the only store it can prove a
+  // resume against.
+  assert.throws(
+    () => adapter().buildSpec({ ...REQUEST, continuity: { ref: { providerSessionId: LOCATOR, storeDir: null }, turn: "open" } }),
+    /host-owned directory/,
+  );
+});
+
+test("the session store is named inside the phase's private runtime directory", () => {
+  assert.equal(
+    adapter().continuityStoreDir("/state/tasks/t/1/private/builder"),
+    join("/state/tasks/t/1/private/builder", "pi-sessions"),
+  );
+});
+
+test("assertResumable proves the conversation is really there before a correction launches", () => {
+  const store = sessionStore();
+  try {
+    writeSession(store.dir, { assistantTurns: 2 });
+    const evidence = adapter().assertResumable(
+      { providerSessionId: LOCATOR, storeDir: store.dir },
+      { cwd: "/tmp/work" },
+    );
+    assert.equal(evidence.proof, "host-visible-session-store");
+    assert.match(evidence.detail, /2 prior assistant turn/);
+  } finally { store.close(); }
+});
+
+test("every way a pi resume would silently cold-start is refused instead", () => {
+  const store = sessionStore();
+  try {
+    const resume = (ref: { providerSessionId: string; storeDir: string | null }, cwd = "/tmp/work"): void => {
+      adapter().assertResumable(ref, { cwd });
+    };
+    // The documented warn-and-create path: pi prints a warning on stderr and
+    // opens a NEW session under the requested id. From the host's side that is
+    // a cold start wearing the resume's name, so the host refuses first.
+    assert.throws(() => resume({ providerSessionId: LOCATOR, storeDir: store.dir }), /no session in the host-owned store/);
+
+    writeSession(store.dir, { id: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee" });
+    assert.throws(() => resume({ providerSessionId: LOCATOR, storeDir: store.dir }), /no session in the host-owned store/);
+
+    const other = sessionStore();
+    try {
+      // pi's own lookup filters by cwd (`session-manager.js:1283-1285`), so a
+      // session stored against another directory is one it would not find —
+      // resuming it would quietly create a second conversation.
+      writeSession(other.dir, { cwd: "/somewhere/else" });
+      assert.throws(() => resume({ providerSessionId: LOCATOR, storeDir: other.dir }), /different working directory/);
+    } finally { other.close(); }
+
+    const empty = sessionStore();
+    try {
+      writeSession(empty.dir, { assistantTurns: 0 });
+      assert.throws(() => resume({ providerSessionId: LOCATOR, storeDir: empty.dir }), /no assistant turn to correct/);
+    } finally { empty.close(); }
+
+    const doubled = sessionStore();
+    try {
+      writeSession(doubled.dir, { name: "one.jsonl" });
+      writeSession(doubled.dir, { name: "two.jsonl" });
+      // pi takes the most recently modified. A correction that resumed
+      // whichever that happened to be would be a different conversation on a
+      // different day, so the host will not pick a winner.
+      assert.throws(() => resume({ providerSessionId: LOCATOR, storeDir: doubled.dir }), /2 session files claim/);
+    } finally { doubled.close(); }
+
+    assert.throws(() => resume({ providerSessionId: LOCATOR, storeDir: join(store.dir, "absent") }), /does not exist/);
+    assert.throws(() => resume({ providerSessionId: LOCATOR, storeDir: null }), /host-owned directory/);
+  } finally { store.close(); }
+});
+
+test("a refused resume is E_BACKEND_FAILURE, not a new error code", () => {
+  const store = sessionStore();
+  try {
+    assert.throws(
+      () => adapter().assertResumable({ providerSessionId: LOCATOR, storeDir: store.dir }, { cwd: "/tmp/work" }),
+      (error: unknown) => error instanceof AdapterError && error.code === "E_BACKEND_FAILURE",
+    );
+  } finally { store.close(); }
+});
+
+test("the adapter's own identity check is the module rule, reachable through the contract", () => {
+  const first: PiSessionRecord = { sessionId: LOCATOR, resolvedModel: "gpt-5.6-sol", costUsd: null };
+  adapter().assertSameSession(first, { ...first });
+  assert.throws(
+    () => adapter().assertSameSession(first, { ...first, resolvedModel: "gpt-5.4-mini" }),
+    (error: unknown) => error instanceof AdapterError && error.code === "E_MODEL_MISMATCH",
+  );
+  assert.throws(
+    () => adapter().assertSameSession(first, { ...first, sessionId: "cccccccc-dddd-4eee-8fff-000000000000" }),
+    (error: unknown) => error instanceof AdapterError && error.code === "E_BACKEND_FAILURE",
+  );
+  // A session nobody named is not a session that matched.
+  assert.throws(() => adapter().assertSameSession(first, { ...first, sessionId: null }), AdapterError);
 });

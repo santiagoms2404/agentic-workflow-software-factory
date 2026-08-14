@@ -31,9 +31,12 @@
 import {
   AdapterError,
   type Availability,
-  type HarnessAdapter,
+  type ContinuityCapableAdapter,
+  type ContinuityEvidence,
+  type ContinuityRef,
   type ModelInfo,
   type ModelRequest,
+  type ObservedProviderSession,
   type BrokerProcessRegistration,
   type ProcessSpec,
   type ProcessTransport,
@@ -205,6 +208,45 @@ export function selectorFor(model: string): string {
   return name;
 }
 
+/**
+ * Claude Code's session id rule, stated by the CLI itself: `--session-id <uuid>`
+ * — "must be a valid UUID" (`claude --help`, 2.1.232). Narrower than pi's, and
+ * the host mints one value that satisfies both so the two routes can be
+ * corrected by the same code.
+ */
+const CLAUDE_SESSION_ID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
+/**
+ * The session flags, and unlike pi's they DIFFER between the two turns.
+ *
+ *   · open   — `--session-id <uuid>`: "Use a specific session ID for the
+ *     conversation". The host mints it, so the host knows the locator before
+ *     the first byte rather than learning it from the stream.
+ *   · resume — `--resume <uuid>`: "Resume a conversation by session ID". A
+ *     session id the CLI does not have is a refusal, not a fresh session, which
+ *     is the opposite of pi's behaviour and the reason this route's continuity
+ *     evidence is `provider-refuses-unknown-session`.
+ *   · neither — `--no-session-persistence`, exactly as before. A route
+ *     configured `continuity: none` keeps the reviewed ephemeral argv and
+ *     acquires no transcript on disk.
+ *
+ * `--fork-session` is never passed and must never be: it is the documented flag
+ * for "when resuming, create a new session ID instead of reusing the original",
+ * which is precisely the cold restart this whole mechanism exists to refuse.
+ */
+function sessionArgs(continuity: ModelRequest["continuity"]): readonly string[] {
+  if (continuity === undefined) return ["--no-session-persistence"];
+  const id = continuity.ref.providerSessionId;
+  if (!CLAUDE_SESSION_ID.test(id)) {
+    throw new AdapterError(
+      CLAUDE_ADAPTER_ID,
+      "E_INVALID_REQUEST",
+      `${JSON.stringify(id)} is not a UUID, which is the only session id this CLI accepts`,
+    );
+  }
+  return continuity.turn === "open" ? ["--session-id", id] : ["--resume", id];
+}
+
 function effortFor(effort: string): ClaudeEffort {
   const level = EFFORT_ALIASES[effort] ?? effort;
   if (!(CLAUDE_EFFORT_LEVELS as readonly string[]).includes(level)) {
@@ -272,7 +314,9 @@ export interface ClaudeCodeAdapterOptions {
   exitWaitMs?: number;
 }
 
-export class ClaudeCodeAdapter implements HarnessAdapter {
+export class ClaudeCodeAdapter implements ContinuityCapableAdapter {
+  /** The transport-side half of the continuity claim — see `isContinuityCapable`. */
+  readonly supportsSameSessionCorrection = true as const;
   readonly id = CLAUDE_ADAPTER_ID;
   readonly #executable: string;
   readonly #now: () => string;
@@ -323,10 +367,65 @@ export class ClaudeCodeAdapter implements HarnessAdapter {
       supportsThinking: true,
       supportsTools: true,
       supportsImages: true,
-      continuity: "none",
+      continuity: "same-session-correction",
       usageAuthority: "provider",
       costAuthority: "unavailable",
     };
+  }
+
+  /**
+   * `null`, and this is the honest asymmetry between the two corrected routes.
+   *
+   * Claude Code has no `--session-dir`. Its transcripts live under the config
+   * directory it resolves for itself, which on this machine is beneath the
+   * operator's `$HOME` — the same `$HOME` the env allowlist already passes
+   * because a provider cannot authenticate without it. Relocating it would mean
+   * either remapping `HOME` or allowlisting `CLAUDE_CONFIG_DIR`, and both move
+   * the credential lookup along with the transcript, which is a strictly worse
+   * trade than disclosing the difference.
+   *
+   * So a corrected Claude phase persists its conversation where that CLI
+   * normally would. What stays private on the AWSF side is unchanged: the
+   * session id is a host-minted locator held at `private/continuity.json`, mode
+   * 0600, and it reaches argv and nothing else.
+   */
+  continuityStoreDir(): null {
+    return null;
+  }
+
+  /**
+   * There is no host-visible store to read, so the proof is the CLI's own
+   * refusal — `--resume <uuid>` of a conversation it does not have fails rather
+   * than inventing one, which is the opposite of pi's warn-and-create.
+   *
+   * This is genuinely weaker than pi's and is labelled as such rather than
+   * dressed up: it is established BY the launch instead of before it. What it
+   * costs when it goes wrong is bounded, though, and that is why it is
+   * acceptable — a correction turn reserves no call, so a refused resume costs
+   * the process and no tier call, and the identity check on the returned stream
+   * catches a session that answered as somebody else.
+   */
+  assertResumable(ref: ContinuityRef): ContinuityEvidence {
+    if (!CLAUDE_SESSION_ID.test(ref.providerSessionId)) {
+      throw new AdapterError(
+        this.id,
+        "E_BACKEND_FAILURE",
+        "refusing to resume: the continuity reference is not a session id this CLI accepts; " +
+          "a correction re-enters the session it corrects",
+      );
+    }
+    if (ref.storeDir !== null) {
+      throw new AdapterError(
+        this.id,
+        "E_BACKEND_FAILURE",
+        "refusing to resume: this route has no host-owned session store, so a store directory " +
+          "would name somewhere the provider will not look",
+      );
+    }
+    return Object.freeze({
+      proof: "provider-refuses-unknown-session" as const,
+      detail: "the CLI refuses `--resume` of a session it does not hold; identity is re-checked on the stream",
+    });
   }
 
   /**
@@ -345,7 +444,7 @@ export class ClaudeCodeAdapter implements HarnessAdapter {
       "--verbose",
       "--model",
       selectorFor(request.model),
-      "--no-session-persistence",
+      ...sessionArgs(request.continuity),
     ];
     if (request.effort !== undefined) argv.push("--effort", effortFor(request.effort));
     if (request.systemPromptPath !== undefined) {
@@ -369,17 +468,37 @@ export class ClaudeCodeAdapter implements HarnessAdapter {
    * is what makes "quota is never a retry" structural rather than a policy
    * somebody has to remember: a run that ends `E_QUOTA_EXHAUSTED` ends, and the
    * decision about what happens next belongs to a layer that can see the budget.   */
+  /** Delegates to the module-level function so adapter tests and the runner share one rule. */
+  assertSameSession(first: ObservedProviderSession, next: ObservedProviderSession): void {
+    assertSameSession(
+      { sessionId: first.sessionId, resolvedModel: first.resolvedModel },
+      { sessionId: next.sessionId, resolvedModel: next.resolvedModel },
+    );
+  }
+
   async *execute(
     request: ModelRequest,
     broker: TransportBroker,
     registration: BrokerProcessRegistration,
     signal: AbortSignal,
+    observed?: ObservedProviderSession,
   ): AsyncIterable<NormalizedEvent> {
     if (request.systemPromptPath !== undefined) {
       assertPrivateSystemPrompt(this.id, request.systemPromptPath);
     }
     const transport = await broker.startProcess(registration, this.buildSpec(request), signal);
-    yield* this.parse(transport, signal, { requestedModel: selectorFor(request.model) });
+    // Filled in as the stream names itself; copied back even on a failed or
+    // cancelled stream, because "which conversation was that" is exactly the
+    // question a failure raises.
+    const record: ClaudeSessionRecord = { sessionId: null, resolvedModel: null };
+    try {
+      yield* this.parse(transport, signal, { requestedModel: selectorFor(request.model), session: record });
+    } finally {
+      if (observed !== undefined) {
+        observed.sessionId = record.sessionId;
+        observed.resolvedModel = record.resolvedModel;
+      }
+    }
   }
 
   /**

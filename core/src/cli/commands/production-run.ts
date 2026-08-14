@@ -3,14 +3,17 @@ import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import type {
   AgentPhaseProcessRegistration,
   BrokerProcessRegistration,
+  ContinuityCapableAdapter,
   HarnessAdapter,
   ModelInfo,
   ModelRequest,
+  ObservedProviderSession,
+  PhaseCorrectionProcessRegistration,
   ProcessRegistration,
   ProcessTransport,
   TransportBroker,
 } from "../../adapters/interface.ts";
-import { AdapterError } from "../../adapters/interface.ts";
+import { AdapterError, isContinuityCapable } from "../../adapters/interface.ts";
 import { registeredAdapter } from "../../adapters/registry.ts";
 import { writeSystemPromptFile } from "../../adapters/system-prompt-file.ts";
 import { toConfigSnapshotJson } from "../../config/effective-config.ts";
@@ -40,7 +43,16 @@ import {
   providerPairFrom,
   runMandatoryReview,
 } from "../../workflow/review-routing.ts";
-import { assertClean, captureChangeSet, changedPaths, runGit, systemGitRunner } from "../../git/changes.ts";
+import { assertClean, captureChangeSet, changedPaths, changesSinceBase, runGit, systemGitRunner } from "../../git/changes.ts";
+import { ContinuityStore, continuityHandle } from "../../execution/continuity-store.ts";
+import { continuityFilePath } from "../../persistence/platform-paths.ts";
+import { boundCommandOutput, renderCommandEvidence } from "../../gates/command-evidence.ts";
+import { TEST_OUTPUT_TAIL_MAX_CHARS } from "../../contracts/test-output.ts";
+import {
+  createCorrectionLaunchVerifier,
+  type CorrectionAllowanceState,
+  type OpenConversation,
+} from "../../workflow/phase-launch-authorization.ts";
 import type { AttemptEvidence, PhaseEvidenceRecord } from "../../observability/attempt-evidence.ts";
 import { PermissionBreach } from "../../policy/path-policy.ts";
 import { openPermissionSession, type PermissionSession, type SandboxProbe } from "../../policy/sandbox-broker.ts";
@@ -48,8 +60,15 @@ import { transition, type EdgeId, type TaskState } from "../../state/task-machin
 import { createCompiledPhaseLaunchVerifier } from "../../workflow/phase-launch-authorization.ts";
 import { compileWorkflow, type WorkflowRecipe } from "../../workflow/compiler.ts";
 import type { CompiledAgentPhase } from "../../workflow/phase.ts";
-import type { AgentTurn, CorrectionSession } from "../../workflow/corrections.ts";
-import { EnvelopeValidationFailure, PhaseGateFailure, createHostPhaseGit, runAgentPhase } from "../../workflow/engine.ts";
+import type { AgentTurn, CorrectionCandidateEvidence, CorrectionCommandFailure, CorrectionSession } from "../../workflow/corrections.ts";
+import {
+  EnvelopeValidationFailure,
+  PhaseGateFailure,
+  createHostPhaseGit,
+  runAgentPhase,
+  type CandidateVerification,
+  type HostPhaseGit,
+} from "../../workflow/engine.ts";
 import type { GateDefinition } from "../../workflow/phase.ts";
 import type { PhaseState } from "../../state/phase-machine.ts";
 import { buildWorkflow } from "../../workflow/recipes/build.ts";
@@ -166,9 +185,18 @@ interface Route {
   readonly adapterId: string;
   readonly adapter: HarnessAdapter;
   readonly model: ModelInfo;
+  /** Config and adapter transport BOTH said yes at preflight. */
+  readonly continuity: boolean;
   readonly userPrompt: string;
   readonly systemPrompt: string;
 }
+
+/**
+ * A syntactically valid session id used only to exercise the continuity argv at
+ * preflight. It names nothing, reaches no provider, and is a constant rather
+ * than a mint so a preflight leaves no trace in the store.
+ */
+const PREFLIGHT_SESSION_ID = "00000000-0000-4000-8000-000000000000";
 
 interface LaunchRecord {
   readonly phaseId: string;
@@ -270,14 +298,35 @@ function reportWith(report: GateReport, checks: readonly { item: string; ok: boo
   return report;
 }
 
+/**
+ * Two observations, and which one a gate gets depends on what that gate holds
+ * the phase accountable for.
+ *
+ * A phase that PRODUCES the candidate is accountable for the whole candidate,
+ * measured from the attempt base. Before corrections existed the distinction did
+ * not arise — a phase made exactly one commit, so "since the phase started" and
+ * "since the base" were the same set. A corrected phase makes a second commit on
+ * top of the first, and from there "since the last commit" is only the delta: a
+ * writes-glob check built on it would wave through a candidate that had written
+ * anywhere at all in round one.
+ *
+ * A phase that REVIEWS the candidate is accountable only for what it touched
+ * itself. Handing the reviewer the cumulative view would charge it with the
+ * builder's diff and fail its `writes: []` on the very change it was asked to
+ * read.
+ */
 function phaseGates(
   phaseId: string,
-  permission: PermissionSession,
+  profileWrites: readonly string[],
   worktree: string,
+  baseSha: string,
   config: AwsfConfig,
   review: { readonly candidateSha: string | null; readonly candidatePaths: readonly string[] } | null,
+  observePhase: () => readonly string[],
 ): readonly GateDefinition[] {
-  const observe = (): readonly string[] => changedPaths(permission.before, captureChangeSet(worktree));
+  const observe = review === null
+    ? (): readonly string[] => changesSinceBase(worktree, baseSha)
+    : observePhase;
   const read = artifactReader(worktree);
   const common: GateDefinition[] = [
     {
@@ -303,7 +352,7 @@ function phaseGates(
   if (phaseId === "builder") {
     common.push(
       { id: "diff_matches_claims", run: ({ envelope }) => diffMatchesClaims(observe(), (envelope as BuildOutput).changedFiles) },
-      { id: "writes_within_globs", run: () => writesWithinGlobs(observe(), permission.profile.writes) },
+      { id: "writes_within_globs", run: () => writesWithinGlobs(observe(), profileWrites) },
     );
   }
   if (review !== null) {
@@ -319,7 +368,7 @@ function phaseGates(
     // A reviewer that edits is not a reviewer. `writes: []` makes any observed
     // path a breach, and this states it as a gate rather than leaving it to the
     // permission session alone.
-    common.push({ id: "writes_within_globs", run: () => writesWithinGlobs(observe(), permission.profile.writes) });
+    common.push({ id: "writes_within_globs", run: () => writesWithinGlobs(observe(), profileWrites) });
   }
   return Object.freeze(common);
 }
@@ -437,15 +486,38 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
       if (available.status !== "available") throw new ProductionRouteUnavailable(agent.harness.adapter, available.detail ?? available.code ?? "blocked");
       const model = await adapter.getModelInfo(agent.model);
       const configuredContinuity = agent.harness.continuity;
-      const supportedContinuity = model.continuity === "same-session-correction" ? "same-session" : "none";
-      if (configuredContinuity !== supportedContinuity) {
+      // ONE-WAY, and the direction is the safety argument. Config that asks for
+      // more than the adapter can do is a mismatch and fails closed: it would
+      // tell the escalation ladder a correction costs tokens on a route where it
+      // cannot happen at all. Config that asks for LESS is a narrowing the owner
+      // is entitled to make — the reviewer is the standing example, since a
+      // reviewer that could be corrected is a reviewer that could be argued with.
+      //
+      // The earlier check was two-way, which was right while `none` was the only
+      // truth an adapter could tell. Now that both routes are genuinely capable,
+      // a two-way check would force every configured agent onto a capability it
+      // may not want, so it is narrowed here deliberately rather than left to
+      // read as an oversight.
+      if (configuredContinuity === "same-session" && model.continuity !== "same-session-correction") {
         throw new ProductionContinuityMismatch(agent.harness.adapter, configuredContinuity, model.continuity);
       }
-      if (configuredContinuity !== "none") {
-        throw new ProductionRouteUnavailable(agent.harness.adapter, "the production runner has no verified same-session correction transport");
+      // Two independent assertions, and both must hold. `getModelInfo` is the
+      // adapter's claim about its route; `isContinuityCapable` is whether the
+      // transport half of the contract is actually implemented. Pilot 2 stopped
+      // because a declaration and a transport had drifted apart, so the
+      // declaration alone is no longer enough to authorize a correction.
+      const continuous = configuredContinuity === "same-session";
+      if (continuous && !isContinuityCapable(adapter)) {
+        throw new ProductionRouteUnavailable(
+          agent.harness.adapter,
+          "the adapter reports same-session correction but implements no correction transport",
+        );
       }
       // Pure descriptor construction validates model/thinking/profile/tools before lifecycle mutation.
-      adapter.buildSpec({
+      // The continuity flags are exercised here too, on a throwaway reference,
+      // so an unusable session id or a missing store directory is a refusal
+      // before any lifecycle mutation rather than a failed launch after one.
+      const preflightRequest: ModelRequest = {
         model: agent.model,
         prompt: "preflight",
         cwd: status.worktree,
@@ -453,12 +525,24 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
         effort: agent.thinking,
         profile: agent.tools.profile,
         tools: agent.tools.allow,
-      });
+      };
+      adapter.buildSpec(preflightRequest);
+      if (continuous) {
+        const capable = adapter as ContinuityCapableAdapter;
+        const storeDir = capable.continuityStoreDir(join(options.attemptDir, "private", phase.id));
+        for (const turn of ["open", "resume"] as const) {
+          adapter.buildSpec({
+            ...preflightRequest,
+            continuity: { ref: { providerSessionId: PREFLIGHT_SESSION_ID, storeDir }, turn },
+          });
+        }
+      }
       routes.set(phase.id, {
         agent,
         adapterId: agent.harness.adapter,
         adapter,
         model,
+        continuity: continuous,
         userPrompt: routePrompts.get(phase.id)!.user,
         systemPrompt: routePrompts.get(phase.id)!.system,
       });
@@ -579,29 +663,97 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
     budget: budget.snapshot(), blocker: null, lastActivity: "L4 durable; first provider call held",
   });
 
-  const verifier = createCompiledPhaseLaunchVerifier({
-    statusFor: (taskSessionId) => taskSessionId === status.sessionId
+  // The private conversation ledger. Loaded rather than created blind so a
+  // resumed host does not mint a second locator for a phase that already has
+  // one, and so a `retry` that reuses this attempt directory finds the record
+  // it must refuse to reopen.
+  const continuity = new ContinuityStore({
+    path: continuityFilePath(options.attemptDir),
+    ...(infra.now === undefined ? {} : { now: infra.now }),
+  });
+  await continuity.load();
+
+  /**
+   * What the correction verifier is allowed to see. Deliberately the handle,
+   * the route and the turn count — never the provider locator, which stays in
+   * the store and reaches only argv.
+   */
+  const conversations = new Map<string, OpenConversation>();
+  /** Exactly one agent phase is in flight at a time; the counters are its. */
+  let activePhaseId: string | null = null;
+
+  const launchHost = {
+    statusFor: (taskSessionId: string) => taskSessionId === status.sessionId
       ? { taskSessionId, lifecycleState: status.lifecycleState, workflowId: status.workflow }
       : null,
-    compiledWorkflowFor: (taskSessionId) => taskSessionId === status.sessionId ? compiled : null,
-    configuredRouteFor: ({ taskSessionId, phaseId }) => {
+    compiledWorkflowFor: (taskSessionId: string) => taskSessionId === status.sessionId ? compiled : null,
+    configuredRouteFor: ({ taskSessionId, phaseId }: { taskSessionId: string; phaseId: string }) => {
       const route = routes.get(phaseId);
       return taskSessionId === status.sessionId && route !== undefined
-        ? { adapterId: route.adapterId, role: route.agent.name, launchAuthorization: "agent-phase" }
+        ? { adapterId: route.adapterId, role: route.agent.name, launchAuthorization: "agent-phase" as const }
         : null;
     },
+  };
+  const verifier = createCompiledPhaseLaunchVerifier(launchHost);
+  const correctionVerifier = createCorrectionLaunchVerifier({
+    ...launchHost,
+    conversationFor: ({ taskSessionId, phaseId }) => taskSessionId === status.sessionId
+      ? conversations.get(phaseId) ?? null
+      : null,
+    correctionStateFor: ({ taskSessionId, phaseId }): CorrectionAllowanceState | null => {
+      if (taskSessionId !== status.sessionId || phaseId !== activePhaseId) return null;
+      const snapshot = budget.snapshot();
+      return {
+        used: { auto: snapshot.correctionsAuto, owner: snapshot.correctionsOwner },
+        allowance: { ...snapshot.allowance },
+      };
+    },
   });
+
+  /**
+   * The one place the provider locator would otherwise escape.
+   *
+   * It reaches the child on argv, which is the protocol working as designed, and
+   * the barrier records that argv verbatim into `processes.command_json`. So a
+   * feature that succeeded would publish the locator to the journal, the SQLite
+   * projection, and the dashboard — the exact opposite of what
+   * `private/continuity.json` at mode 0600 is for.
+   *
+   * Exact-match replacement rather than a pattern: the host MINTED these
+   * strings, so it can name them precisely instead of guessing at what a session
+   * id looks like on a route it has not met yet.
+   */
+  const REDACTED_LOCATOR = "[continuity-ref]";
+  const redactLocators = (record: BarrierRecord): BarrierRecord => {
+    const locators = new Set(continuity.locators());
+    if (locators.size === 0) return record;
+    return { ...record, command: record.command.map((argument) => locators.has(argument) ? REDACTED_LOCATOR : argument) };
+  };
 
   const broker = infra.createBroker({
     ledger: budget,
     phaseLaunchVerifier: verifier,
+    correctionLaunchVerifier: correctionVerifier,
+    onCorrection: async (record, evidence) => {
+      const launch = launches.get(record.runId)!;
+      launch.releasedAt = infra.now();
+      // The budget snapshot is recorded beside a launch that did NOT move it.
+      // That is the point: a reader comparing this row with the `onSpent` row
+      // above sees one class of launch that charged a call and one that charged
+      // tokens, rather than having to infer which from the absence of a row.
+      await persist("attempt.updated", { budget: budget.snapshot(), lastActivityAt: launch.releasedAt, lastActivity: `correction round ${String(evidence.correctionRound)} resumed ${evidence.continuityHandle} on the ${evidence.tranche} tranche; no call reserved` }, {
+        type: "process", phaseId: launch.phaseId, adapterId: launch.adapterId, role: launch.role,
+        record: redactLocators(record), status: "RUNNING", registeredAt: launch.registeredAt, releasedAt: launch.releasedAt,
+        endedAt: null, exitCode: null, exitSignal: null,
+      });
+    },
     register: async (record) => {
       const launch = launches.get(record.runId);
       if (launch === undefined) throw new Error(`unregistered host launch ${record.runId}`);
       launch.record = record;
       await persist("attempt.updated", { process: record.identity, budget: budget.snapshot(), lastActivityAt: infra.now(), lastActivity: `process ${record.runId} registered before GO` }, {
         type: "process", phaseId: launch.phaseId, adapterId: launch.adapterId, role: launch.role,
-        record, status: "REGISTERED", registeredAt: launch.registeredAt, releasedAt: null,
+        record: redactLocators(record), status: "REGISTERED", registeredAt: launch.registeredAt, releasedAt: null,
         endedAt: null, exitCode: null, exitSignal: null,
       });
       options.assertLaunchProjection?.(status.sessionId);
@@ -611,7 +763,7 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
       launch.releasedAt = infra.now();
       await persist("attempt.updated", { budget: budget.snapshot(), lastActivityAt: launch.releasedAt, lastActivity: `call ${record.reservationId} spent immediately before GO` }, {
         type: "process", phaseId: launch.phaseId, adapterId: launch.adapterId, role: launch.role,
-        record, status: "RUNNING", registeredAt: launch.registeredAt, releasedAt: launch.releasedAt,
+        record: redactLocators(record), status: "RUNNING", registeredAt: launch.registeredAt, releasedAt: launch.releasedAt,
         endedAt: null, exitCode: null, exitSignal: null,
       });
     },
@@ -642,6 +794,119 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
     });
   };
 
+  interface CandidateMeasurement {
+    readonly testOutput: TestOutput;
+    readonly hygiene: GateReport;
+    readonly aggregate: GateReport;
+    readonly failures: readonly CorrectionCommandFailure[];
+  }
+
+  /**
+   * What was measured, keyed by the exact SHA it was measured against.
+   *
+   * Keyed by SHA rather than by phase so the `tests` phase can only reuse a
+   * measurement of the candidate it is actually gating. A measurement of a
+   * superseded candidate is retained as evidence and can never be mistaken for
+   * a verdict on the current one.
+   */
+  const candidateMeasurements = new Map<string, CandidateMeasurement>();
+
+  /**
+   * Everything the host measures against one exact candidate commit: hygiene,
+   * then each configured command, with the tree proved clean and pinned to that
+   * SHA on both sides of every command.
+   *
+   * Extracted from the `tests` phase, which used to be its only caller, because
+   * a correctable candidate needs the same measurement one stage earlier — at
+   * the moment the builder's conversation is still open. The `tests` phase now
+   * records what this produced rather than running the suite a second time
+   * against the same SHA, which would spend the wall clock twice to learn the
+   * same thing and could disagree with itself.
+   */
+  const measureCandidate = async (phaseId: string, candidateSha: string, round: number): Promise<CandidateMeasurement> => {
+    const gitRunner = systemGitRunner(status.worktree!);
+    const observedBase = runGit(gitRunner, ["rev-parse", status.baseSha!]).trim();
+    const headBeforeHygiene = runGit(gitRunner, ["rev-parse", "HEAD"]).trim();
+    const cleanBeforeHygiene = runGit(gitRunner, ["status", "--porcelain"]).trim().length === 0;
+    const hygieneResult = gitRunner(["diff", "--check", `${status.baseSha!}..${candidateSha}`, "--"]);
+    const headAfterHygiene = runGit(gitRunner, ["rev-parse", "HEAD"]).trim();
+    const cleanAfterHygiene = runGit(gitRunner, ["status", "--porcelain"]).trim().length === 0;
+    const hygiene = candidateHygiene({
+      expectedBaseSha: status.baseSha!, observedBaseSha: observedBase,
+      expectedCandidateSha: candidateSha, headBefore: headBeforeHygiene, headAfter: headAfterHygiene,
+      cleanBefore: cleanBeforeHygiene, cleanAfter: cleanAfterHygiene,
+      exitCode: hygieneResult.status ?? -1,
+      output: `${hygieneResult.stdout}${hygieneResult.stderr}${hygieneResult.error === null ? "" : `\n${hygieneResult.error}`}`,
+    });
+    await persistGate(phaseId, hygiene, candidateSha, round, hygieneResult.status ?? -1);
+    if (!hygiene.passed) {
+      const aggregate = new GateReport("commands_pass");
+      aggregate.check("candidate hygiene", false, "the configured commands were not run against an unclean candidate");
+      return {
+        testOutput: {
+          schema: "awsf.test-output/v1", producerStatus: "failure",
+          summary: "candidate hygiene failed", artifacts: [], notesForNextPhase: "inspect the candidate",
+          passed: false, candidateSha, commands: [], failures: ["candidate_hygiene failed"], outputTail: "",
+        },
+        hygiene, aggregate, failures: [],
+      };
+    }
+
+    assertClean(status.worktree!, "before");
+    const observedHead = runGit(gitRunner, ["rev-parse", "HEAD"]).trim();
+    if (observedHead !== candidateSha) throw new Error(`candidate moved before commands: ${observedHead} != ${candidateSha}`);
+    const commands: TestOutput["commands"] = [];
+    const failures: string[] = [];
+    const commandFailures: CorrectionCommandFailure[] = [];
+    const renderedSections: string[] = [];
+    for (const [gateId, configured] of Object.entries(options.config.gates)) {
+      const started = Date.now();
+      const [executable, ...argv] = configured.argv;
+      const result = infra.runCommand(executable!, argv, {
+        timeoutMs: configured.timeout_seconds * 1_000,
+        cwd: status.worktree!,
+        maxBuffer: options.config.runtime.max_output_bytes,
+      });
+      // The COMPLETE output is retained privately, mode 0600. Retaining only the
+      // bounded rendering is exactly the defect pilot 2 hit: the one segment
+      // needed to fix the failure had already been discarded before anything
+      // asked for it.
+      const output = `${result.stdout}${result.stderr}${result.error === null ? "" : `\n${result.error}`}`;
+      const outputRelative = join("raw", `command-${phaseId}-${gateId}-${String(round)}.txt`);
+      const outputAbsolute = join(options.attemptDir, outputRelative);
+      await mkdir(dirname(outputAbsolute), { recursive: true });
+      await writeFile(outputAbsolute, output, { mode: 0o600 });
+      await chmod(outputAbsolute, 0o600);
+      const exitCode = result.status ?? -1;
+      commands.push({ gateId, argv: [...configured.argv], exitCode, durationMs: Date.now() - started, outputRef: outputRelative });
+      const bounded = boundCommandOutput(output);
+      const rendered = renderCommandEvidence(bounded);
+      renderedSections.push(`### ${gateId} (exit ${String(exitCode)})\n${rendered}`);
+      if (exitCode !== 0) {
+        failures.push(`${gateId} exited ${exitCode}`);
+        commandFailures.push({ gateId, argv: [...configured.argv], exitCode, evidence: rendered });
+      }
+      assertClean(status.worktree!, "after");
+      const afterHead = runGit(systemGitRunner(status.worktree!), ["rev-parse", "HEAD"]).trim();
+      if (afterHead !== candidateSha) throw new Error(`candidate moved during ${gateId}`);
+    }
+    const testOutput: TestOutput = {
+      schema: "awsf.test-output/v1", producerStatus: failures.length === 0 ? "success" : "failure",
+      summary: failures.length === 0 ? "all configured commands passed" : "configured commands failed",
+      artifacts: [], notesForNextPhase: failures.length === 0 ? "await owner" : "inspect command evidence",
+      passed: failures.length === 0, candidateSha, commands, failures,
+      outputTail: safeTail(renderedSections.join("\n\n"), TEST_OUTPUT_TAIL_MAX_CHARS),
+    };
+    const aggregate = new GateReport("commands_pass");
+    for (const [gateId, configured] of Object.entries(options.config.gates)) {
+      const report = commandsPass(testOutput, { gateId, argv: configured.argv }, { candidateSha, cleanBefore: true, cleanAfter: true });
+      reportWith(aggregate, report.checks.map((check) => ({ ...check, item: `${gateId}:${check.item}` })));
+    }
+    if (Object.keys(options.config.gates).length === 0) aggregate.check("configured commands", true, "no commands configured");
+    await persistGate(phaseId, aggregate, candidateSha, round, failures.length === 0 ? 0 : -1);
+    return { testOutput, hygiene, aggregate, failures: Object.freeze(commandFailures) };
+  };
+
   /**
    * A phase launched inside RUNNING registers against the compiled workflow; a
    * phase that IS a lifecycle spawn site registers against its edge. The review
@@ -658,6 +923,37 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
     }
     return { kind: "agent-phase", runId, taskSessionId: status.sessionId, workflowId: compiled.id, phaseId: phase.id, phaseOrdinal: ordinal, reservationId: reservation.id, adapterId: route.adapterId, role: route.agent.name } satisfies AgentPhaseProcessRegistration;
   };
+
+  /**
+   * The registration for a turn that costs tokens rather than a call.
+   *
+   * It carries the phase's ORIGIN reservation — the one the first turn already
+   * spent — so the durable process row still names the call this correction
+   * hangs off, and so the broker can prove that call was real before it agrees
+   * to launch anything for free.
+   */
+  const correctionRegistrationFor = (
+    phase: CompiledAgentPhase,
+    ordinal: number,
+    route: Route,
+    originReservation: Reservation,
+    runId: string,
+    round: number,
+    tranche: "auto" | "owner",
+  ): PhaseCorrectionProcessRegistration => ({
+    kind: "phase-correction",
+    runId,
+    taskSessionId: status.sessionId,
+    workflowId: compiled.id,
+    phaseId: phase.id,
+    phaseOrdinal: ordinal,
+    correctionRound: round,
+    tranche,
+    originReservationId: originReservation.id,
+    adapterId: route.adapterId,
+    role: route.agent.name,
+    continuityHandle: continuityHandle(phase.id),
+  });
 
   const runAgent = async (
     phase: CompiledAgentPhase,
@@ -678,10 +974,15 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
     const registeredAt = infra.now();
     const launch: LaunchRecord = { phaseId: phaseDb, adapterId: route.adapterId, role: route.agent.name, registeredAt };
     launches.set(runId, launch);
+    // A correction turn is its own process with its own registration, so it
+    // needs its own run id: reusing one would collide with the retained raw
+    // output of the turn it is correcting, and the `processes` table's
+    // `UNIQUE (session_id, run_id)` would refuse the second row outright.
+    const runIdFor = (turn: number): string => turn === 0 ? runId : `${runId}:c${String(turn)}`;
     const runtimeDir = join(options.attemptDir, "private", phase.id);
-    await mkdir(runtimeDir, { recursive: true });
+    await mkdir(runtimeDir, { recursive: true, mode: 0o700 });
     const systemPromptPath = await infra.writeSystemPrompt(route.systemPrompt, runtimeDir);
-    const permission = openPermissionSession({
+    const openPermission = (): PermissionSession => openPermissionSession({
       canonicalRepository: status.repository,
       worktree: status.worktree!,
       sessionRuntime: runtimeDir,
@@ -691,12 +992,19 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
       protectedPaths: options.config.policy.protected_paths,
       ...(infra.sandboxProbe === undefined ? {} : { sandboxProbe: infra.sandboxProbe }),
     });
-    const hostGit = createHostPhaseGit<EnvelopeBase>({
+    // Re-armed after every candidate commit, because both objects measure "what
+    // changed since I opened" and a correction round needs that measured from
+    // the candidate it is correcting rather than from the seeded worktree. The
+    // CUMULATIVE view — writes globs, protected paths, the declared diff — is a
+    // separate check, taken from the attempt base by `phaseGates`.
+    let permission = openPermission();
+    const openHostGit = (): HostPhaseGit<EnvelopeBase> => createHostPhaseGit<EnvelopeBase>({
       repository: status.worktree!,
       commitMessage: (envelope) => phase.id === "builder"
         ? (envelope as BuildOutput).proposedCommitMessage
         : `chore: record ${phase.id} output`,
     });
+    let hostGit = openHostGit();
     const renderedPrompt = phase.renderPrompt(previous);
     for (const [name, text] of [["system", route.systemPrompt], ["user", renderedPrompt]] as const) {
       await persist("attempt.updated", {}, {
@@ -704,18 +1012,103 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
         lineCount: text.split(/\r?\n/).length, at: infra.now(),
       });
     }
-    const gatedPhase = { ...phase, gates: phaseGates(phase.id, permission, status.worktree!, options.config, reviewContext) };
+    const gatedPhase = {
+      ...phase,
+      gates: phaseGates(
+        phase.id,
+        permission.profile.writes,
+        status.worktree!,
+        status.baseSha!,
+        options.config,
+        reviewContext,
+        () => changedPaths(permission.before, captureChangeSet(status.worktree!)),
+      ),
+    };
     let phaseQueue = Promise.resolve();
     const onPhaseState = (next: PhaseState): void => {
       phaseQueue = phaseQueue.then(() => persistPhase(phase.id, next));
     };
     const realRegistration = registrationFor(phase, ordinal, route, reservation, runId, first, reviewContext !== null);
-    let sent = false;
+    const handle = continuityHandle(phase.id);
+    // The conversation is opened before the first turn so the locator exists,
+    // is private, and is durable before any process can be told about it. A
+    // route configured `continuity: none` opens nothing and keeps the ephemeral
+    // argv it always had.
+    const conversationRef = route.continuity
+      ? (await continuity.open({
+          phaseId: phase.id,
+          adapter: route.adapter.id,
+          provider: route.model.provider,
+          model: route.model.requestedModel,
+          storeDir: (route.adapter as ContinuityCapableAdapter).continuityStoreDir(runtimeDir),
+        }), continuity.ref(handle))
+      : null;
+    if (conversationRef?.storeDir != null) await mkdir(conversationRef.storeDir, { recursive: true, mode: 0o700 });
+    if (route.continuity) {
+      conversations.set(phase.id, {
+        handle,
+        adapterId: route.adapterId,
+        role: route.agent.name,
+        turns: 0,
+        verifiedContinuity: "same-session-correction",
+      });
+    }
+    /**
+     * The deterministic gate, moved inside the phase that can still act on it.
+     *
+     * Only the phase that produces the candidate gets one, and only when its
+     * route can actually be re-entered. A reviewer never verifies a candidate —
+     * it did not build one — and a route with no correction transport gets the
+     * pre-continuity behaviour: the commit stands, the `tests` phase measures
+     * it, and a red suite blocks on L8 exactly as it did before.
+     */
+    const verifyCandidate = phase.id === "builder" && reviewContext === null && route.continuity
+      ? async ({ candidateSha, correctionRound }: { candidateSha: string; correctionRound: number }): Promise<CandidateVerification> => {
+          const measured = await measureCandidate(phase.id, candidateSha, correctionRound);
+          const passed = measured.hygiene.passed && measured.aggregate.passed && measured.failures.length === 0;
+          // The next round measures from THIS candidate, so both round-scoped
+          // observers are re-armed against the tree as it now stands.
+          permission = openPermission();
+          hostGit = openHostGit();
+          candidateMeasurements.set(candidateSha, measured);
+          await persist("attempt.updated", {
+            candidateSha,
+            lastActivityAt: infra.now(),
+            lastActivity: passed
+              ? `host gates passed against exact candidate ${candidateSha}`
+              : `host gates failed against exact candidate ${candidateSha}; ${String(measured.failures.length)} configured command(s) red`,
+          });
+          return {
+            passed,
+            reports: [measured.hygiene, measured.aggregate],
+            evidence: passed ? null : {
+              candidateSha,
+              baseSha: status.baseSha!,
+              commands: measured.failures,
+            } satisfies CorrectionCandidateEvidence,
+          };
+        }
+      : null;
+
+    let turnIndex = 0;
+    /** What the FIRST turn's stream said. Every later turn is compared to it. */
+    let firstObserved: ObservedProviderSession | null = null;
     const session: CorrectionSession = {
-      identity: { adapter: route.adapter.id, provider: route.model.provider, model: route.model.requestedModel, sessionId: `none:${runId}` },
+      identity: {
+        adapter: route.adapter.id,
+        provider: route.model.provider,
+        model: route.model.requestedModel,
+        // The HOST handle, never the provider locator. See
+        // `execution/continuity-store.ts` for why the two are kept apart: this
+        // string reaches error messages, and error messages reach `status.json`.
+        sessionId: route.continuity ? handle : `none:${runId}`,
+      },
       send: async (prompt): Promise<AgentTurn> => {
-        if (sent) throw new Error("configured and verified continuity is none; a second turn is not authorized");
-        sent = true;
+        const turn = turnIndex;
+        turnIndex += 1;
+        if (turn > 0 && !route.continuity) {
+          throw new Error("configured and verified continuity is none; a second turn is not authorized");
+        }
         await phaseQueue;
         const controller = new HOST.AbortController();
         let idle: unknown | null = null;
@@ -741,18 +1134,47 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
             return transport;
           },
         };
+        // A correction turn proves it can resume BEFORE it launches: the store
+        // proves the route is unchanged and a turn has completed; the adapter
+        // proves the conversation is where it says it is. Either refusal throws
+        // here, with no process created and no call at risk.
+        const turnRunId = runIdFor(turn);
+        if (turn > 0) launches.set(turnRunId, launch);
+        let registration: BrokerProcessRegistration = realRegistration;
+        if (turn > 0) {
+          const record = continuity.assertCorrectable(handle, {
+            adapter: route.adapter.id,
+            provider: route.model.provider,
+            model: route.model.requestedModel,
+          });
+          const evidence = (route.adapter as ContinuityCapableAdapter).assertResumable(
+            { providerSessionId: record.providerSessionId, storeDir: record.storeDir },
+            { cwd: status.worktree! },
+          );
+          const snapshot = budget.snapshot();
+          // The phase machine charged a tranche on `VALIDATING → CORRECTING`
+          // immediately before this send; whichever counter moved is the one
+          // this launch is drawn against.
+          const tranche: "auto" | "owner" = snapshot.correctionsAuto > 0 ? "auto" : "owner";
+          registration = correctionRegistrationFor(phase, ordinal, route, reservation, turnRunId, turn, tranche);
+          await persist("attempt.updated", { lastActivityAt: infra.now(), lastActivity: `${phase.id}: resuming ${handle} for correction round ${String(turn)} (${evidence.proof})` });
+        }
         const request: ModelRequest = {
           model: route.agent.model, prompt, systemPromptPath, cwd: status.worktree!,
           env: HOST.process.env, effort: route.agent.thinking,
           profile: route.agent.tools.profile, tools: route.agent.tools.allow,
+          ...(conversationRef === null ? {} : {
+            continuity: { ref: conversationRef, turn: turn === 0 ? "open" as const : "resume" as const },
+          }),
         };
         const events: NormalizedEvent[] = [];
         let output = "";
         let resolved: { model: string; provenance: ModelResolutionProvenance } | null = null;
         let terminal: NormalizedEvent | null = null;
+        const observed: ObservedProviderSession = { sessionId: null, resolvedModel: null, costUsd: null };
         arm();
         try {
-          for await (const event of route.adapter.execute(request, sandboxingBroker, realRegistration, controller.signal)) {
+          for await (const event of route.adapter.execute(request, sandboxingBroker, registration, controller.signal, observed)) {
             arm();
             events.push(event);
             if (event.kind === "text.delta") output += event.text;
@@ -775,7 +1197,7 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
         if (launch.record !== undefined) {
           await persist("attempt.updated", { process: null, lastActivityAt: endedAt }, {
             type: "process", phaseId: phaseDb, adapterId: route.adapterId, role: route.agent.name,
-            record: launch.record, status: terminal?.kind === "run.completed" && exitCode === 0 ? "EXITED" : "FAILED",
+            record: redactLocators(launch.record), status: terminal?.kind === "run.completed" && exitCode === 0 ? "EXITED" : "FAILED",
             registeredAt, releasedAt: launch.releasedAt ?? registeredAt, endedAt, exitCode, exitSignal: null,
           });
         }
@@ -784,6 +1206,30 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
         if (terminal?.kind !== "run.completed") throw new AdapterError(route.adapter.id, "E_TERMINAL_MISSING", "adapter event stream ended without a terminal");
         if (terminal.exitCode !== 0) throw new AdapterError(route.adapter.id, "E_BACKEND_FAILURE", `provider exited ${String(terminal.exitCode)}`);
         if (resolved === null) throw new AdapterError(route.adapter.id, "E_MODEL_UNRESOLVED", "adapter emitted no resolved model evidence");
+        // The stream's own account of which conversation answered, checked
+        // against the host's. Turn 0 proves the provider honoured the locator it
+        // was handed rather than minting its own; every later turn proves the
+        // correction re-entered that same conversation on that same model. Both
+        // are terminal, and neither reaches a public projection: what the error
+        // names is the handle, not the locator.
+        if (route.continuity) {
+          const capable = route.adapter as ContinuityCapableAdapter;
+          if (turn === 0) {
+            if (observed.sessionId !== null && observed.sessionId !== conversationRef!.providerSessionId) {
+              throw new AdapterError(
+                route.adapter.id,
+                "E_BACKEND_FAILURE",
+                `${handle} answered in a conversation the host did not open; the provider did not honour the session it was given`,
+              );
+            }
+            firstObserved = { ...observed };
+          } else {
+            capable.assertSameSession(firstObserved!, observed);
+          }
+          await continuity.recordTurn(handle);
+          const conversation = conversations.get(phase.id)!;
+          conversations.set(phase.id, { ...conversation, turns: conversation.turns + 1 });
+        }
         const usage = events.some((event) => event.kind === "usage") ? sumUsage(events) : UNREPORTED_TOKEN_USAGE;
         await persist("attempt.updated", { model: { resolved: resolved.model, provenance: resolved.provenance }, lastActivityAt: endedAt }, {
           type: "agent", phaseId: phaseDb, agent: route.agent.name, adapterId: route.adapterId,
@@ -800,6 +1246,7 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
       },
     };
     try {
+      activePhaseId = phase.id;
       const result = await runAgentPhase({
         workflowId: compiled.id,
         phase: gatedPhase,
@@ -807,14 +1254,35 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
         previousEnvelope: previous,
         session,
         budget,
-        permissions: permission,
-        hostGit,
-        persistence: { persist: (envelope, raw) => persistEnvelope(phase.id, runId, envelope, raw) },
+        // Both ports read the CURRENT round's objects. The engine re-enforces
+        // and re-commits every round, and `verifyCandidate` below re-arms them
+        // after each commit.
+        permissions: { enforce: () => permission.enforce() },
+        hostGit: {
+          captureDiff: () => hostGit.captureDiff(),
+          commit: (envelope, paths) => hostGit.commit(envelope, paths),
+        },
+        persistence: { persist: (envelope, raw) => persistEnvelope(phase.id, runIdFor(envelope.correctionRound), envelope, raw) },
         agentSessionId: status.sessionId,
         onPhaseState,
-        // Preflight proved durable config and adapter capability both say none.
-        // Invalid schema or a failed gate therefore blocks on turn one.
-        authorizeCorrection: () => null,
+        /**
+         * The automatic tranche first, and no owner tranche here.
+         *
+         * `awsf run` is non-interactive by construction, and the lifecycle makes
+         * the owner tranche owner-authorized — L10's second correction is
+         * owner-only. A runner that drew it on the owner's behalf would be
+         * spending an authorization nobody gave, so it draws `auto` while `auto`
+         * remains and refuses afterwards. Exhaustion returns null, which the
+         * engine turns into the same `PhaseGateFailure` that blocks on L8 today.
+         */
+        authorizeCorrection: ({ correctionRound }) => {
+          if (!route.continuity) return null;
+          const snapshot = budget.snapshot();
+          if (snapshot.correctionsAuto >= snapshot.allowance.auto) return null;
+          if (correctionRound > phase.maxCorrections) return null;
+          return "host";
+        },
+        ...(verifyCandidate === null ? {} : { verifyCandidate }),
       });
       await phaseQueue;
       const gatedSha = reviewContext === null ? result.candidateSha : reviewContext.candidateSha;
@@ -901,69 +1369,25 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
 
       await persistPhase(phase.id, "RUNNING");
       if (candidateSha === null) throw new Error("code phase requires a host-created candidate SHA");
-      const gitRunner = systemGitRunner(status.worktree!);
-      const observedBase = runGit(gitRunner, ["rev-parse", status.baseSha!]).trim();
-      const headBeforeHygiene = runGit(gitRunner, ["rev-parse", "HEAD"]).trim();
-      const cleanBeforeHygiene = runGit(gitRunner, ["status", "--porcelain"]).trim().length === 0;
-      const hygieneResult = gitRunner(["diff", "--check", `${status.baseSha!}..${candidateSha}`, "--"]);
-      const headAfterHygiene = runGit(gitRunner, ["rev-parse", "HEAD"]).trim();
-      const cleanAfterHygiene = runGit(gitRunner, ["status", "--porcelain"]).trim().length === 0;
-      const hygiene = candidateHygiene({
-        expectedBaseSha: status.baseSha!, observedBaseSha: observedBase,
-        expectedCandidateSha: candidateSha, headBefore: headBeforeHygiene, headAfter: headAfterHygiene,
-        cleanBefore: cleanBeforeHygiene, cleanAfter: cleanAfterHygiene,
-        exitCode: hygieneResult.status ?? -1,
-        output: `${hygieneResult.stdout}${hygieneResult.stderr}${hygieneResult.error === null ? "" : `\n${hygieneResult.error}`}`,
-      });
-      await persistGate(phase.id, hygiene, candidateSha, 0, hygieneResult.status ?? -1);
-      if (!hygiene.passed) {
-        const failure = new PhaseGateFailure(phase.id, [hygiene]);
+      // If the producing phase already measured THIS exact candidate — which it
+      // does whenever its route can be corrected — the measurement is recorded
+      // rather than repeated. Re-running a twenty-minute suite against a SHA the
+      // host already gated would spend the wall clock twice to learn the same
+      // thing, and two runs that disagreed would leave nothing to arbitrate.
+      const retained = candidateMeasurements.get(candidateSha);
+      const measured = retained ?? await measureCandidate(phase.id, candidateSha, 0);
+      if (retained !== undefined) {
+        await persistGate(phase.id, measured.hygiene, candidateSha, 0, measured.hygiene.passed ? 0 : -1);
+        await persistGate(phase.id, measured.aggregate, candidateSha, 0, measured.testOutput.passed ? 0 : -1);
+      }
+      if (!measured.hygiene.passed) {
+        const failure = new PhaseGateFailure(phase.id, [measured.hygiene]);
         await persistPhase(phase.id, "FAILED", failure);
         throw failure;
       }
-
-      assertClean(status.worktree!, "before");
-      const observedHead = runGit(gitRunner, ["rev-parse", "HEAD"]).trim();
-      if (observedHead !== candidateSha) throw new Error(`candidate moved before commands: ${observedHead} != ${candidateSha}`);
-      const commands: TestOutput["commands"] = [];
-      const failures: string[] = [];
-      let combinedTail = "";
-      for (const [gateId, configured] of Object.entries(options.config.gates)) {
-        const started = Date.now();
-        const [executable, ...argv] = configured.argv;
-        const result = infra.runCommand(executable!, argv, {
-          timeoutMs: configured.timeout_seconds * 1_000,
-          cwd: status.worktree!,
-          maxBuffer: options.config.runtime.max_output_bytes,
-        });
-        const output = safeTail(`${result.stdout}${result.stderr}${result.error === null ? "" : `\n${result.error}`}`);
-        const outputRelative = join("raw", `command-${phase.id}-${gateId}.txt`);
-        const outputAbsolute = join(options.attemptDir, outputRelative);
-        await mkdir(dirname(outputAbsolute), { recursive: true });
-        await writeFile(outputAbsolute, output, { mode: 0o600 });
-        const exitCode = result.status ?? -1;
-        commands.push({ gateId, argv: [...configured.argv], exitCode, durationMs: Date.now() - started, outputRef: outputRelative });
-        if (exitCode !== 0) failures.push(`${gateId} exited ${exitCode}`);
-        combinedTail = safeTail(`${combinedTail}\n${output}`);
-        assertClean(status.worktree!, "after");
-        const afterHead = runGit(systemGitRunner(status.worktree!), ["rev-parse", "HEAD"]).trim();
-        if (afterHead !== candidateSha) throw new Error(`candidate moved during ${gateId}`);
-      }
-      const testOutput: TestOutput = {
-        schema: "awsf.test-output/v1", producerStatus: failures.length === 0 ? "success" : "failure",
-        summary: failures.length === 0 ? "all configured commands passed" : "configured commands failed",
-        artifacts: [], notesForNextPhase: failures.length === 0 ? "await owner" : "inspect command evidence",
-        passed: failures.length === 0, candidateSha, commands, failures, outputTail: combinedTail,
-      };
+      const testOutput = measured.testOutput;
       await persistHostEnvelope(phase.id, testOutput);
-      const aggregate = new GateReport("commands_pass");
-      for (const [gateId, configured] of Object.entries(options.config.gates)) {
-        const report = commandsPass(testOutput, { gateId, argv: configured.argv }, { candidateSha, cleanBefore: true, cleanAfter: true });
-        reportWith(aggregate, report.checks.map((check) => ({ ...check, item: `${gateId}:${check.item}` })));
-      }
-      if (Object.keys(options.config.gates).length === 0) aggregate.check("configured commands", true, "no commands configured");
-      await persistGate(phase.id, aggregate, candidateSha, 0, failures.length === 0 ? 0 : -1);
-      if (!aggregate.passed || failures.length > 0) {
+      if (!measured.aggregate.passed || !testOutput.passed) {
         await persistPhase(phase.id, "FAILED", new CommandPhaseFailure(testOutput));
         throw new CommandPhaseFailure(testOutput);
       }

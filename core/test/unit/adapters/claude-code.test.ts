@@ -38,6 +38,7 @@ import {
   type ProcessSpec,
   type ProcessTransport,
 } from "../../../src/adapters/interface.ts";
+import { isContinuityCapable } from "../../../src/adapters/interface.ts";
 import {
   validateEventSequence,
   type NormalizedEvent,
@@ -336,7 +337,12 @@ test("Claude Pro measures tokens and cannot price them — and says both", async
   assert.equal(info.requestedModel, "opus");
   assert.equal(info.usageAuthority, "provider");
   assert.equal(info.costAuthority, "unavailable");
-  assert.equal(info.continuity, "none");
+  // Both halves of the continuity contract, asserted separately: what the route
+  // says about itself, and whether the transport that would have to deliver it
+  // actually exists.
+  assert.equal(info.continuity, "same-session-correction");
+  assert.equal(adapter().supportsSameSessionCorrection, true);
+  assert.ok(isContinuityCapable(adapter()));
   // `null` = this adapter declares no ceiling. Not a ceiling of zero.
   assert.equal(info.contextWindow, null);
 });
@@ -1046,4 +1052,121 @@ test("Claude's route keeps `rate limit`, where pi's drops it — a divergence on
   );
   const terminal = events[events.length - 1];
   assert.equal(terminal?.kind === "run.failed" ? terminal.errorCode : null, "E_QUOTA_EXHAUSTED");
+});
+
+// ---------------------------------------------------------------------------
+// Continuity — `--session-id` on the way in, `--resume` on the way back, and
+// `--fork-session` never. Read off `claude --help` (2.1.232), not inferred.
+// ---------------------------------------------------------------------------
+
+const LOCATOR = "9b1f0c2a-3d4e-4f50-8a61-72b83c94d5e6";
+
+test("without continuity the argv keeps the reviewed ephemeral flag", () => {
+  const spec = adapter().buildSpec(REQUEST);
+  assert.ok(spec.argv.includes("--no-session-persistence"));
+  assert.equal(spec.argv.includes("--session-id"), false);
+  assert.equal(spec.argv.includes("--resume"), false);
+});
+
+test("open takes `--session-id`, in place of the ephemeral flag and nowhere else", () => {
+  const spec = adapter().buildSpec({
+    ...REQUEST,
+    continuity: { ref: { providerSessionId: LOCATOR, storeDir: null }, turn: "open" },
+  });
+  assert.deepEqual([...spec.argv], [
+    "--print",
+    "--output-format", "stream-json",
+    "--include-partial-messages",
+    "--verbose",
+    "--model", "sonnet",
+    "--session-id", LOCATOR,
+    "--effort", "low",
+    "--permission-mode", "dontAsk",
+    "--tools", "Read,Glob,Grep",
+    "--disallowed-tools", "Bash,Write,Edit,NotebookEdit",
+  ]);
+  assert.equal(spec.argv.includes("--no-session-persistence"), false);
+});
+
+test("resume takes `--resume`, and the two turns differ by exactly that pair", () => {
+  const build = (turn: "open" | "resume"): readonly string[] => adapter().buildSpec({
+    ...REQUEST,
+    continuity: { ref: { providerSessionId: LOCATOR, storeDir: null }, turn },
+  }).argv;
+  const open = [...build("open")];
+  const resume = [...build("resume")];
+  assert.equal(resume[resume.indexOf("--resume") + 1], LOCATOR);
+  assert.equal(resume.includes("--session-id"), false);
+  // Unlike pi's, this route's two turns are not byte-identical — and the ONLY
+  // difference is the flag name.
+  assert.deepEqual(
+    open.map((argument) => argument === "--session-id" ? "--resume" : argument),
+    resume,
+  );
+});
+
+test("`--fork-session` never appears — it is the cold restart this mechanism refuses", () => {
+  // The CLI documents it as "when resuming, create a new session ID instead of
+  // reusing the original", which is precisely the substitution the whole
+  // correction contract exists to prevent.
+  for (const turn of ["open", "resume"] as const) {
+    const spec = adapter().buildSpec({
+      ...REQUEST,
+      continuity: { ref: { providerSessionId: LOCATOR, storeDir: null }, turn },
+    });
+    assert.equal(spec.argv.includes("--fork-session"), false);
+  }
+  assert.equal(adapter().buildSpec(REQUEST).argv.includes("--fork-session"), false);
+});
+
+test("the prompt still rides stdin on a correction turn", () => {
+  const spec = adapter().buildSpec({
+    ...REQUEST,
+    prompt: "the configured command failed; fix it",
+    continuity: { ref: { providerSessionId: LOCATOR, storeDir: null }, turn: "resume" },
+  });
+  assert.equal(spec.stdin, "the configured command failed; fix it");
+  for (const argument of spec.argv) assert.equal(argument.includes("configured command"), false);
+});
+
+test("this CLI accepts only a UUID, and anything else fails closed before argv", () => {
+  for (const bad of ["", "not-a-uuid", "9b1f0c2a3d4e4f508a6172b83c94d5e6", `${LOCATOR}-extra`]) {
+    assert.throws(
+      () => adapter().buildSpec({ ...REQUEST, continuity: { ref: { providerSessionId: bad, storeDir: null }, turn: "open" } }),
+      /is not a UUID/,
+      `accepted ${JSON.stringify(bad)}`,
+    );
+  }
+});
+
+test("this route has no host-owned session store, and says so rather than inventing one", () => {
+  // The honest asymmetry with pi: Claude Code has no `--session-dir`, and
+  // relocating its store would mean moving the credential lookup with it.
+  assert.equal(adapter().continuityStoreDir(), null);
+  const evidence = adapter().assertResumable({ providerSessionId: LOCATOR, storeDir: null });
+  assert.equal(evidence.proof, "provider-refuses-unknown-session");
+  // A store directory would name somewhere the provider will not look, so
+  // accepting one would be a proof of nothing.
+  assert.throws(
+    () => adapter().assertResumable({ providerSessionId: LOCATOR, storeDir: "/tmp/sessions" }),
+    /no host-owned session store/,
+  );
+  assert.throws(
+    () => adapter().assertResumable({ providerSessionId: "not-a-uuid", storeDir: null }),
+    (error: unknown) => error instanceof AdapterError && error.code === "E_BACKEND_FAILURE",
+  );
+});
+
+test("the adapter's own identity check is the module rule, reachable through the contract", () => {
+  const first: ClaudeSessionRecord = { sessionId: LOCATOR, resolvedModel: "claude-opus-5" };
+  adapter().assertSameSession(first, { ...first });
+  assert.throws(
+    () => adapter().assertSameSession(first, { ...first, resolvedModel: "claude-sonnet-5" }),
+    (error: unknown) => error instanceof AdapterError && error.code === "E_MODEL_MISMATCH",
+  );
+  assert.throws(
+    () => adapter().assertSameSession(first, { ...first, sessionId: "cccccccc-dddd-4eee-8fff-000000000000" }),
+    (error: unknown) => error instanceof AdapterError && error.code === "E_BACKEND_FAILURE",
+  );
+  assert.throws(() => adapter().assertSameSession(first, { ...first, sessionId: null }), AdapterError);
 });

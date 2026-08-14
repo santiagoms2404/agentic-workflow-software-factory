@@ -21,6 +21,7 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { accessSync, constants } from "node:fs";
 import { delimiter, isAbsolute, join } from "node:path";
+import { reservationIdOf } from "../adapters/interface.ts";
 import { IllegalSpawnSite } from "../state/errors.ts";
 import { LEGAL_EDGES, edgeFor, type LegalEdge } from "../state/task-machine.ts";
 import {
@@ -49,6 +50,9 @@ import type {
   AgentPhaseLaunchVerifier,
   AgentPhaseProcessRegistration,
   BrokerProcessRegistration,
+  PhaseCorrectionLaunchEvidence,
+  PhaseCorrectionLaunchVerifier,
+  PhaseCorrectionProcessRegistration,
   ProcessExit,
   ProcessRegistration,
   ProcessSpec,
@@ -126,12 +130,16 @@ function assertSpawnSite(registration: ProcessRegistration): LegalEdge {
  * `false`: the type is erased at run time, and this is the last gate a
  * JavaScript caller passes through.
  */
-function assertSpecSafe(registration: BrokerProcessRegistration, spec: ProcessSpec): void {
+function assertSpecSafe(
+  registration: BrokerProcessRegistration,
+  spec: ProcessSpec,
+  reservationId: string,
+): void {
   const refuse = (detail: string): never => {
     throw new SpawnRegistrationInvalid(registration.runId, detail);
   };
   if (registration.runId.length === 0) refuse("a launch needs a run id");
-  if (registration.reservationId.length === 0) {
+  if (reservationId.length === 0) {
     refuse("no reservation id — a call is reserved before launch, never after");
   }
   if ((spec as { shell: unknown }).shell !== false) refuse("shell execution is not available on any path");
@@ -249,6 +257,20 @@ export interface BrokerOptions {
   ledger: BrokerReservationLedger;
   /** Trusted host proof for intra-workflow phases. Absent means phase launches are disabled. */
   phaseLaunchVerifier?: AgentPhaseLaunchVerifier;
+  /**
+   * Trusted host proof for allowance-bounded correction turns. Absent means
+   * corrections are disabled — a capability nobody installed is a capability
+   * nobody has, and a free provider launch is the last one that should be
+   * available by default.
+   */
+  correctionLaunchVerifier?: PhaseCorrectionLaunchVerifier;
+  /**
+   * Durable evidence for a launch that charged nothing. Distinct from `onSpent`
+   * because the two say opposite things about the money, and one hook doing
+   * both would make a correction indistinguishable from a spent call in the
+   * journal.
+   */
+  onCorrection?: (record: BarrierRecord, evidence: PhaseCorrectionLaunchEvidence) => Promise<void>;
   /** Absolute path to the gated child. Defaults to the sibling `launcher.ts`. */
   launcherPath?: string;
   /** How long the child has to report its identity before the launch is abandoned. */
@@ -318,9 +340,38 @@ export class ProcessTransportBroker implements TransportBroker {
     const phaseEvidence = registration.kind === "agent-phase"
       ? this.#assertAgentPhaseLaunch(registration)
       : null;
-    const edge = phaseEvidence === null ? assertSpawnSite(registration as ProcessRegistration) : null;
-    assertSpecSafe(registration, spec);
+    const correctionEvidence = registration.kind === "phase-correction"
+      ? this.#assertPhaseCorrectionLaunch(registration)
+      : null;
+    const edge = phaseEvidence === null && correctionEvidence === null
+      ? assertSpawnSite(registration as ProcessRegistration)
+      : null;
+    // A correction carries the ALREADY-SPENT reservation its phase's first turn
+    // converted, so the durable process row still names the call this turn hangs
+    // off. Normalizing it here keeps `assertSpecSafe`'s "a call is reserved
+    // before launch, never after" check meaningful on all three classes.
+    const reservationId = reservationIdOf(registration);
+    assertSpecSafe(registration, spec, reservationId);
     const executable = resolveExecutable(spec.executable, spec.env);
+    const evidence = phaseEvidence ?? correctionEvidence;
+
+    const record: Omit<BarrierRecord, "identity"> = {
+      runId: registration.runId,
+      edge: edge?.id ?? null,
+      ...(evidence === null ? {} : {
+        phase: {
+          taskSessionId: evidence.taskSessionId,
+          workflowId: evidence.workflowId,
+          phaseId: evidence.phaseId,
+          phaseOrdinal: evidence.phaseOrdinal,
+          adapterId: evidence.adapterId,
+          role: evidence.role,
+        },
+      }),
+      reservationId,
+      command: [executable, ...spec.argv],
+      cwd: spec.cwd,
+    };
 
     const held: { child: ChildProcess | null } = { child: null };
     const outcome = await runLauncherBarrier({
@@ -329,29 +380,17 @@ export class ProcessTransportBroker implements TransportBroker {
         held.child = started.child;
         return started.launch;
       },
-      record: {
-        runId: registration.runId,
-        edge: edge?.id ?? null,
-        ...(phaseEvidence === null ? {} : {
-          phase: {
-            taskSessionId: phaseEvidence.taskSessionId,
-            workflowId: phaseEvidence.workflowId,
-            phaseId: phaseEvidence.phaseId,
-            phaseOrdinal: phaseEvidence.phaseOrdinal,
-            adapterId: phaseEvidence.adapterId,
-            role: phaseEvidence.role,
-          },
-        }),
-        reservationId: registration.reservationId,
-        command: [executable, ...spec.argv],
-        cwd: spec.cwd,
-      },
+      record,
+      ...(correctionEvidence === null ? {} : { settlement: "correction" as const }),
       register: this.#options.register,
       ...(this.#options.onSpent === undefined ? {} : { onSpent: this.#options.onSpent }),
       ledger: this.#options.ledger,
       signal,
       ...(hooks.onStep === undefined ? {} : { onStep: hooks.onStep }),
     });
+    if (correctionEvidence !== null) {
+      await this.#options.onCorrection?.({ ...record, identity: outcome.identity }, correctionEvidence);
+    }
 
     // Non-null by construction: the barrier only returns after `start` resolved.
     if (held.child === null) throw new SpawnRegistrationInvalid(registration.runId, "the barrier released a launch that never started");
@@ -390,6 +429,75 @@ export class ProcessTransportBroker implements TransportBroker {
     const reservation = this.#options.ledger.reservation(registration.reservationId);
     if (reservation === undefined || reservation.state !== "held" || reservation.cost !== 1) {
       refuse("reservation is unknown, settled, or not exactly one held call");
+    }
+    return evidence;
+  }
+
+  /**
+   * The third validator: an allowance-bounded correction turn, which reserves
+   * nothing and therefore has to be bounded by something else.
+   *
+   * Everything the agent-phase validator checks is checked here too, through the
+   * same trusted-verifier port, because a correction is still a provider launch
+   * inside a durable `RUNNING` sojourn and none of those guarantees weaken. What
+   * is added is the part that replaces the reservation as the ceiling:
+   *
+   *   · the origin reservation exists AND is already spent — a correction hangs
+   *     off a paid call and can never be the thing that starts a phase, which is
+   *     what stops this class being a free first turn;
+   *   · the round is a positive integer, so round 0 (the first turn) can never
+   *     arrive here wearing the cheap class;
+   *   · the verifier's own answer about the round, the tranche, the continuity
+   *     handle and the adapter's VERIFIED continuity must match the registration
+   *     exactly — the caller declares, the host proves, and a mismatch is a
+   *     refusal rather than a preference.
+   */
+  #assertPhaseCorrectionLaunch(
+    registration: PhaseCorrectionProcessRegistration,
+  ): PhaseCorrectionLaunchEvidence {
+    const refuse = (detail: string): never => {
+      throw new SpawnRegistrationInvalid(registration.runId, `invalid correction authorization: ${detail}`);
+    };
+    if (typeof registration.runId !== "string" || registration.runId.length === 0) refuse("runId is missing");
+    if (typeof registration.taskSessionId !== "string" || registration.taskSessionId.length === 0) refuse("taskSessionId is missing");
+    if (typeof registration.workflowId !== "string" || registration.workflowId.length === 0) refuse("workflowId is missing");
+    if (typeof registration.phaseId !== "string" || registration.phaseId.length === 0) refuse("phaseId is missing");
+    if (!Number.isInteger(registration.phaseOrdinal) || registration.phaseOrdinal < 1) refuse("phaseOrdinal must be a positive integer");
+    if (!Number.isInteger(registration.correctionRound) || registration.correctionRound < 1) {
+      refuse("correctionRound must be a positive integer; round 0 is the phase's first turn and reserves a call");
+    }
+    if (registration.tranche !== "auto" && registration.tranche !== "owner") refuse("tranche must be auto or owner");
+    if (typeof registration.adapterId !== "string" || registration.adapterId.length === 0) refuse("adapterId is missing");
+    if (typeof registration.role !== "string" || registration.role.length === 0) refuse("role is missing");
+    if (typeof registration.continuityHandle !== "string" || registration.continuityHandle.length === 0) {
+      refuse("continuityHandle is missing");
+    }
+    if (typeof registration.originReservationId !== "string" || registration.originReservationId.length === 0) {
+      refuse("originReservationId is missing; a correction hangs off the call its phase already spent");
+    }
+
+    const verifier = this.#options.correctionLaunchVerifier;
+    if (verifier === undefined) return refuse("the trusted correction verifier is not installed");
+    const evidence = verifier.verify(registration);
+    const exact =
+      evidence.taskSessionId === registration.taskSessionId &&
+      evidence.taskState === "RUNNING" &&
+      evidence.workflowId === registration.workflowId &&
+      evidence.phaseId === registration.phaseId &&
+      evidence.phaseOrdinal === registration.phaseOrdinal &&
+      evidence.phaseKind === "agent" &&
+      evidence.adapterId === registration.adapterId &&
+      evidence.role === registration.role &&
+      evidence.correctionRound === registration.correctionRound &&
+      evidence.tranche === registration.tranche &&
+      evidence.continuityHandle === registration.continuityHandle &&
+      evidence.verifiedContinuity === "same-session-correction" &&
+      evidence.launchAuthorization === "phase-correction";
+    if (!exact) refuse("the trusted verifier returned evidence for a different launch");
+
+    const origin = this.#options.ledger.reservation(registration.originReservationId);
+    if (origin === undefined || origin.state !== "spent") {
+      refuse("the origin reservation is unknown or was never spent; a correction follows a paid call");
     }
     return evidence;
   }

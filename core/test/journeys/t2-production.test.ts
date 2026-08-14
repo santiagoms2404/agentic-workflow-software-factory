@@ -14,7 +14,7 @@ import { loadConfig } from "../../src/config/load.ts";
 import type { BuildOutput } from "../../src/contracts/build-output.ts";
 import type { ReviewOutput } from "../../src/contracts/review-output.ts";
 import type { NormalizedEvent } from "../../src/contracts/normalized-events.ts";
-import { AdapterError } from "../../src/adapters/interface.ts";
+import { AdapterError, isTaskEdgeRegistration, reservationIdOf } from "../../src/adapters/interface.ts";
 import type {
   Availability,
   BrokerProcessRegistration,
@@ -157,13 +157,13 @@ function fakeBroker(options: BrokerOptions): TransportBroker {
     async startProcess(registration, spec) {
       const record = {
         identity: { pid: 4242, pgid: 4242, startIdentity: "fixture:4242", startIdentitySource: "fixture" },
-        runId: registration.runId, edge: registration.kind === "agent-phase" ? null : registration.edge,
+        runId: registration.runId, edge: isTaskEdgeRegistration(registration) ? registration.edge : null,
         ...(registration.kind === "agent-phase" ? { phase: { taskSessionId: registration.taskSessionId, workflowId: registration.workflowId, phaseId: registration.phaseId, phaseOrdinal: registration.phaseOrdinal, adapterId: registration.adapterId, role: registration.role } } : {}),
-        reservationId: registration.reservationId, command: [spec.executable, ...spec.argv], cwd: spec.cwd,
+        reservationId: reservationIdOf(registration), command: [spec.executable, ...spec.argv], cwd: spec.cwd,
       };
       if (registration.kind === "agent-phase") options.phaseLaunchVerifier?.verify(registration);
       await options.register(record);
-      const reservation = options.ledger.spendOnGo(registration.reservationId);
+      const reservation = options.ledger.spendOnGo(reservationIdOf(registration));
       await options.onSpent?.(record, reservation);
       return {
         runId: registration.runId, identity: record.identity,

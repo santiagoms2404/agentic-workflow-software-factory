@@ -13,6 +13,7 @@ import type {
   ProcessSpec,
   TransportBroker,
 } from "../../src/adapters/interface.ts";
+import { reservationIdOf } from "../../src/adapters/interface.ts";
 import { PiCodexAdapter } from "../../src/adapters/pi-codex.ts";
 import { publicApiValue } from "../../src/api/responses.ts";
 import type { BuildOutput } from "../../src/contracts/build-output.ts";
@@ -221,11 +222,11 @@ function releasedBroker(
     async startProcess(registration, spec) {
       const record = {
         identity: { pid: 4343, pgid: 4343, startIdentity: "fixture:4343", startIdentitySource: "fixture" },
-        runId: registration.runId, edge: "L19" as const, reservationId: registration.reservationId,
+        runId: registration.runId, edge: "L19" as const, reservationId: reservationIdOf(registration),
         command: [spec.executable, ...spec.argv], cwd: spec.cwd,
       };
       await options.register(record);
-      const spent = options.ledger.spendOnGo(registration.reservationId);
+      const spent = options.ledger.spendOnGo(reservationIdOf(registration));
       await options.onSpent?.(record, spent);
       return {
         runId: registration.runId, identity: record.identity,
@@ -543,13 +544,13 @@ test("L19 reservation is durable before registration and a pre-GO registration r
           checkedBeforeRegister = before.lifecycleState === "RUNNING" && before.budget.callsReserved === 1 && before.budget.callsSpent === 1 && before.process === null;
           const record = {
             identity: { pid: 4242, pgid: 4242, startIdentity: "fixture:4242", startIdentitySource: "fixture" },
-            runId: registration.runId, edge: "L19" as const, reservationId: registration.reservationId,
+            runId: registration.runId, edge: "L19" as const, reservationId: reservationIdOf(registration),
             command: [spec.executable, ...spec.argv], cwd: spec.cwd,
           };
           await options.register(record);
           const registered = await readAttempt(fixture.attemptDir);
           checkedAfterRegister = registered.process?.pid === 4242 && registered.budget.callsReserved === 1 && registered.budget.callsSpent === 1;
-          options.ledger.releaseOnRegistrationFailure(registration.reservationId);
+          options.ledger.releaseOnRegistrationFailure(reservationIdOf(registration));
           throw new Error("fixture registration failure before GO");
         },
       })),

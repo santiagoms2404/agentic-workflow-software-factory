@@ -15,6 +15,9 @@ import type {
   AgentPhaseLaunchEvidence,
   AgentPhaseLaunchVerifier,
   AgentPhaseProcessRegistration,
+  PhaseCorrectionLaunchEvidence,
+  PhaseCorrectionLaunchVerifier,
+  PhaseCorrectionProcessRegistration,
 } from "../adapters/interface.ts";
 import type { TaskState } from "../state/task-machine.ts";
 import type { CompiledWorkflow } from "./compiler.ts";
@@ -119,6 +122,140 @@ export function createCompiledPhaseLaunchVerifier(
         adapterId: registration.adapterId,
         role: registration.role,
         launchAuthorization: "agent-phase",
+      });
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Correction turns.
+// ---------------------------------------------------------------------------
+
+/**
+ * What the host knows about a phase's open conversation, without ever handing
+ * the verifier the provider locator itself. The verifier decides whether a
+ * correction may launch; it has no business knowing how to reach the provider.
+ */
+export interface OpenConversation {
+  readonly handle: string;
+  readonly adapterId: string;
+  readonly role: string;
+  /** Completed sends. A conversation with none has nothing to correct. */
+  readonly turns: number;
+  /** The adapter's own answer, read from `getModelInfo` at preflight. */
+  readonly verifiedContinuity: "same-session-correction" | "none";
+}
+
+/** The live correction counters and the configured per-phase allowance. */
+export interface CorrectionAllowanceState {
+  readonly used: { readonly auto: number; readonly owner: number };
+  readonly allowance: { readonly auto: number; readonly owner: number };
+}
+
+export interface CorrectionLaunchAuthorizationHost extends PhaseLaunchAuthorizationHost {
+  conversationFor(input: { taskSessionId: string; phaseId: string }): OpenConversation | null;
+  correctionStateFor(input: { taskSessionId: string; phaseId: string }): CorrectionAllowanceState | null;
+}
+
+export class CorrectionLaunchAuthorizationRejected extends Error {
+  readonly detail: string;
+
+  constructor(registration: PhaseCorrectionProcessRegistration, detail: string) {
+    super(`correction launch ${registration.runId || "(unnamed run)"} is not authorized: ${detail}`);
+    this.name = "CorrectionLaunchAuthorizationRejected";
+    this.detail = detail;
+  }
+}
+
+/**
+ * The verifier for a launch that charges nothing.
+ *
+ * It reuses the compiled-phase verifier for everything a correction shares with
+ * an ordinary phase launch — durable `RUNNING`, exact compiled identity,
+ * explicit configured route — and then adds the two questions that only matter
+ * when no reservation is standing behind the launch:
+ *
+ *   1. Is there a conversation to re-enter, on a route whose adapter actually
+ *      reports `same-session-correction`? A configured declaration is not
+ *      enough; the pilot that produced this work stopped precisely because a
+ *      config and a transport had drifted apart.
+ *   2. Is this round inside the configured allowance, in the tranche the phase
+ *      machine charged? This is what replaces the ceiling. The check is `<=`
+ *      against the tranche's limit because the charge has already happened by
+ *      the time a launch is described — the phase machine debits on
+ *      `VALIDATING → CORRECTING`, and this runs on the way into `RUNNING`.
+ */
+export function createCorrectionLaunchVerifier(
+  host: CorrectionLaunchAuthorizationHost,
+): PhaseCorrectionLaunchVerifier {
+  const phaseVerifier = createCompiledPhaseLaunchVerifier(host);
+  return {
+    verify(registration): PhaseCorrectionLaunchEvidence {
+      const reject = (detail: string): never => {
+        throw new CorrectionLaunchAuthorizationRejected(registration, detail);
+      };
+      // Everything an ordinary phase launch must prove, proved the same way and
+      // by the same code. A correction is not a weaker launch, only a cheaper
+      // one.
+      const base: AgentPhaseLaunchEvidence = phaseVerifier.verify({
+        kind: "agent-phase",
+        runId: registration.runId,
+        taskSessionId: registration.taskSessionId,
+        workflowId: registration.workflowId,
+        phaseId: registration.phaseId,
+        phaseOrdinal: registration.phaseOrdinal,
+        reservationId: registration.originReservationId,
+        adapterId: registration.adapterId,
+        role: registration.role,
+      });
+
+      const conversation = host.conversationFor({
+        taskSessionId: registration.taskSessionId,
+        phaseId: registration.phaseId,
+      });
+      if (conversation === null) return reject("no conversation is open for this phase");
+      if (conversation.handle !== registration.continuityHandle) {
+        return reject("the registration names a conversation this phase did not open");
+      }
+      if (conversation.verifiedContinuity !== "same-session-correction") {
+        return reject("the adapter on this route does not report same-session correction");
+      }
+      if (conversation.adapterId !== registration.adapterId || conversation.role !== registration.role) {
+        return reject("the conversation was opened on a different adapter or role");
+      }
+      if (conversation.turns < 1) {
+        return reject("the conversation has no completed turn to correct");
+      }
+
+      const corrections = host.correctionStateFor({
+        taskSessionId: registration.taskSessionId,
+        phaseId: registration.phaseId,
+      });
+      if (corrections === null) return reject("the correction allowance for this phase is unknown");
+      const used = registration.tranche === "auto" ? corrections.used.auto : corrections.used.owner;
+      const limit = registration.tranche === "auto" ? corrections.allowance.auto : corrections.allowance.owner;
+      if (used > limit || limit === 0) {
+        return reject(`the ${registration.tranche} correction allowance is spent (${used}/${limit})`);
+      }
+      const total = corrections.allowance.auto + corrections.allowance.owner;
+      if (registration.correctionRound > total) {
+        return reject(`round ${registration.correctionRound} exceeds the configured allowance of ${total}`);
+      }
+
+      return Object.freeze({
+        taskSessionId: base.taskSessionId,
+        taskState: "RUNNING",
+        workflowId: base.workflowId,
+        phaseId: base.phaseId,
+        phaseOrdinal: base.phaseOrdinal,
+        phaseKind: "agent",
+        adapterId: base.adapterId,
+        role: base.role,
+        correctionRound: registration.correctionRound,
+        tranche: registration.tranche,
+        continuityHandle: registration.continuityHandle,
+        verifiedContinuity: "same-session-correction",
+        launchAuthorization: "phase-correction",
       });
     },
   };

@@ -333,10 +333,30 @@ export interface ReservationLedger {
   releaseOnRegistrationFailure: (reservationId: string) => Reservation;
 }
 
+/**
+ * What the barrier does with the money at the `spent` step.
+ *
+ *   · `reservation` — the original contract, and still the default: the held
+ *     reservation converts to spend immediately before `GO`.
+ *   · `correction` — an allowance-bounded intra-phase correction turn. The
+ *     phase's first turn already spent its call, and the plan prices a
+ *     correction in tokens rather than calls (§ "The escalation ladder", rungs
+ *     2 and 3), so there is nothing to charge and nothing to refund. What
+ *     bounds it is `risk.correction_allowance`, charged by the phase machine
+ *     before this launch was described and re-checked by the broker's verifier.
+ *
+ * Stating it as a mode rather than as a nullable ledger keeps the default
+ * unchanged and keeps "this launch is free" an explicit decision a caller had
+ * to make, rather than something that falls out of forgetting to pass a ledger.
+ */
+export type BarrierSettlement = "reservation" | "correction";
+
 export interface LauncherBarrierOptions {
   /** Creates the gated child. The broker's job; the barrier only sequences it. */
   start: () => Promise<GatedLaunch>;
   record: Omit<BarrierRecord, "identity">;
+  /** Defaults to `reservation`. */
+  settlement?: BarrierSettlement;
   /**
    * journal append + fsync · atomic status replace · projector apply — all of
    * it, or it throws. The barrier does not know which of those steps exists
@@ -354,8 +374,8 @@ export interface LauncherBarrierOptions {
 export interface BarrierOutcome {
   launch: GatedLaunch;
   identity: ProcessIdentity;
-  /** The reservation, now spent. */
-  reservation: Reservation;
+  /** The reservation, now spent. `null` under `correction` settlement, which charges nothing. */
+  reservation: Reservation | null;
 }
 
 /**
@@ -420,6 +440,12 @@ export class RegistrationFailed extends Error {
  */
 export async function runLauncherBarrier(options: LauncherBarrierOptions): Promise<BarrierOutcome> {
   const { start, record, register, onSpent, ledger, signal, onStep } = options;
+  const settlement: BarrierSettlement = options.settlement ?? "reservation";
+  // A correction charges nothing, so there is nothing to give back either. The
+  // refund path is skipped rather than allowed to run and fail: releasing the
+  // origin reservation would hand back the call the phase's FIRST turn genuinely
+  // spent, which is the one refund that would actually be theft in reverse.
+  const refundable = settlement === "reservation";
   const step = async (name: BarrierStep): Promise<void> => {
     await onStep?.(name);
   };
@@ -438,7 +464,9 @@ export async function runLauncherBarrier(options: LauncherBarrierOptions): Promi
     launch = await start();
   } catch (cause) {
     // Nothing exists to destroy, but the reservation is real and must go back.
-    const refund = refundQuietly(ledger, record.reservationId);
+    const refund = refundable
+      ? refundQuietly(ledger, record.reservationId)
+      : { reservation: null, error: null };
     throw new RegistrationFailed({
       step: "start",
       cause,
@@ -472,10 +500,10 @@ export async function runLauncherBarrier(options: LauncherBarrierOptions): Promi
     await step("registered");
 
     abortCheck();
-    const reservation = ledger.spendOnGo(record.reservationId);
+    const reservation = refundable ? ledger.spendOnGo(record.reservationId) : null;
     spent = true;
     at = "spent";
-    await onSpent?.({ ...record, identity }, reservation);
+    if (reservation !== null) await onSpent?.({ ...record, identity }, reservation);
     await step("spent");
 
     await launch.release();
@@ -494,7 +522,7 @@ export async function runLauncherBarrier(options: LauncherBarrierOptions): Promi
     // Only an unspent reservation is refundable. Once `spendOnGo` has run, the
     // release token may or may not have reached the child, and the ledger does
     // not guess: it bills the call and leaves the journal to reconcile.
-    const refund = spent
+    const refund = spent || !refundable
       ? { reservation: null, error: null }
       : refundQuietly(ledger, record.reservationId);
     throw new RegistrationFailed({

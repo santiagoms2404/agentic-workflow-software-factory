@@ -42,12 +42,17 @@
 // model config and never reads the API's own `response.model` back.
 // ---------------------------------------------------------------------------
 
+import { readdirSync, readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import {
   AdapterError,
   type Availability,
-  type HarnessAdapter,
+  type ContinuityCapableAdapter,
+  type ContinuityEvidence,
+  type ContinuityRef,
   type ModelInfo,
   type ModelRequest,
+  type ObservedProviderSession,
   type BrokerProcessRegistration,
   type ProcessSpec,
   type ProcessTransport,
@@ -224,6 +229,39 @@ export function selectorFor(model: string): string {
   return name;
 }
 
+/**
+ * The session flags, and the reason `open` and `resume` produce the SAME three
+ * arguments is worth stating rather than leaving as a coincidence: pi's
+ * `--session-id` creates the session when it is missing and opens it when it is
+ * present, so one argv covers both turns and the descriptor test can assert
+ * byte-equality between them.
+ *
+ * What differs between the two turns is therefore not the command line at all —
+ * it is the host's `assertResumable` proof, which runs before the resume and
+ * not before the open. That asymmetry is deliberate: it puts the burden on the
+ * host, which can fail closed for free, rather than on the CLI, which fails
+ * open by design.
+ */
+function sessionArgs(continuity: ModelRequest["continuity"]): readonly string[] {
+  if (continuity === undefined) return ["--no-session"];
+  const { providerSessionId, storeDir } = continuity.ref;
+  if (!PI_SESSION_ID.test(providerSessionId)) {
+    throw new AdapterError(
+      PI_ADAPTER_ID,
+      "E_INVALID_REQUEST",
+      `${JSON.stringify(providerSessionId)} is not a session id this CLI accepts`,
+    );
+  }
+  if (storeDir === null || storeDir.length === 0) {
+    throw new AdapterError(
+      PI_ADAPTER_ID,
+      "E_INVALID_REQUEST",
+      "this route keeps its sessions in a host-owned directory; none was supplied",
+    );
+  }
+  return ["--session-id", providerSessionId, "--session-dir", storeDir];
+}
+
 function thinkingFor(level: string): PiThinking {
   const resolved = THINKING_ALIASES[level] ?? level;
   if (!(PI_THINKING_LEVELS as readonly string[]).includes(resolved)) {
@@ -235,6 +273,83 @@ function thinkingFor(level: string): PiThinking {
     );
   }
   return resolved as PiThinking;
+}
+
+// ---------------------------------------------------------------------------
+// Continuity: the verified `--session-id` / `--session-dir` protocol.
+// ---------------------------------------------------------------------------
+
+/**
+ * The subdirectory of a phase's private runtime directory that pi is told to
+ * keep this phase's conversation in.
+ *
+ * Naming it at all is the point. pi's default store is
+ * `~/.pi/agent/sessions/--<encoded-cwd>--/`, which would put a worker's full
+ * transcript in the operator's home directory for the lifetime of the machine.
+ * `--session-dir` moves it inside the attempt's own `private/` tree, where the
+ * host already owns the mode bits and `awsf gc` already knows how to find it.
+ */
+export const PI_SESSION_DIR_NAME = "pi-sessions";
+
+/**
+ * pi's session id rule, transcribed from `assertValidSessionId`
+ * (`core/session-manager.js:15-19` in the installed 0.81.1): alphanumeric plus
+ * `. _ -`, starting and ending alphanumeric.
+ *
+ * Re-stated here rather than assumed, because the failure it prevents is
+ * silent: `--session-id` is validated by the CLI with `process.exit(1)` and a
+ * message on stderr, which from the host's side is a launch that spent its
+ * process and produced no terminal event.
+ */
+const PI_SESSION_ID = /^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/;
+
+/**
+ * The one line of pi's session format this adapter depends on, and it is the
+ * documented one: `docs/session-format.md` § SessionHeader pins the first line
+ * of every session file to `{"type":"session","version":3,"id":…,"cwd":…}`.
+ *
+ * Everything else about the file is pi's business. The host reads the header to
+ * answer one question — is the conversation this correction claims to re-enter
+ * actually here, under this id, for this working directory — and reads the
+ * entry roles to answer the second: did it get an answer already. A resume of a
+ * session with no assistant turn in it would be a cold start with extra steps.
+ */
+interface PiSessionFileFacts {
+  readonly path: string;
+  readonly cwd: string;
+  readonly assistantTurns: number;
+}
+
+function readPiSessionFile(path: string, expectedId: string): PiSessionFileFacts | null {
+  let text: string;
+  try {
+    text = readFileSync(path, "utf8");
+  } catch {
+    return null;
+  }
+  const lines = text.split("\n");
+  let header: { type?: unknown; id?: unknown; cwd?: unknown } | null = null;
+  let assistantTurns = 0;
+  for (const line of lines) {
+    if (line.trim().length === 0) continue;
+    let entry: { type?: unknown; id?: unknown; cwd?: unknown; message?: { role?: unknown } };
+    try {
+      entry = JSON.parse(line) as typeof entry;
+    } catch {
+      // pi's own reader skips malformed lines; a host that refused here would
+      // be stricter about the file than the tool that writes it.
+      continue;
+    }
+    if (header === null) {
+      if (entry.type !== "session" || typeof entry.id !== "string") return null;
+      if (entry.id !== expectedId) return null;
+      header = entry;
+      continue;
+    }
+    if (entry.type === "message" && entry.message?.role === "assistant") assistantTurns += 1;
+  }
+  if (header === null || typeof header.cwd !== "string") return null;
+  return { path, cwd: header.cwd, assistantTurns };
 }
 
 /**
@@ -292,8 +407,14 @@ export interface PiCodexAdapterOptions {
   exitWaitMs?: number;
 }
 
-export class PiCodexAdapter implements HarnessAdapter {
+export class PiCodexAdapter implements ContinuityCapableAdapter {
   readonly id = PI_ADAPTER_ID;
+  /**
+   * The transport-side half of the continuity claim, and it is a separate
+   * assertion from `getModelInfo().continuity` on purpose — see
+   * `isContinuityCapable`.
+   */
+  readonly supportsSameSessionCorrection = true as const;
   readonly #executable: string;
   readonly #now: () => string;
   readonly #limits: OutputBudgetOptions;
@@ -345,16 +466,30 @@ export class PiCodexAdapter implements HarnessAdapter {
    * adapter. `usageAuthority` stays `"provider"`: the TOKENS are measured and
    * reported: only the money is derived.
    *
-   * `continuity: "none"` is the second correction, and it is a promise being
-   * withdrawn rather than a capability being lost. This adapter pins
-   * `--no-session`, which forecloses `--continue`/`--resume`, and
-   * `ProcessSpec.stdin` is one string written once — so there is no way to
-   * re-enter a session, and a correction through this adapter is necessarily a
-   * cold start. Declaring otherwise would have told M5's escalation ladder that
-   * a correction here costs tokens rather than a tier call, which is a pricing
-   * decision made on a capability that does not exist. `assertSameSession` and
-   * the session record stay: they are what a correction transport will need on
-   * the day one is built, and they are what makes this value re-earnable.
+   * `continuity: "same-session-correction"` is the second correction, and it is
+   * a promise being RE-EARNED rather than restored on trust. The earlier value
+   * was `"none"`, written when this adapter pinned `--no-session`, and the note
+   * that replaced it said the declaration would become true again on the day a
+   * transport existed. That day is this one, and what makes it true is a
+   * protocol read off the installed CLI rather than inferred from a comment:
+   *
+   *   · `--session-id <id>` — "Use exact project session ID, creating it if
+   *     missing" (`pi --help`, 0.81.1). `main.js:264-271` resolves it by exact
+   *     id within the current cwd and `SessionManager.open`s the file it finds,
+   *     so the second turn re-enters the first turn's context.
+   *   · `--session-dir <dir>` — the store that lookup searches
+   *     (`main.js:450-454`, `session-manager.js:1281-1288`), which is what lets
+   *     the transcript live inside the attempt's private tree instead of the
+   *     operator's home.
+   *   · `--no-session` is GONE from the continuity spec, and had to be: it wins
+   *     outright (`main.js:206-208` returns an in-memory session before
+   *     `--session-id` is ever consulted), which is exactly why the earlier
+   *     declaration was honest at the time.
+   *
+   * The one sharp edge is that a missing session is a WARNING on stderr and a
+   * fresh session with the requested id, not a refusal — a cold start wearing
+   * the resume's name. `assertResumable` is the answer, and it runs on the
+   * host, before the launch, against the host's own session directory.
    *
    * `contextWindow: null` means this adapter declares no ceiling — not that the
    * ceiling is zero. pi's local model store knows the real number; reading it
@@ -370,10 +505,80 @@ export class PiCodexAdapter implements HarnessAdapter {
       supportsThinking: true,
       supportsTools: true,
       supportsImages: true,
-      continuity: "none",
+      continuity: "same-session-correction",
       usageAuthority: "provider",
       costAuthority: "catalog-estimate",
     };
+  }
+
+  /** pi has `--session-dir`, so its transcript stays inside the attempt. */
+  continuityStoreDir(runtimeDir: string): string {
+    return join(runtimeDir, PI_SESSION_DIR_NAME);
+  }
+
+  /**
+   * Host-side, pre-launch proof that a resume will resume.
+   *
+   * Reads the directory the host itself handed the CLI — never pi's default
+   * store — so this depends on nothing about where pi would otherwise keep
+   * state. Inside it, the file must exist under the exact id, carry the exact
+   * working directory in its header, and already contain an assistant turn.
+   *
+   * All three matter and none is redundant. A missing file is the documented
+   * warn-and-create path. A different cwd is a session pi would not find (its
+   * own lookup filters by cwd, `session-manager.js:1283-1285`), so resuming it
+   * would silently create a second one. And a session with no assistant turn
+   * has nothing to correct — it is a first turn that never answered, and
+   * treating it as a resume would bill a cold start as a continuation.
+   */
+  assertResumable(ref: ContinuityRef, context: { readonly cwd: string }): ContinuityEvidence {
+    const refuse = (detail: string): never => {
+      throw new AdapterError(
+        this.id,
+        "E_BACKEND_FAILURE",
+        `refusing to resume: ${detail}; a correction re-enters the session it corrects`,
+      );
+    };
+    if (ref.storeDir === null) {
+      return refuse("this route keeps its sessions in a host-owned directory and none was given");
+    }
+    if (!PI_SESSION_ID.test(ref.providerSessionId)) {
+      return refuse("the continuity reference is not a session id this CLI accepts");
+    }
+    let names: readonly string[];
+    try {
+      names = readdirSync(ref.storeDir);
+    } catch {
+      return refuse("the host-owned session directory does not exist");
+    }
+    const expectedCwd = resolve(context.cwd);
+    const found: PiSessionFileFacts[] = [];
+    for (const name of names) {
+      if (!name.endsWith(".jsonl")) continue;
+      const facts = readPiSessionFile(join(ref.storeDir, name), ref.providerSessionId);
+      if (facts !== null) found.push(facts);
+    }
+    if (found.length === 0) {
+      return refuse(`no session in the host-owned store carries the expected id`);
+    }
+    if (found.length > 1) {
+      // Two files claiming one id is not a state the host may pick a winner
+      // from: pi's own lookup takes the most recently modified, and a
+      // correction that resumed whichever that happened to be would be a
+      // different conversation on a different day.
+      return refuse(`${found.length} session files claim the expected id`);
+    }
+    const session = found[0]!;
+    if (resolve(session.cwd) !== expectedCwd) {
+      return refuse("the stored session belongs to a different working directory");
+    }
+    if (session.assistantTurns === 0) {
+      return refuse("the stored session has no assistant turn to correct");
+    }
+    return Object.freeze({
+      proof: "host-visible-session-store" as const,
+      detail: `${session.assistantTurns} prior assistant turn(s) in the host-owned session store`,
+    });
   }
 
   /**
@@ -399,7 +604,7 @@ export class PiCodexAdapter implements HarnessAdapter {
       PI_PROVIDER,
       "--model",
       selectorFor(request.model),
-      "--no-session",
+      ...sessionArgs(request.continuity),
     ];
     if (request.effort !== undefined) argv.push("--thinking", thinkingFor(request.effort));
     if (request.systemPromptPath !== undefined) {
@@ -439,11 +644,20 @@ export class PiCodexAdapter implements HarnessAdapter {
    * decision about what happens next belongs to a layer that can see the
    * budget.
    */
+  /** Delegates to the module-level function so adapter tests and the runner share one rule. */
+  assertSameSession(first: ObservedProviderSession, next: ObservedProviderSession): void {
+    assertSameSession(
+      { sessionId: first.sessionId, resolvedModel: first.resolvedModel, costUsd: first.costUsd ?? null },
+      { sessionId: next.sessionId, resolvedModel: next.resolvedModel, costUsd: next.costUsd ?? null },
+    );
+  }
+
   async *execute(
     request: ModelRequest,
     broker: TransportBroker,
     registration: BrokerProcessRegistration,
     signal: AbortSignal,
+    observed?: ObservedProviderSession,
   ): AsyncIterable<NormalizedEvent> {
     if (request.systemPromptPath !== undefined) {
       // Load-bearing on this route in a way it is not on T13's: pi's
@@ -454,7 +668,19 @@ export class PiCodexAdapter implements HarnessAdapter {
       assertPrivateSystemPrompt(this.id, request.systemPromptPath);
     }
     const transport = await broker.startProcess(registration, this.buildSpec(request), signal);
-    yield* this.parse(transport, signal, { requestedModel: selectorFor(request.model) });
+    // The decoder fills this in as the stream names itself. Copied back on the
+    // way out — including on a failed or cancelled stream, because "which
+    // conversation was that" is exactly the question a failure raises.
+    const record: PiSessionRecord = { sessionId: null, resolvedModel: null, costUsd: null };
+    try {
+      yield* this.parse(transport, signal, { requestedModel: selectorFor(request.model), session: record });
+    } finally {
+      if (observed !== undefined) {
+        observed.sessionId = record.sessionId;
+        observed.resolvedModel = record.resolvedModel;
+        observed.costUsd = record.costUsd;
+      }
+    }
   }
 
   /**

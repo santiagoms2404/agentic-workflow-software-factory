@@ -62,6 +62,39 @@ export function changedPaths(before: ChangeSetFingerprint, after: ChangeSetFinge
     .sort());
 }
 
+/**
+ * Every path the tree differs from the attempt's BASE by — committed candidates
+ * and uncommitted work alike.
+ *
+ * `captureChangeSet` answers a different question: what has changed since the
+ * last commit. That is the right question for one turn and the wrong one for a
+ * candidate, and the difference only becomes visible once a phase can produce
+ * more than one commit. After a correction commits candidate B on top of
+ * candidate A, `git diff HEAD` shows nothing at all, so a writes-glob check
+ * built on it would pass a candidate that had written anywhere.
+ *
+ * `git diff <base>` with no second revision compares the base against the
+ * WORKING TREE, so one command covers both committed and uncommitted change.
+ * Untracked files are added separately because `git diff` does not see them.
+ * `--no-renames` keeps both halves of a rename explicit, and `-z` keeps unusual
+ * bytes in a filename intact — the same two reasons `captureChangeSet` uses
+ * them.
+ */
+export function changesSinceBase(
+  repository: string,
+  baseSha: string,
+  runner = systemGitRunner(repository),
+): readonly string[] {
+  const paths = new Set<string>();
+  for (const path of runGit(runner, ["diff", "--name-only", "--no-renames", "-z", baseSha, "--"]).split("\0")) {
+    if (path) paths.add(path);
+  }
+  for (const path of runGit(runner, ["ls-files", "--others", "--exclude-standard", "-z"]).split("\0")) {
+    if (path) paths.add(path);
+  }
+  return Object.freeze([...paths].sort());
+}
+
 export class WorktreeNotClean extends Error {
   constructor(when: "before" | "after", status: string) {
     super(`worktree is not clean ${when} gate: ${status.trim()}`);

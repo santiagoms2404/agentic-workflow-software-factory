@@ -21,6 +21,7 @@ import type {
   ProcessTransport,
   TransportBroker,
 } from "../../src/adapters/interface.ts";
+import { isTaskEdgeRegistration, reservationIdOf } from "../../src/adapters/interface.ts";
 import { ProcessTransportBroker, type BrokerOptions } from "../../src/execution/transport-broker.ts";
 import { createDashboardProjection } from "../../src/cli/commands/dashboard-projection.ts";
 import { newCommand } from "../../src/cli/commands/new.ts";
@@ -117,13 +118,13 @@ function fakeBroker(options: BrokerOptions): TransportBroker {
     async startProcess(registration, spec) {
       const record = {
         identity: { pid: 4242, pgid: 4242, startIdentity: "fixture:4242", startIdentitySource: "fixture" },
-        runId: registration.runId, edge: registration.kind === "agent-phase" ? null : registration.edge,
+        runId: registration.runId, edge: isTaskEdgeRegistration(registration) ? registration.edge : null,
         ...(registration.kind === "agent-phase" ? { phase: { taskSessionId: registration.taskSessionId, workflowId: registration.workflowId, phaseId: registration.phaseId, phaseOrdinal: registration.phaseOrdinal, adapterId: registration.adapterId, role: registration.role } } : {}),
-        reservationId: registration.reservationId, command: [spec.executable, ...spec.argv], cwd: spec.cwd,
+        reservationId: reservationIdOf(registration), command: [spec.executable, ...spec.argv], cwd: spec.cwd,
       };
       if (registration.kind === "agent-phase") options.phaseLaunchVerifier?.verify(registration);
       await options.register(record);
-      const reservation = options.ledger.spendOnGo(registration.reservationId);
+      const reservation = options.ledger.spendOnGo(reservationIdOf(registration));
       await options.onSpent?.(record, reservation);
       return {
         runId: registration.runId, identity: record.identity,
@@ -410,7 +411,7 @@ function withBuilderContinuity(config: AwsfConfig, continuity: "same-session" | 
 function registrationFailingBroker(options: BrokerOptions): TransportBroker {
   return {
     async startProcess(registration) {
-      options.ledger.releaseOnRegistrationFailure(registration.reservationId);
+      options.ledger.releaseOnRegistrationFailure(reservationIdOf(registration));
       throw new Error("fixture registration failure before GO");
     },
   };
@@ -491,9 +492,13 @@ test("configured continuity mismatch fails closed before broker creation or prov
   }
 });
 
-test("adapter continuity above configured none is also a pre-launch mismatch", async () => {
+test("configured none on a CAPABLE adapter is a narrowing the owner may make, not a mismatch", async () => {
+  // The continuity check is one-way by design. Asking for more than the route
+  // can do is a mismatch; asking for less is the owner declining a capability,
+  // and the standing example is the reviewer — a reviewer that could be
+  // corrected is a reviewer that could be argued with. The earlier two-way check
+  // was right only while `none` was the only truth an adapter could tell.
   const world = await fixture("build");
-  let brokerCreated = false;
   try {
     const prepared = await readAttempt(world.created.attemptDir);
     const status = await runProductionCommand({
@@ -501,23 +506,28 @@ test("adapter continuity above configured none is also a pre-launch mismatch", a
       config: world.config,
       configPath: world.configPath,
       projectRecord: world.projection.project,
+      assertLaunchProjection: world.projection.assertLaunchPermitted,
       infrastructure: {
-        adapterFor: (_entry: AdapterEntry, id: string) => new SameSessionAdapter(id, prepared.worktree!, () => assert.fail("provider launched")),
-        createBroker: (options) => { brokerCreated = true; return new ProcessTransportBroker(options); },
+        adapterFor: (_entry: AdapterEntry, id: string) => new SameSessionAdapter(id, prepared.worktree!, () => {}),
+        createBroker: fakeBroker, sandboxProbe: () => false,
       },
     });
-    assert.equal(status.lifecycleState, "BLOCKED");
-    assert.equal(status.budget.callsSpent, 0);
-    assert.equal(brokerCreated, false);
-    assert.match(status.blocker?.detail ?? "", /ProductionContinuityMismatch/);
-    assert.match(status.blocker?.detail ?? "", /none.*same-session-correction/);
+    assert.equal(status.lifecycleState, "AWAITING_OWNER", status.blocker?.detail);
+    assert.equal(status.budget.callsSpent, 1);
+    // And it really did decline: no conversation was opened, so nothing private
+    // was written for a route that will never be re-entered.
+    assert.equal(existsSync(join(world.created.attemptDir, "private", "continuity.json")), false);
   } finally {
     world.projection.close();
     rmSync(world.root, { recursive: true, force: true });
   }
 });
 
-test("matching same-session declarations remain blocked until a real correction transport exists", async () => {
+test("a route that CLAIMS same-session correction without the transport is refused before any launch", async () => {
+  // The two halves of the continuity contract are separate assertions, and this
+  // is the case that separation exists for: pilot 2 stopped because a
+  // declaration and a transport had drifted apart, so a `getModelInfo` claim
+  // alone may never authorize a correction.
   const world = await fixture("build", 0, (config) => withBuilderContinuity(config, "same-session"));
   let brokerCreated = false;
   try {
@@ -535,7 +545,7 @@ test("matching same-session declarations remain blocked until a real correction 
     assert.equal(status.lifecycleState, "BLOCKED");
     assert.equal(status.budget.callsSpent, 0);
     assert.equal(brokerCreated, false);
-    assert.match(status.blocker?.detail ?? "", /no verified same-session correction transport/);
+    assert.match(status.blocker?.detail ?? "", /implements no correction transport/);
   } finally {
     world.projection.close();
     rmSync(world.root, { recursive: true, force: true });

@@ -16,6 +16,7 @@ import {
   renderCorrectionRequest,
   renderParseFixRequest,
   type AgentTurn,
+  type CorrectionCandidateEvidence,
   type CorrectionSession,
   type PhaseUsage,
 } from "./corrections.ts";
@@ -70,6 +71,25 @@ export function createHostPhaseGit<T extends EnvelopeBase>(options: {
 
 export type CorrectionActor = "host" | "owner" | "human";
 
+/**
+ * What the host measured about the candidate this phase just produced.
+ *
+ * This is the stage the pilot did not have. Deterministic commands can only run
+ * against a commit, and a commit can only exist after the phase's own gates
+ * pass — so their verdict arrives strictly later than every other gate, at a
+ * moment when the phase had already been declared finished and its conversation
+ * closed. Folding it back into the phase makes a red suite what it actually is:
+ * a correctable gate violation, priced in tokens, bounded by the same
+ * allowance, instead of a phase abort that costs the whole builder again.
+ */
+export interface CandidateVerification {
+  readonly passed: boolean;
+  /** Recorded whether it passed or failed; a green run is evidence too. */
+  readonly reports: readonly GateReport[];
+  /** What the resumed session is told. Required when `passed` is false. */
+  readonly evidence: CorrectionCandidateEvidence | null;
+}
+
 export interface RunAgentPhaseOptions<T extends EnvelopeBase> {
   readonly workflowId: string;
   readonly phase: CompiledAgentPhase<T>;
@@ -90,6 +110,21 @@ export interface RunAgentPhaseOptions<T extends EnvelopeBase> {
     cause: "schema-violation" | "gate-violation";
     correctionRound: number;
   }) => CorrectionActor | null;
+  /**
+   * Runs the host's deterministic gates against the exact candidate this phase
+   * just committed. Absent means the phase ends at its commit, which is the
+   * behaviour every caller had before candidate verification existed.
+   *
+   * It is called AFTER the commit and may re-arm `permissions` and `hostGit` for
+   * the next round — the tree it must gate is a committed one, and the next
+   * correction's diff is measured from that commit rather than from the seeded
+   * worktree.
+   */
+  readonly verifyCandidate?: (input: {
+    readonly candidateSha: string;
+    readonly changedPaths: readonly string[];
+    readonly correctionRound: number;
+  }) => Promise<CandidateVerification>;
 }
 
 export interface AgentPhaseResult<T extends EnvelopeBase> {
@@ -101,6 +136,15 @@ export interface AgentPhaseResult<T extends EnvelopeBase> {
   readonly changedPaths: readonly string[];
   readonly candidateSha: string | null;
   readonly usage: PhaseUsage;
+  /**
+   * The verification that passed, when one ran. The caller records it rather
+   * than re-running the commands: a `tests` phase that re-executed a suite the
+   * builder phase already measured against the same SHA would spend the wall
+   * clock twice to learn the same thing, and could disagree with itself.
+   */
+  readonly verification: CandidateVerification | null;
+  /** How many correction rounds this phase actually used. Zero is the common case. */
+  readonly correctionRounds: number;
 }
 
 export class EnvelopeValidationFailure extends Error {
@@ -210,6 +254,7 @@ export async function runAgentPhase<T extends EnvelopeBase>(
     cause: "schema-violation" | "gate-violation",
     previous: StoredEnvelope<T>,
     reports: readonly GateReport[],
+    candidate?: CorrectionCandidateEvidence,
   ): Promise<AgentTurn> => {
     const nextRound = correctionRound + 1;
     const actor = options.authorizeCorrection === undefined
@@ -242,6 +287,7 @@ export async function runAgentPhase<T extends EnvelopeBase>(
           previousEnvelope: previous,
           gateReports: reports,
           remainingCallBudget: options.budget.remaining,
+          ...(candidate === undefined ? {} : { candidate }),
         }));
     const turn = await send(options as RunAgentPhaseOptions<EnvelopeBase>, prompt, nextRound);
     options.budget.recordPhaseTransition({
@@ -265,6 +311,10 @@ export async function runAgentPhase<T extends EnvelopeBase>(
     execution.validating();
 
     let accepted: StoredEnvelope<T> | null = null;
+    let permission: PermissionResult | null = null;
+    let changedPaths: readonly string[] = [];
+    let candidateSha: string | null = null;
+    let verification: CandidateVerification | null = null;
     while (accepted === null) {
       const envelope = await store(options, turn, correctionRound);
       envelopes.push(envelope);
@@ -278,23 +328,52 @@ export async function runAgentPhase<T extends EnvelopeBase>(
       }
 
       lastReports = await runGates(options, envelope.payload, correctionRound);
-      if (lastReports.every((report) => report.passed)) {
+      if (!lastReports.every((report) => report.passed)) {
+        if (gateRound >= options.phase.maxCorrections) {
+          throw new PhaseGateFailure(options.phase.id, lastReports);
+        }
+        gateRound += 1;
+        parseFixes = 0;
+        turn = await correct("gate-violation", envelope, lastReports);
+        continue;
+      }
+
+      // Ordering is safety-significant: gate mistakes are correctable;
+      // permission breaches are observed only here and abort without another
+      // send. Both run on EVERY round, never only the first — a correction that
+      // fixed a failing test by writing outside its globs is a breach, and a
+      // round that skipped this check would launder it.
+      permission = options.permissions.enforce();
+      changedPaths = options.hostGit.captureDiff();
+      candidateSha = options.hostGit.commit(envelope.payload!, changedPaths);
+
+      // No verifier, or nothing to verify because the phase changed no files.
+      if (options.verifyCandidate === undefined || candidateSha === null) {
         accepted = envelope;
         break;
       }
+      verification = await options.verifyCandidate({ candidateSha, changedPaths, correctionRound });
+      if (verification.passed) {
+        accepted = envelope;
+        break;
+      }
+      // The candidate exists and is red. It stays — a failed candidate is
+      // evidence, and the next round builds on it rather than replacing it.
       if (gateRound >= options.phase.maxCorrections) {
-        throw new PhaseGateFailure(options.phase.id, lastReports);
+        throw new PhaseGateFailure(options.phase.id, [...lastReports, ...verification.reports]);
       }
       gateRound += 1;
       parseFixes = 0;
-      turn = await correct("gate-violation", envelope, lastReports);
+      turn = await correct(
+        "gate-violation",
+        envelope,
+        verification.reports,
+        verification.evidence ?? undefined,
+      );
     }
 
-    // Ordering is safety-significant: gate mistakes are correctable; permission
-    // breaches are observed only after the loop and abort without another send.
-    const permission = options.permissions.enforce();
-    const changedPaths = options.hostGit.captureDiff();
-    const candidateSha = options.hostGit.commit(accepted.payload!, changedPaths);
+    // Non-null by construction: the loop only leaves through a break that runs
+    // strictly after both.
     execution.succeed();
     const phaseUsage = usage.snapshot();
     await options.persistence.persistAgentSession?.({
@@ -307,11 +386,16 @@ export async function runAgentPhase<T extends EnvelopeBase>(
       state: "SUCCEEDED",
       envelope: accepted,
       envelopes: Object.freeze([...envelopes]),
+      // The phase's OWN gates only. The verification's reports are already
+      // recorded against the exact SHA they measured, at the round they ran in,
+      // and re-emitting them here would write a second row under the same id.
       gateReports: lastReports,
-      permission,
+      permission: permission!,
       changedPaths,
       candidateSha,
       usage: phaseUsage,
+      verification,
+      correctionRounds: correctionRound,
     });
   } catch (error) {
     execution.fail();
