@@ -68,11 +68,26 @@ Landing exists only through a human at a TTY.
 
 ## Routes
 
+Load what the request calls for, and no more. Reading the whole tree to answer
+one question is how a session arrives with a summary instead of an answer.
+
 | When the request is | Read |
 |---|---|
 | prepare and launch a new task | `cookbooks/preflight_a_task.md` |
+| write the request text, or sharpen one the owner gave you | `cookbooks/how_to_prompt_for_the_owner.md` |
+| decide the workflow and the tier | `cookbooks/choose_the_workflow_and_tier.md` |
+| launch a run, watch it, or work out whether it is stuck | `cookbooks/run_and_observe.md` |
+| an attempt is blocked or waiting, and something has to be decided | `cookbooks/read_a_blocked_attempt.md` |
+| the owner is weighing `journey`, `land`, `cancel`, `rework` or `review` | `cookbooks/owner_acts.md` |
+| where does a journal, envelope, gate row, process record or raw capture live | `references/evidence_map.md` |
+| which source owns a state, an edge, a guard, a ceiling or a recipe | `references/lifecycle.md` |
+| something behaved surprisingly, or a refusal looks like a bug | `references/gotchas.md` |
 
-That is the whole table today. The remaining cookbooks — observing a run,
-reading a blocked attempt, the owner acts, and the measured-trap table — are not
-written yet, and this router does not pretend otherwise. A route to a document
-that does not exist is the same drift these rules exist to prevent.
+Paths are relative to this file. A route pointing at a document that does not
+exist is the same drift these rules exist to prevent, so the suite asserts that
+every path in this table resolves — the table cannot quietly outlive the tree.
+
+The order above is roughly the order a task moves through, and the three
+references are lookups rather than reading. `/prime-awsf` is the entry point for
+a session that has not been primed; it is not in this table because it is a
+command, not a route.

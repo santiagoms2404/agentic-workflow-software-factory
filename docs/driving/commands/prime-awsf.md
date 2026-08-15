@@ -38,7 +38,7 @@ Confirm the toolchain before driving anything, rather than after:
 npm install
 npm test
 npm run lint
-npm run awsf -- doctor
+just awsf doctor
 ```
 
 The diagnosis command is read-only by construction and has no repair path — a

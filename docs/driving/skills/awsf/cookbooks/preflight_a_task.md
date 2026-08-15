@@ -23,12 +23,21 @@ If "Done means" cannot be written as something a command can check, the task is
 not ready to launch. That is the highest-value moment in the whole preflight and
 no CLI can do it for you.
 
+When the owner has given you one sentence and the other three lines have to be
+found, `how_to_prompt_for_the_owner.md` is how — including what a "Done means"
+that only looks like a condition reads like, and what you may never put in a
+request.
+
 ## 2. Choose the workflow and the tier
 
-The workflows, their phases and the per-tier call ceilings are defined in
-`awsf.config.yaml`, pinned by the recipe tests, and reported by the diagnosis
-command. Read them there. This cookbook explains *how to choose*; the CLI
-supplies *what exists*, because a number copied here goes stale in silence.
+The workflows and their phases are defined in `core/src/workflow/recipes/` and
+pinned by the recipe tests; which of them this project will run, and the default
+tier, are in `awsf.config.yaml`; the per-tier call ceilings are in
+`core/src/state/tiers.ts`. Read them there — a number copied here goes stale in
+silence. No command prints that catalogue today, and
+`choose_the_workflow_and_tier.md` says so out loud rather than implying one does.
+
+That cookbook is the long version of this section. The short version:
 
 - The tier is about **risk of the change**, not size of the task. Security,
   process control, persistent data, cross-component or weakly-tested work sits
@@ -42,7 +51,7 @@ supplies *what exists*, because a number copied here goes stale in silence.
 ## 3. Run the diagnosis, then read it
 
 ```bash
-npm run awsf -- doctor
+just awsf doctor
 ```
 
 Findings are evidence, not a chore list. The command has no repair path on
@@ -52,13 +61,14 @@ never something a driving session tidies away before anyone has seen it.
 ## 4. Launch, then observe
 
 ```bash
-npm run awsf -- new TASK "the four-line request"
-npm run awsf -- start TASK
-npm run awsf -- run TASK
+just awsf new TASK "the four-line request"
+just awsf start TASK
+just awsf run TASK
 ```
 
 Report the handle and watch. Do not improvise a status board between the steps;
 read state when the next decision needs it, against the task the owner named.
+`run_and_observe.md` takes over from here.
 
 ## What is deliberately not in this document
 
