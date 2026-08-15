@@ -1729,14 +1729,18 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
       });
       return status;
     }
-    // L17 is the only REVIEWING → BLOCKED edge and its vocabulary is one word,
-    // `review-unavailable`, guarded by a retry count. That is deliberate: the
-    // reviewer being unreachable is the one review failure the contract lets the
-    // host declare terminal. A review that DID answer but answered
-    // inconsistently is refused by L15's own guard instead, and the attempt is
-    // left in REVIEWING with its failed gate recorded, because inventing a
-    // terminal state for it would mean the host deciding what a bad review means.
-    // The owner's exits from there are L18 cancel and L16 rework.
+    // L17 is the only REVIEWING → BLOCKED edge. Its vocabulary is three codes —
+    // `review-unavailable`, `review-malformed`, `review-evidence-invalid` —
+    // because all three are failures the host can determine without interpreting
+    // a verdict. This path emits only the first: a malformed envelope or a
+    // failed evidence gate is still rethrown below rather than classified, so
+    // the guard admits an exit this runner does not yet take.
+    //
+    // A review that DID answer but answered inconsistently is refused by L15's
+    // own guard instead, and the attempt is left in REVIEWING with its failed
+    // gate recorded, because inventing a terminal state for it would mean the
+    // host deciding what a bad review means. The owner's exits from there are
+    // L18 cancel and L16 rework.
     if (failedFrom === "REVIEWING") {
       if (!(error instanceof MandatoryReviewUnavailable)) throw error;
       const detail = `${error.name}: ${error.message}`;

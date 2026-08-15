@@ -433,8 +433,9 @@ test("an unreachable reviewer blocks after exactly one transport retry, with no 
   try {
     const { status, log } = await withLiveCandidate(world, { kind: "transport-failure" })();
     assert.equal(status.lifecycleState, "BLOCKED");
-    // L17 is the only REVIEWING -> BLOCKED edge, and `review-unavailable` is the
-    // single word its vocabulary accepts.
+    // L17 is the only REVIEWING -> BLOCKED edge. Its vocabulary is three codes;
+    // `review-unavailable` is the one a transport failure earns, and the only
+    // one this runner classifies today.
     assert.equal(status.blocker?.code, "review-unavailable");
     assert.match(status.blocker?.detail ?? "", /no substitute was attempted/);
     assert.deepEqual(log.providers, ["openai-codex", "anthropic", "anthropic"], "one fixed route, one retry, never the worker's provider again");
