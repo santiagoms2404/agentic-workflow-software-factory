@@ -470,6 +470,35 @@ export class CallBudget {
   }
 
   /**
+   * An owner re-entry that bought nothing gives the allowance back.
+   *
+   * `authorize()` charges the tranche at the moment the edge is decided, which
+   * is correct — the charge must be durable before a child can exist. But an
+   * authorization whose reservation is released without ever reaching `GO`
+   * bought the owner no provider turn at all, and keeping the charge would
+   * confiscate the one re-entry an attempt gets for a launch that never
+   * happened. This is the caller's assertion that nothing was spent, so it
+   * refuses while any reservation is still held: a held reservation is exactly
+   * the state in which "nothing was spent" is not yet known.
+   *
+   * `awsf review` calls this from its own recovery path. `awsf rework`
+   * deliberately does not — changing what a failed rework costs is a normative
+   * change, and this commit is not authorized to make it.
+   */
+  rewindOwnerReentry(): void {
+    if (this.#held.size > 0) {
+      throw new ReservationOutstanding(
+        `task ${this.taskId} cannot rewind an owner re-entry`,
+        [...this.#held.keys()],
+      );
+    }
+    if (this.#ownerReentries === 0) {
+      throw new RangeError(`task ${this.taskId} has no owner re-entry charge to rewind`);
+    }
+    this.#ownerReentries -= 1;
+  }
+
+  /**
    * `awsf retry` minted attempt n+1. Spend carries forward unchanged; the
    * attempt number moves, and the attempt-scoped owner re-entry allowance is
    * refreshed along with the per-phase pair — a new attempt is the one thing

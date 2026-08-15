@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { existsSync, readFileSync, statSync, promises as fs } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import type {
@@ -35,10 +34,15 @@ import { commandsPass } from "../../gates/commands.ts";
 import { envelopeValid } from "../../gates/envelope.ts";
 import { diffMatchesClaims, headAdvanced, noProtectedPaths, writesWithinGlobs } from "../../gates/git-diff.ts";
 import { GateReport, type GateId } from "../../gates/interface.ts";
-import { reviewEvidenceFitness, reviewEvidencePresent, verdictConsistent, type ReviewEvidenceExpectation } from "../../gates/review.ts";
-import { boundReviewDiff, diffRemovesLines, type DiffFileSection } from "../../gates/review-diff.ts";
+import { reviewEvidencePresent, verdictConsistent, type ReviewEvidenceExpectation } from "../../gates/review.ts";
 import { REVIEW_OUTPUT_SCHEMA_ID, type ReviewOutput } from "../../contracts/review-output.ts";
-import { REVIEW_CONTEXT_DIFF_MAX_CHARS, REVIEW_CONTEXT_SCHEMA_ID, REVIEW_CONTEXT_STAT_MAX_CHARS, type ReviewContext } from "../../contracts/review-context.ts";
+import { REVIEW_CONTEXT_SCHEMA_ID, type ReviewContext } from "../../contracts/review-context.ts";
+import {
+  ReviewEvidenceUnfit,
+  candidatePathsBetween,
+  composeReviewEvidence as composeReviewContext,
+  sha256,
+} from "../../workflow/review-evidence.ts";
 import {
   InvalidReviewInversion,
   MandatoryReviewUnavailable,
@@ -223,10 +227,6 @@ function dbPhaseId(sessionId: string, phaseId: string): string {
   return `${sessionId}:${phaseId}`;
 }
 
-function sha256(value: string): string {
-  return createHash("sha256").update(value, "utf8").digest("hex");
-}
-
 /**
  * Everything the review phase's gates are held against.
  *
@@ -240,17 +240,6 @@ interface ReviewPhaseSubject {
   readonly candidatePaths: readonly string[];
   readonly evidence: ReviewContext | null;
   readonly expectation: ReviewEvidenceExpectation | null;
-}
-
-/** A review context that could not be evidence never reaches a provider. */
-export class ReviewEvidenceUnfit extends Error {
-  readonly report: GateReport;
-  constructor(report: GateReport) {
-    const failed = report.checks.filter((check) => !check.ok).map((check) => `${check.item}: ${check.note}`);
-    super(`composed review evidence is unfit and no review call may be spent on it: ${failed.join("; ")}`);
-    this.name = "ReviewEvidenceUnfit";
-    this.report = report;
-  }
 }
 
 function safeTail(value: string, maximum = 4_000): string {
@@ -295,7 +284,12 @@ async function readCommittedPrompt(configPath: string, relativePath: string): Pr
   return readFile(physical, "utf8");
 }
 
-function requestOutput(status: AttemptStatus, config: AwsfConfig): PlanOutput {
+/**
+ * The intent a `build-review` run is judged against, derived by the host from
+ * the owner's own recorded request. Exported because `awsf review` must compose
+ * a replacement's evidence from the same intent the superseded review saw.
+ */
+export function requestOutput(status: AttemptStatus, config: AwsfConfig): PlanOutput {
   const commands = Object.entries(config.gates).map(([gateId, gate]) => `${gateId}: ${JSON.stringify(gate.argv)}`);
   return {
     schema: "awsf.plan-output/v1",
@@ -435,61 +429,8 @@ function phaseGates(
   return Object.freeze(common);
 }
 
-/**
- * The paths the candidate actually changed, read from Git rather than from the
- * builder's claims — `verdict_consistent` uses this to reject a finding about a
- * file outside the change under review, so a claimed set would let a reviewer
- * and a builder agree with each other about a file neither touched. `-z` keeps
- * unusual bytes in a filename intact, and `--no-renames` makes both sides of a
- * rename explicit.
- */
-function candidatePathsBetween(worktree: string, baseSha: string, candidateSha: string): readonly string[] {
-  const output = runGit(systemGitRunner(worktree), ["diff", "--name-only", "--no-renames", "-z", `${baseSha}..${candidateSha}`]);
-  return Object.freeze([...new Set(output.split("\0").filter((path) => path.length > 0))].sort());
-}
-
-/**
- * The candidate's diff, read from Git once whole and once per file.
- *
- * The whole reading is the authority: it is what the digest is taken of and
- * what the host retains privately. The per-file readings are what bounding
- * selects from, and they exist because attributing a hunk to a path by parsing
- * `diff --git` headers means parsing Git's quoting rules — a path with a quote,
- * a newline, or a non-ASCII byte in it would be attributed to the wrong file or
- * to none, and `diffOmittedFiles` would then name the wrong thing. Asking Git
- * per path cannot get that wrong.
- */
-function candidateDiff(
-  worktree: string,
-  baseSha: string,
-  candidateSha: string,
-  paths: readonly string[],
-): { readonly whole: string; readonly sections: readonly DiffFileSection[]; readonly stat: string; readonly insertions: number; readonly deletions: number } {
-  const git = systemGitRunner(worktree);
-  const range = `${baseSha}..${candidateSha}`;
-  const whole = runGit(git, ["diff", "--no-renames", range, "--"]);
-  // A fixed width, because the default depends on the terminal and evidence
-  // that changes shape with the caller's window is not evidence.
-  const stat = runGit(git, ["diff", "--no-renames", "--stat=200,160", range, "--"]);
-  let insertions = 0;
-  let deletions = 0;
-  for (const record of runGit(git, ["diff", "--numstat", "--no-renames", "-z", range, "--"]).split("\0")) {
-    const fields = record.split("\t");
-    if (fields.length < 3) continue;
-    // Binary files report `-` for both counts; they are not zero-line changes,
-    // they are unmeasurable ones, and adding them as zero would be a lie.
-    insertions += Number.parseInt(fields[0] ?? "", 10) || 0;
-    deletions += Number.parseInt(fields[1] ?? "", 10) || 0;
-  }
-  const sections = paths.map((path) => ({
-    path,
-    text: runGit(git, ["diff", "--no-renames", range, "--", path]),
-  }));
-  return { whole, sections: Object.freeze(sections), stat, insertions, deletions };
-}
-
 /** Transport faults earn the one retry; a refusal, a breach, or exhausted quota never does. */
-function isReviewTransportFailure(error: unknown): boolean {
+export function isReviewTransportFailure(error: unknown): boolean {
   if (error instanceof ProductionRouteUnavailable) return true;
   if (!(error instanceof AdapterError)) return false;
   // Quota is structurally never a retry, and a permission or contract failure
@@ -1467,70 +1408,38 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
   const composeReviewEvidence = async (phaseId: string): Promise<ReviewContext> => {
     if (candidateSha === null) throw new Error("review evidence requires a host-created candidate SHA");
     if (lastTestOutput === null) throw new Error("review evidence requires a completed code phase to carry");
-    const changedFiles = candidatePathsBetween(status.worktree!, status.baseSha!, candidateSha);
-    const observed = candidateDiff(status.worktree!, status.baseSha!, candidateSha, changedFiles);
-    const bounded = boundReviewDiff(observed.sections, REVIEW_CONTEXT_DIFF_MAX_CHARS);
-    // The FULL diff, host-private at 0600. The reviewer is never given a path
-    // into the attempt directory — this is the host's copy, and the digest is
-    // what ties the bounded rendering the model saw to it.
-    const diffRelative = join("raw", `review-context-${candidateSha}.diff`);
-    const diffAbsolute = join(options.attemptDir, diffRelative);
-    await mkdir(dirname(diffAbsolute), { recursive: true });
-    await writeFile(diffAbsolute, observed.whole, { mode: 0o600 });
-    await chmod(diffAbsolute, 0o600);
-    const context: ReviewContext = {
-      schema: REVIEW_CONTEXT_SCHEMA_ID,
-      producerStatus: "success",
-      summary: `Candidate ${candidateSha} against base ${status.baseSha!}: ${String(changedFiles.length)} file(s), +${String(observed.insertions)}/-${String(observed.deletions)}`,
-      artifacts: [],
-      notesForNextPhase: "Judge this candidate against the recorded request. The diff below is the host's; no command may be run.",
-      request: status.request,
-      goals: intent?.goals ?? [],
-      nonGoals: intent?.nonGoals ?? [],
-      acceptanceCriteria: (intent?.implementationSteps ?? []).flatMap((step) => step.acceptanceCriteria),
-      testStrategy: intent?.testStrategy ?? [],
+    const composed = await composeReviewContext({
+      worktree: status.worktree!,
       baseSha: status.baseSha!,
       candidateSha,
-      changedFiles: [...changedFiles],
-      insertions: observed.insertions,
-      deletions: observed.deletions,
-      stat: safeTail(observed.stat, REVIEW_CONTEXT_STAT_MAX_CHARS),
-      diff: bounded.diff,
-      diffTruncated: bounded.truncated,
-      diffOmittedChars: bounded.omittedChars,
-      diffOmittedFiles: [...bounded.omittedFiles],
-      diffSha256: sha256(observed.whole),
-      diffRef: diffRelative,
+      intent: {
+        // The owner's own words, never a phase's restatement of them.
+        request: status.request,
+        goals: intent?.goals ?? [],
+        nonGoals: intent?.nonGoals ?? [],
+        acceptanceCriteria: (intent?.implementationSteps ?? []).flatMap((step) => step.acceptanceCriteria),
+        testStrategy: intent?.testStrategy ?? [],
+      },
       testOutput: lastTestOutput,
-    };
-    // Read the private copy BACK before trusting the digest: the claim the gate
-    // will make is about a file on disk, so the check is made against the file
-    // on disk and not against the string that was meant to be written to it.
-    const onDisk = await readFile(diffAbsolute, "utf8");
-    const expectation: ReviewEvidenceExpectation = {
-      baseSha: status.baseSha!,
-      candidateSha,
-      changedFiles,
-      fullDiffSha256: sha256(onDisk),
-      fullDiffRemovesLines: diffRemovesLines(onDisk),
-    };
-    const parsed = parseEnvelope(JSON.stringify(context), REVIEW_CONTEXT_SCHEMA_ID);
-    if (!parsed.valid) {
-      const report = new GateReport("review_evidence_present");
-      for (const violation of parsed.violations) {
-        report.check(`contract ${violation.path || "(root)"}`, false, violation.message);
-      }
-      throw new ReviewEvidenceUnfit(report);
-    }
-    const fitness = reviewEvidenceFitness(context, expectation);
-    if (!fitness.passed) throw new ReviewEvidenceUnfit(fitness);
+      // The FULL diff, host-private at 0600. The reviewer is never given a path
+      // into the attempt directory — this is the host's copy, and the digest is
+      // what ties the bounded rendering the model saw to it.
+      diffRef: join("raw", `review-context-${candidateSha}.diff`),
+      retainFullDiff: async (relative, diff) => {
+        const absolute = join(options.attemptDir, relative);
+        await mkdir(dirname(absolute), { recursive: true });
+        await writeFile(absolute, diff, { mode: 0o600 });
+        await chmod(absolute, 0o600);
+        return readFile(absolute, "utf8");
+      },
+    });
     await persist("attempt.updated", {
       lastActivityAt: infra.now(),
-      lastActivity: `${phaseId}: composed ${String(changedFiles.length)}-file review evidence for ${candidateSha}` +
-        `${bounded.truncated ? ` (bounded; ${String(bounded.omittedFiles.length)} file(s) omitted)` : ""}`,
+      lastActivity: `${phaseId}: composed ${String(composed.changedFiles.length)}-file review evidence for ${candidateSha}` +
+        `${composed.truncated ? ` (bounded; ${String(composed.omittedFiles.length)} file(s) omitted)` : ""}`,
     });
-    reviewExpectation = expectation;
-    return context;
+    reviewExpectation = composed.expectation;
+    return composed.context;
   };
 
   try {

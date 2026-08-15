@@ -17,6 +17,7 @@ import { landCommand } from "./commands/land.ts";
 import { newCommand } from "./commands/new.ts";
 import { locateAttempt } from "./commands/attempt.ts";
 import { retryCommand } from "./commands/retry.ts";
+import { reviewCommand } from "./commands/review.ts";
 import { reworkCommand } from "./commands/rework.ts";
 import { runStubCommand } from "./commands/run.ts";
 import { runProductionCommand } from "./commands/production-run.ts";
@@ -26,7 +27,7 @@ import { watchCommand } from "./commands/watch.ts";
 
 /** The complete owner-facing command table; documentation reconciles against it. */
 export const CLI_COMMANDS = Object.freeze([
-  "new", "start", "run", "status", "watch", "rework", "journey", "land", "cancel", "retry",
+  "new", "start", "run", "status", "watch", "rework", "review", "journey", "land", "cancel", "retry",
   "doctor", "gc", "dash", "db rebuild",
 ]);
 
@@ -205,6 +206,29 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         });
         if (!result.confirmed) {
           out("Rework declined; state remains AWAITING_OWNER and no call was spent.");
+          return 1;
+        }
+        out(`${result.status.lifecycleState}: ${result.status.nextAction}`);
+        return result.status.lifecycleState === "AWAITING_OWNER" ? 0 : 1;
+      }
+      case "review": {
+        const reason = parsed.flags["reason"] ?? "";
+        if (reason.trim().length === 0) {
+          throw new Error('usage: awsf review <task> --reason "<why the recorded review is not evidence>"');
+        }
+        const result = await reviewCommand({
+          attemptDir: located.attemptDir,
+          stateRoot,
+          reason,
+          terminal: options.terminal ?? processOwnerTerminal(),
+          config,
+          configPath,
+          projectRecord: projection.project,
+          assertAdvancement: projection.assertAdvancement,
+          assertLaunchProjection: projection.assertLaunchPermitted,
+        });
+        if (!result.confirmed) {
+          out("Replacement review declined; state remains AWAITING_OWNER and no call was spent.");
           return 1;
         }
         out(`${result.status.lifecycleState}: ${result.status.nextAction}`);

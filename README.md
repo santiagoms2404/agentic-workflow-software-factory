@@ -100,9 +100,10 @@ stateDiagram-v2
 
 This lifecycle is implemented and exhaustively tested: all 25 legal edges,
 all 75 rejected pairs, and the ordered rejection contract are green. The
-owner CLI now supplies both the interactive L19 `awsf rework TASK "<concrete defect>"`
-path and the persisted, TTY-only L20/L23/L24 landing path. L25 is a legal
-edge with no caller yet: the command that takes it is not written.
+owner CLI supplies the interactive L19 `awsf rework TASK "<concrete defect>"`
+path, the interactive L25
+`awsf review TASK --reason "<why the recorded review is not evidence>"` path,
+and the persisted, TTY-only L20/L23/L24 landing path.
 
 ## Status
 
@@ -133,7 +134,9 @@ a new host-owned candidate on the prior candidate, and reruns fresh gates.
 Rework stays T1-only on purpose: it re-runs one builder phase, and the candidate
 that produces has not been reviewed, so a T2 attempt is told to cancel and
 `awsf retry TASK` — which re-runs the whole workflow, review included, carrying
-the spend forward.
+the spend forward. `awsf review TASK --reason "..."` is the T2 counterpart and
+the opposite trade: it changes no tree, so it preserves and revalidates the
+green rather than invalidating it.
 Unsupported production recipes and any configured continuity that disagrees
 with the selected adapter's verified capability fail closed before launch. The
 explicit `awsf run TASK --stub true` simple-SDLC
@@ -148,6 +151,18 @@ changed-file list, a bounded whole-hunk diff with the digest of the full one,
 and the complete command results — because a review that saw nothing is not a
 review; `review_evidence_present` refuses evidence that could not be evidence
 before the call is spent, and refuses the phase whose prompt did not carry it.
+A review that was recorded *without* that evidence — every review produced
+before the gate existed — can be replaced once, at one call, without rebuilding
+the candidate:
+`awsf review TASK --reason "<why the recorded review is not evidence>"`
+takes L25 at a TTY, revalidates the candidate three times, runs a cold reviewer
+on the opposite provider, and writes its artifacts under `reviewer-re<N>` so the
+review it supersedes is retained unchanged. Eligibility is host-determined
+rather than discretionary: a review carrying a *passing* `review_evidence_present`
+row is not replaceable at all, so disliking a verdict cannot buy a second
+opinion. It draws the same one-per-attempt owner re-entry allowance as rework,
+refuses unless the tier ceiling has two calls of headroom, and says in plain
+words at the confirmation prompt that a failed replacement costs the candidate.
 The owner then records the end-user
 journey with `awsf journey TASK --journey ID --sha REVISION` at a TTY — the
 `journey_passes` gate checks separately that it ran, that it passed, and that

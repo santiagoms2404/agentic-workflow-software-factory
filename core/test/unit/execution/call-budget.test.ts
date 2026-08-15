@@ -466,6 +466,32 @@ test("an intra-phase correction still refreshes per phase, exactly as before", (
   assert.equal(budget.snapshot().correctionsOwner, 0, "the next phase gets its own owner correction");
 });
 
+test("an owner re-entry whose reservation never reached GO gives the allowance back", () => {
+  // `awsf review` charges the tranche when L25 is decided, because the charge
+  // must be durable before a child can exist. A reservation released without
+  // ever reaching GO bought the owner no provider turn at all, and keeping the
+  // charge would confiscate the one re-entry an attempt gets for a launch that
+  // never happened. `awsf rework` deliberately does not do this: changing what
+  // a failed rework costs is a normative change, and this is not it.
+  const budget = ledger(2);
+  budget.authorize(OWNER_GATING_TO_RUNNING);
+  assert.equal(budget.snapshot().ownerReentries, 1);
+
+  refusal(() => budget.rewindOwnerReentry(), ReservationOutstanding);
+  assert.equal(budget.snapshot().ownerReentries, 1, "a held reservation is exactly the state in which nothing-was-spent is unknown");
+
+  budget.releaseOnRegistrationFailure(budget.outstanding()[0]!.id);
+  budget.rewindOwnerReentry();
+  assert.equal(budget.snapshot().ownerReentries, 0);
+  assert.equal(budget.callsSpent, 0, "and the call went back too");
+
+  refusal(() => budget.rewindOwnerReentry(), RangeError);
+
+  // The ledger obeys its caller, so the guard against rewinding a call that
+  // genuinely ran lives in the command: `awsf review` rewinds only when its own
+  // `onSpent` never fired. The journey suite proves that direction.
+});
+
 test("a new attempt is the one thing that buys the owner another re-entry", () => {
   const budget = ledger(2);
   budget.authorize(OWNER_GATING_TO_RUNNING);

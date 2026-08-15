@@ -21,6 +21,7 @@ import {
   type AttemptProjector,
   type AttemptStatus,
 } from "./attempt.ts";
+import { readAttemptEvidence, recordedReviews, supersededReviewLines } from "./review-record.ts";
 
 export interface LandCommandOptions {
   readonly attemptDir: string;
@@ -217,6 +218,13 @@ export async function landCommand(options: LandCommandOptions): Promise<LandComm
   options.terminal.write("Summary:");
   for (const line of inspection.summary.split("\n")) options.terminal.write(`  ${line}`);
   options.terminal.write(`Fast-forward meter: canonical ahead ${inspection.ahead}, behind ${inspection.behind}`);
+  // A replaced review is displayed side by side with the one it superseded.
+  // `requiredReviewPresent` is one boolean, and a human gate that saw only the
+  // replacement verdict would never learn that a review had been replaced or
+  // why — which is precisely what L25 is obliged to make visible.
+  for (const line of supersededReviewLines(recordedReviews(await readAttemptEvidence(options.attemptDir), current.sessionId))) {
+    options.terminal.write(line);
+  }
   const confirmed = await options.terminal.confirm(`Land exact candidate ${current.candidateSha}?`);
   if (!confirmed) return { status: current, confirmed: false };
 
