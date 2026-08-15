@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { repoRoot, relRepo, walkFiles } from "./_walk.ts";
+import { DRIVING_REL, drivingDocs } from "./_driving.ts";
 import { OUTPUT_SCHEMA_PLACEHOLDER } from "../../../src/contracts/json-schema.ts";
 
 // AWSF never maintains a handwritten envelope example beside the schema and the
@@ -34,15 +35,38 @@ const HANDWRITTEN_SCHEMA_PATTERNS: Array<{ name: string; pattern: RegExp }> = [
   { name: "TypeScript interface declaration", pattern: /\binterface\s+\w*(Output|Envelope|ArtifactClaim)\b/ },
 ];
 
+/**
+ * The subset that applies to the driving-document tree. It is a NARROWING, and
+ * the three that are left out are left out on purpose:
+ *
+ *   - the two field-name patterns match ordinary explanation. A cookbook line
+ *     reading `changedFiles: the host-observed set of paths` is a sentence, not
+ *     a transcribed schema, and a fence that fails on it teaches authors to
+ *     stop naming fields — which is most of what a cookbook is for.
+ *   - `"type": "object"` matches an ordinary config example.
+ *
+ * What survives cannot be explanation: a schema id literal, a JSON Schema
+ * keyword, and a pasted TypeScript declaration. Plus the ```json fence ban,
+ * which a driving document has no legitimate use for — it may never restate a
+ * schema, so it never needs to show one.
+ */
+const DRIVING_PATTERN_NAMES = new Set([
+  "inline JSON Schema keyword",
+  "envelope schema id literal",
+  "TypeScript interface declaration",
+]);
+
+const DRIVING_SCHEMA_PATTERNS = HANDWRITTEN_SCHEMA_PATTERNS.filter(({ name }) => DRIVING_PATTERN_NAMES.has(name));
+
 function promptFiles(): string[] {
   return walkFiles(PROMPTS_DIR, PROMPT_EXTS);
 }
 
-test("no prompt under prompts/ contains a handwritten envelope schema or example", () => {
+function schemaOffences(files: string[], patterns: typeof HANDWRITTEN_SCHEMA_PATTERNS): string[] {
   const offences: string[] = [];
-  for (const file of promptFiles()) {
+  for (const file of files) {
     const text = readFileSync(file, "utf8");
-    for (const { name, pattern } of HANDWRITTEN_SCHEMA_PATTERNS) {
+    for (const { name, pattern } of patterns) {
       const match = pattern.exec(text);
       if (match !== null) {
         const line = text.slice(0, match.index).split("\n").length;
@@ -50,6 +74,26 @@ test("no prompt under prompts/ contains a handwritten envelope schema or example
       }
     }
   }
+  return offences;
+}
+
+const JSON_FENCE = /```json\b/;
+
+function jsonFenceOffences(files: string[]): string[] {
+  const offences: string[] = [];
+  for (const file of files) {
+    const text = readFileSync(file, "utf8");
+    const match = JSON_FENCE.exec(text);
+    if (match !== null) {
+      const line = text.slice(0, match.index).split("\n").length;
+      offences.push(`${relRepo(file)}:${line}`);
+    }
+  }
+  return offences;
+}
+
+test("no prompt under prompts/ contains a handwritten envelope schema or example", () => {
+  const offences = schemaOffences(promptFiles(), HANDWRITTEN_SCHEMA_PATTERNS);
   assert.deepEqual(
     offences,
     [],
@@ -59,15 +103,7 @@ test("no prompt under prompts/ contains a handwritten envelope schema or example
 });
 
 test("no prompt hand-rolls a JSON code fence for its output contract", () => {
-  const offences: string[] = [];
-  for (const file of promptFiles()) {
-    const text = readFileSync(file, "utf8");
-    const match = /```json\b/.exec(text);
-    if (match !== null) {
-      const line = text.slice(0, match.index).split("\n").length;
-      offences.push(`${relRepo(file)}:${line}`);
-    }
-  }
+  const offences = jsonFenceOffences(promptFiles());
   assert.deepEqual(
     offences,
     [],
@@ -86,6 +122,68 @@ test("the meta-test's own patterns actually bite", () => {
   ].join("\n");
   const matched = HANDWRITTEN_SCHEMA_PATTERNS.filter(({ pattern }) => pattern.test(specimen));
   assert.equal(matched.length, HANDWRITTEN_SCHEMA_PATTERNS.length);
+});
+
+// ---------------------------------------------------------------------------
+// The driving-document tree. Same principle — a document that restates a schema
+// is a second source of truth that goes wrong quietly — with a narrowed pattern
+// set, because a cookbook explains fields for a living and a prompt does not.
+//
+// Both tests are vacuous until docs/driving/ exists: `walkFiles` returns [] for
+// a missing directory. The two after them are what make them real.
+// ---------------------------------------------------------------------------
+
+test("no driving document restates an envelope schema by hand", () => {
+  const offences = schemaOffences(drivingDocs(), DRIVING_SCHEMA_PATTERNS);
+  assert.deepEqual(
+    offences,
+    [],
+    `a driving document points at core/src/contracts/ and never restates what it defines:\n  ${offences.join("\n  ")}`,
+  );
+});
+
+test("no driving document hand-rolls a JSON code fence", () => {
+  const offences = jsonFenceOffences(drivingDocs());
+  assert.deepEqual(
+    offences,
+    [],
+    `a \`\`\`json fence is a schema copy waiting to drift, and a driving document may not restate ` +
+      `a schema at all:\n  ${offences.join("\n  ")}`,
+  );
+});
+
+test("the narrowed driving-tree patterns actually bite", () => {
+  const specimen = [
+    "The reviewer's envelope declares awsf.review-output/v1.",
+    '{ "$schema": "https://json-schema.org/draft/2020-12/schema" }',
+    "interface ReviewOutput extends EnvelopeBase {}",
+  ].join("\n");
+  const matched = DRIVING_SCHEMA_PATTERNS.filter(({ pattern }) => pattern.test(specimen));
+  assert.equal(matched.length, DRIVING_SCHEMA_PATTERNS.length, `every applied pattern must fire on ${specimen}`);
+  assert.ok(JSON_FENCE.test(["Paste the envelope:", "```json", "{}", "```"].join("\n")));
+});
+
+test("the narrowing is deliberate: the excluded patterns do not fire on ordinary cookbook prose", () => {
+  // If this ever fails because the narrowed set grew, that is the point — the
+  // three excluded patterns match explanation, and a fence that fails on
+  // explanation gets worked around rather than obeyed.
+  const prose = [
+    "Read the builder's envelope. changedFiles: the host-observed set of paths it touched,",
+    "and producerStatus: what the phase itself claims. They can disagree, and that gap is the",
+    'whole reason the gate exists. A config block such as { "type": "object" } is illustration.',
+  ].join("\n");
+  assert.ok(
+    HANDWRITTEN_SCHEMA_PATTERNS.some(({ pattern }) => pattern.test(prose)),
+    "the prompt-scoped set is supposed to trip on this — if it does not, the narrowing proves nothing",
+  );
+  assert.deepEqual(
+    DRIVING_SCHEMA_PATTERNS.filter(({ pattern }) => pattern.test(prose)).map(({ name }) => name),
+    [],
+  );
+  // Guard the filter itself: it selects by NAME, so renaming a pattern above
+  // would silently empty the driving set and every fence over it with it.
+  assert.equal(DRIVING_SCHEMA_PATTERNS.length, DRIVING_PATTERN_NAMES.size, `${DRIVING_REL} lost a pattern to a rename`);
+  assert.equal(DRIVING_SCHEMA_PATTERNS.length, 3);
 });
 
 test("prompts/ is scanned at all — the directory exists and the walker reaches it", () => {

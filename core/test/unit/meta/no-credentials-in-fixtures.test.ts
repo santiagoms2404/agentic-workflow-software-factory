@@ -3,7 +3,13 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { repoRoot, walkFiles, relRepo } from "./_walk.ts";
+import { DRIVING_REL, drivingTextFiles } from "./_driving.ts";
 import { CREDENTIAL_PATTERNS } from "../../../src/policy/redaction.ts";
+
+/** The one predicate every sweep below shares, so the companion test proves the real thing. */
+function credentialShaped(text: string): boolean {
+  return CREDENTIAL_PATTERNS.some((pattern) => pattern.test(text));
+}
 
 /**
  * AGENTS.md invariant 9 says "in fixtures **or anywhere else**", and the
@@ -36,9 +42,7 @@ test("no credential-shaped values in test fixtures", () => {
     ".yaml",
     ".yml",
   ]);
-  const offenders = files
-    .map(relRepo)
-    .filter((f) => CREDENTIAL_PATTERNS.some((p) => p.test(readFileSync(join(repoRoot(), f), "utf8"))));
+  const offenders = files.map(relRepo).filter((f) => credentialShaped(readFileSync(join(repoRoot(), f), "utf8")));
   assert.deepEqual(offenders, []);
 });
 
@@ -46,9 +50,34 @@ test("no credential-shaped values in the committed root manifests", () => {
   const offenders = ROOT_MANIFESTS.filter((f) => {
     const full = join(repoRoot(), f);
     if (!existsSync(full)) return false;
-    return CREDENTIAL_PATTERNS.some((p) => p.test(readFileSync(full, "utf8")));
+    return credentialShaped(readFileSync(full, "utf8"));
   });
   assert.deepEqual(offenders, []);
+});
+
+test("no credential-shaped values in the driving-document tree", () => {
+  // Invariant 9 says "in fixtures **or anywhere else**", and the two sweeps
+  // above reach neither the driving tree nor anything else outside them. A
+  // cookbook is exactly the kind of document that grows a pasted token in a
+  // worked example, so it gets the same sweep.
+  const offenders = drivingTextFiles()
+    .filter((f) => credentialShaped(readFileSync(f, "utf8")))
+    .map(relRepo);
+  assert.deepEqual(offenders, []);
+});
+
+test("the credential sweep bites on a driving document — the walk above is vacuous until the tree exists", () => {
+  // `walkFiles` returns [] for a missing directory, so the sweep above cannot
+  // fail today. This is the assertion that proves it would.
+  //
+  // The token is ASSEMBLED rather than written as one literal: invariant 9 says
+  // credentials belong nowhere, and a fence that carries a credential-shaped
+  // literal in its own source is the first thing a repository-wide sweep would
+  // report. Concatenation keeps the runtime string exact and the file clean.
+  const token = "sk-" + "ant-api03-EXAMPLE-NOT-A-REAL-KEY-000000";
+  const specimen = ["Export it before you start:", "```bash", `export ANTHROPIC_API_KEY=${token}`, "```"].join("\n");
+  assert.equal(credentialShaped(specimen), true, `a pasted token under ${DRIVING_REL} must be caught`);
+  assert.equal(credentialShaped("Run `awsf status TASK` and read the budget line."), false);
 });
 
 // ---------------------------------------------------------------------------

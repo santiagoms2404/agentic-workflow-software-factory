@@ -105,6 +105,7 @@ Conventions: test paths are relative to the repository root; `unit | contract | 
 - [ ] **The full stub-adapter journey suite runs end to end with zero quota spend.** — `journeys` executed with no provider CLIs on PATH (environment-asserted).
 - [ ] **Tests never leave the repository dirty.** — `git status --porcelain` empty after `npm test`.
 - [ ] **Every command documented in README and the plan's Validation section exists as a real package script / CLI command / just target.** — `unit: doc-reconciliation test (T28)`.
+- [x] **Invariants 4 and 9 reach every committed document, not only the two trees their fences started with.** The no-`shell:true` sweep walked `core/src` and `dashboard/src` while the invariant said *nowhere*, and the credential sweep walked `core/test/fixtures` plus the root manifests while the invariant said *anywhere else*; both now also walk the driving-document tree, and each carries a companion that feeds its matcher a synthetic offender in memory — so a fence over a directory that does not exist yet still proves it bites. — `unit: no-shell-true, no-credentials-in-fixtures meta-tests`.
 
 ## Platform & pilots (M8)
 
