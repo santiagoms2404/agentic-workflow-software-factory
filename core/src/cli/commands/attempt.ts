@@ -91,7 +91,8 @@ export type AttemptProjector = (
 export type AttemptAdvancementGuard = (sessionId: string, to: TaskState) => void;
 
 export function deriveAttemptStatus(records: readonly JournalRecord<AttemptEvent>[]): AttemptStatus | null {
-  return records.length === 0 ? null : records[records.length - 1]?.event.next ?? null;
+  const next = records.length === 0 ? null : records[records.length - 1]?.event.next ?? null;
+  return next === null ? null : withOwnerReentries(next);
 }
 
 export function isTerminalStatus(status: AttemptStatus): boolean {
@@ -116,8 +117,25 @@ type LegacyBudget = Omit<BudgetState, "ownerReentries" | "allowance"> & {
  * would have given: nothing had been charged, because the counter that could
  * charge it did not exist. Retained attempts stay readable and nothing on disk
  * is rewritten to make them so.
+ *
+ * EXPORTED because a persisted status is deserialized at more than one
+ * boundary, and the first version of this shim guarded only the first of them.
+ * `status.json` is read by `readAttempt`; a journal record's `event.next` is
+ * read by `deriveAttemptStatus` and, one record at a time, by `awsf db
+ * rebuild`. The projection path is the one that was missed, and the way it
+ * failed is worth stating: `AttemptStatus.budget.ownerReentries` is typed
+ * `number`, so a legacy record handed straight to the projector is a value
+ * lying about its own type — `node:sqlite` then refuses to bind `undefined`
+ * and the whole rebuild dies on the first pre-upgrade attempt it meets. That
+ * made the documented repair for a stale projection unusable on exactly the
+ * databases that needed it.
+ *
+ * So this is applied wherever untyped JSON becomes an `AttemptStatus`, and
+ * nowhere downstream of that: `toAttemptStatusProjection` is entitled to trust
+ * its parameter type, and a mapper that silently repaired its input would hide
+ * which caller was feeding it a stale shape.
  */
-function withOwnerReentries(status: AttemptStatus): AttemptStatus {
+export function withOwnerReentries(status: AttemptStatus): AttemptStatus {
   const budget = status.budget as LegacyBudget;
   if (budget.ownerReentries !== undefined && budget.allowance.ownerReentries !== undefined) {
     return status;

@@ -269,6 +269,81 @@ test("the bounded fixture window is RUNNING in WAL and rebuild preserves its fin
   }
 });
 
+/**
+ * Strips `ownerReentries` from every budget in an attempt's journal AND its
+ * status projection, which is byte-for-byte what an attempt written before the
+ * counter existed holds on disk.
+ *
+ * Rewriting a real attempt rather than hand-rolling a fixture is deliberate:
+ * the shape that broke the rebuild was a genuine pre-upgrade journal, and a
+ * fixture invented from this test's own assumption would prove only that the
+ * assumption is self-consistent.
+ */
+function stripOwnerReentries(attemptDir: string): void {
+  const drop = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(drop);
+    if (value === null || typeof value !== "object") return value;
+    const out: Record<string, unknown> = {};
+    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+      if (key === "ownerReentries") continue;
+      out[key] = drop(child);
+    }
+    return out;
+  };
+  const journalPath = join(attemptDir, "journal.jsonl");
+  writeFileSync(journalPath, readFileSync(journalPath, "utf8")
+    .split("\n")
+    .map((line) => line.trim() === "" ? line : JSON.stringify(drop(JSON.parse(line))))
+    .join("\n"));
+  const statusPath = join(attemptDir, "status.json");
+  writeFileSync(statusPath, JSON.stringify(drop(JSON.parse(readFileSync(statusPath, "utf8")))));
+}
+
+test("db rebuild replays a journal written before the owner re-entry counter existed", async () => {
+  // The regression this file was missing. `withOwnerReentries` shipped guarding
+  // `readAttempt` only, so `status.json` stayed readable while the projection
+  // path took `event.next` straight from the journal — where the field is
+  // absent, `node:sqlite` will not bind `undefined`, and the rebuild refused on
+  // the first legacy attempt it met. That made the documented repair for a
+  // stale projection impossible to run on a state root with any history.
+  const root = mkdtempSync(join(tmpdir(), "awsf-rebuild-legacy-"));
+  try {
+    const stateRoot = join(root, "state");
+    const created = await newCommand({
+      stateRoot, project: "project", taskId: "T22", repository: root,
+      request: "legacy rebuild", workflow: "simple-sdlc", tier: 1,
+      sessionId: () => "legacy-reentry-session", now: () => "2026-08-08T00:00:00.000Z",
+    });
+    const terminal = nextRevision(created.status, { lifecycleState: "CANCELLED" });
+    await persistAttempt(created.attemptDir, created.status.revision, { kind: "attempt.updated", next: terminal });
+    stripOwnerReentries(created.attemptDir);
+
+    // The precondition, asserted rather than assumed: without it a green
+    // rebuild below would prove nothing about legacy records.
+    const raw = JSON.parse(readFileSync(join(created.attemptDir, "journal.jsonl"), "utf8").split("\n")[0] ?? "{}") as {
+      event: { next: { budget: Record<string, unknown> } };
+    };
+    assert.equal("ownerReentries" in raw.event.next.budget, false, "the journal must be missing the field");
+
+    const report = await rebuildCommand(stateRoot);
+    assert.equal(report.ok, true, report.ok ? undefined : report.reason);
+    assert.equal(report.sessions, 1);
+
+    const rebuilt = openDatabase(join(stateRoot, "awsf.db"), { readonly: true });
+    try {
+      const session = getSession(rebuilt, "legacy-reentry-session");
+      assert.equal(session?.lifecycle_state, "CANCELLED", "every record replayed, not just the first");
+      // Zero is the ledger's own answer: nothing was charged, because the
+      // counter that could charge it did not exist. Never null, which would
+      // read as "unknown" to every consumer of this column.
+      assert.equal(session?.owner_reentries, 0);
+    } finally { rebuilt.close(); }
+
+    // The reader half of the same shim, on the same stripped bytes.
+    assert.equal((await readAttempt(created.attemptDir)).budget.ownerReentries, 0);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 test("db rebuild exposes the disposable projection guarantee as an operator command", async () => {
   const root = mkdtempSync(join(tmpdir(), "awsf-rebuild-command-"));
   try {

@@ -10,7 +10,7 @@ import { discoverAttempts, rebuildDatabase, type RebuildReport, type RebuildSour
 import { prepareDatabaseForReadonly } from "../../observability/sqlite.ts";
 import { journalFilePath } from "../../persistence/platform-paths.ts";
 import { toAttemptStatusProjection } from "./attempt-projection.ts";
-import { readAttempt, type AttemptEvent } from "./attempt.ts";
+import { readAttempt, withOwnerReentries, type AttemptEvent } from "./attempt.ts";
 
 async function exists(path: string): Promise<boolean> {
   try { await access(path); return true; } catch { return false; }
@@ -23,9 +23,14 @@ export async function rebuildCommand(stateRoot: string): Promise<RebuildReport> 
     const status = await readAttempt(dir);
     return {
       journalPath: journalFilePath(dir),
+      // `record.event` is parsed JSON wearing a cast, so this is a
+      // deserialization boundary and the legacy-budget upgrade belongs here.
+      // Without it a journal written before the owner re-entry counter existed
+      // reaches the projector with `ownerReentries` undefined, which cannot be
+      // bound, and the rebuild refuses — on the databases most in need of one.
       attemptStatus: (record) => toAttemptStatusProjection(
         stateRoot,
-        (record.event as AttemptEvent).next,
+        withOwnerReentries((record.event as AttemptEvent).next),
         record.event as AttemptEvent,
       ),
       session: {
