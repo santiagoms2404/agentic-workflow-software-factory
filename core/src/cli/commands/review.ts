@@ -78,7 +78,7 @@ import { HOST_AUTHOR } from "../../git/commit.ts";
 import type { AttemptEvidence, PhaseEvidenceRecord } from "../../observability/attempt-evidence.ts";
 import { PermissionBreach } from "../../policy/path-policy.ts";
 import { REDACTED_VALUE, scrubCredentialString, scrubCredentials } from "../../policy/redaction.ts";
-import { openPermissionSession, type PermissionSession, type SandboxProbe } from "../../policy/sandbox-broker.ts";
+import { openPermissionSession, type PermissionSession, type SandboxGrant, type SandboxProbe } from "../../policy/sandbox-broker.ts";
 import { transition, type EdgeId, type TaskState, type TransitionEvidence } from "../../state/task-machine.ts";
 import { ceilingFor } from "../../state/tiers.ts";
 import { compilePhase, type WorkflowRecipe } from "../../workflow/compiler.ts";
@@ -146,6 +146,35 @@ const CANDIDATE_GATE_IDS = Object.freeze(["candidate_hygiene", "commands_pass"])
 
 /** The sentence D5 requires the owner to read before the call is spent. */
 export const CANDIDATE_LOSS_WARNING = "if this review fails, the candidate is lost";
+
+/** Marks the appended block so a compiled prompt says which turn it was. */
+export const CONTRACT_RETRY_HEADING = "ENVELOPE CONTRACT CORRECTION";
+
+/**
+ * The correction handed to a COLD reviewer's second turn.
+ *
+ * It carries the schema violations and nothing else. It does not carry the
+ * owner's reason, the superseded verdict, or any hint about what this reviewer
+ * should conclude — the same rule that keeps `--reason` out of the first
+ * prompt applies with equal force here, because a reviewer told what to find is
+ * not a reviewer. Naming the paths that failed is a correction about FORM, and
+ * the instruction to leave the substance alone is what stops a retry becoming a
+ * second opinion the owner never bought.
+ */
+export function contractRetryPrompt(prompt: string, violations: readonly string[]): string {
+  const listed = violations.length === 0
+    ? "  - no envelope was extracted from the response"
+    : violations.map((violation) => `  - ${violation}`).join("\n");
+  return [
+    prompt,
+    "",
+    CONTRACT_RETRY_HEADING,
+    `Your previous response did not validate against ${REVIEW_OUTPUT_SCHEMA_ID} and was discarded unread.`,
+    listed,
+    "Return the SAME review, unchanged in substance — same verdict, same findings, same limitations —",
+    "as a single JSON envelope that validates. The schema permits no property beyond those it names.",
+  ].join("\n");
+}
 
 const MAX_REASON = 2_000;
 
@@ -891,11 +920,6 @@ async function runReviewCommand(options: ReviewCommandOptions): Promise<ReviewCo
   await mkdir(runtimeDir, { recursive: true, mode: 0o700 });
   const systemPromptPath = await infra.writeSystemPrompt(route.systemPrompt, runtimeDir);
   await validateMaterializedSystemPrompt(route.adapter.id, runtimeDir, systemPromptPath, route.systemPrompt);
-  const request: ModelRequest = {
-    model: route.agent.model, prompt: renderedPrompt, systemPromptPath, cwd: status.worktree!,
-    env: HOST.process.env, effort: route.agent.thinking,
-    profile: route.agent.tools.profile, tools: route.agent.tools.allow,
-  };
   const openPermission = (): PermissionSession => openPermissionSession({
     canonicalRepository: status.repository,
     worktree: status.worktree!,
@@ -907,11 +931,29 @@ async function runReviewCommand(options: ReviewCommandOptions): Promise<ReviewCo
     protectedPaths: options.config.policy.protected_paths,
     ...(infra.sandboxProbe === undefined ? {} : { sandboxProbe: infra.sandboxProbe }),
   });
+  /**
+   * The privacy preflight is a function of the PROMPT, because the contract
+   * retry's prompt is not attempt 1's.
+   *
+   * The launch wrapper refuses any descriptor that differs from the one
+   * validated before it, which is the guarantee that a sandbox grant cannot
+   * change between validation and GO. Reusing attempt 1's preflight for a
+   * retry that carries a different prompt would trip exactly that check, so
+   * each attempt gets its own preflight of its own descriptor and the
+   * guarantee is preserved rather than widened.
+   */
+  const preflightFor = (prompt: string): { request: ModelRequest; grant: SandboxGrant; spec: ProcessSpec } => {
+    const request: ModelRequest = {
+      model: route.agent.model, prompt, systemPromptPath, cwd: status.worktree!,
+      env: HOST.process.env, effort: route.agent.thinking,
+      profile: route.agent.tools.profile, tools: route.agent.tools.allow,
+    };
+    const grant = openPermission().sandbox(route.adapter.buildSpec(request));
+    return { request, grant, spec: preflightDescriptor(route, request, grant.spec) };
+  };
   // The actual final descriptor, including the materialized private path,
   // validated before L25 can become durable.
-  const preflightPermission = openPermission();
-  const preflightGrant = preflightPermission.sandbox(route.adapter.buildSpec(request));
-  const preflightSpec = preflightDescriptor(route, request, preflightGrant.spec);
+  const preflight = preflightFor(renderedPrompt);
 
   const budget = new CallBudget({
     taskId: status.taskId, tier: status.tier, allowance: status.budget.allowance,
@@ -954,6 +996,8 @@ async function runReviewCommand(options: ReviewCommandOptions): Promise<ReviewCo
   let spentAnyCall = false;
   let reviewAccepted = false;
   let transportRetries = 0;
+  let contractRetries = 0;
+  let contractViolations: readonly string[] = [];
   const activeTransport: { current: ProcessTransport | null } = { current: null };
   let transitionOrdinal = status.revision + 1;
   let writeQueue: Promise<void> = Promise.resolve();
@@ -991,10 +1035,16 @@ async function runReviewCommand(options: ReviewCommandOptions): Promise<ReviewCo
     }, { type: "phase", phase: next });
     return next;
   };
-  const persistGate = async (report: GateReport, candidateSha: string | null): Promise<void> => {
+  /**
+   * Round-scoped, because the projection writes gate rows `INSERT OR REPLACE`.
+   * A contract retry reusing round 0 would overwrite the very rows that record
+   * why the first turn failed — the same silent-overwrite hazard the
+   * generation-qualified `-re<N>` identities exist to prevent, one level down.
+   */
+  const persistGate = async (report: GateReport, candidateSha: string | null, round: number): Promise<void> => {
     const at = infra.now();
     await persist("attempt.updated", {}, {
-      type: "gate", id: `${phaseDb}:0:${report.gateId}`, phaseId: phaseDb, round: 0,
+      type: "gate", id: `${phaseDb}:${String(round)}:${report.gateId}`, phaseId: phaseDb, round,
       gateId: report.gateId, kind: gateKind(report.gateId), candidateSha,
       passed: report.passed, exitCode: null, checks: report.checks,
       violations: report.checks.filter((check) => !check.ok).map((check) => `${check.item}: ${check.note}`),
@@ -1034,12 +1084,13 @@ async function runReviewCommand(options: ReviewCommandOptions): Promise<ReviewCo
     await persistEnvelope(contextKey, `host-${contextKey}`, contextEnvelope, JSON.stringify(composed.context));
     contextPhase = await persistPhaseState(contextPhase, "SUCCEEDED");
 
-    for (const [name, text] of [["system", route.systemPrompt], ["user", renderedPrompt]] as const) {
-      await persist("attempt.updated", {}, {
-        type: "compiled-prompt", phaseId: phaseDb, name, text,
-        lineCount: text.split(/\r?\n/).length, at: infra.now(),
-      });
-    }
+    // The system prompt is fixed for the phase; the user prompt is recorded by
+    // each turn, because a contract retry sends a different one and a record
+    // showing only the first would misstate what the provider was asked.
+    await persist("attempt.updated", {}, {
+      type: "compiled-prompt", phaseId: phaseDb, name: "system", text: route.systemPrompt,
+      lineCount: route.systemPrompt.split(/\r?\n/).length, at: infra.now(),
+    });
     phase = await persistPhaseState(phase, "RUNNING");
 
     const broker = infra.createBroker({
@@ -1070,17 +1121,31 @@ async function runReviewCommand(options: ReviewCommandOptions): Promise<ReviewCo
       },
     } as BrokerOptions);
 
-    const runTurn = async (held: Reservation, attempt: 1 | 2): Promise<ReviewOutput> => {
+    const runTurn = async (
+      held: Reservation,
+      attempt: 1 | 2,
+      turnPrompt: string,
+      turnPreflight: { request: ModelRequest; grant: SandboxGrant; spec: ProcessSpec },
+    ): Promise<ReviewOutput> => {
+      // The envelope's own correction round, so a retry neither collides with
+      // the immutable file on disk nor is dropped by the projection's
+      // `INSERT OR IGNORE` on envelope id.
+      const round = attempt - 1;
+      const request = turnPreflight.request;
       const runId = `${status.sessionId}:${phaseKey}:run${attempt === 1 ? "" : `-${String(attempt)}`}`;
+      await persist("attempt.updated", {}, {
+        type: "compiled-prompt", phaseId: phaseDb, name: round === 0 ? "user" : `user-round-${String(round)}`,
+        text: turnPrompt, lineCount: turnPrompt.split(/\r?\n/).length, at: infra.now(),
+      });
       const permission = openPermission();
       const capturingBroker: TransportBroker = {
         startProcess: async (registration, spec, signal) => {
           const launchGrant = permission.sandbox(spec);
           const finalSpec = credentialSafeDescriptor(launchGrant.spec, "launch process descriptor");
           if (
-            JSON.stringify(finalSpec) !== JSON.stringify(preflightSpec) ||
-            launchGrant.badge !== preflightGrant.badge ||
-            launchGrant.mechanism !== preflightGrant.mechanism
+            JSON.stringify(finalSpec) !== JSON.stringify(turnPreflight.spec) ||
+            launchGrant.badge !== turnPreflight.grant.badge ||
+            launchGrant.mechanism !== turnPreflight.grant.mechanism
           ) {
             throw new ReviewRouteMismatch("launch descriptor or sandbox grant changed after its privacy preflight");
           }
@@ -1161,7 +1226,7 @@ async function runReviewCommand(options: ReviewCommandOptions): Promise<ReviewCo
       phase = await persistPhaseState(phase, "VALIDATING");
       const parsed = parseEnvelope(output, REVIEW_OUTPUT_SCHEMA_ID);
       const envelope = wrapEnvelope({
-        envelopeId: `${phaseDb}:0`, sessionId: status.sessionId, phaseId: phaseKey, correctionRound: 0,
+        envelopeId: `${phaseDb}:${String(round)}`, sessionId: status.sessionId, phaseId: phaseKey, correctionRound: round,
         agent: route.agent.name, schemaId: REVIEW_OUTPUT_SCHEMA_ID, createdAt: endedAt,
         rawOutputPath: join("raw", `${phaseKey}.txt`),
       }, parsed);
@@ -1181,7 +1246,10 @@ async function runReviewCommand(options: ReviewCommandOptions): Promise<ReviewCo
         reviewEvidencePresent({
           ...composed.expectation,
           context: composed.context,
-          compiledPrompt: renderedPrompt,
+          // The prompt THIS turn sent. A contract retry appends to it and the
+          // gate is a containment check, so the composed evidence still has to
+          // be provably inside whatever actually reached the provider.
+          compiledPrompt: turnPrompt,
           digest: sha256,
         }),
         ...(payload === null ? [] : [verdictConsistent(payload, {
@@ -1189,13 +1257,14 @@ async function runReviewCommand(options: ReviewCommandOptions): Promise<ReviewCo
           candidatePaths: candidatePathsBetween(status.worktree!, inspection.base, inspection.candidate),
         })]),
       ];
-      for (const report of structural) await persistGate(report, inspection.candidate);
+      for (const report of structural) await persistGate(report, inspection.candidate, round);
       // A real policy breach outranks every gate reading of it.
       permission.enforce();
       if (!parsed.valid) {
-        throw new ReplacementReviewMalformed(
-          parsed.violations.map((violation) => `${violation.path || "(root)"}: ${violation.message}`).join("; ") || "no envelope was extracted",
-        );
+        // Retained for the retry's contract correction, which names the paths
+        // that failed and nothing about what the review should say.
+        contractViolations = parsed.violations.map((violation) => `${violation.path || "(root)"}: ${violation.message}`);
+        throw new ReplacementReviewMalformed(contractViolations.join("; ") || "no envelope was extracted");
       }
       if (payload === null) throw new ReplacementReviewMalformed("the envelope validated but carried no payload");
       const failedEvidence = structural.find((report) => report.gateId === "review_evidence_present" && !report.passed);
@@ -1221,6 +1290,16 @@ async function runReviewCommand(options: ReviewCommandOptions): Promise<ReviewCo
         if (transport) transportRetries += 1;
         return transport;
       },
+      /**
+       * The reviewer route is `continuity: "none"` — `resolveReviewRoute`
+       * refuses anything else — so a second turn is a cold re-ask rather than
+       * an argued-with resume, and the held call is exactly what pays for it.
+       */
+      isContractFailure: (error) => {
+        const contract = error instanceof ReplacementReviewMalformed;
+        if (contract) contractRetries += 1;
+        return contract;
+      },
       execute: async (reviewProvider, attempt) => {
         if (reviewProvider !== route.model.provider) {
           throw new InvalidReviewInversion(`the routed review provider ${JSON.stringify(reviewProvider)} is not the preflighted reviewer route`);
@@ -1229,9 +1308,20 @@ async function runReviewCommand(options: ReviewCommandOptions): Promise<ReviewCo
           ? reservation
           : budget.reserve({ cost: 1, subject: `${recipe.id}:${phaseKey}:retry` });
         if (attempt !== 1) {
-          await persist("attempt.updated", { budget: budget.snapshot(), lastActivityAt: infra.now(), lastActivity: "held one call for the single permitted replacement-review retry" });
+          await persist("attempt.updated", {
+            budget: budget.snapshot(), lastActivityAt: infra.now(),
+            lastActivity: contractRetries > 0
+              ? `held one call for the single permitted replacement-review retry; the first turn did not validate against ${REVIEW_OUTPUT_SCHEMA_ID}`
+              : "held one call for the single permitted replacement-review retry",
+          });
         }
-        return runTurn(held, attempt);
+        // A transport retry never reached the parser, so it re-sends the
+        // original prompt; a contract retry appends the violations it must fix.
+        const turnPrompt = attempt === 1 || contractViolations.length === 0
+          ? renderedPrompt
+          : contractRetryPrompt(renderedPrompt, contractViolations);
+        const turnPreflight = turnPrompt === renderedPrompt ? preflight : preflightFor(turnPrompt);
+        return runTurn(held, attempt, turnPrompt, turnPreflight);
       },
     });
 
@@ -1334,7 +1424,12 @@ async function runReviewCommand(options: ReviewCommandOptions): Promise<ReviewCo
     } catch { /* the halt below is the mandatory durable settlement. */ }
 
     status = await readAttempt(options.attemptDir);
-    if (processRecord !== null && (!processSettled || (observedProcess as ObservedProcessOutcome | null)?.settled === false)) {
+    // Bound to a const rather than narrowed in place: `processRecord` is only
+    // ever assigned inside the broker's `register` callback, so outer-scope
+    // flow analysis cannot see that assignment and the guard alone is not a
+    // durable narrowing.
+    const registered = processRecord as BarrierRecord | null;
+    if (registered !== null && (!processSettled || (observedProcess as ObservedProcessOutcome | null)?.settled === false)) {
       const observed = observedProcess as ObservedProcessOutcome | null;
       const outcome: ObservedProcessOutcome = observed?.settled === true
         ? observed
@@ -1344,10 +1439,10 @@ async function runReviewCommand(options: ReviewCommandOptions): Promise<ReviewCo
       try {
         await recoverPersist("attempt.updated", {
           budget: budget.snapshot(), process: null, lastActivityAt: outcome.endedAt,
-          lastActivity: `registered process ${processRecord.runId} settled ${outcome.status}`,
+          lastActivity: `registered process ${registered.runId} settled ${outcome.status}`,
         }, {
           type: "process", phaseId: phaseDb, adapterId: route.adapterId, role: route.agent.name,
-          record: processRecord, status: outcome.status,
+          record: registered, status: outcome.status,
           registeredAt: releasedAt ?? outcome.endedAt, releasedAt, endedAt: outcome.endedAt,
           exitCode: outcome.exitCode, exitSignal: null,
         });

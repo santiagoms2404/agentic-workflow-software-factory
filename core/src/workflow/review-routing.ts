@@ -66,9 +66,33 @@ export interface MandatoryReviewOptions<T> {
   /** Called at most twice, always with the one provider selected by inversion. */
   execute(reviewProvider: string, attempt: 1 | 2): Promise<T>;
   isTransportFailure(error: unknown): boolean;
+  /**
+   * A failure to speak the envelope contract, which a COLD reviewer can recover
+   * from by simply being asked again.
+   *
+   * Optional, and absent by default, because it is only sound where the route
+   * has no continuity. A resumable reviewer re-asked mid-conversation is being
+   * argued with; a `continuity: "none"` reviewer holds no state, so a second
+   * turn is a fresh opinion rather than a revised one. `awsf review` supplies
+   * it and the production runner does not — there, a phase's own correction
+   * allowance owns this decision, and `authorizeCorrection` already refuses a
+   * route with no continuity.
+   *
+   * Exhausting it does NOT raise `MandatoryReviewUnavailable`: the review was
+   * available and answered twice. The second failure is rethrown as itself, so
+   * the caller classifies a malformed review as malformed.
+   */
+  isContractFailure?(error: unknown): boolean;
 }
 
-/** One fixed-route attempt plus one transport retry. There is no fallback callback. */
+/**
+ * One fixed-route attempt plus one retry. There is no fallback callback.
+ *
+ * The retry is spent on a transport fault, or — where the caller declares the
+ * route cold — on a response that did not validate. Both are the provider
+ * failing to deliver an answer rather than delivering one the host dislikes,
+ * and the single held call exists for exactly that.
+ */
 export async function runMandatoryReview<T>(options: MandatoryReviewOptions<T>): Promise<T> {
   const reviewProvider = oppositeProvider(options.workerProvider, options.providers);
   const attempts: string[] = [];
@@ -77,15 +101,19 @@ export async function runMandatoryReview<T>(options: MandatoryReviewOptions<T>):
     try {
       return await options.execute(reviewProvider, attempt);
     } catch (error) {
-      if (!options.isTransportFailure(error)) throw error;
-      if (attempt === 2) {
-        throw new MandatoryReviewUnavailable(
-          options.workerProvider,
-          reviewProvider,
-          attempts,
-          error,
-        );
+      if (options.isTransportFailure(error)) {
+        if (attempt === 2) {
+          throw new MandatoryReviewUnavailable(
+            options.workerProvider,
+            reviewProvider,
+            attempts,
+            error,
+          );
+        }
+        continue;
       }
+      if (attempt === 1 && options.isContractFailure?.(error) === true) continue;
+      throw error;
     }
   }
   throw new Error("unreachable mandatory review retry state");

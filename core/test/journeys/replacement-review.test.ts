@@ -39,6 +39,7 @@ import { main } from "../../src/cli/main.ts";
 import { newCommand } from "../../src/cli/commands/new.ts";
 import {
   CANDIDATE_LOSS_WARNING,
+  CONTRACT_RETRY_HEADING,
   ReviewCandidateMoved,
   ReviewHeadroomInsufficient,
   ReviewNotReplaceable,
@@ -290,6 +291,13 @@ type Behaviour =
   | "accept"
   | "concern"
   | "malformed"
+  /**
+   * The shape the retained pilot actually failed in: a review whose substance
+   * validated except for one redundant key per finding. The first turn emits
+   * `level` alongside `severity`; the retry, recognised by the contract
+   * correction in its own prompt, emits the same review without it.
+   */
+  | "malformed-then-valid"
   | "stale-sha"
   | "missing-artifact"
   | "writes"
@@ -348,7 +356,11 @@ class ScriptedReviewAdapter implements HarnessAdapter {
     if (this.#behaviour === "quota-exhausted") throw new AdapterError(this.id, "E_QUOTA_EXHAUSTED", "scripted exhaustion; resets later");
     if (this.#behaviour === "writes") writeFileSync(join(this.#worktree, "reviewer-wrote-this.txt"), "not allowed\n");
 
-    const findings: ReviewOutput["findings"] = this.#behaviour === "concern"
+    const contractRetry = this.#behaviour === "malformed-then-valid";
+    // The retry is recognised by the correction in its own prompt, which proves
+    // the block actually reached the provider rather than only being composed.
+    const correctedTurn = request.prompt.includes(CONTRACT_RETRY_HEADING);
+    const findings: ReviewOutput["findings"] = this.#behaviour === "concern" || contractRetry
       ? [{ id: "f1", severity: "high", file: SOURCE, line: 1, title: "concrete defect", detail: "the gates would not have caught this", evidence: "read from the supplied diff" }]
       : [];
     const payload: ReviewOutput = {
@@ -362,7 +374,10 @@ class ScriptedReviewAdapter implements HarnessAdapter {
     const runId = registration.runId;
     yield { kind: "run.started", seq: 1, runId, hostAt: AT, providerAt: null, adapter: this.id, requestedModel: request.model };
     yield { kind: "model.resolved", seq: 2, runId, hostAt: AT, providerAt: null, adapter: this.id, provider: "anthropic", requestedModel: request.model, resolvedModel: `${request.model}-resolved`, provenance: "route-attributed" };
-    yield { kind: "text.delta", seq: 3, runId, hostAt: AT, providerAt: null, text: this.#behaviour === "malformed" ? "not-json at all" : JSON.stringify(payload) };
+    const serialized = contractRetry && !correctedTurn
+      ? JSON.stringify({ ...payload, findings: payload.findings.map((finding) => ({ ...finding, level: finding.severity })) })
+      : JSON.stringify(payload);
+    yield { kind: "text.delta", seq: 3, runId, hostAt: AT, providerAt: null, text: this.#behaviour === "malformed" ? "not-json at all" : serialized };
     yield { kind: "usage", seq: 4, runId, hostAt: AT, providerAt: null, usage: { inputTokens: 40, outputTokens: 10, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0, reasoningRelation: "included-in-output" } };
     yield { kind: "run.completed", seq: 5, runId, hostAt: AT, providerAt: null, exitCode: 0 };
     // After the answer and after the gates, so only the third revalidation can
@@ -644,17 +659,71 @@ test("a transport failure is retried once on the same route and then blocks with
   } finally { await cleanup(fixture); }
 });
 
-test("a malformed replacement blocks on L17 with review-malformed", async () => {
+test("a malformed replacement spends the held retry, and blocks on L17 only when the retry is malformed too", async () => {
   const fixture = await world();
+  const launches: string[] = [];
   try {
-    const result = await run(fixture, "malformed");
+    const result = await run(fixture, "malformed", { launches });
     assert.equal(result.status.lifecycleState, "BLOCKED");
     assert.equal(result.status.blocker?.code, "review-malformed");
-    assert.equal(result.status.budget.callsSpent, 3);
+    // The retry is spent rather than held back: a cold reviewer that failed to
+    // speak the contract is exactly what the second call was reserved for, and
+    // blocking with it unspent forfeited the candidate for nothing.
+    assert.deepEqual(launches, ["claude", "claude"], "one fixed route, one contract retry, never the worker's provider");
+    assert.equal(result.status.budget.callsSpent, 4, "both turns genuinely launched, so both are billed");
+    assert.equal(result.status.budget.callsReserved, 0);
+    // A transport exhaustion says the review was unavailable; this one answered
+    // twice and neither answer validated, so it stays classified as malformed.
+    assert.doesNotMatch(result.status.blocker?.detail ?? "", /no substitute was attempted/);
     const db = openDatabase(join(fixture.stateRoot, "awsf.db"), { readonly: true });
     try {
-      const envelope = gatesForSession(db, result.status.sessionId).find((gate) => gate.phase_id.endsWith(":reviewer-re1") && gate.gate_id === "envelope_valid");
-      assert.equal(envelope?.passed, 0, "the failure is on the record, not only in the blocker");
+      const rows = gatesForSession(db, result.status.sessionId)
+        .filter((gate) => gate.phase_id.endsWith(":reviewer-re1") && gate.gate_id === "envelope_valid");
+      assert.equal(rows.length, 2, "both turns are on the record; the retry does not overwrite the first");
+      assert.deepEqual(rows.map((gate) => gate.correction_round).sort(), [0, 1], "gate rows are round-scoped");
+      for (const row of rows) assert.equal(row.passed, 0, "the failure is on the record, not only in the blocker");
+    } finally { db.close(); }
+  } finally { await cleanup(fixture); }
+});
+
+test("a replacement that only broke the envelope contract is recovered by the held retry", async () => {
+  const fixture = await world();
+  const launches: string[] = [];
+  try {
+    const before = await readAttempt(fixture.attemptDir);
+    const result = await run(fixture, "malformed-then-valid", { launches });
+    const status = result.status;
+    assert.equal(status.lifecycleState, "AWAITING_OWNER", status.blocker?.detail);
+    assert.equal(status.blocker, null);
+    assert.deepEqual(launches, ["claude", "claude"], "the retry is the same cold route, never a substitute");
+    assert.equal(status.budget.callsSpent, before.budget.callsSpent + 2, "the review and its one permitted retry");
+    assert.equal(status.budget.callsReserved, 0);
+    assert.equal(status.candidateSha, fixture.candidate, "nothing was rebuilt; this is the same tree throughout");
+    assert.equal(status.requiredReviewPresent, true);
+    assert.equal(status.journeyApproved, false, "a review that changed no tree never touches the attestation");
+
+    // Both turns are retained and distinguishable. The first is the evidence of
+    // why a retry happened at all, and an identity collision would have
+    // destroyed it silently — the projection writes gate rows
+    // `INSERT OR REPLACE` and envelopes `INSERT OR IGNORE`.
+    assert.ok(existsSync(join(fixture.attemptDir, "envelopes", "reviewer-re1-0.json")), "the rejected turn is retained");
+    assert.ok(existsSync(join(fixture.attemptDir, "envelopes", "reviewer-re1-1.json")), "the accepted turn is its own round");
+    const rejected = JSON.parse(readFileSync(join(fixture.attemptDir, "envelopes", "reviewer-re1-0.json"), "utf8")) as StoredEnvelope<EnvelopeBase>;
+    const accepted = JSON.parse(readFileSync(join(fixture.attemptDir, "envelopes", "reviewer-re1-1.json"), "utf8")) as StoredEnvelope<EnvelopeBase>;
+    assert.equal(rejected.valid, false);
+    assert.equal(accepted.valid, true);
+    assert.match(JSON.stringify(rejected.violations), /level/, "the redundant key is what the first turn was rejected for");
+
+    const db = openDatabase(join(fixture.stateRoot, "awsf.db"), { readonly: true });
+    try {
+      const envelopeGates = gatesForSession(db, status.sessionId)
+        .filter((gate) => gate.phase_id.endsWith(":reviewer-re1") && gate.gate_id === "envelope_valid");
+      assert.deepEqual(envelopeGates.map((gate) => [gate.correction_round, gate.passed]).sort(), [[0, 0], [1, 1]]);
+      const evidence = gatesForSession(db, status.sessionId)
+        .filter((gate) => gate.phase_id.endsWith(":reviewer-re1") && gate.gate_id === "review_evidence_present");
+      assert.ok(evidence.length > 0 && evidence.every((gate) => gate.passed === 1),
+        "appending the correction does not break the evidence the reviewer had to read");
+      assert.equal(getSession(db, status.sessionId)?.review_verdict, "concern");
     } finally { db.close(); }
   } finally { await cleanup(fixture); }
 });
