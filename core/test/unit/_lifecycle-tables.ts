@@ -48,7 +48,8 @@ export type Actor = (typeof ACTORS)[number];
 export type EdgeId =
   | "L1" | "L2" | "L3" | "L4" | "L5" | "L6" | "L7" | "L8"
   | "L9" | "L10" | "L11" | "L12" | "L13" | "L14" | "L15" | "L16"
-  | "L17" | "L18" | "L19" | "L20" | "L21" | "L22" | "L23" | "L24";
+  | "L17" | "L18" | "L19" | "L20" | "L21" | "L22" | "L23" | "L24"
+  | "L25";
 
 export interface LegalEdge {
   readonly id: EdgeId;
@@ -63,7 +64,7 @@ export interface LegalEdge {
 }
 
 /**
- * The twenty-four legal transitions, in L-order, exactly as the plan's L-table
+ * The twenty-five legal transitions, in L-order, exactly as the plan's L-table
  * lists them. This array IS the legal set; no test may compute it from the
  * implementation.
  */
@@ -92,16 +93,17 @@ export const LEGAL_EDGES: readonly LegalEdge[] = [
   { id: "L22", from: "AWAITING_OWNER", to: "CANCELLED",      actors: ["human"],          spawnSite: false, interactive: true  },
   { id: "L23", from: "LANDING",        to: "LANDED",         actors: ["host"],           spawnSite: false, interactive: false },
   { id: "L24", from: "LANDING",        to: "BLOCKED",        actors: ["host"],           spawnSite: false, interactive: false },
+  { id: "L25", from: "AWAITING_OWNER", to: "REVIEWING",      actors: ["owner", "human"], spawnSite: true,  interactive: true  },
 ];
 
-/** "L4, L10, L11, L16, L19 — precisely the edges entering RUNNING or REVIEWING." */
-export const SPAWN_SITE_EDGES = ["L4", "L10", "L11", "L16", "L19"] as const;
+/** "L4, L10, L11, L16, L19, L25 — precisely the edges entering RUNNING or REVIEWING." */
+export const SPAWN_SITE_EDGES = ["L4", "L10", "L11", "L16", "L19", "L25"] as const;
 
-/** The three edges that consume a correction allowance (escalation-ladder rungs 4 and 5). */
-export const CORRECTION_EDGES = ["L10", "L16", "L19"] as const;
+/** The four edges that consume a correction allowance (escalation-ladder rungs 4 and 5). */
+export const CORRECTION_EDGES = ["L10", "L16", "L19", "L25"] as const;
 
 // ---------------------------------------------------------------------------
-// The seventy-six illegal ordered pairs, by class.
+// The seventy-five illegal ordered pairs, by class.
 // ---------------------------------------------------------------------------
 
 export type Pair = readonly [TaskState, TaskState];
@@ -117,13 +119,17 @@ export type Pair = readonly [TaskState, TaskState];
  * LANDED → LANDED and CANCELLED → CANCELLED, making the counts 30 / 7.
  *
  * The counts win, and step 2 is read as narrowed to `from` terminal AND
- * `from !== to`. Reasons: the 27 / 10 / 6 / 33 split is stated with explicit
+ * `from !== to`. Reasons: the 27 / 10 / 6 / 32 split is stated with explicit
  * arithmetic and repeated in four places (class table, T4 checklist, the
- * acceptance checklist, the build prompt) and 27 + 10 + 6 + 33 = 76 only
+ * acceptance checklist, the build prompt) and 27 + 10 + 6 + 32 = 75 only
  * under this reading; whereas the reasoning column justifies steps 2 and 3
  * each against step 5 ("illegal pair") and never against one another — the
  * overlap was not considered when the order was written. `rejection-order.test.ts`
  * pins this reading explicitly instead of leaving it implicit.
+ *
+ * The last class read 33 until L25 (`AWAITING_OWNER → REVIEWING`) became
+ * legal. That is a single-cell amendment: only the "everything else" class
+ * moved, and the first three classes' arithmetic is untouched.
  */
 export const TERMINAL_ATTEMPT_PAIRS: readonly Pair[] = [
   ["LANDED", "DRAFT"], ["LANDED", "PREPARED"], ["LANDED", "RUNNING"],
@@ -158,7 +164,7 @@ export const HUMAN_GATE_BYPASS_PAIRS: readonly Pair[] = [
   ["AWAITING_OWNER", "LANDED"],
 ];
 
-/** 33 = everything else: skip-aheads, backward jumps not on the correction list, and LANDING's dead ends. */
+/** 32 = everything else: skip-aheads, backward jumps not on the correction list, and LANDING's dead ends. */
 export const ILLEGAL_TRANSITION_PAIRS: readonly Pair[] = [
   // DRAFT — 5 skip-aheads.
   ["DRAFT", "RUNNING"], ["DRAFT", "GATING"], ["DRAFT", "REVIEWING"],
@@ -180,9 +186,11 @@ export const ILLEGAL_TRANSITION_PAIRS: readonly Pair[] = [
   ["REVIEWING", "DRAFT"], ["REVIEWING", "PREPARED"], ["REVIEWING", "GATING"],
   ["REVIEWING", "LANDING"],
 
-  // AWAITING_OWNER — 4 backward.
+  // AWAITING_OWNER — 3 backward. AWAITING_OWNER → REVIEWING left this class
+  // when L25 was added: the owner may re-buy a review of an unchanged
+  // candidate whose recorded review carried no evidence.
   ["AWAITING_OWNER", "DRAFT"], ["AWAITING_OWNER", "PREPARED"],
-  ["AWAITING_OWNER", "GATING"], ["AWAITING_OWNER", "REVIEWING"],
+  ["AWAITING_OWNER", "GATING"],
 
   // LANDING — 6 backward plus LANDING → CANCELLED: the cancel note lists
   // L3/L6/L9/L14/L18/L22 only, so a landing in progress is not cancellable.
@@ -292,8 +300,12 @@ export const EDGE_BLOCKER_CODES = {
   L8: ["crash", "silence", "quota-exhausted", "phase-abort", "permission-breach", "budget-exhausted"],
   // L13 — "gates failed, correction budget exhausted".
   L13: ["correction-budget-exhausted"],
-  // L17 — "mandatory review unavailable after one transport retry".
-  L17: ["review-unavailable"],
+  // L17 — the three review failures the host may declare terminal without
+  // interpreting a verdict: "mandatory review unavailable after one transport
+  // retry", an envelope that failed schema validation, and a
+  // `review_evidence_present` row that failed. A `verdict_consistent` failure
+  // is deliberately not among them.
+  L17: ["review-unavailable", "review-malformed", "review-evidence-invalid"],
   // L21 — the plan names these four and only these four.
   L21: ["record-corrupt", "unknown-state", "ambiguous-pid", "unreadable-worktree"],
   // L24 — "non-FF, dirty canonical tree, Git failure, ambiguous crash recovery".
@@ -312,8 +324,20 @@ export const BLOCKER_CODES: readonly string[] = [
 /** T0 = 1, T1 = 3, T2 = 5. `awsf.config.yaml` calls these `risk.call_ceiling`. */
 export const CALL_CEILINGS: Readonly<Record<Tier, number>> = { 0: 1, 1: 3, 2: 5 };
 
-/** `risk.correction_allowance: {auto: 1, owner: 1}`. */
-export const CORRECTION_ALLOWANCE = { auto: 1, owner: 1 } as const;
+/**
+ * `risk.correction_allowance: {auto: 1, owner: 1}`, widened to the three
+ * counters the ledger keeps. `auto` and `owner` are per PHASE; `ownerReentries`
+ * is per ATTEMPT and is coupled to the configured owner allowance by D3 — one
+ * owner-authorized re-entry, of either kind, per attempt.
+ */
+export const CORRECTION_ALLOWANCE = { auto: 1, owner: 1, ownerReentries: 1 } as const;
+
+/**
+ * L25's eligibility vocabulary — two members, both determined by the host from
+ * the recorded review phase's gate rows. A review carrying a PASSING
+ * `review_evidence_present` row is not replaceable at all.
+ */
+export const REVIEW_EVIDENCE_DEFECTS = ["evidence-gate-absent", "evidence-gate-failed"] as const;
 
 /**
  * The actor → tranche map. `host` draws the automatic tranche; `owner` and

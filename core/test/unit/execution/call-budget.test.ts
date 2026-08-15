@@ -21,7 +21,7 @@ import {
   ReservationOutstanding,
   admitWorkflow,
 } from "../../../src/execution/call-budget.ts";
-import { CallCeilingExceeded } from "../../../src/state/errors.ts";
+import { CallCeilingExceeded, CorrectionAllowanceExhausted } from "../../../src/state/errors.ts";
 import type { PhaseSession } from "../../../src/state/phase-machine.ts";
 import type { Tier } from "../../../src/state/tiers.ts";
 
@@ -50,6 +50,9 @@ const GATING_TO_RUNNING = {
   evidence: { candidateSha: CANDIDATE, gatesPass: false },
   spawn: { cost: 1 },
 } as const;
+
+/** The same edge, taken by the owner — which is an owner RE-ENTRY, not a phase correction. */
+const OWNER_GATING_TO_RUNNING = { ...GATING_TO_RUNNING, actor: "owner" } as const;
 
 /**
  * `assert.throws` proves the class and discards the instance, but half the
@@ -90,7 +93,8 @@ test("a fresh ledger has committed nothing and offers the whole ceiling", () => 
       callsReserved: 0,
       correctionsAuto: 0,
       correctionsOwner: 0,
-      allowance: { auto: 1, owner: 1 },
+      ownerReentries: 0,
+      allowance: { auto: 1, owner: 1, ownerReentries: 1 },
     });
   }
 });
@@ -427,6 +431,50 @@ test("a new phase refreshes the correction allowance and leaves the call ledger 
   budget.beginPhase();
   assert.equal(budget.snapshot().correctionsAuto, 0, "the next phase gets its own allowance");
   assert.equal(budget.callsSpent, 1, "and not its own ceiling");
+});
+
+test("an owner re-entry survives beginPhase — it is per attempt, not per phase", () => {
+  // The dormant defect this split repairs. A command that charges the owner
+  // tranche on its authorizing edge and then enters a phase would have had
+  // that charge silently erased from every later snapshot, and the second
+  // re-entry would have been free.
+  const budget = ledger(2);
+  const { result } = budget.authorize(OWNER_GATING_TO_RUNNING);
+  assert.equal(result.spends.correctionTranche, "owner");
+  assert.equal(budget.snapshot().ownerReentries, 1);
+  assert.equal(budget.snapshot().correctionsOwner, 0, "the per-phase counter is not what a task edge charges");
+
+  budget.beginPhase();
+  assert.equal(budget.snapshot().ownerReentries, 1, "a new phase does not refund an owner re-entry");
+  refusal(() => budget.authorize(OWNER_GATING_TO_RUNNING), CorrectionAllowanceExhausted);
+});
+
+test("an intra-phase correction still refreshes per phase, exactly as before", () => {
+  // The other half of the split: nothing about rungs 2–3 changed. Suppressing
+  // the reset would have converted every per-phase allowance into a
+  // once-per-attempt one across the whole workflow.
+  const budget = ledger(2);
+  budget.spendOnGo(budget.reserve({ cost: 1, edge: "L4" }).id);
+  budget.recordPhaseTransition({
+    phase: "build", from: "VALIDATING", to: "CORRECTING", session: SESSION,
+    cause: "gate-violation", actor: "owner",
+  });
+  assert.equal(budget.snapshot().correctionsOwner, 1);
+  assert.equal(budget.snapshot().ownerReentries, 0, "a phase cannot spend a lifecycle allowance");
+
+  budget.beginPhase();
+  assert.equal(budget.snapshot().correctionsOwner, 0, "the next phase gets its own owner correction");
+});
+
+test("a new attempt is the one thing that buys the owner another re-entry", () => {
+  const budget = ledger(2);
+  budget.authorize(OWNER_GATING_TO_RUNNING);
+  assert.equal(budget.snapshot().ownerReentries, 1);
+  budget.releaseOnRegistrationFailure(budget.outstanding()[0]!.id);
+
+  budget.beginAttempt(2);
+  assert.equal(budget.snapshot().ownerReentries, 0);
+  assert.equal(budget.snapshot().attempt, 2);
 });
 
 test("spend carries across attempts of the same task", () => {

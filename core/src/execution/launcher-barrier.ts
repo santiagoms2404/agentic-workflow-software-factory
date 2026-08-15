@@ -306,7 +306,7 @@ export type BarrierStep = (typeof BARRIER_STEPS)[number];
 export interface BarrierRecord {
   identity: ProcessIdentity;
   runId: string;
-  /** Task-edge launches carry L4/L10/L11/L16/L19; agent-phase launches carry null. */
+  /** Task-edge launches carry L4/L10/L11/L16/L19/L25; agent-phase launches carry null. */
   edge: EdgeId | null;
   /** Present only for an intra-workflow agent-phase authorization. */
   phase?: {

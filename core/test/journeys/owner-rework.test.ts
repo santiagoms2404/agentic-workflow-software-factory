@@ -454,7 +454,7 @@ test("exhausted owner allowance and exhausted call ceiling are refused before pr
     const adapter = new AvailableAdapter();
     try {
       await update(fixture, { budget: scenario === "allowance"
-        ? { ...fixture.status.budget, correctionsOwner: fixture.status.budget.allowance.owner }
+        ? { ...fixture.status.budget, ownerReentries: fixture.status.budget.allowance.ownerReentries }
         : { ...fixture.status.budget, callsSpent: 3 } });
       const action = reworkCommand({
         attemptDir: fixture.attemptDir, stateRoot: fixture.stateRoot, defect: DEFECT, terminal: terminal(true),
@@ -608,7 +608,7 @@ test("every post-L19 setup boundary settles the reservation and reaches a legal 
       assert.equal(result.status.lifecycleState, "BLOCKED", scenario.name);
       assert.equal(result.status.budget.callsSpent, 1, scenario.name);
       assert.equal(result.status.budget.callsReserved, 0, scenario.name);
-      assert.equal(result.status.budget.correctionsOwner, 1, scenario.name);
+      assert.equal(result.status.budget.ownerReentries, 1, scenario.name);
       assert.equal(result.status.process, null, scenario.name);
       assert.equal(adapter.launches, 0, scenario.name);
       assert.equal(registrations, 0, scenario.name);
@@ -731,7 +731,7 @@ test("process-backed L19 repairs candidate A, commits B on top, projects fresh e
     assert.equal(sawLiveSandbox, true, "L19 broker grant must project before provider completion");
     assert.equal(status.budget.callsSpent, 2);
     assert.equal(status.budget.callsReserved, 0);
-    assert.equal(status.budget.correctionsOwner, 1);
+    assert.equal(status.budget.ownerReentries, 1);
     assert.match(status.nextAction, /awsf rework .*<concrete defect>/);
     assert.notEqual(status.candidateSha, fixture.candidateA);
     assert.equal(git(status.worktree!, "rev-parse", `${status.candidateSha}^`), fixture.candidateA);

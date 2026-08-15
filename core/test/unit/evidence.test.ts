@@ -21,6 +21,7 @@ import assert from "node:assert/strict";
 import {
   BLOCKER_CODES,
   EDGE_BLOCKER_CODES,
+  REVIEW_EVIDENCE_DEFECTS,
   edge,
   type EdgeId,
 } from "./_lifecycle-tables.ts";
@@ -37,6 +38,7 @@ import {
   withEvidence,
   withoutEvidence,
   withReason,
+  type GateEvidence,
   type LandingEvidence,
   type ReviewEvidence,
   type TransitionEvidence,
@@ -215,11 +217,18 @@ test("L11 needs passing gates AND tier 2; L12 needs passing gates AND tier below
 // ---------------------------------------------------------------------------
 
 test("L13 requires failed gates and a genuinely exhausted correction budget", async () => {
+  // Three counters, three ways out, and L13 must mean all of them: blocking a
+  // task whose owner could still correct in-phase, or still re-enter, strands
+  // work that had a remedy nobody was offered.
+  const spent = { correctionsAuto: 1, correctionsOwner: 1, ownerReentries: 1, callsSpent: 3 };
   await expectAllInsufficient([
     ["gates passed", withEvidence("L13", { gatesPass: true })],
-    ["the owner tranche is still available", { ...validInput("L13"), budget: budget({ correctionsAuto: 1, correctionsOwner: 0, callsSpent: 3 }) }],
-    ["neither tranche is spent", { ...validInput("L13"), budget: budget({ callsSpent: 3 }) }],
+    ["the automatic tranche is still available", { ...validInput("L13"), budget: budget({ ...spent, correctionsAuto: 0 }) }],
+    ["the per-phase owner tranche is still available", { ...validInput("L13"), budget: budget({ ...spent, correctionsOwner: 0 }) }],
+    ["the owner re-entry allowance is still available", { ...validInput("L13"), budget: budget({ ...spent, ownerReentries: 0 }) }],
+    ["nothing is spent at all", { ...validInput("L13"), budget: budget({ callsSpent: 3 }) }],
   ]);
+  await expectAccepted({ ...validInput("L13"), budget: budget(spent) });
 });
 
 // ---------------------------------------------------------------------------
@@ -291,6 +300,60 @@ test("L17 requires the mandatory review to have been retried once and still be u
     ["retries not attested", withoutEvidence("L17", "reviewTransportRetries")],
   ]);
   await expectAccepted(withEvidence("L17", { reviewTransportRetries: 1 }));
+});
+
+test("L17 also blocks on the two review failures the host can determine without judging content", async () => {
+  // The dead end this repairs predates L25: a malformed reviewer envelope
+  // satisfies neither L15 (no valid verdict) nor L16 (no finding of severity
+  // >= medium exists to accept) nor the old L17 (a review that ANSWERED was
+  // never a transport failure), so cancel was the only edge and a parse error
+  // cost the whole candidate.
+  const noRetry = (patch: Partial<TransitionEvidence>): TransitionInput => {
+    const base = withoutEvidence("L17", "reviewTransportRetries");
+    return { ...base, evidence: { ...base.evidence, ...patch } };
+  };
+  for (const code of ["review-malformed", "review-evidence-invalid"] as const) {
+    const accepted = await expectAccepted({
+      ...noRetry({ reviewFailure: code }),
+      reason: { source: "process", code },
+    });
+    assert.equal(accepted.edge, "L17");
+    assert.equal(accepted.to, "BLOCKED");
+  }
+});
+
+test("L17 refuses a verdict_consistent failure — an inconsistent verdict is content", async () => {
+  // Deliberately NOT a host-determinable failure. The host does not decide what
+  // a bad review means, so the attempt stays in REVIEWING with the failed gate
+  // recorded and the owner's own edges are the exits.
+  await expectAllInsufficient([
+    [
+      "an inconsistent verdict is not a blocker",
+      {
+        ...withoutEvidence("L17", "reviewTransportRetries"),
+        reason: { source: "process", code: "review-malformed" },
+        evidence: { reviewFailure: "verdict-inconsistent" },
+      },
+    ],
+    [
+      "an off-vocabulary failure code proves nothing",
+      {
+        ...withoutEvidence("L17", "reviewTransportRetries"),
+        reason: { source: "process", code: "review-unavailable" },
+        evidence: { reviewFailure: "reviewer-was-unconvincing" },
+      },
+    ],
+  ]);
+});
+
+test("L17's blocker vocabulary is exactly three codes", async () => {
+  assert.deepEqual(
+    [...EDGE_BLOCKER_CODES.L17],
+    ["review-unavailable", "review-malformed", "review-evidence-invalid"],
+  );
+  await expectAllInsufficient([
+    ["verdict-inconsistent is not in the vocabulary", withReason("L17", { code: "verdict-inconsistent" })],
+  ]);
 });
 
 // ---------------------------------------------------------------------------
@@ -418,6 +481,106 @@ test("L23 requires canonical HEAD to equal the exact candidate on a clean checko
   ]);
   const result = await expectAccepted(validInput("L23"));
   assert.equal(result.to, "LANDED");
+});
+
+// ---------------------------------------------------------------------------
+// L25 — the owner re-buys a review of an UNCHANGED candidate.
+// ---------------------------------------------------------------------------
+
+test("L25 accepts only with all eleven checks satisfied", async () => {
+  const result = await expectAccepted(validInput("L25"));
+  assert.equal(result.edge, "L25");
+  assert.equal(result.to, "REVIEWING");
+  assert.equal(result.spawnSite, true);
+  assert.equal(result.spends.calls, 1);
+  assert.equal(result.spends.correctionTranche, "owner");
+});
+
+test("L25 requires an owner's own reason, recorded, at T2, on a green 40-hex candidate", async () => {
+  await expectAllInsufficient([
+    ["a gate result is not an owner", withReason("L25", { source: "gate" })],
+    ["no reason was recorded", withoutEvidence("L25", "reviewInvalidationReason")],
+    ["a blank reason is not a record", withEvidence("L25", { reviewInvalidationReason: "" })],
+    ["whitespace is not a record", withEvidence("L25", { reviewInvalidationReason: "   " })],
+    ["T0 has no review to replace", { ...validInput("L25"), tier: 0 }],
+    ["T1 has no review to replace", { ...validInput("L25"), tier: 1 }],
+    ["a red candidate is never re-reviewed", withEvidence("L25", { gatesPass: false })],
+    ["no gate result at all", withoutEvidence("L25", "gatesPass")],
+    ["candidate absent", withoutEvidence("L25", "candidateSha")],
+    ...MALFORMED_SHAS.map((sha) => [`candidate ${JSON.stringify(sha)}`, withEvidence("L25", { candidateSha: sha })] as const),
+  ]);
+});
+
+test("L25 checks the green itself, not the boolean summarising it", async () => {
+  // `gatesPass: true` is one flag an earlier transition wrote. The edge that
+  // PRESERVES a green must read the rows.
+  const rows = (patch: Partial<GateEvidence>): TransitionInput =>
+    withEvidence("L25", {
+      gateEvidence: { ...validInput("L25").evidence!.gateEvidence!, ...patch },
+    });
+  await expectAllInsufficient([
+    ["no gate rows attested at all", withoutEvidence("L25", "gateEvidence")],
+    ["gatesPass true with no configured gate", rows({ configured: [], rows: [] })],
+    ["a configured gate with no recorded row", rows({ configured: ["tests", "typecheck", "lint"] })],
+    [
+      "a recorded row that did not pass",
+      rows({ rows: [{ gateId: "tests", passed: false, candidateSha: CANDIDATE_SHA }] }),
+    ],
+    [
+      "a row measured against a superseded candidate",
+      rows({ rows: [{ gateId: "tests", passed: true, candidateSha: BASE_SHA }] }),
+    ],
+    [
+      "a row whose SHA is not an object id",
+      rows({ rows: [{ gateId: "tests", passed: true, candidateSha: "HEAD" }] }),
+    ],
+  ]);
+});
+
+test("L25 may only supersede a review that exists and named this tree", async () => {
+  await expectAllInsufficient([
+    ["no review to supersede", withoutEvidence("L25", "review")],
+    ["the superseded review was not invalidated", withEvidence("L25", { reviewInvalidated: false })],
+    ["invalidation not attested", withoutEvidence("L25", "reviewInvalidated")],
+    ["a review of a different tree", withReview("L25", { reviewedSha: BASE_SHA })],
+    ...MALFORMED_SHAS.map((sha) => [`reviewed SHA ${JSON.stringify(sha)}`, withReview("L25", { reviewedSha: sha })] as const),
+  ]);
+});
+
+test("L25's eligibility is a two-member host enum — a disliked verdict buys nothing", async () => {
+  // §5.3.1, the anti-shopping rule. A fully evidenced review is not replaceable
+  // at all; if disliking a verdict could buy a cold second opinion, the
+  // mandatory opposite-provider review would be a one-shot lottery, and
+  // "you may only do it once" is no answer, because once is enough.
+  assert.deepEqual([...REVIEW_EVIDENCE_DEFECTS], ["evidence-gate-absent", "evidence-gate-failed"]);
+  for (const defect of REVIEW_EVIDENCE_DEFECTS) {
+    await expectAccepted(withEvidence("L25", { reviewEvidenceDefect: defect }));
+  }
+  await expectAllInsufficient([
+    ["no defect named", withoutEvidence("L25", "reviewEvidenceDefect")],
+    ["a passing evidence gate is not a defect", withEvidence("L25", { reviewEvidenceDefect: "evidence-gate-present" })],
+    ["the owner disagrees with the verdict", withEvidence("L25", { reviewEvidenceDefect: "verdict-unconvincing" })],
+    ["an empty defect", withEvidence("L25", { reviewEvidenceDefect: "" })],
+    ["a near-miss of an allowlisted code", withEvidence("L25", { reviewEvidenceDefect: "Evidence-Gate-Absent" })],
+  ]);
+});
+
+test("L25 requires the host's observation that the candidate has not moved", async () => {
+  await expectAllInsufficient([
+    ["the tree moved or was dirty", withEvidence("L25", { candidateUnchanged: false })],
+    ["nobody looked", withoutEvidence("L25", "candidateUnchanged")],
+  ]);
+});
+
+test("L25 refuses to speak to invalidating the gates — that is the whole point of the edge", async () => {
+  // L16 and L19 MUST invalidate the gates, because they change the tree. L25
+  // exists precisely because the tree does not change, so the old green
+  // vouches for exactly the tree it saw. A request that asserts invalidation
+  // either way is a rework wearing a review's name.
+  await expectAllInsufficient([
+    ["claiming the gates are stale", withEvidence("L25", { gatesInvalidated: true })],
+    ["even denying it is a claim this edge does not make", withEvidence("L25", { gatesInvalidated: false })],
+  ]);
 });
 
 // ---------------------------------------------------------------------------

@@ -34,8 +34,10 @@ import {
   type PhaseTransitionResult,
 } from "../state/phase-machine.ts";
 import {
+  correctionAllowance,
   transition,
   type BudgetState,
+  type CorrectionAllowance,
   type EdgeId,
   type TransitionInput,
   type TransitionResult,
@@ -197,8 +199,12 @@ export interface CallBudgetOptions {
   /** For the refusal message; the ledger itself is per task. */
   taskId: string;
   tier: Tier;
-  /** `risk.correction_allowance` — per phase, defaulting to the config's `{auto: 1, owner: 1}`. */
-  allowance?: { auto: number; owner: number };
+  /**
+   * `risk.correction_allowance` — the `auto`/`owner` pair is per phase,
+   * defaulting to the config's `{auto: 1, owner: 1}`. `ownerReentries` is per
+   * attempt and defaults to `owner`, because D3 couples them.
+   */
+  allowance?: { auto: number; owner: number; ownerReentries?: number };
   /**
    * Rehydration from the journal. Spend is task-lifetime, so a ledger rebuilt
    * mid-task starts where the last one left off. Reservations are deliberately
@@ -210,20 +216,22 @@ export interface CallBudgetOptions {
     callsSpent?: number;
     correctionsAuto?: number;
     correctionsOwner?: number;
+    ownerReentries?: number;
   };
 }
 
-const DEFAULT_ALLOWANCE = { auto: 1, owner: 1 } as const;
+const DEFAULT_ALLOWANCE = { auto: 1, owner: 1, ownerReentries: 1 } as const;
 
 export class CallBudget {
   readonly taskId: string;
   readonly tier: Tier;
-  readonly allowance: { auto: number; owner: number };
+  readonly allowance: CorrectionAllowance;
 
   #attempt: number;
   #callsSpent: number;
   #correctionsAuto: number;
   #correctionsOwner: number;
+  #ownerReentries: number;
   #held = new Map<string, MutableReservation>();
   #settled: MutableReservation[] = [];
   #nextId = 1;
@@ -231,12 +239,13 @@ export class CallBudget {
   constructor(options: CallBudgetOptions) {
     this.taskId = options.taskId;
     this.tier = options.tier;
-    this.allowance = { ...(options.allowance ?? DEFAULT_ALLOWANCE) };
+    this.allowance = correctionAllowance(options.allowance ?? DEFAULT_ALLOWANCE);
     const carried = options.carried ?? {};
     this.#attempt = carried.attempt ?? 1;
     this.#callsSpent = carried.callsSpent ?? 0;
     this.#correctionsAuto = carried.correctionsAuto ?? 0;
     this.#correctionsOwner = carried.correctionsOwner ?? 0;
+    this.#ownerReentries = carried.ownerReentries ?? 0;
   }
 
   // -- Reading -------------------------------------------------------------
@@ -277,6 +286,7 @@ export class CallBudget {
       callsReserved: this.callsReserved,
       correctionsAuto: this.#correctionsAuto,
       correctionsOwner: this.#correctionsOwner,
+      ownerReentries: this.#ownerReentries,
       allowance: { ...this.allowance },
     };
   }
@@ -408,9 +418,13 @@ export class CallBudget {
       result.spends.calls > 0
         ? this.reserve({ cost: result.spends.calls, edge: result.edge, subject: `${result.from} -> ${result.to} (${result.edge})` })
         : null;
-    if (result.spends.correctionTranche !== null) {
-      this.#chargeCorrection(result.spends.correctionTranche);
-    }
+    // A TASK edge drawing the owner tranche is an owner RE-ENTRY, and it is
+    // charged to the attempt-scoped counter — never to the per-phase pair,
+    // which the next `beginPhase()` would zero and thereby refund. The host's
+    // own inter-state escalation (an L10 with actor `host`) still draws the
+    // per-phase automatic tranche, exactly as it always has.
+    if (result.spends.correctionTranche === "owner") this.#ownerReentries += 1;
+    else if (result.spends.correctionTranche === "auto") this.#correctionsAuto += 1;
     return { result, reservation };
   }
 
@@ -428,17 +442,13 @@ export class CallBudget {
     const result = phaseTransition({
       ...input,
       corrections: { auto: this.#correctionsAuto, owner: this.#correctionsOwner },
-      allowance: { ...this.allowance },
+      // The phase machine is bounded by the PER-PHASE pair only. An owner
+      // re-entry is a lifecycle act and never something a phase can spend.
+      allowance: { auto: this.allowance.auto, owner: this.allowance.owner },
     });
-    if (result.correctionTranche !== null) {
-      this.#chargeCorrection(result.correctionTranche);
-    }
+    if (result.correctionTranche === "auto") this.#correctionsAuto += 1;
+    else if (result.correctionTranche === "owner") this.#correctionsOwner += 1;
     return result;
-  }
-
-  #chargeCorrection(tranche: "auto" | "owner"): void {
-    if (tranche === "auto") this.#correctionsAuto += 1;
-    else this.#correctionsOwner += 1;
   }
 
   // -- Boundaries ----------------------------------------------------------
@@ -447,6 +457,12 @@ export class CallBudget {
    * The correction allowance is per PHASE (`{auto: 1, owner: 1}`), so a new
    * phase refreshes it. The call ledger is per TASK and is deliberately
    * untouched here — a workflow with five phases does not get five ceilings.
+   *
+   * `#ownerReentries` deliberately survives: it is per ATTEMPT, and a phase
+   * beginning after an owner re-entry must not hand that allowance back. That
+   * conflation was dormant only because the production runner never took a
+   * correction edge; it is exactly what an owner-authorized replacement review
+   * would have activated.
    */
   beginPhase(): void {
     this.#correctionsAuto = 0;
@@ -454,8 +470,10 @@ export class CallBudget {
   }
 
   /**
-   * `awsf retry` minted attempt n+1. Spend carries forward unchanged; only the
-   * attempt number moves.
+   * `awsf retry` minted attempt n+1. Spend carries forward unchanged; the
+   * attempt number moves, and the attempt-scoped owner re-entry allowance is
+   * refreshed along with the per-phase pair — a new attempt is the one thing
+   * that buys the owner another re-entry.
    *
    * Refuses while a reservation is held, for the reason `ReservationOutstanding`
    * gives: the ledger will not decide on a caller's behalf whether an in-flight
@@ -474,6 +492,7 @@ export class CallBudget {
       );
     }
     this.#attempt = attempt;
+    this.#ownerReentries = 0;
     this.beginPhase();
   }
 

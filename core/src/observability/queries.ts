@@ -27,6 +27,7 @@ export interface SessionRow {
   calls_spent: number;
   corrections_auto: number;
   corrections_owner: number;
+  owner_reentries: number;
   input_tokens: number | null;
   output_tokens: number | null;
   cache_read_tokens: number | null;
@@ -51,7 +52,7 @@ const SESSION_PUBLIC_COLUMNS = `
   session_id, project_slug, task_id, attempt, workflow_id, risk_tier, is_protected,
   lifecycle_state, request_text, base_sha, head_sha, candidate_sha,
   worker_provider, worker_model_requested, worker_model_resolved, review_provider, review_verdict,
-  call_ceiling, calls_reserved, calls_spent, corrections_auto, corrections_owner,
+  call_ceiling, calls_reserved, calls_spent, corrections_auto, corrections_owner, owner_reentries,
   input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens, total_tokens,
   reasoning_relation, usage_authority, estimated_cost_usd, cost_authority, cost_partial,
   observability_degraded, archived, started_at, updated_at, ended_at, state_revision, last_projected_seq`;

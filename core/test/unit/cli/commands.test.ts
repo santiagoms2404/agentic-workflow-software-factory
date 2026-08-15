@@ -94,7 +94,7 @@ test("the retry CLI snapshots the currently loaded effective config and allowanc
     assert.equal(retried.configSnapshotJson, toConfigSnapshotJson(loadConfig(correctedText)));
     assert.match(retried.configSnapshotJson, /test:journeys/);
     assert.doesNotMatch(retried.configSnapshotJson, /\["npm","run","old"\]/);
-    assert.deepEqual(retried.budget.allowance, { auto: 2, owner: 0 });
+    assert.deepEqual(retried.budget.allowance, { auto: 2, owner: 0, ownerReentries: 0 });
     assert.equal(retried.budget.callsSpent, 1);
     assert.equal(retried.budget.callsReserved, 0);
     assert.equal(retried.project, created.status.project);
@@ -164,7 +164,7 @@ test("new, start, status, cancel, and retry preserve the lifecycle and task-life
     );
 
     const lines = await statusCommand(created.attemptDir);
-    for (const label of ["State:", "Phase:", "Rounds:", "Calls:", "Model:", "Last activity:", "Budget:", "Next action:"]) {
+    for (const label of ["State:", "Phase:", "Rounds:", "Calls:", "Model:", "Last activity:", "Budget:", "Owner re-entries:", "Next action:"]) {
       assert.ok(lines.some((line) => line.startsWith(label)), `missing ${label}`);
     }
     assert.ok(lines.every((line) => line.includes("—")), "every status line explains what its value means");
@@ -208,7 +208,11 @@ test("new, start, status, cancel, and retry preserve the lifecycle and task-life
     assert.equal(retried.status.budget.callsReserved, 0);
     assert.equal(retried.status.budget.correctionsAuto, 0);
     assert.equal(retried.status.budget.correctionsOwner, 0);
-    assert.deepEqual(retried.status.budget.allowance, { auto: 2, owner: 0 });
+    assert.equal(retried.status.budget.ownerReentries, 0, "a new attempt buys the owner another re-entry");
+    // `ownerReentries` is not a separate configuration key: D3 couples it to
+    // the configured owner allowance, so an owner allowance of 0 means no
+    // re-entry either.
+    assert.deepEqual(retried.status.budget.allowance, { auto: 2, owner: 0, ownerReentries: 0 });
     assert.equal(retried.status.configSnapshotJson, currentSnapshot);
     assert.notEqual(retried.status.configSnapshotJson, created.status.configSnapshotJson);
     for (const field of ["project", "taskId", "repository", "workflow", "tier", "request"] as const) {

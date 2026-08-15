@@ -347,6 +347,7 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
         reviewVerdict: row.review_verdict,
         correctionsAuto: row.corrections_auto,
         correctionsOwner: row.corrections_owner,
+        ownerReentries: row.owner_reentries,
         stateRevision: row.state_revision,
         transitions: transitionsForSession(readDb, row.session_id).map((item) => ({
           id: item.transition_id,

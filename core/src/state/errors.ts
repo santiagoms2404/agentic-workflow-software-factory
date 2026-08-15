@@ -53,7 +53,14 @@ export const EDGE_BLOCKER_CODES = {
   L5: ["crash", "silence", "quota-exhausted", "phase-abort", "permission-breach", "budget-exhausted"],
   L8: ["crash", "silence", "quota-exhausted", "phase-abort", "permission-breach", "budget-exhausted"],
   L13: ["correction-budget-exhausted"],
-  L17: ["review-unavailable"],
+  // L17 names the three review failures the HOST can declare terminal without
+  // interpreting a verdict. `review-unavailable` is transport after one retry;
+  // `review-malformed` is an envelope TypeBox either validated or did not;
+  // `review-evidence-invalid` is a `review_evidence_present` row that failed or
+  // a post-review revalidation that found the tree moved. A `verdict_consistent`
+  // failure is deliberately absent — an inconsistent verdict is CONTENT, and
+  // the host does not decide what a bad review means.
+  L17: ["review-unavailable", "review-malformed", "review-evidence-invalid"],
   L21: ["record-corrupt", "unknown-state", "ambiguous-pid", "unreadable-worktree"],
   L24: ["non-fast-forward", "dirty-canonical-tree", "git-failure", "ambiguous-recovery"],
 } as const satisfies Record<string, readonly string[]>;
@@ -62,6 +69,26 @@ export const EDGE_BLOCKER_CODES = {
 export const BLOCKER_CODES: readonly string[] = [
   ...new Set(Object.values(EDGE_BLOCKER_CODES).flat()),
 ].sort();
+
+/**
+ * L25's eligibility vocabulary — two members, both HOST-determined from the
+ * persisted gate rows of the recorded review phase.
+ *
+ * `evidence-gate-absent` is a review phase with no `review_evidence_present`
+ * row at all: every review produced before that gate existed, which is the
+ * legacy class the edge exists to migrate. `evidence-gate-failed` is a row
+ * whose `passed` is false.
+ *
+ * The list is exactly two long on purpose. A review carrying a PASSING
+ * evidence row is not replaceable at all — its verdict stands, whatever it
+ * says, and the owner's remedies are the ones the contract already provides.
+ * The owner's `--reason` string is a record, never a key: if disliking a
+ * verdict could buy a replacement review, the mandatory opposite-provider
+ * review would be a one-shot lottery, and "you may only do it once" is not an
+ * answer to that, because once is enough.
+ */
+export const REVIEW_EVIDENCE_DEFECTS = ["evidence-gate-absent", "evidence-gate-failed"] as const;
+export type ReviewEvidenceDefect = (typeof REVIEW_EVIDENCE_DEFECTS)[number];
 
 // ---------------------------------------------------------------------------
 // The base.
@@ -144,7 +171,7 @@ export class HumanGateBypass extends StateError {
 /** Step 5. Only now is "unknown pair" the true, most-specific complaint. */
 export class IllegalTransition extends StateError {
   constructor(from: TaskState, to: TaskState) {
-    super("IllegalTransition", from, to, `${pair(from, to)}: not one of the twenty-four legal transitions`);
+    super("IllegalTransition", from, to, `${pair(from, to)}: not one of the twenty-five legal transitions`);
   }
 }
 

@@ -73,6 +73,8 @@ export interface AttemptStatusProjection extends SessionInit {
   callsReserved: number;
   correctionsAuto: number;
   correctionsOwner: number;
+  /** Attempt-scoped owner re-entries, separate from the per-phase pair above. */
+  ownerReentries: number;
   workerModelResolved: string | null;
   updatedAt: string;
   endedAt: string | null;
@@ -111,8 +113,8 @@ export function projectAttemptStatus(
       if (status.evidence !== undefined) applyAttemptEvidence(db, status.sessionId, sourceSeq, status.evidence);
       db.prepare(`UPDATE sessions SET
           lifecycle_state = ?, base_sha = ?, candidate_sha = ?, calls_spent = ?, calls_reserved = ?,
-          corrections_auto = ?, corrections_owner = ?, worker_model_resolved = ?, updated_at = ?,
-          ended_at = ?, state_revision = ?, last_projected_seq = ?
+          corrections_auto = ?, corrections_owner = ?, owner_reentries = ?, worker_model_resolved = ?,
+          updated_at = ?, ended_at = ?, state_revision = ?, last_projected_seq = ?
         WHERE session_id = ?`).run(
         status.lifecycleState,
         status.baseSha,
@@ -121,6 +123,7 @@ export function projectAttemptStatus(
         status.callsReserved,
         status.correctionsAuto,
         status.correctionsOwner,
+        status.ownerReentries,
         status.workerModelResolved === null ? null : scrubCredentialString(status.workerModelResolved),
         status.updatedAt,
         status.endedAt,

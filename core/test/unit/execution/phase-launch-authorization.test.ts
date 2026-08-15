@@ -1,4 +1,4 @@
-// Agent-phase authorization is separate from the five task-edge spawn sites.
+// Agent-phase authorization is separate from the six task-edge spawn sites.
 // Every refusal below points the broker at a launcher that writes a sentinel as
 // its first instruction. Absence of that file proves authorization failed
 // before child creation, not merely before provider release.

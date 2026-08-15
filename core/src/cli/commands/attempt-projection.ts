@@ -38,6 +38,7 @@ export function toAttemptStatusProjection(
     callsReserved: status.budget.callsReserved,
     correctionsAuto: status.budget.correctionsAuto,
     correctionsOwner: status.budget.correctionsOwner,
+    ownerReentries: status.budget.ownerReentries,
     workerModelResolved: status.model?.resolved ?? null,
     updatedAt: status.lastActivityAt,
     endedAt: isTerminalStatus(status) ? status.lastActivityAt : null,

@@ -12,7 +12,7 @@
 // Pure — no I/O, no clock. `git`, `gate` and `record` appear only as claims
 // somebody else already made; this layer never goes and looks.
 
-import { EDGE_BLOCKER_CODES, InsufficientEvidence } from "./errors.ts";
+import { EDGE_BLOCKER_CODES, InsufficientEvidence, REVIEW_EVIDENCE_DEFECTS } from "./errors.ts";
 import type { EdgeId, LegalEdge, TransitionInput } from "./task-machine.ts";
 import { BLOCKING_SEVERITIES, severityRank } from "../contracts/review-output.ts";
 import { SHA_PATTERN } from "../contracts/test-output.ts";
@@ -63,6 +63,37 @@ function humanInput(input: TransitionInput): string[] {
 function candidate(input: TransitionInput): string[] {
   const sha = input.evidence?.candidateSha;
   return isSha(sha) ? [] : [`candidate SHA ${show(sha)} is not a 40-hex object id`];
+}
+
+/**
+ * `gatesPass` is one boolean somebody wrote down earlier. An edge that spends
+ * a call to PRESERVE a green must check the green itself: every configured
+ * gate has a row, every row passed, and every row measured this candidate and
+ * not some superseded one.
+ */
+function gateEvidenceViolations(input: TransitionInput): string[] {
+  const evidence = input.evidence?.gateEvidence;
+  if (evidence === undefined) {
+    return ["no gate rows were attested; `gatesPass` alone does not prove the green it summarises"];
+  }
+  const violations: string[] = [];
+  if (evidence.configured.length === 0) {
+    violations.push("no gate was named as configured, so 'every configured gate passed' is unprovable");
+  }
+  const candidateSha = input.evidence?.candidateSha;
+  const byId = new Map(evidence.rows.map((row) => [row.gateId, row]));
+  for (const gateId of evidence.configured) {
+    if (!byId.has(gateId)) violations.push(`the configured gate ${JSON.stringify(gateId)} has no recorded row`);
+  }
+  for (const row of evidence.rows) {
+    if (!isTrue(row.passed)) violations.push(`the gate ${JSON.stringify(row.gateId)} did not pass`);
+    if (!isSha(row.candidateSha)) {
+      violations.push(`the gate ${JSON.stringify(row.gateId)} names SHA ${show(row.candidateSha)}, which is not a 40-hex object id`);
+    } else if (row.candidateSha !== candidateSha) {
+      violations.push(`the gate ${JSON.stringify(row.gateId)} measured a different tree than the candidate`);
+    }
+  }
+  return violations;
 }
 
 const GUARDS: Readonly<Record<EdgeId, (input: TransitionInput) => string[]>> = {
@@ -167,15 +198,26 @@ const GUARDS: Readonly<Record<EdgeId, (input: TransitionInput) => string[]>> = {
 
   // L13 — the budget must really be gone. Blocking a task whose owner tranche
   // is still available would strand work the owner could have authorized.
+  //
+  // "The correction budget" now means three counters, not two, and L13 means
+  // ALL of them: an intra-phase owner correction and an owner RE-ENTRY are
+  // different remedies drawn from different accounts, and either one still
+  // standing is a way out of this GATING failure that the owner has not been
+  // offered yet.
   L13: (input) => {
     const violations = blockerCode("L13", input);
     if (input.evidence?.gatesPass !== false) violations.push("the gates did not fail");
-    const { correctionsAuto, correctionsOwner, allowance } = input.budget;
+    const { correctionsAuto, correctionsOwner, ownerReentries, allowance } = input.budget;
     if (correctionsAuto < allowance.auto) {
       violations.push(`the automatic tranche still has ${allowance.auto - correctionsAuto} correction(s)`);
     }
     if (correctionsOwner < allowance.owner) {
       violations.push(`the owner tranche still has ${allowance.owner - correctionsOwner} correction(s)`);
+    }
+    if (ownerReentries < allowance.ownerReentries) {
+      violations.push(
+        `the owner re-entry allowance still has ${allowance.ownerReentries - ownerReentries} re-entry(s)`,
+      );
     }
     return violations;
   },
@@ -235,13 +277,33 @@ const GUARDS: Readonly<Record<EdgeId, (input: TransitionInput) => string[]>> = {
     return violations;
   },
 
-  // L17 — one transport retry, then block. Never a substitute provider:
-  // routing may not read quota and a mandatory review is mandatory.
+  // L17 — the review failures the host may declare terminal, and only those.
+  //
+  // Transport unavailability after one retry was the original reason, and the
+  // reason it qualified is that it needs no interpretation. Two more failures
+  // have exactly that property: an envelope TypeBox either validated or did
+  // not, and a `review_evidence_present` row either passed or did not. Neither
+  // asks the host what a bad review MEANS.
+  //
+  // Never a substitute provider: routing may not read quota and a mandatory
+  // review is mandatory. And a `verdict_consistent` failure still has no exit
+  // here, deliberately — an inconsistent verdict is content.
+  //
+  // Widening this repairs a dead end that predates L25: a malformed reviewer
+  // envelope satisfies neither L15 (no valid verdict), nor L16 (no finding of
+  // severity >= medium exists to accept), nor the old L17 (a review that
+  // ANSWERED was never a transport failure), so cancel was the only edge and
+  // the candidate was lost to a parse error.
   L17: (input) => {
     const violations = blockerCode("L17", input);
     const retries = input.evidence?.reviewTransportRetries;
-    if (retries === undefined || retries < 1) {
-      violations.push(`the mandatory review was retried ${show(retries)} times; it must be retried once before blocking`);
+    const failure = input.evidence?.reviewFailure;
+    const deterministic = failure === "review-malformed" || failure === "review-evidence-invalid";
+    if (!deterministic && (retries === undefined || retries < 1)) {
+      violations.push(
+        `the mandatory review was retried ${show(retries)} times and reviewFailure is ${show(failure)}; ` +
+          "blocking needs one transport retry, or a host-determined review-malformed / review-evidence-invalid failure",
+      );
     }
     return violations;
   },
@@ -318,6 +380,65 @@ const GUARDS: Readonly<Record<EdgeId, (input: TransitionInput) => string[]>> = {
   },
 
   L24: (input) => blockerCode("L24", input),
+
+  // L25 — the owner rejects the review and re-buys the review.
+  //
+  // The contract already had "the owner rejects the review and re-enters"
+  // (L16); it lacked this. The asymmetry existed because the contract assumed
+  // a review's CONTENT could be wrong but its EVIDENCE could not be missing.
+  //
+  // Two things make this an edge rather than a loophole. First, eligibility is
+  // HOST-determined: `reviewEvidenceDefect` is a two-member enum read off the
+  // recorded gate rows, so an owner may not replace a review merely because
+  // they dislike it. Second, `gatesInvalidated` must be ABSENT — the tree did
+  // not change, the old green vouches for exactly the tree it saw, and
+  // preserving it is the entire point of the edge. L16 and L19 demand the
+  // opposite because they change the tree; asserting it here would be a rework
+  // wearing a review's name.
+  L25: (input) => {
+    const e = input.evidence;
+    const violations = candidate(input);
+    if (input.reason.source !== "human") {
+      violations.push(
+        `only an owner may reject a review, not reason.source ${JSON.stringify(input.reason.source)}`,
+      );
+    }
+    if (!isText(e?.reviewInvalidationReason)) {
+      violations.push("no reason was recorded for rejecting the review");
+    }
+    if (input.tier < 2) {
+      violations.push(`review is a T2 control and this task is T${input.tier}; there is nothing to replace`);
+    }
+    if (!isTrue(e?.gatesPass)) violations.push("the gates did not pass — a red candidate is never re-reviewed");
+    violations.push(...gateEvidenceViolations(input));
+    if (!isTrue(e?.reviewInvalidated)) {
+      violations.push("the superseded review was not invalidated on the record");
+    }
+    const review = e?.review;
+    if (review === undefined) {
+      violations.push("no review was recorded, so there is no review to supersede");
+    } else if (!isSha(review.reviewedSha)) {
+      violations.push(`the reviewed SHA ${show(review.reviewedSha)} is not a 40-hex object id`);
+    } else if (review.reviewedSha !== e?.candidateSha) {
+      violations.push("the recorded review names a different tree than the candidate");
+    }
+    const defect = e?.reviewEvidenceDefect;
+    if (defect === undefined || !(REVIEW_EVIDENCE_DEFECTS as readonly string[]).includes(defect)) {
+      violations.push(
+        `reviewEvidenceDefect ${show(defect)} is not one of the host-determined defects (${REVIEW_EVIDENCE_DEFECTS.join(", ")}); ` +
+          "a review that carries a passing evidence gate is not replaceable at all",
+      );
+    }
+    if (!isTrue(e?.candidateUnchanged)) {
+      violations.push("the host did not observe the candidate and base unmoved and both trees clean");
+    }
+    if (e?.gatesInvalidated !== undefined) {
+      violations.push(
+        `gatesInvalidated ${show(e.gatesInvalidated)} was asserted; L25 preserves the green it stands on and may not speak to invalidating it`,
+      );
+    }
+    return violations;
+  },
 };
 
 /** Step 10. Throws `InsufficientEvidence` naming every defect at once, or returns. */

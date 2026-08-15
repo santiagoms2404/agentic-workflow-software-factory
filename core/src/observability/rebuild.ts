@@ -63,7 +63,7 @@ export class DegradedObservabilityHold extends Error {
 /**
  * The gate the CLI and the workflow runner call before persisting a
  * transition. Deliberately NOT part of `state/`: the transition matrix is a
- * pure function of ten states and twenty-four edges, and an observability
+ * pure function of ten states and twenty-five edges, and an observability
  * fact is not one of its inputs. This is a hold applied to a legal
  * transition, not a new rejection class.
  */

@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { attemptDir as attemptDirectory } from "../../persistence/platform-paths.ts";
 import { redactConfigSnapshotJson } from "../../config/effective-config.ts";
 import { ReservationOutstanding } from "../../execution/call-budget.ts";
+import { correctionAllowance } from "../../state/task-machine.ts";
 import {
   isTerminalStatus,
   latestAttemptNumber,
@@ -20,7 +21,7 @@ export interface RetryCommandOptions {
   /** The currently loaded effective config, never the prior attempt's snapshot. */
   readonly configSnapshotJson: string;
   /** The currently configured correction allowance for attempt n+1. */
-  readonly allowance: { readonly auto: number; readonly owner: number };
+  readonly allowance: { readonly auto: number; readonly owner: number; readonly ownerReentries?: number };
   readonly now?: () => string;
   readonly sessionId?: () => string;
   readonly projectRecord?: AttemptProjector;
@@ -55,7 +56,10 @@ export async function retryCommand(options: RetryCommandOptions): Promise<{ atte
       callsReserved: 0,
       correctionsAuto: 0,
       correctionsOwner: 0,
-      allowance: { ...options.allowance },
+      // Attempt-scoped, so a new attempt is what buys the owner another
+      // re-entry. Nothing else does.
+      ownerReentries: 0,
+      allowance: correctionAllowance(options.allowance),
     },
     model: null,
     lastActivityAt: now,

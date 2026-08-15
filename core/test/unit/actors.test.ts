@@ -66,7 +66,7 @@ test("every legal edge accepts exactly the actors its L-table row names", async 
   assert.deepEqual(failures, []);
 });
 
-test("the host owns fifteen edges, the human eight, and the owner shares two with the host", () => {
+test("the host owns fifteen edges, the human nine, and the owner three", () => {
   // A sanity check on the transcription itself: if the Actor column drifted,
   // the matrix test above would start passing for the wrong reason.
   const byActor = (actor: Actor) => LEGAL_EDGES.filter((e) => e.actors.includes(actor)).map((e) => e.id);
@@ -74,8 +74,11 @@ test("the host owns fifteen edges, the human eight, and the owner shares two wit
     "L1", "L2", "L4", "L5", "L7", "L8", "L10", "L11",
     "L12", "L13", "L15", "L17", "L21", "L23", "L24",
   ]);
-  assert.deepEqual(byActor("owner"), ["L10", "L16"]);
-  assert.deepEqual(byActor("human"), ["L3", "L6", "L9", "L14", "L18", "L19", "L20", "L22"]);
+  // L10 is shared with the host, L16 is the owner's alone, and L25 is shared
+  // with the human — a replacement review is an owner act either way, and the
+  // tranche map sends both to the same allowance.
+  assert.deepEqual(byActor("owner"), ["L10", "L16", "L25"]);
+  assert.deepEqual(byActor("human"), ["L3", "L6", "L9", "L14", "L18", "L19", "L20", "L22", "L25"]);
 });
 
 // ---------------------------------------------------------------------------
@@ -132,7 +135,7 @@ test("every human edge demands an interactive session; no host edge does", async
   assert.deepEqual(failures, []);
   assert.deepEqual(
     LEGAL_EDGES.filter((e) => e.interactive).map((e) => e.id),
-    ["L3", "L6", "L9", "L14", "L18", "L19", "L20", "L22"],
+    ["L3", "L6", "L9", "L14", "L18", "L19", "L20", "L22", "L25"],
   );
 });
 
@@ -143,6 +146,24 @@ test("every human edge demands an interactive session; no host edge does", async
 test("L16 and L19 throw for the host — a machine may not decide its own work was wrong", async () => {
   await expectRejection("ActorNotPermitted", inputFor("L16", { actor: "host" }));
   await expectRejection("ActorNotPermitted", inputFor("L19", { actor: "host" }));
+});
+
+test("L25 and L19 share one owner re-entry allowance — D3's tranche coupling, provable", async () => {
+  // "One owner-authorized re-entry of EITHER KIND per attempt." After a
+  // replacement review, an L19 rework is refused as exhausted, and the reverse
+  // holds too. If the two drew separate counters this would pass for free.
+  const replacement = await expectAccepted(validInput("L25"));
+  assert.equal(replacement.spends.correctionTranche, "owner");
+
+  const spent = { ownerReentries: 1 };
+  await expectRejection("CorrectionAllowanceExhausted", withBudget("L19", spent), {
+    scope: "tranche",
+    because: "a replacement review already spent the attempt's one owner re-entry",
+  });
+  await expectRejection("CorrectionAllowanceExhausted", withBudget("L25", spent), {
+    scope: "tranche",
+    because: "an owner rework already spent the attempt's one owner re-entry",
+  });
 });
 
 test("L16 is the owner's edge and L19 is the human's — the Actor column read literally", async () => {
@@ -177,7 +198,7 @@ test("the host draws the automatic tranche and the owner draws the owner tranche
   assert.deepEqual(failures, []);
 });
 
-test("no edge outside L10/L16/L19 draws a correction tranche", async () => {
+test("no edge outside L10/L16/L19/L25 draws a correction tranche", async () => {
   const failures: string[] = [];
   const others = LEGAL_EDGES.filter((e) => !(CORRECTION_EDGES as readonly string[]).includes(e.id));
   assert.equal(others.length, 21);
@@ -195,26 +216,44 @@ test("no edge outside L10/L16/L19 draws a correction tranche", async () => {
 });
 
 test("L10's first correction is the host's and its second is the owner's", async () => {
-  // auto: 1, owner: 1. The host spends the automatic tranche once; the second
-  // inter-state correction on the same task must be authorized by the owner.
-  const first = await expectAccepted(withBudget("L10", { correctionsAuto: 0, correctionsOwner: 0 }));
+  // auto: 1, ownerReentries: 1. The host spends the automatic tranche once; the
+  // second inter-state correction on the same task must be authorized by the
+  // owner, and it draws the attempt-scoped re-entry allowance.
+  const first = await expectAccepted(withBudget("L10", { correctionsAuto: 0, ownerReentries: 0 }));
   assert.equal(first.spends.correctionTranche, "auto");
 
   await expectRejection(
     "CorrectionAllowanceExhausted",
-    withBudget("L10", { correctionsAuto: 1, correctionsOwner: 0 }),
+    withBudget("L10", { correctionsAuto: 1, ownerReentries: 0 }),
     { scope: "tranche", because: "the host's tranche is spent" },
   );
 
   const second = await expectAccepted({
-    ...withBudget("L10", { correctionsAuto: 1, correctionsOwner: 0 }),
+    ...withBudget("L10", { correctionsAuto: 1, ownerReentries: 0 }),
     actor: "owner",
   });
   assert.equal(second.spends.correctionTranche, "owner");
 });
 
+test("a TASK edge's owner tranche is the attempt-scoped re-entry counter, not the per-phase one", async () => {
+  // The whole point of the split. A phase that already spent its intra-phase
+  // owner correction has NOT spent the owner's re-entry, and an owner re-entry
+  // already drawn is not handed back by a later phase.
+  const perPhaseSpent = await expectAccepted({
+    ...withBudget("L10", { correctionsOwner: 1, ownerReentries: 0 }),
+    actor: "owner",
+  });
+  assert.equal(perPhaseSpent.spends.correctionTranche, "owner");
+
+  await expectRejection(
+    "CorrectionAllowanceExhausted",
+    { ...withBudget("L10", { correctionsOwner: 0, ownerReentries: 1 }), actor: "owner" },
+    { scope: "tranche", because: "the re-entry allowance is what an owner-authorized task edge draws" },
+  );
+});
+
 test("with both tranches spent, no actor can correct — and hears the global complaint", async () => {
-  const spent = { correctionsAuto: 1, correctionsOwner: 1 };
+  const spent = { correctionsAuto: 1, ownerReentries: 1 };
   for (const actor of ["host", "owner"] as const) {
     await expectRejection(
       "CorrectionAllowanceExhausted",
@@ -227,13 +266,25 @@ test("with both tranches spent, no actor can correct — and hears the global co
 test("a larger configured allowance is honored — the tranche is data, not a constant", async () => {
   // `risk.correction_allowance` is configuration; the machine must read it
   // rather than hard-code {auto: 1, owner: 1}.
-  const generous = budget({ correctionsAuto: 1, correctionsOwner: 0, allowance: { auto: 2, owner: 1 } });
+  const generous = budget({ correctionsAuto: 1, ownerReentries: 0, allowance: { auto: 2 } });
   const result = await expectAccepted({ ...validInput("L10"), budget: generous });
   assert.equal(result.spends.correctionTranche, "auto");
 
   await expectRejection(
     "CorrectionAllowanceExhausted",
-    { ...validInput("L10"), budget: budget({ correctionsAuto: 2, correctionsOwner: 0, allowance: { auto: 2, owner: 1 } }) },
+    { ...validInput("L10"), budget: budget({ correctionsAuto: 2, ownerReentries: 0, allowance: { auto: 2 } }) },
+    { scope: "tranche" },
+  );
+
+  // And the same for the re-entry allowance, which is its own configured number.
+  await expectAccepted({
+    ...validInput("L10"),
+    actor: "owner",
+    budget: budget({ ownerReentries: 1, allowance: { ownerReentries: 2 } }),
+  });
+  await expectRejection(
+    "CorrectionAllowanceExhausted",
+    { ...validInput("L10"), actor: "owner", budget: budget({ ownerReentries: 2, allowance: { ownerReentries: 2 } }) },
     { scope: "tranche" },
   );
 });

@@ -102,19 +102,19 @@ function registrationFor(from: TaskState, to: TaskState): ProcessRegistration {
 }
 
 // ---------------------------------------------------------------------------
-// The five, and the ninety-five.
+// The six, and the ninety-four.
 // ---------------------------------------------------------------------------
 
-test("the broker's spawn sites are derived from the L-table and are exactly the plan's five", () => {
+test("the broker's spawn sites are derived from the L-table and are exactly the plan's six", () => {
   assert.deepEqual(
     SPAWN_SITE_EDGES.map((edge) => edge.id),
-    ["L4", "L10", "L11", "L16", "L19"],
+    ["L4", "L10", "L11", "L16", "L19", "L25"],
   );
   // Derived, not restated: every one of them enters an executing state.
   for (const edge of SPAWN_SITE_EDGES) {
     assert.ok(edge.to === "RUNNING" || edge.to === "REVIEWING", `${edge.id} enters ${edge.to}`);
   }
-  assert.equal(LEGAL_EDGES.filter((edge) => edge.spawnSite).length, 5);
+  assert.equal(LEGAL_EDGES.filter((edge) => edge.spawnSite).length, 6);
 });
 
 test("every ordered pair that is not a spawn site is refused, and no child is ever created", async () => {
@@ -141,8 +141,8 @@ test("every ordered pair that is not a spawn site is refused, and no child is ev
       }
     }
 
-    // Ten states, a hundred ordered pairs, five of which may spawn.
-    assert.equal(refused, 95);
+    // Ten states, a hundred ordered pairs, six of which may spawn.
+    assert.equal(refused, 94);
     assert.equal(
       existsSync(sentinel.marker),
       false,
@@ -153,7 +153,7 @@ test("every ordered pair that is not a spawn site is refused, and no child is ev
   }
 });
 
-test("the five spawn sites get past the site check — and are stopped by the next one", async () => {
+test("the six spawn sites get past the site check — and are stopped by the next one", async () => {
   const sentinel = makeSentinel();
   try {
     const { broker } = brokerFor(sentinel);

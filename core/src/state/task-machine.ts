@@ -1,4 +1,4 @@
-// The task lifecycle: ten states, twenty-four legal edges, seventy-six
+// The task lifecycle: ten states, twenty-five legal edges, seventy-five
 // rejected ordered pairs, one ordered rejection contract.
 //
 // `transition()` is a pure function. It starts no process, reads no file, asks
@@ -73,7 +73,8 @@ export const ACTOR_TRANCHE: Readonly<Record<Actor, "auto" | "owner">> = {
 export type EdgeId =
   | "L1" | "L2" | "L3" | "L4" | "L5" | "L6" | "L7" | "L8"
   | "L9" | "L10" | "L11" | "L12" | "L13" | "L14" | "L15" | "L16"
-  | "L17" | "L18" | "L19" | "L20" | "L21" | "L22" | "L23" | "L24";
+  | "L17" | "L18" | "L19" | "L20" | "L21" | "L22" | "L23" | "L24"
+  | "L25";
 
 export interface LegalEdge {
   readonly id: EdgeId;
@@ -87,36 +88,37 @@ export interface LegalEdge {
   readonly interactive: boolean;
 }
 
-/** The twenty-four legal transitions, in L-order. */
+/** The twenty-five legal transitions, in L-order. */
 export const LEGAL_EDGES: readonly LegalEdge[] = [
-  { id: "L1",  from: "DRAFT",          to: "PREPARED",       actors: ["host"],          spawnSite: false, interactive: false },
-  { id: "L2",  from: "DRAFT",          to: "BLOCKED",        actors: ["host"],          spawnSite: false, interactive: false },
-  { id: "L3",  from: "DRAFT",          to: "CANCELLED",      actors: ["human"],         spawnSite: false, interactive: true  },
-  { id: "L4",  from: "PREPARED",       to: "RUNNING",        actors: ["host"],          spawnSite: true,  interactive: false },
-  { id: "L5",  from: "PREPARED",       to: "BLOCKED",        actors: ["host"],          spawnSite: false, interactive: false },
-  { id: "L6",  from: "PREPARED",       to: "CANCELLED",      actors: ["human"],         spawnSite: false, interactive: true  },
-  { id: "L7",  from: "RUNNING",        to: "GATING",         actors: ["host"],          spawnSite: false, interactive: false },
-  { id: "L8",  from: "RUNNING",        to: "BLOCKED",        actors: ["host"],          spawnSite: false, interactive: false },
-  { id: "L9",  from: "RUNNING",        to: "CANCELLED",      actors: ["human"],         spawnSite: false, interactive: true  },
-  { id: "L10", from: "GATING",         to: "RUNNING",        actors: ["host", "owner"], spawnSite: true,  interactive: false },
-  { id: "L11", from: "GATING",         to: "REVIEWING",      actors: ["host"],          spawnSite: true,  interactive: false },
-  { id: "L12", from: "GATING",         to: "AWAITING_OWNER", actors: ["host"],          spawnSite: false, interactive: false },
-  { id: "L13", from: "GATING",         to: "BLOCKED",        actors: ["host"],          spawnSite: false, interactive: false },
-  { id: "L14", from: "GATING",         to: "CANCELLED",      actors: ["human"],         spawnSite: false, interactive: true  },
-  { id: "L15", from: "REVIEWING",      to: "AWAITING_OWNER", actors: ["host"],          spawnSite: false, interactive: false },
-  { id: "L16", from: "REVIEWING",      to: "RUNNING",        actors: ["owner"],         spawnSite: true,  interactive: false },
-  { id: "L17", from: "REVIEWING",      to: "BLOCKED",        actors: ["host"],          spawnSite: false, interactive: false },
-  { id: "L18", from: "REVIEWING",      to: "CANCELLED",      actors: ["human"],         spawnSite: false, interactive: true  },
-  { id: "L19", from: "AWAITING_OWNER", to: "RUNNING",        actors: ["human"],         spawnSite: true,  interactive: true  },
-  { id: "L20", from: "AWAITING_OWNER", to: "LANDING",        actors: ["human"],         spawnSite: false, interactive: true  },
-  { id: "L21", from: "AWAITING_OWNER", to: "BLOCKED",        actors: ["host"],          spawnSite: false, interactive: false },
-  { id: "L22", from: "AWAITING_OWNER", to: "CANCELLED",      actors: ["human"],         spawnSite: false, interactive: true  },
-  { id: "L23", from: "LANDING",        to: "LANDED",         actors: ["host"],          spawnSite: false, interactive: false },
-  { id: "L24", from: "LANDING",        to: "BLOCKED",        actors: ["host"],          spawnSite: false, interactive: false },
+  { id: "L1",  from: "DRAFT",          to: "PREPARED",       actors: ["host"],           spawnSite: false, interactive: false },
+  { id: "L2",  from: "DRAFT",          to: "BLOCKED",        actors: ["host"],           spawnSite: false, interactive: false },
+  { id: "L3",  from: "DRAFT",          to: "CANCELLED",      actors: ["human"],          spawnSite: false, interactive: true  },
+  { id: "L4",  from: "PREPARED",       to: "RUNNING",        actors: ["host"],           spawnSite: true,  interactive: false },
+  { id: "L5",  from: "PREPARED",       to: "BLOCKED",        actors: ["host"],           spawnSite: false, interactive: false },
+  { id: "L6",  from: "PREPARED",       to: "CANCELLED",      actors: ["human"],          spawnSite: false, interactive: true  },
+  { id: "L7",  from: "RUNNING",        to: "GATING",         actors: ["host"],           spawnSite: false, interactive: false },
+  { id: "L8",  from: "RUNNING",        to: "BLOCKED",        actors: ["host"],           spawnSite: false, interactive: false },
+  { id: "L9",  from: "RUNNING",        to: "CANCELLED",      actors: ["human"],          spawnSite: false, interactive: true  },
+  { id: "L10", from: "GATING",         to: "RUNNING",        actors: ["host", "owner"],  spawnSite: true,  interactive: false },
+  { id: "L11", from: "GATING",         to: "REVIEWING",      actors: ["host"],           spawnSite: true,  interactive: false },
+  { id: "L12", from: "GATING",         to: "AWAITING_OWNER", actors: ["host"],           spawnSite: false, interactive: false },
+  { id: "L13", from: "GATING",         to: "BLOCKED",        actors: ["host"],           spawnSite: false, interactive: false },
+  { id: "L14", from: "GATING",         to: "CANCELLED",      actors: ["human"],          spawnSite: false, interactive: true  },
+  { id: "L15", from: "REVIEWING",      to: "AWAITING_OWNER", actors: ["host"],           spawnSite: false, interactive: false },
+  { id: "L16", from: "REVIEWING",      to: "RUNNING",        actors: ["owner"],          spawnSite: true,  interactive: false },
+  { id: "L17", from: "REVIEWING",      to: "BLOCKED",        actors: ["host"],           spawnSite: false, interactive: false },
+  { id: "L18", from: "REVIEWING",      to: "CANCELLED",      actors: ["human"],          spawnSite: false, interactive: true  },
+  { id: "L19", from: "AWAITING_OWNER", to: "RUNNING",        actors: ["human"],          spawnSite: true,  interactive: true  },
+  { id: "L20", from: "AWAITING_OWNER", to: "LANDING",        actors: ["human"],          spawnSite: false, interactive: true  },
+  { id: "L21", from: "AWAITING_OWNER", to: "BLOCKED",        actors: ["host"],           spawnSite: false, interactive: false },
+  { id: "L22", from: "AWAITING_OWNER", to: "CANCELLED",      actors: ["human"],          spawnSite: false, interactive: true  },
+  { id: "L23", from: "LANDING",        to: "LANDED",         actors: ["host"],           spawnSite: false, interactive: false },
+  { id: "L24", from: "LANDING",        to: "BLOCKED",        actors: ["host"],           spawnSite: false, interactive: false },
+  { id: "L25", from: "AWAITING_OWNER", to: "REVIEWING",      actors: ["owner", "human"], spawnSite: true,  interactive: true  },
 ];
 
-/** The three edges that draw on a correction allowance — escalation-ladder rungs 4 and 5. */
-export const CORRECTION_EDGES = ["L10", "L16", "L19"] as const;
+/** The four edges that draw on a correction allowance — escalation-ladder rungs 4 and 5. */
+export const CORRECTION_EDGES = ["L10", "L16", "L19", "L25"] as const;
 
 const EDGE_BY_PAIR: ReadonlyMap<string, LegalEdge> = new Map(
   LEGAL_EDGES.map((e) => [`${e.from}->${e.to}`, e]),
@@ -166,6 +168,32 @@ export interface ReviewEvidence {
   findings: readonly ReviewFinding[];
 }
 
+/** One recorded host gate row, as the host measured it. */
+export interface GateEvidenceRow {
+  gateId: string;
+  passed: boolean;
+  /** The tree the gate actually ran against — not the tree somebody hoped it ran against. */
+  candidateSha: string;
+}
+
+/**
+ * The host gate rows behind `gatesPass`, and the gate ids the current config
+ * requires. `gatesPass` is one boolean an earlier transition wrote; an edge
+ * that PRESERVES a green must check the green rather than the flag summarising
+ * it, and a pure guard cannot go and read the rows itself.
+ *
+ * This is the GATING-phase gate set measured against the candidate. The review
+ * phase's own gate rows are not here — what an L25 request has to say about
+ * those is `reviewEvidenceDefect`, and conflating the two would let a failed
+ * `review_evidence_present` row read as a failed candidate gate.
+ */
+export interface GateEvidence {
+  /** Every gate id the current configuration requires of this attempt. */
+  configured: readonly string[];
+  /** The recorded rows. Every configured id must appear. */
+  rows: readonly GateEvidenceRow[];
+}
+
 export interface LandingEvidence {
   shaDisplayed: string;
   summaryDisplayed: string;
@@ -189,20 +217,76 @@ export interface TransitionEvidence {
   treeTerminated?: boolean;
   survivorsReported?: boolean;
   gatesPass?: boolean;
+  gateEvidence?: GateEvidence;
   gatesInvalidated?: boolean;
   reviewInvalidated?: boolean;
+  /** L25: why the recorded review is not evidence. A record, never a key — see `reviewEvidenceDefect`. */
+  reviewInvalidationReason?: string;
   reworkRequest?: string;
   review?: ReviewEvidence;
   reviewTransportRetries?: number;
+  /**
+   * L25's eligibility, and L17's non-transport blocker. Deliberately `string`
+   * rather than the closed unions in `errors.ts`, for the same reason
+   * `TransitionReason.source` is: an off-vocabulary value is exactly what the
+   * guard exists to reject at RUNTIME, and a type that made the bad value
+   * unrepresentable would delete the check along with the risk it guards.
+   */
+  reviewEvidenceDefect?: string;
+  reviewFailure?: string;
+  /**
+   * L25: host observation that the tree under review has not moved — worktree
+   * HEAD is the candidate and clean, canonical HEAD is the base and clean.
+   * Supplied evidence, because `core/src/state/**` may not touch a filesystem;
+   * the physical read lives in the command that authorizes the edge.
+   */
+  candidateUnchanged?: boolean;
   landing?: LandingEvidence;
   headSha?: string;
   checkoutClean?: boolean;
 }
 
 /**
+ * The two correction allowances, which are two different things that one pair
+ * of counters used to carry.
+ *
+ * `auto` and `owner` bound the INTRA-PHASE correction (escalation-ladder rungs
+ * 2–3). They are per PHASE — `beginPhase()` refreshes them, and the contract
+ * that says so is stated verbatim in `call-budget.ts`.
+ *
+ * `ownerReentries` bounds OWNER RE-ENTRY (rungs 4–5: L16, L19, L25 and an
+ * owner-actor L10). It is per ATTEMPT, charged when a task edge draws the owner
+ * tranche, and reset only by `awsf retry`. Before it existed, a phase beginning
+ * after an owner re-entry silently erased that charge.
+ *
+ * It is not a new configuration key: D3 couples the two, so the configured
+ * `risk.correction_allowance.owner` bounds both — one owner-authorized
+ * re-entry, of either kind, per attempt.
+ */
+export interface CorrectionAllowance {
+  auto: number;
+  owner: number;
+  ownerReentries: number;
+}
+
+/**
+ * Widens the configured `risk.correction_allowance` to the three counters the
+ * ledger keeps, defaulting `ownerReentries` to the configured owner allowance.
+ */
+export function correctionAllowance(
+  configured: { auto: number; owner: number; ownerReentries?: number },
+): CorrectionAllowance {
+  return {
+    auto: configured.auto,
+    owner: configured.owner,
+    ownerReentries: configured.ownerReentries ?? configured.owner,
+  };
+}
+
+/**
  * The `sessions` columns this layer reasons over: `calls_reserved`,
- * `calls_spent`, `corrections_auto`, `corrections_owner`, plus the limits from
- * `risk.correction_allowance`.
+ * `calls_spent`, `corrections_auto`, `corrections_owner`, `owner_reentries`,
+ * plus the limits from `risk.correction_allowance`.
  *
  * `callsSpent` is TASK-lifetime, not attempt-lifetime. Spend carries across
  * attempts, so failing repeatedly does not buy a larger budget.
@@ -213,7 +297,9 @@ export interface BudgetState {
   callsReserved: number;
   correctionsAuto: number;
   correctionsOwner: number;
-  allowance: { auto: number; owner: number };
+  /** Attempt-scoped. The counter every owner-authorized TASK edge draws on. */
+  ownerReentries: number;
+  allowance: CorrectionAllowance;
 }
 
 /**
@@ -256,18 +342,27 @@ export interface TransitionResult {
 // The ordered rejection contract.
 // ---------------------------------------------------------------------------
 
+/**
+ * A TASK edge's owner tranche is the attempt-scoped re-entry allowance, never
+ * the per-phase owner counter. The two are separate accounts, and reading the
+ * per-phase one here is what let a later `beginPhase()` refund an owner
+ * re-entry it never authorized.
+ */
+function ownerTrancheSpent(budget: BudgetState): boolean {
+  return budget.ownerReentries >= budget.allowance.ownerReentries;
+}
+
+function autoTrancheSpent(budget: BudgetState): boolean {
+  return budget.correctionsAuto >= budget.allowance.auto;
+}
+
 /** The whole correction budget: once it is gone, no actor can restore it. */
 function globalAllowanceSpent(budget: BudgetState): boolean {
-  return (
-    budget.correctionsAuto >= budget.allowance.auto &&
-    budget.correctionsOwner >= budget.allowance.owner
-  );
+  return autoTrancheSpent(budget) && ownerTrancheSpent(budget);
 }
 
 function trancheSpent(budget: BudgetState, tranche: "auto" | "owner"): boolean {
-  return tranche === "auto"
-    ? budget.correctionsAuto >= budget.allowance.auto
-    : budget.correctionsOwner >= budget.allowance.owner;
+  return tranche === "auto" ? autoTrancheSpent(budget) : ownerTrancheSpent(budget);
 }
 
 /**
@@ -335,7 +430,7 @@ export function transition(input: TransitionInput): TransitionResult {
       from,
       to,
       tranche,
-      `auto ${budget.correctionsAuto}/${budget.allowance.auto}, owner ${budget.correctionsOwner}/${budget.allowance.owner}`,
+      `auto ${budget.correctionsAuto}/${budget.allowance.auto}, owner re-entries ${budget.ownerReentries}/${budget.allowance.ownerReentries}`,
     );
   }
 
@@ -358,7 +453,7 @@ export function transition(input: TransitionInput): TransitionResult {
       tranche,
       tranche === "auto"
         ? `auto ${budget.correctionsAuto}/${budget.allowance.auto}`
-        : `owner ${budget.correctionsOwner}/${budget.allowance.owner}`,
+        : `owner re-entries ${budget.ownerReentries}/${budget.allowance.ownerReentries}`,
     );
   }
 

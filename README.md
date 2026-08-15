@@ -59,7 +59,7 @@ Six pillars carry the design (full detail in the plan's [Solution](specs/awsf-pl
 
 ### The lifecycle
 
-Ten states, twenty-four legal edges, seventy-six rejected pairs evaluated
+Ten states, twenty-five legal edges, seventy-five rejected pairs evaluated
 against an eleven-step ordered rejection contract. The only path into
 `LANDED` passes through a human at a TTY and the persisted `LANDING` state.
 
@@ -75,6 +75,7 @@ stateDiagram-v2
   GATING --> AWAITING_OWNER : L12 · tier 0/1 skips review
   REVIEWING --> AWAITING_OWNER : L15 · verdict recorded
   REVIEWING --> RUNNING : L16 ✦ · owner names a defect
+  AWAITING_OWNER --> REVIEWING : L25 ✦ · owner re-buys an unevidenced review
   AWAITING_OWNER --> RUNNING : L19 ✦ · owner rework
   AWAITING_OWNER --> LANDING : L20 · human on a TTY only
   LANDING --> LANDED : L23 · HEAD equals candidate
@@ -97,10 +98,11 @@ stateDiagram-v2
   end note
 ```
 
-This lifecycle is implemented and exhaustively tested: all 24 legal edges,
-all 76 rejected pairs, and the ordered rejection contract are green. The
+This lifecycle is implemented and exhaustively tested: all 25 legal edges,
+all 75 rejected pairs, and the ordered rejection contract are green. The
 owner CLI now supplies both the interactive L19 `awsf rework TASK "<concrete defect>"`
-path and the persisted, TTY-only L20/L23/L24 landing path.
+path and the persisted, TTY-only L20/L23/L24 landing path. L25 is a legal
+edge with no caller yet: the command that takes it is not written.
 
 ## Status
 

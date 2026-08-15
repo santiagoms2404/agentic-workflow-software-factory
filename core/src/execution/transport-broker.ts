@@ -9,7 +9,7 @@
 //
 // The broker's job is narrow and entirely pre-flight:
 //
-//   1. validate either one of the five task-edge sites or a separately proven
+//   1. validate either one of the six task-edge sites or a separately proven
 //      agent phase inside the durable RUNNING sojourn,
 //   2. refuse a spec that could execute something other than what it names,
 //   3. create the gated child, and hand the sequencing to the barrier.
@@ -62,13 +62,13 @@ import type {
 import type { Reservation } from "./call-budget.ts";
 
 // ---------------------------------------------------------------------------
-// The five task-edge spawn sites.
+// The six task-edge spawn sites.
 // ---------------------------------------------------------------------------
 
 /**
- * L4, L10, L11, L16, L19 — DERIVED from the L-table's ✦ column rather than
- * restated here. A second list would be a second truth, and the one that
- * drifted would be this one. A unit test pins the derivation to the five the
+ * L4, L10, L11, L16, L19, L25 — DERIVED from the L-table's ✦ column rather
+ * than restated here. A second list would be a second truth, and the one that
+ * drifted would be this one. A unit test pins the derivation to the six the
  * plan names, so a change to the table is caught here rather than discovered
  * by a provider that launched somewhere it should not have.
  */

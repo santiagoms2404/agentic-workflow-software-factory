@@ -11,7 +11,7 @@ import {
   statusFilePath,
 } from "../../persistence/platform-paths.ts";
 import { tryReadStatus } from "../../persistence/status-store.ts";
-import { TERMINAL_STATES, type BudgetState, type TaskState } from "../../state/task-machine.ts";
+import { TERMINAL_STATES, correctionAllowance, type BudgetState, type TaskState } from "../../state/task-machine.ts";
 import type { ModelResolutionProvenance } from "../../contracts/normalized-events.ts";
 import type { ProcessIdentity } from "../../execution/launcher-barrier.ts";
 import type { AttemptEvidence } from "../../observability/attempt-evidence.ts";
@@ -104,10 +104,38 @@ function validateComponent(label: string, value: string): void {
   }
 }
 
+/** What a status written before the owner re-entry counter existed actually holds. */
+type LegacyBudget = Omit<BudgetState, "ownerReentries" | "allowance"> & {
+  ownerReentries?: number;
+  allowance: { auto: number; owner: number; ownerReentries?: number };
+};
+
+/**
+ * Reads a pre-`owner_reentries` status as zero re-entries, with the allowance
+ * coupled to its configured owner tranche. That is the same answer the ledger
+ * would have given: nothing had been charged, because the counter that could
+ * charge it did not exist. Retained attempts stay readable and nothing on disk
+ * is rewritten to make them so.
+ */
+function withOwnerReentries(status: AttemptStatus): AttemptStatus {
+  const budget = status.budget as LegacyBudget;
+  if (budget.ownerReentries !== undefined && budget.allowance.ownerReentries !== undefined) {
+    return status;
+  }
+  return {
+    ...status,
+    budget: {
+      ...budget,
+      ownerReentries: budget.ownerReentries ?? 0,
+      allowance: correctionAllowance(budget.allowance),
+    },
+  };
+}
+
 export async function readAttempt(attemptDir: string): Promise<AttemptStatus> {
   const status = await tryReadStatus<AttemptStatus>(statusFilePath(attemptDir));
   if (status === null) throw new Error(`no attempt status exists at ${attemptDir}`);
-  return status;
+  return withOwnerReentries(status);
 }
 
 export async function persistAttempt(

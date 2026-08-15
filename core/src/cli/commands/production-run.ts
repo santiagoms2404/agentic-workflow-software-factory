@@ -808,9 +808,12 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
     correctionStateFor: ({ taskSessionId, phaseId }): CorrectionAllowanceState | null => {
       if (taskSessionId !== status.sessionId || phaseId !== activePhaseId) return null;
       const snapshot = budget.snapshot();
+      // The per-phase pair only. A correction launch is an intra-phase remedy;
+      // the attempt-scoped owner re-entry allowance is a lifecycle allowance
+      // and is not something a phase may spend.
       return {
         used: { auto: snapshot.correctionsAuto, owner: snapshot.correctionsOwner },
-        allowance: { ...snapshot.allowance },
+        allowance: { auto: snapshot.allowance.auto, owner: snapshot.allowance.owner },
       };
     },
   });

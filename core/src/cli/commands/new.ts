@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import { attemptDir as attemptDirectory } from "../../persistence/platform-paths.ts";
+import { correctionAllowance } from "../../state/task-machine.ts";
 import { ceilingFor, type Tier } from "../../state/tiers.ts";
 import {
   latestAttemptNumber,
@@ -20,7 +21,7 @@ export interface NewCommandOptions {
   readonly workflow: string;
   readonly tier: Tier;
   readonly configSnapshotJson?: string;
-  readonly allowance?: { auto: number; owner: number };
+  readonly allowance?: { auto: number; owner: number; ownerReentries?: number };
   readonly projectRecord?: AttemptProjector;
   readonly now?: () => string;
   readonly sessionId?: () => string;
@@ -58,7 +59,8 @@ export async function newCommand(options: NewCommandOptions): Promise<{ attemptD
       callsReserved: 0,
       correctionsAuto: 0,
       correctionsOwner: 0,
-      allowance: { ...(options.allowance ?? { auto: 1, owner: 1 }) },
+      ownerReentries: 0,
+      allowance: correctionAllowance(options.allowance ?? { auto: 1, owner: 1 }),
     },
     model: null,
     lastActivityAt: now,

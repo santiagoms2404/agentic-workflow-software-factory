@@ -516,11 +516,11 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
   const prior = await priorBuild(options.attemptDir);
   const route = await resolveRoute(status, options.config, options.configPath, infra);
   const remainingCalls = ceilingFor(status.tier) - status.budget.callsSpent - status.budget.callsReserved;
-  const remainingOwner = status.budget.allowance.owner - status.budget.correctionsOwner;
+  const remainingOwner = status.budget.allowance.ownerReentries - status.budget.ownerReentries;
   options.terminal.write(`Candidate SHA: ${firstInspection.candidate}`);
   options.terminal.write(`Summary: ${firstInspection.summary}`);
   options.terminal.write(`Route: ${route.adapterId} / ${route.model.provider} / ${route.agent.model}`);
-  options.terminal.write(`Budget: ${remainingCalls} call(s) and ${remainingOwner} owner rework allowance(s) remain`);
+  options.terminal.write(`Budget: ${remainingCalls} call(s) and ${remainingOwner} owner re-entry allowance(s) remain`);
   options.terminal.write(`Defect: ${defect}`);
   const confirmed = await options.terminal.confirm(`Rework exact candidate ${firstInspection.candidate}?`);
   if (!confirmed) return { status, confirmed: false };
@@ -546,7 +546,11 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
   }
 
   const prompt = reworkPrompt(status, defect, prior, route);
-  const runtimeDir = join(options.attemptDir, "private", `owner-rework-${status.budget.correctionsOwner + 1}`);
+  // Generation-qualified by the OWNER RE-ENTRY counter, which is the one this
+  // command is about to charge. Naming it after the per-phase owner counter
+  // would collide the moment a second rework ran in the same attempt, because
+  // the phase in between had already zeroed that counter.
+  const runtimeDir = join(options.attemptDir, "private", `owner-rework-${status.budget.ownerReentries + 1}`);
   await mkdir(runtimeDir, { recursive: true });
   const systemPromptPath = await infra.writeSystemPrompt(route.systemPrompt, runtimeDir);
   await validateMaterializedSystemPrompt(route.adapter.id, runtimeDir, systemPromptPath, route.systemPrompt);
@@ -576,6 +580,7 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
       callsSpent: status.budget.callsSpent,
       correctionsAuto: status.budget.correctionsAuto,
       correctionsOwner: status.budget.correctionsOwner,
+      ownerReentries: status.budget.ownerReentries,
     },
   });
   const authorization = budget.authorize({
@@ -584,7 +589,7 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
     evidence: { candidateSha: status.candidateSha!, reworkRequest: defect, gatesInvalidated: true, reviewInvalidated: true },
   });
   const reservation = authorization.reservation!;
-  const reworkNumber = budget.snapshot().correctionsOwner;
+  const reworkNumber = budget.snapshot().ownerReentries;
   const phaseKey = `owner-rework-${reworkNumber}`;
   const phaseId = `${status.sessionId}:${phaseKey}`;
   const runId = `${phaseId}:run`;

@@ -47,7 +47,7 @@ test("the tier ceilings are exactly 1, 3 and 5", async () => {
 // The pre-spawn check.
 // ---------------------------------------------------------------------------
 
-/** Spawn-site edges that are legal at any tier — L11 and L16 are T2-only by guard. */
+/** Spawn-site edges that are legal at any tier — L11, L16 and L25 are T2-only by guard. */
 const TIER_FREE_SPAWN_EDGES = ["L4", "L10", "L19"] as const;
 
 test("every spawn-site edge refuses to spawn once the tier's ceiling is reached", async () => {
@@ -87,7 +87,7 @@ test("every spawn-site edge refuses to spawn once the tier's ceiling is reached"
 });
 
 test("the T2-only spawn edges are ceiling-checked at T2", async () => {
-  for (const id of ["L11", "L16"] as const) {
+  for (const id of ["L11", "L16", "L25"] as const) {
     await expectRejection("CallCeilingExceeded", { ...validInput(id), budget: budget({ callsSpent: 5 }) }, {
       because: `${id} at the T2 ceiling`,
     });
@@ -294,5 +294,5 @@ test("the ceiling applies to spawn-site edges only", async () => {
     }
   }
   assert.deepEqual(failures, []);
-  assert.deepEqual([...SPAWN_SITE_EDGES], ["L4", "L10", "L11", "L16", "L19"]);
+  assert.deepEqual([...SPAWN_SITE_EDGES], ["L4", "L10", "L11", "L16", "L19", "L25"]);
 });

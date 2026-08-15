@@ -10,12 +10,12 @@ Conventions: test paths are relative to the repository root; `unit | contract | 
 
 ## Lifecycle contract (M1)
 
-- [ ] **All 24 legal transitions succeed** with their guards satisfied, enumerated literally from the plan's L-table. — `unit: core/test/unit/transitions.test.ts` generates the 10×10 matrix and asserts exactly 24 accepts.
-- [ ] **All 76 illegal ordered pairs throw**, each with the **correct error**: 27 `TerminalAttempt`, 10 `AlreadyInState`, 6 `HumanGateBypass`, 33 `IllegalTransition`. — same suite, class→error map asserted pair by pair.
+- [ ] **All 25 legal transitions succeed** with their guards satisfied, enumerated literally from the plan's L-table. — `unit: core/test/unit/transitions.test.ts` generates the 10×10 matrix and asserts exactly 25 accepts.
+- [ ] **All 75 illegal ordered pairs throw**, each with the **correct error**: 27 `TerminalAttempt`, 10 `AlreadyInState`, 6 `HumanGateBypass`, 32 `IllegalTransition`. — same suite, class→error map asserted pair by pair.
 - [ ] **The 11-step rejection order is a contract**: for every adjacent pair of rejection classes, an input violating both raises the earlier one. — `unit: core/test/unit/rejection-order.test.ts`.
 - [ ] **`AWAITING_OWNER` has no timeout**: no clock-driven path can produce `AWAITING_OWNER → BLOCKED`; only `reason.source === 'record'` with codes {record-corrupt, unknown-state, ambiguous-pid, unreadable-worktree}. — `unit: evidence guards` + a clock-injection negative test.
 - [ ] **A style note cannot authorize rework**: L16 requires ≥ 1 finding of severity ≥ medium with both `file` and `detail`. — `unit: core/test/unit/actors.test.ts`.
-- [ ] **Task-edge spawn is legal on exactly five edges** (L4, L10, L11, L16, L19); every other task-state pair attempting one raises `IllegalSpawnSite`. — `unit` + `sim` (broker-level assertion in M3).
+- [ ] **Task-edge spawn is legal on exactly six edges** (L4, L10, L11, L16, L19, L25); every other task-state pair attempting one raises `IllegalSpawnSite`. — `unit` + `sim` (broker-level assertion in M3).
 - [ ] **A later ordinary compiled agent phase launches without a fake `RUNNING → RUNNING` transition** only while durable task state is `RUNNING`, through an exact workflow/phase/ordinal + configured adapter/role verifier and one held reservation. Wrong state, unknown/local/mismatched phase, task-edge-only review/rework, missing reservation, malformed registration, absent verifier, and verifier equivocation create no child; a valid second agent process spends on `GO`. — `unit: core/test/unit/execution/phase-launch-authorization.test.ts` + `sim: core/test/simulation/phase-launch-authorization.test.ts`.
 - [ ] **An intra-phase correction does not increment `calls_spent`; a `GATING → RUNNING` transition does.** — `unit: core/test/unit/ceilings.test.ts` + `journeys` correction journey.
 - [ ] **A registration failure returns the reservation.** — `unit: call-budget` + `sim: barrier registration-failure case`.

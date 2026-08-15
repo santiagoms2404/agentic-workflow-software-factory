@@ -179,6 +179,8 @@ export interface SessionDetailResponse extends SessionCard {
   reviewVerdict: string | null;
   correctionsAuto: number;
   correctionsOwner: number;
+  /** Per attempt, not per phase — the allowance L16/L19/L25 draw on. */
+  ownerReentries: number;
   stateRevision: number;
   transitions: TransitionSummary[];
   gates: GateSummary[];

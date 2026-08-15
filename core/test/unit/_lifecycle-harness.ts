@@ -57,6 +57,23 @@ export interface ReviewEvidence {
   findings: readonly ReviewFinding[];
 }
 
+/** One recorded host gate row, as the host measured it. */
+export interface GateEvidenceRow {
+  gateId: string;
+  passed: boolean;
+  candidateSha: string;
+}
+
+/**
+ * The rows behind `gatesPass`, plus the gate ids the configuration requires.
+ * L25 spends a call to PRESERVE a green, so it checks the green rather than
+ * the boolean summarising it — and a pure guard cannot go and read the rows.
+ */
+export interface GateEvidence {
+  configured: readonly string[];
+  rows: readonly GateEvidenceRow[];
+}
+
 export interface LandingEvidence {
   shaDisplayed: string;
   summaryDisplayed: string;
@@ -84,17 +101,31 @@ export interface TransitionEvidence {
   // L9
   treeTerminated?: boolean;
   survivorsReported?: boolean;
-  // L10, L11, L12, L13, L20
+  // L10, L11, L12, L13, L20, L25
   gatesPass?: boolean;
-  // L16, L19
+  // L25 — the rows behind that boolean
+  gateEvidence?: GateEvidence;
+  // L16, L19; and L25, which requires it ABSENT
   gatesInvalidated?: boolean;
-  // L19
+  // L19, L25
   reviewInvalidated?: boolean;
+  // L25
+  reviewInvalidationReason?: string;
+  // L19
   reworkRequest?: string;
-  // L15, L16
+  // L15, L16, L25
   review?: ReviewEvidence;
   // L17
   reviewTransportRetries?: number;
+  /**
+   * L25's eligibility and L17's non-transport blocker. Deliberately `string`
+   * rather than the closed unions, for the same reason `reason.source` is: an
+   * off-vocabulary value is exactly what the guard must reject at RUNTIME.
+   */
+  reviewEvidenceDefect?: string;
+  reviewFailure?: string;
+  // L25 — host observation, because a pure guard may not touch a filesystem
+  candidateUnchanged?: boolean;
   // L20
   landing?: LandingEvidence;
   // L23
@@ -105,10 +136,16 @@ export interface TransitionEvidence {
 /**
  * Mirrors the `sessions` columns the state layer reasons over:
  * `calls_reserved`, `calls_spent`, `corrections_auto`, `corrections_owner`,
- * plus the allowance limits from `risk.correction_allowance`.
+ * `owner_reentries`, plus the allowance limits from
+ * `risk.correction_allowance`.
  *
  * `callsSpent` is TASK-lifetime, not attempt-lifetime — spend carries across
  * attempts of the same task.
+ *
+ * `correctionsAuto` / `correctionsOwner` bound the INTRA-PHASE correction and
+ * are per phase. `ownerReentries` bounds OWNER RE-ENTRY (L10-owner, L16, L19,
+ * L25) and is per attempt. One pair of counters used to carry both, which
+ * meant a phase beginning after an owner re-entry refunded it.
  */
 export interface BudgetState {
   attempt: number;
@@ -116,7 +153,8 @@ export interface BudgetState {
   callsReserved: number;
   correctionsAuto: number;
   correctionsOwner: number;
-  allowance: { auto: number; owner: number };
+  ownerReentries: number;
+  allowance: { auto: number; owner: number; ownerReentries: number };
 }
 
 /**
@@ -310,15 +348,25 @@ export async function rejectionNameOf(input: TransitionInput): Promise<string | 
 export const BASE_SHA = "b".repeat(40);
 export const CANDIDATE_SHA = "c".repeat(40);
 
-export function budget(overrides: Partial<BudgetState> = {}): BudgetState {
+/**
+ * `allowance` is patched field by field rather than replaced wholesale, so a
+ * case that says `{auto: 2, owner: 1}` is still talking about the same
+ * re-entry allowance it did not mention.
+ */
+export type BudgetOverrides =
+  Partial<Omit<BudgetState, "allowance">> & { allowance?: Partial<BudgetState["allowance"]> };
+
+export function budget(overrides: BudgetOverrides = {}): BudgetState {
+  const { allowance, ...counters } = overrides;
   return {
     attempt: 1,
     callsSpent: 0,
     callsReserved: 0,
     correctionsAuto: 0,
     correctionsOwner: 0,
-    allowance: { auto: 1, owner: 1 },
-    ...overrides,
+    ownerReentries: 0,
+    ...counters,
+    allowance: { auto: 1, owner: 1, ownerReentries: 1, ...allowance },
   };
 }
 
@@ -348,7 +396,7 @@ export function styleNote(): ReviewFinding {
 type EdgeInputs = Readonly<Record<EdgeId, () => TransitionInput>>;
 
 /**
- * A fully-guard-satisfying input for each of the twenty-four legal edges.
+ * A fully-guard-satisfying input for each of the twenty-five legal edges.
  * These are the inputs the transition matrix asserts are ACCEPTED, so every
  * field here is load-bearing: remove one and the edge must start failing.
  */
@@ -441,7 +489,7 @@ const VALID_INPUTS: EdgeInputs = {
     from: "GATING", to: "BLOCKED", actor: "host", tier: 1,
     reason: { source: "gate", code: "correction-budget-exhausted" },
     interactive: false,
-    budget: budget({ correctionsAuto: 1, correctionsOwner: 1, callsSpent: 3 }),
+    budget: budget({ correctionsAuto: 1, correctionsOwner: 1, ownerReentries: 1, callsSpent: 3 }),
     evidence: { gatesPass: false },
   }),
   L14: () => ({
@@ -531,6 +579,32 @@ const VALID_INPUTS: EdgeInputs = {
     reason: { source: "git", code: "non-fast-forward", detail: "canonical is 2 commits ahead" },
     interactive: false, budget: budget({ callsSpent: 1 }),
   }),
+  // L25 — the owner re-buys a review of an UNCHANGED candidate. Note what is
+  // deliberately absent: `gatesInvalidated`. L16 and L19 must assert it because
+  // they change the tree; L25 exists precisely because the tree does not, so
+  // asserting it would be a rework wearing a review's name.
+  L25: () => ({
+    from: "AWAITING_OWNER", to: "REVIEWING", actor: "human", tier: 2,
+    reason: { source: "human", detail: "awsf review" },
+    interactive: true, budget: budget({ callsSpent: 2 }),
+    evidence: {
+      candidateSha: CANDIDATE_SHA,
+      gatesPass: true,
+      gateEvidence: {
+        configured: ["tests", "typecheck"],
+        rows: [
+          { gateId: "tests", passed: true, candidateSha: CANDIDATE_SHA },
+          { gateId: "typecheck", passed: true, candidateSha: CANDIDATE_SHA },
+        ],
+      },
+      reviewInvalidated: true,
+      reviewInvalidationReason: "the recorded review carries no review_evidence_present row",
+      review: { verdict: "accept", reviewedSha: CANDIDATE_SHA, findings: [] },
+      reviewEvidenceDefect: "evidence-gate-absent",
+      candidateUnchanged: true,
+    },
+    spawn: { cost: 1 },
+  }),
 };
 
 /** A fresh, fully-valid input for a legal edge. Mutate the copy freely. */
@@ -564,9 +638,17 @@ export function withReason(id: EdgeId, patch: Partial<TransitionReason>): Transi
 }
 
 /** `validInput`, with its budget patched. */
-export function withBudget(id: EdgeId, patch: Partial<BudgetState>): TransitionInput {
+export function withBudget(id: EdgeId, patch: BudgetOverrides): TransitionInput {
+  const { allowance, ...counters } = patch;
   const base = validInput(id);
-  return { ...base, budget: { ...base.budget, ...patch } };
+  return {
+    ...base,
+    budget: {
+      ...base.budget,
+      ...counters,
+      allowance: { ...base.budget.allowance, ...allowance },
+    },
+  };
 }
 
 /**

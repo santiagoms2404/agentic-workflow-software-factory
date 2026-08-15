@@ -46,6 +46,7 @@ function attempt(evidence: NonNullable<AttemptStatusProjection["evidence"]>): At
     callsReserved: 1,
     correctionsAuto: 0,
     correctionsOwner: 0,
+    ownerReentries: 0,
     workerModelResolved: null,
     updatedAt: SESSION.startedAt,
     endedAt: null,

@@ -60,8 +60,8 @@ test("2 before 3 — a sealed attempt hears 'this attempt is over', except when 
   // Read literally, step 2 ("from-state is BLOCKED / LANDED / CANCELLED")
   // would swallow the three terminal self-pairs and make the class counts
   // 30 TerminalAttempt / 7 AlreadyInState. The class table says 27 / 10, with
-  // the arithmetic spelled out ("3 × 9", "all ten X → X pairs"), and 76 only
-  // decomposes as 27 + 10 + 6 + 33 under that reading — which is also the
+  // the arithmetic spelled out ("3 × 9", "all ten X → X pairs"), and 75 only
+  // decomposes as 27 + 10 + 6 + 32 under that reading — which is also the
   // split the T4 checklist, the acceptance checklist and the build prompt all
   // repeat. So step 2 is read as narrowed to `from` terminal AND `from !== to`,
   // and this test pins the narrowing rather than leaving T5 to guess.
@@ -101,7 +101,7 @@ test("5 before 6 — an illegal pair dressed as an exhausted correction still he
     ...matrixInput("LANDING", "RUNNING"),
     actor: "owner",
     spawn: { cost: 1 },
-    budget: budget({ correctionsAuto: 1, correctionsOwner: 1 }),
+    budget: budget({ correctionsAuto: 1, ownerReentries: 1 }),
   };
   await expectRejection("IllegalTransition", input, { because: "step 5 outranks step 6" });
 });
@@ -112,7 +112,7 @@ test("6 before 7 — a spent global budget outranks actor legitimacy", async () 
   // which cannot help: no actor can restore a spent global budget.
   await expectRejection(
     "CorrectionAllowanceExhausted",
-    { ...validInput("L16"), actor: "host", budget: budget({ callsSpent: 2, correctionsAuto: 1, correctionsOwner: 1 }) },
+    { ...validInput("L16"), actor: "host", budget: budget({ callsSpent: 2, correctionsAuto: 1, ownerReentries: 1 }) },
     { scope: "global", because: "step 6 outranks step 7" },
   );
 });
@@ -134,7 +134,7 @@ test("8 before 9 — the wrong medium outranks the actor's own spent tranche", a
   // only meaningful once the request can be made at all.
   await expectRejection(
     "InteractiveOwnerRequired",
-    { ...validInput("L19"), interactive: false, budget: budget({ callsSpent: 1, correctionsAuto: 0, correctionsOwner: 1 }) },
+    { ...validInput("L19"), interactive: false, budget: budget({ callsSpent: 1, correctionsAuto: 0, ownerReentries: 1 }) },
     { because: "step 8 outranks step 9" },
   );
 });
@@ -148,7 +148,7 @@ test("9 before 10 — a spent tranche outranks a critique of the evidence", asyn
     ...base,
     actor: "owner",
     reason: { source: "gate", command: ["npm", "run", "test:unit"] },
-    budget: budget({ correctionsAuto: 0, correctionsOwner: 1 }),
+    budget: budget({ correctionsAuto: 0, ownerReentries: 1 }),
   };
   await expectRejection("CorrectionAllowanceExhausted", input, {
     scope: "tranche",
@@ -187,7 +187,7 @@ test("each of the eleven rejections is reachable on its own", async () => {
       step: 6,
       error: "CorrectionAllowanceExhausted",
       scope: "global",
-      input: withBudget("L10", { correctionsAuto: 1, correctionsOwner: 1 }),
+      input: withBudget("L10", { correctionsAuto: 1, ownerReentries: 1 }),
     },
     { step: 7, error: "ActorNotPermitted", input: inputFor("L16", { actor: "host" }) },
     { step: 8, error: "InteractiveOwnerRequired", input: inputFor("L20", { interactive: false }) },
@@ -195,7 +195,7 @@ test("each of the eleven rejections is reachable on its own", async () => {
       step: 9,
       error: "CorrectionAllowanceExhausted",
       scope: "tranche",
-      input: withBudget("L10", { correctionsAuto: 1, correctionsOwner: 0 }),
+      input: withBudget("L10", { correctionsAuto: 1, ownerReentries: 0 }),
     },
     { step: 10, error: "InsufficientEvidence", input: withEvidence("L7", { candidateSha: BASE_SHA }) },
     { step: 11, error: "CallCeilingExceeded", input: withBudget("L4", { callsSpent: 3 }) },
@@ -257,7 +257,7 @@ test("the order holds across non-adjacent pairs too", async () => {
       label: "6 over 11 — a spent global budget at the ceiling",
       error: "CorrectionAllowanceExhausted",
       scope: "global",
-      input: withBudget("L10", { callsSpent: 3, correctionsAuto: 1, correctionsOwner: 1 }),
+      input: withBudget("L10", { callsSpent: 3, correctionsAuto: 1, ownerReentries: 1 }),
     },
     {
       label: "7 over 10 — the wrong actor holding only a style note",
@@ -293,7 +293,7 @@ test("the order holds across non-adjacent pairs too", async () => {
       label: "9 over 11 — a spent tranche at the ceiling",
       error: "CorrectionAllowanceExhausted",
       scope: "tranche",
-      input: withBudget("L10", { callsSpent: 3, correctionsAuto: 1, correctionsOwner: 0 }),
+      input: withBudget("L10", { callsSpent: 3, correctionsAuto: 1, ownerReentries: 0 }),
     },
   ];
 
