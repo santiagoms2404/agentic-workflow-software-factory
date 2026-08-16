@@ -1,7 +1,11 @@
+import { resolve } from "node:path";
+import { queryBacklog } from "../backlog.ts";
+import { TicketStore } from "../persistence/ticket-store.ts";
 import type { DatabaseSync } from "../observability/sqlite.ts";
 import { openDatabase, setSessionArchived } from "../observability/sqlite.ts";
 import {
   agentsForSession,
+  backlogSessionCosts,
   compactActivityForSession,
   compiledPromptEvents,
   configSnapshotForSession,
@@ -46,6 +50,7 @@ import type {
   SessionsResponse,
   SettingsResponse,
   UsageTotals,
+  TicketsResponse,
 } from "../../../dashboard/shared/types.ts";
 import { ApiRequestError, jsonResponse, safely, type ApiHandler, type ApiResponse, type HandlerRequest } from "./responses.ts";
 import { decodePathSegments, validateAuthority } from "./security.ts";
@@ -58,6 +63,7 @@ export const API_ROUTE_TABLE = Object.freeze([
   { method: "GET", path: "/api/v1/sessions/:id/events", name: "events" },
   { method: "GET", path: "/api/v1/settings", name: "settings" },
   { method: "GET", path: "/api/v1/adapters", name: "adapters" },
+  { method: "GET", path: "/api/v1/tickets", name: "tickets" },
   { method: "POST", path: "/api/v1/sessions/:id/archive", name: "archive" },
 ] as const);
 
@@ -278,6 +284,8 @@ function allowedNextActions(state: string): string[] {
 export interface ApiRouterOptions {
   readonly dbPath: string;
   readonly config: AwsfConfig;
+  /** Repository ticket files; the dashboard never receives their paths or bodies. */
+  readonly ticketDirectory?: string;
   readonly open?: typeof openDatabase;
 }
 
@@ -421,6 +429,13 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
       return jsonResponse(response);
     }),
     settings: safely(() => jsonResponse({ settings: buildEffectiveConfig(options.config) } satisfies SettingsResponse)),
+    tickets: safely(async () => {
+      const backlog = await queryBacklog(
+        new TicketStore(options.ticketDirectory ?? resolve(process.cwd(), "specs", "tickets")),
+        backlogSessionCosts(readDb).map((row) => ({ taskId: row.task_id, estimatedCostUsd: row.estimated_cost_usd, costAuthority: row.cost_authority })),
+      );
+      return jsonResponse(backlog satisfies TicketsResponse);
+    }),
     adapters: safely(() => {
       const adapters: AdapterHealth[] = Object.entries(options.config.adapters).map(([id, entry]) => {
         const enabled = entry.enabled !== false;

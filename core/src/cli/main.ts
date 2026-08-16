@@ -9,6 +9,7 @@ import { loadConfig } from "../config/load.ts";
 import { resolveStateRoot } from "../persistence/platform-paths.ts";
 import { callCeilingsOf, type Tier } from "../state/tiers.ts";
 import { processOwnerTerminal, type OwnerTerminal } from "./tty.ts";
+import { backlogCommand } from "./commands/backlog.ts";
 import { cancelCommand } from "./commands/cancel.ts";
 import { doctorCommand } from "./commands/doctor.ts";
 import { dashCommand, gcCommand, rebuildCommand } from "./commands/operator.ts";
@@ -31,7 +32,7 @@ import { watchCommand } from "./commands/watch.ts";
 /** The complete owner-facing command table; documentation reconciles against it. */
 export const CLI_COMMANDS = Object.freeze([
   "new", "start", "run", "status", "watch", "rework", "review", "raise", "journey", "land", "cancel", "retry",
-  "doctor", "gc", "dash", "db rebuild", "ticket",
+  "doctor", "gc", "dash", "db rebuild", "ticket", "backlog",
 ]);
 
 const USAGE = `usage: awsf <${CLI_COMMANDS.join("|")}> [task] [options]`;
@@ -119,6 +120,11 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       }
       out(`Rebuild refused: ${report.reason}; candidate retained at ${report.candidatePath}`);
       return 1;
+    }
+    if (command === "backlog") {
+      if (parsed.positionals.length !== 0) throw new Error("usage: awsf backlog [--state-root PATH]");
+      for (const line of await backlogCommand(ticketStoreFor(cwd), resolve(stateRoot, "awsf.db"))) out(line);
+      return 0;
     }
     if (command === "ticket") {
       const action = parsed.positionals[0];

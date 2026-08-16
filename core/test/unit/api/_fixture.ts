@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type DatabaseSync } from "../../../src/observability/sqlite.ts";
@@ -9,11 +9,16 @@ export function apiFixture(): {
   readonly path: string;
   readonly config: ReturnType<typeof validConfig>;
   readonly writer: DatabaseSync;
+  readonly ticketDirectory: string;
   close(): void;
 } {
   const root = mkdtempSync(join(tmpdir(), "awsf-api-"));
   const path = join(root, "awsf.db");
   const writer = openDatabase(path);
+  const ticketDirectory = join(root, "tickets");
+  mkdirSync(ticketDirectory);
+  writeFileSync(join(ticketDirectory, "T01.md"), `---\nid: T01\ntitle: First\nmilestone: M1\ntier: 0\nstate: done\ndepends_on: []\nworkflow: intake\noutcome: First\ncontext: [First]\nacceptance: [First]\nnon_goals: [First]\n---\nfirst\n`);
+  writeFileSync(join(ticketDirectory, "T02.md"), `---\nid: T02\ntitle: Second\nmilestone: M1\ntier: 1\nstate: todo\ndepends_on: [T01]\nworkflow: build\noutcome: Second\ncontext: [Second]\nacceptance: [Second]\nnon_goals: [Second]\n---\nsecond\n`);
   createSession(writer, {
     sessionId: "session-1",
     projectSlug: "test-project",
@@ -100,6 +105,7 @@ export function apiFixture(): {
     path,
     config: validConfig(),
     writer,
+    ticketDirectory,
     close(): void {
       writer.close();
       rmSync(root, { recursive: true, force: true });

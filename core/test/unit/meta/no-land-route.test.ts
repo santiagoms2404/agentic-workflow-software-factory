@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { API_ROUTE_TABLE } from "../../../src/api/routes.ts";
 import { repoRoot, walkFiles, relRepo } from "./_walk.ts";
 
 const FORBIDDEN_ROUTES = [
@@ -12,7 +13,10 @@ const FORBIDDEN_ROUTES = [
   /config[-_]?mutation/i,
 ];
 
-test("no dashboard write path to the lifecycle exists in the api layer", () => {
+test("the backlog surface is a GET route and no dashboard write path reaches the lifecycle", () => {
+  assert.deepEqual(API_ROUTE_TABLE.find((route) => route.path === "/api/v1/tickets"), {
+    method: "GET", path: "/api/v1/tickets", name: "tickets",
+  });
   const apiFiles = walkFiles(join(repoRoot(), "core", "src", "api"), [".ts"]);
   const offenders = apiFiles
     .map(relRepo)

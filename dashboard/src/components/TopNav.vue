@@ -4,6 +4,7 @@ defineProps<{
   sessionId: string | null;
   phaseName: string | null;
   settings: boolean;
+  backlog: boolean;
 }>();
 </script>
 
@@ -28,8 +29,12 @@ defineProps<{
       <template v-if="settings">
         <span class="sep">›</span><span class="current">settings</span>
       </template>
+      <template v-if="backlog">
+        <span class="sep">›</span><span class="current">backlog</span>
+      </template>
     </nav>
-    <a v-if="!settings" class="settings-link" href="#/settings">Settings</a>
+    <a v-if="!settings && !backlog" class="settings-link" href="#/settings">Settings</a>
+    <a v-if="!backlog" class="settings-link" href="#/backlog">Backlog</a>
     <slot />
   </header>
 </template>

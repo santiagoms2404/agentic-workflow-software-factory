@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createApiRouter } from "../../../src/api/routes.ts";
 import { processesForSession } from "../../../src/observability/queries.ts";
 import { openDatabase, type OpenDatabaseOptions } from "../../../src/observability/sqlite.ts";
-import type { SessionsResponse, SessionDetailResponse, PhaseDetailResponse, EventsResponse } from "../../../../dashboard/shared/types.ts";
+import type { SessionsResponse, SessionDetailResponse, PhaseDetailResponse, EventsResponse, TicketsResponse } from "../../../../dashboard/shared/types.ts";
 import { apiFixture } from "./_fixture.ts";
 
 const headers = { host: "127.0.0.1:4600" };
@@ -11,6 +11,20 @@ const headers = { host: "127.0.0.1:4600" };
 function request(url: string, method = "GET") {
   return { method, url, headers };
 }
+
+test("tickets serves the shared backlog query with its ready set and an honest partial projection", async () => {
+  const fixture = apiFixture();
+  const router = createApiRouter({ dbPath: fixture.path, config: fixture.config, ticketDirectory: fixture.ticketDirectory });
+  try {
+    const response = await router.dispatch(request("/api/v1/tickets"));
+    assert.equal(response.status, 200);
+    const backlog = response.body as TicketsResponse;
+    assert.deepEqual(backlog.ready.map((ticket) => ticket.id), ["T02"]);
+    assert.deepEqual(backlog.counts.state, { todo: 1, wip: 0, done: 1, failed: 0 });
+    assert.equal(backlog.projectedCost.partial, true);
+    assert.equal(backlog.projectedCost.usd, null);
+  } finally { router.close(); fixture.close(); }
+});
 
 test("sessions embeds ordered phases and agents in one response", async () => {
   const fixture = apiFixture();

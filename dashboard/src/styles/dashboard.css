@@ -289,6 +289,24 @@ pre { max-height: 42vh; margin: 8px 0 0; padding: 12px 14px; overflow: auto; bor
 .terminal-command { padding: 10px 12px; border-radius: 8px; background: var(--panel-3); }
 .terminal-note { padding: 11px; border: 1px solid rgba(232,182,74,.55); border-radius: 8px; color: #ffe8ae; font-weight: 700; }
 
+.backlog-route { max-width: 1680px; margin: 0 auto; padding: 24px 28px 32px; }
+.backlog-route h1 { margin: 2px 0 18px; font-size: 28px; }
+.backlog-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0 0 18px; }
+.backlog-metrics > div, .backlog-column { border: 1px solid var(--border-soft); border-radius: 12px; background: var(--surface); }
+.backlog-metrics > div { padding: 14px 16px; }
+.backlog-metrics dt, .ticket-card small { color: var(--faint); }
+.backlog-metrics dd { margin: 4px 0 0; font: 700 18px var(--mono); }
+.backlog-metrics small { color: var(--amber); }
+.backlog-board { display: grid; grid-template-columns: repeat(4, minmax(220px, 1fr)); gap: 14px; align-items: start; }
+.backlog-column { min-height: 160px; padding: 12px; }
+.backlog-column h2 { display: flex; justify-content: space-between; margin: 0 0 11px; font-size: 15px; text-transform: uppercase; color: var(--dim); }
+.backlog-column h2 span, .tier-chip { padding: 2px 7px; border: 1px solid var(--border); border-radius: 999px; font: 12px var(--mono); }
+.ticket-card { display: flex; flex-direction: column; gap: 6px; margin-top: 9px; padding: 12px; border: 1px solid var(--border-soft); border-radius: 9px; background: var(--panel-3); }
+.ticket-card.ready { border-color: rgba(74,222,128,.48); }
+.ticket-card header { display: flex; justify-content: space-between; color: var(--purple); }
+.ticket-card p { margin: 0; font: 12px var(--mono); }
+.ready-label { color: var(--green); }.blocked-label { color: var(--amber); }
+
 .settings-route { max-width: 1500px; margin: 0 auto; padding: 0 0 28px; }
 .settings-route section { padding: 20px; }
 .settings-route h1 { margin: 2px 0 18px; font-size: 26px; }
@@ -335,4 +353,6 @@ pre { max-height: 42vh; margin: 8px 0 0; padding: 12px 14px; overflow: auto; bor
   .event-row > button { grid-template-columns: 90px minmax(110px, 1fr); }
   .event-row > button span, .event-row > button em, .event-row > button small { grid-column: 2; }
   .adapter-list li { grid-template-columns: 1fr; }
+  .backlog-route { padding: 18px 12px; }
+  .backlog-board, .backlog-metrics { grid-template-columns: 1fr; }
 }

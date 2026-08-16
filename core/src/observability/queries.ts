@@ -88,6 +88,17 @@ export function listSessions(db: DatabaseSync, opts: ListSessionsOptions = {}): 
     .all(...params) as unknown as SessionRow[];
 }
 
+export interface BacklogSessionCostRow {
+  task_id: string;
+  estimated_cost_usd: number | null;
+  cost_authority: "provider" | "catalog-estimate" | "unavailable";
+}
+
+/** Cost evidence for the backlog projection; no session detail is exposed. */
+export function backlogSessionCosts(db: DatabaseSync): BacklogSessionCostRow[] {
+  return db.prepare(`SELECT task_id, estimated_cost_usd, cost_authority FROM sessions WHERE archived = 0`).all() as unknown as BacklogSessionCostRow[];
+}
+
 export interface PhaseRow {
   phase_id: string;
   session_id: string;

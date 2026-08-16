@@ -93,7 +93,7 @@ export async function dashCommand(options: DashOptions): Promise<"not-built" | "
     prepareDatabaseForReadonly(options.dbPath);
   }
   const router: ApiRouter | null = options.dbPath !== undefined && options.config !== undefined
-    ? createApiRouter({ dbPath: options.dbPath, config: options.config }) : null;
+    ? createApiRouter({ dbPath: options.dbPath, config: options.config, ticketDirectory: join(options.cwd, "specs", "tickets") }) : null;
   const contentType = (path: string): string => {
     if (path.endsWith(".html")) return "text/html; charset=utf-8";
     if (path.endsWith(".js")) return "text/javascript; charset=utf-8";

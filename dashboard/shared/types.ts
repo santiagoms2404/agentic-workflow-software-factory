@@ -279,3 +279,29 @@ export interface AdaptersResponse {
 export interface ArchiveResponse {
   archived: true;
 }
+
+export interface BacklogTicket {
+  id: string;
+  title: string;
+  milestone: string;
+  tier: 0 | 1 | 2;
+  state: "todo" | "wip" | "done" | "failed";
+  depends_on: string[];
+  workflow: string;
+  outcome: string;
+  context: string[];
+  acceptance: string[];
+  non_goals: string[];
+  ready: boolean;
+}
+
+export interface TicketsResponse {
+  tickets: BacklogTicket[];
+  ready: BacklogTicket[];
+  counts: {
+    state: Record<BacklogTicket["state"], number>;
+    milestone: Record<string, number>;
+    tier: Record<"T0" | "T1" | "T2", number>;
+  };
+  projectedCost: { usd: number | null; authority: CostAuthority; partial: boolean };
+}
