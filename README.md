@@ -122,7 +122,7 @@ markers are earned, never pre-declared. As of this README:
 | **M5** — Workflows & Gates | `[x]` | The six workflows, thirteen gates, permissions, and correction loop |
 | **M6** — Owner Controls | `[x]` | CLI commands, TTY-only persisted landing, cancel, retry, doctor, rebuild, and list-only gc |
 | **M7** — API & Dashboard | `[x]` | Read-only HTTP API and the loopback Vue dashboard |
-| **M8** — Platform & Pilots | `[wip]` | WSL2 matrix evidence and explicit destination-machine deferrals; two real pilot tasks remain |
+| **M8** — Platform & Pilots | `[x]` | WSL2 matrix evidence and explicit destination-machine deferrals; both pilot tasks landed — see `records/pilots/` |
 
 **Concretely, right now:** the lifecycle, persistence, execution kernel,
 adapters, workflows, gates, permissions, owner CLI, and read-only dashboard are
