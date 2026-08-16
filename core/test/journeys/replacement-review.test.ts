@@ -37,6 +37,7 @@ import { nextRevision, persistAttempt, readAttempt, type AttemptStatus } from ".
 import { landCommand } from "../../src/cli/commands/land.ts";
 import { main } from "../../src/cli/main.ts";
 import { newCommand } from "../../src/cli/commands/new.ts";
+import { CeilingRaiseNotInteractive, raiseCommand } from "../../src/cli/commands/raise.ts";
 import {
   CANDIDATE_LOSS_WARNING,
   CONTRACT_RETRY_HEADING,
@@ -55,6 +56,7 @@ import { InvalidReviewInversion } from "../../src/workflow/review-routing.ts";
 import { gatesForSession, getSession, transitionsForSession } from "../../src/observability/queries.ts";
 import { openDatabase } from "../../src/observability/sqlite.ts";
 import type { AttemptEvidence } from "../../src/observability/attempt-evidence.ts";
+import { callCeilingsOf } from "../../src/state/tiers.ts";
 import type { OwnerTerminal } from "../../src/cli/tty.ts";
 
 const AT = "2026-08-14T00:00:00.000Z";
@@ -176,6 +178,7 @@ async function world(options: {
   const created = await newCommand({
     stateRoot, project: config.project.slug, taskId: `replacement-${workflow}`, repository: canonical,
     request, workflow, tier: 2, configSnapshotJson: toConfigSnapshotJson(config),
+    callCeilings: callCeilingsOf(config.risk.call_ceiling),
     allowance: config.risk.correction_allowance, projectRecord: projection.project,
   });
   const prepared = await startCommand({
@@ -614,6 +617,82 @@ test("a completed simple-sdlc at four spent calls is refused for insufficient he
     assert.equal(status.budget.callsSpent, 4);
     assert.equal(status.budget.ownerReentries, 0);
     assert.deepEqual(launches, []);
+  } finally { await cleanup(fixture); }
+});
+
+test("an attempt halted at its ceiling resumes after an owner raise, with no configuration-snapshot mismatch", async () => {
+  // The pilot's own arithmetic, end to end, and the reason the raise had to be
+  // a COMMAND rather than a configuration edit.
+  //
+  // simple-sdlc at T2: a ceiling of five, four spent, one left — and a
+  // replacement review needs two, so the command above refuses and the attempt
+  // is stranded holding a candidate it cannot re-review. Raising the ceiling by
+  // editing `awsf.config.yaml` would move `toConfigSnapshotJson(config)` away
+  // from the snapshot this attempt recorded, and `validateAttempt` compares
+  // those two before anything else — so the edit would lock the owner out of
+  // the very act it was made to enable. The grant goes on the attempt instead:
+  // the config file is byte-identical before and after, the snapshot still
+  // matches, and the same command that refused now runs to completion.
+  const fixture = await world({ workflow: "simple-sdlc", callsSpent: 4 });
+  const launches: string[] = [];
+  const raiseLines: string[] = [];
+  const RAISE_REASON = "the replacement review needs two calls and one remained";
+  try {
+    const configBefore = readFileSync(fixture.configPath, "utf8");
+    await assert.rejects(run(fixture, "accept", { launches }), ReviewHeadroomInsufficient);
+    const halted = await readAttempt(fixture.attemptDir);
+    assert.equal(halted.budget.ceiling, 5, "the attempt records the configured T2 ceiling");
+    assert.deepEqual(launches, [], "the halt cost nothing");
+
+    // A piped caller cannot take the owner out of a halt.
+    await assert.rejects(
+      raiseCommand({
+        attemptDir: fixture.attemptDir, calls: 2, reason: RAISE_REASON,
+        terminal: terminal(true, false), projectRecord: fixture.projection.project,
+      }),
+      CeilingRaiseNotInteractive,
+    );
+
+    const raised = await raiseCommand({
+      attemptDir: fixture.attemptDir, calls: 2, reason: RAISE_REASON,
+      terminal: terminal(true, true, raiseLines), projectRecord: fixture.projection.project,
+    });
+    assert.equal(raised.ceiling, 7);
+    assert.equal(raised.status.lifecycleState, "AWAITING_OWNER", "the raise moved no lifecycle edge");
+    assert.equal(raised.status.budget.callsSpent, 4, "and bought no call");
+    assert.deepEqual(raised.status.ceilingGrants.map((grant) => [grant.calls, grant.ceiling, grant.reason]),
+      [[2, 7, RAISE_REASON]]);
+
+    // The same command, the same config object, the same file on disk.
+    const result = await run(fixture, "accept", { launches });
+    assert.equal(result.status.lifecycleState, "AWAITING_OWNER", result.status.blocker?.detail);
+    assert.equal(result.status.budget.callsSpent, 5, "the fifth call a ceiling of five could not have paid for");
+    assert.equal(result.status.budget.callsReserved, 0);
+    assert.equal(result.status.budget.ceiling, 7, "the grant survived the review that spent against it");
+    assert.equal(result.status.requiredReviewPresent, true);
+    assert.deepEqual(launches, ["claude"], "the reviewer ran exactly once");
+
+    assert.equal(readFileSync(fixture.configPath, "utf8"), configBefore, "no configuration file was edited");
+    assert.equal(
+      result.status.configSnapshotJson,
+      toConfigSnapshotJson(fixture.config),
+      "the attempt's recorded snapshot still equals the live effective configuration",
+    );
+
+    const db = openDatabase(join(fixture.stateRoot, "awsf.db"), { readonly: true });
+    try {
+      const session = getSession(db, result.status.sessionId);
+      assert.equal(session?.call_ceiling, 7, "the projection follows the raise rather than the creation-time number");
+      assert.equal(session?.calls_spent, 5);
+      const events = db.prepare(
+        "SELECT payload_json FROM events WHERE session_id = ? AND type = 'ceiling_grant'",
+      ).all(result.status.sessionId) as { payload_json: string }[];
+      assert.equal(events.length, 1, "the grant is one auditable row, not a silently changed column");
+      assert.deepEqual(JSON.parse(events[0]!.payload_json), {
+        calls: 2, from: 5, to: 7, reason: RAISE_REASON, attempt: 1,
+      });
+      assert.deepEqual(transitionsForSession(db, result.status.sessionId).slice(-2).map((row) => row.edge_id), ["L25", "L15"]);
+    } finally { db.close(); }
   } finally { await cleanup(fixture); }
 });
 

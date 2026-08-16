@@ -33,7 +33,6 @@ export const KNOWN_WORKFLOW_IDS = [
 // schema-closed, so a later task can extend it without touching schema.ts.
 export const KNOWN_GATE_IDS = ["test", "typecheck", "lint"] as const;
 export const KNOWN_RISK_TIERS = ["T0", "T1", "T2"] as const;
-export const VALID_TIER_CEILINGS = [1, 3, 5] as const;
 // Per the Ownership section and the Envelope & Gate Contract: `protected` is
 // orthogonal to risk tier — credential access, external mutation, deletion,
 // migration, release/cutover, credit-billed execution.
@@ -157,8 +156,11 @@ const GateEntrySchema = Type.Object(
 const RiskSchema = Type.Object(
   {
     default: RiskTier,
-    // one ceiling per risk tier; each value checked by load.ts against
-    // VALID_TIER_CEILINGS ({1,3,5}).
+    // One ceiling per risk tier, and a real dial: any whole number of calls
+    // the loader admits (`MIN_CALL_CEILING`..`MAX_CALL_CEILING` in
+    // core/src/state/tiers.ts). The shipped defaults stay 1/3/5. The upper
+    // bound lives in code, never here — a bound the config could raise would
+    // be a bound the config could remove.
     call_ceiling: Type.Object(
       { T0: Type.Integer(), T1: Type.Integer(), T2: Type.Integer() },
       { additionalProperties: false },

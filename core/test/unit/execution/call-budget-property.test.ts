@@ -21,7 +21,7 @@ import { setTimeout as delay } from "node:timers/promises";
 
 import { CallBudget } from "../../../src/execution/call-budget.ts";
 import { CallCeilingExceeded } from "../../../src/state/errors.ts";
-import { CALL_CEILINGS, type Tier } from "../../../src/state/tiers.ts";
+import { DEFAULT_CALL_CEILINGS as CALL_CEILINGS, type Tier } from "../../../src/state/tiers.ts";
 
 const TIERS: readonly Tier[] = [0, 1, 2];
 const SEEDS: readonly number[] = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597];

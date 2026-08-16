@@ -280,12 +280,16 @@ test("the bounded fixture window is RUNNING in WAL and rebuild preserves its fin
  * assumption is self-consistent.
  */
 function stripOwnerReentries(attemptDir: string): void {
+  // `ceiling` and `ceilingGrants` join the strip list because the ceiling
+  // became an owner-set number after the counter did: a genuine pre-upgrade
+  // attempt is missing all three, and the shim must answer for all three.
+  const stripped = new Set(["ownerReentries", "ceiling", "ceilingGrants"]);
   const drop = (value: unknown): unknown => {
     if (Array.isArray(value)) return value.map(drop);
     if (value === null || typeof value !== "object") return value;
     const out: Record<string, unknown> = {};
     for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
-      if (key === "ownerReentries") continue;
+      if (stripped.has(key)) continue;
       out[key] = drop(child);
     }
     return out;
@@ -300,7 +304,8 @@ function stripOwnerReentries(attemptDir: string): void {
 }
 
 test("db rebuild replays a journal written before the owner re-entry counter existed", async () => {
-  // The regression this file was missing. `withOwnerReentries` shipped guarding
+  // The regression this file was missing. The shim (now `withLegacyDefaults`,
+  // which covers the absent call ceiling too) shipped guarding
   // `readAttempt` only, so `status.json` stayed readable while the projection
   // path took `event.next` straight from the journal — where the field is
   // absent, `node:sqlite` will not bind `undefined`, and the rebuild refused on
@@ -321,9 +326,11 @@ test("db rebuild replays a journal written before the owner re-entry counter exi
     // The precondition, asserted rather than assumed: without it a green
     // rebuild below would prove nothing about legacy records.
     const raw = JSON.parse(readFileSync(join(created.attemptDir, "journal.jsonl"), "utf8").split("\n")[0] ?? "{}") as {
-      event: { next: { budget: Record<string, unknown> } };
+      event: { next: { budget: Record<string, unknown> } & Record<string, unknown> };
     };
     assert.equal("ownerReentries" in raw.event.next.budget, false, "the journal must be missing the field");
+    assert.equal("ceiling" in raw.event.next.budget, false, "and the ceiling the dial added after it");
+    assert.equal("ceilingGrants" in raw.event.next, false, "and the grant ledger");
 
     const report = await rebuildCommand(stateRoot);
     assert.equal(report.ok, true, report.ok ? undefined : report.reason);
@@ -337,10 +344,16 @@ test("db rebuild replays a journal written before the owner re-entry counter exi
       // counter that could charge it did not exist. Never null, which would
       // read as "unknown" to every consumer of this column.
       assert.equal(session?.owner_reentries, 0);
+      // Same rule for the ceiling: the tier default is the number that attempt
+      // actually ran under, so the rebuild replays it rather than inventing one.
+      assert.equal(session?.call_ceiling, 3);
     } finally { rebuilt.close(); }
 
     // The reader half of the same shim, on the same stripped bytes.
-    assert.equal((await readAttempt(created.attemptDir)).budget.ownerReentries, 0);
+    const read = await readAttempt(created.attemptDir);
+    assert.equal(read.budget.ownerReentries, 0);
+    assert.equal(read.budget.ceiling, undefined, "an absent ceiling stays absent rather than claiming one was recorded");
+    assert.deepEqual(read.ceilingGrants, []);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 

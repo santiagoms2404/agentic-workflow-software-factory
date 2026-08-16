@@ -515,7 +515,7 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
   const firstInspection = inspectCandidate(status);
   const prior = await priorBuild(options.attemptDir);
   const route = await resolveRoute(status, options.config, options.configPath, infra);
-  const remainingCalls = ceilingFor(status.tier) - status.budget.callsSpent - status.budget.callsReserved;
+  const remainingCalls = ceilingFor(status.tier, status.budget.ceiling) - status.budget.callsSpent - status.budget.callsReserved;
   const remainingOwner = status.budget.allowance.ownerReentries - status.budget.ownerReentries;
   options.terminal.write(`Candidate SHA: ${firstInspection.candidate}`);
   options.terminal.write(`Summary: ${firstInspection.summary}`);
@@ -575,6 +575,8 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
   const preflightSpec = preflightDescriptor(route, request, () => preflightGrant.spec);
   const budget = new CallBudget({
     taskId: status.taskId, tier: 1, allowance: status.budget.allowance,
+    // The attempt's own ceiling, including any owner grant.
+    ...(status.budget.ceiling === undefined ? {} : { ceiling: status.budget.ceiling }),
     carried: {
       attempt: status.attempt,
       callsSpent: status.budget.callsSpent,

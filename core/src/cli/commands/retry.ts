@@ -4,6 +4,7 @@ import { attemptDir as attemptDirectory } from "../../persistence/platform-paths
 import { redactConfigSnapshotJson } from "../../config/effective-config.ts";
 import { ReservationOutstanding } from "../../execution/call-budget.ts";
 import { correctionAllowance } from "../../state/task-machine.ts";
+import { assertCeiling, ceilingFor, type CallCeilings } from "../../state/tiers.ts";
 import {
   isTerminalStatus,
   latestAttemptNumber,
@@ -22,6 +23,8 @@ export interface RetryCommandOptions {
   readonly configSnapshotJson: string;
   /** The currently configured correction allowance for attempt n+1. */
   readonly allowance: { readonly auto: number; readonly owner: number; readonly ownerReentries?: number };
+  /** The currently configured `risk.call_ceiling`, re-read like the allowance is. */
+  readonly callCeilings?: CallCeilings;
   readonly now?: () => string;
   readonly sessionId?: () => string;
   readonly projectRecord?: AttemptProjector;
@@ -40,6 +43,16 @@ export async function retryCommand(options: RetryCommandOptions): Promise<{ atte
   if (attempt <= prior.attempt) throw new Error("retry attempt number did not advance");
   const dir = attemptDirectory(options.stateRoot, prior.project, prior.taskId, String(attempt));
   const now = (options.now ?? ((): string => new Date().toISOString()))();
+  // Attempt n+1 takes the CURRENT configured ceiling, exactly as it takes the
+  // current allowance and the current config snapshot — and then re-applies
+  // every grant this task was given. Spend carries forward, so the raises that
+  // paid for it must carry forward too, or the new attempt opens over its own
+  // ceiling with no act left to have caused it.
+  const granted = prior.ceilingGrants.reduce((total, grant) => total + grant.calls, 0);
+  const ceiling = assertCeiling(
+    ceilingFor(prior.tier, options.callCeilings) + granted,
+    `${prior.project}/${prior.taskId} at T${prior.tier} with ${granted} granted call(s)`,
+  );
   const next: AttemptStatus = {
     ...prior,
     sessionId: (options.sessionId ?? randomUUID)(),
@@ -60,6 +73,7 @@ export async function retryCommand(options: RetryCommandOptions): Promise<{ atte
       // re-entry. Nothing else does.
       ownerReentries: 0,
       allowance: correctionAllowance(options.allowance),
+      ceiling,
     },
     model: null,
     lastActivityAt: now,

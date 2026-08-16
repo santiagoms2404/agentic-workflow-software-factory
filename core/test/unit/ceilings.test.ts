@@ -34,13 +34,81 @@ const TIERS: readonly Tier[] = [0, 1, 2];
 // The numbers.
 // ---------------------------------------------------------------------------
 
-test("the tier ceilings are exactly 1, 3 and 5", async () => {
-  const { CALL_CEILINGS: ceilings, ceilingFor } = await tiers();
+test("the tier ceilings DEFAULT to exactly 1, 3 and 5", async () => {
+  const { DEFAULT_CALL_CEILINGS: ceilings, ceilingFor } = await tiers();
   assert.deepEqual({ ...ceilings }, { 0: 1, 1: 3, 2: 5 });
   assert.deepEqual({ ...ceilings }, { ...CALL_CEILINGS });
   assert.equal(ceilingFor(0), 1);
   assert.equal(ceilingFor(1), 3);
   assert.equal(ceilingFor(2), 5);
+});
+
+// ---------------------------------------------------------------------------
+// The dial. The defaults above are what `ceilingFor` answers when NOTHING was
+// resolved for it; an effective configuration or an owner grant is what it
+// answers from when one was.
+// ---------------------------------------------------------------------------
+
+test("ceilingFor resolves from an effective configuration's table", async () => {
+  const { callCeilingsOf, ceilingFor } = await tiers();
+  const configured = callCeilingsOf({ T0: 2, T1: 4, T2: 7 });
+  assert.deepEqual({ ...configured }, { 0: 2, 1: 4, 2: 7 });
+  assert.equal(ceilingFor(0, configured), 2);
+  assert.equal(ceilingFor(1, configured), 4);
+  assert.equal(ceilingFor(2, configured), 7);
+  // And the defaults are untouched by having resolved something else.
+  assert.equal(ceilingFor(2), 5);
+});
+
+test("ceilingFor resolves from one attempt's own already-resolved ceiling", async () => {
+  const { ceilingFor } = await tiers();
+  assert.equal(ceilingFor(2, 7), 7, "an owner-raised ceiling is a resolved number, not a table lookup");
+  assert.equal(ceilingFor(0, 3), 3);
+});
+
+test("fitsCeiling and assertWorkflowFitsTier measure against the resolved ceiling", async () => {
+  const { assertWorkflowFitsTier, fitsCeiling } = await tiers();
+  const CallCeilingExceeded = await errorClass("CallCeilingExceeded");
+  // Semantics unchanged with nothing resolved…
+  assert.equal(fitsCeiling(4, 1, 2), true);
+  assert.equal(fitsCeiling(5, 1, 2), false);
+  // …and the same inclusive comparison against a resolved one.
+  assert.equal(fitsCeiling(5, 1, 2, 6), true);
+  assert.equal(fitsCeiling(6, 1, 2, 6), false);
+  assert.throws(() => assertWorkflowFitsTier({ id: "six-phase", minimumCalls: 6 }, 2), CallCeilingExceeded);
+  assertWorkflowFitsTier({ id: "six-phase", minimumCalls: 6 }, 2, 6);
+});
+
+test("a ceiling is a whole number of calls inside the hard bound", async () => {
+  const { MAX_CALL_CEILING, MIN_CALL_CEILING, assertCeiling } = await tiers();
+  assert.equal(assertCeiling(MIN_CALL_CEILING, "min"), MIN_CALL_CEILING);
+  assert.equal(assertCeiling(MAX_CALL_CEILING, "max"), MAX_CALL_CEILING);
+  for (const invalid of [0, -1, 2.5, Number.NaN, Number.POSITIVE_INFINITY, MAX_CALL_CEILING + 1]) {
+    assert.throws(() => assertCeiling(invalid, "subject"), RangeError, `${invalid} is not a ceiling`);
+  }
+});
+
+test("the pure machine measures a spawn against the attempt's own ceiling", async () => {
+  // The whole point of the raise: an attempt at the T2 default of 5 is refused,
+  // and the SAME request against a ceiling of 6 is accepted — with no config
+  // edit anywhere, because the number arrives on the budget the machine reads.
+  await expectRejection("CallCeilingExceeded", {
+    ...validInput("L4"),
+    tier: 2,
+    budget: budget({ callsSpent: 5 }),
+  }, { because: "T2 default ceiling of 5 with 5 spent" });
+  const raised = await expectAccepted({
+    ...validInput("L4"),
+    tier: 2,
+    budget: { ...budget({ callsSpent: 5 }), ceiling: 6 },
+  });
+  assert.equal(raised.spends.calls, 1);
+  // And the grant is bounded by its own number, not open-ended.
+  await expectRejection("CallCeilingExceeded", {
+    ...validInput("L4"),
+    tier: 2,
+    budget: { ...budget({ callsSpent: 6 }), ceiling: 6 },
+  }, { because: "a raised ceiling is still a ceiling" });
 });
 
 // ---------------------------------------------------------------------------

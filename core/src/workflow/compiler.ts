@@ -5,7 +5,7 @@ import {
 } from "../contracts/json-schema.ts";
 import { schemaForId } from "../contracts/registry.ts";
 import { admitWorkflow } from "../execution/call-budget.ts";
-import type { Tier } from "../state/tiers.ts";
+import type { ResolvedCeiling, Tier } from "../state/tiers.ts";
 import type {
   AgentPhaseDefinition,
   CompiledAgentPhase,
@@ -121,6 +121,8 @@ export function compileWorkflow(
   workflow: WorkflowDefinition,
   tier: Tier,
   committedCalls = 0,
+  /** The attempt's own ceiling, so a raise the owner already granted is honoured here too. */
+  resolvedCeiling?: ResolvedCeiling,
 ): CompiledWorkflow {
   const ids = new Set<string>();
   for (const phase of workflow.phases) {
@@ -128,7 +130,7 @@ export function compileWorkflow(
     ids.add(phase.id);
   }
   const minimumCalls = workflow.phases.filter((phase) => phase.kind === "agent").length;
-  admitWorkflow({ id: workflow.id, minimumCalls }, tier, committedCalls);
+  admitWorkflow({ id: workflow.id, minimumCalls }, tier, committedCalls, resolvedCeiling);
   return Object.freeze({
     id: workflow.id,
     minimumCalls,

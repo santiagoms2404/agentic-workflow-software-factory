@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import { attemptDir as attemptDirectory } from "../../persistence/platform-paths.ts";
 import { correctionAllowance } from "../../state/task-machine.ts";
-import { ceilingFor, type Tier } from "../../state/tiers.ts";
+import { assertCeiling, ceilingFor, type CallCeilings, type Tier } from "../../state/tiers.ts";
 import {
   latestAttemptNumber,
   nextActionFor,
@@ -21,6 +21,12 @@ export interface NewCommandOptions {
   readonly workflow: string;
   readonly tier: Tier;
   readonly configSnapshotJson?: string;
+  /**
+   * The effective configuration's `risk.call_ceiling`. Omitted, the tier's
+   * documented default applies — the same number the hardcoded constant gave
+   * before the field was connected.
+   */
+  readonly callCeilings?: CallCeilings;
   readonly allowance?: { auto: number; owner: number; ownerReentries?: number };
   readonly projectRecord?: AttemptProjector;
   readonly now?: () => string;
@@ -37,6 +43,13 @@ export async function newCommand(options: NewCommandOptions): Promise<{ attemptD
   const attempt = 1;
   const dir = attemptDirectory(options.stateRoot, options.project, options.taskId, String(attempt));
   const now = (options.now ?? ((): string => new Date().toISOString()))();
+  // Pinned at creation from the effective configuration, and recorded on the
+  // attempt: a later edit to `awsf.config.yaml` moves nobody's live ceiling,
+  // and only `awsf raise` moves this one.
+  const ceiling = assertCeiling(
+    ceilingFor(options.tier, options.callCeilings),
+    `${options.project}/${options.taskId} at T${options.tier}`,
+  );
   const status: AttemptStatus = {
     schema: "awsf/attempt-status/v1",
     sessionId: (options.sessionId ?? randomUUID)(),
@@ -61,7 +74,9 @@ export async function newCommand(options: NewCommandOptions): Promise<{ attemptD
       correctionsOwner: 0,
       ownerReentries: 0,
       allowance: correctionAllowance(options.allowance ?? { auto: 1, owner: 1 }),
+      ceiling,
     },
+    ceilingGrants: [],
     model: null,
     lastActivityAt: now,
     lastActivity: "attempt recorded; no worktree or provider exists yet",
@@ -76,9 +91,6 @@ export async function newCommand(options: NewCommandOptions): Promise<{ attemptD
     revision: 1,
     lastSourceSeq: 1,
   };
-  // Calling this also pins the configured ceiling at creation time through the
-  // budget vocabulary; it throws if tier is not one of 0/1/2.
-  ceilingFor(options.tier);
   return {
     attemptDir: dir,
     status: await persistAttempt(dir, null, { kind: "attempt.created", next: status }, options.projectRecord),

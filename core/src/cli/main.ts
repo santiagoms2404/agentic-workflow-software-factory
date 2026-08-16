@@ -6,7 +6,7 @@ import { pathToFileURL } from "node:url";
 import { toConfigSnapshotJson } from "../config/effective-config.ts";
 import { loadConfig } from "../config/load.ts";
 import { resolveStateRoot } from "../persistence/platform-paths.ts";
-import type { Tier } from "../state/tiers.ts";
+import { callCeilingsOf, type Tier } from "../state/tiers.ts";
 import { processOwnerTerminal, type OwnerTerminal } from "./tty.ts";
 import { cancelCommand } from "./commands/cancel.ts";
 import { doctorCommand } from "./commands/doctor.ts";
@@ -15,6 +15,7 @@ import { createDashboardProjection } from "./commands/dashboard-projection.ts";
 import { journeyCommand } from "./commands/journey.ts";
 import { landCommand } from "./commands/land.ts";
 import { newCommand } from "./commands/new.ts";
+import { raiseCommand } from "./commands/raise.ts";
 import { locateAttempt } from "./commands/attempt.ts";
 import { retryCommand } from "./commands/retry.ts";
 import { reviewCommand } from "./commands/review.ts";
@@ -27,7 +28,7 @@ import { watchCommand } from "./commands/watch.ts";
 
 /** The complete owner-facing command table; documentation reconciles against it. */
 export const CLI_COMMANDS = Object.freeze([
-  "new", "start", "run", "status", "watch", "rework", "review", "journey", "land", "cancel", "retry",
+  "new", "start", "run", "status", "watch", "rework", "review", "raise", "journey", "land", "cancel", "retry",
   "doctor", "gc", "dash", "db rebuild",
 ]);
 
@@ -139,6 +140,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         workflow: parsed.flags.workflow ?? config.project.default_workflow,
         tier: tierOf(parsed.flags.tier ?? config.risk.default),
         configSnapshotJson: toConfigSnapshotJson(config),
+        callCeilings: callCeilingsOf(config.risk.call_ceiling),
         allowance: config.risk.correction_allowance,
         projectRecord: projection.project,
       });
@@ -234,6 +236,27 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         out(`${result.status.lifecycleState}: ${result.status.nextAction}`);
         return result.status.lifecycleState === "AWAITING_OWNER" ? 0 : 1;
       }
+      case "raise": {
+        const reason = parsed.flags["reason"] ?? "";
+        const calls = parsed.flags["calls"] === undefined ? 1 : Number(parsed.flags["calls"]);
+        if (reason.trim().length === 0) {
+          throw new Error('usage: awsf raise <task> --calls <n> --reason "<why this task is worth more calls>"');
+        }
+        const result = await raiseCommand({
+          attemptDir: located.attemptDir,
+          calls,
+          reason,
+          terminal: options.terminal ?? processOwnerTerminal(),
+          projectRecord: projection.project,
+        });
+        if (!result.confirmed) {
+          out(`Raise declined; the ceiling remains ${result.ceiling} call(s) and nothing was recorded.`);
+          return 1;
+        }
+        out(`Ceiling raised to ${result.ceiling} call(s) for ${taskId}; the grant and your reason are journalled.`);
+        out(result.status.nextAction);
+        return 0;
+      }
       case "journey": {
         const journeyId = parsed.flags["journey"] ?? "";
         const observedSha = parsed.flags["sha"] ?? "";
@@ -282,6 +305,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
           attemptDir: located.attemptDir,
           stateRoot,
           configSnapshotJson: toConfigSnapshotJson(config),
+          callCeilings: callCeilingsOf(config.risk.call_ceiling),
           allowance: config.risk.correction_allowance,
           projectRecord: projection.project,
         });

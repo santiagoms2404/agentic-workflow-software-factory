@@ -208,12 +208,19 @@ export interface WorkflowCallSpec {
 }
 
 export interface TiersModule {
-  CALL_CEILINGS: Readonly<Record<Tier, number>>;
-  ceilingFor(tier: Tier): number;
+  /** The documented defaults. A ceiling now RESOLVES — from config, or from an owner grant. */
+  DEFAULT_CALL_CEILINGS: Readonly<Record<Tier, number>>;
+  MIN_CALL_CEILING: number;
+  MAX_CALL_CEILING: number;
+  /** `resolved` is the effective configuration's table or one attempt's own ceiling. */
+  ceilingFor(tier: Tier, resolved?: Readonly<Record<Tier, number>> | number): number;
+  callCeilingsOf(configured: { T0: number; T1: number; T2: number }): Readonly<Record<Tier, number>>;
+  assertCeiling(ceiling: number, subject: string): number;
+  fitsCeiling(committed: number, requested: number, tier: Tier, resolved?: Readonly<Record<Tier, number>> | number): boolean;
   /** Workers plus the fuser: the full cost a composite adapter declares in advance. */
   compositeCost(workerCount: number): number;
   /** Throws `CallCeilingExceeded` when the workflow's minimum cannot fit the tier. */
-  assertWorkflowFitsTier(workflow: WorkflowCallSpec, tier: Tier): void;
+  assertWorkflowFitsTier(workflow: WorkflowCallSpec, tier: Tier, resolved?: Readonly<Record<Tier, number>> | number): void;
 }
 
 export interface StateErrorsModule {

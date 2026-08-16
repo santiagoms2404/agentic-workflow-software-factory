@@ -163,6 +163,19 @@ row is not replaceable at all, so disliking a verdict cannot buy a second
 opinion. It draws the same one-per-attempt owner re-entry allowance as rework,
 refuses unless the tier ceiling has two calls of headroom, and says in plain
 words at the confirmation prompt that a failed replacement costs the candidate.
+
+When *that* is what an attempt runs out of, the ceiling is a checkpoint the
+owner can pass rather than a cap that strands the work:
+`awsf raise TASK --calls N --reason "<why this task is worth more calls>"`
+grants one named task more calls while its attempt is live, at a TTY, with the
+grant and the reason written to the journal. It is deliberately a command and
+not a configuration edit — an attempt is compared against the configuration
+snapshot it recorded before `rework` and `review`, so editing `awsf.config.yaml`
+mid-attempt would lock the owner out of the very acts the raise was for. The
+grant is bounded (`MAX_GRANT_CALLS` per act, `MAX_CALL_CEILING` in total),
+task-scoped (it widens nothing else), carried forward by `awsf retry` alongside
+the spend it paid for, and refused outright to a piped stdin.
+
 The owner then records the end-user
 journey with `awsf journey TASK --journey ID --sha REVISION` at a TTY — the
 `journey_passes` gate checks separately that it ran, that it passed, and that
@@ -279,7 +292,10 @@ by the loader in `core/src/config/load.ts`, which hard-rejects:
   protected, already-present, unsupported, or escaping-link seed material
 - adapter, workflow, or gate identifiers outside the known set (`lint` is a
   configured host gate; candidate whitespace hygiene is immutable and is not)
-- a risk-tier call ceiling that isn't `{1, 3, 5}`
+- a risk-tier call ceiling that is not a whole number of calls inside the
+  bound in `core/src/state/tiers.ts` — `risk.call_ceiling` is a real dial
+  (defaults `{T0: 1, T1: 3, T2: 5}`), and the bound is in code because a
+  bound the config could raise would be a bound the config could remove
 - `routing.no_fallback` set to anything but `true`
 - `observability.persist_thinking_text` set to anything but `false` — model
   reasoning is streamed for live display and never persisted

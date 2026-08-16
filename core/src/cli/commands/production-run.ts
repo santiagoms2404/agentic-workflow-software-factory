@@ -512,7 +512,7 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
       : phase),
   };
   // Compilation, route shape, prompts, and minimum-call admission all finish before any process.
-  const compiled = compileWorkflow(configuredRecipe, status.tier, status.budget.callsSpent);
+  const compiled = compileWorkflow(configuredRecipe, status.tier, status.budget.callsSpent, status.budget.ceiling);
   const routes = new Map<string, Route>();
   let inversion: {
     readonly workerProvider: string;
@@ -638,6 +638,9 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
     taskId: status.taskId,
     tier: status.tier,
     allowance: status.budget.allowance,
+    // The attempt's own ceiling, including any owner grant. The ledger must
+    // measure against exactly what the machine decided against.
+    ...(status.budget.ceiling === undefined ? {} : { ceiling: status.budget.ceiling }),
     carried: { attempt: status.attempt, callsSpent: status.budget.callsSpent },
   });
   budget.admitWorkflow(compiled);

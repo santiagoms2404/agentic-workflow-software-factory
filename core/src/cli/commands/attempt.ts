@@ -42,6 +42,26 @@ export interface LandingApproval {
   readonly approvedAt: string;
 }
 
+/**
+ * One owner act that raised this task's ceiling, recorded where the spend it
+ * paid for is recorded.
+ *
+ * TASK-lifetime, exactly like `callsSpent`: `awsf retry` carries both forward,
+ * because an attempt that inherited the spend a grant paid for and not the
+ * grant would open already over its ceiling.
+ */
+export interface CeilingGrant {
+  /** Calls this one act added. Always `>= 1` — a grant raises and never lowers. */
+  readonly calls: number;
+  /** The ceiling it produced, so the sequence reads as a ledger rather than a diff. */
+  readonly ceiling: number;
+  /** The owner's written reason. Recorded here and in the journal; never sent to a provider. */
+  readonly reason: string;
+  /** The attempt the owner granted it from. */
+  readonly attempt: number;
+  readonly at: string;
+}
+
 export interface AttemptStatus {
   readonly schema: "awsf/attempt-status/v1";
   readonly sessionId: string;
@@ -59,7 +79,10 @@ export interface AttemptStatus {
   readonly baseSha: string | null;
   readonly candidateSha: string | null;
   readonly phase: PhaseMeter | null;
+  /** `budget.ceiling` is this task's effective ceiling, grants included. */
   readonly budget: BudgetState;
+  /** Every `awsf raise` this task has been given, oldest first. */
+  readonly ceilingGrants: readonly CeilingGrant[];
   readonly model: AttemptModel | null;
   readonly lastActivityAt: string;
   readonly lastActivity: string;
@@ -92,7 +115,7 @@ export type AttemptAdvancementGuard = (sessionId: string, to: TaskState) => void
 
 export function deriveAttemptStatus(records: readonly JournalRecord<AttemptEvent>[]): AttemptStatus | null {
   const next = records.length === 0 ? null : records[records.length - 1]?.event.next ?? null;
-  return next === null ? null : withOwnerReentries(next);
+  return next === null ? null : withLegacyDefaults(next);
 }
 
 export function isTerminalStatus(status: AttemptStatus): boolean {
@@ -109,6 +132,11 @@ function validateComponent(label: string, value: string): void {
 type LegacyBudget = Omit<BudgetState, "ownerReentries" | "allowance"> & {
   ownerReentries?: number;
   allowance: { auto: number; owner: number; ownerReentries?: number };
+};
+
+/** And what one written before the ceiling was a dial holds. */
+type LegacyStatus = Omit<AttemptStatus, "ceilingGrants"> & {
+  ceilingGrants?: readonly CeilingGrant[];
 };
 
 /**
@@ -134,26 +162,38 @@ type LegacyBudget = Omit<BudgetState, "ownerReentries" | "allowance"> & {
  * nowhere downstream of that: `toAttemptStatusProjection` is entitled to trust
  * its parameter type, and a mapper that silently repaired its input would hide
  * which caller was feeding it a stale shape.
+ *
+ * It now covers a second generation of the same problem. A status written
+ * before the ceiling became an owner-set number records no `budget.ceiling`
+ * and no `ceilingGrants`; both are filled with what that attempt was actually
+ * run under — the tier's documented default, and no grants — rather than with
+ * anything invented. `budget.ceiling` is deliberately left ABSENT rather than
+ * defaulted to a number here, because `ceilingFor` already reads an absent
+ * ceiling as the tier default and writing one in would claim the attempt
+ * recorded a ceiling it never did.
  */
-export function withOwnerReentries(status: AttemptStatus): AttemptStatus {
+export function withLegacyDefaults(status: AttemptStatus): AttemptStatus {
   const budget = status.budget as LegacyBudget;
-  if (budget.ownerReentries !== undefined && budget.allowance.ownerReentries !== undefined) {
-    return status;
-  }
+  const legacy = status as LegacyStatus;
+  const budgetIsCurrent = budget.ownerReentries !== undefined && budget.allowance.ownerReentries !== undefined;
+  if (budgetIsCurrent && legacy.ceilingGrants !== undefined) return status;
   return {
     ...status,
-    budget: {
-      ...budget,
-      ownerReentries: budget.ownerReentries ?? 0,
-      allowance: correctionAllowance(budget.allowance),
-    },
+    ...(budgetIsCurrent ? {} : {
+      budget: {
+        ...budget,
+        ownerReentries: budget.ownerReentries ?? 0,
+        allowance: correctionAllowance(budget.allowance),
+      },
+    }),
+    ceilingGrants: legacy.ceilingGrants ?? [],
   };
 }
 
 export async function readAttempt(attemptDir: string): Promise<AttemptStatus> {
   const status = await tryReadStatus<AttemptStatus>(statusFilePath(attemptDir));
   if (status === null) throw new Error(`no attempt status exists at ${attemptDir}`);
-  return withOwnerReentries(status);
+  return withLegacyDefaults(status);
 }
 
 export async function persistAttempt(

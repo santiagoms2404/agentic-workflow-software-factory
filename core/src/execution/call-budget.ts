@@ -43,10 +43,12 @@ import {
   type TransitionResult,
 } from "../state/task-machine.ts";
 import {
+  assertCeiling,
   assertWorkflowFitsTier,
   ceilingFor,
   compositeCost,
   fitsCeiling,
+  type ResolvedCeiling,
   type Tier,
   type WorkflowCallSpec,
 } from "../state/tiers.ts";
@@ -176,15 +178,20 @@ function freeze(reservation: MutableReservation): Reservation {
  * A free function, not a method, so the compiler can call it with nothing but a
  * tier — a workflow is admitted before any ledger exists for the run.
  */
-export function admitWorkflow(workflow: WorkflowCallSpec, tier: Tier, committed = 0): void {
-  assertWorkflowFitsTier(workflow, tier);
-  if (!fitsCeiling(committed, workflow.minimumCalls, tier)) {
+export function admitWorkflow(
+  workflow: WorkflowCallSpec,
+  tier: Tier,
+  committed = 0,
+  resolved?: ResolvedCeiling,
+): void {
+  assertWorkflowFitsTier(workflow, tier, resolved);
+  if (!fitsCeiling(committed, workflow.minimumCalls, tier, resolved)) {
     throw new CallCeilingExceeded({
       from: null,
       to: null,
       subject: `workflow ${workflow.id} at T${tier} with ${committed} already committed`,
       tier,
-      ceiling: ceilingFor(tier),
+      ceiling: ceilingFor(tier, resolved),
       requested: workflow.minimumCalls,
       committed,
     });
@@ -206,6 +213,12 @@ export interface CallBudgetOptions {
    */
   allowance?: { auto: number; owner: number; ownerReentries?: number };
   /**
+   * This task's effective ceiling — its configured tier ceiling plus whatever
+   * `awsf raise` granted it. Omitted, the tier's documented default applies,
+   * which is what every caller predating the dial was already getting.
+   */
+  ceiling?: number;
+  /**
    * Rehydration from the journal. Spend is task-lifetime, so a ledger rebuilt
    * mid-task starts where the last one left off. Reservations are deliberately
    * NOT rehydratable: a reservation is in-flight state, and a host that died
@@ -226,6 +239,8 @@ export class CallBudget {
   readonly taskId: string;
   readonly tier: Tier;
   readonly allowance: CorrectionAllowance;
+  /** Resolved once at construction; a ledger's ceiling never moves under it. */
+  readonly #resolvedCeiling: number;
 
   #attempt: number;
   #callsSpent: number;
@@ -240,6 +255,9 @@ export class CallBudget {
     this.taskId = options.taskId;
     this.tier = options.tier;
     this.allowance = correctionAllowance(options.allowance ?? DEFAULT_ALLOWANCE);
+    this.#resolvedCeiling = options.ceiling === undefined
+      ? ceilingFor(options.tier)
+      : assertCeiling(options.ceiling, `task ${options.taskId}`);
     const carried = options.carried ?? {};
     this.#attempt = carried.attempt ?? 1;
     this.#callsSpent = carried.callsSpent ?? 0;
@@ -271,7 +289,7 @@ export class CallBudget {
   }
 
   get ceiling(): number {
-    return ceilingFor(this.tier);
+    return ceilingFor(this.tier, this.#resolvedCeiling);
   }
 
   get remaining(): number {
@@ -288,6 +306,7 @@ export class CallBudget {
       correctionsOwner: this.#correctionsOwner,
       ownerReentries: this.#ownerReentries,
       allowance: { ...this.allowance },
+      ceiling: this.#resolvedCeiling,
     };
   }
 
@@ -322,7 +341,7 @@ export class CallBudget {
       throw new RangeError(`task ${this.taskId}: a reservation costs at least one whole call, not ${cost}`);
     }
     const committed = this.committed;
-    if (!fitsCeiling(committed, cost, this.tier)) {
+    if (!fitsCeiling(committed, cost, this.tier, this.#resolvedCeiling)) {
       throw new CallCeilingExceeded({
         from: null,
         to: null,
@@ -527,6 +546,6 @@ export class CallBudget {
 
   /** The compiler's hook, bound to this ledger's tier and what it has already committed. */
   admitWorkflow(workflow: WorkflowCallSpec): void {
-    admitWorkflow(workflow, this.tier, this.committed);
+    admitWorkflow(workflow, this.tier, this.committed, this.#resolvedCeiling);
   }
 }

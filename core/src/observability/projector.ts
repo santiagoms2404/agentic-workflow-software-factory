@@ -111,14 +111,19 @@ export function projectAttemptStatus(
     db.exec("BEGIN IMMEDIATE");
     try {
       if (status.evidence !== undefined) applyAttemptEvidence(db, status.sessionId, sourceSeq, status.evidence);
+      // `call_ceiling` is written on every record, not only at session creation:
+      // an owner raise moves it mid-attempt, and a column that only ever held
+      // the creation-time number would make the dashboard's `spent/ceiling`
+      // meter say the run is over a ceiling it was granted past.
       db.prepare(`UPDATE sessions SET
-          lifecycle_state = ?, base_sha = ?, candidate_sha = ?, calls_spent = ?, calls_reserved = ?,
+          lifecycle_state = ?, base_sha = ?, candidate_sha = ?, call_ceiling = ?, calls_spent = ?, calls_reserved = ?,
           corrections_auto = ?, corrections_owner = ?, owner_reentries = ?, worker_model_resolved = ?,
           updated_at = ?, ended_at = ?, state_revision = ?, last_projected_seq = ?
         WHERE session_id = ?`).run(
         status.lifecycleState,
         status.baseSha,
         status.candidateSha,
+        status.callCeiling,
         status.callsSpent,
         status.callsReserved,
         status.correctionsAuto,
@@ -363,6 +368,20 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
       }
       return;
     }
+    case "ceiling-grant":
+      // Session-level, so `phase_id` is deliberately NULL: the owner raised
+      // what the TASK may cost, not what any one phase did. `sessions.call_ceiling`
+      // is carried by the status projection below, so this row exists to answer
+      // the question that column cannot — who raised it, by how much, and why.
+      db.prepare(`INSERT OR IGNORE INTO events
+        (event_id, session_id, phase_id, first_source_seq, last_source_seq, type, name,
+         payload_json, started_at) VALUES (?, ?, NULL, ?, ?, 'ceiling_grant', 'owner call-ceiling raise', ?, ?)`)
+        .run(`${sessionId}:ceiling-grant:${sourceSeq}`, sessionId, sourceSeq, sourceSeq,
+          stringifyRedacted({
+            calls: evidence.calls, from: evidence.from, to: evidence.to,
+            reason: evidence.reason, attempt: evidence.attempt,
+          }), evidence.at);
+      return;
     case "review":
       // The verdict is the reviewer's own finding, recorded beside the provider
       // that produced it so the inversion is checkable from one row.

@@ -8,9 +8,9 @@ import {
   KNOWN_GATE_IDS,
   KNOWN_PROTECTED_OPERATIONS,
   KNOWN_WORKFLOW_IDS,
-  VALID_TIER_CEILINGS,
   type AwsfConfig,
 } from "./schema.ts";
+import { MAX_CALL_CEILING, MIN_CALL_CEILING } from "../state/tiers.ts";
 
 // Every rejection this loader can throw. Kept as one closed class hierarchy
 // (not exceptions of convenience) so tests can assert on `code`/`instanceof`
@@ -92,11 +92,17 @@ export class ConfigUnknownProtectedOperationError extends ConfigError {
   }
 }
 
+/**
+ * The ceiling is an owner-set number, so the loader checks that it is a NUMBER
+ * OF CALLS rather than checking it against a shortlist. The three-value
+ * allowlist this replaced made `risk.call_ceiling` look like a dial while
+ * admitting only the values the hardcoded constant already had.
+ */
 export class ConfigInvalidCeilingError extends ConfigError {
   constructor(tier: string, ceiling: number) {
     super(
       "E_CONFIG_INVALID_CEILING",
-      `risk.call_ceiling.${tier} = ${ceiling} is not one of {${VALID_TIER_CEILINGS.join(",")}}`,
+      `risk.call_ceiling.${tier} = ${ceiling} is not a whole number of calls from ${MIN_CALL_CEILING} through ${MAX_CALL_CEILING}`,
     );
     this.name = "ConfigInvalidCeilingError";
   }
@@ -248,7 +254,7 @@ function assertKnownReferences(config: AwsfConfig): void {
 
 function assertValidCeilings(config: AwsfConfig): void {
   for (const [tier, ceiling] of Object.entries(config.risk.call_ceiling)) {
-    if (!(VALID_TIER_CEILINGS as readonly number[]).includes(ceiling)) {
+    if (!Number.isInteger(ceiling) || ceiling < MIN_CALL_CEILING || ceiling > MAX_CALL_CEILING) {
       throw new ConfigInvalidCeilingError(tier, ceiling);
     }
   }
@@ -272,8 +278,8 @@ function assertThinkingNeverPersisted(config: AwsfConfig): void {
  * loader's own hard rejections in this order: TypeBox structural
  * validation, absolute machine paths, credential-shaped values, normalized
  * non-overlapping repository seed paths, unknown or unverified adapter references,
- * workflow/gate/protected-operation references, tier ceilings
- * outside {1,3,5}, `routing.no_fallback` other than `true`, and
+ * workflow/gate/protected-operation references, tier ceilings outside
+ * `MIN_CALL_CEILING`..`MAX_CALL_CEILING`, `routing.no_fallback` other than `true`, and
  * `observability.persist_thinking_text` other than `false`.
  */
 export function loadConfig(yamlText: string): AwsfConfig {

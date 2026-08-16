@@ -27,7 +27,9 @@ export function toAttemptStatusProjection(
     riskTier: status.tier,
     isProtected: false,
     requestText: status.request,
-    callCeiling: ceilingFor(status.tier),
+    // The attempt's own effective ceiling — its configured tier ceiling plus
+    // whatever `awsf raise` granted it — never a re-read of live config.
+    callCeiling: ceilingFor(status.tier, status.budget.ceiling),
     configSnapshotJson: status.configSnapshotJson,
     journalPath: journalFilePath(dir),
     startedAt: status.lastActivityAt,

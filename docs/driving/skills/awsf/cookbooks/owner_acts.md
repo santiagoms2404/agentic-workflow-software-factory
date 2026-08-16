@@ -1,9 +1,9 @@
 # Owner acts
 
-Five commands are the owner's and not yours: `journey`, `land`, `cancel`,
-`rework`, `review`. This document is about **which one the evidence supports**
-and **what to hand the owner before they decide**. It is not a table of what each
-one costs, and the reason is at the bottom.
+Six commands are the owner's and not yours: `journey`, `land`, `cancel`,
+`rework`, `review`, `raise`. This document is about **which one the evidence
+supports** and **what to hand the owner before they decide**. It is not a table
+of what each one costs, and the reason is at the bottom.
 
 ## The rule
 
@@ -11,7 +11,7 @@ Prepare and explain. Never perform, and never recommend performing one without
 the evidence its edge requires.
 
 This is not merely a convention you could talk yourself out of — the lifecycle
-enforces it. Every one of the five requires an interactive owner terminal, and a
+enforces it. Every one of the six requires an interactive owner terminal, and a
 piped or redirected standard input is refused by the normative machine *before*
 any process can receive a signal and before any call is reserved. A driving
 session that cannot type into a terminal structurally cannot take one of these
@@ -66,6 +66,19 @@ state in a sentence and the surrounding evidence is sound. It is the wrong act
 when you cannot name the defect, and it is **refused outright above the middle
 tier** for a structural reason worth understanding rather than memorising — see
 `gotchas.md`.
+
+**`raise`** is the only one of the six that buys nothing and moves no state. It
+grants one named task more calls while its attempt is live, so a run that halted
+at its ceiling can continue instead of being cancelled and re-rolled. Two things
+about it are worth understanding rather than memorising. It is a **command and
+not a configuration edit**, because an attempt is compared against the
+configuration snapshot it recorded before `rework` and `review` — editing
+`awsf.config.yaml` mid-attempt would lock the owner out of exactly the acts the
+raise was for. And it is **bounded and task-scoped**: there is no unbounded
+grant, and a grant made for one task widens nothing else. Preparing it means
+telling the owner what halted, what the next act needs, and what the raise would
+cost them — never performing it, and never proposing it as a way around a
+refusal that was about evidence rather than about budget.
 
 **`review`** buys one replacement review, and only when the recorded review is
 genuinely unevidenced. Eligibility is determined by the host from the recorded

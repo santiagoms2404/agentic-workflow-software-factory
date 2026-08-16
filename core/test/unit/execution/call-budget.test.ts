@@ -95,8 +95,23 @@ test("a fresh ledger has committed nothing and offers the whole ceiling", () => 
       correctionsOwner: 0,
       ownerReentries: 0,
       allowance: { auto: 1, owner: 1, ownerReentries: 1 },
+      // The snapshot carries the ceiling the ledger resolved, so the pure
+      // machine measures a spawn against the same number the ledger will.
+      ceiling: CEILING[tier],
     });
   }
+});
+
+test("a ledger takes the ceiling it was given, and refuses one outside the bound", async () => {
+  const { MAX_CALL_CEILING } = await import("../../../src/state/tiers.ts");
+  const raised = new CallBudget({ taskId: "T35", tier: 2, ceiling: 7 });
+  assert.equal(raised.ceiling, 7, "an owner grant reaches the ledger as a resolved number");
+  assert.equal(raised.remaining, 7);
+  assert.equal(raised.snapshot().ceiling, 7);
+  for (const cost of [1, 1, 1, 1, 1, 1, 1]) raised.reserve({ cost });
+  assert.throws(() => raised.reserve({ cost: 1 }), CallCeilingExceeded, "a raised ceiling is still a ceiling");
+  assert.throws(() => new CallBudget({ taskId: "T35", tier: 2, ceiling: MAX_CALL_CEILING + 1 }), RangeError);
+  assert.throws(() => new CallBudget({ taskId: "T35", tier: 2, ceiling: 0 }), RangeError);
 });
 
 test("a reservation counts against the ceiling the moment it is made, before any GO", () => {

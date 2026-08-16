@@ -19,6 +19,7 @@ import {
   ConfigInvalidPersistThinkingError,
   ConfigInvalidSeedPathError,
 } from "../../../src/config/load.ts";
+import { MAX_CALL_CEILING } from "../../../src/state/tiers.ts";
 import { repoRoot } from "../meta/_walk.ts";
 import { validConfig, deepClone } from "./fixture.ts";
 
@@ -134,19 +135,33 @@ test("rejects an unknown protected operation", () => {
   assert.throws(() => loadConfig(toYaml(doc)), ConfigUnknownProtectedOperationError);
 });
 
-test("rejects a tier ceiling not in {1,3,5}", () => {
-  const doc = deepClone(validConfig());
-  doc.risk.call_ceiling.T1 = 4;
-  assert.throws(() => loadConfig(toYaml(doc)), ConfigInvalidCeilingError);
-});
+// The dial, not a shortlist. `risk.call_ceiling` was formerly checked against
+// {1,3,5} — the three values the hardcoded constant already had — which made
+// the field look like a tuning surface while admitting nothing new. Every whole
+// number of calls the bound admits is now accepted, and the bound itself is the
+// only refusal left.
+for (const ceiling of [1, 2, 4, 6, MAX_CALL_CEILING]) {
+  test(`accepts tier ceiling ${ceiling}: the field is a real dial`, () => {
+    const doc = deepClone(validConfig());
+    doc.risk.call_ceiling.T1 = ceiling;
+    assert.equal(loadConfig(toYaml(doc)).risk.call_ceiling.T1, ceiling);
+  });
+}
 
-for (const ceiling of [0, 2, 4, 6, 100]) {
-  test(`rejects tier ceiling ${ceiling} specifically`, () => {
+for (const ceiling of [0, -1, MAX_CALL_CEILING + 1, 100]) {
+  test(`rejects tier ceiling ${ceiling}: below one call or past the hard bound`, () => {
     const doc = deepClone(validConfig());
     doc.risk.call_ceiling.T0 = ceiling;
     assert.throws(() => loadConfig(toYaml(doc)), ConfigInvalidCeilingError);
   });
 }
+
+test("rejects a fractional tier ceiling", () => {
+  const doc = deepClone(validConfig());
+  doc.risk.call_ceiling.T2 = 2.5;
+  assert.throws(() => loadConfig(toYaml(doc)), (error: Error) =>
+    error instanceof ConfigInvalidCeilingError || error.name === "ConfigSchemaError");
+});
 
 test("rejects routing.no_fallback: false", () => {
   const doc = deepClone(validConfig());

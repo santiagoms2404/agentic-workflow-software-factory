@@ -10,7 +10,7 @@ import { discoverAttempts, rebuildDatabase, type RebuildReport, type RebuildSour
 import { prepareDatabaseForReadonly } from "../../observability/sqlite.ts";
 import { journalFilePath } from "../../persistence/platform-paths.ts";
 import { toAttemptStatusProjection } from "./attempt-projection.ts";
-import { readAttempt, withOwnerReentries, type AttemptEvent } from "./attempt.ts";
+import { readAttempt, withLegacyDefaults, type AttemptEvent } from "./attempt.ts";
 
 async function exists(path: string): Promise<boolean> {
   try { await access(path); return true; } catch { return false; }
@@ -30,7 +30,7 @@ export async function rebuildCommand(stateRoot: string): Promise<RebuildReport> 
       // bound, and the rebuild refuses — on the databases most in need of one.
       attemptStatus: (record) => toAttemptStatusProjection(
         stateRoot,
-        withOwnerReentries((record.event as AttemptEvent).next),
+        withLegacyDefaults((record.event as AttemptEvent).next),
         record.event as AttemptEvent,
       ),
       session: {
@@ -42,7 +42,7 @@ export async function rebuildCommand(stateRoot: string): Promise<RebuildReport> 
         riskTier: status.tier,
         isProtected: false,
         requestText: status.request,
-        callCeiling: ceilingFor(status.tier),
+        callCeiling: ceilingFor(status.tier, status.budget.ceiling),
         configSnapshotJson: status.configSnapshotJson,
         journalPath: journalFilePath(dir),
         startedAt: status.lastActivityAt,

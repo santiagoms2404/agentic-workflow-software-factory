@@ -231,7 +231,8 @@ export class ReviewHeadroomInsufficient extends Error {
   constructor(remaining: number, tier: number, taskId: string) {
     super(
       `a replacement review needs two calls of headroom — one for the review and one for its single permitted retry — and this T${tier} attempt has ${remaining}; ` +
-        `insufficient headroom, so nothing was spent and \`awsf land ${taskId}\` or \`awsf cancel ${taskId}\` remain`,
+        `insufficient headroom, so nothing was spent and \`awsf raise ${taskId} --calls ${Math.max(1, 2 - remaining)} --reason "<why>"\`, ` +
+        `\`awsf land ${taskId}\` or \`awsf cancel ${taskId}\` remain`,
     );
     this.name = "ReviewHeadroomInsufficient";
   }
@@ -796,7 +797,7 @@ async function runReviewCommand(options: ReviewCommandOptions): Promise<ReviewCo
   const phases = reviewPhaseOf(recipe);
 
   // §5.4 — two calls of headroom or nothing happens at all.
-  const remainingCalls = ceilingFor(status.tier) - status.budget.callsSpent - status.budget.callsReserved;
+  const remainingCalls = ceilingFor(status.tier, status.budget.ceiling) - status.budget.callsSpent - status.budget.callsReserved;
   if (remainingCalls < 2) throw new ReviewHeadroomInsufficient(remainingCalls, status.tier, status.taskId);
 
   const evidenceRecords = await readAttemptEvidence(options.attemptDir);
@@ -850,7 +851,7 @@ async function runReviewCommand(options: ReviewCommandOptions): Promise<ReviewCo
   options.terminal.write(`Evidence defect: ${superseded.evidenceDefect} — this is what makes that review replaceable, not your reason`);
   options.terminal.write(`Reason on record: ${reason}`);
   options.terminal.write(`Route: ${route.adapterId} / ${route.model.provider} / ${route.agent.model} (cold, opposite the ${recorded.worker!.provider} worker)`);
-  options.terminal.write(`Calls: ${status.budget.callsSpent}/${ceilingFor(status.tier)} spent — ${remainingCalls} remain; this spends one and holds one for its single permitted retry`);
+  options.terminal.write(`Calls: ${status.budget.callsSpent}/${ceilingFor(status.tier, status.budget.ceiling)} spent — ${remainingCalls} remain; this spends one and holds one for its single permitted retry`);
   options.terminal.write(`Owner re-entries: ${status.budget.ownerReentries}/${status.budget.allowance.ownerReentries} — this spends the last one`);
   options.terminal.write(`The attempt leaves AWAITING_OWNER, where it could land, for REVIEWING, where it cannot.`);
   options.terminal.write(`Once the allowance is spent, L16 and L19 are gone: no owner rework and no accepted-finding re-entry remain on this attempt.`);
@@ -957,6 +958,8 @@ async function runReviewCommand(options: ReviewCommandOptions): Promise<ReviewCo
 
   const budget = new CallBudget({
     taskId: status.taskId, tier: status.tier, allowance: status.budget.allowance,
+    // The attempt's own ceiling, including any owner grant.
+    ...(status.budget.ceiling === undefined ? {} : { ceiling: status.budget.ceiling }),
     carried: {
       attempt: status.attempt,
       callsSpent: status.budget.callsSpent,

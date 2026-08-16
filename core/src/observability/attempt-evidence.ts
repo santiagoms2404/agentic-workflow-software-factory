@@ -46,4 +46,11 @@ export type AttemptEvidence =
   | { readonly type: "gate"; readonly id: string; readonly phaseId: string; readonly round: number; readonly gateId: GateId; readonly kind: "pure" | "filesystem" | "git" | "subprocess" | "journey"; readonly candidateSha: string | null; readonly passed: boolean; readonly exitCode: number | null; readonly checks: readonly GateCheck[]; readonly violations: readonly string[]; readonly outputPath: string | null; readonly startedAt: string; readonly endedAt: string }
   | { readonly type: "agent-start"; readonly phaseId: string; readonly agent: string; readonly adapterId: string; readonly provider: string; readonly color: string | null; readonly requestedModel: string; readonly sandboxBadge: SandboxBadge; readonly sandboxMechanism: SandboxMechanism; readonly purpose?: AgentPurpose; readonly at: string }
   | { readonly type: "agent"; readonly phaseId: string; readonly agent: string; readonly adapterId: string; readonly provider: string; readonly color: string | null; readonly requestedModel: string; readonly resolvedModel: string | null; readonly modelProvenance: ModelResolutionProvenance | null; readonly contextWindow: number | null; readonly usageAuthority: "provider" | "partial" | "none"; readonly usage: TokenUsage; readonly contextTokens: number | null; readonly costUsd: number | null; readonly costAuthority: "provider" | "catalog-estimate" | "unavailable"; readonly purpose?: AgentPurpose; readonly at: string }
+  /**
+   * An owner raise of one task's call ceiling. Session-level: it belongs to no
+   * phase, moves no lifecycle edge, and carries the owner's written reason —
+   * which is why it is evidence in its own right rather than a status field
+   * that quietly changed.
+   */
+  | { readonly type: "ceiling-grant"; readonly calls: number; readonly from: number; readonly to: number; readonly reason: string; readonly attempt: number; readonly at: string }
   | { readonly type: "review"; readonly phaseId: string; readonly adapterId: string; readonly provider: string; readonly verdict: ReviewVerdict; readonly reviewedSha: string; readonly findingCount: number; readonly at: string };

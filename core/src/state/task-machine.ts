@@ -300,6 +300,13 @@ export interface BudgetState {
   /** Attempt-scoped. The counter every owner-authorized TASK edge draws on. */
   ownerReentries: number;
   allowance: CorrectionAllowance;
+  /**
+   * This task's effective call ceiling: its configured tier ceiling plus any
+   * owner-granted raise. Optional because a journal written before the ceiling
+   * became a dial records none, and reading one of those as the tier default is
+   * the same answer it was actually run under — never an invented one.
+   */
+  ceiling?: number;
 }
 
 /**
@@ -465,13 +472,15 @@ export function transition(input: TransitionInput): TransitionResult {
   const calls = spawn === undefined ? 0 : spawn.cost;
   if (spawn !== undefined) {
     const committed = budget.callsSpent + budget.callsReserved;
-    if (!fitsCeiling(committed, calls, tier)) {
+    // The attempt's own ceiling, so a machine decision and the ledger that
+    // executes it cannot disagree about what an owner raise bought.
+    if (!fitsCeiling(committed, calls, tier, budget.ceiling)) {
       throw new CallCeilingExceeded({
         from,
         to,
         subject: `${from} -> ${to} (${edge.id})`,
         tier,
-        ceiling: ceilingFor(tier),
+        ceiling: ceilingFor(tier, budget.ceiling),
         requested: calls,
         committed,
       });

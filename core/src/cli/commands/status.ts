@@ -24,9 +24,15 @@ function modelLine(status: AttemptStatus): string {
 
 /** Stable, line-oriented owner display. Every meter says what to do with it. */
 export function formatStatus(status: AttemptStatus): readonly string[] {
-  const ceiling = ceilingFor(status.tier);
+  const ceiling = ceilingFor(status.tier, status.budget.ceiling);
   const committed = status.budget.callsSpent + status.budget.callsReserved;
   const remaining = Math.max(0, ceiling - committed);
+  const granted = status.ceilingGrants.reduce((total, grant) => total + grant.calls, 0);
+  // Silent when nothing was granted, so the ordinary case gains no noise and
+  // the raised case can never be mistaken for a configured ceiling.
+  const raised = granted === 0
+    ? ""
+    : `, including ${granted} owner-granted by ${status.ceilingGrants.length} raise(s)`;
   const blocker = status.blocker === null
     ? ""
     : `; blocker ${status.blocker.code}: ${status.blocker.detail}`;
@@ -34,7 +40,7 @@ export function formatStatus(status: AttemptStatus): readonly string[] {
     `State: ${status.lifecycleState}${blocker} — ${status.nextAction}`,
     phaseLine(status),
     roundLine(status),
-    `Calls: ${status.budget.callsSpent}/${ceiling} spent, ${status.budget.callsReserved} reserved — ${remaining} call(s) remain`,
+    `Calls: ${status.budget.callsSpent}/${ceiling} spent, ${status.budget.callsReserved} reserved — ${remaining} call(s) remain${raised}`,
     modelLine(status),
     `Last activity: ${status.lastActivityAt} — ${status.lastActivity}; refresh with \`awsf status ${status.taskId}\``,
     `Budget: auto ${status.budget.correctionsAuto}/${status.budget.allowance.auto}, owner ${status.budget.correctionsOwner}/${status.budget.allowance.owner} per phase — intra-phase corrections, refreshed each phase`,
