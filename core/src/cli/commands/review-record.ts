@@ -173,19 +173,34 @@ export function recordedRoutes(
 }
 
 /**
- * The lines a human gate must see when a review was replaced: the superseded
- * verdict, why it was replaceable, and the verdict that replaced it. Empty when
+ * The lines a human gate must see when more than one review is on record: every
+ * earlier verdict, why it no longer governs, and the one that does. Empty when
  * exactly one review is on record, because there is then nothing to disclose.
+ *
+ * Two ways an earlier review stops governing, and they are not the same fact.
+ * L25 REPLACES a review of an unchanged candidate, so both name one revision
+ * and the disclosure is about the defect that made the first replaceable. A T2
+ * rework SUPERSEDES one by building a different candidate, so the two name
+ * different revisions and nothing about the first was replaceable — saying it
+ * was would tell the human gate something untrue at the last moment it could
+ * act on it.
  */
 export function supersededReviewLines(reviews: readonly RecordedReview[]): readonly string[] {
   if (reviews.length < 2) return Object.freeze([]);
-  const replacement = reviews[reviews.length - 1]!;
+  const current = reviews[reviews.length - 1]!;
   const lines: string[] = [];
+  let anyReplaced = false;
   for (const superseded of reviews.slice(0, -1)) {
-    lines.push(
-      `Superseded review (${superseded.phaseKey}): ${superseded.output.verdict} — replaceable because ${superseded.evidenceDefect ?? "its evidence gate passed"}`,
-    );
+    const sameRevision = superseded.output.reviewedSha === current.output.reviewedSha;
+    anyReplaced ||= sameRevision;
+    lines.push(sameRevision
+      ? `Superseded review (${superseded.phaseKey}): ${superseded.output.verdict} — replaceable because ${superseded.evidenceDefect ?? "its evidence gate passed"}`
+      : `Superseded review (${superseded.phaseKey}): ${superseded.output.verdict} of ${superseded.output.reviewedSha} — a different revision, reworked since`);
   }
-  lines.push(`Replacement review (${replacement.phaseKey}): ${replacement.output.verdict} with ${String(replacement.output.findings.length)} finding(s)`);
+  lines.push(
+    anyReplaced
+      ? `Replacement review (${current.phaseKey}): ${current.output.verdict} with ${String(current.output.findings.length)} finding(s)`
+      : `Current review (${current.phaseKey}): ${current.output.verdict} of ${current.output.reviewedSha} with ${String(current.output.findings.length)} finding(s)`,
+  );
   return Object.freeze(lines);
 }

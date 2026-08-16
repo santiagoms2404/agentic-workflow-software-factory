@@ -45,7 +45,14 @@ function planTasks(): PlanTask[] {
   const tasks: PlanTask[] = [];
   for (const [index, milestone] of milestones.entries()) {
     const start = milestone.index;
-    const end = milestones[index + 1]?.index ?? html.length;
+    // The LAST milestone ends where its section does, not where the file does.
+    // Without this its final task swallows every later section — the plan-wide
+    // Definition of Done among them — and reads that checklist's honestly
+    // unchecked boxes as its own. Invisible until the last task of the last
+    // milestone completed, and wrong the whole time: the boxes a task's state
+    // is checked against are the ones inside its own block.
+    const closing = html.indexOf("</section>", start);
+    const end = Math.min(milestones[index + 1]?.index ?? html.length, closing === -1 ? html.length : closing);
     const block = html.slice(start, end);
     const heads = [...block.matchAll(/<h4>(\d+)\./g)];
     for (const [headIndex, head] of heads.entries()) {

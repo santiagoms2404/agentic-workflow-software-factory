@@ -56,7 +56,10 @@ import {
 import { openPermissionSession, type SandboxProbe } from "../../policy/sandbox-broker.ts";
 import { transition, type EdgeId, type TaskState } from "../../state/task-machine.ts";
 import { ceilingFor } from "../../state/tiers.ts";
+import type { WorkflowRecipe } from "../../workflow/compiler.ts";
 import { PhaseGateFailure } from "../../workflow/engine.ts";
+import { buildReviewWorkflow } from "../../workflow/recipes/build-review.ts";
+import { simpleSdlcWorkflow } from "../../workflow/recipes/simple-sdlc.ts";
 import type { OwnerTerminal } from "../tty.ts";
 import {
   nextActionFor,
@@ -68,10 +71,41 @@ import {
   type AttemptProjector,
   type AttemptStatus,
 } from "./attempt.ts";
-import { ProductionConfigSnapshotMismatch, ProductionRouteUnavailable, ProductionWorkflowUnsupported } from "./production-run.ts";
+import {
+  ProductionConfigSnapshotMismatch,
+  ProductionRouteUnavailable,
+  ProductionWorkflowUnsupported,
+  requestOutput,
+} from "./production-run.ts";
+import {
+  REVIEW_HEADROOM_CALLS,
+  ReplacementReviewEvidenceInvalid,
+  createReviewRunState,
+  planIntentFrom,
+  prepareReview,
+  resolveReviewRoute,
+  reviewFailureBlocker,
+  reviewPhasesOf,
+  type PreparedReview,
+  type ReviewRoute,
+} from "./review-phase.ts";
+import { readAttemptEvidence, recordedReviews, recordedRoutes } from "./review-record.ts";
 
 const { chmod, mkdir, readFile, realpath, writeFile } = fs;
-const SUPPORTED = new Set(["build", "plan-build-test"]);
+
+/**
+ * The tier fork, as the lifecycle already draws it.
+ *
+ * A T1 rework is the builder phase and the host gates, and L12 carries it home.
+ * A T2 rework is the same builder phase plus the opposite-provider review the
+ * tier bought — `guards.ts` makes L11 require `tier >= 2` and makes L12 forbid
+ * it, so there is no third shape either branch could take.
+ */
+const T1_SUPPORTED = new Set(["build", "plan-build-test"]);
+const T2_SUPPORTED = new Map<string, WorkflowRecipe>([
+  [buildReviewWorkflow.id, buildReviewWorkflow],
+  [simpleSdlcWorkflow.id, simpleSdlcWorkflow],
+]);
 const OWNER = HOST_AUTHOR;
 const MAX_EVIDENCE = 4_000;
 
@@ -109,23 +143,48 @@ export class ReworkRouteMismatch extends Error {
 }
 
 /**
- * Rework re-runs one writable builder phase and produces a new candidate. At T2
- * that new candidate has never been reviewed, and `verdict_consistent` binds a
- * review to the exact SHA it read — so landing it would need a review this
- * command cannot perform, and letting it through would leave an attempt that
- * gates cleanly and can never satisfy L20. Refusing here is the honest outcome:
- * the whole pipeline, review included, re-runs through cancel + retry, which
- * carries the spend forward rather than refunding it.
+ * The attempt's tier and its workflow's tier disagree, so neither branch is the
+ * one this attempt bought.
+ *
+ * This used to refuse T2 outright, on the reasoning that a reworked candidate
+ * no review had read could never satisfy L20. That was true of the COMMAND and
+ * never of the contract — L11 has demanded `tier >= 2` out of GATING all along
+ * — and the missing half is now built: a T2 rework runs the builder, re-composes
+ * the review context, runs the opposite-provider review, and takes L15 home.
+ * What remains refused here is a genuine mismatch, where the recorded tier is
+ * not the tier of the recipe the rework would have to re-run.
  */
 export class ReworkTierUnsupported extends Error {
   readonly tier: number;
-  constructor(tier: number, taskId: string) {
+  constructor(tier: number, workflow: string, recipeTier: number, taskId: string) {
     super(
-      `owner rework re-runs only the builder phase, so a tier-${tier} attempt would land a candidate no review has read; ` +
-        `cancel and \`awsf retry ${taskId}\` to re-run the full workflow, including its opposite-provider review, carrying the spend forward`,
+      `this attempt records tier ${tier} but workflow ${JSON.stringify(workflow)} is a tier-${recipeTier} recipe, ` +
+        `so owner rework cannot tell which branch it bought; cancel and \`awsf retry ${taskId}\` under the intended tier`,
     );
     this.name = "ReworkTierUnsupported";
     this.tier = tier;
+  }
+}
+
+/**
+ * A T2 rework buys three calls before it starts: the builder, the review, and
+ * the review's single permitted retry.
+ *
+ * Refused BEFORE anything is spent, in words, the way the replacement review
+ * already does. Without it the builder's call is spent and the attempt then
+ * strands in GATING holding a candidate it cannot afford to have reviewed —
+ * which is the exact failure the ceiling was supposed to prevent, arriving one
+ * call too late to prevent it.
+ */
+export class ReworkHeadroomInsufficient extends Error {
+  constructor(remaining: number, required: number, tier: number, taskId: string) {
+    super(
+      `a T${tier} owner rework needs ${required} calls of headroom — one for the builder, one for the review, and one for its single permitted retry — ` +
+        `and this attempt has ${remaining}; insufficient headroom, so nothing was spent and ` +
+        `\`awsf raise ${taskId} --calls ${Math.max(1, required - remaining)} --reason "<why>"\`, ` +
+        `\`awsf land ${taskId}\` or \`awsf cancel ${taskId}\` remain`,
+    );
+    this.name = "ReworkHeadroomInsufficient";
   }
 }
 
@@ -313,16 +372,20 @@ function inspectCandidate(status: AttemptStatus): CandidateInspection {
   };
 }
 
-function validateAttempt(status: AttemptStatus, config: AwsfConfig): void {
-  if (!SUPPORTED.has(status.workflow)) {
+/** The T2 recipe this rework must re-run and review, or `null` for the T1 branch. */
+function validateAttempt(status: AttemptStatus, config: AwsfConfig): WorkflowRecipe | null {
+  const t2 = T2_SUPPORTED.get(status.workflow);
+  if (t2 === undefined && !T1_SUPPORTED.has(status.workflow)) {
     throw new ProductionWorkflowUnsupported(status.workflow, "owner rework re-runs a single writable builder phase");
   }
   if (!config.workflows.enabled.includes(status.workflow)) {
     throw new ProductionWorkflowUnsupported(status.workflow, "not enabled by the effective config");
   }
-  if (status.tier !== 1) throw new ReworkTierUnsupported(status.tier, status.taskId);
+  const recipeTier = t2?.tier ?? 1;
+  if (status.tier !== recipeTier) throw new ReworkTierUnsupported(status.tier, status.workflow, recipeTier, status.taskId);
   if (config.project.slug !== status.project) throw new Error("attempt and config project do not match");
   if (toConfigSnapshotJson(config) !== status.configSnapshotJson) throw new ProductionConfigSnapshotMismatch();
+  return t2 ?? null;
 }
 
 async function resolveRoute(status: AttemptStatus, config: AwsfConfig, configPath: string, infra: ReworkInfrastructure): Promise<Route> {
@@ -511,16 +574,32 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
     budget: status.budget, spawn: { cost: 1 },
     evidence: { candidateSha: status.candidateSha ?? "", reworkRequest: defect, gatesInvalidated: true, reviewInvalidated: true },
   });
-  validateAttempt(status, options.config);
+  const recipe = validateAttempt(status, options.config);
   const firstInspection = inspectCandidate(status);
   const prior = await priorBuild(options.attemptDir);
   const route = await resolveRoute(status, options.config, options.configPath, infra);
   const remainingCalls = ceilingFor(status.tier, status.budget.ceiling) - status.budget.callsSpent - status.budget.callsReserved;
   const remainingOwner = status.budget.allowance.ownerReentries - status.budget.ownerReentries;
+  // The T2 branch buys a review as well as a builder, so its whole cost is
+  // refused up front rather than one call into it. The T1 branch is left
+  // exactly as it was: it buys one call, and the ledger refuses that itself.
+  if (recipe !== null) {
+    const required = 1 + REVIEW_HEADROOM_CALLS;
+    if (remainingCalls < required) {
+      throw new ReworkHeadroomInsufficient(remainingCalls, required, status.tier, status.taskId);
+    }
+  }
   options.terminal.write(`Candidate SHA: ${firstInspection.candidate}`);
   options.terminal.write(`Summary: ${firstInspection.summary}`);
   options.terminal.write(`Route: ${route.adapterId} / ${route.model.provider} / ${route.agent.model}`);
   options.terminal.write(`Budget: ${remainingCalls} call(s) and ${remainingOwner} owner re-entry allowance(s) remain`);
+  if (recipe !== null) {
+    options.terminal.write(
+      `This T${status.tier} rework spends one call on the builder and one on the mandatory opposite-provider review of the new candidate, ` +
+        "and holds one more for that review's single permitted retry.",
+    );
+    options.terminal.write("The end-user journey attestation does not survive a new candidate; `awsf journey` runs again before landing.");
+  }
   options.terminal.write(`Defect: ${defect}`);
   const confirmed = await options.terminal.confirm(`Rework exact candidate ${firstInspection.candidate}?`);
   if (!confirmed) return { status, confirmed: false };
@@ -574,7 +653,7 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
   const preflightGrant = permission.sandbox(route.adapter.buildSpec(request));
   const preflightSpec = preflightDescriptor(route, request, () => preflightGrant.spec);
   const budget = new CallBudget({
-    taskId: status.taskId, tier: 1, allowance: status.budget.allowance,
+    taskId: status.taskId, tier: status.tier, allowance: status.budget.allowance,
     // The attempt's own ceiling, including any owner grant.
     ...(status.budget.ceiling === undefined ? {} : { ceiling: status.budget.ceiling }),
     carried: {
@@ -596,8 +675,15 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
   const phaseId = `${status.sessionId}:${phaseKey}`;
   const runId = `${phaseId}:run`;
   const createdAt = infra.now();
+  // The T1 formula is unchanged. A T2 rework writes FOUR phase records per
+  // generation — builder, host measurement, review context, reviewer — so each
+  // one follows the recipe's own phases without ever reusing a predecessor's
+  // ordinal, which `phases UNIQUE (session_id, ordinal)` would refuse.
+  const builderOrdinal = recipe === null
+    ? (status.workflow === "build" ? 3 : 4) + reworkNumber
+    : recipe.phases.length + (reworkNumber - 1) * 4 + 1;
   let phase: PhaseEvidenceRecord = {
-    phaseId, ordinal: (status.workflow === "build" ? 3 : 4) + reworkNumber, key: phaseKey, name: "builder rework",
+    phaseId, ordinal: builderOrdinal, key: phaseKey, name: "builder rework",
     kind: "agent", owner: route.agent.name,
     description: `Repair the owner-named defect on exact candidate ${status.candidateSha}`,
     status: "QUEUED", correctionCount: 0, maxCorrections: 0, errorCode: null, errorMessage: null,
@@ -610,6 +696,13 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
   const activeTransport: { current: ProcessTransport | null } = { current: null };
   let transitionOrdinal = status.revision + 1;
   let writeQueue: Promise<void> = Promise.resolve();
+  // What the shared review phase observed, when this rework reaches one. The
+  // builder's own bookkeeping above stays separate: two phases in one command
+  // settle two different processes, and merging them would let a builder that
+  // exited cleanly answer for a reviewer that did not.
+  const reviewState = createReviewRunState();
+  let reviewRoute: ReviewRoute | null = null;
+  let reviewPhaseDb: string | null = null;
 
   const persist = async (kind: AttemptEvent["kind"], update: Partial<AttemptStatus>, evidence?: AttemptEvidence): Promise<void> => {
     const operation = writeQueue.then(async () => {
@@ -888,31 +981,209 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
     if (!testOutput.passed || !aggregate.passed) throw new PhaseGateFailure(phaseKey, [aggregate]);
     await persistPhase("SUCCEEDED");
 
+    /**
+     * The T2 half, composed while the attempt is still RUNNING.
+     *
+     * Everything a review needs — the persisted measurement of THIS candidate,
+     * the inverted route, the composed evidence, the materialized private
+     * prompt and the swept descriptor — is built before L7, so a rework that
+     * could not have been reviewed halts on L8 with its candidate retained
+     * rather than one call later, from a state whose only other exit is a
+     * projection hold.
+     */
+    let prepared: PreparedReview | null = null;
+    if (recipe !== null) {
+      // Rework used to build this `TestOutput` in memory and never write it
+      // down. The reviewer would then have been handed the retained evidence of
+      // the SUPERSEDED candidate — `lastTestOutputFrom` reads the last one on
+      // record and refuses anything that names another SHA — so the envelope
+      // goes down before anything composes from it.
+      //
+      // It gets a host phase of its own, exactly as the recipes' own `tests`
+      // phase does: the envelopes table is `UNIQUE (phase_id, correction_round)`
+      // and the builder's own build-output already holds the builder phase's
+      // round 0, so hanging a second envelope there would be refused.
+      const testsKey = `${phaseKey}-tests`;
+      const testsPhaseId = `${status.sessionId}:${testsKey}`;
+      const testsAt = infra.now();
+      const testsPhase = (state: string): PhaseEvidenceRecord => ({
+        phaseId: testsPhaseId, ordinal: builderOrdinal + 1, key: testsKey, name: testsKey,
+        kind: "code", owner: "host",
+        description: `Retain the host measurement of reworked candidate ${candidate} for the review that judges it`,
+        status: state, correctionCount: 0, maxCorrections: 0, errorCode: null, errorMessage: null,
+        startedAt: testsAt, endedAt: state === "SUCCEEDED" ? infra.now() : null, createdAt: testsAt,
+      });
+      await persist("attempt.updated", {}, { type: "phase", phase: testsPhase("RUNNING") });
+      const testsRaw = join("raw", `host-${testsKey}.txt`);
+      const testsEnvelope = wrapEnvelope({
+        envelopeId: `${testsPhaseId}:0`, sessionId: status.sessionId, phaseId: testsKey,
+        correctionRound: 0, agent: "host", schemaId: "awsf.test-output/v1", createdAt: testsAt,
+        rawOutputPath: testsRaw,
+      }, parseEnvelope(JSON.stringify(testOutput), "awsf.test-output/v1"));
+      await mkdir(join(options.attemptDir, "raw"), { recursive: true });
+      await writeFile(join(options.attemptDir, testsRaw), JSON.stringify(testOutput), { mode: 0o600 });
+      await chmod(join(options.attemptDir, testsRaw), 0o600);
+      const testsEnvelopePath = join(options.attemptDir, "envelopes", `${testsKey}-0.json`);
+      await mkdir(dirname(testsEnvelopePath), { recursive: true });
+      if (existsSync(testsEnvelopePath)) throw new Error(`immutable envelope already exists: ${testsEnvelopePath}`);
+      await writeFile(testsEnvelopePath, JSON.stringify(testsEnvelope), { mode: 0o600 });
+      await persist("attempt.updated", {}, { type: "envelope", phaseId: testsPhaseId, envelope: testsEnvelope });
+      await persist("attempt.updated", {
+        lastActivityAt: infra.now(), lastActivity: `${testsKey}: retained the host measurement of ${candidate}`,
+      }, { type: "phase", phase: testsPhase("SUCCEEDED") });
+
+      const evidenceRecords = await readAttemptEvidence(options.attemptDir);
+      const reviewPhaseIds = new Set(recordedReviews(evidenceRecords, status.sessionId).map((review) => review.phaseId));
+      const recorded = recordedRoutes(evidenceRecords, reviewPhaseIds);
+      const phases = reviewPhasesOf(recipe);
+      // The inversion is taken against the call that produced THIS candidate —
+      // the rework's own builder, whose route record was written moments ago —
+      // and never against an older one.
+      reviewRoute = await resolveReviewRoute({
+        config: options.config, configPath: options.configPath, infra, recipe,
+        reviewPhaseId: phases.review,
+        workerProvider: recorded.worker?.provider,
+        priorReview: recorded.review,
+      });
+      const intent = planIntentFrom(evidenceRecords) ?? requestOutput(status, options.config);
+      prepared = await prepareReview({
+        subject: {
+          attemptDir: options.attemptDir, stateRoot: options.stateRoot, sessionId: status.sessionId,
+          repository: status.repository, worktree: status.worktree!,
+          baseSha: status.baseSha!, candidateSha: candidate,
+        },
+        config: options.config, infra, recipe, reviewPhaseId: phases.review, route: reviewRoute,
+        // The OWNER RE-ENTRY counter again, the same one the builder's runtime
+        // directory carries, so a second rework's review can never overwrite a
+        // first one's artefacts or collapse onto its gate rows.
+        generation: `rw${String(reworkNumber)}`,
+        intent: {
+          // The owner's own words. The DEFECT is deliberately absent: the
+          // builder was told what to fix, and a reviewer told what to find is
+          // not a reviewer.
+          request: status.request,
+          goals: intent.goals,
+          nonGoals: intent.nonGoals,
+          acceptanceCriteria: intent.implementationSteps.flatMap((step) => step.acceptanceCriteria),
+          testStrategy: intent.testStrategy,
+        },
+        testOutput,
+        workerProvider: recorded.worker!.provider,
+      });
+      reviewPhaseDb = `${status.sessionId}:${prepared.phaseKey}`;
+    }
+
     const l7 = transition({
-      from: "RUNNING", to: "GATING", actor: "host", tier: 1, reason: { source: "git" }, interactive: false,
+      from: "RUNNING", to: "GATING", actor: "host", tier: status.tier, reason: { source: "git" }, interactive: false,
       budget: budget.snapshot(), evidence: { requiredPhasesTerminalSuccess: true, hostCommitCreated: true, baseSha: status.baseSha!, candidateSha: candidate },
     });
     await persistTransition("RUNNING", "GATING", l7.edge, "host", "git", null, `owner rework produced exact candidate ${candidate}`, false, {
       candidateSha: candidate, budget: budget.snapshot(), phase: null, lastActivity: "L7 entered host gating on the new exact candidate",
     });
+
+    if (recipe === null) {
+      options.assertAdvancement?.(status.sessionId, "AWAITING_OWNER");
+      const l12 = transition({
+        from: "GATING", to: "AWAITING_OWNER", actor: "host", tier: status.tier, reason: { source: "gate" }, interactive: false,
+        budget: budget.snapshot(), evidence: { gatesPass: true, candidateSha: candidate },
+      });
+      await persistTransition("GATING", "AWAITING_OWNER", l12.edge, "host", "gate", null, "all fresh owner-rework gates passed", false, {
+        candidateSha: candidate, budget: budget.snapshot(), gatesPass: true, requiredReviewPresent: false,
+        journeyApproved: true, protectedApprovalsValid: true, blocker: null,
+        lastActivity: "fresh L19 candidate and gates passed; awaiting owner",
+      });
+      return { status, confirmed: true };
+    }
+
+    /**
+     * L11 — the spawn site the lifecycle has always had, now with a caller.
+     *
+     * The call is held on the exact candidate the fresh gates just cleared, and
+     * the provider is the one the inversion derived by exclusion. The candidate
+     * is re-read immediately before GO and again after the review answers: a
+     * clean checkout of a DIFFERENT commit is invisible to `assertClean`, so
+     * both reads are SHA comparisons.
+     */
+    const worktree = status.worktree!;
+    const baseSha = status.baseSha!;
+    const assertCandidatePinned = (when: string, afterAnswer: boolean): void => {
+      const observed = systemGitRunner(worktree);
+      const canonicalRunner = systemGitRunner(status.repository);
+      const problems: string[] = [];
+      const head = runGit(observed, ["rev-parse", "HEAD"]).trim();
+      if (head !== candidate) problems.push(`worktree HEAD is ${head}, not the candidate ${candidate}`);
+      const canonicalHead = runGit(canonicalRunner, ["rev-parse", "HEAD"]).trim();
+      if (canonicalHead !== baseSha) problems.push(`canonical HEAD is ${canonicalHead}, not the recorded base ${baseSha}`);
+      const dirty = runGit(observed, ["status", "--porcelain"]).trim();
+      if (dirty.length > 0) problems.push(`the managed worktree is not clean: ${bounded(dirty, 400)}`);
+      if (problems.length === 0) return;
+      const detail = `the candidate under review moved ${when}: ${problems.join("; ")}`;
+      // After the answer this is host-deterministic evidence that the tree the
+      // reviewer read is not the tree the guard would approve, which is what
+      // L17 admits as `review-evidence-invalid`. Before GO nothing was bought,
+      // so it is an ordinary refusal instead.
+      throw afterAnswer ? new ReplacementReviewEvidenceInvalid(detail) : new ReworkCandidateMismatch(detail);
+    };
+
+    const l11 = budget.authorize({
+      from: "GATING", to: "REVIEWING", actor: "host", reason: { source: "gate" }, interactive: false,
+      evidence: { gatesPass: true, candidateSha: candidate }, spawn: { cost: 1 },
+    });
+    await persistTransition("GATING", "REVIEWING", l11.result.edge, "host", "gate", null,
+      `held one call for the ${reviewRoute!.model.provider} review of the reworked candidate`, true, {
+        candidateSha: candidate, budget: budget.snapshot(), gatesPass: true, requiredReviewPresent: false,
+        protectedApprovalsValid: true, blocker: null,
+        lastActivity: `L11 held one call for the mandatory ${reviewRoute!.model.provider} review of ${candidate}`,
+      });
+
+    const reviewOutput = await prepared!.run({
+      budget,
+      reservation: l11.reservation!,
+      retrySubject: `${recipe.id}:${prepared!.phaseKey}:retry`,
+      registration: { from: "GATING", to: "REVIEWING", edge: "L11" },
+      ordinal: builderOrdinal + 2,
+      state: reviewState,
+      persist,
+      assertBeforeGo: () => { assertCandidatePinned("between preflight and GO", false); },
+      assertAfterAnswer: () => { assertCandidatePinned("between the review and L15", true); },
+      ...(options.assertLaunchProjection === undefined ? {} : { assertLaunchProjection: options.assertLaunchProjection }),
+    });
+
     options.assertAdvancement?.(status.sessionId, "AWAITING_OWNER");
-    const l12 = transition({
-      from: "GATING", to: "AWAITING_OWNER", actor: "host", tier: 1, reason: { source: "gate" }, interactive: false,
-      budget: budget.snapshot(), evidence: { gatesPass: true, candidateSha: candidate },
+    const l15 = transition({
+      from: "REVIEWING", to: "AWAITING_OWNER", actor: "host", tier: status.tier, reason: { source: "gate" }, interactive: false,
+      budget: budget.snapshot(),
+      evidence: {
+        gatesPass: true, candidateSha: candidate,
+        review: { verdict: reviewOutput.verdict, reviewedSha: reviewOutput.reviewedSha, findings: reviewOutput.findings },
+      },
     });
-    await persistTransition("GATING", "AWAITING_OWNER", l12.edge, "host", "gate", null, "all fresh owner-rework gates passed", false, {
-      candidateSha: candidate, budget: budget.snapshot(), gatesPass: true, requiredReviewPresent: false,
-      journeyApproved: true, protectedApprovalsValid: true, blocker: null,
-      lastActivity: "fresh L19 candidate and gates passed; awaiting owner",
-    });
+    // `journeyApproved` goes back to false, unlike the replacement review's:
+    // that one changed no tree, and this one changed the tree the owner
+    // attested against. L20 demands the attestation at T2, so `awsf journey`
+    // runs again against the new candidate before this can land.
+    await persistTransition("REVIEWING", "AWAITING_OWNER", l15.edge, "host", "gate", null,
+      `${reviewRoute!.model.provider} review of the reworked candidate returned ${reviewOutput.verdict}`, false, {
+        candidateSha: candidate, budget: budget.snapshot(), gatesPass: true,
+        requiredReviewPresent: true, journeyApproved: false, protectedApprovalsValid: true,
+        blocker: null, phase: null, process: null,
+        lastActivity: `opposite-provider review on ${reviewRoute!.model.provider} of reworked candidate ${candidate} returned ${reviewOutput.verdict} with ${String(reviewOutput.findings.length)} finding(s)`,
+        nextAction: `run \`awsf journey ${status.taskId}\` at a TTY, then \`awsf land ${status.taskId}\``,
+      });
     return { status, confirmed: true };
   } catch (error) {
     await writeQueue;
     const failure = safeFailure(error);
     let survivorReport: TerminationReport | null = null;
-    const processExitAlreadyObserved = observedProcess?.settled === true && observedProcess.status === "EXITED";
-    if (activeTransport.current !== null && !processExitAlreadyObserved) {
-      try { survivorReport = await activeTransport.current.cancel("owner rework failed closed"); }
+    // Whichever phase was in flight owns the survivor question. Once the review
+    // has a transport it is that one: the builder's already exited, and letting
+    // a clean builder exit answer for a reviewer that did not would be a
+    // survivor claim about the wrong process.
+    const failedTransport = reviewState.activeTransport ?? activeTransport.current;
+    const failedObservation = reviewState.activeTransport === null ? observedProcess : reviewState.observed;
+    const processExitAlreadyObserved = failedObservation?.settled === true && failedObservation.status === "EXITED";
+    if (failedTransport !== null && !processExitAlreadyObserved) {
+      try { survivorReport = await failedTransport.cancel("owner rework failed closed"); }
       catch { survivorReport = null; }
     }
     // A reservation that did not reach GO is released even when L19's projector,
@@ -996,7 +1267,7 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
             : failure;
         const reason = blocker(terminationFailure);
         const l8 = transition({
-          from: "RUNNING", to: "BLOCKED", actor: "host", tier: 1,
+          from: "RUNNING", to: "BLOCKED", actor: "host", tier: status.tier,
           reason: { source: "process", code: reason.code, detail: reason.detail }, interactive: false,
           budget: budget.snapshot(),
         });
@@ -1017,6 +1288,98 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
       if (status.lifecycleState !== "BLOCKED" || status.budget.callsReserved !== 0 || status.process !== null) {
         throw new Error("owner rework recovery did not reach an unreserved BLOCKED halt");
       }
+      return { status, confirmed: true };
+    }
+    /**
+     * The T2 review failed, and REVIEWING is where the attempt is.
+     *
+     * The same three answers `awsf review` gives, for the same reason: a review
+     * that ANSWERED and then lost its projection is worth more than the call it
+     * cost, so it is held rather than blocked; a host-determined failure takes
+     * L17; and everything else is recorded with the owner's own exits named,
+     * because inventing a terminal state for a bad review would mean the host
+     * deciding what a bad review means.
+     */
+    if (status.lifecycleState === "REVIEWING") {
+      if (reviewState.answered) {
+        await recoverPersist("attempt.updated", {
+          budget: budget.snapshot(), process: null,
+          blocker: { code: "sqlite-projection-failed", detail: failure.message, ahead: null, behind: null },
+          lastActivityAt: recoveryAt, lastActivity: "owner rework review advancement held at REVIEWING until observability rebuild",
+          nextAction: "run `awsf db rebuild`, then rerun advancement",
+        });
+        return { status, confirmed: true };
+      }
+      if (reviewState.phase !== null) {
+        const failedReviewPhase: PhaseEvidenceRecord = {
+          ...reviewState.phase, status: "FAILED",
+          startedAt: reviewState.phase.startedAt ?? recoveryAt, endedAt: recoveryAt,
+          errorCode: failure.name, errorMessage: failure.message,
+        };
+        try {
+          await recoverPersist("attempt.updated", {
+            phase: { name: failedReviewPhase.name, state: "FAILED", round: 0, maximumRounds: 0 },
+            budget: budget.snapshot(), process: null, lastActivityAt: recoveryAt,
+            lastActivity: `${failedReviewPhase.key} failed closed`,
+          }, { type: "phase", phase: failedReviewPhase });
+        } catch { /* the halt below is the mandatory durable settlement. */ }
+      }
+      status = await readAttempt(options.attemptDir);
+      const registered = reviewState.processRecord as BarrierRecord | null;
+      if (registered !== null && (!reviewState.processSettled || reviewState.observed?.settled === false)) {
+        const outcome: ObservedProcessOutcome = reviewState.observed?.settled === true
+          ? reviewState.observed
+          : survivorReport?.terminated === true
+            ? { status: "CANCELLED", exitCode: null, endedAt: recoveryAt, settled: true }
+            : { status: "FAILED", exitCode: reviewState.observed?.exitCode ?? null, endedAt: recoveryAt, settled: false };
+        try {
+          await recoverPersist("attempt.updated", {
+            budget: budget.snapshot(), process: null, lastActivityAt: outcome.endedAt,
+            lastActivity: `registered process ${registered.runId} settled ${outcome.status}`,
+          }, {
+            type: "process", phaseId: reviewPhaseDb!, adapterId: reviewRoute!.adapterId, role: reviewRoute!.agent.name,
+            record: registered, status: outcome.status,
+            registeredAt: reviewState.releasedAt ?? outcome.endedAt, releasedAt: reviewState.releasedAt,
+            endedAt: outcome.endedAt, exitCode: outcome.exitCode, exitSignal: null,
+          });
+        } catch { /* the halt below is the mandatory durable settlement. */ }
+      }
+      status = await readAttempt(options.attemptDir);
+      const terminationFailure = !processExitAlreadyObserved && failedTransport !== null && survivorReport === null
+        ? new Error(`${failure.message}; registered process termination could not be verified`)
+        : !processExitAlreadyObserved && survivorReport !== null && !survivorReport.terminated
+          ? new Error(`${failure.message}; surviving processes [${survivorReport.survivors.join(", ")}]`)
+          : failure;
+      const named = safeFailure(terminationFailure);
+      const detail = `${named.name}: ${named.message}`;
+      const reason = reviewFailureBlocker(named, detail) ?? { code: "phase-abort", detail, edge: null as "L17" | null };
+      if (reason.edge === null) {
+        await recoverPersist("attempt.updated", {
+          budget: budget.snapshot(), process: null,
+          blocker: { code: reason.code, detail: reason.detail, ahead: null, behind: null },
+          lastActivityAt: recoveryAt, lastActivity: reason.detail,
+          nextAction: `run \`awsf cancel ${status.taskId}\`; REVIEWING has no host exit for ${reason.code}`,
+        });
+        return { status, confirmed: true };
+      }
+      const l17 = transition({
+        from: "REVIEWING", to: "BLOCKED", actor: "host", tier: status.tier,
+        reason: { source: "process", code: reason.code, detail: reason.detail },
+        interactive: false, budget: budget.snapshot(),
+        evidence: { reviewTransportRetries: reviewState.transportRetries, reviewFailure: reason.code },
+      });
+      const seq = transitionOrdinal++;
+      await recoverPersist("attempt.transitioned", {
+        lifecycleState: "BLOCKED", budget: budget.snapshot(), process: null,
+        blocker: { code: reason.code, detail: reason.detail, ahead: null, behind: null },
+        lastActivityAt: recoveryAt, lastActivity: reason.detail,
+        nextAction: nextActionFor("BLOCKED", status.taskId),
+      }, {
+        type: "transition", id: `${status.sessionId}:L17:${seq}`, seq,
+        from: "REVIEWING", to: "BLOCKED", actor: "host", edgeId: l17.edge,
+        reasonSource: "process", reasonCode: reason.code, reasonDetail: reason.detail,
+        spawnSite: false, at: recoveryAt,
+      });
       return { status, confirmed: true };
     }
     if (status.lifecycleState === "GATING") {

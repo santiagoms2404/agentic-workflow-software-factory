@@ -158,3 +158,23 @@ test("one review discloses nothing; a replaced one discloses both verdicts and t
   assert.match(lines[0]!, /Superseded review \(reviewer\): accept — replaceable because evidence-gate-absent/);
   assert.match(lines[1]!, /Replacement review \(reviewer-re1\): concern with 1 finding\(s\)/);
 });
+
+test("a review superseded by a rework is disclosed as a different revision, not as a replaceable one", () => {
+  // The two are not the same fact. L25 replaces a review of an UNCHANGED
+  // candidate, so "replaceable because <defect>" is the disclosure. A T2 rework
+  // builds a DIFFERENT candidate, and nothing about the earlier review was
+  // replaceable — its evidence gate passed and its verdict stood. Telling the
+  // human gate otherwise would be a false statement at the last moment it could
+  // act on one.
+  const reworked = recordedReviews([
+    envelope("reviewer", review(CANDIDATE, "concern")),
+    gate("reviewer", "review_evidence_present", true, CANDIDATE),
+    envelope("reviewer-rw1", review(OTHER)),
+    gate("reviewer-rw1", "review_evidence_present", true, OTHER),
+  ], SESSION);
+  const lines = supersededReviewLines(reworked);
+  assert.equal(lines.length, 2);
+  assert.match(lines[0]!, new RegExp(`Superseded review \\(reviewer\\): concern of ${CANDIDATE} — a different revision, reworked since`));
+  assert.equal(/replaceable/.test(lines[0]!), false, "nothing about it was replaceable");
+  assert.match(lines[1]!, new RegExp(`Current review \\(reviewer-rw1\\): accept of ${OTHER} with 0 finding\\(s\\)`));
+});
