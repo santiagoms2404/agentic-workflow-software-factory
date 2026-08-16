@@ -555,11 +555,35 @@ DEFINITION OF DONE:
 STOP WHEN the M9 checklist is green. Flip markers, metadata, Amendment.
 ```
 
+
+## M10 — Correction Economy (T35–T36) — v1.1, POST-PILOT
+
+```
+[CHOOSE YOUR PROVIDER — pick by live quota; see "Model selection" for the grounding]
+  CLAUDE  claude:opus · /effort high
+  GPT     codex:gpt-5.6-sol · reasoning high
+  SHAPE   two normative changes to the owner's control surface — CLAUDE-FAVOURED.
+          Neither is large in lines; both decide what an attempt may cost and
+          whether a real review finding can be acted on at all.
+  WHY     both defects were found by M8's own pilots rather than by any test, and
+          both were paid for in scarce subscription quota. They are carried as
+          tasks so the next one is not.
+  NOTE    POST-PILOT v1.1. Gated behind M8 being [x]; independent of M9. Nothing
+          here weakens a v1 invariant: the ceiling stays a real bound, every act
+          added is TTY-only and journalled, and no push path appears.
+
+Read the M10 block, both task blocks, and the 2026-08-16 pilot-2 Amendment IN FULL
+before touching anything: the Amendment is where both defects are measured rather
+than asserted.
+
+STOP WHEN the M10 checklist is green. Flip markers, metadata, Amendment.
+```
+
 ---
 
 # Section B — Task prompts (recommended)
 
-Thirty-four prompts, one per bounded task — the granularity the plan is designed around. T31–T34 are M9, post-v1: do not start them before M8 is `[x]`. Every prompt assumes the shared **Conventions** above (marker discipline, completion metadata, never-do list, cross-platform note, fixture integrity, cross-building). Each prompt names the same **read-first set** unless it says otherwise:
+Thirty-six prompts, one per bounded task — the granularity the plan is designed around. T31–T34 are M9, post-v1, and T35–T36 are M10, post-pilot v1.1: do not start either group before M8 is `[x]`. Every prompt assumes the shared **Conventions** above (marker discipline, completion metadata, never-do list, cross-platform note, fixture integrity, cross-building). Each prompt names the same **read-first set** unless it says otherwise:
 
 > `specs/awsf-plan.html` (this task's block IN FULL, plus "The Lifecycle Contract" and the contract section the task implements), `specs/awsf-plan-acceptance.md` (rows tagged with this task's milestone), `AGENTS.md` once it exists, and the existing `core/src`.
 
@@ -1518,4 +1542,83 @@ DONE WHEN: the M9 checklist is green · the M1 no-push/no-destructive-paths stri
 scan passes UNCHANGED · the journey test (vague intent → ticket → ready → stub run)
 passes on the stub adapter with zero spend. Flip T34 + the M9 header; metadata +
 Amendment.
+```
+
+### T35 — The owner-adjustable call ceiling
+
+```
+[CHOOSE YOUR PROVIDER — pick by live quota]
+  CLAUDE  claude:opus · /effort high
+  GPT     codex:gpt-5.6-sol · reasoning high
+  SHAPE   a normative change to how spend is bounded — CLAUDE-FAVOURED.
+  WHY     the ceiling decides whether the reviewer-to-builder loop is affordable
+          at all. Getting it wrong either strands an attempt that was nearly
+          finished or hands an agent an unbounded budget.
+  NOTE    the defect is measured in the 2026-08-16 pilot-2 Amendment, not assumed.
+
+Task T35 of specs/awsf-plan.html (M10). Read the T35 block, the M10 block, the
+2026-08-16 pilot-2 Amendment IN FULL, core/src/state/tiers.ts,
+core/src/config/schema.ts, and the configuration-snapshot comparison in
+core/src/cli/commands/{rework,review}.ts.
+
+ENTRY: M8 is [x].
+
+DO: make the tier ceiling an owner-set number with a configured default —
+ceilingFor resolves from the effective configuration instead of the hardcoded
+CALL_CEILINGS constant, and the VALID_TIER_CEILINGS three-value allowlist is
+deleted so risk.call_ceiling becomes a real dial. Then add a TTY-only owner act
+that RAISES a named task's ceiling while its attempt is live, recording the grant
+and the owner's written reason in the journal.
+
+DO NOT make the raise a configuration edit. An attempt's recorded configuration
+snapshot is compared before rework and review, so editing awsf.config.yaml
+mid-attempt would lock the owner out of the very acts the raise was for. DO NOT
+remove the ceiling, DO NOT allow an unbounded grant, DO NOT let a grant for one
+task widen another, and DO NOT let a non-interactive caller take it.
+
+DONE WHEN: the M10 T35 checklist is green · a raise is journalled, bounded and
+task-scoped · an attempt that halted at its ceiling resumes after a raise with no
+configuration-snapshot mismatch, proved by a journey rather than by inspection ·
+fitsCeiling and assertWorkflowFitsTier keep their semantics and the T0/T1/T2
+defaults are unchanged. Flip T35; metadata + Amendment.
+```
+
+### T36 — Owner rework at tier 2
+
+```
+[CHOOSE YOUR PROVIDER — pick by live quota]
+  CLAUDE  claude:opus · /effort high
+  GPT     codex:gpt-5.6-sol · reasoning high
+  SHAPE   completing a half-written branch in the owner's correction path —
+          CLAUDE-FAVOURED.
+  WHY     the lifecycle already forks correctly; only the command is missing its
+          second branch, and the missing half is the reviewer-to-builder loop the
+          T2 tier exists for.
+  NOTE    the defect is measured in the 2026-08-16 pilot-2 Amendment, not assumed.
+
+Task T36 of specs/awsf-plan.html (M10). Read the T36 block, the M10 block, the
+2026-08-16 pilot-2 Amendment IN FULL, core/src/state/guards.ts (L11 and L12), and
+core/src/cli/commands/{rework,review,production-run}.ts.
+
+ENTRY: M8 is [x].
+
+DO: let awsf rework serve a tier-2 attempt. The lifecycle already demands the
+shape — L11 requires tier >= 2 out of GATING and L12 forbids it — while rework.ts
+hardcodes the T1 branch and refuses every other tier. After the builder phase and
+its host gates, a T2 rework must take L11, re-compose the review context, run the
+opposite-provider review, and take L15 back to AWAITING_OWNER. Persist a
+TestOutput envelope for the new candidate; without one the reviewer is handed
+retained evidence naming the superseded candidate and refuses. Extract the review
+half of awsf review into one module both commands call, and generation-qualify
+and round-scope the rework's review artefacts.
+
+DO NOT relax the tier fork. DO NOT let a reworked T2 candidate reach landing
+without a review bound to that exact revision. DO NOT brief the reviewer on the
+owner's defect statement or on the superseded verdict — the builder gets the
+defect, the reviewer gets the candidate. DO NOT renegotiate the T1 branch.
+
+DONE WHEN: the M10 T36 checklist is green · a T2 rework spends builder plus
+review and returns to AWAITING_OWNER with a review bound to the new candidate ·
+headroom is refused before anything is spent · the existing T1 rework journeys
+pass UNCHANGED. Flip T36 + the M10 header; metadata + Amendment.
 ```

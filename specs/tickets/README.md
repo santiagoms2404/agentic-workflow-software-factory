@@ -11,7 +11,8 @@ plan's tasks become individually addressable, countable, and boardable — the s
 
 **T01–T30 are v1** (milestones M1–M8). **T31–T34 are M9, post-v1** and must not be started before
 M8 is `[x]` and AWSF is adopted; their prompts were added to § Section B on 2026-08-06 alongside
-the rest.
+the rest. **T35–T36 are M10, post-pilot v1.1** — two defects M8's own pilots found in the owner's
+control surface, added 2026-08-16; they are gated behind M8 being `[x]` and are independent of M9.
 
 ## Frontmatter schema
 
