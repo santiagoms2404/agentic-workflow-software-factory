@@ -1,8 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { mkdir } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { createApiRouter } from "../../../src/api/routes.ts";
 import { processesForSession } from "../../../src/observability/queries.ts";
 import { openDatabase, type OpenDatabaseOptions } from "../../../src/observability/sqlite.ts";
+import { writeLandingSummary } from "../../../src/persistence/landing-summary.ts";
 import type { SessionsResponse, SessionDetailResponse, PhaseDetailResponse, EventsResponse, TicketsResponse } from "../../../../dashboard/shared/types.ts";
 import { apiFixture } from "./_fixture.ts";
 
@@ -75,6 +78,14 @@ test("legacy null sandbox columns stay null at the API boundary", async () => {
 
 test("session and phase detail expose summaries but no private file, process, or continuity references", async () => {
   const fixture = apiFixture();
+  const summaryDir = join(dirname(fixture.path), "projects", "test-project", "tasks", "T23", "1");
+  await mkdir(summaryDir, { recursive: true });
+  await writeLandingSummary(summaryDir, {
+    problem: "Build the API",
+    changes: "feat: add the read surface\n2 files changed",
+    verification: "- Deterministic gates: passed",
+    risks: "- Risk tier: T1",
+  });
   const router = createApiRouter({ dbPath: fixture.path, config: fixture.config });
   try {
     const sessionResponse = await router.dispatch(request("/api/v1/sessions/session-1"));
@@ -82,6 +93,12 @@ test("session and phase detail expose summaries but no private file, process, or
     assert.equal(session.transitions[0]?.edgeId, "L4");
     assert.equal(session.gates[0]?.passed, true);
     assert.equal(session.processes[0]?.adapterId, "pi-codex");
+    assert.deepEqual(session.landingSummary, {
+      problem: "Build the API",
+      changes: "feat: add the read surface\n2 files changed",
+      verification: "- Deterministic gates: passed",
+      risks: "- Risk tier: T1",
+    });
 
     const phaseResponse = await router.dispatch(request("/api/v1/sessions/session-1/phases/phase-1"));
     assert.equal(phaseResponse.status, 200);

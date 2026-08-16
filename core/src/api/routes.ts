@@ -1,6 +1,8 @@
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { queryBacklog } from "../backlog.ts";
 import { TicketStore } from "../persistence/ticket-store.ts";
+import { readLandingSummary } from "../persistence/landing-summary.ts";
+import { attemptDir } from "../persistence/platform-paths.ts";
 import type { DatabaseSync } from "../observability/sqlite.ts";
 import { openDatabase, setSessionArchived } from "../observability/sqlite.ts";
 import {
@@ -286,6 +288,8 @@ export interface ApiRouterOptions {
   readonly config: AwsfConfig;
   /** Repository ticket files; the dashboard never receives their paths or bodies. */
   readonly ticketDirectory?: string;
+  /** Defaults to the directory containing the projection database. */
+  readonly stateRoot?: string;
   readonly open?: typeof openDatabase;
 }
 
@@ -340,9 +344,15 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
       });
       return jsonResponse({ sessions: rows.map((row) => card(readDb, row)) } satisfies SessionsResponse);
     }),
-    session: safely((_request, params) => {
+    session: safely(async (_request, params) => {
       const row = requireSession(readDb, params.id ?? "");
       const base = card(readDb, row);
+      const summary = await readLandingSummary(attemptDir(
+        options.stateRoot ?? dirname(options.dbPath),
+        row.project_slug,
+        row.task_id,
+        String(row.attempt),
+      ));
       const response: SessionDetailResponse = {
         ...base,
         baseSha: row.base_sha,
@@ -357,6 +367,7 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
         correctionsOwner: row.corrections_owner,
         ownerReentries: row.owner_reentries,
         stateRevision: row.state_revision,
+        landingSummary: summary,
         transitions: transitionsForSession(readDb, row.session_id).map((item) => ({
           id: item.transition_id,
           seq: item.seq,

@@ -168,6 +168,13 @@ export interface ProcessSummary {
   exitSignal: string | null;
 }
 
+export interface LandingSummary {
+  problem: string;
+  changes: string;
+  verification: string;
+  risks: string;
+}
+
 export interface SessionDetailResponse extends SessionCard {
   baseSha: string | null;
   headSha: string | null;
@@ -182,6 +189,7 @@ export interface SessionDetailResponse extends SessionCard {
   /** Per attempt, not per phase — the allowance L16/L19/L25 draw on. */
   ownerReentries: number;
   stateRevision: number;
+  landingSummary: LandingSummary | null;
   transitions: TransitionSummary[];
   gates: GateSummary[];
   processes: ProcessSummary[];

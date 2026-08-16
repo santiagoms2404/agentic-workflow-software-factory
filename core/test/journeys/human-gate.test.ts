@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { ActorNotPermitted, InteractiveOwnerRequired } from "../../src/state/errors.ts";
@@ -214,9 +214,32 @@ test("the actual CLI path shows the exact SHA, persists LANDING, fast-forwards, 
     assert.equal(git(fixture.repository, "status", "--porcelain"), "");
     assert.equal((await readAttempt(fixture.attemptDir)).lifecycleState, "LANDED");
 
+    const summary = readFileSync(join(fixture.attemptDir, "landing-summary.md"), "utf8");
+    assert.match(summary, /^# Landing Summary/m);
+    for (const heading of ["Problem", "Changes", "Verification", "Risks"]) assert.match(summary, new RegExp(`^## ${heading}$`, "m"));
+    assert.match(summary, /land the exact tested candidate/);
+    assert.match(summary, new RegExp(fixture.candidate));
+
     const journal = readFileSync(join(fixture.attemptDir, "journal.jsonl"), "utf8");
     assert.match(journal, /"lifecycleState":"LANDING"/);
     assert.match(journal, /"lifecycleState":"LANDED"/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a landing summary write failure never blocks the candidate the human approved", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-human-summary-failure-"));
+  try {
+    const fixture = await seed(root);
+    const result = await landCommand({
+      attemptDir: fixture.attemptDir,
+      terminal: terminal(true, true),
+      summaryWriter: async () => { throw new Error("fixture write failure"); },
+    });
+    assert.equal(result.status.lifecycleState, "LANDED");
+    assert.equal(git(fixture.repository, "rev-parse", "HEAD"), fixture.candidate);
+    assert.equal(existsSync(join(fixture.attemptDir, "landing-summary.md")), false);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

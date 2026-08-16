@@ -31,6 +31,7 @@ test("dashboard uses routed inline phase detail and keeps owner/state evidence",
   assert.match(header, /StateRibbon/);
   assert.match(header, /lifecycle-disclosure/);
   assert.match(route, /OwnerGateCard/);
+  assert.match(source("dashboard/src/components/OwnerGateCard.vue"), /summary\.problem[\s\S]*summary\.changes[\s\S]*summary\.verification[\s\S]*summary\.risks/);
   assert.match(route, /PhaseDetailDrawer/);
   assert.doesNotMatch(detail, /aria-modal|role="dialog"|drawer-backdrop/);
   assert.match(detail, /Escape/);

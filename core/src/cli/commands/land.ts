@@ -13,6 +13,10 @@ import {
 } from "../../state/task-machine.ts";
 import type { OwnerTerminal } from "../tty.ts";
 import {
+  writeLandingSummary,
+  type LandingSummary,
+} from "../../persistence/landing-summary.ts";
+import {
   nextActionFor,
   nextRevision,
   persistAttempt,
@@ -32,6 +36,8 @@ export interface LandCommandOptions {
   readonly assertAdvancement?: AttemptAdvancementGuard;
   /** Crash-injection boundary: L20 is durable and Git has not yet moved. */
   readonly afterLandingPersisted?: (status: AttemptStatus) => Promise<void> | void;
+  /** Test seam. A record-write failure is deliberately non-blocking. */
+  readonly summaryWriter?: (attemptDir: string, summary: LandingSummary) => Promise<void>;
 }
 
 export interface LandCommandResult {
@@ -73,6 +79,35 @@ function authorizeLanding(
       },
     },
   });
+}
+
+function summaryFor(status: AttemptStatus, inspection: LandingInspection): LandingSummary {
+  const verification = [
+    `- Deterministic gates: ${status.gatesPass ? "passed" : "not passed"}`,
+    `- Candidate checked: ${inspection.candidateSha}`,
+    `- Required review: ${status.tier === 2 ? (status.requiredReviewPresent ? "recorded" : "missing") : "not required"}`,
+    `- End-user journey: ${status.tier === 2 ? (status.journeyApproved ? "approved" : "not approved") : "not required"}`,
+  ].join("\n");
+  const risks = [
+    `- Risk tier: T${String(status.tier)}`,
+    `- Canonical divergence at review: ahead ${String(inspection.ahead)}, behind ${String(inspection.behind)}`,
+    `- Protected-path approvals: ${status.protectedApprovalsValid ? "valid" : "not recorded"}`,
+  ].join("\n");
+  return {
+    problem: status.request,
+    changes: inspection.summary,
+    verification,
+    risks,
+  };
+}
+
+async function recordSummary(options: LandCommandOptions, status: AttemptStatus, inspection: LandingInspection): Promise<void> {
+  try {
+    await (options.summaryWriter ?? writeLandingSummary)(options.attemptDir, summaryFor(status, inspection));
+  } catch {
+    // This file is a review record, never landing evidence. If the human
+    // approves, the candidate continues through the same persisted gate.
+  }
 }
 
 function decideCompletion(status: AttemptStatus, outcome: LandingOutcome): TransitionResult {
@@ -214,6 +249,9 @@ export async function landCommand(options: LandCommandOptions): Promise<LandComm
   }
 
   const inspection = inspectLanding(current.repository, current.candidateSha);
+  // Write while the attempt is still AWAITING_OWNER so the polling dashboard
+  // can render the same record beside the terminal confirmation.
+  await recordSummary(options, current, inspection);
   options.terminal.write(`Candidate SHA: ${current.candidateSha}`);
   options.terminal.write("Summary:");
   for (const line of inspection.summary.split("\n")) options.terminal.write(`  ${line}`);
