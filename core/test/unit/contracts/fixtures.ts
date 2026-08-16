@@ -1,6 +1,7 @@
 import type {
   BuildOutput,
   DocumentOutput,
+  IntakeOutput,
   PlanOutput,
   ReviewContext,
   ReviewOutput,
@@ -157,7 +158,30 @@ export function validScoutOutput(): ScoutOutput {
   };
 }
 
-/** Every envelope fixture, keyed by schema id — so suites can iterate all seven uniformly. */
+export function validIntakeOutput(): IntakeOutput {
+  return {
+    schema: "awsf.intake-output/v1",
+    producerStatus: "success",
+    summary: "Refined one bounded ticket.",
+    artifacts: [{ path: "specs/tickets/T32.md", kind: "documentation", description: "The validated ticket." }],
+    notesForNextPhase: "Inspect the ticket candidate before landing.",
+    ticket: {
+      id: "T32",
+      title: "The intake recipe and awsf ticket",
+      milestone: "M9",
+      tier: 1,
+      state: "todo",
+      depends_on: ["T31"],
+      workflow: "plan-build-test",
+      outcome: "Vague intent becomes one validated ticket.",
+      context: ["The file-backed ticket store already exists."],
+      acceptance: ["The generated ticket validates against TicketSchema."],
+      non_goals: ["A dashboard backlog."],
+    },
+  };
+}
+
+/** Every envelope fixture, keyed by schema id — so suites can iterate all eight uniformly. */
 export const VALID_ENVELOPES = {
   "awsf.plan-output/v1": validPlanOutput,
   "awsf.build-output/v1": validBuildOutput,
@@ -166,4 +190,5 @@ export const VALID_ENVELOPES = {
   "awsf.review-context/v1": validReviewContext,
   "awsf.document-output/v1": validDocumentOutput,
   "awsf.scout-output/v1": validScoutOutput,
+  "awsf.intake-output/v1": validIntakeOutput,
 } as const;

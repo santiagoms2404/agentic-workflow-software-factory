@@ -20,6 +20,7 @@ import { toConfigSnapshotJson } from "../../config/effective-config.ts";
 import type { AwsfConfig, AgentDefinition, AdapterEntry } from "../../config/schema.ts";
 import type { BuildOutput } from "../../contracts/build-output.ts";
 import type { EnvelopeBase } from "../../contracts/envelope-base.ts";
+import type { IntakeOutput } from "../../contracts/intake-output.ts";
 import { UNREPORTED_TOKEN_USAGE, isPersistableKind, type ModelResolutionProvenance, type NormalizedEvent, type TokenUsage } from "../../contracts/normalized-events.ts";
 import { parseEnvelope } from "../../contracts/parse-envelope.ts";
 import type { PlanOutput } from "../../contracts/plan-output.ts";
@@ -53,6 +54,7 @@ import {
 import { assertClean, captureChangeSet, changedPaths, changesSinceBase, runGit, systemGitRunner } from "../../git/changes.ts";
 import { ContinuityStore, continuityHandle } from "../../execution/continuity-store.ts";
 import { continuityFilePath } from "../../persistence/platform-paths.ts";
+import { TicketStore } from "../../persistence/ticket-store.ts";
 import { boundCommandOutput, renderCommandEvidence } from "../../gates/command-evidence.ts";
 import { TEST_OUTPUT_TAIL_MAX_CHARS } from "../../contracts/test-output.ts";
 import {
@@ -82,6 +84,7 @@ import { buildWorkflow } from "../../workflow/recipes/build.ts";
 import { buildReviewWorkflow } from "../../workflow/recipes/build-review.ts";
 import { planBuildTestWorkflow } from "../../workflow/recipes/plan-build-test.ts";
 import { simpleSdlcWorkflow } from "../../workflow/recipes/simple-sdlc.ts";
+import { intakeWorkflow } from "../../workflow/recipes/intake.ts";
 import {
   nextActionFor,
   nextRevision,
@@ -107,6 +110,7 @@ const SUPPORTED = new Map<string, WorkflowRecipe>([
   [planBuildTestWorkflow.id, planBuildTestWorkflow],
   [buildReviewWorkflow.id, buildReviewWorkflow],
   [simpleSdlcWorkflow.id, simpleSdlcWorkflow],
+  [intakeWorkflow.id, intakeWorkflow],
 ]);
 
 const SUPPORTED_NAMES = [...SUPPORTED.keys()].join(", ");
@@ -390,6 +394,27 @@ function phaseGates(
       { id: "diff_matches_claims", run: ({ envelope }) => diffMatchesClaims(observe(), (envelope as BuildOutput).changedFiles) },
       { id: "writes_within_globs", run: () => writesWithinGlobs(observe(), profileWrites) },
     );
+  }
+  if (phaseId === "intake") {
+    common.push({
+      id: "diff_matches_claims",
+      run: async ({ envelope }) => {
+        const output = envelope as IntakeOutput;
+        const expected = `specs/tickets/${output.ticket.id}.md`;
+        const report = new GateReport("diff_matches_claims");
+        report.check("exact ticket path changed", observe().includes(expected), expected);
+        report.check(
+          "exact ticket artifact declared",
+          output.artifacts.length === 1 && output.artifacts[0]?.path === expected,
+          output.artifacts.map((artifact) => artifact.path).join(", ") || "none",
+        );
+        const record = (await new TicketStore(join(worktree, "specs", "tickets")).load())
+          .find((candidate) => candidate.ticket?.id === output.ticket.id);
+        report.check("written ticket validates", record?.ticket !== null && record?.ticket !== undefined, record?.violations.map((violation) => violation.message).join("; ") ?? "missing");
+        report.check("written ticket matches output", JSON.stringify(record?.ticket) === JSON.stringify(output.ticket), expected);
+        return report;
+      },
+    });
   }
   if (review !== null) {
     // A review of a different tree is not a review of this change, so the gate

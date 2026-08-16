@@ -1,5 +1,6 @@
 #!/usr/bin/env -S node --experimental-strip-types
 
+import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -24,12 +25,13 @@ import { runStubCommand } from "./commands/run.ts";
 import { runProductionCommand } from "./commands/production-run.ts";
 import { defaultWorktreeRoot, startCommand } from "./commands/start.ts";
 import { statusCommand } from "./commands/status.ts";
+import { intakeRequest, listTickets, showTicket, ticketStoreFor } from "./commands/ticket.ts";
 import { watchCommand } from "./commands/watch.ts";
 
 /** The complete owner-facing command table; documentation reconciles against it. */
 export const CLI_COMMANDS = Object.freeze([
   "new", "start", "run", "status", "watch", "rework", "review", "raise", "journey", "land", "cancel", "retry",
-  "doctor", "gc", "dash", "db rebuild",
+  "doctor", "gc", "dash", "db rebuild", "ticket",
 ]);
 
 const USAGE = `usage: awsf <${CLI_COMMANDS.join("|")}> [task] [options]`;
@@ -117,6 +119,62 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       }
       out(`Rebuild refused: ${report.reason}; candidate retained at ${report.candidatePath}`);
       return 1;
+    }
+    if (command === "ticket") {
+      const action = parsed.positionals[0];
+      const store = ticketStoreFor(cwd);
+      if (action === "list" && parsed.positionals.length === 1) {
+        for (const line of await listTickets(store)) out(line);
+        return 0;
+      }
+      if (action === "show" && parsed.positionals.length === 2) {
+        for (const line of await showTicket(store, parsed.positionals[1]!)) out(line);
+        return 0;
+      }
+      if (action !== "new" && action !== "refine") {
+        throw new Error("usage: awsf ticket <new ID INTENT|refine ID INTENT|list|show ID>");
+      }
+      const id = parsed.positionals[1] ?? "";
+      const intent = parsed.positionals.slice(2).join(" ");
+      const loaded = await store.load();
+      const existing = loaded.find((record) => record.ticket?.id === id);
+      if (action === "new" && existing !== undefined) throw new Error(`ticket ${id} already exists; use awsf ticket refine`);
+      const request = intakeRequest(action, id, intent, existing);
+      const configPath = resolve(parsed.flags.config ?? `${cwd}/awsf.config.yaml`);
+      const config = loadConfig(await readFile(configPath, "utf8"));
+      if (!config.workflows.enabled.includes("intake")) throw new Error("the intake workflow is not enabled");
+      const project = parsed.flags.project ?? config.project.slug;
+      // Each intake/refinement is a distinct task-lifetime budget. Reusing a
+      // prior T0 task would either collide or make a second refinement inherit
+      // its already-spent one-call ceiling.
+      const taskId = `ticket-${action}-${id}-${randomUUID()}`;
+      const projection = createDashboardProjection(stateRoot, err);
+      try {
+        const created = await newCommand({
+          stateRoot, project, taskId, repository: cwd, request, workflow: "intake", tier: 0,
+          configSnapshotJson: toConfigSnapshotJson(config),
+          callCeilings: callCeilingsOf(config.risk.call_ceiling),
+          allowance: config.risk.correction_allowance,
+          projectRecord: projection.project,
+        });
+        await startCommand({
+          attemptDir: created.attemptDir,
+          worktreeRoot: resolve(parsed.flags["worktree-root"] ?? env.AWSF_WORKTREE_ROOT ?? defaultWorktreeRoot(stateRoot)),
+          configPath,
+          projectRecord: projection.project,
+        });
+        const status = await runProductionCommand({
+          attemptDir: created.attemptDir, stateRoot, config, configPath,
+          projectRecord: projection.project,
+          assertAdvancement: projection.assertAdvancement,
+          assertLaunchProjection: projection.assertLaunchPermitted,
+        });
+        out(`${status.lifecycleState}: ${status.nextAction}`);
+        out(`Validated intake candidate for ${id}; inspect it, then run awsf land ${taskId}.`);
+        return status.lifecycleState === "AWAITING_OWNER" ? 0 : 1;
+      } finally {
+        projection.close();
+      }
     }
 
     const taskId = parsed.positionals[0];

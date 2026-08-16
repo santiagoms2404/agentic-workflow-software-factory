@@ -87,8 +87,18 @@ agents:
     tools: { profile: readonly, allow: [read, grep, find, ls] }
     writes: []
 
+  - name: intake
+    model: claude:sonnet
+    thinking: low
+    color: "#F59E0B"
+    purpose: Refine vague work into a validated ticket with observable acceptance criteria.
+    prompt: { system: prompts/intake/system.md, user: prompts/intake/user.md }
+    harness: { adapter: claude, continuity: same-session }
+    tools: { profile: managed-worker, allow: [read, grep, find, ls, edit, write] }
+    writes: ["specs/tickets/**"]
+
 workflows:
-  enabled: [scout, plan, build, plan-build-test, build-review, simple-sdlc]
+  enabled: [scout, plan, build, plan-build-test, build-review, simple-sdlc, intake]
 
 gates:
   test: { argv: [npm, run, test:unit], timeout_seconds: 600 }

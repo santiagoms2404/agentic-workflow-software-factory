@@ -26,6 +26,7 @@ export const KNOWN_WORKFLOW_IDS = [
   "plan-build-test",
   "build-review",
   "simple-sdlc",
+  "intake",
 ] as const;
 // §7.3.5 configures the argv-driven gates; the others (envelope validation,
 // artifact/diff/write/hygiene checks, review verdict, journey) are

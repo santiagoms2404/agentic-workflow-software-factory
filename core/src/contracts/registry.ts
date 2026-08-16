@@ -1,6 +1,7 @@
 import type { TObject } from "@sinclair/typebox";
 import { BuildOutputSchema, BUILD_OUTPUT_SCHEMA_ID, type BuildOutput } from "./build-output.ts";
 import { DocumentOutputSchema, DOCUMENT_OUTPUT_SCHEMA_ID, type DocumentOutput } from "./document-output.ts";
+import { IntakeOutputSchema, INTAKE_OUTPUT_SCHEMA_ID, type IntakeOutput } from "./intake-output.ts";
 import { PlanOutputSchema, PLAN_OUTPUT_SCHEMA_ID, type PlanOutput } from "./plan-output.ts";
 import { ReviewContextSchema, REVIEW_CONTEXT_SCHEMA_ID, type ReviewContext } from "./review-context.ts";
 import { ReviewOutputSchema, REVIEW_OUTPUT_SCHEMA_ID, type ReviewOutput } from "./review-output.ts";
@@ -22,6 +23,7 @@ export const ENVELOPE_SCHEMAS = {
   [REVIEW_CONTEXT_SCHEMA_ID]: ReviewContextSchema,
   [DOCUMENT_OUTPUT_SCHEMA_ID]: DocumentOutputSchema,
   [SCOUT_OUTPUT_SCHEMA_ID]: ScoutOutputSchema,
+  [INTAKE_OUTPUT_SCHEMA_ID]: IntakeOutputSchema,
 } as const;
 
 export type EnvelopeSchemaId = keyof typeof ENVELOPE_SCHEMAS;
@@ -35,6 +37,7 @@ export interface EnvelopeTypeById {
   [REVIEW_CONTEXT_SCHEMA_ID]: ReviewContext;
   [DOCUMENT_OUTPUT_SCHEMA_ID]: DocumentOutput;
   [SCOUT_OUTPUT_SCHEMA_ID]: ScoutOutput;
+  [INTAKE_OUTPUT_SCHEMA_ID]: IntakeOutput;
 }
 
 export const ENVELOPE_SCHEMA_IDS = Object.keys(ENVELOPE_SCHEMAS) as EnvelopeSchemaId[];

@@ -8,6 +8,7 @@ import { planBuildTestWorkflow } from "../../../src/workflow/recipes/plan-build-
 import { planWorkflow } from "../../../src/workflow/recipes/plan.ts";
 import { scoutWorkflow } from "../../../src/workflow/recipes/scout.ts";
 import { simpleSdlcWorkflow } from "../../../src/workflow/recipes/simple-sdlc.ts";
+import { intakeWorkflow } from "../../../src/workflow/recipes/intake.ts";
 
 const recipes: readonly WorkflowRecipe[] = [
   scoutWorkflow,
@@ -16,6 +17,7 @@ const recipes: readonly WorkflowRecipe[] = [
   planBuildTestWorkflow,
   buildReviewWorkflow,
   simpleSdlcWorkflow,
+  intakeWorkflow,
 ];
 
 const expected = {
@@ -28,9 +30,10 @@ const expected = {
   // therefore every tier ceiling — is unchanged by its presence.
   "build-review": { tier: 2, phases: ["request:engineer", "builder:agent", "tests:code", "review-context:code", "reviewer:agent"], calls: 2 },
   "simple-sdlc": { tier: 2, phases: ["planner:agent", "builder:agent", "tests:code", "documenter:agent", "final-tests:code", "review-context:code", "reviewer:agent"], calls: 4 },
+  intake: { tier: 0, phases: ["request:engineer", "intake:agent"], calls: 1 },
 } as const;
 
-test("the shipped catalog is exactly six data-shaped recipes with the Phase Contract order", () => {
+test("the shipped catalog is exactly seven data-shaped recipes with the Phase Contract order", () => {
   assert.deepEqual(recipes.map((recipe) => recipe.id), Object.keys(expected));
   for (const recipe of recipes) {
     const contract = expected[recipe.id as keyof typeof expected];
