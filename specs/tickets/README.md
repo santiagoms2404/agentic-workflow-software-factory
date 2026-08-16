@@ -25,6 +25,10 @@ control surface, added 2026-08-16; they are gated behind M8 being `[x]` and are 
 | `state` | `todo` \| `wip` \| `done` \| `failed` | mirrors the plan's `[]` / `[wip]` / `[x]` / `[f]` markers |
 | `depends_on` | list of ids | the plan's Notes § Critical dependency chain |
 | `workflow` | one of the plan's recipes | **derived** from `tier` |
+| `outcome` | non-empty string | the outcome the ticket is intended to deliver |
+| `context` | list of non-empty strings | facts and constraints relevant to the work |
+| `acceptance` | list of non-empty strings | conditions for accepting the work |
+| `non_goals` | list of non-empty strings | explicitly out-of-scope work |
 
 `tier` is an integer, not `T0`/`T1`/`T2`, because the plan's risk tiers and its task ids would
 otherwise collide (`T1` the tier vs. `T1` the task).
@@ -68,8 +72,8 @@ chain grants parallelism:
 ## Keeping state in sync
 
 The plan's status markers are the source of truth. When a task's marker flips in
-`awsf-plan.html`, flip `state:` here in the same commit. As of 2026-08-06: **T01–T05 `done`,
-T06–T34 `todo`.**
+`awsf-plan.html`, flip `state:` here in the same commit. Current plan-aligned states:
+**T01–T31 and T35–T36 `done`; T32–T34 `todo`.**
 
 This is **mechanically enforced** (AGENTS.md invariant 12) by
 `core/test/unit/meta/ticket-plan-sync.test.ts`, which fails the build on drift. The plan carries
