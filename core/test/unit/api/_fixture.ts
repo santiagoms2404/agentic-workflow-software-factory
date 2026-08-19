@@ -96,7 +96,7 @@ export function apiFixture(): {
         JSON.stringify(index === 1
           ? { name: "read", raw_provider_log: "must-not-leak", host_continuity_ref: "private://ref" }
           : { name: `event-${index}` }),
-        eventTimes[index - 1],
+        eventTimes[index - 1]!, // index is 1..3 over a 3-element literal
         index === 3 ? "private-ref" : "public",
       );
   }

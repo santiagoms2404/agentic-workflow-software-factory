@@ -102,7 +102,7 @@ test("stub writes outside its globs block with named paths, no correction, and a
     const reservation = budget.reserve({ cost: 1, subject: "builder" });
     budget.spendOnGo(reservation.id);
 
-    let breach: PermissionBreach | null = null;
+    let breach: PermissionBreach | undefined;
     await assert.rejects(
       runAgentPhase({
         workflowId: compiled.id,

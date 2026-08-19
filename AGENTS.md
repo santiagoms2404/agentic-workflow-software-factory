@@ -23,8 +23,12 @@ not a judgement call. Several are mechanically enforced by meta-tests under
    sqlite-write fence meta-test.
 7. **No dependency beyond the allowlist** (D2): core = `@sinclair/typebox`,
    `yaml`; dashboard = `vue`, `vite`, `@vitejs/plugin-vue`, `lucide-vue-next`;
-   dev = `typescript`, `vue-tsc`, `oxlint`. Enforced by the dependency-allowlist
-   meta-test.
+   dev = `@types/node`, `typescript`, `vue-tsc`, `oxlint`. Enforced by the
+   dependency-allowlist meta-test. `@types/node` was admitted by owner
+   amendment on 2026-08-18 (T37): it carries type declarations only, ships
+   nothing, executes nothing, and appears in no runtime import graph. D2 bounds
+   the *runtime* dependency surface, which this does not enter. Any addition
+   that does execute still requires its own amendment.
 8. **No push, force, or auto-delete path exists anywhere in `core/src`.**
    Landing is local fast-forward only; `awsf gc` lists, never deletes. Enforced
    by the no-push/no-destructive-paths and no-land-route meta-tests.

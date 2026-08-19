@@ -7,7 +7,12 @@ import { repoRoot } from "./_walk.ts";
 const CORE_DEPS = ["@sinclair/typebox", "yaml"];
 const DASHBOARD_DEPS = ["vue", "lucide-vue-next"];
 const DASHBOARD_DEV_DEPS = ["vite", "@vitejs/plugin-vue"];
-const ROOT_DEV_DEPS = ["typescript", "vue-tsc", "oxlint"];
+// `@types/node` was admitted to D2 by owner amendment (2026-08-18, T37). It is
+// a devDependency carrying type declarations only: it ships nothing, executes
+// nothing, and is absent from every runtime import graph. D2 exists to bound the
+// RUNTIME dependency surface, and this does not enter it. Admitting it is what
+// lets `typecheck` see real type errors instead of 813 missing-ambient ones.
+const ROOT_DEV_DEPS = ["@types/node", "typescript", "vue-tsc", "oxlint"];
 
 function readJson(path: string): Record<string, unknown> {
   return JSON.parse(readFileSync(path, "utf8"));

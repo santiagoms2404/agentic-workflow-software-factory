@@ -304,8 +304,11 @@ export interface BacklogTicket {
 }
 
 export interface TicketsResponse {
-  tickets: BacklogTicket[];
-  ready: BacklogTicket[];
+  // Readonly because the backlog projection this mirrors is readonly, and the
+  // tickets route is a read route: nothing on either side of the wire may
+  // rewrite the board it was handed.
+  tickets: readonly BacklogTicket[];
+  ready: readonly BacklogTicket[];
   counts: {
     state: Record<BacklogTicket["state"], number>;
     milestone: Record<string, number>;

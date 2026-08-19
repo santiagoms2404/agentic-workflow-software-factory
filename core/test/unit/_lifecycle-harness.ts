@@ -155,6 +155,18 @@ export interface BudgetState {
   correctionsOwner: number;
   ownerReentries: number;
   allowance: { auto: number; owner: number; ownerReentries: number };
+  /**
+   * This task's effective ceiling: its tier ceiling plus any owner-granted
+   * raise. Optional for the reason the real declaration gives — a journal
+   * written before the ceiling became a dial records none.
+   *
+   * This interface mirrors `core/src/state/task-machine.ts` rather than
+   * importing it, because the harness loads that module dynamically to keep
+   * the purity fence honest. That mirroring is why it silently fell behind
+   * when `awsf raise` added this field, and why the repository-wide typecheck
+   * is the thing that noticed.
+   */
+  ceiling?: number;
 }
 
 /**

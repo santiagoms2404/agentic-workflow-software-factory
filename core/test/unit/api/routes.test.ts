@@ -232,7 +232,9 @@ test("archive changes only review-list visibility, never lifecycle, Git, or conf
 
 test("settings are redacted and adapter health is a read-only configured view", async () => {
   const fixture = apiFixture();
-  fixture.config.adapters.claude.executable = "/private/machine/claude";
+  const claude = fixture.config.adapters.claude;
+  assert.ok(claude, "the fixture configures a claude adapter");
+  claude.executable = "/private/machine/claude";
   const router = createApiRouter({ dbPath: fixture.path, config: fixture.config });
   try {
     const settings = await router.dispatch(request("/api/v1/settings"));

@@ -1622,3 +1622,88 @@ review and returns to AWAITING_OWNER with a review bound to the new candidate ·
 headroom is refused before anything is spent · the existing T1 rework journeys
 pass UNCHANGED. Flip T36 + the M10 header; metadata + Amendment.
 ```
+
+### T37 — Repository-wide typecheck, and the D2 amendment it needs
+
+```
+[CHOOSE YOUR PROVIDER — pick by live quota]
+  CLAUDE  claude:opus · /effort high
+  GPT     codex:gpt-5.6-sol · reasoning high
+  SHAPE   a dependency-contract amendment plus mechanical repair — EITHER.
+  WHY     the repository has no working static type check at all, and the
+          reason is a config decision rather than the code's condition.
+  NOTE    the 835/813/22 split below is measured, not estimated. Re-measure
+          before trusting it; do not carry the numbers forward on faith.
+
+Task T37 of specs/awsf-plan.html (M11). Read the T37 block, the M11 block, the
+Validation Commands section IN FULL (its typecheck row is [f] and carries the
+design correction this task discharges), D2 in the settled-decision table,
+AGENTS.md invariant 7, tsconfig.json, dashboard/tsconfig.json, and
+core/test/unit/meta/dependency-allowlist.test.ts.
+
+ENTRY: the plan is otherwise closed; every other Validation row is [x].
+
+DO: amend D2 to admit @types/node as a DEVDEPENDENCY, recording the reasoning —
+it carries type declarations only, ships nothing, executes nothing, and enters no
+runtime import graph, so it does not touch the runtime surface D2 exists to
+bound. Split typecheck into typecheck:core (tsc -p tsconfig.json, core/** with
+types: ["node"]) and typecheck:dashboard (vue-tsc -p dashboard/tsconfig.json) —
+this row always promised both and the script only ever invoked tsc. Then fix
+every remaining real diagnostic. Fix the never-narrowing test failures at their
+CAUSE: they exist because node:assert would not resolve, so dropping the
+`= null` initialiser restores ordinary narrowing rather than papering over it.
+Update dependency-allowlist.test.ts and AGENTS.md invariant 7 together.
+
+DO NOT add any dependency that executes. DO NOT edit the [f] row's history — it
+is closed by amendment, which is precisely what its design correction anticipated
+and named. DO NOT weaken a compiler option to make an error disappear; every
+strict setting in tsconfig.json stays exactly as it is. DO NOT absorb a real
+defect the newly-honest typecheck surfaces into the "pre-existing" bucket —
+_lifecycle-harness.ts mirrors BudgetState instead of importing it and had fallen
+behind when awsf raise added `ceiling`; that is a genuine bug and is fixed here.
+
+DONE WHEN: the M11 T37 checklist is green · npm run typecheck EXITS 0 across both
+projects · npm test is green across all four layers · npm run lint is clean · the
+Validation row moves [f] -> [x]. Flip T37 + set the M11 header; metadata +
+Amendment recording the D2 change.
+```
+
+### T38 — The seven deferred WSL2 portability rows
+
+```
+[CHOOSE YOUR PROVIDER — pick by live quota]
+  CLAUDE  claude:opus · /effort high
+  GPT     codex:gpt-5.6-sol · reasoning high
+  SHAPE   test coverage against a standing instrument — EITHER.
+  WHY     seven matrix cells describe the suite's coverage rather than the
+          platform, and the two readings are not distinguishable as written.
+  NOTE    G7 is absolute here. This task touches the WSL2 column and nothing else.
+
+Task T38 of specs/awsf-plan.html (M11). Read the T38 block, the M11 block, the
+Portability Matrix IN FULL including the rule that a cell may be filled only with
+evidence produced ON the machine the column names, T27's block, and the README's
+portability section.
+
+ENTRY: T37 is [x].
+
+DO: write real contract or simulation cases for the seven WSL2 cells currently
+DEFERRED — state-root resolution, sandbox broker, worktree containment on
+case-insensitive filesystems, provider CLI launch by name, TTY detection for
+awsf land, installed-vs-portable bin consistency, and write-capable workflows
+end-to-end. Run them on WSL2 and promote each cell individually, with its date
+and the command output that proved it. Where a cell genuinely cannot be promoted,
+replace the deferral text so it names a real PLATFORM limit rather than a missing
+case. Record that the owner holds no Linux desktop, so that column takes a dated
+deferral or N/A instead of sitting at PENDING and implying scheduled work.
+
+DO NOT move any cell outside the WSL2 column. DO NOT let a green WSL2 suite stand
+as evidence about macOS, Linux desktop, or Windows-native — the macOS column
+stays PENDING until the M5 MacBook Pro runs the suites itself. DO NOT weaken a
+case so a cell can be promoted; an unpromotable cell is a finding, not a failure.
+DO NOT let the README grow a competing claim table.
+
+DONE WHEN: the M11 T38 checklist is green · every WSL2 cell is PASS or carries a
+platform-limit deferral · no other column moved · README claims match the matrix
+cells exactly · npm test and npm run typecheck stay green and the suite leaves
+git status --porcelain clean. Flip T38 + the M11 header; metadata + Amendment.
+```

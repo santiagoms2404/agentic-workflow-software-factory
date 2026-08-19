@@ -110,7 +110,7 @@ async function runWithCorruptionAfter(writeToCorruptAfter: number, totalWrites: 
   const write = async (event: NormalizedEvent, mayEmitNotice: boolean): Promise<void> => {
     sourceSeq += 1;
     const at = sourceSeq;
-    let outcome: ProjectionOutcome | null = null;
+    let outcome: ProjectionOutcome | undefined;
     status = await runWriteProtocol<NormalizedEvent, SimStatus>({
       lock,
       journal,
@@ -127,8 +127,8 @@ async function runWithCorruptionAfter(writeToCorruptAfter: number, totalWrites: 
     // write protocol like any other event, so the failure is durable even
     // when the database is too broken to record its own illness — and the
     // notice's own failed projection does not start a cascade.
-    const settled: ProjectionOutcome | null = outcome;
-    if (mayEmitNotice && settled !== null && !settled.ok) {
+    const settled: ProjectionOutcome | undefined = outcome;
+    if (mayEmitNotice && settled !== undefined && !settled.ok) {
       const notice = projectionNotice(settled, {
         seq: at,
         runId: runIdFor(dir),

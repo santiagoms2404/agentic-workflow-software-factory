@@ -34,7 +34,11 @@ async function advance(
   options.assertAdvancement?.(current.sessionId, to);
   const decision = transition({
     from: current.lifecycleState, to, actor: "host", tier: current.tier,
-    reason: { source: reason }, interactive: false, budget: current.budget, evidence,
+    reason: { source: reason }, interactive: false, budget: current.budget,
+    // Spread rather than assigned: under `exactOptionalPropertyTypes` an
+    // explicit `evidence: undefined` is not the same as an absent `evidence`,
+    // and the transition input means the latter.
+    ...(evidence === undefined ? {} : { evidence }),
     ...(spawn ? { spawn: { cost: 1 } } : {}),
   });
   const next = nextRevision(current, {
@@ -78,7 +82,10 @@ export async function runStubCommand(attemptDir: string, options: StubRunOptions
   await writeFile(join(status.worktree!, ".awsf-stub", "simple-sdlc.txt"), "stub simple-sdlc completed without a provider\n", "utf8");
   const candidateSha = commitAsHost({ repository: status.worktree!, message: "test: complete stub simple-sdlc" });
   status = await advance(attemptDir, status, "GATING", "git", {
-    requiredPhasesTerminalSuccess: true, hostCommitCreated: true, baseSha: status.baseSha, candidateSha,
+    requiredPhasesTerminalSuccess: true, hostCommitCreated: true, candidateSha,
+    // `baseSha` is nullable on the attempt and optional in the evidence; a null
+    // base is an absent one, never the string "null".
+    ...(status.baseSha === null ? {} : { baseSha: status.baseSha }),
   }, options);
   if (status.tier === 2) {
     status = await advance(

@@ -101,7 +101,9 @@ function awaitRelease(): void {
   const buffer = Buffer.alloc(64);
   let received = "";
   while (!received.includes("\n")) {
-    const count = fs.readSync(RELEASE_FD, buffer, 0, buffer.length);
+    // `position: null` reads from the file-descriptor's current offset, which is
+    // what a pipe requires; the 4-argument form has no overload.
+    const count = fs.readSync(RELEASE_FD, buffer, 0, buffer.length, null);
     if (count === 0) process.exit(LAUNCHER_EXIT.controlChannelClosed);
     received += buffer.toString("utf8", 0, count);
   }

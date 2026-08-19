@@ -22,10 +22,13 @@
     "awsf": "node --experimental-strip-types core/src/cli/main.ts",
     "dash": "npm --workspace dashboard run dev",
     "dash:build": "npm --workspace dashboard exec vite build",
-    "typecheck": "tsc --build --noEmit",
+    "typecheck": "npm run typecheck:core && npm run typecheck:dashboard",
+    "typecheck:core": "tsc -p tsconfig.json --noEmit",
+    "typecheck:dashboard": "vue-tsc -p dashboard/tsconfig.json --noEmit",
     "lint": "oxlint core dashboard"
   },
   "devDependencies": {
+    "@types/node": "22.20.1",
     "typescript": "5.8.2",
     "vue-tsc": "2.2.0",
     "oxlint": "0.15.6"

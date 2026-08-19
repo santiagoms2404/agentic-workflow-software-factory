@@ -37,6 +37,17 @@ async function httpGet(port: number, path: string, host = `127.0.0.1:${port}`): 
   });
 }
 
+/**
+ * One header as a string. `IncomingHttpHeaders` values are
+ * `string | string[] | undefined`, and every assertion here is a text match, so
+ * the repeated-header case is joined rather than dropped — a header that
+ * arrived twice should still be visible to the pattern that looks for it.
+ */
+function header(headers: import("node:http").IncomingHttpHeaders, name: string): string {
+  const value = headers[name];
+  return value === undefined ? "" : Array.isArray(value) ? value.join(", ") : value;
+}
+
 test("doctor only reads a stale recorded PID, while gc only lists terminal candidates", async () => {
   const root = mkdtempSync(join(tmpdir(), "awsf-operator-"));
   try {
@@ -109,7 +120,7 @@ function v1Projection(dbPath: string): void {
 
 test("dash serves built modules with security headers from loopback only", async () => {
   const root = mkdtempSync(join(tmpdir(), "awsf-dash-built-"));
-  let server: Server | null = null;
+  let server: Server | undefined;
   try {
     const dist = builtDashboard(root);
     assert.equal(await dashCommand({
@@ -123,8 +134,8 @@ test("dash serves built modules with security headers from loopback only", async
     if (address === null || address === undefined || typeof address === "string") throw new Error("missing dashboard address");
     const script = await httpGet(address.port, "/assets/app.js");
     assert.equal(script.status, 200);
-    assert.match(script.headers["content-type"] ?? "", /^text\/javascript/);
-    assert.match(script.headers["content-security-policy"] ?? "", /connect-src 'self'/);
+    assert.match(header(script.headers, "content-type"), /^text\/javascript/);
+    assert.match(header(script.headers, "content-security-policy"), /connect-src 'self'/);
     assert.match(script.body, /dataset\.ready/);
     assert.equal((await httpGet(address.port, "/", "example.com")).status, 400);
   } finally {
@@ -135,7 +146,7 @@ test("dash serves built modules with security headers from loopback only", async
 
 test("dash migrates a v1 projection before its readonly API opens it", async () => {
   const root = mkdtempSync(join(tmpdir(), "awsf-dash-v1-"));
-  let server: Server | null = null;
+  let server: Server | undefined;
   try {
     const dbPath = join(root, "awsf.db");
     v1Projection(dbPath);
@@ -158,7 +169,7 @@ test("dash migrates a v1 projection before its readonly API opens it", async () 
 
 test("dash initializes an absent disposable projection before listening", async () => {
   const root = mkdtempSync(join(tmpdir(), "awsf-dash-fresh-"));
-  let server: Server | null = null;
+  let server: Server | undefined;
   try {
     const dbPath = join(root, "awsf.db");
     assert.equal(await dashCommand({

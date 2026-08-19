@@ -15,8 +15,9 @@
     "noEmit": true,
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
-    "allowJs": false
+    "allowJs": false,
+    "types": ["node"]
   },
-  "include": ["core/src", "core/test", "dashboard/src", "dashboard/shared"],
+  "include": ["core/src", "core/test"],
   "exclude": ["node_modules", "**/dist"]
 }

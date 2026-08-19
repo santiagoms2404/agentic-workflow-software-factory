@@ -2,7 +2,7 @@
 import { computed } from "vue";
 import type { BacklogTicket } from "../../shared/types.ts";
 import TicketCard from "./TicketCard.vue";
-const props = defineProps<{ tickets: BacklogTicket[]; counts: Record<BacklogTicket["state"], number> }>();
+const props = defineProps<{ tickets: readonly BacklogTicket[]; counts: Record<BacklogTicket["state"], number> }>();
 const states: BacklogTicket["state"][] = ["todo", "wip", "done", "failed"];
 const columns = computed(() => states.map((state) => ({ state, count: props.counts[state], tickets: props.tickets.filter((ticket) => ticket.state === state) })));
 </script>

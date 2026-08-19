@@ -1,4 +1,4 @@
-# Tickets — AWSF T01–T34
+# Tickets — AWSF T01–T38
 
 One file per bounded task, split from
 [`../awsf-plan-build-prompts.md`](../awsf-plan-build-prompts.md) § Section B on 2026-08-06.
@@ -13,14 +13,17 @@ plan's tasks become individually addressable, countable, and boardable — the s
 M8 is `[x]` and AWSF is adopted; their prompts were added to § Section B on 2026-08-06 alongside
 the rest. **T35–T36 are M10, post-pilot v1.1** — two defects M8's own pilots found in the owner's
 control surface, added 2026-08-16; they are gated behind M8 being `[x]` and are independent of M9.
+**T37–T38 are M11, closeout**, added 2026-08-18: not new capability but unfinished business of
+tasks already in the plan — T37 discharges the design correction the Validation section left open,
+and T38 converts T27's deferred WSL2 matrix cells from missing coverage into dated evidence.
 
 ## Frontmatter schema
 
 | Field | Type | Source |
 |---|---|---|
-| `id` | `T01`–`T34`, zero-padded | filename; maps to the plan's task number (`T05` = plan task 5) |
+| `id` | `T01`–`T38`, zero-padded | filename; maps to the plan's task number (`T05` = plan task 5) |
 | `title` | string | the Section B heading |
-| `milestone` | `M1`–`M9` | the plan's Milestones & Tasks grouping |
+| `milestone` | `M1`–`M11` | the plan's Milestones & Tasks grouping |
 | `tier` | `0` \| `1` \| `2` | **derived** — see below |
 | `state` | `todo` \| `wip` \| `done` \| `failed` | mirrors the plan's `[]` / `[wip]` / `[x]` / `[f]` markers |
 | `depends_on` | list of ids | the plan's Notes § Critical dependency chain |

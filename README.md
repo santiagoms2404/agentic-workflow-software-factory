@@ -230,7 +230,7 @@ Every status claim above is backed by a command, not an assertion:
 npm install
 npm test              # unit + contract + simulation + zero-quota journeys
 npm run lint          # oxlint over core/ and dashboard/
-npm run typecheck     # known missing-Node-declarations gap; see plan Amendments
+npm run typecheck     # tsc over core/** plus vue-tsc over the dashboard
 npm run awsf -- status <task-id>
 npm run awsf -- doctor
 npm run awsf -- db rebuild

@@ -152,7 +152,7 @@ test("mandatory review unavailability blocks after one fixed-route transport ret
   const budget = new CallBudget({ taskId: "journey-review-unavailable", tier: 2, carried: { callsSpent: 1 } });
   enterReview(budget);
   const attempts: string[] = [];
-  let unavailable: MandatoryReviewUnavailable | null = null;
+  let unavailable: MandatoryReviewUnavailable | undefined;
   await assert.rejects(
     runMandatoryReview({
       workerProvider: "stub-openai",
