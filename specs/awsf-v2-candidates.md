@@ -29,12 +29,12 @@ remaining strict diagnostics."* This is that amendment.
 **Measured, 2026-08-18, on the WSL2 development machine.** `npm run typecheck`
 emits **835 diagnostics**:
 
-| Cause | Count |
-|---|---|
-| `node:*` modules unresolvable (TS2307) | 527 |
-| `process` / `console` / `window` / `setTimeout` missing (TS2580/2304/2584) | 213 |
-| `NodeJS` namespace missing (TS2503) | 15 |
-| **Genuine type errors** | **~22** |
+| Cause                                                                              | Count         |
+| ---------------------------------------------------------------------------------- | ------------- |
+| `node:*` modules unresolvable (TS2307)                                           | 527           |
+| `process` / `console` / `window` / `setTimeout` missing (TS2580/2304/2584) | 213           |
+| `NodeJS` namespace missing (TS2503)                                              | 15            |
+| **Genuine type errors**                                                      | **~22** |
 
 Verified in a throwaway copy by adding `@types/node@22` and pointing `tsc` at a
 core-only project: **835 → 22 errors across 10 files.** Only four are in
@@ -137,17 +137,17 @@ and model listing, neither of which costs a call.
 `agy.exe --help` advertises a print mode with a machine-parseable stream,
 structurally the same shape as the claude adapter's:
 
-| Flag | Meaning |
-|---|---|
-| `--print` / `-p` / `--prompt` | run a single prompt non-interactively |
-| `--output-format` | `text` \| `json` \| **`stream-json`** |
-| `--input-format` | `text` \| `stream-json` (NDJSON on stdin, one turn per line) |
-| `--json-schema` | enforce structured output; for `stream-json`, final result only |
-| `--model` | model for the session |
-| `--effort` | `low` \| `medium` \| `high` |
-| `--sandbox` | terminal restrictions |
-| `--disable-slash-commands` | suppress slash/skill expansion in print mode |
-| `--mode` | `accept-edits` \| `plan` |
+| Flag                                | Meaning                                                          |
+| ----------------------------------- | ---------------------------------------------------------------- |
+| `--print` / `-p` / `--prompt` | run a single prompt non-interactively                            |
+| `--output-format`                 | `text` \| `json` \| **`stream-json`**                |
+| `--input-format`                  | `text` \| `stream-json` (NDJSON on stdin, one turn per line) |
+| `--json-schema`                   | enforce structured output; for`stream-json`, final result only |
+| `--model`                         | model for the session                                            |
+| `--effort`                        | `low` \| `medium` \| `high`                                |
+| `--sandbox`                       | terminal restrictions                                            |
+| `--disable-slash-commands`        | suppress slash/skill expansion in print mode                     |
+| `--mode`                          | `accept-edits` \| `plan`                                     |
 
 **So a machine-parseable stream mode exists.** That removes the reason the
 adapter shipped blocked, but it does **not** discharge the fixture-first rule:
@@ -226,11 +226,11 @@ machine-parseable stream, and the adapter can graduate.**
 
 Four event kinds, each one line of NDJSON:
 
-| `event` | Payload |
-|---|---|
-| `init` | `conversation_id`, `init.{model, cwd, tools, permission_mode}` |
+| `event`       | Payload                                                                                     |
+| --------------- | ------------------------------------------------------------------------------------------- |
+| `init`        | `conversation_id`, `init.{model, cwd, tools, permission_mode}`                          |
 | `step_update` | `{conversation_id, step_index, state, step_type, text_delta?, duration_seconds?, usage?}` |
-| `result` | terminal — `{conversation_id, status, response, duration_seconds, num_turns, usage}` |
+| `result`      | terminal —`{conversation_id, status, response, duration_seconds, num_turns, usage}`      |
 
 `step_type` values observed: `user_input`, `checkpoint`, `agent_response`.
 `state` observed: `DONE`. `status` observed: `SUCCESS` (and `ERROR` on the
@@ -389,6 +389,10 @@ failing invocation was never mentioned by either.
 a `--mode plan` probe, because the answer decides whether antigravity can serve
 AWSF's readonly roles or only its write-capable ones.
 
+**A third limitation was found on 2026-08-19 and is recorded in 2.5:** `agy`
+exposes no system-prompt flag of any kind, so AWSF cannot give it a custom
+operating contract either. See decision #26.
+
 ### 2.2 Fusion adapter via `mf` (fusion-harness)
 
 **Already reserved.** Q5 decided *"fusion adapter in v1.1, contract reserved in
@@ -502,11 +506,11 @@ backlog."
 The owner's live project is the reference implementation for the registry, and
 it is **three repositories**, not one:
 
-| Repository | Branch | Stack | Gates |
-|---|---|---|---|
-| `Smart Health Platform` | `main` | specs and planning only, no code | none |
-| `smart-health-api` | **`master`** | Python — hatch, mypy, ruff, pytest | `pytest` / `ruff` / `mypy` |
-| `smart-health-app` | `main` | Expo / React Native / TypeScript | `jest`, `expo lint`, `playwright` |
+| Repository                | Branch               | Stack                               | Gates                                   |
+| ------------------------- | -------------------- | ----------------------------------- | --------------------------------------- |
+| `Smart Health Platform` | `main`             | specs and planning only, no code    | none                                    |
+| `smart-health-api`      | **`master`** | Python — hatch, mypy, ruff, pytest | `pytest` / `ruff` / `mypy`        |
+| `smart-health-app`      | `main`             | Expo / React Native / TypeScript    | `jest`, `expo lint`, `playwright` |
 
 Five constraints fall straight out of it, none of which the current
 single-repo shape can express:
@@ -571,14 +575,14 @@ with it.
 **Sources, labelled by claim strength** (see 2.3.6 — the labels are the point,
 not decoration):
 
-| Source | Kind | Path |
-|---|---|---|
-| Owain Lewis, "design and planning" walkthrough | `transcript` | `../agentic_design_skills_OwenLewis_youtube_transcript.txt` |
-| Three deck slides from the same talk | `screenshot` | `../agentic_design_skills_OwenLewis_youtube_screenshots/` |
-| `blueprint` — ten skills, guides, worked examples | `source-verified` | `../blueprint/` |
-| `factory` — the Go control plane built from `blueprint/examples/dispatch-control-plane/design.md` | `source-verified` | `../factory/` |
-| `planf3` skill as installed | `source-verified` | `~/.claude/skills/planf3/` |
-| The owner's own three v1 prompt files | `source-verified` | `../{agentic_workflow_software_factory_gemini3.1Pro,agentic_workflow_software_factory_opus4.6,awsf-planf3-build}-prompt*.md` |
+| Source                                                                                                 | Kind                | Path                                                                                                                           |
+| ------------------------------------------------------------------------------------------------------ | ------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Owain Lewis, "design and planning" walkthrough                                                         | `transcript`      | `../agentic_design_skills_OwenLewis_youtube_transcript.txt`                                                                  |
+| Three deck slides from the same talk                                                                   | `screenshot`      | `../agentic_design_skills_OwenLewis_youtube_screenshots/`                                                                    |
+| `blueprint` — ten skills, guides, worked examples                                                   | `source-verified` | `../blueprint/`                                                                                                              |
+| `factory` — the Go control plane built from `blueprint/examples/dispatch-control-plane/design.md` | `source-verified` | `../factory/`                                                                                                                |
+| `planf3` skill as installed                                                                          | `source-verified` | `~/.claude/skills/planf3/`                                                                                                   |
+| The owner's own three v1 prompt files                                                                  | `source-verified` | `../{agentic_workflow_software_factory_gemini3.1Pro,agentic_workflow_software_factory_opus4.6,awsf-planf3-build}-prompt*.md` |
 
 `factory` matters more than a second reference repository normally would: its
 design document is *in* `blueprint/examples/`, so the pair is a complete,
@@ -675,20 +679,20 @@ they are the argument, compressed:
 skipped.** The adaptations in 2.3.5 are taken with them. Each verdict below
 keeps its original cost estimate.
 
-| | Component | Verdict | Cost |
-|---|---|---|---|
-| **A** | Design stage producing a decision doc that stops for review | **Take** | Medium |
-| **B** | Adversarial design review — different model, blocking verdict, five checks | **Take** | Small–medium |
-| **C** | `INV-n`/`AC-n` IDs threaded design → ticket → gate | **Take — best leverage per unit cost** | **Small** |
-| **D** | `ARCHITECTURE.md` + a docs index carrying lifecycle status | **Take — load-bearing for the registry** | Small |
-| **E** | Requirements vs Technical design split | **Take, reduced form** | Small |
-| **F** | An explicit stopping point per stage | **Take — essentially free** | ~0 |
-| **G** | Skill router (`choosing-a-skill` / `workflows` equivalents) | **Take, but sequence with 2.5** | Small |
-| **H** | The five-stage cross-provider ladder as a governed pipeline | **Flag — this is the actual vision** | Large |
-| **I** | `planf3` → `plan-sota` rename | **Take, with the trap in 2.3.7 named** | Small |
-| **J** | GitHub issues as the task sink | **Flag — must not ride in on decision 16** | — |
-| **K** | `html-doc` skill | **Skip** — planf3 authors HTML natively; adopting it is a downgrade | — |
-| **L** | `task-to-pr`, `codex-issue-coordinator` | **Skip** — that is AWSF itself, and AWSF's version is stronger | — |
+|             | Component                                                                   | Verdict                                                                    | Cost            |
+| ----------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------------- | --------------- |
+| **A** | Design stage producing a decision doc that stops for review                 | **Take**                                                             | Medium          |
+| **B** | Adversarial design review — different model, blocking verdict, five checks | **Take**                                                             | Small–medium   |
+| **C** | `INV-n`/`AC-n` IDs threaded design → ticket → gate                    | **Take — best leverage per unit cost**                              | **Small** |
+| **D** | `ARCHITECTURE.md` + a docs index carrying lifecycle status                | **Take — load-bearing for the registry**                            | Small           |
+| **E** | Requirements vs Technical design split                                      | **Take, reduced form**                                               | Small           |
+| **F** | An explicit stopping point per stage                                        | **Take — essentially free**                                         | ~0              |
+| **G** | Skill router (`choosing-a-skill` / `workflows` equivalents)             | **Take, but sequence with 2.6**                                      | Small           |
+| **H** | The five-stage cross-provider ladder as a governed pipeline                 | **Flag — this is the actual vision**                                | Large           |
+| **I** | `planf3` → `plan-sota` rename                                          | **Take, with the trap in 2.3.7 named**                               | Small           |
+| **J** | GitHub issues as the task sink                                              | **Flag — must not ride in on decision 16**                          | —              |
+| **K** | `html-doc` skill                                                          | **Skip** — planf3 authors HTML natively; adopting it is a downgrade | —              |
+| **L** | `task-to-pr`, `codex-issue-coordinator`                                 | **Skip** — that is AWSF itself, and AWSF's version is stronger      | —              |
 
 **Why C is the cheapest real win.** The `ticket/plan-sync` meta-test
 (`AGENTS.md` invariant 12) already asserts that tickets and plan never disagree
@@ -847,7 +851,7 @@ because the four source kinds fail in different directions:**
   than the speech that accompanied it.
 - **Clone repo** carries what was actually built. The only source that cannot
   lie about feasibility.
-- **AWSF's own code** is the only place where *fit* is decidable.
+- **AWSF's own code and as a target system** is the only place where *fit* is decidable.
 
 Worked proof from this pass. The transcript says "use the architecture review
 skill to find edge cases, flaws" — true, vague, unbuildable. The screenshot
@@ -886,13 +890,13 @@ compression while speech is not.
 The defect is treating strength as one scalar. It is not: **each source kind is
 primary for a different class of claim.**
 
-| The claim is about… | Primary evidence | Hearsay for this claim |
-|---|---|---|
-| **Someone asserts, ranks, or recommends X** | transcript, screenshot — nothing stronger exists | — |
-| **X exists and is shaped this way** | the repository or code; captured bytes for runtime shape | transcript, screenshot, help text |
-| **X works / is feasible** | running it, or a repository that demonstrably ships it | transcript, screenshot, help text |
-| **X fits the target system** | **only the target repositories' own code** | everything else, at any volume |
-| **AWSF can build X** | **only AWSF's own code** | everything else, at any volume |
+| The claim is about…                              | Primary evidence                                         | Hearsay for this claim            |
+| ------------------------------------------------- | -------------------------------------------------------- | --------------------------------- |
+| **Someone asserts, ranks, or recommends X** | transcript, screenshot — nothing stronger exists        | —                                |
+| **X exists and is shaped this way**         | the repository or code; captured bytes for runtime shape | transcript, screenshot, help text |
+| **X works / is feasible**                   | running it, or a repository that demonstrably ships it   | transcript, screenshot, help text |
+| **X fits the target system**                | **only the target repositories' own code**         | everything else, at any volume    |
+| **AWSF can build X**                        | **only AWSF's own code**                           | everything else, at any volume    |
 
 Two consequences worth stating plainly. **A transcript-only source is fully
 sufficient** for the whole first row, which is a large share of real intake — no
@@ -939,18 +943,18 @@ immediately.
 
 Every brainstorm therefore declares its sources in **three roles**:
 
-| Role | What it is | What it alone can settle |
-|---|---|---|
-| **Target** | the system the idea is *for* | product fit, current shape, feasibility in that stack |
-| **Factory** | the system that will *build* the idea — **always AWSF** | buildability: which workflow and tier, whose worktree, which gates prove it, how it lands |
-| **Reference** | outside systems and material studied for ideas | *"someone asserts X"*, *"X was built this way elsewhere"* |
+| Role                | What it is                                                      | What it alone can settle                                                                  |
+| ------------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| **Target**    | the system the idea is*for*                                   | product fit, current shape, feasibility in that stack                                     |
+| **Factory**   | the system that will*build* the idea — **always AWSF** | buildability: which workflow and tier, whose worktree, which gates prove it, how it lands |
+| **Reference** | outside systems and material studied for ideas                  | *"someone asserts X"*, *"X was built this way elsewhere"*                             |
 
 Worked contrast:
 
-| | Target | Factory | Reference |
-|---|---|---|---|
-| **This session** | AWSF — **target == factory**; state the collapse so a reader does not read it as an omission | AWSF | `blueprint`, `factory`, the transcript, the screenshots |
-| **A Smart Health session** | `Smart Health Platform`, `smart-health-api`, `smart-health-app` | AWSF | whatever is being studied that day |
+|                                  | Target                                                                                             | Factory | Reference                                                   |
+| -------------------------------- | -------------------------------------------------------------------------------------------------- | ------- | ----------------------------------------------------------- |
+| **This session**           | AWSF —**target == factory**; state the collapse so a reader does not read it as an omission | AWSF    | `blueprint`, `factory`, the transcript, the screenshots |
+| **A Smart Health session** | `Smart Health Platform`, `smart-health-api`, `smart-health-app`                              | AWSF    | whatever is being studied that day                          |
 
 **AWSF is a source in every brainstorm, for every project, permanently** — because
 whatever survives will be built by it. What changes is its role, never its
@@ -990,17 +994,17 @@ travel to sessions that did not derive it.
 ##### 2.3.7 The rename: `planf3` → `plan-sota`
 
 **Decided 2026-08-19: rename and extend.** One skill, renamed; `planf3` is not
-kept alive alongside it. A second surface would drift, and 2.5's cheatsheet would
+kept alive alongside it. A second surface would drift, and 2.6's cheatsheet would
 have to explain both.
 
 **`planf3` is three separable strings, not one, and only one carries real risk.**
 Measured 2026-08-19:
 
-| String | Where it lives | Kind | Risk if renamed |
-|---|---|---|---|
-| `planf3` — skill identity | directory name, frontmatter, 19 in-skill mentions, 4 in the `orchestrate` skill | a name | **none** |
-| `planf3-review v1` — block header | emitted at `SKILL.md:445`, parsed by `review-plan.md` Mode B, 4 doc mentions, plus a copy inside every plan HTML | **wire format** | blocks exported *before* and applied *after* fail to parse |
-| `planf3-review:` + filename | `SKILL.md:315` — `var KEY = 'planf3-review:' + FILE` | **browser state key** | **orphans un-exported review state** |
+| String                               | Where it lives                                                                                                      | Kind                        | Risk if renamed                                               |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------- | --------------------------- | ------------------------------------------------------------- |
+| `planf3` — skill identity         | directory name, frontmatter, 19 in-skill mentions, 4 in the`orchestrate` skill                                    | a name                      | **none**                                                |
+| `planf3-review v1` — block header | emitted at`SKILL.md:445`, parsed by `review-plan.md` Mode B, 4 doc mentions, plus a copy inside every plan HTML | **wire format**       | blocks exported*before* and applied *after* fail to parse |
+| `planf3-review:` + filename        | `SKILL.md:315` — `var KEY = 'planf3-review:' + FILE`                                                           | **browser state key** | **orphans un-exported review state**                    |
 
 **Blast radius: 16 plan HTML files carry the embedded review layer** — 8 live
 (`awsf-plan.html`, `agentic-workflow-redesign-plan.html`,
@@ -1080,7 +1084,144 @@ but can never leave the local machine is a real tension. Q10's own analysis
 stands: the cost is restating a mechanically-checked invariant as a state-aware
 one, and it should be bought deliberately rather than as a side effect.
 
-### 2.5 Non-technical cheatsheet guide
+### 2.5 System prompt engineering — the driving layer and the AWSF agents
+
+**Applied to the driving layer on 2026-08-19; the AWSF agent prompts are v2
+scope.** This is the one candidate that pays off before the v2 plan exists.
+
+**Sources declared** (per 2.3.6). **Target == factory**: AWSF's own prompt
+surface and the owner's driving sessions — `source-verified` at
+`prompts/*/system.md`, the `agents:` block of `awsf.config.yaml`,
+`core/src/adapters/{claude-code,pi-codex}.ts`, `core/src/contracts/review-output.ts`.
+**Reference**: `fixing_opus5_prompt_engineering_is_is_not_dead_IndyDevDan_youtube_transcript.txt`
+(`transcript`), `../fixing-smartass-opus-5/` (`source-verified`), its eight
+`images/*.svg` (`screenshot`). **Absent**: no before/after output-token
+measurement of the owner's own runs — *not gathered*, not unavailable.
+**Cheapest unused upgrade**: run one AWSF phase twice, with and without the
+appended block, and read output tokens straight from the journal; AWSF already
+records provider-authoritative usage per call, so this costs two calls and no
+new tooling.
+
+#### The problem, measured in this repository
+
+The claim is not hypothetical and not about someone else's model. Measured
+2026-08-19 over the 503 lines authored into `specs/awsf-v2-candidates.md` §2.3
+in a single session:
+
+| Pattern | Count |
+|---|---|
+| `load-bearing` | 4 |
+| `worth stating plainly` | 1 |
+| em dashes | 80 |
+
+`core/src/adapters/pi-codex.ts:661` carries "Load-bearing on this route" in a
+source comment. The tics are already in the committed artifacts.
+
+#### What the reference ships
+
+One 6KB markdown file appended with `--append-system-prompt-file`: a purpose
+statement, four instruction sections — **Positive/Negative Patterns**,
+**Reference Points**, **Hard Operational Boundaries**, **Aliases** — and worked
+do/do-not example pairs the author calls in-context distillation. Append, never
+replace: the harness keeps its own system prompt underneath.
+
+**What only the diagrams said.** `images/01_verbal_tics_top_five.svg` names five
+tics as *structural patterns*, two of which the shipped system prompt never
+bans: **negative parallelism** (`"It's not X, it's Y"`) and
+**`"You're absolutely right"`**. The transcript names neither as a pattern. The
+reference's own diagram is ahead of the reference's own artifact, and reading
+either source alone misses it. This is the back-and-forth of 2.3.6 earning its
+keep on a live example.
+
+#### Fit with AWSF — the mechanism is already built
+
+`claude-code.ts:451` pushes `--append-system-prompt-file`; `pi-codex.ts:617`
+pushes `--append-system-prompt`. Identical flags, identical append-not-replace
+semantics, plus `writeSystemPromptFile` and `assertPrivateSystemPrompt`
+materializing the composed prompt into `private/`. **No adapter change, no config
+schema change, no new dependency.**
+
+**But the benefit splits unevenly, and the split is the design.** AWSF worker
+agents emit typed JSON envelopes — `ReviewOutputSchema` carries `findings[]` with
+`id`, `title`, `detail`, `evidence`, plus `limitations[]`. The structural tics
+(six headers, `## KEY TAKEAWAYS`, bold theater, decorative markdown) are
+therefore **already impossible**: the schema prevents them, not a prompt. What
+survives for workers:
+
+1. **Prose inside envelope fields.** `Type.String({ minLength: 1 })`, no upper
+   bound. Fully exposed.
+2. **Output-token burn during reasoning**, which spends quota whatever the
+   envelope looks like.
+3. **The driving session**, where no envelope protection applies at all. This is
+   where the owner reads every word and pays for every token, and where the fix
+   lands at full strength.
+
+**Two sections are interactive-only.** Aliases (`scr`, `eli`, `foc`, `ref`) are
+useless to a headless worker because nobody is present to type them. Pasting all
+four sections into all six worker prompts would be a mistake.
+
+**One hazard, and it is specific.** Compressing the reviewer is dangerous: its
+`detail` and `evidence` fields must stay specific enough to check, and a tersely
+agreeable reviewer is exactly the rubber-stamped closure pillar 1 exists to
+prevent. **The negative-pattern block must be scoped per role, never applied
+uniformly.**
+
+#### Three convergences with what AWSF already believes
+
+- *"Do not claim completion without evidence"* is **pillar 4** restated. An
+  outside engineer independently reached AWSF's own invariant.
+- *"Never add a co-author to a commit message"* is **invariant 11**, already
+  mechanically enforced, and agents cannot commit at all under pillar 5.
+  Redundant for workers, useful for driving sessions.
+- **Reference points (`D1`/`F1`/`R1`) are the same family as verdict C's
+  `INV-n`/`AC-n`.** The review envelope already carries `findings[].id`. Adopting
+  both yields one ID discipline spanning conversation and artifacts.
+
+Also worth noting: *"deliver only what was requested at the intended scope"* is
+already enforced structurally by `path-policy` and the per-agent `writes:`
+allowlists. AWSF is stronger here than the prompt line; the line is belt and
+braces.
+
+#### A third `agy` limitation, measured 2026-08-19
+
+`agy.exe --help` exposes **no system-prompt flag of any kind** — the full flag
+list carries `--print`, `--prompt`, `--prompt-interactive`, `--agent`, `--model`,
+`--effort`, `--mode`, `--sandbox`, `--add-dir`, and no `--system-prompt` or
+`--append-system-prompt`. `agy.exe agents` returns empty and the subcommand only
+*lists*; it cannot define one. **Antigravity cannot express a custom system
+prompt at all**, which is independent of the two limitations already recorded in
+2.1.1 and reinforces decision 14: special-purpose provider, not first-class.
+
+#### What was applied now, and what is v2 scope
+
+**Applied 2026-08-19, outside this repository:** an adapted contract at
+`~/.claude/senior-engineer-system-prompt.md`, wired into the owner's `cc` and
+`pi` shell aliases. It extends the reference with the two tics only its diagram
+named, the phrases measured in this repository, and an `ev` alias demanding the
+file, line, or command behind a claim. `ag` is left unchanged because it cannot
+carry one.
+
+**Trap recorded for the `pi` route:** `--append-system-prompt` decides between
+text and file by `existsSync`, so a wrong path is appended as its **literal
+string** with no error, and the session's system prompt silently becomes the
+path. AWSF already defends this host-side via `assertPrivateSystemPrompt`
+(`pi-codex.ts:662-668`); a hand-written shell alias has no such guard.
+
+**v2 scope — the AWSF agent prompts.** Three paths were weighed:
+
+| Path | Cost | Trade |
+|---|---|---|
+| Edit six `prompts/*/system.md` files | ~1 hr, zero code | Six copies of a shared block, guaranteed to drift |
+| **One shared prompt file concatenated where `route.systemPrompt` is built** | ~2 hr, one small code change | No drift, one edit point. **Recommended** |
+| Leave workers unchanged | 0 | Forfeits the token saving and the field-prose quality |
+
+`route.systemPrompt` is composed before `infra.writeSystemPrompt`
+(`production-run.ts:1061`, `review-phase.ts:700`), so a shared preamble has one
+natural insertion point rather than six. The v2 task is not done when the block
+is appended; it is done when **each role's scoping is stated** and the reviewer's
+evidence fields are shown not to have degraded.
+
+### 2.6 Non-technical cheatsheet guide
 
 **Deliberately last.** A step-by-step `.md` covering every command and flow, for
 a reader with no command-line, agent-driving, or AWSF experience — enabling them
@@ -1096,32 +1237,34 @@ parallel one.
 
 ## Decisions taken (2026-08-18 and 2026-08-19)
 
-| # | Decision |
-|---|---|
-| 1 | Repair `npm run typecheck`; amend D2 to admit `@types/node` as a devDependency; split the check into core (`tsc`) and dashboard (`vue-tsc`). |
-| 2 | Close the seven deferred WSL2 matrix rows **before** the MacBook Pro arrives. |
-| 3 | No Linux desktop is owned; that column takes a dated deferral or `N/A`, not `PENDING`. |
-| 4 | Append closeout work to the existing plan; **park** the v2 plan until the candidate set is concrete. |
-| 5 | Fusion integrates as approach **(c)** — `mf` spawned as a declared-composite adapter whose events are parsed. `awsf raise` is rejected as the accounting mechanism. |
-| 6 | The factory must be able to build repositories other than its own; multi-project is the v2 plan's first Questionable. |
-| 7 | The non-technical cheatsheet is authored last, after the command surface stops moving. |
-| 8 | `mf` resolves via `PATH` lookup with `E_ADAPTER_UNVERIFIED` when absent; a new portability-matrix row is added. |
-| 9 | AWSF's `path-policy` owns the write boundary for `mf`, not `mf`'s own permission policy — one policy owner, and it is the factory's. *(This row once continued "and is extended to express the multi-role ladder rather than exempting it"; that clause is **superseded by #17** — the boundary is reused unchanged, never extended.)* |
-| 10 | `agy` does expose `--output-format stream-json`; a success capture on 2026-08-18 confirms a four-event NDJSON protocol with stream-authoritative model identity and provider-authoritative usage. Q1 is closed favourably. |
-| 11 | The antigravity blocker is **no longer parsing, and no longer authentication** (that claim was tested and retracted). What remains: `agy` exposes no tool allow/deny flag, and `--mode plan` steers rather than enforces, so AWSF's `readonly` profile is inexpressible for it. |
-| 12 | `agy` must be spawned with a **Windows-accessible working directory**; from a WSL-only path it fails with a misleading authentication error. A portability-matrix row. |
-| 13 | Antigravity is viable for **write-capable roles only**, bounded by worktree containment plus host-side stream inspection of `tool_info.parameters.TargetFile`. Readonly roles stay on claude and pi. |
-| 14 | **Detection-only bounding meets the owner's bar for `agy`** (2026-08-19). It is deliberately a special-purpose provider for specific tasks, not a first-class one like claude or pi, and is not to be routed as though it were. |
-| 15 | Multi-project takes the shape of a **project registry**, grounded on Smart Health Platform's three repositories. The plan repo may differ from the target repos, branches and gates are per repo, and cross-repo tasks are the v2 plan's second Questionable. |
-| 16 | **`awsf publish` is in v2**, in Q10's narrow post-`LANDED` human-initiated form, and the no-push meta-test is rewritten from a string scan into a state-aware check rather than deleted. |
-| 17 | `path-policy` is **not** extended for `mf`. Each constituent role gets its own managed worktree, and `mf`'s artifact directory is pointed at the attempt's existing `sessionRuntime`. The boundary is reused, never exempted. |
-| 18 | **v1 pillars, Explicitly Not Built lines, and `AGENTS.md` invariants are revisable in v2 where an idea earns it.** They are dated decisions with stated prices, not a constitution. Each revision must restate the guarantee in a still-mechanically-checkable form and name its cost, per the **#16 precedent** — where *"any push implementation"* narrows to *"no push path from any pre-`LANDED` state"* and the string-scan meta-test is **rewritten as a state-aware check rather than deleted**. A revision that leaves a guarantee unenforced, or unenforceable, is a net loss and is refused on that ground alone. |
-| 19 | **Blueprint/Factory intake (2.3.3): verdicts A, B, C, D, E, F, G, H, I taken; J, K, L skipped.** Taken: a design stage that stops for review; an adversarial design review with a blocking verdict; `INV-n`/`AC-n` IDs threaded design → ticket → gate; `ARCHITECTURE.md` plus a docs index carrying lifecycle status; the requirements/technical-design split; explicit stopping points; a skill router; the cross-provider ladder; the `plan-sota` rename. Skipped: GitHub issues as a task sink, the `html-doc` skill (a downgrade — the plan skill authors HTML natively), and `task-to-pr`/`codex-issue-coordinator` (that is AWSF itself, and AWSF's version is stronger). |
-| 20 | **The design/review layer lives at two altitudes**, split at "does a repository exist yet": a driving-session **skill** before one does, an AWSF **recipe** after. V.7 rule 1 — no skill is ever in the execution path — holds because no gate depends on a skill having been read. |
-| 21 | **A design-review verdict is an envelope, never a transition.** `architecture-review` is a phase whose typed envelope carries `{ verdict, findings[], openQuestions[] }` with `severity` per element; the **gate** is a deterministic host-side count — zero `blocker` findings and zero `blocking` open questions — never a reading of prose. The host advances; the model supplies structured facts. No invariant text changes, and "earned success" is strengthened rather than weakened. |
-| 22 | **The five-stage cross-provider ladder is built as a governed AWSF workflow inside v2**, not merely codified as a runbook, under three conditions: (a) **provider-agnostic**, routing declared in config, so `agy` and `mf` are preferred routes and not preconditions; (b) **sequenced last in v2**, after bootstrap and after verdicts A/B/C exist; (c) a **degradation rule stated up front** — a declared route never falls back at runtime, degradation is a *different declared workflow variant* the owner selects in advance. Greenfield's chicken-and-egg is fixed by **inverting the order**: `git init` + baseline commit + config scaffold first, then the ladder runs inside a real repository as ordinary governed phases. |
-| 23 | **`planf3` is renamed to `plan-sota` — rename and extend, one skill, no second surface.** The name splits into three strings and only the `localStorage` key risks data loss; both risks are erased by a three-line migration shim and a dual-header parser. **Rename everything that executes; leave everything that testifies** — the captured provider fixtures and the historical prose in `awsf-architecture-proposal.md`, `awsf-plan.html` and `README.md` keep the old name, because rewriting them would falsify the record. Measured cost: 45–60 minutes, nothing lost. |
+| #  | Decision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| -- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1  | Repair`npm run typecheck`; amend D2 to admit `@types/node` as a devDependency; split the check into core (`tsc`) and dashboard (`vue-tsc`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| 2  | Close the seven deferred WSL2 matrix rows**before** the MacBook Pro arrives.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| 3  | No Linux desktop is owned; that column takes a dated deferral or`N/A`, not `PENDING`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| 4  | Append closeout work to the existing plan;**park** the v2 plan until the candidate set is concrete.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| 5  | Fusion integrates as approach**(c)** — `mf` spawned as a declared-composite adapter whose events are parsed. `awsf raise` is rejected as the accounting mechanism.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| 6  | The factory must be able to build repositories other than its own; multi-project is the v2 plan's first Questionable.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| 7  | The non-technical cheatsheet is authored last, after the command surface stops moving.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| 8  | `mf` resolves via `PATH` lookup with `E_ADAPTER_UNVERIFIED` when absent; a new portability-matrix row is added.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| 9  | AWSF's`path-policy` owns the write boundary for `mf`, not `mf`'s own permission policy — one policy owner, and it is the factory's. *(This row once continued "and is extended to express the multi-role ladder rather than exempting it"; that clause is **superseded by #17** — the boundary is reused unchanged, never extended.)*                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| 10 | `agy` does expose `--output-format stream-json`; a success capture on 2026-08-18 confirms a four-event NDJSON protocol with stream-authoritative model identity and provider-authoritative usage. Q1 is closed favourably.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| 11 | The antigravity blocker is**no longer parsing, and no longer authentication** (that claim was tested and retracted). What remains: `agy` exposes no tool allow/deny flag, and `--mode plan` steers rather than enforces, so AWSF's `readonly` profile is inexpressible for it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| 12 | `agy` must be spawned with a **Windows-accessible working directory**; from a WSL-only path it fails with a misleading authentication error. A portability-matrix row.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| 13 | Antigravity is viable for**write-capable roles only**, bounded by worktree containment plus host-side stream inspection of `tool_info.parameters.TargetFile`. Readonly roles stay on claude and pi.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| 14 | **Detection-only bounding meets the owner's bar for `agy`** (2026-08-19). It is deliberately a special-purpose provider for specific tasks, not a first-class one like claude or pi, and is not to be routed as though it were.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| 15 | Multi-project takes the shape of a**project registry**, grounded on Smart Health Platform's three repositories. The plan repo may differ from the target repos, branches and gates are per repo, and cross-repo tasks are the v2 plan's second Questionable.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| 16 | **`awsf publish` is in v2**, in Q10's narrow post-`LANDED` human-initiated form, and the no-push meta-test is rewritten from a string scan into a state-aware check rather than deleted.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| 17 | `path-policy` is **not** extended for `mf`. Each constituent role gets its own managed worktree, and `mf`'s artifact directory is pointed at the attempt's existing `sessionRuntime`. The boundary is reused, never exempted.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| 18 | **v1 pillars, Explicitly Not Built lines, and `AGENTS.md` invariants are revisable in v2 where an idea earns it.** They are dated decisions with stated prices, not a constitution. Each revision must restate the guarantee in a still-mechanically-checkable form and name its cost, per the **#16 precedent** — where *"any push implementation"* narrows to *"no push path from any pre-`LANDED` state"* and the string-scan meta-test is **rewritten as a state-aware check rather than deleted**. A revision that leaves a guarantee unenforced, or unenforceable, is a net loss and is refused on that ground alone.                                                                                                                                                                                                                                                                                                                           |
+| 19 | **Blueprint/Factory intake (2.3.3): verdicts A, B, C, D, E, F, G, H, I taken; J, K, L skipped.** Taken: a design stage that stops for review; an adversarial design review with a blocking verdict; `INV-n`/`AC-n` IDs threaded design → ticket → gate; `ARCHITECTURE.md` plus a docs index carrying lifecycle status; the requirements/technical-design split; explicit stopping points; a skill router; the cross-provider ladder; the `plan-sota` rename. Skipped: GitHub issues as a task sink, the `html-doc` skill (a downgrade — the plan skill authors HTML natively), and `task-to-pr`/`codex-issue-coordinator` (that is AWSF itself, and AWSF's version is stronger).                                                                                                                                                                                                                                                                          |
+| 20 | **The design/review layer lives at two altitudes**, split at "does a repository exist yet": a driving-session **skill** before one does, an AWSF **recipe** after. V.7 rule 1 — no skill is ever in the execution path — holds because no gate depends on a skill having been read.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| 21 | **A design-review verdict is an envelope, never a transition.** `architecture-review` is a phase whose typed envelope carries `{ verdict, findings[], openQuestions[] }` with `severity` per element; the **gate** is a deterministic host-side count — zero `blocker` findings and zero `blocking` open questions — never a reading of prose. The host advances; the model supplies structured facts. No invariant text changes, and "earned success" is strengthened rather than weakened.                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| 22 | **The five-stage cross-provider ladder is built as a governed AWSF workflow inside v2**, not merely codified as a runbook, under three conditions: (a) **provider-agnostic**, routing declared in config, so `agy` and `mf` are preferred routes and not preconditions; (b) **sequenced last in v2**, after bootstrap and after verdicts A/B/C exist; (c) a **degradation rule stated up front** — a declared route never falls back at runtime, degradation is a *different declared workflow variant* the owner selects in advance. Greenfield's chicken-and-egg is fixed by **inverting the order**: `git init` + baseline commit + config scaffold first, then the ladder runs inside a real repository as ordinary governed phases.                                                                                                                                                                                                  |
+| 23 | **`planf3` is renamed to `plan-sota` — rename and extend, one skill, no second surface.** The name splits into three strings and only the `localStorage` key risks data loss; both risks are erased by a three-line migration shim and a dual-header parser. **Rename everything that executes; leave everything that testifies** — the captured provider fixtures and the historical prose in `awsf-architecture-proposal.md`, `awsf-plan.html` and `README.md` keep the old name, because rewriting them would falsify the record. Measured cost: 45–60 minutes, nothing lost.                                                                                                                                                                                                                                                                                                                                                                      |
 | 24 | **The claim-labelling rule (2.3.6) is taken.** Label every claim with its source kind and a citable anchor; record absent sources *with the reason* ("does not exist" and "not yet gathered" are different, and only the second is a gap); and for any claim carrying a decision, name the **cheapest unused upgrade** and whether it has been done. A decision may rest on a single weak source provided it says so and names what would settle it; what is forbidden is an unlabelled claim, or one whose cheapest upgrade was available and skipped. Strength is **per claim-type, not a single scalar**. Every brainstorm declares its sources in three roles — **target**, **factory** (always AWSF), **reference** — and where target and factory are the same repository, says so. Adopted with its limits stated per #18: label presence, closed vocabulary and upgrade lines are mechanically checkable; anchor honesty is not. |
+| 25 | **System prompt engineering is taken (2.5), and split by altitude.** The **driving layer is done now** — an adapted contract at `~/.claude/senior-engineer-system-prompt.md`, wired into the `cc` and `pi` aliases via the same `--append-system-prompt[-file]` flags AWSF's own adapters already use. The **AWSF agent prompts are v2 scope**, built as **one shared prompt file concatenated where `route.systemPrompt` is composed**, not as six edited `prompts/*/system.md` copies that would drift. Typed envelopes already prevent the structural tics, so the worker benefit is narrower than the driving benefit and is confined to field prose and output-token cost. Scoping is **per role**: aliases are interactive-only, and the reviewer must not be compressed, because a tersely agreeable reviewer is the rubber-stamped closure pillar 1 exists to prevent. |
+| 26 | **`agy` cannot express a custom system prompt at all** (measured 2026-08-19: no `--system-prompt` or `--append-system-prompt` anywhere in `agy.exe --help`; `agy.exe agents` returns empty and only lists). This is a **third** antigravity limitation, independent of the missing tool allow/deny flag and the Windows-accessible-cwd requirement in 2.1.1, and it further supports #14 — special-purpose provider, never first-class. |
 
 ## Still open
 
@@ -1135,6 +1278,10 @@ parallel one.
   worktree resolution?
 - Does the per-role-worktree shape for `mf` hold up in practice? Recommended in
   2.2, not yet validated.
+- **Does the appended system prompt measurably cut output tokens on an AWSF
+  phase?** 2.5's cheapest unused upgrade: run one phase twice, with and without
+  the block, and read provider-authoritative usage from the journal. Two calls,
+  no new tooling. Worth doing before 2.5's negative-pattern list grows long.
 - **What the ladder's per-stage envelopes actually look like.** Decision #22
   makes the first task of that workstream a capture pass — no envelope can be
   typed for a stage that has never been captured, and the fused proposal's
