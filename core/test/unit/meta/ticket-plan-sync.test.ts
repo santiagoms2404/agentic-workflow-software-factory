@@ -1,24 +1,79 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { parse } from "yaml";
 import { repoRoot } from "./_walk.ts";
 
-// AGENTS.md invariant 12: specs/tickets/ and specs/awsf-plan.html never disagree.
-// The plan's status markers are the source of truth; a ticket's `state` mirrors
-// them and is flipped in the same commit. The plan carries no per-task marker —
-// only milestone <h3> markers and per-task checklists — so those are what a
-// ticket's state is checked against.
+// AGENTS.md invariant 12: a plan and its tickets never disagree. The plan's
+// status markers are the source of truth; a ticket's `state` mirrors them and is
+// flipped in the same commit. The plan carries no per-task marker — only
+// milestone <h3> markers and per-task checklists — so those are what a ticket's
+// state is checked against.
+//
+// PLAN-AWARE, because one repository now holds more than one plan. Each plan
+// owns a ticket set, and every assertion below runs per set:
+//
+//   specs/tickets/*.md              -> specs/awsf-plan.html          (v1, flat)
+//   specs/tickets/<stem>/*.md       -> specs/<stem>.html
+//                                   or specs/v2/<stem>.html
+//
+// WHY v1's tickets are still flat, and why moving them is not housekeeping:
+// `ticketStoreFor` (core/src/cli/commands/ticket.ts) resolves `specs/tickets`
+// and `TicketStore` reads that exact directory with no recursion, so `awsf
+// ticket list` and `awsf backlog` would silently return nothing the moment the
+// files moved into a subdirectory. The move belongs with the registry work that
+// gives the store a plan to resolve against — not here, and not quietly.
+//
+// A ticket directory with no plan is a hard failure rather than a skip: an
+// orphan set is exactly the drift this fence exists to catch, one level up from
+// an orphan ticket.
 
 const SPECS = join(repoRoot(), "specs");
-const PLAN = join(SPECS, "awsf-plan.html");
-const PROMPTS = join(SPECS, "awsf-plan-build-prompts.md");
 const TICKETS = join(SPECS, "tickets");
 
 const STATES = ["todo", "wip", "done", "failed"];
 const TIERS = [0, 1, 2];
 const WORKFLOWS = ["scout", "plan", "build", "plan-build-test", "build-review", "simple-sdlc", "intake"];
+
+/** `T01` for a task plan, `W01` for a spine whose units are workstreams. */
+const TICKET_FILE = /^[TW]\d\d\.md$/;
+const TICKET_ID = /^[TW]\d\d$/;
+
+interface PlanSet {
+  /** What every failure message names, so a red test says WHICH plan drifted. */
+  readonly label: string;
+  readonly plan: string;
+  readonly prompts: string;
+  readonly tickets: string;
+}
+
+function planSets(): PlanSet[] {
+  const sets: PlanSet[] = [
+    {
+      label: "awsf-plan",
+      plan: join(SPECS, "awsf-plan.html"),
+      prompts: join(SPECS, "awsf-plan-build-prompts.md"),
+      tickets: TICKETS,
+    },
+  ];
+  for (const entry of readdirSync(TICKETS, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const stem = entry.name;
+    const plan = [join(SPECS, `${stem}.html`), join(SPECS, "v2", `${stem}.html`)].find((candidate) =>
+      existsSync(candidate),
+    );
+    assert.ok(
+      plan,
+      `specs/tickets/${stem}/ has no plan — expected specs/${stem}.html or specs/v2/${stem}.html. ` +
+        `A ticket set without a plan cannot be checked against anything.`,
+    );
+    const prompts = join(dirname(plan), `${stem}-build-prompts.md`);
+    assert.ok(existsSync(prompts), `${stem}: no build prompts beside the plan at ${prompts}`);
+    sets.push({ label: stem, plan, prompts, tickets: join(TICKETS, stem) });
+  }
+  return sets;
+}
 
 interface PlanTask {
   number: number;
@@ -32,15 +87,15 @@ interface Ticket {
   number: number;
   title: string;
   milestone: string;
-  tier: number;
+  tier: number | undefined;
   state: string;
   depends_on: string[];
-  workflow: string;
+  workflow: string | undefined;
   prompt: string;
 }
 
-function planTasks(): PlanTask[] {
-  const html = readFileSync(PLAN, "utf8");
+function planTasks(set: PlanSet): PlanTask[] {
+  const html = readFileSync(set.plan, "utf8");
   const milestones = [...html.matchAll(/<h3><code class="status">\[([^\]]*)\]<\/code> Milestone (M\d+):/g)];
   const tasks: PlanTask[] = [];
   for (const [index, milestone] of milestones.entries()) {
@@ -69,12 +124,12 @@ function planTasks(): PlanTask[] {
   return tasks.filter((t) => t.number > 0); // task 0 is M0's plan authoring; it has no ticket
 }
 
-function tickets(): Ticket[] {
-  return readdirSync(TICKETS)
-    .filter((name) => /^T\d\d\.md$/.test(name))
+function tickets(set: PlanSet): Ticket[] {
+  return readdirSync(set.tickets)
+    .filter((name) => TICKET_FILE.test(name))
     .sort()
     .map((name) => {
-      const raw = readFileSync(join(TICKETS, name), "utf8");
+      const raw = readFileSync(join(set.tickets, name), "utf8");
       const match = /^---\n([\s\S]*?)\n---\n([\s\S]*)$/.exec(raw);
       assert.ok(match, `${name} has no frontmatter block`);
       const fm = parse(match[1] ?? "") as Record<string, unknown>;
@@ -86,17 +141,17 @@ function tickets(): Ticket[] {
         number: Number(String(fm.id).slice(1)),
         title: String(fm.title),
         milestone: String(fm.milestone),
-        tier: Number(fm.tier),
+        tier: fm.tier === undefined ? undefined : Number(fm.tier),
         state: String(fm.state),
         depends_on: (fm.depends_on as string[]) ?? [],
-        workflow: String(fm.workflow),
+        workflow: fm.workflow === undefined ? undefined : String(fm.workflow),
         prompt: (split[1] ?? "").replace(/\n+$/, ""),
       };
     });
 }
 
-function sectionBPrompts(): Map<number, { title: string; prompt: string }> {
-  const md = readFileSync(PROMPTS, "utf8");
+function sectionBPrompts(set: PlanSet): Map<number, { title: string; prompt: string }> {
+  const md = readFileSync(set.prompts, "utf8");
   const sectionB = md.split("# Section B — Task prompts (recommended)")[1] ?? "";
   const out = new Map<number, { title: string; prompt: string }>();
   const heads = [...sectionB.matchAll(/^### T(\d+) — (.+)$/gm)];
@@ -109,114 +164,148 @@ function sectionBPrompts(): Map<number, { title: string; prompt: string }> {
 }
 
 test("tickets cover a contiguous prefix of the plan's tasks, with no orphans", () => {
-  const numbers = tickets().map((t) => t.number);
-  const highest = Math.max(...numbers);
-  const expected = Array.from({ length: highest }, (_, i) => i + 1);
-  assert.deepEqual(numbers, expected, "ticket ids must be T01..Tnn with no gaps");
+  for (const set of planSets()) {
+    const numbers = tickets(set).map((t) => t.number);
+    const highest = Math.max(...numbers);
+    const expected = Array.from({ length: highest }, (_, i) => i + 1);
+    assert.deepEqual(numbers, expected, "ticket ids must be T01..Tnn with no gaps");
 
-  const uncovered = planTasks()
-    .filter((t) => t.number <= highest && !numbers.includes(t.number))
-    .map((t) => t.number);
-  assert.deepEqual(uncovered, [], "a plan task below the highest ticket has no ticket");
+    const uncovered = planTasks(set)
+      .filter((t) => t.number <= highest && !numbers.includes(t.number))
+      .map((t) => t.number);
+    assert.deepEqual(uncovered, [], "a plan task below the highest ticket has no ticket");
 
-  const orphans = numbers.filter((n) => !planTasks().some((t) => t.number === n));
-  assert.deepEqual(orphans, [], "a ticket names a task the plan does not have");
+    const orphans = numbers.filter((n) => !planTasks(set).some((t) => t.number === n));
+    assert.deepEqual(orphans, [], "a ticket names a task the plan does not have");
+  }
 });
 
 test("each ticket's milestone matches the plan block its task lives in", () => {
-  const byNumber = new Map(planTasks().map((t) => [t.number, t]));
-  const offenders = tickets()
-    .filter((t) => byNumber.get(t.number)?.milestone !== t.milestone)
-    .map((t) => `${t.id}: ticket says ${t.milestone}, plan says ${byNumber.get(t.number)?.milestone}`);
-  assert.deepEqual(offenders, []);
+  for (const set of planSets()) {
+    const byNumber = new Map(planTasks(set).map((t) => [t.number, t]));
+    const offenders = tickets(set)
+      .filter((t) => byNumber.get(t.number)?.milestone !== t.milestone)
+      .map((t) => `${set.label}/${t.id}: ticket says ${t.milestone}, plan says ${byNumber.get(t.number)?.milestone}`);
+    assert.deepEqual(offenders, [], set.label);
+  }
 });
 
 test("ticket state agrees with its milestone's marker", () => {
-  const byNumber = new Map(planTasks().map((t) => [t.number, t]));
-  const offenders: string[] = [];
-  for (const ticket of tickets()) {
-    const marker = byNumber.get(ticket.number)?.milestoneMarker;
-    if (marker === "x" && ticket.state !== "done") {
-      offenders.push(`${ticket.id}: milestone ${ticket.milestone} is [x] but ticket is ${ticket.state}`);
+  for (const set of planSets()) {
+    const byNumber = new Map(planTasks(set).map((t) => [t.number, t]));
+    const offenders: string[] = [];
+    for (const ticket of tickets(set)) {
+      const marker = byNumber.get(ticket.number)?.milestoneMarker;
+      if (marker === "x" && ticket.state !== "done") {
+        offenders.push(`${set.label}/${ticket.id}: milestone ${ticket.milestone} is [x] but ticket is ${ticket.state}`);
+      }
+      if (marker === "" && ticket.state === "done") {
+        offenders.push(`${set.label}/${ticket.id}: milestone ${ticket.milestone} is [] but ticket is done`);
+      }
     }
-    if (marker === "" && ticket.state === "done") {
-      offenders.push(`${ticket.id}: milestone ${ticket.milestone} is [] but ticket is done`);
-    }
+    assert.deepEqual(offenders, [], set.label);
   }
-  assert.deepEqual(offenders, []);
 });
 
 test("every plan task carries a checklist", () => {
-  // Without one, a ticket's state can only be checked against its milestone
-  // marker — a blind spot for any task alone in an unfinished milestone. Nine
-  // tasks were missing one on 2026-08-06; this keeps them from coming back.
-  const barren = planTasks()
-    .filter((t) => t.checklist.length === 0)
-    .map((t) => `task ${t.number} (${t.milestone}) has no checklist to check state against`);
-  assert.deepEqual(barren, []);
+  for (const set of planSets()) {
+    // Without one, a ticket's state can only be checked against its milestone
+    // marker — a blind spot for any task alone in an unfinished milestone. Nine
+    // tasks were missing one on 2026-08-06; this keeps them from coming back.
+    const barren = planTasks(set)
+      .filter((t) => t.checklist.length === 0)
+      .map((t) => `${set.label}: task ${t.number} (${t.milestone}) has no checklist to check state against`);
+    assert.deepEqual(barren, [], set.label);
+  }
 });
 
 test("ticket state agrees with its task's own checklist", () => {
-  const byNumber = new Map(planTasks().map((t) => [t.number, t]));
-  const offenders: string[] = [];
-  for (const ticket of tickets()) {
-    const checklist = byNumber.get(ticket.number)?.checklist ?? [];
-    if (checklist.length === 0) continue; // guarded by the test above
-    const allChecked = checklist.every((mark) => mark === "x");
-    if (allChecked && ticket.state !== "done") {
-      offenders.push(`${ticket.id}: every plan checklist box is [x] but ticket is ${ticket.state}`);
+  for (const set of planSets()) {
+    const byNumber = new Map(planTasks(set).map((t) => [t.number, t]));
+    const offenders: string[] = [];
+    for (const ticket of tickets(set)) {
+      const checklist = byNumber.get(ticket.number)?.checklist ?? [];
+      if (checklist.length === 0) continue; // guarded by the test above
+      const allChecked = checklist.every((mark) => mark === "x");
+      if (allChecked && ticket.state !== "done") {
+        offenders.push(`${set.label}/${ticket.id}: every plan checklist box is [x] but ticket is ${ticket.state}`);
+      }
+      if (!allChecked && ticket.state === "done") {
+        offenders.push(`${set.label}/${ticket.id}: ticket is done but the plan still has unchecked boxes`);
+      }
     }
-    if (!allChecked && ticket.state === "done") {
-      offenders.push(`${ticket.id}: ticket is done but the plan still has unchecked boxes`);
-    }
+    assert.deepEqual(offenders, [], set.label);
   }
-  assert.deepEqual(offenders, []);
 });
 
 test("each ticket carries its Section B build prompt byte-identically", () => {
-  const source = sectionBPrompts();
-  const offenders: string[] = [];
-  for (const ticket of tickets()) {
-    const block = source.get(ticket.number);
-    if (!block) {
-      offenders.push(`${ticket.id}: no Section B block in awsf-plan-build-prompts.md`);
-      continue;
+  for (const set of planSets()) {
+    const source = sectionBPrompts(set);
+    const offenders: string[] = [];
+    for (const ticket of tickets(set)) {
+      const block = source.get(ticket.number);
+      if (!block) {
+        offenders.push(`${set.label}/${ticket.id}: no Section B block in awsf-plan-build-prompts.md`);
+        continue;
+      }
+      if (block.prompt !== ticket.prompt) offenders.push(`${set.label}/${ticket.id}: build prompt has drifted from Section B`);
+      if (block.title !== ticket.title) offenders.push(`${set.label}/${ticket.id}: title differs from its Section B heading`);
     }
-    if (block.prompt !== ticket.prompt) offenders.push(`${ticket.id}: build prompt has drifted from Section B`);
-    if (block.title !== ticket.title) offenders.push(`${ticket.id}: title differs from its Section B heading`);
+    assert.deepEqual(offenders, [], set.label);
   }
-  assert.deepEqual(offenders, []);
 });
 
 test("depends_on points only backwards at tickets that exist", () => {
-  const all = tickets();
-  const ids = new Set(all.map((t) => t.id));
-  const offenders: string[] = [];
-  for (const ticket of all) {
-    for (const dep of ticket.depends_on) {
-      if (!ids.has(dep)) offenders.push(`${ticket.id}: depends on ${dep}, which does not exist`);
-      else if (dep >= ticket.id) offenders.push(`${ticket.id}: depends on ${dep}, which is not earlier`);
+  for (const set of planSets()) {
+    const all = tickets(set);
+    const ids = new Set(all.map((t) => t.id));
+    const offenders: string[] = [];
+    for (const ticket of all) {
+      for (const dep of ticket.depends_on) {
+        if (!ids.has(dep)) offenders.push(`${set.label}/${ticket.id}: depends on ${dep}, which does not exist`);
+        else if (dep >= ticket.id) offenders.push(`${set.label}/${ticket.id}: depends on ${dep}, which is not earlier`);
+      }
     }
+    assert.deepEqual(offenders, [], set.label);
   }
-  assert.deepEqual(offenders, []);
 });
 
 test("a done ticket never waits on unfinished work", () => {
-  const all = tickets();
-  const stateOf = new Map(all.map((t) => [t.id, t.state]));
-  const offenders = all
-    .filter((t) => t.state === "done")
-    .flatMap((t) => t.depends_on.filter((dep) => stateOf.get(dep) !== "done").map((dep) => `${t.id} is done but ${dep} is ${stateOf.get(dep)}`));
-  assert.deepEqual(offenders, []);
+  for (const set of planSets()) {
+    const all = tickets(set);
+    const stateOf = new Map(all.map((t) => [t.id, t.state]));
+    const offenders = all
+      .filter((t) => t.state === "done")
+      .flatMap((t) => t.depends_on.filter((dep) => stateOf.get(dep) !== "done").map((dep) => `${set.label}/${t.id} is done but ${dep} is ${stateOf.get(dep)}`));
+    assert.deepEqual(offenders, [], set.label);
+  }
 });
 
 test("frontmatter values stay inside their vocabularies", () => {
-  const offenders: string[] = [];
-  for (const ticket of tickets()) {
-    if (!STATES.includes(ticket.state)) offenders.push(`${ticket.id}: state "${ticket.state}"`);
-    if (!TIERS.includes(ticket.tier)) offenders.push(`${ticket.id}: tier "${ticket.tier}"`);
-    if (!WORKFLOWS.includes(ticket.workflow)) offenders.push(`${ticket.id}: workflow "${ticket.workflow}"`);
-    if (!/^T\d\d$/.test(ticket.id)) offenders.push(`${ticket.id}: id is not zero-padded Tnn`);
+  for (const set of planSets()) {
+    const offenders: string[] = [];
+    for (const ticket of tickets(set)) {
+      if (!STATES.includes(ticket.state)) offenders.push(`${set.label}/${ticket.id}: state "${ticket.state}"`);
+      // `tier` and `workflow` are optional: the plan skill's own rule is to omit
+      // the field when a plan defines no such vocabulary rather than invent one.
+      // Present-but-wrong is the defect; absent is a legitimate shape.
+      if (ticket.tier !== undefined && !TIERS.includes(ticket.tier)) {
+        offenders.push(`${set.label}/${ticket.id}: tier "${String(ticket.tier)}"`);
+      }
+      if (ticket.workflow !== undefined && !WORKFLOWS.includes(ticket.workflow)) {
+        offenders.push(`${set.label}/${ticket.id}: workflow "${ticket.workflow}"`);
+      }
+      if (!TICKET_ID.test(ticket.id)) offenders.push(`${set.label}/${ticket.id}: id is not zero-padded Tnn or Wnn`);
+    }
+    assert.deepEqual(offenders, [], set.label);
   }
-  assert.deepEqual(offenders, []);
+});
+
+test("every ticket directory pairs with a plan and its build prompts", () => {
+  // planSets() asserts the pairing while discovering it, so reaching here at all
+  // means every set resolved. This test exists so that failure is reported under
+  // its own name rather than inside whichever assertion happened to run first.
+  const labels = planSets().map((set) => set.label);
+  assert.ok(labels.includes("awsf-plan"), `the v1 set is missing; found ${labels.join(", ")}`);
+  assert.equal(new Set(labels).size, labels.length, `two ticket sets share a label: ${labels.join(", ")}`);
 });
