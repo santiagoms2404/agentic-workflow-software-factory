@@ -1,5 +1,15 @@
 # AWSF — v2 Candidates and Closeout Work
 
+> **Frozen record, 2026-08-20.** This file is the working history: the captures,
+> the decisions as they were taken, and the corrections made while taking them.
+> **It is not a planning input, and several of its claims are known to be wrong.**
+> Decision 30's TTY rationale, decision 27's "O2 is the leverage" claim, and
+> decisions 13/14's word "bounded" were each falsified by later checks; decision
+> 24 contradicts §2.3.8; and Part 1 reads as work to schedule when it is history.
+> Those are corrected in `awsf-v2-candidates-fuse-version.md`, not here, because
+> editing them into the record would destroy the trail that produced them. Read
+> the fused file for what is currently true.
+
 A working record, not a plan. It captures decisions taken and options left open
 after `specs/awsf-plan.html` closed on 2026-08-16 with every milestone `[x]` and
 one honest `[f]`.

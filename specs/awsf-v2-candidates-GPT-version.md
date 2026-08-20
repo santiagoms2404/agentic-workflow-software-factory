@@ -1,5 +1,13 @@
 # AWSF v2 candidates: adversarial second review
 
+> **Frozen record, 2026-08-20.** An adversarial second review, preserved as it was
+> written. **It is not a planning input.** Thirteen of its sixteen disagreements
+> were upheld in full and three in part; one claim it makes — that partial call
+> settlement is impossible — was rejected against `settle(id, spent)`, and its
+> "weak" verdict on 2.8 rested partly on a fence break that has since been
+> repaired. The adjudication of every row is in
+> `awsf-v2-candidates-fuse-version.md`, which is what to read for what stands.
+
 All review claims are dated **2026-08-20**. Each evidence tag states a source kind, the date observed, and a citable anchor. Recommendations are labelled `review-judgment`; they are decisions from this review, not facts imported from a source. [review-method, 2026-08-20, review brief §Method]
 
 ## A. Sources declared

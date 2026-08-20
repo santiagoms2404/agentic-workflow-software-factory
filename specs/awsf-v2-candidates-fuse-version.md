@@ -26,6 +26,11 @@ happen: of sixteen registered disagreements, thirteen are upheld in full, three
 in part, and none is rejected.** Three of them found defects in work committed on
 2026-08-20, two of which are already repaired.
 
+**Currency.** Work continued after this file was fused, and six of its statements
+are superseded. They are listed in §10 rather than edited in place, so the
+adjudication that produced them stays readable. **Read §10 before acting on §3
+or §6.**
+
 ---
 
 ## How to read this file
@@ -639,3 +644,64 @@ document correction, or work that must wait on a fork.
 `awsf-v2-candidates-GPT-version.md`. Seventeen verification checks were run
 against this repository while adjudicating, each quoted at the claim it settles.
 Neither source file was modified.*
+
+---
+
+## 10. Changes since fusion — 2026-08-20
+
+Six statements above are superseded by work done after the fusion. Each names
+what it replaces.
+
+**10.1 — marimba's guard now holds the owner-act boundary.** §2.8 called the
+guard extension "the single highest-value unbuilt item" and F-3 posed it as a
+fork. It is built. The guard reads `tool_input.command` and denies the six owner
+acts by name. Offline: `awsf land T01` and `just awsf rework X` deny at exit 2,
+while `awsf status` and `awsf run` pass, so the spend the tier already authorised
+is untouched. Live under marimba's own settings: *"It was blocked — the
+`delegation-guard.sh` PreToolUse hook (marimba) denied `awsf land` as an
+owner-only act in a driving session; the command never executed."* F-3 is
+answered: the flag stays and the boundary is real.
+
+Two adjustments came with it. `ListAgents` moved into the whole-name exclusion
+list, because the review was right that it enumerates and creates nothing. And
+the fail-open behaviour on malformed JSON is now stated in the script's header as
+a deliberate limit rather than left implicit: failing closed on a payload-shape
+change would brick every tool call the day the harness changes its schema.
+
+**10.2 — the v1 ticket move is reversed, and §6 step 1 is wrong about it.** The
+move would have broken two commands. `ticketStoreFor` resolves `specs/tickets`
+and `TicketStore` reads that exact directory with no recursion, so `awsf ticket
+list` and `awsf backlog` would have silently returned nothing. **The v1 tickets
+stay flat.** The physical move belongs with the registry slice that gives the
+store a plan to resolve against — which is F-2, where it now sits.
+
+**10.3 — the sync fence is plan-aware, which was the actual requirement.** It
+pairs each plan with its own ticket set and runs every assertion per set: the
+flat `specs/tickets/` against `awsf-plan.html`, and each
+`specs/tickets/<stem>/` against `specs/<stem>.html`. A ticket set with no plan
+fails loudly rather than being skipped. Proven to bite: a ghost directory
+produced `specs/tickets/awsf-v2-ghost/ has no plan`, and the suite returned to
+green once removed. Ticket ids accept `Wnn` alongside `Tnn` for spine plans whose
+units are workstreams, and `tier`/`workflow` became optional because the plan
+skill omits them when a plan defines no such vocabulary.
+
+**10.4 — `plan-sota` exists.** Decision #23's rename was executed on 2026-08-20:
+23 executing mentions across the skill and `orchestrate`, with both compatibility
+pieces in place — the legacy `localStorage` key read once and never written, and
+Mode B accepting either block header. Those are the only two `planf3` strings
+that remain anywhere, which is exactly the line #23 drew. The rename verified
+itself: the harness reloaded the skill mid-session under the new name.
+
+**10.5 — every plan now carries an In Plain Language section.** It existed only
+in `awsf-plan.html`, hand-authored, and appeared nowhere in the skill, so v2
+would not have had one. It is now the first section of the template body, with a
+required-in-every-plan rule and its own workflow step. It is written last, after
+the technical body is final, so it describes the plan that exists rather than the
+one intended. This applies to the spine and to every deep plan.
+
+**10.6 — `specs/v2/` is dropped and plans stay flat.** §0.2 and §8 both assume a
+`specs/v2/` directory. It is unnecessary: plan filenames never collide, the skill
+defaults to `specs/`, and the fence accepts either location. Only tickets need
+grouping, because only tickets collide. `plan-sota` now writes them to
+`specs/tickets/<plan-stem>/`, which is what makes the plan-aware fence engage —
+without that patch the fence would have been correct and never exercised.
