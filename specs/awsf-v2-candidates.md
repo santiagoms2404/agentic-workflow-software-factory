@@ -1396,105 +1396,6 @@ library pulls `axi-sdk-js` and `@toon-format/toon` into the runtime import graph
 forcing a D2 amendment for a number that renders in a chip. Spawning costs one
 subprocess and buys the whole thing for free.
 
-#### O3 captured end to end, 2026-08-19/20 (the session crossed midnight)
-
-The guard was written and both checks were run under the exact flag marimba
-ships with, `--dangerously-skip-permissions`, in throwaway project directories
-rather than against this repository, so nothing here changed AWSF's own tracked
-surface.
-
-**The matcher first, with no calls spent.** Nine synthetic PreToolUse payloads
-through the script:
-
-| Tool name | Verdict | Why |
-| --- | --- | --- |
-| `Task`, `Agent` | **deny** (exit 2) | the shapes the guard exists for |
-| `WorktreeCreate`, `SendMessage` | **deny** | stem match on a name no list enumerated |
-| `FutureSpawnThing` | **deny** | a name that does not exist, denied on arrival — the property a deny list cannot have |
-| `TaskOutput`, `TaskCreate` | allow | whole-name exclusions: observe-or-stop and plan-only |
-| `Read` | allow | not delegation-shaped |
-| `mcp__foo__task` | allow | an MCP server naming its own tools says nothing about dispatch |
-
-**Then three live runs, and the control is what makes the other two mean
-anything.** Without it, "the model did not delegate" would be equally consistent
-with the fence working and with the model simply choosing not to.
-
-| Run | Configuration | Result |
-| --- | --- | --- |
-| **Control** | no settings, flag on | *"The tool call ran — not blocked — and the subagent returned `4`."* The model does reach for the tool |
-| **Check 1** | PreToolUse guard only, flag on | *"blocked — a `PreToolUse:Agent` hook … denied it, saying Agent delegation isn't allowed in a driving session and to use the `awsf` CLI instead."* |
-| **Check 2** | `permissions.deny: ["Task","Agent"]` only, flag on | *"No such tool available: Task. Task is disabled for this session, in subagents as well as here."* |
-
-**Three facts fall out, and the third is the correction.**
-
-1. **The hook fires under the flag, and its reason text reaches the model.** O3 is
-   a proven fence rather than a claimed one.
-2. **The tool presents to the model as `Agent`**, which the hook's own refusal
-   names, matching what the reference recorded independently.
-3. **The deny list also survives the flag, and it is the stronger of the two**,
-   because it removes the tool from the schema instead of refusing a call to it —
-   and it reaches subagents as well. Card 4's prediction is corrected above.
-
-**One honest limit.** Check 2 listed `Task` and `Agent` together, so it shows the
-pair works and does not establish either key alone. The reference reports both
-work, verified there with a nonsense-name control; this capture is consistent
-with that rather than an independent confirmation of each key.
-
-#### Applied 2026-08-20 (O3), and one hazard it leaves open
-
-The guard is installed rather than proposed:
-
-- the script at `~/.claude/marimba/delegation-guard.sh`, mode `0755`, owner-local
-  and outside every repository;
-- registered in this repository's **untracked** `.claude/settings.local.json`,
-  which scopes it to sessions rooted here and keeps it out of worker worktrees,
-  because an untracked file does not follow a `git worktree add`.
-
-**The matcher is `.*` on purpose.** Every tool name reaches the script and the
-script is the single owner of classification. A matcher that enumerated stems
-would reintroduce fail-open-by-enumeration: a future tool name outside the
-matcher would never reach the classifier at all. The price is one small
-subprocess per tool call, paid by the driving session only.
-
-Verified against the real repository and the real settings file on 2026-08-20:
-
-```
-The tool call ran but was blocked - the `PreToolUse:Agent` hook
-`~/.claude/marimba/delegation-guard.sh` denied it, saying Agent is
-"delegation-shaped" and disallowed in a driving session (no attempt
-dir/journal/reserved call/gate), and directing me to the `awsf` CLI instead.
-```
-
-**Both fences are installed, not one.** The same settings file carries
-`permissions.deny: ["Task", "Agent"]` beside the hook. They fail differently and
-neither is redundant: the deny list removes a tool from the session schema so the
-model never sees it, and the hook classifies by shape so it catches names no list
-enumerated.
-
-**One run demonstrated exactly that layering**, 2026-08-20, against the installed
-configuration:
-
-```
-The tool call did not run: there is no `Task`/`Agent` subagent launcher in this
-session ... and the delegation-shaped call I could make, `ListAgents`, was
-blocked by the PreToolUse hook `~/.claude/marimba/delegation-guard.sh`, which
-denies any tool matching stems like `agent`/`subagent`/`task`/`spawn`/`dispatch`
-in a driving session and points to the `awsf` CLI instead.
-```
-
-`ListAgents` is not on the deny list. It was denied by shape, on the first
-occasion the model reached past the enumerated names — which is the argument for
-keeping both fences, arriving as evidence rather than as reasoning.
-
-**The hazard the placement rule exists to prevent, now closed.** `.claude/` was
-not in this repository's `.gitignore`, so the settings file showed as untracked
-and an unguarded `git add -A` would have committed it. A *tracked*
-`.claude/settings.json` follows a checkout into every managed worktree, where this
-deny would apply to builder and documenter phases that legitimately write and
-edit. **`.claude/` was added to `.gitignore` on 2026-08-20**, which closes the
-whole class and also matches `_driving.ts`'s standing rule that this repository
-commits no `.claude/` tree at all.
-
 #### Collisions with v1, each with its adaptation (per #18)
 
 **Collision 1 — *"Quota-aware routing — the runner never picks a provider by
@@ -2022,6 +1923,126 @@ worktree of this repository, and AWSF's workers legitimately need write and edit
 guard is owner-local and untracked.** The cost of that choice is stated rather
 than hidden: an owner-local hook is outside the suite, so nothing in CI proves it
 is armed, and the capture named in the upgrades is the only evidence it works.
+
+#### O3 captured end to end, 2026-08-19/20 (the session crossed midnight)
+
+The guard was written and both checks were run under the exact flag marimba
+ships with, `--dangerously-skip-permissions`, in throwaway project directories
+rather than against this repository, so nothing here changed AWSF's own tracked
+surface.
+
+**The matcher first, with no calls spent.** Nine synthetic PreToolUse payloads
+through the script:
+
+| Tool name | Verdict | Why |
+| --- | --- | --- |
+| `Task`, `Agent` | **deny** (exit 2) | the shapes the guard exists for |
+| `WorktreeCreate`, `SendMessage` | **deny** | stem match on a name no list enumerated |
+| `FutureSpawnThing` | **deny** | a name that does not exist, denied on arrival — the property a deny list cannot have |
+| `TaskOutput`, `TaskCreate` | allow | whole-name exclusions: observe-or-stop and plan-only |
+| `Read` | allow | not delegation-shaped |
+| `mcp__foo__task` | allow | an MCP server naming its own tools says nothing about dispatch |
+
+**Then three live runs, and the control is what makes the other two mean
+anything.** Without it, "the model did not delegate" would be equally consistent
+with the fence working and with the model simply choosing not to.
+
+| Run | Configuration | Result |
+| --- | --- | --- |
+| **Control** | no settings, flag on | *"The tool call ran — not blocked — and the subagent returned `4`."* The model does reach for the tool |
+| **Check 1** | PreToolUse guard only, flag on | *"blocked — a `PreToolUse:Agent` hook … denied it, saying Agent delegation isn't allowed in a driving session and to use the `awsf` CLI instead."* |
+| **Check 2** | `permissions.deny: ["Task","Agent"]` only, flag on | *"No such tool available: Task. Task is disabled for this session, in subagents as well as here."* |
+
+**Three facts fall out, and the third is the correction.**
+
+1. **The hook fires under the flag, and its reason text reaches the model.** O3 is
+   a proven fence rather than a claimed one.
+2. **The tool presents to the model as `Agent`**, which the hook's own refusal
+   names, matching what the reference recorded independently.
+3. **The deny list also survives the flag, and it is the stronger of the two**,
+   because it removes the tool from the schema instead of refusing a call to it —
+   and it reaches subagents as well. Card 4's prediction is corrected above.
+
+**One honest limit.** Check 2 listed `Task` and `Agent` together, so it shows the
+pair works and does not establish either key alone. The reference reports both
+work, verified there with a nonsense-name control; this capture is consistent
+with that rather than an independent confirmation of each key.
+
+#### Applied 2026-08-20 (O3), and one hazard it leaves open
+
+The guard is installed rather than proposed:
+
+- the script at `~/.claude/marimba/delegation-guard.sh`, mode `0755`, owner-local
+  and outside every repository;
+- registered in this repository's **untracked** `.claude/settings.local.json`,
+  which scopes it to sessions rooted here and keeps it out of worker worktrees,
+  because an untracked file does not follow a `git worktree add`.
+
+**The matcher is `.*` on purpose.** Every tool name reaches the script and the
+script is the single owner of classification. A matcher that enumerated stems
+would reintroduce fail-open-by-enumeration: a future tool name outside the
+matcher would never reach the classifier at all. The price is one small
+subprocess per tool call, paid by the driving session only.
+
+Verified against the real repository and the real settings file on 2026-08-20:
+
+```
+The tool call ran but was blocked - the `PreToolUse:Agent` hook
+`~/.claude/marimba/delegation-guard.sh` denied it, saying Agent is
+"delegation-shaped" and disallowed in a driving session (no attempt
+dir/journal/reserved call/gate), and directing me to the `awsf` CLI instead.
+```
+
+**Both fences are installed, not one.** The same settings file carries
+`permissions.deny: ["Task", "Agent"]` beside the hook. They fail differently and
+neither is redundant: the deny list removes a tool from the session schema so the
+model never sees it, and the hook classifies by shape so it catches names no list
+enumerated.
+
+**One run demonstrated exactly that layering**, 2026-08-20, against the installed
+configuration:
+
+```
+The tool call did not run: there is no `Task`/`Agent` subagent launcher in this
+session ... and the delegation-shaped call I could make, `ListAgents`, was
+blocked by the PreToolUse hook `~/.claude/marimba/delegation-guard.sh`, which
+denies any tool matching stems like `agent`/`subagent`/`task`/`spawn`/`dispatch`
+in a driving session and points to the `awsf` CLI instead.
+```
+
+`ListAgents` is not on the deny list. It was denied by shape, on the first
+occasion the model reached past the enumerated names — which is the argument for
+keeping both fences, arriving as evidence rather than as reasoning.
+
+**The hazard the placement rule exists to prevent, now closed.** `.claude/` was
+not in this repository's `.gitignore`, so the settings file showed as untracked
+and an unguarded `git add -A` would have committed it. A *tracked*
+`.claude/settings.json` follows a checkout into every managed worktree, where this
+deny would apply to builder and documenter phases that legitimately write and
+edit. **`.claude/` was added to `.gitignore` on 2026-08-20**, which closes the
+whole class and also matches `_driving.ts`'s standing rule that this repository
+commits no `.claude/` tree at all.
+
+**Record correction, 2026-08-20.** These two subsections were first committed
+inside §2.7, where `O3` names an untaken quota admission check, because the
+insertion anchored on a heading both candidates share. They are relocated here,
+where `O3` is the delegation-shape guard.
+
+Three statements above are superseded by the same day's later work, and are
+corrected rather than deleted because acting on any of them would repeat the
+mistake. The guard is no longer registered in a repository-local
+`.claude/settings.local.json`; the `.gitignore` line did not close the hazard;
+and the hazard was already closed by an existing fence that had not been read.
+`core/test/unit/meta/execution-isolation.test.ts` asserts that `.claude/` does
+not exist at the repository root **at all**, reading the filesystem rather than
+Git, so the settings file made `npm run test:unit` fail 1 of 988 while the
+working tree stayed clean.
+
+The guard now lives at `~/.claude/marimba/settings.json` and is passed per
+invocation through `claude --settings`, which scopes it to marimba sessions
+rather than to every session rooted in this repository. The suite is back to
+988/988 and the `.gitignore` line is reverted. The full adjudication is in
+`awsf-v2-candidates-fuse-version.md` §0.1.
 
 #### Collisions with v1, each with its adaptation (per #18)
 
