@@ -504,6 +504,154 @@ candidate; extend the guard to owner-act command shapes and capture the denial;
 state the boundary honestly in the contract; keep the installation an owner act
 outside the build.
 
+### 2.9 Evidence readability — the event log
+
+**State: `candidate`, new on 2026-08-20. Fused strength: strong.** It is the
+first candidate in this set whose diagnosis is complete before any work starts,
+because the cause turned out to be one function and the data it needs is already
+in the record.
+
+**Sources declared.** **Target == factory**: `source-verified` at
+`dashboard/src/components/EventLog.vue`, `dashboard/src/display.ts`,
+`core/src/contracts/normalized-events.ts`, `core/src/observability/projector.ts`.
+**Screenshot**: twelve captures of a real reviewer run, 2026-08-20, which is the
+primary source for *"this is what the owner actually sees"* and cannot be
+replaced by reading code. **Absent**: no query against a live projection, so
+every volume figure below is counted from a screenshot rather than from the
+database — *not gathered*, and the query is named in the upgrades.
+
+#### The cause is one function
+
+`EventLog.vue`'s `summary()` is a five-key fallback chain — `inputSummary`,
+`message`, `detail`, `reason`, `resolvedModel` — and **anything it does not match
+falls through to `item.name || item.type`**. That single line explains every
+symptom in the screenshots, including the one that looks like a rendering bug:
+
+| Kind | What the payload holds | What the row shows | Why |
+| --- | --- | --- | --- |
+| `text.delta` | `text` | `text.delta` | `text` is not in the chain |
+| `usage` | `usage: {inputTokens, outputTokens, cacheRead, cacheWrite, reasoning}` | `usage` | the value is an object, and the chain only accepts strings |
+| `tool_call` | `inputSummary`, `outcome`, `durationMs`, `resultSnippet` | escaped JSON of the tool input | `inputSummary` is first in the chain and wins |
+| `quota` | `message` | *"the five_hour subscription window reports allowed"* | it matches — this is the one readable row, and it proves the mechanism |
+
+The duplicated second column is the same defect seen from the front: when the
+chain misses, the summary *is* the kind, printed beside the kind.
+
+#### The data is present; the renderer discards it
+
+Three findings, each `source-verified`, and together they mean this candidate
+adds no new evidence to the system — it stops throwing away what is recorded.
+
+1. **Tool calls already carry their name.** `ToolRequestedEventSchema` declares
+   `name`, and the projector writes it to the events table's `name` **column**
+   rather than into `payload_json`. That is why expanding a tool row shows no
+   name, and why `summary()` *can* read `item.name` but never reaches it.
+2. **Usage is already formatted well, one panel over.** The phase evidence panel
+   renders the identical event as `total tokens 200.0k · provider`,
+   `input / output 156.8k / 43.3k`, `cache read / write 4.19M / 47.5k`. Same data,
+   two renderers, one good.
+3. **The formatters already exist and are already exported.** `display.ts`
+   exports thirteen, `formatTokens` and `formatUsage` among them. `EventLog.vue`
+   imports exactly one of them, `formatDuration`, and hand-rolls the guess chain
+   instead.
+
+#### `text.delta` — settled, and it closes an open question
+
+The frozen record's Still-open list asks *"Does `text_delta` stream
+incrementally? One longer-output probe settles it."* **A screenshot settled it
+instead, at no cost.** Two consecutive deltas from one reviewer run:
+
+```
+seq 4   "{\n  \"schema\": \"awsf.review-output/"
+seq 5   "v1\",\n  \"producerStatus\": \"success\",\n  \"summary\": \"Reviewed candidate …"
+```
+
+The break falls **inside** a JSON string value, mid-token. So the deltas are the
+model streaming its envelope chunk by chunk, one persisted row per chunk, and
+their concatenation in `seq` order reconstructs the phase output that the
+outputs panel already displays in full.
+
+**That is what makes compaction safe.** Folding a run of deltas into one row
+discards nothing, because the whole is retained elsewhere as the phase's own
+output artifact. Compaction at the *display* layer costs nothing and needs no
+contract change; compaction at the *storage* layer is a different decision and is
+not proposed here.
+
+Volume, counted from the screenshots rather than the database: twenty-four
+consecutive delta rows spanning twenty-four seconds in one capture, and four
+inside a single second in another.
+
+#### What to build, in order of leverage
+
+1. **Per-kind summarizers, replacing the guess chain.** One function per kind
+   that reads the fields that kind actually has. `usage` becomes
+   `156.8k in / 43.3k out · 4.19M cached · 16.7k reasoning` through the existing
+   `formatUsage`. `tool_call` becomes `Edit · herdr-visibility.test.ts · replaced
+   2 blocks · ok 81ms`, built from the `name` column and `resultSnippet` —
+   which is the informative field and is currently hidden until expansion while
+   the escaped input is shown. A kind with genuinely nothing to say renders an em
+   dash rather than its own name repeated.
+2. **Delta compaction.** Fold a contiguous run of `text.delta` into one row —
+   `streamed response · 128 chunks · 12.4s` — expandable to the reassembled text.
+   Fold only across contiguous `seq` within one run, never across a tool call or
+   a terminal event, so the fold can never hide an interleaved event.
+3. **A rendered view beside the raw JSON.** The expanded payload is
+   `JSON.stringify(payload, null, 2)` today. Keep it, add a rendered view, and
+   default to rendered with raw one click away. The phase evidence panel is the
+   design precedent and it is already in the repository.
+4. **The clipped run cards.** Cards carrying an `authority partial total` line
+   overflow a fixed height and clip mid-row; three of six cards in the capture
+   are cut. A layout fix, unrelated to the rest, and worth carrying in the same
+   slice because it is the same surface.
+
+#### Collisions, with adaptations (per #18)
+
+**Collision 1 — redaction is per event, and reassembly crosses events.**
+`stringifyRedacted` runs at projection time over one event at a time. A
+credential split across two delta chunks matches no pattern in either chunk and
+is reassembled by any concatenating renderer. **This is a real exposure created by
+compaction rather than an existing one**, and it is the reason compaction needs a
+guard rather than a loop. **Adaptation: redaction runs again over the reassembled
+text, in the same code path that reassembles it, and the fixture that proves it
+splits a credential-shaped value across a chunk boundary deliberately.**
+
+**Collision 2 — invariant 9, thinking is never persisted.** `thinking.delta` is
+streamed for live display and excluded by `isPersistableKind`. A compaction rule
+written over "delta kinds" rather than over `text.delta` specifically would be
+one edit away from persisting a fold of reasoning content. **Adaptation: the fold
+is defined on `text.delta` alone, and a test asserts that no `thinking.delta`
+reaches the projection.**
+
+**Collision 3 — invariant 1, no live task state.** Screenshots of a real run
+carry run ids and session ids. **Adaptation: none of them are quoted into this
+repository, here or in any fixture.** The captures stay outside the tree, and the
+figures above are counted rather than pasted.
+
+#### Buildability
+
+`dashboard/**` is **T1** by `risk.paths`, and the work is one component plus
+`display.ts`, so `build-review` at T1 in a managed worktree. Gates: the three
+existing dashboard suites — `dashboard-display.test.ts`, `dashboard-mechanics.test.ts`,
+`dashboard-parity.test.ts` — plus `vue-tsc`. One constraint carried from §2.7:
+eighteen assertions pin `formatCost` across three files, so reuse must extend the
+formatters rather than perturb them. New coverage owed: one summarizer test per
+kind, a fold test asserting no fold across a tool call or terminal, and the
+split-credential redaction fixture from Collision 1.
+
+#### Cheapest unused upgrades
+
+- **Count the real delta volume.** One `SELECT type, COUNT(*) … GROUP BY type`
+  against the projection gives the true ratio per phase and sizes the win.
+  **Not done** — it needs a live database, and the screenshots were enough to
+  establish the shape.
+- **Diff the reassembly against the stored output.** Concatenate one run's deltas
+  and compare with that phase's output artifact. It settles whether reassembly is
+  byte-identical or merely equivalent, which decides whether the compacted row can
+  claim to *be* the output or only to summarise it. **Not done.**
+- **Confirm the tool name survives to the client.** `summary()` already reads
+  `item.name`, so the column almost certainly reaches the API shape — but "almost
+  certainly" is not the standard. One response inspection settles it. **Not done.**
+
 ---
 
 ## 4. The five forks that must be decided before planning
@@ -705,3 +853,17 @@ defaults to `specs/`, and the fence accepts either location. Only tickets need
 grouping, because only tickets collide. `plan-sota` now writes them to
 `specs/tickets/<plan-stem>/`, which is what makes the plan-aware fence engage —
 without that patch the fence would have been correct and never exercised.
+
+**10.7 — a new candidate, and one open question closed by it.** §2.9, evidence
+readability, was added on 2026-08-20 from twelve screenshots of a real reviewer
+run plus the renderer's own source. It settles the frozen record's Still-open
+item *"Does `text_delta` stream incrementally?"* — it does, and a screenshot
+settled it for nothing where the record had budgeted a probe. The deltas break
+mid-token inside the streamed envelope, so their concatenation reconstructs the
+phase output that is already stored, which is what makes display-layer compaction
+lossless.
+
+It also raises an exposure that did not exist before it was proposed: redaction
+runs per event, so a credential split across two chunks is reassembled by any
+concatenating renderer. That is carried in §2.9's Collision 1 with the fixture
+that must prove it.
