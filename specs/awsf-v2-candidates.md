@@ -1502,17 +1502,28 @@ the skill's own instructions work as written with no fork to maintain. No
 statusline: a per-render network call is exactly the daemon shape Collision 2
 refuses.
 
-**Hazard, hit during this install and recorded so the next machine does not
-repeat it.** `npm i -g quota-axi` re-resolved the shared global tree and dropped
-`@anthropic-ai/claude-code`'s native optional package
-(`@anthropic-ai/claude-code-linux-x64`), after which `claude` refused to start
-with *"native binary not installed"*. Recovered with
-`npm i -g @anthropic-ai/claude-code@2.1.236 --include=optional`, verified back at
-`2.1.236`. **Prefer `npx -y quota-axi`, which touches no global tree**, and if a
-global install is wanted, pin and re-verify `claude --version` immediately after.
-This also strengthens the spawn-not-import decision from an unexpected angle: a
-probe AWSF resolves on `PATH` can be delivered by `npx` and never needs to enter
-a shared install at all.
+**Hazard observed during this work, with its cause explicitly NOT established.**
+Twice on 2026-08-19, `@anthropic-ai/claude-code`'s native optional package
+(`@anthropic-ai/claude-code-linux-x64`) went missing from the global tree and
+`claude` refused to start with *"native binary not installed"*. Both times
+`npm i -g @anthropic-ai/claude-code@2.1.236 --include=optional` restored it.
+
+**A first pass blamed the `npm i -g quota-axi` install. That attribution is
+unproven and probably wrong**, and it is corrected here rather than deleted
+because acting on it would have descoped a harmless install. Two facts against
+it: the failure **recurred with no global install in between**, and the machine
+already carries two `claude-code.corrupt-20260814*` directories dated five days
+before this session. A recurring cause independent of quota-axi — the background
+auto-updater dropping the optional native package is the obvious candidate — fits
+the evidence better. **Cheapest unused upgrade:** watch whether it recurs with no
+`npm -g` activity at all, which separates the two hypotheses in a day of ordinary
+use. Not done.
+
+The practical guidance survives the correction, weaker and honestly labelled:
+**prefer `npx -y quota-axi`, which touches no global tree**, and re-verify
+`claude --version` after any global install. It also supports spawn-not-import
+from an unexpected angle: a probe AWSF resolves on `PATH` can be delivered by
+`npx` and need never enter a shared install.
 
 #### Cheapest unused upgrades
 
