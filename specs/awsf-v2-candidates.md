@@ -1421,13 +1421,47 @@ suites. **Adaptation:** fixture-first, which binds here regardless because a
 parser is executable. Captured bytes become contract fixtures; the live run is a
 portability-matrix row, never a gate.
 
-**Collision 4 — credentials and the sandbox.** The probe reads
-`~/.claude/.credentials.json` and spawns `codex`. **Adaptation: host-side only.**
-Inside a session `sandbox-broker.ts:93`'s `--unshare-all` would break it anyway,
-and granting an agent session credential reach would be a real widening of the
-ceiling. Invariant 9 concerns commits and is not touched, but note that the
-`--full` codex capture carries the account email: fixtures must be scrubbed, and
-the reference's own charter requires the same.
+**Collision 4 — credentials and the sandbox. The rule holds; the reason given for
+it was wrong, and the correction matters more than the rule.**
+
+An earlier pass of this section said the probe must be host-side because *"inside
+a session `--unshare-all` would break it anyway."* **That was wrong on both
+counts, and it is recorded rather than deleted because it would have made the
+bound look self-enforcing when nothing enforces it.**
+
+Checked 2026-08-19 against the descriptor and its test
+(`sandbox-broker.ts:88-104`, `core/test/unit/policy/sandbox-broker.test.ts:75`),
+which pins the argv exactly:
+
+```
+--die-with-parent --new-session --unshare-all --share-net --ro-bind / /
+```
+
+1. **`--share-net` immediately follows `--unshare-all`, so the network is
+   shared.** The usage endpoint is reachable from inside the namespace.
+2. **`--ro-bind / /` makes the whole host filesystem readable**, and the only
+   mask is `--tmpfs` over the state root. `~/.claude/.credentials.json` is not
+   under the state root, so **the credential is readable inside the namespace**.
+   AWSF's own test says as much at line 58: *"`--ro-bind / /` makes the WHOLE
+   host filesystem readable, and `writes: []` confines writes and confines reads
+   not at all."*
+
+**So the probe would run inside a session, not fail.** The adaptation is
+unchanged and the argument for it is now the right one: **host-side only is an
+exposure bound, not a feasibility one.** Running it in-session would place a
+credential-reading, network-calling process inside an agent's reach, in a
+namespace that already confines no reads. Nothing structural prevents it, so the
+rule has to be stated and held deliberately.
+
+**A third fact makes the point sharper.** `bwrap` is **not installed on this
+WSL2 machine**, so `hostProbe("bwrap")` returns false, the badge degrades to
+`tool-policy`, and `grantSandbox` returns the spec unwrapped
+(`sandbox-broker.ts:148-154`). On the current development machine there is no OS
+enforcement to lean on at all.
+
+Invariant 9 concerns commits and is untouched, but the `--full` codex capture
+carries `account.email`: success fixtures must be scrubbed, and the reference's
+own charter requires the same.
 
 #### Scope
 
@@ -1484,9 +1518,11 @@ a shared install at all.
 
 - **Failure-path capture — done 2026-08-19**, four shapes, recorded above. It
   was the right call: it overturned the renderer design.
-- **Sandbox confirmation** — run the probe under the broker and watch it fail on
-  `--unshare-all`. Minutes, and it converts "must be host-side" from reasoning
-  into evidence. **Not done.**
+- **Sandbox confirmation — done 2026-08-19, and it overturned the reasoning.**
+  A live `bwrap` run was impossible (`bwrap` is not installed here), so the
+  descriptor and its pinning test were read instead. The probe would *succeed*
+  in-session, not fail. See Collision 4. A live run remains worth taking on a
+  machine that has `bwrap`, but the conclusion no longer depends on it.
 - **Rate-limited bytes** — no cheap upgrade exists; it needs the provider to
   throttle. Write the parser against the published type and mark that branch
   unproven.
@@ -1527,7 +1563,7 @@ a shared install at all.
 | 26 | **`agy` cannot express a custom system prompt at all** (measured 2026-08-19: no `--system-prompt` or `--append-system-prompt` anywhere in `agy.exe --help`; `agy.exe agents` returns empty and only lists). This is a **third** antigravity limitation, independent of the missing tool allow/deny flag and the Windows-accessible-cwd requirement in 2.1.1, and it further supports #14 — special-purpose provider, never first-class. |
 | 27 | **Quota telemetry is taken as candidate 2.7, scoped to O1 + O2.** A quota chip in the dashboard and a line in `awsf status`/`doctor`, plus a snapshot journalled at each phase boundary so the call ledger's proxy unit gains a real denominator. `quota-axi` is **spawned as a PATH-resolved read-only probe** through the existing `resolveExecutable` / `runSystemCommand` (`transport-broker.ts:169,212`), exactly as #8 resolves `mf` — **never imported as a library**, which would pull two runtime dependencies and force a D2 amendment for a number that renders in a chip. Measured 2026-08-19 on this machine: claude `five_hour` 70% / `seven_day` 95%, codex `weekly` 39%, zero quota spent (two reads, identical `percentUsed`). At ~1.3s per read it is **cached with an age stamp, never called inline in the dashboard poll**. **O3 — a preflight admission check — is explicitly not taken** and earns its own decision under the #21 precedent rather than riding in on this one. **O4 was applied 2026-08-19** outside the repository: `quota-axi@0.1.29` installed globally and its own skill copied verbatim to `~/.claude/skills/quota-axi/`. |
 | 28 | **2.7 renders from `quotaSemantics.effectiveAvailability`, never from `windows[]`, and detects state structurally rather than by exit code.** Established from captured failure bytes on 2026-08-19, not from the contract: with every live source failing, quota-axi serves its on-disk cache with a fully populated window still reading `percentUsed: 61` **and exits 0**, while withholding `effectivePercentRemaining` and marking `runway`, `pace` and `selection` `unmeasurable`. A renderer wired to the raw window would have shown a four-day-old figure as live — the same defect `— subscription` exists to prevent, in a new place. Stale exits 0 and auth-required exits 1, so status comes from `state.status`, per the #10 precedent that detection is structural rather than exit-code guesswork. The four captured failure shapes carry no credential-shaped value and cut directly into fixtures; the success captures carry `account.email` and must be scrubbed first. |
-| 29 | **The guarantee 2.7 must add, in #18 form: an import fence.** `core/src/workflow/**` and the routing resolver may not import the quota module, enforced by a meta-test of the same shape as the state-purity fence (invariant 5). This is what keeps the figure a readout and prevents it becoming the *"quota-aware routing"* Explicitly Not Built removed. Three further bounds hold with no invariant text changing: the probe is **host-side only** (inside a session `--unshare-all` breaks it, and credential reach would widen the ceiling); `--refresh` and `--tui` are **never used**, because a resident refresher is the daemon shape Explicitly Not Built also removed; and the parser is **fixture-first**, so the live read is a portability-matrix row and never enters the credential-free offline suites. |
+| 29 | **The guarantee 2.7 must add, in #18 form: an import fence.** `core/src/workflow/**` and the routing resolver may not import the quota module, enforced by a meta-test of the same shape as the state-purity fence (invariant 5). This is what keeps the figure a readout and prevents it becoming the *"quota-aware routing"* Explicitly Not Built removed. Three further bounds hold with no invariant text changing: the probe is **host-side only, and nothing structural enforces that** — checked 2026-08-19 against the pinned descriptor, `--share-net` follows `--unshare-all` and `--ro-bind / /` leaves `~/.claude/.credentials.json` readable, so an in-session probe would succeed rather than fail, which makes this an exposure bound to hold deliberately rather than a limit to rely on (and `bwrap` is absent on the WSL2 machine, so the badge is `tool-policy` and nothing is OS-enforced there at all); `--refresh` and `--tui` are **never used**, because a resident refresher is the daemon shape Explicitly Not Built also removed; and the parser is **fixture-first**, so the live read is a portability-matrix row and never enters the credential-free offline suites. |
 
 ## Still open
 
