@@ -1233,6 +1233,266 @@ of which move when the planning phase lands. Writing it before the surface
 settles means writing it twice. It is the closing deliverable of v2, not a
 parallel one.
 
+### 2.7 Quota telemetry — reading the window AWSF cannot price
+
+**Numbered after 2.6 for identity, not for order.** 2.6 remains the closing
+deliverable; this candidate is small and independent of the command surface.
+
+**Sources declared** (per 2.3.6). **Target == factory**: AWSF's own cost surface
+and process model — `source-verified` at `core/src/adapters/cost-display.ts`,
+`dashboard/src/display.ts`, `core/src/execution/transport-broker.ts`,
+`core/src/execution/call-budget.ts`, `core/src/policy/sandbox-broker.ts`.
+**Reference**: `../quota-axi` at v0.1.29 (`source-verified`), plus
+`captured-bytes` from nine invocations on this machine, success and failure paths
+alike. **Absent**: macOS behaviour — *not gathered*, and not gatherable until the
+M5 lands, because on darwin the Claude token moves to Keychain behind a
+`--allow-keychain-prompt` consent gate (`quota-axi/src/providers/claude.ts:40`)
+and the unattended path there is unproven. Also absent: a **rate-limited**
+capture — *cannot be gathered on demand*, since it requires the provider to
+actually throttle the usage endpoint. `retryAfter` and `status: "rate_limited"`
+are declared in the published type (`quota-axi/src/types.ts:33,237`), so the
+parser can be written against the contract, but the bytes are unconfirmed and
+that is the one shape a first implementation should treat as unproven.
+
+#### Today's limitation
+
+`cost-display.ts:17` renders `SUBSCRIPTION_COST_DISPLAY = "— subscription"`, and
+the reasoning above it is correct and stays: a subscription run's cost is a share
+of a monthly fee, and `$0.00` would be a measured-looking zero. But the
+consequence has never been stated. On the claude route AWSF reports **no
+consumption signal of any kind** — not a wrong one, none. The unit that actually
+binds a subscription is percent-of-window, and AWSF has never had it because it
+was not observable.
+
+#### It is observable, and it was measured here
+
+`quota-axi` (MIT, published npm, v0.1.29) reads local credential stores and calls
+first-party usage endpoints. Its charter is close enough to AWSF's to be worth
+quoting: *"It reports, the caller decides"*, *"Absent data stays absent — it
+never invents a window duration, a reset deadline, or a percentage"*, and
+*"never runs anything that spends the quota being measured"*
+(`quota-axi/VISION.md`). The middle one is `cost-display.ts:7-12` reached
+independently by another engineer.
+
+**Captured 2026-08-19, timestamps in UTC:**
+
+| Provider          | Window      | Remaining | Resets               |
+| ----------------- | ----------- | --------- | -------------------- |
+| claude (`pro`)  | `five_hour` | 70%       | 2026-08-20T02:00Z    |
+| claude (`pro`)  | `seven_day` | 95%       | 2026-08-26T11:00Z    |
+| codex (`plus`)  | `weekly`    | 39%       | 2026-08-20T22:28:24Z |
+
+Exactly the three figures the owner asked for. **Zero-cost is proven, not
+assumed:** two consecutive codex reads both returned `percentUsed: 61` with
+different `refreshedAt` stamps.
+
+**Latency, measured over three runs each** — and this one changes the design:
+
+| Invocation                 | Times                    |
+| -------------------------- | ------------------------ |
+| `--provider claude,codex`  | 1.35s / 1.24s / 1.41s    |
+| `--provider claude`        | 0.80s / 1.33s / 0.40s    |
+| `--provider codex`         | 1.58s / 1.51s / 1.58s    |
+
+At ~1.3s for both providers the probe **cannot sit inline in the dashboard's
+cursor poll**. It must be read on a cache with an age stamp, which is what
+quota-axi's own `state.stale` and `state.refreshedAt` fields exist for. The codex
+half is the slow one because that path spawns a CLI rather than calling an
+endpoint.
+
+#### The GPT number is real, and its coverage is conditional
+
+This is the finding that would have been missed by reading the file layout.
+`~/.codex/auth.json` does **not** exist on this machine — pi keeps its ChatGPT
+token at `~/.pi/agent/auth.json` under key `openai-codex`, and quota-axi has
+brokers for pi's `xai` and `kimi-coding` keys
+(`providers/pi-xai-credential.ts:5`, `providers/pi-kimi-credential.ts:5`) but
+**none for `openai-codex`**.
+
+It reported the number anyway, via a fallback:
+`attempts: [{oauth, skipped, credentials_missing}, {cli-rpc, success}]`. The
+`codex` binary happens to be installed at `/snap/bin/codex`, and the RPC path
+answered.
+
+**The cross-check that proves it is the right account.** quota-axi's codex reset
+is `2026-08-20T22:28:24Z`; pi's own `~/.pi/agent/quota-cache.json` carries
+`resetAtEpochSeconds: 1787264904`, which is **the same instant**. Same ChatGPT
+Plus weekly window. pi's cache also shows why it is not a substitute source: it
+read 49% used and was 76 hours stale, against quota-axi's live 61%.
+
+**So the coverage is real but undeclared, and it depends on the `codex` CLI being
+installed rather than on pi.** A machine with pi and no codex binary reports
+nothing for GPT. **This is a portability-matrix row**, and the cheapest fix is
+upstream: a `pi-codex-credential.ts` broker following the two that already exist
+in that repository.
+
+#### Failure paths, captured 2026-08-19 — and one of them is a trap
+
+The success capture alone would have produced a wrong renderer. Four shapes were
+forced with environment overrides only, moving nothing on disk:
+`CLAUDE_CONFIG_DIR` at an empty directory (`quota-axi/src/lib/fs.ts:57`),
+`QUOTA_AXI_CODEX_BINARY` at a non-existent path (`providers/codex.ts:36`), and
+`XDG_CACHE_HOME` at an empty directory (`lib/fs.ts:95`).
+
+| Forced condition                       | `state.status` | `windows[]`      | `effectiveAvailability` | Exit       |
+| -------------------------------------- | -------------- | ---------------- | ----------------------- | ---------- |
+| claude, no credential                  | `auth_required` | empty            | empty                   | 1          |
+| codex, no oauth and no binary          | `stale`        | **populated**    | `status: "unknown"`     | **0** |
+| codex, no oauth, no binary, no cache   | `error`        | empty            | empty                   | 1          |
+| both unavailable, default TOON         | —              | `quota[0]:`      | —                       | 1          |
+
+**The trap is the second row.** With every live source failing, quota-axi serves
+its own on-disk cache: `source: "cache"`, a fully populated
+`weekly` window still reading `percentUsed: 61`, **and exit 0**. What protects
+the reader is one level up — `quotaSemantics.status` goes `unknown`,
+`effectivePercentRemaining` is withheld, and `runway`, `pace` and `selection`
+each carry `unmeasurableWindowIds`. The raw window is deliberately preserved as
+diagnostic data, and the tool says so in the payload: *"the raw quota windows are
+stale diagnostic data, so effective remaining is unknown until the provider
+refreshes successfully."*
+
+**Two rules fall straight out, and both belong in the task:**
+
+1. **Render from `quotaSemantics.effectiveAvailability`, never from
+   `windows[]`.** A renderer wired to the raw window would have displayed a
+   four-day-old 39% as a live figure, with no staleness anywhere on screen. This
+   is `— subscription`'s own discipline in a new place: a stale number is a
+   measured-looking figure where there is no current measurement.
+2. **Exit code is not a status.** Stale returns 0 and auth-required returns 1, so
+   detection is structural over `state.status`, exactly as decision #10 concluded
+   for `agy`: *"a failed run still emits a well-formed terminal record… so
+   `blocked` detection can be structural rather than exit-code guesswork."*
+
+The degenerate TOON form is well-behaved and worth recording, because it is what
+a driving session sees on a fresh machine: `quota[0]:` empty, every fact moved
+into `attention[]` as `provider,scope,kind,detail,remedy`.
+
+**No credential-shaped value appears in any failure capture**, so these four cut
+directly into fixtures under invariant 9. The success captures do not: the codex
+`--full` payload carries `account.email`, and it must be scrubbed before any of
+it is committed.
+
+#### Fit — no dependency, no `fetch`, no new machinery
+
+**`core/src` makes zero outbound network calls today.** Measured 2026-08-19:
+`node:http` appears only as a *server* (`api/server.ts:1`,
+`cli/commands/operator.ts:3`), and there is no `fetch(` anywhere in `core/src`.
+
+Spawning the probe keeps that true, because the child makes the call exactly as
+`claude` and `pi` children already do. Both pieces are already built and already
+fenced:
+
+- `transport-broker.ts:169 resolveExecutable()` — PATH lookup, throws
+  `ExecutableNotFound`
+- `transport-broker.ts:212 runSystemCommand()` — argv array, `shell: false`,
+  `timeoutMs`, bounded `maxBuffer`
+
+That is **decision #8's `mf` shape verbatim**: resolve on `PATH`, report
+`blocked` when absent. Invariants 3 and 4 are untouched and **D2 needs no
+amendment**.
+
+**The rejected alternative is the obvious one.** Importing `quota-axi` as a
+library pulls `axi-sdk-js` and `@toon-format/toon` into the runtime import graph,
+forcing a D2 amendment for a number that renders in a chip. Spawning costs one
+subprocess and buys the whole thing for free.
+
+#### Collisions with v1, each with its adaptation (per #18)
+
+**Collision 1 — *"Quota-aware routing — the runner never picks a provider by
+remaining allowance."*** Display is not routing, but nothing structural would
+stop a later session from wiring the figure into the compiler.
+**Adaptation, in #18's required form — a new mechanically-checked guarantee
+rather than a weakened one:** an **import fence** barring `core/src/workflow/**`
+and the routing resolver from importing the quota module, enforced by a meta-test
+of the same shape as the state-purity fence (invariant 5). The number reaches the
+dashboard, the CLI, and the journal, and reaches the runner nowhere. Worth
+noting that the reference refuses to route from its own side: *"quota-axi is not
+a router, not a proxy, not a gateway."*
+
+**Collision 2 — *"Background monitors or watchdog daemons."*** A refreshing quota
+panel is precisely that shape, and quota-axi ships `--refresh` and `--tui` which
+would make it one. **Adaptation:** neither flag is ever used. One bounded
+`--json` read on demand, cached with its age stamp, and a stale read renders as
+stale rather than as a number.
+
+**Collision 3 — *"every command below is credential-free and offline"***
+(`awsf-plan.html:1468`, Validation). A live probe cannot enter the required
+suites. **Adaptation:** fixture-first, which binds here regardless because a
+parser is executable. Captured bytes become contract fixtures; the live run is a
+portability-matrix row, never a gate.
+
+**Collision 4 — credentials and the sandbox.** The probe reads
+`~/.claude/.credentials.json` and spawns `codex`. **Adaptation: host-side only.**
+Inside a session `sandbox-broker.ts:93`'s `--unshare-all` would break it anyway,
+and granting an agent session credential reach would be a real widening of the
+ceiling. Invariant 9 concerns commits and is not touched, but note that the
+`--full` codex capture carries the account email: fixtures must be scrubbed, and
+the reference's own charter requires the same.
+
+#### Scope
+
+|             | Option                                                             | Verdict                          |
+| ----------- | ------------------------------------------------------------------ | -------------------------------- |
+| **O1** | Quota chip in the dashboard plus a line in `awsf status`/`doctor` | **Take**                   |
+| **O2** | A quota snapshot journalled at each phase boundary                 | **Take — the leverage**   |
+| **O3** | Preflight admission check below a threshold                        | **Not taken; own decision** |
+| **O4** | Driving-session use outside AWSF                                   | **Applied 2026-08-19**     |
+
+**Why O2 is the leverage and O1 alone is not.** The call ledger enforces
+`spent + reserved <= ceiling` in *calls*, and calls were chosen as the unit
+because quota was unobservable (`call-budget.ts:9-13`). It is observable now.
+Snapshotting the two windows at phase open and close lets the journal answer what
+a task cost **as a share of the week** — the measurement `— subscription` exists
+to admit it cannot make. It costs one field on a record that is already written.
+
+**Why O3 stays out.** It is admission control rather than provider selection, so
+it does not break the routing line, but it lets an unverifiable external number
+gate a transition. The #21 precedent applies if it is ever built: a typed
+snapshot and a deterministic host-side threshold. It earns its own decision and
+must not ride in on this one.
+
+**Do not overload `costAuthority`.** Dollars and window-percent are different
+axes. A sibling `quota` block leaves `formatCost` untouched, along with the 18
+assertions pinning it across `dashboard-display.test.ts`, `claude-code.test.ts`
+and `pi-codex.test.ts`. `— subscription` keeps its present meaning and gains a
+neighbour: `— subscription · 5h 70% · wk 95%`.
+
+#### Applied 2026-08-19, outside this repository (O4)
+
+`npm i -g quota-axi@0.1.29` (three packages, resolved to
+`~/.nvm/versions/node/v22.23.1/bin/quota-axi`), and the reference's own
+`skills/quota-axi/SKILL.md` copied verbatim to `~/.claude/skills/quota-axi/`.
+Copied unmodified on purpose: it is upstream content, and `npx -y quota-axi`
+resolves the global binary without a download (0.65s against 0.07s direct), so
+the skill's own instructions work as written with no fork to maintain. No
+statusline: a per-render network call is exactly the daemon shape Collision 2
+refuses.
+
+**Hazard, hit during this install and recorded so the next machine does not
+repeat it.** `npm i -g quota-axi` re-resolved the shared global tree and dropped
+`@anthropic-ai/claude-code`'s native optional package
+(`@anthropic-ai/claude-code-linux-x64`), after which `claude` refused to start
+with *"native binary not installed"*. Recovered with
+`npm i -g @anthropic-ai/claude-code@2.1.236 --include=optional`, verified back at
+`2.1.236`. **Prefer `npx -y quota-axi`, which touches no global tree**, and if a
+global install is wanted, pin and re-verify `claude --version` immediately after.
+This also strengthens the spawn-not-import decision from an unexpected angle: a
+probe AWSF resolves on `PATH` can be delivered by `npx` and never needs to enter
+a shared install at all.
+
+#### Cheapest unused upgrades
+
+- **Failure-path capture — done 2026-08-19**, four shapes, recorded above. It
+  was the right call: it overturned the renderer design.
+- **Sandbox confirmation** — run the probe under the broker and watch it fail on
+  `--unshare-all`. Minutes, and it converts "must be host-side" from reasoning
+  into evidence. **Not done.**
+- **Rate-limited bytes** — no cheap upgrade exists; it needs the provider to
+  throttle. Write the parser against the published type and mark that branch
+  unproven.
+- **macOS** — nothing available until the hardware lands. The row is declared now
+  so it is not discovered late.
+
 ---
 
 ## Decisions taken (2026-08-18 and 2026-08-19)
@@ -1265,6 +1525,9 @@ parallel one.
 | 24 | **The claim-labelling rule (2.3.6) is taken.** Label every claim with its source kind and a citable anchor; record absent sources *with the reason* ("does not exist" and "not yet gathered" are different, and only the second is a gap); and for any claim carrying a decision, name the **cheapest unused upgrade** and whether it has been done. A decision may rest on a single weak source provided it says so and names what would settle it; what is forbidden is an unlabelled claim, or one whose cheapest upgrade was available and skipped. Strength is **per claim-type, not a single scalar**. Every brainstorm declares its sources in three roles — **target**, **factory** (always AWSF), **reference** — and where target and factory are the same repository, says so. Adopted with its limits stated per #18: label presence, closed vocabulary and upgrade lines are mechanically checkable; anchor honesty is not. |
 | 25 | **System prompt engineering is taken (2.5), and split by altitude.** The **driving layer is done now** — an adapted contract at `~/.claude/senior-engineer-system-prompt.md`, wired into the `cc` and `pi` aliases via the same `--append-system-prompt[-file]` flags AWSF's own adapters already use. The **AWSF agent prompts are v2 scope**, built as **one shared prompt file concatenated where `route.systemPrompt` is composed**, not as six edited `prompts/*/system.md` copies that would drift. Typed envelopes already prevent the structural tics, so the worker benefit is narrower than the driving benefit and is confined to field prose and output-token cost. Scoping is **per role**: aliases are interactive-only, and the reviewer must not be compressed, because a tersely agreeable reviewer is the rubber-stamped closure pillar 1 exists to prevent. |
 | 26 | **`agy` cannot express a custom system prompt at all** (measured 2026-08-19: no `--system-prompt` or `--append-system-prompt` anywhere in `agy.exe --help`; `agy.exe agents` returns empty and only lists). This is a **third** antigravity limitation, independent of the missing tool allow/deny flag and the Windows-accessible-cwd requirement in 2.1.1, and it further supports #14 — special-purpose provider, never first-class. |
+| 27 | **Quota telemetry is taken as candidate 2.7, scoped to O1 + O2.** A quota chip in the dashboard and a line in `awsf status`/`doctor`, plus a snapshot journalled at each phase boundary so the call ledger's proxy unit gains a real denominator. `quota-axi` is **spawned as a PATH-resolved read-only probe** through the existing `resolveExecutable` / `runSystemCommand` (`transport-broker.ts:169,212`), exactly as #8 resolves `mf` — **never imported as a library**, which would pull two runtime dependencies and force a D2 amendment for a number that renders in a chip. Measured 2026-08-19 on this machine: claude `five_hour` 70% / `seven_day` 95%, codex `weekly` 39%, zero quota spent (two reads, identical `percentUsed`). At ~1.3s per read it is **cached with an age stamp, never called inline in the dashboard poll**. **O3 — a preflight admission check — is explicitly not taken** and earns its own decision under the #21 precedent rather than riding in on this one. **O4 was applied 2026-08-19** outside the repository: `quota-axi@0.1.29` installed globally and its own skill copied verbatim to `~/.claude/skills/quota-axi/`. |
+| 28 | **2.7 renders from `quotaSemantics.effectiveAvailability`, never from `windows[]`, and detects state structurally rather than by exit code.** Established from captured failure bytes on 2026-08-19, not from the contract: with every live source failing, quota-axi serves its on-disk cache with a fully populated window still reading `percentUsed: 61` **and exits 0**, while withholding `effectivePercentRemaining` and marking `runway`, `pace` and `selection` `unmeasurable`. A renderer wired to the raw window would have shown a four-day-old figure as live — the same defect `— subscription` exists to prevent, in a new place. Stale exits 0 and auth-required exits 1, so status comes from `state.status`, per the #10 precedent that detection is structural rather than exit-code guesswork. The four captured failure shapes carry no credential-shaped value and cut directly into fixtures; the success captures carry `account.email` and must be scrubbed first. |
+| 29 | **The guarantee 2.7 must add, in #18 form: an import fence.** `core/src/workflow/**` and the routing resolver may not import the quota module, enforced by a meta-test of the same shape as the state-purity fence (invariant 5). This is what keeps the figure a readout and prevents it becoming the *"quota-aware routing"* Explicitly Not Built removed. Three further bounds hold with no invariant text changing: the probe is **host-side only** (inside a session `--unshare-all` breaks it, and credential reach would widen the ceiling); `--refresh` and `--tui` are **never used**, because a resident refresher is the daemon shape Explicitly Not Built also removed; and the parser is **fixture-first**, so the live read is a portability-matrix row and never enters the credential-free offline suites. |
 
 ## Still open
 
@@ -1286,6 +1549,16 @@ parallel one.
   makes the first task of that workstream a capture pass — no envelope can be
   typed for a stage that has never been captured, and the fused proposal's
   `[ARCHITECT]`/`[BUILDER]` shape has been produced exactly once, by hand.
+- **Does the GPT quota read survive a machine with `pi` but no `codex` CLI?**
+  2.7 measured the number coming from quota-axi's `cli-rpc` fallback, because
+  `~/.codex/auth.json` does not exist here and `/snap/bin/codex` does. Coverage
+  therefore depends on a binary the owner does not otherwise need. A
+  portability-matrix row, and the cheapest fix is upstream: an
+  `openai-codex` credential broker alongside the `pi-xai` and `pi-kimi` ones
+  that repository already ships.
+- **Does the Claude quota read work unattended on macOS?** On darwin the token
+  moves to Keychain behind a `--allow-keychain-prompt` consent gate. Not
+  gatherable until the M5 arrives, and it belongs in the same visit as T27.
 - Further ideas the owner is preparing (transcripts, screenshots, reference
   repositories) — to be gathered in a dedicated session before the v2 plan is
   authored.
