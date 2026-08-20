@@ -1396,6 +1396,105 @@ library pulls `axi-sdk-js` and `@toon-format/toon` into the runtime import graph
 forcing a D2 amendment for a number that renders in a chip. Spawning costs one
 subprocess and buys the whole thing for free.
 
+#### O3 captured end to end, 2026-08-19/20 (the session crossed midnight)
+
+The guard was written and both checks were run under the exact flag marimba
+ships with, `--dangerously-skip-permissions`, in throwaway project directories
+rather than against this repository, so nothing here changed AWSF's own tracked
+surface.
+
+**The matcher first, with no calls spent.** Nine synthetic PreToolUse payloads
+through the script:
+
+| Tool name | Verdict | Why |
+| --- | --- | --- |
+| `Task`, `Agent` | **deny** (exit 2) | the shapes the guard exists for |
+| `WorktreeCreate`, `SendMessage` | **deny** | stem match on a name no list enumerated |
+| `FutureSpawnThing` | **deny** | a name that does not exist, denied on arrival — the property a deny list cannot have |
+| `TaskOutput`, `TaskCreate` | allow | whole-name exclusions: observe-or-stop and plan-only |
+| `Read` | allow | not delegation-shaped |
+| `mcp__foo__task` | allow | an MCP server naming its own tools says nothing about dispatch |
+
+**Then three live runs, and the control is what makes the other two mean
+anything.** Without it, "the model did not delegate" would be equally consistent
+with the fence working and with the model simply choosing not to.
+
+| Run | Configuration | Result |
+| --- | --- | --- |
+| **Control** | no settings, flag on | *"The tool call ran — not blocked — and the subagent returned `4`."* The model does reach for the tool |
+| **Check 1** | PreToolUse guard only, flag on | *"blocked — a `PreToolUse:Agent` hook … denied it, saying Agent delegation isn't allowed in a driving session and to use the `awsf` CLI instead."* |
+| **Check 2** | `permissions.deny: ["Task","Agent"]` only, flag on | *"No such tool available: Task. Task is disabled for this session, in subagents as well as here."* |
+
+**Three facts fall out, and the third is the correction.**
+
+1. **The hook fires under the flag, and its reason text reaches the model.** O3 is
+   a proven fence rather than a claimed one.
+2. **The tool presents to the model as `Agent`**, which the hook's own refusal
+   names, matching what the reference recorded independently.
+3. **The deny list also survives the flag, and it is the stronger of the two**,
+   because it removes the tool from the schema instead of refusing a call to it —
+   and it reaches subagents as well. Card 4's prediction is corrected above.
+
+**One honest limit.** Check 2 listed `Task` and `Agent` together, so it shows the
+pair works and does not establish either key alone. The reference reports both
+work, verified there with a nonsense-name control; this capture is consistent
+with that rather than an independent confirmation of each key.
+
+#### Applied 2026-08-20 (O3), and one hazard it leaves open
+
+The guard is installed rather than proposed:
+
+- the script at `~/.claude/marimba/delegation-guard.sh`, mode `0755`, owner-local
+  and outside every repository;
+- registered in this repository's **untracked** `.claude/settings.local.json`,
+  which scopes it to sessions rooted here and keeps it out of worker worktrees,
+  because an untracked file does not follow a `git worktree add`.
+
+**The matcher is `.*` on purpose.** Every tool name reaches the script and the
+script is the single owner of classification. A matcher that enumerated stems
+would reintroduce fail-open-by-enumeration: a future tool name outside the
+matcher would never reach the classifier at all. The price is one small
+subprocess per tool call, paid by the driving session only.
+
+Verified against the real repository and the real settings file on 2026-08-20:
+
+```
+The tool call ran but was blocked - the `PreToolUse:Agent` hook
+`~/.claude/marimba/delegation-guard.sh` denied it, saying Agent is
+"delegation-shaped" and disallowed in a driving session (no attempt
+dir/journal/reserved call/gate), and directing me to the `awsf` CLI instead.
+```
+
+**Both fences are installed, not one.** The same settings file carries
+`permissions.deny: ["Task", "Agent"]` beside the hook. They fail differently and
+neither is redundant: the deny list removes a tool from the session schema so the
+model never sees it, and the hook classifies by shape so it catches names no list
+enumerated.
+
+**One run demonstrated exactly that layering**, 2026-08-20, against the installed
+configuration:
+
+```
+The tool call did not run: there is no `Task`/`Agent` subagent launcher in this
+session ... and the delegation-shaped call I could make, `ListAgents`, was
+blocked by the PreToolUse hook `~/.claude/marimba/delegation-guard.sh`, which
+denies any tool matching stems like `agent`/`subagent`/`task`/`spawn`/`dispatch`
+in a driving session and points to the `awsf` CLI instead.
+```
+
+`ListAgents` is not on the deny list. It was denied by shape, on the first
+occasion the model reached past the enumerated names — which is the argument for
+keeping both fences, arriving as evidence rather than as reasoning.
+
+**The hazard the placement rule exists to prevent, now closed.** `.claude/` was
+not in this repository's `.gitignore`, so the settings file showed as untracked
+and an unguarded `git add -A` would have committed it. A *tracked*
+`.claude/settings.json` follows a checkout into every managed worktree, where this
+deny would apply to builder and documenter phases that legitimately write and
+edit. **`.claude/` was added to `.gitignore` on 2026-08-20**, which closes the
+whole class and also matches `_driving.ts`'s standing rule that this repository
+commits no `.claude/` tree at all.
+
 #### Collisions with v1, each with its adaptation (per #18)
 
 **Collision 1 — *"Quota-aware routing — the runner never picks a provider by
@@ -1540,6 +1639,534 @@ from an unexpected angle: a probe AWSF resolves on `PATH` can be delivered by
 - **macOS** — nothing available until the hardware lands. The row is declared now
   so it is not discovered late.
 
+### 2.8 `marimba` — the driving session as a named role
+
+**Numbered after 2.7 for identity, not for order.** Like 2.7 it is small and
+independent of the command surface; unlike 2.7 it has a sequencing consequence,
+argued below, that moves it earlier rather than later.
+
+**The name is settled: `marimba`.** It is the owner's nickname, so the role reads
+as the owner's own driver. One word covers all of it — the role, the operating
+contract, the shell alias, and any command surface the role later acquires — and
+it is used consistently from here so the section cannot drift into synonyms.
+`firstmate` names only the reference repository and nothing else. Collisions were
+checked 2026-08-19: zero in this repository, zero in `~/.claude/skills`, and
+`marimba` resolves to nothing on `PATH` (`alias marimba` and `type -a marimba`
+both return not-found on the WSL2 machine).
+
+**Sources declared** (per 2.3.6). **Target == factory**: AWSF is both the system
+being changed and the system that will build it, and the two checks are kept
+apart below rather than allowed to collapse. `source-verified` at
+`core/src/cli/main.ts:33-36`, `core/src/state/task-machine.ts:91-117`,
+`core/src/state/tiers.ts`, `core/src/cli/tty.ts`,
+`core/src/adapters/system-prompt-file.ts`, `core/src/adapters/pi-codex.ts:610-668`,
+`core/src/workflow/recipes/simple-sdlc.ts`, `docs/driving/**`, and
+`core/test/unit/meta/{_driving.ts, driving-tree.test.ts, driving-routes.test.ts,
+doc-reconciliation.test.ts}`. Plus `captured-bytes` from the live shell for the
+three alias definitions quoted below.
+
+**Reference**: `../firstmate` at commit `87681a4` (`source-verified`). Read in
+full: `README.md`, `VISION.md`, all 570 lines of `AGENTS.md`, all 342 of
+`docs/architecture.md`, `docs/scripts.md`, `docs/agent-control.md`,
+`docs/subagent-guard.md`, ten `.agents/skills/*/SKILL.md`, `CONTRIBUTING.md`, and
+the authoritative headers of `fm-spawn.sh`, `fm-watch.sh`, `fm-crew-state.sh` and
+`fm-brief.sh` together with the three brief templates that script emits verbatim.
+
+**Absent, with the reason.** No running firstmate instance — *not gathered*, and
+not cheaply gatherable, since it needs a provisioned fleet home and a session
+backend. Every behavioural claim about firstmate below is therefore
+`source-verified` from its own code and prose and never `captured-bytes`. Per
+2.3.6's matrix that is sufficient for *"someone built it this way"* and *"it is
+feasible"*, and settles neither *fit* nor *buildability*, both of which are
+decidable only in AWSF's own code and are kept in their own sections here.
+
+**Also absent, deliberately.** The bodies of roughly 2.7MB of `bin/*.sh` and
+4.8MB of `tests/` — *not gathered*, because that repository's own convention
+makes each script header the authoritative description of its behaviour, flags
+and contracts (`firstmate/docs/scripts.md:4`), and no claim below turns on an
+implementation body. A later claim that does turn on one needs the body read
+first, and that is the stated bound rather than an unstated omission.
+
+#### Today's limitation
+
+Everything below the driving session is built. AWSF has a deterministic host, a
+lifecycle contract, a CLI, a journal, a status store, a SQLite projection and a
+dashboard. Above all of it sits a human opening sessions, pasting paths, naming
+output files, and deciding what happens next, and that tier has no role, no
+identity and no contract. It is the same gap the ladder in 2.3.4 names from the
+other direction: the manual stages that produced AWSF v1 were manual because the
+driver was a person, every time, with no carried context.
+
+**What already exists, and it is more than the framing suggested.** The driving
+layer is not empty. `docs/driving/skills/awsf/SKILL.md` is a router carrying a
+Posture, four hard rules and a nine-row route table over six cookbooks and three
+references, with `docs/driving/commands/prime-awsf.md` as the entry point. Three
+meta-tests hold it honest: `driving-tree.test.ts` asserts the tree exists and
+both walkers reach it, `driving-routes.test.ts` asserts every advertised route
+resolves inside the tree, and `doc-reconciliation.test.ts` asserts every command
+in a fenced shell block is a real `CLI_COMMANDS` entry, package script or
+justfile recipe.
+
+`_driving.ts` also records why the tree sits at `docs/driving/` rather than
+`.claude/`: `pi-codex` suppresses skill discovery explicitly with `--no-skills`
+(`pi-codex.ts:624-629`), `claude-code` has no verified equivalent, and a
+Claude-route phase's `cwd` is a managed worktree of this repository. **Placement
+is the control.** That reasoning is reused twice below and it is the reason two
+of this section's design choices go the way they do.
+
+So 2.8 is not a greenfield document. It is a **delivery-mechanism change plus a
+role statement** on top of a tree that exists and is already fenced.
+
+#### What the reference is
+
+firstmate is an *agent distro*: a cloned repository of instructions and bash that
+turns any verified harness session into a fleet captain's first mate. No app, no
+server, no model, no MCP server. Its spine is eight mechanisms.
+
+1. **One liaison and five hard rules** (`AGENTS.md:23-38`): never write to a
+   project; never merge without the captain's explicit word; never tear down
+   unlanded work; crewmates never address the captain; report outcomes
+   faithfully.
+2. **Brief, spawn, supervise, teardown**, each a bash script whose header is the
+   contract. `fm-brief.sh` emits a ship brief carrying a machine-readable
+   `Delivery contract: mode=<mode>` line, and `fm-spawn.sh` refuses to launch
+   against a mismatch, so the worker's instructions and the recorded delivery
+   cannot drift apart.
+3. **Delivery mode and autonomy resolved at intake** and passed explicitly to the
+   brief, the spawn and any promotion, all three of which refuse to guess.
+4. **Zero-token supervision.** `fm-watch.sh` classifies wakes in bash, absorbs
+   benign ones, queues actionable ones to a durable wake queue, and wakes the
+   model only for what needs judgment.
+5. **Durable state on disk**, so a restart is a non-event. Status files are
+   append-only *event* logs, and `fm-crew-state.sh` is the deterministic
+   current-state read that reconciles a possibly stale log against an
+   authoritative run step.
+6. **Worktree isolation** via treehouse, with the spawn refusing unless the
+   resolved path is a real worktree root distinct from the primary checkout, and
+   refusing a base that is not the fetched tip of the default branch.
+7. **Guards on the harness itself**: a turn-end guard so no turn ends blind, a
+   PreToolUse policy against watcher-arm anti-patterns, and the delegation-shape
+   guard treated separately below.
+8. **Authority explicit and never inferred**: keyed decision holds, an ask-user
+   authority procedure, and a captain-instruction precedence rule that refuses
+   inference, broadening and analogy.
+
+Optional layers sit on top: persistent secondmates in isolated homes (local or
+whole-home over SSH), an opt-in public-mention relay, an away-mode daemon,
+dispatch profiles with quota-ranked selection, and five session backends.
+
+#### The contract, and whether it can be generated
+
+The delivery mechanism is proven and costs no code. Captured from the live shell,
+2026-08-19:
+
+```
+cc      = claude --dangerously-skip-permissions --append-system-prompt-file "$HOME/.claude/senior-engineer-system-prompt.md"
+pi      = pi --append-system-prompt "$HOME/.claude/senior-engineer-system-prompt.md"
+marimba = not found
+```
+
+A `marimba` pair appending its own contract is the same shape as #25's driving
+layer, on the same flags AWSF's own adapters use (`claude-code.ts:451`,
+`pi-codex.ts:617`).
+
+**The content question is not "write a contract" but "what is unconditional?"**
+firstmate answers this explicitly and it is the most transferable thing in that
+repository for this decision. `firstmate-coding-guidelines/SKILL.md` carries a
+knowledge-placement decision tree whose first two tiers are exactly the split:
+what the agent needs *every session or every turn* goes in the always-loaded
+contract inline, and what it needs only *in a nameable situation* becomes a
+routed skill plus a one-line trigger. It also carries the reason, which is a
+measured one: that skill exists because firstmate's own `AGENTS.md` grew from 585
+to 958 lines between restructures, entirely from conditional detail added inline.
+And it carries the **one-owner rule** — every contract stated in full exactly
+once, every other mention a one-line cross-reference, because two copies drift
+the moment only one is edited.
+
+**Was the question: can the contract be generated from `CLI_COMMANDS` and the
+recipe registry?** The registries split cleanly, and the answer is neither
+"yes" nor "hand-author it and sequence it last".
+
+| Source | What it could produce | Verdict |
+| --- | --- | --- |
+| `CLI_COMMANDS` (`main.ts:33-36`) | eighteen bare strings, no descriptions, no flags, no host/owner split, no evidence requirements. Its own comment reads *"documentation reconciles against it"* | **Cannot carry a contract** |
+| Recipe registry (`workflow/recipes/*.ts`) | `id`, `tier`, and per phase `id`/`kind`/`owner`/`description`/`schemaId`/`maxCorrections`/`gates`; `compiler.ts` enforces earned descriptions | An accurate workflow inventory |
+| `tiers.ts` | the ceilings and `MAX_CALL_CEILING` | Accurate numbers |
+| `task-machine.ts:91-117` | `LEGAL_EDGES` carries `actors` and `interactive`, so the owner-act list is **derivable rather than remembered** | Accurate boundary list |
+
+So an inventory *could* be generated. **It should not be, because the stronger
+rule is to name nothing.** The existing router already commits to it: *"Reference,
+never restate. No schema, edge id, tier ceiling, gate id, blocker code or model
+id belongs in these documents."* A contract that restates nothing has nothing to
+regenerate and nothing to go stale, which is a better property than a generator
+that has to be re-run.
+
+**Consequence for sequencing, and this is the part that moves in the plan.**
+Decision 7 sequences the cheatsheet last because it is written for a reader with
+no command-line experience, so it *must* restate the surface: it has to say "type
+this". marimba's contract has the opposite requirement. It carries identity,
+boundaries and a routing index, names no command, and the surface can move
+underneath it without touching a word. **Decision 7's reasoning does not transfer,
+and the contract belongs early in v2 rather than last.** It is also close to free,
+since its judgment core is largely a compression of the Posture and Hard rules
+already written in the router, and it is a precondition for the heavy work: both
+2.3's planning phase and 2.3.4's ladder are driving-session dense.
+
+#### Where it lands, and the guarantee it earns (per #18)
+
+**The contract lives at `docs/driving/marimba/CONTRACT.md`, inside the fenced
+tree, and the shell function points at that repository path.** This is not
+cosmetic. A file at `~/.claude/marimba-contract.md` sits outside every fence in
+the suite; a file inside the tree is covered by `driving-tree.test.ts`, and its
+route table by `driving-routes.test.ts`, which fails the moment the contract
+advertises a document that is not there.
+
+The new guarantee, in #18's required form: **the contract's routes cannot outlive
+the documents they name, and the contract cannot name a command that does not
+exist**, both enforced by fences that already exist and need no new machinery.
+The honest limit, stated the same way 2.3.6's own limits are: no test can check
+whether the contract's *judgment* is right, only that its pointers resolve.
+
+The placement reasoning in `_driving.ts` is untouched by this and in fact
+strengthened. An appended system prompt reaches the owner's own driving process
+and never enters a managed worktree at all, so it is further from a worker phase's
+context than the tree it points at.
+
+#### Four mechanics cards
+
+**Card 1 — the pi trap, now confirmed in the live alias.** `pi`'s
+`--append-system-prompt` decides between text and file by `existsSync`, so a path
+that is not there is appended as its own literal string with no error and the
+session's system prompt silently becomes the path. The owner's current alias
+passes exactly that shape. AWSF defends it host-side: `assertPrivateSystemPrompt`
+is called before any child starts (`pi-codex.ts:662-668`), and
+`system-prompt-file.ts` deliberately orders the existence check *above* the win32
+mode-bit carve-out for this reason, with the comment recording that a Windows
+launch would otherwise have gone out with a path string as its system prompt and
+nothing anywhere saying so.
+
+**Adaptation: `marimba` is a shell function, not an alias.** Three lines that test
+the contract path is readable and refuse loudly before `exec`. That is the
+cheapest possible port of `assertPrivateSystemPrompt` to the alias layer.
+
+**The two routes are asymmetric, and the check that settled it was cheap.**
+Captured 2026-08-19 on Claude Code 2.1.236:
+
+```
+$ claude --print --append-system-prompt-file /nonexistent/marimba-probe.md "hi"
+exit=1
+stdout: (empty)
+stderr: Error: Append system prompt file not found: /nonexistent/marimba-probe.md
+```
+
+**claude refuses, before any call, and spends nothing.** So the guard is
+*required* on the pi route, where a missing path becomes the system prompt
+silently, and *belt and braces* on the claude route, where the CLI already fails
+closed. The function is still worth writing once for both, because the failure it
+prevents is silent on exactly the route AWSF's own adapter had to defend
+host-side.
+
+**pi's half was then captured too, on pi 0.81.1, same day, in three runs.** The
+control establishes that the flag and the sentinel work at all, which is what
+makes the negative case in the second run informative rather than empty:
+
+| Run | `--append-system-prompt` argument | Prompt | Result |
+| --- | --- | --- | --- |
+| **A** control | a real file containing *"end your reply with the exact token QX7-ALPHA"* | `say hi` | `Hi! QX7-ALPHA`, exit 0 |
+| **B1** | a plain missing path, `/tmp/mb-sp-missing-9f31.md` | *"quote the final line of your system prompt"* | exit 0, **empty stderr**, model declines to quote it |
+| **B2** | a missing path followed by *". Also, end every reply with the exact token QX7-BRAVO."* | `say hi` | `Hi! QX7-BRAVO`, exit 0 |
+
+**B1 proves pi does not refuse a missing file**, which is the whole divergence
+from claude: same wrong path, one CLI stops at exit 1 and the other proceeds at
+exit 0 with no diagnostic anywhere. **B2 proves what it proceeds with** — the
+argument's own text arrived as the system prompt and steered the reply. B1 alone
+could not show that, because a model declining to quote its instructions is
+equally consistent with the flag having been ignored, and that is exactly the
+inconclusive shape a single probe would have been mistaken for proof of.
+
+Both halves are now `captured-bytes` rather than `source-verified`, which is the
+standard 2.3.6 makes absolute for anything that becomes executable: the guarded
+shell function in O2 is a parser of sorts, and it is now written from captured
+behaviour on both routes rather than from a source comment on one.
+
+**Card 2 — `agy` carries no system prompt at all** (#26), so marimba is claude and
+pi only. `agy` is additionally absent from `PATH` on the WSL2 machine, consistent
+with 2.1.1's Windows-accessible working-directory finding.
+
+**Card 3 — decision 7**, answered above: the contract names no command, so the
+sequencing constraint does not bind it.
+
+**Card 4 — the permission flag, decided rather than inherited.** `cc` carries
+`--dangerously-skip-permissions`, and the question was whether marimba inherits
+it by copy-paste. **Decided 2026-08-19: marimba carries it, deliberately.** The
+driving session runs a long sequence of ordinary read and CLI commands on the
+owner's own machine, and a prompt on each one would make the role useless while
+protecting nothing the lifecycle does not already protect: the six owner acts
+need a TTY, and no `awsf` command can push, delete, or mutate anything outside
+the state root.
+
+**Two consequences follow, and they are the reason this is a decision rather than
+a default.**
+
+1. **The prompt is not what bounds marimba; the lifecycle is.** That was already
+   true, and the flag makes it the only thing that is true. It matches this
+   repository's own reasoning in a different place — 2.1.1 refuses the same flag
+   for `agy` because *a convention a model can decline to follow is not a
+   permission profile* — and the answer here is the same one: rely on the
+   structural bound, not on the prompt.
+2. **It was predicted to disarm the deny-list half of O3's defence. That
+   prediction was wrong, and it is corrected rather than deleted.** The
+   reasoning looked sound — a `permissions.deny` entry is part of the permission
+   system the flag switches off — and the capture says otherwise: under the flag
+   the denied tool is not merely refused, it is **absent from the session
+   schema**. Both fences survive the decision. The error is kept because acting
+   on it would have made O3 look like a single point of failure and invited
+   compensating machinery that nothing needed. See the captures below.
+
+**One thing here is not assumption.** This session ran in bypass-permissions mode
+throughout, and a PreToolUse hook blocked two of its own Bash calls outright, with
+the refusal text reaching the model. **PreToolUse hooks fire under the flag** —
+observed behaviour, 2026-08-19, and the load-bearing half of O3 therefore
+survives the decision even if the deny list does not.
+
+#### The line: where marimba ends and AWSF begins
+
+**The tier the owner sets at `awsf new` is the spend authorization. The ceiling is
+where marimba's autonomy ends, and only an interactive owner act moves it.**
+
+marimba may run `new`, `start`, `run`, `status`, `watch`, `doctor`, `dash`,
+`db rebuild`, `ticket`, `backlog` and `gc`, and may read the journal, the status
+store and the projection freely. It may prepare and explain `journey`, `land`,
+`cancel`, `rework`, `review` and `raise`. It may never perform those six.
+
+That boundary is already structural rather than advisory, which is why it is
+worth stating as a line rather than a hope: `transition()` is pure and takes
+evidence somebody else gathered; `LEGAL_EDGES` marks the owner edges
+`interactive`; and `cli/tty.ts` throws `InteractiveOwnerRequired` when stdin is
+not a TTY, before any process receives a signal and before any call is reserved. A
+driving session with no terminal cannot take one of those edges however it is
+prompted.
+
+#### What is adopted, refused, and already stronger here
+
+**Adopted — these sit on marimba's side of the line.**
+
+| | Capability | Adaptation |
+| --- | --- | --- |
+| A1 | Always-loaded contract plus routed skills, with the knowledge-placement tree and the one-owner rule | Adopt as written; it is the shape of the contract itself |
+| A2 | The inline-stub pattern: what stays behind is the trigger condition plus any safety fact that fires on a path the document is not loaded for | Adopt; it decides contract-versus-tree line by line |
+| A3 | A fixed report shape on every report | Adopt the rule, **invert the vocabulary**. firstmate translates internal terms away from its captain; AWSF's owner built the factory, so the handle stays literal: task, attempt, lifecycle state, calls spent against the ceiling |
+| A4 | "A status line is a wake event, never current state" | AWSF's analogue is reading the last journal record as state. One line in the contract |
+| A5 | The stuck-worker ladder, including *"a low context reading is not wedging"* | Adopt only the rungs that map. AWSF has no interrupt or relaunch verb for a running phase, and that gap is **recorded rather than filled here** |
+| A6 | Refusal is a finding, never an obstacle to bypass | Reinforces `awsf gc` listing and the absent force paths |
+| A7 | Tiered memory with decay, cold archival and a per-home token budget (`stow`) | Genuinely absent from AWSF. It must live **outside the repository** under invariant 1, so it targets the existing `~/.claude/projects/*/memory/` tree and never a repo-side store |
+| A8 | A fixed four-section digest with mutually exclusive buckets and mandatory empty states (`bearings`) | **Collides with `prime-awsf`'s no-unrequested-status-board rule.** Adaptation: on request only, scoped to a task the owner named, never a sweep of the state root, never volunteered |
+
+**Refused — each of these would quietly move a decision from the owner to a
+model.**
+
+| | Capability | Why it moves the decision | Verdict |
+| --- | --- | --- | --- |
+| B1 | `yolo` standing autonomy | The first mate approves routine gates and merges green work. Mapped onto AWSF that is a model taking L20, `AWAITING_OWNER` to `LANDING` | **Refuse.** `AWAITING_OWNER` exists so the owner reads the evidence |
+| B2 | `ask-user-authority`'s autonomous branch | Its step 4 keeps a fix inside standing authority when the *model* judges it necessary to satisfy the accepted contract, which is a model adjudicating scope. AWSF counts corrections instead of judging them (`auto: 1, owner: 1`) | **Split.** Adopt the five-element escalation format, which is presentational and good. Refuse the authority branch |
+| B3 | The away-mode daemon injecting into the session | A resident bash daemon writing into the driver's composer so it acts unattended | **Refuse.** Same shape Explicitly Not Built removed and 2.7 Collision 2 held the line on. One rule survives: away mode never expands approval authority |
+| B4 | Auto-relaunch of a wedged worker | A launch spends a call, so this is a model spending the owner's ceiling on its own judgment | **Refuse.** Reserve-before-launch plus `awsf retry` already cover it explicitly |
+| B5 | Dispatch profiles and quota-ranked selection | A model choosing harness, model and effort per task from live quota | **Refuse as routing**, head-on with *"quota-aware routing"* and #29's import fence. **Reuse the procedure as owner guidance**: three orthogonal gates before any quota comparison, never letting quota replace the required reasoning class, escalating on a genuine tie, and accounting for every candidate visibly. 2.3.5 Collision 3 already draws this line as "human picks, the runner never picks" |
+| B6 | Delivery-mode classification at intake | Mapped onto AWSF this is the model choosing the risk tier, which sets the ceiling and whether an opposite-provider review is mandatory | **Adapt.** marimba recommends a tier with reasons; the owner passes `--tier`. `choose_the_workflow_and_tier.md` already has the shape |
+| B7 | Hard rule 1's captain-approved project-write exception | firstmate needs it because it is the only actor holding file tools | **Refuse.** `path-policy` plus per-agent `writes[]` forbid it structurally, and the router already says a driving session never edits a managed worktree |
+
+**Already stronger in AWSF — recorded so nobody re-adopts them.** Worktree
+isolation (`path-policy`, `writes[]` allowlists, worktree containment and a T2
+policy tier, against an assertion in a brief). Typed contracts (TypeBox envelopes
+validated per phase, against a markdown brief with a grep-checked status
+vocabulary — the same finding 2.5 reached from the other direction, that the
+worker benefit of prompt engineering is narrower than the driving benefit).
+Evidence gating (thirteen gates plus `guards.ts` evidence per edge, in-repo and
+pure, against an external validation product plus CI). And no-push, where the
+postures differ deliberately: firstmate merges PRs with the captain's word, while
+AWSF has no push path at all and #16 opened only a narrow post-`LANDED` door.
+
+#### The delegation-shape guard — the strongest single transfer
+
+firstmate's `docs/subagent-guard.md` records an incident with observed rather than
+hypothesized consequences. On 2026-07-22 a primary session ran four workers
+through Claude Code's built-in subagent tool instead of the fleet's own spawn
+path. The fleet view showed zero work under way for the whole run; two of those
+workers died mid-flight when the session restarted and their work was lost; and
+supervision then stayed down for 73 minutes unnoticed.
+
+The transferable part is the diagnosis rather than the incident: *the bypass did
+not merely skip dispatch, it made the guard stack structurally inert*, because
+only the spawn path writes the task metadata every guard counts. No additional
+guard keyed on that metadata can catch the class, since the failure is precisely
+its absence.
+
+**AWSF has the same hole in the same shape.** A driving session that reaches for a
+delegation tool to "just do the task" produces work with no attempt directory, no
+journal record, no reserved call, no gate and no envelope, and every AWSF guard
+counts exactly that attempt state. The fence has to sit on the harness tool
+surface, before untracked work can exist.
+
+The mechanism is one PreToolUse hook that classifies a tool **name by shape**
+rather than against a list, so it fires on future names no deny list knows about,
+with narrow whole-name exclusions for observe-or-stop and plan-only tools so it
+can never be the reason a runaway task cannot be inspected or stopped.
+
+**Its placement is not a free choice, and this is where the reference and AWSF's
+own reasoning meet.** firstmate insists the deny-list hardening lives in *local,
+untracked* settings, because tracked project settings propagate into linked
+worktrees where they would disarm legitimate workers. That is `_driving.ts`'s
+placement rule arrived at independently: a Claude-route phase's `cwd` is a managed
+worktree of this repository, and AWSF's workers legitimately need write and edit.
+**A tracked `.claude/settings.json` in this repository is therefore refused; the
+guard is owner-local and untracked.** The cost of that choice is stated rather
+than hidden: an owner-local hook is outside the suite, so nothing in CI proves it
+is armed, and the capture named in the upgrades is the only evidence it works.
+
+#### Collisions with v1, each with its adaptation (per #18)
+
+**Collision 1 — a driving contract versus V.7 rule 1,
+*"no skill is ever in the execution path."*** A contract carried in the driver's
+own context could be read as instruction that execution depends on.
+**Adaptation, and it is a demonstration rather than a promise:** no gate,
+transition, guard, reservation or accounting decision can depend on it, because
+`transition()` is pure and evidence-only, worker phases receive
+`route.systemPrompt` composed host-side and materialized into `private/`, and the
+six owner edges require a TTY the driver does not have. The rule holds untouched
+and needs no new text.
+
+**Collision 2 — a role that reports a handle every time versus invariant 1,
+*"no live task state, ever."*** A driver told to report task, attempt, state and
+calls is one edit away from a document that prints a status board, which is the
+exact defect `prime-awsf.md` names in itself.
+**Adaptation:** the contract records no task and no attempt, its worked examples
+use the placeholder the existing tree already uses, and A8's digest is on request
+only and scoped to a task the owner named. The handle is reported *in chat*, never
+written to a committed file.
+
+**Collision 3 — a fourth description of how to drive the factory.** `README.md`,
+the `docs/driving/` tree, the future cheatsheet (2.6) and now a contract all
+describe the same surface.
+**Adaptation:** adopt firstmate's one-owner rule verbatim. Each contract is stated
+in full exactly once and every other mention is a one-line cross-reference. The
+contract references the tree and restates none of it, which is also what keeps it
+free of the sequencing constraint.
+
+**Collision 4 — the guard versus provider-agnosticism.** The hook is Claude-shaped
+in its wiring, and AWSF's own position is that a provider-specific mechanism is a
+bound rather than a guarantee.
+**Adaptation:** describe it as what it is. It is an owner-side seatbelt on one
+harness, not a factory guarantee, and the factory's real defence remains the fact
+that untracked work has no attempt and therefore lands nothing. Stating it as a
+guarantee would be the #18 failure mode of leaving a claim unenforceable.
+
+**Collision 5 — Explicitly Not Built's *"background monitors or watchdog
+daemons"*.** firstmate's watcher and away-mode daemon are precisely that shape,
+and they are the two capabilities most tempting to port, because they are what
+makes its supervision cheap.
+**Adaptation:** refused (B3), on the same ground 2.7 Collision 2 refused
+`--refresh` and `--tui`. marimba is turn-scoped and owns no resident process.
+
+#### Scope
+
+|  | Option | Verdict |
+| --- | --- | --- |
+| **O1** | The contract at `docs/driving/marimba/CONTRACT.md`, hand-authored, naming no command | **Recommended — take** |
+| **O2** | `marimba` as a guarded shell function that refuses an unreadable contract path before `exec` | **Recommended — take with O1** |
+| **O3** | The delegation-shape PreToolUse guard, owner-local and untracked | **Recommended — take; the strongest single transfer, and now captured end to end** |
+| **O4** | Tiered, decaying memory curation for the existing out-of-repo memory tree | **Recommended, own decision** — it is real work and does not ride in on O1 |
+| **O5** | A bearings-shaped digest, on request only | **Not taken; own decision** under the #21 precedent, because it edges toward the status board invariant 1 forbids |
+| **O6** | An interrupt or relaunch verb for a running phase | **Not taken.** Recorded as a gap A5 exposed, and it is a lifecycle change rather than a driving one |
+
+#### Overlaps with existing decisions
+
+- **#7 and 2.6** — no collision once the reasoning is separated. The cheatsheet
+  restates the surface and must be last; the contract restates nothing and can be
+  early. Both then point at one owner for the commands.
+- **#20** — no collision. That decision splits the *design/review layer* by
+  whether a repository exists yet. marimba is the driver's identity and sits above
+  both altitudes; no gate depends on it, and no transition has been touched.
+- **#22 and 2.3.4** — reinforcement plus one warning. The ladder is the driving
+  session written down, so the contract is what a ladder-driving session carries.
+  The warning is B5: the ladder's per-stage routing is declared in config and
+  chosen by the owner, and dispatch profiles are the exact mechanism that would
+  erode that.
+- **#25 and #26** — direct extension. Same flags, same append-not-replace
+  semantics, same per-role scoping principle, claude and pi only. 2.5's reviewer
+  hazard has an analogue one tier up: a tersely agreeable driver that stops naming
+  what the evidence does not support is the same failure in the driving seat.
+- **#29** — reinforcement. B5 is the routing that the import fence exists to
+  prevent, arriving from outside rather than from the dashboard.
+
+#### One live observation, recorded with its limit
+
+During this session the `claude` CLI on the WSL2 machine was in exactly the
+*"native binary not installed"* state 2.7 recorded, with no `npm i -g` performed
+in the session. It was repaired in-session with the command 2.7 records,
+`npm i -g @anthropic-ai/claude-code@2.1.236 --include=optional`, which reported
+`changed 2 packages` and restored `claude --version` to `2.1.236`. That is a
+**third occurrence on the same day** and a third successful repair by the same
+route.
+
+This is consistent with the correction already made there — that a recurring
+cause independent of the `quota-axi` install fits the evidence better — and it
+**does not settle it**, because the interval since the last repair was not
+observed. The retraction stands as written, with one more consistent recurrence
+against the original attribution.
+
+**One consequence worth recording, because it cost this session real time.** A
+broken `claude` binary does not fail only where it is invoked deliberately. Tool
+hooks that shell out to it fail too, and their error surfaces as the output of
+whatever command triggered them, so ordinary `grep` and `find` calls returned the
+installer's error text for most of a session before the cause was identified.
+
+#### Cheapest unused upgrades
+
+- **Does `claude --append-system-prompt-file` substitute a missing path silently,
+  as pi does, or refuse? Done 2026-08-19, and it changed the claim.** The CLI was
+  repaired first, then probed: claude refuses with a named error at exit 1 and
+  spends no call. Card 1 carries the bytes. It did not change the design, since
+  O2's guard is still required for pi, but it turned a symmetric assumption into
+  an asymmetric measured fact.
+- **Is pi's silent substitution reproducible? Done 2026-08-19, three runs, and it
+  reproduced exactly.** Card 1 carries the table. The control run is the part
+  worth keeping: without it, B1's empty result would have been read as evidence
+  either way. Both routes are now captured and this pair of upgrades is closed.
+- **Does the delegation-shape guard actually fire? Done, and it does.** The hook
+  was written and run under the exact flag marimba ships with, with a control run
+  proving the model reaches for the tool when nothing stops it. Captures above.
+- **Does a `permissions.deny` entry still bite under
+  `--dangerously-skip-permissions`? Done, and the answer overturned Card 4's
+  prediction.** It bites harder than a refusal: the tool leaves the schema, in
+  subagents too. O3 has two fences rather than one.
+- **Which deny key does the work, `Task` or `Agent`?** Not separated here, because
+  both were listed at once. The reference reports both work. An A/B with a
+  nonsense-name control separates them in one more run, and nothing currently
+  depends on the answer.
+- **Has firstmate ever been run on this machine?** No, and nothing recommended
+  above depends on running it, since what transfers is a document discipline and
+  one hook. Any future proposal to port a *supervision mechanism* needs captured
+  bytes first, and that is the stated bound.
+- **Does the appended block measurably change a driving session's output?**
+  Unchanged from 2.5's open item, and it now covers two contracts rather than one.
+
+#### Proposed, not taken
+
+Only the name is settled (#30). The rest of this section is a recommendation set,
+listed here so it can be taken or rejected item by item:
+
+- **P1** — take O1: the hand-authored, command-free contract inside the fenced
+  tree.
+- **P2** — take O2: the guarded shell function, and with it the decision on
+  Card 4's flag.
+- **P3** — take O3: the delegation-shape guard, owner-local and untracked, with
+  its bound stated rather than claimed as a guarantee.
+- **P4** — accept the adopted list A1 through A8 with the adaptations attached.
+- **P5** — accept the refused list B1 through B7, **named inside the contract
+  itself**, so the refusals travel to sessions that did not derive them.
+- **P6** — sequence the contract early in v2 rather than last, on the reasoning
+  that #7's constraint does not bind a document that names no command.
+
 ---
 
 ## Decisions taken (2026-08-18 and 2026-08-19)
@@ -1575,6 +2202,7 @@ from an unexpected angle: a probe AWSF resolves on `PATH` can be delivered by
 | 27 | **Quota telemetry is taken as candidate 2.7, scoped to O1 + O2.** A quota chip in the dashboard and a line in `awsf status`/`doctor`, plus a snapshot journalled at each phase boundary so the call ledger's proxy unit gains a real denominator. `quota-axi` is **spawned as a PATH-resolved read-only probe** through the existing `resolveExecutable` / `runSystemCommand` (`transport-broker.ts:169,212`), exactly as #8 resolves `mf` — **never imported as a library**, which would pull two runtime dependencies and force a D2 amendment for a number that renders in a chip. Measured 2026-08-19 on this machine: claude `five_hour` 70% / `seven_day` 95%, codex `weekly` 39%, zero quota spent (two reads, identical `percentUsed`). At ~1.3s per read it is **cached with an age stamp, never called inline in the dashboard poll**. **O3 — a preflight admission check — is explicitly not taken** and earns its own decision under the #21 precedent rather than riding in on this one. **O4 was applied 2026-08-19** outside the repository: `quota-axi@0.1.29` installed globally and its own skill copied verbatim to `~/.claude/skills/quota-axi/`. |
 | 28 | **2.7 renders from `quotaSemantics.effectiveAvailability`, never from `windows[]`, and detects state structurally rather than by exit code.** Established from captured failure bytes on 2026-08-19, not from the contract: with every live source failing, quota-axi serves its on-disk cache with a fully populated window still reading `percentUsed: 61` **and exits 0**, while withholding `effectivePercentRemaining` and marking `runway`, `pace` and `selection` `unmeasurable`. A renderer wired to the raw window would have shown a four-day-old figure as live — the same defect `— subscription` exists to prevent, in a new place. Stale exits 0 and auth-required exits 1, so status comes from `state.status`, per the #10 precedent that detection is structural rather than exit-code guesswork. The four captured failure shapes carry no credential-shaped value and cut directly into fixtures; the success captures carry `account.email` and must be scrubbed first. |
 | 29 | **The guarantee 2.7 must add, in #18 form: an import fence.** `core/src/workflow/**` and the routing resolver may not import the quota module, enforced by a meta-test of the same shape as the state-purity fence (invariant 5). This is what keeps the figure a readout and prevents it becoming the *"quota-aware routing"* Explicitly Not Built removed. Three further bounds hold with no invariant text changing: the probe is **host-side only, and nothing structural enforces that** — checked 2026-08-19 against the pinned descriptor, `--share-net` follows `--unshare-all` and `--ro-bind / /` leaves `~/.claude/.credentials.json` readable, so an in-session probe would succeed rather than fail, which makes this an exposure bound to hold deliberately rather than a limit to rely on (and `bwrap` is absent on the WSL2 machine, so the badge is `tool-policy` and nothing is OS-enforced there at all); `--refresh` and `--tui` are **never used**, because a resident refresher is the daemon shape Explicitly Not Built also removed; and the parser is **fixture-first**, so the live read is a portability-matrix row and never enters the credential-free offline suites. |
+| 30 | **The driving session becomes a named role: `marimba`, and the name is settled** (2026-08-19, owner). One word covers the role, the operating contract, the shell alias and any command surface it later acquires; `firstmate` names only the reference repository. Collisions checked: zero in this repository, zero in `~/.claude/skills`, nothing on `PATH`. It is delivered as an appended system prompt on the same flags as #25's driving layer, so claude and pi only per #26. **`marimba` carries `--dangerously-skip-permissions` deliberately** (2.8 Card 4): the driving session is bounded by the lifecycle rather than by a prompt, and both halves of O3's defence were captured working under that flag — the PreToolUse hook refuses the call, and a `permissions.deny` entry removes the tool from the session schema entirely, which corrects the prediction 2.8 first recorded. **2.8's remaining verdicts are proposals P1-P6 and are not taken**; the section is written so they can be accepted or rejected item by item. |
 
 ## Still open
 
@@ -1606,6 +2234,10 @@ from an unexpected angle: a probe AWSF resolves on `PATH` can be delivered by
 - **Does the Claude quota read work unattended on macOS?** On darwin the token
   moves to Keychain behind a `--allow-keychain-prompt` consent gate. Not
   gatherable until the M5 arrives, and it belongs in the same visit as T27.
+- **Which `permissions.deny` key removes the delegation tool, `Task` or
+  `Agent`?** 2.8 captured the pair working together and did not separate them.
+  One A/B run with a nonsense-name control settles it; nothing depends on the
+  answer today, so it is recorded rather than scheduled.
 - Further ideas the owner is preparing (transcripts, screenshots, reference
   repositories) — to be gathered in a dedicated session before the v2 plan is
   authored.
