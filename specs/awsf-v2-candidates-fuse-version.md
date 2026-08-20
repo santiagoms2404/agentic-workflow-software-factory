@@ -571,15 +571,62 @@ model streaming its envelope chunk by chunk, one persisted row per chunk, and
 their concatenation in `seq` order reconstructs the phase output that the
 outputs panel already displays in full.
 
-**That is what makes compaction safe.** Folding a run of deltas into one row
-discards nothing, because the whole is retained elsewhere as the phase's own
-output artifact. Compaction at the *display* layer costs nothing and needs no
-contract change; compaction at the *storage* layer is a different decision and is
-not proposed here.
+**That is what makes display compaction safe**, and the measurement below says
+precisely how safe. Folding a run of deltas into one *row* deletes nothing.
+Compaction at the *storage* layer is a different decision, is not proposed here,
+and the check below turned up a specific reason to refuse it.
 
-Volume, counted from the screenshots rather than the database: twenty-four
-consecutive delta rows spanning twenty-four seconds in one capture, and four
-inside a single second in another.
+#### Measured 2026-08-20, read-only against the live projection
+
+All three of this candidate's cheapest upgrades were run. Two confirmed the case
+far more strongly than the screenshots had; one corrected a sentence above.
+
+**Volume — the case is stronger than it looked.**
+
+| Type | Rows |
+| --- | --- |
+| `text.delta` | 5,708 |
+| `tool_call` | 689 |
+| `usage` | 239 |
+| `compiled_prompt` | 22 |
+| `run.started` / `model.resolved` / `run.completed` / `quota` | 37 combined |
+
+**85.3% of every row in the projection is a `text.delta`.** In the worst phase it
+is 92.2% — 1,282 rows of 1,390. By payload bytes the deltas are 918 KB against
+742 KB for everything else combined, so the least informative rows are also the
+majority of the stored bytes.
+
+The per-row figure is the one worth remembering: the largest run reassembles to
+**5,490 characters across 1,282 chunks — about four characters per row**, each
+wrapped in roughly 165 bytes of `kind`, `seq`, `runId`, `hostAt` and
+`providerAt`. Every one of those four-character rows costs a line on screen.
+
+**Reassembly — equivalent, and NOT byte-identical. This corrects the claim
+above.** Concatenating that run's 1,282 deltas in `seq` order yields text that
+parses cleanly as `awsf.build-output/v1`. Compared against the stored envelope
+for the same phase:
+
+```
+reassembled  5,490 chars   {\n  "schema": "awsf.build-outpu…
+stored       4,236 chars   {"schema":"awsf.build-output/v1…
+BYTE-IDENTICAL: NO      SEMANTICALLY EQUAL (canonical JSON): YES
+```
+
+The store holds the parsed-and-reserialised envelope; the deltas hold what the
+model actually emitted, pretty-printed. They differ from the second character.
+
+**Two consequences, and the second is the reason this check was worth running.**
+A compacted row may say it reconstructs the phase's output; it may **not** claim
+to *be* the stored envelope, because it is not those bytes. And the deltas are
+the **only** surviving record of the model's own formatting — so "the whole is
+retained elsewhere" was too strong, and any future proposal to drop deltas from
+storage would lose something the envelope does not carry. Display compaction is
+unaffected: it hides rows and deletes nothing.
+
+**The tool name reaches the client already.** `queries.ts:213` and `:222` both
+select `type, name, status, payload_json`, and `dashboard/shared/types.ts`
+declares `name: string` on the event item. Nothing needs to be plumbed; the
+template simply never renders it.
 
 #### What to build, in order of leverage
 
@@ -640,17 +687,23 @@ split-credential redaction fixture from Collision 1.
 
 #### Cheapest unused upgrades
 
-- **Count the real delta volume.** One `SELECT type, COUNT(*) … GROUP BY type`
-  against the projection gives the true ratio per phase and sizes the win.
-  **Not done** — it needs a live database, and the screenshots were enough to
-  establish the shape.
-- **Diff the reassembly against the stored output.** Concatenate one run's deltas
-  and compare with that phase's output artifact. It settles whether reassembly is
-  byte-identical or merely equivalent, which decides whether the compacted row can
-  claim to *be* the output or only to summarise it. **Not done.**
-- **Confirm the tool name survives to the client.** `summary()` already reads
-  `item.name`, so the column almost certainly reaches the API shape — but "almost
-  certainly" is not the standard. One response inspection settles it. **Not done.**
+All three were run on 2026-08-20, read-only, against the live projection, and
+the results are folded into the measurement section above.
+
+- **Count the real delta volume — done, and it strengthened the candidate.**
+  85.3% of all rows, 92.2% in the worst phase, and 55% of stored payload bytes.
+- **Diff the reassembly against the stored output — done, and it corrected the
+  candidate.** Semantically equal, not byte-identical: the store minifies and the
+  deltas preserve the model's own formatting. A compacted row must not claim to be
+  the stored envelope, and dropping deltas from storage would lose the only record
+  of what the model actually emitted.
+- **Confirm the tool name reaches the client — done.** It does, through the
+  `name` column selected in `queries.ts` and declared in the shared event type.
+
+**What remains unrun**, and it is now the only one: the split-credential
+redaction fixture from Collision 1. It cannot be run against the live projection
+because it needs a crafted stream rather than a recorded one, so it is written as
+a required test rather than a check.
 
 ---
 
