@@ -569,6 +569,10 @@ flowchart TD
       Questionables section itself was updated to record each decision in place, per Q1–Q6's own
       answers above.</p>
     </details>
+    <details>
+      <summary>2026-08-21 — M1 completed: minimal config round-trip proof</summary>
+      <p><strong>M1 is complete.</strong> <code>buildMinimalConfig</code> is now covered by a YAML round-trip through the real <code>loadConfig()</code> for two valid slugs, a named <code>InvalidProjectSlugError</code> rejection before the loader, and call-ceiling assertions against <code>MIN_CALL_CEILING</code>/<code>MAX_CALL_CEILING</code>. Commit <code>3718a65</code> records the test, M1 marker, and T03 ticket state together. Evidence: <code>node --experimental-strip-types --test core/test/unit/config/init-template.test.ts</code> passed 4/4 and <code>npm run typecheck</code> completed cleanly.</p>
+    </details>
   </section>
 
 </main>
