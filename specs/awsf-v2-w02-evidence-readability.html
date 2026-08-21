@@ -406,7 +406,7 @@ sequenceDiagram
 
     <!-- ===== PHASE 3 ===== -->
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone M3: Rendered view beside the raw JSON</h3>
+      <h3><code class="status">[x]</code> Milestone M3: Rendered view beside the raw JSON</h3>
       <p>Add a rendered view next to the existing <code>JSON.stringify(payload, null, 2)</code> raw view, defaulting to rendered. <code>PhaseInspector.vue</code> already ships this exact pattern for compiled prompts — a <code>view-toggle</code> pair of buttons and a reactive <code>Set</code> tracking which rows are pinned to raw — and it is already proven by <code>dashboard-parity.test.ts</code>'s assertions on <code>rendered-safe</code> / <code>&gt;raw&lt;</code>. This phase reuses that shape rather than inventing a second one.</p>
 
       <figure>
@@ -449,14 +449,14 @@ stateDiagram-v2
       <h4>4. Add the rendered/raw toggle to EventLog.vue, plus Testing Strategy</h4>
       <p><strong>Testing approach.</strong> The toggle is markup, so it follows <code>dashboard-mechanics.test.ts</code>'s existing convention of source-regex assertions against <code>EventLog.vue</code>, extending the same <code>"event paging and settings expose required read-only, text-labelled surfaces"</code> test rather than adding a new one for a single component's markup. That regex convention cannot prove the toggle actually defaults to rendered at runtime, so a manual check closes the gap.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> Add a <code>rawRows = reactive(new Set&lt;string&gt;())</code> alongside the existing <code>expanded</code> set, tracking which row ids are pinned to raw view — mirroring <code>PhaseInspector.vue</code>'s <code>rawPrompts</code>.</li>
-        <li><code class="status">[]</code> On an expanded row, render a <code>view-toggle</code> pair of buttons labelled <code>rendered</code> / <code>raw</code>; the active button reflects <code>rawRows.has(row.id)</code>; default (row not in the set) is rendered.</li>
-        <li><code class="status">[]</code> Rendered view: <code>summarizeEvent(row)</code> for an ordinary row, or <code>row.reassembledText</code> for a folded row (task 3) — reuse the same functions the collapsed-row summary already calls, so the two views can never disagree about what a row says.</li>
-        <li><code class="status">[]</code> Raw view: unchanged — <code>JSON.stringify(row.payload, null, 2)</code> for an ordinary row. For a folded row, raw shows the array of the individual chunk payloads it was built from (each already redacted at projection time), not a synthetic re-serialisation of the fold.</li>
-        <li><code class="status">[]</code> Extend <code>core/test/unit/dashboard-mechanics.test.ts</code>: assert <code>EventLog.vue</code>'s source matches <code>view-toggle</code>, the two button labels, and that rendered is the default (no row id present in <code>rawRows</code> on mount)</li>
-        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/dashboard-mechanics.test.ts core/test/unit/dashboard-parity.test.ts</code></li>
-        <li><code class="status">[]</code> <code>npm run typecheck:dashboard</code></li>
-        <li><code class="status">[]</code> Manual check with the <code>run</code> skill: start the dashboard dev server, open a session with a folded delta run and a completed tool call, confirm rendered is shown by default and raw is reachable in one click for both — this is the one property regex assertions over source text cannot prove</li>
+        <li><code class="status">[x]</code> Add a <code>rawRows = reactive(new Set&lt;string&gt;())</code> alongside the existing <code>expanded</code> set, tracking which row ids are pinned to raw view — mirroring <code>PhaseInspector.vue</code>'s <code>rawPrompts</code>.</li>
+        <li><code class="status">[x]</code> On an expanded row, render a <code>view-toggle</code> pair of buttons labelled <code>rendered</code> / <code>raw</code>; the active button reflects <code>rawRows.has(row.id)</code>; default (row not in the set) is rendered.</li>
+        <li><code class="status">[x]</code> Rendered view: <code>summarizeEvent(row)</code> for an ordinary row, or <code>row.reassembledText</code> for a folded row (task 3) — reuse the same functions the collapsed-row summary already calls, so the two views can never disagree about what a row says.</li>
+        <li><code class="status">[x]</code> Raw view: unchanged — <code>JSON.stringify(row.payload, null, 2)</code> for an ordinary row. For a folded row, raw shows the array of the individual chunk payloads it was built from (each already redacted at projection time), not a synthetic re-serialisation of the fold.</li>
+        <li><code class="status">[x]</code> Extend <code>core/test/unit/dashboard-mechanics.test.ts</code>: assert <code>EventLog.vue</code>'s source matches <code>view-toggle</code>, the two button labels, and that rendered is the default (no row id present in <code>rawRows</code> on mount)</li>
+        <li><code class="status">[x]</code> <code>node --experimental-strip-types --test core/test/unit/dashboard-mechanics.test.ts core/test/unit/dashboard-parity.test.ts</code></li>
+        <li><code class="status">[x]</code> <code>npm run typecheck:dashboard</code></li>
+        <li><code class="status">[x]</code> Manual check with the <code>run</code> skill: start the dashboard dev server, open a session with a folded delta run and a completed tool call, confirm rendered is shown by default and raw is reachable in one click for both — this is the one property regex assertions over source text cannot prove</li>
       </ul>
       <div class="loop">🔁 <strong>Do not exit this phase until every box above is checked.</strong> If any command fails, fix the cause and re-run — loop until all pass.</div>
     </div>
@@ -577,6 +577,10 @@ flowchart TD
   <!-- ===== AMENDMENTS ===== -->
   <section id="amendments">
     <h2>Amendments</h2>
+    <details>
+      <summary>2026-08-21 — M3 / T04 completed</summary>
+      <p>T04 adds the per-row <code>rendered</code>/<code>raw</code> toggle to <code>EventLog.vue</code>, defaulting to rendered through an empty reactive <code>rawRows</code> set. Ordinary rendered rows reuse <code>summarizeEvent()</code> and folded rows reuse <code>reassembledText</code>. To retain the required raw view of a folded row's original inputs, <code>FoldedTextDeltaRow</code> now carries <code>chunkPayloads</code>, an array copied from the already-redacted source payloads. Verification passed: <code>node --experimental-strip-types --test core/test/unit/dashboard-mechanics.test.ts core/test/unit/dashboard-parity.test.ts</code> (11 tests), <code>npm run typecheck:dashboard</code>, and <code>core/test/unit/meta/ticket-plan-sync.test.ts</code> (10 tests). A dev-server browser check confirmed rendered by default and one-click raw for a completed <code>tool_call</code> and a folded delta row. M3 is <code>[x]</code>; the W02 spine remains <code>[]</code>.</p>
+    </details>
     <details>
       <summary>2026-08-21 — M2 / T03 completed</summary>
       <p>T03 adds synthetic runtime coverage for the client-side fold: contiguous deltas, a <code>tool_call</code> boundary, a terminal boundary, defensive <code>thinking.delta</code> exclusion, and a split credential whose halves are individually unmatched but redact after reassembly. The fold predicate and re-redaction call were unchanged. Verification passed: <code>node --experimental-strip-types --test core/test/unit/dashboard-delta-fold.test.ts</code> (5 tests), <code>core/test/unit/observability/projector.test.ts</code> (10 tests), <code>core/test/unit/dashboard-mechanics.test.ts core/test/unit/dashboard-parity.test.ts</code> (11 tests), <code>npm run typecheck:dashboard</code>, <code>core/test/unit/meta/ticket-plan-sync.test.ts</code> (10 tests), and <code>core/test/unit/meta/no-credentials-in-fixtures.test.ts</code> (8 tests). M2 is <code>[x]</code>; the W02 spine remains <code>[]</code>.</p>

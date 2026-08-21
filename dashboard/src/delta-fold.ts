@@ -10,6 +10,7 @@ export interface FoldedTextDeltaRow {
   type: "text.delta.fold";
   chunkCount: number;
   reassembledText: string;
+  chunkPayloads: EventItem["payload"][];
 }
 
 export type DisplayRow = EventItem | FoldedTextDeltaRow;
@@ -37,6 +38,7 @@ function foldRun(run: EventItem[]): FoldedTextDeltaRow {
     type: "text.delta.fold",
     chunkCount: run.length,
     reassembledText: scrubCredentialString(run.map(textFrom).join("")),
+    chunkPayloads: run.map((item) => item.payload),
   };
 }
 

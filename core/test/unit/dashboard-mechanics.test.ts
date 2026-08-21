@@ -47,6 +47,11 @@ test("event paging and settings expose required read-only, text-labelled surface
   assert.match(events, /event\.type/);
   assert.match(events, /formatDuration/);
   assert.match(events, /aria-expanded/);
+  assert.match(events, /class="view-toggle"/);
+  assert.match(events, />rendered<\/button>/);
+  assert.match(events, />raw<\/button>/);
+  assert.match(events, /const rawRows = reactive\(new Set<string>\(\)\)/);
+  assert.match(events, /active: !rawRows\.has\(row\.id\)/);
   for (const label of ["Effective config", "Adapter health", "Database health"]) {
     assert.match(settings, new RegExp(label));
   }

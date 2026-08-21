@@ -12,6 +12,7 @@ const hasMore = ref(false);
 const loading = ref(false);
 const error = ref<string | null>(null);
 const expanded = reactive(new Set<string>());
+const rawRows = reactive(new Set<string>());
 let timer: ReturnType<typeof setInterval> | undefined;
 
 const phaseEvents = computed(() => events.value.filter((event) => event.phaseId === props.phaseId));
@@ -63,7 +64,14 @@ onUnmounted(() => clearInterval(timer));
         <em>{{ isFoldedTextDeltaRow(row) ? "recorded" : row.status ?? "recorded" }}</em>
         <small>{{ row.endedAt ? formatDuration(row.startedAt, row.endedAt) : "point event" }}</small>
       </button>
-      <pre v-if="expanded.has(row.id)">{{ isFoldedTextDeltaRow(row) ? row.reassembledText : json(row.payload) }}</pre>
+      <template v-if="expanded.has(row.id)">
+        <div class="view-toggle" aria-label="Event display mode">
+          <button type="button" :class="{ active: !rawRows.has(row.id) }" @click="rawRows.delete(row.id)">rendered</button>
+          <button type="button" :class="{ active: rawRows.has(row.id) }" @click="rawRows.add(row.id)">raw</button>
+        </div>
+        <pre v-if="rawRows.has(row.id)">{{ isFoldedTextDeltaRow(row) ? json(row.chunkPayloads) : json(row.payload) }}</pre>
+        <pre v-else>{{ isFoldedTextDeltaRow(row) ? row.reassembledText : summarizeEvent(row) }}</pre>
+      </template>
     </article>
   </section>
 </template>
