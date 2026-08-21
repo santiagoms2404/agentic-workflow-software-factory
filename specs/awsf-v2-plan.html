@@ -486,7 +486,7 @@ flowchart LR
 
     <!-- ================= W01 ================= -->
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone M1: W01 — marimba's operating contract <span class="wtag core">v2 core</span></h3>
+      <h3><code class="status">[x]</code> Milestone M1: W01 — marimba's operating contract <span class="wtag core">v2 core</span></h3>
       <p class="deep-plan"><a href="awsf-v2-w01-marimba-contract.html">Deep plan: AWSF v2 W01 — marimba's operating contract</a> <span class="muted">not yet authored</span></p>
       <p><em>Exists because it is cheap, self-contained, and it is what drives every other workstream.</em> The driving role needs a written contract before it is trusted to author thirteen deep plans. The contract is hand-authored, names no command, and therefore carries no sequencing constraint — which is exactly why it can go first.</p>
       <h4>1. W01 — marimba's operating contract</h4>
@@ -514,12 +514,12 @@ flowchart LR
         Execution isolation still green (<code>.claude/</code> absent at the repository root). Route resolution for <strong>every</strong> pointer the contract names, not just the current router — or, alternatively, the contract stays route-free and a test asserts <em>that</em> property instead. No live handles anywhere in the contract, per invariant 1. A captured guard denial for at least one owner-act command shape and one delegation-shaped tool name. All offline; no quota.
       </div>
       <ul class="checklist">
-        <li><code class="status">[]</code> Deep plan <code>awsf-v2-w01-marimba-contract.html</code> authored with its build prompts and its <code>specs/tickets/awsf-v2-w01-marimba-contract/</code> set, and approved by the owner</li>
-        <li><code class="status">[]</code> The contract is command-free, route-checked (or provably route-free), and states its boundary as a tool-surface denial — never as a TTY or "by construction" claim</li>
-        <li><code class="status">[]</code> The guard's tests and captured refusals land in the tree; the installation stays an owner act</li>
-        <li><code class="status">[]</code> The contract states the <em>measured</em> settings semantics — <code>--settings</code> merges, <code>--setting-sources</code> excludes — and never describes <code>--settings</code> as scoping what else loads</li>
-        <li><code class="status">[]</code> The hook-precedence absence is closed by a two-conflicting-hooks probe, or carried forward as a named absence with its cost</li>
-        <li><code class="status">[]</code> The deep plan's own milestones all reach <code>[x]</code></li>
+        <li><code class="status">[x]</code> Deep plan <code>awsf-v2-w01-marimba-contract.html</code> authored with its build prompts and its <code>specs/tickets/awsf-v2-w01-marimba-contract/</code> set, and approved by the owner</li>
+        <li><code class="status">[x]</code> The contract is command-free, route-checked (or provably route-free), and states its boundary as a tool-surface denial — never as a TTY or "by construction" claim</li>
+        <li><code class="status">[x]</code> The guard's tests and captured refusals land in the tree; the installation stays an owner act</li>
+        <li><code class="status">[x]</code> The contract states the <em>measured</em> settings semantics — <code>--settings</code> merges, <code>--setting-sources</code> excludes — and never describes <code>--settings</code> as scoping what else loads</li>
+        <li><code class="status">[x]</code> The hook-precedence absence is closed by a two-conflicting-hooks probe, or carried forward as a named absence with its cost</li>
+        <li><code class="status">[x]</code> The deep plan's own milestones all reach <code>[x]</code></li>
       </ul>
       <div class="loop">🔁 <strong>Do not exit this workstream until its deep plan's every box is checked.</strong> A failing command means fix the cause and re-run — never lower what the row asserts.</div>
     </div>
