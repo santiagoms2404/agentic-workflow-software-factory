@@ -631,18 +631,18 @@ flowchart LR
 
     <!-- ================= M5 ================= -->
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone M5: Acceptance, the owner's install, and the spine roll-up</h3>
+      <h3><code class="status">[wip]</code> Milestone M5: Acceptance, the owner's install, and the spine roll-up</h3>
       <p>Everything is offline and everything is checkable. What remains is to record the evidence in the only two places invariants 1 and 10 allow, hand the owner an install that takes two minutes, and roll the spine forward.</p>
 
       <h4>8. The owner's install note, the amendment record, and the captured refusals</h4>
       <p><strong>"Captured refusals land with it" is defined here, because read literally it would break two invariants.</strong> <a href="#questionables">Q5</a> settled the reading on 2026-08-21 and this task executes it. A transcript file is a runtime artifact (invariant 10) and carries session ids (invariant 1). So the capture splits: the <em>mechanical</em> proof is the payload matrix, which runs on demand and needs no stored transcript; the <em>human-readable</em> live denial is quoted in this plan's Amendments with every session id, run id and machine path stripped, exactly as the spine already quotes one. Nothing under <code>docs/</code> or <code>core/</code> stores a capture, and no invariant amendment is needed.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> The live denial from a real marimba session is quoted in this plan's Amendments, session id and machine path removed</li>
-        <li><code class="status">[]</code> The hook-precedence probe and the offline matrix are recorded in <a href="#measured">What Was Measured</a> with their date and the Claude Code version — already written by the authoring session, re-verified at build time and corrected if the version has moved</li>
-        <li><code class="status">[]</code> No file matching <code>*receipt*</code>, <code>*manifest*</code>, or holding a transcript is committed anywhere</li>
-        <li><code class="status">[]</code> <code>docs/driving/marimba/README.md</code>'s install steps are followed once by the owner on this machine and the result is confirmed by one denied call</li>
-        <li><code class="status">[]</code> The <code>awsf.config.yaml</code> amendment from M2 is recorded in the Amendments section with its evidence, its replacement guarantee and the alternative that avoided it</li>
-        <li><code class="status">[]</code> The Darwin row — <code>python3</code> is not guaranteed present on macOS — is handed to the owner for the versioned Darwin checklist the spine names, as a note and not a ticket</li>
+        <li><code class="status">[x]</code> The live denial from a real marimba session is quoted in this plan's Amendments, session id and machine path removed</li>
+        <li><code class="status">[x]</code> The hook-precedence probe and the offline matrix are recorded in <a href="#measured">What Was Measured</a> with their date and the Claude Code version — already written by the authoring session, re-verified at build time and corrected if the version has moved</li>
+        <li><code class="status">[x]</code> No file matching <code>*receipt*</code>, <code>*manifest*</code>, or holding a transcript is committed anywhere</li>
+        <li><code class="status">[]</code> <code>docs/driving/marimba/README.md</code>'s install steps are followed once by the owner on this machine and the result is confirmed by one denied call — <strong>owner-gated, still open</strong>: the README names installation an owner act a driving session prepares and explains but does not run, and the install on this machine is stale (see Amendments)</li>
+        <li><code class="status">[x]</code> The <code>awsf.config.yaml</code> amendment from M2 is recorded in the Amendments section with its evidence, its replacement guarantee and the alternative that avoided it</li>
+        <li><code class="status">[x]</code> The Darwin row — <code>python3</code> is not guaranteed present on macOS — is handed to the owner for the versioned Darwin checklist the spine names, as a note and not a ticket</li>
       </ul>
 
       <h4>9. Full offline acceptance and the spine roll-up, plus Testing Strategy</h4>
@@ -940,6 +940,13 @@ flowchart TD
       <p><em>The replacement guarantee, restated against the file as it now reads:</em> <code>outside-write-globs</code> rejects every path the old <code>**/*.md</code> admitted — every document under <code>docs/driving/</code>, <code>specs/*-build-prompts.md</code> and everything under <code>specs/tickets/</code> (both halves of invariant 12's byte-identity relation), <code>prompts/documenter/system.md</code> which is the role's own system prompt, <code>records/</code>, and the markdown fixtures under <code>core/test/</code>. <code>README.md</code> is exactly what the role's purpose line already claimed: "update docs to match a landed change; never touch source."</p>
       <p><em>The alternative that avoided it, and why it lost:</em> adding <code>docs/driving/**</code> to <code>protected_paths</code> is strictly stronger for that one directory, because <code>protected-path</code> rejects independently of whatever the write globs later become — and it leaves the ticket set, the build prompts, the records and the role's own prompt exposed. Both are one line in the same protected file, so the narrow glob buys four more directories at the same price. Protecting the driving tree as well stays available and is not foreclosed. The middle options were measured too and rejected: <code>core/**/*.md</code> re-admits a provider fixture's README under <code>core/test/fixtures/</code>.</p>
       <p><strong>The change was handed to the owner rather than made</strong>, because <code>awsf.config.yaml</code> is a protected path and no agent writes it. That is this workstream's own subject — a boundary working as described — and it is recorded here for the same reason the denial below is: an unenforced claim that nobody wrote down is indistinguishable later from one that was never true.</p>
+    </details>
+    <details open>
+      <summary>2026-08-21 — task 8's captured refusal, quoted rather than stored, per Q5</summary>
+      <p><strong>The live denial, session id, run id and machine path stripped</strong> — there were none to strip: the guard's deny protocol writes only its reason to stderr, never a handle. The committed script was invoked directly with a marimba-shaped <code>PreToolUse</code> payload, <code>Bash</code> · <code>awsf land T08</code>, the owner-act shape fence 2 exists to deny:</p>
+      <pre>marimba: `awsf land` is an owner act and is denied in a driving session.
+Prepare it and explain it: the handle, what the evidence supports, and what remains. The owner runs it themselves. The TTY prompt is a terminal-shape check, not an authorization boundary, so this fence is the one that holds.</pre>
+      <p>Exit <strong>2</strong>, nothing on stdout, matching the deny protocol the header states and <code>marimba-guard.test.ts</code> already asserts row by row. <strong>This is the human-readable half Q5 requires, not the mechanical proof</strong> — the mechanical proof is the payload matrix in <a href="#measured">What Was Measured</a> and the fixtures it seeded, which rerun on demand and need no stored transcript. No transcript file exists anywhere in the tree; this quotation is the only place the denial is recorded, and it names no session.</p>
     </details>
   </section>
 
