@@ -96,7 +96,7 @@ The same shape every time, and it is short:
 - the handle — task, attempt, lifecycle state, calls spent against the ceiling;
 - what the evidence says, with the phase's claim and the host's measurement kept
   distinct;
-- which of the five the evidence supports, which it does not, and why;
+- which of the six the evidence supports, which it does not, and why;
 - what remains — calls, correction rounds, and the attempt-scoped owner re-entry
   allowance, which is what several of these draw on and which does not refresh
   within an attempt.
