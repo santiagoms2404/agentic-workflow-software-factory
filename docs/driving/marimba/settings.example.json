@@ -11,7 +11,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "REPLACE_WITH_ABSOLUTE_PATH_TO_CHECKOUT/docs/driving/marimba/delegation-guard.sh"
+            "command": "\"REPLACE_WITH_ABSOLUTE_PATH_TO_CHECKOUT/docs/driving/marimba/delegation-guard.sh\""
           }
         ]
       }
@@ -21,7 +21,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "REPLACE_WITH_ABSOLUTE_PATH_TO_CHECKOUT/docs/driving/marimba/session-banner.sh"
+            "command": "\"REPLACE_WITH_ABSOLUTE_PATH_TO_CHECKOUT/docs/driving/marimba/session-banner.sh\""
           }
         ]
       }
