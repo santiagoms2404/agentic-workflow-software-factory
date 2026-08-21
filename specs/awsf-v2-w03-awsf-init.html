@@ -360,22 +360,22 @@ cleanup: removing /tmp/awsf-init-probe-mD0Vuv</pre>
 
     <!-- ================= M1 ================= -->
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone M1: A minimal config, derived from the schema, round-tripped through the loader</h3>
+      <h3><code class="status">[wip]</code> Milestone M1: A minimal config, derived from the schema, round-tripped through the loader</h3>
       <p>Before anything writes a file, the thing it writes has to be provably loadable — not "believed loadable" from reading <code>schema.ts</code> by eye. This phase produces <code>buildMinimalConfig</code> as a typed object and proves it round-trips, before any command sequences a directory around it.</p>
 
       <h4>1. Enumerate the schema's required shape and choose the minimal values</h4>
       <p>Read <code>AwsfConfigSchema</code> top to bottom and write down, for each of the twelve top-level keys, the smallest value that satisfies both the TypeBox structure and <code>load.ts</code>'s hand-written checks. Record the table in code comments beside <code>buildMinimalConfig</code>, not only in this plan, so a future schema change has something local to update against.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>project</code>: <code>slug</code> supplied by the caller (validated against the schema's own pattern, not re-validated by hand); <code>default_workflow: "intake"</code></li>
-        <li><code class="status">[]</code> <code>runtime</code>: conservative but real numeric floors (<code>silence_timeout_seconds</code>, <code>process_grace_seconds</code>, <code>max_output_bytes</code>, <code>max_event_count</code>) and <code>seed_paths: []</code></li>
-        <li><code class="status">[]</code> <code>adapters</code>: exactly one entry, <code>kind: "claude-code"</code>, <code>enabled: true</code> — the only adapter kind that needs no <code>verified</code> attestation and no unresolved executable-path question</li>
-        <li><code class="status">[]</code> <code>routing</code>: <code>default_worker</code> references that one adapter's key; <code>review: "invert-provider"</code>; <code>no_fallback: true</code></li>
-        <li><code class="status">[]</code> <code>agents: []</code> — an empty array is structurally valid and the schema places no minimum on it</li>
-        <li><code class="status">[]</code> <code>workflows.enabled: ["intake"]</code>, matching <code>project.default_workflow</code></li>
-        <li><code class="status">[]</code> <code>gates: {}</code>, <code>policy.protected_operations: []</code>, <code>policy.protected_paths</code> naming <code>AGENTS.md</code> and <code>awsf.config.yaml</code></li>
-        <li><code class="status">[]</code> <code>risk.call_ceiling</code> values read from <code>MIN_CALL_CEILING</code>/<code>MAX_CALL_CEILING</code> in <code>core/src/state/tiers.ts</code>, never duplicated as new literals</li>
-        <li><code class="status">[]</code> <code>observability.db: "state://awsf.db"</code> (the schema's own symbolic-scheme pattern — never a machine path), <code>persist_thinking_text: false</code></li>
-        <li><code class="status">[]</code> <code>pricing</code>: <code>display_mode</code> set, <code>effective_date: null</code>, <code>models: {}</code> — Q7 in the v1 candidate record already refused fabricating a <code>$0.00</code> cost, and an empty <code>models</code> record is what keeps that refusal intact for a project with no observed run yet</li>
+        <li><code class="status">[x]</code> <code>project</code>: <code>slug</code> supplied by the caller (validated against the schema's own pattern, not re-validated by hand); <code>default_workflow: "intake"</code></li>
+        <li><code class="status">[x]</code> <code>runtime</code>: conservative but real numeric floors (<code>silence_timeout_seconds</code>, <code>process_grace_seconds</code>, <code>max_output_bytes</code>, <code>max_event_count</code>) and <code>seed_paths: []</code></li>
+        <li><code class="status">[x]</code> <code>adapters</code>: exactly one entry, <code>kind: "claude-code"</code>, <code>enabled: true</code> — the only adapter kind that needs no <code>verified</code> attestation and no unresolved executable-path question</li>
+        <li><code class="status">[x]</code> <code>routing</code>: <code>default_worker</code> references that one adapter's key; <code>review: "invert-provider"</code>; <code>no_fallback: true</code></li>
+        <li><code class="status">[x]</code> <code>agents: []</code> — an empty array is structurally valid and the schema places no minimum on it</li>
+        <li><code class="status">[x]</code> <code>workflows.enabled: ["intake"]</code>, matching <code>project.default_workflow</code></li>
+        <li><code class="status">[x]</code> <code>gates: {}</code>, <code>policy.protected_operations: []</code>, <code>policy.protected_paths</code> naming <code>AGENTS.md</code> and <code>awsf.config.yaml</code></li>
+        <li><code class="status">[x]</code> <code>risk.call_ceiling</code> values read from <code>MIN_CALL_CEILING</code>/<code>MAX_CALL_CEILING</code> in <code>core/src/state/tiers.ts</code>, never duplicated as new literals</li>
+        <li><code class="status">[x]</code> <code>observability.db: "state://awsf.db"</code> (the schema's own symbolic-scheme pattern — never a machine path), <code>persist_thinking_text: false</code></li>
+        <li><code class="status">[x]</code> <code>pricing</code>: <code>display_mode</code> set, <code>effective_date: null</code>, <code>models: {}</code> — Q7 in the v1 candidate record already refused fabricating a <code>$0.00</code> cost, and an empty <code>models</code> record is what keeps that refusal intact for a project with no observed run yet</li>
       </ul>
 
       <h4>2. Implement <code>buildMinimalConfig(slug)</code> as a typed object, not a template string</h4>
