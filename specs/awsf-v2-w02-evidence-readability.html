@@ -341,7 +341,7 @@ flowchart TD
 
     <!-- ===== PHASE 2 ===== -->
     <div class="phase">
-      <h3><code class="status">[wip]</code> Milestone M2: Delta compaction (fold, reassemble, re-redact)</h3>
+      <h3><code class="status">[x]</code> Milestone M2: Delta compaction (fold, reassemble, re-redact)</h3>
       <p>Fold a contiguous run of <code>text.delta</code> rows into one expandable row. Folding happens entirely client-side, over the already-fetched, already-accumulated <code>EventItem[]</code> array <code>EventLog.vue</code> builds today — no new API endpoint, no change to pagination or cursors, no storage-layer change. This is the phase Collision 1 and Collision 2 both bind.</p>
 
       <figure>
@@ -391,15 +391,15 @@ sequenceDiagram
       <h4>3. The fold's boundary and redaction tests, plus Testing Strategy</h4>
       <p><strong>Testing approach.</strong> <code>foldTextDeltaRuns</code> is pure and takes plain <code>EventItem[]</code> fixtures, so every case below is a direct runtime assertion, not a source-regex check.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>core/test/unit/dashboard-delta-fold.test.ts</code>: a contiguous run folds to one row with the correct <code>chunkCount</code> and concatenated text, in <code>seq</code> order</li>
-        <li><code class="status">[]</code> Same file — a <code>tool_call</code> row between two <code>text.delta</code> rows produces two separate folded rows, never one spanning it</li>
-        <li><code class="status">[]</code> Same file — a terminal event (<code>run.completed</code> / <code>run.failed</code> / <code>run.cancelled</code>) after a delta run closes that run; no fold reaches past it</li>
-        <li><code class="status">[]</code> Same file — the defensive <code>thinking.delta</code> fixture: the fold function neither starts nor extends a run on <code>type: "thinking.delta"</code></li>
-        <li><code class="status">[]</code> Same file — <strong>the split-credential fixture</strong>: two adjacent, seq-contiguous <code>text.delta</code> items whose <code>payload.text</code> values each carry half of a credential-shaped value (matching one of <code>CREDENTIAL_PATTERNS</code> only once concatenated); asserts the folded row's <code>reassembledText</code> is redacted, proving Collision 1's adaptation actually closes the exposure it names</li>
-        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/dashboard-delta-fold.test.ts</code> — all of the above, green</li>
-        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/observability/projector.test.ts</code> — the existing server-side <code>thinking.delta</code>-never-persisted assertion stays green and unmodified; this task adds to it, it does not replace it</li>
-        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/dashboard-mechanics.test.ts core/test/unit/dashboard-parity.test.ts</code> — still green with the fold wired into <code>EventLog.vue</code></li>
-        <li><code class="status">[]</code> <code>npm run typecheck:dashboard</code></li>
+        <li><code class="status">[x]</code> <code>core/test/unit/dashboard-delta-fold.test.ts</code>: a contiguous run folds to one row with the correct <code>chunkCount</code> and concatenated text, in <code>seq</code> order</li>
+        <li><code class="status">[x]</code> Same file — a <code>tool_call</code> row between two <code>text.delta</code> rows produces two separate folded rows, never one spanning it</li>
+        <li><code class="status">[x]</code> Same file — a terminal event (<code>run.completed</code> / <code>run.failed</code> / <code>run.cancelled</code>) after a delta run closes that run; no fold reaches past it</li>
+        <li><code class="status">[x]</code> Same file — the defensive <code>thinking.delta</code> fixture: the fold function neither starts nor extends a run on <code>type: "thinking.delta"</code></li>
+        <li><code class="status">[x]</code> Same file — <strong>the split-credential fixture</strong>: two adjacent, seq-contiguous <code>text.delta</code> items whose <code>payload.text</code> values each carry half of a credential-shaped value (matching one of <code>CREDENTIAL_PATTERNS</code> only once concatenated); asserts the folded row's <code>reassembledText</code> is redacted, proving Collision 1's adaptation actually closes the exposure it names</li>
+        <li><code class="status">[x]</code> <code>node --experimental-strip-types --test core/test/unit/dashboard-delta-fold.test.ts</code> — all of the above, green</li>
+        <li><code class="status">[x]</code> <code>node --experimental-strip-types --test core/test/unit/observability/projector.test.ts</code> — the existing server-side <code>thinking.delta</code>-never-persisted assertion stays green and unmodified; this task adds to it, it does not replace it</li>
+        <li><code class="status">[x]</code> <code>node --experimental-strip-types --test core/test/unit/dashboard-mechanics.test.ts core/test/unit/dashboard-parity.test.ts</code> — still green with the fold wired into <code>EventLog.vue</code></li>
+        <li><code class="status">[x]</code> <code>npm run typecheck:dashboard</code></li>
       </ul>
       <div class="loop">🔁 <strong>Do not exit this phase until every box above is checked.</strong> If any command fails, fix the cause and re-run — loop until all pass.</div>
     </div>
@@ -577,6 +577,10 @@ flowchart TD
   <!-- ===== AMENDMENTS ===== -->
   <section id="amendments">
     <h2>Amendments</h2>
+    <details>
+      <summary>2026-08-21 — M2 / T03 completed</summary>
+      <p>T03 adds synthetic runtime coverage for the client-side fold: contiguous deltas, a <code>tool_call</code> boundary, a terminal boundary, defensive <code>thinking.delta</code> exclusion, and a split credential whose halves are individually unmatched but redact after reassembly. The fold predicate and re-redaction call were unchanged. Verification passed: <code>node --experimental-strip-types --test core/test/unit/dashboard-delta-fold.test.ts</code> (5 tests), <code>core/test/unit/observability/projector.test.ts</code> (10 tests), <code>core/test/unit/dashboard-mechanics.test.ts core/test/unit/dashboard-parity.test.ts</code> (11 tests), <code>npm run typecheck:dashboard</code>, <code>core/test/unit/meta/ticket-plan-sync.test.ts</code> (10 tests), and <code>core/test/unit/meta/no-credentials-in-fixtures.test.ts</code> (8 tests). M2 is <code>[x]</code>; the W02 spine remains <code>[]</code>.</p>
+    </details>
     <details>
       <summary>2026-08-21 — M2 / T02 completed</summary>
       <p>T02 moves the pure credential-matching primitives into <code>dashboard/shared/credential-patterns.ts</code>, with <code>core/src/policy/redaction.ts</code> re-exporting them, then adds <code>foldTextDeltaRuns()</code>. The client fold starts and continues only on literal <code>text.delta</code> rows with the same <code>runId</code> and strict source-sequence contiguity. It re-redacts the reassembled text before rendering. <code>EventLog.vue</code> now renders folded rows, including their chunk count, duration, and reassembled text on expansion. T03's adversarial fold test remains separate and unstarted. Verification passed: <code>npm run typecheck:dashboard</code>, <code>npm run typecheck:core</code>, <code>node --experimental-strip-types --test core/test/unit/policy/redaction.test.ts core/test/unit/dashboard-mechanics.test.ts core/test/unit/dashboard-parity.test.ts</code> (14 tests), and <code>node --experimental-strip-types --test core/test/unit/meta/ticket-plan-sync.test.ts</code> (10 tests). M2 is <code>[wip]</code>; the W02 spine remains <code>[]</code>.</p>
