@@ -75,7 +75,7 @@ agents:
     prompt: { system: prompts/documenter/system.md, user: prompts/documenter/user.md }
     harness: { adapter: claude, continuity: none }
     tools: { profile: managed-worker, allow: [read, grep, find, ls, edit, write] }
-    writes: ["**/*.md"]
+    writes: ["README.md"]
 
   - name: scout
     model: claude:sonnet
