@@ -44,7 +44,7 @@ function delta(seq: number, text: string, overrides: Partial<EventItem> = {}): E
 
 function folded(row: ReturnType<typeof foldTextDeltaRuns>[number]): FoldedTextDeltaRow {
   assert.equal(row.type, "text.delta.fold");
-  return row;
+  return row as FoldedTextDeltaRow;
 }
 
 test("contiguous text.delta rows fold in source sequence order", () => {

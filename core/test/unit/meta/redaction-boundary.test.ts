@@ -24,13 +24,13 @@ test("every current persistence/display/provider boundary uses the shared creden
 
 test("credential-shape definitions have one production owner", () => {
   const owners = [
-    "core/src/policy/redaction.ts",
+    "dashboard/shared/credential-patterns.ts",
     "core/src/config/load.ts",
     "core/src/config/effective-config.ts",
     "core/src/adapters/env.ts",
   ].filter((path) => {
     const source = readFileSync(join(repoRoot(), path), "utf8");
-    return /AKIA\[|BEGIN \[A-Z|gh\[opusr\]|xox\[baprs\]/.test(source);
+    return /export const CREDENTIAL_PATTERNS/.test(source);
   });
-  assert.deepEqual(owners, ["core/src/policy/redaction.ts"]);
+  assert.deepEqual(owners, ["dashboard/shared/credential-patterns.ts"]);
 });

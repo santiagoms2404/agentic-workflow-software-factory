@@ -463,7 +463,7 @@ stateDiagram-v2
 
     <!-- ===== PHASE 4 ===== -->
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone M4: Fix the clipped run cards</h3>
+      <h3><code class="status">[x]</code> Milestone M4: Fix the clipped run cards</h3>
       <p>Unrelated to the rest of this plan's mechanism, carried in the same slice because it is the same screen. <code>.card-wrap { height: 420px }</code> is sized for four <code>card-metrics-grid</code> rows; the fifth row — <code>authority</code> / <code>partial total</code>, shown only when <code>session.usage.costPartial</code> is true — pushes past that height and <code>.session-card { overflow: hidden }</code> clips it mid-row. Three of six cards were cut in the capture this workstream's diagnosis was drawn from.</p>
 
       <figure class="mockup">
@@ -492,11 +492,11 @@ stateDiagram-v2
       <h4>5. Give the card room for its fifth row, plus Testing Strategy</h4>
       <p><strong>Testing approach.</strong> The CSS assertion proves the declared height changed; it cannot prove the render no longer clips, because a regex over source text has no layout engine behind it. That last property is checked manually.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> In <code>dashboard/src/styles/dashboard.css</code>, increase <code>.card-wrap</code>'s fixed <code>height</code> from <code>420px</code> to <code>452px</code> — enough for the fifth <code>.card-metrics-grid</code> row (its own line height plus the grid's <code>5px</code> row gap) on every card, whether or not <code>partial-metric</code> is present, so the grid layout stays uniform across a row of three cards regardless of which ones show the fifth line.</li>
-        <li><code class="status">[]</code> Do not remove <code>.session-card { overflow: hidden }</code> and do not add scrolling to <code>.card-metrics-grid</code> — <code>dashboard-parity.test.ts</code> already asserts the metrics grid never gets <code>overflow: hidden|auto</code>, and the fix belongs at the height that contains it, not at a clip or a scrollbar on the content.</li>
-        <li><code class="status">[]</code> Extend <code>core/test/unit/dashboard-mechanics.test.ts</code>'s existing <code>.card-wrap</code>/<code>.session-card</code> assertions to require the new height value</li>
-        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/dashboard-mechanics.test.ts core/test/unit/dashboard-parity.test.ts</code> — the existing <code>doesNotMatch</code> assertion against <code>overflow: hidden|auto</code> on <code>.card-metrics-grid</code> stays true</li>
-        <li><code class="status">[]</code> Manual check with the <code>run</code> skill: a session card with <code>costPartial: true</code> shows all five metrics rows uncut in the running dashboard</li>
+        <li><code class="status">[x]</code> In <code>dashboard/src/styles/dashboard.css</code>, increase <code>.card-wrap</code>'s fixed <code>height</code> from <code>420px</code> to <code>452px</code> — enough for the fifth <code>.card-metrics-grid</code> row (its own line height plus the grid's <code>5px</code> row gap) on every card, whether or not <code>partial-metric</code> is present, so the grid layout stays uniform across a row of three cards regardless of which ones show the fifth line.</li>
+        <li><code class="status">[x]</code> Do not remove <code>.session-card { overflow: hidden }</code> and do not add scrolling to <code>.card-metrics-grid</code> — <code>dashboard-parity.test.ts</code> already asserts the metrics grid never gets <code>overflow: hidden|auto</code>, and the fix belongs at the height that contains it, not at a clip or a scrollbar on the content.</li>
+        <li><code class="status">[x]</code> Extend <code>core/test/unit/dashboard-mechanics.test.ts</code>'s existing <code>.card-wrap</code>/<code>.session-card</code> assertions to require the new height value</li>
+        <li><code class="status">[x]</code> <code>node --experimental-strip-types --test core/test/unit/dashboard-mechanics.test.ts core/test/unit/dashboard-parity.test.ts</code> — the existing <code>doesNotMatch</code> assertion against <code>overflow: hidden|auto</code> on <code>.card-metrics-grid</code> stays true</li>
+        <li><code class="status">[x]</code> Manual check with the <code>run</code> skill: a session card with <code>costPartial: true</code> shows all five metrics rows uncut in the running dashboard</li>
       </ul>
       <div class="loop">🔁 <strong>Do not exit this phase until every box above is checked.</strong> If any command fails, fix the cause and re-run — loop until all pass.</div>
     </div>
@@ -507,11 +507,11 @@ stateDiagram-v2
     <h2>Validation Commands</h2>
     <p>Execute these commands to validate the entire plan is complete:</p>
     <ul class="checklist">
-      <li><code class="status">[]</code> <code>node --experimental-strip-types --test "core/test/unit/**/*.test.ts"</code> — the full unit suite, including all four new/extended dashboard test files and the untouched <code>projector.test.ts</code>, green</li>
-      <li><code class="status">[]</code> <code>npm run typecheck</code> — both <code>tsc</code> (core) and <code>vue-tsc</code> (dashboard) clean</li>
-      <li><code class="status">[]</code> <code>npm run lint</code> — <code>oxlint core dashboard</code> clean over the new files</li>
-      <li><code class="status">[]</code> Grep confirms <code>formatCost</code>'s signature and its eighteen pinning assertions are byte-unchanged: <code>git diff --stat -- dashboard/src/display.ts</code> shows only additions, no line inside the existing <code>formatCost</code> function body</li>
-      <li><code class="status">[]</code> Manual dashboard review with the <code>run</code> skill: every event kind in a real or fixture session renders something other than its own kind name; a folded delta run expands to the full reassembled text; the rendered/raw toggle defaults to rendered; no session card clips</li>
+      <li><code class="status">[x]</code> <code>node --experimental-strip-types --test "core/test/unit/**/*.test.ts"</code> — the full unit suite, including all four new/extended dashboard test files and the untouched <code>projector.test.ts</code>, green</li>
+      <li><code class="status">[x]</code> <code>npm run typecheck</code> — both <code>tsc</code> (core) and <code>vue-tsc</code> (dashboard) clean</li>
+      <li><code class="status">[x]</code> <code>npm run lint</code> — <code>oxlint core dashboard</code> clean over the new files</li>
+      <li><code class="status">[x]</code> Grep confirms <code>formatCost</code>'s signature and its eighteen pinning assertions are byte-unchanged: <code>git diff --stat -- dashboard/src/display.ts</code> shows only additions, no line inside the existing <code>formatCost</code> function body</li>
+      <li><code class="status">[x]</code> Manual dashboard review with the <code>run</code> skill: every event kind in a real or fixture session renders something other than its own kind name; a folded delta run expands to the full reassembled text; the rendered/raw toggle defaults to rendered; no session card clips</li>
     </ul>
     <div class="loop">🔁 <strong>The plan is not complete until every box is checked and every command passes. If for some reason a step is not possible to complete, mark it with [f] and move on if possible.</strong></div>
   </section>
@@ -577,6 +577,10 @@ flowchart TD
   <!-- ===== AMENDMENTS ===== -->
   <section id="amendments">
     <h2>Amendments</h2>
+    <details>
+      <summary>2026-08-21 — M4 / T05 completed; W02 closed</summary>
+      <p>T05 changes <code>.card-wrap</code> from <code>420px</code> to <code>452px</code>, preserving <code>.session-card { overflow: hidden }</code> and leaving <code>.card-metrics-grid</code> without overflow or scrolling. The mechanics assertion now pins both the new height and the card clip boundary. Verification passed: <code>node --experimental-strip-types --test core/test/unit/dashboard-mechanics.test.ts core/test/unit/dashboard-parity.test.ts</code> (11 tests), the full unit suite (1073 tests), <code>npm run typecheck</code>, <code>npm run lint</code>, and <code>npm run dash:build</code>. The owner manually confirmed in the running dashboard that a <code>costPartial: true</code> card shows all five metric rows uncut. <code>formatCost</code> remains byte-unchanged. M4 and T05 are <code>[x]</code>; the W02 spine is <code>[x]</code>.</p>
+    </details>
     <details>
       <summary>2026-08-21 — M3 / T04 completed</summary>
       <p>T04 adds the per-row <code>rendered</code>/<code>raw</code> toggle to <code>EventLog.vue</code>, defaulting to rendered through an empty reactive <code>rawRows</code> set. Ordinary rendered rows reuse <code>summarizeEvent()</code> and folded rows reuse <code>reassembledText</code>. To retain the required raw view of a folded row's original inputs, <code>FoldedTextDeltaRow</code> now carries <code>chunkPayloads</code>, an array copied from the already-redacted source payloads. Verification passed: <code>node --experimental-strip-types --test core/test/unit/dashboard-mechanics.test.ts core/test/unit/dashboard-parity.test.ts</code> (11 tests), <code>npm run typecheck:dashboard</code>, and <code>core/test/unit/meta/ticket-plan-sync.test.ts</code> (10 tests). A dev-server browser check confirmed rendered by default and one-click raw for a completed <code>tool_call</code> and a folded delta row. M3 is <code>[x]</code>; the W02 spine remains <code>[]</code>.</p>

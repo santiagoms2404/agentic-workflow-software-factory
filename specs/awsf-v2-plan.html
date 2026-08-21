@@ -526,7 +526,7 @@ flowchart LR
 
     <!-- ================= W02 ================= -->
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone M2: W02 — Evidence readability <span class="wtag core">v2 core</span></h3>
+      <h3><code class="status">[x]</code> Milestone M2: W02 — Evidence readability <span class="wtag core">v2 core</span></h3>
       <p class="deep-plan"><a href="awsf-v2-w02-evidence-readability.html">Deep plan: AWSF v2 W02 — Evidence readability</a> <span class="muted">not yet authored</span></p>
       <p><em>Exists because this is the surface the owner reads while driving everything below it.</em> It is the only workstream in the set whose diagnosis was complete before any work started: the cause is one function, and the data it needs is already in the record. This workstream adds no new evidence to the system — it stops throwing away what is already recorded.</p>
       <h4>2. W02 — Evidence readability</h4>
@@ -543,12 +543,12 @@ flowchart LR
         The three existing dashboard suites — <code>core/test/unit/dashboard-display.test.ts</code>, <code>dashboard-mechanics.test.ts</code>, <code>dashboard-parity.test.ts</code> — plus <code>vue-tsc</code>. New coverage owed: one summariser test per kind; a fold test asserting no fold across a tool call or a terminal event; and the split-credential redaction fixture that deliberately breaks a credential-shaped value across a chunk boundary. <strong>One standing constraint:</strong> eighteen assertions pin <code>formatCost</code> across three files, so reuse must <em>extend</em> the formatters rather than perturb them.
       </div>
       <ul class="checklist">
-        <li><code class="status">[]</code> Deep plan <code>awsf-v2-w02-evidence-readability.html</code> authored with its build prompts and ticket set, and approved by the owner</li>
-        <li><code class="status">[]</code> Per-kind summarisers replace the five-key fallback chain; no row renders its own kind name as its summary</li>
-        <li><code class="status">[]</code> Delta folding is defined on <code>text.delta</code> alone, folds only across contiguous sequence within one run, and a test asserts no <code>thinking.delta</code> reaches the projection</li>
-        <li><code class="status">[]</code> Redaction re-runs over reassembled text in the same code path, proven by the split-credential fixture</li>
-        <li><code class="status">[]</code> A rendered view sits beside the raw JSON, and the clipped run cards no longer cut mid-row</li>
-        <li><code class="status">[]</code> The deep plan's own milestones all reach <code>[x]</code>, with <code>formatCost</code>'s eighteen assertions unchanged</li>
+        <li><code class="status">[x]</code> Deep plan <code>awsf-v2-w02-evidence-readability.html</code> authored with its build prompts and ticket set, and approved by the owner</li>
+        <li><code class="status">[x]</code> Per-kind summarisers replace the five-key fallback chain; no row renders its own kind name as its summary</li>
+        <li><code class="status">[x]</code> Delta folding is defined on <code>text.delta</code> alone, folds only across contiguous sequence within one run, and a test asserts no <code>thinking.delta</code> reaches the projection</li>
+        <li><code class="status">[x]</code> Redaction re-runs over reassembled text in the same code path, proven by the split-credential fixture</li>
+        <li><code class="status">[x]</code> A rendered view sits beside the raw JSON, and the clipped run cards no longer cut mid-row</li>
+        <li><code class="status">[x]</code> The deep plan's own milestones all reach <code>[x]</code>, with <code>formatCost</code>'s eighteen assertions unchanged</li>
       </ul>
       <div class="loop">🔁 <strong>Do not exit this workstream until its deep plan's every box is checked.</strong> A failing command means fix the cause and re-run — never lower what the row asserts.</div>
     </div>
@@ -1056,6 +1056,11 @@ stateDiagram-v2
   <section id="amendments">
     <h2>Amendments</h2>
     <p class="sub">Running history of changes made after this plan was first authored. Append-only; populated by Update Plan, by the review workflow, and by the sessions that author each deep plan. Later entries will record each deep plan as it is authored and approved, and each invariant amendment as it lands.</p>
+
+    <details>
+      <summary>2026-08-21 — W02 landed: milestone M2 goes [x]</summary>
+      <p><code>awsf-v2-w02-evidence-readability.html</code>'s five tasks and four milestones are complete. It replaces the event-log fallback chain with per-kind summaries, folds and re-redacts contiguous <code>text.delta</code> runs, adds the rendered/raw view, and gives run cards room for the fifth metrics row. The full unit suite passed 1073 tests, typecheck and lint passed, and the owner manually confirmed the unclipped <code>costPartial: true</code> card. W02 is <code>[x]</code>.</p>
+    </details>
 
     <details>
       <summary>2026-08-21 — the <code>--settings</code> exclusion probe was run, and it falsified the assumption behind W01's scoping claim</summary>

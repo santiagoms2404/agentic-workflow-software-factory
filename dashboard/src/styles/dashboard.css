@@ -79,7 +79,7 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible, summary:focus-v
 
 .run-count { max-width: 1680px; margin: 0 auto; padding: 20px 28px 0; color: var(--dim); }
 .sessions-grid { max-width: 1680px; margin: 0 auto; padding: 16px 28px 30px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
-.card-wrap { position: relative; min-width: 0; height: 420px; }
+.card-wrap { position: relative; min-width: 0; height: 452px; }
 .session-card {
   height: 100%;
   min-width: 0;
