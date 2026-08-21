@@ -483,7 +483,7 @@ flowchart LR
 
     <!-- ================= M2 ================= -->
     <div class="phase">
-      <h3><code class="status">[wip]</code> Milestone M2: The guard, committed and mechanically proven</h3>
+      <h3><code class="status">[x]</code> Milestone M2: The guard, committed and mechanically proven</h3>
       <p>The guard stops being an anecdote and becomes a tested file. Its behaviour is currently asserted by four captures taken by hand; after this phase it is asserted by twenty-six payloads that run in under a second with no provider call. The phase also makes the guard's header honest about limits measured after it was written, splits the two failures that share one fail-open branch today, and lands the session banner — the four installed files, all in one directory, all tested from one place.</p>
 
       <figure>
@@ -542,16 +542,16 @@ flowchart LR
         The fixture text contains the six owner-act phrases, and a marimba session's own guard denies any Bash command whose text contains one — measured, exit 2, including <code>echo</code> and <code>grep</code>. So <strong>the fixtures are authored with the file-writing tools, never with a shell heredoc</strong>, because those payloads carry a <code>file_path</code> and no <code>command</code> and fence 2 never sees them. Running the finished test is fine: the command line is a test-runner invocation and contains none of the phrases.
       </div>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>core/test/unit/meta/marimba-guard.test.ts</code> exists and is table-driven, with every row carrying a one-line reason it is in the table</li>
-        <li><code class="status">[]</code> Both fences are covered: delegation-shaped names, the six owner-act shapes, the whole-name exclusions, and the <code>mcp__*</code> pass-through</li>
-        <li><code class="status">[]</code> The fail-open rows are asserted as <em>expected</em> behaviour with the reason in a comment — malformed JSON and empty payload. <strong>The unrunnable-interpreter case is now a DENY row</strong>, per <a href="#questionables">Q2</a>, asserting the exit code and that the reason names both the cause and the fix</li>
-        <li><code class="status">[]</code> The known evasion is a row, asserted as an allow, with the comment naming it as the design's ceiling rather than a bug to fix by widening the match</li>
-        <li><code class="status">[]</code> Deny rows assert exit 2 <em>and</em> empty stdout <em>and</em> a non-empty reason on stderr</li>
-        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/marimba-guard.test.ts</code> — green, and under two seconds</li>
-        <li><code class="status">[]</code> Proven to bite: neutralise one branch of the committed script in a scratch copy, watch the matching row go red, discard the scratch copy</li>
-        <li><code class="status">[]</code> The banner is covered too: it exits 0 with the guard present, exits 0 <em>and reports the absence</em> with the guard path pointed at nothing, and never prints a line claiming the hook will fire</li>
-        <li><code class="status">[]</code> The test skips nothing. If either script is missing it fails loudly — a skip is how a fence quietly stops meaning anything</li>
-        <li><code class="status">[]</code> <code>npm run test:unit</code> and <code>npm run lint</code> — green</li>
+        <li><code class="status">[x]</code> <code>core/test/unit/meta/marimba-guard.test.ts</code> exists and is table-driven, with every row carrying a one-line reason it is in the table</li>
+        <li><code class="status">[x]</code> Both fences are covered: delegation-shaped names, the six owner-act shapes, the whole-name exclusions, and the <code>mcp__*</code> pass-through</li>
+        <li><code class="status">[x]</code> The fail-open rows are asserted as <em>expected</em> behaviour with the reason in a comment — malformed JSON and empty payload. <strong>The unrunnable-interpreter case is now a DENY row</strong>, per <a href="#questionables">Q2</a>, asserting the exit code and that the reason names both the cause and the fix</li>
+        <li><code class="status">[x]</code> The known evasion is a row, asserted as an allow, with the comment naming it as the design's ceiling rather than a bug to fix by widening the match</li>
+        <li><code class="status">[x]</code> Deny rows assert exit 2 <em>and</em> empty stdout <em>and</em> a non-empty reason on stderr</li>
+        <li><code class="status">[x]</code> <code>node --experimental-strip-types --test core/test/unit/meta/marimba-guard.test.ts</code> — green, and under two seconds</li>
+        <li><code class="status">[x]</code> Proven to bite: neutralise one branch of the committed script in a scratch copy, watch the matching row go red, discard the scratch copy</li>
+        <li><code class="status">[x]</code> The banner is covered too: it exits 0 with the guard present, exits 0 <em>and reports the absence</em> with the guard path pointed at nothing, and never prints a line claiming the hook will fire</li>
+        <li><code class="status">[x]</code> The test skips nothing. If either script is missing it fails loudly — a skip is how a fence quietly stops meaning anything</li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code> and <code>npm run lint</code> — green</li>
       </ul>
       <div class="loop">
         🔁 <strong>Do not exit this phase until every box above is checked.</strong>
