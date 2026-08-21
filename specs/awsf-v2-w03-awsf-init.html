@@ -360,7 +360,7 @@ cleanup: removing /tmp/awsf-init-probe-mD0Vuv</pre>
 
     <!-- ================= M1 ================= -->
     <div class="phase">
-      <h3><code class="status">[wip]</code> Milestone M1: A minimal config, derived from the schema, round-tripped through the loader</h3>
+      <h3><code class="status">[x]</code> Milestone M1: A minimal config, derived from the schema, round-tripped through the loader</h3>
       <p>Before anything writes a file, the thing it writes has to be provably loadable — not "believed loadable" from reading <code>schema.ts</code> by eye. This phase produces <code>buildMinimalConfig</code> as a typed object and proves it round-trips, before any command sequences a directory around it.</p>
 
       <h4>1. Enumerate the schema's required shape and choose the minimal values</h4>
@@ -389,10 +389,10 @@ cleanup: removing /tmp/awsf-init-probe-mD0Vuv</pre>
       <h4>3. Testing Strategy</h4>
       <p>A round-trip proof, not an inspection. Build the object, serialise it with the same <code>yaml</code> package <code>load.ts</code> parses with, feed the text back through the real <code>loadConfig()</code>, and assert the result deep-equals the object that went in. This is the only way "the generated config loads" is proven by the function that will load it later, rather than by reading the schema and hoping.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/config/init-template.test.ts</code> — round trip: <code>buildMinimalConfig → stringify → loadConfig → deepEqual</code>, for at least two distinct valid slugs</li>
-        <li><code class="status">[]</code> A deliberately invalid slug is rejected, and the rejection is proven to come from <code>buildMinimalConfig</code> itself (not merely from <code>loadConfig</code> downstream)</li>
-        <li><code class="status">[]</code> The call-ceiling values are asserted equal to <code>MIN_CALL_CEILING</code>/<code>MAX_CALL_CEILING</code> imports, not to repeated numeric literals — a change to those constants must move this test without an edit</li>
-        <li><code class="status">[]</code> <code>npm run typecheck</code> — clean; the typed-object approach is proven by the compiler agreeing, not only by the runtime test</li>
+        <li><code class="status">[x]</code> <code>node --experimental-strip-types --test core/test/unit/config/init-template.test.ts</code> — round trip: <code>buildMinimalConfig → stringify → loadConfig → deepEqual</code>, for at least two distinct valid slugs</li>
+        <li><code class="status">[x]</code> A deliberately invalid slug is rejected, and the rejection is proven to come from <code>buildMinimalConfig</code> itself (not merely from <code>loadConfig</code> downstream)</li>
+        <li><code class="status">[x]</code> The call-ceiling values are asserted equal to <code>MIN_CALL_CEILING</code>/<code>MAX_CALL_CEILING</code> imports, not to repeated numeric literals — a change to those constants must move this test without an edit</li>
+        <li><code class="status">[x]</code> <code>npm run typecheck</code> — clean; the typed-object approach is proven by the compiler agreeing, not only by the runtime test</li>
       </ul>
       <div class="loop">
         🔁 <strong>Do not exit this phase until every box above is checked.</strong>
