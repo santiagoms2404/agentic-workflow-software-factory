@@ -445,7 +445,7 @@ flowchart LR
 
     <!-- ================= M1 ================= -->
     <div class="phase">
-      <h3><code class="status">[wip]</code> Milestone M1: Retire the boundary claims already in the tree</h3>
+      <h3><code class="status">[x]</code> Milestone M1: Retire the boundary claims already in the tree</h3>
       <p>Before a new document says the true thing, the three documents saying the false thing have to stop. Doing this first is not tidiness: a contract that contradicts the cookbook a driving session is routed to gives the tree two answers, and the reader has no way to know which is current. This phase touches only prose and one new fence, and it leaves the suite green.</p>
 
       <h4>1. Repair the three documents that call a terminal check an authorisation boundary</h4>
@@ -467,13 +467,13 @@ flowchart LR
         A banned-phrase list is escapable by paraphrase, and a fence that over-fires teaches authors to stop writing plainly. Both risks are real. The mitigation is the same one <code>doc-reconciliation.test.ts</code> chose for its own residual gap: keep the pattern list small, comment why each entry is there, ship the over-fire control alongside the bite control, and <strong>name the gap in the test file rather than closing it with a cleverer regex</strong>. A paraphrase escapes. That is accepted.
       </div>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>core/test/unit/meta/boundary-claims.test.ts</code> exists with both halves and both companions</li>
-        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/boundary-claims.test.ts</code> — green over the repaired tree</li>
-        <li><code class="status">[]</code> The claim ban is proven to bite: restore one deleted sentence in a scratch copy and watch it go red, then discard the scratch copy</li>
-        <li><code class="status">[]</code> The over-fire control is proven: the <code>doctor</code> "read-only by construction" sentence passes</li>
-        <li><code class="status">[]</code> The derivation is proven to bite: a seventh fake act name in a document fails the second half</li>
-        <li><code class="status">[]</code> <code>npm run test:unit</code> — the whole unit suite, still green, no count regression</li>
-        <li><code class="status">[]</code> <code>npm run lint</code> — clean</li>
+        <li><code class="status">[x]</code> <code>core/test/unit/meta/boundary-claims.test.ts</code> exists with both halves and both companions</li>
+        <li><code class="status">[x]</code> <code>node --experimental-strip-types --test core/test/unit/meta/boundary-claims.test.ts</code> — green over the repaired tree</li>
+        <li><code class="status">[x]</code> The claim ban is proven to bite: restore one deleted sentence in a scratch copy and watch it go red, then discard the scratch copy</li>
+        <li><code class="status">[x]</code> The over-fire control is proven: the <code>doctor</code> "read-only by construction" sentence passes</li>
+        <li><code class="status">[x]</code> The derivation is proven to bite: a seventh fake act name in a document fails the second half</li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code> — the whole unit suite, still green, no count regression</li>
+        <li><code class="status">[x]</code> <code>npm run lint</code> — clean</li>
       </ul>
       <div class="loop">
         🔁 <strong>Do not exit this phase until every box above is checked.</strong>
