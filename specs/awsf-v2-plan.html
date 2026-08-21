@@ -555,7 +555,7 @@ flowchart LR
 
     <!-- ================= W03 ================= -->
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone M3: W03 — <code>awsf init</code> <span class="wtag core">v2 core</span></h3>
+      <h3><code class="status">[x]</code> Milestone M3: W03 — <code>awsf init</code> <span class="wtag core">v2 core</span></h3>
       <p class="deep-plan"><a href="awsf-v2-w03-awsf-init.html">Deep plan: AWSF v2 W03 — awsf init</a> <span class="muted">not yet authored</span></p>
       <p><em>Exists because it removes greenfield's chicken-and-egg without inventing a pre-repository execution mode.</em> Nothing about creating an empty project needs a provider, and making the command host-only removes the problem entirely rather than solving it.</p>
       <h4>3. W03 — <code>awsf init</code></h4>
@@ -571,11 +571,11 @@ flowchart LR
         A temporary-directory <code>git init</code> round trip. The baseline commit's identity is the owner's, per invariant 11 — the no-agent-coauthor fence already scans this repository's own history and the new command must not be the thing that breaks it elsewhere. And a test asserting <strong>no model call happens before the baseline exists</strong>, which is the property that makes the command deterministic rather than merely fast. Offline; no quota.
       </div>
       <ul class="checklist">
-        <li><code class="status">[]</code> Deep plan <code>awsf-v2-w03-awsf-init.html</code> authored with its build prompts and ticket set, and approved by the owner</li>
-        <li><code class="status">[]</code> The command is host-only and calls no provider; a test proves the absence rather than the intention</li>
-        <li><code class="status">[]</code> The baseline commit carries the owner's identity as author and committer</li>
-        <li><code class="status">[]</code> The bootstrap order is baseline-first, with the plan produced as a governed phase output</li>
-        <li><code class="status">[]</code> The deep plan's own milestones all reach <code>[x]</code></li>
+        <li><code class="status">[x]</code> Deep plan <code>awsf-v2-w03-awsf-init.html</code> authored with its build prompts and ticket set, and approved by the owner</li>
+        <li><code class="status">[x]</code> The command is host-only and calls no provider; a test proves the absence rather than the intention</li>
+        <li><code class="status">[x]</code> The baseline commit carries the owner's identity as author and committer</li>
+        <li><code class="status">[x]</code> The bootstrap order is baseline-first, with the plan produced as a governed phase output</li>
+        <li><code class="status">[x]</code> The deep plan's own milestones all reach <code>[x]</code></li>
       </ul>
       <div class="loop">🔁 <strong>Do not exit this workstream until its deep plan's every box is checked.</strong> A failing command means fix the cause and re-run — never lower what the row asserts.</div>
     </div>

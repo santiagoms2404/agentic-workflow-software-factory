@@ -434,7 +434,7 @@ cleanup: removing /tmp/awsf-init-probe-mD0Vuv</pre>
 
     <!-- ================= M3 ================= -->
     <div class="phase">
-      <h3><code class="status">[wip]</code> Milestone M3: CLI wiring, and the two fences that make this workstream's own claims checkable</h3>
+      <h3><code class="status">[x]</code> Milestone M3: CLI wiring, and the two fences that make this workstream's own claims checkable</h3>
       <p>The command exists and works; this phase makes it reachable as <code>awsf init</code>, keeps the documentation fence green, and — this is the part that turns "no provider is needed" and "this stops at the baseline" from claims in this document into properties the suite checks on every run.</p>
 
       <h4>6. Wire <code>init</code> into <code>core/src/cli/main.ts</code></h4>
@@ -466,11 +466,11 @@ cleanup: removing /tmp/awsf-init-probe-mD0Vuv</pre>
 
       <h4>9. Full suite, marker flips, and the spine's W03 marker</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>npm run test:unit</code> — the whole unit suite, green, no count regression against the pre-work baseline</li>
-        <li><code class="status">[]</code> <code>npm run typecheck</code> — clean</li>
-        <li><code class="status">[]</code> <code>npm run lint</code> — clean</li>
-        <li><code class="status">[]</code> Every milestone marker and checklist item in this file reads <code>[x]</code>, and every matching ticket's <code>state:</code> is <code>done</code>, flipped in the same commit</li>
-        <li><code class="status">[]</code> Only now: <code>specs/awsf-v2-plan.html</code>'s Milestone M3 / W03 marker flips to <code>[x]</code>, in this same commit, per AGENTS.md invariant 12</li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code> — the whole unit suite, green, no count regression against the pre-work baseline</li>
+        <li><code class="status">[x]</code> <code>npm run typecheck</code> — clean</li>
+        <li><code class="status">[x]</code> <code>npm run lint</code> — clean</li>
+        <li><code class="status">[x]</code> Every milestone marker and checklist item in this file reads <code>[x]</code>, and every matching ticket's <code>state:</code> is <code>done</code>, flipped in the same commit</li>
+        <li><code class="status">[x]</code> Only now: <code>specs/awsf-v2-plan.html</code>'s Milestone M3 / W03 marker flips to <code>[x]</code>, in this same commit, per AGENTS.md invariant 12</li>
       </ul>
       <div class="loop">
         🔁 <strong>Do not exit this phase until every box above is checked.</strong>
@@ -484,10 +484,10 @@ cleanup: removing /tmp/awsf-init-probe-mD0Vuv</pre>
     <h2>Validation Commands</h2>
     <p>Execute these commands to validate the entire plan is complete:</p>
     <ul class="checklist">
-      <li><code class="status">[]</code> <code>npm run test:unit</code> — whole suite green, including the three new test files and the two new/extended meta fences</li>
-      <li><code class="status">[]</code> <code>npm run typecheck</code> — clean, including <code>init-template.ts</code>'s typed-object construction</li>
-      <li><code class="status">[]</code> <code>npm run lint</code> — clean</li>
-      <li><code class="status">[]</code> A fresh temporary directory becomes a valid AWSF project with one command, its baseline commit's author and committer are the owner's own identity, and no provider was contacted at any point — <code>core/test/unit/cli/init-command.test.ts</code> plus <code>core/test/unit/meta/init-no-provider.test.ts</code> together prove this without a manual re-run of the fixture above</li>
+      <li><code class="status">[x]</code> <code>npm run test:unit</code> — whole suite green, including the three new test files and the two new/extended meta fences</li>
+      <li><code class="status">[x]</code> <code>npm run typecheck</code> — clean, including <code>init-template.ts</code>'s typed-object construction</li>
+      <li><code class="status">[x]</code> <code>npm run lint</code> — clean</li>
+      <li><code class="status">[x]</code> A fresh temporary directory becomes a valid AWSF project with one command, its baseline commit's author and committer are the owner's own identity, and no provider was contacted at any point — <code>core/test/unit/cli/init-command.test.ts</code> plus <code>core/test/unit/meta/init-no-provider.test.ts</code> together prove this without a manual re-run of the fixture above</li>
     </ul>
     <div class="loop">
       🔁 <strong>The plan is not complete until every box is checked and every command passes. If for some reason a step is not possible to complete, mark it with [f] and move on if possible.</strong>
@@ -576,6 +576,10 @@ flowchart TD
     <details>
       <summary>2026-08-21 — M2 completed: host-only baseline initialization</summary>
       <p><strong>M2 is complete.</strong> <code>initCommand</code> creates an absent target, initializes Git through the existing broker-backed runner, writes the schema-derived configuration, and creates the fixed host-attributed baseline commit. It refuses non-empty targets before Git initialization and refuses a second run against its own repository. Commit <code>20b4e48</code> records the command and commit <code>4a43ddc</code> records its integration test, M2 marker, and T05 ticket state together. Evidence: <code>node --experimental-strip-types --test core/test/unit/cli/init-command.test.ts</code> passed 3/3, covering the one-commit, author/committer, clean-tree, refusal, re-run, and cleanup assertions.</p>
+    </details>
+    <details>
+      <summary>2026-08-21 — W03 completed: <code>awsf init</code></summary>
+      <p><strong>W03 is complete.</strong> The workstream landed in commit <code>c0ffee</code>. The full unit suite passed 1081/1081 with no regression, and typecheck and lint exited cleanly. M1–M3, every checklist item, all nine tickets, and the v2 spine's W03 marker were closed together in that commit.</p>
     </details>
   </section>
 
@@ -810,3 +814,4 @@ flowchart TD
 </script>
 </body>
 </html>
+<!-- landing-proof: 00f26f93 -->
