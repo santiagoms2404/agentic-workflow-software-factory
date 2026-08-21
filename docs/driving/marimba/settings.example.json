@@ -1,0 +1,30 @@
+{
+  "_comment_1": "marimba's settings, as an EXAMPLE. JSON carries no comments, so the two notes live in these keys and are ignored by the reader. README.md in this directory is the real explanation.",
+  "_comment_2": "Replace both REPLACE_WITH_ABSOLUTE_PATH_TO_CHECKOUT placeholders with the absolute path of your clone of this repository. No machine path is committed here, and the copies of these two scripts in the repository are the only copies - there is no second, installed copy to keep in step.",
+  "permissions": {
+    "deny": ["Task", "Agent"]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "REPLACE_WITH_ABSOLUTE_PATH_TO_CHECKOUT/docs/driving/marimba/delegation-guard.sh"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "REPLACE_WITH_ABSOLUTE_PATH_TO_CHECKOUT/docs/driving/marimba/session-banner.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

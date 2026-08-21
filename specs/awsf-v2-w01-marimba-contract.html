@@ -483,7 +483,7 @@ flowchart LR
 
     <!-- ================= M2 ================= -->
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone M2: The guard, committed and mechanically proven</h3>
+      <h3><code class="status">[wip]</code> Milestone M2: The guard, committed and mechanically proven</h3>
       <p>The guard stops being an anecdote and becomes a tested file. Its behaviour is currently asserted by four captures taken by hand; after this phase it is asserted by twenty-six payloads that run in under a second with no provider call. The phase also makes the guard's header honest about limits measured after it was written, splits the two failures that share one fail-open branch today, and lands the session banner — the four installed files, all in one directory, all tested from one place.</p>
 
       <figure>
@@ -524,15 +524,15 @@ flowchart LR
       <h4>3. Land marimba's installed files in the tree, with the guard's real limits in its header</h4>
       <p>The script is copied into <code>docs/driving/marimba/</code> byte-for-byte first, so the move is separable from the edit and a later reader can see which change did what. Then the header is corrected. Then the header is corrected and the one behaviour change <a href="#questionables">Q2</a> decided goes in: a single guarded branch splitting two failures that share one branch today. A payload the parser rejects is a harness schema change and keeps failing open; a parser that cannot run at all is a machine defect, affects every call, and now fails closed with its cause and its fix on one line. <strong>Q4's banner lands in the same task</strong>, as a fourth installed file, and reports only what it checked.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>docs/driving/marimba/delegation-guard.sh</code> lands as an exact copy first, in its own commit</li>
-        <li><code class="status">[]</code> The header names every measured limit, not only malformed JSON: the interpreter dependency, the written-text-not-intent property with the indirection example, the over-denial of reads that contain an act name, the absence of self-protection, and MCP names never being classified</li>
-        <li><code class="status">[]</code> The header states the one thing the guard is <em>for</em> in a sentence, so a reader who only reads the header does not mistake it for a sandbox</li>
-        <li><code class="status">[]</code> The Q2 branch is in: a payload the parser rejects still fails open; a parser that cannot run at all fails closed, exits 2, and its reason names both the cause and the one-line fix</li>
-        <li><code class="status">[]</code> <code>docs/driving/marimba/session-banner.sh</code> exists, exits 0 unconditionally, and reports only what it checked — settings loaded, guard present and executable, parser runnable. It must not say or imply that the <code>PreToolUse</code> hook will fire, because it cannot know that</li>
-        <li><code class="status">[]</code> <code>docs/driving/marimba/settings.example.json</code> carries the <code>permissions.deny</code> pair, the <code>PreToolUse</code> hook and the <code>SessionStart</code> hook, with obvious placeholders where the two absolute paths go and no machine path committed</li>
-        <li><code class="status">[]</code> <code>docs/driving/marimba/README.md</code> states the install steps as owner acts and says plainly that the repository holds the only copy</li>
-        <li><code class="status">[]</code> No file added under <code>docs/driving/</code> has a basename containing <code>receipt</code> or <code>manifest</code> — the junk-drawer fence is unrelated to this work and would still fail it</li>
-        <li><code class="status">[]</code> Nothing else is added to the guard. <a href="#questionables">Q3</a> received no verdict, so the self-write fence stays unbuilt and stated</li>
+        <li><code class="status">[x]</code> <code>docs/driving/marimba/delegation-guard.sh</code> lands as an exact copy first, in its own commit</li>
+        <li><code class="status">[x]</code> The header names every measured limit, not only malformed JSON: the interpreter dependency, the written-text-not-intent property with the indirection example, the over-denial of reads that contain an act name, the absence of self-protection, and MCP names never being classified</li>
+        <li><code class="status">[x]</code> The header states the one thing the guard is <em>for</em> in a sentence, so a reader who only reads the header does not mistake it for a sandbox</li>
+        <li><code class="status">[x]</code> The Q2 branch is in: a payload the parser rejects still fails open; a parser that cannot run at all fails closed, exits 2, and its reason names both the cause and the one-line fix</li>
+        <li><code class="status">[x]</code> <code>docs/driving/marimba/session-banner.sh</code> exists, exits 0 unconditionally, and reports only what it checked — settings loaded, guard present and executable, parser runnable. It must not say or imply that the <code>PreToolUse</code> hook will fire, because it cannot know that</li>
+        <li><code class="status">[x]</code> <code>docs/driving/marimba/settings.example.json</code> carries the <code>permissions.deny</code> pair, the <code>PreToolUse</code> hook and the <code>SessionStart</code> hook, with obvious placeholders where the two absolute paths go and no machine path committed</li>
+        <li><code class="status">[x]</code> <code>docs/driving/marimba/README.md</code> states the install steps as owner acts and says plainly that the repository holds the only copy</li>
+        <li><code class="status">[x]</code> No file added under <code>docs/driving/</code> has a basename containing <code>receipt</code> or <code>manifest</code> — the junk-drawer fence is unrelated to this work and would still fail it</li>
+        <li><code class="status">[x]</code> Nothing else is added to the guard. <a href="#questionables">Q3</a> decided against the self-write fence, so it stays unbuilt and is stated instead - in the guard's header, and in the contract's part 3 at task 5</li>
       </ul>
 
       <h4>4. The offline denial matrix, plus Testing Strategy</h4>
