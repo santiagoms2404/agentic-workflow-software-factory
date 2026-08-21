@@ -561,19 +561,19 @@ flowchart LR
 
     <!-- ================= M3 ================= -->
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone M3: The contract itself</h3>
+      <h3><code class="status">[wip]</code> Milestone M3: The contract itself</h3>
       <p>Everything the contract asserts is now either measured and recorded in this plan or enforced by a test that exists. That ordering is deliberate: writing the document first would have meant writing claims and hoping they were checkable.</p>
 
       <h4>5. Author the contract</h4>
       <p>Eight parts, in the order given in <a href="#solution">Solution</a>. Written to be read in three minutes by a session that has just started and has no other context. It names no command, carries no relative path, and restates nothing the tree already owns.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>docs/driving/marimba/CONTRACT.md</code> covers all eight parts, in order</li>
-        <li><code class="status">[]</code> Part 3 — what the boundary does not cover — carries all seven measured items, each in one plain sentence, and is the longest part of the document</li>
-        <li><code class="status">[]</code> Part 4 states the settings semantics exactly as measured: <code>--settings</code> merges rather than excludes; <code>--setting-sources</code> is what excludes; a project hook returning allow does not override the deny; the <code>permissions.allow</code> case is named as untested</li>
-        <li><code class="status">[]</code> Part 5 states the architecture-review exception in a form W05's deep plan can cite verbatim: the guard is delivered per invocation, so a session launched without marimba's settings keeps the delegation tools, and that is the supported route for a review by an agent that did not write the proposal</li>
-        <li><code class="status">[]</code> Part 6 carries the four true guarantees and no fifth one; it does not claim confinement to the state root, and it says the managed worktree root is a sibling of the state root</li>
-        <li><code class="status">[]</code> Nowhere does the document describe a terminal check as an authorisation boundary, and <code>boundary-claims.test.ts</code> now covers it because it is a driving document</li>
-        <li><code class="status">[]</code> No live task state, no session id, no run id, no machine path, no continuity locator — invariant 1, in a file that will be read by every marimba session</li>
+        <li><code class="status">[x]</code> <code>docs/driving/marimba/CONTRACT.md</code> covers all eight parts, in order</li>
+        <li><code class="status">[x]</code> Part 3 — what the boundary does not cover — carries all seven measured items, each in one plain sentence, and is the longest part of the document</li>
+        <li><code class="status">[x]</code> Part 4 states the settings semantics exactly as measured: <code>--settings</code> merges rather than excludes; <code>--setting-sources</code> is what excludes; a project hook returning allow does not override the deny; the <code>permissions.allow</code> case is named as untested</li>
+        <li><code class="status">[x]</code> Part 5 states the architecture-review exception in a form W05's deep plan can cite verbatim: the guard is delivered per invocation, so a session launched without marimba's settings keeps the delegation tools, and that is the supported route for a review by an agent that did not write the proposal</li>
+        <li><code class="status">[x]</code> Part 6 carries the four true guarantees and no fifth one; it does not claim confinement to the state root, and it says the managed worktree root is a sibling of the state root</li>
+        <li><code class="status">[x]</code> Nowhere does the document describe a terminal check as an authorisation boundary, and <code>boundary-claims.test.ts</code> now covers it because it is a driving document</li>
+        <li><code class="status">[x]</code> No live task state, no session id, no run id, no machine path, no continuity locator — invariant 1, in a file that will be read by every marimba session</li>
       </ul>
 
       <h4>6. The contract's own fences — command-free, route-free, no live state, within budget, plus Testing Strategy</h4>
