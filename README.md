@@ -192,6 +192,7 @@ AWSF runs from a checked-out repository on Node 22.12 or newer:
 ```bash
 npm install
 npm test
+awsf init ./my-project --project my-project
 npm run awsf -- doctor
 npm run awsf -- db rebuild
 ```
