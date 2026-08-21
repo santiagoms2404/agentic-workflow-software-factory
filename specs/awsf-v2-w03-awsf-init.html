@@ -381,9 +381,9 @@ cleanup: removing /tmp/awsf-init-probe-mD0Vuv</pre>
       <h4>2. Implement <code>buildMinimalConfig(slug)</code> as a typed object, not a template string</h4>
       <p><code>core/src/config/init-template.ts</code> exports a pure function returning <code>AwsfConfig</code>. It performs no I/O — serialisation to YAML text is a separate, one-line call site in <code>init.ts</code>, kept out of this function so the object itself stays the thing under test.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>buildMinimalConfig(slug: string): AwsfConfig</code> exists, typed against the schema's own <code>Static&lt;typeof AwsfConfigSchema&gt;</code> type — a missing or misnamed field is a compile error, not a runtime surprise</li>
-        <li><code class="status">[]</code> The function performs no filesystem, network, or child-process call — it is pure data construction</li>
-        <li><code class="status">[]</code> An invalid <code>slug</code> (empty, uppercase, leading hyphen) is rejected by the function itself with a clear error, before <code>loadConfig</code> ever sees it</li>
+        <li><code class="status">[x]</code> <code>buildMinimalConfig(slug: string): AwsfConfig</code> exists, typed against the schema's own <code>Static&lt;typeof AwsfConfigSchema&gt;</code> type — a missing or misnamed field is a compile error, not a runtime surprise</li>
+        <li><code class="status">[x]</code> The function performs no filesystem, network, or child-process call — it is pure data construction</li>
+        <li><code class="status">[x]</code> An invalid <code>slug</code> (empty, uppercase, leading hyphen) is rejected by the function itself with a clear error, before <code>loadConfig</code> ever sees it</li>
       </ul>
 
       <h4>3. Testing Strategy</h4>
