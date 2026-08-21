@@ -402,18 +402,18 @@ cleanup: removing /tmp/awsf-init-probe-mD0Vuv</pre>
 
     <!-- ================= M2 ================= -->
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone M2: The host-only command — directory, <code>git init</code>, config, baseline commit</h3>
+      <h3><code class="status">[wip]</code> Milestone M2: The host-only command — directory, <code>git init</code>, config, baseline commit</h3>
       <p>The four-step sequence the fixture in <a href="#measured">What Was Measured</a> already proved by hand, now wired into a real, reusable command function and exercised through the transport broker rather than a standalone probe script.</p>
 
       <h4>4. Implement <code>initCommand({ path, slug })</code></h4>
       <p><code>core/src/cli/commands/init.ts</code>. Each step reuses an existing helper; none introduces a new way to do something the tree already knows how to do.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> Precondition: the target directory is either absent or exists and is empty — <strong>per Q2's decision</strong> — and the function refuses with a named error otherwise, before touching the filesystem further</li>
-        <li><code class="status">[]</code> <code>mkdir</code> (recursive) if the directory is absent</li>
-        <li><code class="status">[]</code> <code>git init</code> via <code>systemGitRunner(path)</code> / <code>runGit()</code> — no new <code>child_process</code> call site</li>
-        <li><code class="status">[]</code> <code>buildMinimalConfig(slug)</code> is serialised and written to <code>&lt;path&gt;/awsf.config.yaml</code></li>
-        <li><code class="status">[]</code> <code>commitAsHost({ repository: path, message: "chore: awsf init baseline" })</code> — the fixed message per Q5</li>
-        <li><code class="status">[]</code> The function returns the produced commit SHA and the resolved path, and performs no other write</li>
+        <li><code class="status">[x]</code> Precondition: the target directory is either absent or exists and is empty — <strong>per Q2's decision</strong> — and the function refuses with a named error otherwise, before touching the filesystem further</li>
+        <li><code class="status">[x]</code> <code>mkdir</code> (recursive) if the directory is absent</li>
+        <li><code class="status">[x]</code> <code>git init</code> via <code>systemGitRunner(path)</code> / <code>runGit()</code> — no new <code>child_process</code> call site</li>
+        <li><code class="status">[x]</code> <code>buildMinimalConfig(slug)</code> is serialised and written to <code>&lt;path&gt;/awsf.config.yaml</code></li>
+        <li><code class="status">[x]</code> <code>commitAsHost({ repository: path, message: "chore: awsf init baseline" })</code> — the fixed message per Q5</li>
+        <li><code class="status">[x]</code> The function returns the produced commit SHA and the resolved path, and performs no other write</li>
       </ul>
 
       <h4>5. Testing Strategy</h4>
