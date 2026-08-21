@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plan: AWSF v2 W02 — Evidence readability</title>
+<style>
+/* AWSF dark theme — the same tokens the v1 plan, the v2 spine, and W01's deep plan carry,
+   so the whole plan corpus reads as one document set and the mermaid palette stays synced.
+   The review layer reuses --bg / --fg / --muted / --accent. */
+:root {
+  --bg:#0F1017; --surface:rgba(28,30,43,.85); --surface-solid:#1C1E2B;
+  --border:rgba(255,255,255,.07); --text:#E7E9F0; --muted:#8B90A6;
+
+  --agent-engineer:#F59E0B; --agent-planner:#A78BFA; --agent-builder:#22D3EE;
+  --agent-reviewer:#F43F5E;
+
+  --ok:#22C55E; --running:#3B82F6; --error:#EF4444; --warn:#F97316;
+
+  --font-ui:"Inter","Outfit",system-ui,sans-serif;
+  --font-mono:"JetBrains Mono","Fira Code",ui-monospace,monospace;
+  --num:tabular-nums;
+
+  --r-card:14px; --r-pill:999px;
+  --shadow-card:0 1px 0 rgba(255,255,255,.04) inset, 0 8px 24px rgba(0,0,0,.35);
+
+  --fg:var(--text); --accent:var(--agent-planner);
+  --cool:var(--agent-builder); --good:var(--ok); --danger:var(--error);
+  --border-strong:#2b3040;
+  --maxw:1120px;
+}
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body { margin:0; padding:0; background:var(--bg); color:var(--fg);
+  font-family:var(--font-ui); font-size:15px; line-height:1.65; -webkit-font-smoothing:antialiased; }
+main { max-width:var(--maxw); margin:0 auto; padding:48px 24px 160px; }
+h1,h2,h3,h4 { line-height:1.25; font-weight:650; letter-spacing:-.011em; }
+h1 { font-size:30px; margin:0 0 6px; }
+h2 { font-size:21px; margin:56px 0 14px; padding-bottom:8px; border-bottom:1px solid var(--border-strong); }
+h3 { font-size:17px; margin:34px 0 8px; }
+h4 { font-size:14px; margin:24px 0 6px; color:var(--accent); letter-spacing:.01em; }
+h5 { margin:0 0 6px; }
+p { margin:0 0 14px; }
+a { color:var(--cool); }
+strong { color:#fff; font-weight:650; }
+em { color:var(--muted); font-style:italic; }
+hr { border:0; border-top:1px solid var(--border-strong); margin:40px 0; }
+small { color:var(--muted); }
+ul,ol { margin:0 0 14px; padding-left:22px; }
+li { margin:3px 0; }
+
+code { font-family:var(--font-mono); font-size:.88em; background:var(--surface-solid);
+  border:1px solid var(--border-strong); border-radius:4px; padding:1px 5px; color:#cfc4f7; }
+pre { background:var(--surface-solid); border:1px solid var(--border-strong);
+  border-left:3px solid var(--accent); border-radius:8px; padding:14px 16px; overflow-x:auto;
+  font-family:var(--font-mono); font-size:12.5px; line-height:1.6; color:#d6dde6; }
+pre code { background:none; border:none; padding:0; color:inherit; font-size:inherit; }
+
+table { width:100%; border-collapse:collapse; margin:14px 0 20px; font-size:13px; display:block; overflow-x:auto; }
+th,td { padding:7px 10px; border:1px solid var(--border-strong); text-align:left; vertical-align:top; }
+th { background:var(--surface-solid); color:var(--accent); font-weight:600; font-size:11.5px;
+  letter-spacing:.05em; text-transform:uppercase; white-space:nowrap; }
+tbody tr:nth-child(even) { background:#ffffff05; }
+td code { font-size:11.5px; }
+table.taskmeta { width:100%; font-size:12.5px; margin:6px 0 12px; }
+table.taskmeta th { width:170px; text-transform:none; letter-spacing:0; font-size:12px; }
+
+.meta { margin:14px 0 0; font-size:13px; }
+.meta summary { cursor:pointer; color:var(--muted); font-family:var(--font-mono); font-size:12px; }
+.meta dl { display:grid; grid-template-columns:130px 1fr; gap:4px 14px; margin:12px 0 0; padding:14px;
+  background:var(--surface-solid); border:1px solid var(--border-strong); border-radius:8px; }
+.meta dt { color:var(--accent); font-family:var(--font-mono); font-size:11.5px; }
+.meta dd { margin:0; color:var(--muted); font-family:var(--font-mono); font-size:11.5px; overflow-wrap:anywhere; }
+
+figure { margin:26px 0; text-align:center; }
+figure svg, figure .mermaid { max-width:100%; height:auto; }
+figure .mermaid { background:var(--surface-solid); border:1px solid var(--border-strong);
+  border-radius:10px; padding:20px 12px; overflow-x:auto; text-align:center;
+  color:var(--muted); font-size:12px; }
+figcaption { color:var(--muted); font-size:12px; margin-top:10px; font-style:italic; }
+
+.tag { display:inline-block; font-family:var(--font-mono); font-size:10px; letter-spacing:.06em;
+  text-transform:uppercase; padding:1px 6px; border-radius:3px; margin-right:6px; vertical-align:1px; }
+.tag.existing { background:#262b3a; color:var(--muted); }
+.tag.new { background:#2c2544; color:var(--accent); }
+.tag.dir { background:#173042; color:var(--cool); }
+
+.files ul { list-style:none; padding:0; }
+.files li { padding:4px 0; border-bottom:1px solid #ffffff08; font-size:13px; }
+
+.phase { border:1px solid var(--border-strong); border-radius:var(--r-card);
+  padding:22px 24px; margin:30px 0; background:#ffffff04; }
+.phase > h3 { margin-top:0; }
+.phase > h3 .status { color:var(--accent); }
+.deep-plan { margin:2px 0 12px; font-size:12.5px; font-family:var(--font-mono); }
+.deep-plan a { color:var(--agent-planner); text-decoration:none; border-bottom:1px dotted #a78bfa66; }
+.deep-plan a:hover { border-bottom-style:solid; }
+.deep-plan .muted { color:var(--muted); font-style:italic; font-family:var(--font-ui); font-size:12px; }
+
+.checklist { list-style:none; padding:0; margin:8px 0 16px; }
+.checklist li { padding:4px 0 4px 2px; font-size:13.5px; }
+.checklist li code.status { color:var(--accent); margin-right:6px; background:none; border:none; padding:0; font-size:1em; }
+
+.loop { border:1px dashed var(--accent); border-radius:8px; padding:10px 14px; margin:16px 0 4px;
+  font-size:13px; background:#a78bfa0d; }
+
+.card { border:1px solid var(--border-strong); border-left:3px solid var(--cool); border-radius:8px;
+  padding:12px 16px; margin:14px 0; background:var(--surface-solid); font-size:13px; }
+.card.rule { border-left-color:var(--accent); }
+.card h5 { margin:0 0 6px; font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--muted); font-weight:700; }
+
+#questionables details { border:1px solid var(--border-strong); border-radius:8px;
+  padding:10px 14px; margin:10px 0; background:var(--surface-solid); }
+#questionables summary { cursor:pointer; font-weight:600; font-size:13.5px; }
+.qa-answer { margin:10px 0 2px; font-size:13px; color:var(--muted); }
+.qdecided { color:var(--good); font-family:var(--font-mono); font-size:10px; letter-spacing:.06em; margin-right:6px; }
+.decided { display:block; margin:0 0 10px; padding:8px 12px; font-size:12.5px;
+  border-left:3px solid var(--good); background:#22c55e0d; border-radius:0 6px 6px 0; color:var(--fg); }
+.decided b { color:var(--good); }
+.consequence { display:block; margin:0 0 10px; padding:8px 12px; font-size:12.5px;
+  border-left:3px solid var(--accent); background:#a78bfa0d; border-radius:0 6px 6px 0; color:var(--fg); }
+.consequence b { color:var(--accent); }
+
+/* Mockup frame — mirrors the TARGET surface: the AWSF dashboard, i.e. its own §7 tokens. */
+.mockup { margin:22px 0; }
+.mockup-frame { background:var(--bg); border:1px solid var(--border-strong); border-radius:10px;
+  padding:0; overflow:hidden; text-align:left; box-shadow:0 8px 28px #0006; }
+.mockup-frame .mbar { background:var(--surface-solid); padding:7px 12px; border-bottom:1px solid var(--border-strong);
+  font-family:var(--font-mono); font-size:11px; color:var(--muted); }
+.mockup-frame .mbody { padding:14px 16px; font-family:ui-monospace,"SFMono-Regular",Consolas,"Liberation Mono",monospace; font-size:12.5px; }
+.mk-row { display:flex; align-items:center; gap:8px; padding:2px 0; }
+.mk-pill { display:inline-block; font-family:var(--font-mono); font-size:10px; border-radius:var(--r-pill);
+  padding:2px 9px; margin-right:8px; border:1px solid var(--border-strong); color:var(--muted); }
+.mk-pill.on { background:#a78bfa1a; color:var(--agent-planner); border-color:#a78bfa44; }
+.mk-pill.okp { background:#22c55e1a; color:var(--ok); border-color:#22c55e44; }
+.mk-mono { font-family:var(--font-mono); font-size:11px; color:var(--text); }
+.mk-dim { color:var(--muted); } .mk-okc { color:var(--ok); } .mk-warnc { color:var(--warn); }
+.mk-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--r-card);
+  padding:10px 12px; font-size:11.5px; box-shadow:var(--shadow-card); }
+.mk-two { display:flex; gap:14px; padding:14px 16px; }
+.mk-two > div { flex:1; }
+.mk-two .lbl { font-size:11px; font-family:var(--font-mono); margin-bottom:6px; }
+
+@media (max-width:720px) {
+  main { padding:28px 14px 140px; }
+  .meta dl { grid-template-columns:1fr; }
+  .mk-two { flex-direction:column; }
+}
+
+@media print { #rv-drawer { display:none; } }
+</style>
+</head>
+<body>
+<main>
+
+  <!-- ===== HEADER + UPDATABLE METADATA ===== -->
+  <header>
+    <h1>Plan: AWSF v2 W02 — Evidence readability</h1>
+    <details class="meta">
+      <summary>Metadata</summary>
+      <dl>
+        <dt>created</dt>      <dd>2026-08-20</dd>
+        <dt>modified</dt>     <dd>2026-08-20, 2026-08-21</dd>
+        <dt>commits</dt>      <dd>(none yet — authored, not built)</dd>
+        <dt>agent name</dt>        <dd>plan-sota</dd>
+        <dt>session id</dt>      <dd>(not recorded — invariant 1: no live task state in a committed file)</dd>
+        <dt>back refs</dt>    <dd><a href="awsf-v2-plan.html">specs/awsf-v2-plan.html</a> § Workstreams → Milestone M2 → W02</dd>
+        <dt>forward refs</dt> <dd><a href="awsf-v2-w02-evidence-readability-build-prompts.md">awsf-v2-w02-evidence-readability-build-prompts.md</a>, <a href="tickets/awsf-v2-w02-evidence-readability/">specs/tickets/awsf-v2-w02-evidence-readability/</a></dd>
+      </dl>
+    </details>
+  </header>
+
+  <figure>
+    <pre class="mermaid">
+flowchart LR
+  J["journal record<br/>text.delta"] --> P["projector<br/>redacts, writes one row"]
+  P --> DB[("events table<br/>85.3% of rows")]
+  DB --> API["read-only API"]
+  API --> UI["EventLog.vue"]
+  UI -->|"today"| G["five-key guess chain<br/>→ shows the kind name"]
+  UI -->|"this plan"| S["per-kind summariser<br/>+ delta fold<br/>+ rendered view"]
+  style G stroke:#F43F5E,stroke-width:2px
+  style S stroke:#22C55E,stroke-width:2px
+    </pre>
+    <figcaption>The data already reaches the browser. This plan changes only how <code>EventLog.vue</code> reads what is already there — nothing upstream of the API moves.</figcaption>
+  </figure>
+
+  <!-- ===== IN PLAIN LANGUAGE ===== -->
+  <section id="plain-language">
+    <h2>In Plain Language</h2>
+    <p>This section explains the whole plan without technical vocabulary. Everything after it says the same things precisely, for the people — and machines — building it.</p>
+
+    <h3>What this is about</h3>
+    <p>Every time the factory runs a task, it keeps a detailed log of everything that happened — every message the AI wrote, every tool it used, every cost it incurred. The owner reads that log to understand what the AI actually did. Right now, most rows in that log are unreadable: instead of showing what happened, a row shows the technical category it belongs to, printed twice. A row about token usage says "usage." A row about a tool call shows a wall of escaped computer code instead of the plain English summary that was sitting right next to it. The one thing you can actually read is a coincidence, not a design.</p>
+
+    <h3>Why now</h3>
+    <p>This is the surface the owner watches while everything else in the factory runs. Every other improvement in the wider plan gets judged through this same log, so a log nobody can read makes every other improvement harder to trust. The good news: nothing needs to be invented. The plain-English version of almost every row already exists somewhere in the system — it is simply being thrown away by one function that guesses instead of asking each kind of row what it actually has to say.</p>
+
+    <h3>What we are building</h3>
+    <p>Think of the log today like a delivery manifest where every package is labelled only "package" instead of what's inside — except for one package that happens to have a proper label by accident. This plan writes a proper label for every kind of package: a token-usage row shows the token counts, a tool-call row shows which tool ran and what it did, a cost row shows the cost. Separately, the log is flooded with thousands of tiny fragments — a long AI response arrives one syllable at a time, and today each syllable is its own full row. This plan folds a run of those fragments into one row that says "the model streamed a response, 128 pieces, 12 seconds" — click to see the whole thing, nothing hidden, nothing thrown away. And every row gets a friendly, readable view next to the technical one, with the friendly view shown first. Finally, a handful of the summary cards elsewhere on the same screen were getting visually cut off; this plan fixes that too, because it is the same screen the owner is reading.</p>
+
+    <h3>How we know it worked</h3>
+    <p>Every kind of row shows something a person can act on at a glance — no row's plain-English label is just the row's own category name. A long streamed response folds into one row that can be expanded to the exact original text, and a test proves that fold can never accidentally swallow a tool call or the end of a run. If a secret value happens to be split across two of those tiny fragments — which can happen — it is still caught and hidden after they are joined back together, proven by a test built specifically to try to sneak one through. And none of this changes what is stored in the database; it only changes how the existing log is shown. What is explicitly <strong>not</strong> in scope: nothing is deleted from storage, and no new evidence is invented — this plan stops the log from discarding what it already has.</p>
+  </section>
+
+  <!-- ===== PURPOSE / PROBLEM / SOLUTION ===== -->
+  <section id="purpose">
+    <h2>Purpose</h2>
+    <p>Make the dashboard's event log show what actually happened during a run, using data the system already records and formatters the codebase already exports — with no change to what is stored, and no new evidence added to the system.</p>
+  </section>
+
+  <section id="problem">
+    <h2>Problem</h2>
+    <p><code>EventLog.vue</code>'s <code>summary()</code> is a five-key fallback chain — <code>inputSummary</code>, <code>message</code>, <code>detail</code>, <code>reason</code>, <code>resolvedModel</code> — and anything that matches none of those five falls through to <code>item.name || item.type</code>. That single line explains every symptom: a <code>text.delta</code> row shows the literal string <code>"text.delta"</code>; a <code>usage</code> row shows <code>"usage"</code>; a <code>tool_call</code> row shows escaped JSON because <code>inputSummary</code> is first in the chain and wins over the far more useful <code>resultSnippet</code>, which is hidden until the row is expanded. Only <code>quota</code> rows read correctly, and only because <code>message</code> happens to be third in the chain — which is what proves the mechanism rather than excusing it.</p>
+    <p>Measured read-only against the live projection on 2026-08-20: <strong>85.3% of all projection rows are <code>text.delta</code></strong> (92.2% in the worst phase — 1,282 of 1,390 rows), and by payload bytes the deltas are 918 KB against 742 KB for everything else combined. The largest observed run reassembles to 5,490 characters across 1,282 chunks — about four characters of information per row, each wrapped in roughly 165 bytes of envelope fields. Every one of those four-character rows costs a line on screen, for a reader who is trying to find the two or three rows that actually mattered.</p>
+    <figure>
+      <pre class="mermaid">
+flowchart TD
+  V["payload value"] --> K1{"inputSummary?"}
+  K1 -- yes --> OUT["shown"]
+  K1 -- no --> K2{"message?"}
+  K2 -- yes --> OUT
+  K2 -- no --> K3{"detail?"}
+  K3 -- yes --> OUT
+  K3 -- no --> K4{"reason?"}
+  K4 -- yes --> OUT
+  K4 -- no --> K5{"resolvedModel?"}
+  K5 -- yes --> OUT
+  K5 -- no --> FALL["item.name \|\| item.type<br/>= the row's own kind, printed twice"]
+  style FALL stroke:#F43F5E,stroke-width:2px
+      </pre>
+      <figcaption>The five-key chain <code>summary()</code> runs today. <code>text</code>, <code>usage</code>, <code>resultSnippet</code> and every other field a real kind actually carries are not in the chain, so they all fall through to the same defect.</figcaption>
+    </figure>
+  </section>
+
+  <section id="solution">
+    <h2>Solution</h2>
+    <p>Four pieces, built and shipped in order of leverage. <strong>(1)</strong> Per-kind summarisers replace the guess chain with one function per kind that reads the fields that kind actually has. <strong>(2)</strong> A contiguous run of <code>text.delta</code> folds into one expandable row, closing the volume problem the measurement above quantifies. <strong>(3)</strong> A rendered view sits beside the existing raw JSON, defaulting to rendered. <strong>(4)</strong> The run cards elsewhere on the same dashboard screen stop clipping their fifth metrics row. None of this touches storage, the projector, or the wire format beyond one new field on folded rows — reassembly is a display-time operation on data the API already sends.</p>
+    <figure>
+      <pre class="mermaid">
+flowchart LR
+  subgraph Row["one EventItem"]
+    T["type"] --> D{"dispatch"}
+  end
+  D -->|"tool_call"| F1["name + resultSnippet + outcome"]
+  D -->|"usage"| F2["formatUsageBreakdown"]
+  D -->|"text.delta run"| F3["fold → reassemble → re-redact"]
+  D -->|"quota / notice / run.* / …"| F4["one function per remaining kind"]
+  F1 & F2 & F3 & F4 --> R["rendered row<br/>(default view)"]
+  R -.->|"one click"| J["raw JSON<br/>(unchanged, still there)"]
+      </pre>
+      <figcaption>The target shape: dispatch by <code>type</code>, one function per kind, rendered by default, raw one click away. Nothing upstream of this dispatch changes.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ===== RELEVANT FILES ===== -->
+  <section id="files" class="files">
+    <h2>Relevant Files</h2>
+
+    <h3>Existing Files</h3>
+    <ul>
+      <li><span class="tag existing">existing</span> <code>dashboard/src/components/EventLog.vue</code> — the whole plan's target. <code>summary()</code> (the five-key chain), <code>json()</code> (raw view), and the fetch/paging loop that accumulates every page into one <code>events</code> array client-side, which is what makes a client-side fold safe to reason about (no fold ever needs to see a second page it hasn't fetched yet — the full run is already in memory by the time it renders).</li>
+      <li><span class="tag existing">existing</span> <code>dashboard/src/display.ts</code> — thirteen exported formatters, of which <code>EventLog.vue</code> imports exactly one (<code>formatDuration</code>). <code>formatUsage</code>, <code>formatTokens</code>, <code>costAuthorityLabel</code>, <code>formatCost</code> are reused by the new summarisers. Eighteen assertions pin <code>formatCost</code> across three files (<code>dashboard-display.test.ts</code>, <code>dashboard-mechanics.test.ts</code>, <code>dashboard-parity.test.ts</code>) — this plan adds exports, it does not touch <code>formatCost</code>'s signature or behaviour.</li>
+      <li><span class="tag existing">existing</span> <code>dashboard/shared/types.ts</code> — <code>EventItem</code> (the shape every summariser and the fold function consume), <code>EventsResponse</code>. Already the two-way seam: <code>core/src/api/routes.ts</code>, <code>responses.ts</code> and <code>backlog.ts</code> already import from here, which is the precedent Questionable Q1 below extends rather than invents.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/contracts/normalized-events.ts</code> — <code>NORMALIZED_EVENT_KINDS</code> (twelve kinds), <code>isPersistableKind</code> (excludes <code>thinking.delta</code> — invariant 9), <code>TextDeltaEventSchema</code>. Read for vocabulary; nothing here changes.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/observability/projector.ts</code> — <code>applyEvent()</code>: tool events collapse to one <code>tool_call</code> row keyed by <code>toolCallId</code> (name column set on <code>tool.requested</code>, patched with outcome/duration/snippet on <code>tool.completed</code>); every other persistable kind becomes one row typed by its literal kind string (<code>text.delta</code>, <code>usage</code>, <code>quota</code>, …), with the <code>name</code> column left unset. <code>isPersistableKind</code> is the single gate that keeps <code>thinking.delta</code> out of the table entirely — Collision 2's adaptation rests on this already being true upstream of the dashboard.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/observability/queries.ts</code> — <code>EventRow</code>, <code>eventsForSession</code>/<code>eventsForPhase</code>. Confirms the <code>name</code> column is already selected and already reaches <code>EventItem.name</code> via <code>core/src/api/routes.ts:event()</code>. Nothing needs plumbing.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/policy/redaction.ts</code> — <code>CREDENTIAL_PATTERNS</code>, <code>containsCredential</code>, <code>scrubCredentialString</code>, <code>scrubCredentials</code>, <code>stringifyRedacted</code>. Runs once per event, at projection time, before a row is ever written. This plan's fold reassembles text <em>after</em> that point, which is why Collision 1 exists and why this file's pure string-matching primitives are the ones Q1 below proposes sharing rather than duplicating.</li>
+      <li><span class="tag existing">existing</span> <code>dashboard/src/components/PhaseInspector.vue</code> — the design precedent for phase 3's toggle: a <code>view-toggle</code> pair of buttons (<code>rendered-safe</code> / <code>raw</code>), a reactive <code>Set</code> tracking which items show raw, default state is rendered. <code>dashboard-parity.test.ts</code> already asserts this component's <code>rendered-safe</code> / <code>&gt;raw&lt;</code> vocabulary, so it is proven UI, not a new pattern.</li>
+      <li><span class="tag existing">existing</span> <code>dashboard/src/components/SessionCard.vue</code>, <code>dashboard/src/styles/dashboard.css</code> — phase 4's target. <code>.card-wrap { height: 420px }</code> is a fixed height sized for four <code>card-metrics-grid</code> rows; the fifth row (<code>v-if="session.usage.costPartial"</code>, <code>authority</code> / <code>partial total</code>) pushes past it and <code>.session-card { overflow: hidden }</code> clips it mid-row.</li>
+      <li><span class="tag existing">existing</span> <code>core/test/unit/dashboard-display.test.ts</code>, <code>dashboard-mechanics.test.ts</code>, <code>dashboard-parity.test.ts</code> — the three gates every phase must keep green. <code>dashboard-display.test.ts</code> is a real runtime import of <code>display.ts</code>'s pure functions under <code>node --experimental-strip-types --test</code>; the other two are source-text regex assertions against the <code>.vue</code>/<code>.css</code> files, because Vue SFCs are not natively unit-testable under plain Node. New pure logic in this plan follows <code>display.ts</code>'s pattern (importable, runtime-tested); new markup follows the regex-assertion pattern already used for <code>EventLog.vue</code>.</li>
+      <li><span class="tag existing">existing</span> <code>core/test/unit/observability/projector.test.ts</code> — already asserts <code>thinking.delta</code> never reaches the projection. This plan's own fold test adds the client-side half of that guarantee (the fold predicate checks the literal string <code>"text.delta"</code>, never a broader "delta kind" category); it does not re-prove the server-side half.</li>
+      <li><span class="tag existing">existing</span> <code>tsconfig.json</code>, <code>dashboard/tsconfig.json</code> — <code>dashboard/tsconfig.json</code> currently includes only <code>src</code> and <code>shared</code>. Relevant to Q1: a client-side fold that imports <code>core/src/policy/redaction.ts</code> directly would need this include list widened, which is exactly the seam Q1 asks the owner to choose or avoid.</li>
+    </ul>
+
+    <h3>New Files</h3>
+    <ul>
+      <li><span class="tag new">new</span> <code>dashboard/src/event-summary.ts</code> — <code>summarizeEvent(item: EventItem): string</code>, one internal function per kind, exported individually for direct testing. Pure, no Vue import, same shape as <code>display.ts</code>.</li>
+      <li><span class="tag new">new</span> <code>dashboard/src/delta-fold.ts</code> — <code>foldTextDeltaRuns(events: EventItem[]): DisplayRow[]</code>, the contiguous-run fold plus reassembly plus re-redaction. Pure, no Vue import.</li>
+      <li><span class="tag new">new</span> <code>dashboard/shared/credential-patterns.ts</code> — per Q1, <strong>decided 2026-08-21</strong>: <code>CREDENTIAL_PATTERNS</code>, <code>containsCredential</code>, <code>scrubCredentialString</code>, moved here from <code>core/src/policy/redaction.ts</code> and re-exported by it, so both the projector and the new client-side fold consume one definition.</li>
+      <li><span class="tag new">new</span> <code>core/test/unit/dashboard-event-summary.test.ts</code> — one test per kind against <code>summarizeEvent</code>, plus the em-dash fallback case.</li>
+      <li><span class="tag new">new</span> <code>core/test/unit/dashboard-delta-fold.test.ts</code> — the fold-boundary tests (contiguous fold, no-fold-across-tool-call, no-fold-across-terminal, defensive <code>thinking.delta</code> exclusion) and the split-credential redaction fixture (Collision 1).</li>
+    </ul>
+  </section>
+
+  <!-- ===== IMPLEMENTATION PHASES ===== -->
+  <section id="phases">
+    <h2>Implementation Phases</h2>
+    <p><strong>IMPORTANT:</strong> Execute every phase and task step by step, in order, top to bottom.</p>
+    <p>Status markers: <code>[]</code> idle · <code>[wip]</code> in progress · <code>[x]</code> complete · <code>[f]</code> failed. All start as <code>[]</code>; the Build Plan workflow updates them as it works.</p>
+
+    <!-- ===== PHASE 1 ===== -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Phase 1: Per-kind summarisers</h3>
+      <p>Replace <code>summary()</code>'s five-key guess chain with one function per event kind, each reading the fields that kind actually has. No row's summary is ever its own kind name.</p>
+
+      <figure>
+        <pre class="mermaid">
+flowchart TD
+  E["EventItem.type"] --> tc["tool_call"] --> S1["name · resultSnippet · outcome · durationMs"]
+  E --> u["usage"] --> S2["formatUsageBreakdown(payload.usage)"]
+  E --> q["quota"] --> S3["payload.message (unchanged — already correct)"]
+  E --> n["notice"] --> S4["payload.code · payload.message"]
+  E --> rs["run.started"] --> S5["payload.adapter · payload.requestedModel"]
+  E --> mr["model.resolved"] --> S6["payload.resolvedModel · modelProvenanceLabel"]
+  E --> rc["run.completed / run.failed / run.cancelled"] --> S7["exitCode / errorCode+message / reason"]
+  E --> cp["compiled_prompt"] --> S8["name · lineCount"]
+  E --> cg["ceiling_grant"] --> S9["from → to · reason"]
+  E --> td["text.delta (unfolded)"] --> S10["truncated text preview"]
+  E --> unk["anything unmatched"] --> EM["—"]
+  style EM stroke:#8B90A6,stroke-dasharray:4 3
+        </pre>
+        <figcaption>Every kind the events table actually produces (per <code>projector.ts</code>'s <code>applyEvent</code>) gets its own function. <code>thinking.delta</code> never appears in this table, so it needs none.</figcaption>
+      </figure>
+
+      <h4>1. Write the per-kind summariser module, plus Testing Strategy</h4>
+      <p>One function per kind, dispatched by <code>item.type</code>, each reading only the fields that kind actually has.</p>
+      <p><strong>Testing approach.</strong> One test per kind, directly against the exported per-kind functions (or against <code>summarizeEvent</code> with a fixture <code>EventItem</code> per kind) — the same runtime-import pattern <code>dashboard-display.test.ts</code> already uses, so these tests actually execute the logic rather than regex-matching source text. Edge cases: a <code>tool_call</code> row before completion (no <code>resultSnippet</code> yet); a <code>usage</code> row with every field <code>null</code> (provider reported nothing); the fallback path with a synthetic unknown <code>type</code>.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Create <code>dashboard/src/event-summary.ts</code>. Export <code>summarizeEvent(item: EventItem): string</code> that dispatches on <code>item.type</code> to one internal function per kind, each exported individually so the test file can call them directly without going through dispatch.</li>
+        <li><code class="status">[]</code> <code>tool_call</code>: build from <code>item.name</code> (the column, not the payload) and the payload fields <code>resultSnippet</code>, <code>outcome</code>, <code>durationMs</code> (present once <code>tool.completed</code> has patched the row; before that, render <code>{name} · running</code>). Target shape: <code>Edit · herdr-visibility.test.ts · replaced 2 blocks · ok 81ms</code>. Do not surface <code>inputSummary</code> in the one-line summary — it stays available in the raw view.</li>
+        <li><code class="status">[]</code> <code>usage</code>: add <code>formatUsageBreakdown</code> to <code>display.ts</code> — a new export, narrower than <code>UsageTotals</code>, taking just <code>{ inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, reasoningTokens }</code> (all nullable), reusing the existing <code>formatTokens</code> for each part and omitting any part that is <code>null</code>. Target shape: <code>156.8k in / 43.3k out · 4.19M cached · 16.7k reasoning</code>. This is additive to <code>display.ts</code> — it does not touch <code>formatCost</code>, <code>formatUsage</code>, or any of the eighteen pinned assertions.</li>
+        <li><code class="status">[]</code> <code>quota</code>: <code>payload.message</code> — this one already renders correctly today; keep it, and add it to the dispatch table explicitly so it stops being an accident of chain order.</li>
+        <li><code class="status">[]</code> <code>notice</code>: <code>${payload.code}: ${payload.message}</code>.</li>
+        <li><code class="status">[]</code> <code>run.started</code>: <code>${payload.adapter} → ${payload.requestedModel}</code>.</li>
+        <li><code class="status">[]</code> <code>model.resolved</code>: <code>${payload.resolvedModel} (${modelProvenanceLabel(payload.provenance)})</code>, reusing the existing <code>modelProvenanceLabel</code> export.</li>
+        <li><code class="status">[]</code> <code>run.completed</code> / <code>run.failed</code> / <code>run.cancelled</code>: exit code, or <code>${payload.errorCode}: ${payload.message}</code>, or <code>payload.reason</code>, respectively.</li>
+        <li><code class="status">[]</code> <code>compiled_prompt</code>: <code>${payload.name} · ${payload.lineCount} lines</code>.</li>
+        <li><code class="status">[]</code> <code>ceiling_grant</code>: <code>${payload.from} → ${payload.to} calls · ${payload.reason}</code>.</li>
+        <li><code class="status">[]</code> <code>text.delta</code>, unfolded (a run of exactly one that task 3's fold leaves standing alone, or any row seen before that task lands): a truncated preview of <code>payload.text</code>, not the literal string <code>"text.delta"</code>.</li>
+        <li><code class="status">[]</code> Fallback for a kind matching none of the above: an em dash, never <code>item.name || item.type</code>. This is the one line the whole plan exists to delete.</li>
+        <li><code class="status">[]</code> Wire <code>EventLog.vue</code>'s template to call <code>summarizeEvent(event)</code> in place of the local <code>summary()</code> function; delete <code>summary()</code>.</li>
+        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/dashboard-event-summary.test.ts</code> — twelve-plus assertions, one per kind, proving no row's summary equals its own <code>type</code> string</li>
+        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/dashboard-display.test.ts</code> — the eighteen-assertion <code>formatCost</code> family stays green, unperturbed by the new <code>formatUsageBreakdown</code> export</li>
+        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/dashboard-mechanics.test.ts core/test/unit/dashboard-parity.test.ts</code> — the existing source-regex assertions against <code>EventLog.vue</code> still pass once <code>summary()</code> is replaced</li>
+        <li><code class="status">[]</code> <code>npm run typecheck:dashboard</code> — <code>vue-tsc</code> clean against the new import and the deleted local function</li>
+      </ul>
+      <div class="loop">🔁 <strong>Do not exit this phase until every box above is checked.</strong> If any command fails, fix the cause and re-run — loop until all pass.</div>
+    </div>
+
+    <!-- ===== PHASE 2 ===== -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Phase 2: Delta compaction (fold, reassemble, re-redact)</h3>
+      <p>Fold a contiguous run of <code>text.delta</code> rows into one expandable row. Folding happens entirely client-side, over the already-fetched, already-accumulated <code>EventItem[]</code> array <code>EventLog.vue</code> builds today — no new API endpoint, no change to pagination or cursors, no storage-layer change. This is the phase Collision 1 and Collision 2 both bind.</p>
+
+      <figure>
+        <pre class="mermaid">
+sequenceDiagram
+  participant Arr as ordered EventItem[]
+  participant Fold as foldTextDeltaRuns
+  participant Row as folded row
+  Arr->>Fold: type=text.delta, runId=r1, seq=4
+  Fold->>Fold: start run (chunkCount=1)
+  Arr->>Fold: type=text.delta, runId=r1, seq=5 (contiguous)
+  Fold->>Fold: absorb (chunkCount=2)
+  Arr->>Fold: type=tool_call
+  Fold->>Row: close run → reassemble → scrubCredentialString(text)
+  Fold->>Fold: tool_call passes through unfolded
+  Note over Fold,Row: a terminal event or a runId change<br/>closes a run the same way a tool_call does
+        </pre>
+        <figcaption>The fold is a linear scan over data already in the browser. Any non-<code>text.delta</code> row — a tool call, a terminal event, a different <code>runId</code> — ends the current run; it can never be swallowed by one.</figcaption>
+      </figure>
+
+      <div class="card rule">
+        <h5>The correction that bounds this phase</h5>
+        Reassembly is <strong>semantically equal to the stored phase output and NOT byte-identical to it</strong>: the store holds the parsed-and-reserialised envelope, the deltas hold what the model actually emitted, pretty-printed, and the two differ from the second character (measured 2026-08-20: 5,490 reassembled characters against 4,236 stored characters for the same phase, both parsing to the same canonical JSON). <strong>A folded row's rendered text may say it reconstructs the phase's output; it must never claim to be the stored envelope.</strong> The deltas are also the only surviving record of the model's own formatting — nothing here proposes dropping them from storage, and nothing in this phase deletes a row from the database. Folding hides rows in the client's rendering; it deletes nothing.
+      </div>
+
+      <div class="card rule">
+        <h5>Collision 1 — redaction is per event, reassembly crosses events</h5>
+        <code>stringifyRedacted</code> runs once per event, at projection time, before the row is ever written. A credential-shaped value split across two delta chunks matches no pattern in either chunk alone, so it is stored unredacted in both halves — and is reassembled into full, matching text by any concatenating renderer. <strong>This is a new exposure created by folding, not a pre-existing one</strong>, because before this phase no renderer ever concatenated two rows' text. <strong>Adaptation:</strong> <code>foldTextDeltaRuns</code> runs the same credential-matching predicate over the reassembled text, in the same function that does the concatenation, before the folded row is ever handed to the template. The split-credential fixture (a synthetic pair of chunks whose credential-shaped value is invisible in either chunk alone but complete once joined) is the cheapest unused upgrade named in the spine and the fuse-version record, and it lands here as a required test, not a check, because it cannot be run against a live projection — it needs a crafted stream.
+      </div>
+
+      <div class="card rule">
+        <h5>Collision 2 — invariant 9, thinking is never persisted</h5>
+        <code>thinking.delta</code> is excluded from the events table entirely by <code>isPersistableKind</code> upstream, so it structurally cannot reach <code>EventLog.vue</code> today. The risk this collision names is <em>future</em>: a fold rule written over "delta kinds" as a category is one edit away from also folding — and thereby rendering — reasoning content, the moment a second delta kind exists. <strong>Adaptation:</strong> <code>foldTextDeltaRuns</code>'s run-start and run-continue predicates both test the literal string <code>item.type === "text.delta"</code>, never a pattern, a prefix match, or an enum of "delta-shaped" kinds. The test suite includes a fixture <code>EventItem</code> with <code>type: "thinking.delta"</code> — which cannot occur from a real API response today — asserting the fold function refuses to start or extend a run on it, so the guarantee is pinned at the function boundary rather than only at the (already-tested) server boundary.
+      </div>
+
+      <h4>2. Write the fold module</h4>
+      <p>Questionable Q1 fixed the location of the shared credential-matching predicate the third checklist item below needs: <strong>decided 2026-08-21, option A</strong> — a shared module in <code>dashboard/shared/</code>. See Q1 in this plan's Questionables section.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Create <code>dashboard/shared/credential-patterns.ts</code> per Q1's decision, moving <code>CREDENTIAL_PATTERNS</code>, <code>containsCredential</code> and <code>scrubCredentialString</code> out of <code>core/src/policy/redaction.ts</code>, which imports them back from the new location instead of declaring its own copy.</li>
+        <li><code class="status">[]</code> Create <code>dashboard/src/delta-fold.ts</code>. Export <code>foldTextDeltaRuns(events: EventItem[]): DisplayRow[]</code> where <code>DisplayRow</code> is either a passthrough of an unfolded <code>EventItem</code> or a synthetic folded row: <code>{ id, runId, phaseId, startedAt, endedAt, type: "text.delta.fold", chunkCount, reassembledText }</code>.</li>
+        <li><code class="status">[]</code> Fold predicate: a run starts at any <code>EventItem</code> with <code>type === "text.delta"</code>; it continues while the next item also has <code>type === "text.delta"</code>, the same <code>runId</code>, and <code>firstSourceSeq === previousItem.lastSourceSeq + 1</code> (strict sequence contiguity — this is what makes "no fold across an interleaved event" a property of the scan itself rather than a rule the fold has to remember, since the array is already chronological and any interleaved row breaks the seq chain or the <code>type</code> check).</li>
+        <li><code class="status">[]</code> On closing a run: concatenate the chunks' <code>payload.text</code> in order into <code>reassembledText</code>, then apply the credential-matching predicate from the Q1-decided location (Collision 1's adaptation) to the concatenated string before it is returned.</li>
+        <li><code class="status">[]</code> A run of exactly one chunk still becomes a <code>chunkCount: 1</code> folded row (consistent shape for the template) rather than a special-cased passthrough — task 1's unfolded-<code>text.delta</code> summariser then only has to handle the case where this task has not landed yet, not a permanent code path.</li>
+        <li><code class="status">[]</code> Wire <code>EventLog.vue</code>: replace the direct <code>v-for="event in phaseEvents"</code> with <code>v-for="row in foldedRows"</code> where <code>foldedRows = computed(() =&gt; foldTextDeltaRuns(phaseEvents.value))</code>. A folded row's summary is <code>streamed response · {chunkCount} chunks · {duration}</code>; expanding it shows <code>reassembledText</code>.</li>
+      </ul>
+
+      <h4>3. The fold's boundary and redaction tests, plus Testing Strategy</h4>
+      <p><strong>Testing approach.</strong> <code>foldTextDeltaRuns</code> is pure and takes plain <code>EventItem[]</code> fixtures, so every case below is a direct runtime assertion, not a source-regex check.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>core/test/unit/dashboard-delta-fold.test.ts</code>: a contiguous run folds to one row with the correct <code>chunkCount</code> and concatenated text, in <code>seq</code> order</li>
+        <li><code class="status">[]</code> Same file — a <code>tool_call</code> row between two <code>text.delta</code> rows produces two separate folded rows, never one spanning it</li>
+        <li><code class="status">[]</code> Same file — a terminal event (<code>run.completed</code> / <code>run.failed</code> / <code>run.cancelled</code>) after a delta run closes that run; no fold reaches past it</li>
+        <li><code class="status">[]</code> Same file — the defensive <code>thinking.delta</code> fixture: the fold function neither starts nor extends a run on <code>type: "thinking.delta"</code></li>
+        <li><code class="status">[]</code> Same file — <strong>the split-credential fixture</strong>: two adjacent, seq-contiguous <code>text.delta</code> items whose <code>payload.text</code> values each carry half of a credential-shaped value (matching one of <code>CREDENTIAL_PATTERNS</code> only once concatenated); asserts the folded row's <code>reassembledText</code> is redacted, proving Collision 1's adaptation actually closes the exposure it names</li>
+        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/dashboard-delta-fold.test.ts</code> — all of the above, green</li>
+        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/observability/projector.test.ts</code> — the existing server-side <code>thinking.delta</code>-never-persisted assertion stays green and unmodified; this task adds to it, it does not replace it</li>
+        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/dashboard-mechanics.test.ts core/test/unit/dashboard-parity.test.ts</code> — still green with the fold wired into <code>EventLog.vue</code></li>
+        <li><code class="status">[]</code> <code>npm run typecheck:dashboard</code></li>
+      </ul>
+      <div class="loop">🔁 <strong>Do not exit this phase until every box above is checked.</strong> If any command fails, fix the cause and re-run — loop until all pass.</div>
+    </div>
+
+    <!-- ===== PHASE 3 ===== -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Phase 3: Rendered view beside the raw JSON</h3>
+      <p>Add a rendered view next to the existing <code>JSON.stringify(payload, null, 2)</code> raw view, defaulting to rendered. <code>PhaseInspector.vue</code> already ships this exact pattern for compiled prompts — a <code>view-toggle</code> pair of buttons and a reactive <code>Set</code> tracking which rows are pinned to raw — and it is already proven by <code>dashboard-parity.test.ts</code>'s assertions on <code>rendered-safe</code> / <code>&gt;raw&lt;</code>. This phase reuses that shape rather than inventing a second one.</p>
+
+      <figure>
+        <pre class="mermaid">
+stateDiagram-v2
+  [*] --> Rendered
+  Rendered --> Raw: click "raw"
+  Raw --> Rendered: click "rendered"
+  Rendered: shows summarizeEvent() / reassembledText
+  Raw: shows JSON.stringify(payload, null, 2) — unchanged
+  note right of Rendered
+    default on first expand,
+    per PhaseInspector.vue precedent
+  end note
+        </pre>
+        <figcaption>Per-row toggle state, not global — matching <code>PhaseInspector.vue</code>'s per-prompt <code>rawPrompts</code> set rather than one page-wide switch.</figcaption>
+      </figure>
+
+      <figure class="mockup">
+        <div class="mockup-frame">
+          <div class="mbar">EventLog.vue — expanded row</div>
+          <div class="mbody">
+            <div class="mk-row"><strong class="mk-mono" style="color:var(--cool);">tool_call</strong>
+              <span class="mk-mono">Edit · herdr-visibility.test.ts · replaced 2 blocks · ok 81ms</span>
+              <span class="mk-dim mk-mono" style="margin-left:auto;">81ms</span></div>
+            <div class="mk-row" style="margin:10px 0;">
+              <span class="mk-pill on">rendered</span><span class="mk-pill">raw</span>
+            </div>
+            <div class="mk-card">
+              <div>tool: <strong style="color:var(--agent-planner);">Edit</strong></div>
+              <div>target: herdr-visibility.test.ts</div>
+              <div>result: replaced 2 blocks</div>
+              <div>outcome: <span class="mk-okc">ok</span> · 81ms</div>
+            </div>
+          </div>
+        </div>
+        <figcaption>Rendered view shown by default for an expanded <code>tool_call</code> row; the raw JSON is one click away and unchanged.</figcaption>
+      </figure>
+
+      <h4>4. Add the rendered/raw toggle to EventLog.vue, plus Testing Strategy</h4>
+      <p><strong>Testing approach.</strong> The toggle is markup, so it follows <code>dashboard-mechanics.test.ts</code>'s existing convention of source-regex assertions against <code>EventLog.vue</code>, extending the same <code>"event paging and settings expose required read-only, text-labelled surfaces"</code> test rather than adding a new one for a single component's markup. That regex convention cannot prove the toggle actually defaults to rendered at runtime, so a manual check closes the gap.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Add a <code>rawRows = reactive(new Set&lt;string&gt;())</code> alongside the existing <code>expanded</code> set, tracking which row ids are pinned to raw view — mirroring <code>PhaseInspector.vue</code>'s <code>rawPrompts</code>.</li>
+        <li><code class="status">[]</code> On an expanded row, render a <code>view-toggle</code> pair of buttons labelled <code>rendered</code> / <code>raw</code>; the active button reflects <code>rawRows.has(row.id)</code>; default (row not in the set) is rendered.</li>
+        <li><code class="status">[]</code> Rendered view: <code>summarizeEvent(row)</code> for an ordinary row, or <code>row.reassembledText</code> for a folded row (task 3) — reuse the same functions the collapsed-row summary already calls, so the two views can never disagree about what a row says.</li>
+        <li><code class="status">[]</code> Raw view: unchanged — <code>JSON.stringify(row.payload, null, 2)</code> for an ordinary row. For a folded row, raw shows the array of the individual chunk payloads it was built from (each already redacted at projection time), not a synthetic re-serialisation of the fold.</li>
+        <li><code class="status">[]</code> Extend <code>core/test/unit/dashboard-mechanics.test.ts</code>: assert <code>EventLog.vue</code>'s source matches <code>view-toggle</code>, the two button labels, and that rendered is the default (no row id present in <code>rawRows</code> on mount)</li>
+        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/dashboard-mechanics.test.ts core/test/unit/dashboard-parity.test.ts</code></li>
+        <li><code class="status">[]</code> <code>npm run typecheck:dashboard</code></li>
+        <li><code class="status">[]</code> Manual check with the <code>run</code> skill: start the dashboard dev server, open a session with a folded delta run and a completed tool call, confirm rendered is shown by default and raw is reachable in one click for both — this is the one property regex assertions over source text cannot prove</li>
+      </ul>
+      <div class="loop">🔁 <strong>Do not exit this phase until every box above is checked.</strong> If any command fails, fix the cause and re-run — loop until all pass.</div>
+    </div>
+
+    <!-- ===== PHASE 4 ===== -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Phase 4: Fix the clipped run cards</h3>
+      <p>Unrelated to the rest of this plan's mechanism, carried in the same slice because it is the same screen. <code>.card-wrap { height: 420px }</code> is sized for four <code>card-metrics-grid</code> rows; the fifth row — <code>authority</code> / <code>partial total</code>, shown only when <code>session.usage.costPartial</code> is true — pushes past that height and <code>.session-card { overflow: hidden }</code> clips it mid-row. Three of six cards were cut in the capture this workstream's diagnosis was drawn from.</p>
+
+      <figure class="mockup">
+        <div class="mockup-frame">
+          <div class="mbar">SessionCard.vue — card-metrics-grid, fifth row present</div>
+          <div class="mk-two">
+            <div>
+              <div class="lbl" style="color:var(--danger);">before — .card-wrap height: 420px</div>
+              <div class="mk-card" style="height:118px;overflow:hidden;">
+                <div class="mk-mono">cost · runtime · usage · calls</div>
+                <div class="mk-mono mk-warnc">authority · partial t</div>
+              </div>
+            </div>
+            <div>
+              <div class="lbl" style="color:var(--ok);">after — .card-wrap height: 452px</div>
+              <div class="mk-card" style="height:136px;">
+                <div class="mk-mono">cost · runtime · usage · calls</div>
+                <div class="mk-mono mk-warnc">authority · partial total</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <figcaption>The fifth grid row's own height (row content + gap) is what the 32px increase accounts for — measured from <code>.card-metrics-grid</code>'s own <code>gap: 5px 14px</code> and its row content line-height.</figcaption>
+      </figure>
+
+      <h4>5. Give the card room for its fifth row, plus Testing Strategy</h4>
+      <p><strong>Testing approach.</strong> The CSS assertion proves the declared height changed; it cannot prove the render no longer clips, because a regex over source text has no layout engine behind it. That last property is checked manually.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> In <code>dashboard/src/styles/dashboard.css</code>, increase <code>.card-wrap</code>'s fixed <code>height</code> from <code>420px</code> to <code>452px</code> — enough for the fifth <code>.card-metrics-grid</code> row (its own line height plus the grid's <code>5px</code> row gap) on every card, whether or not <code>partial-metric</code> is present, so the grid layout stays uniform across a row of three cards regardless of which ones show the fifth line.</li>
+        <li><code class="status">[]</code> Do not remove <code>.session-card { overflow: hidden }</code> and do not add scrolling to <code>.card-metrics-grid</code> — <code>dashboard-parity.test.ts</code> already asserts the metrics grid never gets <code>overflow: hidden|auto</code>, and the fix belongs at the height that contains it, not at a clip or a scrollbar on the content.</li>
+        <li><code class="status">[]</code> Extend <code>core/test/unit/dashboard-mechanics.test.ts</code>'s existing <code>.card-wrap</code>/<code>.session-card</code> assertions to require the new height value</li>
+        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/dashboard-mechanics.test.ts core/test/unit/dashboard-parity.test.ts</code> — the existing <code>doesNotMatch</code> assertion against <code>overflow: hidden|auto</code> on <code>.card-metrics-grid</code> stays true</li>
+        <li><code class="status">[]</code> Manual check with the <code>run</code> skill: a session card with <code>costPartial: true</code> shows all five metrics rows uncut in the running dashboard</li>
+      </ul>
+      <div class="loop">🔁 <strong>Do not exit this phase until every box above is checked.</strong> If any command fails, fix the cause and re-run — loop until all pass.</div>
+    </div>
+  </section>
+
+  <!-- ===== GLOBAL VALIDATION ===== -->
+  <section id="validation">
+    <h2>Validation Commands</h2>
+    <p>Execute these commands to validate the entire plan is complete:</p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> <code>node --experimental-strip-types --test "core/test/unit/**/*.test.ts"</code> — the full unit suite, including all four new/extended dashboard test files and the untouched <code>projector.test.ts</code>, green</li>
+      <li><code class="status">[]</code> <code>npm run typecheck</code> — both <code>tsc</code> (core) and <code>vue-tsc</code> (dashboard) clean</li>
+      <li><code class="status">[]</code> <code>npm run lint</code> — <code>oxlint core dashboard</code> clean over the new files</li>
+      <li><code class="status">[]</code> Grep confirms <code>formatCost</code>'s signature and its eighteen pinning assertions are byte-unchanged: <code>git diff --stat -- dashboard/src/display.ts</code> shows only additions, no line inside the existing <code>formatCost</code> function body</li>
+      <li><code class="status">[]</code> Manual dashboard review with the <code>run</code> skill: every event kind in a real or fixture session renders something other than its own kind name; a folded delta run expands to the full reassembled text; the rendered/raw toggle defaults to rendered; no session card clips</li>
+    </ul>
+    <div class="loop">🔁 <strong>The plan is not complete until every box is checked and every command passes. If for some reason a step is not possible to complete, mark it with [f] and move on if possible.</strong></div>
+  </section>
+
+  <!-- ===== QUESTIONABLES ===== -->
+  <section id="questionables">
+    <h2>Questionables</h2>
+    <figure>
+      <pre class="mermaid">
+flowchart TD
+  Q1{"Where does the fold's<br/>re-redaction predicate live?"}
+  Q1 -->|"A: shared module"| A["dashboard/shared/credential-patterns.ts<br/>both sides import it"]
+  Q1 -->|"B: duplicate"| B["copy the regex list into dashboard/src<br/>drift risk"]
+  Q1 -->|"C: server-side fold"| C["fold moves into core/src<br/>new pagination-aware plumbing"]
+  style A stroke:#22C55E,stroke-width:2px
+      </pre>
+      <figcaption>All three Questionables were decided 2026-08-21, each taking the recommended option — Q1 shown here: the single source of credential-matching truth moves to a shared module once a second consumer (the client fold) needs it.</figcaption>
+    </figure>
+
+    <details data-review-options="A — shared module in dashboard/shared/ (recommended)|B — duplicate the pattern list in dashboard/src|C — move the fold itself server-side, keep redaction.ts core-only|D — defer folding, ship phases 1, 3, 4 only">
+      <summary><span class="qdecided">DECIDED</span> Q1 — Where should the credential-matching logic the fold's re-redaction step needs actually live?</summary>
+      <p class="decided"><b>Decided 2026-08-21:</b> option A — a shared module in <code>dashboard/shared/</code> — owner verdict via the exported <code>plan-sota-review v1</code> block. See Amendments.</p>
+      <p class="consequence"><b>What it constrains:</b> task 2 is unblocked. <code>CREDENTIAL_PATTERNS</code>, <code>containsCredential</code> and <code>scrubCredentialString</code> move into <code>dashboard/shared/credential-patterns.ts</code>, and <code>core/src/policy/redaction.ts</code> imports them from there instead of declaring its own copy; <code>dashboard/tsconfig.json</code>'s include list widens only if the import actually requires it. <code>scrubCredentials</code> (the recursive object-redaction wrapper) stays in <code>core/src/policy/redaction.ts</code> — only the pure string-matching primitives move.</p>
+      <p class="qa-answer">Today <code>core/src/policy/redaction.ts</code>'s <code>CREDENTIAL_PATTERNS</code>, <code>containsCredential</code> and <code>scrubCredentialString</code> are pure, dependency-free string functions with no Node-specific API — nothing stops them from running in a browser bundle. <code>dashboard/shared/</code> is already the established two-way seam: <code>core/src/api/routes.ts</code>, <code>responses.ts</code> and <code>backlog.ts</code> already import <code>EventItem</code> and friends from there, and <code>dashboard/tsconfig.json</code> already includes it. This is a smaller diff than option C (which would need new pagination-aware fold plumbing in <code>queries.ts</code>/<code>routes.ts</code>, since a fold spanning two fetched pages needs to be reasoned about server-side in a way it does not client-side, where <code>EventLog.vue</code> already accumulates every page into one array before rendering), and it avoids option B's single-source-of-truth risk on exactly the code this plan is most worried about not drifting. Option D ships value sooner but leaves the volume problem — 85.3% of rows — unsolved.</p>
+    </details>
+
+    <details data-review-options="A — one-line summary only (recommended)|B — richer per-kind <dl> detail panel, matching PhaseInspector's usage panel">
+      <summary><span class="qdecided">DECIDED</span> Q2 — Should the rendered view show only the one-line summary, or a fuller per-kind detail panel?</summary>
+      <p class="decided"><b>Decided 2026-08-21:</b> option A — one-line summary only — owner verdict via the exported <code>plan-sota-review v1</code> block. See Amendments.</p>
+      <p class="consequence"><b>What it constrains:</b> task 4 builds the rendered view as a direct call into <code>summarizeEvent()</code> / <code>reassembledText</code> — the same function the collapsed-row summary already calls — with no second per-kind formatting surface to design or keep in sync. Reopen only if the owner finds the one-line rendered view insufficient once task 4 ships; the trigger is named so it is not rediscovered as a surprise.</p>
+      <p class="qa-answer">Reusing <code>summarizeEvent()</code> for the rendered view means the collapsed row and the expanded rendered view can never say different things about the same row — one function, two call sites. A richer <code>&lt;dl&gt;</code> panel per kind (mirroring <code>PhaseInspector.vue</code>'s usage section) is more informative but is a second formatting surface per kind to keep in sync with the summariser, doubling task 1's surface area for a readability gain this plan's measured evidence does not show is needed — the five-key chain's defect was rows saying nothing, not rows saying too little.</p>
+    </details>
+
+    <details data-review-options="A — bump .card-wrap to 452px, uniform across all cards (recommended)|B — min-height + align-items: stretch, fully organic per-card growth|C — hide the fifth row behind a tooltip instead of a fifth grid row">
+      <summary><span class="qdecided">DECIDED</span> Q3 — How should the run cards give the fifth metrics row room without breaking the three-cards-per-row grid's visual alignment?</summary>
+      <p class="decided"><b>Decided 2026-08-21:</b> option A — bump <code>.card-wrap</code>'s height to <code>452px</code>, uniform across all cards — owner verdict via the exported <code>plan-sota-review v1</code> block. See Amendments.</p>
+      <p class="consequence"><b>What it constrains:</b> task 5 changes exactly one declared height and touches nothing else in <code>dashboard.css</code> or <code>.sessions-grid</code>. Reopen only if <code>452px</code> proves visually wrong once checked against a real capture — the number is a measured estimate from the grid's own row gap and line height, not a pixel-perfect render.</p>
+      <p class="qa-answer">A fixed height that fits five rows on every card keeps all three cards in a grid row visually level regardless of which ones actually show <code>partial-metric</code> — the alternative (B) would let cards with the fifth row grow taller than their row-mates unless <code>align-items: stretch</code> is added at the grid level too, which is a larger, less-tested change to <code>.sessions-grid</code> for a cosmetic fix. Option C (tooltip) hides information the owner is specifically trying to see more of, which cuts against this whole workstream's purpose.</p>
+    </details>
+  </section>
+
+  <!-- ===== NOTES ===== -->
+  <section id="notes">
+    <h2>Notes</h2>
+
+    <h3>What this plan deliberately does not touch</h3>
+    <ul>
+      <li><strong>Storage-layer compaction is not proposed anywhere in this plan.</strong> Folding happens at render time, over data the API already sends; the database keeps every individual <code>text.delta</code> row exactly as it does today. The candidate record this plan is grounded in explicitly separated "the case is stronger than it looked" (85.3% of rows, worth compacting <em>on screen</em>) from "the deltas are the only surviving record of the model's own formatting" (not worth deleting from storage) — this plan only ever acts on the first half.</li>
+      <li><strong>No screenshot, run id, or session id from the twelve captures this workstream's diagnosis rests on is quoted anywhere in this repository</strong> — not in this file, not in a fixture, not in a commit message. Invariant 1. Every fixture in phases 2 and 3's test files is synthetic, built from the schema in <code>normalized-events.ts</code>, never copied from a real capture.</li>
+      <li><strong>No frozen candidate record was read while authoring this plan.</strong> Only <code>specs/awsf-v2-candidates-fuse-version.md</code> §10 and §2.9 — the current, fused source — and the spine's own W02 block were consulted.</li>
+    </ul>
+
+    <h3>The events table's actual type vocabulary</h3>
+    <p>Twelve kinds are defined in <code>NORMALIZED_EVENT_KINDS</code>, but <code>thinking.delta</code> never reaches the events table (filtered by <code>isPersistableKind</code>), and <code>tool.requested</code>/<code>tool.completed</code> collapse into one <code>tool_call</code> row. The projector also writes two literal types no normalized-event kind names directly: <code>compiled_prompt</code> and <code>ceiling_grant</code>. So <code>EventItem.type</code> actually takes twelve distinct string values in practice, and phase 1's summariser dispatch table covers all twelve — <code>tool_call</code>, <code>text.delta</code>, <code>usage</code>, <code>quota</code>, <code>notice</code>, <code>run.started</code>, <code>model.resolved</code>, <code>run.completed</code>, <code>run.failed</code>, <code>run.cancelled</code>, <code>compiled_prompt</code>, <code>ceiling_grant</code> — plus the fallback for anything the table does not yet name, kept as a safety net rather than a case anyone expects to hit.</p>
+
+    <h3>Why the fold lives client-side rather than as new API plumbing</h3>
+    <p><code>EventLog.vue</code>'s existing paging loop (<code>load()</code>) already fetches every page with <code>after=cursor</code> and pushes new events into one growing <code>events</code> array before <code>phaseEvents</code> (a computed filter) ever renders anything. By the time a fold would run, the full ordered set for a phase is already in memory — a server-side fold would have to solve the same problem (a run spanning a page boundary) with strictly less information than the client already has for free. This is the concrete reason Q1 frames server-side folding as the more expensive option rather than the more "correct" one.</p>
+
+    <h3>Rejected: fixing summary() in place rather than replacing it</h3>
+    <p>An earlier framing considered lengthening the five-key chain (adding <code>text</code>, <code>usage</code> as strings, etc.) rather than dispatching by kind. Rejected because the chain's actual defect is structural — it tries every key against every kind regardless of whether that kind could ever have it, which is exactly how <code>usage</code>'s object-shaped value slipped through silently (the chain only accepts strings) and how <code>inputSummary</code> beat <code>resultSnippet</code> for tool calls. A longer chain repeats the defect with more keys; per-kind dispatch removes the category of bug.</p>
+  </section>
+
+  <!-- ===== AMENDMENTS ===== -->
+  <section id="amendments">
+    <h2>Amendments</h2>
+    <details>
+      <summary>2026-08-21 — All three Questionables decided, each taking the recommended option</summary>
+      <p>Owner review via an exported <code>plan-sota-review v1</code> block. <strong>Q1</strong> (credential-matching predicate location): option A — a shared module, <code>dashboard/shared/credential-patterns.ts</code>, with <code>core/src/policy/redaction.ts</code> importing from it rather than declaring its own copy. This unblocks task 2, which was the one task in the set gated on an owner decision. <strong>Q2</strong> (rendered-view depth): option A — the one-line summary, reused from <code>summarizeEvent()</code>, with no second per-kind detail surface. <strong>Q3</strong> (run-card height fix): option A — bump <code>.card-wrap</code>'s height to <code>452px</code>, uniform across all cards. All three were the recommended option in each Questionable's discussion, so no phase, task, or checklist item changes shape as a result — only the Questionables section itself, this Amendment, and the metadata <code>modified</code> row change. The plan's own build prompts and ticket set already described the recommended build; <code>specs/awsf-v2-w02-evidence-readability-build-prompts.md</code> and <code>specs/tickets/awsf-v2-w02-evidence-readability/</code> needed no further edits.</p>
+    </details>
+  </section>
+
+</main>
+
+<!-- ===== PLAN-SOTA REVIEW LAYER v1 — FIXED MACHINERY, COPY VERBATIM ===== -->
+<style>
+  .rv-btn { font: 600 11px/1 system-ui, sans-serif; padding: 3px 9px; border-radius: 999px;
+    border: 1px solid var(--muted, #8884); background: transparent; color: var(--fg, inherit);
+    cursor: pointer; opacity: .55; vertical-align: middle; margin-left: 8px; }
+  .rv-btn:hover { opacity: 1; border-color: var(--accent, #7c6cf0); }
+  .rv-btn.rv-on { opacity: 1; background: var(--accent, #7c6cf0); color: var(--bg, #fff); border-color: transparent; }
+  .rv-note-box { display: block; margin: 8px 0; padding: 8px 12px; border: 1px dashed var(--accent, #7c6cf0);
+    border-radius: 8px; font-size: 13px; min-height: 1.5em; background: color-mix(in srgb, var(--accent, #7c6cf0) 6%, transparent); outline: none; }
+  .rv-note-box:empty::before { content: attr(data-ph); opacity: .5; font-style: italic; }
+  .rv-note-box[hidden] { display: none; }
+  .rv-verdict { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 10px 0 2px; }
+  .rv-verdict-tag { font: 700 10px/1 system-ui, sans-serif; letter-spacing: .08em; opacity: .6; margin-right: 2px; }
+  .rv-status-chip { font: 600 11px/1 ui-monospace, monospace; margin-left: 10px; padding: 3px 9px;
+    border-radius: 999px; border: 1px dotted var(--muted, #8884); background: transparent;
+    color: var(--fg, inherit); cursor: pointer; opacity: .6; }
+  .rv-status-chip:hover { opacity: 1; }
+  .rv-status-chip.rv-on { opacity: 1; border-style: solid; border-color: var(--accent, #7c6cf0); color: var(--accent, #7c6cf0); }
+  #rv-drawer { position: fixed; right: 16px; bottom: 16px; z-index: 9999; font: 13px/1.45 system-ui, sans-serif;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  #rv-pill { font: 700 12px/1 system-ui, sans-serif; padding: 10px 16px; border-radius: 999px; border: none;
+    cursor: pointer; background: var(--accent, #7c6cf0); color: var(--bg, #fff); box-shadow: 0 4px 16px #0004; }
+  #rv-panel { width: min(420px, calc(100vw - 32px)); max-height: 60vh; overflow: auto; padding: 14px;
+    border-radius: 12px; border: 1px solid var(--muted, #8884); background: var(--bg, #fff);
+    color: var(--fg, inherit); box-shadow: 0 8px 32px #0005; }
+  #rv-panel h4 { margin: 0 0 8px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; opacity: .7; }
+  #rv-list { margin: 0 0 10px; padding: 0; list-style: none; font-size: 12px; }
+  #rv-list li { padding: 3px 0; border-bottom: 1px solid #8882; overflow-wrap: anywhere; }
+  #rv-out { width: 100%; min-height: 140px; margin-top: 10px; font: 11px/1.5 ui-monospace, monospace;
+    border: 1px solid var(--muted, #8884); border-radius: 8px; padding: 8px; background: transparent; color: inherit; }
+  #rv-msg { font-size: 11px; opacity: .75; margin-top: 6px; }
+  @media print { #rv-drawer { display: none; } }
+</style>
+<script>
+(function () {
+  'use strict';
+  var FILE = decodeURIComponent(location.pathname.split('/').pop() || 'plan.html');
+  var KEY = 'plan-sota-review:' + FILE;
+  var LEGACY_KEY = 'planf3-review:' + FILE; // pre-rename state; read once, never written
+  var PROPOSE = ['', '[]', '[wip]', '[x]', '[f]'];
+  var state = { a: {}, v: {}, s: {} }, persisted = true;
+  try { state = JSON.parse(localStorage.getItem(KEY) || localStorage.getItem(LEGACY_KEY) || 'null') || state; } catch (e) { persisted = false; }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); persisted = true; }
+    catch (e) { persisted = false; }
+    refresh();
+  }
+  function el(tag, cls, txt) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (txt) n.textContent = txt;
+    if (tag === 'button') { n.type = 'button'; n.setAttribute('data-lavish-action', ''); }
+    return n;
+  }
+  function clean(t) { return String(t || '').replace(/\|/g, '/').replace(/\s*\r?\n\s*/g, ' >> ').trim(); }
+  var registry = []; // {key, label, kind: 'section'|'phase'|'q'}
+
+  function noteBox(key, host, placeholder) {
+    var box = el('div', 'rv-note-box');
+    box.contentEditable = 'true';
+    box.setAttribute('data-ph', placeholder || 'Type your note for the agent…');
+    box.hidden = !(state.a[key]);
+    if (state.a[key]) box.textContent = state.a[key];
+    box.addEventListener('input', function () {
+      var t = box.textContent.trim();
+      if (t) state.a[key] = t; else delete state.a[key];
+      save();
+    });
+    host.appendChild(box);
+    return box;
+  }
+  function annotable(key, label, heading, host, kind) {
+    registry.push({ key: key, label: label, kind: kind });
+    var box = noteBox(key, host);
+    heading.insertAdjacentElement('afterend', box);
+    var btn = el('button', 'rv-btn' + (state.a[key] ? ' rv-on' : ''), '✎ note');
+    btn.addEventListener('click', function () {
+      box.hidden = !box.hidden;
+      if (!box.hidden) box.focus();
+    });
+    heading.appendChild(btn);
+    box.addEventListener('input', function () { btn.classList.toggle('rv-on', !!state.a[key]); });
+  }
+
+  // Sections
+  Array.prototype.forEach.call(document.querySelectorAll('main > section[id]'), function (sec) {
+    var h = sec.querySelector('h2'); if (!h) return;
+    annotable('#' + sec.id, h.textContent.trim(), h, sec, 'section');
+  });
+  // Phases: annotation + proposed-status chip
+  Array.prototype.forEach.call(document.querySelectorAll('#phases .phase'), function (ph, i) {
+    var h = ph.querySelector('h3'); if (!h) return;
+    var key = 'phase-' + (i + 1);
+    var label = h.textContent.replace(/^\s*\[[^\]]*\]\s*/, '').trim();
+    annotable(key, label, h, ph, 'phase');
+    var chip = el('button', 'rv-status-chip' + (state.s[key] ? ' rv-on' : ''));
+    chip.textContent = state.s[key] ? 'propose ' + state.s[key] : 'propose…';
+    chip.title = 'Cycle a PROPOSED status (exported as feedback — the file marker is only changed by the agent)';
+    chip.addEventListener('click', function () {
+      var next = PROPOSE[(PROPOSE.indexOf(state.s[key] || '') + 1) % PROPOSE.length];
+      if (next) state.s[key] = next; else delete state.s[key];
+      chip.textContent = next ? 'propose ' + next : 'propose…';
+      chip.classList.toggle('rv-on', !!next);
+      save();
+    });
+    h.appendChild(chip);
+  });
+  // Questionables: verdict / option buttons + note
+  Array.prototype.forEach.call(document.querySelectorAll('#questionables details'), function (d, i) {
+    var key = 'q-' + (i + 1);
+    var summary = d.querySelector('summary');
+    var label = summary ? summary.textContent.trim().slice(0, 120) : key;
+    registry.push({ key: key, label: label, kind: 'q' });
+    var opts = (d.getAttribute('data-review-options') || '').split('|').map(function (s) { return s.trim(); }).filter(Boolean);
+    if (!opts.length) opts = ['APPROVE', 'REJECT', 'REVISE', 'DEFER'];
+    var row = el('div', 'rv-verdict');
+    row.appendChild(el('span', 'rv-verdict-tag', 'YOUR CALL'));
+    opts.forEach(function (opt) {
+      var b = el('button', 'rv-btn' + ((state.v[key] || {}).c === opt ? ' rv-on' : ''), opt);
+      b.addEventListener('click', function () {
+        if ((state.v[key] || {}).c === opt) { delete state.v[key]; }
+        else { state.v[key] = { c: opt }; }
+        Array.prototype.forEach.call(row.querySelectorAll('.rv-btn'), function (x) {
+          x.classList.toggle('rv-on', x.textContent === ((state.v[key] || {}).c || null));
+        });
+        qbox.hidden = !state.v[key] && !state.a[key];
+        save();
+      });
+      row.appendChild(b);
+    });
+    d.appendChild(row);
+    var qbox = noteBox(key, d, 'Why / what to change instead…');
+    if (state.v[key]) qbox.hidden = false;
+  });
+
+  // Drawer
+  var drawer = el('div'); drawer.id = 'rv-drawer';
+  var panel = el('div'); panel.id = 'rv-panel'; panel.hidden = true;
+  var pill = el('button'); pill.id = 'rv-pill';
+  pill.addEventListener('click', function () { panel.hidden = !panel.hidden; });
+  var list = el('ul'); list.id = 'rv-list';
+  var actions = el('div');
+  var exportBtn = el('button', 'rv-btn rv-on', 'Export Feedback');
+  var clearBtn = el('button', 'rv-btn', 'Clear review');
+  var out = el('textarea'); out.id = 'rv-out'; out.readOnly = true; out.hidden = true;
+  var msg = el('div'); msg.id = 'rv-msg';
+  var head = el('h4', null, 'Review — pending feedback');
+  actions.appendChild(exportBtn); actions.appendChild(clearBtn);
+  panel.appendChild(head); panel.appendChild(list); panel.appendChild(actions);
+  panel.appendChild(out); panel.appendChild(msg);
+  drawer.appendChild(panel); drawer.appendChild(pill);
+  document.body.appendChild(drawer);
+
+  function findLabel(key) {
+    for (var i = 0; i < registry.length; i++) if (registry[i].key === key) return registry[i].label;
+    return key;
+  }
+  function refresh() {
+    var n = Object.keys(state.a).length + Object.keys(state.v).length + Object.keys(state.s).length;
+    pill.textContent = '✎ Review (' + n + ')';
+    list.textContent = '';
+    Object.keys(state.v).forEach(function (k) { list.appendChild(el('li', null, '[verdict] ' + findLabel(k) + ' → ' + state.v[k].c)); });
+    Object.keys(state.s).forEach(function (k) { list.appendChild(el('li', null, '[status] ' + findLabel(k) + ' → propose ' + state.s[k])); });
+    Object.keys(state.a).forEach(function (k) { list.appendChild(el('li', null, '[note] ' + findLabel(k) + ': ' + state.a[k].slice(0, 90))); });
+    if (!n) list.appendChild(el('li', null, 'Nothing yet — click ✎ note on any section, a verdict on a Questionable, or propose… on a phase.'));
+    if (!persisted) msg.textContent = '⚠ localStorage unavailable — review state lives only in this tab.';
+  }
+  function buildExport() {
+    var L = ['plan-sota-review v1', 'plan: ' + FILE, 'title: ' + clean(document.title), 'exported: ' + new Date().toISOString(), ''];
+    var vk = Object.keys(state.v), sk = Object.keys(state.s), ak = Object.keys(state.a);
+    L.push('## verdicts');
+    vk.length ? vk.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | ' + clean(state.v[k].c) + ' | note: ' + (clean(state.a[k]) || '-'));
+    }) : L.push('- (none)');
+    L.push('', '## statuses');
+    sk.length ? sk.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | propose ' + state.s[k]);
+    }) : L.push('- (none)');
+    L.push('', '## annotations');
+    var solo = ak.filter(function (k) { return !state.v[k]; });
+    solo.length ? solo.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | ' + clean(state.a[k]));
+    }) : L.push('- (none)');
+    return L.join('\n');
+  }
+  exportBtn.addEventListener('click', function () {
+    var text = buildExport();
+    out.hidden = false; out.value = text;
+    out.focus(); out.select();
+    function done(m) { msg.textContent = m; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done('Copied — paste it into your next agent session.'); },
+        function () { done('Clipboard blocked — copy from the box below.'); });
+    } else {
+      try { done(document.execCommand('copy') ? 'Copied — paste it into your next agent session.' : 'Clipboard blocked — copy from the box below.'); }
+      catch (e) { done('Clipboard blocked — copy from the box below.'); }
+    }
+    if (window.lavish && typeof window.lavish.queuePrompt === 'function') {
+      window.lavish.queuePrompt(text, { tag: 'plan-sota-review', queueKey: 'plan-sota-review' });
+      msg.textContent += ' Also queued to the agent via Lavish.';
+    }
+  });
+  clearBtn.addEventListener('click', function () {
+    if (!confirm('Clear all review state for this plan?')) return;
+    state = { a: {}, v: {}, s: {} };
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    location.reload();
+  });
+  refresh();
+})();
+</script>
+
+<!-- Mermaid runtime — renders every <pre class="mermaid"> block. Only external reference in the file. -->
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      primaryColor: '#1C1E2B',
+      primaryTextColor: '#E7E9F0',
+      primaryBorderColor: '#A78BFA',
+      lineColor: '#8B90A6',
+      fontFamily: '"Inter","Outfit",system-ui,sans-serif'
+    }
+  });
+</script>
+</body>
+</html>
