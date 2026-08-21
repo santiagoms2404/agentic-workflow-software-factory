@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, reactive, ref } from "vue";
 import type { EventItem, EventsResponse } from "../../shared/types.ts";
 import { formatDuration } from "../display.ts";
 import { summarizeEvent } from "../event-summary.ts";
+import { foldTextDeltaRuns, type DisplayRow, type FoldedTextDeltaRow } from "../delta-fold.ts";
 
 const props = defineProps<{ sessionId: string; phaseId: string }>();
 const events = ref<EventItem[]>([]);
@@ -14,6 +15,15 @@ const expanded = reactive(new Set<string>());
 let timer: ReturnType<typeof setInterval> | undefined;
 
 const phaseEvents = computed(() => events.value.filter((event) => event.phaseId === props.phaseId));
+const foldedRows = computed(() => foldTextDeltaRuns(phaseEvents.value));
+function isFoldedTextDeltaRow(event: DisplayRow): event is FoldedTextDeltaRow {
+  return event.type === "text.delta.fold" && "reassembledText" in event;
+}
+function rowSummary(event: DisplayRow): string {
+  return isFoldedTextDeltaRow(event)
+    ? `streamed response · ${event.chunkCount} chunks · ${event.endedAt ? formatDuration(event.startedAt, event.endedAt) : "point event"}`
+    : summarizeEvent(event);
+}
 function toggle(id: string): void { expanded.has(id) ? expanded.delete(id) : expanded.add(id); }
 function json(value: unknown): string { return JSON.stringify(value, null, 2); }
 async function load(): Promise<void> {
@@ -45,15 +55,15 @@ onUnmounted(() => clearInterval(timer));
     <header><h3>Events ({{ phaseEvents.length }})</h3><span>chronological · canonical timestamps</span></header>
     <p v-if="error" role="alert" class="empty-note">{{ error }}</p>
     <div v-if="!phaseEvents.length && !loading" class="empty-note">No events recorded for this phase.</div>
-    <article v-for="event in phaseEvents" :key="event.id" class="event-row" :class="`event-${event.type}`">
-      <button type="button" :aria-expanded="expanded.has(event.id)" @click="toggle(event.id)">
-        <time>{{ new Date(event.startedAt).toLocaleTimeString([], { hour12: false }) }}</time>
-        <strong>{{ event.type }}</strong>
-        <span :title="summarizeEvent(event)">{{ summarizeEvent(event) }}</span>
-        <em>{{ event.status ?? "recorded" }}</em>
-        <small>{{ event.endedAt ? formatDuration(event.startedAt, event.endedAt) : "point event" }}</small>
+    <article v-for="row in foldedRows" :key="row.id" class="event-row" :class="`event-${row.type}`">
+      <button type="button" :aria-expanded="expanded.has(row.id)" @click="toggle(row.id)">
+        <time>{{ new Date(row.startedAt).toLocaleTimeString([], { hour12: false }) }}</time>
+        <strong>{{ row.type }}</strong>
+        <span :title="rowSummary(row)">{{ rowSummary(row) }}</span>
+        <em>{{ isFoldedTextDeltaRow(row) ? "recorded" : row.status ?? "recorded" }}</em>
+        <small>{{ row.endedAt ? formatDuration(row.startedAt, row.endedAt) : "point event" }}</small>
       </button>
-      <pre v-if="expanded.has(event.id)">{{ json(event.payload) }}</pre>
+      <pre v-if="expanded.has(row.id)">{{ isFoldedTextDeltaRow(row) ? row.reassembledText : json(row.payload) }}</pre>
     </article>
   </section>
 </template>
