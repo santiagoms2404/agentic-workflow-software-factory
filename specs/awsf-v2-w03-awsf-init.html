@@ -434,7 +434,7 @@ cleanup: removing /tmp/awsf-init-probe-mD0Vuv</pre>
 
     <!-- ================= M3 ================= -->
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone M3: CLI wiring, and the two fences that make this workstream's own claims checkable</h3>
+      <h3><code class="status">[wip]</code> Milestone M3: CLI wiring, and the two fences that make this workstream's own claims checkable</h3>
       <p>The command exists and works; this phase makes it reachable as <code>awsf init</code>, keeps the documentation fence green, and — this is the part that turns "no provider is needed" and "this stops at the baseline" from claims in this document into properties the suite checks on every run.</p>
 
       <h4>6. Wire <code>init</code> into <code>core/src/cli/main.ts</code></h4>
@@ -458,10 +458,10 @@ cleanup: removing /tmp/awsf-init-probe-mD0Vuv</pre>
         The import-graph fence proves <strong>no reachable module</strong> from <code>init.ts</code>/<code>init-template.ts</code> sits under <code>core/src/adapters/</code> — it is a static analysis over import statements, so it catches every present-day route to a provider and any future one added the same way, but it would not catch a provider invoked through a mechanism that does not use a static <code>import</code> (none exists in this codebase today; if one is ever added, this fence's own header must say so). The ordering fence proves <code>init.ts</code> imports nothing from a workflow, gate, or recipe module — it does not prove W05 will respect the boundary from its own side; that is W05's own deep plan's obligation, not this one's.
       </div>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>core/test/unit/meta/init-no-provider.test.ts</code> walks the static import graph from <code>core/src/cli/commands/init.ts</code> and <code>core/src/config/init-template.ts</code> and asserts every reachable module matches a small, commented allowlist (config, git, execution/transport-broker, Node builtins, YAML) containing nothing under <code>core/src/adapters/</code></li>
-        <li><code class="status">[]</code> The same fence asserts nothing under <code>core/src/workflow/</code>, <code>core/src/gates/</code>, or any future recipe/compiled-envelope module is reachable — the mechanical form of "W03 stops at the baseline commit"</li>
-        <li><code class="status">[]</code> The fence is proven to bite: a scratch import of a fixture adapter module added temporarily to <code>init.ts</code> turns it red, then the scratch import is discarded</li>
-        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/init-no-provider.test.ts</code> — green over the real tree</li>
+        <li><code class="status">[x]</code> <code>core/test/unit/meta/init-no-provider.test.ts</code> walks the static import graph from <code>core/src/cli/commands/init.ts</code> and <code>core/src/config/init-template.ts</code> and asserts every reachable module matches a small, commented allowlist (config, git, execution/transport-broker, Node builtins, YAML) containing nothing under <code>core/src/adapters/</code></li>
+        <li><code class="status">[x]</code> The same fence asserts nothing under <code>core/src/workflow/</code>, <code>core/src/gates/</code>, or any future recipe/compiled-envelope module is reachable — the mechanical form of "W03 stops at the baseline commit"</li>
+        <li><code class="status">[x]</code> The fence is proven to bite: a scratch import of a fixture adapter module added temporarily to <code>init.ts</code> turns it red, then the scratch import is discarded</li>
+        <li><code class="status">[x]</code> <code>node --experimental-strip-types --test core/test/unit/meta/init-no-provider.test.ts</code> — green over the real tree</li>
       </ul>
 
       <h4>9. Full suite, marker flips, and the spine's W03 marker</h4>
