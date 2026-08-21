@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, reactive, ref } from "vue";
 import type { EventItem, EventsResponse } from "../../shared/types.ts";
 import { formatDuration } from "../display.ts";
+import { summarizeEvent } from "../event-summary.ts";
 
 const props = defineProps<{ sessionId: string; phaseId: string }>();
 const events = ref<EventItem[]>([]);
@@ -14,14 +15,6 @@ let timer: ReturnType<typeof setInterval> | undefined;
 
 const phaseEvents = computed(() => events.value.filter((event) => event.phaseId === props.phaseId));
 function toggle(id: string): void { expanded.has(id) ? expanded.delete(id) : expanded.add(id); }
-function summary(item: EventItem): string {
-  if (!item.payload || typeof item.payload !== "object") return item.name || "—";
-  const value = item.payload as Record<string, unknown>;
-  for (const key of ["inputSummary", "message", "detail", "reason", "resolvedModel"]) {
-    if (typeof value[key] === "string" && value[key]) return String(value[key]);
-  }
-  return item.name || item.type;
-}
 function json(value: unknown): string { return JSON.stringify(value, null, 2); }
 async function load(): Promise<void> {
   if (loading.value) return;
@@ -56,7 +49,7 @@ onUnmounted(() => clearInterval(timer));
       <button type="button" :aria-expanded="expanded.has(event.id)" @click="toggle(event.id)">
         <time>{{ new Date(event.startedAt).toLocaleTimeString([], { hour12: false }) }}</time>
         <strong>{{ event.type }}</strong>
-        <span :title="summary(event)">{{ summary(event) }}</span>
+        <span :title="summarizeEvent(event)">{{ summarizeEvent(event) }}</span>
         <em>{{ event.status ?? "recorded" }}</em>
         <small>{{ event.endedAt ? formatDuration(event.startedAt, event.endedAt) : "point event" }}</small>
       </button>

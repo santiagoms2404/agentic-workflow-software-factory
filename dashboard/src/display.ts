@@ -22,6 +22,20 @@ export function formatUsage(usage: UsageTotals): string {
   return formatTokens(usage.totalTokens);
 }
 
+export function formatUsageBreakdown(usage: Pick<UsageTotals,
+  "inputTokens" | "outputTokens" | "cacheReadTokens" | "cacheWriteTokens" | "reasoningTokens"
+>): string {
+  const input = usage.inputTokens === null ? null : `${formatTokens(usage.inputTokens)} in`;
+  const output = usage.outputTokens === null ? null : `${formatTokens(usage.outputTokens)} out`;
+  const primary = [input, output].filter((part): part is string => part !== null).join(" / ");
+  const secondary = [
+    usage.cacheReadTokens === null ? null : `${formatTokens(usage.cacheReadTokens)} cached`,
+    usage.cacheWriteTokens === null ? null : `${formatTokens(usage.cacheWriteTokens)} cache write`,
+    usage.reasoningTokens === null ? null : `${formatTokens(usage.reasoningTokens)} reasoning`,
+  ].filter((part): part is string => part !== null);
+  return [primary, ...secondary].filter(Boolean).join(" · ") || "—";
+}
+
 export function formatDuration(startedAt: string, endedAt: string | null, now = Date.now()): string {
   const milliseconds = Math.max(0, (endedAt ? Date.parse(endedAt) : now) - Date.parse(startedAt));
   const seconds = Math.floor(milliseconds / 1000);
