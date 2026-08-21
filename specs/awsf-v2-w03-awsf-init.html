@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plan: AWSF v2 W03 — awsf init</title>
+<style>
+/* AWSF dark theme — the same §7 design tokens the v1 plan, the v2 spine, and
+   W01/W02 carry, so the whole set reads as one document and the mermaid
+   palette stays synced. The review layer reuses --bg / --fg / --muted / --accent. */
+:root {
+  --bg:#0F1017; --surface:rgba(28,30,43,.85); --surface-solid:#1C1E2B;
+  --border:rgba(255,255,255,.07); --text:#E7E9F0; --muted:#8B90A6;
+
+  --agent-engineer:#F59E0B; --agent-planner:#A78BFA; --agent-builder:#22D3EE;
+  --agent-reviewer:#F43F5E;
+
+  --ok:#22C55E; --running:#3B82F6; --error:#EF4444; --warn:#F97316;
+
+  --font-ui:"Inter","Outfit",system-ui,sans-serif;
+  --font-mono:"JetBrains Mono","Fira Code",ui-monospace,monospace;
+  --num:tabular-nums;
+
+  --r-card:14px; --r-pill:999px;
+  --shadow-card:0 1px 0 rgba(255,255,255,.04) inset, 0 8px 24px rgba(0,0,0,.35);
+
+  --fg:var(--text); --accent:var(--agent-planner);
+  --cool:var(--agent-builder); --good:var(--ok); --danger:var(--error);
+  --border-strong:#2b3040;
+  --maxw:1120px;
+}
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body { margin:0; padding:0; background:var(--bg); color:var(--fg);
+  font-family:var(--font-ui); font-size:15px; line-height:1.65; -webkit-font-smoothing:antialiased; }
+main { max-width:var(--maxw); margin:0 auto; padding:48px 24px 160px; }
+h1,h2,h3,h4 { line-height:1.25; font-weight:650; letter-spacing:-.011em; }
+h1 { font-size:30px; margin:0 0 6px; }
+h2 { font-size:21px; margin:56px 0 14px; padding-bottom:8px; border-bottom:1px solid var(--border-strong); }
+h3 { font-size:17px; margin:34px 0 8px; }
+h4 { font-size:14px; margin:24px 0 6px; color:var(--accent); letter-spacing:.01em; }
+h5 { margin:0 0 6px; }
+p { margin:0 0 14px; }
+a { color:var(--cool); }
+strong { color:#fff; font-weight:650; }
+em { color:var(--muted); font-style:italic; }
+hr { border:0; border-top:1px solid var(--border-strong); margin:40px 0; }
+small { color:var(--muted); }
+ul,ol { margin:0 0 14px; padding-left:22px; }
+li { margin:3px 0; }
+
+code { font-family:var(--font-mono); font-size:.88em; background:var(--surface-solid);
+  border:1px solid var(--border-strong); border-radius:4px; padding:1px 5px; color:#cfc4f7; }
+pre { background:var(--surface-solid); border:1px solid var(--border-strong);
+  border-left:3px solid var(--accent); border-radius:8px; padding:14px 16px; overflow-x:auto;
+  font-family:var(--font-mono); font-size:12.5px; line-height:1.6; color:#d6dde6; }
+pre code { background:none; border:none; padding:0; color:inherit; font-size:inherit; }
+
+table { width:100%; border-collapse:collapse; margin:14px 0 20px; font-size:13px; display:block; overflow-x:auto; }
+th,td { padding:7px 10px; border:1px solid var(--border-strong); text-align:left; vertical-align:top; }
+th { background:var(--surface-solid); color:var(--accent); font-weight:600; font-size:11.5px;
+  letter-spacing:.05em; text-transform:uppercase; white-space:nowrap; }
+tbody tr:nth-child(even) { background:#ffffff05; }
+td code { font-size:11.5px; }
+.num, td.num { font-variant-numeric:var(--num); text-align:right; }
+.matrix { font-family:var(--font-mono); font-size:12px; }
+.matrix td:first-child { color:var(--accent); }
+.ok { color:var(--good); font-weight:700; } .no { color:#4a5560; }
+
+.meta { margin:14px 0 0; font-size:13px; }
+.meta summary { cursor:pointer; color:var(--muted); font-family:var(--font-mono); font-size:12px; }
+.meta dl { display:grid; grid-template-columns:130px 1fr; gap:4px 14px; margin:12px 0 0; padding:14px;
+  background:var(--surface-solid); border:1px solid var(--border-strong); border-radius:8px; }
+.meta dt { color:var(--accent); font-family:var(--font-mono); font-size:11.5px; }
+.meta dd { margin:0; color:var(--muted); font-family:var(--font-mono); font-size:11.5px; overflow-wrap:anywhere; }
+
+.sub { color:var(--muted); font-size:13.5px; margin-top:0; }
+
+figure { margin:26px 0; text-align:center; }
+figure svg, figure .mermaid { max-width:100%; height:auto; }
+figure .mermaid { background:var(--surface-solid); border:1px solid var(--border-strong);
+  border-radius:10px; padding:20px 12px; overflow-x:auto; text-align:center;
+  color:var(--muted); font-size:12px; }
+figcaption { color:var(--muted); font-size:12px; margin-top:10px; font-style:italic; }
+
+.tag { display:inline-block; font-family:var(--font-mono); font-size:10px; letter-spacing:.06em;
+  text-transform:uppercase; padding:1px 6px; border-radius:3px; margin-right:6px; vertical-align:1px; }
+.tag.existing { background:#262b3a; color:var(--muted); }
+.tag.new { background:#2c2544; color:var(--accent); }
+.tag.dir { background:#173042; color:var(--cool); }
+
+.files ul { list-style:none; padding:0; }
+.files li { padding:4px 0; border-bottom:1px solid #ffffff08; font-size:13px; }
+
+.phase { border:1px solid var(--border-strong); border-radius:var(--r-card);
+  padding:22px 24px; margin:30px 0; background:#ffffff04; }
+.phase > h3 { margin-top:0; }
+.phase > h3 .status { color:var(--accent); }
+
+.checklist { list-style:none; padding:0; margin:8px 0 16px; }
+.checklist li { padding:4px 0 4px 2px; font-size:13.5px; }
+.checklist li .status { color:var(--accent); margin-right:6px; }
+
+.loop { border:1px dashed var(--accent); border-radius:8px; padding:10px 14px; margin:16px 0 4px;
+  font-size:13px; background:#a78bfa0d; }
+
+.card { border:1px solid var(--border-strong); border-left:3px solid var(--cool); border-radius:8px;
+  padding:12px 16px; margin:14px 0; background:var(--surface-solid); font-size:13px; }
+.card.warn { border-left-color:var(--danger); }
+.card.rule { border-left-color:var(--accent); }
+.card.good { border-left-color:var(--good); }
+.card h5 { margin:0 0 6px; font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--muted); font-weight:700; }
+
+.taskmeta { width:100%; font-size:12.5px; margin:6px 0 12px; }
+.taskmeta th { width:150px; text-transform:none; letter-spacing:0; font-size:12px; }
+
+#questionables details, #amendments details { border:1px solid var(--border-strong); border-radius:8px;
+  padding:10px 14px; margin:10px 0; background:var(--surface-solid); }
+#questionables summary, #amendments summary { cursor:pointer; font-weight:600; font-size:13.5px; }
+.qa-answer { margin:10px 0 2px; font-size:13px; color:var(--muted); }
+.qopen { color:var(--warn); font-family:var(--font-mono); font-size:10px; letter-spacing:.06em; margin-right:6px; }
+.qrec { color:var(--cool); font-family:var(--font-mono); font-size:10px; letter-spacing:.06em; margin-right:6px; }
+.qdecided { color:var(--good); font-family:var(--font-mono); font-size:10px; letter-spacing:.06em; margin-right:6px; }
+.recommend { display:block; margin:0 0 10px; padding:8px 12px; font-size:12.5px;
+  border-left:3px solid var(--cool); background:#22d3ee0d; border-radius:0 6px 6px 0; color:var(--fg); }
+.recommend b { color:var(--cool); }
+.consequence { display:block; margin:0 0 10px; padding:8px 12px; font-size:12.5px;
+  border-left:3px solid var(--accent); background:#a78bfa0d; border-radius:0 6px 6px 0; color:var(--fg); }
+.consequence b { color:var(--accent); }
+
+@media (max-width:720px) {
+  main { padding:28px 14px 140px; }
+  .meta dl { grid-template-columns:1fr; }
+}
+</style>
+</head>
+<body>
+<main>
+
+  <!-- ===== HEADER + UPDATABLE METADATA ===== -->
+  <header>
+    <h1>Plan: AWSF v2 W03 — awsf init</h1>
+    <p class="sub">Greenfield's chicken-and-egg — you cannot check a design against a repository that does not exist yet — is removed by never asking a provider to solve it. <strong>This is a deep plan, one workstream of <a href="awsf-v2-plan.html">the v2 spine</a> (Milestone M3).</strong> It carries the whole of <code>awsf init</code>: a minimal config derived from the schema rather than hand-guessed, a host-only command that creates a directory, runs <code>git init</code> through the one broker allowed to spawn a process, writes that config, and produces a baseline commit under the owner's own identity — reusing the commit helper this repository already has rather than writing a second one. <strong>Authoring it wrote no implementation code, changed no invariant, and flipped no marker.</strong> It did run one real fixture — a throwaway <code>git init</code> plus a real <code>loadConfig</code> round trip plus a real <code>commitAsHost</code> call, in a temporary directory, deleted afterward — and its output is quoted verbatim below, which is what turns "no provider is needed" from a design claim into an observation.</p>
+    <details class="meta">
+      <summary>Metadata</summary>
+      <dl>
+        <dt>created</dt>      <dd>2026-08-21</dd>
+        <dt>modified</dt>     <dd>2026-08-21</dd>
+        <dt>commits</dt>      <dd>none yet — this plan is authored and not yet committed</dd>
+        <dt>agent name</dt>   <dd>claude-sonnet-5</dd>
+        <dt>session id</dt>   <dd>not recorded — AGENTS.md invariant 1 keeps live session state out of every committed file in this repository</dd>
+        <dt>back refs</dt>    <dd>./awsf-v2-plan.html (the spine; this is its milestone M3 / workstream W03), ./tickets/awsf-v2-plan/W03.md (the meta-prompt that authored this plan), ./awsf-v2-plan-build-prompts.md (§ Section B → W03), ./awsf-v2-candidates-fuse-version.md (§10 first, then §2.3, "The bootstrap ordering contradicts itself"), ../AGENTS.md (invariants 1, 3, 10, 11), <code>core/src/config/schema.ts</code>, <code>core/src/config/load.ts</code>, <code>core/src/git/commit.ts</code>, <code>core/src/git/changes.ts</code>, <code>core/src/execution/transport-broker.ts</code>, <code>core/src/cli/main.ts</code></dd>
+        <dt>forward refs</dt> <dd>./awsf-v2-w03-awsf-init-build-prompts.md, ./tickets/awsf-v2-w03-awsf-init/ (T01–T09, one file per task, plus README.md)</dd>
+      </dl>
+    </details>
+  </header>
+
+  <figure>
+<pre class="mermaid">
+flowchart LR
+  A["target directory<br/>absent or empty"] --> B["mkdir<br/>host fs call"]
+  B --> C["git init<br/>via transport-broker,<br/>the ONE child_process site"]
+  C --> D["build + write<br/>awsf.config.yaml<br/>schema-derived"]
+  D --> E["loadConfig()<br/>round-trip proof"]
+  E --> F["commitAsHost()<br/>existing helper, reused"]
+  F --> G["HEAD<br/>author = committer = owner"]
+  style F stroke:#22C55E,stroke-width:2px
+  style G stroke:#22C55E,stroke-width:2px
+</pre>
+    <figcaption>Six steps, no branch point that could reach a provider. The diagram has no adapter node because the command imports none — proven in Milestone M3, not merely asserted here.</figcaption>
+  </figure>
+
+  <!-- ===== IN PLAIN LANGUAGE ===== -->
+  <section id="plain-language">
+    <h2>In Plain Language</h2>
+    <p>This section explains the whole plan without technical vocabulary. Everything after it says the same things precisely, for the people — and machines — building it.</p>
+
+    <h3>Starting a brand-new project needs somewhere to stand, and there isn't one yet</h3>
+    <p>Every other command this workshop offers assumes a project already exists: a folder, a rulebook file inside it, a history of changes. That is a reasonable thing to assume for all of them except one — the very first command, the one that has to create that folder in the first place. Ask a helper to do it and you hit an odd little trap: the helper is normally supervised by reading the rulebook file inside the project it is working on, but there is no rulebook file yet, because there is no project yet. Something has to make the first move before any supervision is possible.</p>
+
+    <h3>Why now</h3>
+    <p>The next real project this factory needs to build lives in folders that don't exist as AWSF projects today. Before any of the other new workshop capabilities can be tried against something real, that first folder has to come into being, correctly, every time, without anyone needing to remember a checklist.</p>
+
+    <h3>What we are building</h3>
+    <p>A single, entirely mechanical starting move — no helper involved at all, just the workshop's own hands. Given an empty spot to work in, it lays down the folder, starts a change-history for it, writes the smallest possible rulebook that the rest of the workshop already knows how to read, and files that rulebook away as the very first entry in that project's history — signed with the owner's own name, the same way every other entry in every project this workshop touches is signed. Nothing is asked, nothing is guessed, and no outside advice is consulted at any point, because none of that is needed to lay a floor.</p>
+
+    <h3>How we know it worked</h3>
+    <p>Point the workshop at an empty spot, give it a name for the project, and it hands back a folder with a change-history already begun and one entry in it, signed by the owner, holding a rulebook the rest of the workshop can read without complaint. Do this a second time in a spot that already has something in it, and it refuses rather than mixing unrelated things together into that first entry. And the whole time, from the first step to the last, nothing outside this machine was ever asked a question — which is checkable, because the plan proves it by listing everything the starting move is allowed to reach and showing that no outside advisor is on that list. What this deliberately does not do: decide what the project is about, sketch a design for it, or write any plan for what comes next. Those are separate, later moves, made once there is a floor to make them on.</p>
+  </section>
+
+  <!-- ===== PURPOSE ===== -->
+  <section id="purpose">
+    <h2>Purpose</h2>
+    <p>Give AWSF one deterministic, host-owned command — <code>awsf init</code> — that creates a directory, initialises it as a Git repository, writes the smallest <code>awsf.config.yaml</code> that satisfies the existing <code>awsf/v1</code> schema, and produces a baseline commit under the owner's own identity. <strong>No provider is contacted at any point, before or after the baseline exists.</strong> That is the entire scope. Making the command host-only is not a workaround for the absence of a pre-repository execution mode — it is the reason no such mode is ever needed: nothing about creating an empty, valid project requires a model, so the command simply never calls one.</p>
+    <p><strong>Scope discipline.</strong> This workstream stops the instant a valid baseline commit exists. It does not produce a plan, a design, or a ticket — those are W05's governed phase outputs, running later, against the repository this command created, and W05 is the workstream that consumes them. A deep plan that reaches past the baseline commit has widened W03 into W05's job.</p>
+  </section>
+
+  <!-- ===== PROBLEM ===== -->
+  <section id="problem">
+    <h2>Problem</h2>
+    <p>The source record that fed this workstream (<code>specs/awsf-v2-candidates-fuse-version.md</code> §2.3) held two shapes for how a brand-new project comes into being, and they contradict each other. One put the plan for the new project <em>inside</em> the baseline commit — the very first commit would already contain a design document. The other created the baseline first, empty of any plan, and produced the plan afterward as the output of a later, governed phase. <strong>Only the second shape has somewhere for that later phase to run</strong>: a governed phase needs a repository, a config, and a place to write its output, and none of those exist before the baseline commit does. The first shape is circular — it asks for a plan to be produced by a phase running inside a repository whose own first commit is that plan.</p>
+
+    <figure>
+<pre class="mermaid">
+flowchart TD
+  subgraph wrong["the contradicted shape"]
+    W1["plan authored"] --> W2["baseline commit<br/>CONTAINS the plan"]
+  end
+  subgraph right["the shape this plan builds"]
+    R1["baseline commit<br/>directory + git init + minimal config"] --> R2["a LATER governed phase<br/>(W05, not W03)<br/>produces the plan"]
+  end
+  style W2 stroke:#EF4444
+  style R1 stroke:#22C55E,stroke-width:2px
+  style R2 stroke:#8B90A6,stroke-dasharray:4 3
+</pre>
+      <figcaption>The dashed box is explicitly out of W03's scope — it is drawn only to show where the plan comes from once this workstream is done, not to claim any of it as this workstream's work.</figcaption>
+    </figure>
+
+    <h3>A second problem, found by reading the code this workstream must reuse rather than reinvent</h3>
+    <p><code>core/src/git/commit.ts</code> already exports <code>commitAsHost()</code> and <code>HOST_AUTHOR = "Santiago Marin &lt;santiagomarinsuarez@me.com&gt;"</code> — the exact mechanism a baseline commit needs. It stages everything with <code>git add --all</code>, commits with an explicit <code>user.name</code>/<code>user.email</code> override and <code>--author</code>, and asserts the tree is clean before and after. <strong>But every existing call site — <code>run.ts</code> and <code>rework.ts</code> — calls it against a worktree that already has a <code>HEAD</code>.</strong> Nothing in the tree had exercised it against a repository with zero prior commits before this plan was authored. That gap is closed in <a href="#measured">What Was Measured</a> below, with real output rather than an assumption.</p>
+
+    <h3>A third problem, found the same way: <code>git add --all</code> is a hazard the moment the target directory is not guaranteed empty</h3>
+    <p><code>commitAsHost</code>'s first git call is <code>add --all</code>. If <code>awsf init</code> is ever allowed to run against a directory that already holds unrelated files, every one of those files is swept into the "baseline" commit alongside the config this command wrote — silently, because <code>add --all</code> does not distinguish "written by this command" from "was already there". <strong>This is a correctness finding, not a style preference</strong>, and it is why the command's own precondition — refuse a non-empty target — is not a nicety but the thing standing between "baseline commit" and "baseline commit plus whatever happened to be lying around". It is carried forward as <a href="#questionables">Q2</a> because the exact boundary of "non-empty" (an empty directory that merely exists, vs. one holding dotfiles, vs. one holding an unrelated <code>.git</code>) is a real design choice, not a foregone one.</p>
+  </section>
+
+  <!-- ===== SOLUTION ===== -->
+  <section id="solution">
+    <h2>Solution</h2>
+    <p>Three pieces, each reusing something the tree already has rather than adding a parallel mechanism. A schema-derived config builder that is validated by round-tripping it through the loader that will read it back later — never a hand-written YAML string trusted on faith. A host-only command that sequences <code>mkdir</code>, <code>git init</code> (through the transport broker, the one file in this repository allowed to import <code>node:child_process</code>), the config write, and <code>commitAsHost</code>. And two mechanically-enforced fences: one proving the command's own import graph never reaches a provider, and one proving the command stops at the baseline commit rather than reaching into W05's territory.</p>
+
+    <figure>
+<pre class="mermaid">
+flowchart LR
+  subgraph new["core/src/ — new"]
+    T["config/init-template.ts<br/>buildMinimalConfig(slug)"]
+    I["cli/commands/init.ts<br/>initCommand()"]
+  end
+  subgraph existing["core/src/ — reused, not duplicated"]
+    L["config/load.ts<br/>loadConfig()"]
+    C["git/commit.ts<br/>commitAsHost() · HOST_AUTHOR"]
+    G["git/changes.ts<br/>systemGitRunner() · runGit()"]
+    B["execution/transport-broker.ts<br/>runSystemCommand()<br/>the one child_process site"]
+  end
+  subgraph tests["core/test/unit/ — offline, no quota"]
+    T1["init-command.test.ts<br/>temp-dir integration"]
+    T2["init-template.test.ts<br/>round trip"]
+    T3["meta/init-no-provider.test.ts<br/>import-graph allowlist"]
+  end
+  T --> L
+  I --> T
+  I --> G --> B
+  I --> C
+  T1 --> I
+  T2 --> T
+  T3 --> I
+</pre>
+      <figcaption>Two new files, four reused, three tests. Nothing new imports <code>node:child_process</code> — the fence in Milestone M3 proves it.</figcaption>
+    </figure>
+
+    <h3>Why the config is built as a typed object and round-tripped, not hand-written once</h3>
+    <p><code>AwsfConfigSchema</code> (<code>core/src/config/schema.ts</code>) is not small: twelve top-level keys, several of them further-nested objects, several checked structurally by TypeBox and several more checked by hand in <code>load.ts</code> — absolute-path rejection, credential-shape rejection, seed-path containment, known-reference membership (adapter kind, workflow id, gate id, protected-operation id), call-ceiling bounds, <code>no_fallback === true</code>, <code>persist_thinking_text === false</code>. A hand-typed YAML string that merely "looks right" is exactly the kind of artifact that silently drifts the day the schema changes. <code>buildMinimalConfig(slug)</code> instead constructs a plain object typed as <code>AwsfConfig</code>, so the compiler itself rejects a missing or misnamed field, and its own test round-trips it — <code>stringify → loadConfig → deepEqual</code> — so the thing this command writes is proven loadable by the exact function that will load it back, not by inspection.</p>
+
+    <h3>Why <code>git init</code> goes through <code>systemGitRunner</code>, not a new call site</h3>
+    <p>AGENTS.md invariant 3 is absolute: <code>node:child_process</code> is imported nowhere except <code>core/src/execution/transport-broker.ts</code>, enforced by the child-process fence meta-test. <code>core/src/git/changes.ts</code>'s <code>systemGitRunner(repository)</code> already wraps <code>runSystemCommand</code> for exactly this purpose, and <code>commitAsHost</code> already uses it. <code>initCommand</code> reuses the same runner for the one additional call the existing helper never had reason to make — <code>git init</code> — rather than opening a second door into the broker.</p>
+
+    <h3>What "minimal" settles on, and what stays a Questionable</h3>
+    <p>The fixture below proves a config holding one <code>claude-code</code> adapter, an empty <code>agents</code> array, <code>workflows.enabled: [intake]</code>, and empty <code>gates</code>/<code>protected_operations</code> loads cleanly and produces a non-empty commit on its own — no README, no <code>.gitignore</code>, nothing beyond the config file was needed to satisfy <code>commitAsHost</code>'s refusal to create an empty commit. That is the whole of what gets written. Which adapter, which workflow, and how the target path and project slug are supplied are still open — see <a href="#questionables">Questionables</a>.</p>
+  </section>
+
+  <!-- ===== WHAT WAS MEASURED ===== -->
+  <section id="measured">
+    <h2>What Was Measured</h2>
+    <p>One fixture was run while authoring this plan, in a real temporary directory, deleted afterward. Its output is quoted verbatim below rather than described, and it is what makes "no provider is needed" and "the existing commit helper works with no prior <code>HEAD</code>" observations instead of assumptions. Run 2026-08-21, Node <code>v22.23.1</code>, against this repository's <code>core/src/config/load.ts</code> and <code>core/src/git/commit.ts</code> exactly as committed.</p>
+
+    <h3>The sequence, run for real</h3>
+    <ol>
+      <li><code>mkdtempSync</code> a directory under the OS temp root.</li>
+      <li><code>git init --quiet</code> in it — argv-array form, no <code>shell: true</code>, the same shape <code>systemGitRunner</code> uses.</li>
+      <li>Write a minimal <code>awsf.config.yaml</code> — the exact fields named in <a href="#solution">Solution</a> above — and call <code>loadConfig()</code> on its text.</li>
+      <li>Call <code>commitAsHost({ repository: dir, message: "chore: awsf init baseline" })</code> against the fresh, <code>HEAD</code>-less repository, with only the config file present — no README, no other file.</li>
+      <li>Inspect <code>git log -1</code> and delete the directory.</li>
+    </ol>
+
+    <h3>Output, quoted verbatim</h3>
+    <pre>temp dir: /tmp/awsf-init-probe-mD0Vuv
+git init: ok, no prior commits
+loadConfig: OK — schema awsf/v1 project.slug new-project
+commitAsHost: OK — HEAD after commit:
+3086ae9cc3d6fb3cb5dbcc8bd845d029bc0c0306
+Santiago Marin &lt;santiagomarinsuarez@me.com&gt;
+Santiago Marin &lt;santiagomarinsuarez@me.com&gt;
+chore: awsf init baseline
+
+expected HOST_AUTHOR: Santiago Marin &lt;santiagomarinsuarez@me.com&gt;
+---
+cleanup: removing /tmp/awsf-init-probe-mD0Vuv</pre>
+
+    <h3>What this settles</h3>
+    <table>
+      <thead><tr><th>Question</th><th>Before this fixture</th><th>After</th></tr></thead>
+      <tbody>
+        <tr><td>Does <code>commitAsHost</code> work with no prior <code>HEAD</code>?</td><td>Untested — both existing call sites assume one</td><td class="ok">Yes. <code>git status --porcelain</code> and <code>git add --all</code> both work pre-first-commit; the assertion "refuse an empty commit" still fires correctly on a truly empty tree, and did not fire here because the config file was untracked content.</td></tr>
+        <tr><td>Is the config file alone enough content for a non-empty baseline commit?</td><td>Assumed a README might be needed</td><td class="ok">Yes — proven by omitting one and re-running; the commit succeeded holding only <code>awsf.config.yaml</code>. No README is written by this command.</td></tr>
+        <tr><td>Does the baseline commit carry the owner's identity as both author and committer?</td><td>Expected, from reading <code>commit.ts</code></td><td class="ok">Confirmed by the quoted <code>git log</code> line — both fields read <code>Santiago Marin &lt;santiagomarinsuarez@me.com&gt;</code>, matching <code>HOST_AUTHOR</code> exactly.</td></tr>
+        <tr><td>Does a minimal, schema-derived config actually satisfy <code>loadConfig</code> on the first attempt?</td><td>Believed, from reading <code>schema.ts</code></td><td class="ok">Confirmed — no <code>ConfigSchemaError</code> or any of the loader's hand-written rejections fired.</td></tr>
+        <tr><td>Was any provider, adapter, or network call reachable from this sequence?</td><td>Believed by design</td><td class="ok">The script imported only <code>loadConfig</code>, <code>commitAsHost</code>, <code>HOST_AUTHOR</code>, and Node's own <code>fs</code>/<code>os</code>/<code>path</code>/<code>child_process</code> — nothing under <code>core/src/adapters/</code> was ever imported, transitively or otherwise. Milestone M3 turns this from a fixture observation into a standing, mechanically-enforced fence.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="card warn">
+      <h5>What this fixture does not settle</h5>
+      The fixture's own probe script called <code>git init</code> with Node's <code>execFileSync</code> directly, not through <code>systemGitRunner</code>/<code>runSystemCommand</code> — that substitution is a same-shape, same-argv call and is not expected to change behaviour, but it means the transport-broker path itself is exercised for the first time by Milestone M2's own integration test, not by this fixture. Recorded here so the gap is named rather than quietly assumed closed.
+    </div>
+  </section>
+
+  <!-- ===== RELEVANT FILES ===== -->
+  <section id="files" class="files">
+    <h2>Relevant Files</h2>
+
+    <h3>Existing Files</h3>
+    <ul>
+      <li><span class="tag existing">existing</span> <code>core/src/config/schema.ts</code> — <code>AwsfConfigSchema</code> and the known-id const tuples. The single source of truth <code>buildMinimalConfig</code> is derived from.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/config/load.ts</code> — <code>loadConfig()</code> and its hard rejections. The function the round-trip test proves the generated config passes.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/state/tiers.ts</code> — <code>MIN_CALL_CEILING</code> / <code>MAX_CALL_CEILING</code>. The generated config's ceilings must reference these constants, never repeat their values as new literals.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/git/commit.ts</code> — <code>commitAsHost()</code>, <code>HOST_AUTHOR</code>. Reused unchanged; proven above to work with no prior <code>HEAD</code>.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/git/changes.ts</code> — <code>systemGitRunner()</code>, <code>runGit()</code>, <code>assertClean()</code>. The layer both <code>commitAsHost</code> and the new <code>git init</code> call sit on.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/execution/transport-broker.ts</code> — <code>runSystemCommand()</code>. The only file allowed to import <code>node:child_process</code> (invariant 3); <code>git init</code> reaches the OS exclusively through it.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/persistence/platform-paths.ts</code> — <code>resolveStateRoot()</code>. Named to say what <code>awsf init</code> does <strong>not</strong> touch: the state root is machine-local and out of this command's scope entirely.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/cli/main.ts</code> — <code>CLI_COMMANDS</code>, the frozen documentation-reconciled command table, and the dispatch structure every other command's early section assumes a repository already exists. <code>init</code> is added as its own top-level branch, executed <em>before</em> that assumption fires.</li>
+      <li><span class="tag existing">existing</span> <code>core/test/unit/meta/no-agent-coauthor.test.ts</code> — scans <em>this repository's own</em> <code>git log --all</code>. Its jurisdiction stops at this repository's history; it cannot see a commit <code>awsf init</code> makes inside a fresh target-project repository elsewhere. Read in full below under <a href="#questionables">Q — invariant 11's reach</a> reasoning.</li>
+      <li><span class="tag existing">existing</span> <code>core/test/unit/meta/child-process-fence.test.ts</code> — scoped to <code>core/src</code>; the reason a new command may not add a second <code>child_process</code> import site.</li>
+      <li><span class="tag existing">existing</span> <code>core/test/unit/meta/junk-drawer.test.ts</code> — scans tracked basenames for <code>receipt</code>/<code>manifest</code>/log/db extensions. Constrains what any new fixture file in this repository may be called.</li>
+      <li><span class="tag existing">existing</span> <code>core/test/unit/meta/doc-reconciliation.test.ts</code> — checks <code>README.md</code> and <code>specs/awsf-plan.html</code>'s Validation section against <code>CLI_COMMANDS</code>. Adding <code>init</code> to <code>CLI_COMMANDS</code> without updating <code>README.md</code> fails this fence.</li>
+      <li><span class="tag existing">existing</span> <code>core/test/unit/meta/ticket-plan-sync.test.ts</code> — will pair <code>specs/tickets/awsf-v2-w03-awsf-init/</code> with this plan the moment both exist.</li>
+      <li><span class="tag existing">existing</span> <code>README.md</code> — gains one line documenting <code>awsf init</code>, the minimum <code>doc-reconciliation.test.ts</code> requires.</li>
+    </ul>
+
+    <h3>New Files</h3>
+    <ul>
+      <li><span class="tag new">new</span> <code>core/src/config/init-template.ts</code> — <code>buildMinimalConfig(slug: string): AwsfConfig</code>, a typed object construction, never a hand-written YAML string.</li>
+      <li><span class="tag new">new</span> <code>core/src/cli/commands/init.ts</code> — <code>initCommand({ path, slug })</code>: precondition check, <code>mkdir</code>, <code>git init</code> via <code>systemGitRunner</code>, config write, <code>commitAsHost</code>.</li>
+      <li><span class="tag new">new</span> <code>core/test/unit/config/init-template.test.ts</code> — the round-trip proof: build → stringify → <code>loadConfig</code> → deep-equal, plus the invalid-slug rejection case.</li>
+      <li><span class="tag new">new</span> <code>core/test/unit/cli/init-command.test.ts</code> — the temp-directory integration test mirroring the fixture above, run through the real command function rather than a standalone script.</li>
+      <li><span class="tag new">new</span> <code>core/test/unit/meta/init-no-provider.test.ts</code> — the import-graph allowlist fence: walks the static import graph from <code>init.ts</code> and <code>init-template.ts</code> and asserts every reachable module is in a named allowlist that contains nothing under <code>core/src/adapters/</code> and nothing that constructs a workflow/gate/recipe module.</li>
+      <li><span class="tag new">new</span> <code>specs/awsf-v2-w03-awsf-init-build-prompts.md</code> — nine prompts, one per task.</li>
+      <li><span class="tag dir">dir</span> <code>specs/tickets/awsf-v2-w03-awsf-init/</code> — <code>T01.md</code>–<code>T09.md</code> plus <code>README.md</code>.</li>
+    </ul>
+  </section>
+
+  <!-- ===== IMPLEMENTATION PHASES ===== -->
+  <section id="phases">
+    <h2>Implementation Phases</h2>
+    <p><strong>IMPORTANT:</strong> Execute every phase and task step by step, in order, top to bottom.</p>
+    <p>Status markers: <code>[]</code> idle · <code>[wip]</code> in progress · <code>[x]</code> complete · <code>[f]</code> failed. All start as <code>[]</code>; the Build Plan workflow updates them as it works.</p>
+    <div class="card rule">
+      <h5>Two marker sets, and only one of them moves before the end</h5>
+      <strong>This plan's own markers move on every task</strong> — the milestone <code>&lt;h3&gt;</code> and each checklist item in <code>specs/awsf-v2-w03-awsf-init.html</code>, plus the matching ticket's <code>state:</code> in the same commit. <strong>The spine's W03 marker in <code>specs/awsf-v2-plan.html</code> does not move until the final task</strong>, which is the only task that touches it. Confusing the two breaks AGENTS.md invariant 2 or invariant 12.
+    </div>
+
+    <!-- ================= M1 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M1: A minimal config, derived from the schema, round-tripped through the loader</h3>
+      <p>Before anything writes a file, the thing it writes has to be provably loadable — not "believed loadable" from reading <code>schema.ts</code> by eye. This phase produces <code>buildMinimalConfig</code> as a typed object and proves it round-trips, before any command sequences a directory around it.</p>
+
+      <h4>1. Enumerate the schema's required shape and choose the minimal values</h4>
+      <p>Read <code>AwsfConfigSchema</code> top to bottom and write down, for each of the twelve top-level keys, the smallest value that satisfies both the TypeBox structure and <code>load.ts</code>'s hand-written checks. Record the table in code comments beside <code>buildMinimalConfig</code>, not only in this plan, so a future schema change has something local to update against.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>project</code>: <code>slug</code> supplied by the caller (validated against the schema's own pattern, not re-validated by hand); <code>default_workflow: "intake"</code></li>
+        <li><code class="status">[]</code> <code>runtime</code>: conservative but real numeric floors (<code>silence_timeout_seconds</code>, <code>process_grace_seconds</code>, <code>max_output_bytes</code>, <code>max_event_count</code>) and <code>seed_paths: []</code></li>
+        <li><code class="status">[]</code> <code>adapters</code>: exactly one entry, <code>kind: "claude-code"</code>, <code>enabled: true</code> — the only adapter kind that needs no <code>verified</code> attestation and no unresolved executable-path question</li>
+        <li><code class="status">[]</code> <code>routing</code>: <code>default_worker</code> references that one adapter's key; <code>review: "invert-provider"</code>; <code>no_fallback: true</code></li>
+        <li><code class="status">[]</code> <code>agents: []</code> — an empty array is structurally valid and the schema places no minimum on it</li>
+        <li><code class="status">[]</code> <code>workflows.enabled: ["intake"]</code>, matching <code>project.default_workflow</code></li>
+        <li><code class="status">[]</code> <code>gates: {}</code>, <code>policy.protected_operations: []</code>, <code>policy.protected_paths</code> naming <code>AGENTS.md</code> and <code>awsf.config.yaml</code></li>
+        <li><code class="status">[]</code> <code>risk.call_ceiling</code> values read from <code>MIN_CALL_CEILING</code>/<code>MAX_CALL_CEILING</code> in <code>core/src/state/tiers.ts</code>, never duplicated as new literals</li>
+        <li><code class="status">[]</code> <code>observability.db: "state://awsf.db"</code> (the schema's own symbolic-scheme pattern — never a machine path), <code>persist_thinking_text: false</code></li>
+        <li><code class="status">[]</code> <code>pricing</code>: <code>display_mode</code> set, <code>effective_date: null</code>, <code>models: {}</code> — Q7 in the v1 candidate record already refused fabricating a <code>$0.00</code> cost, and an empty <code>models</code> record is what keeps that refusal intact for a project with no observed run yet</li>
+      </ul>
+
+      <h4>2. Implement <code>buildMinimalConfig(slug)</code> as a typed object, not a template string</h4>
+      <p><code>core/src/config/init-template.ts</code> exports a pure function returning <code>AwsfConfig</code>. It performs no I/O — serialisation to YAML text is a separate, one-line call site in <code>init.ts</code>, kept out of this function so the object itself stays the thing under test.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>buildMinimalConfig(slug: string): AwsfConfig</code> exists, typed against the schema's own <code>Static&lt;typeof AwsfConfigSchema&gt;</code> type — a missing or misnamed field is a compile error, not a runtime surprise</li>
+        <li><code class="status">[]</code> The function performs no filesystem, network, or child-process call — it is pure data construction</li>
+        <li><code class="status">[]</code> An invalid <code>slug</code> (empty, uppercase, leading hyphen) is rejected by the function itself with a clear error, before <code>loadConfig</code> ever sees it</li>
+      </ul>
+
+      <h4>3. Testing Strategy</h4>
+      <p>A round-trip proof, not an inspection. Build the object, serialise it with the same <code>yaml</code> package <code>load.ts</code> parses with, feed the text back through the real <code>loadConfig()</code>, and assert the result deep-equals the object that went in. This is the only way "the generated config loads" is proven by the function that will load it later, rather than by reading the schema and hoping.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/config/init-template.test.ts</code> — round trip: <code>buildMinimalConfig → stringify → loadConfig → deepEqual</code>, for at least two distinct valid slugs</li>
+        <li><code class="status">[]</code> A deliberately invalid slug is rejected, and the rejection is proven to come from <code>buildMinimalConfig</code> itself (not merely from <code>loadConfig</code> downstream)</li>
+        <li><code class="status">[]</code> The call-ceiling values are asserted equal to <code>MIN_CALL_CEILING</code>/<code>MAX_CALL_CEILING</code> imports, not to repeated numeric literals — a change to those constants must move this test without an edit</li>
+        <li><code class="status">[]</code> <code>npm run typecheck</code> — clean; the typed-object approach is proven by the compiler agreeing, not only by the runtime test</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass.
+      </div>
+    </div>
+
+    <!-- ================= M2 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M2: The host-only command — directory, <code>git init</code>, config, baseline commit</h3>
+      <p>The four-step sequence the fixture in <a href="#measured">What Was Measured</a> already proved by hand, now wired into a real, reusable command function and exercised through the transport broker rather than a standalone probe script.</p>
+
+      <h4>4. Implement <code>initCommand({ path, slug })</code></h4>
+      <p><code>core/src/cli/commands/init.ts</code>. Each step reuses an existing helper; none introduces a new way to do something the tree already knows how to do.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Precondition: the target directory is either absent or exists and is empty — <strong>per Q2's decision</strong> — and the function refuses with a named error otherwise, before touching the filesystem further</li>
+        <li><code class="status">[]</code> <code>mkdir</code> (recursive) if the directory is absent</li>
+        <li><code class="status">[]</code> <code>git init</code> via <code>systemGitRunner(path)</code> / <code>runGit()</code> — no new <code>child_process</code> call site</li>
+        <li><code class="status">[]</code> <code>buildMinimalConfig(slug)</code> is serialised and written to <code>&lt;path&gt;/awsf.config.yaml</code></li>
+        <li><code class="status">[]</code> <code>commitAsHost({ repository: path, message: "chore: awsf init baseline" })</code> — the fixed message per Q5</li>
+        <li><code class="status">[]</code> The function returns the produced commit SHA and the resolved path, and performs no other write</li>
+      </ul>
+
+      <h4>5. Testing Strategy</h4>
+      <p>A temp-directory integration test that exercises <code>initCommand</code> itself — not a standalone script — end to end, plus the refusal case Q2 requires.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/cli/init-command.test.ts</code> — happy path: fresh empty temp dir → <code>initCommand</code> → directory exists, <code>.git</code> exists, <code>awsf.config.yaml</code> round-trips through <code>loadConfig</code>, <code>git rev-list --count HEAD</code> equals <code>1</code></li>
+        <li><code class="status">[]</code> The produced commit's author AND committer both equal <code>HOST_AUTHOR</code> exactly — asserted against <code>git log -1 --format=%an&lt;%ae&gt;%cn&lt;%ce&gt;</code>, not merely against the return value</li>
+        <li><code class="status">[]</code> The working tree is clean immediately after the call (<code>git status --porcelain</code> empty)</li>
+        <li><code class="status">[]</code> Refusal case: a target directory holding one unrelated file is refused, and the refusal is proven to happen <strong>before</strong> any <code>git init</code> or commit — no <code>.git</code> directory is created and the unrelated file is untouched</li>
+        <li><code class="status">[]</code> Re-running <code>initCommand</code> against a directory it already initialised is refused (a <code>.git</code> directory present makes the directory non-empty by this precondition) — per Q6's decision</li>
+        <li><code class="status">[]</code> Every temp directory the test creates is removed in a <code>finally</code>/cleanup, leaving no fixture on disk</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass.
+      </div>
+    </div>
+
+    <!-- ================= M3 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M3: CLI wiring, and the two fences that make this workstream's own claims checkable</h3>
+      <p>The command exists and works; this phase makes it reachable as <code>awsf init</code>, keeps the documentation fence green, and — this is the part that turns "no provider is needed" and "this stops at the baseline" from claims in this document into properties the suite checks on every run.</p>
+
+      <h4>6. Wire <code>init</code> into <code>core/src/cli/main.ts</code></h4>
+      <p><code>init</code> is added as its own top-level branch, checked <strong>before</strong> the existing <code>configPath = resolve(...); loadConfig(await readFile(configPath))</code> section that every other command falls through to — that section assumes the config file already exists, which is exactly the assumption <code>init</code> exists to not need.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>"init"</code> is added to the frozen <code>CLI_COMMANDS</code> array</li>
+        <li><code class="status">[]</code> A new branch in <code>main()</code> handles <code>init</code> ahead of the generic <code>configPath</code>/<code>loadConfig</code> section, parses its positional/flag arguments per <a href="#questionables">Q1</a>'s decision, calls <code>initCommand</code>, and reports the resulting commit SHA and path</li>
+        <li><code class="status">[]</code> <code>USAGE</code> reflects the new command</li>
+      </ul>
+
+      <h4>7. Close the documentation-reconciliation fence</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>README.md</code> gains one documented invocation of <code>awsf init</code></li>
+        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/doc-reconciliation.test.ts</code> — green</li>
+      </ul>
+
+      <h4>8. The no-provider fence and the baseline-first ordering fence</h4>
+      <p>Two properties this plan asserts throughout are made mechanically checkable here, rather than resting on the fixture in <a href="#measured">What Was Measured</a> alone.</p>
+      <div class="card rule">
+        <h5>What each fence proves, and what it does not</h5>
+        The import-graph fence proves <strong>no reachable module</strong> from <code>init.ts</code>/<code>init-template.ts</code> sits under <code>core/src/adapters/</code> — it is a static analysis over import statements, so it catches every present-day route to a provider and any future one added the same way, but it would not catch a provider invoked through a mechanism that does not use a static <code>import</code> (none exists in this codebase today; if one is ever added, this fence's own header must say so). The ordering fence proves <code>init.ts</code> imports nothing from a workflow, gate, or recipe module — it does not prove W05 will respect the boundary from its own side; that is W05's own deep plan's obligation, not this one's.
+      </div>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>core/test/unit/meta/init-no-provider.test.ts</code> walks the static import graph from <code>core/src/cli/commands/init.ts</code> and <code>core/src/config/init-template.ts</code> and asserts every reachable module matches a small, commented allowlist (config, git, execution/transport-broker, Node builtins, YAML) containing nothing under <code>core/src/adapters/</code></li>
+        <li><code class="status">[]</code> The same fence asserts nothing under <code>core/src/workflow/</code>, <code>core/src/gates/</code>, or any future recipe/compiled-envelope module is reachable — the mechanical form of "W03 stops at the baseline commit"</li>
+        <li><code class="status">[]</code> The fence is proven to bite: a scratch import of a fixture adapter module added temporarily to <code>init.ts</code> turns it red, then the scratch import is discarded</li>
+        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/init-no-provider.test.ts</code> — green over the real tree</li>
+      </ul>
+
+      <h4>9. Full suite, marker flips, and the spine's W03 marker</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — the whole unit suite, green, no count regression against the pre-work baseline</li>
+        <li><code class="status">[]</code> <code>npm run typecheck</code> — clean</li>
+        <li><code class="status">[]</code> <code>npm run lint</code> — clean</li>
+        <li><code class="status">[]</code> Every milestone marker and checklist item in this file reads <code>[x]</code>, and every matching ticket's <code>state:</code> is <code>done</code>, flipped in the same commit</li>
+        <li><code class="status">[]</code> Only now: <code>specs/awsf-v2-plan.html</code>'s Milestone M3 / W03 marker flips to <code>[x]</code>, in this same commit, per AGENTS.md invariant 12</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass.
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== GLOBAL VALIDATION ===== -->
+  <section id="validation">
+    <h2>Validation Commands</h2>
+    <p>Execute these commands to validate the entire plan is complete:</p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> <code>npm run test:unit</code> — whole suite green, including the three new test files and the two new/extended meta fences</li>
+      <li><code class="status">[]</code> <code>npm run typecheck</code> — clean, including <code>init-template.ts</code>'s typed-object construction</li>
+      <li><code class="status">[]</code> <code>npm run lint</code> — clean</li>
+      <li><code class="status">[]</code> A fresh temporary directory becomes a valid AWSF project with one command, its baseline commit's author and committer are the owner's own identity, and no provider was contacted at any point — <code>core/test/unit/cli/init-command.test.ts</code> plus <code>core/test/unit/meta/init-no-provider.test.ts</code> together prove this without a manual re-run of the fixture above</li>
+    </ul>
+    <div class="loop">
+      🔁 <strong>The plan is not complete until every box is checked and every command passes. If for some reason a step is not possible to complete, mark it with [f] and move on if possible.</strong>
+    </div>
+  </section>
+
+  <!-- ===== QUESTIONABLES ===== -->
+  <section id="questionables">
+    <h2>Questionables</h2>
+    <figure>
+<pre class="mermaid">
+flowchart TD
+  Q1["Q1 path shape"] --> D["initCommand"]
+  Q2["Q2 non-empty refusal"] --> D
+  Q4["Q4 default workflow"] --> D
+  Q5["Q5 commit message"] --> D
+  Q6["Q6 re-run behaviour"] --> D
+  Q3["Q3 invariant 11's reach"] -.-> D
+  style D stroke:#A78BFA,stroke-width:2px
+</pre>
+      <figcaption>Six decisions, all taken by the owner on 2026-08-21, each the recommended option. Five shape the command's own behaviour; the sixth (Q3) was a documentation-precision question about what invariant 11 does and does not guarantee here.</figcaption>
+    </figure>
+
+    <details data-review-options="Path argument, default to cwd, created if absent (recommended)|CWD only — directory must already exist">
+      <summary>Q1 — Does <code>awsf init</code> take an explicit target-path argument, or does it only ever operate on the current working directory?</summary>
+      <p class="qa-answer"><span class="qdecided">DECIDED 2026-08-21</span> A path argument, defaulting to <code>cwd</code> when omitted, created if absent — mirroring <code>git init [&lt;directory&gt;]</code>'s own long-standing shape. The spine's own W03 scope language is literally "create the directory", which only makes sense if the directory may not exist yet; every other AWSF command instead assumes <code>cwd</code> already <em>is</em> the project, because a project already exists by the time any of them run. <code>init</code> is the one command for which that assumption cannot hold on entry.</p>
+    </details>
+
+    <details data-review-options="Refuse if the directory exists and is non-empty (recommended)|Refuse only if a .git directory already exists|Always proceed">
+      <summary>Q2 — What counts as "the target is not usable" — how strict is the non-empty refusal?</summary>
+      <p class="qa-answer"><span class="qdecided">DECIDED 2026-08-21</span> Refuse whenever the directory exists and is non-empty, full stop. <a href="#problem">Problem</a> names the concrete hazard: <code>commitAsHost</code>'s <code>git add --all</code> would otherwise sweep pre-existing, unrelated files into the "baseline" commit with no signal that it happened. The narrower option — refuse only when <code>.git</code> already exists — tolerates that hazard for the sake of letting <code>init</code> run against a directory holding stray files, which is not a real use case this workstream needs to serve.</p>
+    </details>
+
+    <details>
+      <summary>Q3 — Invariant 11 and the no-agent-coauthor fence: precisely what do they guarantee for a repository this command creates elsewhere?</summary>
+      <p class="qa-answer"><span class="qdecided">DECIDED 2026-08-21 — APPROVED</span> The framing below was confirmed to read correctly, with no revision requested. <code>core/test/unit/meta/no-agent-coauthor.test.ts</code> scans <em>this repository's own</em> <code>git log --all</code>, scoped by <code>repoRoot()</code>. It has no jurisdiction over a commit <code>awsf init</code> makes inside a brand-new target-project repository somewhere else on the owner's machine — that repository is never this repository's history. So the guarantee this workstream must uphold is <strong>by construction</strong>, not by an inherited fence: reusing <code>commitAsHost</code>/<code>HOST_AUTHOR</code> rather than any ad hoc identity-setting is what keeps every baseline commit, in every project <code>awsf init</code> ever touches, carrying the owner's identity — and Milestone M2's own integration test proves it directly, on the actual commit produced, rather than relying on a fence that cannot see it.</p>
+    </details>
+
+    <details data-review-options="workflows.enabled: [intake] only (recommended)|workflows.enabled: [] — presume nothing">
+      <summary>Q4 — Does the minimal config declare <code>workflows.enabled: [intake]</code>, or an empty list that presumes nothing about what the new project will do next?</summary>
+      <p class="qa-answer"><span class="qdecided">DECIDED 2026-08-21</span> <code>[intake]</code> only, matching <code>project.default_workflow</code>. It is the narrowest workflow already known to <code>KNOWN_WORKFLOW_IDS</code> that a freshly created, otherwise-empty project can meaningfully run without any further scaffolding. This is very likely to be revisited once W04's registry and W05's design-to-plan recipes land — noted here rather than silently baked in as permanent.</p>
+    </details>
+
+    <details data-review-options="Fixed message, &quot;chore: awsf init baseline&quot; (recommended)|Accept an owner-supplied message">
+      <summary>Q5 — Is the baseline commit's message fixed text, or can the owner supply one?</summary>
+      <p class="qa-answer"><span class="qdecided">DECIDED 2026-08-21</span> Fixed: <code>"chore: awsf init baseline"</code>. This is a deterministic, host-owned command with no interactive step by design (<a href="#purpose">Purpose</a>) — accepting free text here would be the first crack in that determinism for no benefit the workstream's scope requires.</p>
+    </details>
+
+    <details data-review-options="Refuse — a repository already initialised by awsf init is a hard stop (recommended)|Treat as idempotent and no-op successfully">
+      <summary>Q6 — If <code>awsf init</code> is run a second time against a directory it already initialised, does it refuse or silently succeed as a no-op?</summary>
+      <p class="qa-answer"><span class="qdecided">DECIDED 2026-08-21</span> Refuse, via the same non-empty-directory precondition Q2 settles — a <code>.git</code> directory already being present makes the target non-empty. A silent no-op risks masking the caller's actual intent (did they mean to re-run <code>init</code>, or did they mean something else entirely and land here by mistake); an explicit, named refusal costs nothing and is easy to soften later if real usage shows the friction is not worth it.</p>
+    </details>
+  </section>
+
+  <!-- ===== NOTES ===== -->
+  <section id="notes">
+    <h2>Notes</h2>
+    <p><strong>Why this plan touches no new dependency.</strong> Everything <code>awsf init</code> needs — schema validation, YAML parsing, Git invocation, host-identity commits — already exists in the allowlisted dependency surface (AGENTS.md invariant 7: <code>@sinclair/typebox</code>, <code>yaml</code> for core; the dev toolchain otherwise). No addition to that allowlist is proposed or needed here.</p>
+    <p><strong>Relationship to W04 and W05, stated so neither workstream's deep plan has to rediscover it.</strong> W04's registry decides how a project like the one <code>awsf init</code> creates gets catalogued and where its clone sits on the machine — <code>awsf init</code> produces the repository W04 later registers, and does not register anything itself. W05's design → architecture-review → plan chain is the "later, governed phase" this plan repeatedly points at without building — it is the consumer of the baseline this workstream produces, never a peer of it.</p>
+    <p><strong>Why no mockup figure appears anywhere in this plan.</strong> <code>awsf init</code> has no user-facing UI surface — it is a CLI command with a text report. The template's optional <code>.mockup</code> figure is intentionally omitted from every phase.</p>
+    <p><strong>Derived-field rule for this workstream's tickets.</strong> Recorded here and restated in <code>specs/tickets/awsf-v2-w03-awsf-init/README.md</code> per the ticket-authoring convention: each ticket's <code>milestone</code> is the <code>M</code>-number of the phase its numbered task belongs to (M1 → T01–T03, M2 → T04–T05, M3 → T06–T09), and <code>depends_on</code> follows the plan's own top-to-bottom task order with no presumed parallelism, because every task in this plan reads or extends the output of the one before it.</p>
+  </section>
+
+  <!-- ===== AMENDMENTS ===== -->
+  <section id="amendments">
+    <h2>Amendments</h2>
+    <details>
+      <summary>2026-08-21 — All six Questionables decided by owner review</summary>
+      <p>Applied from an exported <code>plan-sota-review v1</code> block. All six verdicts took the
+      recommended option: <strong>Q1</strong> a path argument, defaulting to <code>cwd</code>, created
+      if absent · <strong>Q2</strong> refuse whenever the target directory exists and is non-empty ·
+      <strong>Q3</strong> approved as written — invariant 11's mechanical fence has no jurisdiction over
+      a target-project repository this command creates elsewhere, and the guarantee is upheld by
+      construction via <code>commitAsHost</code>/<code>HOST_AUTHOR</code> · <strong>Q4</strong>
+      <code>workflows.enabled: [intake]</code> only · <strong>Q5</strong> the baseline commit message is
+      fixed text, <code>"chore: awsf init baseline"</code> · <strong>Q6</strong> re-running <code>awsf
+      init</code> against an already-initialised directory refuses rather than silently no-opping. No
+      Questionable was revised or rejected, so no section of this plan needed surgical correction — the
+      Questionables section itself was updated to record each decision in place, per Q1–Q6's own
+      answers above.</p>
+    </details>
+  </section>
+
+</main>
+
+<!-- ===== PLAN-SOTA REVIEW LAYER v1 — FIXED MACHINERY, COPY VERBATIM ===== -->
+<style>
+  .rv-btn { font: 600 11px/1 system-ui, sans-serif; padding: 3px 9px; border-radius: 999px;
+    border: 1px solid var(--muted, #8884); background: transparent; color: var(--fg, inherit);
+    cursor: pointer; opacity: .55; vertical-align: middle; margin-left: 8px; }
+  .rv-btn:hover { opacity: 1; border-color: var(--accent, #7c6cf0); }
+  .rv-btn.rv-on { opacity: 1; background: var(--accent, #7c6cf0); color: var(--bg, #fff); border-color: transparent; }
+  .rv-note-box { display: block; margin: 8px 0; padding: 8px 12px; border: 1px dashed var(--accent, #7c6cf0);
+    border-radius: 8px; font-size: 13px; min-height: 1.5em; background: color-mix(in srgb, var(--accent, #7c6cf0) 6%, transparent); outline: none; }
+  .rv-note-box:empty::before { content: attr(data-ph); opacity: .5; font-style: italic; }
+  .rv-note-box[hidden] { display: none; }
+  .rv-verdict { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 10px 0 2px; }
+  .rv-verdict-tag { font: 700 10px/1 system-ui, sans-serif; letter-spacing: .08em; opacity: .6; margin-right: 2px; }
+  .rv-status-chip { font: 600 11px/1 ui-monospace, monospace; margin-left: 10px; padding: 3px 9px;
+    border-radius: 999px; border: 1px dotted var(--muted, #8884); background: transparent;
+    color: var(--fg, inherit); cursor: pointer; opacity: .6; }
+  .rv-status-chip:hover { opacity: 1; }
+  .rv-status-chip.rv-on { opacity: 1; border-style: solid; border-color: var(--accent, #7c6cf0); color: var(--accent, #7c6cf0); }
+  #rv-drawer { position: fixed; right: 16px; bottom: 16px; z-index: 9999; font: 13px/1.45 system-ui, sans-serif;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  #rv-pill { font: 700 12px/1 system-ui, sans-serif; padding: 10px 16px; border-radius: 999px; border: none;
+    cursor: pointer; background: var(--accent, #7c6cf0); color: var(--bg, #fff); box-shadow: 0 4px 16px #0004; }
+  #rv-panel { width: min(420px, calc(100vw - 32px)); max-height: 60vh; overflow: auto; padding: 14px;
+    border-radius: 12px; border: 1px solid var(--muted, #8884); background: var(--bg, #fff);
+    color: var(--fg, inherit); box-shadow: 0 8px 32px #0005; }
+  #rv-panel h4 { margin: 0 0 8px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; opacity: .7; }
+  #rv-list { margin: 0 0 10px; padding: 0; list-style: none; font-size: 12px; }
+  #rv-list li { padding: 3px 0; border-bottom: 1px solid #8882; overflow-wrap: anywhere; }
+  #rv-out { width: 100%; min-height: 140px; margin-top: 10px; font: 11px/1.5 ui-monospace, monospace;
+    border: 1px solid var(--muted, #8884); border-radius: 8px; padding: 8px; background: transparent; color: inherit; }
+  #rv-msg { font-size: 11px; opacity: .75; margin-top: 6px; }
+  @media print { #rv-drawer { display: none; } }
+</style>
+<script>
+(function () {
+  'use strict';
+  var FILE = decodeURIComponent(location.pathname.split('/').pop() || 'plan.html');
+  var KEY = 'plan-sota-review:' + FILE;
+  var LEGACY_KEY = 'planf3-review:' + FILE; // pre-rename state; read once, never written
+  var PROPOSE = ['', '[]', '[wip]', '[x]', '[f]'];
+  var state = { a: {}, v: {}, s: {} }, persisted = true;
+  try { state = JSON.parse(localStorage.getItem(KEY) || localStorage.getItem(LEGACY_KEY) || 'null') || state; } catch (e) { persisted = false; }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); persisted = true; }
+    catch (e) { persisted = false; }
+    refresh();
+  }
+  function el(tag, cls, txt) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (txt) n.textContent = txt;
+    if (tag === 'button') { n.type = 'button'; n.setAttribute('data-lavish-action', ''); }
+    return n;
+  }
+  function clean(t) { return String(t || '').replace(/\|/g, '/').replace(/\s*\r?\n\s*/g, ' >> ').trim(); }
+  var registry = []; // {key, label, kind: 'section'|'phase'|'q'}
+
+  function noteBox(key, host, placeholder) {
+    var box = el('div', 'rv-note-box');
+    box.contentEditable = 'true';
+    box.setAttribute('data-ph', placeholder || 'Type your note for the agent…');
+    box.hidden = !(state.a[key]);
+    if (state.a[key]) box.textContent = state.a[key];
+    box.addEventListener('input', function () {
+      var t = box.textContent.trim();
+      if (t) state.a[key] = t; else delete state.a[key];
+      save();
+    });
+    host.appendChild(box);
+    return box;
+  }
+  function annotable(key, label, heading, host, kind) {
+    registry.push({ key: key, label: label, kind: kind });
+    var box = noteBox(key, host);
+    heading.insertAdjacentElement('afterend', box);
+    var btn = el('button', 'rv-btn' + (state.a[key] ? ' rv-on' : ''), '✎ note');
+    btn.addEventListener('click', function () {
+      box.hidden = !box.hidden;
+      if (!box.hidden) box.focus();
+    });
+    heading.appendChild(btn);
+    box.addEventListener('input', function () { btn.classList.toggle('rv-on', !!state.a[key]); });
+  }
+
+  // Sections
+  Array.prototype.forEach.call(document.querySelectorAll('main > section[id]'), function (sec) {
+    var h = sec.querySelector('h2'); if (!h) return;
+    annotable('#' + sec.id, h.textContent.trim(), h, sec, 'section');
+  });
+  // Phases: annotation + proposed-status chip
+  Array.prototype.forEach.call(document.querySelectorAll('#phases .phase'), function (ph, i) {
+    var h = ph.querySelector('h3'); if (!h) return;
+    var key = 'phase-' + (i + 1);
+    var label = h.textContent.replace(/^\s*\[[^\]]*\]\s*/, '').trim();
+    annotable(key, label, h, ph, 'phase');
+    var chip = el('button', 'rv-status-chip' + (state.s[key] ? ' rv-on' : ''));
+    chip.textContent = state.s[key] ? 'propose ' + state.s[key] : 'propose…';
+    chip.title = 'Cycle a PROPOSED status (exported as feedback — the file marker is only changed by the agent)';
+    chip.addEventListener('click', function () {
+      var next = PROPOSE[(PROPOSE.indexOf(state.s[key] || '') + 1) % PROPOSE.length];
+      if (next) state.s[key] = next; else delete state.s[key];
+      chip.textContent = next ? 'propose ' + next : 'propose…';
+      chip.classList.toggle('rv-on', !!next);
+      save();
+    });
+    h.appendChild(chip);
+  });
+  // Questionables: verdict / option buttons + note
+  Array.prototype.forEach.call(document.querySelectorAll('#questionables details'), function (d, i) {
+    var key = 'q-' + (i + 1);
+    var summary = d.querySelector('summary');
+    var label = summary ? summary.textContent.trim().slice(0, 120) : key;
+    registry.push({ key: key, label: label, kind: 'q' });
+    var opts = (d.getAttribute('data-review-options') || '').split('|').map(function (s) { return s.trim(); }).filter(Boolean);
+    if (!opts.length) opts = ['APPROVE', 'REJECT', 'REVISE', 'DEFER'];
+    var row = el('div', 'rv-verdict');
+    row.appendChild(el('span', 'rv-verdict-tag', 'YOUR CALL'));
+    opts.forEach(function (opt) {
+      var b = el('button', 'rv-btn' + ((state.v[key] || {}).c === opt ? ' rv-on' : ''), opt);
+      b.addEventListener('click', function () {
+        if ((state.v[key] || {}).c === opt) { delete state.v[key]; }
+        else { state.v[key] = { c: opt }; }
+        Array.prototype.forEach.call(row.querySelectorAll('.rv-btn'), function (x) {
+          x.classList.toggle('rv-on', x.textContent === ((state.v[key] || {}).c || null));
+        });
+        qbox.hidden = !state.v[key] && !state.a[key];
+        save();
+      });
+      row.appendChild(b);
+    });
+    d.appendChild(row);
+    var qbox = noteBox(key, d, 'Why / what to change instead…');
+    if (state.v[key]) qbox.hidden = false;
+  });
+
+  // Drawer
+  var drawer = el('div'); drawer.id = 'rv-drawer';
+  var panel = el('div'); panel.id = 'rv-panel'; panel.hidden = true;
+  var pill = el('button'); pill.id = 'rv-pill';
+  pill.addEventListener('click', function () { panel.hidden = !panel.hidden; });
+  var list = el('ul'); list.id = 'rv-list';
+  var actions = el('div');
+  var exportBtn = el('button', 'rv-btn rv-on', 'Export Feedback');
+  var clearBtn = el('button', 'rv-btn', 'Clear review');
+  var out = el('textarea'); out.id = 'rv-out'; out.readOnly = true; out.hidden = true;
+  var msg = el('div'); msg.id = 'rv-msg';
+  var head = el('h4', null, 'Review — pending feedback');
+  actions.appendChild(exportBtn); actions.appendChild(clearBtn);
+  panel.appendChild(head); panel.appendChild(list); panel.appendChild(actions);
+  panel.appendChild(out); panel.appendChild(msg);
+  drawer.appendChild(panel); drawer.appendChild(pill);
+  document.body.appendChild(drawer);
+
+  function findLabel(key) {
+    for (var i = 0; i < registry.length; i++) if (registry[i].key === key) return registry[i].label;
+    return key;
+  }
+  function refresh() {
+    var n = Object.keys(state.a).length + Object.keys(state.v).length + Object.keys(state.s).length;
+    pill.textContent = '✎ Review (' + n + ')';
+    list.textContent = '';
+    Object.keys(state.v).forEach(function (k) { list.appendChild(el('li', null, '[verdict] ' + findLabel(k) + ' → ' + state.v[k].c)); });
+    Object.keys(state.s).forEach(function (k) { list.appendChild(el('li', null, '[status] ' + findLabel(k) + ' → propose ' + state.s[k])); });
+    Object.keys(state.a).forEach(function (k) { list.appendChild(el('li', null, '[note] ' + findLabel(k) + ': ' + state.a[k].slice(0, 90))); });
+    if (!n) list.appendChild(el('li', null, 'Nothing yet — click ✎ note on any section, a verdict on a Questionable, or propose… on a phase.'));
+    if (!persisted) msg.textContent = '⚠ localStorage unavailable — review state lives only in this tab.';
+  }
+  function buildExport() {
+    var L = ['plan-sota-review v1', 'plan: ' + FILE, 'title: ' + clean(document.title), 'exported: ' + new Date().toISOString(), ''];
+    var vk = Object.keys(state.v), sk = Object.keys(state.s), ak = Object.keys(state.a);
+    L.push('## verdicts');
+    vk.length ? vk.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | ' + clean(state.v[k].c) + ' | note: ' + (clean(state.a[k]) || '-'));
+    }) : L.push('- (none)');
+    L.push('', '## statuses');
+    sk.length ? sk.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | propose ' + state.s[k]);
+    }) : L.push('- (none)');
+    L.push('', '## annotations');
+    var solo = ak.filter(function (k) { return !state.v[k]; });
+    solo.length ? solo.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | ' + clean(state.a[k]));
+    }) : L.push('- (none)');
+    return L.join('\n');
+  }
+  exportBtn.addEventListener('click', function () {
+    var text = buildExport();
+    out.hidden = false; out.value = text;
+    out.focus(); out.select();
+    function done(m) { msg.textContent = m; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done('Copied — paste it into your next agent session.'); },
+        function () { done('Clipboard blocked — copy from the box below.'); });
+    } else {
+      try { done(document.execCommand('copy') ? 'Copied — paste it into your next agent session.' : 'Clipboard blocked — copy from the box below.'); }
+      catch (e) { done('Clipboard blocked — copy from the box below.'); }
+    }
+    if (window.lavish && typeof window.lavish.queuePrompt === 'function') {
+      window.lavish.queuePrompt(text, { tag: 'plan-sota-review', queueKey: 'plan-sota-review' });
+      msg.textContent += ' Also queued to the agent via Lavish.';
+    }
+  });
+  clearBtn.addEventListener('click', function () {
+    if (!confirm('Clear all review state for this plan?')) return;
+    state = { a: {}, v: {}, s: {} };
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    location.reload();
+  });
+  refresh();
+})();
+</script>
+
+<!-- Mermaid runtime — renders every <pre class="mermaid"> block. Only external reference in the file. -->
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      primaryColor: '#1C1E2B',
+      primaryTextColor: '#E7E9F0',
+      primaryBorderColor: '#2b3040',
+      lineColor: '#8B90A6',
+      fontFamily: '"JetBrains Mono","Fira Code",ui-monospace,monospace'
+    }
+  });
+</script>
+</body>
+</html>
