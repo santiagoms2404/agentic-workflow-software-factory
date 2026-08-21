@@ -402,7 +402,7 @@ cleanup: removing /tmp/awsf-init-probe-mD0Vuv</pre>
 
     <!-- ================= M2 ================= -->
     <div class="phase">
-      <h3><code class="status">[wip]</code> Milestone M2: The host-only command — directory, <code>git init</code>, config, baseline commit</h3>
+      <h3><code class="status">[x]</code> Milestone M2: The host-only command — directory, <code>git init</code>, config, baseline commit</h3>
       <p>The four-step sequence the fixture in <a href="#measured">What Was Measured</a> already proved by hand, now wired into a real, reusable command function and exercised through the transport broker rather than a standalone probe script.</p>
 
       <h4>4. Implement <code>initCommand({ path, slug })</code></h4>
@@ -419,12 +419,12 @@ cleanup: removing /tmp/awsf-init-probe-mD0Vuv</pre>
       <h4>5. Testing Strategy</h4>
       <p>A temp-directory integration test that exercises <code>initCommand</code> itself — not a standalone script — end to end, plus the refusal case Q2 requires.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/cli/init-command.test.ts</code> — happy path: fresh empty temp dir → <code>initCommand</code> → directory exists, <code>.git</code> exists, <code>awsf.config.yaml</code> round-trips through <code>loadConfig</code>, <code>git rev-list --count HEAD</code> equals <code>1</code></li>
-        <li><code class="status">[]</code> The produced commit's author AND committer both equal <code>HOST_AUTHOR</code> exactly — asserted against <code>git log -1 --format=%an&lt;%ae&gt;%cn&lt;%ce&gt;</code>, not merely against the return value</li>
-        <li><code class="status">[]</code> The working tree is clean immediately after the call (<code>git status --porcelain</code> empty)</li>
-        <li><code class="status">[]</code> Refusal case: a target directory holding one unrelated file is refused, and the refusal is proven to happen <strong>before</strong> any <code>git init</code> or commit — no <code>.git</code> directory is created and the unrelated file is untouched</li>
-        <li><code class="status">[]</code> Re-running <code>initCommand</code> against a directory it already initialised is refused (a <code>.git</code> directory present makes the directory non-empty by this precondition) — per Q6's decision</li>
-        <li><code class="status">[]</code> Every temp directory the test creates is removed in a <code>finally</code>/cleanup, leaving no fixture on disk</li>
+        <li><code class="status">[x]</code> <code>node --experimental-strip-types --test core/test/unit/cli/init-command.test.ts</code> — happy path: fresh empty temp dir → <code>initCommand</code> → directory exists, <code>.git</code> exists, <code>awsf.config.yaml</code> round-trips through <code>loadConfig</code>, <code>git rev-list --count HEAD</code> equals <code>1</code></li>
+        <li><code class="status">[x]</code> The produced commit's author AND committer both equal <code>HOST_AUTHOR</code> exactly — asserted against <code>git log -1 --format=%an&lt;%ae&gt;%cn&lt;%ce&gt;</code>, not merely against the return value</li>
+        <li><code class="status">[x]</code> The working tree is clean immediately after the call (<code>git status --porcelain</code> empty)</li>
+        <li><code class="status">[x]</code> Refusal case: a target directory holding one unrelated file is refused, and the refusal is proven to happen <strong>before</strong> any <code>git init</code> or commit — no <code>.git</code> directory is created and the unrelated file is untouched</li>
+        <li><code class="status">[x]</code> Re-running <code>initCommand</code> against a directory it already initialised is refused (a <code>.git</code> directory present makes the directory non-empty by this precondition) — per Q6's decision</li>
+        <li><code class="status">[x]</code> Every temp directory the test creates is removed in a <code>finally</code>/cleanup, leaving no fixture on disk</li>
       </ul>
       <div class="loop">
         🔁 <strong>Do not exit this phase until every box above is checked.</strong>
