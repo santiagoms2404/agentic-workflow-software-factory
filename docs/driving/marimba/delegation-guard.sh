@@ -41,10 +41,20 @@
 #
 #   FENCE 2 READS WRITTEN COMMAND TEXT, NOT RESOLVED INTENT. This is the
 #   design's ceiling rather than an oversight. `script -qec "awsf land T"` is
-#   denied; the same act reached through a shell variable is ALLOWED - measured:
-#       v=land; script -qec "awsf $v T"      -> exit 0
-#   No arrangement of substring matching closes that, and widening the match
-#   until it might would cost more in false denials than the gap costs.
+#   denied, and so is any spacing of it, because the parser collapses
+#   whitespace before matching. WHITESPACE IS THE ONLY SHELL TRANSFORMATION
+#   THIS FENCE UNDOES. Every other one writes the same act as text the match
+#   does not contain, and each of these exits 0:
+#       v=land; script -qec "awsf $v T"      a variable
+#       awsf \                               a line continuation, with the
+#         land T                             verb on the next line
+#       awsf "land" T   /   awsf l"and" T    a quoted or split verb
+#       awsf la\nd T                         a backslash before a letter
+#   That is a class, not a set of holes to be plugged. Closing the two easiest
+#   would leave the rest open while reading as though the fence had started
+#   covering intent, which is the same half-closed hazard refused below. No
+#   arrangement of substring matching closes it, and widening the match until
+#   it might would cost more in false denials than the gap costs.
 #
 #   FENCE 2 OVER-DENIES. A command that merely READS or QUOTES an act name is
 #   refused: `grep -rn "awsf land" docs/` and `echo awsf land > f.txt` both exit
