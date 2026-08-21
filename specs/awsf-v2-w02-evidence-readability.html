@@ -292,7 +292,7 @@ flowchart LR
 
     <!-- ===== PHASE 1 ===== -->
     <div class="phase">
-      <h3><code class="status">[]</code> Phase 1: Per-kind summarisers</h3>
+      <h3><code class="status">[]</code> Milestone M1: Per-kind summarisers</h3>
       <p>Replace <code>summary()</code>'s five-key guess chain with one function per event kind, each reading the fields that kind actually has. No row's summary is ever its own kind name.</p>
 
       <figure>
@@ -341,7 +341,7 @@ flowchart TD
 
     <!-- ===== PHASE 2 ===== -->
     <div class="phase">
-      <h3><code class="status">[]</code> Phase 2: Delta compaction (fold, reassemble, re-redact)</h3>
+      <h3><code class="status">[]</code> Milestone M2: Delta compaction (fold, reassemble, re-redact)</h3>
       <p>Fold a contiguous run of <code>text.delta</code> rows into one expandable row. Folding happens entirely client-side, over the already-fetched, already-accumulated <code>EventItem[]</code> array <code>EventLog.vue</code> builds today — no new API endpoint, no change to pagination or cursors, no storage-layer change. This is the phase Collision 1 and Collision 2 both bind.</p>
 
       <figure>
@@ -406,7 +406,7 @@ sequenceDiagram
 
     <!-- ===== PHASE 3 ===== -->
     <div class="phase">
-      <h3><code class="status">[]</code> Phase 3: Rendered view beside the raw JSON</h3>
+      <h3><code class="status">[]</code> Milestone M3: Rendered view beside the raw JSON</h3>
       <p>Add a rendered view next to the existing <code>JSON.stringify(payload, null, 2)</code> raw view, defaulting to rendered. <code>PhaseInspector.vue</code> already ships this exact pattern for compiled prompts — a <code>view-toggle</code> pair of buttons and a reactive <code>Set</code> tracking which rows are pinned to raw — and it is already proven by <code>dashboard-parity.test.ts</code>'s assertions on <code>rendered-safe</code> / <code>&gt;raw&lt;</code>. This phase reuses that shape rather than inventing a second one.</p>
 
       <figure>
@@ -463,7 +463,7 @@ stateDiagram-v2
 
     <!-- ===== PHASE 4 ===== -->
     <div class="phase">
-      <h3><code class="status">[]</code> Phase 4: Fix the clipped run cards</h3>
+      <h3><code class="status">[]</code> Milestone M4: Fix the clipped run cards</h3>
       <p>Unrelated to the rest of this plan's mechanism, carried in the same slice because it is the same screen. <code>.card-wrap { height: 420px }</code> is sized for four <code>card-metrics-grid</code> rows; the fifth row — <code>authority</code> / <code>partial total</code>, shown only when <code>session.usage.costPartial</code> is true — pushes past that height and <code>.session-card { overflow: hidden }</code> clips it mid-row. Three of six cards were cut in the capture this workstream's diagnosis was drawn from.</p>
 
       <figure class="mockup">
