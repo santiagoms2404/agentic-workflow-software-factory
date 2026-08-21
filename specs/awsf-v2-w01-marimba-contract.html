@@ -561,7 +561,7 @@ flowchart LR
 
     <!-- ================= M3 ================= -->
     <div class="phase">
-      <h3><code class="status">[wip]</code> Milestone M3: The contract itself</h3>
+      <h3><code class="status">[x]</code> Milestone M3: The contract itself</h3>
       <p>Everything the contract asserts is now either measured and recorded in this plan or enforced by a test that exists. That ordering is deliberate: writing the document first would have meant writing claims and hoping they were checkable.</p>
 
       <h4>5. Author the contract</h4>
@@ -579,13 +579,13 @@ flowchart LR
       <h4>6. The contract's own fences — command-free, route-free, no live state, within budget, plus Testing Strategy</h4>
       <p><strong>Testing approach.</strong> A document-scoped meta-test with four assertions and a companion proving each matcher bites on a synthetic offender held in memory. Command-free is defined mechanically as no shell fence and no backticked <code>awsf</code>/<code>just</code>/<code>npm&nbsp;run</code> invocation. Route-free reuses the route matcher from <code>driving-routes.test.ts</code> — imported, not copied, so the two cannot drift apart. Live-state uses a UUID-shaped and run-id-shaped pattern. Budget is a line and word count with the limit as a named constant carrying the reason.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>core/test/unit/meta/driving-contract.test.ts</code> exists with all four assertions</li>
-        <li><code class="status">[]</code> The route matcher is <em>imported</em> from the routes fence rather than re-declared</li>
-        <li><code class="status">[]</code> Each matcher has a bite companion; each companion feeds a synthetic offender in memory and none of them writes a file</li>
-        <li><code class="status">[]</code> The budget constant carries its reason in a comment: this text is re-sent on every request of every marimba session</li>
-        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/driving-contract.test.ts</code> — green</li>
-        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/doc-reconciliation.test.ts</code> — green; the contract has no shell fence for it to check, and the README's install block contains no <code>awsf</code>, <code>just</code> or <code>npm run</code> command</li>
-        <li><code class="status">[]</code> <code>npm run test:unit</code> and <code>npm run lint</code> — green</li>
+        <li><code class="status">[x]</code> <code>core/test/unit/meta/driving-contract.test.ts</code> exists with all four assertions</li>
+        <li><code class="status">[x]</code> The route matcher is <em>imported</em> from the routes fence rather than re-declared</li>
+        <li><code class="status">[x]</code> Each matcher has a bite companion; each companion feeds a synthetic offender in memory and none of them writes a file</li>
+        <li><code class="status">[x]</code> The budget constant carries its reason in a comment: this text is re-sent on every request of every marimba session</li>
+        <li><code class="status">[x]</code> <code>node --experimental-strip-types --test core/test/unit/meta/driving-contract.test.ts</code> — green</li>
+        <li><code class="status">[x]</code> <code>node --experimental-strip-types --test core/test/unit/meta/doc-reconciliation.test.ts</code> — green; the contract has no shell fence for it to check, and the README's install block contains no <code>awsf</code>, <code>just</code> or <code>npm run</code> command</li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code> and <code>npm run lint</code> — green</li>
       </ul>
       <div class="loop">
         🔁 <strong>Do not exit this phase until every box above is checked.</strong>

@@ -38,9 +38,14 @@ const ROUTER = join(drivingDir(), "skills", "awsf", "SKILL.md");
  * BY PATH — this would report it, and the right answer then is to make the
  * router unambiguous rather than to loosen the matcher.
  */
-const ROUTE = /`((?:[\w.-]+\/)+[\w.-]+\.md)`/g;
+export const ROUTE = /`((?:[\w.-]+\/)+[\w.-]+\.md)`/g;
 
-function routes(markdown: string): string[] {
+/**
+ * Exported because driving-contract.test.ts asserts the contract declares NO
+ * route, and that has to be the SAME property this file checks. Two copies of
+ * one regex is how a property quietly stops being one property.
+ */
+export function routes(markdown: string): string[] {
   return [...new Set([...markdown.matchAll(ROUTE)].map((match) => match[1] ?? ""))];
 }
 
