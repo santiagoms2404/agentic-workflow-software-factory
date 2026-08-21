@@ -41,12 +41,14 @@ be the same paragraph written five more times. **Section B is the whole file.**
    open**, so a prompt that finds itself wanting to decide something has found a gap in the plan and
    should stop rather than choose.
 3. **The `awsf.config.yaml` amendment has landed as its own owner-authored commit**, before task 3.
-   It protects `docs/driving/**`, and the reason was measured on 2026-08-21 rather than assumed: the
-   guard script is already unreachable by every role, and the documenter's `**/*.md` glob reaches
-   every markdown document in the driving tree. No agent writes `awsf.config.yaml`; `path-policy`
-   rejects `protected-path` independently of the write globs, and that is the boundary working. See
-   the plan's M2 amendment card for the wording, the measurement, the replacement guarantee and the
-   better alternative it surfaced — narrowing the documenter's glob instead.
+   It narrows the documenter role's `writes` from `["**/*.md"]` to `["README.md"]`. The reason was
+   measured on 2026-08-21 rather than assumed: the guard script was never exposed, and `**/*.md`
+   reaches the driving tree, `specs/*-build-prompts.md`, every file under `specs/tickets/`,
+   `records/`, markdown fixtures under `core/test/`, and the documenter's own system prompt — which
+   is both halves of the byte-identity relation invariant 12 rests on, plus the role's own
+   definition. No agent writes `awsf.config.yaml`; `path-policy` rejects `protected-path`
+   independently of the write globs, and that is the boundary working. See the plan's M2 card for
+   the measurement, the replacement guarantee, and the protected-path alternative that lost.
 
 ---
 
@@ -283,12 +285,13 @@ its own files. A fence on the file-writing tools would leave the shell route ope
 reading as though it had closed both, and a half-closed hazard that looks closed is the
 exact defect this workstream exists to repair. State the gap in the header instead.
 
-GATE: the awsf.config.yaml amendment adding docs/driving/** to policy.protected_paths
-must already have landed as its own owner-authored commit. If it has not, stop. Do NOT
-write awsf.config.yaml - path-policy rejects protected-path independently of the write
-globs, and that is the boundary working, not an obstacle. Note what the amendment is
-actually for, measured 2026-08-21: the guard SCRIPT was already unreachable by every
-role, and the exposure is the documenter's **/*.md glob over the tree's DOCUMENTS.
+GATE: the awsf.config.yaml amendment narrowing the documenter's writes from ["**/*.md"]
+to ["README.md"] must already have landed as its own owner-authored commit. If it has
+not, stop. Do NOT write awsf.config.yaml - path-policy rejects protected-path
+independently of the write globs, and that is the boundary working, not an obstacle.
+Note what the amendment is actually for, measured 2026-08-21: the guard SCRIPT was never
+exposed, and **/*.md reached the driving tree, the build prompts, every ticket file, the
+records and the documenter's own system prompt.
 
 READ FIRST
   specs/awsf-v2-w01-marimba-contract.html - milestone M2 in full, its amendment card, and
