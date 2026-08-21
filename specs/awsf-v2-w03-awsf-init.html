@@ -573,6 +573,10 @@ flowchart TD
       <summary>2026-08-21 — M1 completed: minimal config round-trip proof</summary>
       <p><strong>M1 is complete.</strong> <code>buildMinimalConfig</code> is now covered by a YAML round-trip through the real <code>loadConfig()</code> for two valid slugs, a named <code>InvalidProjectSlugError</code> rejection before the loader, and call-ceiling assertions against <code>MIN_CALL_CEILING</code>/<code>MAX_CALL_CEILING</code>. Commit <code>3718a65</code> records the test, M1 marker, and T03 ticket state together. Evidence: <code>node --experimental-strip-types --test core/test/unit/config/init-template.test.ts</code> passed 4/4 and <code>npm run typecheck</code> completed cleanly.</p>
     </details>
+    <details>
+      <summary>2026-08-21 — M2 completed: host-only baseline initialization</summary>
+      <p><strong>M2 is complete.</strong> <code>initCommand</code> creates an absent target, initializes Git through the existing broker-backed runner, writes the schema-derived configuration, and creates the fixed host-attributed baseline commit. It refuses non-empty targets before Git initialization and refuses a second run against its own repository. Commit <code>20b4e48</code> records the command and commit <code>4a43ddc</code> records its integration test, M2 marker, and T05 ticket state together. Evidence: <code>node --experimental-strip-types --test core/test/unit/cli/init-command.test.ts</code> passed 3/3, covering the one-commit, author/committer, clean-tree, refusal, re-run, and cleanup assertions.</p>
+    </details>
   </section>
 
 </main>
