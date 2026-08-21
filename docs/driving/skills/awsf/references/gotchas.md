@@ -135,13 +135,15 @@ formality.
 **Symptom.** `awsf land`, `cancel`, `journey`, `rework` or `review` refuses when
 run from a script, a pipe, or any non-terminal context.
 
-**Cause.** All five require an interactive owner terminal, and the refusal comes
-from the normative machine *before* any process can receive a signal and before
-any call is reserved.
+**Cause.** All six — `land`, `cancel`, `journey`, `rework`, `review`, `raise` —
+require an interactive owner terminal, and the refusal comes from the
+normative machine *before* any process can receive a signal and before any
+call is reserved. The check is a terminal-shape test (`process.stdin.isTTY`),
+not the authorisation boundary itself.
 
-**Guard.** The refusal is the design, and it is what makes "landing exists only
-through a human at a terminal" true rather than aspirational. There is no flag
-that bypasses it and you should not look for one.
+**Guard.** No flag bypasses it, but a PTY makes the check pass — `script -qec`
+supplies one and clears it. The fence that actually holds the line is the
+per-invocation tool-surface denial marimba's hook performs.
 
 ### 9. The two provider routes fail in opposite directions on an unknown session
 

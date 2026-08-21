@@ -445,18 +445,18 @@ flowchart LR
 
     <!-- ================= M1 ================= -->
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone M1: Retire the boundary claims already in the tree</h3>
+      <h3><code class="status">[wip]</code> Milestone M1: Retire the boundary claims already in the tree</h3>
       <p>Before a new document says the true thing, the three documents saying the false thing have to stop. Doing this first is not tidiness: a contract that contradicts the cookbook a driving session is routed to gives the tree two answers, and the reader has no way to know which is current. This phase touches only prose and one new fence, and it leaves the suite green.</p>
 
       <h4>1. Repair the three documents that call a terminal check an authorisation boundary</h4>
       <p>Replace the claim, do not merely soften it. Each document gets the statement that fits its own job: the router states the boundary in one line, the cookbook states what actually holds the line and what a driving session must therefore do, and the trap table's §8 keeps its symptom and gets a corrected cause. <strong>The symptom stays true in all three</strong> — a piped stdin really does refuse an owner act — and only the claim about what that refusal <em>proves</em> changes.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>SKILL.md</code>: "Landing exists only through a human at a TTY" → landing is authorised by the owner at a terminal, and the terminal check is a shape test rather than the authorisation boundary; the boundary marimba operates under is the per-invocation tool-surface denial.</li>
-        <li><code class="status">[]</code> <code>SKILL.md</code>: the owner-act list gains <code>raise</code>, making it six and agreeing with <code>owner_acts.md</code> and with the code.</li>
-        <li><code class="status">[]</code> <code>owner_acts.md</code>: the paragraph beginning "This is not merely a convention" is rewritten. Keep "the lifecycle refuses a non-interactive invocation"; delete "structurally cannot".</li>
-        <li><code class="status">[]</code> <code>gotchas.md</code> §8: title and symptom unchanged; "All five" → six, named; the cause becomes the terminal-shape statement; "there is no flag that bypasses it and you should not look for one" is replaced by the accurate version — no flag bypasses it, a PTY makes the check pass, and the fence that holds is the hook.</li>
-        <li><code class="status">[]</code> <code>prime-awsf.md</code> is read and left unchanged — its "read-only by construction" is about <code>doctor</code> having no repair path and is true.</li>
-        <li><code class="status">[]</code> No new claim is added that the suite cannot check; every replacement sentence is either a measured fact recorded in this plan or a pointer to the file that owns it.</li>
+        <li><code class="status">[x]</code> <code>SKILL.md</code>: "Landing exists only through a human at a TTY" → landing is authorised by the owner at a terminal, and the terminal check is a shape test rather than the authorisation boundary; the boundary marimba operates under is the per-invocation tool-surface denial.</li>
+        <li><code class="status">[x]</code> <code>SKILL.md</code>: the owner-act list gains <code>raise</code>, making it six and agreeing with <code>owner_acts.md</code> and with the code.</li>
+        <li><code class="status">[x]</code> <code>owner_acts.md</code>: the paragraph beginning "This is not merely a convention" is rewritten. Keep "the lifecycle refuses a non-interactive invocation"; delete "structurally cannot".</li>
+        <li><code class="status">[x]</code> <code>gotchas.md</code> §8: title and symptom unchanged; "All five" → six, named; the cause becomes the terminal-shape statement; "there is no flag that bypasses it and you should not look for one" is replaced by the accurate version — no flag bypasses it, a PTY makes the check pass, and the fence that holds is the hook.</li>
+        <li><code class="status">[x]</code> <code>prime-awsf.md</code> is read and left unchanged — its "read-only by construction" is about <code>doctor</code> having no repair path and is true.</li>
+        <li><code class="status">[x]</code> No new claim is added that the suite cannot check; every replacement sentence is either a measured fact recorded in this plan or a pointer to the file that owns it.</li>
       </ul>
 
       <h4>2. Derive the six owner acts from the code rather than copying them, plus Testing Strategy</h4>

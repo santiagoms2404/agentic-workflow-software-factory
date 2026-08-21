@@ -45,10 +45,12 @@ just awsf db rebuild
 
 ## What only the owner may do
 
-`journey`, `land`, `cancel`, `rework` and `review` are owner acts, and the
-lifecycle already enforces that. Prepare them and explain them; never perform
-one, and never recommend performing one without the evidence its edge requires.
-Landing exists only through a human at a TTY.
+`journey`, `land`, `cancel`, `rework`, `review` and `raise` are owner acts.
+Prepare them and explain them; never perform one, and never recommend
+performing one without the evidence its edge requires. Landing is authorised
+by the owner at a terminal — the terminal check is a shape test, not the
+authorisation boundary, and the boundary marimba operates under is the
+per-invocation tool-surface denial.
 
 ## Hard rules
 

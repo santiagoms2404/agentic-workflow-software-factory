@@ -11,11 +11,13 @@ Prepare and explain. Never perform, and never recommend performing one without
 the evidence its edge requires.
 
 This is not merely a convention you could talk yourself out of — the lifecycle
-enforces it. Every one of the six requires an interactive owner terminal, and a
-piped or redirected standard input is refused by the normative machine *before*
-any process can receive a signal and before any call is reserved. A driving
-session that cannot type into a terminal structurally cannot take one of these
-edges, which is the design working rather than an obstacle to route around.
+refuses a non-interactive invocation. Every one of the six requires an
+interactive owner terminal, and a piped or redirected standard input is
+refused by the normative machine *before* any process can receive a signal and
+before any call is reserved. That refusal is a terminal-shape check, not the
+authorisation boundary: it stops an accidental non-interactive invocation, and
+the boundary a driving session actually operates under is the per-invocation
+tool-surface denial marimba's guard performs.
 
 The evidence each edge demands is in `core/src/state/guards.ts`, and the edges
 themselves in `core/src/state/task-machine.ts`. Read them there when it matters.
