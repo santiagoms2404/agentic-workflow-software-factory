@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plan: AWSF v2 W01 — marimba's operating contract</title>
+<style>
+/* AWSF dark theme — the same §7 design tokens the v1 plan and the v2 spine carry,
+   so the three read as one document set and the mermaid palette stays synced.
+   The review layer reuses --bg / --fg / --muted / --accent. */
+:root {
+  --bg:#0F1017; --surface:rgba(28,30,43,.85); --surface-solid:#1C1E2B;
+  --border:rgba(255,255,255,.07); --text:#E7E9F0; --muted:#8B90A6;
+
+  --agent-engineer:#F59E0B; --agent-planner:#A78BFA; --agent-builder:#22D3EE;
+  --agent-reviewer:#F43F5E;
+
+  --ok:#22C55E; --running:#3B82F6; --error:#EF4444; --warn:#F97316;
+
+  --font-ui:"Inter","Outfit",system-ui,sans-serif;
+  --font-mono:"JetBrains Mono","Fira Code",ui-monospace,monospace;
+  --num:tabular-nums;
+
+  --r-card:14px; --r-pill:999px;
+  --shadow-card:0 1px 0 rgba(255,255,255,.04) inset, 0 8px 24px rgba(0,0,0,.35);
+
+  --fg:var(--text); --accent:var(--agent-planner);
+  --cool:var(--agent-builder); --good:var(--ok); --danger:var(--error);
+  --border-strong:#2b3040;
+  --maxw:1120px;
+}
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body { margin:0; padding:0; background:var(--bg); color:var(--fg);
+  font-family:var(--font-ui); font-size:15px; line-height:1.65; -webkit-font-smoothing:antialiased; }
+main { max-width:var(--maxw); margin:0 auto; padding:48px 24px 160px; }
+h1,h2,h3,h4 { line-height:1.25; font-weight:650; letter-spacing:-.011em; }
+h1 { font-size:30px; margin:0 0 6px; }
+h2 { font-size:21px; margin:56px 0 14px; padding-bottom:8px; border-bottom:1px solid var(--border-strong); }
+h3 { font-size:17px; margin:34px 0 8px; }
+h4 { font-size:14px; margin:24px 0 6px; color:var(--accent); letter-spacing:.01em; }
+h5 { margin:0 0 6px; }
+p { margin:0 0 14px; }
+a { color:var(--cool); }
+strong { color:#fff; font-weight:650; }
+em { color:var(--muted); font-style:italic; }
+hr { border:0; border-top:1px solid var(--border-strong); margin:40px 0; }
+small { color:var(--muted); }
+ul,ol { margin:0 0 14px; padding-left:22px; }
+li { margin:3px 0; }
+
+code { font-family:var(--font-mono); font-size:.88em; background:var(--surface-solid);
+  border:1px solid var(--border-strong); border-radius:4px; padding:1px 5px; color:#cfc4f7; }
+pre { background:var(--surface-solid); border:1px solid var(--border-strong);
+  border-left:3px solid var(--accent); border-radius:8px; padding:14px 16px; overflow-x:auto;
+  font-family:var(--font-mono); font-size:12.5px; line-height:1.6; color:#d6dde6; }
+pre code { background:none; border:none; padding:0; color:inherit; font-size:inherit; }
+
+table { width:100%; border-collapse:collapse; margin:14px 0 20px; font-size:13px; display:block; overflow-x:auto; }
+th,td { padding:7px 10px; border:1px solid var(--border-strong); text-align:left; vertical-align:top; }
+th { background:var(--surface-solid); color:var(--accent); font-weight:600; font-size:11.5px;
+  letter-spacing:.05em; text-transform:uppercase; white-space:nowrap; }
+tbody tr:nth-child(even) { background:#ffffff05; }
+td code { font-size:11.5px; }
+.num, td.num { font-variant-numeric:var(--num); text-align:right; }
+.matrix { font-family:var(--font-mono); font-size:12px; }
+.matrix td:first-child { color:var(--accent); }
+.deny { color:var(--danger); font-weight:700; }
+.allow { color:var(--good); font-weight:700; }
+.ok { color:var(--good); font-weight:700; } .no { color:#4a5560; }
+
+.meta { margin:14px 0 0; font-size:13px; }
+.meta summary { cursor:pointer; color:var(--muted); font-family:var(--font-mono); font-size:12px; }
+.meta dl { display:grid; grid-template-columns:130px 1fr; gap:4px 14px; margin:12px 0 0; padding:14px;
+  background:var(--surface-solid); border:1px solid var(--border-strong); border-radius:8px; }
+.meta dt { color:var(--accent); font-family:var(--font-mono); font-size:11.5px; }
+.meta dd { margin:0; color:var(--muted); font-family:var(--font-mono); font-size:11.5px; overflow-wrap:anywhere; }
+
+.sub { color:var(--muted); font-size:13.5px; margin-top:0; }
+
+figure { margin:26px 0; text-align:center; }
+figure svg, figure .mermaid { max-width:100%; height:auto; }
+figure .mermaid { background:var(--surface-solid); border:1px solid var(--border-strong);
+  border-radius:10px; padding:20px 12px; overflow-x:auto; text-align:center;
+  color:var(--muted); font-size:12px; }
+figcaption { color:var(--muted); font-size:12px; margin-top:10px; font-style:italic; }
+
+.tag { display:inline-block; font-family:var(--font-mono); font-size:10px; letter-spacing:.06em;
+  text-transform:uppercase; padding:1px 6px; border-radius:3px; margin-right:6px; vertical-align:1px; }
+.tag.existing { background:#262b3a; color:var(--muted); }
+.tag.new { background:#2c2544; color:var(--accent); }
+.tag.dir { background:#173042; color:var(--cool); }
+.tag.owner { background:#3a2a12; color:var(--warn); }
+
+.files ul { list-style:none; padding:0; }
+.files li { padding:4px 0; border-bottom:1px solid #ffffff08; font-size:13px; }
+
+.phase { border:1px solid var(--border-strong); border-radius:var(--r-card);
+  padding:22px 24px; margin:30px 0; background:#ffffff04; }
+.phase > h3 { margin-top:0; }
+.phase > h3 .status { color:var(--accent); }
+
+.checklist { list-style:none; padding:0; margin:8px 0 16px; }
+.checklist li { padding:4px 0 4px 2px; font-size:13.5px; }
+.checklist li .status { color:var(--accent); margin-right:6px; }
+
+.loop { border:1px dashed var(--accent); border-radius:8px; padding:10px 14px; margin:16px 0 4px;
+  font-size:13px; background:#a78bfa0d; }
+
+.card { border:1px solid var(--border-strong); border-left:3px solid var(--cool); border-radius:8px;
+  padding:12px 16px; margin:14px 0; background:var(--surface-solid); font-size:13px; }
+.card.warn { border-left-color:var(--danger); }
+.card.rule { border-left-color:var(--accent); }
+.card.good { border-left-color:var(--good); }
+.card.owner { border-left-color:var(--warn); }
+.card h5 { margin:0 0 6px; font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--muted); font-weight:700; }
+
+.taskmeta { width:100%; font-size:12.5px; margin:6px 0 12px; }
+.taskmeta th { width:150px; text-transform:none; letter-spacing:0; font-size:12px; }
+
+#questionables details, #amendments details { border:1px solid var(--border-strong); border-radius:8px;
+  padding:10px 14px; margin:10px 0; background:var(--surface-solid); }
+#questionables summary, #amendments summary { cursor:pointer; font-weight:600; font-size:13.5px; }
+.qa-answer { margin:10px 0 2px; font-size:13px; color:var(--muted); }
+.qopen { color:var(--warn); font-family:var(--font-mono); font-size:10px; letter-spacing:.06em; margin-right:6px; }
+.qrec { color:var(--cool); font-family:var(--font-mono); font-size:10px; letter-spacing:.06em; margin-right:6px; }
+.qdecided { color:var(--good); font-family:var(--font-mono); font-size:10px; letter-spacing:.06em; margin-right:6px; }
+.recommend { display:block; margin:0 0 10px; padding:8px 12px; font-size:12.5px;
+  border-left:3px solid var(--cool); background:#22d3ee0d; border-radius:0 6px 6px 0; color:var(--fg); }
+.recommend b { color:var(--cool); }
+.decided { display:block; margin:0 0 10px; padding:8px 12px; font-size:12.5px;
+  border-left:3px solid var(--good); background:#22c55e0d; border-radius:0 6px 6px 0; color:var(--fg); }
+.decided b { color:var(--good); }
+.consequence { display:block; margin:0 0 10px; padding:8px 12px; font-size:12.5px;
+  border-left:3px solid var(--accent); background:#a78bfa0d; border-radius:0 6px 6px 0; color:var(--fg); }
+.consequence b { color:var(--accent); }
+
+@media (max-width:720px) {
+  main { padding:28px 14px 140px; }
+  .meta dl { grid-template-columns:1fr; }
+}
+</style>
+</head>
+<body>
+<main>
+
+  <!-- ===== HEADER + UPDATABLE METADATA ===== -->
+  <header>
+    <h1>Plan: AWSF v2 W01 — marimba's operating contract</h1>
+    <p class="sub">The driving role gets a written contract before it is trusted to author thirteen more deep plans. <strong>This is a deep plan, one workstream of <a href="awsf-v2-plan.html">the v2 spine</a>.</strong> It carries the contract document, the guard that makes the contract's boundary real, the offline tests that prove the guard's behaviour, and the repairs the tree needs because three documents already in it describe that boundary wrongly. <strong>Authoring it wrote no implementation code, changed no invariant, and flipped no marker.</strong> It did run two probes: the hook-precedence probe the spine left open, and an offline behaviour matrix over the installed guard. Both are recorded below, and one of them falsifies a limit the guard's own header states too narrowly.</p>
+    <details class="meta">
+      <summary>Metadata</summary>
+      <dl>
+        <dt>created</dt>      <dd>2026-08-21</dd>
+        <dt>modified</dt>     <dd>2026-08-21</dd>
+        <dt>commits</dt>      <dd>none yet — this plan is authored and not yet committed</dd>
+        <dt>agent name</dt>   <dd>claude-opus-5</dd>
+        <dt>session id</dt>   <dd>not recorded — AGENTS.md invariant 1 keeps live session state out of every committed file in this repository</dd>
+        <dt>back refs</dt>    <dd>./awsf-v2-plan.html (the spine; this is its milestone M1 / workstream W01), ./tickets/awsf-v2-plan/W01.md (the meta-prompt that authored this plan), ./awsf-v2-plan-build-prompts.md (§ Section B → T01), ./awsf-v2-candidates-fuse-version.md (§10 first, then §2.8 and §0.1), ./awsf-v2-intent.md (decision 3 — the boundary is enforced at the tool surface), ../AGENTS.md (invariants 1, 2, 3, 9, 10, 12)</dd>
+        <dt>forward refs</dt> <dd>./awsf-v2-w01-marimba-contract-build-prompts.md, ./tickets/awsf-v2-w01-marimba-contract/ (T01–T09, one file per task), ./tickets/awsf-v2-w01-marimba-contract/README.md</dd>
+      </dl>
+    </details>
+  </header>
+
+  <figure>
+<pre class="mermaid">
+flowchart LR
+  M["marimba<br/>driving session"] -->|every tool call| H{"PreToolUse hook<br/>delivered per invocation"}
+  H -->|delegation-shaped name| D1["deny · exit 2"]
+  H -->|owner-act command text| D2["deny · exit 2"]
+  H -->|anything else| A["proceed"]
+  D2 -. "indirection · PTY · no --settings" .-> A
+  style D1 stroke:#EF4444,stroke-width:2px
+  style D2 stroke:#EF4444,stroke-width:2px
+  style A stroke:#22C55E,stroke-width:2px
+</pre>
+    <figcaption>The boundary is a denial at the tool surface, and the dotted arrow is measured rather than imagined: a command that names an owner act through a shell variable was allowed on 2026-08-21. The contract's job is to state both halves.</figcaption>
+  </figure>
+
+  <!-- ===== IN PLAIN LANGUAGE ===== -->
+  <section id="plain-language">
+    <h2>In Plain Language</h2>
+    <p>This section explains the whole plan without technical vocabulary. Everything after it says the same things precisely, for the people — and machines — building it.</p>
+
+    <h3>A helper runs the workshop, and nobody has written down what it may do</h3>
+    <p>There is a workshop that builds software, and there is a helper who operates it: choosing what to work on, starting the machines, watching, and reporting back. The helper is not supposed to do certain things — hand work to other helpers who are not on the books, or take the few final decisions that belong to the owner alone. Until now that was an understanding rather than a written rule, and the few notes that did exist described the wrong thing as the safeguard. They said the safeguard was that those final decisions can only be taken by someone typing at a keyboard. That is not a safeguard. It is a check on what the room looks like, and it is easy to make a room look right.</p>
+
+    <h3>Why now</h3>
+    <p>This helper is about to be trusted to write thirteen more plans, each of which decides how a piece of the workshop gets built. A helper whose limits are written down wrongly will pass that wrong description along thirteen times. Fixing it costs a few days and no new machinery, and it is the cheapest thing in the whole programme.</p>
+
+    <h3>What we are building</h3>
+    <p>Think of a doorman posted at the workshop's door. Every time the helper reaches for something, the doorman looks at what is being reached for and turns away two kinds of request: handing work to an unbooked helper, and the owner's own final decisions. The doorman already exists and already works. What this plan adds is three things. A short rule sheet the helper is handed at the start of every shift, which says plainly what it may do, what the doorman turns away, and — this is the part everyone skips — exactly which ways past the doorman are still open. A set of rehearsals that check the doorman by presenting him with two dozen prepared requests and confirming which he waves through and which he turns back, all of which can be run at any time without calling anyone or spending anything. And repairs to the three existing notes that describe the old, wrong safeguard, so the workshop does not carry two answers to the same question.</p>
+
+    <h3>How we know it worked</h3>
+    <p>Someone who has never seen this can run one command and watch the rehearsals pass, including a rehearsal that deliberately presents a request the doorman <em>should</em> wave through, so a doorman who turned everything away could not pass by being useless. The rule sheet will be short enough to read in three minutes, will name no command, and will state its own gaps out loud. The three wrong notes will be gone, and a check will fail loudly if that wording ever comes back. Deliberately not part of this: making the doorman impossible to get past. He cannot be, the plan says so in the rule sheet, and pretending otherwise is the exact mistake this work exists to undo.</p>
+  </section>
+
+  <!-- ===== PURPOSE ===== -->
+  <section id="purpose">
+    <h2>Purpose</h2>
+    <p>Give the driving role a written operating contract, delivered as an <strong>appended</strong> system prompt on every marimba invocation, that states its boundary as what that boundary actually is — a denial at the tool surface — and names, with measured evidence, everything that denial does not cover. Land the guard that performs the denial inside this repository as its single source of truth, with an offline test matrix that proves both of its fences bite and that its exclusions still pass. Repair the three documents already in <code>docs/driving/</code> that describe a terminal-shape check as an authorisation boundary, because a new contract that contradicts them would give the tree two answers to one question.</p>
+    <p><strong>Scope discipline.</strong> Installing the guard is an owner act and is not a task here. Extending the guard's <em>coverage</em> is not in scope either; three candidate hardenings surfaced while measuring it, and all three are Questionables rather than tasks, because the spine's scope for W01 is the contract plus the guard's tests and captured refusals.</p>
+  </section>
+
+  <!-- ===== PROBLEM ===== -->
+  <section id="problem">
+    <h2>Problem</h2>
+    <p>Three claims about this boundary are false, and two of them are not merely in an old candidate record — <strong>they are live in the driving tree today</strong>, in the documents a driving session is told to read. A fourth problem is structural: the guard that makes the boundary real lives at a per-user path outside this repository, so nothing in the suite can see it, and its behaviour is currently asserted by four hand-captured anecdotes rather than by a test that runs on demand.</p>
+
+    <figure>
+<pre class="mermaid">
+flowchart TD
+  subgraph claimed["what the record and the tree claim"]
+    C1["a terminal check<br/>is the boundary"]
+    C2["the contract inherits<br/>two existing fences"]
+    C3["nothing mutates outside<br/>the state root"]
+  end
+  subgraph measured["what is measured"]
+    R1["terminal SHAPE test<br/>a PTY clears it"]
+    R2["one router is scanned<br/>a new document is not"]
+    R3["worktree root is a SIBLING<br/>landing moves the canonical repo"]
+  end
+  C1 --> R1
+  C2 --> R2
+  C3 --> R3
+  style C1 stroke:#EF4444
+  style C2 stroke:#EF4444
+  style C3 stroke:#EF4444
+  style R1 stroke:#22C55E
+  style R2 stroke:#22C55E
+  style R3 stroke:#22C55E
+</pre>
+      <figcaption>Three claims to retire, and the measured statement that replaces each. The first is the substantive one: it is the only claim on which anybody has rested a safety property.</figcaption>
+    </figure>
+
+    <h3>The three false claims, and where each one lives right now</h3>
+    <table>
+      <thead><tr><th>Claim</th><th>Why it is false</th><th>Where it is committed today</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>"Bounded by construction."</strong> Owner acts require an interactive terminal, so a driving session structurally cannot take one.</td>
+          <td><code>processOwnerTerminal()</code> reads <code>process.stdin.isTTY</code>. That is a terminal <em>shape</em> test. <code>script -qec</code> yields <code>isTTY=true</code> and a scripted answer clears the confirmation. It prevents an accidental non-interactive invocation and prevents nothing deliberate.</td>
+          <td><code>docs/driving/skills/awsf/cookbooks/owner_acts.md</code> — "the lifecycle enforces it… a driving session that cannot type into a terminal <em>structurally cannot</em> take one of these edges". <code>docs/driving/skills/awsf/references/gotchas.md</code> §8 — "what makes 'landing exists only through a human at a terminal' true rather than aspirational… there is no flag that bypasses it". <code>docs/driving/skills/awsf/SKILL.md</code> — "Landing exists only through a human at a TTY."</td>
+        </tr>
+        <tr>
+          <td><strong>"It inherits two existing fences."</strong></td>
+          <td><code>core/test/unit/meta/driving-routes.test.ts</code> hardcodes <code>ROUTER = docs/driving/skills/awsf/SKILL.md</code>, so any route a <em>new</em> document declares is unchecked. What the tree genuinely gives a new document is <strong>five</strong> fences, not two — the candidate record undercounted in the other direction as well.</td>
+          <td>Superseded in <code>specs/awsf-v2-candidates-fuse-version.md</code> §2.8; not present in the tree.</td>
+        </tr>
+        <tr>
+          <td><strong>"No <code>awsf</code> command mutates outside the state root."</strong></td>
+          <td><code>defaultWorktreeRoot(stateRoot)</code> returns <code>join(dirname(stateRoot), "awsf-worktrees")</code> — a <em>sibling</em> of the state root, not a child. And <code>land</code> fast-forwards the canonical repository by design; that is the whole point of the edge.</td>
+          <td>Superseded in §2.8; not present in the tree.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>A fourth problem the spine names but does not solve: the guard is unreachable</h3>
+    <p>The guard lives at <code>~/.claude/marimba/delegation-guard.sh</code> and is passed per invocation with <code>--settings</code>. That placement is correct and was itself a repair — installing it at <code>.claude/settings.local.json</code> broke <code>execution-isolation.test.ts</code>, which asserts <code>.claude/</code> does not exist at the repository root at all. But the consequence is that <strong>no test in this repository can see the guard</strong>, and the spine still requires that "the guard's tests and its captured refusals land with it". Nothing about a per-user path makes that possible. Resolving it was this plan's first structural decision, and it is <a href="#questionables">Q6</a> — <strong>decided 2026-08-21: the repository holds the only copy</strong>, and the owner's settings point their hook command at it.</p>
+
+    <h3>A fifth, discovered while measuring: the guard's stated limits are narrower than its real ones</h3>
+    <p>The guard's header names one fail-open case — malformed JSON. Measured 2026-08-21, there are more, and one of them is silent. The full table is in <a href="#measured">What Was Measured</a>; the short version is that the guard parses its payload with <code>python3</code>, and <strong>a <code>python3</code> that is missing or broken disables both fences and exits <code>0</code></strong>, with nothing announcing it. On a machine where <code>python3</code> is absent, marimba runs with no boundary and no signal.</p>
+  </section>
+
+  <!-- ===== SOLUTION ===== -->
+  <section id="solution">
+    <h2>Solution</h2>
+    <p>Four artifacts, one repair pass, and one owner amendment. The contract is a short document that travels with every marimba invocation as appended system-prompt text; the guard becomes a committed file that the owner's settings point at, so there is exactly one copy of it; the tests are an offline payload matrix plus a set of document-level fences; and the tree's three wrong sentences are replaced with the measured statement and pinned by a fence so the wording cannot come back.</p>
+
+    <figure>
+<pre class="mermaid">
+flowchart LR
+  subgraph tree["docs/driving/ — committed, swept by five fences"]
+    C["marimba/CONTRACT.md<br/>command-free · route-free"]
+    G["marimba/delegation-guard.sh<br/>the one copy"]
+    B["marimba/session-banner.sh"]
+    E["marimba/settings.example.json"]
+  end
+  subgraph tests["core/test/unit/meta/ — offline, no quota"]
+    T1["marimba-guard.test.ts<br/>matrix + banner"]
+    T2["driving-contract.test.ts<br/>contract properties"]
+    T3["driving-routes.test.ts<br/>generalised to every doc"]
+  end
+  subgraph owner["owner-side — named, never ticketed"]
+    S["~/.claude/marimba/settings.json"]
+    L["the launcher"]
+  end
+  S -->|PreToolUse → absolute path| G
+  S -->|SessionStart| B
+  L -->|--append-system-prompt| C
+  E -.->|copied once, by hand| S
+  T1 --> G
+  T2 --> C
+  T3 --> C
+  style owner stroke:#F97316,stroke-dasharray:4 3
+</pre>
+      <figcaption>One copy of the guard, two consumers of the tree, and a dashed boundary around everything the owner does by hand. Nothing inside the dashed box is a task in this plan.</figcaption>
+    </figure>
+
+    <h3>Why the contract is command-free, route-free and short</h3>
+    <p>The spine fixes "command-free"; the other two properties are derived, and their reasons are worth stating because they are what makes the route collision resolvable at all.</p>
+    <ul>
+      <li><strong>Route-free, because the contract travels and the tree may not.</strong> A cookbook is read on demand from a checkout that is present. The contract is injected as system-prompt text into a session that may be driving a different project entirely — which is precisely what W04's registry makes routine. A relative path inside it would be an instruction to read a file that is not there. So the contract cites nothing by relative path, and a fence asserts it. That is the honest resolution of the route collision: not a test dodge, but a property the artifact needs for its own reasons.</li>
+      <li><strong>Short, because it is paid on every request.</strong> A route is read once when it is needed; an appended system prompt is re-sent on every turn of every marimba session for as long as the session lives. The budget is <strong>≤ 120 lines and ≤ 1,100 words</strong>, checked mechanically. This is also why the contract restates none of the tree: it states the rule, the guard enforces the list, and the cookbook explains the choice — three layers, one source each.</li>
+      <li><strong>Command-free, mechanically defined.</strong> No fenced shell block, and no backticked <code>awsf&nbsp;&lt;verb&gt;</code>, <code>just&nbsp;&lt;target&gt;</code> or <code>npm&nbsp;run&nbsp;&lt;script&gt;</code> token. The contract therefore names the owner acts by their <em>property</em> — the acts the lifecycle reserves for the owner — and never by list. The list has one source: the six commands in <code>core/src/cli/main.ts</code> that construct an owner terminal.</li>
+    </ul>
+
+    <h3>What the contract must say, in eight parts</h3>
+    <ol>
+      <li>What the driving role is, and the one line that separates it from worker work.</li>
+      <li>The boundary, stated as a denial at the tool surface performed by a hook delivered per invocation, with two fences: delegation-shaped tool <em>names</em>, and owner-act command <em>text</em>.</li>
+      <li><strong>What the boundary does not cover</strong> — seven measured items, each stated plainly. This is the section the contract exists for.</li>
+      <li>The measured settings semantics: <code>--settings</code> merges, <code>--setting-sources</code> excludes, and a project hook returning <em>allow</em> does not override marimba's deny.</li>
+      <li>The scope exception W05 depends on: the guard is per invocation, so a review session launched without marimba's settings keeps the delegation tools.</li>
+      <li>The four guarantees that replace the retired claims: no push path exists, nothing is auto-deleted, writes are confined to a managed worktree by <code>path-policy</code>, and canonical movement happens only through a human-approved local fast-forward.</li>
+      <li>What marimba does instead of an owner act: prepare and explain. One line; the cookbook already holds the detail.</li>
+      <li>Invariant 1 applied to the contract's own text: no live task state, ever, including in its examples.</li>
+    </ol>
+  </section>
+
+  <!-- ===== WHAT WAS MEASURED ===== -->
+  <section id="measured">
+    <h2>What Was Measured</h2>
+    <p>Two probes were run while authoring this plan. Both are reproducible offline except where noted, and both changed what the contract will say. Every figure below was produced on <strong>2026-08-21</strong>, Claude Code <strong>2.1.238</strong>, against the guard as installed.</p>
+
+    <h3>Probe 1 — hook precedence. The spine's named absence, now closed.</h3>
+    <p>The spine carried this forward explicitly: "Both hooks fired; nothing here shows what happens when a project <code>PreToolUse</code> hook returns allow for the same call marimba's denies. Until that is captured, the contract may not claim a project cannot weaken the guard." Three runs in a throwaway directory outside this repository, each asking for one Bash call whose command text contains an owner-act shape and whose success is observable as a marker file:</p>
+    <table>
+      <thead><tr><th>Run</th><th>Setup</th><th>Project hook fired</th><th>Marker written</th><th>Result</th></tr></thead>
+      <tbody>
+        <tr><td>A — control</td><td>project <code>.claude/settings.json</code> with an allow-returning <code>PreToolUse</code> hook; no <code>--settings</code></td><td>—</td><td class="allow">yes</td><td>the observable works and the model complies</td></tr>
+        <tr><td>B — control</td><td>no project <code>.claude/</code>; <code>--settings</code> → marimba</td><td>—</td><td class="deny">no</td><td>the guard denies this exact shape</td></tr>
+        <tr><td><strong>C — the question</strong></td><td>both present</td><td class="allow"><strong>yes</strong>, logged</td><td class="deny"><strong>no</strong></td><td><strong>deny wins</strong></td></tr>
+      </tbody>
+    </table>
+    <p>Run C's project hook is proven to have run — it appended its payload to a log before returning <code>permissionDecision: "allow"</code> — and the call was blocked anyway. <strong>A project's own <code>PreToolUse</code> hook cannot weaken marimba's deny for the same call.</strong> Both controls matter: A proves an allowed call does write the marker, so C's silence is a result rather than a broken probe, and B proves the guard denies this shape on its own.</p>
+    <div class="card">
+      <h5>What this probe does <em>not</em> settle</h5>
+      It tested one allow mechanism — a hook returning an allow decision — against one deny mechanism — a hook exiting 2. It did not test a project settings file's <code>permissions.allow</code> list against a hook deny, and it did not establish hook <em>ordering</em>. The cheapest unused upgrade is one more run with <code>permissions.allow</code> in the project settings instead of an allow hook. Until it is run, the contract states the measured case and not a general one.
+    </div>
+
+    <h3>Probe 2 — the guard's offline behaviour matrix</h3>
+    <p>Twenty-six payloads fed to the installed script on stdin, no provider call, no quota. This is the matrix the committed test will encode, and it is reproduced here because three rows changed the plan.</p>
+    <table class="matrix">
+      <thead><tr><th>Payload</th><th>Exit</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>Bash</code> · <code>echo hello</code></td><td class="allow">0</td><td>the fence is not a blanket refusal</td></tr>
+        <tr><td><code>Bash</code> · <code>awsf status</code>, <code>awsf run</code>, <code>awsf retry</code></td><td class="allow">0</td><td>the spend the tier already authorised is untouched</td></tr>
+        <tr><td><code>Bash</code> · <code>awsf land</code>, <code>just awsf rework</code></td><td class="deny">2</td><td>fence 2 bites through a wrapper</td></tr>
+        <tr><td><code>Bash</code> · <code>awsf&nbsp;&nbsp;&nbsp;land</code> (extra whitespace)</td><td class="deny">2</td><td>the parser normalises whitespace before matching</td></tr>
+        <tr><td><code>Bash</code> · <code>script -qec "awsf land T"</code></td><td class="deny">2</td><td>the direct PTY route is denied by text</td></tr>
+        <tr><td><strong><code>Bash</code> · <code>v=land; script -qec "awsf $v T"</code></strong></td><td class="allow"><strong>0</strong></td><td><strong>indirection evades fence 2 entirely.</strong> The fence reads written text, not resolved intent.</td></tr>
+        <tr><td><code>Bash</code> · <code>grep -rn "awsf land" docs/</code>, <code>echo awsf land &gt; f.txt</code></td><td class="deny">2</td><td>it over-denies: reading or writing the phrase is denied too</td></tr>
+        <tr><td><code>Task</code>, <code>Agent</code>, <code>SendMessage</code>, <code>Monitor</code>, <code>ScheduleWakeup</code>, <code>EnterWorktree</code></td><td class="deny">2</td><td>fence 1 classifies by shape, so a tool that did not exist when it was written is denied on arrival</td></tr>
+        <tr><td><code>ListAgents</code>, <code>TaskOutput</code></td><td class="allow">0</td><td>the whole-name exclusions still pass — observe-or-stop</td></tr>
+        <tr><td><code>mcp__srv__task</code></td><td class="allow">0</td><td>MCP names are never classified, by design</td></tr>
+        <tr><td><code>Write</code> / <code>Edit</code> with a <code>file_path</code> and no command</td><td class="allow">0</td><td>fence 2 sees no command; <strong>including an Edit whose target is the guard itself</strong></td></tr>
+        <tr><td>malformed JSON, empty payload</td><td class="allow">0</td><td>fails open — stated in the header, deliberate</td></tr>
+        <tr><td><strong><code>Task</code> with <code>python3</code> broken</strong></td><td class="allow"><strong>0</strong></td><td><strong>both fences silently disabled.</strong> Not stated in the header.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>The three rows that changed this plan</h3>
+    <ol>
+      <li><strong>Indirection evades fence 2.</strong> This is the honest ceiling of the whole design and it belongs in the contract's own text, not in a footnote. The boundary holds against mistake, drift and the direct shape. It does not hold against a session that decides to route around it, and no arrangement of substring matching will change that.</li>
+      <li><strong>A broken interpreter disables the guard silently.</strong> Combined with the fact that a wrong <code>--settings</code> path also yields a session with no guard and no signal, there is currently <em>no positive confirmation anywhere</em> that marimba is running guarded. Two Questionables came from this and both were decided on 2026-08-21: <a href="#questionables">Q2</a> makes an unrunnable parser fail closed, and <a href="#questionables">Q4</a> adds a session-start banner so the condition is visible before the first tool call rather than after it.</li>
+      <li><strong>Fence 2 over-denies, and that lands on this workstream's own build.</strong> A marimba session cannot author the guard's test fixtures with a shell heredoc, because the fixture text contains the denied shapes and its own guard denies the write. The fixtures must be authored with the file-writing tools, which carry no <code>command</code> field. This is written into task 4 so it is not discovered mid-build.</li>
+    </ol>
+
+    <h3>The baseline this work must not regress</h3>
+    <p><code>npm run test:unit</code>, 2026-08-21, on the tree as committed at <code>53a2844</code>: <strong>989 tests, 989 pass, 0 fail</strong>, 122&nbsp;s. Every "no count regression" box below is checked against this number, and the number is recorded here rather than left as "green" so a silently-skipped file is visible as arithmetic.</p>
+
+    <h3>The five fences the tree actually gives a new document</h3>
+    <p>§2.8 said two and named the wrong count in the other direction as well. Measured by reading each fence's scope:</p>
+    <table>
+      <thead><tr><th>Fence</th><th>Covers a new document?</th></tr></thead>
+      <tbody>
+        <tr><td><code>driving-tree.test.ts</code> — the walk arrives</td><td class="ok">inherited</td></tr>
+        <tr><td><code>no-credentials-in-fixtures.test.ts</code> — credential sweep, wide extension set</td><td class="ok">inherited</td></tr>
+        <tr><td><code>no-shell-true.test.ts</code> — <code>shell: true</code> sweep, wide extension set</td><td class="ok">inherited</td></tr>
+        <tr><td><code>doc-reconciliation.test.ts</code> — every command in a shell fence exists</td><td class="ok">inherited</td></tr>
+        <tr><td><code>no-handwritten-schema.test.ts</code> — three narrowed patterns plus the <code>```json</code> fence ban</td><td class="ok">inherited <strong>(§2.8 missed this one)</strong></td></tr>
+        <tr><td><code>driving-routes.test.ts</code> — routes resolve</td><td class="no">not inherited — hardcodes one router</td></tr>
+        <tr><td><code>execution-isolation.test.ts</code> — <code>.claude/</code> absent at the root</td><td class="no">unrelated to a document's content; it is the placement control</td></tr>
+      </tbody>
+    </table>
+    <p>The tree outside the router is <strong>route-free today</strong> — no backticked relative markdown path appears in any cookbook or reference. That is what makes task 7's generalisation green on arrival rather than a migration.</p>
+  </section>
+
+  <!-- ===== RELEVANT FILES ===== -->
+  <section id="files" class="files">
+    <h2>Relevant Files</h2>
+
+    <h3>Existing Files</h3>
+    <ul>
+      <li><span class="tag existing">existing</span> <code>docs/driving/skills/awsf/SKILL.md</code> — the router. Carries "Landing exists only through a human at a TTY" and an owner-act list of five. Both are repaired by task 1.</li>
+      <li><span class="tag existing">existing</span> <code>docs/driving/skills/awsf/cookbooks/owner_acts.md</code> — carries the strongest form of the false claim: "structurally cannot take one of these edges". Names six acts, which is correct.</li>
+      <li><span class="tag existing">existing</span> <code>docs/driving/skills/awsf/references/gotchas.md</code> — §8 carries the claim plus "there is no flag that bypasses it and you should not look for one", and names five acts.</li>
+      <li><span class="tag existing">existing</span> <code>docs/driving/commands/prime-awsf.md</code> — the entry point. Its "read-only by construction" line is about <code>doctor</code> and is <em>true</em>; task 1 leaves it alone and the fence must not catch it.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/cli/main.ts</code> — <code>CLI_COMMANDS</code>, and the six <code>case</code> arms that construct an owner terminal: <code>rework</code>, <code>review</code>, <code>raise</code>, <code>journey</code>, <code>land</code>, <code>cancel</code>. The single source for "which acts are owner acts".</li>
+      <li><span class="tag existing">existing</span> <code>core/src/cli/tty.ts</code> — <code>processOwnerTerminal()</code>. Eleven lines; the whole false claim rests on <code>process.stdin.isTTY === true</code>.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/cli/commands/start.ts</code> — <code>defaultWorktreeRoot</code> returns a sibling of the state root. Evidence for retiring the third claim.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/policy/path-policy.ts</code> — what actually confines writes; <code>protected-path</code> is an independent rejection.</li>
+      <li><span class="tag existing">existing</span> <code>core/test/unit/meta/_driving.ts</code> — <code>DRIVING_REL</code>, the two walkers, and the standing caution that a basename containing <code>receipt</code> or <code>manifest</code> trips the junk-drawer fence.</li>
+      <li><span class="tag existing">existing</span> <code>core/test/unit/meta/driving-routes.test.ts</code> — generalised by task 7. Its matcher-bites companion is kept and extended, not replaced.</li>
+      <li><span class="tag existing">existing</span> <code>core/test/unit/meta/driving-tree.test.ts</code> — proves the walk arrives; the reason every tree-scoped fence is not vacuous.</li>
+      <li><span class="tag existing">existing</span> <code>core/test/unit/meta/execution-isolation.test.ts</code> — must stay green: <code>.claude/</code> absent at the repository root. Nothing in this plan puts anything there.</li>
+      <li><span class="tag existing">existing</span> <code>core/test/unit/meta/junk-drawer.test.ts</code> — scans tracked basenames for <code>receipt</code>/<code>manifest</code>. Constrains what the new files may be called.</li>
+      <li><span class="tag existing">existing</span> <code>core/test/unit/meta/child-process-fence.test.ts</code> — scoped to <code>core/src</code> only, so a <em>test</em> may spawn a process. This is what makes task 4 possible without an amendment.</li>
+      <li><span class="tag existing">existing</span> <code>core/test/unit/meta/ticket-plan-sync.test.ts</code> — will pair <code>specs/tickets/awsf-v2-w01-marimba-contract/</code> with this plan the moment both exist.</li>
+      <li><span class="tag existing">existing</span> <code>awsf.config.yaml</code> — <code>policy.protected_paths</code>. Protected itself; the one amendment this plan needs edits it.</li>
+      <li><span class="tag owner">owner-side</span> <code>~/.claude/marimba/delegation-guard.sh</code>, <code>~/.claude/marimba/settings.json</code> — the installed guard. Read while authoring; the plan proposes the script move into the tree and the settings keep pointing at it.</li>
+    </ul>
+
+    <h3>New Files</h3>
+    <ul>
+      <li><span class="tag new">new</span> <code>docs/driving/marimba/CONTRACT.md</code> — the contract. Command-free, route-free, ≤120 lines. Delivered by <code>--append-system-prompt</code>.</li>
+      <li><span class="tag new">new</span> <code>docs/driving/marimba/delegation-guard.sh</code> — the guard, committed as its single source of truth, with a header that names every measured limit.</li>
+      <li><span class="tag new">new</span> <code>docs/driving/marimba/session-banner.sh</code> — the <code>SessionStart</code> banner Q4 decided. Reports what it checked — settings loaded, guard present and executable, parser runnable — and never claims the hook will fire.</li>
+      <li><span class="tag new">new</span> <code>docs/driving/marimba/settings.example.json</code> — the settings shape the owner installs: the <code>permissions.deny</code> pair, the <code>PreToolUse</code> hook, the <code>SessionStart</code> hook, and a placeholder where the absolute path goes.</li>
+      <li><span class="tag new">new</span> <code>docs/driving/marimba/README.md</code> — how the three fit together and the owner's install steps. Not a route target; the router does not link it.</li>
+      <li><span class="tag new">new</span> <code>core/test/unit/meta/marimba-guard.test.ts</code> — the offline payload matrix, both fences, exclusions, fail-open cases, and the measured evasion recorded as an expected allow.</li>
+      <li><span class="tag new">new</span> <code>core/test/unit/meta/driving-contract.test.ts</code> — the contract's own properties: command-free, route-free, no live task state, within budget.</li>
+      <li><span class="tag new">new</span> <code>core/test/unit/meta/boundary-claims.test.ts</code> — no driving document asserts an authorisation property of a terminal check, and the owner-act names in the tree agree with the six commands that construct an owner terminal.</li>
+      <li><span class="tag new">new</span> <code>specs/awsf-v2-w01-marimba-contract-build-prompts.md</code> — nine prompts, one per task.</li>
+      <li><span class="tag dir">dir</span> <code>specs/tickets/awsf-v2-w01-marimba-contract/</code> — <code>T01.md</code>–<code>T09.md</code> plus <code>README.md</code>.</li>
+    </ul>
+
+    <div class="card owner">
+      <h5>Owner-side, named and deliberately not ticketed</h5>
+      Copying <code>settings.example.json</code> to <code>~/.claude/marimba/settings.json</code> and filling in the two absolute paths — the guard and the banner · adding <code>--append-system-prompt "$(cat …/CONTRACT.md)"</code> to the launcher · deciding whether to add <code>--setting-sources user</code> (<a href="#questionables">Q7</a>, still open) · the <code>awsf.config.yaml</code> amendment in task 3 · and one row for the Darwin checklist the spine already names: <strong>macOS ships <code>python3</code> only with the Xcode command line tools, and the guard fails open without it.</strong>
+    </div>
+  </section>
+
+  <!-- ===== IMPLEMENTATION PHASES ===== -->
+  <section id="phases">
+    <h2>Implementation Phases</h2>
+    <p><strong>IMPORTANT:</strong> Execute every phase and task step by step, in order, top to bottom.</p>
+    <p>Status markers: <code>[]</code> idle · <code>[wip]</code> in progress · <code>[x]</code> complete · <code>[f]</code> failed. All start as <code>[]</code>; the Build Plan workflow updates them as it works.</p>
+    <div class="card rule">
+      <h5>Two marker sets, and only one of them moves before the end</h5>
+      <strong>This plan's own markers move on every task</strong> — the milestone <code>&lt;h3&gt;</code> and each checklist item in <code>specs/awsf-v2-w01-marimba-contract.html</code>, plus the matching ticket's <code>state:</code> in the same commit. <strong>The spine's W01 marker in <code>specs/awsf-v2-plan.html</code> does not move until task 9</strong>, which is the only task that touches it. Confusing the two in either direction breaks AGENTS.md invariant 2 or invariant 12.
+    </div>
+
+    <!-- ================= M1 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M1: Retire the boundary claims already in the tree</h3>
+      <p>Before a new document says the true thing, the three documents saying the false thing have to stop. Doing this first is not tidiness: a contract that contradicts the cookbook a driving session is routed to gives the tree two answers, and the reader has no way to know which is current. This phase touches only prose and one new fence, and it leaves the suite green.</p>
+
+      <h4>1. Repair the three documents that call a terminal check an authorisation boundary</h4>
+      <p>Replace the claim, do not merely soften it. Each document gets the statement that fits its own job: the router states the boundary in one line, the cookbook states what actually holds the line and what a driving session must therefore do, and the trap table's §8 keeps its symptom and gets a corrected cause. <strong>The symptom stays true in all three</strong> — a piped stdin really does refuse an owner act — and only the claim about what that refusal <em>proves</em> changes.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>SKILL.md</code>: "Landing exists only through a human at a TTY" → landing is authorised by the owner at a terminal, and the terminal check is a shape test rather than the authorisation boundary; the boundary marimba operates under is the per-invocation tool-surface denial.</li>
+        <li><code class="status">[]</code> <code>SKILL.md</code>: the owner-act list gains <code>raise</code>, making it six and agreeing with <code>owner_acts.md</code> and with the code.</li>
+        <li><code class="status">[]</code> <code>owner_acts.md</code>: the paragraph beginning "This is not merely a convention" is rewritten. Keep "the lifecycle refuses a non-interactive invocation"; delete "structurally cannot".</li>
+        <li><code class="status">[]</code> <code>gotchas.md</code> §8: title and symptom unchanged; "All five" → six, named; the cause becomes the terminal-shape statement; "there is no flag that bypasses it and you should not look for one" is replaced by the accurate version — no flag bypasses it, a PTY makes the check pass, and the fence that holds is the hook.</li>
+        <li><code class="status">[]</code> <code>prime-awsf.md</code> is read and left unchanged — its "read-only by construction" is about <code>doctor</code> having no repair path and is true.</li>
+        <li><code class="status">[]</code> No new claim is added that the suite cannot check; every replacement sentence is either a measured fact recorded in this plan or a pointer to the file that owns it.</li>
+      </ul>
+
+      <h4>2. Derive the six owner acts from the code rather than copying them, plus Testing Strategy</h4>
+      <p>Three documents held three different lists — five, six, and five. The repair in task 1 makes them agree today; this task makes them unable to disagree tomorrow. The source of truth is <code>core/src/cli/main.ts</code>: exactly six <code>case</code> arms construct an owner terminal. A fence parses that file and checks the tree's lists against it.</p>
+      <p><strong>Testing approach.</strong> A new meta-test, <code>boundary-claims.test.ts</code>, with two halves and a companion for each — the pattern every tree-scoped fence in this repository already follows, because a walked-list fence over a tree is vacuously green if the walk or the matcher stops working. Half one is the claim ban: a small, commented pattern list that fires on an assertion that a terminal check <em>authorises</em>, with a synthetic offender proving each pattern bites and a synthetic innocent (the <code>doctor</code> sentence) proving it does not over-fire. Half two derives the six act names from <code>main.ts</code> and asserts every driving document that enumerates owner acts enumerates those six.</p>
+      <div class="card warn">
+        <h5>The stated cost of a phrase-matching fence, accepted rather than hidden</h5>
+        A banned-phrase list is escapable by paraphrase, and a fence that over-fires teaches authors to stop writing plainly. Both risks are real. The mitigation is the same one <code>doc-reconciliation.test.ts</code> chose for its own residual gap: keep the pattern list small, comment why each entry is there, ship the over-fire control alongside the bite control, and <strong>name the gap in the test file rather than closing it with a cleverer regex</strong>. A paraphrase escapes. That is accepted.
+      </div>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>core/test/unit/meta/boundary-claims.test.ts</code> exists with both halves and both companions</li>
+        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/boundary-claims.test.ts</code> — green over the repaired tree</li>
+        <li><code class="status">[]</code> The claim ban is proven to bite: restore one deleted sentence in a scratch copy and watch it go red, then discard the scratch copy</li>
+        <li><code class="status">[]</code> The over-fire control is proven: the <code>doctor</code> "read-only by construction" sentence passes</li>
+        <li><code class="status">[]</code> The derivation is proven to bite: a seventh fake act name in a document fails the second half</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — the whole unit suite, still green, no count regression</li>
+        <li><code class="status">[]</code> <code>npm run lint</code> — clean</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass.
+      </div>
+    </div>
+
+    <!-- ================= M2 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M2: The guard, committed and mechanically proven</h3>
+      <p>The guard stops being an anecdote and becomes a tested file. Its behaviour is currently asserted by four captures taken by hand; after this phase it is asserted by twenty-six payloads that run in under a second with no provider call. The phase also makes the guard's header honest about limits measured after it was written, splits the two failures that share one fail-open branch today, and lands the session banner — the four installed files, all in one directory, all tested from one place.</p>
+
+      <figure>
+<pre class="mermaid">
+flowchart LR
+  P["payload fixture<br/>tool_name + tool_input"] --> S["delegation-guard.sh<br/>committed copy"]
+  S --> R{"exit code"}
+  R -->|2| D["assert reason on stderr<br/>nothing on stdout"]
+  R -->|0| A["assert it proceeds"]
+  A --> N["includes the KNOWN evasion<br/>recorded, not hidden"]
+  style D stroke:#EF4444
+  style A stroke:#22C55E
+  style N stroke:#F97316
+</pre>
+        <figcaption>The matrix asserts allows as hard as it asserts denies. A guard that denied everything would pass a deny-only suite and be useless.</figcaption>
+      </figure>
+
+      <div class="card owner">
+        <h5>Owner amendment — lands as its own commit before this phase starts</h5>
+        <strong>Add the guard's committed path to <code>policy.protected_paths</code> in <code>awsf.config.yaml</code>.</strong> <em>What it blocks today:</em> nothing — <code>docs/**</code> matches no protected glob, so a worker phase whose write globs include the tree could rewrite the guard that constrains the driving session above it. <em>Replacement guarantee, still mechanically checkable:</em> <code>path-policy</code> rejects <code>protected-path</code> independently of the write globs, and the existing path-policy tests cover the mechanism. <em>Cost:</em> one line in a protected file, and any future legitimate edit to the guard becomes an owner act. <em>The alternative that avoids the amendment entirely:</em> leave the guard outside the repository and test a committed copy that is not the installed one — which reintroduces exactly the drift <a href="#questionables">Q6</a> exists to remove. <strong>No agent writes this file; <code>path-policy</code> refusing is the boundary working, not an obstacle to route around.</strong>
+      </div>
+
+      <h4>3. Land marimba's installed files in the tree, with the guard's real limits in its header</h4>
+      <p>The script is copied into <code>docs/driving/marimba/</code> byte-for-byte first, so the move is separable from the edit and a later reader can see which change did what. Then the header is corrected. Then the header is corrected and the one behaviour change <a href="#questionables">Q2</a> decided goes in: a single guarded branch splitting two failures that share one branch today. A payload the parser rejects is a harness schema change and keeps failing open; a parser that cannot run at all is a machine defect, affects every call, and now fails closed with its cause and its fix on one line. <strong>Q4's banner lands in the same task</strong>, as a fourth installed file, and reports only what it checked.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>docs/driving/marimba/delegation-guard.sh</code> lands as an exact copy first, in its own commit</li>
+        <li><code class="status">[]</code> The header names every measured limit, not only malformed JSON: the interpreter dependency, the written-text-not-intent property with the indirection example, the over-denial of reads that contain an act name, the absence of self-protection, and MCP names never being classified</li>
+        <li><code class="status">[]</code> The header states the one thing the guard is <em>for</em> in a sentence, so a reader who only reads the header does not mistake it for a sandbox</li>
+        <li><code class="status">[]</code> The Q2 branch is in: a payload the parser rejects still fails open; a parser that cannot run at all fails closed, exits 2, and its reason names both the cause and the one-line fix</li>
+        <li><code class="status">[]</code> <code>docs/driving/marimba/session-banner.sh</code> exists, exits 0 unconditionally, and reports only what it checked — settings loaded, guard present and executable, parser runnable. It must not say or imply that the <code>PreToolUse</code> hook will fire, because it cannot know that</li>
+        <li><code class="status">[]</code> <code>docs/driving/marimba/settings.example.json</code> carries the <code>permissions.deny</code> pair, the <code>PreToolUse</code> hook and the <code>SessionStart</code> hook, with obvious placeholders where the two absolute paths go and no machine path committed</li>
+        <li><code class="status">[]</code> <code>docs/driving/marimba/README.md</code> states the install steps as owner acts and says plainly that the repository holds the only copy</li>
+        <li><code class="status">[]</code> No file added under <code>docs/driving/</code> has a basename containing <code>receipt</code> or <code>manifest</code> — the junk-drawer fence is unrelated to this work and would still fail it</li>
+        <li><code class="status">[]</code> Nothing else is added to the guard. <a href="#questionables">Q3</a> received no verdict, so the self-write fence stays unbuilt and stated</li>
+      </ul>
+
+      <h4>4. The offline denial matrix, plus Testing Strategy</h4>
+      <p><strong>Testing approach.</strong> A table-driven meta-test spawning the committed script with a payload on stdin and asserting the exit code, plus — for every deny row — that a reason reached stderr and <strong>nothing reached stdout</strong>, which is the guard's own stated deny protocol and is the half a naive test forgets. <code>execFileSync</code> is legitimate here: the child-process fence is scoped to <code>core/src</code>, and <code>junk-drawer.test.ts</code> already spawns <code>git</code> from a meta-test. Rows come from the matrix in <a href="#measured">What Was Measured</a> and must include the allow rows and the known evasion; a suite of denies only would be passed by a guard that denied everything.</p>
+      <div class="card warn">
+        <h5>A collision to handle rather than discover: this task cannot be typed into a shell</h5>
+        The fixture text contains the six owner-act phrases, and a marimba session's own guard denies any Bash command whose text contains one — measured, exit 2, including <code>echo</code> and <code>grep</code>. So <strong>the fixtures are authored with the file-writing tools, never with a shell heredoc</strong>, because those payloads carry a <code>file_path</code> and no <code>command</code> and fence 2 never sees them. Running the finished test is fine: the command line is a test-runner invocation and contains none of the phrases.
+      </div>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>core/test/unit/meta/marimba-guard.test.ts</code> exists and is table-driven, with every row carrying a one-line reason it is in the table</li>
+        <li><code class="status">[]</code> Both fences are covered: delegation-shaped names, the six owner-act shapes, the whole-name exclusions, and the <code>mcp__*</code> pass-through</li>
+        <li><code class="status">[]</code> The fail-open rows are asserted as <em>expected</em> behaviour with the reason in a comment — malformed JSON and empty payload. <strong>The unrunnable-interpreter case is now a DENY row</strong>, per <a href="#questionables">Q2</a>, asserting the exit code and that the reason names both the cause and the fix</li>
+        <li><code class="status">[]</code> The known evasion is a row, asserted as an allow, with the comment naming it as the design's ceiling rather than a bug to fix by widening the match</li>
+        <li><code class="status">[]</code> Deny rows assert exit 2 <em>and</em> empty stdout <em>and</em> a non-empty reason on stderr</li>
+        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/marimba-guard.test.ts</code> — green, and under two seconds</li>
+        <li><code class="status">[]</code> Proven to bite: neutralise one branch of the committed script in a scratch copy, watch the matching row go red, discard the scratch copy</li>
+        <li><code class="status">[]</code> The banner is covered too: it exits 0 with the guard present, exits 0 <em>and reports the absence</em> with the guard path pointed at nothing, and never prints a line claiming the hook will fire</li>
+        <li><code class="status">[]</code> The test skips nothing. If either script is missing it fails loudly — a skip is how a fence quietly stops meaning anything</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> and <code>npm run lint</code> — green</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass.
+      </div>
+    </div>
+
+    <!-- ================= M3 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M3: The contract itself</h3>
+      <p>Everything the contract asserts is now either measured and recorded in this plan or enforced by a test that exists. That ordering is deliberate: writing the document first would have meant writing claims and hoping they were checkable.</p>
+
+      <h4>5. Author the contract</h4>
+      <p>Eight parts, in the order given in <a href="#solution">Solution</a>. Written to be read in three minutes by a session that has just started and has no other context. It names no command, carries no relative path, and restates nothing the tree already owns.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>docs/driving/marimba/CONTRACT.md</code> covers all eight parts, in order</li>
+        <li><code class="status">[]</code> Part 3 — what the boundary does not cover — carries all seven measured items, each in one plain sentence, and is the longest part of the document</li>
+        <li><code class="status">[]</code> Part 4 states the settings semantics exactly as measured: <code>--settings</code> merges rather than excludes; <code>--setting-sources</code> is what excludes; a project hook returning allow does not override the deny; the <code>permissions.allow</code> case is named as untested</li>
+        <li><code class="status">[]</code> Part 5 states the architecture-review exception in a form W05's deep plan can cite verbatim: the guard is delivered per invocation, so a session launched without marimba's settings keeps the delegation tools, and that is the supported route for a review by an agent that did not write the proposal</li>
+        <li><code class="status">[]</code> Part 6 carries the four true guarantees and no fifth one; it does not claim confinement to the state root, and it says the managed worktree root is a sibling of the state root</li>
+        <li><code class="status">[]</code> Nowhere does the document describe a terminal check as an authorisation boundary, and <code>boundary-claims.test.ts</code> now covers it because it is a driving document</li>
+        <li><code class="status">[]</code> No live task state, no session id, no run id, no machine path, no continuity locator — invariant 1, in a file that will be read by every marimba session</li>
+      </ul>
+
+      <h4>6. The contract's own fences — command-free, route-free, no live state, within budget, plus Testing Strategy</h4>
+      <p><strong>Testing approach.</strong> A document-scoped meta-test with four assertions and a companion proving each matcher bites on a synthetic offender held in memory. Command-free is defined mechanically as no shell fence and no backticked <code>awsf</code>/<code>just</code>/<code>npm&nbsp;run</code> invocation. Route-free reuses the route matcher from <code>driving-routes.test.ts</code> — imported, not copied, so the two cannot drift apart. Live-state uses a UUID-shaped and run-id-shaped pattern. Budget is a line and word count with the limit as a named constant carrying the reason.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>core/test/unit/meta/driving-contract.test.ts</code> exists with all four assertions</li>
+        <li><code class="status">[]</code> The route matcher is <em>imported</em> from the routes fence rather than re-declared</li>
+        <li><code class="status">[]</code> Each matcher has a bite companion; each companion feeds a synthetic offender in memory and none of them writes a file</li>
+        <li><code class="status">[]</code> The budget constant carries its reason in a comment: this text is re-sent on every request of every marimba session</li>
+        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/driving-contract.test.ts</code> — green</li>
+        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/doc-reconciliation.test.ts</code> — green; the contract has no shell fence for it to check, and the README's install block contains no <code>awsf</code>, <code>just</code> or <code>npm run</code> command</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> and <code>npm run lint</code> — green</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass.
+      </div>
+    </div>
+
+    <!-- ================= M4 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M4: The route hole, closed for the whole tree</h3>
+      <p>The contract is route-free and a test says so, which is enough for the contract. It is not enough for the tree: the next document someone adds will declare routes and nothing will check them. Closing it costs one generalisation and is green on arrival, because the tree outside the router is route-free today.</p>
+
+      <figure>
+<pre class="mermaid">
+flowchart LR
+  A["driving-routes.test.ts<br/>before"] --> B["SKILL.md only"]
+  C["driving-routes.test.ts<br/>after"] --> D["every document in the tree"]
+  D --> E["each route resolved<br/>relative to its own file"]
+  D --> F["router still owes ≥ 2 routes"]
+  D --> G["a cookbook may owe none"]
+  style C stroke:#22C55E,stroke-width:2px
+</pre>
+        <figcaption>One scanner, every document. The ≥2-routes floor stays on the router alone — a cookbook with no routes is normal, and moving that floor to every file would fail the tree it is meant to protect.</figcaption>
+      </figure>
+
+      <h4>7. Generalise the route scanner from one router to every driving document, plus Testing Strategy</h4>
+      <p>The change is small and its two traps are known. First, each route must resolve relative to <em>its own file</em>, not the router's directory, or a route in a reference would resolve against <code>skills/awsf/</code> by accident and pass for the wrong reason. Second, the "advertises at least two routes" assertion belongs to the router and only the router; applied tree-wide it fails on every cookbook immediately.</p>
+      <p><strong>Testing approach.</strong> Extend rather than rewrite. The existing matcher-bites companion is kept verbatim and gains a case for a route declared in a non-router document. Every failure message continues to name the offending file, because a tree-wide scan that says only "a route is broken" is worse than the single-file version it replaces.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> The scan covers <code>drivingDocs()</code>, and the escape check still reports a <code>../</code> route rather than skipping it</li>
+        <li><code class="status">[]</code> Routes resolve relative to the file that declares them; a test proves this by placing a fixture route that would resolve only under the wrong base and asserting it is reported</li>
+        <li><code class="status">[]</code> The ≥2-routes floor still applies to the router and to nothing else</li>
+        <li><code class="status">[]</code> Failure messages name the file and the route</li>
+        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/driving-routes.test.ts</code> — green over today's tree, which is route-free outside the router</li>
+        <li><code class="status">[]</code> Proven to bite: add a broken route to a scratch copy of a cookbook, watch it go red, discard the scratch copy</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> and <code>npm run lint</code> — green</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass.
+      </div>
+    </div>
+
+    <!-- ================= M5 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M5: Acceptance, the owner's install, and the spine roll-up</h3>
+      <p>Everything is offline and everything is checkable. What remains is to record the evidence in the only two places invariants 1 and 10 allow, hand the owner an install that takes two minutes, and roll the spine forward.</p>
+
+      <h4>8. The owner's install note, the amendment record, and the captured refusals</h4>
+      <p><strong>"Captured refusals land with it" is defined here, because read literally it would break two invariants.</strong> <a href="#questionables">Q5</a> settled the reading on 2026-08-21 and this task executes it. A transcript file is a runtime artifact (invariant 10) and carries session ids (invariant 1). So the capture splits: the <em>mechanical</em> proof is the payload matrix, which runs on demand and needs no stored transcript; the <em>human-readable</em> live denial is quoted in this plan's Amendments with every session id, run id and machine path stripped, exactly as the spine already quotes one. Nothing under <code>docs/</code> or <code>core/</code> stores a capture, and no invariant amendment is needed.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> The live denial from a real marimba session is quoted in this plan's Amendments, session id and machine path removed</li>
+        <li><code class="status">[]</code> The hook-precedence probe and the offline matrix are recorded in <a href="#measured">What Was Measured</a> with their date and the Claude Code version — already written by the authoring session, re-verified at build time and corrected if the version has moved</li>
+        <li><code class="status">[]</code> No file matching <code>*receipt*</code>, <code>*manifest*</code>, or holding a transcript is committed anywhere</li>
+        <li><code class="status">[]</code> <code>docs/driving/marimba/README.md</code>'s install steps are followed once by the owner on this machine and the result is confirmed by one denied call</li>
+        <li><code class="status">[]</code> The <code>awsf.config.yaml</code> amendment from M2 is recorded in the Amendments section with its evidence, its replacement guarantee and the alternative that avoided it</li>
+        <li><code class="status">[]</code> The Darwin row — <code>python3</code> is not guaranteed present on macOS — is handed to the owner for the versioned Darwin checklist the spine names, as a note and not a ticket</li>
+      </ul>
+
+      <h4>9. Full offline acceptance and the spine roll-up, plus Testing Strategy</h4>
+      <p><strong>Testing approach.</strong> The whole suite, the linter, the typechecker and the read-only diagnosis, in that order, with nothing skipped and no count lower than the baseline. Then the two-file marker flip that AGENTS.md invariant 12 requires in a single commit.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>npm test</code> — unit, contract, simulation and journeys, all green</li>
+        <li><code class="status">[]</code> <code>npm run lint</code> — clean</li>
+        <li><code class="status">[]</code> <code>npm run typecheck</code> — clean</li>
+        <li><code class="status">[]</code> <code>just awsf doctor</code> — read-only, no finding attributable to this work</li>
+        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/execution-isolation.test.ts</code> — still green; <code>.claude/</code> is still absent from the repository root</li>
+        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/ticket-plan-sync.test.ts</code> — this plan and <code>specs/tickets/awsf-v2-w01-marimba-contract/</code> agree, and so do the v1 and spine sets</li>
+        <li><code class="status">[]</code> Every milestone marker in <em>this</em> plan is <code>[x]</code> and every checklist box is checked</li>
+        <li><code class="status">[]</code> <strong>Only now:</strong> <code>specs/awsf-v2-plan.html</code>'s W01 milestone and its six checklist boxes go <code>[x]</code>, and <code>specs/tickets/awsf-v2-plan/W01.md</code> goes <code>state: done</code> — in the <em>same commit</em>, per invariant 12</li>
+        <li><code class="status">[]</code> The commit names no agent, model or AI tool as author, committer or co-author — invariant 11, enforced by a meta-test over this repository's own history</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass.
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== GLOBAL VALIDATION ===== -->
+  <section id="validation">
+    <h2>Validation Commands</h2>
+    <p>Execute these to validate the whole plan. Every one of them runs offline and spends no quota.</p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> <code>npm run test:unit</code> — the full unit suite including all meta-fences, with no count below the measured baseline of <strong>989 pass, 0 fail</strong></li>
+      <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/marimba-guard.test.ts</code> — both fences bite, the exclusions still pass, the malformed payload still fails open, an unrunnable parser fails closed, and the banner reports an absent guard instead of claiming one</li>
+      <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/driving-contract.test.ts</code> — the contract is command-free, route-free, live-state-free and within budget</li>
+      <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/boundary-claims.test.ts</code> — no driving document claims a terminal check authorises anything, and the tree's owner-act lists match the six commands that build an owner terminal</li>
+      <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/driving-routes.test.ts</code> — every route in every document of the tree resolves</li>
+      <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/driving-tree.test.ts</code> — the walk still arrives, so none of the above is vacuous</li>
+      <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/execution-isolation.test.ts</code> — <code>.claude/</code> is still absent at the repository root</li>
+      <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/ticket-plan-sync.test.ts</code> — plan and tickets agree, for all three plan sets</li>
+      <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/junk-drawer.test.ts</code> — nothing transcript-shaped, receipt-shaped or manifest-shaped was committed</li>
+      <li><code class="status">[]</code> <code>npm run lint</code> — clean</li>
+      <li><code class="status">[]</code> <code>npm run typecheck</code> — clean</li>
+      <li><code class="status">[]</code> <code>npm test</code> — unit, contract, simulation and journeys</li>
+      <li><code class="status">[]</code> <code>just awsf doctor</code> — read-only diagnosis, no finding attributable to this work</li>
+    </ul>
+    <div class="loop">
+      🔁 <strong>The plan is not complete until every box is checked and every command passes. If for some reason a step is not possible to complete, mark it with [f] and move on if possible.</strong>
+    </div>
+  </section>
+
+  <!-- ===== EVIDENCE AND UPGRADES ===== -->
+  <section id="evidence">
+    <h2>Evidence, and the Cheapest Unused Upgrade</h2>
+    <p>The spine requires this pair for every claim carrying a decision, and it passes down here. Each row names what the claim rests on today and the smallest piece of work that would strengthen it.</p>
+    <table>
+      <thead><tr><th>Claim</th><th>Evidence today</th><th>Cheapest unused upgrade</th></tr></thead>
+      <tbody>
+        <tr><td>The terminal check is not an authorisation boundary</td><td><code>core/src/cli/tty.ts</code> read directly; <code>script -qec</code> reproduction recorded in §2.8 of the fused record</td><td>A journey test that takes an owner act under a PTY with a scripted answer, asserting the act completes. It would turn a reproduction into a standing red-if-it-changes fact — and it is deliberately <em>not</em> in this plan, because a committed test that exercises the bypass is a bypass recipe in the tree.</td></tr>
+        <tr><td>The guard denies both fences and passes its exclusions</td><td>Twenty-six payloads, measured 2026-08-21, encoded as the matrix test in task 4</td><td>Property-based generation over tool names for fence 1: assert every name containing a stem denies and every whole-name exclusion allows, so a future exclusion added by hand cannot silently shadow a stem.</td></tr>
+        <tr><td>A project hook cannot weaken the deny</td><td>Probe 1, three runs with two controls, 2026-08-21, Claude Code 2.1.238</td><td>One more run using a project <code>permissions.allow</code> entry instead of an allow-returning hook. Different mechanism, untested, one invocation.</td></tr>
+        <tr><td><code>--settings</code> merges rather than excludes</td><td>The spine's probe of 2026-08-21, three runs with a control; the CLI's own help describes it as loading "additional settings"</td><td>None needed. If exclusion is wanted, <code>--setting-sources</code> is the flag, and adopting it is <a href="#questionables">Q7</a>.</td></tr>
+        <tr><td>A missing interpreter disables the guard silently</td><td>Measured: a stub <code>python3</code> exiting 127 on <code>PATH</code> yields exit 0 for a payload that otherwise denies</td><td>None — <a href="#questionables">Q2</a> fixes it rather than measuring it further, and <a href="#questionables">Q4</a> surfaces the same condition one step earlier.</td></tr>
+        <tr><td>The tree gives a new document five fences, not two</td><td>Each fence's scope read directly; the route fence's hardcoded <code>ROUTER</code> constant</td><td>None. Task 7 changes the count to six by generalising the route fence.</td></tr>
+        <tr><td>The tree outside the router is route-free today</td><td>A scan for backticked relative markdown paths across <code>docs/driving/</code> returns matches only in <code>SKILL.md</code></td><td>None — task 7's generalisation is itself the standing check.</td></tr>
+        <tr><td>Exactly six commands take an owner terminal</td><td><code>core/src/cli/main.ts</code>: six <code>case</code> arms construct <code>processOwnerTerminal()</code> — <code>rework</code>, <code>review</code>, <code>raise</code>, <code>journey</code>, <code>land</code>, <code>cancel</code>. <code>retry</code> does not, and the guard correctly omits it.</td><td>None. Task 2 makes it a derived fact instead of a copied list.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Every mechanism this plan calls a boundary, and what it does not cover</h3>
+    <table>
+      <thead><tr><th>Mechanism</th><th>What it covers</th><th>What it does not cover</th></tr></thead>
+      <tbody>
+        <tr><td>Fence 1 — delegation-shaped tool names</td><td>Any tool whose normalised name contains one of fourteen stems, including tools that do not exist yet</td><td><code>mcp__*</code> names, which are never classified; the ten whole-name exclusions; anything reached without a tool call</td></tr>
+        <tr><td>Fence 2 — owner-act command text</td><td>The six act names appearing literally in a Bash command, through any wrapper, with whitespace normalised</td><td><strong>Any indirection</strong> — a variable, an alias, a script file, an encoded string. It reads written text, not resolved intent. It also over-denies: a read that merely quotes an act name is refused.</td></tr>
+        <tr><td>The hook as a whole</td><td>Every tool call in a session launched with marimba's settings</td><td>A session launched without them; a machine with no working <code>python3</code>; a malformed payload; writes to the guard's own files</td></tr>
+        <tr><td><code>path-policy</code></td><td>Where a <em>worker phase</em> may write, with <code>protected-path</code> as an independent rejection</td><td>The driving session, which does not run under it at all</td></tr>
+        <tr><td><code>--settings</code></td><td>Where marimba's own rules come from</td><td>What else loads. It merges project settings; <code>--setting-sources</code> is what excludes them.</td></tr>
+        <tr><td>The absence of <code>.claude/</code> at the repository root</td><td>That there is no tree at the path a provider CLI would scan from a managed worktree</td><td>Isolation. It is an absence, and the fence's own comment says so.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ===== QUESTIONABLES ===== -->
+  <section id="questionables">
+    <h2>Questionables</h2>
+    <p>Seven decisions. The spine assigned none of its five to W01, so all seven are this workstream's own. Each carries a recommendation with its reasoning, because a plan that surfaces a choice without saying which way it leans is passing work back rather than doing it — but the recommendation is not the decision, and the option not taken stays readable next to the one that was. <strong>They are listed in dependency order rather than numeric order</strong>: Q6 is answered first because three of the others only mean something once it is.</p>
+    <p><strong>All seven were decided by the owner on 2026-08-21</strong>, and each took the recommended option. Five came through an exported <code>plan-sota-review v1</code> block; <strong>Q3 and Q7 were left without a verdict in that block and were decided by owner direction immediately after</strong>, which is why their wording says so rather than citing the block. <strong>A decided Questionable is now a constraint on the build, not an assignment to it</strong> — the tasks below implement it and no session re-litigates one. Each entry keeps its full option set and its original reasoning, so the road not taken stays readable, and adds a line naming what the decision constrains. <strong>Two of the seven were decided as "do not build it"</strong>, and both name the trigger that would reopen them, so a refusal is not mistaken later for something nobody considered.</p>
+
+    <figure>
+<pre class="mermaid">
+flowchart TD
+  Q6["Q6 decided<br/>one copy, in the repository"] --> Q2["Q2 decided<br/>fail closed on the interpreter"]
+  Q6 --> Q3["Q3 decided<br/>not built, stated instead"]
+  Q6 --> Q1["Q1 decided<br/>docs/driving/marimba/"]
+  Q2 --> Q4["Q4 decided<br/>SessionStart banner"]
+  Q5["Q5 decided<br/>fixtures + Amendments"]
+  Q7["Q7 decided<br/>--settings alone"]
+  style Q6 stroke:#22C55E,stroke-width:2px
+  style Q2 stroke:#22C55E,stroke-width:2px
+  style Q1 stroke:#22C55E,stroke-width:2px
+  style Q4 stroke:#22C55E,stroke-width:2px
+  style Q5 stroke:#22C55E,stroke-width:2px
+  style Q3 stroke:#22C55E,stroke-width:2px,stroke-dasharray:4 3
+  style Q7 stroke:#22C55E,stroke-width:2px,stroke-dasharray:4 3
+</pre>
+      <figcaption>All seven settled on 2026-08-21, each taking the recommended option. The two dashed boxes were decided as <em>do not build</em> — Q3's self-write fence stays stated rather than fenced, and Q7 leaves the launcher as it is — and each names the trigger that would reopen it.</figcaption>
+    </figure>
+
+    <details data-review-options="Repository holds the only copy|Keep it per-user and commit a tested twin|Leave it entirely owner-side">
+      <summary><span class="qdecided">DECIDED</span> Q6 — Where does the guard's single source of truth live?</summary>
+      <p class="decided"><b>Decided 2026-08-21:</b> the repository holds the only copy, and the owner's <code>settings.json</code> points its hook command at that absolute path — owner verdict via the exported <code>plan-sota-review v1</code> block. See Amendments.</p>
+      <p class="consequence"><b>What it constrains:</b> milestone M2 is unblocked and task 3 commits the script. The two costs are accepted rather than solved — a moved checkout leaves the hook command unresolvable, and marimba can still edit the file that constrains it. The first is now surfaced at session start by <a href="#questionables">Q4</a>'s banner; the second stays stated rather than fenced, and <a href="#questionables">Q3</a> is where it is revisited.</p>
+      <p class="qa-answer">This is the question that makes "the guard's tests land with it" possible at all, and it has to be answered before M2 starts. <strong>One copy</strong> means the tested file and the executed file are the same bytes, so drift is not merely detected — it cannot occur. Its costs are real and both are measurable: the hook stops existing if the checkout moves, and a hook command that cannot execute fails open silently (measured: exit 127 from the shell, and the tool proceeds). That silent failure is what <a href="#questionables">Q4</a> addresses. <strong>A committed twin</strong> keeps the installed guard independent of any checkout, at the cost of two copies with no mechanical way to compare them: a test cannot read <code>$HOME</code> without becoming machine-dependent, and <code>config/load.ts</code> refuses absolute machine paths on principle, so the drift check would have to be a habit. This repository has consistently refused to let a habit stand where a test could. <strong>Entirely owner-side</strong> is honest about where the guard runs but abandons the spine's requirement outright, leaving the guard asserted by four anecdotes forever.</p>
+    </details>
+
+    <details data-review-options="Fail closed on a missing interpreter|Keep fail-open and state it|Drop python3 for node">
+      <summary><span class="qdecided">DECIDED</span> Q2 — What should the guard do when its payload parser cannot run?</summary>
+      <p class="decided"><b>Decided 2026-08-21:</b> fail closed on a missing interpreter, and keep failing open on a malformed payload — owner verdict via the exported <code>plan-sota-review v1</code> block. See Amendments.</p>
+      <p class="consequence"><b>What it constrains:</b> the two failures stop sharing one branch. Task 3 writes the split into the script and its header; task 4 asserts both halves, the malformed payload as an expected allow and the unrunnable interpreter as an expected deny. <strong>The deny must name its own cause and its fix in one line</strong> — a session bricked by a guard that will not say why is the failure mode this decision was taken to avoid, arriving from the other direction.</p>
+      <p class="qa-answer">These are two different failures wearing one branch today. <strong>A malformed payload</strong> means the harness changed its schema; failing closed there would brick every tool call the day that happens, which is exactly why the current behaviour is right and is stated in the header. <strong>A missing interpreter</strong> is a machine defect: it will affect every call, it is fixed by one install, and it currently removes the entire boundary with no signal at all. Failing closed there is loud on the first call and names its own cause. It does brick the session — the difference is that it bricks it visibly, with a one-line fix, instead of silently running unguarded. <strong>Dropping <code>python3</code> for <code>node</code></strong> is tempting because <code>node</code> is guaranteed present wherever this repository runs, but marimba drives projects that are not this repository and the guard is a per-user artifact, so "guaranteed present" is an assumption rather than a fact. It also does not remove the failure mode; it moves it. Whichever is chosen, the header stops naming only malformed JSON.</p>
+    </details>
+
+    <details data-review-options="Build the self-write fence now|Defer to a later workstream|Reject it as arms-race">
+      <summary><span class="qdecided">DECIDED</span> Q3 — Should the guard deny writes to its own files?</summary>
+      <p class="decided"><b>Decided 2026-08-21:</b> do not build it. Record the gap in the contract and in the guard's header instead — owner direction, taken after the exported <code>plan-sota-review v1</code> block left this one without a verdict. See Amendments.</p>
+      <p class="consequence"><b>What it constrains, and the reason is the shape of the hazard rather than its size.</b> A fence on <code>tool_input.file_path</code> would catch an <code>Edit</code> aimed at the guard and would not catch a shell command doing the same thing, because those two requests look nothing alike to the hook. Catching the second means matching arbitrary shell, which is where a guard stops being maintainable. <strong>A fence that closes half a hazard while reading as though it closed all of it is worse than the hazard written down</strong>, and that is the whole reason this workstream exists. So task 3 states the gap in the header, task 5 states it in the contract's part 3, and nothing is built. <strong>The trigger to reopen, named in advance:</strong> an actual accidental edit to the guard. Then the accidental case has evidence behind it and the half-fence earns its keep.</p>
+      <p class="qa-answer">Measured: an <code>Edit</code> whose <code>file_path</code> is the guard's own script is allowed, because fence 2 only ever looks at a <code>command</code> field. Adding a third fence on <code>tool_input.file_path</code> is perhaps ten lines and would close the accidental case cleanly. <strong>Against building it now:</strong> the spine's scope for W01 is the contract plus the guard's tests and captured refusals, and extending the guard's coverage is a different thing wearing the same clothes. It is also only half a fence — the same edit through <code>sed -i</code> is a Bash command that fence 2 has no reason to deny, and chasing that leads to matching arbitrary shell, which is where guards go to become unmaintainable. <strong>For building it now:</strong> the accidental case is the likely one, and the owner amendment in M2 already protects the file from worker phases but not from marimba itself. <strong>Rejecting outright</strong> is defensible on the grounds that a fence covering only the polite half of a hazard invites being mistaken for the whole. Deferring keeps the honest statement in the contract, which is the part that matters either way.</p>
+    </details>
+
+    <details data-review-options="Add a SessionStart banner|Leave the absence silent">
+      <summary><span class="qdecided">DECIDED</span> Q4 — Should a session with no guard announce itself?</summary>
+      <p class="decided"><b>Decided 2026-08-21:</b> add the <code>SessionStart</code> banner — owner verdict via the exported <code>plan-sota-review v1</code> block. See Amendments.</p>
+      <p class="consequence"><b>What it constrains, and it adds a deliverable.</b> A fourth installed file, <code>docs/driving/marimba/session-banner.sh</code>, plus a <code>SessionStart</code> entry in the settings example. Three rules the build may not soften. <strong>It reports what it checked, never what it hopes:</strong> the banner can prove the settings file loaded and can cheaply check that the guard script is present and executable and that the payload parser runs — it cannot prove the <code>PreToolUse</code> hook will fire, and its wording must not imply otherwise. <strong>It always exits 0</strong>, because a <code>SessionStart</code> hook that fails is a new way to break a session for no gain. <strong>And it is not a self-test:</strong> making marimba issue a deliberately-denied call at session start was considered and refused in the same breath as this decision — that would put a document in the execution path of its own boundary, which this project refuses everywhere else. Q6's first cost — a moved checkout leaving the hook unresolvable — is exactly what this now surfaces. <strong>One correction to the reasoning below, which was written before Q2 was decided:</strong> of the three failure modes it names, a broken parser is now caught by Q2's fail-closed branch on the first tool call. The banner's remaining job is the other two — a wrong <code>--settings</code> path and a moved checkout — and those are the two nothing else catches.</p>
+      <p class="qa-answer">There is currently no positive confirmation anywhere that a given marimba session is guarded. A typo in the <code>--settings</code> path, a moved checkout, or a broken interpreter each yields a session that behaves normally and denies nothing. A <code>SessionStart</code> hook printing one line proves the settings file loaded — it does not prove the <code>PreToolUse</code> hook will fire, and the banner's own text must not overclaim. <strong>Against it:</strong> a banner that is present-but-lying is worse than no banner, and the only thing that truly proves the guard works is a denied call. <strong>The stronger version, and its cost:</strong> the contract could instruct marimba to make one deliberately-denied call at session start and confirm the refusal. That is real proof, and it is also a document in the execution path of its own boundary — the pattern this project refuses everywhere else. The banner is the honest small version; the self-test is a bigger decision than W01 should take.</p>
+    </details>
+
+    <details data-review-options="Fixtures plus this plan's Amendments|Commit a redacted transcript|Owner-side only">
+      <summary><span class="qdecided">DECIDED</span> Q5 — What does "the guard's captured refusals land with it" mean?</summary>
+      <p class="decided"><b>Decided 2026-08-21:</b> payload fixtures in the test, and the live denial quoted in this plan's Amendments with its session id stripped — owner verdict via the exported <code>plan-sota-review v1</code> block. See Amendments.</p>
+      <p class="consequence"><b>What it constrains:</b> task 8 executes this reading and no invariant amendment is needed, which is the point — the literal reading would have required one against invariant 10, and that amendment would have had to contradict "Git and the journal are the only evidence store" rather than restate it. Nothing under <code>docs/</code> or <code>core/</code> stores a capture.</p>
+      <p class="qa-answer">Read literally, "captured refusals land in the tree" means committing transcripts, and that breaks two invariants at once: a transcript is a runtime artifact (invariant 10, enforced by the junk-drawer fence) and it carries session and run ids (invariant 1). The recommended split keeps both halves of the value — the mechanical proof reruns on demand and needs no stored capture, and the human-readable denial stays quotable in the plan the way the spine already quotes one. <strong>A redacted transcript file</strong> is the literal reading; it would need an invariant 10 amendment, and the amendment would be hard to write because the guarantee it replaces is "Git and the journal are the only evidence store", which this would contradict rather than restate. <strong>Owner-side only</strong> satisfies the invariants by giving up the requirement, and leaves nothing in the repository that a reader can check. This Questionable exists because the spine's wording admits all three readings and the owner should pick, not the build session.</p>
+    </details>
+
+    <details data-review-options="docs/driving/marimba/|Inside docs/driving/skills/awsf/|Split: contract at top level, guard under guards/">
+      <summary><span class="qdecided">DECIDED</span> Q1 — Where in the driving tree does marimba's material live?</summary>
+      <p class="decided"><b>Decided 2026-08-21:</b> <code>docs/driving/marimba/</code>, a third sibling beside <code>commands/</code> and <code>skills/</code> — owner verdict via the exported <code>plan-sota-review v1</code> block. See Amendments.</p>
+      <p class="consequence"><b>What it constrains:</b> four files land there — <code>CONTRACT.md</code>, <code>delegation-guard.sh</code>, <code>session-banner.sh</code> and <code>settings.example.json</code> — plus a <code>README.md</code>. The directory is <em>not</em> a route target and the router does not link it; that is the distinction the placement encodes.</p>
+      <p class="qa-answer">The tree's existing two directories are <em>discovery-shaped</em>: they mirror the layout a provider CLI scans. marimba's material is <em>invocation-shaped</em> — it is passed by flags and never discovered — and the three files are installed together as one unit. A sibling directory names that difference; filing them inside <code>skills/awsf/</code> would put a non-route document in a directory whose every other file is a route target, which is exactly the ambiguity the route fence exists to remove. <strong>The split option</strong> — contract at the tree's top level, guard under <code>guards/</code> — reads well in a listing and separates the document from the executable, at the cost of splitting one install into two places the owner has to remember. Whichever is chosen, no basename may contain <code>receipt</code> or <code>manifest</code>: the junk-drawer fence has nothing to do with this work and would still fail it.</p>
+    </details>
+
+    <details data-review-options="Adopt --setting-sources user|Keep --settings alone">
+      <summary><span class="qdecided">DECIDED</span> Q7 — Should the launcher add <code>--setting-sources user</code>?</summary>
+      <p class="decided"><b>Decided 2026-08-21:</b> keep <code>--settings</code> alone; do not add <code>--setting-sources user</code> — owner direction, taken after the exported <code>plan-sota-review v1</code> block left this one without a verdict. See Amendments.</p>
+      <p class="consequence"><b>What it constrains:</b> nothing in the build, because the launcher is owner-side and no task touches it. What it settles is the reasoning, so it is not re-derived later. Exclusion would protect against a project weakening the guard, and <a href="#measured">probe 1</a> measured that a project hook returning <em>allow</em> loses to marimba's deny — so the flag would be buying protection from something shown not to happen, while throwing away every legitimate project setting a marimba session driving that project needs. <strong>The one unmeasured sliver, and the cheap way to close it:</strong> probe 1 tested a project <em>hook</em>. A project settings file's <code>permissions.allow</code> list is a different mechanism and is still untested. One invocation settles it, and it is the cheapest unused upgrade already named in the evidence table. If that also loses to the deny, this question is closed completely rather than by judgement.</p>
+      <p class="qa-answer">The spine's probe established that <code>--settings</code> merges project settings rather than excluding them, and named <code>--setting-sources</code> as the flag that would exclude them. The precedence probe recorded above changes what that is worth: a project hook returning <em>allow</em> does not override marimba's deny, so the thing exclusion would protect against is the thing that was just measured not to happen — for hooks. <strong>Adopting it</strong> buys certainty against the untested mechanisms, chiefly a project <code>permissions.allow</code> list, at the cost of also excluding every legitimate project setting: a project's own tool permissions, environment, and status line all vanish from a marimba session driving that project, which is a real loss once W04 makes multi-project driving routine. <strong>Keeping <code>--settings</code> alone</strong> accepts a narrow untested exposure and keeps the project's own configuration working. The cheap thing that would settle it is the one unused probe named in the evidence table: one run with <code>permissions.allow</code> instead of an allow hook.</p>
+    </details>
+  </section>
+
+  <!-- ===== NOTES ===== -->
+  <section id="notes">
+    <h2>Notes</h2>
+
+    <h3>Alternatives considered and rejected</h3>
+    <table>
+      <thead><tr><th>Alternative</th><th>Why it was rejected</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Port the guard's classifier into <code>core/src</code> in TypeScript</strong> and have the hook shell out to it</td><td>It would make the classifier trivially unit-testable in the repository's own idiom, and it is still wrong. The guard is a Claude Code harness artifact, not part of AWSF's runtime, and putting it in <code>core/src</code> would place it inside the dependency-allowlist, LOC-budget and purity fences that exist for a different thing. It also adds a Node process start to every tool call the harness makes, which is a latency cost paid on every call for no gain over spawning the script directly in a test.</td></tr>
+        <tr><td><strong>Extend fence 2 to resolve shell variables</strong> so the measured evasion is closed</td><td>It means matching arbitrary shell semantics with substring matching. Every step down that road makes the guard longer, slower and more confidently wrong, and none of the steps reach the destination. The correct response to an evasion that cannot be closed is to state it in the contract, which is what this plan does.</td></tr>
+        <tr><td><strong>Make the contract a route target</strong> in the router's table rather than an appended system prompt</td><td>The spine fixes the delivery as appended, and the reason survives inspection: a route is read only if the session both has the tree and chooses to read it, which makes the contract's reach conditional on the thing it is supposed to govern. An appended prompt reaches every invocation unconditionally.</td></tr>
+        <tr><td><strong>Skip the test when the guard file is absent</strong></td><td>A skip is how a fence stops meaning anything without anyone noticing. This repository has an explicit pattern for the opposite — every tree-scoped fence ships a companion proving its matcher bites, precisely because a vacuous green is the failure mode it fears most.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>An observation recorded, deliberately not acted on</h3>
+    <div class="card warn">
+      <h5><code>--disable-slash-commands</code> exists, and this plan does not touch the isolation fence</h5>
+      Claude Code 2.1.238's help lists <code>--disable-slash-commands</code>, described as "Disable all skills". <code>execution-isolation.test.ts</code> names its own strictly-better guard as "a Claude descriptor flag that demonstrably disables project skill and command discovery", and the spine states plainly: <em>"The fence stays as it is, and this plan does not propose changing it."</em> That instruction is honoured — nothing here proposes a fence change, and this flag is untested against the property the fence needs, which is discovery rather than invocation. It is written down because the alternative is that the next session rediscovers it and treats an unverified flag as a control, which is the exact mistake <code>claude-code.ts</code>'s own <code>no-tools</code> comment was written to prevent. <strong>Testing it belongs to whichever workstream owns the isolation fence, with its own controls, and not to W01.</strong>
+    </div>
+
+    <h3>Risks</h3>
+    <table>
+      <thead><tr><th>Risk</th><th>Mitigation</th></tr></thead>
+      <tbody>
+        <tr><td><strong>R1 — the contract becomes a second source of truth.</strong> It is read on every request and is therefore the most tempting place to restate a list.</td><td>The command-free and route-free fences make restating a command or pointing at a document mechanically impossible; the budget fence makes restating anything long fail. The rule stated once in the contract, the list held by the guard, the explanation held by the cookbook.</td></tr>
+        <tr><td><strong>R2 — the boundary is read as stronger than it is.</strong> The whole workstream exists because that already happened once.</td><td>Part 3 of the contract is the longest part and states seven gaps in plain sentences. The guard's header repeats them for anyone who reads the script instead. The word "sandbox" appears nowhere.</td></tr>
+        <tr><td><strong>R3 — the phrase fence becomes decoration.</strong> A banned-phrase list is easy to satisfy by paraphrase.</td><td>Accepted and named in the test file, following <code>doc-reconciliation.test.ts</code>'s precedent of naming a residual gap rather than closing it with a cleverer regex. The over-fire control ships beside the bite control so the fence cannot be quietly loosened either.</td></tr>
+        <tr><td><strong>R4 — the guard's file location makes it editable by the session it constrains.</strong></td><td>The M2 amendment closes it for worker phases. For marimba itself <a href="#questionables">Q3</a> decided it stays stated rather than fenced, because a fence on the file-writing tools would leave the shell route open while reading as though it had closed both. The trigger to reopen is an actual accidental edit.</td></tr>
+        <tr><td><strong>R5 — W05 cites the exception loosely</strong> and a reviewer session ends up launched with marimba's settings after all, silently losing the tool it needs.</td><td>Task 5 requires part 5 of the contract to be written in a form W05 can cite verbatim, and the spine already records the dependency in both directions.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>What this plan deliberately does not do</h3>
+    <ul>
+      <li><strong>It does not install anything.</strong> Every install step is an owner act, named in <a href="#files">Relevant Files</a> and repeated in the tree's README.</li>
+      <li><strong>It does not widen the guard's coverage.</strong> Three candidate hardenings surfaced while measuring and all three are Questionables.</li>
+      <li><strong>It does not touch the execution-isolation fence</strong> or propose a change to it.</li>
+      <li><strong>It does not commit a bypass recipe.</strong> The PTY reproduction and the indirection evasion are described in prose in this plan and in the contract; neither becomes an executable test, because a committed test that performs the bypass is a bypass someone can run.</li>
+      <li><strong>It does not flip the spine's marker</strong> before its own task 9.</li>
+    </ul>
+
+    <figure>
+<pre class="mermaid">
+flowchart TD
+  L["marimba launcher<br/>owner-side"] --> S1["--settings ~/.claude/marimba/settings.json"]
+  L --> S2["--append-system-prompt CONTRACT.md"]
+  L --> P["project .claude/settings.json<br/>MERGED, not excluded"]
+  S1 --> H1["marimba PreToolUse<br/>exit 2 = deny"]
+  P --> H2["project PreToolUse<br/>allow"]
+  H1 --> V["deny wins · measured"]
+  H2 --> V
+  style V stroke:#22C55E,stroke-width:2px
+  style P stroke:#F97316,stroke-dasharray:4 3
+</pre>
+      <figcaption>What a marimba invocation actually assembles, after both probes. The dashed box is the part the spine could not describe accurately until 2026-08-21.</figcaption>
+    </figure>
+
+    <h3>Forward dependencies this workstream creates</h3>
+    <ul>
+      <li><strong>W05</strong> depends on part 5 of the contract, verbatim: the architecture review runs in a session launched without marimba's settings, and that is the supported route rather than a workaround.</li>
+      <li><strong>W04</strong> inherits the launcher's one machine path — the absolute path to the contract and to the guard. That is placement-layer material by decision 2, and it is the first concrete customer of it outside the registry itself.</li>
+      <li><strong>The Darwin checklist</strong> gains one row that did not exist before this plan: the guard's interpreter dependency.</li>
+    </ul>
+  </section>
+
+  <!-- ===== AMENDMENTS ===== -->
+  <section id="amendments">
+    <h2>Amendments</h2>
+    <p>Append-only, newest at the bottom.</p>
+    <details open>
+      <summary>2026-08-21 — owner review applied: all seven Questionables decided</summary>
+      <p>An exported <code>plan-sota-review v1</code> block carried <strong>five verdicts, no proposed statuses and no annotations</strong>, and the remaining two were decided by owner direction the same day. Every one of the seven took the recommended option, so no section had to be revised against a rejected premise. The five from the block, with what each changed in the plan:</p>
+      <ul>
+        <li><strong>Q6 → the repository holds the only copy.</strong> Milestone M2 is unblocked; task 3 commits the script and the owner's settings point at it. The two accepted costs are recorded in the Questionable itself.</li>
+        <li><strong>Q2 → fail closed on a missing interpreter, keep failing open on a malformed payload.</strong> Task 3 gains the guarded branch and the requirement that the denial name its own cause and fix; task 4's interpreter row moved from an expected <em>allow</em> to an expected <em>deny</em>.</li>
+        <li><strong>Q4 → add the <code>SessionStart</code> banner.</strong> The only verdict that added a deliverable: <code>docs/driving/marimba/session-banner.sh</code>, plus a <code>SessionStart</code> entry in the settings example, three rules it may not soften, and its own rows in task 4. Task 3's title widened from moving the guard to landing marimba's installed files, because the old title no longer covered what the task does.</li>
+        <li><strong>Q5 → payload fixtures plus this plan's Amendments.</strong> Task 8 executes it and no invariant amendment is needed.</li>
+        <li><strong>Q1 → <code>docs/driving/marimba/</code>.</strong> Four installed files and a README, in one directory that is deliberately not a route target.</li>
+      </ul>
+      <p><strong>Q3 and Q7 carried no verdict in the block and were decided by owner direction the same day, both as "do not build it".</strong> Q3 — the guard does not get a fence over its own files, because one on the file-writing tools would leave the shell route open while reading as though it had closed both; the gap is stated in the header and in the contract's part 3, and task 3 carries it as an explicit checklist item so a refusal is not mistaken mid-build for an oversight. Q7 — the launcher keeps <code>--settings</code> alone, because probe 1 measured that a project hook cannot weaken the deny, and excluding project settings would discard everything else a project legitimately configures. <strong>Each names its own trigger to reopen:</strong> an actual accidental edit to the guard for Q3, and the one unrun probe — a project <code>permissions.allow</code> list rather than a hook — for Q7.</p>
+      <p>Applied by an authoring session, not a build session: <strong>no marker moved</strong>, in this plan or in the spine, and nothing was committed. The <code>modified</code> row is unchanged because the review landed the same day the plan was authored.</p>
+    </details>
+  </section>
+
+</main>
+
+<!-- ===== PLAN-SOTA REVIEW LAYER v1 — FIXED MACHINERY, COPY VERBATIM =====
+     Not a placeholder: reproduce this <style> + <script> pair exactly in every plan.
+     Annotations, Questionable verdicts, and proposed phase statuses persist to
+     localStorage (key: plan filename). The browser NEVER writes this file; canonical
+     []/[wip]/[x]/[f] markers stay agent-owned. Export produces a `plan-sota-review v1`
+     block (clipboard + visible box) and, when running under Lavish Editor, queues it
+     once via window.lavish.queuePrompt(). -->
+<style>
+  .rv-btn { font: 600 11px/1 system-ui, sans-serif; padding: 3px 9px; border-radius: 999px;
+    border: 1px solid var(--muted, #8884); background: transparent; color: var(--fg, inherit);
+    cursor: pointer; opacity: .55; vertical-align: middle; margin-left: 8px; }
+  .rv-btn:hover { opacity: 1; border-color: var(--accent, #7c6cf0); }
+  .rv-btn.rv-on { opacity: 1; background: var(--accent, #7c6cf0); color: var(--bg, #fff); border-color: transparent; }
+  .rv-note-box { display: block; margin: 8px 0; padding: 8px 12px; border: 1px dashed var(--accent, #7c6cf0);
+    border-radius: 8px; font-size: 13px; min-height: 1.5em; background: color-mix(in srgb, var(--accent, #7c6cf0) 6%, transparent); outline: none; }
+  .rv-note-box:empty::before { content: attr(data-ph); opacity: .5; font-style: italic; }
+  .rv-note-box[hidden] { display: none; }
+  .rv-verdict { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 10px 0 2px; }
+  .rv-verdict-tag { font: 700 10px/1 system-ui, sans-serif; letter-spacing: .08em; opacity: .6; margin-right: 2px; }
+  .rv-status-chip { font: 600 11px/1 ui-monospace, monospace; margin-left: 10px; padding: 3px 9px;
+    border-radius: 999px; border: 1px dotted var(--muted, #8884); background: transparent;
+    color: var(--fg, inherit); cursor: pointer; opacity: .6; }
+  .rv-status-chip:hover { opacity: 1; }
+  .rv-status-chip.rv-on { opacity: 1; border-style: solid; border-color: var(--accent, #7c6cf0); color: var(--accent, #7c6cf0); }
+  #rv-drawer { position: fixed; right: 16px; bottom: 16px; z-index: 9999; font: 13px/1.45 system-ui, sans-serif;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  #rv-pill { font: 700 12px/1 system-ui, sans-serif; padding: 10px 16px; border-radius: 999px; border: none;
+    cursor: pointer; background: var(--accent, #7c6cf0); color: var(--bg, #fff); box-shadow: 0 4px 16px #0004; }
+  #rv-panel { width: min(420px, calc(100vw - 32px)); max-height: 60vh; overflow: auto; padding: 14px;
+    border-radius: 12px; border: 1px solid var(--muted, #8884); background: var(--bg, #fff);
+    color: var(--fg, inherit); box-shadow: 0 8px 32px #0005; }
+  #rv-panel h4 { margin: 0 0 8px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; opacity: .7; }
+  #rv-list { margin: 0 0 10px; padding: 0; list-style: none; font-size: 12px; }
+  #rv-list li { padding: 3px 0; border-bottom: 1px solid #8882; overflow-wrap: anywhere; }
+  #rv-out { width: 100%; min-height: 140px; margin-top: 10px; font: 11px/1.5 ui-monospace, monospace;
+    border: 1px solid var(--muted, #8884); border-radius: 8px; padding: 8px; background: transparent; color: inherit; }
+  #rv-msg { font-size: 11px; opacity: .75; margin-top: 6px; }
+  @media print { #rv-drawer { display: none; } }
+</style>
+<script>
+(function () {
+  'use strict';
+  var FILE = decodeURIComponent(location.pathname.split('/').pop() || 'plan.html');
+  var KEY = 'plan-sota-review:' + FILE;
+  var LEGACY_KEY = 'planf3-review:' + FILE; // pre-rename state; read once, never written
+  var PROPOSE = ['', '[]', '[wip]', '[x]', '[f]'];
+  var state = { a: {}, v: {}, s: {} }, persisted = true;
+  try { state = JSON.parse(localStorage.getItem(KEY) || localStorage.getItem(LEGACY_KEY) || 'null') || state; } catch (e) { persisted = false; }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); persisted = true; }
+    catch (e) { persisted = false; }
+    refresh();
+  }
+  function el(tag, cls, txt) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (txt) n.textContent = txt;
+    if (tag === 'button') { n.type = 'button'; n.setAttribute('data-lavish-action', ''); }
+    return n;
+  }
+  function clean(t) { return String(t || '').replace(/\|/g, '/').replace(/\s*\r?\n\s*/g, ' >> ').trim(); }
+  var registry = []; // {key, label, kind: 'section'|'phase'|'q'}
+
+  function noteBox(key, host, placeholder) {
+    var box = el('div', 'rv-note-box');
+    box.contentEditable = 'true';
+    box.setAttribute('data-ph', placeholder || 'Type your note for the agent…');
+    box.hidden = !(state.a[key]);
+    if (state.a[key]) box.textContent = state.a[key];
+    box.addEventListener('input', function () {
+      var t = box.textContent.trim();
+      if (t) state.a[key] = t; else delete state.a[key];
+      save();
+    });
+    host.appendChild(box);
+    return box;
+  }
+  function annotable(key, label, heading, host, kind) {
+    registry.push({ key: key, label: label, kind: kind });
+    var box = noteBox(key, host);
+    heading.insertAdjacentElement('afterend', box);
+    var btn = el('button', 'rv-btn' + (state.a[key] ? ' rv-on' : ''), '✎ note');
+    btn.addEventListener('click', function () {
+      box.hidden = !box.hidden;
+      if (!box.hidden) box.focus();
+    });
+    heading.appendChild(btn);
+    box.addEventListener('input', function () { btn.classList.toggle('rv-on', !!state.a[key]); });
+  }
+
+  // Sections
+  Array.prototype.forEach.call(document.querySelectorAll('main > section[id]'), function (sec) {
+    var h = sec.querySelector('h2'); if (!h) return;
+    annotable('#' + sec.id, h.textContent.trim(), h, sec, 'section');
+  });
+  // Phases: annotation + proposed-status chip
+  Array.prototype.forEach.call(document.querySelectorAll('#phases .phase'), function (ph, i) {
+    var h = ph.querySelector('h3'); if (!h) return;
+    var key = 'phase-' + (i + 1);
+    var label = h.textContent.replace(/^\s*\[[^\]]*\]\s*/, '').trim();
+    annotable(key, label, h, ph, 'phase');
+    var chip = el('button', 'rv-status-chip' + (state.s[key] ? ' rv-on' : ''));
+    chip.textContent = state.s[key] ? 'propose ' + state.s[key] : 'propose…';
+    chip.title = 'Cycle a PROPOSED status (exported as feedback — the file marker is only changed by the agent)';
+    chip.addEventListener('click', function () {
+      var next = PROPOSE[(PROPOSE.indexOf(state.s[key] || '') + 1) % PROPOSE.length];
+      if (next) state.s[key] = next; else delete state.s[key];
+      chip.textContent = next ? 'propose ' + next : 'propose…';
+      chip.classList.toggle('rv-on', !!next);
+      save();
+    });
+    h.appendChild(chip);
+  });
+  // Questionables: verdict / option buttons + note
+  Array.prototype.forEach.call(document.querySelectorAll('#questionables details'), function (d, i) {
+    var key = 'q-' + (i + 1);
+    var summary = d.querySelector('summary');
+    var label = summary ? summary.textContent.trim().slice(0, 120) : key;
+    registry.push({ key: key, label: label, kind: 'q' });
+    var opts = (d.getAttribute('data-review-options') || '').split('|').map(function (s) { return s.trim(); }).filter(Boolean);
+    if (!opts.length) opts = ['APPROVE', 'REJECT', 'REVISE', 'DEFER'];
+    var row = el('div', 'rv-verdict');
+    row.appendChild(el('span', 'rv-verdict-tag', 'YOUR CALL'));
+    opts.forEach(function (opt) {
+      var b = el('button', 'rv-btn' + ((state.v[key] || {}).c === opt ? ' rv-on' : ''), opt);
+      b.addEventListener('click', function () {
+        if ((state.v[key] || {}).c === opt) { delete state.v[key]; }
+        else { state.v[key] = { c: opt }; }
+        Array.prototype.forEach.call(row.querySelectorAll('.rv-btn'), function (x) {
+          x.classList.toggle('rv-on', x.textContent === ((state.v[key] || {}).c || null));
+        });
+        qbox.hidden = !state.v[key] && !state.a[key];
+        save();
+      });
+      row.appendChild(b);
+    });
+    d.appendChild(row);
+    var qbox = noteBox(key, d, 'Why / what to change instead…');
+    if (state.v[key]) qbox.hidden = false;
+  });
+
+  // Drawer
+  var drawer = el('div'); drawer.id = 'rv-drawer';
+  var panel = el('div'); panel.id = 'rv-panel'; panel.hidden = true;
+  var pill = el('button'); pill.id = 'rv-pill';
+  pill.addEventListener('click', function () { panel.hidden = !panel.hidden; });
+  var list = el('ul'); list.id = 'rv-list';
+  var actions = el('div');
+  var exportBtn = el('button', 'rv-btn rv-on', 'Export Feedback');
+  var clearBtn = el('button', 'rv-btn', 'Clear review');
+  var out = el('textarea'); out.id = 'rv-out'; out.readOnly = true; out.hidden = true;
+  var msg = el('div'); msg.id = 'rv-msg';
+  var head = el('h4', null, 'Review — pending feedback');
+  actions.appendChild(exportBtn); actions.appendChild(clearBtn);
+  panel.appendChild(head); panel.appendChild(list); panel.appendChild(actions);
+  panel.appendChild(out); panel.appendChild(msg);
+  drawer.appendChild(panel); drawer.appendChild(pill);
+  document.body.appendChild(drawer);
+
+  function findLabel(key) {
+    for (var i = 0; i < registry.length; i++) if (registry[i].key === key) return registry[i].label;
+    return key;
+  }
+  function refresh() {
+    var n = Object.keys(state.a).length + Object.keys(state.v).length + Object.keys(state.s).length;
+    pill.textContent = '✎ Review (' + n + ')';
+    list.textContent = '';
+    Object.keys(state.v).forEach(function (k) { list.appendChild(el('li', null, '[verdict] ' + findLabel(k) + ' → ' + state.v[k].c)); });
+    Object.keys(state.s).forEach(function (k) { list.appendChild(el('li', null, '[status] ' + findLabel(k) + ' → propose ' + state.s[k])); });
+    Object.keys(state.a).forEach(function (k) { list.appendChild(el('li', null, '[note] ' + findLabel(k) + ': ' + state.a[k].slice(0, 90))); });
+    if (!n) list.appendChild(el('li', null, 'Nothing yet — click ✎ note on any section, a verdict on a Questionable, or propose… on a phase.'));
+    if (!persisted) msg.textContent = '⚠ localStorage unavailable — review state lives only in this tab.';
+  }
+  function buildExport() {
+    var L = ['plan-sota-review v1', 'plan: ' + FILE, 'title: ' + clean(document.title), 'exported: ' + new Date().toISOString(), ''];
+    var vk = Object.keys(state.v), sk = Object.keys(state.s), ak = Object.keys(state.a);
+    L.push('## verdicts');
+    vk.length ? vk.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | ' + clean(state.v[k].c) + ' | note: ' + (clean(state.a[k]) || '-'));
+    }) : L.push('- (none)');
+    L.push('', '## statuses');
+    sk.length ? sk.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | propose ' + state.s[k]);
+    }) : L.push('- (none)');
+    L.push('', '## annotations');
+    var solo = ak.filter(function (k) { return !state.v[k]; });
+    solo.length ? solo.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | ' + clean(state.a[k]));
+    }) : L.push('- (none)');
+    return L.join('\n');
+  }
+  exportBtn.addEventListener('click', function () {
+    var text = buildExport();
+    out.hidden = false; out.value = text;
+    out.focus(); out.select();
+    function done(m) { msg.textContent = m; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done('Copied — paste it into your next agent session.'); },
+        function () { done('Clipboard blocked — copy from the box below.'); });
+    } else {
+      try { done(document.execCommand('copy') ? 'Copied — paste it into your next agent session.' : 'Clipboard blocked — copy from the box below.'); }
+      catch (e) { done('Clipboard blocked — copy from the box below.'); }
+    }
+    if (window.lavish && typeof window.lavish.queuePrompt === 'function') {
+      window.lavish.queuePrompt(text, { tag: 'plan-sota-review', queueKey: 'plan-sota-review' });
+      msg.textContent += ' Also queued to the agent via Lavish.';
+    }
+  });
+  clearBtn.addEventListener('click', function () {
+    if (!confirm('Clear all review state for this plan?')) return;
+    state = { a: {}, v: {}, s: {} };
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    location.reload();
+  });
+  refresh();
+})();
+</script>
+
+<!-- Mermaid runtime — renders every <pre class="mermaid"> block. Only external reference in the file. -->
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      primaryColor: '#1C1E2B',
+      primaryTextColor: '#E7E9F0',
+      primaryBorderColor: '#2b3040',
+      lineColor: '#8B90A6',
+      fontFamily: '"JetBrains Mono","Fira Code",ui-monospace,monospace'
+    }
+  });
+</script>
+</body>
+</html>
