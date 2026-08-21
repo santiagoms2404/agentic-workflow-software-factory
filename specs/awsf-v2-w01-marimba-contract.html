@@ -154,7 +154,7 @@ figcaption { color:var(--muted); font-size:12px; margin-top:10px; font-style:ita
       <dl>
         <dt>created</dt>      <dd>2026-08-21</dd>
         <dt>modified</dt>     <dd>2026-08-21</dd>
-        <dt>commits</dt>      <dd>none yet — this plan is authored and not yet committed; since then: <code>3479801</code> (T01 — the three boundary-claim documents repaired), <code>f54efb1</code> (T02 — boundary-claims fence, M1 markers, ticket state), <code>3314031</code> (docs — T02's commit and Amendment recorded), <code>d784b04</code> (docs — the two residual owner-act lists repaired by owner direction), <code>811330d</code> (docs — that repair and why the fence stayed narrow, recorded as an Amendment), <code>a574437</code> (T03 — the guard landed as an exact copy, on its own), <code>6f38165</code> (T03 — the two parser failures split, plus the banner, the settings example and the README), <code>d7f4f47</code> (T04 — the offline matrix and the banner's three rules; M2 and its markers), <code>7667bdd</code> (docs — fence 2's ceiling restated as a class), <code>2ef2c47</code> (docs — M2's landing and that finding, recorded as an Amendment), <code>1ca4898</code> (T05 — the contract authored), <code>d593137</code> (T06 — the contract's four fences, M3 and its markers)</dd>
+        <dt>commits</dt>      <dd>none yet — this plan is authored and not yet committed; since then: <code>3479801</code> (T01 — the three boundary-claim documents repaired), <code>f54efb1</code> (T02 — boundary-claims fence, M1 markers, ticket state), <code>3314031</code> (docs — T02's commit and Amendment recorded), <code>d784b04</code> (docs — the two residual owner-act lists repaired by owner direction), <code>811330d</code> (docs — that repair and why the fence stayed narrow, recorded as an Amendment), <code>a574437</code> (T03 — the guard landed as an exact copy, on its own), <code>6f38165</code> (T03 — the two parser failures split, plus the banner, the settings example and the README), <code>d7f4f47</code> (T04 — the offline matrix and the banner's three rules; M2 and its markers), <code>7667bdd</code> (docs — fence 2's ceiling restated as a class), <code>2ef2c47</code> (docs — M2's landing and that finding, recorded as an Amendment), <code>1ca4898</code> (T05 — the contract authored), <code>d593137</code> (T06 — the contract's four fences, M3 and its markers), <code>ec629a8</code> (docs — M3's landing and the import's cost)</dd>
         <dt>agent name</dt>   <dd>claude-opus-5</dd>
         <dt>session id</dt>   <dd>not recorded — AGENTS.md invariant 1 keeps live session state out of every committed file in this repository</dd>
         <dt>back refs</dt>    <dd>./awsf-v2-plan.html (the spine; this is its milestone M1 / workstream W01), ./tickets/awsf-v2-plan/W01.md (the meta-prompt that authored this plan), ./awsf-v2-plan-build-prompts.md (§ Section B → T01), ./awsf-v2-candidates-fuse-version.md (§10 first, then §2.8 and §0.1), ./awsf-v2-intent.md (decision 3 — the boundary is enforced at the tool surface), ../AGENTS.md (invariants 1, 2, 3, 9, 10, 12)</dd>
@@ -271,7 +271,7 @@ flowchart TD
     <figure>
 <pre class="mermaid">
 flowchart LR
-  subgraph tree["docs/driving/ — committed, swept by five fences"]
+  subgraph tree["docs/driving/ — committed, swept by six fences"]
     C["marimba/CONTRACT.md<br/>command-free · route-free"]
     G["marimba/delegation-guard.sh<br/>the one copy"]
     B["marimba/session-banner.sh"]
@@ -371,8 +371,8 @@ flowchart LR
     <h3>The baseline this work must not regress</h3>
     <p><code>npm run test:unit</code>, 2026-08-21, on the tree as committed at <code>53a2844</code>: <strong>989 tests, 989 pass, 0 fail</strong>, 122&nbsp;s. Every "no count regression" box below is checked against this number, and the number is recorded here rather than left as "green" so a silently-skipped file is visible as arithmetic.</p>
 
-    <h3>The five fences the tree actually gives a new document</h3>
-    <p>§2.8 said two and named the wrong count in the other direction as well. Measured by reading each fence's scope:</p>
+    <h3>The six fences the tree actually gives a new document</h3>
+    <p>§2.8 said two and named the wrong count in the other direction as well. Measured by reading each fence's scope. The count was <strong>five</strong> when measured; task 7 raised it to six by generalising the route fence, and the row below records both states:</p>
     <table>
       <thead><tr><th>Fence</th><th>Covers a new document?</th></tr></thead>
       <tbody>
@@ -381,7 +381,7 @@ flowchart LR
         <tr><td><code>no-shell-true.test.ts</code> — <code>shell: true</code> sweep, wide extension set</td><td class="ok">inherited</td></tr>
         <tr><td><code>doc-reconciliation.test.ts</code> — every command in a shell fence exists</td><td class="ok">inherited</td></tr>
         <tr><td><code>no-handwritten-schema.test.ts</code> — three narrowed patterns plus the <code>```json</code> fence ban</td><td class="ok">inherited <strong>(§2.8 missed this one)</strong></td></tr>
-        <tr><td><code>driving-routes.test.ts</code> — routes resolve</td><td class="no">not inherited — hardcodes one router</td></tr>
+        <tr><td><code>driving-routes.test.ts</code> — routes resolve</td><td class="ok">inherited <strong>(task 7)</strong> — was not, while it hardcoded one router</td></tr>
         <tr><td><code>execution-isolation.test.ts</code> — <code>.claude/</code> absent at the root</td><td class="no">unrelated to a document's content; it is the placement control</td></tr>
       </tbody>
     </table>
@@ -595,7 +595,7 @@ flowchart LR
 
     <!-- ================= M4 ================= -->
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone M4: The route hole, closed for the whole tree</h3>
+      <h3><code class="status">[x]</code> Milestone M4: The route hole, closed for the whole tree</h3>
       <p>The contract is route-free and a test says so, which is enough for the contract. It is not enough for the tree: the next document someone adds will declare routes and nothing will check them. Closing it costs one generalisation and is green on arrival, because the tree outside the router is route-free today.</p>
 
       <figure>
@@ -615,13 +615,13 @@ flowchart LR
       <p>The change is small and its two traps are known. First, each route must resolve relative to <em>its own file</em>, not the router's directory, or a route in a reference would resolve against <code>skills/awsf/</code> by accident and pass for the wrong reason. Second, the "advertises at least two routes" assertion belongs to the router and only the router; applied tree-wide it fails on every cookbook immediately.</p>
       <p><strong>Testing approach.</strong> Extend rather than rewrite. The existing matcher-bites companion is kept verbatim and gains a case for a route declared in a non-router document. Every failure message continues to name the offending file, because a tree-wide scan that says only "a route is broken" is worse than the single-file version it replaces.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> The scan covers <code>drivingDocs()</code>, and the escape check still reports a <code>../</code> route rather than skipping it</li>
-        <li><code class="status">[]</code> Routes resolve relative to the file that declares them; a test proves this by placing a fixture route that would resolve only under the wrong base and asserting it is reported</li>
-        <li><code class="status">[]</code> The ≥2-routes floor still applies to the router and to nothing else</li>
-        <li><code class="status">[]</code> Failure messages name the file and the route</li>
-        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/driving-routes.test.ts</code> — green over today's tree, which is route-free outside the router</li>
-        <li><code class="status">[]</code> Proven to bite: add a broken route to a scratch copy of a cookbook, watch it go red, discard the scratch copy</li>
-        <li><code class="status">[]</code> <code>npm run test:unit</code> and <code>npm run lint</code> — green</li>
+        <li><code class="status">[x]</code> The scan covers <code>drivingDocs()</code>, and the escape check still reports a <code>../</code> route rather than skipping it</li>
+        <li><code class="status">[x]</code> Routes resolve relative to the file that declares them; a test proves this by placing a fixture route that would resolve only under the wrong base and asserting it is reported</li>
+        <li><code class="status">[x]</code> The ≥2-routes floor still applies to the router and to nothing else</li>
+        <li><code class="status">[x]</code> Failure messages name the file and the route</li>
+        <li><code class="status">[x]</code> <code>node --experimental-strip-types --test core/test/unit/meta/driving-routes.test.ts</code> — green over today's tree, which is route-free outside the router</li>
+        <li><code class="status">[x]</code> Proven to bite: add a broken route to a scratch copy of a cookbook, watch it go red, discard the scratch copy</li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code> and <code>npm run lint</code> — green</li>
       </ul>
       <div class="loop">
         🔁 <strong>Do not exit this phase until every box above is checked.</strong>
@@ -702,8 +702,8 @@ flowchart LR
         <tr><td><code>--settings</code> merges rather than excludes</td><td>The spine's probe of 2026-08-21, three runs with a control; the CLI's own help describes it as loading "additional settings"</td><td>None needed. If exclusion is wanted, <code>--setting-sources</code> is the flag, and adopting it is <a href="#questionables">Q7</a>.</td></tr>
         <tr><td>A missing interpreter disables the guard silently</td><td>Measured: a stub <code>python3</code> exiting 127 on <code>PATH</code> yields exit 0 for a payload that otherwise denies</td><td>None — <a href="#questionables">Q2</a> fixes it rather than measuring it further, and <a href="#questionables">Q4</a> surfaces the same condition one step earlier.</td></tr>
         <tr><td>The documenter's <code>**/*.md</code> reaches the driving tree, both halves of invariant 12's byte-identity relation, the records, and its own system prompt</td><td>Measured 2026-08-21: every role's <code>writes</code> globs run through <code>evaluatePathPolicy</code> over thirteen representative paths. Three candidate replacements measured alongside it. No role's globs reach a <code>.sh</code> in the driving tree, so the guard script was never exposed.</td><td>None for the finding. The remaining question is whether the sync fence should also assert that no role's write globs reach <code>specs/tickets/**</code> or <code>specs/*-build-prompts.md</code> — a fence over the config rather than over the files, which would catch the next over-broad glob instead of this one. Out of W01's scope; worth naming for whichever workstream owns the config surface.</td></tr>
-        <tr><td>The tree gives a new document five fences, not two</td><td>Each fence's scope read directly; the route fence's hardcoded <code>ROUTER</code> constant</td><td>None. Task 7 changes the count to six by generalising the route fence.</td></tr>
-        <tr><td>The tree outside the router is route-free today</td><td>A scan for backticked relative markdown paths across <code>docs/driving/</code> returns matches only in <code>SKILL.md</code></td><td>None — task 7's generalisation is itself the standing check.</td></tr>
+        <tr><td>The tree gives a new document six fences, not two</td><td>Each fence's scope read directly. Five when measured; task 7 generalised the route fence from the hardcoded <code>ROUTER</code> to <code>drivingDocs()</code>, making it the sixth.</td><td>None — the upgrade this row named has been taken.</td></tr>
+        <tr><td>The tree outside the router is route-free today</td><td>A scan for backticked relative markdown paths across <code>docs/driving/</code> returns matches only in <code>SKILL.md</code> — nine of them</td><td>None — task 7's generalisation is now the standing check, so this is no longer a claim anyone has to re-measure by hand.</td></tr>
         <tr><td>Exactly six commands take an owner terminal</td><td><code>core/src/cli/main.ts</code>: six <code>case</code> arms construct <code>processOwnerTerminal()</code> — <code>rework</code>, <code>review</code>, <code>raise</code>, <code>journey</code>, <code>land</code>, <code>cancel</code>. <code>retry</code> does not, and the guard correctly omits it.</td><td>None. Task 2 makes it a derived fact instead of a copied list.</td></tr>
       </tbody>
     </table>
