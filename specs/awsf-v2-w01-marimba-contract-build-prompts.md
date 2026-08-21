@@ -140,7 +140,7 @@ M4, and 8–9 are M5. The ticket for each is
 [CHOOSE YOUR PROVIDER — pick by live quota]
   MODEL   Sonnet 5 · EFFORT medium
   CLAUDE  claude:sonnet · /effort medium
-  GPT     codex:gpt-5.6-sol · reasoning medium
+  GPT     codex:gpt-5.6-terra · reasoning medium
   WHY     prose edits against a decision already taken and evidence already measured.
 
 TASK 1 of 9. Plan: specs/awsf-v2-w01-marimba-contract.html, milestone M1.
@@ -611,7 +611,7 @@ DEFINITION OF DONE
 [CHOOSE YOUR PROVIDER — pick by live quota]
   MODEL   Sonnet 5 · EFFORT medium
   CLAUDE  claude:sonnet · /effort medium
-  GPT     codex:gpt-5.6-sol · reasoning medium
+  GPT     codex:gpt-5.6-terra · reasoning medium
   WHY     recording work already done, in the two places two invariants allow.
 
 TASK 8 of 9. Plan: specs/awsf-v2-w01-marimba-contract.html, milestone M5.
@@ -671,7 +671,7 @@ DEFINITION OF DONE
 [CHOOSE YOUR PROVIDER — pick by live quota]
   MODEL   Sonnet 5 · EFFORT medium
   CLAUDE  claude:sonnet · /effort medium
-  GPT     codex:gpt-5.6-sol · reasoning medium
+  GPT     codex:gpt-5.6-terra · reasoning medium
   WHY     running everything and flipping two marker sets in one commit. The judgement was
           spent in the eight tasks before this one.
 

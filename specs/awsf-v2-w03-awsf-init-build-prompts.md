@@ -85,7 +85,7 @@ exactly. Tasks 1–3 are milestone M1, 4–5 are M2, 6–9 are M3 (task 9 is the
 [CHOOSE YOUR PROVIDER — pick by live quota]
   MODEL   Sonnet 5 · EFFORT medium
   CLAUDE  claude:sonnet · /effort medium
-  GPT     codex:gpt-5.6-sol · reasoning medium
+  GPT     codex:gpt-5.6-terra · reasoning medium
   WHY     mechanical enumeration against a fixed schema, no design judgment.
 
 TASK 1 of 9. Plan: specs/awsf-v2-w03-awsf-init.html, milestone M1.
@@ -123,7 +123,7 @@ DEFINITION OF DONE
 [CHOOSE YOUR PROVIDER — pick by live quota]
   MODEL   Sonnet 5 · EFFORT medium
   CLAUDE  claude:sonnet · /effort medium
-  GPT     codex:gpt-5.6-sol · reasoning medium
+  GPT     codex:gpt-5.6-terra · reasoning medium
   WHY     a typed object construction against a table already decided.
 
 TASK 2 of 9. Plan: specs/awsf-v2-w03-awsf-init.html, milestone M1.
@@ -156,7 +156,7 @@ DEFINITION OF DONE
 [CHOOSE YOUR PROVIDER — pick by live quota]
   MODEL   Sonnet 5 · EFFORT medium
   CLAUDE  claude:sonnet · /effort medium
-  GPT     codex:gpt-5.6-sol · reasoning medium
+  GPT     codex:gpt-5.6-terra · reasoning medium
   WHY     a round-trip test against an existing loader, plus the compiler check.
 
 TASK 3 of 9. Plan: specs/awsf-v2-w03-awsf-init.html, milestone M1.
@@ -232,7 +232,7 @@ DEFINITION OF DONE
 [CHOOSE YOUR PROVIDER — pick by live quota]
   MODEL   Sonnet 5 · EFFORT medium
   CLAUDE  claude:sonnet · /effort medium
-  GPT     codex:gpt-5.6-sol · reasoning medium
+  GPT     codex:gpt-5.6-terra · reasoning medium
   WHY     a temp-directory integration test against an already-implemented command.
 
 TASK 5 of 9. Plan: specs/awsf-v2-w03-awsf-init.html, milestone M2.
@@ -262,7 +262,7 @@ DEFINITION OF DONE
 [CHOOSE YOUR PROVIDER — pick by live quota]
   MODEL   Sonnet 5 · EFFORT medium
   CLAUDE  claude:sonnet · /effort medium
-  GPT     codex:gpt-5.6-sol · reasoning medium
+  GPT     codex:gpt-5.6-terra · reasoning medium
   WHY     CLI dispatch wiring against an existing, well-understood file.
 
 TASK 6 of 9. Plan: specs/awsf-v2-w03-awsf-init.html, milestone M3.
@@ -294,7 +294,7 @@ DEFINITION OF DONE
 [CHOOSE YOUR PROVIDER — pick by live quota]
   MODEL   Haiku 4.5 · EFFORT low
   CLAUDE  claude:haiku · /effort low
-  GPT     codex:gpt-5.6-sol · reasoning low
+  GPT     codex:gpt-5.6-terra · reasoning low
   WHY     a one-line documentation addition and a fence run.
 
 TASK 7 of 9. Plan: specs/awsf-v2-w03-awsf-init.html, milestone M3.
@@ -360,7 +360,7 @@ DEFINITION OF DONE
 [CHOOSE YOUR PROVIDER — pick by live quota]
   MODEL   Sonnet 5 · EFFORT medium
   CLAUDE  claude:sonnet · /effort medium
-  GPT     codex:gpt-5.6-sol · reasoning medium
+  GPT     codex:gpt-5.6-terra · reasoning medium
   WHY     running three already-defined gates, then a bookkeeping pass that is the ONLY
           task in this whole build sequence permitted to touch the spine file.
 

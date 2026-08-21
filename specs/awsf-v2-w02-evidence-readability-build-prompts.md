@@ -102,7 +102,7 @@ and task 5 is M4. The ticket for each is
 [CHOOSE YOUR PROVIDER — pick by live quota]
   MODEL   Sonnet 5 · EFFORT medium
   CLAUDE  claude:sonnet · /effort medium
-  GPT     codex:gpt-5.6-sol · reasoning medium
+  GPT     codex:gpt-5.6-terra · reasoning medium
   WHY     dispatch-table work against fields the plan already names field-by-field.
 
 TASK 1 of 5. Plan: specs/awsf-v2-w02-evidence-readability.html, milestone M1.
@@ -145,7 +145,7 @@ STOP WHEN
 [CHOOSE YOUR PROVIDER — pick by live quota]
   MODEL   Sonnet 5 · EFFORT high
   CLAUDE  claude:sonnet · /effort high
-  GPT     codex:gpt-5.6-sol · reasoning high
+  GPT     codex:gpt-5.6-terra · reasoning high
   WHY     the fold's contiguity boundary and the Q1-gated re-redaction call are security-relevant
           and need care even before the adversarial fixture in task 3 tries to defeat them.
 
@@ -205,7 +205,7 @@ STOP WHEN
 [CHOOSE YOUR PROVIDER — pick by live quota]
   MODEL   Sonnet 5 · EFFORT high
   CLAUDE  claude:sonnet · /effort high
-  GPT     codex:gpt-5.6-sol · reasoning high
+  GPT     codex:gpt-5.6-terra · reasoning high
   WHY     the split-credential fixture must be written to genuinely try to defeat task 2's
           re-redaction call, not merely restate it - an adversarial-test task warrants the
           same care as the code it is testing.
@@ -250,7 +250,7 @@ STOP WHEN
 [CHOOSE YOUR PROVIDER — pick by live quota]
   MODEL   Sonnet 5 · EFFORT medium
   CLAUDE  claude:sonnet · /effort medium
-  GPT     codex:gpt-5.6-sol · reasoning medium
+  GPT     codex:gpt-5.6-terra · reasoning medium
   WHY     reuses PhaseInspector.vue's proven toggle precedent; no new mechanism to design.
 
 TASK 4 of 5. Plan: specs/awsf-v2-w02-evidence-readability.html, milestone M3.
@@ -296,7 +296,7 @@ STOP WHEN
 [CHOOSE YOUR PROVIDER — pick by live quota]
   MODEL   Sonnet 5 · EFFORT low
   CLAUDE  claude:sonnet · /effort low
-  GPT     codex:gpt-5.6-sol · reasoning low
+  GPT     codex:gpt-5.6-terra · reasoning low
   WHY     one CSS value change plus a regex test update; the only task not about the event log.
 
 TASK 5 of 5. Plan: specs/awsf-v2-w02-evidence-readability.html, milestone M4.
