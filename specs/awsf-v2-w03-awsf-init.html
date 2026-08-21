@@ -440,9 +440,9 @@ cleanup: removing /tmp/awsf-init-probe-mD0Vuv</pre>
       <h4>6. Wire <code>init</code> into <code>core/src/cli/main.ts</code></h4>
       <p><code>init</code> is added as its own top-level branch, checked <strong>before</strong> the existing <code>configPath = resolve(...); loadConfig(await readFile(configPath))</code> section that every other command falls through to — that section assumes the config file already exists, which is exactly the assumption <code>init</code> exists to not need.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>"init"</code> is added to the frozen <code>CLI_COMMANDS</code> array</li>
-        <li><code class="status">[]</code> A new branch in <code>main()</code> handles <code>init</code> ahead of the generic <code>configPath</code>/<code>loadConfig</code> section, parses its positional/flag arguments per <a href="#questionables">Q1</a>'s decision, calls <code>initCommand</code>, and reports the resulting commit SHA and path</li>
-        <li><code class="status">[]</code> <code>USAGE</code> reflects the new command</li>
+        <li><code class="status">[x]</code> <code>"init"</code> is added to the frozen <code>CLI_COMMANDS</code> array</li>
+        <li><code class="status">[x]</code> A new branch in <code>main()</code> handles <code>init</code> ahead of the generic <code>configPath</code>/<code>loadConfig</code> section, parses its positional/flag arguments per <a href="#questionables">Q1</a>'s decision, calls <code>initCommand</code>, and reports the resulting commit SHA and path</li>
+        <li><code class="status">[x]</code> <code>USAGE</code> reflects the new command</li>
       </ul>
 
       <h4>7. Close the documentation-reconciliation fence</h4>

@@ -15,6 +15,7 @@ import { doctorCommand } from "./commands/doctor.ts";
 import { dashCommand, gcCommand, rebuildCommand } from "./commands/operator.ts";
 import { createDashboardProjection } from "./commands/dashboard-projection.ts";
 import { journeyCommand } from "./commands/journey.ts";
+import { initCommand } from "./commands/init.ts";
 import { landCommand } from "./commands/land.ts";
 import { newCommand } from "./commands/new.ts";
 import { raiseCommand } from "./commands/raise.ts";
@@ -31,11 +32,11 @@ import { watchCommand } from "./commands/watch.ts";
 
 /** The complete owner-facing command table; documentation reconciles against it. */
 export const CLI_COMMANDS = Object.freeze([
-  "new", "start", "run", "status", "watch", "rework", "review", "raise", "journey", "land", "cancel", "retry",
+  "init", "new", "start", "run", "status", "watch", "rework", "review", "raise", "journey", "land", "cancel", "retry",
   "doctor", "gc", "dash", "db rebuild", "ticket", "backlog",
 ]);
 
-const USAGE = `usage: awsf <${CLI_COMMANDS.join("|")}> [task] [options]`;
+const USAGE = `usage: awsf init [path] --project <slug>\n       awsf <${CLI_COMMANDS.join("|")}> [task] [options]`;
 
 interface ParsedArgs {
   readonly positionals: readonly string[];
@@ -181,6 +182,15 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       } finally {
         projection.close();
       }
+    }
+
+    if (command === "init") {
+      if (parsed.positionals.length > 1) throw new Error("usage: awsf init [path] --project <slug>");
+      const slug = parsed.flags.project;
+      if (slug === undefined) throw new Error("usage: awsf init [path] --project <slug>");
+      const result = await initCommand({ path: parsed.positionals[0] ?? cwd, slug });
+      out(`Initialized ${result.path} at ${result.commitSha}.`);
+      return 0;
     }
 
     const taskId = parsed.positionals[0];
