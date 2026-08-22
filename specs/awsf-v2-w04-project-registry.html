@@ -535,18 +535,18 @@ flowchart TD
 
     <!-- ================= M2 ================= -->
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone M2: The join, and the state root's absence from both layers</h3>
+      <h3><code class="status">[wip]</code> Milestone M2: The join, and the state root's absence from both layers</h3>
       <p>The one place identity and location meet. Everything downstream — gate lookup, contract verification, plan-source resolution — consumes a <code>ResolvedProject</code> and never reads either document directly, so there is exactly one site where a mismatch between the layers can be detected and exactly one place it is named.</p>
 
       <h4>6. <code>resolveProject</code> and its four rejections</h4>
       <p>Takes a loaded catalog and a loaded placement document, returns a <code>ResolvedProject</code>, and refuses rather than degrading. Each rejection carries the remedy in its message, because the person reading it is being told a machine-local file is wrong and has no other clue where to look.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>ProjectSlugMismatchError</code> — the placement document's <code>project</code> differs from the catalog's slug</li>
-        <li><code class="status">[]</code> <code>UnplacedRepositoryError</code> — the catalog declares a repository placement does not locate, naming the missing id and the command that would add it</li>
-        <li><code class="status">[]</code> <code>OrphanPlacementError</code> — placement locates a repository the catalog does not declare, which is the drift a hand-maintained table produces and the one the measured project's own alias table already exhibits</li>
-        <li><code class="status">[]</code> <code>RepositoryIdentityMismatchError</code> — where the catalog declares <code>identity.root_commit</code>, the located repository's own root commit disagrees. Read through <code>systemGitRunner</code>/<code>runGit</code>, never a new <code>node:child_process</code> import site (invariant 3)</li>
-        <li><code class="status">[]</code> Every worktree root resolves through the documented order — per-repository override, then project default, then <code>defaultWorktreeRoot(stateRoot)</code> — and the resolved value is returned per repository, never recomputed by a caller</li>
-        <li><code class="status">[]</code> <code>ResolvedProject</code> exposes <code>gatesFor(repositoryId)</code> returning <code>ConfiguredCommand</code>-shaped records that <code>commandsPass</code> consumes <strong>unchanged</strong> — the catalog supplies, the existing gate resolves</li>
+        <li><code class="status">[x]</code> <code>ProjectSlugMismatchError</code> — the placement document's <code>project</code> differs from the catalog's slug</li>
+        <li><code class="status">[x]</code> <code>UnplacedRepositoryError</code> — the catalog declares a repository placement does not locate, naming the missing id and the command that would add it</li>
+        <li><code class="status">[x]</code> <code>OrphanPlacementError</code> — placement locates a repository the catalog does not declare, which is the drift a hand-maintained table produces and the one the measured project's own alias table already exhibits</li>
+        <li><code class="status">[x]</code> <code>RepositoryIdentityMismatchError</code> — where the catalog declares <code>identity.root_commit</code>, the located repository's own root commit disagrees. Read through <code>systemGitRunner</code>/<code>runGit</code>, never a new <code>node:child_process</code> import site (invariant 3)</li>
+        <li><code class="status">[x]</code> Every worktree root resolves through the documented order — per-repository override, then project default, then <code>defaultWorktreeRoot(stateRoot)</code> — and the resolved value is returned per repository, never recomputed by a caller</li>
+        <li><code class="status">[x]</code> <code>ResolvedProject</code> exposes <code>gatesFor(repositoryId)</code> returning <code>ConfiguredCommand</code>-shaped records that <code>commandsPass</code> consumes <strong>unchanged</strong> — the catalog supplies, the existing gate resolves</li>
       </ul>
 
       <h4>7. Placement's home inside the state root, and the fence that keeps the root out of both layers</h4>
