@@ -989,6 +989,12 @@ flowchart TD
       <p><code>core/test/unit/registry/resolve.test.ts</code> reads catalog and placement documents from a temporary directory across five repositories. It creates two temporary Git repositories, records the first root commit in the catalog, induces the identity mismatch by locating that entry at the second repository, and proves a repository without <code>identity.root_commit</code> resolves without verification. It also proves the per-repository, project-level and state-root-sibling worktree-root fallbacks. Every fixture is removed in <code>finally</code>.</p>
       <p>Evidence: <code>node --experimental-strip-types --test core/test/unit/registry/resolve.test.ts</code> passed 3/3; <code>npm run test:unit</code> passed 1103/1103, exit 0; and the ticket/plan sync fence passed 10/10. T08 is <code>done</code>, M2 is <code>[x]</code>, and the v2 spine was untouched.</p>
     </details>
+    <details>
+      <summary>2026-08-22 — M3 completed: project commands and AWSF's catalog</summary>
+      <p><strong>M3 is complete in commits <code>ce36003</code>, <code>0fcb2d4</code> and <code>3cbff17</code>.</strong> <code>awsf project register</code> requires an explicit path for every declared repository, probes nothing, resolves before writing placement, and refuses an existing registration. <code>awsf project list</code> and <code>awsf project show</code> read the machine-local placement back through the resolved-project join.</p>
+      <p>AWSF's own <code>awsf.project.yaml</code> is the first committed catalog: one plan repository, the real branch and three gate commands, and the registered plan source. Task 10 triggered the required owner act, which landed separately as commit <code>82fade2</code>: <code>awsf.project.yaml</code> joined <code>policy.protected_paths</code> only after the file existed. The contract projection remains deliberately unprotected.</p>
+      <p>Evidence: <code>node --experimental-strip-types --test core/test/unit/cli/project-command.test.ts</code> passed 5/5, exit 0; its cases cover register/list/show round-trip, no placement write after failed resolution, byte-unchanged refusal on re-registration, the no-provider import boundary, and catalog/config slug agreement. T09–T11 are <code>done</code>, M3 is <code>[x]</code>, and the v2 spine was untouched.</p>
+    </details>
   </section>
 
 </main>
