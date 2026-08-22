@@ -552,10 +552,10 @@ flowchart TD
       <h4>7. Placement's home inside the state root, and the fence that keeps the root out of both layers</h4>
       <p>The containment argument written down as a test, so a later schema change cannot re-open the question by accident.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>placementFilePath(stateRoot, slug)</code> joins <code>projects/&lt;slug&gt;/placement.yaml</code>, added to <code>platform-paths.ts</code> beside <code>attemptDir</code> — the same pure-path-arithmetic module, with no filesystem access</li>
-        <li><code class="status">[]</code> A test asserts <code>discoverAttempts</code> is unaffected by a <code>placement.yaml</code> sitting beside a project's <code>tasks/</code> directory, because it filters to directories — the walk this file must not disturb, proven rather than assumed</li>
-        <li><code class="status">[]</code> A test asserts <code>doctorCommand</code>, <code>gcCommand</code> and <code>rebuildCommand</code> each still take exactly one state root and that no registry module offers a per-project one — the mechanical form of "the state root is in neither layer"</li>
-        <li><code class="status">[]</code> No registry module imports <code>resolveStateRoot</code>; the state root arrives as a parameter, as it already does everywhere else, keeping the layer testable for all three platforms from any one</li>
+        <li><code class="status">[x]</code> <code>placementFilePath(stateRoot, slug)</code> joins <code>projects/&lt;slug&gt;/placement.yaml</code>, added to <code>platform-paths.ts</code> beside <code>attemptDir</code> — the same pure-path-arithmetic module, with no filesystem access</li>
+        <li><code class="status">[x]</code> A test asserts <code>discoverAttempts</code> is unaffected by a <code>placement.yaml</code> sitting beside a project's <code>tasks/</code> directory, because it filters to directories — the walk this file must not disturb, proven rather than assumed</li>
+        <li><code class="status">[x]</code> A test asserts <code>doctorCommand</code>, <code>gcCommand</code> and <code>rebuildCommand</code> each still take exactly one state root and that no registry module offers a per-project one — the mechanical form of "the state root is in neither layer"</li>
+        <li><code class="status">[x]</code> No registry module imports <code>resolveStateRoot</code>; the state root arrives as a parameter, as it already does everywhere else, keeping the layer testable for all three platforms from any one</li>
       </ul>
 
       <h4>8. Testing Strategy</h4>

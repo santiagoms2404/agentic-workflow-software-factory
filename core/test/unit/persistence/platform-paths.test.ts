@@ -7,6 +7,7 @@ import {
   continuityFilePath,
   journalFilePath,
   lockFilePath,
+  placementFilePath,
   rawStreamFilePath,
   resolveStateRoot,
   statusFilePath,
@@ -47,6 +48,7 @@ test("the attempt tree matches the Ownership section's layout", () => {
   const root = "/state-root";
   const attempt = attemptDir(root, "acme-app", "T6", "attempt-1");
   assert.equal(attempt, join(root, "projects", "acme-app", "tasks", "T6", "attempt-1"));
+  assert.equal(placementFilePath(root, "acme-app"), join(root, "projects", "acme-app", "placement.yaml"));
   assert.equal(journalFilePath(attempt), join(attempt, "journal.jsonl"));
   assert.equal(statusFilePath(attempt), join(attempt, "status.json"));
   assert.equal(continuityFilePath(attempt), join(attempt, "private", "continuity.json"));

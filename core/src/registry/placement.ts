@@ -1,8 +1,9 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname } from "node:path";
 import { Value } from "@sinclair/typebox/value";
 import { parse as parseYaml, stringify } from "yaml";
 import { isAbsoluteMachinePath } from "../config/machine-path.ts";
+import { placementFilePath } from "../persistence/platform-paths.ts";
 import {
   PLACEMENT_VERSION,
   PlacementSchema,
@@ -65,10 +66,6 @@ function assertPlacement(doc: unknown): Placement {
   return doc;
 }
 
-function placementFilePath(stateRoot: string, slug: string): string {
-  return join(stateRoot, "projects", slug, "placement.yaml");
-}
-
 /** Parses and validates machine-local placement YAML. */
 export function loadPlacement(yamlText: string): Placement {
   return assertPlacement(parseYaml(yamlText));
@@ -83,7 +80,7 @@ export async function readPlacement(stateRoot: string, slug: string): Promise<Pl
 export async function writePlacement(stateRoot: string, slug: string, doc: Placement): Promise<void> {
   const placement = assertPlacement(doc);
   const path = placementFilePath(stateRoot, slug);
-  await mkdir(join(stateRoot, "projects", slug), { recursive: true });
+  await mkdir(dirname(path), { recursive: true });
   const temporary = `${path}.tmp`;
   await writeFile(temporary, stringify(placement));
   await rename(temporary, path);

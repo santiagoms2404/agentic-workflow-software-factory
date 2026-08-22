@@ -52,6 +52,11 @@ export function attemptDir(stateRoot: string, project: string, task: string, att
   return join(stateRoot, "projects", project, "tasks", task, attempt);
 }
 
+/** The machine-local placement document for one project. */
+export function placementFilePath(stateRoot: string, slug: string): string {
+  return join(stateRoot, "projects", slug, "placement.yaml");
+}
+
 export function journalFilePath(attempt: string): string {
   return join(attempt, "journal.jsonl");
 }

@@ -44,7 +44,7 @@ test("catalog and placement share only their project join field outside document
 });
 
 test("neither emitted schema names a state root or clone path", () => {
-  const forbidden = /(?:^|[_-])(?:state[_-]?root|clone(?:[_-]?(?:path|root|location))?)(?:$|[_-])/i;
+  const forbidden = /(?:^|[_-])(?:state[_-]?root|stateroot|clone(?:[_-]?(?:path|root|location))?)(?:$|[_-])/i;
 
   for (const [name, schema] of [
     ["catalog", emitProjectCatalogJsonSchema()],
