@@ -582,7 +582,7 @@ flowchart LR
 
     <!-- ================= W04 ================= -->
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone M4: W04 — Project registry v1 <span class="wtag core">v2 core</span></h3>
+      <h3><code class="status">[x]</code> Milestone M4: W04 — Project registry v1 <span class="wtag core">v2 core</span></h3>
       <p class="deep-plan"><a href="awsf-v2-w04-project-registry.html">Deep plan: AWSF v2 W04 — Project registry v1</a> <span class="muted">not yet authored</span></p>
       <p><em>Exists because everything multi-project depends on it.</em> It is the workstream that turns "a factory for this repository" into "a factory for the owner's projects", and the one that gives <code>ticketStoreFor</code> a plan to resolve against.</p>
       <h4>4. W04 — Project registry v1</h4>
@@ -601,13 +601,13 @@ flowchart LR
         Catalog and placement schemas, each rejecting what the other must hold — an absolute path in the catalog is a rejection, not a warning. Path containment across the two layers. Per-repository gate-command resolution. Ticket/plan sync redefined per <em>registered plan source</em> rather than per checkout, with the redefinition proven to fail on a drift it should catch. And a cross-repo coordination record whose child tasks each own exactly one repository, asserted rather than assumed. Offline; no quota.
       </div>
       <ul class="checklist">
-        <li><code class="status">[]</code> Deep plan <code>awsf-v2-w04-project-registry.html</code> authored with its build prompts and ticket set, and approved by the owner</li>
-        <li><code class="status">[]</code> Q1 and Q2 are <strong>applied as decided</strong>, not re-litigated; the deep plan records how it implements each, and the digest fence Q1 depends on is one of its tasks</li>
-        <li><code class="status">[]</code> The Smart Health repositories are read before the catalog schema is frozen</li>
-        <li><code class="status">[]</code> Catalog holds no machine path; placement holds no committed identity; the state root is in neither</li>
-        <li><code class="status">[]</code> Invariant 12's relation is redefined per registered plan source and the redefinition is proven to bite</li>
-        <li><code class="status">[]</code> v1's flat tickets move only here, and <code>awsf ticket list</code> and <code>awsf backlog</code> still return them afterwards</li>
-        <li><code class="status">[]</code> The deep plan's own milestones all reach <code>[x]</code></li>
+        <li><code class="status">[x]</code> Deep plan <code>awsf-v2-w04-project-registry.html</code> authored with its build prompts and ticket set, and approved by the owner</li>
+        <li><code class="status">[x]</code> Q1 and Q2 are <strong>applied as decided</strong>, not re-litigated; the deep plan records how it implements each, and the digest fence Q1 depends on is one of its tasks</li>
+        <li><code class="status">[x]</code> The Smart Health repositories are read before the catalog schema is frozen</li>
+        <li><code class="status">[x]</code> Catalog holds no machine path; placement holds no committed identity; the state root is in neither</li>
+        <li><code class="status">[x]</code> Invariant 12's relation is redefined per registered plan source and the redefinition is proven to bite</li>
+        <li><code class="status">[x]</code> v1's flat tickets move only here, and <code>awsf ticket list</code> and <code>awsf backlog</code> still return them afterwards</li>
+        <li><code class="status">[x]</code> The deep plan's own milestones all reach <code>[x]</code></li>
       </ul>
       <div class="loop">🔁 <strong>Do not exit this workstream until its deep plan's every box is checked.</strong> A failing command means fix the cause and re-run — never lower what the row asserts.</div>
     </div>

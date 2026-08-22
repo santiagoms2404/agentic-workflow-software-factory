@@ -751,7 +751,7 @@ flowchart TD
 
     <!-- ================= M6 ================= -->
     <div class="phase">
-      <h3><code class="status">[wip]</code> Milestone M6: The v1 ticket move, behaviour preserved, and the workstream closed</h3>
+      <h3><code class="status">[x]</code> Milestone M6: The v1 ticket move, behaviour preserved, and the workstream closed</h3>
       <p><strong>The move belongs here and nowhere else, and it happens in this order for a stated reason.</strong> The fuse record reversed an earlier attempt because <code>ticketStoreFor</code> resolves <code>specs/tickets</code> and <code>TicketStore</code> reads that exact directory with no recursion, so the files moving first would silently make <code>awsf ticket list</code> and <code>awsf backlog</code> return nothing. Task 19 gives the store a plan to resolve against; task 20 moves the files. <strong>Never the other way round.</strong></p>
 
       <h4>19. <code>ticketStoreForPlan</code>, and the default-plan rule that preserves today's behaviour</h4>
@@ -775,13 +775,13 @@ flowchart TD
 
       <h4>21. Full suite, marker flips, and the spine's W04 marker</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>npm run test:unit</code> — the whole unit suite green, with no count regression against the pre-work baseline</li>
-        <li><code class="status">[]</code> <code>npm run typecheck</code> and <code>npm run lint</code> — clean</li>
-        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/no-destructive-paths.test.ts</code> — green, confirming no registry or placement prose tripped the two vocabulary patterns named at the top of this section</li>
-        <li><code class="status">[]</code> Every milestone marker and checklist item in this file reads <code>[x]</code>, and every matching ticket's <code>state:</code> is <code>done</code>, flipped in the same commit</li>
-        <li><code class="status">[]</code> <strong>Both owner amendments have landed</strong> — invariant 12's replacement text, and <code>awsf.project.yaml</code> in <code>policy.protected_paths</code>. The second is confirmed by reading <code>awsf.config.yaml</code>; if it has not landed, <strong>stop and report</strong> rather than closing the workstream with the catalog unprotected, and do not add it yourself — it is a protected path</li>
-        <li><code class="status">[]</code> An Amendment entry is appended to this plan recording the landing commit and the suite count</li>
-        <li><code class="status">[]</code> Only now: <code>specs/awsf-v2-plan.html</code>'s Milestone M4 / W04 marker flips to <code>[x]</code>, in this same commit, per AGENTS.md invariant 12</li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code> — the whole unit suite green, with no count regression against the pre-work baseline</li>
+        <li><code class="status">[x]</code> <code>npm run typecheck</code> and <code>npm run lint</code> — clean</li>
+        <li><code class="status">[x]</code> <code>node --experimental-strip-types --test core/test/unit/meta/no-destructive-paths.test.ts</code> — green, confirming no registry or placement prose tripped the two vocabulary patterns named at the top of this section</li>
+        <li><code class="status">[x]</code> Every milestone marker and checklist item in this file reads <code>[x]</code>, and every matching ticket's <code>state:</code> is <code>done</code>, flipped in the same commit</li>
+        <li><code class="status">[x]</code> <strong>Both owner amendments have landed</strong> — invariant 12's replacement text, and <code>awsf.project.yaml</code> in <code>policy.protected_paths</code>. The second is confirmed by reading <code>awsf.config.yaml</code>; if it has not landed, <strong>stop and report</strong> rather than closing the workstream with the catalog unprotected, and do not add it yourself — it is a protected path</li>
+        <li><code class="status">[x]</code> An Amendment entry is appended to this plan recording the landing commit and the suite count</li>
+        <li><code class="status">[x]</code> Only now: <code>specs/awsf-v2-plan.html</code>'s Milestone M4 / W04 marker flips to <code>[x]</code>, in this same commit, per AGENTS.md invariant 12</li>
       </ul>
       <div class="loop">
         🔁 <strong>Do not exit this phase until every box above is checked.</strong>
@@ -795,14 +795,14 @@ flowchart TD
     <h2>Validation Commands</h2>
     <p>Execute these commands to validate the entire plan is complete:</p>
     <ul class="checklist">
-      <li><code class="status">[]</code> <code>npm run test:unit</code> — whole suite green, including the six new registry test files, the layer-separation fence, and the redefined sync fence</li>
-      <li><code class="status">[]</code> <code>npm run typecheck</code> — clean, including both schemas' static types</li>
-      <li><code class="status">[]</code> <code>npm run lint</code> — clean</li>
-      <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/layer-separation.test.ts</code> — the catalog holds no machine path, the placement layer holds no committed identity, and neither schema has a property a state root could occupy</li>
-      <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/registry/contracts.test.ts</code> — the digest fence has been <strong>watched to fail</strong> on a one-byte drift, on a projection drift, and on a catalog drift, each distinguished</li>
-      <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/registry/plan-source.test.ts</code> — invariant 12's redefinition has been <strong>watched to fail</strong> on a drift induced across a repository boundary, and on a declared-format mismatch that would previously have passed vacuously</li>
-      <li><code class="status">[]</code> <code>awsf ticket list</code> and <code>awsf backlog</code> produce output identical to the baseline captured before task 20 — v1's tickets survived the move</li>
-      <li><code class="status">[]</code> A second project is registered from a temporary catalog and placement pair, resolves cleanly, and <strong>no absolute path appears in any committed file</strong> — asserted by loading every committed <code>*.project.yaml</code> and <code>*.contracts.yaml</code> in the tree through their loaders</li>
+      <li><code class="status">[x]</code> <code>npm run test:unit</code> — whole suite green, including the six new registry test files, the layer-separation fence, and the redefined sync fence</li>
+      <li><code class="status">[x]</code> <code>npm run typecheck</code> — clean, including both schemas' static types</li>
+      <li><code class="status">[x]</code> <code>npm run lint</code> — clean</li>
+      <li><code class="status">[x]</code> <code>node --experimental-strip-types --test core/test/unit/meta/layer-separation.test.ts</code> — the catalog holds no machine path, the placement layer holds no committed identity, and neither schema has a property a state root could occupy</li>
+      <li><code class="status">[x]</code> <code>node --experimental-strip-types --test core/test/unit/registry/contracts.test.ts</code> — the digest fence has been <strong>watched to fail</strong> on a one-byte drift, on a projection drift, and on a catalog drift, each distinguished</li>
+      <li><code class="status">[x]</code> <code>node --experimental-strip-types --test core/test/unit/registry/plan-source.test.ts</code> — invariant 12's redefinition has been <strong>watched to fail</strong> on a drift induced across a repository boundary, and on a declared-format mismatch that would previously have passed vacuously</li>
+      <li><code class="status">[x]</code> <code>awsf ticket list</code> and <code>awsf backlog</code> produce output identical to the baseline captured before task 20 — v1's tickets survived the move</li>
+      <li><code class="status">[x]</code> A second project is registered from a temporary catalog and placement pair, resolves cleanly, and <strong>no absolute path appears in any committed file</strong> — asserted by loading every committed <code>*.project.yaml</code> and <code>*.contracts.yaml</code> in the tree through their loaders</li>
       <li><code class="status">[f]</code> <strong>Owner-run, not agent-run, and marked <code>[f]</code> until it happens:</strong> one real <code>awsf start</code> in a registered second project's worktree, confirming the resolved worktree root and gate commands are the ones the catalog recorded. This needs a provider call, so it is outside every offline validation above and is named rather than claimed. See <a href="#notes">Notes</a></li>
     </ul>
     <div class="loop">
@@ -1006,6 +1006,11 @@ flowchart TD
       <p><strong>M5 is complete in commits <code>2a26b2f</code>, <code>5f5e785</code> and <code>d11d532</code>.</strong> <code>resolvePlanSources</code> now resolves self-placed and foreign plan repositories, returns each plan's HTML, build prompts and ticket-set paths, and refuses an unimplemented declared format by plan name. The sole v1 parser owns the Milestone grammar and rejects a declared v1 plan that parses to zero tasks.</p>
       <p>The invariant-12 fence now discovers sets through the committed catalog instead of directory adjacency while preserving its coverage, milestone, state, prompt, dependency and vocabulary assertions. The foreign-repository fixture registers placement in a temporary state root, proves the green baseline, then restores between a ticket-state drift, a deleted-plan orphan and an unsupported-format refusal. A separate Phase-heading regression proves the measured vacuous-pass hazard fails with <code>PlanGrammarMismatchError</code>. Every temporary repository and state root is removed in <code>finally</code>.</p>
       <p>Evidence: <code>node --experimental-strip-types --test core/test/unit/registry/plan-source.test.ts</code> passed 6/6, exit 0; <code>npm run test:unit</code> passed 1128/1128, exit 0; <code>npm run typecheck</code> passed; and <code>npm run lint</code> exited 0 with one unrelated dashboard warning. T16–T18 are <code>done</code>, M5 is <code>[x]</code>, and the v2 spine was untouched.</p>
+    </details>
+    <details>
+      <summary>2026-08-22 — W04 landed: project registry v1</summary>
+      <p><strong>Landing commit:</strong> <code>feat(registry): close project registry workstream</code>. T21 closes M6 and flips the W04 spine marker in the same commit. The owner-run provider validation remains <code>[f]</code> pending the owner's real <code>awsf start</code>.</p>
+      <p>Evidence: <code>npm run test:unit</code> passed <strong>1132/1132</strong>, exit 0; <code>npm run typecheck</code> passed; <code>npm run lint</code> reported zero errors; <code>no-destructive-paths.test.ts</code> passed 1/1; <code>ticket-plan-sync.test.ts</code> passed 10/10; and the layer-separation, contracts, plan-source, and project-command suites passed 2/2, 11/11, 6/6, and 6/6 respectively.</p>
     </details>
   </section>
 
