@@ -579,17 +579,17 @@ flowchart TD
 
     <!-- ================= M3 ================= -->
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone M3: The command surface, and AWSF's own catalog as its first instance</h3>
+      <h3><code class="status">[wip]</code> Milestone M3: The command surface, and AWSF's own catalog as its first instance</h3>
       <p>Registration writes machine-local placement and <strong>never writes the catalog</strong>. That asymmetry is the whole command's design: the catalog is authored by a person and reviewed like any other durable intent; placement is a local fact a command may record because getting it wrong costs nothing outside this machine.</p>
 
       <h4>9. <code>awsf project register|list|show</code></h4>
       <p>Host-only, like <code>awsf init</code>: no provider is contacted, and the command is deterministic. It is wired ahead of the generic <code>configPath</code>/<code>loadConfig</code> section for the same reason <code>init</code> is — a project being registered need not be the repository the command was run in.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>awsf project register --catalog &lt;path&gt; --repository &lt;id&gt;=&lt;path&gt; …</code> loads and validates the catalog, requires an explicit path for <strong>every</strong> declared repository, resolves the pair, and only then writes placement — a failed resolution writes nothing</li>
-        <li><code class="status">[]</code> Registration <strong>probes nothing</strong>: it does not search the filesystem for clones and does not enumerate worktrees to guess a root. Per <a href="#questionables">Q6</a>, a placement value nobody stated is a value nobody can be held to, and placement is the layer where a wrong value silently sends work to the wrong tree</li>
-        <li><code class="status">[]</code> <code>awsf project list</code> reads <code>&lt;state-root&gt;/projects/*/placement.yaml</code> and reports slug, repository count and whether each resolves; <code>awsf project show &lt;slug&gt;</code> reports the resolved record per repository — role, branch, gates, resolved worktree root</li>
-        <li><code class="status">[]</code> Re-registering an already-registered project refuses rather than silently overwriting, matching W03's Q6 precedent for <code>awsf init</code>; <code>--force</code> is <strong>not</strong> added, because overwriting placement is how a project quietly starts pointing at the wrong clone</li>
-        <li><code class="status">[]</code> <code>"project"</code> is added to the frozen <code>CLI_COMMANDS</code> array and to <code>USAGE</code>; <code>README.md</code> gains one documented invocation, keeping <code>doc-reconciliation.test.ts</code> green</li>
+        <li><code class="status">[x]</code> <code>awsf project register --catalog &lt;path&gt; --repository &lt;id&gt;=&lt;path&gt; …</code> loads and validates the catalog, requires an explicit path for <strong>every</strong> declared repository, resolves the pair, and only then writes placement — a failed resolution writes nothing</li>
+        <li><code class="status">[x]</code> Registration <strong>probes nothing</strong>: it does not search the filesystem for clones and does not enumerate worktrees to guess a root. Per <a href="#questionables">Q6</a>, a placement value nobody stated is a value nobody can be held to, and placement is the layer where a wrong value silently sends work to the wrong tree</li>
+        <li><code class="status">[x]</code> <code>awsf project list</code> reads <code>&lt;state-root&gt;/projects/*/placement.yaml</code> and reports slug, repository count and whether each resolves; <code>awsf project show &lt;slug&gt;</code> reports the resolved record per repository — role, branch, gates, resolved worktree root</li>
+        <li><code class="status">[x]</code> Re-registering an already-registered project refuses rather than silently overwriting, matching W03's Q6 precedent for <code>awsf init</code>; <code>--force</code> is <strong>not</strong> added, because overwriting placement is how a project quietly starts pointing at the wrong clone</li>
+        <li><code class="status">[x]</code> <code>"project"</code> is added to the frozen <code>CLI_COMMANDS</code> array and to <code>USAGE</code>; <code>README.md</code> gains one documented invocation, keeping <code>doc-reconciliation.test.ts</code> green</li>
       </ul>
 
       <h4>10. Author AWSF's own catalog — the degenerate case, on purpose</h4>

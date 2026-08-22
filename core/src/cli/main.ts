@@ -16,6 +16,7 @@ import { dashCommand, gcCommand, rebuildCommand } from "./commands/operator.ts";
 import { createDashboardProjection } from "./commands/dashboard-projection.ts";
 import { journeyCommand } from "./commands/journey.ts";
 import { initCommand } from "./commands/init.ts";
+import { listProjects, registerProject, showProject } from "./commands/project.ts";
 import { landCommand } from "./commands/land.ts";
 import { newCommand } from "./commands/new.ts";
 import { raiseCommand } from "./commands/raise.ts";
@@ -32,7 +33,7 @@ import { watchCommand } from "./commands/watch.ts";
 
 /** The complete owner-facing command table; documentation reconciles against it. */
 export const CLI_COMMANDS = Object.freeze([
-  "init", "new", "start", "run", "status", "watch", "rework", "review", "raise", "journey", "land", "cancel", "retry",
+  "init", "project", "new", "start", "run", "status", "watch", "rework", "review", "raise", "journey", "land", "cancel", "retry",
   "doctor", "gc", "dash", "db rebuild", "ticket", "backlog",
 ]);
 
@@ -41,11 +42,13 @@ const USAGE = `usage: awsf init [path] --project <slug>\n       awsf <${CLI_COMM
 interface ParsedArgs {
   readonly positionals: readonly string[];
   readonly flags: Readonly<Record<string, string>>;
+  readonly repositories: readonly string[];
 }
 
 function parseArgs(args: readonly string[]): ParsedArgs {
   const positionals: string[] = [];
   const flags: Record<string, string> = {};
+  const repositories: string[] = [];
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index] ?? "";
     if (!arg.startsWith("--")) {
@@ -54,16 +57,20 @@ function parseArgs(args: readonly string[]): ParsedArgs {
     }
     const equals = arg.indexOf("=");
     if (equals > 2) {
-      flags[arg.slice(2, equals)] = arg.slice(equals + 1);
+      const key = arg.slice(2, equals);
+      const value = arg.slice(equals + 1);
+      if (key === "repository") repositories.push(value);
+      else flags[key] = value;
       continue;
     }
     const key = arg.slice(2);
     const value = args[index + 1];
     if (value === undefined || value.startsWith("--")) throw new Error(`--${key} requires a value`);
-    flags[key] = value;
+    if (key === "repository") repositories.push(value);
+    else flags[key] = value;
     index += 1;
   }
-  return { positionals, flags };
+  return { positionals, flags, repositories };
 }
 
 function tierOf(value: string): Tier {
@@ -191,6 +198,28 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       const result = await initCommand({ path: parsed.positionals[0] ?? cwd, slug });
       out(`Initialized ${result.path} at ${result.commitSha}.`);
       return 0;
+    }
+
+    if (command === "project") {
+      const action = parsed.positionals[0];
+      if (action === "register" && parsed.positionals.length === 1) {
+        const catalogPath = parsed.flags.catalog;
+        if (catalogPath === undefined || parsed.repositories.length === 0) {
+          throw new Error("usage: awsf project register --catalog <path> --repository <id>=<absolute-path> [...]");
+        }
+        const result = await registerProject({ stateRoot, catalogPath: resolve(catalogPath), repositories: parsed.repositories });
+        out(`Registered ${result.slug} with ${Object.keys(result.repositories).length} repository(ies).`);
+        return 0;
+      }
+      if (action === "list" && parsed.positionals.length === 1) {
+        for (const line of await listProjects(stateRoot)) out(line);
+        return 0;
+      }
+      if (action === "show" && parsed.positionals.length === 2) {
+        for (const line of await showProject(stateRoot, parsed.positionals[1]!)) out(line);
+        return 0;
+      }
+      throw new Error("usage: awsf project <register|list|show> [options]");
     }
 
     const taskId = parsed.positionals[0];
