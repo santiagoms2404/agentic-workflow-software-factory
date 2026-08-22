@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 import { stringify as toYaml } from "yaml";
 import {
   CatalogAbsolutePathError,
@@ -10,6 +12,7 @@ import {
   CatalogUnknownVersionError,
   loadCatalog,
 } from "../../../src/registry/catalog.ts";
+import { loadConfig } from "../../../src/config/load.ts";
 
 function validCatalog(): Record<string, unknown> {
   return {
@@ -46,6 +49,16 @@ function cloneCatalog(): Record<string, any> {
 function assertCode(action: () => unknown, ErrorType: new (...args: any[]) => Error, code: string): void {
   assert.throws(action, (error: unknown) => error instanceof ErrorType && (error as { code?: string }).code === code);
 }
+
+test("loads this repository's catalog with the configured project slug", () => {
+  const catalogPath = fileURLToPath(new URL("../../../../awsf.project.yaml", import.meta.url));
+  const configPath = fileURLToPath(new URL("../../../../awsf.config.yaml", import.meta.url));
+
+  const catalog = loadCatalog(readFileSync(catalogPath, "utf8"));
+  const config = loadConfig(readFileSync(configPath, "utf8"));
+
+  assert.equal(catalog.project.slug, config.project.slug);
+});
 
 test("loads a measured five-repository catalog with mixed branches and an optional identity signal", () => {
   const catalog = loadCatalog(toYaml(validCatalog()));

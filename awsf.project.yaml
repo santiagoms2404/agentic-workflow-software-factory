@@ -1,0 +1,20 @@
+version: awsf.project/v1
+
+project:
+  slug: agentic-workflow-software-factory
+
+repositories:
+  awsf:
+    role: plan
+    default_branch: main
+    gates:
+      test: { argv: [npm, run, test:unit], timeout_seconds: 600 }
+      typecheck: { argv: [npm, run, typecheck], timeout_seconds: 300 }
+      lint: { argv: [npm, run, lint], timeout_seconds: 300 }
+
+plans:
+  root: specs
+  format: awsf-plan-html/v1
+  default: awsf-plan
+
+# Deliberately no contracts entry: this project has one repository.
