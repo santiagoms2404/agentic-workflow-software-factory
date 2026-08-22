@@ -653,11 +653,11 @@ flowchart LR
 
       <h4>13. The local fence — a gate that reads only inside one worktree</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>core/src/gates/contract-digest.ts</code> returns a <code>GateReport</code> in the shape the existing structural gates use, with one check per contract entry</li>
-        <li><code class="status">[]</code> It takes <strong>one repository root</strong> and reads <code>&lt;root&gt;/awsf.contracts.yaml</code> plus the paths that file names. It accepts no catalog, no placement, no state root and no second root — the signature is what makes the boundary claim checkable by reading the function</li>
-        <li><code class="status">[]</code> A missing <code>awsf.contracts.yaml</code> is a <strong>pass with no checks</strong>, not a failure: most repositories participate in no contract, and a gate that failed on absence would make the mechanism unadoptable</li>
-        <li><code class="status">[]</code> A named artifact that does not exist, or exists and hashes differently, is a failed check naming the contract id, the path, the expected digest and the observed one</li>
-        <li><code class="status">[]</code> Hashing uses <code>node:crypto</code> over the raw bytes — no normalisation, no re-serialisation, no encoding assumption. Byte identity, the same bar the sync fence and the measured project's own producer-side check both hold</li>
+        <li><code class="status">[x]</code> <code>core/src/gates/contract-digest.ts</code> returns a <code>GateReport</code> in the shape the existing structural gates use, with one check per contract entry</li>
+        <li><code class="status">[x]</code> It takes <strong>one repository root</strong> and reads <code>&lt;root&gt;/awsf.contracts.yaml</code> plus the paths that file names. It accepts no catalog, no placement, no state root and no second root — the signature is what makes the boundary claim checkable by reading the function</li>
+        <li><code class="status">[x]</code> A missing <code>awsf.contracts.yaml</code> is a <strong>pass with no checks</strong>, not a failure: most repositories participate in no contract, and a gate that failed on absence would make the mechanism unadoptable</li>
+        <li><code class="status">[x]</code> A named artifact that does not exist, or exists and hashes differently, is a failed check naming the contract id, the path, the expected digest and the observed one</li>
+        <li><code class="status">[x]</code> Hashing uses <code>node:crypto</code> over the raw bytes — no normalisation, no re-serialisation, no encoding assumption. Byte identity, the same bar the sync fence and the measured project's own producer-side check both hold</li>
       </ul>
 
       <h4>14. The central reconciliation — <code>awsf project verify</code></h4>

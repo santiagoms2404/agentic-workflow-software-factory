@@ -12,6 +12,7 @@ export const GATE_IDS = [
   "review_evidence_present",
   "commands_pass",
   "journey_passes",
+  "contract_digest",
 ] as const;
 
 export type GateId = (typeof GATE_IDS)[number];
@@ -26,9 +27,11 @@ export interface GateCheck {
 export class GateReport {
   readonly checks: GateCheck[] = [];
   readonly gateId: GateId;
+  readonly passWhenEmpty: boolean;
 
-  constructor(gateId: GateId) {
+  constructor(gateId: GateId, options: { readonly passWhenEmpty?: boolean } = {}) {
     this.gateId = gateId;
+    this.passWhenEmpty = options.passWhenEmpty ?? false;
   }
 
   check(item: string, ok: boolean, note: string): this {
@@ -37,6 +40,6 @@ export class GateReport {
   }
 
   get passed(): boolean {
-    return this.checks.length > 0 && this.checks.every((check) => check.ok);
+    return (this.checks.length > 0 || this.passWhenEmpty) && this.checks.every((check) => check.ok);
   }
 }
