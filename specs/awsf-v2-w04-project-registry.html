@@ -751,16 +751,16 @@ flowchart TD
 
     <!-- ================= M6 ================= -->
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone M6: The v1 ticket move, behaviour preserved, and the workstream closed</h3>
+      <h3><code class="status">[wip]</code> Milestone M6: The v1 ticket move, behaviour preserved, and the workstream closed</h3>
       <p><strong>The move belongs here and nowhere else, and it happens in this order for a stated reason.</strong> The fuse record reversed an earlier attempt because <code>ticketStoreFor</code> resolves <code>specs/tickets</code> and <code>TicketStore</code> reads that exact directory with no recursion, so the files moving first would silently make <code>awsf ticket list</code> and <code>awsf backlog</code> return nothing. Task 19 gives the store a plan to resolve against; task 20 moves the files. <strong>Never the other way round.</strong></p>
 
       <h4>19. <code>ticketStoreForPlan</code>, and the default-plan rule that preserves today's behaviour</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>ticketStoreForPlan(resolved, planStem)</code> returns a <code>TicketStore</code> over the resolved plan source's tickets root — <strong>inside the plan repository</strong>, not the working one</li>
-        <li><code class="status">[]</code> <code>ticketStoreFor(repository)</code> is retained as the self-placed path so a repository with no catalog behaves exactly as it does today; nothing about a single-repository project without a registry changes</li>
-        <li><code class="status">[]</code> <code>awsf ticket list</code> and <code>awsf backlog</code> accept an optional <code>--plan &lt;stem&gt;</code>, defaulting to the catalog's <code>plans.default</code>. With <code>default: awsf-plan</code> in task 10's catalog, the argument-free invocation resolves to v1's set — <strong>today's behaviour, preserved by a declared default rather than by a hardcoded path</strong></li>
-        <li><code class="status">[]</code> With no default declared and more than one plan source present, the command <strong>lists the candidates and exits non-zero</strong> rather than guessing which plan the operator meant</li>
-        <li><code class="status">[]</code> <code>TicketStore</code>, <code>TicketSchema</code> and <code>intakeRequest</code> are <strong>not modified</strong> — see <a href="#questionables">Q4</a>. Only the resolution of the directory changes</li>
+        <li><code class="status">[x]</code> <code>ticketStoreForPlan(resolved, planStem)</code> returns a <code>TicketStore</code> over the resolved plan source's tickets root — <strong>inside the plan repository</strong>, not the working one</li>
+        <li><code class="status">[x]</code> <code>ticketStoreFor(repository)</code> is retained as the self-placed path so a repository with no catalog behaves exactly as it does today; nothing about a single-repository project without a registry changes</li>
+        <li><code class="status">[x]</code> <code>awsf ticket list</code> and <code>awsf backlog</code> accept an optional <code>--plan &lt;stem&gt;</code>, defaulting to the catalog's <code>plans.default</code>. With <code>default: awsf-plan</code> in task 10's catalog, the argument-free invocation resolves to v1's set — <strong>today's behaviour, preserved by a declared default rather than by a hardcoded path</strong></li>
+        <li><code class="status">[x]</code> With no default declared and more than one plan source present, the command <strong>lists the candidates and exits non-zero</strong> rather than guessing which plan the operator meant</li>
+        <li><code class="status">[x]</code> <code>TicketStore</code>, <code>TicketSchema</code> and <code>intakeRequest</code> are <strong>not modified</strong> — see <a href="#questionables">Q4</a>. Only the resolution of the directory changes</li>
       </ul>
 
       <h4>20. Move v1's flat tickets, and prove nothing changed for the reader</h4>

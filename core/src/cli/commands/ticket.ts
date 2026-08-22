@@ -1,4 +1,5 @@
-import { resolve } from "node:path";
+import { basename, resolve } from "node:path";
+import type { ResolvedPlanSource } from "../../registry/plan-source.ts";
 import { TicketStore, type StoredTicket } from "../../persistence/ticket-store.ts";
 
 export type TicketAction = "new" | "refine" | "list" | "show";
@@ -14,6 +15,13 @@ export class TicketNotFound extends Error {
 
 export function ticketStoreFor(repository: string): TicketStore {
   return new TicketStore(resolve(repository, "specs", "tickets"));
+}
+
+/** Resolves one declared plan's store without changing TicketStore's file contract. */
+export function ticketStoreForPlan(resolved: readonly ResolvedPlanSource[], planStem: string): TicketStore {
+  const source = resolved.find((candidate) => basename(candidate.planPath, ".html") === planStem);
+  if (source === undefined) throw new Error(`no resolved plan source named ${JSON.stringify(planStem)}`);
+  return new TicketStore(source.ticketsPath);
 }
 
 function summary(record: StoredTicket): string {

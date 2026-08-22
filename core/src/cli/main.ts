@@ -1,11 +1,14 @@
 #!/usr/bin/env -S node --experimental-strip-types
 
 import { randomUUID } from "node:crypto";
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { basename, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { toConfigSnapshotJson } from "../config/effective-config.ts";
 import { loadConfig } from "../config/load.ts";
+import { loadCatalog } from "../registry/catalog.ts";
+import { resolvePlanSources } from "../registry/plan-source.ts";
 import { resolveStateRoot } from "../persistence/platform-paths.ts";
 import { callCeilingsOf, type Tier } from "../state/tiers.ts";
 import { processOwnerTerminal, type OwnerTerminal } from "./tty.ts";
@@ -28,7 +31,7 @@ import { runStubCommand } from "./commands/run.ts";
 import { runProductionCommand } from "./commands/production-run.ts";
 import { defaultWorktreeRoot, startCommand } from "./commands/start.ts";
 import { statusCommand } from "./commands/status.ts";
-import { intakeRequest, listTickets, showTicket, ticketStoreFor } from "./commands/ticket.ts";
+import { intakeRequest, listTickets, showTicket, ticketStoreFor, ticketStoreForPlan } from "./commands/ticket.ts";
 import { watchCommand } from "./commands/watch.ts";
 
 /** The complete owner-facing command table; documentation reconciles against it. */
@@ -77,6 +80,44 @@ function tierOf(value: string): Tier {
   const number = Number(value.replace(/^T/, ""));
   if (number !== 0 && number !== 1 && number !== 2) throw new Error(`tier must be 0, 1, or 2; got ${value}`);
   return number;
+}
+
+class PlanSelectionRequiredError extends Error {
+  readonly candidates: readonly string[];
+
+  constructor(candidates: readonly string[]) {
+    super("--plan is required when this catalog has no default plan");
+    this.name = "PlanSelectionRequiredError";
+    this.candidates = candidates;
+  }
+}
+
+/** Uses a catalog when present, while retaining the original self-placed store otherwise. */
+async function ticketStoreForList(repository: string, requestedPlan: string | undefined) {
+  let source: string;
+  try {
+    source = await readFile(resolve(repository, "awsf.project.yaml"), "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return ticketStoreFor(repository);
+    throw error;
+  }
+
+  const catalog = loadCatalog(source);
+  const resolved = resolvePlanSources(resolve(repository, "awsf.project.yaml"), catalog);
+  const candidates = resolved.map((plan) => basename(plan.planPath, ".html"));
+  const planStem = requestedPlan ?? catalog.plans.default;
+  if (planStem === undefined) {
+    if (candidates.length > 1) throw new PlanSelectionRequiredError(candidates);
+    if (candidates.length === 0) throw new Error(`catalog ${JSON.stringify(resolve(repository, "awsf.project.yaml"))} resolved no plan sources`);
+    return ticketStoreForPlan(resolved, candidates[0]!);
+  }
+
+  const store = ticketStoreForPlan(resolved, planStem);
+  // Task 20 moves the existing flat default set after this resolver exists.
+  // Until then, the declared default retains the single-repository behaviour.
+  return !existsSync(store.directory) && planStem === catalog.plans.default
+    ? ticketStoreFor(repository)
+    : store;
 }
 
 export interface CliMainOptions {
@@ -130,16 +171,28 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       return 1;
     }
     if (command === "backlog") {
-      if (parsed.positionals.length !== 0) throw new Error("usage: awsf backlog [--state-root PATH]");
-      for (const line of await backlogCommand(ticketStoreFor(cwd), resolve(stateRoot, "awsf.db"))) out(line);
-      return 0;
+      if (parsed.positionals.length !== 0) throw new Error("usage: awsf backlog [--state-root PATH] [--plan <stem>]");
+      try {
+        for (const line of await backlogCommand(await ticketStoreForList(cwd, parsed.flags.plan), resolve(stateRoot, "awsf.db"))) out(line);
+        return 0;
+      } catch (error) {
+        if (!(error instanceof PlanSelectionRequiredError)) throw error;
+        out(`plan candidates: ${error.candidates.join(", ")}`);
+        return 1;
+      }
     }
     if (command === "ticket") {
       const action = parsed.positionals[0];
       const store = ticketStoreFor(cwd);
       if (action === "list" && parsed.positionals.length === 1) {
-        for (const line of await listTickets(store)) out(line);
-        return 0;
+        try {
+          for (const line of await listTickets(await ticketStoreForList(cwd, parsed.flags.plan))) out(line);
+          return 0;
+        } catch (error) {
+          if (!(error instanceof PlanSelectionRequiredError)) throw error;
+          out(`plan candidates: ${error.candidates.join(", ")}`);
+          return 1;
+        }
       }
       if (action === "show" && parsed.positionals.length === 2) {
         for (const line of await showTicket(store, parsed.positionals[1]!)) out(line);
