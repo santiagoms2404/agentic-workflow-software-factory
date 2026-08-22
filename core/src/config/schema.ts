@@ -50,9 +50,11 @@ const IdentifierString = Type.String({ minLength: 1, pattern: "^[a-zA-Z0-9][a-zA
 const NonEmptyString = Type.String({ minLength: 1 });
 const RiskTier = Type.Union([Type.Literal("T0"), Type.Literal("T1"), Type.Literal("T2")]);
 
+export const ProjectSlugSchema = Type.String({ minLength: 1, pattern: "^[a-z0-9][a-z0-9-]*$" });
+
 const ProjectSchema = Type.Object(
   {
-    slug: Type.String({ minLength: 1, pattern: "^[a-z0-9][a-z0-9-]*$" }),
+    slug: ProjectSlugSchema,
     default_workflow: IdentifierString, // membership checked by load.ts against KNOWN_WORKFLOW_IDS
   },
   { additionalProperties: false },
@@ -146,7 +148,7 @@ const WorkflowsSchema = Type.Object(
 // against KNOWN_GATE_IDS. The structural gates (envelope_valid,
 // diff_matches_claims, verdict_consistent, …) are hardcoded in
 // core/src/gates/ and never appear here.
-const GateEntrySchema = Type.Object(
+export const GateEntrySchema = Type.Object(
   {
     argv: Type.Array(NonEmptyString, { minItems: 1 }),
     timeout_seconds: Type.Integer({ minimum: 1 }),

@@ -76,11 +76,13 @@ three induced-drift proofs (15, 17, 18) are the ones worth spending the better m
 - **Read first**, always: `specs/awsf-v2-w04-project-registry.html` (the named milestone/task in full), `AGENTS.md` (all
   twelve invariants, invariant 12 in its **amended** form from task 16 onward), and whatever source
   files that task's own `READ FIRST` names.
-- **Marker discipline — the positive and the negative, together.** Flip **this leaf plan's** own
-  checklist items and milestone `<h3>` to `[wip]` on start and `[x]` on completion, in
-  `specs/awsf-v2-w04-project-registry.html`, on **every** task including the first. Flip the matching
-  `specs/tickets/awsf-v2-w04-project-registry/T<nn>.md`'s `state:` in the same commit. **Never** touch
-  `specs/awsf-v2-plan.html`'s W04 marker — **task 21 is the only task that does.**
+- **Marker discipline — the positive and the negative, together.** Flip **this leaf plan's** current
+  task checklist items to `[wip]` on start and `[x]` on completion in
+  `specs/awsf-v2-w04-project-registry.html`. A milestone `<h3>` moves to `[wip]` when its first task
+  starts, stays `[wip]` through intermediate tasks, and moves to `[x]` only when its final task
+  completes. Flip the matching `specs/tickets/awsf-v2-w04-project-registry/T<nn>.md`'s `state:` in
+  the same commit. **Never** touch `specs/awsf-v2-plan.html`'s W04 marker — **task 21 is the only
+  task that does.**
 - **Never do**: write implementation code beyond what the task names; add a dependency outside the
   D2 allowlist (AGENTS.md invariant 7); add a new `node:child_process` import site (invariant 3);
   use `shell: true` (invariant 4); commit a runtime artifact, receipt or manifest (invariant 10);
@@ -133,8 +135,8 @@ DO NOT
 
 DEFINITION OF DONE
   The plan's task 1 checklist, every box.
-  Flip task 1's checklist boxes and milestone M1 to [wip] on start and [x] on completion in
-  specs/awsf-v2-w04-project-registry.html, and T01.md's state to wip then done in the same commit.
+  Flip task 1's checklist boxes and milestone M1 to [wip] on start. On completion, flip task 1's
+  boxes to [x] and T01.md's state to done in the same commit; keep milestone M1 [wip] through task 4.
   Do NOT touch specs/awsf-v2-plan.html.
   Every existing config/load test passes UNMODIFIED - that is the proof, not inspection.
 ```
@@ -146,7 +148,7 @@ DEFINITION OF DONE
   MODEL   Opus 5 · EFFORT high
   CLAUDE  claude:opus · /effort high
   GPT     codex:gpt-5.6-terra · reasoning high
-  WHY     a closed vocabulary that freezes here; each member has to be justified against a real project.
+  WHY     a closed vocabulary that freezes here; measured and unobserved members must not be conflated.
 
 TASK 2 of 21. Plan: specs/awsf-v2-w04-project-registry.html, milestone M1.
 PREDECESSORS: T01 is [x] and core/src/config/machine-path.ts exists.
@@ -177,10 +179,11 @@ DO NOT
 
 DEFINITION OF DONE
   The plan's task 2 checklist, every box.
-  Flip task 2's checklist boxes and milestone M1 to [wip] on start and [x] on completion in
+  Flip task 2's checklist boxes to [wip] on start and [x] on completion in
   specs/awsf-v2-w04-project-registry.html, and T02.md's state to wip then done in the same commit.
-  Do NOT touch specs/awsf-v2-plan.html.
-  A reviewer can point at each of the five role members and name the measured repository it exists for.
+  Keep milestone M1 [wip]; only task 5 may flip it to [x]. Do NOT touch specs/awsf-v2-plan.html.
+  A reviewer can map plan, service, application and source to measured repositories; library is
+  explicitly recorded as unobserved rather than falsely attributed.
 ```
 
 ### T03 — The catalog loader and its closed error hierarchy
@@ -218,9 +221,9 @@ DO NOT
 
 DEFINITION OF DONE
   The plan's task 3 checklist, every box.
-  Flip task 3's checklist boxes and milestone M1 to [wip] on start and [x] on completion in
+  Flip task 3's checklist boxes to [wip] on start and [x] on completion in
   specs/awsf-v2-w04-project-registry.html, and T03.md's state to wip then done in the same commit.
-  Do NOT touch specs/awsf-v2-plan.html.
+  Keep milestone M1 [wip]; only task 5 may flip it to [x]. Do NOT touch specs/awsf-v2-plan.html.
   loadCatalog shares ONE absolute-path implementation with loadConfig - grep proves there is no second copy.
 ```
 
@@ -258,9 +261,9 @@ DO NOT
 
 DEFINITION OF DONE
   The plan's task 4 checklist, every box.
-  Flip task 4's checklist boxes and milestone M1 to [wip] on start and [x] on completion in
+  Flip task 4's checklist boxes to [wip] on start and [x] on completion in
   specs/awsf-v2-w04-project-registry.html, and T04.md's state to wip then done in the same commit.
-  Do NOT touch specs/awsf-v2-plan.html.
+  Keep milestone M1 [wip]; only task 5 may flip it to [x]. Do NOT touch specs/awsf-v2-plan.html.
   A placement document carrying default_branch or role is REJECTED by the schema, not ignored.
 ```
 
@@ -301,9 +304,8 @@ DO NOT
 
 DEFINITION OF DONE
   The plan's task 5 checklist, every box.
-  Flip task 5's checklist boxes and milestone M1 to [wip] on start and [x] on completion in
-  specs/awsf-v2-w04-project-registry.html, and T05.md's state to wip then done in the same commit.
-  Do NOT touch specs/awsf-v2-plan.html.
+  Flip task 5's checklist boxes to [wip] on start. On completion, flip task 5's boxes and milestone
+  M1 to [x], and T05.md's state to done in the same commit. Do NOT touch specs/awsf-v2-plan.html.
   node --experimental-strip-types --test core/test/unit/registry/catalog.test.ts - green
   node --experimental-strip-types --test core/test/unit/registry/placement.test.ts - green
   node --experimental-strip-types --test core/test/unit/meta/layer-separation.test.ts - green
@@ -348,8 +350,8 @@ DO NOT
 
 DEFINITION OF DONE
   The plan's task 6 checklist, every box.
-  Flip task 6's checklist boxes and milestone M2 to [wip] on start and [x] on completion in
-  specs/awsf-v2-w04-project-registry.html, and T06.md's state to wip then done in the same commit.
+  Flip task 6's checklist boxes and milestone M2 to [wip] on start. On completion, flip task 6's
+  boxes to [x] and T06.md's state to done in the same commit; keep milestone M2 [wip] through task 7.
   Do NOT touch specs/awsf-v2-plan.html.
   gatesFor's return value is handed to commandsPass with no adaptation - the catalog RECORDS, it does not RESOLVE.
 ```
@@ -387,9 +389,9 @@ DO NOT
 
 DEFINITION OF DONE
   The plan's task 7 checklist, every box.
-  Flip task 7's checklist boxes and milestone M2 to [wip] on start and [x] on completion in
+  Flip task 7's checklist boxes to [wip] on start and [x] on completion in
   specs/awsf-v2-w04-project-registry.html, and T07.md's state to wip then done in the same commit.
-  Do NOT touch specs/awsf-v2-plan.html.
+  Keep milestone M2 [wip]; only task 8 may flip it to [x]. Do NOT touch specs/awsf-v2-plan.html.
   A test would go RED if a future schema added a per-project state root to either layer.
 ```
 
@@ -424,9 +426,8 @@ DO NOT
 
 DEFINITION OF DONE
   The plan's task 8 checklist, every box.
-  Flip task 8's checklist boxes and milestone M2 to [wip] on start and [x] on completion in
-  specs/awsf-v2-w04-project-registry.html, and T08.md's state to wip then done in the same commit.
-  Do NOT touch specs/awsf-v2-plan.html.
+  Flip task 8's checklist boxes to [wip] on start. On completion, flip task 8's boxes and milestone
+  M2 to [x], and T08.md's state to done in the same commit. Do NOT touch specs/awsf-v2-plan.html.
   node --experimental-strip-types --test core/test/unit/registry/resolve.test.ts - green
   npm run test:unit - green, no count regression
 ```
@@ -465,8 +466,8 @@ DO NOT
 
 DEFINITION OF DONE
   The plan's task 9 checklist, every box.
-  Flip task 9's checklist boxes and milestone M3 to [wip] on start and [x] on completion in
-  specs/awsf-v2-w04-project-registry.html, and T09.md's state to wip then done in the same commit.
+  Flip task 9's checklist boxes and milestone M3 to [wip] on start. On completion, flip task 9's
+  boxes to [x] and T09.md's state to done in the same commit; keep milestone M3 [wip] through task 10.
   Do NOT touch specs/awsf-v2-plan.html.
   A failed resolution leaves NO placement file behind - proven in task 11, not assumed here.
 ```
@@ -509,9 +510,9 @@ DO NOT
 
 DEFINITION OF DONE
   The plan's task 10 checklist, every box.
-  Flip task 10's checklist boxes and milestone M3 to [wip] on start and [x] on completion in
+  Flip task 10's checklist boxes to [wip] on start and [x] on completion in
   specs/awsf-v2-w04-project-registry.html, and T10.md's state to wip then done in the same commit.
-  Do NOT touch specs/awsf-v2-plan.html.
+  Keep milestone M3 [wip]; only task 11 may flip it to [x]. Do NOT touch specs/awsf-v2-plan.html.
   awsf.project.yaml loads through loadCatalog in a test, and its slug equals awsf.config.yaml's.
 ```
 
@@ -545,9 +546,8 @@ DO NOT
 
 DEFINITION OF DONE
   The plan's task 11 checklist, every box.
-  Flip task 11's checklist boxes and milestone M3 to [wip] on start and [x] on completion in
-  specs/awsf-v2-w04-project-registry.html, and T11.md's state to wip then done in the same commit.
-  Do NOT touch specs/awsf-v2-plan.html.
+  Flip task 11's checklist boxes to [wip] on start. On completion, flip task 11's boxes and milestone
+  M3 to [x], and T11.md's state to done in the same commit. Do NOT touch specs/awsf-v2-plan.html.
   node --experimental-strip-types --test core/test/unit/cli/project-command.test.ts - green
   node --experimental-strip-types --test core/test/unit/meta/doc-reconciliation.test.ts - green
   npm run test:unit && npm run typecheck && npm run lint - all clean
@@ -586,8 +586,8 @@ DO NOT
 
 DEFINITION OF DONE
   The plan's task 12 checklist, every box.
-  Flip task 12's checklist boxes and milestone M4 to [wip] on start and [x] on completion in
-  specs/awsf-v2-w04-project-registry.html, and T12.md's state to wip then done in the same commit.
+  Flip task 12's checklist boxes and milestone M4 to [wip] on start. On completion, flip task 12's
+  boxes to [x] and T12.md's state to done in the same commit; keep milestone M4 [wip] through task 14.
   Do NOT touch specs/awsf-v2-plan.html.
   The digest format has ONE schema fragment, used in both documents - grep proves there is no second.
 ```
@@ -626,9 +626,9 @@ DO NOT
 
 DEFINITION OF DONE
   The plan's task 13 checklist, every box.
-  Flip task 13's checklist boxes and milestone M4 to [wip] on start and [x] on completion in
+  Flip task 13's checklist boxes to [wip] on start and [x] on completion in
   specs/awsf-v2-w04-project-registry.html, and T13.md's state to wip then done in the same commit.
-  Do NOT touch specs/awsf-v2-plan.html.
+  Keep milestone M4 [wip]; only task 15 may flip it to [x]. Do NOT touch specs/awsf-v2-plan.html.
   The function's SIGNATURE makes the single-root claim checkable without reading its body.
 ```
 
@@ -664,9 +664,9 @@ DO NOT
 
 DEFINITION OF DONE
   The plan's task 14 checklist, every box.
-  Flip task 14's checklist boxes and milestone M4 to [wip] on start and [x] on completion in
+  Flip task 14's checklist boxes to [wip] on start and [x] on completion in
   specs/awsf-v2-w04-project-registry.html, and T14.md's state to wip then done in the same commit.
-  Do NOT touch specs/awsf-v2-plan.html.
+  Keep milestone M4 [wip]; only task 15 may flip it to [x]. Do NOT touch specs/awsf-v2-plan.html.
   A reader can tell from the report WHICH of the N+1 copies moved.
 ```
 
@@ -705,9 +705,8 @@ DO NOT
 
 DEFINITION OF DONE
   The plan's task 15 checklist, every box.
-  Flip task 15's checklist boxes and milestone M4 to [wip] on start and [x] on completion in
-  specs/awsf-v2-w04-project-registry.html, and T15.md's state to wip then done in the same commit.
-  Do NOT touch specs/awsf-v2-plan.html.
+  Flip task 15's checklist boxes to [wip] on start. On completion, flip task 15's boxes and milestone
+  M4 to [x], and T15.md's state to done in the same commit. Do NOT touch specs/awsf-v2-plan.html.
   node --experimental-strip-types --test core/test/unit/registry/contracts.test.ts - green
   All three drift modes have been SEEN to go red, each distinguished.
 ```
@@ -750,8 +749,8 @@ DO NOT
 
 DEFINITION OF DONE
   The plan's task 16 checklist, every box.
-  Flip task 16's checklist boxes and milestone M5 to [wip] on start and [x] on completion in
-  specs/awsf-v2-w04-project-registry.html, and T16.md's state to wip then done in the same commit.
+  Flip task 16's checklist boxes and milestone M5 to [wip] on start. On completion, flip task 16's
+  boxes to [x] and T16.md's state to done in the same commit; keep milestone M5 [wip] through task 17.
   Do NOT touch specs/awsf-v2-plan.html.
   The fence can still run offline in a clone that has never registered anything.
 ```
@@ -791,9 +790,9 @@ DO NOT
 
 DEFINITION OF DONE
   The plan's task 17 checklist, every box.
-  Flip task 17's checklist boxes and milestone M5 to [wip] on start and [x] on completion in
+  Flip task 17's checklist boxes to [wip] on start and [x] on completion in
   specs/awsf-v2-w04-project-registry.html, and T17.md's state to wip then done in the same commit.
-  Do NOT touch specs/awsf-v2-plan.html.
+  Keep milestone M5 [wip]; only task 18 may flip it to [x]. Do NOT touch specs/awsf-v2-plan.html.
   npm run test:unit is green over this repository's real tree with NO change to any ticket or plan file.
 ```
 
@@ -830,9 +829,8 @@ DO NOT
 
 DEFINITION OF DONE
   The plan's task 18 checklist, every box.
-  Flip task 18's checklist boxes and milestone M5 to [wip] on start and [x] on completion in
-  specs/awsf-v2-w04-project-registry.html, and T18.md's state to wip then done in the same commit.
-  Do NOT touch specs/awsf-v2-plan.html.
+  Flip task 18's checklist boxes to [wip] on start. On completion, flip task 18's boxes and milestone
+  M5 to [x], and T18.md's state to done in the same commit. Do NOT touch specs/awsf-v2-plan.html.
   node --experimental-strip-types --test core/test/unit/registry/plan-source.test.ts - green
   npm run test:unit - green over the real tree, no count regression
 ```
@@ -870,8 +868,8 @@ DO NOT
 
 DEFINITION OF DONE
   The plan's task 19 checklist, every box.
-  Flip task 19's checklist boxes and milestone M6 to [wip] on start and [x] on completion in
-  specs/awsf-v2-w04-project-registry.html, and T19.md's state to wip then done in the same commit.
+  Flip task 19's checklist boxes and milestone M6 to [wip] on start. On completion, flip task 19's
+  boxes to [x] and T19.md's state to done in the same commit; keep milestone M6 [wip] through task 20.
   Do NOT touch specs/awsf-v2-plan.html.
   Only the RESOLUTION of the directory changes. The store's contract is untouched.
 ```
@@ -910,9 +908,9 @@ DO NOT
 
 DEFINITION OF DONE
   The plan's task 20 checklist, every box.
-  Flip task 20's checklist boxes and milestone M6 to [wip] on start and [x] on completion in
+  Flip task 20's checklist boxes to [wip] on start and [x] on completion in
   specs/awsf-v2-w04-project-registry.html, and T20.md's state to wip then done in the same commit.
-  Do NOT touch specs/awsf-v2-plan.html.
+  Keep milestone M6 [wip]; only task 21 may flip it to [x]. Do NOT touch specs/awsf-v2-plan.html.
   awsf ticket list and awsf backlog match the captured baseline EXACTLY
   awsf ticket show T17 resolves
   npm run test:unit - green
@@ -954,9 +952,9 @@ DO NOT
 
 DEFINITION OF DONE
   The plan's task 21 checklist, every box.
-  Flip task 21's checklist boxes and milestone M6 to [wip] on start and [x] on completion in
-  specs/awsf-v2-w04-project-registry.html, and T21.md's state to wip then done in the same commit.
-  Task 21 IS the task that flips specs/awsf-v2-plan.html's W04 marker - in this same commit.
+  Flip task 21's checklist boxes to [wip] on start. On completion, flip task 21's boxes and milestone
+  M6 to [x], and T21.md's state to done in the same commit. Task 21 IS the task that flips
+  specs/awsf-v2-plan.html's W04 marker - in this same commit.
   npm run test:unit && npm run typecheck && npm run lint - all clean
   node --experimental-strip-types --test core/test/unit/meta/ticket-plan-sync.test.ts - green
   Every marker in this plan is [x]; the spine's W04 marker is [x], in this same commit.
