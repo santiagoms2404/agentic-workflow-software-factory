@@ -689,7 +689,7 @@ flowchart LR
 
     <!-- ================= M5 ================= -->
     <div class="phase">
-      <h3><code class="status">[wip]</code> Milestone M5: Invariant 12 redefined per registered plan source, and proven to bite</h3>
+      <h3><code class="status">[x]</code> Milestone M5: Invariant 12 redefined per registered plan source, and proven to bite</h3>
       <p><strong>Precondition, and the build must stop if it is unmet:</strong> the owner-authored amendment in <a href="#amendment-required">Amendment Required Before the Build</a> has landed. Ordering gate <span class="gate">G2</span>. This phase redefines the relation; it does not relax it, and it does not touch <code>AGENTS.md</code>.</p>
 
       <figure>
@@ -733,11 +733,11 @@ flowchart TD
       <h4>18. Testing Strategy</h4>
       <p>The redefinition must be proven to fail on an induced drift, and the drift that matters is the one adjacency could never have seen: a plan and its tickets in a repository that is not this one.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>npm run test:unit</code> — <code>ticket-plan-sync.test.ts</code> green over this repository's real tree, resolved through the registry, with <strong>no change to any ticket or plan file</strong>. The existing 38-ticket set and every v2 set are proven to still be found</li>
-        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/registry/plan-source.test.ts</code> — a temporary <strong>foreign</strong> plan repository holding a plan, its build prompts and a ticket set, registered into a temporary state root and resolved through placement: the fence's assertions pass across the repository boundary</li>
-        <li><code class="status">[]</code> <strong>Proven to bite, across the boundary:</strong> flip one ticket's <code>state</code> in that foreign repository so it disagrees with the plan's marker → red, with a message naming the plan source. Revert; then delete the plan → the orphan rule fires. Revert; then set <code>plans.format</code> to an unimplemented value → <code>UnsupportedPlanFormatError</code>, <strong>not</strong> a vacuous pass</li>
-        <li><code class="status">[]</code> A regression assertion for the vacuous-pass hazard specifically: a plan whose headings use the measured project's <em>Phase</em> grammar under a <em>declared</em> v1 format is asserted to fail loudly rather than parse to zero tasks</li>
-        <li><code class="status">[]</code> Every temporary repository and state root is removed in a cleanup</li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code> — <code>ticket-plan-sync.test.ts</code> green over this repository's real tree, resolved through the registry, with <strong>no change to any ticket or plan file</strong>. The existing 38-ticket set and every v2 set are proven to still be found</li>
+        <li><code class="status">[x]</code> <code>node --experimental-strip-types --test core/test/unit/registry/plan-source.test.ts</code> — a temporary <strong>foreign</strong> plan repository holding a plan, its build prompts and a ticket set, registered into a temporary state root and resolved through placement: the fence's assertions pass across the repository boundary</li>
+        <li><code class="status">[x]</code> <strong>Proven to bite, across the boundary:</strong> flip one ticket's <code>state</code> in that foreign repository so it disagrees with the plan's marker → red, with a message naming the plan source. Revert; then delete the plan → the orphan rule fires. Revert; then set <code>plans.format</code> to an unimplemented value → <code>UnsupportedPlanFormatError</code>, <strong>not</strong> a vacuous pass</li>
+        <li><code class="status">[x]</code> A regression assertion for the vacuous-pass hazard specifically: a plan whose headings use the measured project's <em>Phase</em> grammar under a <em>declared</em> v1 format is asserted to fail loudly rather than parse to zero tasks</li>
+        <li><code class="status">[x]</code> Every temporary repository and state root is removed in a cleanup</li>
       </ul>
       <div class="card warn">
         <h5>What the redefined fence does <em>not</em> cover</h5>
