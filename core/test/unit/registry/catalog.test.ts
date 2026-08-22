@@ -8,6 +8,7 @@ import {
   CatalogContractReferenceError,
   CatalogEscapingPathError,
   CatalogPlanRoleCardinalityError,
+  CatalogSchemaError,
   CatalogUnknownGateError,
   CatalogUnknownVersionError,
   loadCatalog,
@@ -89,6 +90,13 @@ test("rejects a repository-relative path with an upward escape", () => {
   doc.contracts[0].producer.path = "../service/openapi.json";
 
   assertCode(() => loadCatalog(toYaml(doc)), CatalogEscapingPathError, "E_CATALOG_ESCAPING_PATH");
+});
+
+test("rejects uppercase hex in a catalog contract digest", () => {
+  const doc = cloneCatalog();
+  doc.contracts[0].digest = `sha256:${"A".repeat(64)}`;
+
+  assertCode(() => loadCatalog(toYaml(doc)), CatalogSchemaError, "E_CATALOG_SCHEMA");
 });
 
 for (const count of [0, 2]) {

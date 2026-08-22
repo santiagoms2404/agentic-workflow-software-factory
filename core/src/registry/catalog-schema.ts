@@ -8,11 +8,14 @@ export const PROJECT_DELIVERY_POSTURES = ["service", "mobile", "docs", "none"] a
 export const PROJECT_PLAN_FORMATS = ["awsf-plan-html/v1"] as const;
 
 const NonEmptyString = Type.String({ minLength: 1 });
-const ExplicitId = Type.String({ minLength: 1, pattern: "^[a-zA-Z0-9][a-zA-Z0-9._-]*$" });
+export const ExplicitIdSchema = Type.String({ minLength: 1, pattern: "^[a-zA-Z0-9][a-zA-Z0-9._-]*$" });
+
+/** Shared verbatim by the parent catalog and every participating repository's projection. */
+export const ContractDigestSchema = Type.String({ pattern: "^sha256:[0-9a-f]{64}$" });
 
 const RepositoryReferenceSchema = Type.Object(
   {
-    repository: ExplicitId,
+    repository: ExplicitIdSchema,
     path: NonEmptyString,
   },
   { additionalProperties: false },
@@ -32,7 +35,7 @@ const RepositorySchema = Type.Object(
     // a complete account of every check a repository may run.
     gates: Type.Optional(
       Type.Partial(
-        Type.Record(ExplicitId, GateEntrySchema, {
+        Type.Record(ExplicitIdSchema, GateEntrySchema, {
           additionalProperties: false,
         }),
       ),
@@ -51,7 +54,7 @@ export const ProjectCatalogSchema = Type.Object(
       { slug: ProjectSlugSchema },
       { additionalProperties: false },
     ),
-    repositories: Type.Record(ExplicitId, RepositorySchema, {
+    repositories: Type.Record(ExplicitIdSchema, RepositorySchema, {
       minProperties: 1,
       additionalProperties: false,
     }),
@@ -67,8 +70,8 @@ export const ProjectCatalogSchema = Type.Object(
       Type.Array(
         Type.Object(
           {
-            id: ExplicitId,
-            digest: Type.String({ pattern: "^sha256:[0-9a-fA-F]{64}$" }),
+            id: ExplicitIdSchema,
+            digest: ContractDigestSchema,
             producer: RepositoryReferenceSchema,
             consumers: Type.Array(RepositoryReferenceSchema, { minItems: 1 }),
           },

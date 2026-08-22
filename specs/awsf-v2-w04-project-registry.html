@@ -618,7 +618,7 @@ flowchart TD
 
     <!-- ================= M4 ================= -->
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone M4: Q1 as decided — the content-addressed contract and its two fences</h3>
+      <h3><code class="status">[wip]</code> Milestone M4: Q1 as decided — the content-addressed contract and its two fences</h3>
       <p><strong>Questionable Q1 is decided and is a constraint, not an assignment.</strong> The shape is settled: an immutable, content-addressed artifact committed in each child, with the parent naming <code>{child repository, contract digest}</code> and a meta-test asserting each child's copy hashes to what the parent names. This phase owns the mechanism, and the mechanism is two fences with a deliberate division of labour.</p>
 
       <figure>
@@ -645,10 +645,10 @@ flowchart LR
 
       <h4>12. The parent record, and its projection into each participating repository</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>awsf.contracts/v1</code>: a repository-root document listing, per contract the repository participates in, <code>{id, role: produces|consumes, path, digest}</code> — and nothing else. It is a projection, not a second source of truth</li>
-        <li><code class="status">[]</code> The digest format is <code>sha256:</code> plus 64 lowercase hex, in both the catalog and the projection, validated by the same schema fragment in both — a format that differs between them is a drift the fence cannot see</li>
-        <li><code class="status">[]</code> <code>path</code> is repository-relative and rejects a <code>..</code> segment via the same <code>normalizeRepositoryPath</code> task 3 uses — a contract path that escapes its own repository is the thing this whole shape exists to prevent</li>
-        <li><code class="status">[]</code> The projection is <strong>not</strong> added to <code>policy.protected_paths</code>: a contract revision costs a coordinated commit in every child, which Q1 accepted as the right price, and a protected file could not carry it</li>
+        <li><code class="status">[x]</code> <code>awsf.contracts/v1</code>: a repository-root document listing, per contract the repository participates in, <code>{id, role: produces|consumes, path, digest}</code> — and nothing else. It is a projection, not a second source of truth</li>
+        <li><code class="status">[x]</code> The digest format is <code>sha256:</code> plus 64 lowercase hex, in both the catalog and the projection, validated by the same schema fragment in both — a format that differs between them is a drift the fence cannot see</li>
+        <li><code class="status">[x]</code> <code>path</code> is repository-relative and rejects a <code>..</code> segment via the same <code>normalizeRepositoryPath</code> task 3 uses — a contract path that escapes its own repository is the thing this whole shape exists to prevent</li>
+        <li><code class="status">[x]</code> The projection is <strong>not</strong> added to <code>policy.protected_paths</code>: a contract revision costs a coordinated commit in every child, which Q1 accepted as the right price, and a protected file could not carry it</li>
       </ul>
 
       <h4>13. The local fence — a gate that reads only inside one worktree</h4>
