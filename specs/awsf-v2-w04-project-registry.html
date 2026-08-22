@@ -983,6 +983,12 @@ flowchart TD
       <p><strong>Three contradictions were corrected before completion was claimed.</strong> Plan-role cardinality remains in task 3, which owns the loader that can enforce it. Milestone markers now stay <code>[wip]</code> through intermediate tasks and move to <code>[x]</code> only with the milestone's final task; the convention, all twenty-one prompts and their ticket copies now agree. The measurement is recorded at its actual width: it grounds <code>plan</code>, <code>service</code>, <code>application</code> and <code>source</code>, while <code>library</code> remains an explicitly unobserved v1 member. T02 is <code>done</code>, M1 remains <code>[wip]</code>, and the v2 spine was untouched.</p>
       <p>Evidence: <code>npm run test:unit</code> passed 1081/1081; <code>npm run typecheck</code> passed; scoped <code>oxlint</code> reported zero warnings and zero errors; the catalog schema probe passed 10/10; and the ticket/plan sync fence passed 10/10.</p>
     </details>
+    <details>
+      <summary>2026-08-22 — M2 completed: catalog and placement join</summary>
+      <p><strong>M2 is complete in commits <code>9d45f93</code>, <code>7a22f90</code> and <code>56a5ba9</code>.</strong> The resolved-project join names and refuses slug disagreement, unplaced catalog repositories, orphan placement entries and opt-in root-commit identity disagreement. Placement remains inside the one machine state root, and the state root remains a caller-provided value rather than a registry field.</p>
+      <p><code>core/test/unit/registry/resolve.test.ts</code> reads catalog and placement documents from a temporary directory across five repositories. It creates two temporary Git repositories, records the first root commit in the catalog, induces the identity mismatch by locating that entry at the second repository, and proves a repository without <code>identity.root_commit</code> resolves without verification. It also proves the per-repository, project-level and state-root-sibling worktree-root fallbacks. Every fixture is removed in <code>finally</code>.</p>
+      <p>Evidence: <code>node --experimental-strip-types --test core/test/unit/registry/resolve.test.ts</code> passed 3/3; <code>npm run test:unit</code> passed 1103/1103, exit 0; and the ticket/plan sync fence passed 10/10. T08 is <code>done</code>, M2 is <code>[x]</code>, and the v2 spine was untouched.</p>
+    </details>
   </section>
 
 </main>
