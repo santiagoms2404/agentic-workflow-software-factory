@@ -451,7 +451,7 @@ application  lib/api/openapi.json    sha256 0510d03b81c4…   430473 bytes
 
     <!-- ================= M1 ================= -->
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone M1: Two layers, each refusing what the other must hold</h3>
+      <h3><code class="status">[wip]</code> Milestone M1: Two layers, each refusing what the other must hold</h3>
       <p>Nothing is joined, resolved or registered in this phase. It builds the two documents and — the part that makes the separation real rather than stylistic — the rejections that keep each from becoming the other. The catalog inherits its absolute-path refusal from the code that already enforces it, so the guarantee has one implementation, not two.</p>
 
       <figure>
@@ -474,10 +474,10 @@ flowchart TD
       <h4>1. Extract the machine-path guard, leaving <code>loadConfig</code> behaviourally identical</h4>
       <p>A pure extraction first, with no behaviour change anywhere, so that the catalog's later reuse is provably the same code and not a lookalike. The spine's fourth authoring rule applies directly: check whether the guarantee is already enforced somewhere stronger before adding a weaker sibling.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>core/src/config/machine-path.ts</code> exports <code>isAbsoluteMachinePath</code>, <code>scanStrings</code> and <code>assertNoAbsolutePaths</code>, with <code>ABSOLUTE_PATH_PATTERN</code> and the "durable intent" comment moved across intact</li>
-        <li><code class="status">[]</code> <code>load.ts</code> imports them and defines none of them; <code>ConfigAbsolutePathError</code> stays in <code>load.ts</code> and is passed in as the thrower, so the config loader's closed error hierarchy is unchanged</li>
-        <li><code class="status">[]</code> The module is pure path arithmetic and string inspection — no filesystem, no clock, no <code>node:child_process</code></li>
-        <li><code class="status">[]</code> Every existing <code>config/load</code> test passes unmodified — the extraction is proven by the absence of a test edit, not by inspection</li>
+        <li><code class="status">[x]</code> <code>core/src/config/machine-path.ts</code> exports <code>isAbsoluteMachinePath</code>, <code>scanStrings</code> and <code>assertNoAbsolutePaths</code>, with <code>ABSOLUTE_PATH_PATTERN</code> and the "durable intent" comment moved across intact</li>
+        <li><code class="status">[x]</code> <code>load.ts</code> imports them and defines none of them; <code>ConfigAbsolutePathError</code> stays in <code>load.ts</code> and is passed in as the thrower, so the config loader's closed error hierarchy is unchanged</li>
+        <li><code class="status">[x]</code> The module is pure path arithmetic and string inspection — no filesystem, no clock, no <code>node:child_process</code></li>
+        <li><code class="status">[x]</code> Every existing <code>config/load</code> test passes unmodified — the extraction is proven by the absence of a test edit, not by inspection</li>
       </ul>
 
       <h4>2. <code>awsf.project/v1</code> — the catalog schema</h4>

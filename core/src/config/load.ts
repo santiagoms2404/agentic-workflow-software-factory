@@ -11,6 +11,7 @@ import {
   type AwsfConfig,
 } from "./schema.ts";
 import { MAX_CALL_CEILING, MIN_CALL_CEILING } from "../state/tiers.ts";
+import { assertNoAbsolutePaths, scanStrings } from "./machine-path.ts";
 
 // Every rejection this loader can throw. Kept as one closed class hierarchy
 // (not exceptions of convenience) so tests can assert on `code`/`instanceof`
@@ -135,45 +136,6 @@ export class ConfigInvalidSeedPathError extends ConfigError {
   }
 }
 
-// Absolute POSIX paths, Windows drive-letter paths, UNC paths, and
-// home-relative paths. A committed config is "durable intent" — it must
-// never encode where anything lives on any one machine.
-const ABSOLUTE_PATH_PATTERN = /^(\/|[A-Za-z]:[\\/]|\\\\|~)/;
-
-function isAbsoluteMachinePath(value: string): boolean {
-  return ABSOLUTE_PATH_PATTERN.test(value);
-}
-
-// Walks every string leaf in the parsed document — object keys AND values,
-// array items — in document order, and throws on the first offender via
-// `onLeaf`. Keys are scanned too: adapter ids, gate ids, and risk.paths
-// globs are all object keys, not values, and must be held to the same bar.
-function scanStrings(node: unknown, path: string, onLeaf: (path: string, value: string) => void): void {
-  if (typeof node === "string") {
-    onLeaf(path, node);
-    return;
-  }
-  if (Array.isArray(node)) {
-    node.forEach((item, index) => scanStrings(item, `${path}[${index}]`, onLeaf));
-    return;
-  }
-  if (node !== null && typeof node === "object") {
-    for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
-      const keyPath = path === "" ? key : `${path}.${key}`;
-      onLeaf(`${keyPath} (key)`, key);
-      scanStrings(value, keyPath, onLeaf);
-    }
-  }
-}
-
-function assertNoAbsolutePaths(doc: unknown): void {
-  scanStrings(doc, "", (path, value) => {
-    if (isAbsoluteMachinePath(value)) {
-      throw new ConfigAbsolutePathError(path, value);
-    }
-  });
-}
-
 function assertNoCredentialShapedValues(doc: unknown): void {
   scanStrings(doc, "", (path, value) => {
     if (containsCredential(value)) {
@@ -291,7 +253,7 @@ export function loadConfig(yamlText: string): AwsfConfig {
   }
   const config = doc as AwsfConfig;
 
-  assertNoAbsolutePaths(doc);
+  assertNoAbsolutePaths(doc, ConfigAbsolutePathError);
   assertNoCredentialShapedValues(doc);
   assertValidSeedPaths(config);
   assertKnownReferences(config);
