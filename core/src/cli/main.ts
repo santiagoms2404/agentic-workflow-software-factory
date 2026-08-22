@@ -16,7 +16,7 @@ import { dashCommand, gcCommand, rebuildCommand } from "./commands/operator.ts";
 import { createDashboardProjection } from "./commands/dashboard-projection.ts";
 import { journeyCommand } from "./commands/journey.ts";
 import { initCommand } from "./commands/init.ts";
-import { listProjects, registerProject, showProject } from "./commands/project.ts";
+import { listProjects, registerProject, showProject, verifyRegisteredProject } from "./commands/project.ts";
 import { landCommand } from "./commands/land.ts";
 import { newCommand } from "./commands/new.ts";
 import { raiseCommand } from "./commands/raise.ts";
@@ -219,7 +219,12 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         for (const line of await showProject(stateRoot, parsed.positionals[1]!)) out(line);
         return 0;
       }
-      throw new Error("usage: awsf project <register|list|show> [options]");
+      if (action === "verify" && parsed.positionals.length === 2) {
+        const report = await verifyRegisteredProject(stateRoot, parsed.positionals[1]!);
+        for (const line of report.lines) out(line);
+        return report.ok ? 0 : 1;
+      }
+      throw new Error("usage: awsf project <register|list|show|verify> [options]");
     }
 
     const taskId = parsed.positionals[0];

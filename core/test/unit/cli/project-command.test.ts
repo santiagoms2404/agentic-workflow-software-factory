@@ -9,7 +9,9 @@ import {
   ProjectAlreadyRegisteredError,
   registerProject,
   showProject,
+  verifyRegisteredProject,
 } from "../../../src/cli/commands/project.ts";
+import { main } from "../../../src/cli/main.ts";
 import { loadConfig } from "../../../src/config/load.ts";
 import { loadCatalog } from "../../../src/registry/catalog.ts";
 import { placementFilePath } from "../../../src/persistence/platform-paths.ts";
@@ -48,6 +50,74 @@ test("register, list, and show round-trip a project placement", async () => {
     assert.deepEqual(await showProject(stateRoot, "project-command"), [
       `plans: role=plan, branch=main, gates=none, worktree_root=${join(root, "awsf-worktrees")}`,
     ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("project verify reports every missing, mismatched, and drifting contract copy", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-project-verify-"));
+  const stateRoot = join(root, "state");
+  const plans = join(root, "plans");
+  const service = join(root, "service");
+  const application = join(root, "application");
+  const catalogPath = join(plans, "awsf.project.yaml");
+  try {
+    requireDirectory(plans);
+    requireDirectory(service);
+    requireDirectory(application);
+    writeFileSync(catalogPath, toYaml({
+      version: "awsf.project/v1",
+      project: { slug: "project-verify" },
+      repositories: {
+        plans: planRepository(),
+        service: { role: "service", default_branch: "main" },
+        application: { role: "application", default_branch: "main" },
+      },
+      plans: { root: "specs", format: "awsf-plan-html/v1" },
+      contracts: [{
+        id: "openapi",
+        digest: `sha256:${"1".repeat(64)}`,
+        producer: { repository: "service", path: "openapi.json" },
+        consumers: [{ repository: "application", path: "lib/api/openapi.json" }],
+      }],
+    }));
+    writeFileSync(join(service, "awsf.contracts.yaml"), toYaml({ version: "awsf.contracts/v1", contracts: [] }));
+    mkdirSync(join(application, "lib", "api"), { recursive: true });
+    writeFileSync(join(application, "lib", "api", "openapi.json"), "consumer artifact");
+    writeFileSync(join(application, "awsf.contracts.yaml"), toYaml({
+      version: "awsf.contracts/v1",
+      contracts: [{
+        id: "openapi",
+        role: "consumes",
+        path: "lib/api/openapi.json",
+        digest: `sha256:${"0".repeat(64)}`,
+      }],
+    }));
+    await registerProject({
+      stateRoot,
+      catalogPath,
+      repositories: [`plans=${plans}`, `service=${service}`, `application=${application}`],
+    });
+
+    const report = await verifyRegisteredProject(stateRoot, "project-verify");
+    assert.equal(report.ok, false);
+    assert.deepEqual(report.failures.map((failure) => failure.kind), [
+      "projection-missing",
+      "projection-disagrees",
+      "artifact-disagrees",
+    ]);
+    assert.match(report.lines.join("\n"), /projection missing: contract=openapi, repository=service/);
+    assert.match(report.lines.join("\n"), /projection disagrees: contract=openapi, repository=application/);
+    assert.match(report.lines.join("\n"), /artifact disagrees: contract=openapi, repository=application/);
+
+    const output: string[] = [];
+    assert.equal(await main({
+      argv: ["project", "verify", "project-verify", "--state-root", stateRoot],
+      writeOut: (line) => { output.push(line); },
+      writeError: () => {},
+    }), 1);
+    assert.deepEqual(output, report.lines);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

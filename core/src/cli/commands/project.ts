@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { access, readdir, readFile } from "node:fs/promises";
 import type { Dirent } from "node:fs";
 import { join } from "node:path";
@@ -7,6 +8,7 @@ import type { ProjectCatalog } from "../../registry/catalog-schema.ts";
 import { loadPlacement, readPlacement, writePlacement } from "../../registry/placement.ts";
 import type { Placement } from "../../registry/placement-schema.ts";
 import { resolveProject, type ResolvedProject } from "../../registry/resolve.ts";
+import { loadContractProjection, type ContractProjection } from "../../registry/contracts.ts";
 import { placementFilePath } from "../../persistence/platform-paths.ts";
 
 export interface RegisterProjectOptions {
@@ -119,4 +121,129 @@ export async function showProject(stateRoot: string, slug: string): Promise<read
     const gates = repository.gates.map((gate) => gate.gateId).join(",") || "none";
     return `${repository.id}: role=${repository.role}, branch=${repository.defaultBranch}, gates=${gates}, worktree_root=${repository.worktreeRoot}`;
   });
+}
+
+export type ProjectVerificationFailure =
+  | {
+    readonly kind: "projection-missing";
+    readonly contractId: string;
+    readonly repositoryId: string;
+  }
+  | {
+    readonly kind: "projection-disagrees";
+    readonly contractId: string;
+    readonly repositoryId: string;
+    readonly expected: { readonly digest: string; readonly path: string; readonly role: "produces" | "consumes" };
+    readonly observed: { readonly digest: string; readonly path: string; readonly role: "produces" | "consumes" };
+  }
+  | {
+    readonly kind: "artifact-disagrees";
+    readonly contractId: string;
+    readonly repositoryId: string;
+    readonly path: string;
+    readonly expectedDigest: string;
+    readonly observedDigest: string;
+  };
+
+export interface ProjectVerificationReport {
+  readonly failures: readonly ProjectVerificationFailure[];
+  readonly ok: boolean;
+  readonly lines: readonly string[];
+}
+
+function sha256(bytes: Uint8Array): string {
+  return `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
+}
+
+async function projectionAt(repositoryPath: string): Promise<ContractProjection | undefined> {
+  try {
+    return loadContractProjection(await readFile(join(repositoryPath, "awsf.contracts.yaml"), "utf8"));
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") return undefined;
+    throw error;
+  }
+}
+
+async function artifactDigest(path: string): Promise<string> {
+  try {
+    return sha256(await readFile(path));
+  } catch (error) {
+    if (error instanceof Error && "code" in error && typeof error.code === "string") return error.code === "ENOENT" ? "missing" : error.code;
+    return error instanceof Error ? error.message : String(error);
+  }
+}
+
+function failureLine(failure: ProjectVerificationFailure): string {
+  switch (failure.kind) {
+    case "projection-missing":
+      return `projection missing: contract=${failure.contractId}, repository=${failure.repositoryId}`;
+    case "projection-disagrees":
+      return `projection disagrees: contract=${failure.contractId}, repository=${failure.repositoryId}; expected digest=${failure.expected.digest}, role=${failure.expected.role}, path=${failure.expected.path}; observed digest=${failure.observed.digest}, role=${failure.observed.role}, path=${failure.observed.path}`;
+    case "artifact-disagrees":
+      return `artifact disagrees: contract=${failure.contractId}, repository=${failure.repositoryId}, path=${failure.path}; expected digest=${failure.expectedDigest}; observed digest=${failure.observedDigest}`;
+  }
+}
+
+/**
+ * Reconciles every resolved repository, unlike task 13's contractDigest(root)
+ * signature that deliberately reads only one repository root.
+ */
+export async function verifyProject(project: ResolvedProject): Promise<ProjectVerificationReport> {
+  const failures: ProjectVerificationFailure[] = [];
+  const projections = new Map<string, ContractProjection | undefined>();
+
+  for (const contract of project.contracts) {
+    const participants = [
+      { ...contract.producer, role: "produces" as const },
+      ...contract.consumers.map((consumer) => ({ ...consumer, role: "consumes" as const })),
+    ];
+    for (const participant of participants) {
+      const repository = project.repositories[participant.repository];
+      if (repository === undefined) {
+        throw new RangeError(`contract ${JSON.stringify(contract.id)} references unresolved repository ${JSON.stringify(participant.repository)}`);
+      }
+      let projection = projections.get(repository.id);
+      if (projection === undefined && !projections.has(repository.id)) {
+        projection = await projectionAt(repository.path);
+        projections.set(repository.id, projection);
+      }
+      const declared = projection?.contracts.find((entry) => entry.id === contract.id);
+      if (declared === undefined) {
+        failures.push({ kind: "projection-missing", contractId: contract.id, repositoryId: repository.id });
+        continue;
+      }
+
+      const expected = { digest: contract.digest, path: participant.path, role: participant.role };
+      const observed = { digest: declared.digest, path: declared.path, role: declared.role };
+      if (
+        observed.digest !== expected.digest
+        || observed.path !== expected.path
+        || observed.role !== expected.role
+      ) {
+        failures.push({ kind: "projection-disagrees", contractId: contract.id, repositoryId: repository.id, expected, observed });
+      }
+
+      const observedDigest = await artifactDigest(join(repository.path, participant.path));
+      if (observedDigest !== declared.digest) {
+        failures.push({
+          kind: "artifact-disagrees",
+          contractId: contract.id,
+          repositoryId: repository.id,
+          path: participant.path,
+          expectedDigest: declared.digest,
+          observedDigest,
+        });
+      }
+    }
+  }
+
+  const lines = failures.length === 0
+    ? [`project ${project.slug}: contract verification passed`]
+    : failures.map(failureLine);
+  return Object.freeze({ failures: Object.freeze(failures), ok: failures.length === 0, lines: Object.freeze(lines) });
+}
+
+/** Verifies one registered project's catalog contracts across its resolved repository roots. */
+export async function verifyRegisteredProject(stateRoot: string, slug: string): Promise<ProjectVerificationReport> {
+  return verifyProject(await resolvedRegisteredProject(stateRoot, slug));
 }

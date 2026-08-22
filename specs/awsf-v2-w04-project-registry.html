@@ -662,10 +662,10 @@ flowchart LR
 
       <h4>14. The central reconciliation — <code>awsf project verify</code></h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> Over a <code>ResolvedProject</code>: for every contract, for every participant, assert the participant's projection carries that contract with the catalog's digest, and that the artifact at the declared path hashes to it</li>
-        <li><code class="status">[]</code> Three distinct failures are distinguished and reported separately — <strong>projection missing</strong> the contract, <strong>projection disagreeing</strong> with the parent, and <strong>artifact disagreeing</strong> with the projection. Collapsing them would hide which of the N+1 copies moved</li>
-        <li><code class="status">[]</code> Exit code non-zero on any failure; the report names every failing pair rather than stopping at the first, because a contract revision that half-landed will fail in several places at once and the operator needs the set</li>
-        <li><code class="status">[]</code> It reads across repositories and says so in its own header comment, contrasted explicitly with task 13's single-root signature — the two functions' asymmetry is the design and must be legible to the next reader</li>
+        <li><code class="status">[x]</code> Over a <code>ResolvedProject</code>: for every contract, for every participant, assert the participant's projection carries that contract with the catalog's digest, and that the artifact at the declared path hashes to it</li>
+        <li><code class="status">[x]</code> Three distinct failures are distinguished and reported separately — <strong>projection missing</strong> the contract, <strong>projection disagreeing</strong> with the parent, and <strong>artifact disagreeing</strong> with the projection. Collapsing them would hide which of the N+1 copies moved</li>
+        <li><code class="status">[x]</code> Exit code non-zero on any failure; the report names every failing pair rather than stopping at the first, because a contract revision that half-landed will fail in several places at once and the operator needs the set</li>
+        <li><code class="status">[x]</code> It reads across repositories and says so in its own header comment, contrasted explicitly with task 13's single-root signature — the two functions' asymmetry is the design and must be legible to the next reader</li>
       </ul>
 
       <h4>15. Testing Strategy</h4>
