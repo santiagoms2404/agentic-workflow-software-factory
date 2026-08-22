@@ -1,4 +1,4 @@
-import { defaultWorktreeRoot } from "../cli/commands/start.ts";
+import { defaultWorktreeRoot } from "../persistence/platform-paths.ts";
 import type { GateEntry } from "../config/schema.ts";
 import type { ConfiguredCommand } from "../gates/commands.ts";
 import { runGit, systemGitRunner } from "../git/changes.ts";

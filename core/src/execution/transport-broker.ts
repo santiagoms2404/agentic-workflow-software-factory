@@ -21,7 +21,6 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { accessSync, constants } from "node:fs";
 import { delimiter, isAbsolute, join } from "node:path";
-import { reservationIdOf } from "../adapters/interface.ts";
 import { IllegalSpawnSite } from "../state/errors.ts";
 import { LEGAL_EDGES, edgeFor, type LegalEdge } from "../state/task-machine.ts";
 import {
@@ -60,6 +59,12 @@ import type {
   TransportBroker,
 } from "../adapters/interface.ts";
 import type { Reservation } from "./call-budget.ts";
+
+function reservationIdOf(registration: BrokerProcessRegistration): string {
+  return registration.kind === "phase-correction"
+    ? registration.originReservationId
+    : registration.reservationId;
+}
 
 // ---------------------------------------------------------------------------
 // The six task-edge spawn sites.

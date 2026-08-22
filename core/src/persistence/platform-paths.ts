@@ -9,7 +9,7 @@
 // Pure path arithmetic: nothing here touches the filesystem.
 
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 const NAMESPACE = "awsf";
 
@@ -55,6 +55,11 @@ export function attemptDir(stateRoot: string, project: string, task: string, att
 /** The machine-local placement document for one project. */
 export function placementFilePath(stateRoot: string, slug: string): string {
   return join(stateRoot, "projects", slug, "placement.yaml");
+}
+
+/** The conventional machine-local worktree root is a sibling of the state root. */
+export function defaultWorktreeRoot(stateRoot: string): string {
+  return join(dirname(stateRoot), "awsf-worktrees");
 }
 
 export function journalFilePath(attempt: string): string {

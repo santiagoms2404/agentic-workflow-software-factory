@@ -579,7 +579,7 @@ flowchart TD
 
     <!-- ================= M3 ================= -->
     <div class="phase">
-      <h3><code class="status">[wip]</code> Milestone M3: The command surface, and AWSF's own catalog as its first instance</h3>
+      <h3><code class="status">[x]</code> Milestone M3: The command surface, and AWSF's own catalog as its first instance</h3>
       <p>Registration writes machine-local placement and <strong>never writes the catalog</strong>. That asymmetry is the whole command's design: the catalog is authored by a person and reviewed like any other durable intent; placement is a local fact a command may record because getting it wrong costs nothing outside this machine.</p>
 
       <h4>9. <code>awsf project register|list|show</code></h4>
@@ -604,11 +604,11 @@ flowchart TD
 
       <h4>11. Testing Strategy</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/cli/project-command.test.ts</code> — register into a temporary state root, then <code>list</code> and <code>show</code> read it back; a resolution failure is proven to leave <strong>no</strong> placement file behind</li>
-        <li><code class="status">[]</code> A second registration against the same slug is refused, and the existing placement file is proven byte-unchanged afterwards</li>
-        <li><code class="status">[]</code> An import-graph fence in the shape of <code>init-no-provider.test.ts</code> asserts nothing under <code>core/src/adapters/</code> is reachable from <code>project.ts</code> — <code>awsf project</code> is host-only and the absence is proven, not intended</li>
-        <li><code class="status">[]</code> A test loads the repository's own committed <code>awsf.project.yaml</code> through <code>loadCatalog</code> and asserts its slug equals <code>awsf.config.yaml</code>'s — the two committed documents are proven not to disagree about what this project is called</li>
-        <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code>, <code>npm run lint</code> — all green</li>
+        <li><code class="status">[x]</code> <code>node --experimental-strip-types --test core/test/unit/cli/project-command.test.ts</code> — register into a temporary state root, then <code>list</code> and <code>show</code> read it back; a resolution failure is proven to leave <strong>no</strong> placement file behind</li>
+        <li><code class="status">[x]</code> A second registration against the same slug is refused, and the existing placement file is proven byte-unchanged afterwards</li>
+        <li><code class="status">[x]</code> An import-graph fence in the shape of <code>init-no-provider.test.ts</code> asserts nothing under <code>core/src/adapters/</code> is reachable from <code>project.ts</code> — <code>awsf project</code> is host-only and the absence is proven, not intended</li>
+        <li><code class="status">[x]</code> A test loads the repository's own committed <code>awsf.project.yaml</code> through <code>loadCatalog</code> and asserts its slug equals <code>awsf.config.yaml</code>'s — the two committed documents are proven not to disagree about what this project is called</li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code>, <code>npm run lint</code> — all green</li>
       </ul>
       <div class="loop">
         🔁 <strong>Do not exit this phase until every box above is checked.</strong>

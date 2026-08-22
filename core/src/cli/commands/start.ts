@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { registeredAdapter } from "../../adapters/registry.ts";
 import { loadConfig } from "../../config/load.ts";
 import { runGit, systemGitRunner } from "../../git/changes.ts";
@@ -13,6 +13,8 @@ import {
   type AttemptProjector,
   type AttemptStatus,
 } from "./attempt.ts";
+
+export { defaultWorktreeRoot } from "../../persistence/platform-paths.ts";
 
 export interface StartPreflight {
   readonly adapter: boolean;
@@ -143,9 +145,4 @@ export async function startCommand(options: StartCommandOptions): Promise<Attemp
     { kind: "attempt.transitioned", next },
     options.projectRecord,
   );
-}
-
-/** Useful to derive the conventional machine-local worktree root from a state root sibling. */
-export function defaultWorktreeRoot(stateRoot: string): string {
-  return join(dirname(stateRoot), "awsf-worktrees");
 }
