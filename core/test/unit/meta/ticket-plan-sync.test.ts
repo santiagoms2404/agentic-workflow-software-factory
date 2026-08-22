@@ -22,13 +22,6 @@ import { repoRoot } from "./_walk.ts";
 // refused by name, and the sole implemented parser rejects a plan that does not
 // contain its declared grammar rather than treating it as zero tasks.
 //
-// WHY v1's tickets are still flat, and why moving them is not housekeeping:
-// `ticketStoreFor` (core/src/cli/commands/ticket.ts) resolves `specs/tickets`
-// and `TicketStore` reads that exact directory with no recursion, so `awsf
-// ticket list` and `awsf backlog` would silently return nothing the moment the
-// files moved into a subdirectory. That one set remains special-cased until the
-// registry-backed store and ticket move land together.
-//
 // A ticket set in a resolved source's tickets root with no matching plan is a
 // hard failure rather than a skip: an orphan set is exactly the drift this
 // fence exists to catch, one level up from an orphan ticket.
@@ -36,7 +29,6 @@ import { repoRoot } from "./_walk.ts";
 const ROOT = repoRoot();
 const CATALOG = join(ROOT, "awsf.project.yaml");
 const SPECS = join(ROOT, "specs");
-const TICKETS = join(SPECS, "tickets");
 
 const STATES = ["todo", "wip", "done", "failed"];
 const TIERS = [0, 1, 2];
@@ -81,14 +73,13 @@ function planSets(): PlanSet[] {
   const sets: PlanSet[] = [];
   for (const source of sources) {
     const stem = basename(source.planPath, ".html");
-    const isFlatAwsfPlan = source.planPath === join(SPECS, "awsf-plan.html");
-    if (!isFlatAwsfPlan && !existsSync(source.ticketsPath)) continue;
+    if (!existsSync(source.ticketsPath)) continue;
     assert.ok(existsSync(source.promptsPath), `${stem}: no build prompts for the resolved plan source at ${source.promptsPath}`);
     sets.push({
       label: stem,
       plan: source.planPath,
       prompts: source.promptsPath,
-      tickets: isFlatAwsfPlan ? TICKETS : source.ticketsPath,
+      tickets: source.ticketsPath,
     });
   }
   return sets;

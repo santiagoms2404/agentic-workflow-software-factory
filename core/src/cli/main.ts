@@ -195,7 +195,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         }
       }
       if (action === "show" && parsed.positionals.length === 2) {
-        for (const line of await showTicket(store, parsed.positionals[1]!)) out(line);
+        for (const line of await showTicket(await ticketStoreForList(cwd, parsed.flags.plan), parsed.positionals[1]!)) out(line);
         return 0;
       }
       if (action !== "new" && action !== "refine") {

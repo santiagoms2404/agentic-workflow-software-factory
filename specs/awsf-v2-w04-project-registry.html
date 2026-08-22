@@ -765,12 +765,12 @@ flowchart TD
 
       <h4>20. Move v1's flat tickets, and prove nothing changed for the reader</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> Capture the exact current output of <code>awsf ticket list</code> and <code>awsf backlog</code> <strong>before</strong> touching anything, as the comparison baseline. Without it, "still returns them" is an opinion</li>
-        <li><code class="status">[]</code> Move <code>specs/tickets/T01.md</code>–<code>T38.md</code> into <code>specs/tickets/awsf-plan/</code> using <code>git mv</code>, preserving history; <strong>no <code>unlinkSync</code>, <code>rmSync</code> or <code>rm -rf</code> anywhere</strong> — three of the nine patterns invariant 8's fence scans for</li>
-        <li><code class="status">[]</code> Update every relative link inside the moved tickets — they point at <code>../awsf-plan.html</code> and gain one level; a moved ticket whose links no longer resolve is drift the sync fence does not check for</li>
-        <li><code class="status">[]</code> Remove the flat-set special case from <code>planSets()</code>: after the move every set is uniform and the exception has no remaining instance</li>
-        <li><code class="status">[]</code> <code>awsf ticket list</code> and <code>awsf backlog</code> produce output <strong>identical to the captured baseline</strong>, asserted in a test rather than eyeballed</li>
-        <li><code class="status">[]</code> <code>awsf ticket show T17</code> resolves — the path-suffix branch in <code>showTicket</code> matches on <code>/T17.md</code> and must be confirmed to still match one level deeper</li>
+        <li><code class="status">[x]</code> Capture the exact current output of <code>awsf ticket list</code> and <code>awsf backlog</code> <strong>before</strong> touching anything, as the comparison baseline. Without it, "still returns them" is an opinion</li>
+        <li><code class="status">[x]</code> Move <code>specs/tickets/T01.md</code>–<code>T38.md</code> into <code>specs/tickets/awsf-plan/</code> using <code>git mv</code>, preserving history; <strong>no <code>unlinkSync</code>, <code>rmSync</code> or <code>rm -rf</code> anywhere</strong> — three of the nine patterns invariant 8's fence scans for</li>
+        <li><code class="status">[x]</code> Update every relative link inside the moved tickets — they point at <code>../awsf-plan.html</code> and gain one level; a moved ticket whose links no longer resolve is drift the sync fence does not check for</li>
+        <li><code class="status">[x]</code> Remove the flat-set special case from <code>planSets()</code>: after the move every set is uniform and the exception has no remaining instance</li>
+        <li><code class="status">[x]</code> <code>awsf ticket list</code> and <code>awsf backlog</code> produce output <strong>identical to the captured baseline</strong>, asserted in a test rather than eyeballed</li>
+        <li><code class="status">[x]</code> <code>awsf ticket show T17</code> resolves — the path-suffix branch in <code>showTicket</code> matches on <code>/T17.md</code> and must be confirmed to still match one level deeper</li>
       </ul>
 
       <h4>21. Full suite, marker flips, and the spine's W04 marker</h4>

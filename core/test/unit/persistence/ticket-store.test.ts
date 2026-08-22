@@ -37,7 +37,7 @@ test("Ticket is one TypeBox source for runtime validation, static type, and JSON
 });
 
 test("the ticket corpus validates", async () => {
-  const records = await new TicketStore("specs/tickets").load();
+  const records = await new TicketStore("specs/tickets/awsf-plan").load();
   assert.ok(records.length > 0);
   assert.deepEqual(
     records.filter((record) => record.ticket === null).map((record) => ({ path: record.path, violations: record.violations })),
