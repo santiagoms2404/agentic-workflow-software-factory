@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { parse } from "yaml";
+import { parseAwsfPlanHtmlV1, type ParsedPlanTask } from "../../../src/registry/plan-source.ts";
 import { repoRoot } from "./_walk.ts";
 
 // AGENTS.md invariant 12: a plan and its tickets never disagree. The plan's
@@ -75,13 +76,6 @@ function planSets(): PlanSet[] {
   return sets;
 }
 
-interface PlanTask {
-  number: number;
-  milestone: string;
-  milestoneMarker: string;
-  checklist: string[];
-}
-
 interface Ticket {
   id: string;
   number: number;
@@ -94,34 +88,8 @@ interface Ticket {
   prompt: string;
 }
 
-function planTasks(set: PlanSet): PlanTask[] {
-  const html = readFileSync(set.plan, "utf8");
-  const milestones = [...html.matchAll(/<h3><code class="status">\[([^\]]*)\]<\/code> Milestone (M\d+):/g)];
-  const tasks: PlanTask[] = [];
-  for (const [index, milestone] of milestones.entries()) {
-    const start = milestone.index;
-    // The LAST milestone ends where its section does, not where the file does.
-    // Without this its final task swallows every later section — the plan-wide
-    // Definition of Done among them — and reads that checklist's honestly
-    // unchecked boxes as its own. Invisible until the last task of the last
-    // milestone completed, and wrong the whole time: the boxes a task's state
-    // is checked against are the ones inside its own block.
-    const closing = html.indexOf("</section>", start);
-    const end = Math.min(milestones[index + 1]?.index ?? html.length, closing === -1 ? html.length : closing);
-    const block = html.slice(start, end);
-    const heads = [...block.matchAll(/<h4>(\d+)\./g)];
-    for (const [headIndex, head] of heads.entries()) {
-      const slice = block.slice(head.index, heads[headIndex + 1]?.index ?? block.length);
-      const items = [...slice.matchAll(/<code class="status">\[([^\]]*)\]<\/code>/g)].map((m) => m[1] ?? "");
-      tasks.push({
-        number: Number(head[1]),
-        milestone: milestone[2] ?? "",
-        milestoneMarker: milestone[1] ?? "",
-        checklist: items,
-      });
-    }
-  }
-  return tasks.filter((t) => t.number > 0); // task 0 is M0's plan authoring; it has no ticket
+function planTasks(set: PlanSet): readonly ParsedPlanTask[] {
+  return parseAwsfPlanHtmlV1(readFileSync(set.plan, "utf8"), set.label);
 }
 
 function tickets(set: PlanSet): Ticket[] {

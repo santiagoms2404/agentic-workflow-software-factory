@@ -689,7 +689,7 @@ flowchart LR
 
     <!-- ================= M5 ================= -->
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone M5: Invariant 12 redefined per registered plan source, and proven to bite</h3>
+      <h3><code class="status">[wip]</code> Milestone M5: Invariant 12 redefined per registered plan source, and proven to bite</h3>
       <p><strong>Precondition, and the build must stop if it is unmet:</strong> the owner-authored amendment in <a href="#amendment-required">Amendment Required Before the Build</a> has landed. Ordering gate <span class="gate">G2</span>. This phase redefines the relation; it does not relax it, and it does not touch <code>AGENTS.md</code>.</p>
 
       <figure>
@@ -714,11 +714,11 @@ flowchart TD
 
       <h4>16. Plan-source resolution, the declared format, and the self-placement rule</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>resolvePlanSources(catalogPath, catalog, placement?)</code> returns one record per plan stem: <code>{project, repositoryId, planPath, promptsPath, ticketsPath, format}</code></li>
-        <li><code class="status">[]</code> <strong>Self-placement:</strong> when the catalog file sits inside the repository its own <code>role: plan</code> entry names, the plan repository resolves to that checkout and <strong>placement is not consulted</strong>. This is what keeps the fence runnable in a fresh clone with no registry state, and it is asserted directly rather than left as a consequence</li>
-        <li><code class="status">[]</code> A foreign plan source resolves only where placement locates it; its absence yields <strong>no record and no failure</strong></li>
-        <li><code class="status">[]</code> <code>plans.format</code> is checked against the formats implemented in code; an unimplemented format throws <code>UnsupportedPlanFormatError</code> naming the format and the plan — <strong>never a parse that yields zero tasks</strong>. v1 implements exactly one format and the error message says so</li>
-        <li><code class="status">[]</code> The grammar for that one format is moved out of the test file into <code>plan-source.ts</code> as a named exported parser, so the fence and any future consumer read the same definition rather than two copies of a regular expression</li>
+        <li><code class="status">[x]</code> <code>resolvePlanSources(catalogPath, catalog, placement?)</code> returns one record per plan stem: <code>{project, repositoryId, planPath, promptsPath, ticketsPath, format}</code></li>
+        <li><code class="status">[x]</code> <strong>Self-placement:</strong> when the catalog file sits inside the repository its own <code>role: plan</code> entry names, the plan repository resolves to that checkout and <strong>placement is not consulted</strong>. This is what keeps the fence runnable in a fresh clone with no registry state, and it is asserted directly rather than left as a consequence</li>
+        <li><code class="status">[x]</code> A foreign plan source resolves only where placement locates it; its absence yields <strong>no record and no failure</strong></li>
+        <li><code class="status">[x]</code> <code>plans.format</code> is checked against the formats implemented in code; an unimplemented format throws <code>UnsupportedPlanFormatError</code> naming the format and the plan — <strong>never a parse that yields zero tasks</strong>. v1 implements exactly one format and the error message says so</li>
+        <li><code class="status">[x]</code> The grammar for that one format is moved out of the test file into <code>plan-source.ts</code> as a named exported parser, so the fence and any future consumer read the same definition rather than two copies of a regular expression</li>
       </ul>
 
       <h4>17. The sync fence, resolving through the registry rather than adjacency</h4>
