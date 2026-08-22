@@ -618,7 +618,7 @@ flowchart TD
 
     <!-- ================= M4 ================= -->
     <div class="phase">
-      <h3><code class="status">[wip]</code> Milestone M4: Q1 as decided — the content-addressed contract and its two fences</h3>
+      <h3><code class="status">[x]</code> Milestone M4: Q1 as decided — the content-addressed contract and its two fences</h3>
       <p><strong>Questionable Q1 is decided and is a constraint, not an assignment.</strong> The shape is settled: an immutable, content-addressed artifact committed in each child, with the parent naming <code>{child repository, contract digest}</code> and a meta-test asserting each child's copy hashes to what the parent names. This phase owns the mechanism, and the mechanism is two fences with a deliberate division of labour.</p>
 
       <figure>
@@ -671,11 +671,11 @@ flowchart LR
       <h4>15. Testing Strategy</h4>
       <p>The induced-drift proof is the point of this phase. A fence nobody has watched fail is decoration, and this one guards the only thing standing between N committed copies and silent divergence.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/registry/contracts.test.ts</code> — a two-repository temporary fixture with a JSON contract committed in both, a catalog naming one digest, projections in each: <code>awsf project verify</code> green and both local fences green</li>
-        <li><code class="status">[]</code> <strong>Proven to bite, three ways:</strong> mutate <em>one byte</em> of the consumer's artifact → the consumer's local fence goes red <em>and</em> verify goes red; revert, then change only the consumer's projection digest → verify goes red while the producer's local fence stays green; revert, then change only the catalog's digest → verify goes red against <strong>both</strong> participants. Each failure is asserted to be the distinct one task 14 names</li>
-        <li><code class="status">[]</code> The local fence is asserted to read <strong>no path outside its given root</strong> — exercised by running it in a fixture whose sibling directory holds a contradicting artifact, and asserting the verdict is unaffected by it</li>
-        <li><code class="status">[]</code> A repository with no <code>awsf.contracts.yaml</code> passes the local fence with zero checks recorded, not a skipped or errored gate</li>
-        <li><code class="status">[]</code> Every temporary repository is removed in a cleanup (invariant 10)</li>
+        <li><code class="status">[x]</code> <code>node --experimental-strip-types --test core/test/unit/registry/contracts.test.ts</code> — a two-repository temporary fixture with a JSON contract committed in both, a catalog naming one digest, projections in each: <code>awsf project verify</code> green and both local fences green</li>
+        <li><code class="status">[x]</code> <strong>Proven to bite, three ways:</strong> mutate <em>one byte</em> of the consumer's artifact → the consumer's local fence goes red <em>and</em> verify goes red; revert, then change only the consumer's projection digest → verify goes red while the producer's local fence stays green; revert, then change only the catalog's digest → verify goes red against <strong>both</strong> participants. Each failure is asserted to be the distinct one task 14 names</li>
+        <li><code class="status">[x]</code> The local fence is asserted to read <strong>no path outside its given root</strong> — exercised by running it in a fixture whose sibling directory holds a contradicting artifact, and asserting the verdict is unaffected by it</li>
+        <li><code class="status">[x]</code> A repository with no <code>awsf.contracts.yaml</code> passes the local fence with zero checks recorded, not a skipped or errored gate</li>
+        <li><code class="status">[x]</code> Every temporary repository is removed in a cleanup (invariant 10)</li>
       </ul>
       <div class="card warn">
         <h5>What the digest fence does <em>not</em> cover</h5>
