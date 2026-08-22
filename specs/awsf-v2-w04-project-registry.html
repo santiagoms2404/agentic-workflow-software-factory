@@ -1,0 +1,1212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plan: AWSF v2 W04 — Project registry v1</title>
+<style>
+/* AWSF dark theme — the same §7 design tokens the v1 plan, the v2 spine, and
+   W01/W02 carry, so the whole set reads as one document and the mermaid
+   palette stays synced. The review layer reuses --bg / --fg / --muted / --accent. */
+:root {
+  --bg:#0F1017; --surface:rgba(28,30,43,.85); --surface-solid:#1C1E2B;
+  --border:rgba(255,255,255,.07); --text:#E7E9F0; --muted:#8B90A6;
+
+  --agent-engineer:#F59E0B; --agent-planner:#A78BFA; --agent-builder:#22D3EE;
+  --agent-reviewer:#F43F5E;
+
+  --ok:#22C55E; --running:#3B82F6; --error:#EF4444; --warn:#F97316;
+
+  --font-ui:"Inter","Outfit",system-ui,sans-serif;
+  --font-mono:"JetBrains Mono","Fira Code",ui-monospace,monospace;
+  --num:tabular-nums;
+
+  --r-card:14px; --r-pill:999px;
+  --shadow-card:0 1px 0 rgba(255,255,255,.04) inset, 0 8px 24px rgba(0,0,0,.35);
+
+  --fg:var(--text); --accent:var(--agent-planner);
+  --cool:var(--agent-builder); --good:var(--ok); --danger:var(--error);
+  --border-strong:#2b3040;
+  --maxw:1120px;
+}
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body { margin:0; padding:0; background:var(--bg); color:var(--fg);
+  font-family:var(--font-ui); font-size:15px; line-height:1.65; -webkit-font-smoothing:antialiased; }
+main { max-width:var(--maxw); margin:0 auto; padding:48px 24px 160px; }
+h1,h2,h3,h4 { line-height:1.25; font-weight:650; letter-spacing:-.011em; }
+h1 { font-size:30px; margin:0 0 6px; }
+h2 { font-size:21px; margin:56px 0 14px; padding-bottom:8px; border-bottom:1px solid var(--border-strong); }
+h3 { font-size:17px; margin:34px 0 8px; }
+h4 { font-size:14px; margin:24px 0 6px; color:var(--accent); letter-spacing:.01em; }
+h5 { margin:0 0 6px; }
+p { margin:0 0 14px; }
+a { color:var(--cool); }
+strong { color:#fff; font-weight:650; }
+em { color:var(--muted); font-style:italic; }
+hr { border:0; border-top:1px solid var(--border-strong); margin:40px 0; }
+small { color:var(--muted); }
+ul,ol { margin:0 0 14px; padding-left:22px; }
+li { margin:3px 0; }
+
+code { font-family:var(--font-mono); font-size:.88em; background:var(--surface-solid);
+  border:1px solid var(--border-strong); border-radius:4px; padding:1px 5px; color:#cfc4f7; }
+pre { background:var(--surface-solid); border:1px solid var(--border-strong);
+  border-left:3px solid var(--accent); border-radius:8px; padding:14px 16px; overflow-x:auto;
+  font-family:var(--font-mono); font-size:12.5px; line-height:1.6; color:#d6dde6; }
+pre code { background:none; border:none; padding:0; color:inherit; font-size:inherit; }
+
+table { width:100%; border-collapse:collapse; margin:14px 0 20px; font-size:13px; display:block; overflow-x:auto; }
+th,td { padding:7px 10px; border:1px solid var(--border-strong); text-align:left; vertical-align:top; }
+th { background:var(--surface-solid); color:var(--accent); font-weight:600; font-size:11.5px;
+  letter-spacing:.05em; text-transform:uppercase; white-space:nowrap; }
+tbody tr:nth-child(even) { background:#ffffff05; }
+td code { font-size:11.5px; }
+.num, td.num { font-variant-numeric:var(--num); text-align:right; }
+.matrix { font-family:var(--font-mono); font-size:12px; }
+.matrix td:first-child { color:var(--accent); }
+.ok { color:var(--good); font-weight:700; } .no { color:#4a5560; }
+
+.meta { margin:14px 0 0; font-size:13px; }
+.meta summary { cursor:pointer; color:var(--muted); font-family:var(--font-mono); font-size:12px; }
+.meta dl { display:grid; grid-template-columns:130px 1fr; gap:4px 14px; margin:12px 0 0; padding:14px;
+  background:var(--surface-solid); border:1px solid var(--border-strong); border-radius:8px; }
+.meta dt { color:var(--accent); font-family:var(--font-mono); font-size:11.5px; }
+.meta dd { margin:0; color:var(--muted); font-family:var(--font-mono); font-size:11.5px; overflow-wrap:anywhere; }
+
+.sub { color:var(--muted); font-size:13.5px; margin-top:0; }
+
+figure { margin:26px 0; text-align:center; }
+figure svg, figure .mermaid { max-width:100%; height:auto; }
+figure .mermaid { background:var(--surface-solid); border:1px solid var(--border-strong);
+  border-radius:10px; padding:20px 12px; overflow-x:auto; text-align:center;
+  color:var(--muted); font-size:12px; }
+figcaption { color:var(--muted); font-size:12px; margin-top:10px; font-style:italic; }
+
+.tag { display:inline-block; font-family:var(--font-mono); font-size:10px; letter-spacing:.06em;
+  text-transform:uppercase; padding:1px 6px; border-radius:3px; margin-right:6px; vertical-align:1px; }
+.tag.existing { background:#262b3a; color:var(--muted); }
+.tag.new { background:#2c2544; color:var(--accent); }
+.tag.dir { background:#173042; color:var(--cool); }
+
+.files ul { list-style:none; padding:0; }
+.files li { padding:4px 0; border-bottom:1px solid #ffffff08; font-size:13px; }
+
+.phase { border:1px solid var(--border-strong); border-radius:var(--r-card);
+  padding:22px 24px; margin:30px 0; background:#ffffff04; }
+.phase > h3 { margin-top:0; }
+.phase > h3 .status { color:var(--accent); }
+
+.checklist { list-style:none; padding:0; margin:8px 0 16px; }
+.checklist li { padding:4px 0 4px 2px; font-size:13.5px; }
+.checklist li .status { color:var(--accent); margin-right:6px; }
+
+.loop { border:1px dashed var(--accent); border-radius:8px; padding:10px 14px; margin:16px 0 4px;
+  font-size:13px; background:#a78bfa0d; }
+
+.card { border:1px solid var(--border-strong); border-left:3px solid var(--cool); border-radius:8px;
+  padding:12px 16px; margin:14px 0; background:var(--surface-solid); font-size:13px; }
+.card.warn { border-left-color:var(--danger); }
+.card.rule { border-left-color:var(--accent); }
+.card.good { border-left-color:var(--good); }
+.card h5 { margin:0 0 6px; font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--muted); font-weight:700; }
+
+.taskmeta { width:100%; font-size:12.5px; margin:6px 0 12px; }
+.taskmeta th { width:150px; text-transform:none; letter-spacing:0; font-size:12px; }
+
+#questionables details, #amendments details { border:1px solid var(--border-strong); border-radius:8px;
+  padding:10px 14px; margin:10px 0; background:var(--surface-solid); }
+#questionables summary, #amendments summary { cursor:pointer; font-weight:600; font-size:13.5px; }
+.qa-answer { margin:10px 0 2px; font-size:13px; color:var(--muted); }
+.qopen { color:var(--warn); font-family:var(--font-mono); font-size:10px; letter-spacing:.06em; margin-right:6px; }
+.qrec { color:var(--cool); font-family:var(--font-mono); font-size:10px; letter-spacing:.06em; margin-right:6px; }
+.qdecided { color:var(--good); font-family:var(--font-mono); font-size:10px; letter-spacing:.06em; margin-right:6px; }
+.recommend { display:block; margin:0 0 10px; padding:8px 12px; font-size:12.5px;
+  border-left:3px solid var(--cool); background:#22d3ee0d; border-radius:0 6px 6px 0; color:var(--fg); }
+.recommend b { color:var(--cool); }
+.consequence { display:block; margin:0 0 10px; padding:8px 12px; font-size:12.5px;
+  border-left:3px solid var(--accent); background:#a78bfa0d; border-radius:0 6px 6px 0; color:var(--fg); }
+.consequence b { color:var(--accent); }
+
+@media (max-width:720px) {
+  main { padding:28px 14px 140px; }
+  .meta dl { grid-template-columns:1fr; }
+}
+</style>
+</head>
+<body>
+<main>
+
+
+  <!-- ===== HEADER + UPDATABLE METADATA ===== -->
+  <header>
+    <h1>Plan: AWSF v2 W04 — Project registry v1</h1>
+    <p class="sub">A factory that can build <em>this</em> repository knows one project by knowing nothing about projects at all. Pointing it at a second one needs two records that must never be the same record: a <strong>catalog</strong> of what a project <em>is</em>, committed and durable, and a <strong>placement</strong> layer of where its clones <em>sit</em>, machine-local and never committed. <strong>The split is forced by code, not chosen</strong> — <code>core/src/config/load.ts</code> refuses absolute machine paths outright, so a committed catalog physically cannot hold a clone location. <strong>This is a deep plan, one workstream of <a href="awsf-v2-plan.html">the v2 spine</a> (Milestone M4)</strong>, and the spine's hinge: W05, W07 and W08 all wait on it. It carries the two schemas and the rejection each makes of the other, the join between them, the content-addressed cross-repository contract Questionable Q1 settled, the redefinition of AGENTS.md invariant 12 that a separate plan repository forces, and the v1 ticket move that belongs here and nowhere else. <strong>Authoring it wrote no implementation code, changed no invariant, committed nothing, and flipped no marker.</strong> It did spend the workstream's named cheapest unused upgrade — a read of the owner's real multi-repository project — and that reading changed the schema in five places before it froze. What was measured is quoted below.</p>
+    <details class="meta">
+      <summary>Metadata</summary>
+      <dl>
+        <dt>created</dt>      <dd>2026-08-21</dd>
+        <dt>modified</dt>     <dd>2026-08-21, 2026-08-22</dd>
+        <dt>commits</dt>      <dd>none yet — this plan is authored and reviewed, and not yet committed</dd>
+        <dt>agent name</dt>   <dd>claude-opus-5, claude-opus-5</dd>
+        <dt>session id</dt>   <dd>not recorded — AGENTS.md invariant 1 keeps live session state out of every committed file in this repository</dd>
+        <dt>back refs</dt>    <dd>./awsf-v2-plan.html (the spine; this is its milestone M4 / workstream W04, and the source of Questionables Q1 and Q2), ./tickets/awsf-v2-plan/W04.md (the meta-prompt that authored this plan), ./awsf-v2-plan-build-prompts.md (§ Section B → W04), ./awsf-v2-candidates-fuse-version.md (§10 first — §10.2 reverses the v1 ticket move and re-homes it here — then §2.3 and the F-1/F-2 rows), ./awsf-v2-w03-awsf-init.html (W03; produces the repository this workstream registers), ../AGENTS.md (invariants 1, 3, 4, 7, 8, 10, 12), <code>core/src/config/load.ts</code>, <code>core/src/config/schema.ts</code>, <code>core/src/cli/commands/ticket.ts</code>, <code>core/src/persistence/ticket-store.ts</code>, <code>core/src/persistence/platform-paths.ts</code>, <code>core/src/cli/commands/start.ts</code>, <code>core/src/cli/commands/operator.ts</code>, <code>core/src/observability/rebuild.ts</code>, <code>core/src/gates/commands.ts</code>, <code>core/src/policy/path-policy.ts</code>, <code>core/test/unit/meta/ticket-plan-sync.test.ts</code>, <code>core/test/unit/meta/no-destructive-paths.test.ts</code></dd>
+        <dt>forward refs</dt> <dd>./awsf-v2-w04-project-registry-build-prompts.md, ./tickets/awsf-v2-w04-project-registry/ (T01–T21, one file per task, plus README.md), ./awsf-v2-w05-design-to-plan.html and ./awsf-v2-w07-quota-telemetry.html and ./awsf-v2-w08-publish.html (all three wait on this workstream; none yet authored)</dd>
+      </dl>
+    </details>
+  </header>
+
+  <figure>
+<pre class="mermaid">
+flowchart LR
+  subgraph COMMITTED["COMMITTED · durable · travels with the project"]
+    CAT["catalog<br/>awsf.project.yaml<br/>identity · roles · branches<br/>gate commands · contracts"]
+  end
+  subgraph LOCAL["MACHINE-LOCAL · never committed"]
+    PLC["placement<br/>clone paths<br/>worktree roots"]
+  end
+  CAT --> J["resolveProject<br/>the join"]
+  PLC --> J
+  J --> USE["one resolved project<br/>identity WITH location"]
+  SR["state root<br/>one per machine<br/>projects namespaced inside"] -. holds .-> PLC
+  SR -.-> DGR["doctor · gc · db rebuild<br/>already walk projects/*"]
+  style CAT stroke:#A78BFA,stroke-width:2px
+  style PLC stroke:#22D3EE,stroke-width:2px
+  style SR stroke:#8B90A6,stroke-dasharray:4 3
+</pre>
+    <figcaption>Two layers and a join. The state root is in <strong>neither</strong> layer — the catalog cannot hold it, because the loader refuses machine paths; the placement layer does not need to, because it lives <em>inside</em> the state root and no file records its own location. The dashed edge is containment, not a field.</figcaption>
+  </figure>
+
+  <!-- ===== IN PLAIN LANGUAGE ===== -->
+  <section id="plain-language">
+    <h2>In Plain Language</h2>
+    <p>This section explains the whole plan without technical vocabulary. Everything after it says the same things precisely, for the people — and machines — building it.</p>
+
+    <h3>The workshop only knows how to build one thing, because it has never been told there is more than one</h3>
+    <p>There is a workshop that builds software. Today it can only work on the single body of work it lives inside, the way a workbench with one job clamped to it never needs a label. The moment the owner wants it to work on a second body of work — and the owner has one, a health project made of several separate pieces kept in separate places — the workshop has no way to be told which one it is working on, where each piece is kept, or which pieces belong together.</p>
+    <p>The obvious fix is to write all of that down in one list. That fix is wrong, and it is wrong in a way the workshop already refuses to allow. Two very different kinds of fact get mixed into one list. One kind is true forever and true for everyone: <em>this project has a piece that holds the written plans, and two pieces that hold working parts, and this part is checked by running these particular checks.</em> The other kind is true only on one computer, today: <em>on this machine, that piece is kept in that drawer.</em> Written together, the second kind poisons the first — the list stops being a description of the project and becomes a description of one desk. Hand it to a second machine and it is wrong everywhere it matters.</p>
+
+    <h3>The workshop already refuses the mistake, which is why now</h3>
+    <p>This is not a preference anyone has to be talked into. The workshop's existing settings reader already <em>rejects</em> anything that looks like a location on a particular machine — it will not accept the setting at all. So the mixed list is not merely a bad idea; it cannot be written. The separation is forced. What is missing is only the second list, the one that is allowed to say where things are because it never leaves the machine it describes.</p>
+    <p>The second reason for now: the health project is real, it is already split across several pieces, and one of those pieces contains a hand-written table of where the others are kept, complete with the exact drawer names on the owner's own computer — and that table has been shared publicly and has already gone out of date. It is the mistake this plan prevents, already made, already committed, already stale. Building the fix against that real project rather than an imagined one is what an hour of reading bought, and it changed the design in five places.</p>
+
+    <h3>Two lists, a rule that keeps them apart, and a fingerprint that catches copies drifting</h3>
+    <p>Think of a touring theatre company. The <strong>programme</strong> says what the show is: which people are in it, which scenes belong to which act, what has to be true before the curtain goes up. It is printed once and it is the same programme in every city. The <strong>get-in sheet</strong> says where everything is in <em>tonight's</em> building: which door, which room, which corridor. It is written fresh in each city and thrown away after. Nobody prints the corridor numbers into the programme, and nobody expects the get-in sheet to explain the plot.</p>
+    <p>This plan builds both, and — this is the part that makes it real rather than tidy — it makes each one <em>refuse</em> to hold the other's content. A location written into the programme is rejected outright, not warned about. A fact about what the show <em>is</em>, written into the get-in sheet, is rejected too. Neither can quietly become the other over time, which is how this sort of separation usually dies.</p>
+    <p>Then there is a third thing, and it is the one with the most value hidden in it. When a project is made of several pieces that have to agree with each other — one piece produces a description of how to talk to it, another piece has to hold a copy of that description — the two copies drift apart silently, and nothing notices until something breaks in front of a user. The fix is a fingerprint. Each piece keeps its own copy <em>and</em> the fingerprint of what that copy is supposed to be, and a check that reads nothing but that one piece's own contents can say whether it still matches. Copies drifting stops being a hazard nobody is watching for and becomes a failed check, immediately, in the ordinary run of work. The owner's health project already keeps two copies of exactly such a description; today one side is checked automatically and the other side is checked by nobody, and the instruction for keeping them in step assumes the two pieces sit side by side on disk — which, for several of the working copies actually in use, they do not.</p>
+    <p>Finally, there is a promise the workshop already makes and enforces by machine: a written plan and the individual work items cut from it must never disagree. That promise is currently kept by a trick — the plan and its work items are always found in the same place, so they are found together. Once a project keeps its plans in a piece separate from its working parts, that trick stops working. This plan replaces the trick with something stronger rather than weaker: the pairing is looked up deliberately instead of assumed from where the files happen to sit, and two new ways of getting it wrong — a set of work items whose plan cannot be found, and a plan written in a form the checker does not know how to read — become loud failures instead of silent ones.</p>
+
+    <h3>How anyone would know it worked</h3>
+    <p>A second project can be described to the workshop and located on this machine, and neither description can be made to hold the other's kind of fact — attempting it is refused with a named reason, not accepted with a warning. The existing housekeeping commands still see one place for all projects rather than one place each. The two copies of a shared description are proved to match, and the check is proved to <em>fail</em> when one copy is deliberately altered by a single character — a check nobody has watched fail is decoration. The plan-and-work-items promise still holds, is still enforced by machine, and has also been watched to fail on a deliberately introduced disagreement across a boundary it could not previously see. And the workshop's own existing work items keep listing exactly as they do today after they are moved, which is the one part of this that is easy to break silently and would be noticed by nobody.</p>
+    <p>Deliberately <em>not</em> part of this: any single job spanning two pieces at once. A job takes one piece, and finishing it is all-or-nothing within that piece. Work that genuinely touches two is a parent note plus two separate jobs with an agreed description between them — because a half-finished job across two pieces has no way to be undone, and nothing here would be able to write that story honestly.</p>
+  </section>
+
+  <!-- ===== PURPOSE ===== -->
+  <section id="purpose">
+    <h2>Purpose</h2>
+    <p>Turn "a factory for this repository" into "a factory for the owner's projects" by giving AWSF a <strong>project</strong> it can name, describe, locate and resolve — without letting a single machine fact reach a committed file, without teaching <code>doctor</code>, <code>gc</code> or <code>db rebuild</code> to walk more than one state root, and without letting any task own more than one repository.</p>
+    <p>Three consumers are waiting on the result and shape what v1 must contain. <strong>W05</strong> needs a plan source it can resolve, because its <code>AC</code>/<code>INV</code> coverage gate extends the same fence this workstream redefines. <strong>W07</strong> needs per-repository scope for its quota readout. <strong>W08</strong> needs per-repository delivery policy, because the spine states plainly that its allowlist "has to live in the catalog". W04 is the hinge: the longest path in the spine runs through it.</p>
+    <p>And one obligation that is this workstream's alone. <strong>Invariant 12 currently assumes a plan and its tickets share one checkout.</strong> A separate plan repository breaks that assumption. This plan owes a new mechanically-checked source-of-truth relation — <em>redefined, never relaxed</em> — proven to fail on an induced drift, and an owner-authored amendment to the invariant's text that lands <em>before</em> the build starts.</p>
+  </section>
+
+  <!-- ===== PROBLEM ===== -->
+  <section id="problem">
+    <h2>Problem</h2>
+    <p>AWSF has exactly one notion of "which project": <code>const project = parsed.flags.project ?? config.project.slug</code>. A slug, read from the committed config of whatever repository the command was run in, or overridden by a flag. Everything downstream — the attempt directory, the journal, the status store — is already namespaced by that slug. <strong>The storage layout is already multi-project; the vocabulary is not.</strong> There is nowhere to say that a project has more than one repository, nowhere to say which of them holds its plans, nowhere to say what each is checked with, and nowhere to say where any of them are.</p>
+
+    <h3>The obvious fix is one list, and one list is the thing the loader refuses</h3>
+    <p><code>core/src/config/load.ts</code> holds <code>ABSOLUTE_PATH_PATTERN = /^(\/|[A-Za-z]:[\\/]|\\\\|~)/</code> and walks <strong>every string leaf in the parsed document — object keys and values, array items included</strong> — throwing <code>ConfigAbsolutePathError</code> on the first offender. Its comment states the reason as a rule rather than a check: <em>"A committed config is 'durable intent' — it must never encode where anything lives on any one machine."</em> A committed catalog carrying a clone location is not discouraged. It is unrepresentable. <strong>That is the forcing, and it is not negotiable.</strong></p>
+
+    <h3>The mistake has already been made, in the owner's own project, and it is public and stale</h3>
+    <p>The owner's health platform keeps its plans in one repository and its code in others. That plan repository's agent-facing document carries a five-row table — alias, path, role — and the <em>path</em> column holds absolute Windows paths. It is committed. It is pushed to a public remote. It is a catalog and a placement layer fused into one file, which is exactly the artifact this workstream exists to replace, and it is already wrong: it records one of its five repositories as "not yet under git", and that repository is on a branch. <strong>A hand-maintained placement table drifts. That is measured, not predicted.</strong> The same repository's engineering document additionally hardcodes an absolute path to the plan repository in prose, so a reader who moves either clone gets a document that points at nothing.</p>
+
+    <h3>Invariant 12's fence is held together by directory adjacency</h3>
+    <p><code>core/test/unit/meta/ticket-plan-sync.test.ts</code> pairs a ticket set with its plan by <strong>filesystem convention</strong>: <code>specs/tickets/&lt;stem&gt;/</code> resolves to <code>specs/&lt;stem&gt;.html</code>, and the build prompts are looked for beside the plan. That works while every plan and every ticket lives in one checkout, and it is what breaks the instant a project's plans live in a repository separate from its code. The store has the same shape of assumption pointing the other way: <code>ticketStoreFor(repository)</code> resolves <code>&lt;repository&gt;/specs/tickets</code>, so <code>awsf ticket list</code> run inside a code repository of a multi-repository project finds nothing at all.</p>
+
+    <figure>
+<pre class="mermaid">
+flowchart TD
+  A["one repository<br/>plan · tickets · code"] --> B["adjacency works<br/>specs/tickets/stem ↔ specs/stem.html"]
+  A --> C["ticketStoreFor cwd<br/>finds the tickets"]
+  D["a project of N repositories"] --> E["plan repo holds the plans"]
+  D --> F["code repos hold the code"]
+  E -.->|"no path from here"| F
+  F --> G["ticketStoreFor cwd<br/>finds NOTHING"]
+  E --> H["fence walks specs/tickets<br/>of the WRONG tree"]
+  style G stroke:#EF4444,stroke-width:2px
+  style H stroke:#EF4444,stroke-width:2px
+</pre>
+      <figcaption>Both halves of invariant 12's machinery resolve by adjacency, and they resolve <em>relative to different repositories</em> once a project spans several. The store looks beside the working repository; the fence looks beside the ticket set. Neither is wrong today, and both are unrecoverable by the same trick tomorrow.</figcaption>
+    </figure>
+
+    <h3>Three separate reasons a deep plan's tickets are already invisible to the store</h3>
+    <p>Found by reading the code this workstream must not break, and worth stating precisely because two of the three are invisible from the fence's side. <code>TicketStore.load()</code> filters <code>/^T\d\d\.md$/</code>, so a <code>W</code>-numbered file is rejected <strong>by name</strong>. It calls <code>readdir</code> with <strong>no recursion</strong>, so a subdirectory is never entered. And <code>TicketSchema</code> requires <code>tier</code>, <code>workflow</code>, <code>outcome</code>, <code>context</code>, <code>acceptance</code> and <code>non_goals</code>, all of which the v2 ticket sets omit by the sync fence's own already-decided rule. <strong>Moving v1's flat tickets fixes none of the three by itself</strong>, which is precisely why the fuse record reversed that move and re-homed it here.</p>
+  </section>
+
+  <!-- ===== SOLUTION ===== -->
+  <section id="solution">
+    <h2>Solution</h2>
+    <p>Two documents with two loaders, each rejecting what the other must hold; one join with four named rejections; a content-addressed contract that lets a child repository check its own agreement without reading anyone else's tree; and invariant 12's relation resolved through the registry instead of through a directory listing.</p>
+
+    <h3>The catalog — <code>awsf.project.yaml</code>, at the plan repository's root</h3>
+    <p>Durable project intent, versioned <code>awsf.project/v1</code>, and <strong>narrow by Q2's decision</strong>: project identity, one entry per repository carrying its role, default branch, gate commands and delivery posture, and the declared contracts between them. It is a <em>separate document with its own schema and its own loader</em>, never an extension of <code>AwsfConfig</code> — Q2 refused config loading outright, and the refusal is structural: a precedence rule between a project's config and the protected <code>awsf.config.yaml</code> is a route around <code>path-policy</code> that needs no amendment to take.</p>
+    <p><strong>It lives in the plan repository</strong> because that is the one repository a project with a plan is guaranteed to have, and because it is the repository whose whole job is already cross-cutting description. For AWSF itself the case is degenerate and instructive: this repository <em>is</em> its own plan repository, so its catalog names one repository whose role is both.</p>
+    <p><strong>The absolute-path rejection is inherited, not re-implemented.</strong> Task 1 extracts <code>isAbsoluteMachinePath</code> and the string-leaf walker out of <code>load.ts</code> into a shared module, leaving <code>loadConfig</code> behaviourally identical, and the catalog loader calls the same function. The guarantee "a committed catalog cannot hold a clone location" is then the same code path that already holds for the config, not a second, weaker sibling of it — which is the fourth rule the spine's Shared Invariants section imposes, applied here deliberately.</p>
+
+    <h3>The placement layer — <code>&lt;state-root&gt;/projects/&lt;slug&gt;/placement.yaml</code></h3>
+    <p>Machine-local by construction, because the state root is machine-derived: <code>resolveStateRoot(env, platform)</code> reads <code>XDG_STATE_HOME</code>, or falls back per platform, and is configured in no committed file anywhere. A placement document written under it is outside every repository and therefore cannot be committed by accident.</p>
+    <p><strong>Per project, not one shared file</strong>, and that is the existing grain: <code>attemptDir</code> already resolves <code>&lt;state-root&gt;/projects/&lt;project&gt;/tasks/&lt;task&gt;/&lt;attempt&gt;/</code>, and <code>discoverAttempts</code> already walks <code>&lt;state-root&gt;/projects/*</code> filtering to directories, so a file beside those directories is skipped by the walk it must not disturb. It is also the pattern this repository has held to elsewhere — <code>TicketStore</code>'s own comment says there is <em>intentionally</em> no database, cache or index, and one mutable file every project must contend for would be exactly that.</p>
+    <p><strong>Placement carries paths and nothing else</strong>, and its schema enforces the mirror-image rule: a <em>relative</em> path is a rejection, because a relative path resolved from a different working directory is a different location. Catalog refuses absolute; placement requires it. Each layer refuses what the other must hold, and a meta-test asserts the two schemas' property sets are disjoint but for the join key.</p>
+
+    <h3>Per-repository worktree roots, because per-project cannot describe the real case</h3>
+    <p>Placement carries a project-level <code>worktree_root</code> and a <strong>per-repository override</strong>. This is not a generalisation for its own sake: the measured project's two code repositories keep their worktrees under <em>two different filesystems</em> — one repository's are all siblings of the clones on the Windows-mounted projects root, while the other's are split, with the most recent three moved onto the Linux home filesystem. A placement layer offering one root per project cannot describe that project. Resolution order is per-repository override, then project default, then <code>defaultWorktreeRoot(stateRoot)</code> — which is <code>join(dirname(stateRoot), "awsf-worktrees")</code>, a <strong>sibling</strong> of the state root and never inside it.</p>
+
+    <h3>The state root is in neither layer, and the reason is a working command, not a preference</h3>
+    <p><code>doctor</code>, <code>gc</code> and <code>db rebuild</code> each take one <code>stateRoot</code>, and <code>discoverAttempts(stateRoot)</code> already iterates every project inside it. <strong>Project namespacing is not something this workstream invents; it exists in <code>platform-paths.ts</code> today.</strong> Putting a state root in either layer would give a project its own root and require teaching three working commands to walk several. The catalog cannot hold one, the placement layer does not need to, and a meta-test asserts neither schema has a property that could become one.</p>
+
+    <figure>
+<pre class="mermaid">
+flowchart LR
+  C1["catalog<br/>slug · repositories<br/>roles · branches<br/>gates · contracts"]
+  P1["placement<br/>clone paths<br/>worktree roots"]
+  C1 --> R["resolveProject"]
+  P1 --> R
+  R -->|"reject"| X1["slug mismatch"]
+  R -->|"reject"| X2["placed but undeclared"]
+  R -->|"reject"| X3["declared but unplaced"]
+  R -->|"reject"| X4["identity signal disagrees"]
+  R --> OK["ResolvedProject"]
+  OK --> G["gate commands<br/>→ commandsPass, unchanged"]
+  OK --> K["contract digests<br/>→ the two fences"]
+  OK --> S["plan sources<br/>→ invariant 12"]
+  style OK stroke:#22C55E,stroke-width:2px
+  style X1 stroke:#EF4444
+  style X2 stroke:#EF4444
+  style X3 stroke:#EF4444
+  style X4 stroke:#EF4444
+</pre>
+      <figcaption>The join is the only place identity and location meet, and it is where every mismatch between them is named. Its three consumers are the three things the spine says wait on this workstream — and each receives a record, never a resolver: Q2's consequence, applied.</figcaption>
+    </figure>
+
+    <h3>Recorded, not resolved — what Q2's consequence means in code</h3>
+    <p>The catalog's gate entries carry the <strong>same shape</strong> <code>awsf.config.yaml</code>'s already do — <code>argv</code> as an array with at least one element, plus <code>timeout_seconds</code> — keyed by an id in <code>KNOWN_GATE_IDS</code>. Resolution stays exactly where it is: <code>commandsPass(output, configured, context)</code> in <code>core/src/gates/commands.ts</code> joins on <code>gateId</code> and asserts <strong>argv exact</strong> against host-generated evidence. The catalog becomes a second <em>source</em> for the same triple; it gains no resolver, runs nothing, and interprets nothing. An <code>argv</code> array rather than a command string is also invariant 4 holding: executable plus argv, never <code>shell: true</code>.</p>
+
+    <h3>Q1 as decided — the contract is content-addressed and committed in each child</h3>
+    <p>The catalog's parent coordination record names, per contract, the producing repository, each consuming repository, the repository-relative path in each, and one <code>sha256:</code> digest. <strong>Each participating repository also commits <code>awsf.contracts.yaml</code></strong>, a small projection naming only the contracts that repository participates in and the digest each is expected to hash to.</p>
+    <div class="card rule">
+      <h5>Why the projection exists, and why it is forced rather than chosen</h5>
+      Q1 requires two things at once: <strong>the parent record names the digest</strong>, and <strong>a child's gate reads its contract from inside its own worktree</strong>. A gate that had to read the parent record would have to reach into the plan repository — across exactly the boundary <code>path-policy</code> exists to hold, which is the hole the parent-owned option was rejected for opening. The only shape satisfying both is a copy of the digest inside each child. <strong>It cannot live in that child's <code>awsf.config.yaml</code></strong>, because that file is a <code>protected-path</code> no agent can write and a contract revision must be committable as ordinary work. So it is a separate file, and the cost — the digest now has N+1 copies, not just the artifact — is paid by the second fence below.
+    </div>
+    <p>Two fences, and the division of labour is the point. <strong>The local fence</strong> runs inside one repository, reads only that repository's <code>awsf.contracts.yaml</code> and the files it names, and asserts each hashes to its recorded digest. It needs no registry, no placement, and no second tree — it is the gate a child's worker phase runs. <strong>The central reconciliation</strong>, <code>awsf project verify</code>, runs over a resolved project and asserts every child's projection agrees with the parent record and every artifact agrees with both. It is driver-side, it is allowed to use placement, and it is what makes the N+1 copies safe.</p>
+
+    <h3>Invariant 12, redefined per registered plan source</h3>
+    <p>The catalog declares which repository holds the plans and where inside it they live. A <strong>plan source</strong> is <code>{project, repository-id, plans-root, plan format}</code>, and it resolves to a machine path only through placement. The fence pairs each ticket set with its plan through that record instead of through <code>readdirSync</code> on a fixed directory, and the store's <code>ticketStoreFor(repository)</code> is joined by <code>ticketStoreForPlan(resolved, planStem)</code>, which resolves into the plan repository rather than the working one.</p>
+    <div class="card warn">
+      <h5>The redefinition has a second half the phrase "registered plan source" does not cover</h5>
+      Resolution is only one of the two adjacency assumptions. The other is <strong>grammar</strong>. The fence matches <code>/&lt;h3&gt;&lt;code class="status"&gt;\[([^\]]*)\]&lt;\/code&gt; Milestone (M\d+):/</code>. The measured project's real plan writes its headings as <code>&lt;h3&gt;&lt;code class="status"&gt;[…]&lt;/code&gt; Phase 24.5</code> — <em>Phase</em>, not <em>Milestone</em>, and a decimal ordinal, not <code>M</code> plus digits. Of the <strong>219</strong> status markers in that one file, zero would match. Resolving the plan source correctly and then parsing it to zero tasks is a worse failure than not finding it, because the fence's first assertion still compares ticket numbers against ticket numbers and passes. <strong>So a plan source declares its format</strong>, and the fence <em>refuses by name</em> a format it does not implement rather than parsing it to nothing. v1 implements exactly one format and says so.
+    </div>
+    <div class="card rule">
+      <h5>The fence must stay hermetic in a fresh clone — the constraint that fixes the resolution rule</h5>
+      Placement is machine-local and uncommitted, so a fresh clone has none. A fence that required placement to resolve <em>any</em> plan source would fail on a machine that had never registered anything, which would make invariant 12 unenforceable exactly where it is most needed. The rule that resolves this: <strong>a repository that is its own plan repository is self-placed</strong> — the catalog beside the checkout resolves to <code>repoRoot()</code> with no placement consulted. AWSF's own project is that case, so the existing 38-ticket check runs unchanged and offline. A <em>foreign</em> plan source is checked only where placement locates it, and its absence is not a failure — another machine's clones are not this checkout's business. The asymmetry the fence already has is preserved: a ticket set with no resolvable plan is a hard failure; a plan with no ticket set is not, because AWSF did not author it.
+    </div>
+  </section>
+
+  <!-- ===== WHAT WAS MEASURED ===== -->
+  <section id="measured">
+    <h2>What Was Measured</h2>
+    <p>The spine names one cheapest unused upgrade for this workstream: <em>read the three Smart Health repositories and write down what a catalog would actually have to say about them.</em> It was spent before this plan's schemas were written. Every row below is a real observation made on <strong>2026-08-21</strong> against the owner's own working tree, read-only, with no code written and no provider contacted. <strong>Per AGENTS.md invariant 1 and the marimba contract, no absolute path, branch name of in-flight work, or session identifier from that reading is reproduced here</strong> — shapes, counts and digests only.</p>
+
+    <h3>It is not three repositories. It is five, and a sixth named in prose.</h3>
+    <p>The plan repository's own agent-facing document carries the alias table: a plan-and-research repository holding no code, a backend service repository, a mobile application repository, and <strong>two upstream machine-learning source repositories</strong> the backend was derived from. A sixth, a dispatch daemon, is named in prose as a separate repository. <strong>A catalog schema sized for the spine's stated three would not have fitted the project it was sized against</strong> — and the two upstream sources are a role neither "holds the plan" nor "holds code being built" describes, which is why the role vocabulary below has five members rather than two.</p>
+
+    <h3>Six facts that each changed a schema decision</h3>
+    <table class="matrix">
+      <thead><tr><th>Measured</th><th>What it changed</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Default branches are mixed</strong> across one project — three repositories on <code>main</code>, two on <code>master</code>, and the sixth on <code>master</code>.</td><td>Per-repository default branch is load-bearing <em>today</em>, not a future nicety. A project-level default would be wrong for this project on the day it was written.</td></tr>
+        <tr><td><strong>Directory name, repository name and remote name are three different strings</strong>, and none is derivable from another. One repository's directory, its declared alias and its remote all differ; another's remote carries a spelling error the directory does not.</td><td>Catalog identity is an explicit <code>id</code>, never inferred from a directory name or a remote URL. Placement keys on that <code>id</code>, and the join rejects a placement entry naming an <code>id</code> the catalog does not declare.</td></tr>
+        <tr><td><strong>Two repositories in the project have no remote at all</strong>, and one of them the alias table still records as "not yet under git" — it is on a branch.</td><td>Any identity signal used to verify that a placement path points at the <em>right</em> clone must work without a remote. Hence an optional <code>root_commit</code> rather than a required remote URL — and hence the honest note that a hand-maintained table drifts.</td></tr>
+        <tr><td><strong>Worktree roots differ per repository within one project.</strong> The backend's ten worktrees are all siblings of its clone on one filesystem; the application's eleven are split, with three on a different filesystem entirely.</td><td>Per-<em>project</em> worktree roots cannot describe this project. Placement carries a per-repository override, with the project default and <code>defaultWorktreeRoot</code> behind it.</td></tr>
+        <tr><td><strong>The backend declares six checkable commands</strong> — a test suite, a linter, a type check scoped to one subpath, a contract drift check, a seed-integrity check and a database-migration check — where <code>KNOWN_GATE_IDS</code> holds three.</td><td>Surfaced as <a href="#questionables">Q5</a> rather than silently widened. The recorded set stays the three the existing machinery joins on, and the contract drift check is <em>subsumed</em> by Q1's local fence rather than needing an id of its own.</td></tr>
+        <tr><td><strong>The plan repository holds four plans, and three are explicitly closed</strong> — its own document says not to start new work against them. It holds <strong>no ticket sets at all</strong>; its units are phases with build prompts.</td><td>"Which plan" is not derivable from "which project", so a plan source is per-plan and the catalog carries an optional default. And a plan with no ticket set must not be a failure, which preserves the fence's existing asymmetry rather than inventing a new rule.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>The cross-repository contract already exists, in exactly the shape Q1 chose</h3>
+    <p>The backend commits an OpenAPI document at its repository root. The application commits a copy of that same document inside its own tree and generates its typed client from it. Both copies are tracked by Git in their own repositories. Hashed on 2026-08-21:</p>
+<pre><code>backend      openapi.json            sha256 0510d03b81c4…   430473 bytes
+application  lib/api/openapi.json    sha256 0510d03b81c4…   430473 bytes
+                                     ── identical ──</code></pre>
+    <p class="sub">Digests truncated to twelve hex characters: enough to show the two agreed, deliberately not enough to be mistaken for a catalog field. The value will change the next time the contract does; what matters is that the two agreed, and that agreement is currently maintained by hand.</p>
+    <div class="card good">
+      <h5>Q1 is not a new discipline. It is a discipline this project already practises, half-mechanised.</h5>
+      The producing side is already a fence: <code>app/contract_check.py</code> regenerates the schema from the live application, serialises it deterministically, compares it <strong>byte-identically</strong> to the committed snapshot, and exits <code>1</code> on drift — reading only from inside its own repository, resolved from the module's own location. <strong>That is the same mechanism shape as the ticket/plan sync fence and the same shape Q1 prescribes.</strong> The consuming side has nothing. Its copy is made by a hand-run <code>cp</code> documented in a README, and no test anywhere checks it.
+    </div>
+    <div class="card warn">
+      <h5>And that documented instruction already encodes a placement assumption that is false from most of the trees in use</h5>
+      The consuming repository's README instructs the reader to copy the contract from a <strong>relative sibling path</strong> — an assumption that the two clones sit next to each other. True of the two primary clones. <strong>False from every worktree on the other filesystem</strong>, of which that repository currently has three. Run there, the instruction either fails or copies the wrong file, and nothing would notice. This is the exact failure the local fence turns into a red check, and it is why the digest belongs in the child rather than being fetched from a sibling.
+    </div>
+
+    <h3>What this fixture does not settle</h3>
+    <div class="card warn">
+      <h5>Read, not run</h5>
+      This was a <strong>read</strong> of a real project, not an execution against it. It proves the schema fits a real project's facts; it does not prove the loader accepts a catalog written for that project, because no such catalog exists yet. It proves the two contract copies agreed at one instant; it does not prove the fence would have caught them disagreeing, which only the induced-drift test in Milestone M4 can do. It says nothing about a project the owner does not have — a monorepo with several plans, a repository shared between two projects, or a contract that is a directory rather than a file are all outside what was observed and outside v1. <strong>The named upgrade that would close the largest remaining gap is in <a href="#notes">Notes</a>:</strong> register that project for real once M3 lands and run <code>awsf project verify</code> against its actual contract pair. It costs no quota and needs no code beyond this workstream.
+    </div>
+  </section>
+
+  <!-- ===== AMENDMENT REQUIRED BEFORE THE BUILD ===== -->
+  <section id="amendment-required">
+    <h2>Amendment Required Before the Build</h2>
+    <p>Ordering gate <span class="gate">G2</span> in the spine's Shared Invariants section: <strong>an invariant or protected-config amendment lands as an owner-approved commit before the workstream that depends on it starts building.</strong> No agent can write <code>AGENTS.md</code> — <code>path-policy</code> rejects <code>protected-path</code> independently of the write globs — and inventing an owner-authorized protected-change mechanism to route around it is the boundary working, not a bug to fix. <strong>Neither of the two amendments below is a task in this plan.</strong> They are stated here, with their sequence, so the build does not discover one of them as a refused write mid-task.</p>
+    <div class="card warn">
+      <h5>Why an amendment is owed at all, when the guarantee is not being weakened</h5>
+      Invariant 12's <em>guarantee</em> — a plan and its tickets never disagree — is unchanged and is strengthened by two new failure modes. But its <em>text</em> names two literal paths, <code>specs/tickets/</code> and <code>specs/awsf-plan.html</code>, and task 20 moves v1's tickets to <code>specs/tickets/awsf-plan/</code>. After that commit the invariant's own text is false about where the thing it governs lives. An invariant whose text is false is worse than one that is merely narrow, so the text must land corrected <strong>before</strong> the move, not after it.
+    </div>
+    <h3>The amendment, written out so the owner commits text rather than an intention</h3>
+    <p>Replace AGENTS.md item 12 with:</p>
+<pre><code>12. **A plan and its ticket set never disagree, and the pairing is resolved
+    through the registered plan source rather than through directory
+    adjacency.** Every ticket set belongs to exactly one plan. The plan's
+    status markers are the source of truth; a ticket's `state` mirrors them
+    and is flipped in the *same commit*, never a later one. A ticket's build
+    prompt stays byte-identical to its build-prompts § Section B block — the
+    tickets are a re-cut of that file, never a fork of it. A ticket set whose
+    plan cannot be resolved is a hard failure, not a skip; a plan whose
+    declared format the fence does not implement is refused by name rather
+    than parsed to zero tasks. Enforced by the ticket/plan-sync meta-test:
+    task coverage, milestone grouping, `state` against both the milestone
+    marker and the task's own checklist, prompt and title integrity,
+    `depends_on` ordering, and the frontmatter vocabularies.</code></pre>
+    <h3>The second amendment, no longer conditional — and it lands <em>after</em> a task, not before the build</h3>
+    <p><a href="#questionables">Q1</a> was <strong>decided on 2026-08-22 in favour of protecting the catalog</strong>, which makes a second owner-authored commit required: adding <code>awsf.project.yaml</code> to <code>policy.protected_paths</code> in <code>awsf.config.yaml</code>, itself a protected path and therefore an owner act by the same gate.</p>
+    <div class="card warn">
+      <h5>Its sequence is the reverse of the one gate G2 normally imposes, and that is not a slip</h5>
+      <code>path-policy</code> matches a <code>protected_paths</code> glob against a <strong>path</strong>, independently of whether the file exists, so protecting <code>awsf.project.yaml</code> rejects <strong>creating</strong> it exactly as it rejects editing it. <strong>Task 10 is the task that creates this repository's catalog.</strong> Landing this amendment before the build would therefore make task 10 impossible rather than merely governed. <strong>It lands after task 10 and before the workstream closes at task 21.</strong> Nothing in tasks 11–20 writes the catalog, so no other task is affected.
+    </div>
+    <table>
+      <thead><tr><th>Owner act</th><th>Lands</th><th>Because</th></tr></thead>
+      <tbody>
+        <tr><td><strong>AGENTS.md invariant 12</strong>, replacement text above</td><td>before task 16</td><td>Task 16 redefines the relation the amended text describes; tasks 1–15 do not need it, and task 16's own prompt refuses to proceed without it.</td></tr>
+        <tr><td><strong><code>awsf.config.yaml</code> — <code>awsf.project.yaml</code> into <code>policy.protected_paths</code></strong></td><td>after task 10, before task 21</td><td>Protecting the path rejects creating the file, and task 10 creates it. Sequenced after, not skipped — the workstream does not close with the catalog unprotected.</td></tr>
+      </tbody>
+    </table>
+    <p><strong>What this second amendment does <em>not</em> cover, stated with the same discipline as every other boundary in this plan.</strong> <code>protected_paths</code> is enforced by <code>path-policy</code> over a <strong>worker phase's writes inside a managed worktree</strong>. It is not a filesystem permission and it does not bind a session that is not running as a governed phase — the very sessions these build prompts describe edit this repository directly. So the guarantee earned is <em>"no AWSF worker phase can rewrite a project's catalog"</em>, which is the case Q1's reasoning is actually about, and <strong>not</strong> "no agent anywhere can". The stronger sentence would be false, and the weaker one is the one the mechanism supports.</p>
+  </section>
+
+  <!-- ===== RELEVANT FILES ===== -->
+  <section id="files" class="files">
+    <h2>Relevant Files</h2>
+
+    <h3>Existing Files</h3>
+    <ul>
+      <li><span class="tag existing">existing</span> <code>core/src/config/load.ts</code> — <code>ABSOLUTE_PATH_PATTERN</code>, <code>isAbsoluteMachinePath</code> and <code>scanStrings</code>. The forcing behind the two-layer split, and the code task 1 extracts so the catalog inherits the same rejection rather than a weaker sibling of it.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/config/schema.ts</code> — <code>GateEntrySchema</code> (<code>argv</code> + <code>timeout_seconds</code>), <code>KNOWN_GATE_IDS</code>, <code>PolicySchema.protected_paths</code>, and <code>observability.db</code>'s symbolic <code>state://</code> scheme: the established precedent for a committed surface naming a machine-local thing symbolically and resolving it at runtime.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/persistence/platform-paths.ts</code> — <code>resolveStateRoot</code> and <code>attemptDir</code>. Proves the state root is already machine-derived and projects are <em>already</em> namespaced inside one root.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/observability/rebuild.ts</code> — <code>discoverAttempts(stateRoot)</code> walks <code>&lt;stateRoot&gt;/projects/*</code> filtering to directories. Why placement may live beside those directories as a file, and why per-project state roots would cost three commands.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/cli/commands/operator.ts</code>, <code>core/src/cli/commands/doctor.ts</code> — <code>gcCommand</code>, <code>rebuildCommand</code>, <code>doctorCommand</code>, each taking exactly one <code>stateRoot</code>.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/cli/commands/start.ts</code> — <code>defaultWorktreeRoot(stateRoot) = join(dirname(stateRoot), "awsf-worktrees")</code>. Source proof that the managed worktree root is a <strong>sibling</strong> of the state root, and the fallback the placement layer sits in front of.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/cli/main.ts</code> — <code>const project = parsed.flags.project ?? config.project.slug</code>, the <code>--state-root</code>/<code>--worktree-root</code>/<code>AWSF_WORKTREE_ROOT</code> overrides, and the <code>configPath</code> resolution every non-<code>init</code> command falls through to.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/gates/commands.ts</code> — <code>commandsPass</code>, which joins on <code>gateId</code> and asserts <strong>argv exact</strong>. The resolver Q2's decision leaves exactly where it is.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/cli/commands/ticket.ts</code>, <code>core/src/persistence/ticket-store.ts</code> — <code>ticketStoreFor</code>, the <code>/^T\d\d\.md$/</code> filter, the non-recursive <code>readdir</code>, and the "intentionally no database, cache, or index" comment.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/contracts/ticket.ts</code> — <code>TicketSchema</code>'s six required fields the v2 ticket sets omit. Read for <a href="#questionables">Q4</a>; deliberately not modified by this plan.</li>
+      <li><span class="tag existing">existing</span> <code>core/test/unit/meta/ticket-plan-sync.test.ts</code> — the plan-aware fence, its adjacency resolution, its <code>Milestone (M\d+)</code> grammar, and the hard-failure-on-orphan rule this plan preserves.</li>
+      <li><span class="tag existing">existing</span> <code>core/test/unit/meta/no-destructive-paths.test.ts</code> — scans <strong>file contents</strong> in <code>core/src</code> for nine forbidden patterns, comments included. Named here because two of them (<code>/git\s+push/</code>, <code>/worktree\s+(?:remove|prune)\b/</code>) sit squarely in this workstream's vocabulary.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/policy/path-policy.ts</code> — <code>protected-path</code> as an independent rejection; the boundary Q1's local fence must not reach across.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/git/</code> — <code>systemGitRunner</code>/<code>runGit</code> and <code>commitAsHost</code>, reused by W03. The only route to a Git invocation, per invariant 3.</li>
+    </ul>
+
+    <h3>New Files</h3>
+    <ul>
+      <li><span class="tag new">new</span> <code>core/src/config/machine-path.ts</code> — <code>isAbsoluteMachinePath</code>, <code>scanStrings</code>, <code>assertNoAbsolutePaths</code>, extracted from <code>load.ts</code> so both loaders share one rejection.</li>
+      <li><span class="tag new">new</span> <code>core/src/registry/catalog-schema.ts</code> — <code>awsf.project/v1</code> as a TypeBox definition; the validator's shape, the static type and the emittable JSON Schema, per this repository's contract convention.</li>
+      <li><span class="tag new">new</span> <code>core/src/registry/catalog.ts</code> — the catalog loader and its closed error hierarchy, mirroring <code>ConfigError</code>'s <code>code</code>-bearing shape.</li>
+      <li><span class="tag new">new</span> <code>core/src/registry/placement-schema.ts</code>, <code>core/src/registry/placement.ts</code> — <code>awsf.placement/v1</code>, its loader, and its reader/writer under the state root.</li>
+      <li><span class="tag new">new</span> <code>core/src/registry/resolve.ts</code> — <code>resolveProject</code>, the join, and its four rejections.</li>
+      <li><span class="tag new">new</span> <code>core/src/registry/contracts.ts</code> — digest computation and the shared core of both contract fences.</li>
+      <li><span class="tag new">new</span> <code>core/src/registry/plan-source.ts</code> — plan-source resolution, the declared plan format, and the self-placement rule.</li>
+      <li><span class="tag new">new</span> <code>core/src/gates/contract-digest.ts</code> — the local fence, as a structural gate in the shape of the existing <code>GateReport</code> gates.</li>
+      <li><span class="tag new">new</span> <code>core/src/cli/commands/project.ts</code> — <code>awsf project register|list|show|verify</code>.</li>
+      <li><span class="tag new">new</span> <code>awsf.project.yaml</code> — AWSF's own catalog, at this repository's root. The degenerate single-repository case, and this plan's first real instance.</li>
+      <li><span class="tag new">new</span> <code>core/test/unit/registry/{catalog,placement,resolve,contracts,plan-source}.test.ts</code>, <code>core/test/unit/cli/project-command.test.ts</code> — the unit surface.</li>
+      <li><span class="tag new">new</span> <code>core/test/unit/meta/layer-separation.test.ts</code> — the disjointness assertion and the fence that keeps a state root out of both schemas.</li>
+      <li><span class="tag dir">dir</span> <code>specs/tickets/awsf-plan/</code> — where v1's <code>T01</code>–<code>T38</code> land in task 20, retiring the fence's flat-set special case.</li>
+      <li><span class="tag new">new</span> <code>specs/awsf-v2-w04-project-registry-build-prompts.md</code>, <code>specs/tickets/awsf-v2-w04-project-registry/</code> — this plan's own twenty-one prompts and ticket set.</li>
+    </ul>
+  </section>
+
+  <!-- ===== IMPLEMENTATION PHASES ===== -->
+  <section id="phases">
+    <h2>Implementation Phases</h2>
+    <p><strong>IMPORTANT:</strong> Execute every phase and task step by step, in order, top to bottom.</p>
+    <p>Status markers: <code>[]</code> idle · <code>[wip]</code> in progress · <code>[x]</code> complete · <code>[f]</code> failed. All start as <code>[]</code>; the Build Plan workflow updates them as it works.</p>
+    <div class="card rule">
+      <h5>Two marker sets, and only one of them moves before the end</h5>
+      <strong>This plan's own markers move on every task</strong> — the milestone <code>&lt;h3&gt;</code> and each checklist item in <code>specs/awsf-v2-w04-project-registry.html</code>, plus the matching ticket's <code>state:</code> in the same commit. <strong>The spine's W04 marker in <code>specs/awsf-v2-plan.html</code> does not move until task 21</strong>, the only task that touches it. Confusing the two breaks AGENTS.md invariant 2 or invariant 12.
+    </div>
+    <div class="card warn">
+      <h5>One landmine this workstream's vocabulary walks straight into</h5>
+      <code>no-destructive-paths.test.ts</code> scans <strong>file contents</strong> across <code>core/src</code>, comments included, for nine patterns. Two of them — <code>/git\s+push/</code> and <code>/worktree\s+(?:remove|prune)\b/</code> — are phrases a registry and placement module is naturally tempted to write in prose. <strong>Never write either phrase in a comment or string under <code>core/src</code>.</strong> Say "no upstream write path exists" and "reclaiming a worktree", and the invariant-8 fence stays green for the right reason instead of being edited for the wrong one.
+    </div>
+
+    <!-- ================= M1 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M1: Two layers, each refusing what the other must hold</h3>
+      <p>Nothing is joined, resolved or registered in this phase. It builds the two documents and — the part that makes the separation real rather than stylistic — the rejections that keep each from becoming the other. The catalog inherits its absolute-path refusal from the code that already enforces it, so the guarantee has one implementation, not two.</p>
+
+      <figure>
+<pre class="mermaid">
+flowchart TD
+  M["machine-path.ts<br/>extracted from load.ts"] --> L1["loadConfig<br/>behaviour identical"]
+  M --> L2["loadCatalog<br/>same rejection"]
+  L2 -->|"absolute path"| R1["E_CATALOG_ABSOLUTE_PATH"]
+  L2 -->|"'..' segment"| R2["E_CATALOG_ESCAPING_PATH"]
+  P["loadPlacement"] -->|"relative path"| R3["E_PLACEMENT_RELATIVE_PATH"]
+  P -->|"durable field"| R4["schema: additionalProperties false"]
+  style R1 stroke:#EF4444
+  style R2 stroke:#EF4444
+  style R3 stroke:#EF4444
+  style R4 stroke:#EF4444
+</pre>
+        <figcaption>Four rejections, two per layer, and each is a named error code rather than a warning. The <code>..</code> rejection is the one the inherited pattern does <em>not</em> give for free — it is the gap named in this phase's own limits card.</figcaption>
+      </figure>
+
+      <h4>1. Extract the machine-path guard, leaving <code>loadConfig</code> behaviourally identical</h4>
+      <p>A pure extraction first, with no behaviour change anywhere, so that the catalog's later reuse is provably the same code and not a lookalike. The spine's fourth authoring rule applies directly: check whether the guarantee is already enforced somewhere stronger before adding a weaker sibling.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>core/src/config/machine-path.ts</code> exports <code>isAbsoluteMachinePath</code>, <code>scanStrings</code> and <code>assertNoAbsolutePaths</code>, with <code>ABSOLUTE_PATH_PATTERN</code> and the "durable intent" comment moved across intact</li>
+        <li><code class="status">[]</code> <code>load.ts</code> imports them and defines none of them; <code>ConfigAbsolutePathError</code> stays in <code>load.ts</code> and is passed in as the thrower, so the config loader's closed error hierarchy is unchanged</li>
+        <li><code class="status">[]</code> The module is pure path arithmetic and string inspection — no filesystem, no clock, no <code>node:child_process</code></li>
+        <li><code class="status">[]</code> Every existing <code>config/load</code> test passes unmodified — the extraction is proven by the absence of a test edit, not by inspection</li>
+      </ul>
+
+      <h4>2. <code>awsf.project/v1</code> — the catalog schema</h4>
+      <p>A TypeBox definition in the shape this repository's <code>core/src/contracts/</code> convention already uses: one definition that is the validator's shape, the static type, and the emittable JSON Schema. <strong>Narrow, by Q2's decision</strong>, and the role vocabulary is closed with the five members the measured project actually needs.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>version: "awsf.project/v1"</code> as a required literal — an unknown version is a rejection, never a best-effort parse</li>
+        <li><code class="status">[]</code> <code>project.slug</code>, held to the same pattern <code>AwsfConfigSchema</code>'s slug already uses, never a second slug grammar</li>
+        <li><code class="status">[]</code> <code>repositories</code>: a record keyed by an explicit <code>id</code>, each entry carrying <code>role</code>, <code>default_branch</code>, optional <code>identity.root_commit</code>, optional <code>gates</code>, and optional <code>delivery</code></li>
+        <li><code class="status">[]</code> <code>role</code> is a closed union of <code>plan</code> · <code>service</code> · <code>application</code> · <code>library</code> · <code>source</code> — five members because the measured project has five roles, and <code>source</code> exists because two of its repositories are upstream origins rather than build targets</li>
+        <li><code class="status">[]</code> Exactly one repository may carry <code>role: plan</code>, and the loader rejects zero or several — the plan source's resolution has no tiebreak and must not invent one</li>
+        <li><code class="status">[]</code> <code>gates</code> reuses the existing shape exactly — <code>argv</code> array with <code>minItems: 1</code> plus <code>timeout_seconds</code> — keyed by an id checked against <code>KNOWN_GATE_IDS</code>, imported rather than restated</li>
+        <li><code class="status">[]</code> <code>delivery</code> records posture only (<code>service</code> · <code>mobile</code> · <code>docs</code> · <code>none</code>) and carries <strong>no remote, endpoint or credential field</strong> — W08 owns delivery policy and its invariant 8 amendment, and this workstream must not pre-empt either</li>
+        <li><code class="status">[]</code> <code>plans</code>: <code>root</code> (repository-relative, default <code>specs</code>), <code>format</code> (a closed union, one member in v1), and optional <code>default</code> naming a plan stem</li>
+        <li><code class="status">[]</code> <code>contracts</code>: a list, each with <code>id</code>, <code>digest</code> (<code>sha256:</code> plus 64 hex), a producer <code>{repository, path}</code> and one or more consumers <code>{repository, path}</code> — see M4</li>
+        <li><code class="status">[]</code> <code>additionalProperties: false</code> at every level, and <strong>no property anywhere whose name or type could carry a state root, a clone location or a worktree root</strong></li>
+      </ul>
+
+      <h4>3. The catalog loader and its closed error hierarchy</h4>
+      <p>Modelled on <code>load.ts</code>: TypeBox structural validation first, then the hand-written rejections in a fixed order, each throwing a distinct <code>code</code>-bearing error so tests assert on <code>code</code> rather than message text.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>loadCatalog(yamlText): ProjectCatalog</code>, rejecting in order: structure, unknown version, absolute machine path, escaping path, credential-shaped value, unknown gate id, plan-role cardinality, contract reference integrity</li>
+        <li><code class="status">[]</code> The absolute-path rejection calls the extracted <code>assertNoAbsolutePaths</code> — <strong>the same function, over keys and values alike</strong>, throwing <code>CatalogAbsolutePathError</code></li>
+        <li><code class="status">[]</code> Every repository-relative path field additionally rejects a <code>..</code> segment and a leading <code>./</code>, via <code>normalizeRepositoryPath</code> from <code>path-policy.ts</code> where it already does this rather than a new normaliser</li>
+        <li><code class="status">[]</code> <code>containsCredential</code> from <code>core/src/policy/redaction.ts</code> is applied to the whole document, exactly as <code>loadConfig</code> does — invariant 9 reaches the catalog for free</li>
+        <li><code class="status">[]</code> Every contract's producer and consumer names a repository the catalog declares; an undeclared reference is a rejection</li>
+      </ul>
+
+      <h4>4. <code>awsf.placement/v1</code> — the placement schema, loader, and its inverse rule</h4>
+      <p>The mirror image, and its schema is where "placement holds no committed identity" stops being a sentence and becomes <code>additionalProperties: false</code> over a property set containing nothing but paths.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>version: "awsf.placement/v1"</code>, <code>project</code> (the join key), <code>repositories</code> keyed by the catalog's <code>id</code>, each with <code>path</code> and optional <code>worktree_root</code>, plus an optional project-level <code>worktree_root</code></li>
+        <li><code class="status">[]</code> <strong>Every path field is required to be absolute</strong> — <code>loadPlacement</code> throws <code>PlacementRelativePathError</code> otherwise, the exact inverse of the catalog's rule and for the stated reason that a relative path resolved from a different working directory is a different location</li>
+        <li><code class="status">[]</code> The schema carries <strong>no</strong> <code>role</code>, <code>default_branch</code>, <code>gates</code>, <code>delivery</code>, <code>plans</code>, <code>contracts</code> or <code>version</code>-of-the-project field; <code>additionalProperties: false</code> makes an attempt to add one a load-time rejection rather than a silently ignored key</li>
+        <li><code class="status">[]</code> The schema carries no <code>state_root</code> field and no field a state root could be written into</li>
+        <li><code class="status">[]</code> <code>readPlacement(stateRoot, slug)</code> / <code>writePlacement(stateRoot, slug, doc)</code> resolve <code>&lt;state-root&gt;/projects/&lt;slug&gt;/placement.yaml</code>, writing through a temporary file and a rename, as <code>TicketStore.write</code> already does</li>
+      </ul>
+
+      <h4>5. Testing Strategy</h4>
+      <p>The two rejections proven from both directions, plus one structural assertion that is the mechanical form of this phase's whole claim. The fixtures are written from the shapes measured on 2026-08-21 — mixed default branches, five roles, a repository with no remote, a per-repository worktree root — so the schema is tested against a real project's facts rather than a convenient one's.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/registry/catalog.test.ts</code> — a valid five-repository catalog loads; a POSIX absolute path, a Windows drive-letter path, a UNC path and a <code>~</code> path each throw <code>CatalogAbsolutePathError</code>, <strong>and one of the four is placed in an object key rather than a value</strong>, because <code>scanStrings</code> checks keys and a test that only checks values would not notice if that stopped being true</li>
+        <li><code class="status">[]</code> The same file: a <code>..</code> segment in a repository-relative path is rejected; zero and two <code>role: plan</code> repositories are each rejected; an unknown <code>version</code> is rejected; a gate id outside <code>KNOWN_GATE_IDS</code> is rejected; a contract naming an undeclared repository is rejected</li>
+        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/registry/placement.test.ts</code> — a relative path is rejected; an absolute path loads; a document carrying <code>default_branch</code> or <code>role</code> is rejected by <code>additionalProperties: false</code>, proving the inverse rule mechanically rather than by review</li>
+        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/layer-separation.test.ts</code> — walks both emitted JSON Schemas and asserts their property-name sets intersect in <strong>exactly</strong> the join key, and that neither contains a property matching a state-root or clone-path name pattern. A schema change that quietly merges the layers turns this red.</li>
+        <li><code class="status">[]</code> <code>npm run typecheck</code> and <code>npm run lint</code> — clean</li>
+      </ul>
+      <div class="card warn">
+        <h5>What the inherited rejection does <em>not</em> cover — stated, not closed</h5>
+        <code>ABSOLUTE_PATH_PATTERN</code> anchors on four prefixes. It does not catch a <strong>relative path that escapes upward</strong> (which task 3 adds separately, and only for the fields declared to be repository-relative), a path reached through an <strong>environment-variable reference</strong> such as <code>$HOME/clone</code>, or a machine fact that is <strong>not path-shaped at all</strong> — a hostname, a username, a drive label in a free-text description field. The first is closed here; the second and third are not, and no mechanism in this plan closes them. The honest claim is therefore narrower than "the catalog cannot hold a machine fact": it is <strong>the catalog cannot hold a machine <em>path</em>, in any of the four shapes the pattern names, plus upward escapes</strong>. Anything stronger would need a rule about what a project description may say, which is a different kind of fence and is not proposed.
+      </div>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass.
+      </div>
+    </div>
+
+    <!-- ================= M2 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M2: The join, and the state root's absence from both layers</h3>
+      <p>The one place identity and location meet. Everything downstream — gate lookup, contract verification, plan-source resolution — consumes a <code>ResolvedProject</code> and never reads either document directly, so there is exactly one site where a mismatch between the layers can be detected and exactly one place it is named.</p>
+
+      <h4>6. <code>resolveProject</code> and its four rejections</h4>
+      <p>Takes a loaded catalog and a loaded placement document, returns a <code>ResolvedProject</code>, and refuses rather than degrading. Each rejection carries the remedy in its message, because the person reading it is being told a machine-local file is wrong and has no other clue where to look.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>ProjectSlugMismatchError</code> — the placement document's <code>project</code> differs from the catalog's slug</li>
+        <li><code class="status">[]</code> <code>UnplacedRepositoryError</code> — the catalog declares a repository placement does not locate, naming the missing id and the command that would add it</li>
+        <li><code class="status">[]</code> <code>OrphanPlacementError</code> — placement locates a repository the catalog does not declare, which is the drift a hand-maintained table produces and the one the measured project's own alias table already exhibits</li>
+        <li><code class="status">[]</code> <code>RepositoryIdentityMismatchError</code> — where the catalog declares <code>identity.root_commit</code>, the located repository's own root commit disagrees. Read through <code>systemGitRunner</code>/<code>runGit</code>, never a new <code>node:child_process</code> import site (invariant 3)</li>
+        <li><code class="status">[]</code> Every worktree root resolves through the documented order — per-repository override, then project default, then <code>defaultWorktreeRoot(stateRoot)</code> — and the resolved value is returned per repository, never recomputed by a caller</li>
+        <li><code class="status">[]</code> <code>ResolvedProject</code> exposes <code>gatesFor(repositoryId)</code> returning <code>ConfiguredCommand</code>-shaped records that <code>commandsPass</code> consumes <strong>unchanged</strong> — the catalog supplies, the existing gate resolves</li>
+      </ul>
+
+      <h4>7. Placement's home inside the state root, and the fence that keeps the root out of both layers</h4>
+      <p>The containment argument written down as a test, so a later schema change cannot re-open the question by accident.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>placementFilePath(stateRoot, slug)</code> joins <code>projects/&lt;slug&gt;/placement.yaml</code>, added to <code>platform-paths.ts</code> beside <code>attemptDir</code> — the same pure-path-arithmetic module, with no filesystem access</li>
+        <li><code class="status">[]</code> A test asserts <code>discoverAttempts</code> is unaffected by a <code>placement.yaml</code> sitting beside a project's <code>tasks/</code> directory, because it filters to directories — the walk this file must not disturb, proven rather than assumed</li>
+        <li><code class="status">[]</code> A test asserts <code>doctorCommand</code>, <code>gcCommand</code> and <code>rebuildCommand</code> each still take exactly one state root and that no registry module offers a per-project one — the mechanical form of "the state root is in neither layer"</li>
+        <li><code class="status">[]</code> No registry module imports <code>resolveStateRoot</code>; the state root arrives as a parameter, as it already does everywhere else, keeping the layer testable for all three platforms from any one</li>
+      </ul>
+
+      <h4>8. Testing Strategy</h4>
+      <p>Temporary-directory fixtures with real files, because the join's failures are all about documents disagreeing on disk and an in-memory fixture would not exercise the reader.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/registry/resolve.test.ts</code> — a catalog and placement pair resolving cleanly across five repositories, and each of the four rejections induced deliberately and asserted by <code>code</code></li>
+        <li><code class="status">[]</code> The identity check is exercised against a <strong>real temporary Git repository</strong> whose root commit is read back — a mismatch is induced by pointing placement at a second repository, and the case of a repository declaring <em>no</em> identity signal is asserted to resolve without complaint</li>
+        <li><code class="status">[]</code> Worktree-root resolution asserted for all three fallback levels, including the per-repository override that the measured project requires</li>
+        <li><code class="status">[]</code> Every temporary directory is removed in a cleanup, leaving no fixture on disk (invariant 10)</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — green, no count regression</li>
+      </ul>
+      <div class="card warn">
+        <h5>What the join does <em>not</em> cover</h5>
+        <code>RepositoryIdentityMismatchError</code> only fires where the catalog <strong>chose</strong> to declare <code>identity.root_commit</code>. Two of the measured project's six repositories have no remote and any project may decline the field, so <strong>a placement entry pointing at the wrong clone of the right shape is not detected in the general case</strong>. The field is optional because requiring it would make the registry unusable for a repository that has one; the consequence is that identity verification is opt-in and its absence is silent. A repository with several root commits is also outside what the check handles, and the loader should say so rather than pick one.
+      </div>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass.
+      </div>
+    </div>
+
+    <!-- ================= M3 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M3: The command surface, and AWSF's own catalog as its first instance</h3>
+      <p>Registration writes machine-local placement and <strong>never writes the catalog</strong>. That asymmetry is the whole command's design: the catalog is authored by a person and reviewed like any other durable intent; placement is a local fact a command may record because getting it wrong costs nothing outside this machine.</p>
+
+      <h4>9. <code>awsf project register|list|show</code></h4>
+      <p>Host-only, like <code>awsf init</code>: no provider is contacted, and the command is deterministic. It is wired ahead of the generic <code>configPath</code>/<code>loadConfig</code> section for the same reason <code>init</code> is — a project being registered need not be the repository the command was run in.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>awsf project register --catalog &lt;path&gt; --repository &lt;id&gt;=&lt;path&gt; …</code> loads and validates the catalog, requires an explicit path for <strong>every</strong> declared repository, resolves the pair, and only then writes placement — a failed resolution writes nothing</li>
+        <li><code class="status">[]</code> Registration <strong>probes nothing</strong>: it does not search the filesystem for clones and does not enumerate worktrees to guess a root. Per <a href="#questionables">Q6</a>, a placement value nobody stated is a value nobody can be held to, and placement is the layer where a wrong value silently sends work to the wrong tree</li>
+        <li><code class="status">[]</code> <code>awsf project list</code> reads <code>&lt;state-root&gt;/projects/*/placement.yaml</code> and reports slug, repository count and whether each resolves; <code>awsf project show &lt;slug&gt;</code> reports the resolved record per repository — role, branch, gates, resolved worktree root</li>
+        <li><code class="status">[]</code> Re-registering an already-registered project refuses rather than silently overwriting, matching W03's Q6 precedent for <code>awsf init</code>; <code>--force</code> is <strong>not</strong> added, because overwriting placement is how a project quietly starts pointing at the wrong clone</li>
+        <li><code class="status">[]</code> <code>"project"</code> is added to the frozen <code>CLI_COMMANDS</code> array and to <code>USAGE</code>; <code>README.md</code> gains one documented invocation, keeping <code>doc-reconciliation.test.ts</code> green</li>
+      </ul>
+
+      <h4>10. Author AWSF's own catalog — the degenerate case, on purpose</h4>
+      <p>One repository, whose role is both plan and code. Writing it is what proves the schema can describe the simplest project as well as the measured one, and it is what gives the redefined fence in M5 something real to resolve against with no placement file present.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>awsf.project.yaml</code> at this repository's root: slug matching <code>awsf.config.yaml</code>'s <code>project.slug</code>, one repository with <code>role: plan</code>, its real default branch, and its three gates as <code>argv</code> arrays matching what <code>npm run test:unit</code>, <code>typecheck</code> and <code>lint</code> actually invoke</li>
+        <li><code class="status">[]</code> <code>plans.root: specs</code>, <code>plans.format</code> set to v1's single member, <code>plans.default: awsf-plan</code> — which is what preserves today's argument-free <code>awsf ticket list</code> behaviour in task 19</li>
+        <li><code class="status">[]</code> No <code>contracts</code> entry: this project has one repository and therefore no cross-repository contract. <strong>The absence is recorded here deliberately</strong>, so nobody later reads an empty list as an unfinished one</li>
+        <li><code class="status">[]</code> The file loads through <code>loadCatalog</code> in a test — the same round-trip proof W03 applied to its minimal config, for the same reason</li>
+        <li><code class="status">[]</code> <strong>The owner is told this task is done</strong>, because it is the trigger for the second amendment: <a href="#questionables">Q1</a>'s decision protects <code>awsf.project.yaml</code>, and <code>path-policy</code> would reject <em>creating</em> it, so the <code>protected_paths</code> commit lands only once this file exists. See <a href="#amendment-required">Amendment Required Before the Build</a></li>
+      </ul>
+
+      <h4>11. Testing Strategy</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/cli/project-command.test.ts</code> — register into a temporary state root, then <code>list</code> and <code>show</code> read it back; a resolution failure is proven to leave <strong>no</strong> placement file behind</li>
+        <li><code class="status">[]</code> A second registration against the same slug is refused, and the existing placement file is proven byte-unchanged afterwards</li>
+        <li><code class="status">[]</code> An import-graph fence in the shape of <code>init-no-provider.test.ts</code> asserts nothing under <code>core/src/adapters/</code> is reachable from <code>project.ts</code> — <code>awsf project</code> is host-only and the absence is proven, not intended</li>
+        <li><code class="status">[]</code> A test loads the repository's own committed <code>awsf.project.yaml</code> through <code>loadCatalog</code> and asserts its slug equals <code>awsf.config.yaml</code>'s — the two committed documents are proven not to disagree about what this project is called</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code>, <code>npm run lint</code> — all green</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass.
+      </div>
+    </div>
+
+    <!-- ================= M4 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M4: Q1 as decided — the content-addressed contract and its two fences</h3>
+      <p><strong>Questionable Q1 is decided and is a constraint, not an assignment.</strong> The shape is settled: an immutable, content-addressed artifact committed in each child, with the parent naming <code>{child repository, contract digest}</code> and a meta-test asserting each child's copy hashes to what the parent names. This phase owns the mechanism, and the mechanism is two fences with a deliberate division of labour.</p>
+
+      <figure>
+<pre class="mermaid">
+flowchart LR
+  subgraph PROD["producer repository"]
+    PA["contract artifact"]
+    PP["awsf.contracts.yaml<br/>digest"]
+  end
+  subgraph CONS["consumer repository"]
+    CA["contract artifact<br/>its own copy"]
+    CP["awsf.contracts.yaml<br/>digest"]
+  end
+  PP -. local fence .-> PA
+  CP -. local fence .-> CA
+  CAT["catalog<br/>parent record<br/>one digest"] ==>|"awsf project verify"| PP
+  CAT ==>|"awsf project verify"| CP
+  style PP stroke:#22C55E
+  style CP stroke:#22C55E
+  style CAT stroke:#A78BFA,stroke-width:2px
+</pre>
+        <figcaption>Dotted edges never leave a repository — that is the local fence, and it is the gate a child's worker phase runs. Solid edges cross repositories and belong to the driver, which has already resolved placement. No dotted edge crosses a boundary; that is the entire reason Q1 was decided this way.</figcaption>
+      </figure>
+
+      <h4>12. The parent record, and its projection into each participating repository</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>awsf.contracts/v1</code>: a repository-root document listing, per contract the repository participates in, <code>{id, role: produces|consumes, path, digest}</code> — and nothing else. It is a projection, not a second source of truth</li>
+        <li><code class="status">[]</code> The digest format is <code>sha256:</code> plus 64 lowercase hex, in both the catalog and the projection, validated by the same schema fragment in both — a format that differs between them is a drift the fence cannot see</li>
+        <li><code class="status">[]</code> <code>path</code> is repository-relative and rejects a <code>..</code> segment via the same <code>normalizeRepositoryPath</code> task 3 uses — a contract path that escapes its own repository is the thing this whole shape exists to prevent</li>
+        <li><code class="status">[]</code> The projection is <strong>not</strong> added to <code>policy.protected_paths</code>: a contract revision costs a coordinated commit in every child, which Q1 accepted as the right price, and a protected file could not carry it</li>
+      </ul>
+
+      <h4>13. The local fence — a gate that reads only inside one worktree</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>core/src/gates/contract-digest.ts</code> returns a <code>GateReport</code> in the shape the existing structural gates use, with one check per contract entry</li>
+        <li><code class="status">[]</code> It takes <strong>one repository root</strong> and reads <code>&lt;root&gt;/awsf.contracts.yaml</code> plus the paths that file names. It accepts no catalog, no placement, no state root and no second root — the signature is what makes the boundary claim checkable by reading the function</li>
+        <li><code class="status">[]</code> A missing <code>awsf.contracts.yaml</code> is a <strong>pass with no checks</strong>, not a failure: most repositories participate in no contract, and a gate that failed on absence would make the mechanism unadoptable</li>
+        <li><code class="status">[]</code> A named artifact that does not exist, or exists and hashes differently, is a failed check naming the contract id, the path, the expected digest and the observed one</li>
+        <li><code class="status">[]</code> Hashing uses <code>node:crypto</code> over the raw bytes — no normalisation, no re-serialisation, no encoding assumption. Byte identity, the same bar the sync fence and the measured project's own producer-side check both hold</li>
+      </ul>
+
+      <h4>14. The central reconciliation — <code>awsf project verify</code></h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Over a <code>ResolvedProject</code>: for every contract, for every participant, assert the participant's projection carries that contract with the catalog's digest, and that the artifact at the declared path hashes to it</li>
+        <li><code class="status">[]</code> Three distinct failures are distinguished and reported separately — <strong>projection missing</strong> the contract, <strong>projection disagreeing</strong> with the parent, and <strong>artifact disagreeing</strong> with the projection. Collapsing them would hide which of the N+1 copies moved</li>
+        <li><code class="status">[]</code> Exit code non-zero on any failure; the report names every failing pair rather than stopping at the first, because a contract revision that half-landed will fail in several places at once and the operator needs the set</li>
+        <li><code class="status">[]</code> It reads across repositories and says so in its own header comment, contrasted explicitly with task 13's single-root signature — the two functions' asymmetry is the design and must be legible to the next reader</li>
+      </ul>
+
+      <h4>15. Testing Strategy</h4>
+      <p>The induced-drift proof is the point of this phase. A fence nobody has watched fail is decoration, and this one guards the only thing standing between N committed copies and silent divergence.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/registry/contracts.test.ts</code> — a two-repository temporary fixture with a JSON contract committed in both, a catalog naming one digest, projections in each: <code>awsf project verify</code> green and both local fences green</li>
+        <li><code class="status">[]</code> <strong>Proven to bite, three ways:</strong> mutate <em>one byte</em> of the consumer's artifact → the consumer's local fence goes red <em>and</em> verify goes red; revert, then change only the consumer's projection digest → verify goes red while the producer's local fence stays green; revert, then change only the catalog's digest → verify goes red against <strong>both</strong> participants. Each failure is asserted to be the distinct one task 14 names</li>
+        <li><code class="status">[]</code> The local fence is asserted to read <strong>no path outside its given root</strong> — exercised by running it in a fixture whose sibling directory holds a contradicting artifact, and asserting the verdict is unaffected by it</li>
+        <li><code class="status">[]</code> A repository with no <code>awsf.contracts.yaml</code> passes the local fence with zero checks recorded, not a skipped or errored gate</li>
+        <li><code class="status">[]</code> Every temporary repository is removed in a cleanup (invariant 10)</li>
+      </ul>
+      <div class="card warn">
+        <h5>What the digest fence does <em>not</em> cover</h5>
+        It proves <strong>bytes at a declared path equal a declared digest</strong>. It does not prove the contract is <em>correct</em>; it does not prove the producer regenerated it after changing the thing it describes — the measured project's own producer-side check does that, and it is a different check; and <strong>it does not prove any consumer actually uses its copy</strong>. In the measured project the application could ignore its contract snapshot entirely and every fence here would stay green. It also assumes a contract is <strong>one file</strong>: a contract that is a directory, a generated set, or a pair that must agree structurally rather than byte-for-byte is outside v1 and is not smuggled in by treating the first file as representative.
+      </div>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass.
+      </div>
+    </div>
+
+    <!-- ================= M5 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M5: Invariant 12 redefined per registered plan source, and proven to bite</h3>
+      <p><strong>Precondition, and the build must stop if it is unmet:</strong> the owner-authored amendment in <a href="#amendment-required">Amendment Required Before the Build</a> has landed. Ordering gate <span class="gate">G2</span>. This phase redefines the relation; it does not relax it, and it does not touch <code>AGENTS.md</code>.</p>
+
+      <figure>
+<pre class="mermaid">
+flowchart TD
+  A["catalog: plans.root · plans.format<br/>repository role = plan"] --> B{"is the plan repository<br/>this checkout?"}
+  B -->|yes| C["self-placed<br/>resolve to repoRoot<br/>NO placement needed"]
+  B -->|no| D{"placement locates it?"}
+  D -->|yes| E["resolve through placement"]
+  D -->|no| F["not checked here<br/>another machine's clones"]
+  C --> G{"format implemented?"}
+  E --> G
+  G -->|no| H["REFUSE by name"]
+  G -->|yes| I["parse · pair · assert"]
+  I -->|"ticket set, no plan"| J["HARD FAIL"]
+  style C stroke:#22C55E,stroke-width:2px
+  style H stroke:#EF4444
+  style J stroke:#EF4444
+</pre>
+        <figcaption>Self-placement is what keeps the fence hermetic in a fresh clone: this repository is its own plan repository, so the existing check runs with no registry state on disk. The two red terminals are the failure modes the redefinition <em>adds</em> — which is why it is a strengthening, not a relaxation.</figcaption>
+      </figure>
+
+      <h4>16. Plan-source resolution, the declared format, and the self-placement rule</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>resolvePlanSources(catalogPath, catalog, placement?)</code> returns one record per plan stem: <code>{project, repositoryId, planPath, promptsPath, ticketsPath, format}</code></li>
+        <li><code class="status">[]</code> <strong>Self-placement:</strong> when the catalog file sits inside the repository its own <code>role: plan</code> entry names, the plan repository resolves to that checkout and <strong>placement is not consulted</strong>. This is what keeps the fence runnable in a fresh clone with no registry state, and it is asserted directly rather than left as a consequence</li>
+        <li><code class="status">[]</code> A foreign plan source resolves only where placement locates it; its absence yields <strong>no record and no failure</strong></li>
+        <li><code class="status">[]</code> <code>plans.format</code> is checked against the formats implemented in code; an unimplemented format throws <code>UnsupportedPlanFormatError</code> naming the format and the plan — <strong>never a parse that yields zero tasks</strong>. v1 implements exactly one format and the error message says so</li>
+        <li><code class="status">[]</code> The grammar for that one format is moved out of the test file into <code>plan-source.ts</code> as a named exported parser, so the fence and any future consumer read the same definition rather than two copies of a regular expression</li>
+      </ul>
+
+      <h4>17. The sync fence, resolving through the registry rather than adjacency</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>planSets()</code> is rebuilt on <code>resolvePlanSources</code>. The hardcoded <code>specs/tickets/&lt;stem&gt;/ → specs/&lt;stem&gt;.html</code> and <code>specs/v2/&lt;stem&gt;.html</code> candidate list is <strong>deleted</strong>, not extended</li>
+        <li><code class="status">[]</code> Every existing assertion — coverage, milestone grouping, state against marker and checklist, byte-identical prompts, <code>depends_on</code> ordering, frontmatter vocabularies — runs unchanged over the resolved sets. <strong>This phase changes how a set is found, never what is asserted about it</strong></li>
+        <li><code class="status">[]</code> The hard-failure-on-orphan rule is preserved and re-expressed: a ticket set inside a resolved plan source's tickets root whose plan does not exist fails loudly, naming the plan source rather than a directory</li>
+        <li><code class="status">[]</code> The header comment is rewritten to describe registry resolution and to state the self-placement rule and the format refusal — the existing comment explains adjacency and would otherwise become the most misleading text in the file</li>
+        <li><code class="status">[]</code> The flat-set special case for <code>awsf-plan</code> is left in place <strong>until task 20</strong> and removed there, so this task's diff is resolution-only and the move's diff is the move</li>
+      </ul>
+
+      <h4>18. Testing Strategy</h4>
+      <p>The redefinition must be proven to fail on an induced drift, and the drift that matters is the one adjacency could never have seen: a plan and its tickets in a repository that is not this one.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — <code>ticket-plan-sync.test.ts</code> green over this repository's real tree, resolved through the registry, with <strong>no change to any ticket or plan file</strong>. The existing 38-ticket set and every v2 set are proven to still be found</li>
+        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/registry/plan-source.test.ts</code> — a temporary <strong>foreign</strong> plan repository holding a plan, its build prompts and a ticket set, registered into a temporary state root and resolved through placement: the fence's assertions pass across the repository boundary</li>
+        <li><code class="status">[]</code> <strong>Proven to bite, across the boundary:</strong> flip one ticket's <code>state</code> in that foreign repository so it disagrees with the plan's marker → red, with a message naming the plan source. Revert; then delete the plan → the orphan rule fires. Revert; then set <code>plans.format</code> to an unimplemented value → <code>UnsupportedPlanFormatError</code>, <strong>not</strong> a vacuous pass</li>
+        <li><code class="status">[]</code> A regression assertion for the vacuous-pass hazard specifically: a plan whose headings use the measured project's <em>Phase</em> grammar under a <em>declared</em> v1 format is asserted to fail loudly rather than parse to zero tasks</li>
+        <li><code class="status">[]</code> Every temporary repository and state root is removed in a cleanup</li>
+      </ul>
+      <div class="card warn">
+        <h5>What the redefined fence does <em>not</em> cover</h5>
+        It proves a plan and its ticket set agree in the dimensions it checks. It does not prove the plan is <strong>right</strong>. It still cannot read a plan whose format it does not implement — it refuses, which is better than a silent pass but is not coverage, and <strong>v1 implements exactly one format</strong>, so a project whose plans use another grammar gets a refusal rather than a check. It does not see a foreign plan source on a machine that has not registered it, by design. And it says nothing about a ticket set that exists in a repository nobody declared as a plan repository — that set is invisible, exactly as it is today.
+      </div>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass.
+      </div>
+    </div>
+
+    <!-- ================= M6 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M6: The v1 ticket move, behaviour preserved, and the workstream closed</h3>
+      <p><strong>The move belongs here and nowhere else, and it happens in this order for a stated reason.</strong> The fuse record reversed an earlier attempt because <code>ticketStoreFor</code> resolves <code>specs/tickets</code> and <code>TicketStore</code> reads that exact directory with no recursion, so the files moving first would silently make <code>awsf ticket list</code> and <code>awsf backlog</code> return nothing. Task 19 gives the store a plan to resolve against; task 20 moves the files. <strong>Never the other way round.</strong></p>
+
+      <h4>19. <code>ticketStoreForPlan</code>, and the default-plan rule that preserves today's behaviour</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>ticketStoreForPlan(resolved, planStem)</code> returns a <code>TicketStore</code> over the resolved plan source's tickets root — <strong>inside the plan repository</strong>, not the working one</li>
+        <li><code class="status">[]</code> <code>ticketStoreFor(repository)</code> is retained as the self-placed path so a repository with no catalog behaves exactly as it does today; nothing about a single-repository project without a registry changes</li>
+        <li><code class="status">[]</code> <code>awsf ticket list</code> and <code>awsf backlog</code> accept an optional <code>--plan &lt;stem&gt;</code>, defaulting to the catalog's <code>plans.default</code>. With <code>default: awsf-plan</code> in task 10's catalog, the argument-free invocation resolves to v1's set — <strong>today's behaviour, preserved by a declared default rather than by a hardcoded path</strong></li>
+        <li><code class="status">[]</code> With no default declared and more than one plan source present, the command <strong>lists the candidates and exits non-zero</strong> rather than guessing which plan the operator meant</li>
+        <li><code class="status">[]</code> <code>TicketStore</code>, <code>TicketSchema</code> and <code>intakeRequest</code> are <strong>not modified</strong> — see <a href="#questionables">Q4</a>. Only the resolution of the directory changes</li>
+      </ul>
+
+      <h4>20. Move v1's flat tickets, and prove nothing changed for the reader</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Capture the exact current output of <code>awsf ticket list</code> and <code>awsf backlog</code> <strong>before</strong> touching anything, as the comparison baseline. Without it, "still returns them" is an opinion</li>
+        <li><code class="status">[]</code> Move <code>specs/tickets/T01.md</code>–<code>T38.md</code> into <code>specs/tickets/awsf-plan/</code> using <code>git mv</code>, preserving history; <strong>no <code>unlinkSync</code>, <code>rmSync</code> or <code>rm -rf</code> anywhere</strong> — three of the nine patterns invariant 8's fence scans for</li>
+        <li><code class="status">[]</code> Update every relative link inside the moved tickets — they point at <code>../awsf-plan.html</code> and gain one level; a moved ticket whose links no longer resolve is drift the sync fence does not check for</li>
+        <li><code class="status">[]</code> Remove the flat-set special case from <code>planSets()</code>: after the move every set is uniform and the exception has no remaining instance</li>
+        <li><code class="status">[]</code> <code>awsf ticket list</code> and <code>awsf backlog</code> produce output <strong>identical to the captured baseline</strong>, asserted in a test rather than eyeballed</li>
+        <li><code class="status">[]</code> <code>awsf ticket show T17</code> resolves — the path-suffix branch in <code>showTicket</code> matches on <code>/T17.md</code> and must be confirmed to still match one level deeper</li>
+      </ul>
+
+      <h4>21. Full suite, marker flips, and the spine's W04 marker</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — the whole unit suite green, with no count regression against the pre-work baseline</li>
+        <li><code class="status">[]</code> <code>npm run typecheck</code> and <code>npm run lint</code> — clean</li>
+        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/no-destructive-paths.test.ts</code> — green, confirming no registry or placement prose tripped the two vocabulary patterns named at the top of this section</li>
+        <li><code class="status">[]</code> Every milestone marker and checklist item in this file reads <code>[x]</code>, and every matching ticket's <code>state:</code> is <code>done</code>, flipped in the same commit</li>
+        <li><code class="status">[]</code> <strong>Both owner amendments have landed</strong> — invariant 12's replacement text, and <code>awsf.project.yaml</code> in <code>policy.protected_paths</code>. The second is confirmed by reading <code>awsf.config.yaml</code>; if it has not landed, <strong>stop and report</strong> rather than closing the workstream with the catalog unprotected, and do not add it yourself — it is a protected path</li>
+        <li><code class="status">[]</code> An Amendment entry is appended to this plan recording the landing commit and the suite count</li>
+        <li><code class="status">[]</code> Only now: <code>specs/awsf-v2-plan.html</code>'s Milestone M4 / W04 marker flips to <code>[x]</code>, in this same commit, per AGENTS.md invariant 12</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass.
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== GLOBAL VALIDATION ===== -->
+  <section id="validation">
+    <h2>Validation Commands</h2>
+    <p>Execute these commands to validate the entire plan is complete:</p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> <code>npm run test:unit</code> — whole suite green, including the six new registry test files, the layer-separation fence, and the redefined sync fence</li>
+      <li><code class="status">[]</code> <code>npm run typecheck</code> — clean, including both schemas' static types</li>
+      <li><code class="status">[]</code> <code>npm run lint</code> — clean</li>
+      <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/layer-separation.test.ts</code> — the catalog holds no machine path, the placement layer holds no committed identity, and neither schema has a property a state root could occupy</li>
+      <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/registry/contracts.test.ts</code> — the digest fence has been <strong>watched to fail</strong> on a one-byte drift, on a projection drift, and on a catalog drift, each distinguished</li>
+      <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/registry/plan-source.test.ts</code> — invariant 12's redefinition has been <strong>watched to fail</strong> on a drift induced across a repository boundary, and on a declared-format mismatch that would previously have passed vacuously</li>
+      <li><code class="status">[]</code> <code>awsf ticket list</code> and <code>awsf backlog</code> produce output identical to the baseline captured before task 20 — v1's tickets survived the move</li>
+      <li><code class="status">[]</code> A second project is registered from a temporary catalog and placement pair, resolves cleanly, and <strong>no absolute path appears in any committed file</strong> — asserted by loading every committed <code>*.project.yaml</code> and <code>*.contracts.yaml</code> in the tree through their loaders</li>
+      <li><code class="status">[f]</code> <strong>Owner-run, not agent-run, and marked <code>[f]</code> until it happens:</strong> one real <code>awsf start</code> in a registered second project's worktree, confirming the resolved worktree root and gate commands are the ones the catalog recorded. This needs a provider call, so it is outside every offline validation above and is named rather than claimed. See <a href="#notes">Notes</a></li>
+    </ul>
+    <div class="loop">
+      🔁 <strong>The plan is not complete until every box is checked and every command passes. If for some reason a step is not possible to complete, mark it with [f] and move on if possible.</strong>
+    </div>
+  </section>
+
+  <!-- ===== QUESTIONABLES ===== -->
+  <section id="questionables">
+    <h2>Questionables</h2>
+    <p><strong>Two of these are already decided by the owner and are recorded here as applied constraints, not as open choices.</strong> Q-A and Q-B restate the spine's Q1 and Q2 with <em>how this plan implements each and what that implementation costs</em> — which is what the spine asked for. They carry no options, because re-opening them is not on offer. Q1 through Q6 below them were this plan's own open decisions, and <strong>all six were decided by the owner on 2026-08-22, each on the recommended option</strong>. Each records its verdict in place, with the recommendation's reasoning and the case against it both retained so the road not taken stays readable. <strong>One of the six carries an ordering consequence rather than only a preference</strong> — see Q1 and the <a href="#amendment-required">Amendment Required Before the Build</a> section, which that decision changed from conditional to required.</p>
+
+    <figure>
+<pre class="mermaid">
+flowchart TD
+  QA["Q-A · spine Q1 DECIDED<br/>contract in each child"] --> M4["M4 · two fences"]
+  QB["Q-B · spine Q2 DECIDED<br/>narrow + versioned"] --> M1["M1 · catalog schema"]
+  QB --> Q5["Q5 gate vocabulary"]
+  Q1["Q1 protect the catalog?"] --> M1
+  Q2["Q2 catalog location"] --> M1
+  Q3["Q3 format: declare or generalise"] --> M5["M5 · invariant 12"]
+  Q4["Q4 ticket contract gap"] --> M6["M6 · the move"]
+  Q6["Q6 register: probe or state"] --> M3["M3 · the command"]
+  style QA stroke:#22C55E,stroke-width:2px
+  style QB stroke:#22C55E,stroke-width:2px
+</pre>
+      <figcaption>Two inherited decisions applied as constraints, and six of this plan's own — <strong>all eight now settled</strong>, the six on 2026-08-22. Every one of them changes a schema, a command's refusal, or the reach of a fence; none was a matter of taste. Q1 is the one that also moved an owner act from conditional to required.</figcaption>
+    </figure>
+
+    <details>
+      <summary><span class="qdecided">DECIDED — APPLIED</span> Q-A — Spine Questionable Q1: how this plan implements the content-addressed cross-repository contract, and what that costs</summary>
+      <p class="qa-answer"><strong>The decision, restated so it is not re-litigated here:</strong> the contract is an <em>immutable, content-addressed artifact committed in each child repository</em>; the parent coordination record names <code>{child repository, contract digest}</code>; a meta-test asserts each child's copy hashes to what the parent names. Taken by the owner on 2026-08-21. <strong>W04 owns the mechanism; the shape is settled.</strong></p>
+      <p class="qa-answer"><strong>How this plan implements it.</strong> The parent record is a <code>contracts</code> list in the committed catalog — durable, path-free, and the natural home for what Q2's own floor calls "the relationships between them". Each participating repository additionally commits <code>awsf.contracts.yaml</code>, a projection naming only the contracts it takes part in and the digest each must hash to. Two fences follow from that: a <strong>local</strong> one taking exactly one repository root, reading only that repository's projection and the files it names — the gate a child's worker phase runs — and a <strong>central</strong> one, <code>awsf project verify</code>, running over a resolved project and reconciling every projection against the parent record. M4's testing strategy watches all three drift modes go red.</p>
+      <p class="qa-answer"><strong>Why the projection is forced rather than chosen — the part worth defending.</strong> Q1 requires two things simultaneously: the parent names the digest, <em>and</em> a child's gate reads its contract from inside its own worktree. A gate that fetched the digest from the parent record would have to reach into the plan repository — across exactly the boundary <code>path-policy</code> exists to hold, and the hole the parent-owned option was rejected for opening. A copy of the digest inside each child is the only shape satisfying both. It cannot live in that child's <code>awsf.config.yaml</code>, which is a <code>protected-path</code> no agent can write while a contract revision must be committable as ordinary work.</p>
+      <p class="qa-answer"><strong>What it costs, stated plainly.</strong> <em>The digest now has N+1 copies, not just the artifact.</em> Q1 accepted N copies of the artifact and priced them at a meta-test; this implementation adds one copy of the <em>digest</em> per participant and pays for it with the central reconciliation, which is the only reason the extra copies are safe. Concretely: a contract revision now costs a new digest, an edit to the catalog, and a coordinated commit in every participating repository — one more file per repository than the decision's own description implies. That is the honest price and it is visible in M4's task 12. <strong>One alternative was considered and rejected:</strong> encoding the digest in the artifact's own filename, which removes the projection entirely and is content-addressing in the most literal sense. It was refused because every contract revision would then rename a file, changing every consumer's import path — churn on each revision in exchange for removing one small file, and an unstable path for tooling that has to find the artifact.</p>
+    </details>
+
+    <details>
+      <summary><span class="qdecided">DECIDED — APPLIED</span> Q-B — Spine Questionable Q2: how this plan keeps the catalog narrow and versioned, and what that costs</summary>
+      <p class="qa-answer"><strong>The decision, restated:</strong> the catalog stays <em>narrow and versioned</em> — plan repository, target repositories, per-repository default branch and gate commands. Config loading is <strong>refused</strong>, because it creates a precedence question between a project's config, the machine's config, and the committed <code>awsf.config.yaml</code>, which is a protected path no agent can write; a precedence rule letting a project config override it is a route around <code>path-policy</code> that needs no amendment to take. Taken by the owner on 2026-08-21.</p>
+      <p class="qa-answer"><strong>How this plan implements it.</strong> <code>awsf.project/v1</code> is a <em>separate document with its own schema, its own loader and its own error hierarchy</em> — never an extension of <code>AwsfConfigSchema</code>, never merged into it, and never consulted by <code>loadConfig</code>. There is no precedence rule anywhere in this plan because there are no two documents describing the same thing. The version is a required literal and an unknown version is a rejection rather than a best-effort parse, which is what "versioned" has to mean if it is to be worth anything later.</p>
+      <p class="qa-answer"><strong>The consequence carried, so it is not mistaken for a gap.</strong> The catalog <em>records</em> per-repository gate commands and does not <em>resolve</em> them. Concretely, it stores the same <code>{argv, timeout_seconds}</code> shape <code>awsf.config.yaml</code> already stores, keyed by an id from <code>KNOWN_GATE_IDS</code>, and <code>ResolvedProject.gatesFor(id)</code> hands <code>commandsPass</code> a record it already knows how to consume. The catalog gains no resolver, runs nothing, and interprets nothing.</p>
+      <p class="qa-answer"><strong>What it costs.</strong> <em>The measured project has six checkable commands per repository where the recorded vocabulary has three.</em> Narrowness is not free and this is where the bill arrives — a real repository's contract-drift check, seed-integrity check and migration check have nowhere to be recorded. Two mitigations, both honest: the contract-drift check is <strong>subsumed</strong> by Q-A's local fence, which does the same job through a different mechanism; and the remaining two are surfaced as <a href="#questionables">Q5</a> rather than silently dropped or silently accommodated. A second, smaller cost: a project that would genuinely benefit from its own tuning cannot have it, and the workaround — a second <code>awsf.config.yaml</code> per repository — is the shape that already exists and is unchanged by this plan.</p>
+      <p class="qa-answer"><strong>The framing error in the spine's Q2, recorded rather than hidden.</strong> Its third option bundled per-project worktree roots with state-root reach. Per-project worktree roots are <strong>in</strong>, in the machine-local placement layer, and this plan goes further on measured evidence — they are per-<em>repository</em>, because one project's two code repositories keep their worktrees on two different filesystems. State-root reach is <strong>out</strong>, and this plan's M2 makes the exclusion mechanical rather than merely intended. Neither half was ever open here and neither is treated as undecided.</p>
+    </details>
+
+    <details data-review-options="Protect it — add awsf.project.yaml to policy.protected_paths (recommended)|Leave it writable — catalog edits are ordinary work">
+      <summary>Q1 — Does the catalog become a protected path, so no agent can rewrite it?</summary>
+      <p class="qa-answer"><span class="qdecided">DECIDED 2026-08-22</span> <strong>Protect it.</strong> The catalog names each repository's <em>gate commands</em> and the set of repositories the project consists of. An agent that can rewrite its own gate commands can disable its own gates, and an agent that can add a repository can widen the project's reach — both without touching a single line of the policy that was supposed to bound it. That is precisely the boundary-erosion pattern risk R1 names, arriving as a convenience. The cost is real and small: every catalog edit becomes an owner commit, and catalog edits are rare by construction because the catalog is narrow. <strong>Note the ordering consequence if this is taken:</strong> adding <code>awsf.project.yaml</code> to <code>policy.protected_paths</code> means editing <code>awsf.config.yaml</code>, which is itself protected — so it is a second owner-authored commit under gate <span class="gate">G2</span>, landing before the build. <strong>The case against:</strong> a growing project adds repositories, and every addition becoming an owner ceremony is friction that will eventually be routed around — and a boundary people route around is worse than one that was never claimed. If that is the owner's read, the honest alternative is to leave it writable and say so, rather than protect it and quietly grant exceptions later.</p>
+      <p class="qa-answer"><strong>The consequence this decision carries, found while applying it and not visible when the option was written.</strong> <code>path-policy</code> matches <code>protected_paths</code> globs against a <em>path</em>, independently of whether the file exists — so protecting <code>awsf.project.yaml</code> rejects <strong>creating</strong> it just as firmly as editing it. Task 10 is the task that creates this repository's catalog. <strong>The protected-config amendment therefore lands after task 10, not before the build</strong>, which is the reverse of the ordering gate <span class="gate">G2</span> normally imposes and is stated here so it is not discovered at task 10 as a refused write. The invariant 12 amendment is unaffected and still lands before task 16. Both are recorded in <a href="#amendment-required">Amendment Required Before the Build</a>, now with their sequence.</p>
+      <p class="qa-answer"><strong>Two further consequences, so the decision's reach is legible.</strong> Every later catalog edit is an owner commit — including the fields <strong>W05</strong>, <strong>W07</strong> and <strong>W08</strong> will each want to add, so those three workstreams inherit an owner act they would otherwise have discovered themselves. And the contrast with Q-A's projection is now load-bearing rather than incidental: the <em>catalog</em> is protected because rewriting a gate command disables a gate, while <code>awsf.contracts.yaml</code> is deliberately <strong>not</strong> protected because a contract revision must be committable as ordinary work in every child. Two files, one repository, opposite answers, and each for its own stated reason.</p>
+    </details>
+
+    <details data-review-options="Plan repository root, one per project (recommended)|Alongside each repository's awsf.config.yaml|In the state root, machine-local, not committed">
+      <summary>Q2 — Where does the catalog live, and what happens to a project that has no plan repository yet?</summary>
+      <p class="qa-answer"><span class="qdecided">DECIDED 2026-08-22</span> <strong>The plan repository's root, exactly one per project.</strong> It is the one repository a project with a plan is guaranteed to have; it is the repository whose whole role is already cross-cutting description; and it makes the schema's "exactly one <code>role: plan</code>" rule and the file's own location agree, which is what the self-placement rule in M5 depends on. <em>One copy per repository</em> is the option to avoid: it turns a single description into N copies with no reconciliation, which is exactly the drift Q-A had to build a fence for and would be a self-inflicted second instance. <em>In the state root</em> makes the catalog machine-local, which destroys its whole purpose — it must travel with the project. <strong>The genuinely open part, which is why this is a Questionable at all:</strong> a project created by <code>awsf init</code> has one repository and no separate plan repository, so its single repository carries <code>role: plan</code> and holds the catalog. When such a project later grows a second repository, the catalog stays where it is and the original repository keeps <code>role: plan</code> — meaning the plan repository is decided at registration and moving it later is a manual migration this plan does not automate. That is a real limitation and the alternative is a mechanism nothing yet needs.</p>
+    </details>
+
+    <details data-review-options="Declare the format per plan source and refuse unknown ones (recommended)|Generalise the grammar to accept Milestone and Phase headings|Both — generalise now and declare later">
+      <summary>Q3 — How does the fence handle a plan whose markup grammar it does not implement?</summary>
+      <p class="qa-answer"><span class="qdecided">DECIDED 2026-08-22</span> <strong>Declare the format in the catalog and refuse an unimplemented one by name.</strong> This is the option grounded in a measurement rather than a guess: the fence's grammar requires <code>Milestone M&lt;digits&gt;</code>, and the owner's real plan writes <code>Phase 24.5</code> — a different noun and a decimal ordinal. Of that file's 219 status markers, zero would match. <strong>The failure mode being prevented is worse than a missing check:</strong> resolving a plan source correctly and then parsing it to zero tasks leaves the fence comparing ticket numbers against ticket numbers, so parts of it pass while asserting nothing. A declared format turns that into a named refusal. <em>Generalising the grammar</em> is cheaper today and is guessing at the shape of every plan format that will ever be registered — and it would have hidden this very finding rather than surfacing it. <em>Both</em> is the worst of the two: a generalised grammar that silently half-matches a foreign plan is exactly the vacuous pass the declaration exists to prevent. <strong>The cost of the recommendation, stated:</strong> v1 implements one format, so any project whose plans use another grammar gets a refusal rather than a check — a visible gap instead of a hidden one, which is the trade being proposed.</p>
+    </details>
+
+    <details data-review-options="Leave TicketSchema alone and name the gap (recommended)|Align it now — make tier and workflow optional and widen the id to Tnn or Wnn|Align fully — make the four content arrays optional too">
+      <summary>Q4 — Does this workstream align <code>TicketSchema</code> with the sync fence's already-decided vocabulary, or name the gap and defer?</summary>
+      <p class="qa-answer"><span class="qdecided">DECIDED 2026-08-22</span> <strong>Leave it alone, and name the gap precisely.</strong> The two have already diverged, deliberately and on the fence's side: the fence accepts <code>Wnn</code> ids and treats <code>tier</code> and <code>workflow</code> as optional, while <code>TicketSchema</code> requires <code>^T[0-9]{2}$</code> plus six fields the v2 ticket sets omit. <strong>The gap that is left after this workstream, stated so it is not discovered later:</strong> <code>awsf ticket list --plan awsf-plan</code> returns v1's 38 tickets exactly as today, and a v2 spine set returns <em>nothing</em> because <code>TicketStore.load()</code> filters on <code>Tnn</code> by filename, while a v2 deep-plan set would return records the store reports as <em>invalid</em>, since it deliberately exposes retained files it cannot validate rather than hiding them. <strong>Why not fix it here:</strong> widening the id pattern without also relaxing the six required fields makes the second case <em>worse</em> — nine clean empty results become nine invalid-file reports — and relaxing all six touches <code>awsf ticket new</code>, <code>awsf ticket refine</code>, the backlog query and the dashboard's ticket view, which is a blast radius this workstream has no reason to absorb while it is also redefining an invariant. <strong>The case for aligning now:</strong> the divergence is already load-bearing and every month it stays makes the store less able to see the plans the factory actually runs on. That is a fair argument and the reason this is a Questionable rather than a footnote.</p>
+    </details>
+
+    <details data-review-options="Record only the three KNOWN_GATE_IDS (recommended)|Widen KNOWN_GATE_IDS with the measured project's checks|Allow free-form gate ids in the catalog only">
+      <summary>Q5 — The measured project declares six checkable commands per repository where <code>KNOWN_GATE_IDS</code> has three. Does the vocabulary widen?</summary>
+      <p class="qa-answer"><span class="qdecided">DECIDED 2026-08-22</span> <strong>Record only the three.</strong> <code>commandsPass</code> joins on <code>gateId</code> against host-generated evidence and asserts <strong>argv exact</strong>; an id with no consumer is a recorded command nothing runs, which is precisely the decorative outcome Q2's own consequence warns against. Two of the measured project's three extras are project-specific integrity checks that AWSF has no contract for and would be asserting on evidence it cannot interpret. <strong>The third disappears rather than being dropped:</strong> the backend's contract-drift check is doing Q-A's job by another route, so the local digest fence subsumes it and no new id is needed. <em>Widening <code>KNOWN_GATE_IDS</code></em> means inventing a taxonomy to fill a field — the exact thing the ticket-authoring convention forbids — and every new id needs a consumer before it means anything. <em>Free-form ids in the catalog only</em> is the worst shape: two vocabularies for one concept, one of them unchecked. <strong>The cost:</strong> a real repository's full check set cannot be described here, so the catalog is a partial description of how that repository is verified, and a reader must not mistake it for the whole. That belongs in the catalog's own documentation and is called out in <a href="#notes">Notes</a>.</p>
+    </details>
+
+    <details data-review-options="Require an explicit path per repository, probe nothing (recommended)|Probe from a given root and record what was found|Probe, but only report — never write what was probed">
+      <summary>Q6 — Does <code>awsf project register</code> discover clone locations by probing the filesystem, or must the owner state each one?</summary>
+      <p class="qa-answer"><span class="qdecided">DECIDED 2026-08-22</span> <strong>Require an explicit path per declared repository; probe nothing.</strong> Placement is the layer where a wrong value silently sends work to the wrong tree, and a probed value is one nobody stated and therefore one nobody can be held to. The measured project makes the hazard concrete: its directory names, declared aliases and remote names are three different strings, one remote carries a spelling error the directory does not, and two of its repositories have no remote at all — so any probe matching on name would mis-associate at least one repository, and any probe matching on remote would fail on two. <strong>The case for probing is genuinely strong on ergonomics:</strong> a six-repository project means six flags, and <code>git worktree list</code> would find the split worktree roots this plan had to discover by hand. If the owner prefers it, the <em>third</em> option is the safe form — probe and print what was found, then require the operator to pass those values explicitly — because it keeps the ergonomic win without letting an inference become a durable record. The recommendation stays at "state it" for v1 on the grounds that the cheapest thing to add later is convenience, and the most expensive thing to remove later is a silent default.</p>
+    </details>
+  </section>
+
+  <!-- ===== NOTES ===== -->
+  <section id="notes">
+    <h2>Notes</h2>
+
+    <h3>Evidence and the cheapest unused upgrade, per decision-bearing claim</h3>
+    <p>The spine's third authoring rule: every claim carrying a decision names its evidence and the cheapest unused upgrade that would strengthen it. Applied per claim rather than once for the plan.</p>
+    <table>
+      <thead><tr><th>Claim</th><th>Evidence it rests on</th><th>Cheapest unused upgrade</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>The two-layer split is forced by code, not chosen</strong></td>
+          <td>Source-read: <code>ABSOLUTE_PATH_PATTERN</code> and <code>scanStrings</code> in <code>load.ts</code>, walking keys as well as values, with the "durable intent" comment stating the rule.</td>
+          <td>None needed — this is the strongest evidence class available, a rejection already in the shipped loader. The extraction in task 1 is what keeps it that way instead of forking it.</td>
+        </tr>
+        <tr>
+          <td><strong>Per-repository worktree roots are required, not a generalisation</strong></td>
+          <td>Measured 2026-08-21: one project's two code repositories keep worktrees on two different filesystems, with three of one repository's eleven moved off the shared root.</td>
+          <td>Ask the owner <em>why</em> those three moved. The answer is almost certainly performance on a mounted filesystem, and if so it predicts every future project of that shape will need the same override — turning a measured accommodation into a designed one.</td>
+        </tr>
+        <tr>
+          <td><strong>The state root belongs in neither layer</strong></td>
+          <td>Source-read: <code>discoverAttempts</code> walks <code>&lt;stateRoot&gt;/projects/*</code>; <code>doctor</code>, <code>gc</code> and <code>rebuild</code> each take one root; <code>attemptDir</code> already namespaces by project.</td>
+          <td>Run <code>awsf doctor</code> against a state root holding two registered projects and read what it reports. It should already be correct — and if the report is confusing rather than wrong, that is W02's surface problem surfacing here rather than a registry one.</td>
+        </tr>
+        <tr>
+          <td><strong>Q-A's contract shape works in a real project</strong></td>
+          <td>Measured 2026-08-21: two committed copies of one contract, byte-identical, in two repositories; producer-side drift check already mechanised; consumer side checked by nothing.</td>
+          <td><strong>The largest remaining gap, and it is cheap.</strong> Once M3 lands, register that real project and run <code>awsf project verify</code> against its actual contract pair. No quota, no new code, and it converts M4's fixture from a construction into an observation. It would also immediately exercise the five-repository, mixed-branch, no-remote catalog this plan only tested with fixtures.</td>
+        </tr>
+        <tr>
+          <td><strong>The fence's grammar, not just its resolution, blocks a foreign plan</strong></td>
+          <td>Measured 2026-08-21: 219 status markers in one real plan, zero of which match the fence's <code>Milestone (M\d+)</code> regular expression.</td>
+          <td>Run the current fence against that plan by hand — point <code>planTasks</code> at it in a scratch script and print the parsed task count. Expected zero; seeing zero rather than reasoning to it is an hour and closes the last doubt behind Q3.</td>
+        </tr>
+        <tr>
+          <td><strong>The v1 ticket move preserves behaviour</strong></td>
+          <td>Source-read: <code>ticketStoreFor</code>'s fixed resolution, the <code>/^T\d\d\.md$/</code> filter, the non-recursive <code>readdir</code>, and <code>showTicket</code>'s path-suffix branch.</td>
+          <td>Capture the baseline before touching anything — which task 20 now requires as its first box. Without it, "still returns them" is an opinion, and the failure mode here is silent by construction.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>What is deliberately not in this workstream</h3>
+    <ul>
+      <li><strong>Any task owning two repositories.</strong> <code>AttemptStatus</code> carries one repository and one worktree; landing is atomic per repository; a partial cross-repository landing has no rollback story and multi-repository atomicity would have to write that story first. Cross-repository work is a parent coordination record plus declared contract artifacts between single-repository children — which is what M4 builds.</li>
+      <li><strong>Delivery policy, remotes, and anything W08 owns.</strong> The catalog records delivery <em>posture</em> and no remote, endpoint or credential. W08's allowlist lands in the catalog later, after invariant 8's amendment, and this workstream must not pre-empt either — inventing the field now would put a shape in the schema before the mechanism that reads it has been designed.</li>
+      <li><strong>Config loading, and any precedence rule between project and machine configuration.</strong> Refused by Q-B, and the refusal is structural rather than a scope cut.</li>
+      <li><strong>Changing <code>TicketSchema</code>.</strong> See Q4. The gap is named, measured, and left.</li>
+      <li><strong>Migrating a project's plan repository after registration.</strong> See Q2. Decided at registration; moving it later is manual.</li>
+      <li><strong>Anything owner-side.</strong> Both amendments — invariant 12's replacement text, and <code>awsf.project.yaml</code> into <code>policy.protected_paths</code> after Q1's decision — are owner-authored commits, not tasks, and per the spine's own list, work that cannot land from a managed worktree never becomes a ticket in any deep plan. Their <em>sequence</em> differs and is tabulated in <a href="#amendment-required">Amendment Required Before the Build</a>: the first lands before task 16, the second after task 10.</li>
+    </ul>
+
+    <h3>Reading the catalog as a partial description, which it is</h3>
+    <p>Q5's cost deserves to be visible to a reader of a catalog rather than only to a reader of this plan. The catalog records the checks AWSF's gate machinery can join on — three per repository — and a real repository may run more. <strong>A catalog is not a complete account of how a repository is verified, and the schema documentation must say so</strong>, in the file, beside the <code>gates</code> field. Otherwise the first person to read a catalog with three entries for a repository that runs six will reasonably conclude three is all there are.</p>
+
+    <h3>Relationship to the workstreams on either side</h3>
+    <p><strong>W03 produces what W04 registers.</strong> <code>awsf init</code> creates a repository with a valid <code>awsf.config.yaml</code> and a baseline commit under the owner's identity; it registers nothing and knows nothing about projects. A project created that way is the single-repository case Q2 describes, and its catalog is written afterwards. <strong>W05 consumes W04's plan source.</strong> Its <code>AC</code>/<code>INV</code> coverage gate extends the very fence M5 redefines, so it must build on <code>resolvePlanSources</code> rather than re-deriving a plan's location — and the declared-format rule is what will let it refuse a plan it cannot read instead of covering zero identifiers and reporting success. <strong>W07 and W08 consume the catalog</strong> for per-repository scope and per-repository delivery policy respectively; neither field's <em>resolver</em> is built here, by Q-B's decision.</p>
+
+    <h3>Rejected while authoring this plan</h3>
+    <ul>
+      <li><strong>Extending <code>AwsfConfigSchema</code> with a <code>project.repositories</code> block.</strong> It would have been the smallest diff and it is the shape Q2 refused: one document describing both the machine's tuning and the project's identity, with <code>awsf.config.yaml</code> protected and the catalog necessarily not, which is a precedence question wearing a convenience's clothes.</li>
+      <li><strong>One machine-wide placement file.</strong> Cheaper to read, and it is a shared mutable index — the thing this repository has consistently refused, in <code>TicketStore</code>'s own words. Per-project files also mean registering a project contends with nothing.</li>
+      <li><strong>Making <code>TicketStore</code> recursive.</strong> It would have made the ticket move trivial and it would have made every plan's tickets visible to every other plan's commands, which is the collision <code>specs/tickets/&lt;stem&gt;/</code> exists to prevent. Resolution belongs in the resolver, not in the reader.</li>
+      <li><strong>Encoding the contract digest in the artifact's filename.</strong> Genuinely more literal content-addressing and it removes the projection file entirely. Rejected because every revision would rename the artifact and change every consumer's import path, trading a small file for churn on each revision and an unstable path for tooling.</li>
+      <li><strong>Generalising the sync fence's heading grammar to accept both nouns.</strong> A one-line change that would have made a foreign plan appear checkable while checking almost nothing — and it would have buried the measurement that produced Q3 instead of surfacing it.</li>
+      <li><strong>Probing the filesystem during registration.</strong> See Q6. The measured project's three-way name divergence makes an inferred association wrong at least once out of six.</li>
+    </ul>
+
+    <h3>Risks this plan carries knowingly</h3>
+    <table>
+      <thead><tr><th>Risk</th><th>Why it is accepted</th><th>What would surface it early</th></tr></thead>
+      <tbody>
+        <tr><td><strong>The N+1 digest copies drift on a half-landed contract revision</strong></td><td>Q-A's shape requires them, and a coordinated commit across repositories is the price the decision explicitly accepted for a breaking change.</td><td><code>awsf project verify</code> reports every failing pair rather than the first, so a half-landed revision reads as a set and not as one puzzling failure.</td></tr>
+        <tr><td><strong>The registry is built and only ever used by one project</strong></td><td>Three workstreams are blocked on it and the owner has a real multi-repository project measured against it.</td><td>The upgrade in the evidence table — registering that real project — is the earliest possible falsifier and costs no quota.</td></tr>
+        <tr><td><strong>Placement points at the wrong clone and nobody notices</strong></td><td>The identity signal is optional because two of the measured project's repositories have no remote and a required field would make the registry unusable for them.</td><td>Declare <code>identity.root_commit</code> for every repository that has one. The check is already built; only its adoption is voluntary.</td></tr>
+        <tr><td><strong>The catalog becomes the place every later workstream adds a field</strong></td><td>It is the only project-scoped committed surface, so gravity points at it — and Q-B's narrowness is a decision, not a mechanism.</td><td>The version literal. Any field added without moving <code>awsf.project/v1</code> forward is a change nobody declared, and the loader's rejection of an unknown version is what makes the next version an explicit act.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Derived-field rule for this workstream's tickets</h3>
+    <p>Recorded here and restated in <code>specs/tickets/awsf-v2-w04-project-registry/README.md</code> per the ticket-authoring convention: each ticket's <code>milestone</code> is the <code>M</code>-number of the phase its numbered task belongs to — M1 → T01–T05, M2 → T06–T08, M3 → T09–T11, M4 → T12–T15, M5 → T16–T18, M6 → T19–T21 — and the ticket number equals the plan's own <code>&lt;h4&gt;N.</code> task number exactly. <code>depends_on</code> follows the plan's stated dependency chain <strong>including its two granted parallelisms</strong>: T02 and T04 both depend on T01 and not on each other, because the catalog and placement schemas share only the extracted guard; and T13 and T14 both depend on T12 and not on each other, because the local fence and the central reconciliation share only the digest record. Everywhere else each task reads or extends the output of the one before it. <code>tier</code> and <code>workflow</code> are omitted entirely — this plan defines no risk-tier or named workflow-route vocabulary for its own tasks, and inventing one to fill the field would misrepresent it. <code>state</code> mirrors this plan's own markers and flips in the same commit, per AGENTS.md invariant 12.</p>
+  </section>
+
+  <!-- ===== AMENDMENTS ===== -->
+  <section id="amendments">
+    <h2>Amendments</h2>
+    <details>
+      <summary>2026-08-21 — Authored; no amendment yet</summary>
+      <p>This plan is authored and not yet committed, reviewed or built. Its six Questionables are open and its two inherited decisions — the spine's Q1 and Q2 — are recorded as applied constraints with their implementation and cost, not as choices. Entries below this one are appended by the Update Plan workflow as the workstream builds, and by the Review Plan workflow when an exported <code>plan-sota-review v1</code> block is applied.</p>
+    </details>
+    <details>
+      <summary>2026-08-22 — All six open Questionables decided by owner review</summary>
+      <p>Applied from an exported <code>plan-sota-review v1</code> block (exported <code>2026-08-22T04:40:29.535Z</code>): <strong>six verdicts, no proposed statuses, no annotations</strong>. All six took the recommended option: <strong>Q1</strong> protect the catalog by adding <code>awsf.project.yaml</code> to <code>policy.protected_paths</code> · <strong>Q2</strong> the catalog lives at the plan repository's root, one per project · <strong>Q3</strong> a plan source declares its format and the fence refuses an unimplemented one by name · <strong>Q4</strong> <code>TicketSchema</code> is left alone and the gap named · <strong>Q5</strong> the catalog records only the three <code>KNOWN_GATE_IDS</code> · <strong>Q6</strong> registration requires an explicit path per repository and probes nothing. No verdict was <code>REJECT</code> or <code>REVISE</code>, so no section built on a now-overturned assumption needed surgical correction.</p>
+      <p><strong>One verdict did change the plan beyond its own entry, and the change was found while applying it rather than when the option was written.</strong> Q1's protection has an ordering consequence: <code>path-policy</code> matches a <code>protected_paths</code> glob against a <em>path</em> regardless of whether the file exists, so protecting <code>awsf.project.yaml</code> rejects <strong>creating</strong> it — and task 10 is the task that creates it. The <em>Amendment Required Before the Build</em> section therefore moved from naming one required amendment plus one conditional, to naming <strong>two required amendments with different sequences</strong>: invariant 12's text before task 16, and the <code>protected_paths</code> commit <em>after task 10</em>, which is the reverse of the direction gate <span class="gate">G2</span> normally imposes. Task 10 gained a checklist item telling the owner it is the trigger, task 21 gained one refusing to close the workstream with the catalog unprotected, and the section gained an explicit statement of what <code>protected_paths</code> does <em>not</em> cover — it binds a worker phase's writes inside a managed worktree, not every session that can edit the file, so the guarantee earned is narrower than "no agent can rewrite it" and is written at that narrower width.</p>
+    </details>
+  </section>
+
+</main>
+<!-- ===== PLAN-SOTA REVIEW LAYER v1 — FIXED MACHINERY, COPY VERBATIM ===== -->
+<style>
+  .rv-btn { font: 600 11px/1 system-ui, sans-serif; padding: 3px 9px; border-radius: 999px;
+    border: 1px solid var(--muted, #8884); background: transparent; color: var(--fg, inherit);
+    cursor: pointer; opacity: .55; vertical-align: middle; margin-left: 8px; }
+  .rv-btn:hover { opacity: 1; border-color: var(--accent, #7c6cf0); }
+  .rv-btn.rv-on { opacity: 1; background: var(--accent, #7c6cf0); color: var(--bg, #fff); border-color: transparent; }
+  .rv-note-box { display: block; margin: 8px 0; padding: 8px 12px; border: 1px dashed var(--accent, #7c6cf0);
+    border-radius: 8px; font-size: 13px; min-height: 1.5em; background: color-mix(in srgb, var(--accent, #7c6cf0) 6%, transparent); outline: none; }
+  .rv-note-box:empty::before { content: attr(data-ph); opacity: .5; font-style: italic; }
+  .rv-note-box[hidden] { display: none; }
+  .rv-verdict { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 10px 0 2px; }
+  .rv-verdict-tag { font: 700 10px/1 system-ui, sans-serif; letter-spacing: .08em; opacity: .6; margin-right: 2px; }
+  .rv-status-chip { font: 600 11px/1 ui-monospace, monospace; margin-left: 10px; padding: 3px 9px;
+    border-radius: 999px; border: 1px dotted var(--muted, #8884); background: transparent;
+    color: var(--fg, inherit); cursor: pointer; opacity: .6; }
+  .rv-status-chip:hover { opacity: 1; }
+  .rv-status-chip.rv-on { opacity: 1; border-style: solid; border-color: var(--accent, #7c6cf0); color: var(--accent, #7c6cf0); }
+  #rv-drawer { position: fixed; right: 16px; bottom: 16px; z-index: 9999; font: 13px/1.45 system-ui, sans-serif;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  #rv-pill { font: 700 12px/1 system-ui, sans-serif; padding: 10px 16px; border-radius: 999px; border: none;
+    cursor: pointer; background: var(--accent, #7c6cf0); color: var(--bg, #fff); box-shadow: 0 4px 16px #0004; }
+  #rv-panel { width: min(420px, calc(100vw - 32px)); max-height: 60vh; overflow: auto; padding: 14px;
+    border-radius: 12px; border: 1px solid var(--muted, #8884); background: var(--bg, #fff);
+    color: var(--fg, inherit); box-shadow: 0 8px 32px #0005; }
+  #rv-panel h4 { margin: 0 0 8px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; opacity: .7; }
+  #rv-list { margin: 0 0 10px; padding: 0; list-style: none; font-size: 12px; }
+  #rv-list li { padding: 3px 0; border-bottom: 1px solid #8882; overflow-wrap: anywhere; }
+  #rv-out { width: 100%; min-height: 140px; margin-top: 10px; font: 11px/1.5 ui-monospace, monospace;
+    border: 1px solid var(--muted, #8884); border-radius: 8px; padding: 8px; background: transparent; color: inherit; }
+  #rv-msg { font-size: 11px; opacity: .75; margin-top: 6px; }
+  @media print { #rv-drawer { display: none; } }
+</style>
+<script>
+(function () {
+  'use strict';
+  var FILE = decodeURIComponent(location.pathname.split('/').pop() || 'plan.html');
+  var KEY = 'plan-sota-review:' + FILE;
+  var LEGACY_KEY = 'planf3-review:' + FILE; // pre-rename state; read once, never written
+  var PROPOSE = ['', '[]', '[wip]', '[x]', '[f]'];
+  var state = { a: {}, v: {}, s: {} }, persisted = true;
+  try { state = JSON.parse(localStorage.getItem(KEY) || localStorage.getItem(LEGACY_KEY) || 'null') || state; } catch (e) { persisted = false; }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); persisted = true; }
+    catch (e) { persisted = false; }
+    refresh();
+  }
+  function el(tag, cls, txt) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (txt) n.textContent = txt;
+    if (tag === 'button') { n.type = 'button'; n.setAttribute('data-lavish-action', ''); }
+    return n;
+  }
+  function clean(t) { return String(t || '').replace(/\|/g, '/').replace(/\s*\r?\n\s*/g, ' >> ').trim(); }
+  var registry = []; // {key, label, kind: 'section'|'phase'|'q'}
+
+  function noteBox(key, host, placeholder) {
+    var box = el('div', 'rv-note-box');
+    box.contentEditable = 'true';
+    box.setAttribute('data-ph', placeholder || 'Type your note for the agent…');
+    box.hidden = !(state.a[key]);
+    if (state.a[key]) box.textContent = state.a[key];
+    box.addEventListener('input', function () {
+      var t = box.textContent.trim();
+      if (t) state.a[key] = t; else delete state.a[key];
+      save();
+    });
+    host.appendChild(box);
+    return box;
+  }
+  function annotable(key, label, heading, host, kind) {
+    registry.push({ key: key, label: label, kind: kind });
+    var box = noteBox(key, host);
+    heading.insertAdjacentElement('afterend', box);
+    var btn = el('button', 'rv-btn' + (state.a[key] ? ' rv-on' : ''), '✎ note');
+    btn.addEventListener('click', function () {
+      box.hidden = !box.hidden;
+      if (!box.hidden) box.focus();
+    });
+    heading.appendChild(btn);
+    box.addEventListener('input', function () { btn.classList.toggle('rv-on', !!state.a[key]); });
+  }
+
+  // Sections
+  Array.prototype.forEach.call(document.querySelectorAll('main > section[id]'), function (sec) {
+    var h = sec.querySelector('h2'); if (!h) return;
+    annotable('#' + sec.id, h.textContent.trim(), h, sec, 'section');
+  });
+  // Phases: annotation + proposed-status chip
+  Array.prototype.forEach.call(document.querySelectorAll('#phases .phase'), function (ph, i) {
+    var h = ph.querySelector('h3'); if (!h) return;
+    var key = 'phase-' + (i + 1);
+    var label = h.textContent.replace(/^\s*\[[^\]]*\]\s*/, '').trim();
+    annotable(key, label, h, ph, 'phase');
+    var chip = el('button', 'rv-status-chip' + (state.s[key] ? ' rv-on' : ''));
+    chip.textContent = state.s[key] ? 'propose ' + state.s[key] : 'propose…';
+    chip.title = 'Cycle a PROPOSED status (exported as feedback — the file marker is only changed by the agent)';
+    chip.addEventListener('click', function () {
+      var next = PROPOSE[(PROPOSE.indexOf(state.s[key] || '') + 1) % PROPOSE.length];
+      if (next) state.s[key] = next; else delete state.s[key];
+      chip.textContent = next ? 'propose ' + next : 'propose…';
+      chip.classList.toggle('rv-on', !!next);
+      save();
+    });
+    h.appendChild(chip);
+  });
+  // Questionables: verdict / option buttons + note
+  Array.prototype.forEach.call(document.querySelectorAll('#questionables details'), function (d, i) {
+    var key = 'q-' + (i + 1);
+    var summary = d.querySelector('summary');
+    var label = summary ? summary.textContent.trim().slice(0, 120) : key;
+    registry.push({ key: key, label: label, kind: 'q' });
+    var opts = (d.getAttribute('data-review-options') || '').split('|').map(function (s) { return s.trim(); }).filter(Boolean);
+    if (!opts.length) opts = ['APPROVE', 'REJECT', 'REVISE', 'DEFER'];
+    var row = el('div', 'rv-verdict');
+    row.appendChild(el('span', 'rv-verdict-tag', 'YOUR CALL'));
+    opts.forEach(function (opt) {
+      var b = el('button', 'rv-btn' + ((state.v[key] || {}).c === opt ? ' rv-on' : ''), opt);
+      b.addEventListener('click', function () {
+        if ((state.v[key] || {}).c === opt) { delete state.v[key]; }
+        else { state.v[key] = { c: opt }; }
+        Array.prototype.forEach.call(row.querySelectorAll('.rv-btn'), function (x) {
+          x.classList.toggle('rv-on', x.textContent === ((state.v[key] || {}).c || null));
+        });
+        qbox.hidden = !state.v[key] && !state.a[key];
+        save();
+      });
+      row.appendChild(b);
+    });
+    d.appendChild(row);
+    var qbox = noteBox(key, d, 'Why / what to change instead…');
+    if (state.v[key]) qbox.hidden = false;
+  });
+
+  // Drawer
+  var drawer = el('div'); drawer.id = 'rv-drawer';
+  var panel = el('div'); panel.id = 'rv-panel'; panel.hidden = true;
+  var pill = el('button'); pill.id = 'rv-pill';
+  pill.addEventListener('click', function () { panel.hidden = !panel.hidden; });
+  var list = el('ul'); list.id = 'rv-list';
+  var actions = el('div');
+  var exportBtn = el('button', 'rv-btn rv-on', 'Export Feedback');
+  var clearBtn = el('button', 'rv-btn', 'Clear review');
+  var out = el('textarea'); out.id = 'rv-out'; out.readOnly = true; out.hidden = true;
+  var msg = el('div'); msg.id = 'rv-msg';
+  var head = el('h4', null, 'Review — pending feedback');
+  actions.appendChild(exportBtn); actions.appendChild(clearBtn);
+  panel.appendChild(head); panel.appendChild(list); panel.appendChild(actions);
+  panel.appendChild(out); panel.appendChild(msg);
+  drawer.appendChild(panel); drawer.appendChild(pill);
+  document.body.appendChild(drawer);
+
+  function findLabel(key) {
+    for (var i = 0; i < registry.length; i++) if (registry[i].key === key) return registry[i].label;
+    return key;
+  }
+  function refresh() {
+    var n = Object.keys(state.a).length + Object.keys(state.v).length + Object.keys(state.s).length;
+    pill.textContent = '✎ Review (' + n + ')';
+    list.textContent = '';
+    Object.keys(state.v).forEach(function (k) { list.appendChild(el('li', null, '[verdict] ' + findLabel(k) + ' → ' + state.v[k].c)); });
+    Object.keys(state.s).forEach(function (k) { list.appendChild(el('li', null, '[status] ' + findLabel(k) + ' → propose ' + state.s[k])); });
+    Object.keys(state.a).forEach(function (k) { list.appendChild(el('li', null, '[note] ' + findLabel(k) + ': ' + state.a[k].slice(0, 90))); });
+    if (!n) list.appendChild(el('li', null, 'Nothing yet — click ✎ note on any section, a verdict on a Questionable, or propose… on a phase.'));
+    if (!persisted) msg.textContent = '⚠ localStorage unavailable — review state lives only in this tab.';
+  }
+  function buildExport() {
+    var L = ['plan-sota-review v1', 'plan: ' + FILE, 'title: ' + clean(document.title), 'exported: ' + new Date().toISOString(), ''];
+    var vk = Object.keys(state.v), sk = Object.keys(state.s), ak = Object.keys(state.a);
+    L.push('## verdicts');
+    vk.length ? vk.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | ' + clean(state.v[k].c) + ' | note: ' + (clean(state.a[k]) || '-'));
+    }) : L.push('- (none)');
+    L.push('', '## statuses');
+    sk.length ? sk.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | propose ' + state.s[k]);
+    }) : L.push('- (none)');
+    L.push('', '## annotations');
+    var solo = ak.filter(function (k) { return !state.v[k]; });
+    solo.length ? solo.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | ' + clean(state.a[k]));
+    }) : L.push('- (none)');
+    return L.join('\n');
+  }
+  exportBtn.addEventListener('click', function () {
+    var text = buildExport();
+    out.hidden = false; out.value = text;
+    out.focus(); out.select();
+    function done(m) { msg.textContent = m; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done('Copied — paste it into your next agent session.'); },
+        function () { done('Clipboard blocked — copy from the box below.'); });
+    } else {
+      try { done(document.execCommand('copy') ? 'Copied — paste it into your next agent session.' : 'Clipboard blocked — copy from the box below.'); }
+      catch (e) { done('Clipboard blocked — copy from the box below.'); }
+    }
+    if (window.lavish && typeof window.lavish.queuePrompt === 'function') {
+      window.lavish.queuePrompt(text, { tag: 'plan-sota-review', queueKey: 'plan-sota-review' });
+      msg.textContent += ' Also queued to the agent via Lavish.';
+    }
+  });
+  clearBtn.addEventListener('click', function () {
+    if (!confirm('Clear all review state for this plan?')) return;
+    state = { a: {}, v: {}, s: {} };
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    location.reload();
+  });
+  refresh();
+})();
+</script>
+
+<!-- Mermaid runtime — renders every <pre class="mermaid"> block. Only external reference in the file. -->
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      primaryColor: '#1C1E2B',
+      primaryTextColor: '#E7E9F0',
+      primaryBorderColor: '#2b3040',
+      lineColor: '#8B90A6',
+      fontFamily: '"JetBrains Mono","Fira Code",ui-monospace,monospace'
+    }
+  });
+</script>
+</body>
+</html>
