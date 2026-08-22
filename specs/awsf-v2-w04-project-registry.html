@@ -451,7 +451,7 @@ application  lib/api/openapi.json    sha256 0510d03b81c4…   430473 bytes
 
     <!-- ================= M1 ================= -->
     <div class="phase">
-      <h3><code class="status">[wip]</code> Milestone M1: Two layers, each refusing what the other must hold</h3>
+      <h3><code class="status">[x]</code> Milestone M1: Two layers, each refusing what the other must hold</h3>
       <p>Nothing is joined, resolved or registered in this phase. It builds the two documents and — the part that makes the separation real rather than stylistic — the rejections that keep each from becoming the other. The catalog inherits its absolute-path refusal from the code that already enforces it, so the guarantee has one implementation, not two.</p>
 
       <figure>
@@ -517,11 +517,11 @@ flowchart TD
       <h4>5. Testing Strategy</h4>
       <p>The two rejections proven from both directions, plus one structural assertion that is the mechanical form of this phase's whole claim. The fixtures are written from the shapes measured on 2026-08-21 — mixed default branches, five repositories, a repository with no remote, a per-repository worktree root — so the schema is tested against a real project's facts rather than a convenient one's.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/registry/catalog.test.ts</code> — a valid five-repository catalog loads; a POSIX absolute path, a Windows drive-letter path, a UNC path and a <code>~</code> path each throw <code>CatalogAbsolutePathError</code>, <strong>and one of the four is placed in an object key rather than a value</strong>, because <code>scanStrings</code> checks keys and a test that only checks values would not notice if that stopped being true</li>
-        <li><code class="status">[]</code> The same file: a <code>..</code> segment in a repository-relative path is rejected; zero and two <code>role: plan</code> repositories are each rejected; an unknown <code>version</code> is rejected; a gate id outside <code>KNOWN_GATE_IDS</code> is rejected; a contract naming an undeclared repository is rejected</li>
-        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/registry/placement.test.ts</code> — a relative path is rejected; an absolute path loads; a document carrying <code>default_branch</code> or <code>role</code> is rejected by <code>additionalProperties: false</code>, proving the inverse rule mechanically rather than by review</li>
-        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/layer-separation.test.ts</code> — walks both emitted JSON Schemas and asserts their property-name sets intersect in <strong>exactly</strong> the join key, and that neither contains a property matching a state-root or clone-path name pattern. A schema change that quietly merges the layers turns this red.</li>
-        <li><code class="status">[]</code> <code>npm run typecheck</code> and <code>npm run lint</code> — clean</li>
+        <li><code class="status">[x]</code> <code>node --experimental-strip-types --test core/test/unit/registry/catalog.test.ts</code> — a valid five-repository catalog loads; a POSIX absolute path, a Windows drive-letter path, a UNC path and a <code>~</code> path each throw <code>CatalogAbsolutePathError</code>, <strong>and one of the four is placed in an object key rather than a value</strong>, because <code>scanStrings</code> checks keys and a test that only checks values would not notice if that stopped being true</li>
+        <li><code class="status">[x]</code> The same file: a <code>..</code> segment in a repository-relative path is rejected; zero and two <code>role: plan</code> repositories are each rejected; an unknown <code>version</code> is rejected; a gate id outside <code>KNOWN_GATE_IDS</code> is rejected; a contract naming an undeclared repository is rejected</li>
+        <li><code class="status">[x]</code> <code>node --experimental-strip-types --test core/test/unit/registry/placement.test.ts</code> — a relative path is rejected; an absolute path loads; a document carrying <code>default_branch</code> or <code>role</code> is rejected by <code>additionalProperties: false</code>, proving the inverse rule mechanically rather than by review</li>
+        <li><code class="status">[x]</code> <code>node --experimental-strip-types --test core/test/unit/meta/layer-separation.test.ts</code> — walks both emitted JSON Schemas and asserts their property-name sets intersect in <strong>exactly</strong> the join key, and that neither contains a property matching a state-root or clone-path name pattern. A schema change that quietly merges the layers turns this red.</li>
+        <li><code class="status">[x]</code> <code>npm run typecheck</code> and <code>npm run lint</code> — clean</li>
       </ul>
       <div class="card warn">
         <h5>What the inherited rejection does <em>not</em> cover — stated, not closed</h5>
