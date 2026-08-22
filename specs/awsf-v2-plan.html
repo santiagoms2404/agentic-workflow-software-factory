@@ -1086,6 +1086,11 @@ stateDiagram-v2
       <p><strong>One thing surfaced during task 9 that this spine did not anticipate</strong>: a driving session's own scheduling tool can write a <code>.claude/scheduled_tasks.lock</code> file at the repository root, which — though already git-excluded — is exactly what <code>execution-isolation.test.ts</code> asserts is absent, and the fence correctly went red on it mid-task. Removed with the owner's confirmation; recorded in the deep plan's own Amendments rather than repeated here in full.</p>
       <p>This is the first of fourteen workstreams to close. <strong>W02–W14 remain <code>[]</code></strong>, each still waiting on its own deep plan.</p>
     </details>
+
+    <details>
+      <summary>2026-08-21 — W03 landed: milestone M3 goes [x]</summary>
+      <p><code>awsf-v2-w03-awsf-init.html</code>'s nine tasks and three milestones are complete. The host-only <code>awsf init</code> command creates the target repository, writes a schema-derived minimal configuration, and makes the baseline commit under the owner's identity without reaching a provider or workflow module. <code>npm run test:unit</code> passed 1081/1081 tests, above the 1073 pre-work baseline; typecheck and lint exited 0. The deep plan, its nine tickets, the spine's W03 checklist and ticket, and milestone M3 were closed together in <code>c0ffeea</code>.</p>
+    </details>
   </section>
 
 </main>
