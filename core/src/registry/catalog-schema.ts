@@ -1,5 +1,5 @@
 import { Type, type Static } from "@sinclair/typebox";
-import { GateEntrySchema, KNOWN_GATE_IDS, ProjectSlugSchema } from "../config/schema.ts";
+import { GateEntrySchema, ProjectSlugSchema } from "../config/schema.ts";
 import { stringUnion, toJsonSchema } from "../contracts/typebox.ts";
 
 export const PROJECT_CATALOG_VERSION = "awsf.project/v1" as const;
@@ -32,7 +32,7 @@ const RepositorySchema = Type.Object(
     // a complete account of every check a repository may run.
     gates: Type.Optional(
       Type.Partial(
-        Type.Record(stringUnion(KNOWN_GATE_IDS), GateEntrySchema, {
+        Type.Record(ExplicitId, GateEntrySchema, {
           additionalProperties: false,
         }),
       ),

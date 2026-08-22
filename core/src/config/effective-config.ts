@@ -1,16 +1,15 @@
 import type { AwsfConfig } from "./schema.ts";
+import { isAbsoluteMachinePath } from "./machine-path.ts";
 import {
   REDACTED_VALUE,
   containsCredential,
 } from "../policy/redaction.ts";
 
-// Same path shape the loader refuses in committed config. Credentials use the
-// shared policy scrubber; effective config adds machine-path redaction because
-// settings responses must not expose either class of runtime detail.
-const ABSOLUTE_PATH_PATTERN = /^(\/|[A-Za-z]:[\\/]|\\\\|~)/;
-
+// Credentials use the shared policy scrubber; effective config adds
+// machine-path redaction because settings responses must not expose either
+// class of runtime detail.
 function shouldRedact(value: string): boolean {
-  return ABSOLUTE_PATH_PATTERN.test(value) || containsCredential(value);
+  return isAbsoluteMachinePath(value) || containsCredential(value);
 }
 
 function redactDeep(node: unknown): unknown {

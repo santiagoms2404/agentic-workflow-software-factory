@@ -497,11 +497,11 @@ flowchart TD
       <h4>3. The catalog loader and its closed error hierarchy</h4>
       <p>Modelled on <code>load.ts</code>: TypeBox structural validation first, then the hand-written rejections in a fixed order, each throwing a distinct <code>code</code>-bearing error so tests assert on <code>code</code> rather than message text.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>loadCatalog(yamlText): ProjectCatalog</code>, rejecting in order: structure, unknown version, absolute machine path, escaping path, credential-shaped value, unknown gate id, plan-role cardinality, contract reference integrity</li>
-        <li><code class="status">[]</code> The absolute-path rejection calls the extracted <code>assertNoAbsolutePaths</code> — <strong>the same function, over keys and values alike</strong>, throwing <code>CatalogAbsolutePathError</code></li>
-        <li><code class="status">[]</code> Every repository-relative path field additionally rejects a <code>..</code> segment and a leading <code>./</code>, via <code>normalizeRepositoryPath</code> from <code>path-policy.ts</code> where it already does this rather than a new normaliser</li>
-        <li><code class="status">[]</code> <code>containsCredential</code> from <code>core/src/policy/redaction.ts</code> is applied to the whole document, exactly as <code>loadConfig</code> does — invariant 9 reaches the catalog for free</li>
-        <li><code class="status">[]</code> Every contract's producer and consumer names a repository the catalog declares; an undeclared reference is a rejection</li>
+        <li><code class="status">[x]</code> <code>loadCatalog(yamlText): ProjectCatalog</code>, rejecting in order: structure, unknown version, absolute machine path, escaping path, credential-shaped value, unknown gate id, plan-role cardinality, contract reference integrity</li>
+        <li><code class="status">[x]</code> The absolute-path rejection calls the extracted <code>assertNoAbsolutePaths</code> — <strong>the same function, over keys and values alike</strong>, throwing <code>CatalogAbsolutePathError</code></li>
+        <li><code class="status">[x]</code> Every repository-relative path field additionally rejects a <code>..</code> segment and a leading <code>./</code>, via <code>normalizeRepositoryPath</code> from <code>path-policy.ts</code> where it already does this rather than a new normaliser</li>
+        <li><code class="status">[x]</code> <code>containsCredential</code> from <code>core/src/policy/redaction.ts</code> is applied to the whole document, exactly as <code>loadConfig</code> does — invariant 9 reaches the catalog for free</li>
+        <li><code class="status">[x]</code> Every contract's producer and consumer names a repository the catalog declares; an undeclared reference is a rejection</li>
       </ul>
 
       <h4>4. <code>awsf.placement/v1</code> — the placement schema, loader, and its inverse rule</h4>
