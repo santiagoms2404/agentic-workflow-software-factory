@@ -535,7 +535,7 @@ flowchart TD
 
     <!-- ================= M2 ================= -->
     <div class="phase">
-      <h3><code class="status">[wip]</code> Milestone M2: The join, and the state root's absence from both layers</h3>
+      <h3><code class="status">[x]</code> Milestone M2: The join, and the state root's absence from both layers</h3>
       <p>The one place identity and location meet. Everything downstream — gate lookup, contract verification, plan-source resolution — consumes a <code>ResolvedProject</code> and never reads either document directly, so there is exactly one site where a mismatch between the layers can be detected and exactly one place it is named.</p>
 
       <h4>6. <code>resolveProject</code> and its four rejections</h4>
@@ -561,11 +561,11 @@ flowchart TD
       <h4>8. Testing Strategy</h4>
       <p>Temporary-directory fixtures with real files, because the join's failures are all about documents disagreeing on disk and an in-memory fixture would not exercise the reader.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/registry/resolve.test.ts</code> — a catalog and placement pair resolving cleanly across five repositories, and each of the four rejections induced deliberately and asserted by <code>code</code></li>
-        <li><code class="status">[]</code> The identity check is exercised against a <strong>real temporary Git repository</strong> whose root commit is read back — a mismatch is induced by pointing placement at a second repository, and the case of a repository declaring <em>no</em> identity signal is asserted to resolve without complaint</li>
-        <li><code class="status">[]</code> Worktree-root resolution asserted for all three fallback levels, including the per-repository override that the measured project requires</li>
-        <li><code class="status">[]</code> Every temporary directory is removed in a cleanup, leaving no fixture on disk (invariant 10)</li>
-        <li><code class="status">[]</code> <code>npm run test:unit</code> — green, no count regression</li>
+        <li><code class="status">[x]</code> <code>node --experimental-strip-types --test core/test/unit/registry/resolve.test.ts</code> — a catalog and placement pair resolving cleanly across five repositories, and each of the four rejections induced deliberately and asserted by <code>code</code></li>
+        <li><code class="status">[x]</code> The identity check is exercised against a <strong>real temporary Git repository</strong> whose root commit is read back — a mismatch is induced by pointing placement at a second repository, and the case of a repository declaring <em>no</em> identity signal is asserted to resolve without complaint</li>
+        <li><code class="status">[x]</code> Worktree-root resolution asserted for all three fallback levels, including the per-repository override that the measured project requires</li>
+        <li><code class="status">[x]</code> Every temporary directory is removed in a cleanup, leaving no fixture on disk (invariant 10)</li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code> — green, no count regression</li>
       </ul>
       <div class="card warn">
         <h5>What the join does <em>not</em> cover</h5>
