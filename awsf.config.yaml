@@ -120,6 +120,7 @@ risk:
 policy:
   protected_paths:
     - awsf.config.yaml
+    - awsf.project.yaml
     - AGENTS.md
     - core/src/state/**
     - core/src/policy/**
