@@ -1,36 +1,41 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { parse } from "yaml";
-import { parseAwsfPlanHtmlV1, type ParsedPlanTask } from "../../../src/registry/plan-source.ts";
+import { loadCatalog } from "../../../src/registry/catalog.ts";
+import {
+  parseAwsfPlanHtmlV1,
+  resolvePlanSources,
+  type ParsedPlanTask,
+} from "../../../src/registry/plan-source.ts";
 import { repoRoot } from "./_walk.ts";
 
-// AGENTS.md invariant 12: a plan and its tickets never disagree. The plan's
-// status markers are the source of truth; a ticket's `state` mirrors them and is
-// flipped in the same commit. The plan carries no per-task marker — only
-// milestone <h3> markers and per-task checklists — so those are what a ticket's
-// state is checked against.
+// AGENTS.md invariant 12: a plan and its tickets never disagree. The committed
+// project catalog declares the plan source, and resolvePlanSources pairs every
+// plan with its prompts and ticket set before the assertions below run. Because
+// this checkout is its own plan repository, self-placement resolves it through
+// repoRoot without machine-local placement and keeps this fence hermetic in a
+// fresh clone. A foreign source without placement is outside this checkout.
 //
-// PLAN-AWARE, because one repository now holds more than one plan. Each plan
-// owns a ticket set, and every assertion below runs per set:
-//
-//   specs/tickets/*.md              -> specs/awsf-plan.html          (v1, flat)
-//   specs/tickets/<stem>/*.md       -> specs/<stem>.html
-//                                   or specs/v2/<stem>.html
+// The declared format is resolved before parsing. An unsupported format is
+// refused by name, and the sole implemented parser rejects a plan that does not
+// contain its declared grammar rather than treating it as zero tasks.
 //
 // WHY v1's tickets are still flat, and why moving them is not housekeeping:
 // `ticketStoreFor` (core/src/cli/commands/ticket.ts) resolves `specs/tickets`
 // and `TicketStore` reads that exact directory with no recursion, so `awsf
 // ticket list` and `awsf backlog` would silently return nothing the moment the
-// files moved into a subdirectory. The move belongs with the registry work that
-// gives the store a plan to resolve against — not here, and not quietly.
+// files moved into a subdirectory. That one set remains special-cased until the
+// registry-backed store and ticket move land together.
 //
-// A ticket directory with no plan is a hard failure rather than a skip: an
-// orphan set is exactly the drift this fence exists to catch, one level up from
-// an orphan ticket.
+// A ticket set in a resolved source's tickets root with no matching plan is a
+// hard failure rather than a skip: an orphan set is exactly the drift this
+// fence exists to catch, one level up from an orphan ticket.
 
-const SPECS = join(repoRoot(), "specs");
+const ROOT = repoRoot();
+const CATALOG = join(ROOT, "awsf.project.yaml");
+const SPECS = join(ROOT, "specs");
 const TICKETS = join(SPECS, "tickets");
 
 const STATES = ["todo", "wip", "done", "failed"];
@@ -50,28 +55,41 @@ interface PlanSet {
 }
 
 function planSets(): PlanSet[] {
-  const sets: PlanSet[] = [
-    {
-      label: "awsf-plan",
-      plan: join(SPECS, "awsf-plan.html"),
-      prompts: join(SPECS, "awsf-plan-build-prompts.md"),
-      tickets: TICKETS,
-    },
-  ];
-  for (const entry of readdirSync(TICKETS, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue;
-    const stem = entry.name;
-    const plan = [join(SPECS, `${stem}.html`), join(SPECS, "v2", `${stem}.html`)].find((candidate) =>
-      existsSync(candidate),
-    );
-    assert.ok(
-      plan,
-      `specs/tickets/${stem}/ has no plan — expected specs/${stem}.html or specs/v2/${stem}.html. ` +
-        `A ticket set without a plan cannot be checked against anything.`,
-    );
-    const prompts = join(dirname(plan), `${stem}-build-prompts.md`);
-    assert.ok(existsSync(prompts), `${stem}: no build prompts beside the plan at ${prompts}`);
-    sets.push({ label: stem, plan, prompts, tickets: join(TICKETS, stem) });
+  const catalog = loadCatalog(readFileSync(CATALOG, "utf8"));
+  const sources = resolvePlanSources(CATALOG, catalog);
+  const ticketRoots = new Map<string, { project: string; repositoryId: string }>();
+
+  for (const source of sources) {
+    ticketRoots.set(dirname(source.ticketsPath), {
+      project: source.project,
+      repositoryId: source.repositoryId,
+    });
+  }
+  for (const [ticketsRoot, owner] of ticketRoots) {
+    if (!existsSync(ticketsRoot)) continue;
+    for (const entry of readdirSync(ticketsRoot, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const expectedPath = join(ticketsRoot, entry.name);
+      assert.ok(
+        sources.some((source) => source.ticketsPath === expectedPath),
+        `plan source ${owner.project}/${owner.repositoryId}/${entry.name} has a ticket set but no resolved plan. ` +
+          "A ticket set without a plan cannot be checked against anything.",
+      );
+    }
+  }
+
+  const sets: PlanSet[] = [];
+  for (const source of sources) {
+    const stem = basename(source.planPath, ".html");
+    const isFlatAwsfPlan = source.planPath === join(SPECS, "awsf-plan.html");
+    if (!isFlatAwsfPlan && !existsSync(source.ticketsPath)) continue;
+    assert.ok(existsSync(source.promptsPath), `${stem}: no build prompts for the resolved plan source at ${source.promptsPath}`);
+    sets.push({
+      label: stem,
+      plan: source.planPath,
+      prompts: source.promptsPath,
+      tickets: isFlatAwsfPlan ? TICKETS : source.ticketsPath,
+    });
   }
   return sets;
 }

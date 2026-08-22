@@ -723,11 +723,11 @@ flowchart TD
 
       <h4>17. The sync fence, resolving through the registry rather than adjacency</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>planSets()</code> is rebuilt on <code>resolvePlanSources</code>. The hardcoded <code>specs/tickets/&lt;stem&gt;/ → specs/&lt;stem&gt;.html</code> and <code>specs/v2/&lt;stem&gt;.html</code> candidate list is <strong>deleted</strong>, not extended</li>
-        <li><code class="status">[]</code> Every existing assertion — coverage, milestone grouping, state against marker and checklist, byte-identical prompts, <code>depends_on</code> ordering, frontmatter vocabularies — runs unchanged over the resolved sets. <strong>This phase changes how a set is found, never what is asserted about it</strong></li>
-        <li><code class="status">[]</code> The hard-failure-on-orphan rule is preserved and re-expressed: a ticket set inside a resolved plan source's tickets root whose plan does not exist fails loudly, naming the plan source rather than a directory</li>
-        <li><code class="status">[]</code> The header comment is rewritten to describe registry resolution and to state the self-placement rule and the format refusal — the existing comment explains adjacency and would otherwise become the most misleading text in the file</li>
-        <li><code class="status">[]</code> The flat-set special case for <code>awsf-plan</code> is left in place <strong>until task 20</strong> and removed there, so this task's diff is resolution-only and the move's diff is the move</li>
+        <li><code class="status">[x]</code> <code>planSets()</code> is rebuilt on <code>resolvePlanSources</code>. The hardcoded <code>specs/tickets/&lt;stem&gt;/ → specs/&lt;stem&gt;.html</code> and <code>specs/v2/&lt;stem&gt;.html</code> candidate list is <strong>deleted</strong>, not extended</li>
+        <li><code class="status">[x]</code> Every existing assertion — coverage, milestone grouping, state against marker and checklist, byte-identical prompts, <code>depends_on</code> ordering, frontmatter vocabularies — runs unchanged over the resolved sets. <strong>This phase changes how a set is found, never what is asserted about it</strong></li>
+        <li><code class="status">[x]</code> The hard-failure-on-orphan rule is preserved and re-expressed: a ticket set inside a resolved plan source's tickets root whose plan does not exist fails loudly, naming the plan source rather than a directory</li>
+        <li><code class="status">[x]</code> The header comment is rewritten to describe registry resolution and to state the self-placement rule and the format refusal — the existing comment explains adjacency and would otherwise become the most misleading text in the file</li>
+        <li><code class="status">[x]</code> The flat-set special case for <code>awsf-plan</code> is left in place <strong>until task 20</strong> and removed there, so this task's diff is resolution-only and the move's diff is the move</li>
       </ul>
 
       <h4>18. Testing Strategy</h4>
