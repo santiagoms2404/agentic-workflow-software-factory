@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plan: AWSF v2 W06 — Prompt composition and the shared per-role block</title>
+<style>
+:root {
+  --bg:#0E1116; --surface:#171D25; --surface-soft:#141922; --fg:#E8EDF3;
+  --muted:#8D99A8; --accent:#2DD4BF; --cool:#60A5FA; --warn:#F59E0B;
+  --danger:#F87171; --good:#4ADE80; --border:#293341; --review:#FB7185;
+  --font-ui:Inter,system-ui,-apple-system,sans-serif;
+  --font-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,monospace;
+  --maxw:1120px;
+}
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.65 var(--font-ui); }
+main { max-width:var(--maxw); margin:auto; padding:48px 24px 150px; }
+h1,h2,h3,h4 { line-height:1.25; letter-spacing:-.01em; }
+h1 { font-size:30px; margin:0 0 6px; }
+h2 { font-size:21px; margin:54px 0 14px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+h3 { font-size:17px; margin:32px 0 8px; }
+h4 { font-size:14px; margin:24px 0 6px; color:var(--accent); }
+h5 { margin:0 0 6px; color:var(--muted); text-transform:uppercase; letter-spacing:.07em; font-size:11px; }
+p { margin:0 0 14px; }
+a { color:var(--cool); }
+strong { color:#fff; }
+em,.muted,.sub { color:var(--muted); }
+ul,ol { margin:0 0 14px; padding-left:22px; }
+li { margin:3px 0; }
+code { font:12px var(--font-mono); color:#9FE8DC; background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:1px 5px; }
+pre { background:var(--surface); border:1px solid var(--border); border-left:3px solid var(--accent); border-radius:8px; padding:14px 16px; overflow:auto; color:#D9E2EC; font:12.5px/1.6 var(--font-mono); }
+pre code { border:0; padding:0; background:none; color:inherit; }
+table { width:100%; border-collapse:collapse; margin:14px 0 20px; font-size:13px; display:block; overflow-x:auto; }
+th,td { border:1px solid var(--border); padding:8px 10px; text-align:left; vertical-align:top; }
+th { background:var(--surface); color:var(--accent); font-size:11.5px; text-transform:uppercase; letter-spacing:.05em; }
+tbody tr:nth-child(even) { background:#ffffff04; }
+.meta { margin-top:14px; font-size:13px; }
+.meta summary { cursor:pointer; color:var(--muted); font:12px var(--font-mono); }
+.meta dl { display:grid; grid-template-columns:130px 1fr; gap:5px 14px; padding:14px; background:var(--surface); border:1px solid var(--border); border-radius:8px; }
+.meta dt { color:var(--accent); font:11.5px var(--font-mono); }
+.meta dd { margin:0; color:var(--muted); font:11.5px var(--font-mono); overflow-wrap:anywhere; }
+figure { margin:26px 0; text-align:center; }
+figure svg, figure .mermaid { max-width:100%; height:auto; }
+figure .mermaid { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:20px 12px; overflow:auto; color:var(--muted); }
+figcaption { margin-top:9px; color:var(--muted); font-size:12px; font-style:italic; }
+.phase { margin:30px 0; padding:22px 24px; border:1px solid var(--border); border-radius:14px; background:#ffffff04; }
+.phase > h3 { margin-top:0; }
+.checklist { list-style:none; padding:0; }
+.checklist li { padding:4px 0; }
+.status { color:var(--accent); margin-right:5px; }
+.loop { margin-top:16px; padding:10px 14px; border:1px dashed var(--accent); border-radius:8px; background:#2dd4bf0a; font-size:13px; }
+.card { margin:14px 0; padding:12px 16px; background:var(--surface); border:1px solid var(--border); border-left:3px solid var(--cool); border-radius:8px; font-size:13px; }
+.card.rule { border-left-color:var(--accent); }
+.card.warn { border-left-color:var(--warn); }
+.card.danger { border-left-color:var(--danger); }
+.card.good { border-left-color:var(--good); }
+.gate { color:var(--warn); border:1px solid var(--warn); border-radius:3px; padding:0 5px; font:11px var(--font-mono); }
+.tag { display:inline-block; margin-right:6px; padding:1px 6px; border-radius:3px; font:10px var(--font-mono); text-transform:uppercase; letter-spacing:.06em; }
+.tag.existing { background:#27303C; color:var(--muted); }
+.tag.new { background:#173B37; color:var(--accent); }
+.files ul { list-style:none; padding:0; }
+.files li { padding:4px 0; border-bottom:1px solid #ffffff08; }
+.taskmeta th { width:165px; text-transform:none; letter-spacing:0; font-size:12px; }
+#questionables details,#amendments details { margin:10px 0; padding:10px 14px; background:var(--surface); border:1px solid var(--border); border-radius:8px; }
+#questionables summary,#amendments summary { cursor:pointer; font-weight:650; }
+.qa-answer { margin:10px 0 2px; color:var(--muted); font-size:13px; }
+.qopen { color:var(--warn); font:10px var(--font-mono); letter-spacing:.06em; margin-right:6px; }
+.qdecided { color:var(--good); font:10px var(--font-mono); letter-spacing:.06em; margin-right:6px; }
+.recommend { display:block; margin:8px 0; padding:8px 12px; border-left:3px solid var(--cool); background:#60a5fa0c; color:var(--fg); }
+@media (max-width:720px) { main { padding:28px 14px 130px; } .meta dl { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>Plan: AWSF v2 W06 — Prompt composition and the shared per-role block</h1>
+  <p class="sub">Workstream W06 of <a href="awsf-v2-plan.html">the AWSF v2 spine</a> · milestone M6 · centralise first, share second, measure third</p>
+  <details class="meta">
+    <summary>Metadata</summary>
+    <dl>
+      <dt>created</dt><dd>2026-08-22</dd>
+      <dt>modified</dt><dd>2026-08-22, 2026-08-23</dd>
+      <dt>commits</dt><dd>none — authoring only; no implementation was committed, none — owner review applied; still uncommitted</dd>
+      <dt>agent name</dt><dd>pi, pi</dd>
+      <dt>session id</dt><dd>not recorded — AGENTS.md invariant 1 keeps live session state out of committed files, not recorded — owner review carried no session id into the plan</dd>
+      <dt>back refs</dt><dd>./awsf-v2-plan.html (spine milestone M6 and ordering gate G1), ./tickets/awsf-v2-plan/W06.md (meta-prompt), ./awsf-v2-plan-build-prompts.md (§ Section B → W06), ./awsf-v2-candidates-fuse-version.md (§10 first, then §2.5), ./awsf-v2-w05-design-to-plan.html (W05 design; its milestone M7 waits on this plan's centralisation milestone), ../AGENTS.md (invariants 1 and 10), core/src/cli/commands/production-run.ts, core/src/cli/commands/review-phase.ts, core/src/cli/commands/rework.ts, core/src/adapters/system-prompt-file.ts</dd>
+      <dt>forward refs</dt><dd>./awsf-v2-w06-prompt-composition-build-prompts.md, ./tickets/awsf-v2-w06-prompt-composition/ (T01–T10 plus README.md), ./awsf-v2-w05-design-to-plan.html#phases (milestone M7 is unblocked only by this plan's M1), ./awsf-v2-w11-five-stage-ladder.html (not yet authored; consumes centralised composition)</dd>
+    </dl>
+  </details>
+</header>
+
+<figure>
+  <pre class="mermaid">
+flowchart LR
+  A["three composition sites"] --> C["M1 · one composer"]
+  C --> S["M2 · shared per-role block"]
+  S --> E["immutable prompt evidence"]
+  E --> B["M3 · repeated matched benchmark"]
+  C -. "G1 unblocks" .-> W["W05 M7 · new roles"]
+  style C stroke:#2DD4BF,stroke-width:2px
+  style E stroke:#60A5FA,stroke-width:2px
+  style B stroke:#F59E0B,stroke-width:2px
+  </pre>
+  <figcaption>The sequence is the design. The centralisation commit is the baseline arm and the G1 release point. The shared block comes later, and only repeated matched runs may judge its effect.</figcaption>
+</figure>
+
+<section id="plain-language">
+  <h2>In Plain Language</h2>
+  <p>This section explains the whole plan without technical vocabulary. Everything after it gives the precise build instructions.</p>
+  <h3>Three workers prepare the same instruction packet three different ways</h3>
+  <p>Today, the normal worker, a replacement checker, and a repair worker each assemble their instructions separately. That makes it easy for one path to miss a rule or use changed wording while the record still says the settings were unchanged.</p>
+  <h3>A new kind of worker is about to arrive</h3>
+  <p>The earlier workstream has designed two new jobs. Its final stage waits here because adding those jobs before instruction assembly is unified would create another copy of the problem.</p>
+  <h3>Build one packing desk, then add the common note</h3>
+  <p>First, all instruction packets go through one packing desk without changing a byte. Second, that desk adds a short common note suited to each job and seals the complete packet into the same permanent record as the job's own instructions. The independent checker keeps its full duty to disagree and show evidence. Shortcuts used only in conversation never enter these worker packets.</p>
+  <h3>Compare repeated like-for-like work</h3>
+  <p>Automated checks prove all three paths receive the same private packet and reject changed instructions. A separate paid comparison then repeats the same work with and without the common note. It records words sent, words returned, repair rounds caused by malformed answers, and how specific the independent checker's evidence is. One run on each side proves nothing, so this workstream cannot close on that basis.</p>
+</section>
+
+<section id="purpose">
+  <h2>Purpose</h2>
+  <p>Replace three independent headless system-prompt composition implementations with one host-owned composition boundary, append a reviewed shared per-role block without weakening role-specific contracts, bind every resulting byte to immutable route evidence, and assess the prompt effect with a pre-registered repeated matched-task benchmark.</p>
+</section>
+
+<section id="problem">
+  <h2>Problem</h2>
+  <p><code>production-run.ts</code>, <code>review-phase.ts</code>, and <code>rework.ts</code> each resolve configured prompt paths and construct route objects independently. The adapter boundary is already safe and append-only, but the bytes handed to it can diverge before that boundary. The config snapshot records prompt paths rather than prompt contents, so a later rework or replacement review can read changed bytes under a snapshot that still compares equal. Adding W05's <code>designer</code> and <code>architecture-reviewer</code> before centralisation would add another prompt path.</p>
+  <figure>
+    <pre class="mermaid">
+flowchart TD
+  CFG["same config snapshot"] --> P["production-run"]
+  CFG --> R["replacement review"]
+  CFG --> W["owner rework"]
+  P --> X1["prompt bytes A"]
+  R --> X2["prompt bytes B"]
+  W --> X3["prompt bytes C"]
+  X1 --> H["private materialisation"]
+  X2 --> H
+  X3 --> H
+  style X2 stroke:#F87171,stroke-width:2px
+  style X3 stroke:#F87171,stroke-width:2px
+    </pre>
+    <figcaption>The private-file mechanism protects whichever bytes it receives. It cannot prove that three callers composed the same instruction set or that later calls reused the recorded bytes.</figcaption>
+  </figure>
+</section>
+
+<section id="solution">
+  <h2>Solution</h2>
+  <p>Create one prompt-bundle boundary that resolves contained committed prompt paths, credential-checks the inputs, composes the system bytes, and returns the user prompt plus immutable component evidence. Migrate all three command paths to it with no shared block present. Only after byte-parity and a source-count fence are green, add the shared per-role block through that boundary. Persist the role, shared, and composed digests beside the full composed system bytes in the existing immutable compiled-prompt evidence, and refuse rework or replacement review when current composition differs from the route on record. Keep <code>writeSystemPromptFile</code>, <code>assertPrivateSystemPrompt</code>, and both adapters unchanged.</p>
+  <figure>
+    <pre class="mermaid">
+sequenceDiagram
+  participant C as command path
+  participant P as one prompt boundary
+  participant J as immutable journal
+  participant F as private file
+  participant A as adapter
+  C->>P: role + config context
+  P->>P: role bytes + shared bytes
+  P->>J: full bytes + component digests
+  P->>F: composed system bytes
+  F->>F: mode 0600 + read-back
+  F->>A: private path on argv
+  Note over P,J: later routes must match recorded digest
+    </pre>
+    <figcaption>The shared block is delivered by the same append mechanism already used by both adapters. Evidence and private materialisation are host concerns, not adapter features.</figcaption>
+  </figure>
+
+  <h3>Composition contract</h3>
+  <pre><code>composePromptBundle({ configRoot, agent, sharedPolicy }) → {
+  userPrompt,
+  systemPrompt: roleSystemBytes + separator + renderedSharedBytes,
+  evidence: {
+    roleSystemDigest,
+    sharedBlockDigest,
+    composedSystemDigest,
+    compositionVersion
+  }
+}</code></pre>
+  <ul>
+    <li>The composition function owns the separator and newline rule. Callers may not concatenate prompt text.</li>
+    <li>Phase M1 uses an empty shared component and must reproduce today's system bytes exactly. No fourth copy is created while centralising.</li>
+    <li>The full composed system prompt remains the <code>compiled-prompt</code> text. Optional component digests extend that same evidence record for legacy journal compatibility rather than creating a receipt or manifest.</li>
+    <li>The API accepts no interactive-alias input. Absence from the type and call surface is stronger than asking each caller to remember a filter.</li>
+    <li>Role-specific system prompts remain authoritative. Shared style never replaces role contracts, output schemas, write policy, or reviewer dissent/evidence duties.</li>
+  </ul>
+</section>
+
+<section id="ordering">
+  <h2>Ordering Gate G1 — authoring order and build order disagree</h2>
+  <div class="card warn">
+    <h5><span class="gate">G1</span> composition before roles</h5>
+    <p><strong>W05's deep plan was authored before this one so W06 could discover the roles it must support: the six configured roles plus W05's planned <code>designer</code> and <code>architecture-reviewer</code>.</strong> Build order deliberately reverses that edge. This plan's milestone <strong>M1 must land and read <code>[x]</code> before W05 milestone M7, “G1 — the route, the two roles, and the close,” starts.</strong></p>
+    <p>W05 milestones M1–M6 do not wait. W05 M7 task 23 performs the check. This plan releases that gate when T03 closes M1, not when the benchmark finishes. The shared block remains generic over agent definitions, and M2 carries synthetic fixtures for the two planned W05 roles even if their committed prompt files do not exist yet.</p>
+  </div>
+</section>
+
+<section id="boundaries">
+  <h2>Boundaries and Invariants</h2>
+  <table>
+    <thead><tr><th>Boundary</th><th>Guarantee</th><th>Does not cover</th></tr></thead>
+    <tbody>
+      <tr><td>One prompt-bundle boundary</td><td>All three command paths use one composition rule and one separator contract.</td><td>It does not make prompt content good. Reviewer fixtures and the benchmark judge that separately.</td></tr>
+      <tr><td>Immutable compiled-prompt evidence</td><td>Role, shared, and final digests describe the exact full system bytes recorded for the route; later rework/review must match.</td><td>A digest proves identity, not quality, privacy, or provider delivery.</td></tr>
+      <tr><td>Private system-prompt file</td><td>The host writes mode 0600, checks containment and bytes, and adapters reject a non-private launch path.</td><td>Windows mode bits remain the documented platform carve-out. W06 does not widen that claim.</td></tr>
+      <tr><td>Offline regression fixtures</td><td>Composition, alias absence, evidence drift refusal, and reviewer-specificity floor are deterministic and quota-free.</td><td>They do not estimate model variance or token effects.</td></tr>
+      <tr><td>Repeated matched benchmark</td><td>Compares the M1 baseline with the M2 candidate over the same tasks, models, order controls, and declared metrics.</td><td>It does not become an offline gate, a CI hook, or proof about untested providers and tasks.</td></tr>
+    </tbody>
+  </table>
+  <div class="card rule">
+    <h5>Invariant 1 — no live task state</h5>
+    <p>No committed benchmark fixture, plan amendment, or test names a live task, attempt, session, journal path, or provider handle. Detailed benchmark rows remain in the runtime journal/status store. A later plan amendment may record aggregate results and the protocol version without live handles.</p>
+  </div>
+  <div class="card rule">
+    <h5>Invariant 10 — no runtime artifacts</h5>
+    <p>No benchmark report, receipt, manifest, raw provider output, or copied journal is committed. Canned regression fixtures are authored test inputs, not captures. The benchmark's detailed evidence stays in the journal; offline suites use only synthetic records.</p>
+  </div>
+</section>
+
+<section id="files" class="files">
+  <h2>Relevant Files</h2>
+  <h3>Existing Files</h3>
+  <ul>
+    <li><span class="tag existing">existing</span><code>core/src/cli/commands/production-run.ts</code> — generic phase route loading and the first system-prompt composition/persistence site.</li>
+    <li><span class="tag existing">existing</span><code>core/src/cli/commands/review-phase.ts</code> — replacement-review route resolution and the second site.</li>
+    <li><span class="tag existing">existing</span><code>core/src/cli/commands/rework.ts</code> — owner-rework route resolution and the third site; currently does not persist its own compiled-prompt event.</li>
+    <li><span class="tag existing">existing</span><code>core/src/adapters/system-prompt-file.ts</code> — mode-0600 write and launch-time privacy assertion; read, tested, unchanged.</li>
+    <li><span class="tag existing">existing</span><code>core/src/observability/attempt-evidence.ts</code>, <code>core/src/cli/commands/review-record.ts</code> — immutable prompt/route evidence and later route reconstruction.</li>
+    <li><span class="tag existing">existing</span><code>core/src/config/effective-config.ts</code> — proves the snapshot serialises config fields and paths, not prompt file bytes.</li>
+    <li><span class="tag existing">existing</span><code>core/src/gates/review.ts</code>, <code>core/src/contracts/review-output.ts</code> — current reviewer evidence floor and the place regression fixtures must strengthen without changing verdict semantics.</li>
+    <li><span class="tag existing">existing</span><code>prompts/{planner,builder,reviewer,documenter,scout,intake}/system.md</code> — six current role contracts.</li>
+    <li><span class="tag existing">existing</span><code>specs/awsf-v2-w05-design-to-plan.html</code> — decides two new roles and names M7 as the G1 waiter.</li>
+    <li><span class="tag existing">existing</span><code>core/test/unit/meta/ticket-plan-sync.test.ts</code> — existing generic plan/ticket/prompt fence used by this plan's artifacts.</li>
+  </ul>
+  <h3>New Files</h3>
+  <ul>
+    <li><span class="tag new">new</span><code>core/src/workflow/prompt-composition.ts</code> — the single prompt-bundle boundary and closed role-policy owner.</li>
+    <li><span class="tag new">new</span><code>prompts/shared/headless-role.md</code> — the decided common committed source; the composer adds the closed reviewer-preservation overlay.</li>
+    <li><span class="tag new">new</span><code>core/test/unit/workflow/prompt-composition.test.ts</code> — byte, separator, role coverage, alias absence, and synthetic W05-role fixtures.</li>
+    <li><span class="tag new">new</span><code>core/test/unit/meta/prompt-composition-site.test.ts</code> — source fence that permits configured system-prompt reading/composition in one implementation only.</li>
+    <li><span class="tag new">new</span><code>core/test/unit/cli/prompt-route-evidence.test.ts</code> — digest persistence and current-vs-recorded refusal across production, rework, and replacement review.</li>
+    <li><span class="tag new">new</span><code>core/test/unit/gates/reviewer-evidence-specificity.test.ts</code> — detailed and tersely agreeable reviewer fixtures for the decided four-point rubric and omitted-evidence rule.</li>
+    <li><span class="tag new">new</span><code>specs/awsf-v2-w06-prompt-composition-build-prompts.md</code> and <code>specs/tickets/awsf-v2-w06-prompt-composition/</code> — execution prompts and addressable tickets authored with this plan.</li>
+  </ul>
+</section>
+
+<section id="phases">
+  <h2>Implementation Phases</h2>
+  <p><strong>Execute every phase and task in order.</strong> Status markers are <code>[]</code> idle, <code>[wip]</code> in progress, <code>[x]</code> complete, and <code>[f]</code> failed. Every marker starts idle. This authoring session earned none.</p>
+
+  <div class="phase">
+    <h3><code class="status">[]</code> Milestone M1: Centralise composition without adding shared bytes</h3>
+    <p>This milestone is a behaviour-preserving extraction. It establishes the M1 commit as the benchmark baseline and is the only W06 milestone W05 M7 waits on.</p>
+    <figure>
+      <pre class="mermaid">
+flowchart LR
+  P["production-run"] --> C["prompt bundle"]
+  R["review-phase"] --> C
+  W["rework"] --> C
+  C --> O["unchanged role system bytes"]
+  O --> F["private file"]
+      </pre>
+      <figcaption>Three callers remain because they launch different lifecycle paths. Prompt reading, containment, credential checking, separator ownership, and system composition have one implementation.</figcaption>
+    </figure>
+
+    <h4>1. Characterise the three sites and define the one-site fence</h4>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Add table-driven characterization fixtures for production, replacement review, and owner rework that capture exact user bytes, exact role-system bytes, containment rejection, symlink escape rejection, and credential rejection before changing a caller.</li>
+      <li><code class="status">[]</code> Define “composition site” mechanically as code that reads <code>agent.prompt.system</code> or joins a shared system block. The meta-test permits that implementation in one named module and fails on a synthetic second site.</li>
+      <li><code class="status">[]</code> Record current role coverage: planner, builder, reviewer, documenter, scout, intake, plus synthetic designer and architecture-reviewer definitions from W05. Do not add W05 prompt files.</li>
+      <li><code class="status">[]</code> Confirm the baseline contains no shared block and no alias source. Characterization must observe before it prescribes.</li>
+    </ul>
+
+    <h4>2. Extract the prompt bundle and migrate all three callers</h4>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Implement one boundary that resolves config-relative prompt paths, rejects escape/symlink/credential cases, and returns user bytes plus role-system bytes. Remove all three local <code>readCommittedPrompt</code> copies.</li>
+      <li><code class="status">[]</code> Preserve system bytes exactly in M1, including final newlines. The shared component is structurally empty, so centralisation cannot accidentally introduce the feature scheduled for M2.</li>
+      <li><code class="status">[]</code> Keep <code>writeSystemPromptFile</code>, <code>assertPrivateSystemPrompt</code>, descriptor privacy sweeps, adapter flags, and materialised-byte read-back unchanged.</li>
+      <li><code class="status">[]</code> Make production, rework, and replacement review consume the same returned bundle. Rework must stop carrying a fourth local prompt shape inside its hard-coded builder route.</li>
+    </ul>
+
+    <h4>3. Testing Strategy and the G1 release point</h4>
+    <p>All M1 validation is offline. The old paths are fixtures, the source fence asserts the count, and private materialisation remains covered by existing adapter/system-prompt tests.</p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/workflow/prompt-composition.test.ts core/test/unit/meta/prompt-composition-site.test.ts</code> — exact parity and one implementation site.</li>
+      <li><code class="status">[]</code> <code>npm run test:unit</code> — all route, adapter, review, and meta regressions stay green without provider calls.</li>
+      <li><code class="status">[]</code> <code>npm run typecheck:core &amp;&amp; npm run lint</code> — boundary types and source policy are valid.</li>
+      <li><code class="status">[]</code> Prove the site-count fence red by introducing a temporary second direct system-prompt read in a copied fixture, then restore it and rerun green.</li>
+      <li><code class="status">[]</code> Only after every M1 box is green, mark M1 <code>[x]</code>. That marker is W05 M7's G1 precondition. Do not touch the spine's W06 marker.</li>
+    </ul>
+    <div class="loop">🔁 <strong>Do not exit M1 until composition remains byte-identical and the site count is one.</strong> If shared content appears, remove it. M2 owns it.</div>
+  </div>
+
+  <div class="phase">
+    <h3><code class="status">[]</code> Milestone M2: Append the shared per-role block and seal its evidence</h3>
+    <p>M2 begins only after M1 is <code>[x]</code>. Q1–Q2 were decided by the owner on 2026-08-23: one common committed file with a closed reviewer overlay, and the structural four-point specificity rubric with the explicit omitted-evidence rule. The block enters through the single boundary, never through a caller or adapter.</p>
+    <figure>
+      <pre class="mermaid">
+flowchart TD
+  RP["role prompt bytes"] --> C["single composer"]
+  SB["shared source"] --> C
+  POL["role policy"] --> C
+  C --> FULL["full composed bytes"]
+  FULL --> D["role + shared + full digests"]
+  FULL --> RV["reviewer-safe fixture gate"]
+  style RV stroke:#FB7185,stroke-width:2px
+      </pre>
+      <figcaption>One shared source may render role-sensitive output, but there is still one composition implementation and one immutable evidence record per launched phase.</figcaption>
+    </figure>
+
+    <h4>4. Add the shared source, role policy, and exact separator contract</h4>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Apply Q1 as decided: one committed common block plus a reviewer-specific preservation overlay selected by a closed role policy in the composer. Use the approved common clauses and reviewer treatment recorded in Q1.</li>
+      <li><code class="status">[]</code> Append rather than replace: role-system bytes remain an exact prefix, followed by one canonical separator and the rendered shared bytes. Empty shared content reproduces M1 exactly.</li>
+      <li><code class="status">[]</code> Cover all six current roles and W05's two planned roles. Unknown roles fail closed until their shared policy is declared; they never inherit a generic brevity policy accidentally.</li>
+      <li><code class="status">[]</code> Expose no input, file, heading, or substitution slot for interactive aliases. A fixture attempts to inject synthetic alias bytes and proves the API cannot carry them.</li>
+      <li><code class="status">[]</code> Reviewer output-contract, dissent, finding, limitation, and evidence duties remain byte-present. No shared clause directs the reviewer to shorten findings, agree, omit limitations, or prefer summary over proof.</li>
+    </ul>
+
+    <h4>5. Put shared bytes in immutable route evidence and refuse drift</h4>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Extend the existing <code>compiled-prompt</code> system evidence compatibly with role-system, shared-block, and final-composed SHA-256 digests plus a composition-version identifier; keep the full composed text as the evidence payload.</li>
+      <li><code class="status">[]</code> Persist that evidence before each launch path can spend a call. Rework also records its own compiled system and user prompts, closing its current evidence gap.</li>
+      <li><code class="status">[]</code> Replacement review compares current composed digest with the latest governing review route evidence. Owner rework compares with the governing builder route evidence. A mismatch refuses before reservation/GO and instructs the owner to start under a new configuration snapshot.</li>
+      <li><code class="status">[]</code> Legacy journals without component digests remain readable. They may derive the final digest from retained full system text, but may not invent a shared-component digest or claim that shared composition ran.</li>
+      <li><code class="status">[]</code> Add no receipt, manifest, migration, or second evidence store. Journal evidence remains canonical and projector writes stay within invariant 6's existing files.</li>
+    </ul>
+
+    <h4>6. Gate reviewer evidence specificity and non-compression</h4>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Apply Q2's approved specificity rubric as a pure deterministic check over <code>ReviewOutput</code> and candidate context. Keep verdict semantics unchanged.</li>
+      <li><code class="status">[]</code> Add a detailed-concern fixture that passes, a tersely agreeable accept fixture that fails for missing limitations/evidence where the context demands them, and a vague one-word evidence fixture that fails.</li>
+      <li><code class="status">[]</code> Include deletion-only, file-wide finding, no-finding clean review, and bounded/omitted evidence cases so the gate does not force fake line numbers or fabricated findings.</li>
+      <li><code class="status">[]</code> Assert reviewer shared bytes differ from worker style bytes only through the approved role policy and preserve evidence specificity over brevity.</li>
+    </ul>
+
+    <h4>7. Testing Strategy</h4>
+    <p>M2 validation is offline and synthetic. It proves bytes, evidence identity, refusal timing, role coverage, and reviewer specificity without asking a model to behave.</p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/workflow/prompt-composition.test.ts core/test/unit/cli/prompt-route-evidence.test.ts core/test/unit/cli/review-record.test.ts core/test/unit/gates/reviewer-evidence-specificity.test.ts</code> — shared composition and evidence gates.</li>
+      <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/adapters/claude-code.test.ts core/test/unit/adapters/pi-codex.test.ts</code> — private delivery and append flags remain unchanged.</li>
+      <li><code class="status">[]</code> <code>npm run test:unit &amp;&amp; npm run typecheck:core &amp;&amp; npm run lint</code> — full offline close.</li>
+      <li><code class="status">[]</code> Induce one shared-byte drift after recording a route and observe both rework and replacement review refuse before call spend; restore and rerun green.</li>
+    </ul>
+    <div class="loop">🔁 <strong>Do not exit M2 until the reviewer fixtures, alias absence, digest drift refusals, and full offline suite are green.</strong> A shorter reviewer is a regression even when its envelope parses.</div>
+  </div>
+
+  <div class="phase">
+    <h3><code class="status">[]</code> Milestone M3: Measure repeated matched tasks outside offline suites</h3>
+    <p>M3 starts only after M2 is <code>[x]</code>. Q3–Q5 were decided by the owner on 2026-08-23: three fixed task classes, five paired repetitions per arm for each task (30 route runs), safety non-inferiority with tokens descriptive, and journal detail plus a handle-free aggregate Amendment. It spends quota. The M1 commit is the baseline arm, the M2 commit is the candidate arm, and no feature flag or adapter branch is added for benchmarking.</p>
+    <figure>
+      <pre class="mermaid">
+flowchart LR
+  T["fixed task corpus"] --> A["M1 baseline · repeated"]
+  T --> B["M2 candidate · repeated"]
+  A --> M["four predeclared metrics"]
+  B --> M
+  M --> G{"acceptance thresholds"}
+  G -->|pass| X["close W06"]
+  G -->|fail| F["revise or reject block"]
+  style G stroke:#F59E0B,stroke-width:2px
+  style F stroke:#F87171,stroke-width:2px
+      </pre>
+      <figcaption>Runs are paired by task, route, model, and order block. Input/output tokens, parse corrections, and reviewer specificity are read from retained evidence. Detailed rows never enter the repository.</figcaption>
+    </figure>
+
+    <h4>8. Freeze the benchmark protocol and validate its arithmetic offline</h4>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Before any provider call, freeze Q3's decided corpus: bounded source change, contract/envelope change, and evidence-heavy defect review; five paired repetitions per arm for each task, 30 route runs total; plus provider/model identities, alternation rule, temperature controls available to the route, and stop conditions.</li>
+      <li><code class="status">[]</code> Declare the four metrics in advance: provider-authoritative input tokens, output tokens, parse-correction count from phase evidence, and reviewer evidence specificity under Q2's fixed rubric.</li>
+      <li><code class="status">[]</code> Freeze Q4's decided thresholds before looking at candidate results: candidate correction total no higher than baseline, candidate median specificity no lower, and no lost required limitation; token deltas remain descriptive. Report per-task paired differences and arm distributions.</li>
+      <li><code class="status">[]</code> Validate pairing, missing-usage handling, correction aggregation, specificity scoring, and median/difference arithmetic against synthetic rows in the offline unit suite. Synthetic rows carry no live identifiers.</li>
+      <li><code class="status">[]</code> State the abort rule: provider/model drift, task mutation, red deterministic gates, missing metric authority, or exhausted quota invalidates the affected pair rather than being counted as a prompt outcome.</li>
+    </ul>
+
+    <h4>9. Run the quota-spending benchmark and record the result</h4>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Obtain explicit owner approval immediately before spend. Run the fixed corpus on separate clean M1 and M2 worktrees/state namespaces, with identical config and models except the composed shared bytes.</li>
+      <li><code class="status">[]</code> Complete five repetitions in <em>both</em> arms for each of the three retained tasks: 30 valid route runs. One sample per arm, an incomplete pair, or fewer than five repetitions on either side is no result and cannot close this task.</li>
+      <li><code class="status">[]</code> Keep detailed rows and provider outputs in the journal/status store only. Commit no report, receipt, manifest, raw output, session id, task id, or journal path.</li>
+      <li><code class="status">[]</code> Compare only the four predeclared metrics and apply the thresholds unchanged. Parse corrections are counted even when the corrected envelope eventually passes.</li>
+      <li><code class="status">[]</code> Append an aggregate, handle-free result to this plan's Amendments: date, protocol version, repetitions completed, per-metric arm summaries, threshold verdict, and any invalidated pairs. Do not claim causality beyond the tested tasks/models.</li>
+      <li><code class="status">[]</code> If a safety threshold fails, keep M3 open or mark it <code>[f]</code>; revise or remove the shared block through a new reviewed amendment and rerun the full pre-registered benchmark. Never waive reviewer specificity or parse-correction regression with token savings.</li>
+    </ul>
+
+    <h4>10. Testing Strategy, global validation, and workstream close</h4>
+    <p>The benchmark itself is deliberately outside every offline suite. This task reruns the offline controls after the live measurement and reconciles all markers and tickets only if both evidence classes pass.</p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> <code>npm run test:unit</code> — full offline suite green; output must show no benchmark calls were made.</li>
+      <li><code class="status">[]</code> <code>npm run test:contract &amp;&amp; npm run test:sim &amp;&amp; npm run test:journeys</code> — offline contract, simulation, and journey suites green.</li>
+      <li><code class="status">[]</code> <code>npm run typecheck &amp;&amp; npm run lint</code> — both workspaces valid.</li>
+      <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/ticket-plan-sync.test.ts</code> — this plan, Section B, and T01–T10 remain synchronized.</li>
+      <li><code class="status">[]</code> Confirm M1–M3 and every task checklist are <code>[x]</code>, and T01–T10 are <code>state: done</code>, flipped in the same commits.</li>
+      <li><code class="status">[]</code> Only now flip the spine's M6/W06 marker and checklist in <code>specs/awsf-v2-plan.html</code> and <code>specs/tickets/awsf-v2-plan/W06.md</code> in the same commit. This authoring session does not perform that act.</li>
+    </ul>
+    <div class="loop">🔁 <strong>Do not close W06 on offline tests alone or on fewer than the approved repeated matched runs.</strong> Both the deterministic gates and the predeclared benchmark thresholds must pass.</div>
+  </div>
+</section>
+
+<section id="validation">
+  <h2>Validation Commands</h2>
+  <p>These are the complete-plan gates. Every command is offline. The paid benchmark is a separately approved manual execution in M3 task 9 and is intentionally absent.</p>
+  <ul class="checklist">
+    <li><code class="status">[]</code> <code>npm run test:unit</code> — all unit and meta-tests, including one-site, evidence, reviewer, and plan/ticket sync.</li>
+    <li><code class="status">[]</code> <code>npm run test:contract &amp;&amp; npm run test:sim &amp;&amp; npm run test:journeys</code> — remaining offline suites.</li>
+    <li><code class="status">[]</code> <code>npm run typecheck &amp;&amp; npm run lint</code> — static validation.</li>
+    <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/ticket-plan-sync.test.ts</code> — plan/tickets/build-prompt identity.</li>
+    <li><code class="status">[]</code> <code>git diff --check</code> — document and source whitespace integrity.</li>
+  </ul>
+  <div class="loop">🔁 <strong>The workstream is incomplete until every offline command passes and M3's separately recorded benchmark satisfies its predeclared thresholds.</strong></div>
+</section>
+
+<section id="questionables">
+  <h2>Questionables</h2>
+  <p><strong>All five decisions were settled by the owner on 2026-08-23.</strong> They remain here with their option sets so the implementation and the roads not taken stay reviewable. No status marker moved.</p>
+  <figure>
+    <pre class="mermaid">
+flowchart TD
+  Q1["Q1 · shared source"] --> M2["M2 implementation"]
+  Q2["Q2 · reviewer rubric"] --> M2
+  Q3["Q3 · repeats + corpus"] --> M3["M3 benchmark"]
+  Q4["Q4 · thresholds"] --> M3
+  Q5["Q5 · result summary"] --> M3
+    </pre>
+    <figcaption>Q1–Q2 now bind M2. Q3–Q5 now bind M3 before any benchmark call: 30 route runs, safety non-inferiority, descriptive token deltas, and journal detail with a handle-free aggregate.</figcaption>
+  </figure>
+
+  <details data-review-options="One common file + closed reviewer overlay (recommended)|One universal file with reviewer exception prose|Worker-only common file; reviewer receives none">
+    <summary><span class="qdecided">DECIDED Q1</span>What is the shared block's committed source shape and exact reviewer treatment?</summary>
+    <p class="qa-answer"><strong>Decided 2026-08-23: one common file plus a closed reviewer overlay.</strong> One common committed file carries universal style; the composition module owns a closed role policy that appends a reviewer-preservation overlay. The approved common clauses require plain and specific language, each fact once, detail matched to task, exact output-contract compliance, and brevity only when no required fact or evidence is lost. The reviewer overlay makes dissent, findings, limitations, locations, observations, and consequences outrank brevity. Unknown roles fail closed and no interactive alias text enters the headless block.</p>
+  </details>
+
+  <details data-review-options="Structural 4-point rubric + explicit omitted-evidence rule (recommended)|Prompt-byte preservation only|Human-scored benchmark only; no new runtime gate">
+    <summary><span class="qdecided">DECIDED Q2</span>What deterministic floor defines reviewer evidence specificity?</summary>
+    <p class="qa-answer"><strong>Decided 2026-08-23: structural four-point rubric plus the explicit omitted-evidence rule.</strong> The four points are candidate-relative file, line or explicit file-wide scope, observed mechanism or condition, and concrete consequence. The output must also name a limitation when host evidence is bounded or omitted and the missing surface cannot be checked. A clean review may have zero findings, so the gate judges findings that exist and required limitations rather than rewarding finding count. Fixtures cover detailed concern, legitimate clean accept, deletion-only, omitted evidence, vague evidence, and tersely agreeable output.</p>
+  </details>
+
+  <details data-review-options="3 tasks × 3 paired repetitions per arm (18 route runs, recommended minimum)|3 tasks × 5 paired repetitions per arm (30 route runs)|Owner supplies a different repeated matched design before spend">
+    <summary><span class="qdecided">DECIDED Q3</span>How large is the repeated matched-task benchmark, and which task classes enter?</summary>
+    <p class="qa-answer"><strong>Decided 2026-08-23: three tasks × five paired repetitions per arm, 30 route runs.</strong> The fixed task classes are bounded source change, contract/envelope change, and evidence-heavy defect review. Each task completes five baseline and five candidate runs, with arm order alternated by pair. Task inputs, route config, provider/model identities, and deterministic gates stay identical between arms except for the shared composed bytes. An incomplete pair or fewer than five repetitions on either side is no result.</p>
+  </details>
+
+  <details data-review-options="Safety non-inferiority; tokens descriptive (recommended)|Require output-token reduction plus safety non-inferiority|Owner supplies numeric deltas before spend">
+    <summary><span class="qdecided">DECIDED Q4</span>What predeclared thresholds decide whether the shared block stays?</summary>
+    <p class="qa-answer"><strong>Decided 2026-08-23: safety non-inferiority is binding and token deltas are descriptive.</strong> Candidate parse-correction total may not exceed baseline, candidate median reviewer-specificity score may not decrease, and no task may lose a required reviewer limitation. Input/output token deltas are reported by task and arm without an adoption threshold because the shared block necessarily adds input bytes and no credible effect size exists yet. Token savings cannot offset either safety regression.</p>
+  </details>
+
+  <details data-review-options="Journal detail + handle-free plan Amendment aggregate (recommended)|Journal only|Owner-approved external analysis location outside the repository">
+    <summary><span class="qdecided">DECIDED Q5</span>Where is the benchmark result retained without creating a committed runtime artifact?</summary>
+    <p class="qa-answer"><strong>Decided 2026-08-23: journal detail plus a handle-free aggregate Amendment.</strong> Detailed rows remain in the existing journal/status store. This plan receives only an aggregate Amendment with protocol version, completed repetition count, metric summaries, invalidated-pair count, and threshold verdict. It names no task, attempt, session, provider handle, or journal path. No external analysis location or committed benchmark report is added.</p>
+  </details>
+</section>
+
+<section id="notes">
+  <h2>Notes</h2>
+  <h3>Evidence and cheapest unused upgrade</h3>
+  <table>
+    <thead><tr><th>Claim</th><th>Evidence</th><th>Cheapest unused upgrade</th></tr></thead>
+    <tbody>
+      <tr><td>There are three independent composition sites.</td><td>Source-verified in the three command files: each has its own contained prompt reader and route-system assignment.</td><td>M1's source fence, induced red once, turns the count into a maintained property.</td></tr>
+      <tr><td>No adapter change is needed.</td><td><code>system-prompt-file.ts</code> documents both append flags and writes mode 0600; both adapters call <code>assertPrivateSystemPrompt</code> at launch.</td><td>Rerun the focused adapter tests after M2 and assert their descriptors are byte-identical except for private file content.</td></tr>
+      <tr><td>The config snapshot does not bind prompt bytes.</td><td><code>toConfigSnapshotJson</code> serialises the effective config; agent prompt fields are relative paths. Rework compares that JSON and then rereads the file.</td><td>The M2 induced-drift fixture proving snapshot equality plus digest inequality refuses before spend.</td></tr>
+      <tr><td>The reviewer is exposed to style compression.</td><td>The source record identifies tersely agreeable review as the direct failure mode; current <code>concrete</code> checks only non-empty strings.</td><td>Q2's canned vague/detailed fixtures and the repeated reviewer-specificity benchmark.</td></tr>
+      <tr><td>A shared style block improves token use or clarity.</td><td>Unverified. No repeated matched measurement exists.</td><td>M3 is the upgrade. Until it runs, this remains a hypothesis and no result is claimed.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Roles centralised</h3>
+  <table>
+    <thead><tr><th>Role</th><th>Source</th><th>Shared-policy posture</th></tr></thead>
+    <tbody>
+      <tr><td>planner, builder, documenter, scout, intake</td><td>Current committed config and role prompts.</td><td>Common headless block, exact output and role contract preserved.</td></tr>
+      <tr><td>reviewer</td><td>Current committed config and review prompt.</td><td>Common block plus approved non-compression treatment; evidence and dissent outrank brevity.</td></tr>
+      <tr><td>designer</td><td>W05 decided Questionable and M7.</td><td>Synthetic M1/M2 fixture until W05 M7 lands; then generic route resolution admits it without a new site.</td></tr>
+      <tr><td>architecture-reviewer</td><td>W05 decided Questionable and M7.</td><td>Reviewer-class policy and specificity floor. W05 M7 waits on M1 before adding its prompt path.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Rejected approaches</h3>
+  <ul>
+    <li><strong>Write the shared block first.</strong> Rejected because it creates a fourth copy before removing three.</li>
+    <li><strong>Put the block in each role's system file.</strong> Rejected because “shared” becomes eight independently drifting copies and later roles recreate the problem.</li>
+    <li><strong>Change adapter flags.</strong> Rejected because both adapters already append private prompt files and assert them at launch.</li>
+    <li><strong>Add prompt bytes to committed config.</strong> Rejected because config is a tuning surface and protected path; immutable route evidence already exists in the journal.</li>
+    <li><strong>Use one baseline and one candidate call.</strong> Rejected because model variance dominates a two-call comparison.</li>
+    <li><strong>Put the paid benchmark under <code>npm test</code>.</strong> Rejected because an offline suite may not spend quota or depend on provider availability.</li>
+    <li><strong>Commit a benchmark report.</strong> Rejected by invariant 10; detailed evidence belongs in the journal.</li>
+  </ul>
+
+  <h3>Derived-field rule for this plan's tickets</h3>
+  <p>The same rule is recorded in <code>specs/tickets/awsf-v2-w06-prompt-composition/README.md</code>.</p>
+  <ul>
+    <li><strong><code>milestone</code></strong> comes from the phase containing the numbered task: M1 → T01–T03, M2 → T04–T07, M3 → T08–T10.</li>
+    <li><strong><code>depends_on</code></strong> is linear because each task consumes the prior task's accepted contract or evidence: T01 has none; T02–T10 depend on the immediate predecessor. Cross-plan G1 is a release this plan provides, not a dependency field on one of its own tickets.</li>
+    <li><strong><code>tier</code> and <code>workflow</code></strong> are omitted because this plan defines no task-tier or execution-route vocabulary for its own implementation tasks. The benchmark's T2 task corpus is measurement input, not a ticket tier.</li>
+    <li><strong><code>state</code></strong> mirrors this plan's milestone and task checklist markers and flips in the same commit.</li>
+  </ul>
+
+  <h3>Benchmark record shape</h3>
+  <p>The detailed record is runtime evidence, never a file in this repository. Each retained pair needs arm, corpus item ordinal, repetition ordinal, provider/model identity, input tokens, output tokens, parse-correction count, reviewer-specificity score, validity, and invalidation reason. The committed aggregate omits all live handles and task identities.</p>
+  <figure>
+    <pre class="mermaid">
+flowchart TD
+  J["journal · detailed rows"] --> A["aggregate by task class + arm"]
+  A --> P["plan Amendment · no handles"]
+  J -. "never copied" .-> X["repository report"]
+  style X stroke:#F87171,stroke-width:2px
+    </pre>
+    <figcaption>Git carries the plan and aggregate decision. The journal carries runtime evidence. No third evidence store is introduced.</figcaption>
+  </figure>
+</section>
+
+<section id="amendments">
+  <h2>Amendments</h2>
+  <details>
+    <summary>2026-08-23 — owner review applied: five Questionables decided</summary>
+    <p>An exported <code>plan-sota-review v1</code> block carried five verdicts, no proposed statuses, and no annotations. Applied in full. Q1 selected one common file plus a closed reviewer overlay. Q2 selected the structural four-point specificity rubric plus the explicit omitted-evidence rule. Q3 increased the benchmark from the recommended minimum to five paired repetitions per arm across three fixed task classes, 30 route runs total. Q4 made safety non-inferiority binding while token deltas remain descriptive. Q5 retained detailed rows in the journal/status store and a handle-free aggregate in this plan.</p>
+    <p>No phase or checklist marker moved, no ticket state changed, no implementation code was written, and no benchmark result is claimed.</p>
+  </details>
+</section>
+
+</main>
+
+<!-- ===== PLAN-SOTA REVIEW LAYER v1 — FIXED MACHINERY, COPY VERBATIM ===== -->
+<style>
+  .rv-btn { font: 600 11px/1 system-ui, sans-serif; padding: 3px 9px; border-radius: 999px;
+    border: 1px solid var(--muted, #8884); background: transparent; color: var(--fg, inherit);
+    cursor: pointer; opacity: .55; vertical-align: middle; margin-left: 8px; }
+  .rv-btn:hover { opacity: 1; border-color: var(--accent, #7c6cf0); }
+  .rv-btn.rv-on { opacity: 1; background: var(--accent, #7c6cf0); color: var(--bg, #fff); border-color: transparent; }
+  .rv-note-box { display: block; margin: 8px 0; padding: 8px 12px; border: 1px dashed var(--accent, #7c6cf0);
+    border-radius: 8px; font-size: 13px; min-height: 1.5em; background: color-mix(in srgb, var(--accent, #7c6cf0) 6%, transparent); outline: none; }
+  .rv-note-box:empty::before { content: attr(data-ph); opacity: .5; font-style: italic; }
+  .rv-note-box[hidden] { display: none; }
+  .rv-verdict { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 10px 0 2px; }
+  .rv-verdict-tag { font: 700 10px/1 system-ui, sans-serif; letter-spacing: .08em; opacity: .6; margin-right: 2px; }
+  .rv-status-chip { font: 600 11px/1 ui-monospace, monospace; margin-left: 10px; padding: 3px 9px;
+    border-radius: 999px; border: 1px dotted var(--muted, #8884); background: transparent;
+    color: var(--fg, inherit); cursor: pointer; opacity: .6; }
+  .rv-status-chip:hover { opacity: 1; }
+  .rv-status-chip.rv-on { opacity: 1; border-style: solid; border-color: var(--accent, #7c6cf0); color: var(--accent, #7c6cf0); }
+  #rv-drawer { position: fixed; right: 16px; bottom: 16px; z-index: 9999; font: 13px/1.45 system-ui, sans-serif;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  #rv-pill { font: 700 12px/1 system-ui, sans-serif; padding: 10px 16px; border-radius: 999px; border: none;
+    cursor: pointer; background: var(--accent, #7c6cf0); color: var(--bg, #fff); box-shadow: 0 4px 16px #0004; }
+  #rv-panel { width: min(420px, calc(100vw - 32px)); max-height: 60vh; overflow: auto; padding: 14px;
+    border-radius: 12px; border: 1px solid var(--muted, #8884); background: var(--bg, #fff);
+    color: var(--fg, inherit); box-shadow: 0 8px 32px #0005; }
+  #rv-panel h4 { margin: 0 0 8px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; opacity: .7; }
+  #rv-list { margin: 0 0 10px; padding: 0; list-style: none; font-size: 12px; }
+  #rv-list li { padding: 3px 0; border-bottom: 1px solid #8882; overflow-wrap: anywhere; }
+  #rv-out { width: 100%; min-height: 140px; margin-top: 10px; font: 11px/1.5 ui-monospace, monospace;
+    border: 1px solid var(--muted, #8884); border-radius: 8px; padding: 8px; background: transparent; color: inherit; }
+  #rv-msg { font-size: 11px; opacity: .75; margin-top: 6px; }
+  @media print { #rv-drawer { display: none; } }
+</style>
+<script>
+(function () {
+  'use strict';
+  var FILE = decodeURIComponent(location.pathname.split('/').pop() || 'plan.html');
+  var KEY = 'plan-sota-review:' + FILE;
+  var LEGACY_KEY = 'planf3-review:' + FILE; // pre-rename state; read once, never written
+  var PROPOSE = ['', '[]', '[wip]', '[x]', '[f]'];
+  var state = { a: {}, v: {}, s: {} }, persisted = true;
+  try { state = JSON.parse(localStorage.getItem(KEY) || localStorage.getItem(LEGACY_KEY) || 'null') || state; } catch (e) { persisted = false; }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); persisted = true; }
+    catch (e) { persisted = false; }
+    refresh();
+  }
+  function el(tag, cls, txt) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (txt) n.textContent = txt;
+    if (tag === 'button') { n.type = 'button'; n.setAttribute('data-lavish-action', ''); }
+    return n;
+  }
+  function clean(t) { return String(t || '').replace(/\|/g, '/').replace(/\s*\r?\n\s*/g, ' >> ').trim(); }
+  var registry = []; // {key, label, kind: 'section'|'phase'|'q'}
+
+  function noteBox(key, host, placeholder) {
+    var box = el('div', 'rv-note-box');
+    box.contentEditable = 'true';
+    box.setAttribute('data-ph', placeholder || 'Type your note for the agent…');
+    box.hidden = !(state.a[key]);
+    if (state.a[key]) box.textContent = state.a[key];
+    box.addEventListener('input', function () {
+      var t = box.textContent.trim();
+      if (t) state.a[key] = t; else delete state.a[key];
+      save();
+    });
+    host.appendChild(box);
+    return box;
+  }
+  function annotable(key, label, heading, host, kind) {
+    registry.push({ key: key, label: label, kind: kind });
+    var box = noteBox(key, host);
+    heading.insertAdjacentElement('afterend', box);
+    var btn = el('button', 'rv-btn' + (state.a[key] ? ' rv-on' : ''), '✎ note');
+    btn.addEventListener('click', function () {
+      box.hidden = !box.hidden;
+      if (!box.hidden) box.focus();
+    });
+    heading.appendChild(btn);
+    box.addEventListener('input', function () { btn.classList.toggle('rv-on', !!state.a[key]); });
+  }
+
+  // Sections
+  Array.prototype.forEach.call(document.querySelectorAll('main > section[id]'), function (sec) {
+    var h = sec.querySelector('h2'); if (!h) return;
+    annotable('#' + sec.id, h.textContent.trim(), h, sec, 'section');
+  });
+  // Phases: annotation + proposed-status chip
+  Array.prototype.forEach.call(document.querySelectorAll('#phases .phase'), function (ph, i) {
+    var h = ph.querySelector('h3'); if (!h) return;
+    var key = 'phase-' + (i + 1);
+    var label = h.textContent.replace(/^\s*\[[^\]]*\]\s*/, '').trim();
+    annotable(key, label, h, ph, 'phase');
+    var chip = el('button', 'rv-status-chip' + (state.s[key] ? ' rv-on' : ''));
+    chip.textContent = state.s[key] ? 'propose ' + state.s[key] : 'propose…';
+    chip.title = 'Cycle a PROPOSED status (exported as feedback — the file marker is only changed by the agent)';
+    chip.addEventListener('click', function () {
+      var next = PROPOSE[(PROPOSE.indexOf(state.s[key] || '') + 1) % PROPOSE.length];
+      if (next) state.s[key] = next; else delete state.s[key];
+      chip.textContent = next ? 'propose ' + next : 'propose…';
+      chip.classList.toggle('rv-on', !!next);
+      save();
+    });
+    h.appendChild(chip);
+  });
+  // Questionables: verdict / option buttons + note
+  Array.prototype.forEach.call(document.querySelectorAll('#questionables details'), function (d, i) {
+    var key = 'q-' + (i + 1);
+    var summary = d.querySelector('summary');
+    var label = summary ? summary.textContent.trim().slice(0, 120) : key;
+    registry.push({ key: key, label: label, kind: 'q' });
+    var opts = (d.getAttribute('data-review-options') || '').split('|').map(function (s) { return s.trim(); }).filter(Boolean);
+    if (!opts.length) opts = ['APPROVE', 'REJECT', 'REVISE', 'DEFER'];
+    var row = el('div', 'rv-verdict');
+    row.appendChild(el('span', 'rv-verdict-tag', 'YOUR CALL'));
+    opts.forEach(function (opt) {
+      var b = el('button', 'rv-btn' + ((state.v[key] || {}).c === opt ? ' rv-on' : ''), opt);
+      b.addEventListener('click', function () {
+        if ((state.v[key] || {}).c === opt) { delete state.v[key]; }
+        else { state.v[key] = { c: opt }; }
+        Array.prototype.forEach.call(row.querySelectorAll('.rv-btn'), function (x) {
+          x.classList.toggle('rv-on', x.textContent === ((state.v[key] || {}).c || null));
+        });
+        qbox.hidden = !state.v[key] && !state.a[key];
+        save();
+      });
+      row.appendChild(b);
+    });
+    d.appendChild(row);
+    var qbox = noteBox(key, d, 'Why / what to change instead…');
+    if (state.v[key]) qbox.hidden = false;
+  });
+
+  // Drawer
+  var drawer = el('div'); drawer.id = 'rv-drawer';
+  var panel = el('div'); panel.id = 'rv-panel'; panel.hidden = true;
+  var pill = el('button'); pill.id = 'rv-pill';
+  pill.addEventListener('click', function () { panel.hidden = !panel.hidden; });
+  var list = el('ul'); list.id = 'rv-list';
+  var actions = el('div');
+  var exportBtn = el('button', 'rv-btn rv-on', 'Export Feedback');
+  var clearBtn = el('button', 'rv-btn', 'Clear review');
+  var out = el('textarea'); out.id = 'rv-out'; out.readOnly = true; out.hidden = true;
+  var msg = el('div'); msg.id = 'rv-msg';
+  var head = el('h4', null, 'Review — pending feedback');
+  actions.appendChild(exportBtn); actions.appendChild(clearBtn);
+  panel.appendChild(head); panel.appendChild(list); panel.appendChild(actions);
+  panel.appendChild(out); panel.appendChild(msg);
+  drawer.appendChild(panel); drawer.appendChild(pill);
+  document.body.appendChild(drawer);
+
+  function findLabel(key) {
+    for (var i = 0; i < registry.length; i++) if (registry[i].key === key) return registry[i].label;
+    return key;
+  }
+  function refresh() {
+    var n = Object.keys(state.a).length + Object.keys(state.v).length + Object.keys(state.s).length;
+    pill.textContent = '✎ Review (' + n + ')';
+    list.textContent = '';
+    Object.keys(state.v).forEach(function (k) { list.appendChild(el('li', null, '[verdict] ' + findLabel(k) + ' → ' + state.v[k].c)); });
+    Object.keys(state.s).forEach(function (k) { list.appendChild(el('li', null, '[status] ' + findLabel(k) + ' → propose ' + state.s[k])); });
+    Object.keys(state.a).forEach(function (k) { list.appendChild(el('li', null, '[note] ' + findLabel(k) + ': ' + state.a[k].slice(0, 90))); });
+    if (!n) list.appendChild(el('li', null, 'Nothing yet — click ✎ note on any section, a verdict on a Questionable, or propose… on a phase.'));
+    if (!persisted) msg.textContent = '⚠ localStorage unavailable — review state lives only in this tab.';
+  }
+  function buildExport() {
+    var L = ['plan-sota-review v1', 'plan: ' + FILE, 'title: ' + clean(document.title), 'exported: ' + new Date().toISOString(), ''];
+    var vk = Object.keys(state.v), sk = Object.keys(state.s), ak = Object.keys(state.a);
+    L.push('## verdicts');
+    vk.length ? vk.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | ' + clean(state.v[k].c) + ' | note: ' + (clean(state.a[k]) || '-'));
+    }) : L.push('- (none)');
+    L.push('', '## statuses');
+    sk.length ? sk.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | propose ' + state.s[k]);
+    }) : L.push('- (none)');
+    L.push('', '## annotations');
+    var solo = ak.filter(function (k) { return !state.v[k]; });
+    solo.length ? solo.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | ' + clean(state.a[k]));
+    }) : L.push('- (none)');
+    return L.join('\n');
+  }
+  exportBtn.addEventListener('click', function () {
+    var text = buildExport();
+    out.hidden = false; out.value = text;
+    out.focus(); out.select();
+    function done(m) { msg.textContent = m; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done('Copied — paste it into your next agent session.'); },
+        function () { done('Clipboard blocked — copy from the box below.'); });
+    } else {
+      try { done(document.execCommand('copy') ? 'Copied — paste it into your next agent session.' : 'Clipboard blocked — copy from the box below.'); }
+      catch (e) { done('Clipboard blocked — copy from the box below.'); }
+    }
+    if (window.lavish && typeof window.lavish.queuePrompt === 'function') {
+      window.lavish.queuePrompt(text, { tag: 'plan-sota-review', queueKey: 'plan-sota-review' });
+      msg.textContent += ' Also queued to the agent via Lavish.';
+    }
+  });
+  clearBtn.addEventListener('click', function () {
+    if (!confirm('Clear all review state for this plan?')) return;
+    state = { a: {}, v: {}, s: {} };
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    location.reload();
+  });
+  refresh();
+})();
+</script>
+
+<!-- Mermaid runtime — renders every <pre class="mermaid"> block. Only external reference in the file. -->
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      primaryColor: '#171D25',
+      primaryTextColor: '#E8EDF3',
+      primaryBorderColor: '#2DD4BF',
+      lineColor: '#60A5FA',
+      fontFamily: 'Inter, system-ui, sans-serif'
+    }
+  });
+</script>
+</body>
+</html>

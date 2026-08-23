@@ -1,0 +1,1411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plan: AWSF v2 W05 — Design, architecture review, and plan as compiled recipes</title>
+<style>
+:root {
+  --bg:#0F1017; --surface:rgba(28,30,43,.85); --surface-solid:#1C1E2B;
+  --border:rgba(255,255,255,.07); --text:#E7E9F0; --muted:#8B90A6;
+
+  --agent-engineer:#F59E0B; --agent-planner:#A78BFA; --agent-builder:#22D3EE;
+  --agent-reviewer:#F43F5E; --agent-designer:#5EEAD4; --agent-architect:#FB7185;
+
+  --ok:#22C55E; --running:#3B82F6; --error:#EF4444; --warn:#F97316;
+
+  --font-ui:"Inter","Outfit",system-ui,sans-serif;
+  --font-mono:"JetBrains Mono","Fira Code",ui-monospace,monospace;
+  --num:tabular-nums;
+
+  --r-card:14px; --r-pill:999px;
+  --shadow-card:0 1px 0 rgba(255,255,255,.04) inset, 0 8px 24px rgba(0,0,0,.35);
+
+  --fg:var(--text); --accent:var(--agent-planner);
+  --cool:var(--agent-builder); --good:var(--ok); --danger:var(--error);
+  --border-strong:#2b3040;
+  --maxw:1120px;
+}
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body { margin:0; padding:0; background:var(--bg); color:var(--fg);
+  font-family:var(--font-ui); font-size:15px; line-height:1.65; -webkit-font-smoothing:antialiased; }
+main { max-width:var(--maxw); margin:0 auto; padding:48px 24px 160px; }
+h1,h2,h3,h4 { line-height:1.25; font-weight:650; letter-spacing:-.011em; }
+h1 { font-size:30px; margin:0 0 6px; }
+h2 { font-size:21px; margin:56px 0 14px; padding-bottom:8px; border-bottom:1px solid var(--border-strong); }
+h3 { font-size:17px; margin:34px 0 8px; }
+h4 { font-size:14px; margin:24px 0 6px; color:var(--accent); letter-spacing:.01em; }
+h5 { margin:0 0 6px; }
+p { margin:0 0 14px; }
+a { color:var(--cool); }
+strong { color:#fff; font-weight:650; }
+em { color:var(--muted); font-style:italic; }
+hr { border:0; border-top:1px solid var(--border-strong); margin:40px 0; }
+small { color:var(--muted); }
+ul,ol { margin:0 0 14px; padding-left:22px; }
+li { margin:3px 0; }
+
+code { font-family:var(--font-mono); font-size:.88em; background:var(--surface-solid);
+  border:1px solid var(--border-strong); border-radius:4px; padding:1px 5px; color:#cfc4f7; }
+pre { background:var(--surface-solid); border:1px solid var(--border-strong);
+  border-left:3px solid var(--accent); border-radius:8px; padding:14px 16px; overflow-x:auto;
+  font-family:var(--font-mono); font-size:12.5px; line-height:1.6; color:#d6dde6; }
+pre code { background:none; border:none; padding:0; color:inherit; font-size:inherit; }
+
+table { width:100%; border-collapse:collapse; margin:14px 0 20px; font-size:13px; display:block; overflow-x:auto; }
+th,td { padding:7px 10px; border:1px solid var(--border-strong); text-align:left; vertical-align:top; }
+th { background:var(--surface-solid); color:var(--accent); font-weight:600; font-size:11.5px;
+  letter-spacing:.05em; text-transform:uppercase; white-space:nowrap; }
+tbody tr:nth-child(even) { background:#ffffff05; }
+td code { font-size:11.5px; }
+.num, td.num { font-variant-numeric:var(--num); text-align:right; }
+.matrix { font-family:var(--font-mono); font-size:12px; }
+.matrix td:first-child { color:var(--accent); }
+.ok { color:var(--good); font-weight:700; } .no { color:#4a5560; }
+
+.meta { margin:14px 0 0; font-size:13px; }
+.meta summary { cursor:pointer; color:var(--muted); font-family:var(--font-mono); font-size:12px; }
+.meta dl { display:grid; grid-template-columns:130px 1fr; gap:4px 14px; margin:12px 0 0; padding:14px;
+  background:var(--surface-solid); border:1px solid var(--border-strong); border-radius:8px; }
+.meta dt { color:var(--accent); font-family:var(--font-mono); font-size:11.5px; }
+.meta dd { margin:0; color:var(--muted); font-family:var(--font-mono); font-size:11.5px; overflow-wrap:anywhere; }
+
+.sub { color:var(--muted); font-size:13.5px; margin-top:0; }
+.muted { color:var(--muted); font-size:12px; font-style:italic; }
+.deep-plan { margin:0 0 10px; font-size:13px; }
+.gate { font-family:var(--font-mono); font-size:11px; color:var(--warn); border:1px solid var(--warn);
+  border-radius:3px; padding:0 5px; letter-spacing:.04em; }
+
+figure { margin:26px 0; text-align:center; }
+figure svg, figure .mermaid { max-width:100%; height:auto; }
+figure .mermaid { background:var(--surface-solid); border:1px solid var(--border-strong);
+  border-radius:10px; padding:20px 12px; overflow-x:auto; text-align:center;
+  color:var(--muted); font-size:12px; }
+figcaption { color:var(--muted); font-size:12px; margin-top:10px; font-style:italic; }
+
+.tag { display:inline-block; font-family:var(--font-mono); font-size:10px; letter-spacing:.06em;
+  text-transform:uppercase; padding:1px 6px; border-radius:3px; margin-right:6px; vertical-align:1px; }
+.tag.existing { background:#262b3a; color:var(--muted); }
+.tag.new { background:#2c2544; color:var(--accent); }
+.tag.dir { background:#173042; color:var(--cool); }
+
+.files ul { list-style:none; padding:0; }
+.files li { padding:4px 0; border-bottom:1px solid #ffffff08; font-size:13px; }
+
+.phase { border:1px solid var(--border-strong); border-radius:var(--r-card);
+  padding:22px 24px; margin:30px 0; background:#ffffff04; }
+.phase > h3 { margin-top:0; }
+.phase > h3 .status { color:var(--accent); }
+
+.checklist { list-style:none; padding:0; margin:8px 0 16px; }
+.checklist li { padding:4px 0 4px 2px; font-size:13.5px; }
+.checklist li .status { color:var(--accent); margin-right:6px; }
+
+.loop { border:1px dashed var(--accent); border-radius:8px; padding:10px 14px; margin:16px 0 4px;
+  font-size:13px; background:#a78bfa0d; }
+
+.card { border:1px solid var(--border-strong); border-left:3px solid var(--cool); border-radius:8px;
+  padding:12px 16px; margin:14px 0; background:var(--surface-solid); font-size:13px; }
+.card.warn { border-left-color:var(--danger); }
+.card.rule { border-left-color:var(--accent); }
+.card.good { border-left-color:var(--good); }
+.card.gate { border-left-color:var(--warn); border-radius:8px; padding:12px 16px; font-family:inherit;
+  font-size:13px; color:inherit; letter-spacing:normal; }
+.card h5 { margin:0 0 6px; font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--muted); font-weight:700; }
+
+.taskmeta { width:100%; font-size:12.5px; margin:6px 0 12px; }
+.taskmeta th { width:150px; text-transform:none; letter-spacing:0; font-size:12px; }
+
+#questionables details, #amendments details { border:1px solid var(--border-strong); border-radius:8px;
+  padding:10px 14px; margin:10px 0; background:var(--surface-solid); }
+#questionables summary, #amendments summary { cursor:pointer; font-weight:600; font-size:13.5px; }
+.qa-answer { margin:10px 0 2px; font-size:13px; color:var(--muted); }
+.qopen { color:var(--warn); font-family:var(--font-mono); font-size:10px; letter-spacing:.06em; margin-right:6px; }
+.qrec { color:var(--cool); font-family:var(--font-mono); font-size:10px; letter-spacing:.06em; margin-right:6px; }
+.qdecided { color:var(--good); font-family:var(--font-mono); font-size:10px; letter-spacing:.06em; margin-right:6px; }
+.decided { font-size:13px; margin:6px 0 10px; }
+.recommend { display:block; margin:0 0 10px; padding:8px 12px; font-size:12.5px;
+  border-left:3px solid var(--cool); background:#22d3ee0d; border-radius:0 6px 6px 0; color:var(--fg); }
+.recommend b { color:var(--cool); }
+.consequence { display:block; margin:0 0 10px; padding:8px 12px; font-size:12.5px;
+  border-left:3px solid var(--accent); background:#a78bfa0d; border-radius:0 6px 6px 0; color:var(--fg); }
+.consequence b { color:var(--accent); }
+
+@media (max-width:720px) {
+  main { padding:28px 14px 140px; }
+  .meta dl { grid-template-columns:1fr; }
+}
+</style>
+</head>
+<body>
+<main>
+
+  <!-- ===== HEADER + UPDATABLE METADATA ===== -->
+  <header>
+    <h1>Plan: AWSF v2 W05 — Design, architecture review, and plan as compiled recipes</h1>
+    <p class="sub">Workstream W05 of <a href="awsf-v2-plan.html">the AWSF v2 spine</a> · milestone M5 · the <code>INV-n</code>/<code>AC-n</code> spine threaded design → ticket → gate</p>
+    <details class="meta">
+      <summary>Metadata</summary>
+      <dl>
+        <dt>created</dt>      <dd>2026-08-22</dd>
+        <dt>modified</dt>     <dd>2026-08-22, 2026-08-23</dd>
+        <dt>commits</dt>      <dd>none yet — this plan is authored and reviewed, and nothing in it has been built</dd>
+        <dt>agent name</dt>   <dd>claude-opus-5, claude-opus-5</dd>
+        <dt>session id</dt>   <dd>not recorded — AGENTS.md invariant 1 keeps live session state out of every committed file in this repository</dd>
+        <dt>back refs</dt>    <dd>./awsf-v2-plan.html (the spine; this is its milestone M5 / workstream W05, the source of Questionable Q5 and of ordering gate <span class="gate">G1</span>), ./tickets/awsf-v2-plan/W05.md (the meta-prompt that authored this plan), ./awsf-v2-plan-build-prompts.md (§ Section B → W05), ./awsf-v2-candidates-fuse-version.md (§10 first, then §2.3), ./awsf-v2-w04-project-registry.html (W04; gives this workstream the resolved plan source its coverage gate joins on), ./awsf-v2-w01-marimba-contract.html (W01; states the architecture-review scope exception this plan depends on), ../AGENTS.md (invariants 1, 10, 12), ../docs/driving/marimba/CONTRACT.md (§5), <code>core/src/workflow/compiler.ts</code>, <code>core/src/workflow/phase.ts</code>, <code>core/src/workflow/recipes/</code>, <code>core/src/contracts/</code>, <code>core/src/gates/interface.ts</code>, <code>core/src/gates/review.ts</code>, <code>core/src/registry/plan-source.ts</code>, <code>core/src/state/task-machine.ts</code>, <code>core/src/cli/commands/production-run.ts</code>, <code>core/src/adapters/pi-codex.ts</code>, <code>core/src/adapters/claude-code.ts</code>, <code>core/test/unit/meta/ticket-plan-sync.test.ts</code>, <code>core/test/unit/transitions.test.ts</code>, <code>core/test/unit/workflow/recipes.test.ts</code></dd>
+        <dt>forward refs</dt> <dd>./awsf-v2-w05-design-to-plan-build-prompts.md, ./tickets/awsf-v2-w05-design-to-plan/ (T01–T28, one file per task, plus README.md), ./awsf-v2-w06-prompt-composition.html (not yet authored — ordering gate <span class="gate">G1</span> makes W06's centralisation a precondition of this plan's milestone M7), ./awsf-v2-w11-five-stage-ladder.html (not yet authored — consumes this workstream's compiled recipes and typed envelopes)</dd>
+      </dl>
+    </details>
+  </header>
+
+  <figure>
+    <pre class="mermaid">
+flowchart LR
+  R["request<br/>engineer · 0 calls"] --> E["design context<br/>host code · 0 calls"]
+  E --> D["design<br/>agent"]
+  D --> A["architecture review<br/>agent"]
+  A --> C["plan context<br/>host code · 0 calls"]
+  C --> P["plan<br/>agent"]
+  P --> V["render<br/>host code · 0 calls"]
+  D -. "INV-n / AC-n declared" .-> C
+  C --> G{"zero blockers?"}
+  G -->|no| S["stop · AWAITING_OWNER"]
+  V --> T["plan + prompts + tickets"]
+  T --> X["coverage gate<br/>ticket-plan-sync"]
+  style G stroke:#F97316,stroke-width:2px
+  style S stroke:#EF4444,stroke-width:2px
+  style X stroke:#22C55E,stroke-width:2px
+    </pre>
+    <figcaption>Seven phases, three agent calls, three host phases that buy nothing. The identifiers declared by the design are carried forward by the <em>host</em>, not retyped by a model, and they end up in a committed plan and its tickets where the coverage gate joins them. The zero-blocker check sits at the plan-context boundary, so the plan phase is never bought when the review is not clear.</figcaption>
+  </figure>
+
+  <!-- ===== IN PLAIN LANGUAGE ===== -->
+  <section id="plain-language">
+    <h2>In Plain Language</h2>
+    <p>This section explains the whole plan without technical vocabulary. Everything after it says the same things precisely, for the people — and machines — building it.</p>
+
+    <h3>A promise made at the start, and nobody checking it was kept</h3>
+    <p>Before this workshop builds anything, it writes down what the finished work has to do. Then it breaks that into a list of jobs, and hands the jobs out one at a time. There is already a strict clerk who checks that the list of jobs and the master document agree — if a job is quietly deleted, renamed, or marked finished when it is not, the clerk stops everything and says so.</p>
+    <p>The clerk is good at their job and is checking the wrong thing. They compare the job list against the job list. Nobody compares either one against the <em>promises</em>. So a promise made at the beginning — "the finished thing must never do this", "you will know it works when you can see that" — can be dropped on the way to the job list, and every check still passes. The promise was written in ordinary sentences, and ordinary sentences are not something a clerk can tick off.</p>
+
+    <h3>Why now, and not later</h3>
+    <p>Two things just became true. The workshop learned to keep several projects apart and to know, for any master document, exactly which job list belongs to it — so there is finally a reliable place to put a promise and a reliable way to find it again. And the workshop is about to start using this same start-to-finish routine for real work rather than for practice. Adding the missing check now costs a few days. Adding it after a year of documents means going back through all of them.</p>
+    <p>There is also a small thing that has to happen before a bigger thing, and getting the order wrong is expensive. A separate piece of work is about to tidy up how the workshop writes instructions for its assistants — today the same instructions are assembled in three different places. This plan introduces two new kinds of assistant. If it did that first, there would be four places to tidy instead of three. So the new assistants are the very last thing this plan builds, and everything else is arranged to go first.</p>
+
+    <h3>Give every promise a number, and make the numbers travel</h3>
+    <p>Think of a building inspection. Before anything is poured, the architect writes a short numbered list: <em>things that must always be true</em>, and <em>things you should be able to see when it is finished</em>. Every item gets a number. From then on, every work order on that site cites the numbers it exists to satisfy. At the end, an inspector does something very simple: walk the numbered list, and check that each number appears on at least one work order. A promise nobody took responsibility for is now visible in about a second, without reading anything.</p>
+    <p>That is the whole idea. The numbered promises get written once, at the design stage, and everything downstream carries them rather than rewriting them — which matters, because a number copied by hand is a number that can be copied wrong. Here the workshop itself carries them forward, so the only thing anyone has to decide is which job serves which promise.</p>
+    <p>Between the design and the job list sits a second reader who did not write the design and is asked one question: what is wrong with this? Their answer is <strong>written down as a form with numbered boxes, not as a verdict that moves the work along by itself</strong>. That distinction is the difference between an opinion and a record. The form is kept; a simple, unarguable rule reads it; and if the form lists anything serious, the workshop does not go on to the expensive next step. It stops and waits for a person.</p>
+    <p>And one rule about that stop, because it is easy to get backwards: the workshop never asks the second reader to look again at an unchanged design. Asking someone to re-examine something that has not changed, when their previous answer was inconvenient, is asking them to change their mind. The design is what has to change, and the person who wrote it has already left the room.</p>
+
+    <h3>How anyone would know it worked</h3>
+    <p>Three things become observably true, and one thing deliberately does not.</p>
+    <ul>
+      <li><strong>A deleted promise turns the checks red.</strong> Not "should" — the plan is not finished until someone has deliberately deleted one, watched everything go red, put it back, and written down the exact words of the complaint. A check nobody has seen fail is decoration.</li>
+      <li><strong>Nothing in the routine depends on an assistant having read a separate handbook first.</strong> Some of the workshop's assistants are hired through an agency that does not let them bring handbooks. The routine is therefore built so that no step ever needed one.</li>
+      <li><strong>The master document, the instructions, and the job list are produced together, from one source, by the workshop itself.</strong> Two documents that are supposed to say the same thing are now the same sentence written out twice by one machine, rather than two copies somebody has to keep matched.</li>
+      <li><strong>What is deliberately not claimed:</strong> when the second reader's form comes back with nothing serious on it, that means <em>the form is filled in correctly</em>. It does not mean the design is good, and it never will. That sentence is printed on the form itself, next to the result, so nobody has to remember it — and the reader is required to say what they did not look at, because a review that claims to have checked everything has told you nothing.</li>
+    </ul>
+    <p>One more thing, and it is the piece that decides whether any of this is useful. The real project this is being built for keeps its written plans in one folder and its actual code in two others. So before the first reader starts, the workshop looks up all three, writes down exactly which version of each it found, and hands that list over. The readers may look at everything; the workshop only ever <em>writes</em> into the plans folder. And if one of the three cannot be found, everything stops right there — because a design written against two out of three looks finished, and that is the expensive kind of mistake.</p>
+    <p>Worth saying plainly: an earlier draft of this plan claimed the readers were not allowed to look at the other two folders. That turned out to be wrong — nothing had ever stopped them, and nobody had checked. Finding out cost three extra pieces of work and no money, because the plan was still only a plan.</p>
+  </section>
+
+  <!-- ===== PURPOSE / PROBLEM / SOLUTION ===== -->
+  <section id="purpose">
+    <h2>Purpose</h2>
+    <p>Make a plan's claims checkable by the same machinery that already checks its tickets. A design states what must stay true and what must become true, gives each of those statements an identifier, and the identifier travels — into the plan, into the tickets, and into a test that fails when one of them is dropped. Between the design and the plan sits an independent architecture review whose verdict is a <strong>typed envelope</strong> rather than a state change, and a deterministic check that refuses to buy the planning call while the review still reports a blocker.</p>
+    <p>Every stage is a <strong>compiled recipe with a typed envelope</strong>. Nothing in the chain depends on an installed skill having been reachable, and nothing in it depends on a document having been read.</p>
+  </section>
+
+  <section id="problem">
+    <h2>Problem</h2>
+    <p>AWSF can already run a plan-shaped workflow, and the plan it produces is prose. A planning envelope carries <code>implementationSteps[].acceptanceCriteria</code> as an array of free-text strings, and nothing downstream ever reads them again. The ticket set that a plan spawns is checked hard — coverage, milestone grouping, state, byte-identical prompts, dependency order — by <code>core/test/unit/meta/ticket-plan-sync.test.ts</code>, and none of those assertions can see whether the work described actually serves the design that motivated it. <strong>A task can be deleted from a plan and its acceptance criterion vanishes with it, silently.</strong></p>
+
+    <h3>The route the source record proposed cannot run</h3>
+    <p>The greenfield planning candidate described <em>"a plan recipe emitting a planf3 HTML"</em> — a workflow phase that invokes an installed skill. It cannot exist. <code>core/src/adapters/pi-codex.ts:621</code> launches every <code>pi</code> child with <code>--no-skills</code>, in a block that also passes <code>--no-extensions</code>, <code>--no-prompt-templates</code>, <code>--no-themes</code> and <code>--no-context-files</code>. A phase on that route reaches no installed skill, no prompt template, and no context file.</p>
+    <p><strong>And the two routes disagree, which is worse than either of them refusing.</strong> The Claude adapter passes no skill-disabling flag at all; what closes the door there is its tool allowlist — <code>--tools Read,Glob,Grep</code> for the read-only profile — and the eight-name tool map at <code>core/src/adapters/claude-code.ts:139-147</code>, which has no member that invokes a skill. So the door is shut on both routes, by two different mechanisms. Since <code>routing.review: invert-provider</code> and <code>routing.no_fallback: true</code> mean a phase's provider is resolved at run time rather than at authoring time, a design that leaned on a skill would not merely be unavailable — <strong>it would be unavailable differently depending on which provider the phase landed on</strong>. That is the concrete form of the rule that no gate may depend on a document having been read.</p>
+
+    <h3>The review that becomes a transition stops being a review</h3>
+    <p><code>core/src/state/task-machine.ts</code> carries ten task states and exactly twenty-five legal edges, and its own header says why <code>PLANNING</code>/<code>BUILDING</code>/<code>DOCUMENTING</code> are deliberately absent: <em>"they are phases, and promoting them to states would make this matrix workflow-dependent and destroy its testability."</em> An architecture review that earned its own edge would do exactly that. It would also need a write to <code>core/src/state/**</code>, which is a <strong>protected path</strong> no agent can write and a purity-fenced directory — so the design that needs a new edge needs an owner amendment for a thing the matrix already refuses on principle.</p>
+
+    <h3>The zero-blocker count is a shape check that reads like a quality claim</h3>
+    <p>A review reporting no blocking findings proves that the review's envelope is internally consistent. It proves nothing about how hard the reviewer looked. Every deployment of a counted verdict eventually gets read as <em>"the design is clean"</em>, and the moment it does, the count starts being optimised rather than measured. This plan treats that as a defect to be designed against rather than a caveat to be footnoted.</p>
+
+    <figure>
+      <pre class="mermaid">
+flowchart TD
+  P["plan · prose acceptance criteria"] --> K["ticket set"]
+  K --> F["ticket-plan-sync<br/>coverage · state · prompts · order"]
+  P -. "nothing joins on" .-> F
+  D["design intent"] -. "lost at the boundary" .-> P
+  style D stroke:#EF4444,stroke-dasharray:4 3
+  style F stroke:#22C55E
+      </pre>
+      <figcaption>The fence is strong and it is joined on the wrong thing. Ticket and plan cannot disagree; plan and design can, freely, because there is no identifier for them to disagree about.</figcaption>
+    </figure>
+  </section>
+
+  <section id="solution">
+    <h2>Solution</h2>
+    <p>One recipe, <code>design-to-plan</code>, with seven phases and three agent calls. Five new envelope contracts, five new gates, one grammar extension to the plan format W04 already declares and parses, one host renderer, and one extension to invariant 12's meta-test. Two new agent roles. No new task state, no new legal edge, no new CLI command.</p>
+
+    <figure>
+      <pre class="mermaid">
+flowchart TD
+  subgraph runtime["one attempt · tier 2 · 3 calls · 1 worktree"]
+    R["request · engineer<br/>awsf.plan-output/v1"] --> E["design-context · code<br/>awsf.design-context/v1"]
+    E --> D["design · agent<br/>awsf.design-output/v1"]
+    D --> A["architecture-review · agent<br/>awsf.architecture-review-output/v1"]
+    A --> C["plan-context · code<br/>awsf.plan-context/v1"]
+    C --> P["plan · agent<br/>awsf.design-plan-output/v1"]
+    P --> V["plan-render · code<br/>awsf.document-output/v1"]
+  end
+  V --> H["specs/stem.html"]
+  V --> B["specs/stem-build-prompts.md"]
+  V --> K["specs/tickets/stem/"]
+  H --> Z["ticket-plan-sync<br/>+ spine coverage"]
+  K --> Z
+  style C stroke:#F97316,stroke-width:2px
+  style Z stroke:#22C55E,stroke-width:2px
+      </pre>
+      <figcaption>The chain and what it leaves behind. The three host phases cost nothing and carry the weight: <code>design-context</code> resolves which repositories the design is about, <code>plan-context</code> is where the zero-blocker rule lives, and <code>plan-render</code> is what turns one validated envelope into the three committed files the coverage gate then joins.</figcaption>
+    </figure>
+
+    <h3>The seven phases, and what each one is for</h3>
+    <table>
+      <thead><tr><th>Phase</th><th>Kind</th><th>Envelope</th><th>Gate</th><th>Why it is shaped this way</th></tr></thead>
+      <tbody>
+        <tr><td><code>request</code></td><td>engineer</td><td><code>awsf.plan-output/v1</code></td><td>—</td><td>The requirements stage is the owner's recorded request, typed. <code>requestOutput</code> already synthesises this envelope from <code>status.request</code>, and every shipped recipe starts the same way. <strong>No new contract, no provider, no call.</strong></td></tr>
+        <tr><td><code>design-context</code></td><td>code · host</td><td><code>awsf.design-context/v1</code></td><td><code>design_evidence_present</code></td><td>Resolves every repository the project's catalog declares to a path and a head revision, through W04's registry. <strong>This is what makes a three-repository project buildable</strong>, and it moves no ceiling.</td></tr>
+        <tr><td><code>design</code></td><td>agent · <code>designer</code></td><td><code>awsf.design-output/v1</code></td><td><code>spine_declared</code></td><td>Where <code>INV-n</code> and <code>AC-n</code> are <em>declared</em>. Also the only place they are declared: everything downstream carries them, nothing downstream invents them.</td></tr>
+        <tr><td><code>architecture-review</code></td><td>agent · <code>architecture-reviewer</code></td><td><code>awsf.architecture-review-output/v1</code></td><td><code>architecture_verdict_consistent</code></td><td>A fresh session that did not write the design. <strong>Its distinct schema id is what keeps it out of the transition machinery</strong> — and, as the card below records, out of automatic provider inversion with it.</td></tr>
+        <tr><td><code>plan-context</code></td><td>code · host</td><td><code>awsf.plan-context/v1</code></td><td><code>architecture_review_clear</code></td><td>Composes the planner's input from two earlier phases, the way <code>review-context</code> already does for the reviewer. <strong>This is where the zero-blocker rule bites</strong>, before the planning call is reserved.</td></tr>
+        <tr><td><code>plan</code></td><td>agent · <code>planner</code></td><td><code>awsf.design-plan-output/v1</code></td><td><code>spine_carried</code></td><td>Maps ordered steps onto the identifiers the host handed it. The existing <code>planner</code> role, unchanged.</td></tr>
+        <tr><td><code>plan-render</code></td><td>code · host</td><td><code>awsf.document-output/v1</code></td><td><code>no_protected_paths</code>, <code>diff_matches_claims</code></td><td>One validated envelope becomes three files by deterministic host code. No model writes the plan document.</td></tr>
+      </tbody>
+    </table>
+    <p><strong>Three agent calls against a tier-2 ceiling of five.</strong> <code>compileWorkflow</code> counts <code>minimumCalls</code> as the number of agent phases and admits through <code>admitWorkflow</code>; three host phases and one engineer phase move no ceiling, exactly as <code>review-context</code> already does not. <strong>Adding cross-repository reading therefore costs no quota at all</strong> — it is host work, and the ceiling does not notice it.</p>
+
+    <h3>The verdict is an envelope because the code already says which phases are transitions</h3>
+    <p><code>core/src/cli/commands/production-run.ts:119-121</code> decides what a review <em>is</em> by schema id, not by name: <code>isReviewPhase</code> returns true for an agent phase whose <code>schemaId</code> is <code>awsf.review-output/v1</code>, and only such a phase is deferred to become the L11 spawn site out of <code>GATING</code>. <strong>Giving the architecture review its own schema id is therefore not cosmetic — it is the mechanism that keeps it out of the transition machinery.</strong> It runs as an ordinary agent phase inside the durable <code>RUNNING</code> sojourn; the twenty-five edges are untouched; and <code>core/test/unit/transitions.test.ts</code>, which pins <code>LEGAL_EDGES.length</code> at 25 in four separate assertions, is the fence that would catch a later drift back toward a transition. This plan adds no assertion for that property because a stronger one already exists.</p>
+
+    <div class="card warn">
+      <h5>What the distinct schema id costs, and it is not free</h5>
+      <p><strong>The same discrimination that keeps the architecture review out of the transition machinery keeps it out of automatic provider inversion.</strong> <code>production-run.ts</code> finds the phase to invert with <code>compiled.phases.find(isReviewPhase)</code> — the same schema-id test — and then requires the configured reviewer route to resolve to the opposite provider from the worker. A phase carrying <code>awsf.architecture-review-output/v1</code> is invisible to that block, so <code>routing.review: invert-provider</code> does nothing for it.</p>
+      <p><strong>What survives, and it is the property that matters here.</strong> Independence for an architecture review is <em>a fresh session that did not write the design</em>, and that holds unconditionally: both roles carry <code>continuity: none</code>, so the reviewer inherits none of the designer's turns whatever provider it lands on. Cross-provider difference is the stronger property the <em>code</em> reviewer gets, because a review of a diff benefits from a second model's blind spots.</p>
+      <p><strong>So this plan buys it with configuration rather than with a mechanism</strong>: the amendment puts <code>architecture-reviewer</code> on the adapter <code>designer</code> is not on. That is weaker than the code reviewer's guarantee — it is a convention a later config edit can undo silently, where the reviewer's is enforced by <code>InvalidReviewInversion</code> at route resolution. <strong>The alternative was refused deliberately:</strong> extending the inversion test to a second schema id would put the architecture review back inside the machinery that also selects the L11 spawn site, and the whole design rests on it staying out. <strong>The named upgrade</strong> is to separate those two questions in <code>production-run.ts</code> — which phase inverts, and which phase is a task-machine transition — so a phase can answer yes to the first and no to the second. That belongs to the workstream that owns the composition site, not to this one.</p>
+    </div>
+
+    <h3>The identifier spine, end to end</h3>
+    <figure>
+      <pre class="mermaid">
+flowchart LR
+  D["design envelope<br/>INV-1 · AC-1 · AC-2"] -->|host carries| C["plan-context"]
+  C -->|model maps steps| P["plan envelope<br/>steps serve ids"]
+  P -->|host renders| H["plan HTML<br/>declares + serves"]
+  P -->|host renders| K["tickets<br/>serves: AC-2"]
+  H --> J["spine coverage join"]
+  K --> J
+  style J stroke:#22C55E,stroke-width:2px
+      </pre>
+      <figcaption>The identifier set is never retyped by a model. The host carries it from the design into the plan context; the model's only job is to say which step serves which identifier; the host renders both sides of the join from one envelope.</figcaption>
+    </figure>
+    <p>Two consequences fall out of that, and both are worth naming because they turn assertions into structure:</p>
+    <ul>
+      <li><strong>Transcription drift is impossible, not merely detected.</strong> The planner never restates an identifier set; it references one the host composed. A gate that had to catch a mistyped <code>AC-3</code> is replaced by an arrangement in which there is nothing to mistype.</li>
+      <li><strong>Invariant 12's byte-identity clause becomes true by construction for anything this chain produces.</strong> A ticket's build prompt and its § Section B block are the same string, written twice by one function in one commit. The existing meta-test stops being a discipline check and becomes a regression check.</li>
+    </ul>
+
+    <h3>Reading three repositories, writing one</h3>
+    <p>The project this factory exists to build keeps its plans in one repository and its code in two others. A chain that could only reason about the repository it runs in would be the wrong deliverable, so the chain reads every repository the project declares and writes only into the one it runs in.</p>
+    <p><strong>The permission this needs does not exist, because nothing was ever forbidden.</strong> <code>path-policy</code> judges write targets only — its three violation reasons are <code>invalid-path</code>, <code>outside-write-globs</code> and <code>protected-path</code>. And <code>core/src/policy/sandbox-broker.ts</code> binds <code>--ro-bind / /</code> before binding the worktree writable over it, with the comment saying so outright: <em>"the whole host filesystem is readable above; <code>writes: []</code> confines WRITES and confines reads not at all."</em> A read-only phase can already reach a second repository. What was missing is that nothing told it where to look and nothing recorded what was available.</p>
+    <table>
+      <thead><tr><th>What the chain needs</th><th>Where it already exists</th></tr></thead>
+      <tbody>
+        <tr><td>Which repositories a project has, and which holds the plans</td><td>W04's catalog — <code>repositories</code> with a <code>role</code>, one of them <code>plan</code></td></tr>
+        <tr><td>Where each one is on this machine</td><td>W04's placement layer — <code>repositories: {id: {path}}</code>, machine-local by design because a committed catalog cannot hold an absolute path</td></tr>
+        <tr><td>Per-repository default branch, which differs across the three</td><td>The catalog's <code>default_branch</code>, already recorded per repository</td></tr>
+        <tr><td>Permission to read outside the worktree</td><td>Nothing to add — see above</td></tr>
+        <tr><td>A record of what was read</td><td><strong>New.</strong> <code>design-context</code> pins each target's head revision, which is the whole of this workstream's addition</td></tr>
+      </tbody>
+    </table>
+    <div class="card warn">
+      <h5>The reproducibility unit is a revision, not a byte — and that is weaker than the code reviewer's</h5>
+      <p><code>review_evidence_present</code> proves the exact bytes of a diff reached the model, by digesting the host-private copy on disk. <code>design_evidence_present</code> cannot make that claim and does not try. It proves <strong>which revision of each repository was available</strong> to the designer; it says nothing about which files were opened.</p>
+      <p><strong>That is the right unit rather than a shortcut.</strong> A reviewer judges a fixed diff, so the diff is the evidence. A designer explores a codebase, and a host that pre-selected a bounded slice would be guessing which files matter — the guess would then be the design's real constraint, invisibly. <strong>The named upgrade</strong>, if evidence ever needs tightening: have the phase report the paths it read and check them against the targets, which is a per-tool-call record the harness does not currently retain. <strong>The residual, stated rather than hidden:</strong> another process may commit to <code>smart-health-api</code> mid-attempt, and the recorded revision is a record of what was there, not a lock on it.</p>
+    </div>
+
+    <h3>The five gates, and which ones are allowed a correction</h3>
+    <table>
+      <thead><tr><th>Gate</th><th>Runs on</th><th>Correctable</th><th>What it asserts</th></tr></thead>
+      <tbody>
+        <tr><td><code>design_evidence_present</code></td><td>design-context</td><td><strong>no</strong></td><td>Every repository the catalog declares appears once, resolved to an existing path and a non-empty head revision, with the plan repository among them. A missing repository is a registry fault and no model turn can fix it.</td></tr>
+        <tr><td><code>spine_declared</code></td><td>design envelope</td><td>yes — the designer is at fault</td><td><code>answeredRequest</code> equals the owner-recorded request after trimming; <code>INV</code>/<code>AC</code>/<code>D</code> ids are contiguous from 1, unique, and each carries a non-empty statement; at least one <code>AC</code>; <strong>no declaration is qualified by a plan stem</strong> — a declaration is always local, a qualified id is always a reference.</td></tr>
+        <tr><td><code>architecture_verdict_consistent</code></td><td>review envelope</td><td>yes — the reviewer is at fault</td><td><code>reviewedDesign</code> echoes the design's summary; every finding's <code>subject</code> resolves to a declared id or a named component; <code>accept</code> carries no high/critical finding; <code>concern</code> carries at least one concrete finding; <code>limitations</code> is non-empty.</td></tr>
+        <tr><td><code>architecture_review_clear</code></td><td>plan-context</td><td><strong>no</strong></td><td>Blocking findings number zero and the verdict is <code>accept</code>. The carried identifier set equals the design's exactly.</td></tr>
+        <tr><td><code>spine_carried</code></td><td>plan envelope</td><td>yes — the planner is at fault</td><td>Every identifier in the context is served by at least one step; no step serves an unknown one; a <code>&lt;plan-stem&gt;#INV-n</code> reference resolves against the same catalog; step ids are <code>T01</code>…<code>Tnn</code> contiguous; <code>dependsOn</code> points only backwards.</td></tr>
+      </tbody>
+    </table>
+    <div class="card warn">
+      <h5>Why the zero-blocker gate must not be correctable, stated once and then enforced</h5>
+      <p>Every other gate in this chain fails because the party who can fix it is still in the session. The zero-blocker gate is different: <strong>the party at fault is the designer, and the designer's session closed two phases ago.</strong> A correction round here would resume the <em>reviewer</em> and ask it to try again against an unchanged design — which is asking it to produce a different verdict about the same artifact. That is an incentive to soften a finding, and a tersely agreeable reviewer is precisely the rubber-stamped closure the independent review exists to prevent.</p>
+      <p>So the check does not live in a phase's gate list at all. It lives on the host <code>plan-context</code> phase, which composes the planner's input. A review that reports a blocker <strong>cannot produce a valid plan context</strong>, the plan phase's call is never reserved, and the attempt stops at <code>AWAITING_OWNER</code> with the findings in the journal. The owner may still continue — <code>L19</code> is a legal edge — but it is an interactive human act, recorded with actor <code>human</code>, and it draws on a correction allowance. An override that costs something and is written down is the right shape; an override a gate can be talked into is not.</p>
+    </div>
+
+    <h3>The limit belongs on the green row, not in a footnote</h3>
+    <p><code>GateReport</code> records a note on every check it performs, passing or failing — its own comment says <em>"a passing report still explains every check it performed"</em>, and those notes are persisted and projected into the dashboard. So the limit is written into the passing note itself:</p>
+    <pre><code>report.check(
+  "no blocking findings",
+  blocking.length === 0,
+  `${blocking.length} blocking of ${findings.length} finding(s); this gate ` +
+  "checks the verdict's shape, not the review's thoroughness — a zero here " +
+  "is envelope consistency, never a clean design",
+);</code></pre>
+    <p>A unit test asserts that sentence is present in the <strong>passing</strong> report, so it cannot be quietly trimmed to make output tidier. That is what <em>"put it where a reader of a green gate will see it"</em> means mechanically: the limit travels with the row, into the journal, into the projection, and into anything that renders a gate result.</p>
+    <p>The envelope carries a second, independent statement of the same limit: <code>limitations</code> is required to be non-empty, so <strong>a review that claims it checked everything is refused</strong>. The count says how many blockers were found; the limitations say where the reviewer did not look. Neither is derivable from the other.</p>
+
+    <h3>The grammar extension, and why the format id does not move</h3>
+    <p>W04 froze one plan grammar — <code>awsf-plan-html/v1</code>, declared in <code>awsf.project.yaml</code> and parsed by <code>parseAwsfPlanHtmlV1</code>, which refuses foreign heading forms by name rather than parsing them to zero tasks. The identifier spine extends it in the same idiom the format already uses for machine-readable markers, a class-tagged <code>&lt;code&gt;</code>:</p>
+    <pre><code>&lt;!-- declaration, in the plan's own spine section --&gt;
+&lt;dt&gt;&lt;code class="inv"&gt;INV-1&lt;/code&gt;&lt;/dt&gt;
+&lt;dd&gt;core/src/state/** stays free of I/O.&lt;/dd&gt;
+&lt;dt&gt;&lt;code class="ac"&gt;AC-2&lt;/code&gt;&lt;/dt&gt;
+&lt;dd&gt;A dropped acceptance criterion turns the coverage gate red.&lt;/dd&gt;
+
+&lt;!-- claim, inside a task's block --&gt;
+&lt;p class="serves"&gt;&lt;code class="serves"&gt;AC-2&lt;/code&gt; &lt;code class="serves"&gt;awsf-v2-plan#INV-1&lt;/code&gt;&lt;/p&gt;</code></pre>
+    <p><strong>The extension is additive and optional, so the format id stays at <code>/v1</code>.</strong> A plan that declares no identifiers is a legitimate shape and is not failed — the same accounting the fence already makes for <code>tier</code> and <code>workflow</code>, whose own comment reads <em>"present-but-wrong is the defect; absent is a legitimate shape."</em> Bumping the format instead would force every plan already in <code>specs/</code> to be re-declared for no gain. <strong>The named trigger for a bump</strong> is making the spine mandatory, which is a decision this workstream deliberately does not take.</p>
+
+    <h3>What this does not do to <code>plan-sota</code></h3>
+    <p>The owner's hand-authoring route is untouched. Both routes emit the same declared format, so a plan the factory renders and a plan the owner writes are read by the same parser, joined by the same coverage gate, and paired with their tickets by the same registry lookup. <strong>One format, two authors.</strong> The <code>planf3</code> → <code>plan-sota</code> rename is owner-side migration work, executed on 2026-08-20, and it does not re-enter this or any task graph.</p>
+  </section>
+
+  <!-- ===== ORDERING GATE G1 ===== -->
+  <section id="ordering">
+    <h2>Ordering Gate G1 — read this before sequencing anything</h2>
+    <div class="card rule">
+      <h5><span class="gate">G1</span> composition before roles</h5>
+      <p><strong>W06's centralisation of prompt composition lands before this workstream adds any new agent role's prompt path.</strong> The spine states it, and the inversion is deliberate: <em>this deep plan is authored before W06's, because W06 cannot know which roles it is centralising for until this design exists — but this workstream's new-role code lands after W06's centralisation.</em> Authoring order and build order disagree on this one edge, on purpose.</p>
+      <p><strong>What "prompt path" means here, precisely, because a builder can read it too narrowly and too widely.</strong> It is not the <code>prompts/&lt;role&gt;/</code> files, which are ordinary committed text. It is the <em>code that composes a system prompt for launch</em>. <code>core/src/cli/commands/production-run.ts</code>, <code>core/src/cli/commands/review-phase.ts</code> and <code>core/src/cli/commands/rework.ts</code> each do that independently today. A workstream that gave itself its own runner would make four.</p>
+    </div>
+    <p><strong>This plan honours G1 twice — structurally and sequentially — and both are required.</strong></p>
+    <table>
+      <thead><tr><th>Way</th><th>What it is</th><th>How it is checked</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Structural</strong></td><td>The chain writes <strong>no runner</strong>. <code>design-to-plan</code> is registered in the existing <code>SUPPORTED</code> map in <code>production-run.ts</code> and executed by the loop that is already there. That loop builds <code>routePrompts</code> generically from <code>recipe.phases</code> and materialises the private system prompt once, so a new role adds no composition site. There is also no new CLI command: <code>awsf new … --workflow design-to-plan</code> already reaches it.</td><td>Task 26 asserts the count of independent system-prompt composition sites did not increase. If W06 has centralised, that count is 1.</td></tr>
+        <tr><td><strong>Sequential</strong></td><td>Milestone <strong>M7</strong> holds every task that touches a role: the two <code>prompts/&lt;role&gt;/</code> pairs, the recipe that loads them, the <code>SUPPORTED</code> registration, the two host phase bindings, and the owner's config amendment. <strong>M7 does not start until W06's centralisation milestone is <code>[x]</code>.</strong> M1–M6 touch no role and no composition site and may proceed at any time.</td><td>Task 23's first checklist box reads <code>specs/awsf-v2-w06-prompt-composition.html</code> and refuses to proceed unless its centralisation milestone is <code>[x]</code>. The same precondition is repeated in T23's <code>PREDECESSORS</code> line, in the build prompt, and in the ticket README.</td></tr>
+      </tbody>
+    </table>
+    <div class="card good">
+      <h5>A scheduling consequence worth stating, because the spine's dependency arrow hides it</h5>
+      <p>The spine's critical path runs <code>W03 → W04 → W05 → W06 → W11 → W12</code>. That arrow is about deep-plan authoring order. In <em>build</em> order this workstream is not one block: <strong>six of its seven milestones are offline, quota-free, and independent of W06 entirely</strong> — including every task Q5 added except the binding in M7. Only M7 waits. So W05's build and W06's build overlap rather than queue, and the longest path is shorter than the diagram suggests. Nothing in this plan depends on that overlap being taken — it is available, not assumed.</p>
+    </div>
+  </section>
+
+  <!-- ===== DECISIONS INHERITED ===== -->
+  <section id="inherited">
+    <h2>Decisions This Workstream Inherits</h2>
+    <p>Each of these arrived settled. A decided Questionable is a constraint on this plan, not an assignment to it — what follows records <strong>how</strong> each is implemented, not <strong>whether</strong> to.</p>
+
+    <h3>Q5, decided 2026-08-21 — identifiers are unique per plan</h3>
+    <p><code>AC</code>/<code>INV</code> ids are unique <strong>per plan</strong>, and a cross-plan reference is written <code>&lt;plan-stem&gt;#INV-n</code>. The reasoning, so this plan can defend it rather than merely obey it: the identifier is what the coverage gate joins on, and the fence being extended — <code>ticket-plan-sync</code> — is already <em>per plan set</em>. Giving the new join the same scope as the machinery underneath it leaves one scope to reason about instead of two. Both wider options need an allocator handing out the next free id across several plans and repositories, which is shared mutable state; this repository has refused that consistently, and <code>TicketStore</code>'s own comment says there is <em>"intentionally no database, cache, or index."</em></p>
+    <p><strong>How this plan implements it, in five concrete rules:</strong></p>
+    <table>
+      <thead><tr><th>Rule</th><th>Where it is enforced</th></tr></thead>
+      <tbody>
+        <tr><td>An identifier is <code>INV-n</code> or <code>AC-n</code> with <code>n</code> a positive integer, no leading zero.</td><td>TypeBox <code>pattern</code> on the design envelope; the emitted JSON Schema carries it into the designer's own prompt.</td></tr>
+        <tr><td>Within one plan, identifiers of each kind are <strong>contiguous from 1 and unique</strong>. Contiguity is what makes a silently deleted identifier visible without a registry.</td><td><code>spine_declared</code> at run time; the coverage gate offline.</td></tr>
+        <tr><td><strong>A declaration is never qualified.</strong> A bare id is always local to the plan it appears in.</td><td><code>spine_declared</code> rejects a qualified declaration by name.</td></tr>
+        <tr><td>A <strong>reference</strong> to another plan's identifier is written <code>&lt;plan-stem&gt;#INV-n</code>, where the stem is the plan filename without <code>.html</code> — the same shape as the file-path references used everywhere here.</td><td><code>spine_carried</code> at run time; the coverage gate offline.</td></tr>
+        <tr><td>A qualified reference resolves through <code>resolvePlanSources</code>, the list the fence already builds. <strong>No allocator, no index, no new state</strong> — the resolver that pairs plans with ticket sets is the same one that resolves a stem.</td><td>The coverage gate, which already holds that list in hand.</td></tr>
+      </tbody>
+    </table>
+    <p><strong>The falsifier is scheduled as milestone M1, before anything is built.</strong> Thread one <code>INV</code> and one <code>AC</code> through <code>specs/awsf-plan.html</code> by hand — design line, ticket line, gate assertion — count how many of that plan's real cross-references would have to cross a plan boundary, and record the number. If several do, per-project earns its allocator and Q5 reopens with evidence rather than on taste. M1 costs about an hour, spends no quota, and its result can change M2 through M6.</p>
+
+    <h3>The collision, already resolved — depend on it, do not rediscover it</h3>
+    <p>The architecture review needs a fresh subagent that did not write the design. marimba's guard denies delegation-shaped tools. W01 settled this and its contract states the exception in a form this plan cites verbatim — <code>docs/driving/marimba/CONTRACT.md</code> §5:</p>
+    <blockquote><p><em>"The guard is delivered per invocation, so a session launched without marimba's settings keeps the delegation tools, and that is the supported route for a review by an agent that did not write the proposal. Such a session is reviewing, not driving: it reads, judges and reports, and it takes no owner act."</em></p></blockquote>
+    <p><strong>Nothing in this workstream re-examines that, and nothing in it changes the guard.</strong> The runtime chain does not need the exception at all — the architecture-review phase is an ordinary governed phase launched by the host, not a delegation from a driving session. The exception matters for the <em>other</em> use of an architecture review: an owner-driven review of a design that has not become an attempt yet. Both are supported; only the second touches the guard.</p>
+  </section>
+
+  <!-- ===== AMENDMENT REQUIRED ===== -->
+  <section id="amendment">
+    <h2>Amendment Required Before the Route Runs</h2>
+    <p>Ordering gate <span class="gate">G2</span> in the spine: an invariant or protected-config amendment lands as an owner-approved commit before the workstream that depends on it starts building. <strong>The spine names W08 and W13 as the workstreams G2 blocks. It does not name W05, and it should have.</strong> This plan discovered a third: <code>awsf.config.yaml</code> is a protected path, and this workstream cannot run its route without an entry in it.</p>
+
+    <h3>What the amendment is</h3>
+    <p>Two additions to <code>awsf.config.yaml</code>, in one owner-authored commit:</p>
+    <pre><code>agents:
+  - name: designer
+    model: claude:opus
+    thinking: xhigh
+    color: "#5EEAD4"
+    purpose: State the architecture, its invariants, and its acceptance criteria as identified claims.
+    prompt: { system: prompts/designer/system.md, user: prompts/designer/user.md }
+    harness: { adapter: claude, continuity: none }
+    tools: { profile: readonly, allow: [read, grep, find, ls] }
+    writes: []
+
+  - name: architecture-reviewer
+    # Cross-provider here is a CONFIG choice, not the automatic inversion — see
+    # "What the distinct schema id costs" in the Solution section. Put it on the
+    # adapter the designer is not on, and change both together if either moves.
+    model: codex:gpt-5.6-sol
+    thinking: high
+    color: "#FB7185"
+    purpose: Judge a design against its own stated invariants and name what it did not check.
+    prompt: { system: prompts/architecture-reviewer/system.md, user: prompts/architecture-reviewer/user.md }
+    harness: { adapter: codex, continuity: none }
+    tools: { profile: readonly, allow: [read, grep, find, ls] }
+    writes: [] # a reviewer that cannot fix cannot quietly fix
+
+workflows:
+  enabled: [scout, plan, build, plan-build-test, build-review, simple-sdlc, intake, design-to-plan]</code></pre>
+
+    <h3>Its sequence runs the opposite way to the gate's usual direction, and that is not a slip</h3>
+    <p><code>core/src/config/load.ts:196</code> rejects any entry in <code>workflows.enabled</code> that is not in <code>KNOWN_WORKFLOW_IDS</code>, and that constant lives in <code>core/src/config/schema.ts</code> — <strong>source, not protected config</strong>. So if the owner commits the amendment first, <code>loadConfig</code> refuses the file and <em>every</em> AWSF command stops, not just this route. The amendment must land <strong>after</strong> task 24, which adds <code>design-to-plan</code> to <code>KNOWN_WORKFLOW_IDS</code> and ships the recipe, and <strong>before</strong> task 27, which runs the route end to end. W04 hit the same inversion for its own second amendment and sequenced it the same way, for the same class of reason.</p>
+    <table>
+      <thead><tr><th>Owner act</th><th>Lands</th><th>Because</th></tr></thead>
+      <tbody>
+        <tr><td><code>awsf.config.yaml</code> — two <code>agents:</code> entries and <code>design-to-plan</code> in <code>workflows.enabled</code></td><td>after task 24, before task 27</td><td>Committing it earlier makes <code>loadConfig</code> reject a workflow id the code does not yet know, which breaks the whole CLI. Committing it later leaves the route unrunnable, and task 27 refuses to close without it.</td></tr>
+      </tbody>
+    </table>
+    <p><strong>A consequence to carry, not to work around.</strong> <code>runProductionCommand</code> compares <code>toConfigSnapshotJson(config)</code> against the attempt's recorded snapshot and throws <code>ProductionConfigSnapshotMismatch</code> when they differ. The amendment therefore invalidates any attempt already in flight. That is the snapshot doing its job — a config change mid-attempt means the record would no longer describe what ran. Land it between attempts.</p>
+    <p><strong>No invariant amendment is required.</strong> Invariant 12's text already reads <em>"a plan and its ticket set never disagree, and the pairing is resolved through the registered plan source"</em> after W04 amended it. The coverage gate strengthens what that fence proves without changing what the invariant claims, so its text stays true and untouched. <strong>If a task in this plan finds itself wanting to edit <code>AGENTS.md</code>, that is a signal the scope drifted, not a missing amendment.</strong></p>
+  </section>
+
+  <!-- ===== RELEVANT FILES ===== -->
+  <section id="files" class="files">
+    <h2>Relevant Files</h2>
+    <p>Every existing path below was read while authoring this plan.</p>
+
+    <h3>Existing Files</h3>
+    <ul>
+      <li><span class="tag existing">existing</span> <code>core/test/unit/meta/ticket-plan-sync.test.ts</code> — the fence the coverage gate extends. Ten tests over each resolved plan set. <strong>Note its skip: <code>if (!existsSync(source.ticketsPath)) continue;</code></strong> — a plan with no ticket set is skipped entirely, which is why the render phase must emit the plan, its prompts and its tickets together or the coverage gate never engages on what the chain produces.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/registry/plan-source.ts</code> — <code>parseAwsfPlanHtmlV1</code>, <code>resolvePlanSources</code>, <code>IMPLEMENTED_PLAN_FORMATS</code>. The grammar this workstream extends and the resolver a qualified cross-plan reference resolves through.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/contracts/envelope-base.ts</code> — <code>phaseEnvelope</code>, the five shared fields, <code>HOST_OWNED_FIELD_NAMES</code>, and the wire/stored split every new envelope must respect.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/contracts/registry.ts</code> — the single lookup table. An envelope not registered here is unusable rather than silently unvalidated.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/contracts/review-output.ts</code> — <code>REVIEW_SEVERITIES</code>, <code>BLOCKING_SEVERITIES</code>, <code>severityRank</code>. The architecture review reuses this vocabulary rather than inventing a second one.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/contracts/document-output.ts</code> — reused unchanged as the render phase's envelope.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/contracts/json-schema.ts</code> — <code>{output_schema}</code> injection and <code>{previous_envelope}</code> rendering; why no prompt in this plan restates a shape by hand.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/gates/interface.ts</code> — <code>GATE_IDS</code>, <code>GateReport</code>, and the note-on-every-check behaviour the stated limit rides on.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/gates/review.ts</code> — <code>verdictConsistent</code>, and the fitness/gate split whose vocabulary this plan borrows for its own precondition-versus-gate distinction.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/workflow/compiler.ts</code> — <code>WorkflowRecipe</code>, <code>compileWorkflow</code>, <code>minimumCalls</code>, and the construction-time invariants a new recipe must satisfy before any provider can execute.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/workflow/phase.ts</code> — <code>PhaseKind</code>, <code>GateDefinition</code>, and <code>PhaseExecution</code>'s earned-success rule.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/workflow/recipes/simple-sdlc.ts</code> — the <code>review-context</code> host phase: the exact precedent for <code>plan-context</code>, including the comment explaining why a phase with one envelope slot needs one.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/cli/commands/production-run.ts</code> — <code>SUPPORTED</code>, <code>isReviewPhase</code>, <code>requestOutput</code>, the <code>routePrompts</code> composition site, and the phase loop this recipe rides.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/policy/sandbox-broker.ts</code> — <code>bwrapSpec</code> binds <code>--ro-bind / /</code> before binding the worktree writable, and its comment states that <code>writes: []</code> confines writes and not reads. This is the source that falsified Q5's original recommendation.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/policy/path-policy.ts</code> — three violation reasons, all about write targets. Nothing here judges a read, and nothing in this workstream changes that.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/registry/placement-schema.ts</code> · <code>core/src/registry/catalog-schema.ts</code> — where a project's repositories are declared and where each one's machine-local path lives. <code>design-context</code> reads both and adds neither.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/workflow/review-evidence.ts</code> — the composed-evidence precedent, and the byte-level standard <code>design_evidence_present</code> deliberately does not meet.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/state/task-machine.ts</code> — the ten states and twenty-five edges the architecture review must not join. Protected path.</li>
+      <li><span class="tag existing">existing</span> <code>core/test/unit/transitions.test.ts</code> — pins <code>LEGAL_EDGES.length</code> at 25 in four assertions. The existing fence under "envelope, not transition".</li>
+      <li><span class="tag existing">existing</span> <code>core/src/adapters/pi-codex.ts</code> (line 621) and <code>core/src/adapters/claude-code.ts</code> (lines 139–147) — the two mechanisms that close the skill route, and the asymmetry between them.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/config/schema.ts</code> · <code>core/src/config/load.ts</code> — <code>KNOWN_WORKFLOW_IDS</code> and the loader check that forces the amendment's sequence.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/persistence/ticket-store.ts</code> — the "intentionally no database, cache, or index" position Q5 rests on.</li>
+      <li><span class="tag existing">existing</span> <code>specs/awsf-plan.html</code> and <code>specs/tickets/awsf-plan/</code> — v1, all markers <code>[x]</code>. M1's hand-threading subject; history, never re-planned.</li>
+      <li><span class="tag existing">existing</span> <code>docs/driving/marimba/CONTRACT.md</code> §5 — the architecture-review scope exception, cited rather than rediscovered.</li>
+      <li><span class="tag existing">existing</span> <code>awsf.config.yaml</code> · <code>awsf.project.yaml</code> · <code>AGENTS.md</code> — protected. Only the first is amended, by the owner, and only after task 23.</li>
+    </ul>
+
+    <h3>New Files</h3>
+    <ul>
+      <li><span class="tag new">new</span> <code>core/src/contracts/design-output.ts</code> — <code>awsf.design-output/v1</code>. Where <code>INV-n</code> and <code>AC-n</code> are declared.</li>
+      <li><span class="tag new">new</span> <code>core/src/contracts/design-context.ts</code> — <code>awsf.design-context/v1</code>. Host-composed; the one envelope in the chain carrying machine-local absolute paths, and therefore journalled and never committed.</li>
+      <li><span class="tag new">new</span> <code>core/src/contracts/architecture-review-output.ts</code> — <code>awsf.architecture-review-output/v1</code>. A distinct schema id is what keeps this phase out of the transition machinery.</li>
+      <li><span class="tag new">new</span> <code>core/src/contracts/plan-context.ts</code> — <code>awsf.plan-context/v1</code>. Host-composed; <code>blockingFindingCount</code> is <code>Type.Literal(0)</code>, so the zero-blocker rule is in the type as well as in the gate.</li>
+      <li><span class="tag new">new</span> <code>core/src/contracts/design-plan-output.ts</code> — <code>awsf.design-plan-output/v1</code>. Ordered steps, each naming the identifiers it serves and carrying its own build prompt.</li>
+      <li><span class="tag new">new</span> <code>core/src/registry/plan-spine.ts</code> — the identifier grammar: parse declarations and claims out of <code>awsf-plan-html/v1</code>, validate a set, resolve a qualified reference, and compute coverage. <strong>Pure.</strong> Shared by the runtime gates and the offline meta-test, so neither can drift from the other.</li>
+      <li><span class="tag new">new</span> <code>core/src/registry/plan-render.ts</code> — one validated envelope becomes the plan HTML, the build-prompts file, and the ticket set. The inverse of <code>parseAwsfPlanHtmlV1</code>, and round-trip tested against it.</li>
+      <li><span class="tag new">new</span> <code>core/src/gates/design-spine.ts</code> — <code>spine_declared</code>, <code>spine_carried</code>.</li>
+      <li><span class="tag new">new</span> <code>core/src/gates/design-evidence.ts</code> — <code>design_evidence_present</code>, and its stated limit.</li>
+      <li><span class="tag new">new</span> <code>core/src/gates/architecture-review.ts</code> — <code>architecture_verdict_consistent</code>, <code>architecture_review_clear</code>, and the stated limit.</li>
+      <li><span class="tag new">new</span> <code>core/src/workflow/recipes/design-to-plan.ts</code> — the six-phase recipe. Lands in M7, because it loads the two new roles' prompts.</li>
+      <li><span class="tag new">new</span> <code>prompts/designer/system.md</code> · <code>prompts/designer/user.md</code> · <code>prompts/architecture-reviewer/system.md</code> · <code>prompts/architecture-reviewer/user.md</code> — M7. Each user prompt declares <code>{output_schema}</code> and restates no shape by hand.</li>
+      <li><span class="tag new">new</span> <code>core/test/unit/registry/plan-spine.test.ts</code> · <code>core/test/unit/registry/plan-render.test.ts</code> · <code>core/test/unit/gates/design-spine.test.ts</code> · <code>core/test/unit/gates/architecture-review.test.ts</code> · <code>core/test/unit/workflow/design-to-plan.test.ts</code> · <code>core/test/unit/gates/design-evidence.test.ts</code> — the offline suites.</li>
+      <li><span class="tag new">new</span> <code>specs/tickets/awsf-v2-w05-design-to-plan/</code> — <code>T01</code>–<code>T28</code> and a <code>README.md</code> recording the derived-field rules.</li>
+    </ul>
+    <div class="card">
+      <h5>Where the new pure code lives, and the one alternative considered</h5>
+      <p><code>core/src/registry/</code> already owns <code>plan-source.ts</code> — the plan-document layer, not just the project layer — so the grammar and the renderer join it there. The alternative was a new <code>core/src/plans/</code> directory. It was refused for one measurable reason: <code>core/src/workflow/</code> is <em>already</em> above its advisory 800-line budget in <code>loc-budget.test.ts</code>, and adding a directory to fix a naming preference would not change that while adding a layer boundary nothing enforces. If <code>plan-spine.ts</code> plus <code>plan-render.ts</code> push <code>core/src/registry/</code> past its own advisory range, the split becomes worth taking; that is a warning, not a failure, and the plan does not pre-empt it.</p>
+    </div>
+  </section>
+
+  <!-- ===== IMPLEMENTATION PHASES ===== -->
+  <section id="phases">
+    <h2>Implementation Phases</h2>
+    <p><strong>IMPORTANT:</strong> Execute every phase and task step by step, in order, top to bottom.</p>
+    <p>Status markers: <code>[]</code> idle · <code>[wip]</code> in progress · <code>[x]</code> complete · <code>[f]</code> failed. All start as <code>[]</code>. <strong>Flip this plan's own markers as you work</strong>, and flip the matching ticket's <code>state:</code> in the same commit. <strong>Never touch the W05 marker in <code>specs/awsf-v2-plan.html</code> — task 28 is the only task that does.</strong></p>
+    <p>Milestones M1 through M6 are offline and spend no quota. <strong>M7 is gated by <span class="gate">G1</span>.</strong></p>
+
+    <!-- ================= M1 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M1: The falsifier, run before anything is built</h3>
+      <p>The spine calls this the cheapest unused upgrade and then repurposes it as Q5's falsifier. It runs first because its result can change every milestone after it: if a plan's real cross-references routinely cross a plan boundary, per-project scope earns its allocator and Q5 reopens with evidence. <strong>It writes no code and spends no quota.</strong></p>
+
+      <h4>1. Thread one <code>INV</code> and one <code>AC</code> through v1 by hand, and count the crossings</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Pick one real architectural invariant and one real acceptance criterion out of <code>specs/awsf-plan.html</code> — statements that plan already makes in prose, not invented ones</li>
+        <li><code class="status">[]</code> Write the declaration lines they would carry, in the grammar this plan proposes, and the <code>serves</code> claim on the task that satisfies each</li>
+        <li><code class="status">[]</code> Write the ticket-side claim on the matching file in <code>specs/tickets/awsf-plan/</code></li>
+        <li><code class="status">[]</code> Sketch the gate assertion by hand and answer the question it exists to answer: <strong>would deleting the <code>AC</code> from the plan while leaving it on the ticket turn it red, and would deleting it from both go unnoticed?</strong></li>
+        <li><code class="status">[]</code> Count, across that plan, how many statements of the same kind would need to reference an identifier declared in a <em>different</em> plan, and write the number down</li>
+        <li><code class="status">[]</code> Record the outcome in this plan's Notes and Amendments: Q5 <strong>confirmed as decided</strong>, or <strong>reopened with the count as evidence</strong> and the owner asked before M2 starts</li>
+        <li><code class="status">[]</code> The hand-threaded lines are an experiment, not a deliverable — <strong>do not commit them into <code>specs/awsf-plan.html</code></strong>. v1 is history; task 18 is where a plan opts in for real</li>
+      </ul>
+
+      <h4>2. Testing Strategy</h4>
+      <p>Nothing here executes, so the validation is that the experiment produced a written answer rather than an impression. The evidence is a count and a decision line in this plan, which is a committed document — not a report file, which invariant 10 forbids.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>git diff --stat</code> — proves <code>specs/awsf-plan.html</code> and <code>specs/tickets/awsf-plan/</code> are unchanged by this milestone</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — green before any of this plan's code exists, so later failures are attributable</li>
+        <li><code class="status">[]</code> This plan's Notes carry the crossing count and the Q5 outcome, in a sentence a reader can disagree with</li>
+      </ul>
+      <div class="loop">🔁 <strong>Do not exit this milestone until every box above is checked.</strong> If the count reopens Q5, stop and put it to the owner — M2 through M6 are built on the answer.</div>
+    </div>
+
+    <!-- ================= M2 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M2: The identifier grammar, and the parser that refuses a malformed one</h3>
+      <p>The identifier has to exist in a committed document before anything can join on it. This milestone extends <code>awsf-plan-html/v1</code> additively — a plan that declares nothing stays valid — and teaches the existing parser to return what it finds without loosening what it accepts.</p>
+      <figure>
+        <pre class="mermaid">
+flowchart LR
+  H["plan HTML"] --> S["spine section<br/>declarations"]
+  H --> T["task blocks<br/>serves claims"]
+  S --> V["validate set<br/>contiguous · unique · unqualified"]
+  T --> R["resolve reference<br/>bare or stem#ID"]
+  V --> J["coverage join"]
+  R --> J
+  style V stroke:#A78BFA
+  style J stroke:#22C55E
+        </pre>
+        <figcaption>Declarations and claims are parsed out of the same document by the same module. A malformed identifier is refused by name, never ignored — the rule <code>plan-source.ts</code> already applies to an unimplemented plan format.</figcaption>
+      </figure>
+
+      <h4>3. The grammar, and <code>parseAwsfPlanHtmlV1</code> extended to return it</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Declaration form: <code>&lt;code class="inv"&gt;INV-n&lt;/code&gt;</code> and <code>&lt;code class="ac"&gt;AC-n&lt;/code&gt;</code> inside the plan's own spine section, each paired with a non-empty statement</li>
+        <li><code class="status">[]</code> Claim form: <code>&lt;code class="serves"&gt;AC-n&lt;/code&gt;</code> inside a task's block, bare for a local identifier and <code>&lt;plan-stem&gt;#AC-n</code> for one declared elsewhere</li>
+        <li><code class="status">[]</code> <code>ParsedPlanTask</code> gains <code>serves: readonly string[]</code>; the parse result gains the plan-level declaration list</li>
+        <li><code class="status">[]</code> A string matching <code>INV-</code> or <code>AC-</code> that does <strong>not</strong> match the full pattern is a <strong>hard parse failure by name</strong>, never a skip — the same posture <code>UnsupportedPlanFormatError</code> and <code>PlanGrammarMismatchError</code> already take</li>
+        <li><code class="status">[]</code> A plan declaring zero identifiers parses exactly as it does today; <strong>no existing plan in <code>specs/</code> changes</strong></li>
+        <li><code class="status">[]</code> <code>IMPLEMENTED_PLAN_FORMATS</code> is unchanged — the extension is additive, and the trigger for a version bump is written into the module comment: making the spine mandatory</li>
+      </ul>
+
+      <h4>4. The ticket-side claim, as one optional field</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Ticket frontmatter gains <code>serves: [AC-2, INV-1]</code> — <strong>one field, not two</strong>; the prefix already discriminates an invariant from an acceptance criterion, and a second field would be a second vocabulary to keep aligned</li>
+        <li><code class="status">[]</code> The field is optional. A ticket set whose plan declares nothing carries nothing, and that is a legitimate shape rather than a defect</li>
+        <li><code class="status">[]</code> <code>TicketSchema</code> in <code>core/src/contracts/ticket.ts</code> is <strong>not</strong> modified — W04 decided that store and fence vocabularies stay separate and named the divergence as a known gap; this task does not quietly close it</li>
+        <li><code class="status">[]</code> The field's derivation rule is written into <code>specs/tickets/awsf-v2-w05-design-to-plan/README.md</code> before any ticket uses it</li>
+      </ul>
+
+      <h4>5. Testing Strategy</h4>
+      <p><code>node:test</code> over <code>core/src/registry/plan-spine.ts</code> and the extended parser, with fixtures held in memory rather than on disk. The edge cases that matter are the ones where a wrong answer is invisible: an identifier with a leading zero, a duplicate, a gap in the sequence, a qualified declaration, and a plan that declares nothing at all.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — the new parser tests pass and every existing <code>plan-source</code> test still passes unchanged</li>
+        <li><code class="status">[]</code> <code>npm run typecheck</code> — <code>ParsedPlanTask</code>'s new field is threaded everywhere it is consumed</li>
+        <li><code class="status">[]</code> A fixture with <code>INV-01</code> fails by name, and the failure message names the offending string</li>
+        <li><code class="status">[]</code> A fixture declaring <code>AC-1</code> and <code>AC-3</code> fails on the gap, because contiguity is what makes a silent deletion visible without a registry</li>
+        <li><code class="status">[]</code> A fixture whose declaration is written <code>other-plan#INV-1</code> fails — declarations are never qualified</li>
+        <li><code class="status">[]</code> Every plan currently in <code>specs/</code> parses to the same task list as before, asserted against the committed files rather than a fixture</li>
+      </ul>
+      <div class="loop">🔁 <strong>Do not exit this milestone until every box above is checked.</strong> A failing command means fix the cause and re-run — never widen what the parser accepts to make a test pass.</div>
+    </div>
+
+    <!-- ================= M3 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M3: Five typed envelopes, one source each</h3>
+      <p>Every contract in <code>core/src/contracts/</code> is defined once in TypeBox and yields three emissions: the runtime validator, the static type, and the JSON Schema injected into the agent's own prompt. These five follow that rule exactly, reuse the shared base rather than restating it, and reuse the existing severity vocabulary rather than inventing a second one.</p>
+
+      <h4>6. <code>awsf.design-output/v1</code> and <code>awsf.architecture-review-output/v1</code></h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>DesignOutputSchema</code> via <code>phaseEnvelope</code>, carrying <code>answeredRequest</code>, <code>components[]</code>, <code>decisions[]</code>, <code>invariants[]</code>, <code>acceptanceCriteria[]</code>, <code>openQuestions[]</code></li>
+        <li><code class="status">[]</code> Identifier patterns are structural: <code>^INV-[1-9][0-9]*$</code>, <code>^AC-[1-9][0-9]*$</code>, <code>^D-[1-9][0-9]*$</code>, so the rule travels into the designer's prompt with the emitted schema instead of only firing at gate time — the same reasoning <code>WORKTREE_RELATIVE_PATH_PATTERN</code> is built on</li>
+        <li><code class="status">[]</code> Every <code>acceptanceCriteria[]</code> entry carries <code>verifiedBy</code>: how anyone would observe it holding. An acceptance criterion with no stated observation is prose</li>
+        <li><code class="status">[]</code> <code>ArchitectureReviewOutputSchema</code> carrying <code>reviewedDesign</code>, <code>verdict</code>, <code>findings[]</code> and <code>limitations</code>, with <code>limitations</code> at <code>minItems: 1</code></li>
+        <li><code class="status">[]</code> Findings reuse <code>REVIEW_SEVERITIES</code> and <code>BLOCKING_SEVERITIES</code> imported from <code>review-output.ts</code>. <strong>Do not redeclare them</strong> — one ordered vocabulary, one place to change it</li>
+        <li><code class="status">[]</code> A finding's <code>subject</code> is a declared identifier or a named component, not a file path: an architecture review judges claims, and the repository it would name may not exist yet</li>
+      </ul>
+
+      <h4>7. <code>awsf.design-context/v1</code> — the repositories the design is about</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>DesignContextSchema</code> via <code>phaseEnvelope</code>, carrying <code>targets[]</code> — one entry per repository the project's catalog declares, each with <code>repositoryId</code>, the absolute path resolved from the machine-local placement layer, <code>defaultBranch</code>, and the <code>headSha</code> the host read at composition time</li>
+        <li><code class="status">[]</code> Host-composed, like <code>plan-context</code>. A model never states which repositories exist; it is told</li>
+        <li><code class="status">[]</code> <code>targets</code> is <code>minItems: 1</code> and always includes the plan repository itself, so a single-repository project is the degenerate case rather than a separate path</li>
+        <li><code class="status">[]</code> <strong>Write the reproducibility unit into the module comment</strong>: <code>headSha</code> pins <em>which revision was available</em>, not which files were opened. That is weaker than <code>review_evidence_present</code>'s byte-level digest, and it is the right unit here — a designer explores a codebase where a reviewer judges a fixed diff</li>
+        <li><code class="status">[]</code> An absolute path in an envelope is machine-local, so <strong>this envelope is journalled and never committed</strong> — invariant 1 and invariant 10 both bite here, and the render phase must not carry a target path into any rendered file</li>
+      </ul>
+
+      <h4>8. <code>awsf.plan-context/v1</code>, <code>awsf.design-plan-output/v1</code>, and registration</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>PlanContextSchema</code> carrying the identifier set the host copied from the design, the review verdict, the non-blocking findings the planner must still answer, and <code>blockingFindingCount</code> as <code>Type.Literal(0)</code></li>
+        <li><code class="status">[]</code> <strong>State the reason for the literal in the module comment:</strong> a plan context composed from a review that still reports a blocker is not merely gate-failing, it is <em>unrepresentable</em>. The gate and the schema then agree by construction rather than by coincidence</li>
+        <li><code class="status">[]</code> <code>DesignPlanOutputSchema</code> carrying <code>milestones[]</code> and <code>steps[]</code>, each step with <code>id</code>, <code>title</code>, <code>milestone</code>, <code>files</code>, <code>serves</code>, <code>dependsOn</code> and <code>buildPrompt</code>, plus <code>testStrategy</code>, <code>risks</code> and <code>openQuestions</code></li>
+        <li><code class="status">[]</code> Step ids match <code>^T[0-9]{2}$</code> and milestone ids <code>^M[0-9]+$</code> — the vocabularies the sync fence already checks, so a rendered ticket set is well-formed before any gate sees it</li>
+        <li><code class="status">[]</code> All four registered in <code>ENVELOPE_SCHEMAS</code> and <code>EnvelopeTypeById</code>, and exported from <code>contracts/index.ts</code></li>
+        <li><code class="status">[]</code> No new envelope declares a field in <code>HOST_OWNED_FIELD_NAMES</code>, in either case form</li>
+      </ul>
+
+      <h4>9. Testing Strategy</h4>
+      <p>Contract tests under <code>core/test/unit/contracts/</code>, following the shape the existing envelope tests use: emit the JSON Schema, validate a good payload, and prove each rejection individually. <code>awsf.design-context/v1</code> is the one envelope carrying machine-local absolute paths, so its test is also where the never-committed rule is asserted. The edge case that matters most is depth — <code>additionalProperties: false</code> has to hold inside <code>steps[]</code> and <code>findings[]</code>, not only at the top level.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — each schema emits, validates a good payload, and rejects an unknown field at every depth</li>
+        <li><code class="status">[]</code> A payload with <code>blockingFindingCount: 1</code> fails <code>awsf.plan-context/v1</code> validation, so the literal is proven and not merely written</li>
+        <li><code class="status">[]</code> A design payload with <code>limitations: []</code> on the review side fails, and the violation names the field</li>
+        <li><code class="status">[]</code> <code>emitAllEnvelopeJsonSchemas()</code> includes all five ids, proving registration rather than assuming it</li>
+        <li><code class="status">[]</code> A <code>awsf.design-context/v1</code> payload with an empty <code>targets</code> fails, and one carrying a relative path fails — a machine-local absolute path is the only shape that resolves</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — the existing <code>no-handwritten-schema</code> meta-test stays green: nothing under <code>prompts/</code> restates any of these shapes</li>
+      </ul>
+      <div class="loop">🔁 <strong>Do not exit this milestone until every box above is checked.</strong> An envelope that is not in the registry is unusable rather than unvalidated — if a test needs to reach around <code>schemaForId</code>, the registration is missing.</div>
+    </div>
+
+    <!-- ================= M4 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M4: Five gates, two of them deliberately uncorrectable</h3>
+      <p>The gates are pure functions over envelopes: same input, same <code>GateReport</code>, every time. Three of them fail because someone still in the session can fix them. The other two cannot be argued with: one fails because the design is wrong and the designer left two phases ago, the other because a repository the project declares could not be resolved, and no model turn fixes a registry.</p>
+      <figure>
+        <pre class="mermaid">
+flowchart TD
+  X["design-context"] --> G0["design_evidence_present<br/>NOT correctable"]
+  D["design envelope"] --> G1["spine_declared<br/>correctable"]
+  A["review envelope"] --> G2["architecture_verdict_consistent<br/>correctable"]
+  A --> G3["architecture_review_clear<br/>NOT correctable"]
+  G3 -->|blocker| S["no plan context<br/>stop · AWAITING_OWNER"]
+  G3 -->|clear| C["plan context"]
+  C --> P["plan envelope"] --> G4["spine_carried<br/>correctable"]
+  style G3 stroke:#F97316,stroke-width:2px
+  style G0 stroke:#F97316,stroke-width:2px
+  style S stroke:#EF4444,stroke-width:2px
+        </pre>
+        <figcaption>Correctability follows fault. Asking the reviewer for another turn against an unchanged design is asking it to change its mind, which is the one correction this chain must never buy.</figcaption>
+      </figure>
+
+      <h4>10. <code>spine_declared</code></h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>answeredRequest</code>, trimmed, equals the owner-recorded request; the note reports both when they differ</li>
+        <li><code class="status">[]</code> <code>INV</code>, <code>AC</code> and <code>D</code> identifiers are contiguous from 1, unique, and each carries a non-empty statement</li>
+        <li><code class="status">[]</code> At least one <code>AC</code>. A design with nothing to verify has produced no acceptance boundary, which is the defect the whole workstream exists to remove</li>
+        <li><code class="status">[]</code> No declaration is qualified by a plan stem — <strong>Q5's rule, enforced at the point of declaration rather than at the point of use</strong></li>
+        <li><code class="status">[]</code> Registered in <code>GATE_IDS</code> and attached to the design phase with the correction allowance the recipe declares</li>
+      </ul>
+
+      <h4>11. <code>design_evidence_present</code></h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Every repository the project's catalog declares appears exactly once in <code>targets</code>; the note names any that are missing, because a design written without one of its repositories is the failure this gate exists to catch</li>
+        <li><code class="status">[]</code> Every target resolved to an existing path and a non-empty <code>headSha</code>. An unresolvable placement entry fails <strong>before</strong> the design call is reserved, not after</li>
+        <li><code class="status">[]</code> The plan repository is among the targets and is the one the attempt's worktree belongs to</li>
+        <li><code class="status">[]</code> <strong>The passing note carries the limit</strong>, in the same discipline as the two review gates: this proves which revisions were <em>available</em> to the designer, never which files it read</li>
+        <li><code class="status">[]</code> Registered in <code>GATE_IDS</code> and attached to the <code>design-context</code> phase. Not correctable — a missing repository is a registry fault, and no model turn can fix it</li>
+      </ul>
+
+      <h4>12. <code>architecture_verdict_consistent</code>, and the limit written onto the green row</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>reviewedDesign</code> echoes the design envelope's <code>summary</code> exactly — the <code>reviewedSha</code> pattern applied to an artifact that has no SHA yet</li>
+        <li><code class="status">[]</code> Every finding's <code>subject</code> resolves to a declared identifier or a named component; the note lists any that do not</li>
+        <li><code class="status">[]</code> <code>accept</code> carries no high or critical finding; <code>concern</code> carries at least one finding with all four of file-free concreteness — subject, title, detail, evidence</li>
+        <li><code class="status">[]</code> <code>limitations</code> is non-empty, and the note says what the reviewer declared it did not check</li>
+        <li><code class="status">[]</code> <strong>The passing note carries the stated limit</strong>: a count of blocking findings is envelope consistency, never a clean design</li>
+      </ul>
+
+      <h4>13. <code>architecture_review_clear</code> — the deterministic zero-blocker gate</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Pure over the stored review envelope: blocking findings number zero and the verdict is <code>accept</code></li>
+        <li><code class="status">[]</code> The identifier set carried into the plan context equals the design's exactly, so the planner cannot be handed a set the reviewer never saw</li>
+        <li><code class="status">[]</code> It is attached to the host <code>plan-context</code> phase, <strong>not</strong> to the review phase, and it appears in no phase's correction path. The reason is written into the module comment, in one sentence a reader can disagree with</li>
+        <li><code class="status">[]</code> On failure, the attempt stops at <code>AWAITING_OWNER</code> with the findings journalled, through the existing edges only. <strong><code>core/src/state/task-machine.ts</code> is not touched and <code>LEGAL_EDGES.length</code> stays 25</strong></li>
+        <li><code class="status">[]</code> The passing note carries the same stated limit as task 12, because this is the row a reader of a green run actually sees</li>
+      </ul>
+
+      <h4>14. <code>spine_carried</code></h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Every identifier in the plan context is served by at least one step; the note names any that are not</li>
+        <li><code class="status">[]</code> No step serves an identifier the context does not carry</li>
+        <li><code class="status">[]</code> A <code>&lt;plan-stem&gt;#INV-n</code> reference resolves against the catalog's own plan list; an unresolvable stem fails and the note names the stem</li>
+        <li><code class="status">[]</code> Step ids are <code>T01</code>…<code>Tnn</code> contiguous with no gaps, and <code>dependsOn</code> points only at earlier steps — the two rules the sync fence already enforces on tickets, applied one stage earlier where they are cheaper to fix</li>
+      </ul>
+
+      <h4>15. Testing Strategy</h4>
+      <p><code>node:test</code> over each gate as a pure function, in the shape <code>core/test/unit/gates/verdict-consistent.test.ts</code> already uses. Determinism is asserted rather than assumed: run each gate twice over the same frozen envelope and deep-equal the two reports. The three-repository fixture is the one that would have caught this workstream's own falsified assumption, so it is not optional.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — every gate passes its good fixture and fails each bad one individually, with the failing check named</li>
+        <li><code class="status">[]</code> Determinism: two runs over one frozen envelope produce deep-equal <code>checks</code> arrays, for all five gates</li>
+        <li><code class="status">[]</code> The stated-limit sentence is asserted present in the <strong>passing</strong> report of both review gates <em>and</em> of <code>design_evidence_present</code>, so none of the three can be trimmed away later</li>
+        <li><code class="status">[]</code> <code>design_evidence_present</code> fails a fixture whose catalog declares three repositories and whose context carries two, and the note names the missing one</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — <code>core/test/unit/transitions.test.ts</code> is untouched and still pins twenty-five edges</li>
+        <li><code class="status">[]</code> <code>npm run lint</code> and <code>npm run typecheck</code></li>
+      </ul>
+      <div class="loop">🔁 <strong>Do not exit this milestone until every box above is checked.</strong> If a gate needs a clock, the filesystem, or a network call to decide, it is not this kind of gate — move the input into the envelope instead.</div>
+    </div>
+
+    <!-- ================= M5 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M5: The coverage gate — invariant 12 extended, and proven to bite</h3>
+      <p>This is the milestone the workstream exists for. The identifier join goes into the same meta-test that already holds plan and tickets together, it is conditional on a plan having opted in, and it is not finished until a deliberately dropped acceptance criterion has been watched turning it red.</p>
+      <figure>
+        <pre class="mermaid">
+flowchart LR
+  C["awsf.project.yaml"] --> RS["resolvePlanSources"]
+  RS --> PS["plan set<br/>plan · prompts · tickets"]
+  PS --> E["existing ten assertions"]
+  PS --> N["spine coverage<br/>declared · served · mirrored · resolvable"]
+  N -->|plan declares nothing| K["skip · legitimate shape"]
+  style N stroke:#22C55E,stroke-width:2px
+  style K stroke:#8B90A6,stroke-dasharray:4 3
+        </pre>
+        <figcaption>The new assertions ride the resolver W04 built. They engage per plan set, exactly like the ten already there, and a plan that declares no identifiers passes them the way a ticket with no <code>tier</code> passes the vocabulary check.</figcaption>
+      </figure>
+
+      <h4>16. <code>spineCoverage</code> as one pure function, shared by both surfaces</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>spineCoverage(declared, planTasks, tickets, knownStems)</code> returns a violation list; it reads no file and knows nothing about <code>node:test</code></li>
+        <li><code class="status">[]</code> The same function backs <code>spine_carried</code> at run time and the meta-test offline, so <strong>the runtime gate and the offline fence cannot drift apart</strong></li>
+        <li><code class="status">[]</code> Each violation names the plan label, the identifier, and which of the four rules it broke — a red test must say <em>which</em> plan drifted, the standard the existing fence already sets</li>
+      </ul>
+
+      <h4>17. Extend <code>ticket-plan-sync.test.ts</code></h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <strong>Coverage</strong>: every identifier the plan declares is served by at least one of its tasks</li>
+        <li><code class="status">[]</code> <strong>No orphans</strong>: no task and no ticket claims an identifier the plan does not declare, unless it is qualified and resolvable</li>
+        <li><code class="status">[]</code> <strong>Mirror</strong>: a ticket's <code>serves</code> equals its plan task's served set exactly — the same relation the fence already enforces for <code>milestone</code> and <code>state</code>, and the reason a drop on either side is caught</li>
+        <li><code class="status">[]</code> <strong>Q5</strong>: identifiers are unique and contiguous within a plan, and a qualified reference resolves to a stem in the resolved plan-source list</li>
+        <li><code class="status">[]</code> <strong>Conditional engagement</strong>: a plan declaring no identifiers whose tickets claim none passes, and the reason is written as a comment beside the existing <code>tier</code>/<code>workflow</code> note it mirrors</li>
+        <li><code class="status">[]</code> The new assertions live in their own named tests, so a failure is reported under its own name rather than inside whichever assertion ran first</li>
+      </ul>
+
+      <h4>18. This plan opts in, and becomes the first real instance</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Add a spine section to <code>specs/awsf-v2-w05-design-to-plan.html</code> declaring this workstream's own <code>INV</code> and <code>AC</code> statements — the ones already argued in Purpose and Solution, given identifiers rather than invented for the occasion</li>
+        <li><code class="status">[]</code> Add the <code>serves</code> claim to each task that satisfies one, and the matching <code>serves:</code> field to each ticket in <code>specs/tickets/awsf-v2-w05-design-to-plan/</code></li>
+        <li><code class="status">[]</code> <strong>No other plan in <code>specs/</code> is edited.</strong> v1 stays history and the other v2 plans opt in when their own workstreams choose to</li>
+        <li><code class="status">[]</code> Record in the tickets README that <code>serves</code> is read off the plan, never derived, so a reviewer edits the plan rather than the ticket</li>
+      </ul>
+
+      <h4>19. Testing Strategy</h4>
+      <p>Two surfaces, because they answer different questions. Fixtures held in memory prove the matcher bites on every rule; the real committed plan sets prove it engages on what is actually there. Then the induced drift, which is the only evidence that matters: <strong>a coverage gate nobody has seen fail is decoration.</strong></p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — fixture tests fail once per rule, each with a distinguishable message</li>
+        <li><code class="status">[]</code> <strong>Induced drift, part one</strong>: delete one <code>AC</code> declaration from this plan, run <code>npm run test:unit</code>, and record that it went red naming that identifier. Restore, and confirm green</li>
+        <li><code class="status">[]</code> <strong>Induced drift, part two</strong>: delete the <code>serves:</code> line from one ticket while leaving the plan intact, run the suite, and record that the mirror assertion caught it. Restore, and confirm green</li>
+        <li><code class="status">[]</code> <strong>Induced drift, part three</strong>: change one claim to <code>no-such-plan#AC-1</code>, run the suite, and record that the unresolvable stem was named. Restore, and confirm green</li>
+        <li><code class="status">[]</code> Both drift runs are recorded in this plan's Amendments with the exact failure text, because the evidence is the message rather than the exit code</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — the whole suite is green with everything restored, and the ten pre-existing sync assertions are unchanged</li>
+      </ul>
+      <div class="loop">🔁 <strong>Do not exit this milestone until every box above is checked.</strong> If an induced drift does <em>not</em> turn the suite red, the gate is wrong — fix the gate, never the fixture.</div>
+    </div>
+
+    <!-- ================= M6 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M6: The renderer — one envelope, three files, byte-identity by construction</h3>
+      <p>The stage the source record described as <em>"a plan recipe emitting an HTML plan"</em>, built the way it can actually exist: a model emits a validated envelope, and deterministic host code turns that envelope into the three committed files. No model writes the plan document, so nothing in the chain depends on a document having been read.</p>
+      <figure>
+        <pre class="mermaid">
+flowchart LR
+  E["awsf.design-plan-output/v1"] --> R["renderPlanDocument"]
+  R --> H["stem.html"]
+  R --> B["stem-build-prompts.md"]
+  R --> K["tickets/stem/*.md"]
+  H --> P["parseAwsfPlanHtmlV1"]
+  P -->|round trip| E
+  B -. "same string" .- K
+  style R stroke:#A78BFA,stroke-width:2px
+        </pre>
+        <figcaption>The renderer is the inverse of the parser W04 shipped, and the round trip is asserted rather than assumed. A build prompt reaches the prompts file and the ticket as one string written twice by one function.</figcaption>
+      </figure>
+
+      <h4>20. <code>renderPlanDocument</code> — the plan and its build prompts</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Pure: envelope in, a map of relative path to file contents out. It writes nothing itself, so it is testable without a worktree</li>
+        <li><code class="status">[]</code> Emits <code>awsf-plan-html/v1</code> exactly as the parser accepts it: milestone headings with status markers, numbered task headings, a checklist per task, and the spine section carrying declarations and claims</li>
+        <li><code class="status">[]</code> Emits <code>&lt;stem&gt;-build-prompts.md</code> with a <code># Section B — Task prompts (recommended)</code> block and one <code>### T&lt;nn&gt; — &lt;title&gt;</code> heading per step, in the shape the sync fence parses today</li>
+        <li><code class="status">[]</code> <strong>Every task carries a checklist</strong>, because the fence fails a plan task that has none and a rendered plan must not be born failing</li>
+        <li><code class="status">[]</code> All markers render as <code>[]</code> and every ticket <code>state</code> as <code>todo</code>. <strong>A rendered plan claims no completed work</strong> — invariant 2, applied to a document a machine wrote</li>
+      </ul>
+
+      <h4>21. The ticket set, its README, and the round trip</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Emits <code>specs/tickets/&lt;stem&gt;/T&lt;nn&gt;.md</code> per step with parsing frontmatter — <strong><code>title</code> always quoted</strong>, because a task title routinely contains a colon and YAML reads that as a nested mapping</li>
+        <li><code class="status">[]</code> The ticket body's build prompt and the § Section B block are <strong>the same string</strong>, taken once from the envelope. Byte-identity is a property of the code, and the existing assertion becomes a regression check</li>
+        <li><code class="status">[]</code> Emits <code>README.md</code> with the derived-field rules for the set it just wrote, so a reviewer edits a rule rather than re-deriving one</li>
+        <li><code class="status">[]</code> <code>depends_on</code> is carried from the envelope's <code>dependsOn</code>, never a blind <code>n-1</code> chain, so declared parallelism survives rendering</li>
+        <li><code class="status">[]</code> Emits nothing else. A receipt, a manifest, or a run log would violate invariant 10, and the renderer has no reason to want one</li>
+      </ul>
+
+      <h4>22. Testing Strategy</h4>
+      <p>The renderer's correctness claim is a round trip, so the test is a round trip: render an envelope, parse the result with the shipped parser, and assert the tasks, milestones, markers and identifiers come back identical. The edge cases are the ones that would corrupt a downstream reader silently — a colon in a title, a backtick in a build prompt, an apostrophe in a statement.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — <code>parseAwsfPlanHtmlV1(render(e))</code> returns the milestones, task numbers, checklists and identifiers <code>e</code> declared</li>
+        <li><code class="status">[]</code> Every rendered ticket's frontmatter parses with the same <code>yaml</code> reader the fence uses, asserted on a title containing a colon</li>
+        <li><code class="status">[]</code> A rendered set is run through <code>spineCoverage</code> and produces zero violations — <strong>the renderer's output satisfies M5's gate, which is why M5 comes first</strong></li>
+        <li><code class="status">[]</code> Rendering the same envelope twice produces byte-identical output; nothing in it reads a clock, a random source, or the filesystem</li>
+        <li><code class="status">[]</code> <code>npm run lint</code> and <code>npm run typecheck</code></li>
+      </ul>
+      <div class="loop">🔁 <strong>Do not exit this milestone until every box above is checked.</strong> If the round trip needs the parser loosened to pass, the renderer is emitting a grammar the format does not have — fix the renderer.</div>
+    </div>
+
+    <!-- ================= M7 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M7: <span class="gate">G1</span> — the route, the two roles, and the close</h3>
+      <div class="card warn">
+        <h5>Precondition — ordering gate <span class="gate">G1</span>. This milestone does not start until it holds.</h5>
+        <p><strong><code>specs/awsf-v2-w06-prompt-composition.html</code> must exist, and its centralisation milestone must be <code>[x]</code>.</strong> W06 turns three independent system-prompt composition sites into one. Every task below touches a role's prompt path, and adding a role before the sites are one site is what creates the fourth copy the gate exists to prevent. <strong>Milestones M1 through M6 have no such precondition and may already be complete.</strong> If W06's plan does not exist yet, stop here and say so — do not build the role prompts "so they are ready".</p>
+      </div>
+      <p>Everything below is the thin layer that makes the six milestones underneath reachable by a provider: two prompt pairs, one recipe, three host phase bindings, and one owner amendment. It is deliberately last and deliberately small.</p>
+      <figure>
+        <pre class="mermaid">
+flowchart TD
+  W6["W06 centralisation [x]"] --> T23["prompts/designer<br/>prompts/architecture-reviewer"]
+  T23 --> T24["recipe + KNOWN_WORKFLOW_IDS + SUPPORTED"]
+  T24 --> AM["owner amendment<br/>awsf.config.yaml"]
+  AM --> T27["end-to-end on a fixture adapter"]
+  T24 --> T26["bind plan-context + plan-render<br/>in the ONE composition site"]
+  T26 --> T27
+  style W6 stroke:#F97316,stroke-width:2px
+  style AM stroke:#FB7185,stroke-width:2px
+        </pre>
+        <figcaption>The owner amendment sits between the code that admits its vocabulary and the task that runs the route. Committed earlier, it makes the config loader reject a workflow id the code does not know yet, which stops every command rather than just this one.</figcaption>
+      </figure>
+
+      <h4>23. Confirm <span class="gate">G1</span>, then write the two role prompts</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <strong>First act of this milestone</strong>: open <code>specs/awsf-v2-w06-prompt-composition.html</code> and confirm its centralisation milestone reads <code>[x]</code>. If it does not, stop and report — this is gate <span class="gate">G1</span> and no later box may be checked without it</li>
+        <li><code class="status">[]</code> <code>prompts/designer/{system,user}.md</code> — the user prompt declares <code>{output_schema}</code> and <code>{previous_envelope}</code> and restates no shape by hand</li>
+        <li><code class="status">[]</code> <code>prompts/architecture-reviewer/{system,user}.md</code> — same rule, plus one instruction that is the point of the role: <strong>state what you did not check</strong>, because <code>limitations</code> is required non-empty and a reviewer that has not been asked will not answer</li>
+        <li><code class="status">[]</code> Neither system prompt duplicates whatever shared block W06 introduced. If a sentence belongs to every role, it belongs in W06's one place, and this task's job is to notice that rather than to copy it</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — <code>no-handwritten-schema.test.ts</code> stays green over the four new files</li>
+      </ul>
+
+      <h4>24. The recipe, the workflow id, and the registration</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>core/src/workflow/recipes/design-to-plan.ts</code>: seven phases in Phase Contract order, <code>tier: 2</code>, three agent phases, <code>as const satisfies WorkflowRecipe</code></li>
+        <li><code class="status">[]</code> Each phase's <code>description</code> is earned — <code>assertEarnedDescription</code> rejects one that merely restates the phase id, and it fails at compile time rather than at run time</li>
+        <li><code class="status">[]</code> <code>design-to-plan</code> added to <code>KNOWN_WORKFLOW_IDS</code> in <code>core/src/config/schema.ts</code> — <strong>this is the task that must precede the owner's amendment</strong></li>
+        <li><code class="status">[]</code> Registered in <code>SUPPORTED</code> in <code>production-run.ts</code> and in the recipe list in <code>core/test/unit/workflow/recipes.test.ts</code>, whose "exactly seven" assertion becomes eight with its phase order and call count spelled out</li>
+        <li><code class="status">[]</code> <code>compileWorkflow(designToPlan, 2)</code> admits: <code>minimumCalls</code> is 3 against a tier-2 ceiling of 5, and the three host phases move nothing</li>
+      </ul>
+
+      <h4>25. Bind <code>design-context</code>, and resolve the targets through W04's registry</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> The host composes <code>design-context</code> from the project's catalog plus the machine-local placement layer — both already built by W04 — and reads each target's <code>headSha</code> with the existing <code>systemGitRunner</code></li>
+        <li><code class="status">[]</code> The composed target paths reach the designer and the architecture reviewer as ordinary envelope content, so both phases know where to read without either one being told a path by a prompt</li>
+        <li><code class="status">[]</code> <strong>No policy change.</strong> <code>path-policy</code> judges write targets only, and <code>sandbox-broker</code> already binds the whole filesystem read-only before binding the worktree writable. Verify that rather than assume it, and <strong>do not add a read glob, a read policy, or a second writable root</strong></li>
+        <li><code class="status">[]</code> Writes stay in the one worktree: assert that a run over a three-repository project touches no file outside the plan repository's worktree</li>
+        <li><code class="status">[]</code> A project whose catalog declares one repository composes a one-entry <code>targets</code> and behaves exactly as before</li>
+      </ul>
+
+      <h4>26. Bind the remaining two host phases inside the one composition site</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>plan-context</code> is composed by the host from the stored design and review envelopes, in the phase loop, keyed by its schema id — the same way <code>review-context</code> already is</li>
+        <li><code class="status">[]</code> <code>plan-render</code> writes its three files into the managed worktree and the host commits them; <code>no_protected_paths</code> and <code>diff_matches_claims</code> run against that commit</li>
+        <li><code class="status">[]</code> <strong>No new runner, no new CLI command, no new system-prompt composition path.</strong> <code>awsf new … --workflow design-to-plan</code> reaches the route through the machinery that already exists</li>
+        <li><code class="status">[]</code> Assert it: a test counts the independent system-prompt composition sites and fails if the number rose. After W06 that number is 1, and this milestone must leave it at 1</li>
+        <li><code class="status">[]</code> <code>isReviewPhase</code> is unchanged, so the architecture-review phase is <strong>not</strong> deferred to the L11 spawn site and takes no task-machine edge</li>
+      </ul>
+
+      <h4>27. The owner amendment lands, then the route runs end to end</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <strong>Owner act, not a task</strong>: the two <code>agents:</code> entries and <code>design-to-plan</code> in <code>workflows.enabled</code>, committed by the owner. This box is checked by observing the commit, never by writing the file — <code>awsf.config.yaml</code> is a protected path</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — the config loads with the amended file, proving the vocabulary landed in the right order</li>
+        <li><code class="status">[]</code> One end-to-end pass on the <code>stub</code> fixture adapter: request → design → review → context → plan → render, with canned envelopes. <strong>Offline, no provider, no quota</strong></li>
+        <li><code class="status">[]</code> A second pass whose canned review carries one <code>high</code> finding: no plan context is composed, no planning call is reserved, the attempt stops, and the findings are in the journal</li>
+        <li><code class="status">[]</code> The rendered output of the first pass passes <code>ticket-plan-sync</code> including the new coverage assertions — <strong>the chain's product satisfies the chain's own gate</strong></li>
+      </ul>
+
+      <h4>28. Testing Strategy, full suite, and the workstream's close</h4>
+      <p>The last task is the only one that touches the spine. Everything it asserts has already been asserted once inside a milestone; running it again as one sweep is what makes the close honest rather than accumulated.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — the whole suite green, including every meta-test</li>
+        <li><code class="status">[]</code> <code>npm run typecheck</code> and <code>npm run lint</code></li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — <code>doc-reconciliation.test.ts</code> green: no command was documented that does not exist, and none was added that is undocumented</li>
+        <li><code class="status">[]</code> <code>README.md</code> names the new workflow route in one line, and no more — a route is not a feature tour</li>
+        <li><code class="status">[]</code> Every milestone marker in this plan reads <code>[x]</code>, and every ticket in <code>specs/tickets/awsf-v2-w05-design-to-plan/</code> reads <code>state: done</code>, flipped in the same commit</li>
+        <li><code class="status">[]</code> <strong>Only now</strong>: flip milestone M5's marker in <code>specs/awsf-v2-plan.html</code> to <code>[x]</code>, check its seven workstream boxes, and flip <code>specs/tickets/awsf-v2-plan/W05.md</code> to <code>state: done</code> — all in one commit</li>
+        <li><code class="status">[]</code> Record in this plan's Amendments what was built, what was refused, and the Q5 outcome from M1</li>
+      </ul>
+      <div class="loop">🔁 <strong>Do not exit this milestone until every box above is checked.</strong> A failing command means fix the cause and re-run — never lower what the row asserts. If the owner amendment has not landed, tasks 27 and 25 stay open and the workstream stays open with them.</div>
+    </div>
+  </section>
+
+  <!-- ===== GLOBAL VALIDATION ===== -->
+  <section id="validation">
+    <h2>Validation Commands</h2>
+    <p>Every command below is offline and spends no quota. Run them from the repository root.</p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> <code>npm run test:unit</code> — the whole suite, including <code>ticket-plan-sync</code> with its new coverage assertions and every other meta-test</li>
+      <li><code class="status">[]</code> <code>npm run typecheck</code> — the five new envelopes' static types reach every consumer</li>
+      <li><code class="status">[]</code> <code>npm run lint</code></li>
+      <li><code class="status">[]</code> <code>git diff --stat</code> — no plan other than this one was edited, and no runtime artifact was committed</li>
+      <li><code class="status">[]</code> The induced-drift runs from task 19 are recorded with their exact failure text, and the suite is green with everything restored</li>
+      <li><code class="status">[]</code> The stub end-to-end pass and the blocking-review pass from task 27 both behaved as written</li>
+      <li><code class="status">[]</code> Every milestone marker in this plan is <code>[x]</code>, every ticket is <code>done</code>, and the spine's M5 marker was flipped by task 28 and by nothing else</li>
+    </ul>
+    <div class="loop">
+      🔁 <strong>The plan is not complete until every box is checked and every command passes. If a step turns out to be impossible, mark it <code>[f]</code>, record why in Amendments, and move on if the rest can stand without it.</strong>
+    </div>
+  </section>
+
+  <!-- ===== QUESTIONABLES ===== -->
+  <section id="questionables">
+    <h2>Questionables</h2>
+    <p>One decision arrives settled from the spine and is recorded here as <strong>applied</strong>, with how rather than whether. Six were this plan's own. <strong>All six were decided by the owner on 2026-08-23</strong> and are now constraints this plan implements rather than questions it asks. Five came through an exported <code>plan-sota-review v1</code> block, each on the recommended option. <strong>Q5 was decided separately and against its recommendation</strong>, after the owner named the three-repository project this factory exists to serve and the recommendation's premise was checked against the source and found false.</p>
+    <p>Each entry keeps its recommendation and its stated cost, so the reasoning stays readable next to the choice. Clicking an option in the browser records a <em>proposal</em> that travels via Export Feedback; the text here is updated only by an agent session applying that feedback.</p>
+    <div class="card good">
+      <h5>One recommendation was falsified, and that is the review working</h5>
+      <p>Q5 shipped with a recommendation that turned out to rest on a false premise: it claimed the sandbox kept a read-only phase from reading a second repository. The source says otherwise, in a comment written for exactly this misreading. The owner supplied the case that made anyone check — three real repositories, one for plans and two for code — and the answer moved from <em>narrow, with a documented limitation</em> to <em>read all of them, record the revisions</em>. <strong>The cost of being wrong here was three tasks and no quota</strong>, because the correction landed while the plan was still a plan.</p>
+    </div>
+    <figure>
+      <pre class="mermaid">
+flowchart LR
+  QA["Q-A · Q5 inherited<br/>unique per plan"] --> M2["M2 grammar"]
+  Q1["Q1 · plan contract"] --> M3["M3 envelopes"]
+  Q2["Q2 · opt-in site"] --> M5["M5 coverage"]
+  Q3["Q3 · two roles"] --> M7["M7 route"]
+  Q4["Q4 · render scope"] --> M6["M6 renderer"]
+  Q5b["Q5 · reads all repos"] --> M6
+  Q6["Q6 · stop state"] --> M4["M4 gates"]
+  style QA stroke:#22C55E,stroke-width:2px
+  style Q1 stroke:#22C55E,stroke-width:2px
+  style Q2 stroke:#22C55E,stroke-width:2px
+  style Q3 stroke:#22C55E,stroke-width:2px
+  style Q4 stroke:#22C55E,stroke-width:2px
+  style Q6 stroke:#22C55E,stroke-width:2px
+  style Q5b stroke:#22C55E,stroke-width:2px
+      </pre>
+      <figcaption>All six decided on 2026-08-23. Five took the recommended option and changed no milestone's shape. Q5 went the other way and added three tasks — a host phase, an envelope and a gate — which is why it is the only one that touches three milestones.</figcaption>
+    </figure>
+
+    <details>
+      <summary><span class="qdecided">APPLIED</span> Q-A — <code>AC</code>/<code>INV</code> ids are unique per plan, cross-plan references qualified by plan stem <em>(spine Q5, decided 2026-08-21)</em></summary>
+      <p class="decided"><b>Approved (2026-08-23):</b> the owner confirmed this implementation of the spine's Q5 in the same review block. <b>Not open.</b> A decided Questionable is a constraint on this plan, not an assignment to it. It is recorded here so the implementation is reviewable next to the decision that forced it; the five rules and where each is enforced are in <em>Decisions This Workstream Inherits</em> above.</p>
+      <p class="qa-answer"><strong>The one thing still owed is evidence, not a choice.</strong> Milestone M1 threads one <code>INV</code> and one <code>AC</code> through v1 by hand and counts how many real cross-references would cross a plan boundary. That count is the falsifier the spine named in advance: if several do, per-project scope earns its allocator and Q5 reopens <em>with evidence</em> rather than on taste. M1 runs before M2, so the answer arrives while it can still change the grammar.</p>
+      <p class="qa-answer"><strong>What the qualified form buys, concretely.</strong> <code>&lt;plan-stem&gt;#INV-n</code> resolves through <code>resolvePlanSources</code> — the list the fence already builds to pair plans with ticket sets. So a cross-plan reference costs one lookup in a list that is already in hand, and costs no allocator, no index, and no new persisted state. That is the whole of the "apparent cost disappears" claim, and it is checkable: task 19's third induced drift points a claim at a stem that does not exist and watches the fence name it.</p>
+    </details>
+
+    <details data-review-options="A new awsf.design-plan-output/v1, leaving plan-output untouched|Bump to awsf.plan-output/v2 and migrate the three recipes that use it|Add an optional serves field to awsf.plan-output/v1">
+      <summary><span class="qdecided">DECIDED</span> Q1 — Does the planning envelope fork, or does <code>awsf.plan-output/v1</code> grow the identifier join?</summary>
+      <p class="decided"><b>Decided (2026-08-23):</b> <strong>A new <code>awsf.design-plan-output/v1</code>, leaving <code>awsf.plan-output/v1</code> untouched</strong> — owner verdict via the exported <code>plan-sota-review v1</code> block, on the recommended option. See Amendments. <strong>A decided Questionable is a constraint, not an assignment: implement it, do not re-litigate it.</strong></p>
+      <span class="recommend"><b>Recommendation: a new <code>awsf.design-plan-output/v1</code>.</b> This route's plan is a different artifact — it carries the join and it renders to a committed document — and forking leaves <code>plan</code>, <code>plan-build-test</code> and <code>simple-sdlc</code> untouched.</span>
+      <span class="consequence"><b>The cost, stated rather than buried:</b> two plan-shaped contracts exist, and the plans produced by the other three recipes stay unjoinable. That is a real gap and this plan does not pretend otherwise. <b>The named upgrade:</b> if the spine proves out, <code>awsf.plan-output/v2</code> absorbs it and the three recipes migrate — a versioned change with a migration, not a drift.</span>
+      <p class="qa-answer"><strong>Why not grow v1.</strong> Every envelope schema is <code>additionalProperties: false</code>, so adding a required field breaks every existing planner envelope at once, including the ones <code>requestOutput</code> synthesises for four recipes' <code>request</code> phases. Adding it <em>optionally</em> is worse than either alternative: the join would be enforceable only when the model happened to emit it, and a coverage gate that can be satisfied by omission is not a gate.</p>
+      <p class="qa-answer"><strong>Why not bump to v2 now.</strong> It is the right eventual shape and the wrong first move. Migrating three shipped recipes and their prompts is a change to work this workstream is not scoped to touch, and it would make W05's acceptance boundary depend on three routes it does not own — the exact failure the spine split this candidate to avoid.</p>
+    </details>
+
+    <details data-review-options="This plan opts in; v1 stays history|Opt in specs/awsf-plan.html and one of its tickets|A synthetic plan and ticket set registered as a test fixture">
+      <summary><span class="qdecided">DECIDED</span> Q2 — Which plan becomes the coverage gate's first real instance?</summary>
+      <p class="decided"><b>Decided (2026-08-23):</b> <strong>This plan opts in; v1 stays history</strong> — owner verdict via the exported <code>plan-sota-review v1</code> block, on the recommended option. See Amendments. <strong>A decided Questionable is a constraint, not an assignment: implement it, do not re-litigate it.</strong></p>
+      <span class="recommend"><b>Recommendation: this plan opts in, and v1 stays history.</b> The plan that introduces the identifier spine is the first to carry it, which makes the demonstration self-evident and touches nothing that is already closed.</span>
+      <span class="consequence"><b>The cost:</b> the first instance is a plan written <em>after</em> the grammar existed, so it proves the gate works and not that real prose maps onto it cleanly. <b>That second question is exactly what M1 answers</b>, by hand, on a plan written before any of this existed — which is why M1 is not optional and why its result is recorded whether or not it changes anything.</span>
+      <p class="qa-answer"><strong>Why not edit v1.</strong> <code>specs/awsf-plan.html</code> has every marker at <code>[x]</code>. Editing a closed plan to demonstrate a new mechanism invites exactly the re-planning the spine forbids, and the same evidence is available by threading it <em>by hand</em> in M1 without committing the result.</p>
+      <p class="qa-answer"><strong>Why not a synthetic fixture as the only instance.</strong> Fixtures are still built, and task 19 uses them to prove each rule bites individually. But a fence whose only subject is a fixture has never met real data. The plan sets the meta-test actually resolves are the ones that catch drift, and this plan is one of them.</p>
+    </details>
+
+    <details data-review-options="Two new roles: designer and architecture-reviewer|One new role; the design phase reuses planner|One new architect role that both designs and reviews">
+      <summary><span class="qdecided">DECIDED</span> Q3 — Two new agent roles, where the spine's wording implies one</summary>
+      <p class="decided"><b>Decided (2026-08-23):</b> <strong>Two new roles: <code>designer</code> and <code>architecture-reviewer</code></strong> — owner verdict via the exported <code>plan-sota-review v1</code> block, on the recommended option. See Amendments. <strong>A decided Questionable is a constraint, not an assignment: implement it, do not re-litigate it.</strong></p>
+      <span class="recommend"><b>Recommendation: two — <code>designer</code> and <code>architecture-reviewer</code>.</b> The spine says W05 "introduces an architecture-reviewer role", and building it discloses that a second is forced by the mechanism.</span>
+      <span class="consequence"><b>The cost:</b> the owner's <code>awsf.config.yaml</code> amendment adds two <code>agents:</code> entries instead of one, and two prompt pairs need writing. Both land in the same milestone and the same owner commit, so the sequencing cost is zero and the surface cost is one extra role.</span>
+      <p class="qa-answer"><strong>Why the second one is forced rather than chosen.</strong> <code>production-run.ts</code> resolves a phase's prompts through its <code>owner</code>: <code>agents.get(phase.owner)</code>, then <code>agent.prompt.user</code> and <code>agent.prompt.system</code>. Two phases owned by the same role therefore receive the <em>same</em> user prompt. Design and plan need different instructions, so they cannot share a role — unless the recipe's own phase-level prompt were used, which production deliberately overrides with the configured one.</p>
+      <p class="qa-answer"><strong>Why not one role that designs and then reviews.</strong> It would destroy the property the review exists for. The independent architecture review is settled precisely because the reviewer did not write the proposal, and a role reviewing its own prior phase output is a self-review wearing two phase ids. The spine's own collision note assumes a <em>fresh</em> session for the same reason.</p>
+      <p class="qa-answer"><strong>What is not needed:</strong> a new reviewer for code. The existing <code>reviewer</code> role is untouched, keeps its inversion, and this chain does not use it.</p>
+    </details>
+
+    <details data-review-options="Plan HTML, build prompts, and the ticket set together|Plan HTML only; prompts and tickets stay hand-authored|Plan HTML and build prompts; tickets by a later host step">
+      <summary><span class="qdecided">DECIDED</span> Q4 — What the render phase emits</summary>
+      <p class="decided"><b>Decided (2026-08-23):</b> <strong>Plan HTML, build prompts, and the ticket set together, in one commit</strong> — owner verdict via the exported <code>plan-sota-review v1</code> block, on the recommended option. See Amendments. <strong>A decided Questionable is a constraint, not an assignment: implement it, do not re-litigate it.</strong></p>
+      <span class="recommend"><b>Recommendation: all three, in one commit.</b> Anything less leaves the coverage gate unable to engage on what the chain produces.</span>
+      <span class="consequence"><b>The cost:</b> the plan envelope has to carry each step's full build prompt, which makes it the largest envelope in the system and puts it closest to the 256 KiB parse ceiling. <b>Mitigation, and it is a real limit not a workaround:</b> a plan whose rendered prompts exceed the envelope ceiling is a plan with too many tasks in one attempt, and failing loudly at that boundary is the correct behaviour.</span>
+      <p class="qa-answer"><strong>Why less than three does not work.</strong> <code>ticket-plan-sync.test.ts</code> contains <code>if (!existsSync(source.ticketsPath)) continue;</code> — <strong>a plan with no ticket set is skipped entirely.</strong> A chain that rendered a plan and no tickets would produce documents the fence never looks at, and the coverage gate this workstream exists to build would be silently vacuous on its own output.</p>
+      <p class="qa-answer"><strong>What emitting all three buys beyond that.</strong> Invariant 12's byte-identity clause stops being a discipline check. The ticket body and the § Section B block are one string written twice by one function in one commit, so they cannot drift; the existing assertion becomes a regression test against a future refactor rather than a guard against a careless author.</p>
+    </details>
+
+    <details data-review-options="Read every declared repository, write only the one the attempt runs in|v1 supports one repository: the plan repository is the subject|Defer multi-repository reading to its own workstream">
+      <summary><span class="qdecided">DECIDED</span> Q5 — The chain designs for one repository, and W04 made "one repository" a real question</summary>
+      <p class="decided"><b>Decided (2026-08-23):</b> <strong>the chain reads every repository the project's catalog declares, read-only and revision-recorded, and writes only into the one the attempt runs in.</strong> Owner verdict, taken after the recommendation below was falsified. <strong>A decided Questionable is a constraint, not an assignment: implement it, do not re-litigate it.</strong> See Amendments.</p>
+      <p class="qa-answer"><strong>The recommendation this replaces was wrong, and it is worth recording why rather than deleting it.</strong> It said the designer and the reviewer "cannot read the code they are reasoning about" in a multi-repository project, and priced the fix as a second worktree — a new mechanism belonging to another workstream. <strong>Both halves were wrong.</strong> <code>path-policy</code> judges write targets only; <code>sandbox-broker</code> binds <code>--ro-bind / /</code> before binding the worktree writable, and its own comment says <em>"writes: [] confines WRITES and confines reads not at all."</em> Nothing forbade the read. What was missing was that nothing supplied the paths and nothing recorded the revisions — which is a host phase, not a mechanism.</p>
+      <p class="qa-answer"><strong>What settled it was the case, not the argument.</strong> The project this factory exists to serve keeps its plans in one repository and its code in two others, with default branches that already disagree — <code>main</code>, <code>master</code>, <code>main</code>, which W04's catalog records per repository. Shipping a chain that could not read them would have delivered the wrong thing and then required a second workstream to retrofit the phase into a chain that already existed — the same "four places instead of one" pattern ordering gate <span class="gate">G1</span> exists to prevent, arriving by a different route.</p>
+      <p class="qa-answer"><strong>What it costs, exactly:</strong> one host phase, one envelope, one gate, and three tasks — <strong>7</strong>, <strong>11</strong> and <strong>25</strong>. No new agent call, because a host phase moves no ceiling. No policy change. No second writable root. No new task state or legal edge. The single-repository project stays the degenerate case of the same path rather than a separate one, which is the shape W04 chose for its own catalog and the reason this fits without a second acceptance boundary.</p>
+      <p class="qa-answer"><strong>The limit that comes with it, stated where a green gate is read.</strong> <code>design_evidence_present</code> proves which revision of each repository was <em>available</em>, never which files were opened — weaker than <code>review_evidence_present</code>'s byte-level digest, and the right unit for a phase that explores rather than judges. The card in Solution carries the reasoning and the named upgrade.</p>
+      <p class="qa-answer"><strong>The option set, retained so the road not taken stays readable.</strong> <em>Read every declared repository</em> is what was chosen: it needs no permission that does not already exist, and its only new obligation is the record. <em>One repository, deferred limitation</em> was the original recommendation; it survives only if the multi-repository case is hypothetical, and it is not. <em>Its own workstream</em> keeps this plan's acceptance boundary at one thing, at the cost of shipping a chain that cannot do the job it exists for and retrofitting it afterwards.</p>
+    </details>
+
+    <details data-review-options="Stop at AWAITING_OWNER; the owner may continue via L19|Stop at BLOCKED; only a retry mints a new attempt|Fail the plan-context phase and let the existing failure path decide">
+      <summary><span class="qdecided">DECIDED</span> Q6 — Where a blocking architecture review leaves the attempt</summary>
+      <p class="decided"><b>Decided (2026-08-23):</b> <strong>Stop at <code>AWAITING_OWNER</code>; the owner may continue via <code>L19</code></strong> — owner verdict via the exported <code>plan-sota-review v1</code> block, on the recommended option. See Amendments. <strong>A decided Questionable is a constraint, not an assignment: implement it, do not re-litigate it.</strong></p>
+      <span class="recommend"><b>Recommendation: <code>AWAITING_OWNER</code>, findings journalled, no automatic resume.</b> The design is wrong and a person has to decide what to do about it; that is what the state is for.</span>
+      <span class="consequence"><b>The cost:</b> <code>L19</code> lets the owner resume into <code>RUNNING</code>, so an owner who always continues makes the gate decorative. <b>That is accepted, deliberately.</b> The override is an interactive human act recorded with actor <code>human</code>, and it draws on a correction allowance — it costs something and it is written down. An override a gate can be <em>argued</em> into is the failure mode worth preventing; an override a person takes in the open is not.</span>
+      <p class="qa-answer"><strong>Why not <code>BLOCKED</code>.</strong> <code>BLOCKED</code> is terminal for the attempt, so a design with one high finding and an obvious fix would cost a whole new attempt. The findings are the useful output here, and the owner should be able to act on them without re-minting.</p>
+      <p class="qa-answer"><strong>Why the stop must not be a correction.</strong> Stated once in Solution and repeated because it is the single most important shape in this plan: resuming the reviewer against an unchanged design asks it to produce a different verdict about the same artifact. No gate in this chain may buy that turn.</p>
+    </details>
+  </section>
+
+  <!-- ===== NOTES ===== -->
+  <section id="notes">
+    <h2>Notes</h2>
+
+    <h3>Evidence and the cheapest unused upgrade, per decision-bearing claim</h3>
+    <p>The spine requires this pair of every deep plan: a claim that carries a decision names the evidence it rests on and the cheapest unused thing that would strengthen it. Where a claim is unverified, the row says so.</p>
+    <table>
+      <thead><tr><th>Claim</th><th>Evidence</th><th>Cheapest unused upgrade</th></tr></thead>
+      <tbody>
+        <tr><td>A recipe phase cannot reach an installed skill</td><td><strong>Source-verified.</strong> <code>core/src/adapters/pi-codex.ts:621</code> passes <code>--no-skills</code>; <code>core/src/adapters/claude-code.ts:139-147</code> maps exactly eight tool names, none of which invokes a skill, and the read-only profile passes <code>--tools Read,Glob,Grep</code>.</td><td>A meta-test asserting no adapter descriptor can carry a skill-invoking tool name. Cheap, and currently unwritten — the property holds today by two independent constructions and nothing pins either.</td></tr>
+        <tr><td>The architecture review is independent of the design that produced it</td><td><strong>Partly source-verified, and the weaker half is named.</strong> Fresh-session independence holds unconditionally: both roles carry <code>continuity: none</code>. Cross-provider difference does <em>not</em> hold automatically — <code>isReviewPhase</code> gates the inversion block, so this phase is invisible to it and the difference is bought with configuration.</td><td>Separate "which phase inverts" from "which phase is a transition" in <code>production-run.ts</code>. Small, and deliberately left to the workstream that owns that file.</td></tr>
+        <tr><td>The architecture review must not become a transition</td><td><strong>Source-verified.</strong> <code>task-machine.ts</code>'s own header states the rule; <code>transitions.test.ts</code> pins twenty-five edges in four assertions; <code>isReviewPhase</code> selects the L11 spawn site by schema id.</td><td>None needed — this is the one claim in the plan already guarded by a stronger fence than anything W05 would add. The upgrade is to <em>not</em> add one.</td></tr>
+        <tr><td>Identifiers unique per plan are sufficient</td><td><strong>Reasoned, not yet measured.</strong> The argument is scope alignment with <code>ticket-plan-sync</code> plus <code>TicketStore</code>'s stated refusal of an index.</td><td><strong>Milestone M1, and it is scheduled rather than named.</strong> One hour, no quota, and it can reopen the decision with a count.</td></tr>
+        <tr><td>A zero-blocker count proves envelope consistency only</td><td><strong>Definitional</strong>, and treated as a design constraint rather than a caveat: the limit rides the passing note and a unit test asserts it is there.</td><td>Sample the finding counts across a run of real reviews and see whether the count trends toward zero over time. That is the measurement that would show the number being optimised rather than measured — and it needs history this repository does not have yet.</td></tr>
+        <tr><td>Byte-identity by construction beats byte-identity by assertion</td><td><strong>Derived in this plan.</strong> One function writes the string twice; the existing assertion stays as a regression check.</td><td>Delete the assertion and see what else breaks. Cheap, and deliberately not taken — a construction argument that removes its own check is one refactor away from being false.</td></tr>
+        <tr><td>A read-only phase may read a repository other than its worktree</td><td><strong>Source-verified, and it overturned this plan's own recommendation.</strong> <code>sandbox-broker.ts:95</code> binds <code>--ro-bind / /</code>; <code>path-policy</code>'s three violation reasons are all write-target reasons. The original Q5 entry asserted the opposite from reasoning rather than from source.</td><td>Run the chain once against the three real repositories and confirm no write lands outside the plan repository's worktree. Task 25 asserts it; the assertion is the cheap version and the real run is the upgrade.</td></tr>
+        <tr><td>Revision-level evidence is the right unit for a design phase</td><td><strong>Argued, not measured.</strong> The reviewer's byte-level digest exists because it judges a fixed diff; nothing yet shows a designer needs less.</td><td>Record which paths a design phase actually opened and compare against the declared targets — a per-tool-call record the harness does not retain today, which is why the claim is argued rather than shown.</td></tr>
+        <tr><td>The chain rides the existing runner and adds no composition site</td><td><strong>Source-verified for the agent phases:</strong> <code>routePrompts</code> is built generically from <code>recipe.phases</code>. <strong>Not yet verified for the three host phases</strong>, each of which needs a branch keyed by schema id beside the one <code>review-context</code> already has.</td><td>Task 26's site count, which is the assertion, not the evidence. The evidence arrives when it runs.</td></tr>
+        <tr><td>Three agent calls fit a tier-2 ceiling</td><td><strong>Source-verified.</strong> <code>DEFAULT_CALL_CEILINGS</code> is <code>{0:1, 1:3, 2:5}</code>; <code>minimumCalls</code> counts agent phases only, which <code>review-context</code> already demonstrates.</td><td>Confirm what a correction round costs the ledger. A resumed session should not spend a second call, but this plan asserts the admission arithmetic and not that.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>What is deliberately not in this workstream</h3>
+    <ul>
+      <li><strong>The <code>planf3</code> → <code>plan-sota</code> rename.</strong> Owner-side migration work, executed 2026-08-20, living outside every managed worktree. It does not re-enter this or any task graph.</li>
+      <li><strong>Replacing the hand-authoring route.</strong> Both routes emit the same declared format. Nothing here deprecates the other.</li>
+      <li><strong>Retrofitting the identifier join onto <code>plan</code>, <code>plan-build-test</code> or <code>simple-sdlc</code>.</strong> Named as a gap in Q1 and left, with the migration named.</li>
+      <li><strong>Generalising <code>rework</code> to a design.</strong> <code>rework.ts</code> is bound to build and test envelopes; the ladder workstream owns that shape.</li>
+      <li><strong>A second writable root, or any write outside the attempt's worktree.</strong> Q5 brought cross-repository <em>reading</em> in; writing stays single-repository, which is what keeps <code>path-policy</code> and W04's Q1 reasoning intact.</li>
+      <li><strong>Cloning, fetching, or updating a target repository.</strong> <code>design-context</code> reads what is on disk and records its revision. A chain that fetched would be making another repository's state its business mid-attempt.</li>
+      <li><strong>Preparing the Smart Health repositories themselves.</strong> Adding a project catalog, recording per-repository gate commands, and whatever cross-repository contract W04's Q1 shape calls for are changes to <em>those</em> repositories — see the note below. None of it is a ticket here.</li>
+      <li><strong>Any new task state, legal edge, or CLI command.</strong> If a task finds itself wanting one, the scope drifted.</li>
+      <li><strong>Widening <code>TicketSchema</code>.</strong> W04 named the store/fence vocabulary divergence as a known gap and left it; this plan does not quietly close it while doing something else.</li>
+    </ul>
+
+    <h3>Relationship to the workstreams on either side</h3>
+    <p><strong>W04, upstream and already built.</strong> Everything this workstream joins on comes from there: <code>resolvePlanSources</code>, the declared plan format, the plan-aware fence, the per-plan-set scope that makes Q-A's answer the cheap one, and — after Q5 — the catalog and placement layers <code>design-context</code> resolves its targets through. <strong>Q5's answer costs one host phase precisely because W04 already built the registry underneath it.</strong> Without W04 the coverage gate would have had to invent its own pairing, which is the drift W04 removed.</p>
+    <p><strong>W06, downstream in authoring and upstream in build.</strong> The one inverted edge in the spine. W06 needs this design to know which roles it is centralising for; this workstream's M7 needs W06's centralisation to exist. Both directions are real and neither is a mistake.</p>
+    <p><strong>W11, the ladder, further downstream.</strong> It consumes these compiled recipes and typed envelopes. The one thing it should <em>not</em> inherit is the assumption that every plan-shaped envelope carries the join — three recipes still do not, by Q1.</p>
+    <p><strong>W02, sideways.</strong> The dashboard renders gate checks, so the stated limit on the zero-blocker row reaches a reader through W02's work without this plan asking for anything. That is a benefit, not a dependency; nothing here waits on it.</p>
+
+    <h3>Rejected while authoring this plan</h3>
+    <table>
+      <thead><tr><th>Rejected</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>A <code>awsf.requirements-output/v1</code> envelope for the first stage</td><td>Every shipped recipe already starts with an <code>engineer</code> phase whose envelope <code>requestOutput</code> synthesises from the recorded request. A new contract would have restated that for no new guarantee. The requirements stage is the owner's request, typed — and the design echoes it back verbatim so the link is checkable without a hash a model would have to compute.</td></tr>
+        <tr><td>Making the zero-blocker check a gate on the review phase</td><td>It would be correctable, and the only party it could correct is the reviewer. See the warning card in Solution.</td></tr>
+        <tr><td>Separate <code>satisfies</code> and <code>upholds</code> ticket fields</td><td>Two vocabularies to keep aligned where the identifier prefix already discriminates. One <code>serves</code> field.</td></tr>
+        <tr><td>Bumping <code>awsf-plan-html/v1</code> to <code>/v2</code></td><td>The extension is additive and optional. A bump would force every plan already in <code>specs/</code> to be re-declared for no gain, and the trigger for a real bump — making the spine mandatory — is written into the module comment instead.</td></tr>
+        <tr><td>A new <code>core/src/plans/</code> directory</td><td><code>core/src/registry/</code> already owns the plan-document layer via <code>plan-source.ts</code>. The reason to split later is a measured budget warning, not a naming preference.</td></tr>
+        <tr><td>A meta-test asserting the architecture review takes no edge</td><td><code>transitions.test.ts</code> already pins twenty-five edges in four assertions. The spine's own rule applies: check first whether the guarantee is already enforced somewhere stronger. It is.</td></tr>
+        <tr><td>Letting the design phase reuse <code>planner</code></td><td>Production resolves a phase's prompts through its owner, so two phases with one owner get one prompt. See Q3.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Risks this plan carries knowingly</h3>
+    <table>
+      <thead><tr><th>Risk</th><th>Why it is real</th><th>What this plan does about it</th></tr></thead>
+      <tbody>
+        <tr><td><strong>The green row gets read as a clean design anyway</strong></td><td>Counted verdicts drift toward being optimised. A sentence on a note is weaker than a number on a dashboard.</td><td>The limit rides the passing note, a unit test pins it there, and <code>limitations</code> is required non-empty so the envelope states the same limit independently. Three statements of one bound; none of them is a footnote.</td></tr>
+        <tr><td><strong>Identifiers become ceremony</strong></td><td>A design can declare five acceptance criteria that restate the summary, satisfy every gate, and mean nothing.</td><td>Named and <em>not</em> mechanically closed, because no gate can judge whether a statement is worth making. What is closed: every <code>AC</code> carries a <code>verifiedBy</code>, so a criterion with no stated observation is refused. The residual gap is accepted, in the same accounting the driving-tree fences already make for paraphrase.</td></tr>
+        <tr><td><strong>M7 waits on a workstream that has not been planned yet</strong></td><td>W06's deep plan does not exist at the time this one is authored — that is what gate <span class="gate">G1</span> is.</td><td>Six of seven milestones are independent of W06 and can complete first. M7 is small on purpose, so the wait costs little and the waiting work is visible.</td></tr>
+        <tr><td><strong>A target repository moves under the design</strong></td><td>The recorded head revision is a record of what was there, not a lock. Another process may commit to a code repository mid-attempt.</td><td>Named rather than prevented — locking another repository during an attempt is a coordination mechanism this project has refused elsewhere. The record is what makes the drift visible after the fact.</td></tr>
+        <tr><td><strong>The plan envelope grows large</strong></td><td>It carries every step's full build prompt, against a 256 KiB parse ceiling.</td><td>Stated in Q4 as a real limit rather than mitigated: a plan whose prompts exceed the ceiling has too many tasks in one attempt, and failing at that boundary is correct.</td></tr>
+        <tr><td><strong>A design is written against a repository nobody resolved</strong></td><td>Placement is machine-local, so a fresh clone or a moved directory leaves a declared repository unresolvable — and a design written without one of its repositories looks complete.</td><td><code>design_evidence_present</code> fails before the design call is reserved, and names the repository. A registry fault stops the run rather than degrading it.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>What the Smart Health repositories will need, and why none of it is a ticket here</h3>
+    <p>This chain reads a project's repositories; it does not prepare them. Once the factory is strong enough to run against the real project, three things have to land <em>in those repositories</em>, and the spine already classes work in another repository as owner-side and out of every task graph.</p>
+    <table>
+      <thead><tr><th>What lands there</th><th>Where its shape is already decided</th></tr></thead>
+      <tbody>
+        <tr><td>A project catalog at the plan repository's root, naming all three repositories, which one holds the plans, and each one's default branch — <code>main</code>, <code>master</code>, <code>main</code>.</td><td>W04, <code>awsf.project/v1</code>. The shape exists; only the instance is missing.</td></tr>
+        <tr><td>Per-repository gate commands recorded in that catalog — the API repository's and the app repository's own test, typecheck and lint invocations, which are not this repository's.</td><td>W04's Q2, decided: the catalog <em>records</em> gate commands and does not resolve them.</td></tr>
+        <tr><td>A machine-local placement entry mapping each repository id to its path on this machine.</td><td>W04's placement layer, written by <code>awsf project register</code> and never committed.</td></tr>
+        <tr><td>If the two code repositories are ever given a declared contract between them, an immutable content-addressed artifact committed in each.</td><td>Spine Q1, decided 2026-08-21. <strong>W04 still owes the reading that fixes its content</strong> — that debt is W04's, not this workstream's.</td></tr>
+      </tbody>
+    </table>
+    <p><strong>Nothing above is a change to AWSF</strong>, which is why none of it appears in this plan's tasks and why a session building this workstream should refuse it if it arrives as a request. The one thing this plan does owe the real project is that <code>design_evidence_present</code> fails loudly when a declared repository will not resolve, so a missing placement entry is a red gate rather than a design quietly written against two repositories out of three.</p>
+
+    <h3>Derived-field rule for this workstream's tickets</h3>
+    <p>Recorded here and in <code>specs/tickets/awsf-v2-w05-design-to-plan/README.md</code>, per the ticket-authoring convention: any field not read directly off the plan must have its derivation rule written down once rather than re-derived downstream.</p>
+    <ul>
+      <li><strong><code>milestone</code></strong> is the <code>M</code>-number of the phase the numbered task belongs to: <code>M1</code> → <code>T01</code>–<code>T02</code>, <code>M2</code> → <code>T03</code>–<code>T05</code>, <code>M3</code> → <code>T06</code>–<code>T09</code>, <code>M4</code> → <code>T10</code>–<code>T15</code>, <code>M5</code> → <code>T16</code>–<code>T19</code>, <code>M6</code> → <code>T20</code>–<code>T22</code>, <code>M7</code> → <code>T23</code>–<code>T28</code>. Ticket number equals the plan's own <code>&lt;h4&gt;N.</code> task number exactly.</li>
+      <li><strong><code>depends_on</code></strong> follows the plan's stated chain, including its granted parallelism. <strong>M4 opens three branches on <code>T09</code> and closes them on <code>T15</code>.</strong> <code>T10</code> (<code>spine_declared</code>) reads the design envelope, <code>T11</code> (<code>design_evidence_present</code>) reads the design context, and <code>T12</code> (<code>architecture_verdict_consistent</code>) reads the review envelope; no two of them call each other, so all three depend on <code>T09</code> alone and may be built in any order or at once. Two branches then continue one task each — <code>T13</code> on <code>T12</code>, <code>T14</code> on <code>T10</code> — and <code>T11</code> ends where it started. <code>T15</code> rejoins on all three. Everywhere else a task depends on its immediate predecessor, and <code>T01</code> depends on nothing.</li>
+      <li><strong><code>tier</code> and <code>workflow</code></strong> are omitted entirely. This plan defines no risk-tier or workflow-route vocabulary for its own tasks; the tiers it discusses belong to the recipe being built, not to the meta-work of building it. The fence treats both as optional and checks them only when present.</li>
+      <li><strong><code>state</code></strong> mirrors this plan's markers and flips in the same commit, per invariant 12.</li>
+      <li><strong><code>serves</code></strong> is read off this plan's own spine section from task 18 onward. <strong>It is never derived</strong> — a reviewer who disagrees with a claim edits the plan, and the ticket follows.</li>
+    </ul>
+
+    <h3>Two ordering facts these tickets encode and must not be reordered around</h3>
+    <ol>
+      <li><strong><code>T23</code> refuses to start until W06's centralisation milestone is <code>[x]</code>.</strong> Ordering gate <span class="gate">G1</span>. <code>depends_on: [T22]</code> records task order; it cannot record another plan's marker, so the precondition is stated in <code>T23</code>'s own <code>PREDECESSORS</code> line, in its first checklist box, in the build prompt, and in the tickets README. <code>T01</code>–<code>T22</code> do not need it.</li>
+      <li><strong><code>T24</code> comes before the owner's config amendment, and the amendment comes before <code>T27</code>.</strong> <code>loadConfig</code> rejects a <code>workflows.enabled</code> entry that is not in <code>KNOWN_WORKFLOW_IDS</code>, so an amendment landing first breaks every command rather than just this route. The task order cannot encode an owner act, so the sequence is stated in the plan's <em>Amendment Required</em> section and repeated in <code>T27</code>'s prompt.</li>
+    </ol>
+
+    <figure>
+      <pre class="mermaid">
+gantt
+  dateFormat X
+  axisFormat %s
+  section offline · no quota
+  M1 falsifier        :0, 1
+  M2 grammar          :1, 2
+  M3 envelopes        :2, 2
+  M4 gates            :4, 3
+  M5 coverage gate    :7, 3
+  M6 renderer         :10, 3
+  section gated by G1
+  W06 centralisation  :crit, 4, 9
+  M7 route and close  :crit, 13, 3
+      </pre>
+      <figcaption>Relative sequence, not a schedule. The only edge that crosses into another workstream is the last one, which is what makes the wait affordable.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ===== AMENDMENTS ===== -->
+  <section id="amendments">
+    <h2>Amendments</h2>
+    <p>Append-only history of changes made after this plan was first authored. The milestone-one falsifier's result, the induced-drift failure texts from task 19, and the workstream's close all land here as they happen.</p>
+    <details>
+      <summary>2026-08-23 — owner review applied: five of six own Questionables decided, each on the recommended option; Q5 left open</summary>
+      <p>An exported <code>plan-sota-review v1</code> block carried <strong>six verdicts</strong>, <strong>no proposed statuses</strong>, and <strong>no annotations</strong>. Applied in full. <strong>No status marker moved</strong> — every milestone in this plan is still <code>[]</code>, every ticket is still <code>todo</code>, and the spine's W05 marker is untouched. A Questionable verdict is not a marker.</p>
+      <p><strong>The six verdicts.</strong> <em>Q-A</em> — the implementation of the spine's Q5 was approved as written; the five rules and the M1 falsifier are unchanged. <em>Q1</em> — a new <code>awsf.design-plan-output/v1</code>, leaving <code>awsf.plan-output/v1</code> untouched; the three recipes that use the shared contract stay unjoinable and the <code>/v2</code> migration remains named rather than taken. <em>Q2</em> — this plan opts in as the coverage gate's first real instance and v1 stays history; M1's hand-threading still supplies the evidence a plan written before the grammar existed would have given. <em>Q3</em> — two new roles, <code>designer</code> and <code>architecture-reviewer</code>, because production resolves a phase's prompts through its <code>owner</code>. <em>Q4</em> — the render phase emits the plan, its build prompts and its ticket set together, which is what keeps the coverage gate from being vacuous on this chain's own output. <em>Q6</em> — a blocking verdict stops the attempt at <code>AWAITING_OWNER</code>, with the <code>L19</code> override kept as an interactive, recorded, allowance-drawing owner act.</p>
+      <p><strong>Every verdict took the recommended option, so no milestone changed shape.</strong> The application was therefore a status change rather than a revision: each decided entry gained its decision line, its badge moved from <em>recommended</em> to <em>decided</em>, and the Questionables diagram and intro were rewritten to separate decided from open. Nothing in Purpose, Solution, Implementation Phases or Validation needed editing, because all six recommendations were already what the body describes.</p>
+      <p><strong>Q5 received no verdict in this block and was recorded as open</strong>, not as approved by silence. It was decided later the same day, against its recommendation — see the entry below.</p>
+    </details>
+    <details>
+      <summary>2026-08-23 — Q5 decided against its recommendation: the chain reads every declared repository, and three tasks were added</summary>
+      <p><strong>What prompted it.</strong> The owner named the project this factory exists to serve: <code>Smart Health Platform</code> holding the plans and prompts, <code>smart-health-api</code> and <code>smart-health-app</code> holding the code — three repositories, with default branches <code>main</code>, <code>master</code> and <code>main</code>. Q5's recommendation had priced the multi-repository case as out of scope. It is the only case that matters.</p>
+      <p><strong>What the source said.</strong> The recommendation rested on a premise that is false. It claimed a read-only phase could not read a repository other than its worktree. <code>core/src/policy/sandbox-broker.ts</code> binds <code>--ro-bind / /</code> before binding the worktree writable, and its own comment reads <em>"the whole host filesystem is readable above; <code>writes: []</code> confines WRITES and confines reads not at all."</em> <code>path-policy</code>'s three violation reasons — <code>invalid-path</code>, <code>outside-write-globs</code>, <code>protected-path</code> — are all about write targets. <strong>Nothing forbade the read.</strong> What was missing was a phase to supply the paths and record the revisions, which is host work rather than a mechanism.</p>
+      <p><strong>What changed in the plan.</strong> A <code>design-context</code> host phase joins the recipe before <code>design</code>, resolving every repository the project's catalog declares through W04's catalog and placement layers and recording each one's head revision. It brings one envelope, <code>awsf.design-context/v1</code>, and one gate, <code>design_evidence_present</code>, which is uncorrectable because a missing repository is a registry fault no model turn can fix. <strong>Three tasks were added — 7, 11 and 25 — and everything after each insertion renumbered; the plan went from twenty-five tasks to twenty-eight.</strong> No agent call was added, no ceiling moved, <code>path-policy</code> was not touched, no second writable root exists, and the twenty-five legal edges are unchanged.</p>
+      <p><strong>What was stated rather than hidden.</strong> The reproducibility unit is a repository revision, not a byte — weaker than <code>review_evidence_present</code>'s digest, and the right unit for a phase that explores a codebase rather than judging a fixed diff. The recorded revision is a record of what was available, not a lock: another process may commit to a code repository mid-attempt. Both limits ride the passing gate note and the Solution card, on the same discipline as the zero-blocker limit.</p>
+      <p><strong>What did not change.</strong> No status marker moved. Preparing the three Smart Health repositories — their catalog, their per-repository gate commands, their placement entries — is work in <em>those</em> repositories and is named in Notes as owner-side, exactly as the spine requires. This workstream's only obligation to them is that a repository that will not resolve turns a gate red before the design call is bought.</p>
+    </details>
+  </section>
+
+</main>
+<!-- ===== PLAN-SOTA REVIEW LAYER v1 — FIXED MACHINERY, COPY VERBATIM ===== -->
+<style>
+  .rv-btn { font: 600 11px/1 system-ui, sans-serif; padding: 3px 9px; border-radius: 999px;
+    border: 1px solid var(--muted, #8884); background: transparent; color: var(--fg, inherit);
+    cursor: pointer; opacity: .55; vertical-align: middle; margin-left: 8px; }
+  .rv-btn:hover { opacity: 1; border-color: var(--accent, #7c6cf0); }
+  .rv-btn.rv-on { opacity: 1; background: var(--accent, #7c6cf0); color: var(--bg, #fff); border-color: transparent; }
+  .rv-note-box { display: block; margin: 8px 0; padding: 8px 12px; border: 1px dashed var(--accent, #7c6cf0);
+    border-radius: 8px; font-size: 13px; min-height: 1.5em; background: color-mix(in srgb, var(--accent, #7c6cf0) 6%, transparent); outline: none; }
+  .rv-note-box:empty::before { content: attr(data-ph); opacity: .5; font-style: italic; }
+  .rv-note-box[hidden] { display: none; }
+  .rv-verdict { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 10px 0 2px; }
+  .rv-verdict-tag { font: 700 10px/1 system-ui, sans-serif; letter-spacing: .08em; opacity: .6; margin-right: 2px; }
+  .rv-status-chip { font: 600 11px/1 ui-monospace, monospace; margin-left: 10px; padding: 3px 9px;
+    border-radius: 999px; border: 1px dotted var(--muted, #8884); background: transparent;
+    color: var(--fg, inherit); cursor: pointer; opacity: .6; }
+  .rv-status-chip:hover { opacity: 1; }
+  .rv-status-chip.rv-on { opacity: 1; border-style: solid; border-color: var(--accent, #7c6cf0); color: var(--accent, #7c6cf0); }
+  #rv-drawer { position: fixed; right: 16px; bottom: 16px; z-index: 9999; font: 13px/1.45 system-ui, sans-serif;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  #rv-pill { font: 700 12px/1 system-ui, sans-serif; padding: 10px 16px; border-radius: 999px; border: none;
+    cursor: pointer; background: var(--accent, #7c6cf0); color: var(--bg, #fff); box-shadow: 0 4px 16px #0004; }
+  #rv-panel { width: min(420px, calc(100vw - 32px)); max-height: 60vh; overflow: auto; padding: 14px;
+    border-radius: 12px; border: 1px solid var(--muted, #8884); background: var(--bg, #fff);
+    color: var(--fg, inherit); box-shadow: 0 8px 32px #0005; }
+  #rv-panel h4 { margin: 0 0 8px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; opacity: .7; }
+  #rv-list { margin: 0 0 10px; padding: 0; list-style: none; font-size: 12px; }
+  #rv-list li { padding: 3px 0; border-bottom: 1px solid #8882; overflow-wrap: anywhere; }
+  #rv-out { width: 100%; min-height: 140px; margin-top: 10px; font: 11px/1.5 ui-monospace, monospace;
+    border: 1px solid var(--muted, #8884); border-radius: 8px; padding: 8px; background: transparent; color: inherit; }
+  #rv-msg { font-size: 11px; opacity: .75; margin-top: 6px; }
+  @media print { #rv-drawer { display: none; } }
+</style>
+<script>
+(function () {
+  'use strict';
+  var FILE = decodeURIComponent(location.pathname.split('/').pop() || 'plan.html');
+  var KEY = 'plan-sota-review:' + FILE;
+  var LEGACY_KEY = 'planf3-review:' + FILE; // pre-rename state; read once, never written
+  var PROPOSE = ['', '[]', '[wip]', '[x]', '[f]'];
+  var state = { a: {}, v: {}, s: {} }, persisted = true;
+  try { state = JSON.parse(localStorage.getItem(KEY) || localStorage.getItem(LEGACY_KEY) || 'null') || state; } catch (e) { persisted = false; }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); persisted = true; }
+    catch (e) { persisted = false; }
+    refresh();
+  }
+  function el(tag, cls, txt) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (txt) n.textContent = txt;
+    if (tag === 'button') { n.type = 'button'; n.setAttribute('data-lavish-action', ''); }
+    return n;
+  }
+  function clean(t) { return String(t || '').replace(/\|/g, '/').replace(/\s*\r?\n\s*/g, ' >> ').trim(); }
+  var registry = []; // {key, label, kind: 'section'|'phase'|'q'}
+
+  function noteBox(key, host, placeholder) {
+    var box = el('div', 'rv-note-box');
+    box.contentEditable = 'true';
+    box.setAttribute('data-ph', placeholder || 'Type your note for the agent…');
+    box.hidden = !(state.a[key]);
+    if (state.a[key]) box.textContent = state.a[key];
+    box.addEventListener('input', function () {
+      var t = box.textContent.trim();
+      if (t) state.a[key] = t; else delete state.a[key];
+      save();
+    });
+    host.appendChild(box);
+    return box;
+  }
+  function annotable(key, label, heading, host, kind) {
+    registry.push({ key: key, label: label, kind: kind });
+    var box = noteBox(key, host);
+    heading.insertAdjacentElement('afterend', box);
+    var btn = el('button', 'rv-btn' + (state.a[key] ? ' rv-on' : ''), '✎ note');
+    btn.addEventListener('click', function () {
+      box.hidden = !box.hidden;
+      if (!box.hidden) box.focus();
+    });
+    heading.appendChild(btn);
+    box.addEventListener('input', function () { btn.classList.toggle('rv-on', !!state.a[key]); });
+  }
+
+  // Sections
+  Array.prototype.forEach.call(document.querySelectorAll('main > section[id]'), function (sec) {
+    var h = sec.querySelector('h2'); if (!h) return;
+    annotable('#' + sec.id, h.textContent.trim(), h, sec, 'section');
+  });
+  // Phases: annotation + proposed-status chip
+  Array.prototype.forEach.call(document.querySelectorAll('#phases .phase'), function (ph, i) {
+    var h = ph.querySelector('h3'); if (!h) return;
+    var key = 'phase-' + (i + 1);
+    var label = h.textContent.replace(/^\s*\[[^\]]*\]\s*/, '').trim();
+    annotable(key, label, h, ph, 'phase');
+    var chip = el('button', 'rv-status-chip' + (state.s[key] ? ' rv-on' : ''));
+    chip.textContent = state.s[key] ? 'propose ' + state.s[key] : 'propose…';
+    chip.title = 'Cycle a PROPOSED status (exported as feedback — the file marker is only changed by the agent)';
+    chip.addEventListener('click', function () {
+      var next = PROPOSE[(PROPOSE.indexOf(state.s[key] || '') + 1) % PROPOSE.length];
+      if (next) state.s[key] = next; else delete state.s[key];
+      chip.textContent = next ? 'propose ' + next : 'propose…';
+      chip.classList.toggle('rv-on', !!next);
+      save();
+    });
+    h.appendChild(chip);
+  });
+  // Questionables: verdict / option buttons + note
+  Array.prototype.forEach.call(document.querySelectorAll('#questionables details'), function (d, i) {
+    var key = 'q-' + (i + 1);
+    var summary = d.querySelector('summary');
+    var label = summary ? summary.textContent.trim().slice(0, 120) : key;
+    registry.push({ key: key, label: label, kind: 'q' });
+    var opts = (d.getAttribute('data-review-options') || '').split('|').map(function (s) { return s.trim(); }).filter(Boolean);
+    if (!opts.length) opts = ['APPROVE', 'REJECT', 'REVISE', 'DEFER'];
+    var row = el('div', 'rv-verdict');
+    row.appendChild(el('span', 'rv-verdict-tag', 'YOUR CALL'));
+    opts.forEach(function (opt) {
+      var b = el('button', 'rv-btn' + ((state.v[key] || {}).c === opt ? ' rv-on' : ''), opt);
+      b.addEventListener('click', function () {
+        if ((state.v[key] || {}).c === opt) { delete state.v[key]; }
+        else { state.v[key] = { c: opt }; }
+        Array.prototype.forEach.call(row.querySelectorAll('.rv-btn'), function (x) {
+          x.classList.toggle('rv-on', x.textContent === ((state.v[key] || {}).c || null));
+        });
+        qbox.hidden = !state.v[key] && !state.a[key];
+        save();
+      });
+      row.appendChild(b);
+    });
+    d.appendChild(row);
+    var qbox = noteBox(key, d, 'Why / what to change instead…');
+    if (state.v[key]) qbox.hidden = false;
+  });
+
+  // Drawer
+  var drawer = el('div'); drawer.id = 'rv-drawer';
+  var panel = el('div'); panel.id = 'rv-panel'; panel.hidden = true;
+  var pill = el('button'); pill.id = 'rv-pill';
+  pill.addEventListener('click', function () { panel.hidden = !panel.hidden; });
+  var list = el('ul'); list.id = 'rv-list';
+  var actions = el('div');
+  var exportBtn = el('button', 'rv-btn rv-on', 'Export Feedback');
+  var clearBtn = el('button', 'rv-btn', 'Clear review');
+  var out = el('textarea'); out.id = 'rv-out'; out.readOnly = true; out.hidden = true;
+  var msg = el('div'); msg.id = 'rv-msg';
+  var head = el('h4', null, 'Review — pending feedback');
+  actions.appendChild(exportBtn); actions.appendChild(clearBtn);
+  panel.appendChild(head); panel.appendChild(list); panel.appendChild(actions);
+  panel.appendChild(out); panel.appendChild(msg);
+  drawer.appendChild(panel); drawer.appendChild(pill);
+  document.body.appendChild(drawer);
+
+  function findLabel(key) {
+    for (var i = 0; i < registry.length; i++) if (registry[i].key === key) return registry[i].label;
+    return key;
+  }
+  function refresh() {
+    var n = Object.keys(state.a).length + Object.keys(state.v).length + Object.keys(state.s).length;
+    pill.textContent = '✎ Review (' + n + ')';
+    list.textContent = '';
+    Object.keys(state.v).forEach(function (k) { list.appendChild(el('li', null, '[verdict] ' + findLabel(k) + ' → ' + state.v[k].c)); });
+    Object.keys(state.s).forEach(function (k) { list.appendChild(el('li', null, '[status] ' + findLabel(k) + ' → propose ' + state.s[k])); });
+    Object.keys(state.a).forEach(function (k) { list.appendChild(el('li', null, '[note] ' + findLabel(k) + ': ' + state.a[k].slice(0, 90))); });
+    if (!n) list.appendChild(el('li', null, 'Nothing yet — click ✎ note on any section, a verdict on a Questionable, or propose… on a phase.'));
+    if (!persisted) msg.textContent = '⚠ localStorage unavailable — review state lives only in this tab.';
+  }
+  function buildExport() {
+    var L = ['plan-sota-review v1', 'plan: ' + FILE, 'title: ' + clean(document.title), 'exported: ' + new Date().toISOString(), ''];
+    var vk = Object.keys(state.v), sk = Object.keys(state.s), ak = Object.keys(state.a);
+    L.push('## verdicts');
+    vk.length ? vk.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | ' + clean(state.v[k].c) + ' | note: ' + (clean(state.a[k]) || '-'));
+    }) : L.push('- (none)');
+    L.push('', '## statuses');
+    sk.length ? sk.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | propose ' + state.s[k]);
+    }) : L.push('- (none)');
+    L.push('', '## annotations');
+    var solo = ak.filter(function (k) { return !state.v[k]; });
+    solo.length ? solo.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | ' + clean(state.a[k]));
+    }) : L.push('- (none)');
+    return L.join('\n');
+  }
+  exportBtn.addEventListener('click', function () {
+    var text = buildExport();
+    out.hidden = false; out.value = text;
+    out.focus(); out.select();
+    function done(m) { msg.textContent = m; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done('Copied — paste it into your next agent session.'); },
+        function () { done('Clipboard blocked — copy from the box below.'); });
+    } else {
+      try { done(document.execCommand('copy') ? 'Copied — paste it into your next agent session.' : 'Clipboard blocked — copy from the box below.'); }
+      catch (e) { done('Clipboard blocked — copy from the box below.'); }
+    }
+    if (window.lavish && typeof window.lavish.queuePrompt === 'function') {
+      window.lavish.queuePrompt(text, { tag: 'plan-sota-review', queueKey: 'plan-sota-review' });
+      msg.textContent += ' Also queued to the agent via Lavish.';
+    }
+  });
+  clearBtn.addEventListener('click', function () {
+    if (!confirm('Clear all review state for this plan?')) return;
+    state = { a: {}, v: {}, s: {} };
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    location.reload();
+  });
+  refresh();
+})();
+</script>
+
+<!-- Mermaid runtime — renders every <pre class="mermaid"> block. Only external reference in the file. -->
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      primaryColor: '#1C1E2B',
+      primaryTextColor: '#E7E9F0',
+      primaryBorderColor: '#2b3040',
+      lineColor: '#8B90A6',
+      fontFamily: '"JetBrains Mono","Fira Code",ui-monospace,monospace'
+    }
+  });
+</script>
+</body>
+</html>
