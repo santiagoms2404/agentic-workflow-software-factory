@@ -597,10 +597,10 @@ flowchart LR
 
       <h4>4. The ticket-side claim, as one optional field</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> Ticket frontmatter gains <code>serves: [AC-2, INV-1]</code> — <strong>one field, not two</strong>; the prefix already discriminates an invariant from an acceptance criterion, and a second field would be a second vocabulary to keep aligned</li>
-        <li><code class="status">[]</code> The field is optional. A ticket set whose plan declares nothing carries nothing, and that is a legitimate shape rather than a defect</li>
-        <li><code class="status">[]</code> <code>TicketSchema</code> in <code>core/src/contracts/ticket.ts</code> is <strong>not</strong> modified — W04 decided that store and fence vocabularies stay separate and named the divergence as a known gap; this task does not quietly close it</li>
-        <li><code class="status">[]</code> The field's derivation rule is written into <code>specs/tickets/awsf-v2-w05-design-to-plan/README.md</code> before any ticket uses it</li>
+        <li><code class="status">[x]</code> Ticket frontmatter gains <code>serves: [AC-2, INV-1]</code> — <strong>one field, not two</strong>; the prefix already discriminates an invariant from an acceptance criterion, and a second field would be a second vocabulary to keep aligned</li>
+        <li><code class="status">[x]</code> The field is optional. A ticket set whose plan declares nothing carries nothing, and that is a legitimate shape rather than a defect</li>
+        <li><code class="status">[x]</code> <code>TicketSchema</code> in <code>core/src/contracts/ticket.ts</code> is <strong>not</strong> modified — W04 decided that store and fence vocabularies stay separate and named the divergence as a known gap; this task does not quietly close it</li>
+        <li><code class="status">[x]</code> The field's derivation rule is written into <code>specs/tickets/awsf-v2-w05-design-to-plan/README.md</code> before any ticket uses it</li>
       </ul>
 
       <h4>5. Testing Strategy</h4>

@@ -4,6 +4,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { parse } from "yaml";
 import { loadCatalog } from "../../../src/registry/catalog.ts";
+import { isPlanIdentifierClaim } from "../../../src/registry/plan-spine.ts";
 import {
   parseAwsfPlanHtmlV1,
   resolvePlanSources,
@@ -94,6 +95,7 @@ interface Ticket {
   state: string;
   depends_on: string[];
   workflow: string | undefined;
+  serves: string[] | undefined;
   prompt: string;
 }
 
@@ -122,6 +124,7 @@ function tickets(set: PlanSet): Ticket[] {
         state: String(fm.state),
         depends_on: (fm.depends_on as string[]) ?? [],
         workflow: fm.workflow === undefined ? undefined : String(fm.workflow),
+        serves: fm.serves === undefined ? undefined : (fm.serves as string[]),
         prompt: (split[1] ?? "").replace(/\n+$/, ""),
       };
     });
@@ -263,14 +266,21 @@ test("frontmatter values stay inside their vocabularies", () => {
     const offenders: string[] = [];
     for (const ticket of tickets(set)) {
       if (!STATES.includes(ticket.state)) offenders.push(`${set.label}/${ticket.id}: state "${ticket.state}"`);
-      // `tier` and `workflow` are optional: the plan skill's own rule is to omit
-      // the field when a plan defines no such vocabulary rather than invent one.
-      // Present-but-wrong is the defect; absent is a legitimate shape.
+      // `tier`, `workflow`, and `serves` are optional: the plan skill's own rule
+      // is to omit a field when a plan defines no such vocabulary rather than
+      // invent one. Present-but-wrong is the defect; absent is legitimate.
       if (ticket.tier !== undefined && !TIERS.includes(ticket.tier)) {
         offenders.push(`${set.label}/${ticket.id}: tier "${String(ticket.tier)}"`);
       }
       if (ticket.workflow !== undefined && !WORKFLOWS.includes(ticket.workflow)) {
         offenders.push(`${set.label}/${ticket.id}: workflow "${ticket.workflow}"`);
+      }
+      if (
+        ticket.serves !== undefined
+        && (!Array.isArray(ticket.serves)
+          || ticket.serves.some((identifier) => typeof identifier !== "string" || !isPlanIdentifierClaim(identifier)))
+      ) {
+        offenders.push(`${set.label}/${ticket.id}: serves ${JSON.stringify(ticket.serves)}`);
       }
       if (!TICKET_ID.test(ticket.id)) offenders.push(`${set.label}/${ticket.id}: id is not zero-padded Tnn or Wnn`);
     }
