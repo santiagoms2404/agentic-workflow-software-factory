@@ -533,6 +533,22 @@ workflows:
     </div>
   </section>
 
+  <!-- ===== IDENTIFIER SPINE ===== -->
+  <section id="spine">
+    <h2>Identifier Spine</h2>
+    <p>These are this workstream's existing claims, declared here so the coverage gate can join them to the tasks that serve them.</p>
+    <dl>
+      <dt><code class="inv">INV-1</code></dt>
+      <dd>The architecture review remains an envelope within the existing task-machine path: this workstream adds no task state and no legal edge.</dd>
+      <dt><code class="inv">INV-2</code></dt>
+      <dd>No stage in this workstream's execution path depends on an installed skill being reachable.</dd>
+      <dt><code class="ac">AC-1</code></dt>
+      <dd>A deliberately dropped identifier turns the coverage gate red. Observed by deleting a declaration while its claims remain, running <code>npm run test:unit</code>, and seeing the named identifier in the failure before restoring it.</dd>
+      <dt><code class="ac">AC-2</code></dt>
+      <dd>The stated limit is present on a passing gate row. Observed by the gate unit tests asserting the limit sentence in passing reports.</dd>
+    </dl>
+  </section>
+
   <!-- ===== IMPLEMENTATION PHASES ===== -->
   <section id="phases">
     <h2>Implementation Phases</h2>
@@ -703,6 +719,7 @@ flowchart TD
       </ul>
 
       <h4>12. <code>architecture_verdict_consistent</code>, and the limit written onto the green row</h4>
+      <p class="serves"><code class="serves">AC-2</code></p>
       <ul class="checklist">
         <li><code class="status">[x]</code> <code>reviewedDesign</code> echoes the design envelope's <code>summary</code> exactly — the <code>reviewedSha</code> pattern applied to an artifact that has no SHA yet</li>
         <li><code class="status">[x]</code> Every finding's <code>subject</code> resolves to a declared identifier or a named component; the note lists any that do not</li>
@@ -712,6 +729,7 @@ flowchart TD
       </ul>
 
       <h4>13. <code>architecture_review_clear</code> — the deterministic zero-blocker gate</h4>
+      <p class="serves"><code class="serves">INV-1</code> <code class="serves">AC-2</code></p>
       <ul class="checklist">
         <li><code class="status">[x]</code> Pure over the stored review envelope: blocking findings number zero and the verdict is <code>accept</code></li>
         <li><code class="status">[x]</code> The identifier set carried into the plan context equals the design's exactly, so the planner cannot be handed a set the reviewer never saw</li>
@@ -729,6 +747,7 @@ flowchart TD
       </ul>
 
       <h4>15. Testing Strategy</h4>
+      <p class="serves"><code class="serves">INV-1</code> <code class="serves">AC-2</code></p>
       <p><code>node:test</code> over each gate as a pure function, in the shape <code>core/test/unit/gates/verdict-consistent.test.ts</code> already uses. Determinism is asserted rather than assumed: run each gate twice over the same frozen envelope and deep-equal the two reports. The three-repository fixture is the one that would have caught this workstream's own falsified assumption, so it is not optional.</p>
       <ul class="checklist">
         <li><code class="status">[x]</code> <code>npm run test:unit</code> — every gate passes its good fixture and fails each bad one individually, with the failing check named</li>
@@ -778,13 +797,14 @@ flowchart LR
 
       <h4>18. This plan opts in, and becomes the first real instance</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> Add a spine section to <code>specs/awsf-v2-w05-design-to-plan.html</code> declaring this workstream's own <code>INV</code> and <code>AC</code> statements — the ones already argued in Purpose and Solution, given identifiers rather than invented for the occasion</li>
-        <li><code class="status">[]</code> Add the <code>serves</code> claim to each task that satisfies one, and the matching <code>serves:</code> field to each ticket in <code>specs/tickets/awsf-v2-w05-design-to-plan/</code></li>
-        <li><code class="status">[]</code> <strong>No other plan in <code>specs/</code> is edited.</strong> v1 stays history and the other v2 plans opt in when their own workstreams choose to</li>
-        <li><code class="status">[]</code> Record in the tickets README that <code>serves</code> is read off the plan, never derived, so a reviewer edits the plan rather than the ticket</li>
+        <li><code class="status">[x]</code> Add a spine section to <code>specs/awsf-v2-w05-design-to-plan.html</code> declaring this workstream's own <code>INV</code> and <code>AC</code> statements — the ones already argued in Purpose and Solution, given identifiers rather than invented for the occasion</li>
+        <li><code class="status">[x]</code> Add the <code>serves</code> claim to each task that satisfies one, and the matching <code>serves:</code> field to each ticket in <code>specs/tickets/awsf-v2-w05-design-to-plan/</code></li>
+        <li><code class="status">[x]</code> <strong>No other plan in <code>specs/</code> is edited.</strong> v1 stays history and the other v2 plans opt in when their own workstreams choose to</li>
+        <li><code class="status">[x]</code> Record in the tickets README that <code>serves</code> is read off the plan, never derived, so a reviewer edits the plan rather than the ticket</li>
       </ul>
 
       <h4>19. Testing Strategy</h4>
+      <p class="serves"><code class="serves">AC-1</code></p>
       <p>Two surfaces, because they answer different questions. Fixtures held in memory prove the matcher bites on every rule; the real committed plan sets prove it engages on what is actually there. Then the induced drift, which is the only evidence that matters: <strong>a coverage gate nobody has seen fail is decoration.</strong></p>
       <ul class="checklist">
         <li><code class="status">[]</code> <code>npm run test:unit</code> — fixture tests fail once per rule, each with a distinguishable message</li>
@@ -879,6 +899,7 @@ flowchart TD
       </ul>
 
       <h4>24. The recipe, the workflow id, and the registration</h4>
+      <p class="serves"><code class="serves">INV-2</code></p>
       <ul class="checklist">
         <li><code class="status">[]</code> <code>core/src/workflow/recipes/design-to-plan.ts</code>: seven phases in Phase Contract order, <code>tier: 2</code>, three agent phases, <code>as const satisfies WorkflowRecipe</code></li>
         <li><code class="status">[]</code> Each phase's <code>description</code> is earned — <code>assertEarnedDescription</code> rejects one that merely restates the phase id, and it fails at compile time rather than at run time</li>
@@ -897,6 +918,7 @@ flowchart TD
       </ul>
 
       <h4>26. Bind the remaining two host phases inside the one composition site</h4>
+      <p class="serves"><code class="serves">INV-1</code> <code class="serves">INV-2</code></p>
       <ul class="checklist">
         <li><code class="status">[]</code> <code>plan-context</code> is composed by the host from the stored design and review envelopes, in the phase loop, keyed by its schema id — the same way <code>review-context</code> already is</li>
         <li><code class="status">[]</code> <code>plan-render</code> writes its three files into the managed worktree and the host commits them; <code>no_protected_paths</code> and <code>diff_matches_claims</code> run against that commit</li>
