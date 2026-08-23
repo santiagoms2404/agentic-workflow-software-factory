@@ -819,7 +819,7 @@ flowchart LR
 
     <!-- ================= M6 ================= -->
     <div class="phase">
-      <h3><code class="status">[wip]</code> Milestone M6: The renderer — one envelope, three files, byte-identity by construction</h3>
+      <h3><code class="status">[x]</code> Milestone M6: The renderer — one envelope, three files, byte-identity by construction</h3>
       <p>The stage the source record described as <em>"a plan recipe emitting an HTML plan"</em>, built the way it can actually exist: a model emits a validated envelope, and deterministic host code turns that envelope into the three committed files. No model writes the plan document, so nothing in the chain depends on a document having been read.</p>
       <figure>
         <pre class="mermaid">
@@ -857,11 +857,11 @@ flowchart LR
       <h4>22. Testing Strategy</h4>
       <p>The renderer's correctness claim is a round trip, so the test is a round trip: render an envelope, parse the result with the shipped parser, and assert the tasks, milestones, markers and identifiers come back identical. The edge cases are the ones that would corrupt a downstream reader silently — a colon in a title, a backtick in a build prompt, an apostrophe in a statement.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>npm run test:unit</code> — <code>parseAwsfPlanHtmlV1(render(e))</code> returns the milestones, task numbers, checklists and identifiers <code>e</code> declared</li>
-        <li><code class="status">[]</code> Every rendered ticket's frontmatter parses with the same <code>yaml</code> reader the fence uses, asserted on a title containing a colon</li>
-        <li><code class="status">[]</code> A rendered set is run through <code>spineCoverage</code> and produces zero violations — <strong>the renderer's output satisfies M5's gate, which is why M5 comes first</strong></li>
-        <li><code class="status">[]</code> Rendering the same envelope twice produces byte-identical output; nothing in it reads a clock, a random source, or the filesystem</li>
-        <li><code class="status">[]</code> <code>npm run lint</code> and <code>npm run typecheck</code></li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code> — <code>parseAwsfPlanHtmlV1(render(e))</code> returns the milestones, task numbers, checklists and identifiers <code>e</code> declared</li>
+        <li><code class="status">[x]</code> Every rendered ticket's frontmatter parses with the same <code>yaml</code> reader the fence uses, asserted on a title containing a colon</li>
+        <li><code class="status">[x]</code> A rendered set is run through <code>spineCoverage</code> and produces zero violations — <strong>the renderer's output satisfies M5's gate, which is why M5 comes first</strong></li>
+        <li><code class="status">[x]</code> Rendering the same envelope twice produces byte-identical output; nothing in it reads a clock, a random source, or the filesystem</li>
+        <li><code class="status">[x]</code> <code>npm run lint</code> and <code>npm run typecheck</code></li>
       </ul>
       <div class="loop">🔁 <strong>Do not exit this milestone until every box above is checked.</strong> If the round trip needs the parser loosened to pass, the renderer is emitting a grammar the format does not have — fix the renderer.</div>
     </div>
