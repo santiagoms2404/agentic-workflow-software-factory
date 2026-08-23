@@ -847,11 +847,11 @@ flowchart LR
 
       <h4>21. The ticket set, its README, and the round trip</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> Emits <code>specs/tickets/&lt;stem&gt;/T&lt;nn&gt;.md</code> per step with parsing frontmatter — <strong><code>title</code> always quoted</strong>, because a task title routinely contains a colon and YAML reads that as a nested mapping</li>
-        <li><code class="status">[]</code> The ticket body's build prompt and the § Section B block are <strong>the same string</strong>, taken once from the envelope. Byte-identity is a property of the code, and the existing assertion becomes a regression check</li>
-        <li><code class="status">[]</code> Emits <code>README.md</code> with the derived-field rules for the set it just wrote, so a reviewer edits a rule rather than re-deriving one</li>
-        <li><code class="status">[]</code> <code>depends_on</code> is carried from the envelope's <code>dependsOn</code>, never a blind <code>n-1</code> chain, so declared parallelism survives rendering</li>
-        <li><code class="status">[]</code> Emits nothing else. A receipt, a manifest, or a run log would violate invariant 10, and the renderer has no reason to want one</li>
+        <li><code class="status">[x]</code> Emits <code>specs/tickets/&lt;stem&gt;/T&lt;nn&gt;.md</code> per step with parsing frontmatter — <strong><code>title</code> always quoted</strong>, because a task title routinely contains a colon and YAML reads that as a nested mapping</li>
+        <li><code class="status">[x]</code> The ticket body's build prompt and the § Section B block are <strong>the same string</strong>, taken once from the envelope. Byte-identity is a property of the code, and the existing assertion becomes a regression check</li>
+        <li><code class="status">[x]</code> Emits <code>README.md</code> with the derived-field rules for the set it just wrote, so a reviewer edits a rule rather than re-deriving one</li>
+        <li><code class="status">[x]</code> <code>depends_on</code> is carried from the envelope's <code>dependsOn</code>, never a blind <code>n-1</code> chain, so declared parallelism survives rendering</li>
+        <li><code class="status">[x]</code> Emits nothing else. A receipt, a manifest, or a run log would violate invariant 10, and the renderer has no reason to want one</li>
       </ul>
 
       <h4>22. Testing Strategy</h4>

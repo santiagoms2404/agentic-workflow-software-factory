@@ -92,27 +92,85 @@ function renderPlanHtml(envelope: PlanDocumentEnvelope): string {
   ].join("\n");
 }
 
-function renderBuildPrompts(envelope: PlanDocumentEnvelope): string {
-  const prompts = envelope.plan.steps.map((step) => [
-    `### ${step.id} — ${step.title}`,
-    "",
-    step.buildPrompt,
-  ].join("\n")).join("\n\n");
+interface RenderedStepDocuments {
+  readonly promptBlock: string;
+  readonly ticketPath: string;
+  readonly ticket: string;
+}
 
+function renderStepDocuments(envelope: PlanDocumentEnvelope): RenderedStepDocuments[] {
+  return envelope.plan.steps.map((step) => {
+    // Normalize the envelope value once, then write this exact string into both
+    // documents. The sync fence trims the Section B block but only strips final
+    // newlines from the ticket, so retaining boundary whitespace would make its
+    // two readers disagree even though both copies came from the same field.
+    const buildPrompt = step.buildPrompt.trim();
+    const title = JSON.stringify(step.title);
+    const ticket = [
+      "---",
+      `id: ${step.id}`,
+      `title: ${title}`,
+      `milestone: ${step.milestone}`,
+      "state: todo",
+      `depends_on: ${JSON.stringify(step.dependsOn)}`,
+      `serves: ${JSON.stringify(step.serves)}`,
+      "---",
+      "",
+      `# ${step.id} · ${step.title}`,
+      "",
+      `> **Plan:** [\`../../${envelope.stem}.html\`](../../${envelope.stem}.html) · Milestone ${step.milestone}`,
+      "",
+      "## Build prompt",
+      "",
+      buildPrompt,
+      "",
+    ].join("\n");
+
+    return {
+      promptBlock: [`### ${step.id} — ${step.title}`, "", buildPrompt].join("\n"),
+      ticketPath: `specs/tickets/${envelope.stem}/${step.id}.md`,
+      ticket,
+    };
+  });
+}
+
+function renderBuildPrompts(envelope: PlanDocumentEnvelope, steps: readonly RenderedStepDocuments[]): string {
   return [
     `# Build Prompts — ${envelope.plan.summary}`,
     "",
     "# Section B — Task prompts (recommended)",
     "",
-    prompts,
+    steps.map((step) => step.promptBlock).join("\n\n"),
+    "",
+  ].join("\n");
+}
+
+function renderTicketReadme(envelope: PlanDocumentEnvelope): string {
+  return [
+    `# Tickets — ${envelope.plan.summary}`,
+    "",
+    `One file per step rendered from \`specs/${envelope.stem}.html\`. Build prompts are written from`,
+    "the same normalized envelope string as their Section B blocks; do not format either copy independently.",
+    "",
+    "## Derived-field rule",
+    "",
+    "- **`milestone`** is copied from each step's `milestone` field.",
+    "- **`depends_on`** is copied from each step's `dependsOn` field. It is never inferred from ticket order.",
+    "- **`state`** is always `todo` because rendered plans claim no completed work.",
+    "- **`serves`** is copied from each step's `serves` field. It is never derived from prose.",
+    "- **`tier`** and **`workflow`** are omitted because the envelope defines neither vocabulary.",
+    "- **`title`** is copied from the step and always YAML-quoted. The build prompt is normalized once.",
     "",
   ].join("\n");
 }
 
 /** Pure rendering only. The caller owns all filesystem writes. */
 export function renderPlanDocument(envelope: PlanDocumentEnvelope): Map<string, string> {
+  const steps = renderStepDocuments(envelope);
   return new Map([
     [`specs/${envelope.stem}.html`, renderPlanHtml(envelope)],
-    [`specs/${envelope.stem}-build-prompts.md`, renderBuildPrompts(envelope)],
+    [`specs/${envelope.stem}-build-prompts.md`, renderBuildPrompts(envelope, steps)],
+    [`specs/tickets/${envelope.stem}/README.md`, renderTicketReadme(envelope)],
+    ...steps.map((step) => [step.ticketPath, step.ticket] as const),
   ]);
 }
