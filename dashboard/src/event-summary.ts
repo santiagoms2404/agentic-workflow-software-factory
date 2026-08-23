@@ -1,5 +1,5 @@
 import type { EventItem, ModelProvenance } from "../shared/types.ts";
-import { formatTokens, formatUsageBreakdown, modelProvenanceLabel } from "./display.ts";
+import { formatUsageBreakdown, modelProvenanceLabel } from "./display.ts";
 
 type Payload = Record<string, unknown>;
 type UsageBreakdown = {
