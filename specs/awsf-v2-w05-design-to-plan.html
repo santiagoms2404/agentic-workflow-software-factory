@@ -618,17 +618,17 @@ flowchart LR
 
     <!-- ================= M3 ================= -->
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone M3: Five typed envelopes, one source each</h3>
+      <h3><code class="status">[wip]</code> Milestone M3: Five typed envelopes, one source each</h3>
       <p>Every contract in <code>core/src/contracts/</code> is defined once in TypeBox and yields three emissions: the runtime validator, the static type, and the JSON Schema injected into the agent's own prompt. These five follow that rule exactly, reuse the shared base rather than restating it, and reuse the existing severity vocabulary rather than inventing a second one.</p>
 
       <h4>6. <code>awsf.design-output/v1</code> and <code>awsf.architecture-review-output/v1</code></h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>DesignOutputSchema</code> via <code>phaseEnvelope</code>, carrying <code>answeredRequest</code>, <code>components[]</code>, <code>decisions[]</code>, <code>invariants[]</code>, <code>acceptanceCriteria[]</code>, <code>openQuestions[]</code></li>
-        <li><code class="status">[]</code> Identifier patterns are structural: <code>^INV-[1-9][0-9]*$</code>, <code>^AC-[1-9][0-9]*$</code>, <code>^D-[1-9][0-9]*$</code>, so the rule travels into the designer's prompt with the emitted schema instead of only firing at gate time — the same reasoning <code>WORKTREE_RELATIVE_PATH_PATTERN</code> is built on</li>
-        <li><code class="status">[]</code> Every <code>acceptanceCriteria[]</code> entry carries <code>verifiedBy</code>: how anyone would observe it holding. An acceptance criterion with no stated observation is prose</li>
-        <li><code class="status">[]</code> <code>ArchitectureReviewOutputSchema</code> carrying <code>reviewedDesign</code>, <code>verdict</code>, <code>findings[]</code> and <code>limitations</code>, with <code>limitations</code> at <code>minItems: 1</code></li>
-        <li><code class="status">[]</code> Findings reuse <code>REVIEW_SEVERITIES</code> and <code>BLOCKING_SEVERITIES</code> imported from <code>review-output.ts</code>. <strong>Do not redeclare them</strong> — one ordered vocabulary, one place to change it</li>
-        <li><code class="status">[]</code> A finding's <code>subject</code> is a declared identifier or a named component, not a file path: an architecture review judges claims, and the repository it would name may not exist yet</li>
+        <li><code class="status">[x]</code> <code>DesignOutputSchema</code> via <code>phaseEnvelope</code>, carrying <code>answeredRequest</code>, <code>components[]</code>, <code>decisions[]</code>, <code>invariants[]</code>, <code>acceptanceCriteria[]</code>, <code>openQuestions[]</code></li>
+        <li><code class="status">[x]</code> Identifier patterns are structural: <code>^INV-[1-9][0-9]*$</code>, <code>^AC-[1-9][0-9]*$</code>, <code>^D-[1-9][0-9]*$</code>, so the rule travels into the designer's prompt with the emitted schema instead of only firing at gate time — the same reasoning <code>WORKTREE_RELATIVE_PATH_PATTERN</code> is built on</li>
+        <li><code class="status">[x]</code> Every <code>acceptanceCriteria[]</code> entry carries <code>verifiedBy</code>: how anyone would observe it holding. An acceptance criterion with no stated observation is prose</li>
+        <li><code class="status">[x]</code> <code>ArchitectureReviewOutputSchema</code> carrying <code>reviewedDesign</code>, <code>verdict</code>, <code>findings[]</code> and <code>limitations</code>, with <code>limitations</code> at <code>minItems: 1</code></li>
+        <li><code class="status">[x]</code> Findings reuse <code>REVIEW_SEVERITIES</code> and <code>BLOCKING_SEVERITIES</code> imported from <code>review-output.ts</code>. <strong>Do not redeclare them</strong> — one ordered vocabulary, one place to change it</li>
+        <li><code class="status">[x]</code> A finding's <code>subject</code> is a declared identifier or a named component, not a file path: an architecture review judges claims, and the repository it would name may not exist yet</li>
       </ul>
 
       <h4>7. <code>awsf.design-context/v1</code> — the repositories the design is about</h4>
