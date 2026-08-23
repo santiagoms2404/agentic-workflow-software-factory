@@ -642,12 +642,12 @@ flowchart LR
 
       <h4>8. <code>awsf.plan-context/v1</code>, <code>awsf.design-plan-output/v1</code>, and registration</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>PlanContextSchema</code> carrying the identifier set the host copied from the design, the review verdict, the non-blocking findings the planner must still answer, and <code>blockingFindingCount</code> as <code>Type.Literal(0)</code></li>
-        <li><code class="status">[]</code> <strong>State the reason for the literal in the module comment:</strong> a plan context composed from a review that still reports a blocker is not merely gate-failing, it is <em>unrepresentable</em>. The gate and the schema then agree by construction rather than by coincidence</li>
-        <li><code class="status">[]</code> <code>DesignPlanOutputSchema</code> carrying <code>milestones[]</code> and <code>steps[]</code>, each step with <code>id</code>, <code>title</code>, <code>milestone</code>, <code>files</code>, <code>serves</code>, <code>dependsOn</code> and <code>buildPrompt</code>, plus <code>testStrategy</code>, <code>risks</code> and <code>openQuestions</code></li>
-        <li><code class="status">[]</code> Step ids match <code>^T[0-9]{2}$</code> and milestone ids <code>^M[0-9]+$</code> — the vocabularies the sync fence already checks, so a rendered ticket set is well-formed before any gate sees it</li>
-        <li><code class="status">[]</code> All four registered in <code>ENVELOPE_SCHEMAS</code> and <code>EnvelopeTypeById</code>, and exported from <code>contracts/index.ts</code></li>
-        <li><code class="status">[]</code> No new envelope declares a field in <code>HOST_OWNED_FIELD_NAMES</code>, in either case form</li>
+        <li><code class="status">[x]</code> <code>PlanContextSchema</code> carrying the identifier set the host copied from the design, the review verdict, the non-blocking findings the planner must still answer, and <code>blockingFindingCount</code> as <code>Type.Literal(0)</code></li>
+        <li><code class="status">[x]</code> <strong>State the reason for the literal in the module comment:</strong> a plan context composed from a review that still reports a blocker is not merely gate-failing, it is <em>unrepresentable</em>. The gate and the schema then agree by construction rather than by coincidence</li>
+        <li><code class="status">[x]</code> <code>DesignPlanOutputSchema</code> carrying <code>milestones[]</code> and <code>steps[]</code>, each step with <code>id</code>, <code>title</code>, <code>milestone</code>, <code>files</code>, <code>serves</code>, <code>dependsOn</code> and <code>buildPrompt</code>, plus <code>testStrategy</code>, <code>risks</code> and <code>openQuestions</code></li>
+        <li><code class="status">[x]</code> Step ids match <code>^T[0-9]{2}$</code> and milestone ids <code>^M[0-9]+$</code> — the vocabularies the sync fence already checks, so a rendered ticket set is well-formed before any gate sees it</li>
+        <li><code class="status">[x]</code> All four registered in <code>ENVELOPE_SCHEMAS</code> and <code>EnvelopeTypeById</code>, and exported from <code>contracts/index.ts</code></li>
+        <li><code class="status">[x]</code> No new envelope declares a field in <code>HOST_OWNED_FIELD_NAMES</code>, in either case form</li>
       </ul>
 
       <h4>9. Testing Strategy</h4>

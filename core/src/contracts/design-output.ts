@@ -25,7 +25,7 @@ const DesignDecisionSchema = Type.Object(
   { additionalProperties: false },
 );
 
-const DesignInvariantSchema = Type.Object(
+export const DesignInvariantSchema = Type.Object(
   {
     // Structural so the identifier rule travels with the emitted schema into
     // the designer's prompt instead of existing only in a later gate.
@@ -35,7 +35,7 @@ const DesignInvariantSchema = Type.Object(
   { additionalProperties: false },
 );
 
-const DesignAcceptanceCriterionSchema = Type.Object(
+export const DesignAcceptanceCriterionSchema = Type.Object(
   {
     id: Type.String({ pattern: ACCEPTANCE_CRITERION_IDENTIFIER_PATTERN.source }),
     statement: Type.String({ minLength: 1 }),

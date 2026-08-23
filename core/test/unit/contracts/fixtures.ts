@@ -1,8 +1,12 @@
 import type {
+  ArchitectureReviewOutput,
   BuildOutput,
   DesignContext,
+  DesignOutput,
+  DesignPlanOutput,
   DocumentOutput,
   IntakeOutput,
+  PlanContext,
   PlanOutput,
   ReviewContext,
   ReviewOutput,
@@ -159,6 +163,108 @@ export function validDesignContext(): DesignContext {
   };
 }
 
+export function validDesignOutput(): DesignOutput {
+  return {
+    schema: "awsf.design-output/v1",
+    producerStatus: "success",
+    summary: "Designed a typed envelope registry.",
+    artifacts: [],
+    notesForNextPhase: "Review the declared identifier spine.",
+    answeredRequest: "Make design claims traceable into rendered tickets.",
+    components: [{ name: "contract registry", responsibility: "Resolve every envelope by schema id." }],
+    decisions: [{ id: "D-1", statement: "Keep the design planning envelope separate from plan-output v1." }],
+    invariants: [{ id: "INV-1", statement: "Every envelope resolves through the registry." }],
+    acceptanceCriteria: [
+      {
+        id: "AC-1",
+        statement: "A rendered ticket names the design claim it serves.",
+        verifiedBy: "Run the ticket-plan-sync unit test.",
+      },
+    ],
+    openQuestions: [],
+  };
+}
+
+export function validArchitectureReviewOutput(): ArchitectureReviewOutput {
+  return {
+    schema: "awsf.architecture-review-output/v1",
+    producerStatus: "success",
+    summary: "Reviewed the design identifier spine.",
+    artifacts: [],
+    notesForNextPhase: "Address the medium finding while planning.",
+    reviewedDesign: "Designed a typed envelope registry.",
+    verdict: "accept",
+    findings: [
+      {
+        id: "F1",
+        severity: "medium",
+        subject: "AC-1",
+        title: "Rendered prompt size remains bounded",
+        detail: "Large plans can approach the envelope byte ceiling.",
+        evidence: "The design plan carries every step's full build prompt.",
+      },
+    ],
+    limitations: ["Did not execute the future renderer."],
+  };
+}
+
+export function validPlanContext(): PlanContext {
+  return {
+    schema: "awsf.plan-context/v1",
+    producerStatus: "success",
+    summary: "Carried one invariant and one acceptance criterion into planning.",
+    artifacts: [],
+    notesForNextPhase: "Map every identifier onto at least one step.",
+    identifierSet: {
+      invariants: [{ id: "INV-1", statement: "Every envelope resolves through the registry." }],
+      acceptanceCriteria: [
+        {
+          id: "AC-1",
+          statement: "A rendered ticket names the design claim it serves.",
+          verifiedBy: "Run the ticket-plan-sync unit test.",
+        },
+      ],
+    },
+    reviewVerdict: "accept",
+    nonBlockingFindings: [
+      {
+        id: "F1",
+        severity: "medium",
+        subject: "AC-1",
+        title: "Rendered prompt size remains bounded",
+        detail: "Large plans can approach the envelope byte ceiling.",
+        evidence: "The design plan carries every step's full build prompt.",
+      },
+    ],
+    blockingFindingCount: 0,
+  };
+}
+
+export function validDesignPlanOutput(): DesignPlanOutput {
+  return {
+    schema: "awsf.design-plan-output/v1",
+    producerStatus: "success",
+    summary: "Planned the traceable envelope contracts.",
+    artifacts: [{ path: "specs/envelope-plan.html", kind: "plan", description: "The rendered plan." }],
+    notesForNextPhase: "Render the plan, prompts, and tickets from this envelope.",
+    milestones: [{ id: "M1", title: "Typed contracts" }],
+    steps: [
+      {
+        id: "T01",
+        title: "Define the contracts",
+        milestone: "M1",
+        files: ["core/src/contracts/index.ts"],
+        serves: ["INV-1", "AC-1"],
+        dependsOn: [],
+        buildPrompt: "Define and register the typed envelopes.",
+      },
+    ],
+    testStrategy: ["Run the contract unit tests."],
+    risks: [{ risk: "Schema drift", mitigation: "Emit every form from TypeBox." }],
+    openQuestions: [],
+  };
+}
+
 export function validDocumentOutput(): DocumentOutput {
   return {
     schema: "awsf.document-output/v1",
@@ -206,7 +312,7 @@ export function validIntakeOutput(): IntakeOutput {
   };
 }
 
-/** Every envelope fixture, keyed by schema id — so suites can iterate all nine uniformly. */
+/** Every envelope fixture, keyed by schema id, so suites can iterate the registry uniformly. */
 export const VALID_ENVELOPES = {
   "awsf.plan-output/v1": validPlanOutput,
   "awsf.build-output/v1": validBuildOutput,
@@ -214,6 +320,10 @@ export const VALID_ENVELOPES = {
   "awsf.review-output/v1": validReviewOutput,
   "awsf.review-context/v1": validReviewContext,
   "awsf.design-context/v1": validDesignContext,
+  "awsf.design-output/v1": validDesignOutput,
+  "awsf.architecture-review-output/v1": validArchitectureReviewOutput,
+  "awsf.plan-context/v1": validPlanContext,
+  "awsf.design-plan-output/v1": validDesignPlanOutput,
   "awsf.document-output/v1": validDocumentOutput,
   "awsf.scout-output/v1": validScoutOutput,
   "awsf.intake-output/v1": validIntakeOutput,

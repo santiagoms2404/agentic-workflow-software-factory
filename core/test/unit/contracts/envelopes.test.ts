@@ -20,14 +20,18 @@ import { VALID_ENVELOPES } from "./fixtures.ts";
 
 const SCHEMA_IDS = Object.keys(VALID_ENVELOPES) as (keyof typeof VALID_ENVELOPES)[];
 
-test("the registry holds exactly the nine phase envelopes", () => {
+test("the registry holds exactly the thirteen phase envelopes", () => {
   assert.deepEqual(
     [...ENVELOPE_SCHEMA_IDS].sort(),
     [
+      "awsf.architecture-review-output/v1",
       "awsf.build-output/v1",
       "awsf.design-context/v1",
+      "awsf.design-output/v1",
+      "awsf.design-plan-output/v1",
       "awsf.document-output/v1",
       "awsf.intake-output/v1",
+      "awsf.plan-context/v1",
       "awsf.plan-output/v1",
       "awsf.review-context/v1",
       "awsf.review-output/v1",

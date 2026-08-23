@@ -1,8 +1,24 @@
 import type { TObject } from "@sinclair/typebox";
+import {
+  ArchitectureReviewOutputSchema,
+  ARCHITECTURE_REVIEW_OUTPUT_SCHEMA_ID,
+  type ArchitectureReviewOutput,
+} from "./architecture-review-output.ts";
 import { BuildOutputSchema, BUILD_OUTPUT_SCHEMA_ID, type BuildOutput } from "./build-output.ts";
 import { DesignContextSchema, DESIGN_CONTEXT_SCHEMA_ID, type DesignContext } from "./design-context.ts";
+import {
+  DesignOutputSchema,
+  DESIGN_OUTPUT_SCHEMA_ID,
+  type DesignOutput,
+} from "./design-output.ts";
+import {
+  DesignPlanOutputSchema,
+  DESIGN_PLAN_OUTPUT_SCHEMA_ID,
+  type DesignPlanOutput,
+} from "./design-plan-output.ts";
 import { DocumentOutputSchema, DOCUMENT_OUTPUT_SCHEMA_ID, type DocumentOutput } from "./document-output.ts";
 import { IntakeOutputSchema, INTAKE_OUTPUT_SCHEMA_ID, type IntakeOutput } from "./intake-output.ts";
+import { PlanContextSchema, PLAN_CONTEXT_SCHEMA_ID, type PlanContext } from "./plan-context.ts";
 import { PlanOutputSchema, PLAN_OUTPUT_SCHEMA_ID, type PlanOutput } from "./plan-output.ts";
 import { ReviewContextSchema, REVIEW_CONTEXT_SCHEMA_ID, type ReviewContext } from "./review-context.ts";
 import { ReviewOutputSchema, REVIEW_OUTPUT_SCHEMA_ID, type ReviewOutput } from "./review-output.ts";
@@ -23,6 +39,10 @@ export const ENVELOPE_SCHEMAS = {
   [REVIEW_OUTPUT_SCHEMA_ID]: ReviewOutputSchema,
   [REVIEW_CONTEXT_SCHEMA_ID]: ReviewContextSchema,
   [DESIGN_CONTEXT_SCHEMA_ID]: DesignContextSchema,
+  [DESIGN_OUTPUT_SCHEMA_ID]: DesignOutputSchema,
+  [ARCHITECTURE_REVIEW_OUTPUT_SCHEMA_ID]: ArchitectureReviewOutputSchema,
+  [PLAN_CONTEXT_SCHEMA_ID]: PlanContextSchema,
+  [DESIGN_PLAN_OUTPUT_SCHEMA_ID]: DesignPlanOutputSchema,
   [DOCUMENT_OUTPUT_SCHEMA_ID]: DocumentOutputSchema,
   [SCOUT_OUTPUT_SCHEMA_ID]: ScoutOutputSchema,
   [INTAKE_OUTPUT_SCHEMA_ID]: IntakeOutputSchema,
@@ -38,6 +58,10 @@ export interface EnvelopeTypeById {
   [REVIEW_OUTPUT_SCHEMA_ID]: ReviewOutput;
   [REVIEW_CONTEXT_SCHEMA_ID]: ReviewContext;
   [DESIGN_CONTEXT_SCHEMA_ID]: DesignContext;
+  [DESIGN_OUTPUT_SCHEMA_ID]: DesignOutput;
+  [ARCHITECTURE_REVIEW_OUTPUT_SCHEMA_ID]: ArchitectureReviewOutput;
+  [PLAN_CONTEXT_SCHEMA_ID]: PlanContext;
+  [DESIGN_PLAN_OUTPUT_SCHEMA_ID]: DesignPlanOutput;
   [DOCUMENT_OUTPUT_SCHEMA_ID]: DocumentOutput;
   [SCOUT_OUTPUT_SCHEMA_ID]: ScoutOutput;
   [INTAKE_OUTPUT_SCHEMA_ID]: IntakeOutput;
