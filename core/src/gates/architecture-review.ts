@@ -1,8 +1,17 @@
+/**
+ * `architecture_review_clear` is attached to the host plan-context phase, not
+ * the review phase, and appears in no phase's correction path because asking
+ * the reviewer to reconsider an unchanged design rewards a softened finding.
+ * Task 26 must journal the findings and stop a failed attempt at
+ * `AWAITING_OWNER` through the existing task-state edges only.
+ */
+
 import type {
   ArchitectureReviewFinding,
   ArchitectureReviewOutput,
 } from "../contracts/architecture-review-output.ts";
 import type { DesignOutput } from "../contracts/design-output.ts";
+import type { PlanContext } from "../contracts/plan-context.ts";
 import { BLOCKING_SEVERITIES } from "../contracts/review-output.ts";
 import { GateReport } from "./interface.ts";
 
@@ -15,6 +24,32 @@ function concrete(finding: ArchitectureReviewFinding): boolean {
 
 function listed(values: readonly string[]): string {
   return values.length === 0 ? "none" : values.join(", ");
+}
+
+export interface CarriedArchitectureIdentifiers {
+  /** The source declarations from the stored design envelope. */
+  readonly design: Pick<DesignOutput, "invariants" | "acceptanceCriteria">;
+  /** The declarations copied into the host-composed plan context. */
+  readonly planContext: PlanContext["identifierSet"];
+}
+
+function identifiersExact(carried: CarriedArchitectureIdentifiers): boolean {
+  const { design, planContext } = carried;
+  return design.invariants.length === planContext.invariants.length
+    && design.invariants.every((declaration, index) => {
+      const copied = planContext.invariants[index];
+      return copied !== undefined
+        && declaration.id === copied.id
+        && declaration.statement === copied.statement;
+    })
+    && design.acceptanceCriteria.length === planContext.acceptanceCriteria.length
+    && design.acceptanceCriteria.every((declaration, index) => {
+      const copied = planContext.acceptanceCriteria[index];
+      return copied !== undefined
+        && declaration.id === copied.id
+        && declaration.statement === copied.statement
+        && declaration.verifiedBy === copied.verifiedBy;
+    });
 }
 
 /** Validate an architecture review's references and verdict shape against the design it judged. */
@@ -68,6 +103,37 @@ export function architectureVerdictConsistent(
     declaredLimitations.length > 0
       ? `reviewer declared it did not check: ${declaredLimitations.join("; ")}`
       : "reviewer declared it did not check: nothing",
+  );
+  return report;
+}
+
+/** Refuse planning when the stored review is blocking or the host changed the design's identifier spine. */
+export function architectureReviewClear(
+  review: ArchitectureReviewOutput,
+  carriedIdentifiers: CarriedArchitectureIdentifiers,
+): GateReport {
+  const report = new GateReport("architecture_review_clear");
+  const blocking = review.findings.filter((finding) =>
+    BLOCKING_SEVERITIES.some((severity) => severity === finding.severity),
+  );
+  const exact = identifiersExact(carriedIdentifiers);
+
+  report.check(
+    "no blocking findings",
+    blocking.length === 0,
+    `${String(blocking.length)} blocking of ${String(review.findings.length)} finding(s); this gate checks the verdict's shape, not the review's thoroughness — a zero here is envelope consistency, never a clean design`,
+  );
+  report.check(
+    "review verdict accepts design",
+    review.verdict === "accept",
+    `review verdict=${review.verdict}; accept is required before planning`,
+  );
+  report.check(
+    "carried identifier set equals design",
+    exact,
+    exact
+      ? `${String(carriedIdentifiers.design.invariants.length)} invariant(s) and ${String(carriedIdentifiers.design.acceptanceCriteria.length)} acceptance criterion/criteria copied exactly from the stored design`
+      : `design=${JSON.stringify(carriedIdentifiers.design)}; plan-context=${JSON.stringify(carriedIdentifiers.planContext)}`,
   );
   return report;
 }

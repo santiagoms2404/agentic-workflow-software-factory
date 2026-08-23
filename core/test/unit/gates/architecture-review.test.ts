@@ -2,10 +2,14 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { ArchitectureReviewOutput } from "../../../src/contracts/architecture-review-output.ts";
 import type { DesignOutput } from "../../../src/contracts/design-output.ts";
-import { architectureVerdictConsistent } from "../../../src/gates/architecture-review.ts";
+import {
+  architectureReviewClear,
+  architectureVerdictConsistent,
+} from "../../../src/gates/architecture-review.ts";
 import {
   validArchitectureReviewOutput,
   validDesignOutput,
+  validPlanContext,
 } from "../contracts/fixtures.ts";
 
 function reportFor(
@@ -103,4 +107,87 @@ test("limitations must say what the reviewer did not check", () => {
 
   assert.equal(check?.ok, false);
   assert.equal(check?.note, "reviewer declared it did not check: nothing");
+});
+
+test("architecture_review_clear passes a clear review with the design's exact identifier set", () => {
+  const review = validArchitectureReviewOutput();
+  const design = validDesignOutput();
+  const planContext = validPlanContext();
+  const carried = { design, planContext: planContext.identifierSet };
+  const first = architectureReviewClear(review, carried);
+  const second = architectureReviewClear(review, carried);
+
+  assert.equal(first.gateId, "architecture_review_clear");
+  assert.equal(first.passed, true);
+  assert.equal(first.checks.length, 3);
+  assert.ok(first.checks.every((check) => check.note.length > 0));
+  assert.match(
+    first.checks.find((check) => check.item === "no blocking findings")?.note ?? "",
+    /this gate checks the verdict's shape, not the review's thoroughness — a zero here is envelope consistency, never a clean design/u,
+  );
+  assert.deepEqual(first.checks, second.checks);
+});
+
+test("architecture_review_clear rejects every blocking severity", () => {
+  for (const severity of ["high", "critical"] as const) {
+    const review = validArchitectureReviewOutput();
+    review.findings[0]!.severity = severity;
+    const report = architectureReviewClear(review, {
+      design: validDesignOutput(),
+      planContext: validPlanContext().identifierSet,
+    });
+
+    assert.equal(report.passed, false, severity);
+    assert.equal(report.checks.find((check) => check.item === "no blocking findings")?.ok, false);
+  }
+});
+
+test("architecture_review_clear requires an accept verdict independently of finding count", () => {
+  const review = validArchitectureReviewOutput();
+  review.verdict = "concern";
+  review.findings[0]!.severity = "medium";
+  const report = architectureReviewClear(review, {
+    design: validDesignOutput(),
+    planContext: validPlanContext().identifierSet,
+  });
+
+  assert.equal(report.checks.find((check) => check.item === "no blocking findings")?.ok, true);
+  assert.equal(report.checks.find((check) => check.item === "review verdict accepts design")?.ok, false);
+  assert.equal(report.passed, false);
+});
+
+test("architecture_review_clear requires the full carried identifier set to equal the design", () => {
+  const cases = [
+    {
+      name: "changed invariant",
+      mutate: (identifierSet: ReturnType<typeof validPlanContext>["identifierSet"]): void => {
+        identifierSet.invariants[0]!.statement = "Changed after review.";
+      },
+    },
+    {
+      name: "changed acceptance criterion",
+      mutate: (identifierSet: ReturnType<typeof validPlanContext>["identifierSet"]): void => {
+        identifierSet.acceptanceCriteria[0]!.verifiedBy = "A different observation.";
+      },
+    },
+    {
+      name: "extra identifier",
+      mutate: (identifierSet: ReturnType<typeof validPlanContext>["identifierSet"]): void => {
+        identifierSet.invariants.push({ id: "INV-2", statement: "Not declared by the design." });
+      },
+    },
+  ];
+
+  for (const fixture of cases) {
+    const identifierSet = validPlanContext().identifierSet;
+    fixture.mutate(identifierSet);
+    const report = architectureReviewClear(validArchitectureReviewOutput(), {
+      design: validDesignOutput(),
+      planContext: identifierSet,
+    });
+    const check = report.checks.find((candidate) => candidate.item === "carried identifier set equals design");
+
+    assert.equal(check?.ok, false, fixture.name);
+    assert.match(check?.note ?? "", /design=.*plan-context=/u, fixture.name);
+  }
 });

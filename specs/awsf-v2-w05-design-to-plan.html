@@ -713,11 +713,11 @@ flowchart TD
 
       <h4>13. <code>architecture_review_clear</code> — the deterministic zero-blocker gate</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> Pure over the stored review envelope: blocking findings number zero and the verdict is <code>accept</code></li>
-        <li><code class="status">[]</code> The identifier set carried into the plan context equals the design's exactly, so the planner cannot be handed a set the reviewer never saw</li>
-        <li><code class="status">[]</code> It is attached to the host <code>plan-context</code> phase, <strong>not</strong> to the review phase, and it appears in no phase's correction path. The reason is written into the module comment, in one sentence a reader can disagree with</li>
-        <li><code class="status">[]</code> On failure, the attempt stops at <code>AWAITING_OWNER</code> with the findings journalled, through the existing edges only. <strong><code>core/src/state/task-machine.ts</code> is not touched and <code>LEGAL_EDGES.length</code> stays 25</strong></li>
-        <li><code class="status">[]</code> The passing note carries the same stated limit as task 12, because this is the row a reader of a green run actually sees</li>
+        <li><code class="status">[x]</code> Pure over the stored review envelope: blocking findings number zero and the verdict is <code>accept</code></li>
+        <li><code class="status">[x]</code> The identifier set carried into the plan context equals the design's exactly, so the planner cannot be handed a set the reviewer never saw</li>
+        <li><code class="status">[x]</code> It is attached to the host <code>plan-context</code> phase, <strong>not</strong> to the review phase, and it appears in no phase's correction path. The reason is written into the module comment, in one sentence a reader can disagree with</li>
+        <li><code class="status">[x]</code> On failure, the attempt stops at <code>AWAITING_OWNER</code> with the findings journalled, through the existing edges only. <strong><code>core/src/state/task-machine.ts</code> is not touched and <code>LEGAL_EDGES.length</code> stays 25</strong></li>
+        <li><code class="status">[x]</code> The passing note carries the same stated limit as task 12, because this is the row a reader of a green run actually sees</li>
       </ul>
 
       <h4>14. <code>spine_carried</code></h4>
