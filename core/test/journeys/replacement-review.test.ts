@@ -57,6 +57,8 @@ import { gatesForSession, getSession, transitionsForSession } from "../../src/ob
 import { openDatabase } from "../../src/observability/sqlite.ts";
 import type { AttemptEvidence } from "../../src/observability/attempt-evidence.ts";
 import { callCeilingsOf } from "../../src/state/tiers.ts";
+import { composePromptBundle } from "../../src/workflow/prompt-composition.ts";
+import { PromptCompositionMismatch } from "../../src/cli/commands/review-record.ts";
 import type { OwnerTerminal } from "../../src/cli/tty.ts";
 
 const AT = "2026-08-14T00:00:00.000Z";
@@ -171,6 +173,9 @@ async function world(options: {
       writeFileSync(target, readFileSync(resolve(promptPath), "utf8"));
     }
   }
+  const sharedPrompt = join(root, "prompts/shared/headless-role.md");
+  mkdirSync(resolve(sharedPrompt, ".."), { recursive: true });
+  writeFileSync(sharedPrompt, readFileSync(resolve("prompts/shared/headless-role.md"), "utf8"));
 
   const projection = createDashboardProjection(stateRoot);
   const workflow = options.workflow ?? "build-review";
@@ -213,6 +218,14 @@ async function world(options: {
         correctionCount: 0, maxCorrections: 0, errorCode: null, errorMessage: null,
         startedAt: AT, endedAt: AT, createdAt: AT,
       },
+    });
+  }
+  for (const role of ["builder", "reviewer"] as const) {
+    const agent = config.agents.find((candidate) => candidate.name === role)!;
+    const prompts = await composePromptBundle({ configPath, agent });
+    await append(world, {
+      type: "compiled-prompt", phaseId: phaseId(role), name: "system", text: prompts.systemPrompt,
+      lineCount: prompts.systemPrompt.split(/\r?\n/).length, at: AT,
     });
   }
   await append(world, { type: "envelope", phaseId: phaseId("request"), envelope: envelope("request", "awsf.plan-output/v1", plan(request), "raw/host-request.txt") });
@@ -546,6 +559,37 @@ test("a failed evidence row is replaceable, which is the other half of the two-m
     assert.equal(result.status.lifecycleState, "AWAITING_OWNER", result.status.blocker?.detail);
     assert.match(lines.join("\n"), /Evidence defect: evidence-gate-failed/);
   } finally { await cleanup(fixture); }
+});
+
+test("role and shared prompt drift refuse replacement review before confirmation, reservation, or call spend", async () => {
+  for (const scenario of ["role", "shared"] as const) {
+    const fixture = await world();
+    const launches: string[] = [];
+    let confirmations = 0;
+    try {
+      const path = scenario === "role"
+        ? join(fixture.root, "prompts/reviewer/system.md")
+        : join(fixture.root, "prompts/shared/headless-role.md");
+      writeFileSync(path, `${readFileSync(path, "utf8")}induced ${scenario} drift\n`);
+      const before = await readAttempt(fixture.attemptDir);
+      await assert.rejects(reviewCommand({
+        attemptDir: fixture.attemptDir, stateRoot: fixture.stateRoot, reason: REASON,
+        terminal: {
+          interactive: true, write: () => {},
+          confirm: async () => { confirmations += 1; return true; },
+        },
+        config: fixture.config, configPath: fixture.configPath,
+        projectRecord: fixture.projection.project,
+        infrastructure: infra(fixture, "accept", launches, fakeBroker),
+      }), PromptCompositionMismatch);
+      const after = await readAttempt(fixture.attemptDir);
+      assert.equal(after.revision, before.revision, `${scenario}: path-only snapshot equality did not authorize drift`);
+      assert.equal(after.budget.callsSpent, before.budget.callsSpent);
+      assert.equal(after.budget.callsReserved, 0);
+      assert.equal(confirmations, 0);
+      assert.deepEqual(launches, []);
+    } finally { await cleanup(fixture); }
+  }
 });
 
 test("every zero-cost refusal leaves AWAITING_OWNER exactly as it was", async () => {

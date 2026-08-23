@@ -75,6 +75,41 @@ test("a run.started event is projected as one events row", () => {
   assert.deepEqual(rows, [{ type: "run.started", run_id: "run1" }]);
 });
 
+test("compiled system prompt projection retains full text and composition digests without a schema change", () => {
+  const db = freshDb();
+  const text = "role bytes\n\nshared bytes\n";
+  const composition = {
+    roleSystemDigest: "1".repeat(64),
+    sharedBlockDigest: "2".repeat(64),
+    composedSystemDigest: "3".repeat(64),
+    compositionVersion: "awsf.prompt-composition/v1",
+  };
+  const phase = projectAttemptStatus(db, attempt({
+    type: "phase",
+    phase: {
+      phaseId: "phase-1", ordinal: 1, key: "builder", name: "builder", kind: "agent", owner: "builder",
+      description: "fixture phase", status: "RUNNING", correctionCount: 0, maxCorrections: 0,
+      errorCode: null, errorMessage: null, startedAt: SESSION.startedAt, endedAt: null, createdAt: SESSION.startedAt,
+    },
+  }), 1);
+  assert.equal(phase.ok, true);
+  const promptStatus = {
+    ...attempt({
+      type: "compiled-prompt", phaseId: "phase-1", name: "system", text,
+      ...composition, lineCount: 4, at: SESSION.startedAt,
+    }),
+    stateRevision: 2,
+  };
+  const outcome = projectAttemptStatus(db, promptStatus, 2);
+  assert.equal(outcome.ok, true);
+  const row = db.prepare("SELECT type, name, payload_json FROM events").get() as {
+    type: string; name: string; payload_json: string;
+  };
+  assert.equal(row.type, "compiled_prompt");
+  assert.equal(row.name, "system");
+  assert.deepEqual(JSON.parse(row.payload_json), { text, lineCount: 4, ...composition });
+});
+
 test("agent launch evidence creates a route-attributed null-usage row with exact broker grant", () => {
   const db = freshDb();
   const outcome = projectAttemptStatus(db, attempt({

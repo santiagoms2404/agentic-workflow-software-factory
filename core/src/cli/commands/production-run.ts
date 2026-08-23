@@ -1074,6 +1074,7 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
     for (const [name, text] of [["system", route.systemPrompt], ["user", renderedPrompt]] as const) {
       await persist("attempt.updated", {}, {
         type: "compiled-prompt", phaseId: phaseDb, name, text,
+        ...(name === "system" ? route.evidence : {}),
         lineCount: text.split(/\r?\n/).length, at: infra.now(),
       });
     }

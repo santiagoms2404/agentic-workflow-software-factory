@@ -40,7 +40,20 @@ export type AttemptEvidence =
   | { readonly type: "transition"; readonly id: string; readonly seq: number; readonly from: TaskState; readonly to: TaskState; readonly actor: "host" | "owner" | "human"; readonly edgeId: string; readonly reasonSource: string; readonly reasonCode: string | null; readonly reasonDetail: string | null; readonly spawnSite: boolean; readonly at: string }
   | { readonly type: "phase"; readonly phase: PhaseEvidenceRecord }
   | { readonly type: "normalized-event"; readonly phaseId: string; readonly event: NormalizedEvent }
-  | { readonly type: "compiled-prompt"; readonly phaseId: string; readonly name: string; readonly text: string; readonly lineCount: number; readonly at: string }
+  | {
+      readonly type: "compiled-prompt";
+      readonly phaseId: string;
+      readonly name: string;
+      /** Full compiled bytes remain canonical for display and legacy digest derivation. */
+      readonly text: string;
+      readonly lineCount: number;
+      /** Present on composed system prompts; optional for legacy journals and user prompts. */
+      readonly roleSystemDigest?: string;
+      readonly sharedBlockDigest?: string;
+      readonly composedSystemDigest?: string;
+      readonly compositionVersion?: string;
+      readonly at: string;
+    }
   | { readonly type: "process"; readonly phaseId: string; readonly adapterId: string; readonly role: string; readonly record: BarrierRecord; readonly status: "REGISTERED" | "RUNNING" | "EXITED" | "FAILED" | "CANCELLED"; readonly registeredAt: string; readonly releasedAt: string | null; readonly endedAt: string | null; readonly exitCode: number | null; readonly exitSignal: string | null }
   | { readonly type: "envelope"; readonly phaseId: string; readonly envelope: StoredEnvelope<EnvelopeBase> }
   | { readonly type: "gate"; readonly id: string; readonly phaseId: string; readonly round: number; readonly gateId: GateId; readonly kind: "pure" | "filesystem" | "git" | "subprocess" | "journey"; readonly candidateSha: string | null; readonly passed: boolean; readonly exitCode: number | null; readonly checks: readonly GateCheck[]; readonly violations: readonly string[]; readonly outputPath: string | null; readonly startedAt: string; readonly endedAt: string }

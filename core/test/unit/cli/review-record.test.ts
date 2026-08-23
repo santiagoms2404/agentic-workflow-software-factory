@@ -17,6 +17,10 @@ import {
 } from "../../../src/cli/commands/review-record.ts";
 import type { ReviewOutput } from "../../../src/contracts/review-output.ts";
 import type { AttemptEvidence } from "../../../src/observability/attempt-evidence.ts";
+import {
+  PROMPT_COMPOSITION_VERSION,
+  promptSha256,
+} from "../../../src/workflow/prompt-composition.ts";
 
 const SESSION = "0f8d1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5b";
 const CANDIDATE = "a".repeat(40);
@@ -52,6 +56,23 @@ function gate(key: string, gateId: string, passed: boolean, candidateSha: string
     checks: [{ item: gateId, ok: passed, note: "fixture" }], violations: [], outputPath: null,
     startedAt: AT, endedAt: AT,
   } as unknown as AttemptEvidence;
+}
+
+function compiledSystem(
+  key: string,
+  text: string,
+  composition?: {
+    roleSystemDigest: string;
+    sharedBlockDigest: string;
+    composedSystemDigest: string;
+    compositionVersion: string;
+  },
+): AttemptEvidence {
+  const record: AttemptEvidence = {
+    type: "compiled-prompt", phaseId: `${SESSION}:${key}`, name: "system", text,
+    lineCount: text.split(/\r?\n/).length, at: AT,
+  };
+  return composition === undefined ? record : { ...record, ...composition };
 }
 
 function agent(key: string, adapterId: string, provider: string, requestedModel: string): AttemptEvidence {
@@ -142,6 +163,38 @@ test("the worker and review routes are told apart by which phase wrote them, not
   ], new Set([`${SESSION}:reviewer`]));
   assert.equal(routes.worker?.provider, "openai-codex");
   assert.equal(routes.review?.requestedModel, "claude:opus");
+});
+
+test("modern route reconstruction retains full system text and all composition fields", () => {
+  const role = "role bytes\n";
+  const shared = "shared bytes\n";
+  const text = `${role}\n\n${shared}`;
+  const composition = {
+    roleSystemDigest: promptSha256(role),
+    sharedBlockDigest: promptSha256(shared),
+    composedSystemDigest: promptSha256(text),
+    compositionVersion: PROMPT_COMPOSITION_VERSION,
+  };
+  const routes = recordedRoutes([
+    compiledSystem("builder", text, composition),
+    agent("builder", "codex", "openai-codex", "codex:gpt-5.6-sol"),
+  ], new Set());
+  assert.deepEqual(routes.worker?.systemPrompt, { text, ...composition });
+});
+
+test("legacy full-text route evidence derives only the final digest", () => {
+  const text = "legacy full composed system bytes\n";
+  const routes = recordedRoutes([
+    compiledSystem("reviewer", text),
+    agent("reviewer", "claude", "anthropic", "claude:opus"),
+  ], new Set([`${SESSION}:reviewer`]));
+  assert.deepEqual(routes.review?.systemPrompt, {
+    text,
+    roleSystemDigest: null,
+    sharedBlockDigest: null,
+    composedSystemDigest: promptSha256(text),
+    compositionVersion: null,
+  });
 });
 
 test("one review discloses nothing; a replaced one discloses both verdicts and the defect", () => {

@@ -54,6 +54,7 @@ import { agentsForSession, gatesForSession, getSession, transitionsForSession } 
 import { openDatabase } from "../../src/observability/sqlite.ts";
 import type { AttemptEvidence } from "../../src/observability/attempt-evidence.ts";
 import { callCeilingsOf } from "../../src/state/tiers.ts";
+import { composePromptBundle } from "../../src/workflow/prompt-composition.ts";
 import type { OwnerTerminal } from "../../src/cli/tty.ts";
 
 const AT = "2026-08-16T00:00:00.000Z";
@@ -167,6 +168,9 @@ async function world(options: {
       writeFileSync(target, readFileSync(resolve(promptPath), "utf8"));
     }
   }
+  const sharedPrompt = join(root, "prompts/shared/headless-role.md");
+  mkdirSync(resolve(sharedPrompt, ".."), { recursive: true });
+  writeFileSync(sharedPrompt, readFileSync(resolve("prompts/shared/headless-role.md"), "utf8"));
 
   const projection = createDashboardProjection(stateRoot);
   const workflow = options.workflow ?? "build-review";
@@ -210,6 +214,14 @@ async function world(options: {
         correctionCount: 0, maxCorrections: 0, errorCode: null, errorMessage: null,
         startedAt: AT, endedAt: AT, createdAt: AT,
       },
+    });
+  }
+  for (const role of ["builder", "reviewer"] as const) {
+    const agent = config.agents.find((candidate) => candidate.name === role)!;
+    const prompts = await composePromptBundle({ configPath, agent });
+    await append(fixture, {
+      type: "compiled-prompt", phaseId: phaseId(role), name: "system", text: prompts.systemPrompt,
+      lineCount: prompts.systemPrompt.split(/\r?\n/).length, at: AT,
     });
   }
   await append(fixture, { type: "envelope", phaseId: phaseId("request"), envelope: envelope("request", "awsf.plan-output/v1", plan(request), "raw/host-request.txt") });

@@ -90,7 +90,13 @@ import {
   type PreparedReview,
   type ReviewRoute,
 } from "./review-phase.ts";
-import { readAttemptEvidence, recordedReviews, recordedRoutes } from "./review-record.ts";
+import {
+  assertPromptCompositionCurrent,
+  readAttemptEvidence,
+  recordedReviews,
+  recordedRoutes,
+  type RecordedRoute,
+} from "./review-record.ts";
 
 const { chmod, mkdir, readFile, realpath, writeFile } = fs;
 
@@ -383,7 +389,13 @@ function validateAttempt(status: AttemptStatus, config: AwsfConfig): WorkflowRec
   return t2 ?? null;
 }
 
-async function resolveRoute(status: AttemptStatus, config: AwsfConfig, configPath: string, infra: ReworkInfrastructure): Promise<Route> {
+async function resolveRoute(
+  status: AttemptStatus,
+  config: AwsfConfig,
+  configPath: string,
+  infra: ReworkInfrastructure,
+  governingBuilder: RecordedRoute | null,
+): Promise<Route> {
   const agent = config.agents.find((candidate) => candidate.name === "builder");
   if (agent === undefined || agent.writes.length === 0) throw new ProductionRouteUnavailable("builder", "supported owner rework requires the configured writable builder phase");
   const entry = config.adapters[agent.harness.adapter];
@@ -395,6 +407,7 @@ async function resolveRoute(status: AttemptStatus, config: AwsfConfig, configPat
   const model = credentialSafeValue(await adapter.getModelInfo(agent.model), "configured model route");
   if (model.adapter !== adapter.id) throw new ReworkRouteMismatch(`adapter descriptor says ${model.adapter}, selected adapter is ${adapter.id}`);
   const prompts = await readReworkPromptPair(configPath, agent);
+  assertPromptCompositionCurrent(prompts, governingBuilder, "builder");
   return {
     agent,
     adapterId: agent.harness.adapter,
@@ -564,7 +577,12 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
   const recipe = validateAttempt(status, options.config);
   const firstInspection = inspectCandidate(status);
   const prior = await priorBuild(options.attemptDir);
-  const route = await resolveRoute(status, options.config, options.configPath, infra);
+  const governingEvidence = await readAttemptEvidence(options.attemptDir);
+  const governingReviewPhaseIds = new Set(
+    recordedReviews(governingEvidence, status.sessionId).map((review) => review.phaseId),
+  );
+  const governingRoutes = recordedRoutes(governingEvidence, governingReviewPhaseIds);
+  const route = await resolveRoute(status, options.config, options.configPath, infra, governingRoutes.worker);
   const remainingCalls = ceilingFor(status.tier, status.budget.ceiling) - status.budget.callsSpent - status.budget.callsReserved;
   const remainingOwner = status.budget.allowance.ownerReentries - status.budget.ownerReentries;
   // The T2 branch buys a review as well as a builder, so its whole cost is
@@ -742,6 +760,15 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
     lastActivity: `L19 human rework request accepted; call ${reservation.id} held before launch`,
   });
   await persist("attempt.updated", {}, { type: "phase", phase });
+  await persist("attempt.updated", {}, {
+    type: "compiled-prompt", phaseId, name: "system", text: route.systemPrompt,
+    ...route.evidence,
+    lineCount: route.systemPrompt.split(/\r?\n/).length, at: infra.now(),
+  });
+  await persist("attempt.updated", {}, {
+    type: "compiled-prompt", phaseId, name: "user", text: prompt,
+    lineCount: prompt.split(/\r?\n/).length, at: infra.now(),
+  });
 
   const broker = infra.createBroker({
     ledger: budget,

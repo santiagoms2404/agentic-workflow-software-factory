@@ -15,6 +15,10 @@ import { REVIEW_OUTPUT_SCHEMA_ID, type ReviewOutput } from "../../contracts/revi
 import type { ReviewEvidenceDefect } from "../../state/errors.ts";
 import type { GateEvidenceRow } from "../../state/task-machine.ts";
 import type { AttemptEvidence } from "../../observability/attempt-evidence.ts";
+import {
+  promptSha256,
+  type PromptBundle,
+} from "../../workflow/prompt-composition.ts";
 
 const { readFile } = fs;
 
@@ -136,12 +140,49 @@ export function candidateGateRows(
   return Object.freeze(rows);
 }
 
+export interface RecordedSystemPrompt {
+  /** Retained full composed text. */
+  readonly text: string;
+  readonly roleSystemDigest: string | null;
+  readonly sharedBlockDigest: string | null;
+  /** Derived from `text` only for a legacy record carrying no composition metadata. */
+  readonly composedSystemDigest: string | null;
+  readonly compositionVersion: string | null;
+}
+
 export interface RecordedRoute {
   readonly phaseId: string;
   readonly agent: string;
   readonly adapterId: string;
   readonly provider: string;
   readonly requestedModel: string;
+  readonly systemPrompt: RecordedSystemPrompt | null;
+}
+
+export class PromptCompositionMismatch extends Error {
+  readonly currentDigest: string;
+  readonly recordedDigest: string;
+
+  constructor(governingRole: string, currentDigest: string, recordedDigest: string, changed: readonly string[]) {
+    const components = changed.length === 0 ? "" : `; changed component(s): ${changed.join(", ")}`;
+    super(
+      `current composed system digest ${currentDigest} does not match governing recorded ${governingRole} digest ${recordedDigest}${components}; ` +
+        "config snapshot equality covers prompt paths only and cannot override digest inequality; start under a new configuration snapshot",
+    );
+    this.name = "PromptCompositionMismatch";
+    this.currentDigest = currentDigest;
+    this.recordedDigest = recordedDigest;
+  }
+}
+
+export class PromptCompositionRecordMissing extends Error {
+  constructor(governingRole: string) {
+    super(
+      `the governing recorded ${governingRole} route has no usable full-text system prompt evidence; ` +
+        "start under a new configuration snapshot",
+    );
+    this.name = "PromptCompositionRecordMissing";
+  }
 }
 
 /**
@@ -155,6 +196,23 @@ export function recordedRoutes(
   evidence: readonly AttemptEvidence[],
   reviewPhaseIds: ReadonlySet<string>,
 ): { readonly worker: RecordedRoute | null; readonly review: RecordedRoute | null } {
+  const systemPrompts = new Map<string, RecordedSystemPrompt>();
+  for (const record of evidence) {
+    if (record.type !== "compiled-prompt" || record.name !== "system") continue;
+    const legacy = record.roleSystemDigest === undefined &&
+      record.sharedBlockDigest === undefined &&
+      record.composedSystemDigest === undefined &&
+      record.compositionVersion === undefined;
+    systemPrompts.set(record.phaseId, Object.freeze({
+      text: record.text,
+      roleSystemDigest: record.roleSystemDigest ?? null,
+      // Legacy evidence records no component boundary, so no shared digest is invented.
+      sharedBlockDigest: record.sharedBlockDigest ?? null,
+      composedSystemDigest: legacy ? promptSha256(record.text) : record.composedSystemDigest ?? null,
+      compositionVersion: record.compositionVersion ?? null,
+    }));
+  }
+
   let worker: RecordedRoute | null = null;
   let review: RecordedRoute | null = null;
   for (const record of evidence) {
@@ -165,11 +223,50 @@ export function recordedRoutes(
       adapterId: record.adapterId,
       provider: record.provider,
       requestedModel: record.requestedModel,
+      systemPrompt: systemPrompts.get(record.phaseId) ?? null,
     };
     if (reviewPhaseIds.has(record.phaseId)) review = route;
     else worker = route;
   }
   return { worker, review };
+}
+
+/** Refuses path-stable prompt drift before a later route may reserve or spend a call. */
+export function assertPromptCompositionCurrent(
+  current: PromptBundle,
+  governing: RecordedRoute | null,
+  governingRole: string,
+): void {
+  const recorded = governing?.systemPrompt;
+  if (recorded === null || recorded === undefined || recorded.composedSystemDigest === null) {
+    throw new PromptCompositionRecordMissing(governingRole);
+  }
+  const retainedTextDigest = promptSha256(recorded.text);
+  if (retainedTextDigest !== recorded.composedSystemDigest) {
+    throw new PromptCompositionMismatch(
+      governingRole,
+      retainedTextDigest,
+      recorded.composedSystemDigest,
+      ["recorded-full-text"],
+    );
+  }
+  if (current.evidence.composedSystemDigest === recorded.composedSystemDigest) return;
+  const changed: string[] = [];
+  if (recorded.roleSystemDigest !== null && current.evidence.roleSystemDigest !== recorded.roleSystemDigest) {
+    changed.push("role-system");
+  }
+  if (recorded.sharedBlockDigest !== null && current.evidence.sharedBlockDigest !== recorded.sharedBlockDigest) {
+    changed.push("shared-block");
+  }
+  if (recorded.compositionVersion !== null && current.evidence.compositionVersion !== recorded.compositionVersion) {
+    changed.push("composition-version");
+  }
+  throw new PromptCompositionMismatch(
+    governingRole,
+    current.evidence.composedSystemDigest,
+    recorded.composedSystemDigest,
+    changed,
+  );
 }
 
 /**

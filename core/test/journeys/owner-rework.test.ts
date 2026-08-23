@@ -34,10 +34,12 @@ import { loadConfig } from "../../src/config/load.ts";
 import { toConfigSnapshotJson } from "../../src/config/effective-config.ts";
 import { ProcessTransportBroker, type BrokerOptions } from "../../src/execution/transport-broker.ts";
 import { InteractiveOwnerRequired, CallCeilingExceeded, CorrectionAllowanceExhausted } from "../../src/state/errors.ts";
-import { agentsForSession, gatesForSession, getSession, processesForSession, transitionsForSession } from "../../src/observability/queries.ts";
+import { agentsForSession, compiledPromptEvents, gatesForSession, getSession, processesForSession, transitionsForSession } from "../../src/observability/queries.ts";
 import { openDatabase } from "../../src/observability/sqlite.ts";
 import type { AttemptEvidence } from "../../src/observability/attempt-evidence.ts";
 import type { AwsfConfig } from "../../src/config/schema.ts";
+import { composePromptBundle } from "../../src/workflow/prompt-composition.ts";
+import { PromptCompositionMismatch } from "../../src/cli/commands/review-record.ts";
 import type { OwnerTerminal } from "../../src/cli/tty.ts";
 
 const PROVIDER = resolve("core/test/fixtures/providers/codex/production-runner-fixture.mjs");
@@ -103,6 +105,9 @@ async function world(options: { commandExit?: number; workflow?: "build" | "plan
       writeFileSync(target, readFileSync(resolve(promptPath), "utf8"));
     }
   }
+  const sharedPrompt = join(root, "prompts/shared/headless-role.md");
+  mkdirSync(resolve(sharedPrompt, ".."), { recursive: true });
+  writeFileSync(sharedPrompt, readFileSync(resolve("prompts/shared/headless-role.md"), "utf8"));
   const projection = createDashboardProjection(stateRoot);
   const created = await newCommand({
     stateRoot, project: config.project.slug, taskId: `rework-${options.workflow ?? "build"}`,
@@ -133,6 +138,28 @@ async function world(options: { commandExit?: number; workflow?: "build" | "plan
       },
     },
   }, projection.project);
+  const builder = config.agents.find((agent) => agent.name === "builder")!;
+  const builderPrompts = await composePromptBundle({ configPath, agent: builder });
+  const withPrompt = await persistAttempt(created.attemptDir, withPhase.revision, {
+    kind: "attempt.updated", next: nextRevision(withPhase, {}),
+    evidence: {
+      type: "compiled-prompt", phaseId: builderPhaseId, name: "system", text: builderPrompts.systemPrompt,
+      lineCount: builderPrompts.systemPrompt.split(/\r?\n/).length, at: "2026-08-12T00:00:00.000Z",
+    },
+  }, projection.project);
+  const withRoute = await persistAttempt(created.attemptDir, withPrompt.revision, {
+    kind: "attempt.updated", next: nextRevision(withPrompt, {}),
+    evidence: {
+      type: "agent", phaseId: builderPhaseId, agent: "builder", adapterId: "pi-codex",
+      provider: "openai-codex", color: null, requestedModel: builder.model,
+      resolvedModel: builder.model, modelProvenance: "route-attributed", contextWindow: null,
+      usageAuthority: "provider", usage: {
+        inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0,
+        reasoningTokens: 0, reasoningRelation: "unknown",
+      },
+      contextTokens: 2, costUsd: null, costAuthority: "unavailable", at: "2026-08-12T00:00:00.000Z",
+    },
+  }, projection.project);
   const buildEnvelope: StoredEnvelope<BuildOutput> = {
     schemaId: "awsf.build-output/v1", envelopeId: `${prepared.sessionId}:builder:0`, sessionId: prepared.sessionId,
     phaseId: builderPhaseId, correctionRound: 0, agent: "builder", valid: true, violations: [],
@@ -144,13 +171,13 @@ async function world(options: { commandExit?: number; workflow?: "build" | "plan
     },
     rawOutputPath: "raw/builder.txt", createdAt: "2026-08-12T00:00:00.000Z",
   };
-  let awaiting = nextRevision(withPhase, {
+  let awaiting = nextRevision(withRoute, {
     lifecycleState: "AWAITING_OWNER", candidateSha: candidateA,
     budget: { ...prepared.budget, callsSpent: 1 }, gatesPass: true, requiredReviewPresent: false,
     journeyApproved: true, protectedApprovalsValid: true, phase: null,
     lastActivity: "candidate A passed its original gates", nextAction: `run \`awsf rework ${prepared.taskId} "<concrete defect>"\``,
   });
-  awaiting = await persistAttempt(created.attemptDir, withPhase.revision, {
+  awaiting = await persistAttempt(created.attemptDir, withRoute.revision, {
     kind: "attempt.updated", next: awaiting,
     evidence: { type: "envelope", phaseId: builderPhaseId, envelope: buildEnvelope },
   }, projection.project);
@@ -468,6 +495,36 @@ test("exhausted owner allowance and exhausted call ceiling are refused before pr
   }
 });
 
+test("role and shared prompt drift refuse owner rework before confirmation, reservation, or call spend", async () => {
+  for (const scenario of ["role", "shared"] as const) {
+    const fixture = await world();
+    const adapter = new AvailableAdapter();
+    let confirmations = 0;
+    try {
+      const path = scenario === "role"
+        ? join(fixture.root, "prompts/builder/system.md")
+        : join(fixture.root, "prompts/shared/headless-role.md");
+      writeFileSync(path, `${readFileSync(path, "utf8")}induced ${scenario} drift\n`);
+      const before = await readAttempt(fixture.attemptDir);
+      await assert.rejects(reworkCommand({
+        attemptDir: fixture.attemptDir, stateRoot: fixture.stateRoot, defect: DEFECT,
+        terminal: {
+          interactive: true, write: () => {},
+          confirm: async () => { confirmations += 1; return true; },
+        },
+        config: fixture.config, configPath: fixture.configPath,
+        projectRecord: fixture.projection.project, infrastructure: infra(adapter),
+      }), PromptCompositionMismatch);
+      const after = await readAttempt(fixture.attemptDir);
+      assert.equal(after.revision, before.revision, `${scenario}: path-only snapshot equality did not authorize drift`);
+      assert.equal(after.budget.callsSpent, before.budget.callsSpent);
+      assert.equal(after.budget.callsReserved, 0);
+      assert.equal(confirmations, 0);
+      assert.equal(adapter.launches, 0);
+    } finally { await cleanup(fixture); }
+  }
+});
+
 test("dirty or mismatched candidate and unavailable fixed route refuse before L19", async () => {
   for (const scenario of ["dirty", "mismatch", "unavailable"] as const) {
     const fixture = await world();
@@ -707,6 +764,7 @@ test("process-backed L19 repairs candidate A, commits B on top, projects fresh e
   const lines: string[] = [];
   let sawLiveRoute = false;
   let sawLiveSandbox = false;
+  let sawCompiledPromptsBeforeGo = false;
   try {
     const result = await reworkCommand({
       attemptDir: fixture.attemptDir, stateRoot: fixture.stateRoot, defect: DEFECT, terminal: terminal(true, true, lines),
@@ -721,6 +779,15 @@ test("process-backed L19 repairs candidate A, commits B on top, projects fresh e
             const live = agentsForSession(liveDb, fixture.status.sessionId).find((row) => row.agent === "builder");
             sawLiveRoute = live?.requested_model === "codex:gpt-5.6-sol" && live.resolved_model === null;
             sawLiveSandbox = live?.sandbox_badge === "tool-policy" && live.sandbox_mechanism === "adapter-tool-policy";
+            const prompts = compiledPromptEvents(liveDb, `${fixture.status.sessionId}:owner-rework-1`);
+            const system = prompts.find((event) => event.name === "system");
+            const systemPayload = system === undefined ? null : JSON.parse(system.payload_json) as Record<string, unknown>;
+            sawCompiledPromptsBeforeGo = prompts.some((event) => event.name === "user") &&
+              typeof systemPayload?.text === "string" &&
+              typeof systemPayload.roleSystemDigest === "string" &&
+              typeof systemPayload.sharedBlockDigest === "string" &&
+              typeof systemPayload.composedSystemDigest === "string" &&
+              systemPayload.compositionVersion === "awsf.prompt-composition/v1";
           } finally { liveDb.close(); }
         },
       })),
@@ -729,6 +796,7 @@ test("process-backed L19 repairs candidate A, commits B on top, projects fresh e
     assert.equal(status.lifecycleState, "AWAITING_OWNER", status.blocker?.detail);
     assert.equal(sawLiveRoute, true, "L19 route evidence must project before provider completion");
     assert.equal(sawLiveSandbox, true, "L19 broker grant must project before provider completion");
+    assert.equal(sawCompiledPromptsBeforeGo, true, "owner rework system/user prompt evidence must project before GO");
     assert.equal(status.budget.callsSpent, 2);
     assert.equal(status.budget.callsReserved, 0);
     assert.equal(status.budget.ownerReentries, 1);
@@ -758,7 +826,7 @@ test("process-backed L19 repairs candidate A, commits B on top, projects fresh e
       const process = processesForSession(db, status.sessionId).find((row) => row.run_id.includes("owner-rework-1"));
       assert.equal(process?.status, "EXITED");
       assert.equal(process?.exit_code, 0);
-      assert.equal(agentsForSession(db, status.sessionId).find((row) => row.agent === "builder")?.call_count, 1);
+      assert.equal(agentsForSession(db, status.sessionId).find((row) => row.agent === "builder")?.call_count, 2);
       const fresh = gatesForSession(db, status.sessionId).filter((gate) => gate.phase_id.includes("owner-rework-1"));
       assert.ok(fresh.length >= 10);
       assert.ok(fresh.every((gate) => gate.candidate_sha === status.candidateSha && gate.passed === 1));

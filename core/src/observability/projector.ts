@@ -243,7 +243,14 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
         (event_id, session_id, phase_id, first_source_seq, last_source_seq, type, name,
          payload_json, started_at) VALUES (?, ?, ?, ?, ?, 'compiled_prompt', ?, ?, ?)`)
         .run(`${sessionId}:prompt:${sourceSeq}`, sessionId, evidence.phaseId, sourceSeq, sourceSeq,
-          evidence.name, stringifyRedacted({ text: evidence.text, lineCount: evidence.lineCount }), evidence.at);
+          evidence.name, stringifyRedacted({
+            text: evidence.text,
+            lineCount: evidence.lineCount,
+            ...(evidence.roleSystemDigest === undefined ? {} : { roleSystemDigest: evidence.roleSystemDigest }),
+            ...(evidence.sharedBlockDigest === undefined ? {} : { sharedBlockDigest: evidence.sharedBlockDigest }),
+            ...(evidence.composedSystemDigest === undefined ? {} : { composedSystemDigest: evidence.composedSystemDigest }),
+            ...(evidence.compositionVersion === undefined ? {} : { compositionVersion: evidence.compositionVersion }),
+          }), evidence.at);
       return;
     case "process": {
       const record = evidence.record;

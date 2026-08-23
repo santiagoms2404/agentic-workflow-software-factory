@@ -20,6 +20,8 @@ import { readReviewPromptPair } from "../../../src/cli/commands/review-phase.ts"
 import { readReworkPromptPair } from "../../../src/cli/commands/rework.ts";
 import {
   composePromptBundle,
+  PROMPT_COMPOSITION_VERSION,
+  promptSha256,
   PromptCredentialRejected,
   UnknownPromptRole,
   type ComposePromptBundleOptions,
@@ -154,14 +156,24 @@ test("all six configured roles and two synthetic W05 roles append through the sa
     }
     for (const pathway of LOADERS) {
       const observed = await pathway.load(configPath, agent);
+      const systemPrompt = [expected.system, sharedBytes].join(SEPARATOR);
       assert.deepEqual(
         observed,
-        { userPrompt: expected.user, systemPrompt: [expected.system, sharedBytes].join(SEPARATOR) },
+        {
+          userPrompt: expected.user,
+          systemPrompt,
+          evidence: {
+            roleSystemDigest: promptSha256(expected.system),
+            sharedBlockDigest: promptSha256(sharedBytes),
+            composedSystemDigest: promptSha256(systemPrompt),
+            compositionVersion: PROMPT_COMPOSITION_VERSION,
+          },
+        },
         `${pathway.path}:${role}`,
       );
       assert.equal(observed.systemPrompt.slice(0, expected.system.length), expected.system, `${pathway.path}:${role} exact role prefix`);
       assert.equal(observed.systemPrompt.slice(expected.system.length), `${SEPARATOR}${sharedBytes}`, `${pathway.path}:${role} one separator`);
-      assert.deepEqual(Object.keys(observed).sort(), ["systemPrompt", "userPrompt"], `${pathway.path}:${role} closed output`);
+      assert.deepEqual(Object.keys(observed).sort(), ["evidence", "systemPrompt", "userPrompt"], `${pathway.path}:${role} closed output`);
     }
   }
 });
@@ -176,6 +188,12 @@ test("an empty shared source reproduces M1 exactly and a non-empty source uses t
   assert.deepEqual(await composePromptBundle({ configPath, agent: agent! }), {
     userPrompt: EXPECTED.planner.user,
     systemPrompt: "role bytes without a final newline",
+    evidence: {
+      roleSystemDigest: promptSha256("role bytes without a final newline"),
+      sharedBlockDigest: promptSha256(""),
+      composedSystemDigest: promptSha256("role bytes without a final newline"),
+      compositionVersion: PROMPT_COMPOSITION_VERSION,
+    },
   });
 
   write(root, "prompts/shared/headless-role.md", "shared bytes without a final newline");
@@ -227,9 +245,16 @@ test("synthetic interactive alias bytes have no typed or runtime input path", as
 
   const observed = await composePromptBundle(options);
   assert.doesNotMatch(observed.systemPrompt, new RegExp(syntheticAliasBytes));
+  const systemPrompt = [EXPECTED.planner.system, COMMON_SHARED_BYTES].join(SEPARATOR);
   assert.deepEqual(observed, {
     userPrompt: EXPECTED.planner.user,
-    systemPrompt: [EXPECTED.planner.system, COMMON_SHARED_BYTES].join(SEPARATOR),
+    systemPrompt,
+    evidence: {
+      roleSystemDigest: promptSha256(EXPECTED.planner.system),
+      sharedBlockDigest: promptSha256(COMMON_SHARED_BYTES),
+      composedSystemDigest: promptSha256(systemPrompt),
+      compositionVersion: PROMPT_COMPOSITION_VERSION,
+    },
   });
 });
 

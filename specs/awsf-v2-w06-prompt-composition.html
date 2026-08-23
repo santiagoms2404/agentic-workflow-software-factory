@@ -321,11 +321,11 @@ flowchart TD
 
     <h4>5. Put shared bytes in immutable route evidence and refuse drift</h4>
     <ul class="checklist">
-      <li><code class="status">[]</code> Extend the existing <code>compiled-prompt</code> system evidence compatibly with role-system, shared-block, and final-composed SHA-256 digests plus a composition-version identifier; keep the full composed text as the evidence payload.</li>
-      <li><code class="status">[]</code> Persist that evidence before each launch path can spend a call. Rework also records its own compiled system and user prompts, closing its current evidence gap.</li>
-      <li><code class="status">[]</code> Replacement review compares current composed digest with the latest governing review route evidence. Owner rework compares with the governing builder route evidence. A mismatch refuses before reservation/GO and instructs the owner to start under a new configuration snapshot.</li>
-      <li><code class="status">[]</code> Legacy journals without component digests remain readable. They may derive the final digest from retained full system text, but may not invent a shared-component digest or claim that shared composition ran.</li>
-      <li><code class="status">[]</code> Add no receipt, manifest, migration, or second evidence store. Journal evidence remains canonical and projector writes stay within invariant 6's existing files.</li>
+      <li><code class="status">[x]</code> Extend the existing <code>compiled-prompt</code> system evidence compatibly with role-system, shared-block, and final-composed SHA-256 digests plus a composition-version identifier; keep the full composed text as the evidence payload.</li>
+      <li><code class="status">[x]</code> Persist that evidence before each launch path can spend a call. Rework also records its own compiled system and user prompts, closing its current evidence gap.</li>
+      <li><code class="status">[x]</code> Replacement review compares current composed digest with the latest governing review route evidence. Owner rework compares with the governing builder route evidence. A mismatch refuses before reservation/GO and instructs the owner to start under a new configuration snapshot.</li>
+      <li><code class="status">[x]</code> Legacy journals without component digests remain readable. They may derive the final digest from retained full system text, but may not invent a shared-component digest or claim that shared composition ran.</li>
+      <li><code class="status">[x]</code> Add no receipt, manifest, migration, or second evidence store. Journal evidence remains canonical and projector writes stay within invariant 6's existing files.</li>
     </ul>
 
     <h4>6. Gate reviewer evidence specificity and non-compression</h4>

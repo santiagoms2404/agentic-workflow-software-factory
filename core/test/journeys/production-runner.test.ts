@@ -174,6 +174,9 @@ async function fixture(
       writeFileSync(destination, `${readFileSync(resolve(promptPath), "utf8")}${marker}`);
     }
   }
+  const sharedPrompt = join(root, "prompts/shared/headless-role.md");
+  mkdirSync(resolve(sharedPrompt, ".."), { recursive: true });
+  writeFileSync(sharedPrompt, readFileSync(resolve("prompts/shared/headless-role.md"), "utf8"));
   const projection = createDashboardProjection(stateRoot);
   const created = await newCommand({ stateRoot, project: config.project.slug, taskId: `fixture-${workflow}`, repository: canonical, request: "write one bounded source", workflow, tier: 1, configSnapshotJson: JSON.stringify(config), projectRecord: projection.project });
   await startCommand({ attemptDir: created.attemptDir, worktreeRoot: join(root, "worktrees"), configPath, preflight: () => ({ adapter: true, sandbox: true, observability: true }), projectRecord: projection.project });

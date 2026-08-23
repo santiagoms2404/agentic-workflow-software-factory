@@ -1,12 +1,27 @@
+import { createHash } from "node:crypto";
 import { readFile, realpath } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 
 import type { AgentDefinition } from "../config/schema.ts";
 import { REDACTED_VALUE, scrubCredentialString } from "../policy/redaction.ts";
 
+export const PROMPT_COMPOSITION_VERSION = "awsf.prompt-composition/v1";
+
+export interface PromptCompositionEvidence {
+  readonly roleSystemDigest: string;
+  readonly sharedBlockDigest: string;
+  readonly composedSystemDigest: string;
+  readonly compositionVersion: typeof PROMPT_COMPOSITION_VERSION;
+}
+
 export interface PromptBundle {
   readonly userPrompt: string;
   readonly systemPrompt: string;
+  readonly evidence: PromptCompositionEvidence;
+}
+
+export function promptSha256(value: string): string {
+  return createHash("sha256").update(value, "utf8").digest("hex");
 }
 
 export interface ComposePromptBundleOptions {
@@ -108,5 +123,11 @@ export async function composePromptBundle(options: ComposePromptBundleOptions): 
   const systemPrompt = renderedSharedBytes.length === 0
     ? roleSystemPrompt
     : [roleSystemPrompt, renderedSharedBytes].join(SYSTEM_PROMPT_SEPARATOR);
-  return Object.freeze({ userPrompt, systemPrompt });
+  const evidence: PromptCompositionEvidence = Object.freeze({
+    roleSystemDigest: promptSha256(roleSystemPrompt),
+    sharedBlockDigest: promptSha256(renderedSharedBytes),
+    composedSystemDigest: promptSha256(systemPrompt),
+    compositionVersion: PROMPT_COMPOSITION_VERSION,
+  });
+  return Object.freeze({ userPrompt, systemPrompt, evidence });
 }

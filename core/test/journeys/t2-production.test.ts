@@ -223,6 +223,9 @@ async function fixture(tier: 1 | 2 = 2, configure: (config: AwsfConfig) => AwsfC
       writeFileSync(destination, readFileSync(resolve(promptPath), "utf8"));
     }
   }
+  const sharedPrompt = join(root, "prompts/shared/headless-role.md");
+  mkdirSync(resolve(sharedPrompt, ".."), { recursive: true });
+  writeFileSync(sharedPrompt, readFileSync(resolve("prompts/shared/headless-role.md"), "utf8"));
   const projection = createDashboardProjection(stateRoot);
   const created = await newCommand({
     stateRoot, project: config.project.slug, taskId: `fixture-t2-${tier}`, repository: canonical,

@@ -96,7 +96,10 @@ import {
 } from "../../workflow/review-routing.ts";
 import type { AttemptEvent, AttemptStatus } from "./attempt.ts";
 import { ProductionRouteUnavailable, ProductionWorkflowUnsupported, isReviewTransportFailure } from "./production-run.ts";
-import type { RecordedRoute } from "./review-record.ts";
+import {
+  assertPromptCompositionCurrent,
+  type RecordedRoute,
+} from "./review-record.ts";
 
 const { chmod, mkdir, readFile, realpath, writeFile } = fs;
 
@@ -510,6 +513,7 @@ export async function resolveReviewRoute(options: ResolveReviewRouteOptions): Pr
     );
   }
   const prompts = await readReviewPromptPair(options.configPath, agent);
+  if (priorReview !== null) assertPromptCompositionCurrent(prompts, priorReview, "reviewer");
   return {
     agent,
     adapterId: agent.harness.adapter,
@@ -812,6 +816,7 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
     // showing only the first would misstate what the provider was asked.
     await persist("attempt.updated", {}, {
       type: "compiled-prompt", phaseId: phaseDb, name: "system", text: route.systemPrompt,
+      ...route.evidence,
       lineCount: route.systemPrompt.split(/\r?\n/).length, at: infra.now(),
     });
     phase = await persistPhaseState(phase, "RUNNING");
