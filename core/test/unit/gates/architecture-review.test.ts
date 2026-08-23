@@ -12,6 +12,14 @@ import {
   validPlanContext,
 } from "../contracts/fixtures.ts";
 
+function freeze<T>(value: T): T {
+  if (value !== null && typeof value === "object") {
+    Object.freeze(value);
+    for (const child of Object.values(value)) freeze(child);
+  }
+  return value;
+}
+
 function reportFor(
   review: ArchitectureReviewOutput,
   design: DesignOutput = validDesignOutput(),
@@ -26,8 +34,8 @@ function failedItems(review: ArchitectureReviewOutput): string[] {
 }
 
 test("architecture_verdict_consistent passes a matching review and states its limit", () => {
-  const review = validArchitectureReviewOutput();
-  const design = validDesignOutput();
+  const review = freeze(validArchitectureReviewOutput());
+  const design = freeze(validDesignOutput());
   const first = architectureVerdictConsistent(review, design);
   const second = architectureVerdictConsistent(review, design);
 
@@ -37,7 +45,7 @@ test("architecture_verdict_consistent passes a matching review and states its li
   assert.ok(first.checks.every((check) => check.note.length > 0));
   assert.match(
     first.checks.find((check) => check.item === "accept has no high/critical findings")?.note ?? "",
-    /this gate checks the verdict's shape, not the review's thoroughness — a zero here is envelope consistency, never a clean design/u,
+    /not the review's thoroughness/u,
   );
   assert.match(
     first.checks.find((check) => check.item === "review limitations declared")?.note ?? "",
@@ -110,10 +118,10 @@ test("limitations must say what the reviewer did not check", () => {
 });
 
 test("architecture_review_clear passes a clear review with the design's exact identifier set", () => {
-  const review = validArchitectureReviewOutput();
-  const design = validDesignOutput();
-  const planContext = validPlanContext();
-  const carried = { design, planContext: planContext.identifierSet };
+  const review = freeze(validArchitectureReviewOutput());
+  const design = freeze(validDesignOutput());
+  const planContext = freeze(validPlanContext());
+  const carried = freeze({ design, planContext: planContext.identifierSet });
   const first = architectureReviewClear(review, carried);
   const second = architectureReviewClear(review, carried);
 
@@ -123,7 +131,7 @@ test("architecture_review_clear passes a clear review with the design's exact id
   assert.ok(first.checks.every((check) => check.note.length > 0));
   assert.match(
     first.checks.find((check) => check.item === "no blocking findings")?.note ?? "",
-    /this gate checks the verdict's shape, not the review's thoroughness — a zero here is envelope consistency, never a clean design/u,
+    /not the review's thoroughness/u,
   );
   assert.deepEqual(first.checks, second.checks);
 });

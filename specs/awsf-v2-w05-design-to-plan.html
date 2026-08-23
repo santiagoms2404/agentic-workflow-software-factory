@@ -665,7 +665,7 @@ flowchart LR
 
     <!-- ================= M4 ================= -->
     <div class="phase">
-      <h3><code class="status">[wip]</code> Milestone M4: Five gates, two of them deliberately uncorrectable</h3>
+      <h3><code class="status">[x]</code> Milestone M4: Five gates, two of them deliberately uncorrectable</h3>
       <p>The gates are pure functions over envelopes: same input, same <code>GateReport</code>, every time. Three of them fail because someone still in the session can fix them. The other two cannot be argued with: one fails because the design is wrong and the designer left two phases ago, the other because a repository the project declares could not be resolved, and no model turn fixes a registry.</p>
       <figure>
         <pre class="mermaid">
@@ -731,12 +731,12 @@ flowchart TD
       <h4>15. Testing Strategy</h4>
       <p><code>node:test</code> over each gate as a pure function, in the shape <code>core/test/unit/gates/verdict-consistent.test.ts</code> already uses. Determinism is asserted rather than assumed: run each gate twice over the same frozen envelope and deep-equal the two reports. The three-repository fixture is the one that would have caught this workstream's own falsified assumption, so it is not optional.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>npm run test:unit</code> — every gate passes its good fixture and fails each bad one individually, with the failing check named</li>
-        <li><code class="status">[]</code> Determinism: two runs over one frozen envelope produce deep-equal <code>checks</code> arrays, for all five gates</li>
-        <li><code class="status">[]</code> The stated-limit sentence is asserted present in the <strong>passing</strong> report of both review gates <em>and</em> of <code>design_evidence_present</code>, so none of the three can be trimmed away later</li>
-        <li><code class="status">[]</code> <code>design_evidence_present</code> fails a fixture whose catalog declares three repositories and whose context carries two, and the note names the missing one</li>
-        <li><code class="status">[]</code> <code>npm run test:unit</code> — <code>core/test/unit/transitions.test.ts</code> is untouched and still pins twenty-five edges</li>
-        <li><code class="status">[]</code> <code>npm run lint</code> and <code>npm run typecheck</code></li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code> — every gate passes its good fixture and fails each bad one individually, with the failing check named</li>
+        <li><code class="status">[x]</code> Determinism: two runs over one frozen envelope produce deep-equal <code>checks</code> arrays, for all five gates</li>
+        <li><code class="status">[x]</code> The stated-limit sentence is asserted present in the <strong>passing</strong> report of both review gates <em>and</em> of <code>design_evidence_present</code>, so none of the three can be trimmed away later</li>
+        <li><code class="status">[x]</code> <code>design_evidence_present</code> fails a fixture whose catalog declares three repositories and whose context carries two, and the note names the missing one</li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code> — <code>core/test/unit/transitions.test.ts</code> is untouched and still pins twenty-five edges</li>
+        <li><code class="status">[x]</code> <code>npm run lint</code> and <code>npm run typecheck</code></li>
       </ul>
       <div class="loop">🔁 <strong>Do not exit this milestone until every box above is checked.</strong> If a gate needs a clock, the filesystem, or a network call to decide, it is not this kind of gate — move the input into the envelope instead.</div>
     </div>

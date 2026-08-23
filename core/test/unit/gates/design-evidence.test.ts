@@ -8,6 +8,14 @@ import { validDesignContext } from "../contracts/fixtures.ts";
 
 const SHA_C = "c".repeat(40);
 
+function freeze<T>(value: T): T {
+  if (value !== null && typeof value === "object") {
+    Object.freeze(value);
+    for (const child of Object.values(value)) freeze(child);
+  }
+  return value;
+}
+
 function repository(
   id: string,
   role: ResolvedRepository["role"],
@@ -64,8 +72,8 @@ function failedItems(value: PhaseGateContext<DesignContext>, project = catalog()
 }
 
 test("design_evidence_present accepts every resolved repository once and states its limit", () => {
-  const context = gateContext();
-  const project = catalog();
+  const context = freeze(gateContext());
+  const project = freeze(catalog());
   const first = designEvidencePresent(context, project);
   const second = designEvidencePresent(context, project);
 
@@ -79,19 +87,30 @@ test("design_evidence_present accepts every resolved repository once and states 
   assert.deepEqual(first.checks, second.checks);
 });
 
-test("a context missing one of three catalog repositories fails and names it", () => {
+test("a three-repository catalog rejects a two-target context and names the missing repository", () => {
+  const context = gateContext(validDesignContext());
+  const project = catalog();
+  const report = designEvidencePresent(context, project);
+  const check = report.checks.find((candidate) => candidate.item === "every declared repository appears exactly once");
+
+  assert.equal(Object.keys(project.repositories).length, 3);
+  assert.equal(context.envelope.targets.length, 2);
+  assert.equal(check?.ok, false);
+  assert.match(check?.note ?? "", /missing: application/u);
+});
+
+test("a duplicate target fails exact catalog coverage", () => {
   const context = envelope();
-  context.targets = context.targets.filter((target) => target.repositoryId !== "service");
+  context.targets.push({ ...context.targets[1]! });
   const report = designEvidencePresent(gateContext(context), catalog());
   const check = report.checks.find((candidate) => candidate.item === "every declared repository appears exactly once");
 
   assert.equal(check?.ok, false);
-  assert.match(check?.note ?? "", /missing: service/u);
+  assert.match(check?.note ?? "", /duplicate: service/u);
 });
 
-test("duplicate and undeclared targets fail exact catalog coverage", () => {
+test("an undeclared target fails exact catalog coverage", () => {
   const context = envelope();
-  context.targets.push({ ...context.targets[1]! });
   context.targets.push({
     repositoryId: "ghost",
     path: "/work/smart-health/ghost",
@@ -102,28 +121,34 @@ test("duplicate and undeclared targets fail exact catalog coverage", () => {
   const check = report.checks.find((candidate) => candidate.item === "every declared repository appears exactly once");
 
   assert.equal(check?.ok, false);
-  assert.match(check?.note ?? "", /duplicate: service/u);
   assert.match(check?.note ?? "", /unexpected: ghost/u);
 });
 
-test("a target whose path or revision does not match host resolution fails", () => {
-  const wrongPath = envelope();
-  wrongPath.targets[1]!.path = "/work/smart-health/other-service";
-  assert.ok(failedItems(gateContext(wrongPath)).includes("targets carry resolved paths and revisions"));
+test("a target with a path that does not match host resolution fails", () => {
+  const context = envelope();
+  context.targets[1]!.path = "/work/smart-health/other-service";
 
-  const blankRevision = envelope();
-  blankRevision.targets[2]!.headSha = "";
-  const report = designEvidencePresent(gateContext(blankRevision), catalog());
+  assert.ok(failedItems(gateContext(context)).includes("targets carry resolved paths and revisions"));
+});
+
+test("a target with a blank revision fails", () => {
+  const context = envelope();
+  context.targets[2]!.headSha = "";
+  const report = designEvidencePresent(gateContext(context), catalog());
   const check = report.checks.find((candidate) => candidate.item === "targets carry resolved paths and revisions");
+
   assert.equal(check?.ok, false);
   assert.match(check?.note ?? "", /application/u);
 });
 
-test("the catalog plan repository must be targeted from its own worktree", () => {
-  const noPlanTarget = envelope();
-  noPlanTarget.targets = noPlanTarget.targets.filter((target) => target.repositoryId !== "plans");
-  assert.ok(failedItems(gateContext(noPlanTarget)).includes("plan repository is a target"));
+test("the catalog plan repository must be a target", () => {
+  const context = envelope();
+  context.targets = context.targets.filter((target) => target.repositoryId !== "plans");
 
+  assert.ok(failedItems(gateContext(context)).includes("plan repository is a target"));
+});
+
+test("the attempt worktree must belong to the plan repository", () => {
   assert.ok(
     failedItems(gateContext(envelope(), "/work/smart-health/service-worktrees/T11"))
       .includes("attempt worktree belongs to the plan repository"),

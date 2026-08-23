@@ -12,6 +12,14 @@ import {
 
 const OWNER_REQUEST = "Make design claims traceable into rendered tickets.";
 
+function freeze<T>(value: T): T {
+  if (value !== null && typeof value === "object") {
+    Object.freeze(value);
+    for (const child of Object.values(value)) freeze(child);
+  }
+  return value;
+}
+
 function reportFor(design: DesignOutput) {
   return spineDeclared(design, { ownerRecordedRequest: OWNER_REQUEST });
 }
@@ -31,6 +39,12 @@ test("spine_declared passes a local, contiguous design spine and notes every che
   assert.equal(report.passed, true);
   assert.equal(report.checks.length, 8);
   assert.ok(report.checks.every((check) => check.note.length > 0));
+});
+
+test("spine_declared produces deterministic checks for a frozen design", () => {
+  const design = freeze(validDesignOutput());
+
+  assert.deepEqual(reportFor(design).checks, reportFor(design).checks);
 });
 
 test("an answered-request mismatch reports both values", () => {
@@ -123,6 +137,14 @@ test("spine_carried accepts complete local coverage and resolvable qualified ref
   assert.equal(report.passed, true);
   assert.equal(report.checks.length, 5);
   assert.ok(report.checks.every((check) => check.note.length > 0));
+});
+
+test("spine_carried produces deterministic checks for frozen plan inputs", () => {
+  const plan = freeze(validDesignPlanOutput());
+  const context = freeze(validPlanContext());
+  const stems = freeze(["current-plan"]);
+
+  assert.deepEqual(carriedReport(plan, context, stems).checks, carriedReport(plan, context, stems).checks);
 });
 
 test("spine_carried names context identifiers served by nothing", () => {
