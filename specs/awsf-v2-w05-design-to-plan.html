@@ -704,11 +704,11 @@ flowchart TD
 
       <h4>12. <code>architecture_verdict_consistent</code>, and the limit written onto the green row</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>reviewedDesign</code> echoes the design envelope's <code>summary</code> exactly — the <code>reviewedSha</code> pattern applied to an artifact that has no SHA yet</li>
-        <li><code class="status">[]</code> Every finding's <code>subject</code> resolves to a declared identifier or a named component; the note lists any that do not</li>
-        <li><code class="status">[]</code> <code>accept</code> carries no high or critical finding; <code>concern</code> carries at least one finding with all four of file-free concreteness — subject, title, detail, evidence</li>
-        <li><code class="status">[]</code> <code>limitations</code> is non-empty, and the note says what the reviewer declared it did not check</li>
-        <li><code class="status">[]</code> <strong>The passing note carries the stated limit</strong>: a count of blocking findings is envelope consistency, never a clean design</li>
+        <li><code class="status">[x]</code> <code>reviewedDesign</code> echoes the design envelope's <code>summary</code> exactly — the <code>reviewedSha</code> pattern applied to an artifact that has no SHA yet</li>
+        <li><code class="status">[x]</code> Every finding's <code>subject</code> resolves to a declared identifier or a named component; the note lists any that do not</li>
+        <li><code class="status">[x]</code> <code>accept</code> carries no high or critical finding; <code>concern</code> carries at least one finding with all four of file-free concreteness — subject, title, detail, evidence</li>
+        <li><code class="status">[x]</code> <code>limitations</code> is non-empty, and the note says what the reviewer declared it did not check</li>
+        <li><code class="status">[x]</code> <strong>The passing note carries the stated limit</strong>: a count of blocking findings is envelope consistency, never a clean design</li>
       </ul>
 
       <h4>13. <code>architecture_review_clear</code> — the deterministic zero-blocker gate</h4>
