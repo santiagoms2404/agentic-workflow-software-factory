@@ -568,7 +568,7 @@ workflows:
 
     <!-- ================= M2 ================= -->
     <div class="phase">
-      <h3><code class="status">[wip]</code> Milestone M2: The identifier grammar, and the parser that refuses a malformed one</h3>
+      <h3><code class="status">[x]</code> Milestone M2: The identifier grammar, and the parser that refuses a malformed one</h3>
       <p>The identifier has to exist in a committed document before anything can join on it. This milestone extends <code>awsf-plan-html/v1</code> additively — a plan that declares nothing stays valid — and teaches the existing parser to return what it finds without loosening what it accepts.</p>
       <figure>
         <pre class="mermaid">
@@ -606,12 +606,12 @@ flowchart LR
       <h4>5. Testing Strategy</h4>
       <p><code>node:test</code> over <code>core/src/registry/plan-spine.ts</code> and the extended parser, with fixtures held in memory rather than on disk. The edge cases that matter are the ones where a wrong answer is invisible: an identifier with a leading zero, a duplicate, a gap in the sequence, a qualified declaration, and a plan that declares nothing at all.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>npm run test:unit</code> — the new parser tests pass and every existing <code>plan-source</code> test still passes unchanged</li>
-        <li><code class="status">[]</code> <code>npm run typecheck</code> — <code>ParsedPlanTask</code>'s new field is threaded everywhere it is consumed</li>
-        <li><code class="status">[]</code> A fixture with <code>INV-01</code> fails by name, and the failure message names the offending string</li>
-        <li><code class="status">[]</code> A fixture declaring <code>AC-1</code> and <code>AC-3</code> fails on the gap, because contiguity is what makes a silent deletion visible without a registry</li>
-        <li><code class="status">[]</code> A fixture whose declaration is written <code>other-plan#INV-1</code> fails — declarations are never qualified</li>
-        <li><code class="status">[]</code> Every plan currently in <code>specs/</code> parses to the same task list as before, asserted against the committed files rather than a fixture</li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code> — the new parser tests pass and every existing <code>plan-source</code> test still passes unchanged</li>
+        <li><code class="status">[x]</code> <code>npm run typecheck</code> — <code>ParsedPlanTask</code>'s new field is threaded everywhere it is consumed</li>
+        <li><code class="status">[x]</code> A fixture with <code>INV-01</code> fails by name, and the failure message names the offending string</li>
+        <li><code class="status">[x]</code> A fixture declaring <code>AC-1</code> and <code>AC-3</code> fails on the gap, because contiguity is what makes a silent deletion visible without a registry</li>
+        <li><code class="status">[x]</code> A fixture whose declaration is written <code>other-plan#INV-1</code> fails — declarations are never qualified</li>
+        <li><code class="status">[x]</code> Every plan currently in <code>specs/</code> parses to the same task list as before, asserted against the committed files rather than a fixture</li>
       </ul>
       <div class="loop">🔁 <strong>Do not exit this milestone until every box above is checked.</strong> A failing command means fix the cause and re-run — never widen what the parser accepts to make a test pass.</div>
     </div>
