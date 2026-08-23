@@ -542,7 +542,7 @@ workflows:
 
     <!-- ================= M1 ================= -->
     <div class="phase">
-      <h3><code class="status">[wip]</code> Milestone M1: The falsifier, run before anything is built</h3>
+      <h3><code class="status">[x]</code> Milestone M1: The falsifier, run before anything is built</h3>
       <p>The spine calls this the cheapest unused upgrade and then repurposes it as Q5's falsifier. It runs first because its result can change every milestone after it: if a plan's real cross-references routinely cross a plan boundary, per-project scope earns its allocator and Q5 reopens with evidence. <strong>It writes no code and spends no quota.</strong></p>
 
       <h4>1. Thread one <code>INV</code> and one <code>AC</code> through v1 by hand, and count the crossings</h4>
@@ -559,9 +559,9 @@ workflows:
       <h4>2. Testing Strategy</h4>
       <p>Nothing here executes, so the validation is that the experiment produced a written answer rather than an impression. The evidence is a count and a decision line in this plan, which is a committed document — not a report file, which invariant 10 forbids.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>git diff --stat</code> — proves <code>specs/awsf-plan.html</code> and <code>specs/tickets/awsf-plan/</code> are unchanged by this milestone</li>
-        <li><code class="status">[]</code> <code>npm run test:unit</code> — green before any of this plan's code exists, so later failures are attributable</li>
-        <li><code class="status">[]</code> This plan's Notes carry the crossing count and the Q5 outcome, in a sentence a reader can disagree with</li>
+        <li><code class="status">[x]</code> <code>git diff --stat</code> — proves <code>specs/awsf-plan.html</code> and <code>specs/tickets/awsf-plan/</code> are unchanged by this milestone</li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code> — green before any of this plan's code exists, so later failures are attributable</li>
+        <li><code class="status">[x]</code> This plan's Notes carry the crossing count and the Q5 outcome, in a sentence a reader can disagree with</li>
       </ul>
       <div class="loop">🔁 <strong>Do not exit this milestone until every box above is checked.</strong> If the count reopens Q5, stop and put it to the owner — M2 through M6 are built on the answer.</div>
     </div>
