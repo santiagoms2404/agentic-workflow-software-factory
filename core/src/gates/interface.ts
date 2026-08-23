@@ -14,6 +14,7 @@ export const GATE_IDS = [
   "journey_passes",
   "contract_digest",
   "spine_declared",
+  "design_evidence_present",
 ] as const;
 
 export type GateId = (typeof GATE_IDS)[number];
