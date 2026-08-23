@@ -318,6 +318,17 @@ async function readCommittedPrompt(configPath: string, path: string): Promise<st
   return readFile(physical, "utf8");
 }
 
+/** Existing owner-rework prompt-loading site, exposed so M1 can pin it before extraction. */
+export async function readReworkPromptPair(
+  configPath: string,
+  agent: AgentDefinition,
+): Promise<{ readonly user: string; readonly system: string }> {
+  return {
+    user: credentialSafeText(await readCommittedPrompt(configPath, agent.prompt.user), "configured user prompt", true),
+    system: credentialSafeText(await readCommittedPrompt(configPath, agent.prompt.system), "configured system prompt", true),
+  };
+}
+
 async function priorBuild(attemptDir: string): Promise<PriorBuild> {
   const text = await readFile(join(attemptDir, "journal.jsonl"), "utf8");
   const records = text.split("\n").filter(Boolean).map((line: string) => JSON.parse(line) as {
@@ -399,21 +410,14 @@ async function resolveRoute(status: AttemptStatus, config: AwsfConfig, configPat
   if (available.status !== "available") throw new ProductionRouteUnavailable(agent.harness.adapter, available.detail ?? available.code ?? "blocked");
   const model = credentialSafeValue(await adapter.getModelInfo(agent.model), "configured model route");
   if (model.adapter !== adapter.id) throw new ReworkRouteMismatch(`adapter descriptor says ${model.adapter}, selected adapter is ${adapter.id}`);
+  const prompts = await readReworkPromptPair(configPath, agent);
   return {
     agent,
     adapterId: agent.harness.adapter,
     adapter,
     model,
-    userPrompt: credentialSafeText(
-      await readCommittedPrompt(configPath, agent.prompt.user),
-      "configured user prompt",
-      true,
-    ),
-    systemPrompt: credentialSafeText(
-      await readCommittedPrompt(configPath, agent.prompt.system),
-      "configured system prompt",
-      true,
-    ),
+    userPrompt: prompts.user,
+    systemPrompt: prompts.system,
   };
 }
 

@@ -251,7 +251,7 @@ sequenceDiagram
   <p><strong>Execute every phase and task in order.</strong> Status markers are <code>[]</code> idle, <code>[wip]</code> in progress, <code>[x]</code> complete, and <code>[f]</code> failed. Every marker starts idle. This authoring session earned none.</p>
 
   <div class="phase">
-    <h3><code class="status">[]</code> Milestone M1: Centralise composition without adding shared bytes</h3>
+    <h3><code class="status">[wip]</code> Milestone M1: Centralise composition without adding shared bytes</h3>
     <p>This milestone is a behaviour-preserving extraction. It establishes the M1 commit as the benchmark baseline and is the only W06 milestone W05 M7 waits on.</p>
     <figure>
       <pre class="mermaid">
@@ -267,10 +267,10 @@ flowchart LR
 
     <h4>1. Characterise the three sites and define the one-site fence</h4>
     <ul class="checklist">
-      <li><code class="status">[]</code> Add table-driven characterization fixtures for production, replacement review, and owner rework that capture exact user bytes, exact role-system bytes, containment rejection, symlink escape rejection, and credential rejection before changing a caller.</li>
-      <li><code class="status">[]</code> Define “composition site” mechanically as code that reads <code>agent.prompt.system</code> or joins a shared system block. The meta-test permits that implementation in one named module and fails on a synthetic second site.</li>
-      <li><code class="status">[]</code> Record current role coverage: planner, builder, reviewer, documenter, scout, intake, plus synthetic designer and architecture-reviewer definitions from W05. Do not add W05 prompt files.</li>
-      <li><code class="status">[]</code> Confirm the baseline contains no shared block and no alias source. Characterization must observe before it prescribes.</li>
+      <li><code class="status">[x]</code> Add table-driven characterization fixtures for production, replacement review, and owner rework that capture exact user bytes, exact role-system bytes, containment rejection, symlink escape rejection, and credential rejection before changing a caller.</li>
+      <li><code class="status">[x]</code> Define “composition site” mechanically as code that reads <code>agent.prompt.system</code> or joins a shared system block. The meta-test permits that implementation in one named module and fails on a synthetic second site.</li>
+      <li><code class="status">[x]</code> Record current role coverage: planner, builder, reviewer, documenter, scout, intake, plus synthetic designer and architecture-reviewer definitions from W05. Do not add W05 prompt files.</li>
+      <li><code class="status">[x]</code> Confirm the baseline contains no shared block and no alias source. Characterization must observe before it prescribes.</li>
     </ul>
 
     <h4>2. Extract the prompt bundle and migrate all three callers</h4>

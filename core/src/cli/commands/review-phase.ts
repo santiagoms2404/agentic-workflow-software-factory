@@ -294,6 +294,17 @@ async function readCommittedPrompt(configPath: string, path: string): Promise<st
   return readFile(physical, "utf8");
 }
 
+/** Existing replacement-review prompt-loading site, exposed so M1 can pin it before extraction. */
+export async function readReviewPromptPair(
+  configPath: string,
+  agent: AgentDefinition,
+): Promise<{ readonly user: string; readonly system: string }> {
+  return {
+    user: credentialSafeText(await readCommittedPrompt(configPath, agent.prompt.user), "configured user prompt", true),
+    system: credentialSafeText(await readCommittedPrompt(configPath, agent.prompt.system), "configured system prompt", true),
+  };
+}
+
 async function validateMaterializedSystemPrompt(
   adapterId: string,
   runtimeDir: string,
@@ -514,13 +525,14 @@ export async function resolveReviewRoute(options: ResolveReviewRouteOptions): Pr
         `the configured route is now ${agent.harness.adapter}/${model.provider}/${agent.model}`,
     );
   }
+  const prompts = await readReviewPromptPair(options.configPath, agent);
   return {
     agent,
     adapterId: agent.harness.adapter,
     adapter,
     model,
-    userPrompt: credentialSafeText(await readCommittedPrompt(options.configPath, agent.prompt.user), "configured user prompt", true),
-    systemPrompt: credentialSafeText(await readCommittedPrompt(options.configPath, agent.prompt.system), "configured system prompt", true),
+    userPrompt: prompts.user,
+    systemPrompt: prompts.system,
   };
 }
 

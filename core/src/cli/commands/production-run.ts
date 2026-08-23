@@ -288,6 +288,17 @@ async function readCommittedPrompt(configPath: string, relativePath: string): Pr
   return readFile(physical, "utf8");
 }
 
+/** Existing production prompt-loading site, exposed so M1 can pin its behavior before extraction. */
+export async function readProductionPromptPair(
+  configPath: string,
+  agent: AgentDefinition,
+): Promise<{ readonly user: string; readonly system: string }> {
+  return {
+    user: await readCommittedPrompt(configPath, agent.prompt.user),
+    system: await readCommittedPrompt(configPath, agent.prompt.system),
+  };
+}
+
 /**
  * The intent a `build-review` run is judged against, derived by the host from
  * the owner's own recorded request. Exported because `awsf review` must compose
@@ -525,10 +536,7 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
     if (phase.kind !== "agent") continue;
     const agent = agents.get(phase.owner);
     if (agent === undefined) throw new ProductionRouteUnavailable(phase.owner, "no explicit agent definition exists");
-    routePrompts.set(phase.id, {
-      user: await readCommittedPrompt(options.configPath, agent.prompt.user),
-      system: await readCommittedPrompt(options.configPath, agent.prompt.system),
-    });
+    routePrompts.set(phase.id, await readProductionPromptPair(options.configPath, agent));
   }
   const configuredRecipe: WorkflowRecipe = {
     ...recipe,
