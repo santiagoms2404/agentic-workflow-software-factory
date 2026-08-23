@@ -4,11 +4,11 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { parse } from "yaml";
 import { loadCatalog } from "../../../src/registry/catalog.ts";
-import { isPlanIdentifierClaim } from "../../../src/registry/plan-spine.ts";
+import { isPlanIdentifierClaim, spineCoverage } from "../../../src/registry/plan-spine.ts";
 import {
   parseAwsfPlanHtmlV1,
   resolvePlanSources,
-  type ParsedPlanTask,
+  type ParsedAwsfPlan,
 } from "../../../src/registry/plan-source.ts";
 import { repoRoot } from "./_walk.ts";
 
@@ -29,7 +29,6 @@ import { repoRoot } from "./_walk.ts";
 
 const ROOT = repoRoot();
 const CATALOG = join(ROOT, "awsf.project.yaml");
-const SPECS = join(ROOT, "specs");
 
 const STATES = ["todo", "wip", "done", "failed"];
 const TIERS = [0, 1, 2];
@@ -45,6 +44,7 @@ interface PlanSet {
   readonly plan: string;
   readonly prompts: string;
   readonly tickets: string;
+  readonly knownStems: readonly string[];
 }
 
 function planSets(): PlanSet[] {
@@ -71,6 +71,7 @@ function planSets(): PlanSet[] {
     }
   }
 
+  const knownStems = Object.freeze(sources.map((source) => basename(source.planPath, ".html")));
   const sets: PlanSet[] = [];
   for (const source of sources) {
     const stem = basename(source.planPath, ".html");
@@ -81,6 +82,7 @@ function planSets(): PlanSet[] {
       plan: source.planPath,
       prompts: source.promptsPath,
       tickets: source.ticketsPath,
+      knownStems,
     });
   }
   return sets;
@@ -99,7 +101,7 @@ interface Ticket {
   prompt: string;
 }
 
-function planTasks(set: PlanSet): readonly ParsedPlanTask[] {
+function planTasks(set: PlanSet): ParsedAwsfPlan {
   return parseAwsfPlanHtmlV1(readFileSync(set.plan, "utf8"), set.label);
 }
 
@@ -285,6 +287,24 @@ test("frontmatter values stay inside their vocabularies", () => {
       if (!TICKET_ID.test(ticket.id)) offenders.push(`${set.label}/${ticket.id}: id is not zero-padded Tnn or Wnn`);
     }
     assert.deepEqual(offenders, [], set.label);
+  }
+});
+
+test("resolved plan sets satisfy the shared identifier-spine coverage decision", () => {
+  for (const set of planSets()) {
+    const parsed = planTasks(set);
+    const planTickets = tickets(set);
+    const ticketIdByNumber = new Map(planTickets.map((ticket) => [ticket.number, ticket.id]));
+    const violations = spineCoverage(
+      { label: set.label, declarations: parsed.declarations },
+      parsed.map((task) => ({
+        id: ticketIdByNumber.get(task.number) ?? `T${String(task.number).padStart(2, "0")}`,
+        serves: task.serves,
+      })),
+      planTickets.map((ticket) => ({ id: ticket.id, serves: ticket.serves })),
+      set.knownStems,
+    );
+    assert.deepEqual(violations.map((violation) => violation.message), [], set.label);
   }
 });
 

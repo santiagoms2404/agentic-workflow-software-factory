@@ -5,6 +5,7 @@ import { test } from "node:test";
 import {
   ACCEPTANCE_CRITERION_IDENTIFIER_PATTERN,
   INVARIANT_IDENTIFIER_PATTERN,
+  spineCoverage,
 } from "../../../src/registry/plan-spine.ts";
 import {
   PlanIdentifierGrammarError,
@@ -48,6 +49,73 @@ test("the plan identifier patterns require a positive integer without a leading 
   assert.equal(INVARIANT_IDENTIFIER_PATTERN.test("INV-1"), true);
   assert.equal(INVARIANT_IDENTIFIER_PATTERN.test("INV-01"), false);
   assert.equal(ACCEPTANCE_CRITERION_IDENTIFIER_PATTERN.test("AC-0"), false);
+});
+
+test("spineCoverage returns no violations for covered, mirrored, resolvable claims", () => {
+  const violations = spineCoverage(
+    {
+      label: "fixture-plan",
+      declarations: [
+        { id: "INV-1", statement: "State stays pure." },
+        { id: "AC-1", statement: "A dropped criterion fails." },
+      ],
+    },
+    [{ id: "T01", serves: ["INV-1", "AC-1", "other-plan#AC-1"] }],
+    [{ id: "T01", serves: ["other-plan#AC-1", "AC-1", "INV-1"] }],
+    ["fixture-plan", "other-plan"],
+  );
+
+  assert.deepEqual(violations, []);
+  assert.equal(Object.isFrozen(violations), true);
+});
+
+test("spineCoverage distinguishes all four rules and names the plan and identifier", () => {
+  const violations = spineCoverage(
+    {
+      label: "drifted-plan",
+      declarations: [
+        { id: "INV-1", statement: "State stays pure." },
+        { id: "AC-2", statement: "The declaration sequence has a gap." },
+      ],
+    },
+    [
+      { id: "T01", serves: ["INV-1", "AC-9", "missing-plan#AC-1"] },
+      { id: "T02", serves: [] },
+    ],
+    [
+      { id: "T01", serves: ["INV-1"] },
+      { id: "T02", serves: [] },
+    ],
+    ["drifted-plan"],
+  );
+
+  assert.deepEqual(new Set(violations.map((violation) => violation.rule)), new Set([
+    "COVERAGE",
+    "ORPHANS",
+    "MIRROR",
+    "Q5",
+  ]));
+  assert.ok(violations.every((violation) => violation.message.includes(`drifted-plan/${violation.identifier}`)));
+  assert.ok(violations.every((violation) => violation.message.includes(`${violation.rule} rule broken`)));
+  assert.ok(violations.some((violation) => violation.rule === "COVERAGE" && violation.identifier === "AC-2"));
+  assert.ok(violations.some((violation) => violation.rule === "ORPHANS" && violation.identifier === "AC-9"));
+  assert.ok(violations.some((violation) => violation.rule === "MIRROR" && violation.identifier === "T01"));
+  assert.ok(violations.some((violation) => violation.rule === "Q5" && violation.identifier === "missing-plan#AC-1"));
+  assert.ok(violations.some((violation) => violation.rule === "Q5" && violation.identifier === "AC-2"));
+});
+
+test("spineCoverage skips ticket mirroring when the runtime caller has no ticket surface", () => {
+  const violations = spineCoverage(
+    {
+      label: "runtime-plan",
+      declarations: [{ id: "AC-1", statement: "The plan carries the criterion." }],
+    },
+    [{ id: "T01", serves: ["AC-1"] }],
+    undefined,
+    ["runtime-plan"],
+  );
+
+  assert.deepEqual(violations, []);
 });
 
 test("the v1 parser carries spine declarations and local or qualified task claims", () => {

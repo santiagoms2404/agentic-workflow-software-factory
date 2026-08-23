@@ -125,7 +125,11 @@ function carriedReport(
   context: PlanContext = validPlanContext(),
   knownStems: readonly string[] = ["current-plan"],
 ) {
-  return spineCarried(plan, context, knownStems);
+  return spineCarried(
+    plan,
+    { identifierSet: context.identifierSet, planLabel: "current-plan" },
+    knownStems,
+  );
 }
 
 test("spine_carried accepts complete local coverage and resolvable qualified references", () => {

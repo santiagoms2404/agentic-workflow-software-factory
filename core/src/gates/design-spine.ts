@@ -6,7 +6,7 @@ import {
   DECISION_IDENTIFIER_PATTERN,
   INVARIANT_IDENTIFIER_PATTERN,
   declarationSequenceIssue,
-  isPlanIdentifierClaim,
+  spineCoverage,
   type DeclarationIdentifierPrefix,
   type PlanSpineDeclaration,
 } from "../registry/plan-spine.ts";
@@ -28,6 +28,7 @@ function listed(values: readonly string[]): string {
 
 export interface SpineCarriedContext {
   readonly identifierSet: PlanContext["identifierSet"];
+  readonly planLabel: string;
 }
 
 /**
@@ -41,24 +42,19 @@ export function spineCarried(
   knownStems: readonly string[],
 ): GateReport {
   const report = new GateReport("spine_carried");
-  const carried = [
-    ...context.identifierSet.invariants.map((declaration) => declaration.id),
-    ...context.identifierSet.acceptanceCriteria.map((declaration) => declaration.id),
+  const declarations = [
+    ...context.identifierSet.invariants,
+    ...context.identifierSet.acceptanceCriteria,
   ];
-  const served = planEnvelope.steps.flatMap((step) => step.serves);
-  const unserved = carried.filter((identifier) => !served.includes(identifier));
-  const qualifiedReferences = served.filter((identifier) =>
-    identifier.includes("#") && isPlanIdentifierClaim(identifier),
+  const coverage = spineCoverage(
+    { label: context.planLabel, declarations },
+    planEnvelope.steps,
+    undefined,
+    knownStems,
   );
-  const unknown = served.filter((identifier) =>
-    !carried.includes(identifier) && !qualifiedReferences.includes(identifier),
-  );
-  const unresolvedStems = qualifiedReferences.flatMap((identifier) => {
-    const separator = identifier.indexOf("#");
-    if (separator === -1) return [];
-    const stem = identifier.slice(0, separator);
-    return knownStems.includes(stem) ? [] : [stem];
-  });
+  const unserved = coverage.filter((violation) => violation.rule === "COVERAGE");
+  const unknown = coverage.filter((violation) => violation.rule === "ORPHANS");
+  const q5 = coverage.filter((violation) => violation.rule === "Q5");
   const expectedStepIds = planEnvelope.steps.map((_, index) => `T${String(index + 1).padStart(2, "0")}`);
   const malformedStepIds = planEnvelope.steps
     .map((step, index) => ({ actual: step.id, expected: expectedStepIds[index]! }))
@@ -74,22 +70,22 @@ export function spineCarried(
     "every carried identifier is served",
     unserved.length === 0,
     unserved.length === 0
-      ? `${String(carried.length)} carried identifier(s) served by at least one step`
-      : `served by nothing: ${listed(unserved)}`,
+      ? `${String(declarations.length)} carried identifier(s) served by at least one step`
+      : `served by nothing: ${listed(unserved.map((violation) => violation.message))}`,
   );
   report.check(
     "steps serve only carried local identifiers",
     unknown.length === 0,
     unknown.length === 0
       ? "every bare step identifier is carried by the plan context"
-      : `identifier(s) absent from plan context: ${listed(unknown)}`,
+      : `identifier(s) absent from plan context: ${listed(unknown.map((violation) => violation.message))}`,
   );
   report.check(
     "qualified references resolve to catalog plan stems",
-    unresolvedStems.length === 0,
-    unresolvedStems.length === 0
-      ? "every qualified reference resolves to a catalog plan stem"
-      : `unresolvable plan stem(s): ${listed(unresolvedStems)}`,
+    q5.length === 0,
+    q5.length === 0
+      ? "every qualified reference resolves to a catalog plan stem and local declarations satisfy Q5"
+      : `Q5 violation(s): ${listed(q5.map((violation) => violation.message))}`,
   );
   report.check(
     "step identifiers are contiguous",

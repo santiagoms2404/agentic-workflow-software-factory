@@ -743,7 +743,7 @@ flowchart TD
 
     <!-- ================= M5 ================= -->
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone M5: The coverage gate — invariant 12 extended, and proven to bite</h3>
+      <h3><code class="status">[wip]</code> Milestone M5: The coverage gate — invariant 12 extended, and proven to bite</h3>
       <p>This is the milestone the workstream exists for. The identifier join goes into the same meta-test that already holds plan and tickets together, it is conditional on a plan having opted in, and it is not finished until a deliberately dropped acceptance criterion has been watched turning it red.</p>
       <figure>
         <pre class="mermaid">
@@ -761,9 +761,9 @@ flowchart LR
 
       <h4>16. <code>spineCoverage</code> as one pure function, shared by both surfaces</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>spineCoverage(declared, planTasks, tickets, knownStems)</code> returns a violation list; it reads no file and knows nothing about <code>node:test</code></li>
-        <li><code class="status">[]</code> The same function backs <code>spine_carried</code> at run time and the meta-test offline, so <strong>the runtime gate and the offline fence cannot drift apart</strong></li>
-        <li><code class="status">[]</code> Each violation names the plan label, the identifier, and which of the four rules it broke — a red test must say <em>which</em> plan drifted, the standard the existing fence already sets</li>
+        <li><code class="status">[x]</code> <code>spineCoverage(declared, planTasks, tickets, knownStems)</code> returns a violation list; it reads no file and knows nothing about <code>node:test</code></li>
+        <li><code class="status">[x]</code> The same function backs <code>spine_carried</code> at run time and the meta-test offline, so <strong>the runtime gate and the offline fence cannot drift apart</strong></li>
+        <li><code class="status">[x]</code> Each violation names the plan label, the identifier, and which of the four rules it broke — a red test must say <em>which</em> plan drifted, the standard the existing fence already sets</li>
       </ul>
 
       <h4>17. Extend <code>ticket-plan-sync.test.ts</code></h4>
