@@ -618,7 +618,7 @@ flowchart LR
 
     <!-- ================= M3 ================= -->
     <div class="phase">
-      <h3><code class="status">[wip]</code> Milestone M3: Five typed envelopes, one source each</h3>
+      <h3><code class="status">[x]</code> Milestone M3: Five typed envelopes, one source each</h3>
       <p>Every contract in <code>core/src/contracts/</code> is defined once in TypeBox and yields three emissions: the runtime validator, the static type, and the JSON Schema injected into the agent's own prompt. These five follow that rule exactly, reuse the shared base rather than restating it, and reuse the existing severity vocabulary rather than inventing a second one.</p>
 
       <h4>6. <code>awsf.design-output/v1</code> and <code>awsf.architecture-review-output/v1</code></h4>
@@ -653,12 +653,12 @@ flowchart LR
       <h4>9. Testing Strategy</h4>
       <p>Contract tests under <code>core/test/unit/contracts/</code>, following the shape the existing envelope tests use: emit the JSON Schema, validate a good payload, and prove each rejection individually. <code>awsf.design-context/v1</code> is the one envelope carrying machine-local absolute paths, so its test is also where the never-committed rule is asserted. The edge case that matters most is depth — <code>additionalProperties: false</code> has to hold inside <code>steps[]</code> and <code>findings[]</code>, not only at the top level.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>npm run test:unit</code> — each schema emits, validates a good payload, and rejects an unknown field at every depth</li>
-        <li><code class="status">[]</code> A payload with <code>blockingFindingCount: 1</code> fails <code>awsf.plan-context/v1</code> validation, so the literal is proven and not merely written</li>
-        <li><code class="status">[]</code> A design payload with <code>limitations: []</code> on the review side fails, and the violation names the field</li>
-        <li><code class="status">[]</code> <code>emitAllEnvelopeJsonSchemas()</code> includes all five ids, proving registration rather than assuming it</li>
-        <li><code class="status">[]</code> A <code>awsf.design-context/v1</code> payload with an empty <code>targets</code> fails, and one carrying a relative path fails — a machine-local absolute path is the only shape that resolves</li>
-        <li><code class="status">[]</code> <code>npm run test:unit</code> — the existing <code>no-handwritten-schema</code> meta-test stays green: nothing under <code>prompts/</code> restates any of these shapes</li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code> — each schema emits, validates a good payload, and rejects an unknown field at every depth</li>
+        <li><code class="status">[x]</code> A payload with <code>blockingFindingCount: 1</code> fails <code>awsf.plan-context/v1</code> validation, so the literal is proven and not merely written</li>
+        <li><code class="status">[x]</code> A design payload with <code>limitations: []</code> on the review side fails, and the violation names the field</li>
+        <li><code class="status">[x]</code> <code>emitAllEnvelopeJsonSchemas()</code> includes all five ids, proving registration rather than assuming it</li>
+        <li><code class="status">[x]</code> A <code>awsf.design-context/v1</code> payload with an empty <code>targets</code> fails, and one carrying a relative path fails — a machine-local absolute path is the only shape that resolves</li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code> — the existing <code>no-handwritten-schema</code> meta-test stays green: nothing under <code>prompts/</code> restates any of these shapes</li>
       </ul>
       <div class="loop">🔁 <strong>Do not exit this milestone until every box above is checked.</strong> An envelope that is not in the registry is unusable rather than unvalidated — if a test needs to reach around <code>schemaForId</code>, the registration is missing.</div>
     </div>
