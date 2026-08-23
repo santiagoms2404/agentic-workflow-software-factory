@@ -145,6 +145,21 @@ function sectionBPrompts(set: PlanSet): Map<number, { title: string; prompt: str
   return out;
 }
 
+function identifierSpineViolations(set: PlanSet) {
+  const parsed = planTasks(set);
+  const planTickets = tickets(set);
+  const ticketIdByNumber = new Map(planTickets.map((ticket) => [ticket.number, ticket.id]));
+  return spineCoverage(
+    { label: set.label, declarations: parsed.declarations },
+    parsed.map((task) => ({
+      id: ticketIdByNumber.get(task.number) ?? `T${String(task.number).padStart(2, "0")}`,
+      serves: task.serves,
+    })),
+    planTickets.map((ticket) => ({ id: ticket.id, serves: ticket.serves })),
+    set.knownStems,
+  );
+}
+
 test("tickets cover a contiguous prefix of the plan's tasks, with no orphans", () => {
   for (const set of planSets()) {
     const numbers = tickets(set).map((t) => t.number);
@@ -271,6 +286,9 @@ test("frontmatter values stay inside their vocabularies", () => {
       // `tier`, `workflow`, and `serves` are optional: the plan skill's own rule
       // is to omit a field when a plan defines no such vocabulary rather than
       // invent one. Present-but-wrong is the defect; absent is legitimate.
+      // The four spine tests below mirror that rule: when a plan declares no
+      // identifiers and its tasks and tickets claim none, there is no join to
+      // enforce, so the plan legitimately passes instead of inventing a spine.
       if (ticket.tier !== undefined && !TIERS.includes(ticket.tier)) {
         offenders.push(`${set.label}/${ticket.id}: tier "${String(ticket.tier)}"`);
       }
@@ -290,21 +308,39 @@ test("frontmatter values stay inside their vocabularies", () => {
   }
 });
 
-test("resolved plan sets satisfy the shared identifier-spine coverage decision", () => {
+test("identifier spine COVERAGE: every declaration is served by a plan task", () => {
   for (const set of planSets()) {
-    const parsed = planTasks(set);
-    const planTickets = tickets(set);
-    const ticketIdByNumber = new Map(planTickets.map((ticket) => [ticket.number, ticket.id]));
-    const violations = spineCoverage(
-      { label: set.label, declarations: parsed.declarations },
-      parsed.map((task) => ({
-        id: ticketIdByNumber.get(task.number) ?? `T${String(task.number).padStart(2, "0")}`,
-        serves: task.serves,
-      })),
-      planTickets.map((ticket) => ({ id: ticket.id, serves: ticket.serves })),
-      set.knownStems,
-    );
-    assert.deepEqual(violations.map((violation) => violation.message), [], set.label);
+    const offenders = identifierSpineViolations(set)
+      .filter((violation) => violation.rule === "COVERAGE")
+      .map((violation) => violation.message);
+    assert.deepEqual(offenders, [], set.label);
+  }
+});
+
+test("identifier spine ORPHANS: task and ticket claims are declared or qualified and resolvable", () => {
+  for (const set of planSets()) {
+    const offenders = identifierSpineViolations(set)
+      .filter((violation) => violation.rule === "ORPHANS")
+      .map((violation) => violation.message);
+    assert.deepEqual(offenders, [], set.label);
+  }
+});
+
+test("identifier spine MIRROR: each ticket exactly matches its plan task's served set", () => {
+  for (const set of planSets()) {
+    const offenders = identifierSpineViolations(set)
+      .filter((violation) => violation.rule === "MIRROR")
+      .map((violation) => violation.message);
+    assert.deepEqual(offenders, [], set.label);
+  }
+});
+
+test("identifier spine Q5: declarations are unique and contiguous and qualified stems resolve", () => {
+  for (const set of planSets()) {
+    const offenders = identifierSpineViolations(set)
+      .filter((violation) => violation.rule === "Q5")
+      .map((violation) => violation.message);
+    assert.deepEqual(offenders, [], set.label);
   }
 });
 

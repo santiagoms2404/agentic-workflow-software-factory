@@ -768,12 +768,12 @@ flowchart LR
 
       <h4>17. Extend <code>ticket-plan-sync.test.ts</code></h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> <strong>Coverage</strong>: every identifier the plan declares is served by at least one of its tasks</li>
-        <li><code class="status">[]</code> <strong>No orphans</strong>: no task and no ticket claims an identifier the plan does not declare, unless it is qualified and resolvable</li>
-        <li><code class="status">[]</code> <strong>Mirror</strong>: a ticket's <code>serves</code> equals its plan task's served set exactly — the same relation the fence already enforces for <code>milestone</code> and <code>state</code>, and the reason a drop on either side is caught</li>
-        <li><code class="status">[]</code> <strong>Q5</strong>: identifiers are unique and contiguous within a plan, and a qualified reference resolves to a stem in the resolved plan-source list</li>
-        <li><code class="status">[]</code> <strong>Conditional engagement</strong>: a plan declaring no identifiers whose tickets claim none passes, and the reason is written as a comment beside the existing <code>tier</code>/<code>workflow</code> note it mirrors</li>
-        <li><code class="status">[]</code> The new assertions live in their own named tests, so a failure is reported under its own name rather than inside whichever assertion ran first</li>
+        <li><code class="status">[x]</code> <strong>Coverage</strong>: every identifier the plan declares is served by at least one of its tasks</li>
+        <li><code class="status">[x]</code> <strong>No orphans</strong>: no task and no ticket claims an identifier the plan does not declare, unless it is qualified and resolvable</li>
+        <li><code class="status">[x]</code> <strong>Mirror</strong>: a ticket's <code>serves</code> equals its plan task's served set exactly — the same relation the fence already enforces for <code>milestone</code> and <code>state</code>, and the reason a drop on either side is caught</li>
+        <li><code class="status">[x]</code> <strong>Q5</strong>: identifiers are unique and contiguous within a plan, and a qualified reference resolves to a stem in the resolved plan-source list</li>
+        <li><code class="status">[x]</code> <strong>Conditional engagement</strong>: a plan declaring no identifiers whose tickets claim none passes, and the reason is written as a comment beside the existing <code>tier</code>/<code>workflow</code> note it mirrors</li>
+        <li><code class="status">[x]</code> The new assertions live in their own named tests, so a failure is reported under its own name rather than inside whichever assertion ran first</li>
       </ul>
 
       <h4>18. This plan opts in, and becomes the first real instance</h4>
