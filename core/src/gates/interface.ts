@@ -13,6 +13,7 @@ export const GATE_IDS = [
   "commands_pass",
   "journey_passes",
   "contract_digest",
+  "spine_declared",
 ] as const;
 
 export type GateId = (typeof GATE_IDS)[number];

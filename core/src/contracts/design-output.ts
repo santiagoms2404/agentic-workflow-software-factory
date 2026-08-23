@@ -2,12 +2,11 @@ import { Type, type Static } from "@sinclair/typebox";
 import { phaseEnvelope } from "./envelope-base.ts";
 import {
   ACCEPTANCE_CRITERION_IDENTIFIER_PATTERN,
+  DECISION_IDENTIFIER_PATTERN,
   INVARIANT_IDENTIFIER_PATTERN,
 } from "../registry/plan-spine.ts";
 
 export const DESIGN_OUTPUT_SCHEMA_ID = "awsf.design-output/v1";
-
-const DECISION_IDENTIFIER_PATTERN = /^D-[1-9][0-9]*$/u;
 
 const DesignComponentSchema = Type.Object(
   {

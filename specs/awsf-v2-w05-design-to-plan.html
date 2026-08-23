@@ -665,7 +665,7 @@ flowchart LR
 
     <!-- ================= M4 ================= -->
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone M4: Five gates, two of them deliberately uncorrectable</h3>
+      <h3><code class="status">[wip]</code> Milestone M4: Five gates, two of them deliberately uncorrectable</h3>
       <p>The gates are pure functions over envelopes: same input, same <code>GateReport</code>, every time. Three of them fail because someone still in the session can fix them. The other two cannot be argued with: one fails because the design is wrong and the designer left two phases ago, the other because a repository the project declares could not be resolved, and no model turn fixes a registry.</p>
       <figure>
         <pre class="mermaid">
@@ -686,11 +686,11 @@ flowchart TD
 
       <h4>10. <code>spine_declared</code></h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>answeredRequest</code>, trimmed, equals the owner-recorded request; the note reports both when they differ</li>
-        <li><code class="status">[]</code> <code>INV</code>, <code>AC</code> and <code>D</code> identifiers are contiguous from 1, unique, and each carries a non-empty statement</li>
-        <li><code class="status">[]</code> At least one <code>AC</code>. A design with nothing to verify has produced no acceptance boundary, which is the defect the whole workstream exists to remove</li>
-        <li><code class="status">[]</code> No declaration is qualified by a plan stem — <strong>Q5's rule, enforced at the point of declaration rather than at the point of use</strong></li>
-        <li><code class="status">[]</code> Registered in <code>GATE_IDS</code> and attached to the design phase with the correction allowance the recipe declares</li>
+        <li><code class="status">[x]</code> <code>answeredRequest</code>, trimmed, equals the owner-recorded request; the note reports both when they differ</li>
+        <li><code class="status">[x]</code> <code>INV</code>, <code>AC</code> and <code>D</code> identifiers are contiguous from 1, unique, and each carries a non-empty statement</li>
+        <li><code class="status">[x]</code> At least one <code>AC</code>. A design with nothing to verify has produced no acceptance boundary, which is the defect the whole workstream exists to remove</li>
+        <li><code class="status">[x]</code> No declaration is qualified by a plan stem — <strong>Q5's rule, enforced at the point of declaration rather than at the point of use</strong></li>
+        <li><code class="status">[x]</code> Registered in <code>GATE_IDS</code> and attached to the design phase with the correction allowance the recipe declares</li>
       </ul>
 
       <h4>11. <code>design_evidence_present</code></h4>
