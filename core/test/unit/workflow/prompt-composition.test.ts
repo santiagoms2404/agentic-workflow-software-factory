@@ -15,14 +15,12 @@ import { dirname, join, resolve } from "node:path";
 import type { AgentDefinition } from "../../../src/config/schema.ts";
 import { loadConfig } from "../../../src/config/load.ts";
 import { readProductionPromptPair } from "../../../src/cli/commands/production-run.ts";
+import { readReviewPromptPair } from "../../../src/cli/commands/review-phase.ts";
+import { readReworkPromptPair } from "../../../src/cli/commands/rework.ts";
 import {
-  readReviewPromptPair,
-  ReviewCredentialRejected,
-} from "../../../src/cli/commands/review-phase.ts";
-import {
-  readReworkPromptPair,
-  OwnerReworkCredentialRejected,
-} from "../../../src/cli/commands/rework.ts";
+  PromptCredentialRejected,
+  type PromptBundle,
+} from "../../../src/workflow/prompt-composition.ts";
 
 const EXPECTED = {
   planner: {
@@ -60,8 +58,7 @@ const EXPECTED = {
 } as const;
 
 type Role = keyof typeof EXPECTED;
-type Pair = { readonly user: string; readonly system: string };
-type Loader = (configPath: string, agent: AgentDefinition) => Promise<Pair>;
+type Loader = (configPath: string, agent: AgentDefinition) => Promise<PromptBundle>;
 
 const LOADERS: readonly { readonly path: string; readonly load: Loader }[] = [
   { path: "production", load: readProductionPromptPair },
@@ -134,8 +131,16 @@ test("the six configured roles and two synthetic W05 roles retain exact user and
     }
     for (const pathway of LOADERS) {
       const observed = await pathway.load(configPath, agent);
-      assert.deepEqual(observed, { user: expected.user, system: expected.system }, `${pathway.path}:${role}`);
-      assert.deepEqual(Object.keys(observed).sort(), ["system", "user"], `${pathway.path}:${role} has no shared or alias input`);
+      assert.deepEqual(
+        observed,
+        { userPrompt: expected.user, systemPrompt: expected.system },
+        `${pathway.path}:${role}`,
+      );
+      assert.deepEqual(
+        Object.keys(observed).sort(),
+        ["systemPrompt", "userPrompt"],
+        `${pathway.path}:${role} has no shared or alias input`,
+      );
     }
   }
 });
@@ -152,9 +157,9 @@ test("all three current readers reject absolute, config-root, lexical-escape, an
 
   const cases = [
     { name: "absolute", value: outside, message: (value: string) => `prompt path must be relative: ${value}` },
-    { name: "config root", value: ".", message: (value: string, production: boolean) => `prompt path escapes ${production ? "the " : ""}config context: ${value}` },
-    { name: "lexical escape", value: "../outside.md", message: (value: string, production: boolean) => `prompt path escapes ${production ? "the " : ""}config context: ${value}` },
-    { name: "symlink escape", value: "prompts/escape.md", message: (value: string, production: boolean) => `prompt symlink escapes ${production ? "the " : ""}config context: ${value}` },
+    { name: "config root", value: ".", message: (value: string) => `prompt path escapes the config context: ${value}` },
+    { name: "lexical escape", value: "../outside.md", message: (value: string) => `prompt path escapes the config context: ${value}` },
+    { name: "symlink escape", value: "prompts/escape.md", message: (value: string) => `prompt symlink escapes the config context: ${value}` },
   ] as const;
 
   for (const pathway of LOADERS) {
@@ -163,7 +168,7 @@ test("all three current readers reject absolute, config-root, lexical-escape, an
         const agent = { ...base!, prompt: { ...base!.prompt, [field]: scenario.value } };
         await assert.rejects(
           pathway.load(configPath, agent),
-          (error: unknown) => error instanceof Error && error.message === scenario.message(scenario.value, pathway.path === "production"),
+          (error: unknown) => error instanceof Error && error.message === scenario.message(scenario.value),
           `${pathway.path}:${field}:${scenario.name}`,
         );
       }
@@ -171,7 +176,7 @@ test("all three current readers reject absolute, config-root, lexical-escape, an
   }
 });
 
-test("credential behavior is characterized on both prompt fields before centralization", async (t) => {
+test("the centralized bundle rejects credentials and prior redactions on both prompt fields for all three paths", async (t) => {
   const root = fixtureRoot(t);
   const configPath = join(root, "awsf.config.yaml");
   const [base] = prepareRoles(root);
@@ -183,10 +188,13 @@ test("credential behavior is characterized on both prompt fields before centrali
       write(root, path, `${text}\n`);
       const agent = { ...base!, prompt: { ...base!.prompt, [field]: path } };
 
-      const production = await readProductionPromptPair(configPath, agent);
-      assert.equal(production[field], `${text}\n`, `production currently accepts ${label} bytes in ${field}`);
-      await assert.rejects(readReviewPromptPair(configPath, agent), ReviewCredentialRejected, `replacement-review:${field}:${label}`);
-      await assert.rejects(readReworkPromptPair(configPath, agent), OwnerReworkCredentialRejected, `owner-rework:${field}:${label}`);
+      for (const pathway of LOADERS) {
+        await assert.rejects(
+          pathway.load(configPath, agent),
+          PromptCredentialRejected,
+          `${pathway.path}:${field}:${label}`,
+        );
+      }
     }
   }
 });

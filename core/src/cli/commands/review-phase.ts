@@ -78,6 +78,7 @@ import { REDACTED_VALUE, scrubCredentialString, scrubCredentials } from "../../p
 import { openPermissionSession, type PermissionSession, type SandboxGrant, type SandboxProbe } from "../../policy/sandbox-broker.ts";
 import type { EdgeId, TaskState } from "../../state/task-machine.ts";
 import { compilePhase, type WorkflowRecipe } from "../../workflow/compiler.ts";
+import { composePromptBundle, type PromptBundle } from "../../workflow/prompt-composition.ts";
 import type { CompiledAgentPhase } from "../../workflow/phase.ts";
 import {
   ReviewEvidenceUnfit,
@@ -282,27 +283,12 @@ function artifactReader(worktree: string): (path: string) => ArtifactObservation
   };
 }
 
-async function readCommittedPrompt(configPath: string, path: string): Promise<string> {
-  if (isAbsolute(path)) throw new Error(`prompt path must be relative: ${path}`);
-  const root = await realpath(dirname(resolve(configPath)));
-  const candidate = resolve(root, path);
-  const fromRoot = relative(root, candidate);
-  if (fromRoot === "" || fromRoot.startsWith("..") || isAbsolute(fromRoot)) throw new Error(`prompt path escapes config context: ${path}`);
-  const physical = await realpath(candidate);
-  const physicalFromRoot = relative(root, physical);
-  if (physicalFromRoot.startsWith("..") || isAbsolute(physicalFromRoot)) throw new Error(`prompt symlink escapes config context: ${path}`);
-  return readFile(physical, "utf8");
-}
-
-/** Existing replacement-review prompt-loading site, exposed so M1 can pin it before extraction. */
+/** Replacement-review seam retained for the three-path prompt-bundle characterization. */
 export async function readReviewPromptPair(
   configPath: string,
   agent: AgentDefinition,
-): Promise<{ readonly user: string; readonly system: string }> {
-  return {
-    user: credentialSafeText(await readCommittedPrompt(configPath, agent.prompt.user), "configured user prompt", true),
-    system: credentialSafeText(await readCommittedPrompt(configPath, agent.prompt.system), "configured system prompt", true),
-  };
+): Promise<PromptBundle> {
+  return composePromptBundle({ configPath, agent });
 }
 
 async function validateMaterializedSystemPrompt(
@@ -434,13 +420,11 @@ export interface ReviewPhaseInfrastructure {
   sandboxProbe?: SandboxProbe;
 }
 
-export interface ReviewRoute {
+export interface ReviewRoute extends PromptBundle {
   readonly agent: AgentDefinition;
   readonly adapterId: string;
   readonly adapter: HarnessAdapter;
   readonly model: ModelInfo;
-  readonly userPrompt: string;
-  readonly systemPrompt: string;
 }
 
 export interface ResolveReviewRouteOptions {
@@ -531,8 +515,7 @@ export async function resolveReviewRoute(options: ResolveReviewRouteOptions): Pr
     adapterId: agent.harness.adapter,
     adapter,
     model,
-    userPrompt: prompts.user,
-    systemPrompt: prompts.system,
+    ...prompts,
   };
 }
 

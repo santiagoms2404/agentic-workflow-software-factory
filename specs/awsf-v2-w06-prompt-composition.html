@@ -275,10 +275,10 @@ flowchart LR
 
     <h4>2. Extract the prompt bundle and migrate all three callers</h4>
     <ul class="checklist">
-      <li><code class="status">[]</code> Implement one boundary that resolves config-relative prompt paths, rejects escape/symlink/credential cases, and returns user bytes plus role-system bytes. Remove all three local <code>readCommittedPrompt</code> copies.</li>
-      <li><code class="status">[]</code> Preserve system bytes exactly in M1, including final newlines. The shared component is structurally empty, so centralisation cannot accidentally introduce the feature scheduled for M2.</li>
-      <li><code class="status">[]</code> Keep <code>writeSystemPromptFile</code>, <code>assertPrivateSystemPrompt</code>, descriptor privacy sweeps, adapter flags, and materialised-byte read-back unchanged.</li>
-      <li><code class="status">[]</code> Make production, rework, and replacement review consume the same returned bundle. Rework must stop carrying a fourth local prompt shape inside its hard-coded builder route.</li>
+      <li><code class="status">[x]</code> Implement one boundary that resolves config-relative prompt paths, rejects escape/symlink/credential cases, and returns user bytes plus role-system bytes. Remove all three local <code>readCommittedPrompt</code> copies.</li>
+      <li><code class="status">[x]</code> Preserve system bytes exactly in M1, including final newlines. The shared component is structurally empty, so centralisation cannot accidentally introduce the feature scheduled for M2.</li>
+      <li><code class="status">[x]</code> Keep <code>writeSystemPromptFile</code>, <code>assertPrivateSystemPrompt</code>, descriptor privacy sweeps, adapter flags, and materialised-byte read-back unchanged.</li>
+      <li><code class="status">[x]</code> Make production, rework, and replacement review consume the same returned bundle. Rework must stop carrying a fourth local prompt shape inside its hard-coded builder route.</li>
     </ul>
 
     <h4>3. Testing Strategy and the G1 release point</h4>

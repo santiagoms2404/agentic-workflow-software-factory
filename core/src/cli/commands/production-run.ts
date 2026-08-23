@@ -68,6 +68,7 @@ import { openPermissionSession, type PermissionSession, type SandboxProbe } from
 import { transition, type EdgeId, type TaskState } from "../../state/task-machine.ts";
 import { createCompiledPhaseLaunchVerifier } from "../../workflow/phase-launch-authorization.ts";
 import { compileWorkflow, type WorkflowRecipe } from "../../workflow/compiler.ts";
+import { composePromptBundle, type PromptBundle } from "../../workflow/prompt-composition.ts";
 import type { CompiledAgentPhase } from "../../workflow/phase.ts";
 import type { AgentTurn, CorrectionCandidateEvidence, CorrectionCommandFailure, CorrectionSession } from "../../workflow/corrections.ts";
 import {
@@ -96,7 +97,7 @@ import {
   type AttemptStatus,
 } from "./attempt.ts";
 
-const { chmod, mkdir, readFile, realpath, writeFile } = fs;
+const { chmod, mkdir, readFile, writeFile } = fs;
 
 const HOST = globalThis as unknown as {
   process: { env: Readonly<Record<string, string>> };
@@ -199,15 +200,13 @@ export interface ProductionRunOptions {
   readonly infrastructure?: Partial<ProductionInfrastructure>;
 }
 
-interface Route {
+interface Route extends PromptBundle {
   readonly agent: AgentDefinition;
   readonly adapterId: string;
   readonly adapter: HarnessAdapter;
   readonly model: ModelInfo;
   /** Config and adapter transport BOTH said yes at preflight. */
   readonly continuity: boolean;
-  readonly userPrompt: string;
-  readonly systemPrompt: string;
 }
 
 /**
@@ -272,31 +271,12 @@ function contextTokens(usage: TokenUsage): number | null {
   return (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0);
 }
 
-async function readCommittedPrompt(configPath: string, relativePath: string): Promise<string> {
-  if (isAbsolute(relativePath)) throw new Error(`prompt path must be relative: ${relativePath}`);
-  const root = await realpath(dirname(resolve(configPath)));
-  const candidate = resolve(root, relativePath);
-  const fromRoot = relative(root, candidate);
-  if (fromRoot === "" || fromRoot.startsWith("..") || isAbsolute(fromRoot)) {
-    throw new Error(`prompt path escapes the config context: ${relativePath}`);
-  }
-  const physical = await realpath(candidate);
-  const physicalFromRoot = relative(root, physical);
-  if (physicalFromRoot.startsWith("..") || isAbsolute(physicalFromRoot)) {
-    throw new Error(`prompt symlink escapes the config context: ${relativePath}`);
-  }
-  return readFile(physical, "utf8");
-}
-
-/** Existing production prompt-loading site, exposed so M1 can pin its behavior before extraction. */
+/** Production seam retained for the three-path prompt-bundle characterization. */
 export async function readProductionPromptPair(
   configPath: string,
   agent: AgentDefinition,
-): Promise<{ readonly user: string; readonly system: string }> {
-  return {
-    user: await readCommittedPrompt(configPath, agent.prompt.user),
-    system: await readCommittedPrompt(configPath, agent.prompt.system),
-  };
+): Promise<PromptBundle> {
+  return composePromptBundle({ configPath, agent });
 }
 
 /**
@@ -531,7 +511,7 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
   }
 
   const agents = new Map(options.config.agents.map((agent) => [agent.name, agent]));
-  const routePrompts = new Map<string, { user: string; system: string }>();
+  const routePrompts = new Map<string, PromptBundle>();
   for (const phase of recipe.phases) {
     if (phase.kind !== "agent") continue;
     const agent = agents.get(phase.owner);
@@ -541,7 +521,7 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
   const configuredRecipe: WorkflowRecipe = {
     ...recipe,
     phases: recipe.phases.map((phase) => phase.kind === "agent"
-      ? { ...phase, prompt: routePrompts.get(phase.id)!.user }
+      ? { ...phase, prompt: routePrompts.get(phase.id)!.userPrompt }
       : phase),
   };
   // Compilation, route shape, prompts, and minimum-call admission all finish before any process.
@@ -622,8 +602,7 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
         adapter,
         model,
         continuity: continuous,
-        userPrompt: routePrompts.get(phase.id)!.user,
-        systemPrompt: routePrompts.get(phase.id)!.system,
+        ...routePrompts.get(phase.id)!,
       });
     }
     // D10: the router decides the review provider by exclusion from the worker's,
