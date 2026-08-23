@@ -251,7 +251,7 @@ sequenceDiagram
   <p><strong>Execute every phase and task in order.</strong> Status markers are <code>[]</code> idle, <code>[wip]</code> in progress, <code>[x]</code> complete, and <code>[f]</code> failed. Every marker starts idle. This authoring session earned none.</p>
 
   <div class="phase">
-    <h3><code class="status">[wip]</code> Milestone M1: Centralise composition without adding shared bytes</h3>
+    <h3><code class="status">[x]</code> Milestone M1: Centralise composition without adding shared bytes</h3>
     <p>This milestone is a behaviour-preserving extraction. It establishes the M1 commit as the benchmark baseline and is the only W06 milestone W05 M7 waits on.</p>
     <figure>
       <pre class="mermaid">
@@ -284,11 +284,11 @@ flowchart LR
     <h4>3. Testing Strategy and the G1 release point</h4>
     <p>All M1 validation is offline. The old paths are fixtures, the source fence asserts the count, and private materialisation remains covered by existing adapter/system-prompt tests.</p>
     <ul class="checklist">
-      <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/workflow/prompt-composition.test.ts core/test/unit/meta/prompt-composition-site.test.ts</code> — exact parity and one implementation site.</li>
-      <li><code class="status">[]</code> <code>npm run test:unit</code> — all route, adapter, review, and meta regressions stay green without provider calls.</li>
-      <li><code class="status">[]</code> <code>npm run typecheck:core &amp;&amp; npm run lint</code> — boundary types and source policy are valid.</li>
-      <li><code class="status">[]</code> Prove the site-count fence red by introducing a temporary second direct system-prompt read in a copied fixture, then restore it and rerun green.</li>
-      <li><code class="status">[]</code> Only after every M1 box is green, mark M1 <code>[x]</code>. That marker is W05 M7's G1 precondition. Do not touch the spine's W06 marker.</li>
+      <li><code class="status">[x]</code> <code>node --experimental-strip-types --test core/test/unit/workflow/prompt-composition.test.ts core/test/unit/meta/prompt-composition-site.test.ts</code> — exact parity and one implementation site.</li>
+      <li><code class="status">[x]</code> <code>npm run test:unit</code> — all route, adapter, review, and meta regressions stay green without provider calls.</li>
+      <li><code class="status">[x]</code> <code>npm run typecheck:core &amp;&amp; npm run lint</code> — boundary types and source policy are valid.</li>
+      <li><code class="status">[x]</code> Prove the site-count fence red by introducing a temporary second direct system-prompt read in a copied fixture, then restore it and rerun green.</li>
+      <li><code class="status">[x]</code> Only after every M1 box is green, mark M1 <code>[x]</code>. That marker is W05 M7's G1 precondition. Do not touch the spine's W06 marker.</li>
     </ul>
     <div class="loop">🔁 <strong>Do not exit M1 until composition remains byte-identical and the site count is one.</strong> If shared content appears, remove it. M2 owns it.</div>
   </div>
@@ -514,6 +514,11 @@ flowchart TD
 
 <section id="amendments">
   <h2>Amendments</h2>
+  <details>
+    <summary>2026-08-23 — M1 centralisation validation completed</summary>
+    <p>M1's focused composition and one-site tests, full unit suite, core typecheck, and lint completed offline. The site-count fixture induced a temporary second direct system-prompt read and observed the fence fail before restoration. The six configured roles and two synthetic W05 roles retained exact role-only system bytes across production, replacement-review, and owner-rework paths.</p>
+    <p>G1 is released: W05 M7 is unblocked, not completed. The spine's W06 marker remains unchanged.</p>
+  </details>
   <details>
     <summary>2026-08-23 — owner review applied: five Questionables decided</summary>
     <p>An exported <code>plan-sota-review v1</code> block carried five verdicts, no proposed statuses, and no annotations. Applied in full. Q1 selected one common file plus a closed reviewer overlay. Q2 selected the structural four-point specificity rubric plus the explicit omitted-evidence rule. Q3 increased the benchmark from the recommended minimum to five paired repetitions per arm across three fixed task classes, 30 route runs total. Q4 made safety non-inferiority binding while token deltas remain descriptive. Q5 retained detailed rows in the journal/status store and a handle-free aggregate in this plan.</p>
