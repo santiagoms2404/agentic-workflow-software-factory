@@ -69,39 +69,77 @@ test("spineCoverage returns no violations for covered, mirrored, resolvable clai
   assert.equal(Object.isFrozen(violations), true);
 });
 
-test("spineCoverage distinguishes all four rules and names the plan and identifier", () => {
+test("spineCoverage names a declaration that breaks COVERAGE", () => {
   const violations = spineCoverage(
     {
-      label: "drifted-plan",
-      declarations: [
-        { id: "INV-1", statement: "State stays pure." },
-        { id: "AC-2", statement: "The declaration sequence has a gap." },
-      ],
+      label: "fixture-coverage",
+      declarations: [{ id: "AC-1", statement: "Every declaration is served." }],
     },
-    [
-      { id: "T01", serves: ["INV-1", "AC-9", "missing-plan#AC-1"] },
-      { id: "T02", serves: [] },
-    ],
-    [
-      { id: "T01", serves: ["INV-1"] },
-      { id: "T02", serves: [] },
-    ],
-    ["drifted-plan"],
+    [{ id: "T01", serves: [] }],
+    [{ id: "T01", serves: [] }],
+    ["fixture-coverage"],
   );
 
-  assert.deepEqual(new Set(violations.map((violation) => violation.rule)), new Set([
-    "COVERAGE",
-    "ORPHANS",
-    "MIRROR",
-    "Q5",
-  ]));
-  assert.ok(violations.every((violation) => violation.message.includes(`drifted-plan/${violation.identifier}`)));
-  assert.ok(violations.every((violation) => violation.message.includes(`${violation.rule} rule broken`)));
-  assert.ok(violations.some((violation) => violation.rule === "COVERAGE" && violation.identifier === "AC-2"));
-  assert.ok(violations.some((violation) => violation.rule === "ORPHANS" && violation.identifier === "AC-9"));
-  assert.ok(violations.some((violation) => violation.rule === "MIRROR" && violation.identifier === "T01"));
-  assert.ok(violations.some((violation) => violation.rule === "Q5" && violation.identifier === "missing-plan#AC-1"));
-  assert.ok(violations.some((violation) => violation.rule === "Q5" && violation.identifier === "AC-2"));
+  assert.deepEqual(violations, [{
+    plan: "fixture-coverage",
+    identifier: "AC-1",
+    rule: "COVERAGE",
+    message: "fixture-coverage/AC-1: COVERAGE rule broken: the declaration is served by no plan task",
+  }]);
+});
+
+test("spineCoverage names an undeclared claim that breaks ORPHANS", () => {
+  const violations = spineCoverage(
+    {
+      label: "fixture-orphans",
+      declarations: [{ id: "AC-1", statement: "Every claim is declared." }],
+    },
+    [{ id: "T01", serves: ["AC-1", "AC-2"] }],
+    undefined,
+    ["fixture-orphans"],
+  );
+
+  assert.deepEqual(violations, [{
+    plan: "fixture-orphans",
+    identifier: "AC-2",
+    rule: "ORPHANS",
+    message: "fixture-orphans/AC-2: ORPHANS rule broken: plan task T01 claims an identifier the plan does not declare",
+  }]);
+});
+
+test("spineCoverage names a task whose ticket breaks MIRROR", () => {
+  const violations = spineCoverage(
+    {
+      label: "fixture-mirror",
+      declarations: [{ id: "AC-1", statement: "Ticket claims mirror plan claims." }],
+    },
+    [{ id: "T01", serves: ["AC-1"] }],
+    [{ id: "T01", serves: undefined }],
+    ["fixture-mirror"],
+  );
+
+  assert.deepEqual(violations, [{
+    plan: "fixture-mirror",
+    identifier: "T01",
+    rule: "MIRROR",
+    message: "fixture-mirror/T01: MIRROR rule broken: plan task serves [AC-1], ticket serves []",
+  }]);
+});
+
+test("spineCoverage names an unresolvable stem that breaks Q5", () => {
+  const violations = spineCoverage(
+    { label: "fixture-q5", declarations: [] },
+    [{ id: "T01", serves: ["no-such-plan#AC-1"] }],
+    undefined,
+    ["fixture-q5"],
+  );
+
+  assert.deepEqual(violations, [{
+    plan: "fixture-q5",
+    identifier: "no-such-plan#AC-1",
+    rule: "Q5",
+    message: "fixture-q5/no-such-plan#AC-1: Q5 rule broken: plan task T01 names unresolvable plan stem no-such-plan",
+  }]);
 });
 
 test("spineCoverage skips ticket mirroring when the runtime caller has no ticket surface", () => {

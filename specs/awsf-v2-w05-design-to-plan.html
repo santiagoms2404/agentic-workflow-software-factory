@@ -762,7 +762,7 @@ flowchart TD
 
     <!-- ================= M5 ================= -->
     <div class="phase">
-      <h3><code class="status">[wip]</code> Milestone M5: The coverage gate — invariant 12 extended, and proven to bite</h3>
+      <h3><code class="status">[x]</code> Milestone M5: The coverage gate — invariant 12 extended, and proven to bite</h3>
       <p>This is the milestone the workstream exists for. The identifier join goes into the same meta-test that already holds plan and tickets together, it is conditional on a plan having opted in, and it is not finished until a deliberately dropped acceptance criterion has been watched turning it red.</p>
       <figure>
         <pre class="mermaid">
@@ -807,12 +807,12 @@ flowchart LR
       <p class="serves"><code class="serves">AC-1</code></p>
       <p>Two surfaces, because they answer different questions. Fixtures held in memory prove the matcher bites on every rule; the real committed plan sets prove it engages on what is actually there. Then the induced drift, which is the only evidence that matters: <strong>a coverage gate nobody has seen fail is decoration.</strong></p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>npm run test:unit</code> — fixture tests fail once per rule, each with a distinguishable message</li>
-        <li><code class="status">[]</code> <strong>Induced drift, part one</strong>: delete one <code>AC</code> declaration from this plan, run <code>npm run test:unit</code>, and record that it went red naming that identifier. Restore, and confirm green</li>
-        <li><code class="status">[]</code> <strong>Induced drift, part two</strong>: delete the <code>serves:</code> line from one ticket while leaving the plan intact, run the suite, and record that the mirror assertion caught it. Restore, and confirm green</li>
-        <li><code class="status">[]</code> <strong>Induced drift, part three</strong>: change one claim to <code>no-such-plan#AC-1</code>, run the suite, and record that the unresolvable stem was named. Restore, and confirm green</li>
-        <li><code class="status">[]</code> Both drift runs are recorded in this plan's Amendments with the exact failure text, because the evidence is the message rather than the exit code</li>
-        <li><code class="status">[]</code> <code>npm run test:unit</code> — the whole suite is green with everything restored, and the ten pre-existing sync assertions are unchanged</li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code> — fixture tests fail once per rule, each with a distinguishable message</li>
+        <li><code class="status">[x]</code> <strong>Induced drift, part one</strong>: delete one <code>AC</code> declaration from this plan, run <code>npm run test:unit</code>, and record that it went red naming that identifier. Restore, and confirm green</li>
+        <li><code class="status">[x]</code> <strong>Induced drift, part two</strong>: delete the <code>serves:</code> line from one ticket while leaving the plan intact, run the suite, and record that the mirror assertion caught it. Restore, and confirm green</li>
+        <li><code class="status">[x]</code> <strong>Induced drift, part three</strong>: change one claim to <code>no-such-plan#AC-1</code>, run the suite, and record that the unresolvable stem was named. Restore, and confirm green</li>
+        <li><code class="status">[x]</code> Both drift runs are recorded in this plan's Amendments with the exact failure text, because the evidence is the message rather than the exit code</li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code> — the whole suite is green with everything restored, and the ten pre-existing sync assertions are unchanged</li>
       </ul>
       <div class="loop">🔁 <strong>Do not exit this milestone until every box above is checked.</strong> If an induced drift does <em>not</em> turn the suite red, the gate is wrong — fix the gate, never the fixture.</div>
     </div>
@@ -1207,6 +1207,16 @@ gantt
       <p><strong>The hand-threaded sample used claims v1 already makes.</strong> <code>INV-1</code> was task 10's broker boundary: only <code>core/src/execution/transport-broker.ts</code> imports <code>node:child_process</code>, and adapters never spawn or call global <code>fetch</code>. <code>AC-1</code> was the same task's kill-host criterion: between registration and release, killing the host leaves no provider process and the stub side-effect file proves the command never ran. The proposed task claim served both ids, and the proposed <code>specs/tickets/awsf-plan/T10.md</code> frontmatter mirrored <code>serves: [INV-1, AC-1]</code>. The experiment stayed outside the repository; neither v1 file was edited.</p>
       <p><strong>The manual gate join behaved as designed.</strong> Removing only a declaration while its plan-task and ticket claims remain creates orphan references; removing the declaration and plan-task claim while the ticket retains its claim also creates a plan/ticket mirror mismatch. Either deletion turns the gate red. Removing the declaration, plan-task claim, and ticket claim together is invisible if the remaining local sequence is contiguous. That is accepted: this fence detects propagation drift from the plan's identified source of truth, while Git records a coordinated source change; it cannot reconstruct a claim removed from every joined surface. The runtime design contract independently requires at least one acceptance criterion.</p>
       <p><strong>Q5 CONFIRMED as decided.</strong> The crossing count across <code>specs/awsf-plan.html</code> is <strong>0</strong>. Its invariant and acceptance statements are owned by that plan and served by its own T01–T38 set. References to source repositories, provider CLIs, destination machines, the architecture proposal, and the companion acceptance file are evidence or inputs, not declarations owned by another plan. Per-plan ids therefore impose no qualified references on the v1 corpus and require no allocator. M1 remains <code>[wip]</code> for task 2's independent baseline checks; the spine's W05 marker is untouched.</p>
+    </details>
+    <details>
+      <summary>2026-08-23 — M5 / Task 19: the coverage gate was watched failing on three induced drifts</summary>
+      <p><strong>Fixture coverage is split by rule.</strong> <code>core/test/unit/registry/plan-spine.test.ts</code> now gives COVERAGE, ORPHANS, MIRROR and Q5 one isolated bad input each and deep-equals each rule's complete violation, including plan label, identifier, rule and message. The focused suite passed 17/17 before the committed-plan drifts began.</p>
+      <ol>
+        <li><strong>Deleted declaration.</strong> <code>AC-2</code>'s declaration and statement were deleted while its plan-task and ticket claims remained. <code>npm run test:unit</code> failed with the exact text <code>awsf-v2-w05-design-to-plan/AC-2: ORPHANS rule broken: plan task T12 claims an identifier the plan does not declare</code>. The declaration was restored and the suite passed 1269/1269.</li>
+        <li><strong>Deleted ticket mirror.</strong> The <code>serves: [AC-1]</code> line was deleted from <code>T19.md</code> while task 19's plan claim remained. <code>npm run test:unit</code> failed with the exact text <code>awsf-v2-w05-design-to-plan/T19: MIRROR rule broken: plan task serves [AC-1], ticket serves []</code>. The line was restored and the suite passed 1269/1269.</li>
+        <li><strong>Unresolvable qualified claim.</strong> Task 19's plan claim was changed from <code>AC-1</code> to <code>no-such-plan#AC-1</code>. <code>npm run test:unit</code> failed with the exact text <code>awsf-v2-w05-design-to-plan/no-such-plan#AC-1: Q5 rule broken: plan task T19 names unresolvable plan stem no-such-plan</code>. The claim was restored and the suite passed 1269/1269.</li>
+      </ol>
+      <p><strong>Every induced edit was restored before M5 closed.</strong> The spine's W05 marker remains untouched.</p>
     </details>
   </section>
 
