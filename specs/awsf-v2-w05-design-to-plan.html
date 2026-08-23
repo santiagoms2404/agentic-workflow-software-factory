@@ -722,10 +722,10 @@ flowchart TD
 
       <h4>14. <code>spine_carried</code></h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> Every identifier in the plan context is served by at least one step; the note names any that are not</li>
-        <li><code class="status">[]</code> No step serves an identifier the context does not carry</li>
-        <li><code class="status">[]</code> A <code>&lt;plan-stem&gt;#INV-n</code> reference resolves against the catalog's own plan list; an unresolvable stem fails and the note names the stem</li>
-        <li><code class="status">[]</code> Step ids are <code>T01</code>…<code>Tnn</code> contiguous with no gaps, and <code>dependsOn</code> points only at earlier steps — the two rules the sync fence already enforces on tickets, applied one stage earlier where they are cheaper to fix</li>
+        <li><code class="status">[x]</code> Every identifier in the plan context is served by at least one step; the note names any that are not</li>
+        <li><code class="status">[x]</code> No step serves an identifier the context does not carry</li>
+        <li><code class="status">[x]</code> A <code>&lt;plan-stem&gt;#INV-n</code> reference resolves against the catalog's own plan list; an unresolvable stem fails and the note names the stem</li>
+        <li><code class="status">[x]</code> Step ids are <code>T01</code>…<code>Tnn</code> contiguous with no gaps, and <code>dependsOn</code> points only at earlier steps — the two rules the sync fence already enforces on tickets, applied one stage earlier where they are cheaper to fix</li>
       </ul>
 
       <h4>15. Testing Strategy</h4>

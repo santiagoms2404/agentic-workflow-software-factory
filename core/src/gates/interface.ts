@@ -14,6 +14,7 @@ export const GATE_IDS = [
   "journey_passes",
   "contract_digest",
   "spine_declared",
+  "spine_carried",
   "design_evidence_present",
   "architecture_verdict_consistent",
   "architecture_review_clear",
