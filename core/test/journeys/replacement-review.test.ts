@@ -377,7 +377,12 @@ class ScriptedReviewAdapter implements HarnessAdapter {
     // the block actually reached the provider rather than only being composed.
     const correctedTurn = request.prompt.includes(CONTRACT_RETRY_HEADING);
     const findings: ReviewOutput["findings"] = this.#behaviour === "concern" || contractRetry
-      ? [{ id: "f1", severity: "high", file: SOURCE, line: 1, title: "concrete defect", detail: "the gates would not have caught this", evidence: "read from the supplied diff" }]
+      ? [{
+          id: "f1", severity: "high", file: SOURCE, line: 1,
+          title: "generated flag bypasses the configured branch",
+          detail: "The gates would accept a path that always returns the generated value.",
+          evidence: "`generated` is assigned `true` before the configured branch is checked.",
+        }]
       : [];
     const payload: ReviewOutput = {
       schema: "awsf.review-output/v1", producerStatus: "success", summary: "audited the exact candidate on disk",

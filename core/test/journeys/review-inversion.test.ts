@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import type { ReviewContext } from "../../src/contracts/review-context.ts";
 import type { ReviewOutput } from "../../src/contracts/review-output.ts";
 import type { TestOutput } from "../../src/contracts/test-output.ts";
 import { CallBudget } from "../../src/execution/call-budget.ts";
@@ -46,6 +47,19 @@ function previousTestOutput(): TestOutput {
   };
 }
 
+function reviewContext(): ReviewContext {
+  return {
+    schema: "awsf.review-context/v1", producerStatus: "success", summary: "one changed file",
+    artifacts: [], notesForNextPhase: "review exact candidate", request: "review the bounded change",
+    goals: ["review it"], nonGoals: ["no edits"], acceptanceCriteria: ["the change is sound"],
+    testStrategy: ["host gates"], baseSha: "b".repeat(40), candidateSha,
+    changedFiles: ["src/change.ts"], insertions: 1, deletions: 0,
+    stat: "src/change.ts | 1 +", diff: "@@ -1,0 +1,1 @@\n+change\n", diffTruncated: false,
+    diffOmittedChars: 0, diffOmittedFiles: [], diffSha256: "c".repeat(64),
+    diffRef: "raw/review.diff", testOutput: previousTestOutput(),
+  };
+}
+
 class TransportFault extends Error {}
 
 function enterReview(budget: CallBudget): void {
@@ -74,6 +88,7 @@ test("T2 gates route review to the opposite stub provider, validate the verdict,
       run: ({ envelope }: { envelope: ReviewOutput }) => verdictConsistent(envelope, {
         candidateSha,
         candidatePaths: ["src/change.ts"],
+        reviewContext: reviewContext(),
       }),
     }],
   };

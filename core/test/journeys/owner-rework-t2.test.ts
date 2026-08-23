@@ -397,7 +397,12 @@ class ScriptedReviewer implements HarnessAdapter {
     // pointed at rather than from anything the test remembered.
     const reviewed = this.#behaviour === "stale-sha" ? this.#superseded : git(request.cwd, "rev-parse", "HEAD");
     const findings: ReviewOutput["findings"] = this.#behaviour === "concern"
-      ? [{ id: "f2", severity: "medium", file: SOURCE, line: 1, title: "still worth a look", detail: "a second, smaller concern in the same file", evidence: "read from the supplied diff" }]
+      ? [{
+          id: "f2", severity: "medium", file: SOURCE, line: 1,
+          title: "generated flag remains unconditional",
+          detail: "Callers would still receive the generated path when the feature is disabled.",
+          evidence: "`generated` remains assigned `true` without a feature-condition branch.",
+        }]
       : [];
     const payload: ReviewOutput = {
       schema: "awsf.review-output/v1", producerStatus: "success", summary: "audited the reworked candidate on disk",

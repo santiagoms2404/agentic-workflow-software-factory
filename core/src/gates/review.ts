@@ -12,6 +12,73 @@ function concrete(finding: ReviewFinding): boolean {
 export interface ReviewGateContext {
   readonly candidateSha: string;
   readonly candidatePaths: readonly string[];
+  /** Host-composed candidate evidence. Required for the Q2 omitted-evidence rule. */
+  readonly reviewContext: ReviewContext | null;
+}
+
+export interface ReviewFindingSpecificity {
+  readonly candidateFile: boolean;
+  readonly lineOrFileWideScope: boolean;
+  readonly observedMechanismOrCondition: boolean;
+  readonly concreteConsequence: boolean;
+  readonly score: number;
+}
+
+const OBSERVATION_WORD = /\b(?:adds?|after|before|calls?|contains?|declares?|deletes?|equals?|false|if|invokes?|is|lacks?|missing|null|references?|removes?|returns?|sets?|throws?|true|undefined|uses?|when|while|writes?)\b/i;
+const CONSEQUENCE_WORD = /\b(?:accepts?|allows?|blocks?|bypasses?|cannot|causes?|corrupts?|crashes?|drops?|duplicates?|exposes?|fails?|leaks?|loses?|omits?|overwrites?|prevents?|rejects?|results?|returns?|stale|throws?|unable|unreachable|widens?|will|would|wrong)\b/i;
+const CODE_SHAPE = /[`'"()[\]{}=<>:/]|\.|->/;
+
+function terms(value: string): readonly string[] {
+  return value.match(/[\p{L}\p{N}_]+/gu) ?? [];
+}
+
+/** The decided four-point rubric, scored per finding without rewarding finding count. */
+export function reviewFindingSpecificity(
+  finding: ReviewFinding,
+  candidatePaths: ReadonlySet<string>,
+): ReviewFindingSpecificity {
+  const evidenceTerms = terms(finding.evidence);
+  const consequenceText = `${finding.title} ${finding.detail}`;
+  const candidateFile = candidatePaths.has(finding.file);
+  // `null` is the contract's explicit file-wide scope. It is never replaced by a fake line.
+  const lineOrFileWideScope = finding.line === null || (Number.isInteger(finding.line) && finding.line > 0);
+  const observedMechanismOrCondition = evidenceTerms.length >= 2 && (
+    CODE_SHAPE.test(finding.evidence) || OBSERVATION_WORD.test(finding.evidence)
+  );
+  const concreteConsequence = terms(consequenceText).length >= 4 && CONSEQUENCE_WORD.test(consequenceText);
+  return Object.freeze({
+    candidateFile,
+    lineOrFileWideScope,
+    observedMechanismOrCondition,
+    concreteConsequence,
+    score: [candidateFile, lineOrFileWideScope, observedMechanismOrCondition, concreteConsequence]
+      .filter(Boolean).length,
+  });
+}
+
+function omittedEvidencePaths(context: ReviewContext): readonly string[] {
+  const paths = new Set(context.diffOmittedFiles);
+  const marker = /^\*\*\* awsf: \d+ of \d+ hunk\(s\) omitted from (.+)$/gm;
+  for (const match of context.diff.matchAll(marker)) {
+    const path = match[1]?.trim();
+    if (path !== undefined && path.length > 0) paths.add(path);
+  }
+  return Object.freeze([...paths].sort());
+}
+
+const EVIDENCE_LIMITATION = /\b(?:bound(?:ed|ing)?|could not (?:check|inspect|see|verify)|diff|hunk|omitt\w*|not (?:shown|supplied|visible)|truncat\w*|unable to (?:check|inspect|see|verify))\b/i;
+
+function hasRequiredEvidenceLimitation(output: ReviewOutput, context: ReviewContext): {
+  readonly required: boolean;
+  readonly ok: boolean;
+  readonly paths: readonly string[];
+} {
+  const paths = omittedEvidencePaths(context);
+  const required = context.diffTruncated || context.diffOmittedChars > 0 || paths.length > 0;
+  if (!required) return { required, ok: true, paths };
+  const relevant = output.limitations.filter((limitation) => EVIDENCE_LIMITATION.test(limitation));
+  const named = paths.every((path) => relevant.some((limitation) => limitation.includes(path)));
+  return { required, ok: relevant.length > 0 && named, paths };
 }
 
 export function verdictConsistent(output: ReviewOutput, context: ReviewGateContext): GateReport {
@@ -22,6 +89,15 @@ export function verdictConsistent(output: ReviewOutput, context: ReviewGateConte
   const concreteFindings = output.findings.filter(concrete);
   const candidatePaths = new Set(context.candidatePaths);
   const outside = output.findings.filter((finding) => !candidatePaths.has(finding.file));
+  const specificity = output.findings.map((finding) => ({
+    id: finding.id,
+    result: reviewFindingSpecificity(finding, candidatePaths),
+  }));
+  const failing = (point: keyof Omit<ReviewFindingSpecificity, "score">): readonly string[] =>
+    specificity.filter((finding) => !finding.result[point]).map((finding) => finding.id);
+  const evidenceLimitation = context.reviewContext === null
+    ? null
+    : hasRequiredEvidenceLimitation(output, context.reviewContext);
 
   report.check("reviewed SHA exact", output.reviewedSha === context.candidateSha, `expected=${context.candidateSha}; reviewed=${output.reviewedSha}`);
   report.check(
@@ -38,6 +114,40 @@ export function verdictConsistent(output: ReviewOutput, context: ReviewGateConte
     "finding paths inside candidate context",
     outside.length === 0,
     outside.length === 0 ? `${output.findings.length} finding path(s) verified` : `outside candidate: ${outside.map((finding) => finding.file).join(", ")}`,
+  );
+  const badScope = failing("lineOrFileWideScope");
+  report.check(
+    "findings name a line or explicit file-wide scope",
+    badScope.length === 0,
+    badScope.length === 0 ? `${output.findings.length} finding scope(s) verified` : `missing scope: ${badScope.join(", ")}`,
+  );
+  const badMechanism = failing("observedMechanismOrCondition");
+  report.check(
+    "findings state an observed mechanism or condition",
+    badMechanism.length === 0,
+    badMechanism.length === 0 ? `${output.findings.length} finding mechanism(s) verified` : `vague evidence: ${badMechanism.join(", ")}`,
+  );
+  const badConsequence = failing("concreteConsequence");
+  report.check(
+    "findings state a concrete consequence",
+    badConsequence.length === 0,
+    badConsequence.length === 0 ? `${output.findings.length} finding consequence(s) verified` : `missing consequence: ${badConsequence.join(", ")}`,
+  );
+  report.check(
+    "candidate context available for specificity",
+    context.reviewContext !== null,
+    context.reviewContext === null ? "no host-composed review context" : `${context.reviewContext.changedFiles.length} changed file(s) in context`,
+  );
+  report.check(
+    "bounded or omitted evidence has a specific limitation",
+    evidenceLimitation?.ok ?? false,
+    evidenceLimitation === null
+      ? "no host-composed review context"
+      : !evidenceLimitation.required
+        ? "the supplied diff is complete"
+        : evidenceLimitation.ok
+          ? `bounded evidence acknowledged; ${evidenceLimitation.paths.length} omitted or partial file(s) named`
+          : `bounded evidence requires a limitation${evidenceLimitation.paths.length === 0 ? "" : ` naming: ${evidenceLimitation.paths.join(", ")}`}`,
   );
   return report;
 }

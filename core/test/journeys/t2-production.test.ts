@@ -149,7 +149,12 @@ class ScriptedT2Adapter implements HarnessAdapter {
       else if (this.#behaviour.kind === "finding-outside") {
         payload = review(candidate, [{ id: "f1", severity: "medium", file: "README.md", line: null, title: "unrelated", detail: "about a file this change never touched", evidence: "fixture" }]);
       } else if (this.#behaviour.kind === "concern") {
-        payload = review(candidate, [{ id: "f1", severity: "high", file: SOURCE, line: 1, title: "concrete defect", detail: "the gates would not have caught this", evidence: "fixture evidence" }]);
+        payload = review(candidate, [{
+          id: "f1", severity: "high", file: SOURCE, line: 1,
+          title: "generated flag bypasses the configured branch",
+          detail: "The gates would accept a path that always returns the generated value.",
+          evidence: "`generated` is assigned `true` before the configured branch is checked.",
+        }]);
       } else payload = review(candidate);
     } else if (this.#builds === "deletes-a-file") {
       rmSync(join(this.#worktree, REMOVABLE));

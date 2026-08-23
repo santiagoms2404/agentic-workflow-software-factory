@@ -220,6 +220,22 @@ test("the reviewer-class overlay preserves dissent, findings, limitations, locat
   }
 });
 
+test("reviewer shared bytes differ from worker bytes only by the approved non-compression overlay", async (t) => {
+  const root = fixtureRoot(t);
+  const configPath = join(root, "awsf.config.yaml");
+  const agents = prepareRoles(root);
+  const builder = agents.find((agent) => agent.name === "builder")!;
+  const reviewer = agents.find((agent) => agent.name === "reviewer")!;
+  const workerBundle = await composePromptBundle({ configPath, agent: builder });
+  const reviewerBundle = await composePromptBundle({ configPath, agent: reviewer });
+  const workerShared = workerBundle.systemPrompt.slice(EXPECTED.builder.system.length + SEPARATOR.length);
+  const reviewerShared = reviewerBundle.systemPrompt.slice(EXPECTED.reviewer.system.length + SEPARATOR.length);
+
+  assert.equal(workerShared, COMMON_SHARED_BYTES);
+  assert.equal(reviewerShared, `${workerShared}${SEPARATOR}${REVIEWER_OVERLAY_BYTES}`);
+  assert.match(reviewerShared, /findings, limitations, locations, observations, and consequences outrank brevity/);
+});
+
 test("unknown roles fail closed on every command path", async (t) => {
   const root = fixtureRoot(t);
   const configPath = join(root, "awsf.config.yaml");

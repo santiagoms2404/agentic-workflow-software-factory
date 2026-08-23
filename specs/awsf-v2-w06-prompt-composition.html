@@ -330,10 +330,10 @@ flowchart TD
 
     <h4>6. Gate reviewer evidence specificity and non-compression</h4>
     <ul class="checklist">
-      <li><code class="status">[]</code> Apply Q2's approved specificity rubric as a pure deterministic check over <code>ReviewOutput</code> and candidate context. Keep verdict semantics unchanged.</li>
-      <li><code class="status">[]</code> Add a detailed-concern fixture that passes, a tersely agreeable accept fixture that fails for missing limitations/evidence where the context demands them, and a vague one-word evidence fixture that fails.</li>
-      <li><code class="status">[]</code> Include deletion-only, file-wide finding, no-finding clean review, and bounded/omitted evidence cases so the gate does not force fake line numbers or fabricated findings.</li>
-      <li><code class="status">[]</code> Assert reviewer shared bytes differ from worker style bytes only through the approved role policy and preserve evidence specificity over brevity.</li>
+      <li><code class="status">[x]</code> Apply Q2's approved specificity rubric as a pure deterministic check over <code>ReviewOutput</code> and candidate context. Keep verdict semantics unchanged.</li>
+      <li><code class="status">[x]</code> Add a detailed-concern fixture that passes, a tersely agreeable accept fixture that fails for missing limitations/evidence where the context demands them, and a vague one-word evidence fixture that fails.</li>
+      <li><code class="status">[x]</code> Include deletion-only, file-wide finding, no-finding clean review, and bounded/omitted evidence cases so the gate does not force fake line numbers or fabricated findings.</li>
+      <li><code class="status">[x]</code> Assert reviewer shared bytes differ from worker style bytes only through the approved role policy and preserve evidence specificity over brevity.</li>
     </ul>
 
     <h4>7. Testing Strategy</h4>

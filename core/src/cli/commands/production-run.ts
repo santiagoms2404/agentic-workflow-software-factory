@@ -415,7 +415,11 @@ function phaseGates(
       id: "verdict_consistent",
       run: ({ envelope }) => review.candidateSha === null
         ? new GateReport("verdict_consistent").check("candidate exists to review", false, "no host candidate was created before the review phase")
-        : verdictConsistent(envelope as ReviewOutput, { candidateSha: review.candidateSha, candidatePaths: review.candidatePaths }),
+        : verdictConsistent(envelope as ReviewOutput, {
+            candidateSha: review.candidateSha,
+            candidatePaths: review.candidatePaths,
+            reviewContext: review.evidence,
+          }),
     });
     // A reviewer that edits is not a reviewer. `writes: []` makes any observed
     // path a breach, and this states it as a gate rather than leaving it to the

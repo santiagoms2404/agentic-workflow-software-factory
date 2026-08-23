@@ -987,6 +987,7 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
         ...(payload === null ? [] : [verdictConsistent(payload, {
           candidateSha: subject.candidateSha,
           candidatePaths: candidatePathsBetween(subject.worktree, subject.baseSha, subject.candidateSha),
+          reviewContext: composed.context,
         })]),
       ];
       for (const report of structural) await persistGate(report, round);
