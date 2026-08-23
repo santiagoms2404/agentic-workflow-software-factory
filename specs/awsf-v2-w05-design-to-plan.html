@@ -568,7 +568,7 @@ workflows:
 
     <!-- ================= M2 ================= -->
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone M2: The identifier grammar, and the parser that refuses a malformed one</h3>
+      <h3><code class="status">[wip]</code> Milestone M2: The identifier grammar, and the parser that refuses a malformed one</h3>
       <p>The identifier has to exist in a committed document before anything can join on it. This milestone extends <code>awsf-plan-html/v1</code> additively — a plan that declares nothing stays valid — and teaches the existing parser to return what it finds without loosening what it accepts.</p>
       <figure>
         <pre class="mermaid">
@@ -587,12 +587,12 @@ flowchart LR
 
       <h4>3. The grammar, and <code>parseAwsfPlanHtmlV1</code> extended to return it</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> Declaration form: <code>&lt;code class="inv"&gt;INV-n&lt;/code&gt;</code> and <code>&lt;code class="ac"&gt;AC-n&lt;/code&gt;</code> inside the plan's own spine section, each paired with a non-empty statement</li>
-        <li><code class="status">[]</code> Claim form: <code>&lt;code class="serves"&gt;AC-n&lt;/code&gt;</code> inside a task's block, bare for a local identifier and <code>&lt;plan-stem&gt;#AC-n</code> for one declared elsewhere</li>
-        <li><code class="status">[]</code> <code>ParsedPlanTask</code> gains <code>serves: readonly string[]</code>; the parse result gains the plan-level declaration list</li>
-        <li><code class="status">[]</code> A string matching <code>INV-</code> or <code>AC-</code> that does <strong>not</strong> match the full pattern is a <strong>hard parse failure by name</strong>, never a skip — the same posture <code>UnsupportedPlanFormatError</code> and <code>PlanGrammarMismatchError</code> already take</li>
-        <li><code class="status">[]</code> A plan declaring zero identifiers parses exactly as it does today; <strong>no existing plan in <code>specs/</code> changes</strong></li>
-        <li><code class="status">[]</code> <code>IMPLEMENTED_PLAN_FORMATS</code> is unchanged — the extension is additive, and the trigger for a version bump is written into the module comment: making the spine mandatory</li>
+        <li><code class="status">[x]</code> Declaration form: <code>&lt;code class="inv"&gt;INV-n&lt;/code&gt;</code> and <code>&lt;code class="ac"&gt;AC-n&lt;/code&gt;</code> inside the plan's own spine section, each paired with a non-empty statement</li>
+        <li><code class="status">[x]</code> Claim form: <code>&lt;code class="serves"&gt;AC-n&lt;/code&gt;</code> inside a task's block, bare for a local identifier and <code>&lt;plan-stem&gt;#AC-n</code> for one declared elsewhere</li>
+        <li><code class="status">[x]</code> <code>ParsedPlanTask</code> gains <code>serves: readonly string[]</code>; the parse result gains the plan-level declaration list</li>
+        <li><code class="status">[x]</code> A string matching <code>INV-</code> or <code>AC-</code> that does <strong>not</strong> match the full pattern is a <strong>hard parse failure by name</strong>, never a skip — the same posture <code>UnsupportedPlanFormatError</code> and <code>PlanGrammarMismatchError</code> already take</li>
+        <li><code class="status">[x]</code> A plan declaring zero identifiers parses exactly as it does today; <strong>no existing plan in <code>specs/</code> changes</strong></li>
+        <li><code class="status">[x]</code> <code>IMPLEMENTED_PLAN_FORMATS</code> is unchanged — the extension is additive, and the trigger for a version bump is written into the module comment: making the spine mandatory</li>
       </ul>
 
       <h4>4. The ticket-side claim, as one optional field</h4>
