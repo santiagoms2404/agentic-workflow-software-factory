@@ -633,11 +633,11 @@ flowchart LR
 
       <h4>7. <code>awsf.design-context/v1</code> — the repositories the design is about</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>DesignContextSchema</code> via <code>phaseEnvelope</code>, carrying <code>targets[]</code> — one entry per repository the project's catalog declares, each with <code>repositoryId</code>, the absolute path resolved from the machine-local placement layer, <code>defaultBranch</code>, and the <code>headSha</code> the host read at composition time</li>
-        <li><code class="status">[]</code> Host-composed, like <code>plan-context</code>. A model never states which repositories exist; it is told</li>
-        <li><code class="status">[]</code> <code>targets</code> is <code>minItems: 1</code> and always includes the plan repository itself, so a single-repository project is the degenerate case rather than a separate path</li>
-        <li><code class="status">[]</code> <strong>Write the reproducibility unit into the module comment</strong>: <code>headSha</code> pins <em>which revision was available</em>, not which files were opened. That is weaker than <code>review_evidence_present</code>'s byte-level digest, and it is the right unit here — a designer explores a codebase where a reviewer judges a fixed diff</li>
-        <li><code class="status">[]</code> An absolute path in an envelope is machine-local, so <strong>this envelope is journalled and never committed</strong> — invariant 1 and invariant 10 both bite here, and the render phase must not carry a target path into any rendered file</li>
+        <li><code class="status">[x]</code> <code>DesignContextSchema</code> via <code>phaseEnvelope</code>, carrying <code>targets[]</code> — one entry per repository the project's catalog declares, each with <code>repositoryId</code>, the absolute path resolved from the machine-local placement layer, <code>defaultBranch</code>, and the <code>headSha</code> the host read at composition time</li>
+        <li><code class="status">[x]</code> Host-composed, like <code>plan-context</code>. A model never states which repositories exist; it is told</li>
+        <li><code class="status">[x]</code> <code>targets</code> is <code>minItems: 1</code> and always includes the plan repository itself, so a single-repository project is the degenerate case rather than a separate path</li>
+        <li><code class="status">[x]</code> <strong>Write the reproducibility unit into the module comment</strong>: <code>headSha</code> pins <em>which revision was available</em>, not which files were opened. That is weaker than <code>review_evidence_present</code>'s byte-level digest, and it is the right unit here — a designer explores a codebase where a reviewer judges a fixed diff</li>
+        <li><code class="status">[x]</code> An absolute path in an envelope is machine-local, so <strong>this envelope is journalled and never committed</strong> — invariant 1 and invariant 10 both bite here, and the render phase must not carry a target path into any rendered file</li>
       </ul>
 
       <h4>8. <code>awsf.plan-context/v1</code>, <code>awsf.design-plan-output/v1</code>, and registration</h4>

@@ -11,6 +11,7 @@ export * from "./build-output.ts";
 export * from "./test-output.ts";
 export * from "./review-output.ts";
 export * from "./review-context.ts";
+export * from "./design-context.ts";
 export * from "./document-output.ts";
 export * from "./intake-output.ts";
 export * from "./scout-output.ts";

@@ -1,5 +1,6 @@
 import type {
   BuildOutput,
+  DesignContext,
   DocumentOutput,
   IntakeOutput,
   PlanOutput,
@@ -134,6 +135,30 @@ export function validReviewContext(): ReviewContext {
   };
 }
 
+export function validDesignContext(): DesignContext {
+  return {
+    schema: "awsf.design-context/v1",
+    producerStatus: "success",
+    summary: "Resolved two repositories for design.",
+    artifacts: [],
+    notesForNextPhase: "Explore both pinned repository revisions.",
+    targets: [
+      {
+        repositoryId: "plans",
+        path: "/work/smart-health/plans",
+        defaultBranch: "main",
+        headSha: SHA_A,
+      },
+      {
+        repositoryId: "service",
+        path: "/work/smart-health/service",
+        defaultBranch: "master",
+        headSha: SHA_B,
+      },
+    ],
+  };
+}
+
 export function validDocumentOutput(): DocumentOutput {
   return {
     schema: "awsf.document-output/v1",
@@ -181,13 +206,14 @@ export function validIntakeOutput(): IntakeOutput {
   };
 }
 
-/** Every envelope fixture, keyed by schema id — so suites can iterate all eight uniformly. */
+/** Every envelope fixture, keyed by schema id — so suites can iterate all nine uniformly. */
 export const VALID_ENVELOPES = {
   "awsf.plan-output/v1": validPlanOutput,
   "awsf.build-output/v1": validBuildOutput,
   "awsf.test-output/v1": validTestOutput,
   "awsf.review-output/v1": validReviewOutput,
   "awsf.review-context/v1": validReviewContext,
+  "awsf.design-context/v1": validDesignContext,
   "awsf.document-output/v1": validDocumentOutput,
   "awsf.scout-output/v1": validScoutOutput,
   "awsf.intake-output/v1": validIntakeOutput,

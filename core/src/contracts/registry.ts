@@ -1,5 +1,6 @@
 import type { TObject } from "@sinclair/typebox";
 import { BuildOutputSchema, BUILD_OUTPUT_SCHEMA_ID, type BuildOutput } from "./build-output.ts";
+import { DesignContextSchema, DESIGN_CONTEXT_SCHEMA_ID, type DesignContext } from "./design-context.ts";
 import { DocumentOutputSchema, DOCUMENT_OUTPUT_SCHEMA_ID, type DocumentOutput } from "./document-output.ts";
 import { IntakeOutputSchema, INTAKE_OUTPUT_SCHEMA_ID, type IntakeOutput } from "./intake-output.ts";
 import { PlanOutputSchema, PLAN_OUTPUT_SCHEMA_ID, type PlanOutput } from "./plan-output.ts";
@@ -21,6 +22,7 @@ export const ENVELOPE_SCHEMAS = {
   [TEST_OUTPUT_SCHEMA_ID]: TestOutputSchema,
   [REVIEW_OUTPUT_SCHEMA_ID]: ReviewOutputSchema,
   [REVIEW_CONTEXT_SCHEMA_ID]: ReviewContextSchema,
+  [DESIGN_CONTEXT_SCHEMA_ID]: DesignContextSchema,
   [DOCUMENT_OUTPUT_SCHEMA_ID]: DocumentOutputSchema,
   [SCOUT_OUTPUT_SCHEMA_ID]: ScoutOutputSchema,
   [INTAKE_OUTPUT_SCHEMA_ID]: IntakeOutputSchema,
@@ -35,6 +37,7 @@ export interface EnvelopeTypeById {
   [TEST_OUTPUT_SCHEMA_ID]: TestOutput;
   [REVIEW_OUTPUT_SCHEMA_ID]: ReviewOutput;
   [REVIEW_CONTEXT_SCHEMA_ID]: ReviewContext;
+  [DESIGN_CONTEXT_SCHEMA_ID]: DesignContext;
   [DOCUMENT_OUTPUT_SCHEMA_ID]: DocumentOutput;
   [SCOUT_OUTPUT_SCHEMA_ID]: ScoutOutput;
   [INTAKE_OUTPUT_SCHEMA_ID]: IntakeOutput;
