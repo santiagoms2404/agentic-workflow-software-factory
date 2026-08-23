@@ -14,6 +14,32 @@ export interface ComposePromptBundleOptions {
   readonly agent: AgentDefinition;
 }
 
+const SHARED_PROMPT_PATH = "prompts/shared/headless-role.md";
+const SYSTEM_PROMPT_SEPARATOR = "\n\n";
+const REVIEWER_PRESERVATION_OVERLAY =
+  "Dissent, findings, limitations, locations, observations, and consequences outrank brevity.\n";
+
+const ROLE_POLICIES = {
+  planner: "common",
+  builder: "common",
+  reviewer: "reviewer-preserving",
+  documenter: "common",
+  scout: "common",
+  intake: "common",
+  designer: "common",
+  "architecture-reviewer": "reviewer-preserving",
+} as const;
+
+type PromptRole = keyof typeof ROLE_POLICIES;
+type RolePolicy = (typeof ROLE_POLICIES)[PromptRole];
+
+export class UnknownPromptRole extends Error {
+  constructor(role: string) {
+    super(`prompt composition rejected unknown role ${JSON.stringify(role)}; declare its shared policy before launch`);
+    this.name = "UnknownPromptRole";
+  }
+}
+
 export class PromptCredentialRejected extends Error {
   constructor(source: string) {
     super(`prompt bundle rejected ${source}: credential-shaped data is never sent to a provider`);
@@ -44,13 +70,28 @@ function credentialSafePrompt(value: string, source: string): string {
   return value;
 }
 
+function policyFor(role: string): RolePolicy {
+  if (!Object.hasOwn(ROLE_POLICIES, role)) throw new UnknownPromptRole(role);
+  return ROLE_POLICIES[role as PromptRole];
+}
+
+function renderSharedBytes(commonSharedBytes: string, policy: RolePolicy): string {
+  if (commonSharedBytes.length === 0) return "";
+  if (policy === "reviewer-preserving") {
+    return [commonSharedBytes, REVIEWER_PRESERVATION_OVERLAY].join(SYSTEM_PROMPT_SEPARATOR);
+  }
+  return commonSharedBytes;
+}
+
 /**
  * Loads and composes the complete headless prompt bundle for one configured role.
  *
- * M1 has no shared component. The final system prompt is therefore the exact
- * role-system file content, with no separator or newline normalization.
+ * Role-system bytes are never normalized. This module owns the only separator:
+ * an empty shared source reproduces M1 exactly, while non-empty shared bytes are
+ * appended after the role contract. The closed policy rejects undeclared roles.
  */
 export async function composePromptBundle(options: ComposePromptBundleOptions): Promise<PromptBundle> {
+  const policy = policyFor(options.agent.name);
   const userPrompt = credentialSafePrompt(
     await readContainedPrompt(options.configPath, options.agent.prompt.user),
     "configured user prompt",
@@ -59,5 +100,13 @@ export async function composePromptBundle(options: ComposePromptBundleOptions): 
     await readContainedPrompt(options.configPath, options.agent.prompt.system),
     "configured system prompt",
   );
-  return Object.freeze({ userPrompt, systemPrompt: roleSystemPrompt });
+  const commonSharedBytes = credentialSafePrompt(
+    await readContainedPrompt(options.configPath, SHARED_PROMPT_PATH),
+    "shared headless role prompt",
+  );
+  const renderedSharedBytes = renderSharedBytes(commonSharedBytes, policy);
+  const systemPrompt = renderedSharedBytes.length === 0
+    ? roleSystemPrompt
+    : [roleSystemPrompt, renderedSharedBytes].join(SYSTEM_PROMPT_SEPARATOR);
+  return Object.freeze({ userPrompt, systemPrompt });
 }

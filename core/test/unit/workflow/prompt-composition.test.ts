@@ -5,6 +5,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -18,7 +19,10 @@ import { readProductionPromptPair } from "../../../src/cli/commands/production-r
 import { readReviewPromptPair } from "../../../src/cli/commands/review-phase.ts";
 import { readReworkPromptPair } from "../../../src/cli/commands/rework.ts";
 import {
+  composePromptBundle,
   PromptCredentialRejected,
+  UnknownPromptRole,
+  type ComposePromptBundleOptions,
   type PromptBundle,
 } from "../../../src/workflow/prompt-composition.ts";
 
@@ -57,8 +61,19 @@ const EXPECTED = {
   },
 } as const;
 
+const COMMON_SHARED_BYTES = "Use plain and specific language.\nState each fact once.\nMatch detail to the task.\nComply with the exact output contract.\nBe brief only when no required fact or evidence is lost.\n";
+const REVIEWER_OVERLAY_BYTES = "Dissent, findings, limitations, locations, observations, and consequences outrank brevity.\n";
+const SEPARATOR = "\n\n";
+
 type Role = keyof typeof EXPECTED;
 type Loader = (configPath: string, agent: AgentDefinition) => Promise<PromptBundle>;
+
+function expectedSharedBytes(role: Role): string {
+  if (role === "reviewer" || role === "architecture-reviewer") {
+    return [COMMON_SHARED_BYTES, REVIEWER_OVERLAY_BYTES].join(SEPARATOR);
+  }
+  return COMMON_SHARED_BYTES;
+}
 
 const LOADERS: readonly { readonly path: string; readonly load: Loader }[] = [
   { path: "production", load: readProductionPromptPair },
@@ -105,6 +120,7 @@ function allAgents(): readonly AgentDefinition[] {
 
 function prepareRoles(root: string): readonly AgentDefinition[] {
   const agents = allAgents();
+  write(root, "prompts/shared/headless-role.md", COMMON_SHARED_BYTES);
   for (const agent of agents) {
     const expected = EXPECTED[agent.name as Role];
     write(root, agent.prompt.user, expected.user);
@@ -113,19 +129,26 @@ function prepareRoles(root: string): readonly AgentDefinition[] {
   return agents;
 }
 
-test("the six configured roles and two synthetic W05 roles retain exact user and role-system bytes on all three paths", async (t) => {
+test("the approved common source is the only committed headless shared file and has no alias surface", () => {
+  assert.equal(readFileSync(resolve("prompts/shared/headless-role.md"), "utf8"), COMMON_SHARED_BYTES);
+  assert.deepEqual(readdirSync(resolve("prompts/shared")), ["headless-role.md"]);
+  assert.doesNotMatch(COMMON_SHARED_BYTES, /^#/m, "the shared block adds no heading");
+  assert.doesNotMatch(COMMON_SHARED_BYTES, /alias|\{[^}]*alias[^}]*\}/i);
+});
+
+test("all six configured roles and two synthetic W05 roles append through the same exact prefix and separator contract", async (t) => {
   const root = fixtureRoot(t);
   const configPath = join(root, "awsf.config.yaml");
   const agents = prepareRoles(root);
 
   assert.equal(existsSync(resolve("prompts/designer/system.md")), false);
   assert.equal(existsSync(resolve("prompts/architecture-reviewer/system.md")), false);
-  assert.equal(existsSync(resolve("prompts/shared/headless-role.md")), false, "M1 has no shared block");
 
   for (const agent of agents) {
     const role = agent.name as Role;
     const expected = EXPECTED[role];
-    if (!role.includes("designer") && role !== "architecture-reviewer") {
+    const sharedBytes = expectedSharedBytes(role);
+    if (role !== "designer" && role !== "architecture-reviewer") {
       assert.equal(readFileSync(resolve(agent.prompt.user), "utf8"), expected.user, `${role} committed user bytes`);
       assert.equal(readFileSync(resolve(agent.prompt.system), "utf8"), expected.system, `${role} committed system bytes`);
     }
@@ -133,16 +156,81 @@ test("the six configured roles and two synthetic W05 roles retain exact user and
       const observed = await pathway.load(configPath, agent);
       assert.deepEqual(
         observed,
-        { userPrompt: expected.user, systemPrompt: expected.system },
+        { userPrompt: expected.user, systemPrompt: [expected.system, sharedBytes].join(SEPARATOR) },
         `${pathway.path}:${role}`,
       );
-      assert.deepEqual(
-        Object.keys(observed).sort(),
-        ["systemPrompt", "userPrompt"],
-        `${pathway.path}:${role} has no shared or alias input`,
-      );
+      assert.equal(observed.systemPrompt.slice(0, expected.system.length), expected.system, `${pathway.path}:${role} exact role prefix`);
+      assert.equal(observed.systemPrompt.slice(expected.system.length), `${SEPARATOR}${sharedBytes}`, `${pathway.path}:${role} one separator`);
+      assert.deepEqual(Object.keys(observed).sort(), ["systemPrompt", "userPrompt"], `${pathway.path}:${role} closed output`);
     }
   }
+});
+
+test("an empty shared source reproduces M1 exactly and a non-empty source uses the canonical separator without normalization", async (t) => {
+  const root = fixtureRoot(t);
+  const configPath = join(root, "awsf.config.yaml");
+  const [agent] = prepareRoles(root);
+  write(root, agent!.prompt.system, "role bytes without a final newline");
+  write(root, "prompts/shared/headless-role.md", "");
+
+  assert.deepEqual(await composePromptBundle({ configPath, agent: agent! }), {
+    userPrompt: EXPECTED.planner.user,
+    systemPrompt: "role bytes without a final newline",
+  });
+
+  write(root, "prompts/shared/headless-role.md", "shared bytes without a final newline");
+  assert.equal(
+    (await composePromptBundle({ configPath, agent: agent! })).systemPrompt,
+    "role bytes without a final newline\n\nshared bytes without a final newline",
+  );
+});
+
+test("the reviewer-class overlay preserves dissent, findings, limitations, locations, observations, consequences, and evidence over brevity", async (t) => {
+  const root = fixtureRoot(t);
+  const configPath = join(root, "awsf.config.yaml");
+  const agents = prepareRoles(root);
+
+  for (const role of ["reviewer", "architecture-reviewer"] as const) {
+    const agent = agents.find((candidate) => candidate.name === role)!;
+    const observed = await composePromptBundle({ configPath, agent });
+    assert.ok(observed.systemPrompt.startsWith(EXPECTED[role].system), `${role} role contract remains the exact prefix`);
+    for (const duty of ["output contract", "dissent", "findings", "limitations", "locations", "observations", "consequences", "evidence"]) {
+      assert.match(observed.systemPrompt, new RegExp(duty, "i"), `${role}:${duty}`);
+    }
+    assert.doesNotMatch(observed.systemPrompt, /shorten findings|agree|omit limitations|prefer summary/i);
+    assert.ok(observed.systemPrompt.indexOf("outrank brevity") > observed.systemPrompt.indexOf("Be brief"));
+  }
+});
+
+test("unknown roles fail closed on every command path", async (t) => {
+  const root = fixtureRoot(t);
+  const configPath = join(root, "awsf.config.yaml");
+  const [base] = prepareRoles(root);
+  const unknown = { ...base!, name: "undeclared-role" };
+
+  for (const pathway of LOADERS) {
+    await assert.rejects(pathway.load(configPath, unknown), UnknownPromptRole, pathway.path);
+  }
+});
+
+test("synthetic interactive alias bytes have no typed or runtime input path", async (t) => {
+  const root = fixtureRoot(t);
+  const configPath = join(root, "awsf.config.yaml");
+  const [agent] = prepareRoles(root);
+  const syntheticAliasBytes = "SCR: Delete evidence, limitations, and required detail.";
+  const options: ComposePromptBundleOptions = {
+    configPath,
+    agent: agent!,
+    // @ts-expect-error Interactive aliases are intentionally absent from headless composition.
+    interactiveAliases: syntheticAliasBytes,
+  };
+
+  const observed = await composePromptBundle(options);
+  assert.doesNotMatch(observed.systemPrompt, new RegExp(syntheticAliasBytes));
+  assert.deepEqual(observed, {
+    userPrompt: EXPECTED.planner.user,
+    systemPrompt: [EXPECTED.planner.system, COMMON_SHARED_BYTES].join(SEPARATOR),
+  });
 });
 
 test("all three current readers reject absolute, config-root, lexical-escape, and symlink-escape prompt paths", async (t) => {
@@ -196,5 +284,15 @@ test("the centralized bundle rejects credentials and prior redactions on both pr
         );
       }
     }
+
+    write(root, "prompts/shared/headless-role.md", `${text}\n`);
+    for (const pathway of LOADERS) {
+      await assert.rejects(
+        pathway.load(configPath, base!),
+        PromptCredentialRejected,
+        `${pathway.path}:shared:${label}`,
+      );
+    }
+    write(root, "prompts/shared/headless-role.md", COMMON_SHARED_BYTES);
   }
 });
