@@ -819,7 +819,7 @@ flowchart LR
 
     <!-- ================= M6 ================= -->
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone M6: The renderer — one envelope, three files, byte-identity by construction</h3>
+      <h3><code class="status">[wip]</code> Milestone M6: The renderer — one envelope, three files, byte-identity by construction</h3>
       <p>The stage the source record described as <em>"a plan recipe emitting an HTML plan"</em>, built the way it can actually exist: a model emits a validated envelope, and deterministic host code turns that envelope into the three committed files. No model writes the plan document, so nothing in the chain depends on a document having been read.</p>
       <figure>
         <pre class="mermaid">
@@ -838,11 +838,11 @@ flowchart LR
 
       <h4>20. <code>renderPlanDocument</code> — the plan and its build prompts</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> Pure: envelope in, a map of relative path to file contents out. It writes nothing itself, so it is testable without a worktree</li>
-        <li><code class="status">[]</code> Emits <code>awsf-plan-html/v1</code> exactly as the parser accepts it: milestone headings with status markers, numbered task headings, a checklist per task, and the spine section carrying declarations and claims</li>
-        <li><code class="status">[]</code> Emits <code>&lt;stem&gt;-build-prompts.md</code> with a <code># Section B — Task prompts (recommended)</code> block and one <code>### T&lt;nn&gt; — &lt;title&gt;</code> heading per step, in the shape the sync fence parses today</li>
-        <li><code class="status">[]</code> <strong>Every task carries a checklist</strong>, because the fence fails a plan task that has none and a rendered plan must not be born failing</li>
-        <li><code class="status">[]</code> All markers render as <code>[]</code> and every ticket <code>state</code> as <code>todo</code>. <strong>A rendered plan claims no completed work</strong> — invariant 2, applied to a document a machine wrote</li>
+        <li><code class="status">[x]</code> Pure: envelope in, a map of relative path to file contents out. It writes nothing itself, so it is testable without a worktree</li>
+        <li><code class="status">[x]</code> Emits <code>awsf-plan-html/v1</code> exactly as the parser accepts it: milestone headings with status markers, numbered task headings, a checklist per task, and the spine section carrying declarations and claims</li>
+        <li><code class="status">[x]</code> Emits <code>&lt;stem&gt;-build-prompts.md</code> with a <code># Section B — Task prompts (recommended)</code> block and one <code>### T&lt;nn&gt; — &lt;title&gt;</code> heading per step, in the shape the sync fence parses today</li>
+        <li><code class="status">[x]</code> <strong>Every task carries a checklist</strong>, because the fence fails a plan task that has none and a rendered plan must not be born failing</li>
+        <li><code class="status">[x]</code> All markers render as <code>[]</code> and every ticket <code>state</code> as <code>todo</code>. <strong>A rendered plan claims no completed work</strong> — invariant 2, applied to a document a machine wrote</li>
       </ul>
 
       <h4>21. The ticket set, its README, and the round trip</h4>
