@@ -322,7 +322,7 @@ flowchart LR
 
   <!-- ================= M1 ================= -->
   <div class="phase">
-    <h3><code class="status">[wip]</code> Milestone M1: One real capture in the tree, and a pure parser over it</h3>
+    <h3><code class="status">[x]</code> Milestone M1: One real capture in the tree, and a pure parser over it</h3>
     <p>The spine calls the missing in-tree fixture this workstream's <em>cheapest unused upgrade</em>, and it is first because everything after it is tested against these bytes. It is also the only milestone that touches a live process.</p>
 
     <h4>1. Capture one real reading, scrub it, and write its provenance</h4>
@@ -353,12 +353,12 @@ flowchart LR
     <p class="serves"><code class="serves">AC-1</code> <code class="serves">AC-5</code></p>
     <p>The parser is written last in this milestone and tested only against the fixtures above. It is a pure function of <code>(rawText, now)</code>: no clock read, no filesystem, no spawn. It returns a readout record and a fault list, following the collect-every-fault discipline of <code>core/src/adapters/stream/usage.ts</code> — a payload with three unreadable fields is a fact about the tool, and a caller told only the first would fix it three times.</p>
     <ul class="checklist">
-      <li><code class="status">[]</code> The parser reads <code>quotaSemantics.effectiveAvailability</code> and <strong>never</strong> indexes <code>windows[]</code> except by an id that came out of the effective figure — asserted by <code>derived-windows-disagree.json</code> rendering the effective number</li>
-      <li><code class="status">[]</code> State is detected structurally from <code>state.status</code> and <code>quotaSemantics.status</code>; the parser is never given an exit code and has no parameter for one</li>
-      <li><code class="status">[]</code> Minutes-to-reset is <code>null</code> — never zero and never inferred — for <code>runway.status: unknown</code>, for a stale report, and for unresolved semantics</li>
-      <li><code class="status">[]</code> <code>now</code> is a parameter. A test pinning <code>now</code> to two different instants against the same fixture produces two different minute figures, proving the clock is not read internally</li>
-      <li><code class="status">[]</code> Malformed input — not JSON, JSON that is not an object, a missing <code>quotaSemantics</code>, a non-numeric percentage — produces a fault list and an unavailable record, never a throw</li>
-      <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green</li>
+      <li><code class="status">[x]</code> The parser reads <code>quotaSemantics.effectiveAvailability</code> and <strong>never</strong> indexes <code>windows[]</code> except by an id that came out of the effective figure — asserted by <code>derived-windows-disagree.json</code> rendering the effective number</li>
+      <li><code class="status">[x]</code> State is detected structurally from <code>state.status</code> and <code>quotaSemantics.status</code>; the parser is never given an exit code and has no parameter for one</li>
+      <li><code class="status">[x]</code> Minutes-to-reset is <code>null</code> — never zero and never inferred — for <code>runway.status: unknown</code>, for a stale report, and for unresolved semantics</li>
+      <li><code class="status">[x]</code> <code>now</code> is a parameter. A test pinning <code>now</code> to two different instants against the same fixture produces two different minute figures, proving the clock is not read internally</li>
+      <li><code class="status">[x]</code> Malformed input — not JSON, JSON that is not an object, a missing <code>quotaSemantics</code>, a non-numeric percentage — produces a fault list and an unavailable record, never a throw</li>
+      <li><code class="status">[x]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green</li>
     </ul>
     <div class="loop">
       🔁 <strong>Do not exit this phase until every box above is checked.</strong> If any command fails, fix the cause and re-run — never lower what the row asserts.
