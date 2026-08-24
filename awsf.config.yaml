@@ -97,8 +97,30 @@ agents:
     tools: { profile: managed-worker, allow: [read, grep, find, ls, edit, write] }
     writes: ["specs/tickets/**"]
 
+  - name: designer
+    model: claude:opus
+    thinking: xhigh
+    color: "#5EEAD4"
+    purpose: State the architecture, its invariants, and its acceptance criteria as identified claims.
+    prompt: { system: prompts/designer/system.md, user: prompts/designer/user.md }
+    harness: { adapter: claude, continuity: none }
+    tools: { profile: readonly, allow: [read, grep, find, ls] }
+    writes: []
+
+  - name: architecture-reviewer
+    # Cross-provider independence is configured here. Keep this role on the
+    # provider opposite designer and change both together if either moves.
+    model: codex:gpt-5.6-sol
+    thinking: high
+    color: "#FB7185"
+    purpose: Judge a design against its own stated invariants and name what it did not check.
+    prompt: { system: prompts/architecture-reviewer/system.md, user: prompts/architecture-reviewer/user.md }
+    harness: { adapter: codex, continuity: none }
+    tools: { profile: readonly, allow: [read, grep, find, ls] }
+    writes: []
+
 workflows:
-  enabled: [scout, plan, build, plan-build-test, build-review, simple-sdlc, intake]
+    enabled: [scout, plan, build, plan-build-test, build-review, simple-sdlc, intake, design-to-plan]
 
 gates:
   test: { argv: [npm, run, test:unit], timeout_seconds: 600 }
