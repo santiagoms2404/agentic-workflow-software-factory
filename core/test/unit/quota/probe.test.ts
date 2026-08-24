@@ -1,10 +1,17 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
+  QUOTA_UNAVAILABLE_REASON_CODES,
   buildEnabledProviderCsv,
   buildQuotaAxiArgv,
+  compareNumericVersions,
+  isBelowQuotaStopThreshold,
+  knownMinuteFigure,
   probeQuota,
+  retainQuotaFailureInAttempt,
 } from "../../../src/quota/probe.ts";
 
 const PROBE_SOURCE = new URL("../../../src/quota/probe.ts", import.meta.url);
@@ -31,10 +38,11 @@ test("quota argv construction sites use only the default JSON provider selector"
   }
 });
 
-test("the probe resolves quota-axi against its command environment and returns raw bytes", () => {
+test("the probe resolves quota-axi against its command environment and passes configured timeoutMs", async () => {
   const calls: Array<{ executable: string; argv: readonly string[]; options: unknown }> = [];
   const env = { PATH: "/project/bin" };
-  const result = probeQuota({
+  const failures: unknown[] = [];
+  const result = await probeQuota({
     resolveExecutable: (executable, resolvedEnv) => {
       assert.equal(executable, "quota-axi");
       assert.equal(resolvedEnv, env);
@@ -42,7 +50,9 @@ test("the probe resolves quota-axi against its command environment and returns r
     },
     runCommand: (executable, argv, options) => {
       calls.push({ executable, argv, options });
-      return { status: 0, stdout: '{"providers":[]}', stderr: "", error: null };
+      return argv[0] === "--version"
+        ? { status: 0, stdout: "quota-axi 0.1.29\n", stderr: "", error: null }
+        : { status: 0, stdout: '{"providers":[]}', stderr: "", error: null };
     },
     routes: [
       { provider: "claude" },
@@ -50,7 +60,11 @@ test("the probe resolves quota-axi against its command environment and returns r
       { provider: "unused", enabled: false },
       { provider: "claude" },
     ],
-    options: { timeoutMs: 2_500, env },
+    purpose: "phase-boundary",
+    options: { env },
+    now: "2026-08-24T20:26:39.429Z",
+    journalFailure: (failure) => { failures.push(failure); },
+    retainFailureBytes: async () => { throw new Error("nominal probe must retain nothing"); },
   });
 
   assert.equal(buildEnabledProviderCsv([
@@ -58,10 +72,121 @@ test("the probe resolves quota-axi against its command environment and returns r
     { provider: "unused", enabled: false },
     { provider: "codex" },
   ]), "claude,codex");
-  assert.deepEqual(calls, [{
-    executable: "/project/bin/quota-axi",
-    argv: ["--provider", "claude,codex", "--json"],
-    options: { timeoutMs: 2_500, env },
-  }]);
-  assert.deepEqual(result, { bytes: '{"providers":[]}', status: 0, stderr: "", error: null });
+  assert.deepEqual(calls, [
+    {
+      executable: "/project/bin/quota-axi",
+      argv: ["--version"],
+      options: { timeoutMs: 2_500, env },
+    },
+    {
+      executable: "/project/bin/quota-axi",
+      argv: ["--provider", "claude,codex", "--json"],
+      options: { timeoutMs: 2_500, env },
+    },
+  ]);
+  assert.equal(result.availability, "unavailable");
+  assert.equal(result.failure.reasonCode, "semantics-unresolved");
+  assert.equal(failures.length, 1);
+});
+
+test("the version floor uses numeric ordering and journals both found and floor versions", async () => {
+  assert.equal(compareNumericVersions("0.1.9", "0.1.29"), -1);
+  assert.equal(compareNumericVersions("0.1.30", "0.1.29"), 1);
+  assert.equal(compareNumericVersions("1.0.0", "0.99.99"), 1);
+
+  const journal: unknown[] = [];
+  const calls: string[][] = [];
+  const result = await probeQuota({
+    resolveExecutable: () => "/project/bin/quota-axi",
+    runCommand: (_executable, argv) => {
+      calls.push([...argv]);
+      return { status: 0, stdout: "quota-axi 0.1.9\n", stderr: "", error: null };
+    },
+    routes: [{ provider: "claude" }],
+    purpose: "phase-boundary",
+    options: { env: { PATH: "/project/bin" } },
+    now: "2026-08-24T20:26:39.429Z",
+    journalFailure: (failure) => { journal.push(failure); },
+    retainFailureBytes: async () => { throw new Error("a below-floor version retains no payload"); },
+  });
+
+  assert.deepEqual(calls, [["--version"]]);
+  assert.equal(result.availability, "unavailable");
+  assert.deepEqual(result.failure, {
+    reasonCode: "version-below-floor",
+    foundVersion: "0.1.9",
+    floorVersion: "0.1.29",
+  });
+  assert.deepEqual(journal, [result.failure]);
+});
+
+test("unparseable bytes are retained at 0600 and only their attempt-relative path is journalled", async () => {
+  const attemptDir = mkdtempSync(join(tmpdir(), "awsf-quota-probe-"));
+  try {
+    const journal: unknown[] = [];
+    const raw = "private rate-limit response";
+    const result = await probeQuota({
+      resolveExecutable: () => "/project/bin/quota-axi",
+      runCommand: (_executable, argv) => argv[0] === "--version"
+        ? { status: 0, stdout: "0.1.29\n", stderr: "", error: null }
+        : { status: 0, stdout: raw, stderr: "", error: null },
+      routes: [{ provider: "claude" }],
+      purpose: "phase-boundary",
+      options: { env: { PATH: "/project/bin" } },
+      now: "2026-08-24T20:26:39.429Z",
+      journalFailure: (failure) => { journal.push(failure); },
+      retainFailureBytes: retainQuotaFailureInAttempt(attemptDir, "phase/one"),
+    });
+
+    assert.equal(result.availability, "unavailable");
+    assert.equal(result.failure.reasonCode, "unparseable");
+    if (result.failure.reasonCode !== "unparseable") assert.fail("wrong failure variant");
+    const retained = join(attemptDir, result.failure.retainedPath);
+    assert.equal(readFileSync(retained, "utf8"), raw);
+    assert.equal(statSync(retained).mode & 0o777, 0o600);
+    assert.deepEqual(journal, [result.failure]);
+    assert.equal(JSON.stringify(journal).includes(raw), false, "journal carries the path, never raw bytes");
+  } finally {
+    rmSync(attemptDir, { recursive: true, force: true });
+  }
+});
+
+test("the interactive timeout is passed through and fails open with a journalled code", async () => {
+  const journal: unknown[] = [];
+  let observedTimeout: number | null = null;
+  const result = await probeQuota({
+    resolveExecutable: () => "/project/bin/quota-axi",
+    runCommand: (_executable, _argv, options) => {
+      observedTimeout = options.timeoutMs;
+      return { status: null, stdout: "", stderr: "", error: "ETIMEDOUT" };
+    },
+    routes: [{ provider: "claude" }],
+    purpose: "interactive-preflight",
+    options: { env: { PATH: "/project/bin" } },
+    now: "2026-08-24T20:26:39.429Z",
+    journalFailure: (failure) => { journal.push(failure); },
+    retainFailureBytes: async () => { throw new Error("timeouts carry no response bytes"); },
+  });
+
+  assert.equal(observedTimeout, 8_000);
+  assert.equal(result.availability, "unavailable");
+  assert.deepEqual(result.failure, { reasonCode: "timeout", command: "version", timeoutMs: 8_000 });
+  assert.deepEqual(journal, [result.failure]);
+});
+
+test("the closed failure vocabulary and known-minute comparator exclude unavailable figures", () => {
+  assert.deepEqual(QUOTA_UNAVAILABLE_REASON_CODES, [
+    "executable-not-found",
+    "timeout",
+    "nonzero-exit",
+    "unparseable",
+    "version-below-floor",
+    "semantics-unresolved",
+    "stale",
+  ]);
+  assert.equal(knownMinuteFigure(null), null);
+  const known = knownMinuteFigure(12);
+  assert.ok(known);
+  assert.equal(isBelowQuotaStopThreshold(known, 15), true);
+  assert.equal(isBelowQuotaStopThreshold(known, 10), false);
 });
