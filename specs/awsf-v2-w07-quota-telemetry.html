@@ -436,17 +436,17 @@ flowchart LR
   </div>
   <!-- ================= M4 ================= -->
   <div class="phase">
-    <h3><code class="status">[]</code> Milestone M4: The preflight readout the owner reads before starting</h3>
+    <h3><code class="status">[wip]</code> Milestone M4: The preflight readout the owner reads before starting</h3>
     <p>The first of the workstream's three pieces, and the only one with a user-facing surface. It is a report and nothing else: it selects no provider, orders nothing, and recommends nothing.</p>
 
     <h4>9. Map configured routes to measurable providers</h4>
     <ul class="checklist">
-      <li><code class="status">[]</code> Resolve the project through <code>awsf.project.yaml</code> and its plan repository, so the readout reports on <em>this project's</em> configured routes rather than on whatever the machine happens to be signed into</li>
-      <li><code class="status">[]</code> Map by <strong>adapter kind, never by adapter id</strong>: <code>claude-code → claude</code>, <code>pi-codex → codex</code>. An adapter id is an owner-chosen label and a project that names its Codex route <code>claude</code> would otherwise report the wrong provider's window with no error</li>
-      <li><code class="status">[]</code> <code>fixture</code> maps to nothing and is reported as <em>spends no quota</em> rather than omitted, so the stub route's absence from the report is explained rather than mysterious</li>
-      <li><code class="status">[]</code> <code>antigravity</code> maps to nothing measurable and is reported as <em>unmeasurable</em> with that stated reason</li>
-      <li><code class="status">[]</code> <code>composite-fusion</code> reports the kinds of its members. If they cannot be resolved, it reports unmeasurable rather than guessing one</li>
-      <li><code class="status">[]</code> A disabled adapter is not probed and not reported. The provider CSV is built from enabled routes only</li>
+      <li><code class="status">[x]</code> Resolve the project through <code>awsf.project.yaml</code> and its plan repository, so the readout reports on <em>this project's</em> configured routes rather than on whatever the machine happens to be signed into</li>
+      <li><code class="status">[x]</code> Map by <strong>adapter kind, never by adapter id</strong>: <code>claude-code → claude</code>, <code>pi-codex → codex</code>. An adapter id is an owner-chosen label and a project that names its Codex route <code>claude</code> would otherwise report the wrong provider's window with no error</li>
+      <li><code class="status">[x]</code> <code>fixture</code> maps to nothing and is reported as <em>spends no quota</em> rather than omitted, so the stub route's absence from the report is explained rather than mysterious</li>
+      <li><code class="status">[x]</code> <code>antigravity</code> maps to nothing measurable and is reported as <em>unmeasurable</em> with that stated reason</li>
+      <li><code class="status">[x]</code> <code>composite-fusion</code> reports the kinds of its members. If they cannot be resolved, it reports unmeasurable rather than guessing one</li>
+      <li><code class="status">[x]</code> A disabled adapter is not probed and not reported. The provider CSV is built from enabled routes only</li>
     </ul>
 
     <h4>10. Render the readout</h4>
