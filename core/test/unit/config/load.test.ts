@@ -29,6 +29,49 @@ test("loads a fully valid config", () => {
   assert.equal(config.project.slug, "test-project");
 });
 
+test("omitting quota_stop yields a disabled stop", () => {
+  const config = loadConfig(toYaml(validConfig()));
+  assert.equal(config.routing.quota_stop, undefined);
+});
+
+test("quota_stop default applies to every adapter and by_adapter overrides only its adapter", () => {
+  const doc = deepClone(validConfig());
+  doc.routing.quota_stop = {
+    default: { minutes: 30, probe_timeout_ms: 2_500 },
+    by_adapter: { codex: { minutes: 15, probe_timeout_ms: 3_000 } },
+  };
+  const config = loadConfig(toYaml(doc));
+  const stopFor = (adapterId: string) => config.routing.quota_stop?.by_adapter?.[adapterId] ?? config.routing.quota_stop?.default;
+  assert.deepEqual(stopFor("claude"), { minutes: 30, probe_timeout_ms: 2_500 });
+  assert.deepEqual(stopFor("stub"), { minutes: 30, probe_timeout_ms: 2_500 });
+  assert.deepEqual(stopFor("codex"), { minutes: 15, probe_timeout_ms: 3_000 });
+});
+
+test("rejects measured quota fields by name", () => {
+  for (const [field, value] of [
+    ["percentage", 42],
+    ["resetsAt", "2026-08-25T00:00:00Z"],
+    ["window_id", "five-hour"],
+  ] as const) {
+    const doc = deepClone(validConfig()) as unknown as Record<string, unknown>;
+    (doc.routing as Record<string, unknown>).quota_stop = {
+      default: { minutes: 30, probe_timeout_ms: 2_500, [field]: value },
+    };
+    assert.throws(() => loadConfig(toYaml(doc)), (error: Error) =>
+      error instanceof ConfigSchemaError && error.violations.some((violation) => violation.endsWith(`/routing/quota_stop/default/${field}: Unexpected property`)));
+  }
+});
+
+test("rejects negative and non-integer quota stop minutes", () => {
+  for (const minutes of [-1, 2.5]) {
+    const doc = deepClone(validConfig()) as unknown as Record<string, unknown>;
+    (doc.routing as Record<string, unknown>).quota_stop = {
+      default: { minutes, probe_timeout_ms: 2_500 },
+    };
+    assert.throws(() => loadConfig(toYaml(doc)), ConfigSchemaError);
+  }
+});
+
 test("the committed default awsf.config.yaml loads and validates", () => {
   const text = readFileSync(join(repoRoot(), "awsf.config.yaml"), "utf8");
   const config = loadConfig(text);

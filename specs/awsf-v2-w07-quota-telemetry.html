@@ -409,7 +409,7 @@ flowchart LR
 
   <!-- ================= M3 ================= -->
   <div class="phase">
-    <h3><code class="status">[wip]</code> Milestone M3: The per-route threshold, behind gate G7-A</h3>
+    <h3><code class="status">[x]</code> Milestone M3: The per-route threshold, behind gate G7-A</h3>
     <p><strong>This milestone does not start until the owner's amendment commit has landed.</strong> The first task is to verify it, not to write it — no agent can write either protected file, and inventing a route around that is the boundary working rather than an obstacle.</p>
 
     <h4>7. Verify the amendment, then read the threshold</h4>
@@ -424,11 +424,11 @@ flowchart LR
     <h4>8. Testing Strategy</h4>
     <p>Config tests only. No probe, no process, no network.</p>
     <ul class="checklist">
-      <li><code class="status">[]</code> A config with no <code>quota_stop</code> block loads and yields a disabled stop</li>
-      <li><code class="status">[]</code> A config with <code>default</code> only applies it to every adapter; a <code>by_adapter</code> entry overrides the default for that adapter alone</li>
-      <li><code class="status">[]</code> A block carrying a percentage, a <code>resetsAt</code>, or a window id is refused by name</li>
-      <li><code class="status">[]</code> A negative or non-integer <code>minutes</code> is refused</li>
-      <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green</li>
+      <li><code class="status">[x]</code> A config with no <code>quota_stop</code> block loads and yields a disabled stop</li>
+      <li><code class="status">[x]</code> A config with <code>default</code> only applies it to every adapter; a <code>by_adapter</code> entry overrides the default for that adapter alone</li>
+      <li><code class="status">[x]</code> A block carrying a percentage, a <code>resetsAt</code>, or a window id is refused by name</li>
+      <li><code class="status">[x]</code> A negative or non-integer <code>minutes</code> is refused</li>
+      <li><code class="status">[x]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green</li>
     </ul>
     <div class="loop">
       🔁 <strong>Do not exit this phase until every box above is checked.</strong> If the amendment has not landed, this phase is <code>[f]</code> and the workstream waits — it does not route around the gate.
