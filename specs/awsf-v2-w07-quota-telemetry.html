@@ -1,0 +1,1060 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plan: AWSF v2 W07 — Quota telemetry as a readout</title>
+<style>
+:root {
+  --bg:#0E1116; --surface:#171D25; --surface-soft:#141922; --fg:#E8EDF3;
+  --muted:#8D99A8; --accent:#2DD4BF; --cool:#60A5FA; --warn:#F59E0B;
+  --danger:#F87171; --good:#4ADE80; --border:#293341; --review:#FB7185;
+  --font-ui:Inter,system-ui,-apple-system,sans-serif;
+  --font-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,monospace;
+  --maxw:1120px;
+}
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.65 var(--font-ui); }
+main { max-width:var(--maxw); margin:auto; padding:48px 24px 150px; }
+h1,h2,h3,h4 { line-height:1.25; letter-spacing:-.01em; }
+h1 { font-size:30px; margin:0 0 6px; }
+h2 { font-size:21px; margin:54px 0 14px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+h3 { font-size:17px; margin:32px 0 8px; }
+h4 { font-size:14px; margin:24px 0 6px; color:var(--accent); }
+h5 { margin:0 0 6px; color:var(--muted); text-transform:uppercase; letter-spacing:.07em; font-size:11px; }
+p { margin:0 0 14px; }
+a { color:var(--cool); }
+strong { color:#fff; }
+em,.muted,.sub { color:var(--muted); }
+ul,ol { margin:0 0 14px; padding-left:22px; }
+li { margin:3px 0; }
+code { font:12px var(--font-mono); color:#9FE8DC; background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:1px 5px; }
+pre { background:var(--surface); border:1px solid var(--border); border-left:3px solid var(--accent); border-radius:8px; padding:14px 16px; overflow:auto; color:#D9E2EC; font:12.5px/1.6 var(--font-mono); }
+pre code { border:0; padding:0; background:none; color:inherit; }
+table { width:100%; border-collapse:collapse; margin:14px 0 20px; font-size:13px; display:block; overflow-x:auto; }
+th,td { border:1px solid var(--border); padding:8px 10px; text-align:left; vertical-align:top; }
+th { background:var(--surface); color:var(--accent); font-size:11.5px; text-transform:uppercase; letter-spacing:.05em; }
+tbody tr:nth-child(even) { background:#ffffff04; }
+.meta { margin-top:14px; font-size:13px; }
+.meta summary { cursor:pointer; color:var(--muted); font:12px var(--font-mono); }
+.meta dl { display:grid; grid-template-columns:130px 1fr; gap:5px 14px; padding:14px; background:var(--surface); border:1px solid var(--border); border-radius:8px; }
+.meta dt { color:var(--accent); font:11.5px var(--font-mono); }
+.meta dd { margin:0; color:var(--muted); font:11.5px var(--font-mono); overflow-wrap:anywhere; }
+figure { margin:26px 0; text-align:center; }
+figure svg, figure .mermaid { max-width:100%; height:auto; }
+figure .mermaid { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:20px 12px; overflow:auto; color:var(--muted); }
+figcaption { margin-top:9px; color:var(--muted); font-size:12px; font-style:italic; }
+.phase { margin:30px 0; padding:22px 24px; border:1px solid var(--border); border-radius:14px; background:#ffffff04; }
+.phase > h3 { margin-top:0; }
+.checklist { list-style:none; padding:0; }
+.checklist li { padding:4px 0; }
+.status { color:var(--accent); margin-right:5px; }
+.loop { margin-top:16px; padding:10px 14px; border:1px dashed var(--accent); border-radius:8px; background:#2dd4bf0a; font-size:13px; }
+.card { margin:14px 0; padding:12px 16px; background:var(--surface); border:1px solid var(--border); border-left:3px solid var(--cool); border-radius:8px; font-size:13px; }
+.card.rule { border-left-color:var(--accent); }
+.card.warn { border-left-color:var(--warn); }
+.card.danger { border-left-color:var(--danger); }
+.card.good { border-left-color:var(--good); }
+.gate { color:var(--warn); border:1px solid var(--warn); border-radius:3px; padding:0 5px; font:11px var(--font-mono); }
+.tag { display:inline-block; margin-right:6px; padding:1px 6px; border-radius:3px; font:10px var(--font-mono); text-transform:uppercase; letter-spacing:.06em; }
+.tag.existing { background:#27303C; color:var(--muted); }
+.tag.new { background:#173B37; color:var(--accent); }
+.files ul { list-style:none; padding:0; }
+.files li { padding:4px 0; border-bottom:1px solid #ffffff08; }
+.taskmeta th { width:165px; text-transform:none; letter-spacing:0; font-size:12px; }
+#questionables details,#amendments details { margin:10px 0; padding:10px 14px; background:var(--surface); border:1px solid var(--border); border-radius:8px; }
+#questionables summary,#amendments summary { cursor:pointer; font-weight:650; }
+.qa-answer { margin:10px 0 2px; color:var(--muted); font-size:13px; }
+.qopen { color:var(--warn); font:10px var(--font-mono); letter-spacing:.06em; margin-right:6px; }
+.qdecided { color:var(--good); font:10px var(--font-mono); letter-spacing:.06em; margin-right:6px; }
+.recommend { display:block; margin:8px 0; padding:8px 12px; border-left:3px solid var(--cool); background:#60a5fa0c; color:var(--fg); }
+@media (max-width:720px) { main { padding:28px 14px 130px; } .meta dl { grid-template-columns:1fr; } }
+</style>
+<body>
+<main>
+<header>
+  <h1>Plan: AWSF v2 W07 — Quota telemetry as a readout</h1>
+  <p class="sub">Workstream W07 of <a href="awsf-v2-plan.html">the AWSF v2 spine</a> · milestone M7 · <strong>quota is a readout, never a router</strong></p>
+  <details class="meta">
+    <summary>Metadata</summary>
+    <dl>
+      <dt>created</dt><dd>2026-08-24</dd>
+      <dt>modified</dt><dd>2026-08-24, 2026-08-24</dd>
+      <dt>commits</dt><dd>none — authoring only; no implementation was written or committed, none — owner review applied; still uncommitted</dd>
+      <dt>agent name</dt><dd>claude, claude</dd>
+      <dt>session id</dt><dd>not recorded — AGENTS.md invariant 1 keeps live session state out of committed files, not recorded — the owner review block carried no session id into the plan</dd>
+      <dt>back refs</dt><dd>./awsf-v2-plan.html (spine milestone M7 and Shared Invariants), ./tickets/awsf-v2-plan/W07.md (meta-prompt), ./awsf-v2-plan-build-prompts.md (§ Section B → W07), ./awsf-v2-candidates-fuse-version.md (§10 first, then §2.7 and §0.2), ./awsf-v2-w04-project-registry.html (the per-project shape this plan resolves against), ../AGENTS.md (invariants 1, 3, 7, 9, 10), ../awsf.config.yaml, ../awsf.project.yaml, core/src/contracts/normalized-events.ts, core/src/execution/transport-broker.ts, core/src/observability/attempt-evidence.ts, core/src/observability/queries.ts, core/src/state/task-machine.ts, core/src/state/guards.ts, core/src/cli/commands/production-run.ts</dd>
+      <dt>forward refs</dt><dd>./awsf-v2-w07-quota-telemetry-build-prompts.md, ./tickets/awsf-v2-w07-quota-telemetry/ (T01–T20 plus README.md)</dd>
+    </dl>
+  </details>
+</header>
+
+<figure>
+  <pre class="mermaid">
+flowchart LR
+  Q["quota-axi on PATH"] --> P["pure parser · fixtures"]
+  P --> R["preflight readout"]
+  P --> S["boundary snapshot"]
+  S --> J["journal · non-attributable"]
+  S --> A["L26 · AWAITING_OWNER"]
+  P -. "fence: never reaches" .-> W["workflow · routing"]
+  style P stroke:#2DD4BF,stroke-width:2px
+  style J stroke:#60A5FA,stroke-width:2px
+  style W stroke:#F87171,stroke-width:2px,stroke-dasharray:4 3
+  </pre>
+  <figcaption>One parser, two readers, one fence. Nothing on this diagram flows back into a routing decision, and the dashed edge is the thing a test asserts is absent.</figcaption>
+</figure>
+
+<section id="plain-language">
+  <h2>In Plain Language</h2>
+  <p>This section explains the whole plan without technical vocabulary. Everything after it says the same things precisely, for the people — and machines — building it.</p>
+
+  <h3>A fuel gauge you read before setting off, not a hand on the wheel</h3>
+  <p>The owner pays for several assistants by subscription. Each one allows a certain amount of work inside a repeating window of time, and when the allowance runs out the assistant simply stops until the window resets. Today there is no way to see how much of each window is left without leaving the workshop and asking each provider by hand. This plan adds a gauge. The gauge only shows a number. It is never allowed to steer.</p>
+
+  <h3>Why now, and why so narrow</h3>
+  <p>An earlier review looked at a bigger promise attached to this idea and refused it. The promise was that reading the gauge before and after a job would tell you what that job cost. It cannot. The number is a whole-household reading: anyone else using the same account moves it, it is rounded to whole percentage points, and nothing in it says which job was running. So the gauge stays a gauge. The workshop already keeps a separate, exact record of what each job consumed, reported by the provider itself and stamped with the job's name — that is the record to build a cost figure on, and this plan points at it rather than competing with it.</p>
+
+  <h3>Three pieces, and one wall</h3>
+  <p>First, a report the owner reads before starting: for each assistant the project uses, how much of the window remains and how long until it resets. Second, a note written into the permanent record at each pause between stages of a job, labelled in the record itself as <em>not attributable to this job</em>, so nobody can later mistake it for a cost. Third, a stopping rule: if too little time remains before the window resets, the workshop finishes the stage it is on and hands the job back to the owner rather than starting the next one. Adding that handover is itself a change to the small set of moves the workshop is allowed to make, and only the owner can make that change — so this plan asks for it up front rather than discovering it halfway through. It then waits. There is no clock that restarts it and no automatic resumption — only a person can start it again. The wall is the fourth piece: a test proves that the part of the workshop which decides who does the work cannot see the gauge at all.</p>
+
+  <h3>How anyone would know it worked</h3>
+  <p>A real reading from the tool was captured once, stripped of anything private, and stored in the workshop so every test afterwards runs against those exact stored bytes and costs nothing. The report shows the correct figure even when a stored reading is deliberately built so that the raw parts disagree with the summary. An old version of the tool is refused by name. When the reading fails or times out, work continues and the failure is written down — a broken gauge never stops the car. The handover to the owner happens at the pause between two stages, and nothing restarts it. A handover triggered by a broken gauge is refused outright, which is a stronger promise than merely not acting on one. And there is one thing deliberately missing, written down as missing: the exact bytes the tool produces when it is itself being rate-limited cannot be conjured on demand. So the workshop keeps them by itself the next time it happens — it sets the unreadable reply aside in a private place nobody else can read, and notes where it put it, rather than relying on someone being at the desk that day.</p>
+</section>
+
+<section id="purpose">
+  <h2>Purpose</h2>
+  <p>Give the owner one honest number before spending, and one honest note in the record while spending — and make it structurally impossible for either to become an input to a routing decision. Every rule below was produced by a failure rather than by a preference, which is why this workstream's contract arrived settled and this plan implements it rather than re-deriving it.</p>
+  <p>The workstream is small on purpose. It adds no task state, no legal transition, no daemon, no timer, and no dependency. Its largest single risk is not that it will be built wrong — it is that a plausible convenience (let the router prefer the provider with more headroom) will be built on top of it later, and this plan spends three of its nineteen tasks making that convenience turn a test red.</p>
+</section>
+
+<section id="problem">
+  <h2>Problem</h2>
+  <p>Four problems, and they are not the same size.</p>
+  <p><strong>1 — There is no readout at all.</strong> Nothing in <code>core/src</code> reads a provider window. The owner's only current signal is a <code>quota</code> normalized event, which an adapter emits when a provider has <em>already</em> refused the call. That is an obituary, not a gauge.</p>
+  <p><strong>2 — The headline claim of the source candidate is false and must not be rebuilt.</strong> The candidate called a phase-boundary snapshot <em>"the leverage"</em>: a real denominator for the call ledger's proxy unit. An account-window percentage cannot be that denominator. Another client on the same account moves the same number, the figure is an integer percentage, and nothing in the payload carries task identity. The adjudication upheld the refusal. What is left is context, and it has to be labelled as context <em>in the record</em>, not in a comment.</p>
+  <p><strong>3 — Two corrections the source left open.</strong> It pins <code>quota-axi@0.1.29</code> while also recommending an unpinned <code>npx -y quota-axi</code> that may resolve elsewhere; and a probe that sits between two phases has no stated failure posture — no timeout, no fail-open rule, and nothing said about what is journalled when the read fails.</p>
+  <p><strong>4 — The fixture-first rule is currently satisfied by captures held outside the repository</strong>, which is exactly the residual the rule exists to prevent. A rule whose evidence lives on one laptop is a rule with no witness.</p>
+  <figure>
+    <pre class="mermaid">
+flowchart TD
+  R["window reading<br/>integer % · account-wide"] --> X1["another client moves it"]
+  R --> X2["no task identity in payload"]
+  R --> X3["integer resolution"]
+  X1 --> N["cannot be a task denominator"]
+  X2 --> N
+  X3 --> N
+  U["per-call usage events<br/>provider-authoritative"] --> Y["HAS task identity"]
+  style N stroke:#F87171,stroke-width:2px
+  style Y stroke:#4ADE80,stroke-width:2px
+    </pre>
+    <figcaption>Three independent defects, one conclusion. The right-hand column is not a consolation prize — the normalized <code>usage</code> event already carries the number with a task attached, and it is where a real per-task denominator comes from.</figcaption>
+  </figure>
+</section>
+
+<section id="solution">
+  <h2>Solution</h2>
+  <p>One pure parser, fed by one injected process capability, read by two consumers, and surrounded by three fences.</p>
+  <p><strong>The parser is pure and takes <code>now</code> as an argument.</strong> It never reads the clock, never touches the filesystem, and never spawns. Everything it needs arrives as bytes. That is what makes every test in this workstream offline and deterministic, and it is what lets a single scrubbed capture in the tree serve the whole parser surface.</p>
+  <p><strong>The process capability is injected, not imported.</strong> <code>node:child_process</code> is importable in exactly one module by invariant 3, and <code>runSystemCommand</code> in <code>core/src/execution/transport-broker.ts</code> is already the shape this needs: executable, argv array, <code>timeoutMs</code>, explicit <code>env</code>, bounded <code>maxBuffer</code>. The quota module takes that function as a parameter. It therefore needs no fence exemption, and the hard timeout the failure posture requires comes for free from the capability that already has one.</p>
+  <p><strong>Spawn on PATH, never fetch.</strong> The settled contract says spawn on PATH rather than import. <code>npx -y quota-axi</code> is neither: it resolves a package at run time over the network and can land on a version this parser has never seen. <code>resolveExecutable("quota-axi", env)</code> against the spec's own <code>PATH</code> is the whole resolution, and a missing executable is a named, journalled unavailability — not a crash and not a stop.</p>
+  <p><strong>Two consumers, deliberately different.</strong> The preflight readout is interactive, renders for a person, and may take longer. The phase-boundary probe is on the critical path between two phases, has a tighter timeout, fails open, and writes a record whose own fields say it is not attributable to the task it sits inside.</p>
+  <figure>
+    <pre class="mermaid">
+flowchart LR
+  subgraph fenced["core/src/quota/ — fenced module"]
+    PR["probe.ts<br/>argv · floor · posture"]
+    PA["parse.ts<br/>pure · now injected"]
+    RD["readout.ts<br/>effectiveAvailability only"]
+    PR --> PA --> RD
+  end
+  RSC["runSystemCommand<br/>injected capability"] -.-> PR
+  RD --> CLI["awsf quota"]
+  RD --> LOOP["phase loop<br/>production-run.ts"]
+  LOOP --> EV["AttemptEvidence<br/>quota-snapshot"]
+  LOOP --> AO["AWAITING_OWNER"]
+  WF["core/src/workflow/**"] -. "asserted absent" .-> fenced
+  style fenced stroke:#2DD4BF,stroke-width:2px
+  style WF stroke:#F87171,stroke-width:2px,stroke-dasharray:4 3
+    </pre>
+    <figcaption>The phase loop already lives in <code>core/src/cli/commands/production-run.ts</code> — <em>not</em> under <code>core/src/workflow/**</code> — so the snapshot site is outside the fence by construction and the engine needs no change to accommodate it.</figcaption>
+  </figure>
+</section>
+<section id="contract">
+  <h2>The Runtime Contract</h2>
+  <p>Settled by the spine and unchanged by review. This plan implements it; no task may re-derive it.</p>
+  <table class="taskmeta">
+    <tr><th>Render source</th><td>From <code>quotaSemantics.effectiveAvailability</code> and <strong>never</strong> from <code>windows[]</code>. An account window can bound every model window, so a model window read in isolation reports headroom the account does not have.</td></tr>
+    <tr><th>State detection</th><td><strong>Structurally</strong>, from <code>state.status</code> and <code>quotaSemantics.status</code>. <strong>Never by exit code.</strong> Exit <code>0</code> means only that at least one provider returned data <em>fresh or stale</em>, and a stale report keeps raw windows for diagnostics while its effective availability is unknown. Branching on the exit code reads a stale percentage as current headroom.</td></tr>
+    <tr><th>Flags</th><td>Never <code>--refresh</code>, never <code>--tui</code>, and — added here — never <code>--once</code> (a TUI flag) and never <code>--full</code>. The argv is exactly <code>["--provider", "&lt;csv&gt;", "--json"]</code>.</td></tr>
+    <tr><th>Invocation</th><td>Spawn on <code>PATH</code>, never import. <code>npx -y</code> is not a PATH spawn and is barred by the same rule.</td></tr>
+    <tr><th>Parsing</th><td>Fixture-first, over scrubbed captures held <strong>in the tree</strong>.</td></tr>
+    <tr><th>Fence</th><td>Nothing under <code>core/src/workflow/**</code> and no routing resolver may reach the module.</td></tr>
+    <tr><th>Decision inherited</th><td><strong>Q4, decided 2026-08-21:</strong> the unit is absolute time remaining — minutes to window reset — with the threshold configured per route. The upgrade ships named alongside it: compare the remaining window against the next phase's observed median duration.</td></tr>
+  </table>
+
+  <div class="card rule">
+    <h5>Two additions this plan makes to the flag rule, with their reasons</h5>
+    <p><code>--full</code> is barred because it is the flag that exposes <code>account.accountId</code>, provider <code>label</code>/<code>source</code>, and per-source attempt paths. Invariants 1 and 9 both bite there, and the fixture would inherit the exposure. The check that makes this safe rather than merely cautious: <strong>every field this plan branches on is in default <code>--json</code></strong>. The demoted set is window <code>percentUsed</code>/<code>startsAt</code>/<code>windowSeconds</code>, the pace cycle-progress inputs, <code>quotaSemantics.description</code>, and scope pace <code>behindWindowIds</code>/<code>onPaceWindowIds</code>. <code>resetsAt</code>, <code>runway</code>, <code>state.status</code>, <code>quotaSemantics.status</code> and <code>unresolvedWindowIds</code> are all present without it.</p>
+    <p><code>--once</code> is barred because it belongs to the TUI, and a rule that names two TUI flags but not the third is a rule that will be defeated by autocomplete.</p>
+  </div>
+
+  <div class="card warn">
+    <h5>The derived-field rule — how minutes-to-reset is obtained without reading <code>windows[]</code></h5>
+    <p>The two settled rules appear to conflict: render only from <code>effectiveAvailability</code>, but report a reset instant that lives on a window. They do not. <strong><code>effectiveAvailability</code> selects which window binds; the reset instant is then read from that named window and from no other.</strong> The scope's <code>runway</code> supplies <code>limitingWindowId</code> and, for a finite projection, <code>usableRunwaySeconds</code> and <code>projectedExhaustedAt</code>; <code>boundedBy</code> names every window included in the effective figure. The forbidden act is <em>choosing</em> a window by scanning <code>windows[]</code> — never the act of dereferencing the one the effective figure already named.</p>
+    <p>Written as a rule a test can hold: <strong>no code path may index <code>windows[]</code> except by an id that came out of <code>effectiveAvailability</code>.</strong> When <code>runway.status</code> is <code>through_reset</code> there is deliberately no synthetic deadline and the reset instant is the binding window's <code>resetsAt</code>. When it is <code>unknown</code>, minutes-to-reset is <code>null</code> — never zero, never inferred.</p>
+  </div>
+</section>
+
+<section id="gates">
+  <h2>The Two Ordering Gates This Plan Introduces</h2>
+  <div class="card rule">
+    <h5><span class="gate">G7-A</span> — the permission amendment lands before M3 builds</h5>
+    <p><strong>Q4 requires the threshold to be configured per route. Every candidate home for it is a protected path.</strong> <code>awsf.config.yaml</code> and <code>awsf.project.yaml</code> are both listed under <code>policy.protected_paths</code>, and <code>path-policy</code> treats <code>protected-path</code> as an independent rejection, so no agent can write either one under any write-glob. This is the same shape as the spine's <span class="gate">G2</span>: <strong>one owner-authored commit, landed before the workstream that depends on it starts building.</strong></p>
+    <p><strong>It is not only a protected-path question.</strong> <code>awsf.config.yaml</code>'s header and <code>core/src/config/schema.ts</code>'s header both state the same durable intent: <em>"no machine paths, no credentials, no PIDs, no quota fields."</em> That line is documentation rather than a meta-test — <code>core/src/config/load.ts</code> enforces absolute paths and credential shapes and nothing about quota — but it is the file's stated contract and a plan that quietly widened it would be doing exactly what the fourth shared rule forbids.</p>
+    <p><strong>The amendment restates the intent rather than deleting it.</strong> The reason "no quota fields" was written is that quota <em>state</em> is live, machine-local, and different every minute — invariant 1's territory. A per-route threshold is none of those: it is a durable policy number the owner chooses once. The amendment says so explicitly, so the boundary stays legible: <em>measured quota state never appears here; a durable quota policy threshold may.</em> That is a narrowing of an ambiguous sentence, not a loosening of a checked rule.</p>
+    <p><strong>The gate is the permission, not the values — and the order matters more than it looks.</strong> <code>RoutingSchema</code> in <code>core/src/config/schema.ts</code> carries <code>additionalProperties: false</code>, and <code>load.ts</code> hard-fails on a schema mismatch. Writing a <code>quota_stop</code> block into <code>awsf.config.yaml</code> <em>before</em> the schema accepts it therefore breaks every AWSF command at load time — observed directly: <code>config does not match awsf/v1: /routing/quota_stop: Unexpected property</code>. So <strong><span class="gate">G7-A</span> is the one-line durable-intent change and nothing else.</strong> The schema extension is T07's work and is agent-writable, because <code>core/src/config/**</code> is not a protected path. Actual threshold values are a <em>separate, optional, later</em> owner commit once T07 has landed: the block is optional, and absent means the stop is disabled, so the repository's own config need never carry one.</p>
+    <p><strong>M1 and M2 do not wait on it.</strong> The fixture, the parser, the probe, the version floor and the failure posture are all independent of where the threshold lives. Only M3 onward is gated.</p>
+  </div>
+
+  <div class="card rule">
+    <h5><span class="gate">G7-B</span> — the legal-edge amendment lands before M6 builds</h5>
+    <p><strong>Owner verdict, 2026-08-24: the stop gets its own legal edge.</strong> <code>L26 — RUNNING → AWAITING_OWNER</code>, actor <code>host</code>, not a spawn site, not interactive, not a correction edge. <code>core/src/state/**</code> is a protected path, so like <span class="gate">G7-A</span> this is <strong>one owner-authored commit landed before M6 starts building</strong>. Two files move in it: the edge in <code>core/src/state/task-machine.ts</code> and its guard in <code>core/src/state/guards.ts</code>.</p>
+    <p><strong>Its cost, measured rather than estimated.</strong> The plan's first draft claimed this amendment would also move the SQLite check constraints. <strong>It does not.</strong> <code>0001-initial.sql</code> declares <code>from_state TEXT NOT NULL, to_state TEXT NOT NULL</code> and <code>edge_id TEXT NOT NULL</code> with <em>no</em> <code>CHECK</code> on any of the three. No migration is touched, which also means the protected <code>migrations/**</code> directory stays shut and this remains one amendment rather than two. What genuinely moves is four things: the <code>EdgeId</code> union and <code>LEGAL_EDGES</code> (owner, protected); the guard, which <code>Readonly&lt;Record&lt;EdgeId, …&gt;&gt;</code> makes a <em>typecheck error</em> to omit rather than something anyone could forget; and two test-side files an agent may write — the mirror table in <code>core/test/unit/_lifecycle-tables.ts</code>, where the pair moves out of the illegal set, and <code>assert.equal(LEGAL_EDGES.length, 25)</code> at <code>core/test/unit/transitions.test.ts:67</code>.</p>
+    <p><strong>The objection the source itself raises, and its answer.</strong> <code>_lifecycle-tables.ts</code> states why this pair was illegal: <em>"RUNNING → AWAITING_OWNER skips gating."</em> That reasoning is about <em>advancing</em> work without gating it. A quota stop does not advance work — it suspends it, with no candidate and no gate run. The question is therefore whether a task suspended this way could reach <code>LANDING</code> without gating, and <strong>it cannot: <code>L20</code>'s guard already requires <code>gatesPass</code>, a 40-hex candidate, and a displayed SHA equal to that candidate.</strong> The bypass is closed by machinery that predates this workstream, which is exactly the check the spine's fourth shared rule demands before a plan proposes a new guarantee.</p>
+    <p><strong>What the edge buys that the alternative could not.</strong> <code>L26</code>'s guard is where <code>INV-4</code> stops being a property of how the comparison is written and becomes a property of the machine: <strong>an unavailable, stale, or unknown reading cannot form a legal transition at all.</strong> A future edit that made the host try to stop on a broken gauge is refused by the state machine rather than by a code shape someone could refactor away. The rejected alternative — firing at <code>L12</code>/<code>L15</code> — would have entangled quota with the tier fork out of <code>GATING</code> and with review-verdict consistency, putting a quota condition inside two guards that exist for other reasons.</p>
+    <p><strong>M1 through M5 do not wait on it.</strong> Only M6 is gated.</p>
+  </div>
+</section>
+
+<section id="files" class="files">
+  <h2>Relevant Files</h2>
+
+  <h3>Existing Files</h3>
+  <ul>
+    <li><span class="tag existing">existing</span> <code>core/src/execution/transport-broker.ts</code> — <code>runSystemCommand</code> (executable, argv, <code>timeoutMs</code>, <code>env</code>, <code>maxBuffer</code>) and <code>resolveExecutable</code>. Both are taken as injected capabilities; neither is re-implemented. This file is the only importer of <code>node:child_process</code> and stays so.</li>
+    <li><span class="tag existing">existing</span> <code>core/src/cli/commands/production-run.ts</code> — the phase loop at <code>for (const [index, phase] of compiled.phases.entries())</code>. <strong>The phase boundary is between iterations of this loop, and this file is not under <code>core/src/workflow/**</code></strong>, which is why the snapshot needs no engine change and no fence exemption. It also holds the route resolution, which is the one place the fence is weaker than a path glob can express.</li>
+    <li><span class="tag existing">existing</span> <code>core/src/observability/attempt-evidence.ts</code> — <code>AttemptEvidence</code>, the discriminated union the attempt journal carries. The snapshot is a new member here. This is the additive extension point that avoids touching the normalized-event vocabulary.</li>
+    <li><span class="tag existing">existing</span> <code>core/src/contracts/normalized-events.ts</code> — the twelve normalized kinds. <code>QuotaEventSchema</code> is <em>provider-signalled refusal</em> (<code>scope</code>, <code>resetAt</code>, <code>message</code>), commented <em>"quota is never a retry — it blocks with the reset time"</em>. <strong>The boundary snapshot must not reuse it</strong>: one is a run-blocking fact from inside a run, the other is host-initiated context between runs. Also the home of <code>TokenUsage</code> — the per-call, provider-authoritative number that <em>does</em> carry task identity.</li>
+    <li><span class="tag existing">existing</span> <code>core/src/observability/projector.ts</code> — <code>applyAttemptEvidence</code>'s switch has no <code>default</code> clause, so an unhandled evidence type is a silent no-op. That is what makes the snapshot journal-only without a migration.</li>
+    <li><span class="tag existing">existing</span> <code>core/src/observability/queries.ts</code> — <code>PhaseRow</code> carries <code>phase_key</code>, <code>started_at</code> and <code>ended_at</code>. <strong>The data for the observed-median upgrade is recorded; the statistic is not</strong> — there is no median query in this file today, and M5 adds one.</li>
+    <li><span class="tag existing">existing</span> <code>core/src/state/task-machine.ts</code> — the twenty-five legal edges, none of them <code>RUNNING → AWAITING_OWNER</code>. <strong>Q1 is decided: this plan adds <code>L26</code>.</strong> Protected path; owner-authored under <span class="gate">G7-B</span>.</li>
+    <li><span class="tag existing">existing</span> <code>core/src/state/guards.ts</code> — <code>GUARDS: Readonly&lt;Record&lt;EdgeId, …&gt;&gt;</code>, so a new edge without a guard is a typecheck error rather than an oversight. <code>L20</code>'s guard already demands <code>gatesPass</code> and a real candidate, which is what closes the gating-bypass objection to <code>L26</code>. <code>L21</code>'s comment is the repository's own statement of <code>INV-5</code>: <em>"AWAITING_OWNER has no timeout, so no clock may produce this edge; a task waiting on the owner waits forever, and that is the point."</em> Protected path.</li>
+    <li><span class="tag existing">existing</span> <code>core/src/observability/migrations/0001-initial.sql</code> — the <code>transitions</code> table. <code>from_state</code>, <code>to_state</code> and <code>edge_id</code> carry <strong>no <code>CHECK</code> constraint</strong>, which is why <code>L26</code> needs no migration and the protected migrations directory stays shut.</li>
+    <li><span class="tag existing">existing</span> <code>core/test/unit/_lifecycle-tables.ts</code>, <code>core/test/unit/transitions.test.ts</code> — the hand-maintained mirror of the edge table and the <code>assert.equal(LEGAL_EDGES.length, 25)</code> row. Both are tests, so an agent may write them; both move with <code>L26</code>.</li>
+    <li><span class="tag existing">existing</span> <code>core/src/workflow/phase-launch-authorization.ts</code> — <code>ConfiguredPhaseRoute</code> is <code>{ adapterId, role, launchAuthorization }</code>. This is what "route" means in this repository, and it is the reason Q4's "per route" resolves to adapter identity rather than agent role.</li>
+    <li><span class="tag existing">existing</span> <code>awsf.config.yaml</code> — <code>adapters:</code> (the route surface), <code>routing:</code> (where the threshold goes), and <code>policy.protected_paths</code> (which lists this file and <code>awsf.project.yaml</code>). Protected: no agent writes it. Gate <span class="gate">G7-A</span>.</li>
+    <li><span class="tag existing">existing</span> <code>awsf.project.yaml</code>, <code>core/src/registry/catalog.ts</code>, <code>core/src/registry/plan-source.ts</code> — W04's per-project shape. The readout resolves the project and its plan repository through the catalog before deciding which routes to report on.</li>
+    <li><span class="tag existing">existing</span> <code>core/test/unit/meta/child-process-fence.test.ts</code>, <code>core/test/unit/meta/_walk.ts</code> — the fence idiom and its file walker. The existing fences are direct-text scans; M7's is the first transitive one and says so.</li>
+    <li><span class="tag existing">existing</span> <code>core/test/unit/meta/no-credentials-in-fixtures.test.ts</code> — the sweep every new fixture must survive, over <code>.ts .json .jsonl .md .txt .yaml .yml</code> under <code>core/test/fixtures</code>.</li>
+    <li><span class="tag existing">existing</span> <code>core/test/fixtures/providers/claude/PROVENANCE.md</code> — the provenance idiom: every fixture is either captured bytes or a <em>stated transformation</em> of captured bytes, and the two are never mixed up. The quota fixture directory copies this exactly.</li>
+    <li><span class="tag existing">existing</span> <code>AGENTS.md</code> — invariants 1 (no live task state), 3 (one <code>child_process</code> importer), 7 (dependency allowlist — the reason quota-axi is spawned and never added to <code>package.json</code>), 9 (no committed credential-shaped value), 10 (no committed runtime artifact).</li>
+  </ul>
+
+  <h3>New Files</h3>
+  <ul>
+    <li><span class="tag new">new</span> <code>core/src/quota/parse.ts</code> — the pure parser. Takes the raw <code>--json</code> text and a <code>now</code> instant; returns a readout record plus a fault list, in the style of <code>core/src/adapters/stream/usage.ts</code>. No I/O, no clock, no spawn.</li>
+    <li><span class="tag new">new</span> <code>core/src/quota/probe.ts</code> — argv construction, PATH resolution, version floor, hard timeout, and the seven failure reason codes. Takes <code>runCommand</code> and <code>resolveExecutable</code> as injected capabilities.</li>
+    <li><span class="tag new">new</span> <code>core/src/quota/readout.ts</code> — the render model: per route, effective percent, minutes to reset, configured threshold, verdict, and the observed-median comparison. <strong>Carries no comparator, no ordering, and no preferred-provider field</strong> — asserted exhaustively by a test.</li>
+    <li><span class="tag new">new</span> <code>core/src/quota/routes.ts</code> — the adapter-kind → quota-axi-provider mapping and the provider CSV builder. Kept separate because the mapping is a derived rule with its own README entry.</li>
+    <li><span class="tag new">new</span> <code>core/src/cli/commands/quota.ts</code> — <code>awsf quota</code>, the preflight readout.</li>
+    <li><span class="tag new">new</span> <code>core/test/fixtures/quota-axi/PROVENANCE.md</code> — captured versus derived, the scrub list, the capture argv, and the named absence.</li>
+    <li><span class="tag new">new</span> <code>core/test/fixtures/quota-axi/capture-probe.ts</code> — committed beside the bytes, calls the same argv builder the module uses, so the argv under test and the argv that produced the bytes are the same argv by construction.</li>
+    <li><span class="tag new">new</span> <code>core/test/fixtures/quota-axi/nominal.json</code> — <strong>captured then scrubbed.</strong> The one live invocation this workstream spends.</li>
+    <li><span class="tag new">new</span> <code>core/test/fixtures/quota-axi/derived-*.json</code> — six stated transformations: <code>semantics-partial</code>, <code>state-unauthenticated</code>, <code>stale</code>, <code>exhausted-now</code>, <code>runway-unknown</code>, and <code>windows-disagree</code> (the one where <code>windows[]</code> reports generous headroom and <code>effectiveAvailability</code> does not).</li>
+    <li><span class="tag new">new</span> <code>core/test/unit/meta/quota-fence.test.ts</code> — the three-leg fence: transitive unreachability from <code>core/src/workflow/**</code>, absence of quota types in route-resolution signatures, and the exhaustive field list of the readout record.</li>
+    <li><span class="tag new">new</span> <code>core/test/unit/quota/*.test.ts</code> — parser, probe, readout, routes, median, snapshot and stop.</li>
+  </ul>
+</section>
+
+<section id="spine">
+  <h2>Identifier Spine</h2>
+  <p>This workstream's claims, declared here so the coverage gate can join them to the tasks that serve them. Ids are unique per plan, per the spine's decided Q5; a cross-plan reference would be written <code>&lt;plan-stem&gt;#INV-n</code>.</p>
+  <dl>
+    <dt><code class="inv">INV-1</code></dt>
+    <dd>No file under <code>core/src/workflow/**</code> reaches <code>core/src/quota/**</code>, transitively through the relative-import graph and not merely by direct import.</dd>
+    <dt><code class="inv">INV-2</code></dt>
+    <dd>No quota figure is an input to any route, model, provider, or ordering decision, and the readout record carries no field that could serve as one.</dd>
+    <dt><code class="inv">INV-3</code></dt>
+    <dd>No task cost, rate, or denominator is derived from two window readings anywhere in the tree.</dd>
+    <dt><code class="inv">INV-4</code></dt>
+    <dd>A failed, timed-out, stale, or unknown read never stops a run. Enforced twice: the threshold comparison takes only a known figure, and <code>L26</code>'s guard refuses a transition whose evidence does not carry one — so the machine, not the code shape, is the backstop.</dd>
+    <dt><code class="inv">INV-5</code></dt>
+    <dd>No timer, scheduled wake-up, or automatic resume follows the stop; only a human- or owner-actored edge leaves <code>AWAITING_OWNER</code> toward work. <code>L21</code>'s existing comment already asserts this property of the state; <code>L26</code> must not weaken it.</dd>
+    <dt><code class="ac">AC-1</code></dt>
+    <dd>A scrubbed real capture lives in the tree and every parser test reads it or a named derivation of it. Observed by the parser suite passing with no network and no captures outside the repository.</dd>
+    <dt><code class="ac">AC-2</code></dt>
+    <dd>A version below the named floor is refused by name. Observed by a test that supplies a lower version string and asserts the refusal reason code.</dd>
+    <dt><code class="ac">AC-3</code></dt>
+    <dd>The journalled snapshot carries an explicit non-attributable label as a field of the record. Observed by asserting the field on a round-tripped journal line.</dd>
+    <dt><code class="ac">AC-4</code></dt>
+    <dd>The stop reaches <code>AWAITING_OWNER</code> over <code>L26</code> at a phase boundary and nothing resumes it. Observed end-to-end offline on the fixture adapter, with the clock advanced and no further transition recorded.</dd>
+    <dt><code class="ac">AC-5</code></dt>
+    <dd>The readout renders the effective figure when the raw windows disagree with it. Observed against <code>derived-windows-disagree.json</code>, whose <code>windows[]</code> is generous and whose <code>effectiveAvailability</code> is not.</dd>
+  </dl>
+</section>
+<section id="phases">
+  <h2>Implementation Phases</h2>
+  <p><strong>IMPORTANT:</strong> Execute every phase and task step by step, in order, top to bottom.</p>
+  <p>Status markers: <code>[]</code> idle · <code>[wip]</code> in progress · <code>[x]</code> complete · <code>[f]</code> failed. All start as <code>[]</code>. <strong>Flip this plan's own markers as you work</strong>, and flip the matching ticket's <code>state:</code> in the same commit. <strong>Never touch the W07 marker in <code>specs/awsf-v2-plan.html</code> — task 19 is the only task that does.</strong></p>
+  <p>Every milestone is offline and spends no agent quota. <strong>The single exception is task 1</strong>, which makes one bounded live invocation of a tool that cannot spend the quota it measures. <strong>M3 onward is gated by <span class="gate">G7-A</span>, and M6 by <span class="gate">G7-B</span>.</strong></p>
+
+  <figure>
+    <pre class="mermaid">
+flowchart LR
+  M1["M1 fixture<br/>+ parser"] --> M2["M2 probe<br/>floor · posture"]
+  M2 --> M3["M3 config<br/>threshold"]
+  M3 --> M4["M4 preflight<br/>readout"]
+  M4 --> M5["M5 observed<br/>median"]
+  M5 --> M6["M6 snapshot<br/>+ stop"]
+  M6 --> M7["M7 fences<br/>+ close"]
+  GA["G7-A owner commit"] -.-> M3
+  GB["G7-B owner commit · L26"] -.-> M6
+  style M1 stroke:#2DD4BF,stroke-width:2px
+  style M6 stroke:#60A5FA,stroke-width:2px
+  style M7 stroke:#F59E0B,stroke-width:2px
+  style GA stroke:#F87171,stroke-width:2px,stroke-dasharray:4 3
+  style GB stroke:#F87171,stroke-width:2px,stroke-dasharray:4 3
+    </pre>
+    <figcaption>M1 and M2 are unblocked today. M3 and M6 each wait on one owner-authored commit, which is why both amendments are requested at the top of this plan rather than discovered halfway through it.</figcaption>
+  </figure>
+
+  <!-- ================= M1 ================= -->
+  <div class="phase">
+    <h3><code class="status">[]</code> Milestone M1: One real capture in the tree, and a pure parser over it</h3>
+    <p>The spine calls the missing in-tree fixture this workstream's <em>cheapest unused upgrade</em>, and it is first because everything after it is tested against these bytes. It is also the only milestone that touches a live process.</p>
+
+    <h4>1. Capture one real reading, scrub it, and write its provenance</h4>
+    <p class="serves"><code class="serves">AC-1</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Create <code>core/test/fixtures/quota-axi/capture-probe.ts</code>, which imports the module's own argv builder rather than hard-coding argv, so the argv under test and the argv that produced these bytes are the same argv by construction</li>
+      <li><code class="status">[]</code> Spend <strong>one</strong> bounded live invocation: <code>quota-axi --provider claude,codex --json</code> resolved on <code>PATH</code>. Record the resolved version, the exit code, the byte count, and whether stderr was empty</li>
+      <li><code class="status">[]</code> Write <code>nominal.json</code> as <strong>captured then scrubbed</strong>, and state every scrub in the provenance rather than editing silently</li>
+      <li><code class="status">[]</code> Scrub list, applied and recorded: any <code>account</code> identity or label, any address-shaped or email-shaped string, every absolute or home-relative path including cache and auth-source paths, and any <code>sourcesTried</code> entry naming a machine location. Timestamps are <strong>kept</strong> — they are what the parser reads — but the capture instant is recorded beside them so a test can pin <code>now</code></li>
+      <li><code class="status">[]</code> Write <code>PROVENANCE.md</code> in the idiom of <code>core/test/fixtures/providers/claude/PROVENANCE.md</code>: what ran, on which version, what was captured verbatim, what was scrubbed and why, and which files are derived</li>
+      <li><code class="status">[]</code> Record the <strong>named absence</strong> in the same file: the bytes quota-axi emits when it is itself rate-limited cannot be summoned safely, so no fixture for them exists. State the plan — retain the next natural occurrence — rather than leaving the gap silent</li>
+      <li><code class="status">[]</code> Confirm the new files survive <code>no-credentials-in-fixtures.test.ts</code>, which sweeps <code>.json</code> and <code>.md</code> under <code>core/test/fixtures</code></li>
+    </ul>
+
+    <h4>2. Derive the six transformation fixtures, each named as a transformation</h4>
+    <p class="serves"><code class="serves">AC-5</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> <code>derived-semantics-partial.json</code> — <code>quotaSemantics.status</code> is <code>partial</code> with <code>unresolvedWindowIds</code> populated</li>
+      <li><code class="status">[]</code> <code>derived-state-unauthenticated.json</code> — <code>state.status</code> reports an auth problem with its reason and remedy fields, and no usable window</li>
+      <li><code class="status">[]</code> <code>derived-stale.json</code> — raw windows retained for diagnostics while effective availability, pace, runway and selection are all unknown. <strong>This is the fixture that proves exit code 0 is not evidence of freshness</strong></li>
+      <li><code class="status">[]</code> <code>derived-exhausted-now.json</code> — zero runway</li>
+      <li><code class="status">[]</code> <code>derived-runway-unknown.json</code> — unmeasurable bounds named rather than a conclusion invented</li>
+      <li><code class="status">[]</code> <code>derived-windows-disagree.json</code> — <code>windows[]</code> reports generous headroom while <code>effectiveAvailability</code> reports little. <strong>This is the fixture the render-source rule is proved against</strong>, and it must be built by transformation from the capture rather than written from scratch</li>
+      <li><code class="status">[]</code> Every derivation is one stated sentence in <code>PROVENANCE.md</code>, and no derived file mixes captured and invented bytes without saying which is which</li>
+    </ul>
+
+    <h4>3. Testing Strategy</h4>
+    <p class="serves"><code class="serves">AC-1</code> <code class="serves">AC-5</code></p>
+    <p>The parser is written last in this milestone and tested only against the fixtures above. It is a pure function of <code>(rawText, now)</code>: no clock read, no filesystem, no spawn. It returns a readout record and a fault list, following the collect-every-fault discipline of <code>core/src/adapters/stream/usage.ts</code> — a payload with three unreadable fields is a fact about the tool, and a caller told only the first would fix it three times.</p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> The parser reads <code>quotaSemantics.effectiveAvailability</code> and <strong>never</strong> indexes <code>windows[]</code> except by an id that came out of the effective figure — asserted by <code>derived-windows-disagree.json</code> rendering the effective number</li>
+      <li><code class="status">[]</code> State is detected structurally from <code>state.status</code> and <code>quotaSemantics.status</code>; the parser is never given an exit code and has no parameter for one</li>
+      <li><code class="status">[]</code> Minutes-to-reset is <code>null</code> — never zero and never inferred — for <code>runway.status: unknown</code>, for a stale report, and for unresolved semantics</li>
+      <li><code class="status">[]</code> <code>now</code> is a parameter. A test pinning <code>now</code> to two different instants against the same fixture produces two different minute figures, proving the clock is not read internally</li>
+      <li><code class="status">[]</code> Malformed input — not JSON, JSON that is not an object, a missing <code>quotaSemantics</code>, a non-numeric percentage — produces a fault list and an unavailable record, never a throw</li>
+      <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green</li>
+    </ul>
+    <div class="loop">
+      🔁 <strong>Do not exit this phase until every box above is checked.</strong> If any command fails, fix the cause and re-run — never lower what the row asserts.
+    </div>
+  </div>
+
+  <!-- ================= M2 ================= -->
+  <div class="phase">
+    <h3><code class="status">[]</code> Milestone M2: The probe, the version floor, and the failure posture</h3>
+    <p>Both of the source's smaller corrections land here, and neither was written down anywhere before this plan. The milestone spends nothing: every test drives an injected fake <code>runCommand</code>.</p>
+
+    <h4>4. The probe as an injected capability</h4>
+    <ul class="checklist">
+      <li><code class="status">[]</code> <code>core/src/quota/probe.ts</code> takes <code>runCommand</code> and <code>resolveExecutable</code> as parameters, matching <code>SystemCommandOptions</code>. It imports <code>node:child_process</code> nowhere and needs no exemption from the invariant 3 fence</li>
+      <li><code class="status">[]</code> Argv is exactly <code>["--provider", "&lt;csv&gt;", "--json"]</code>. A test enumerates the argv and asserts that <code>--refresh</code>, <code>--tui</code>, <code>--once</code> and <code>--full</code> appear in no code path</li>
+      <li><code class="status">[]</code> The executable is <code>quota-axi</code> resolved against the spec's own <code>PATH</code>. <code>npx</code> appears nowhere; a test asserts the string is absent from the module</li>
+      <li><code class="status">[]</code> quota-axi is <strong>not</strong> added to any <code>package.json</code>. Invariant 7 bounds the runtime dependency surface, and a spawned tool that is absent degrades to a named unavailability rather than a broken install</li>
+      <li><code class="status">[]</code> The provider CSV contains only the providers this project's configured routes actually use — never a full sweep, because a sweep touches auth sources for providers the project does not use and buys nothing</li>
+    </ul>
+
+    <h4>5. The version floor and the failure posture, both written down</h4>
+    <p class="serves"><code class="serves">AC-2</code> <code class="serves">INV-4</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> The floor is <strong><code>0.1.29</code></strong> — the version the source pinned and the version the M1 capture was taken from, recorded in <code>PROVENANCE.md</code>. It is checked by running <code>quota-axi --version</code> and comparing numerically, not by string equality</li>
+      <li><code class="status">[]</code> A version below the floor is refused with reason code <code>version-below-floor</code>, naming both the found version and the floor. <strong>The floor is necessary and not sufficient</strong>, and the module says so: a version above it that emits an unreadable payload is caught by the parser's fault list, not by the floor</li>
+      <li><code class="status">[]</code> <strong>Hard timeout.</strong> Two defaults, because the two consumers are not alike: <code>8000</code> ms for the interactive preflight readout and <code>2500</code> ms for the phase-boundary probe, which sits on the critical path between two phases. Both are configuration, not literals, and both are passed through the capability's own <code>timeoutMs</code></li>
+      <li><code class="status">[]</code> <strong>Fail-open, stated as a rule the code shape enforces:</strong> the threshold comparison takes a known minute figure and nothing else. An unavailable record has no minute figure to compare, so a failed read cannot reach the stop by any path — it is not a branch that could be written the other way</li>
+      <li><code class="status">[]</code> <strong>Seven reason codes</strong>, closed as a union: <code>executable-not-found</code>, <code>timeout</code>, <code>nonzero-exit</code>, <code>unparseable</code>, <code>version-below-floor</code>, <code>semantics-unresolved</code>, <code>stale</code>. Every unavailable outcome carries exactly one, and none is a free-text string</li>
+      <li><code class="status">[]</code> Every failure is journalled. A silent skip is the defect this row exists to prevent: an owner who cannot tell "the window is fine" from "the gauge is broken" has no gauge</li>
+      <li><code class="status">[]</code> <strong>Retention, so the named absence can actually close.</strong> On <code>unparseable</code> or <code>nonzero-exit</code>, write the raw bytes to the attempt's private uncommitted area at mode <code>0o600</code> — the same idiom <code>production-run.ts</code> already uses for <code>raw/&lt;run-id&gt;</code> — and journal the path rather than the bytes. Nothing is committed and invariant 10 is untouched, but the next natural rate-limited response is <em>kept by the system</em> instead of depending on the owner noticing it. See Questionable Q9</li>
+    </ul>
+
+    <h4>6. Testing Strategy</h4>
+    <p class="serves"><code class="serves">AC-2</code> <code class="serves">INV-4</code></p>
+    <p>Every test drives a fake <code>runCommand</code> that returns a scripted <code>CommandResult</code>. No process is spawned in the suite; the only live invocation in this workstream was task 1.</p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> A supplied version below the floor produces <code>version-below-floor</code> — the red-on-lower-version proof the spine's checklist asks for by name</li>
+      <li><code class="status">[]</code> A fake that reports the timeout condition produces <code>timeout</code>, and the caller receives an unavailable record rather than an exception</li>
+      <li><code class="status">[]</code> Exit code <code>0</code> carrying <code>derived-stale.json</code> produces <code>stale</code>, proving state is read structurally and not from the exit code</li>
+      <li><code class="status">[]</code> Exit code <code>1</code> carrying a well-formed payload is still parsed structurally, for the same reason in the other direction</li>
+      <li><code class="status">[]</code> A test enumerates every construction site of the argv and asserts the four barred flags and the string <code>npx</code> are absent</li>
+      <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green</li>
+    </ul>
+    <div class="loop">
+      🔁 <strong>Do not exit this phase until every box above is checked.</strong> A failing command means fix the cause and re-run.
+    </div>
+  </div>
+
+  <!-- ================= M3 ================= -->
+  <div class="phase">
+    <h3><code class="status">[]</code> Milestone M3: The per-route threshold, behind gate G7-A</h3>
+    <p><strong>This milestone does not start until the owner's amendment commit has landed.</strong> The first task is to verify it, not to write it — no agent can write either protected file, and inventing a route around that is the boundary working rather than an obstacle.</p>
+
+    <h4>7. Verify the amendment, then read the threshold</h4>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Confirm the owner-authored commit has landed and that <code>awsf.config.yaml</code>'s durable-intent line now distinguishes measured quota state from a durable quota policy threshold. <strong>If it has not, stop and mark this task <code>[f]</code> with the reason</strong> — do not proceed and do not write the file. <strong>The file carries no <code>quota_stop</code> block yet and must not</strong>: until this task's schema change lands, one would fail <code>load.ts</code> and break every command</li>
+      <li><code class="status">[]</code> Extend <code>core/src/config/schema.ts</code> with the optional <code>routing.quota_stop</code> block: a <code>default</code> entry and a <code>by_adapter</code> map, each carrying <code>minutes</code> and <code>probe_timeout_ms</code>. Absent means the stop is disabled — <strong>the feature is opt-in and a project that configures nothing behaves exactly as it does today</strong></li>
+      <li><code class="status">[]</code> The threshold is keyed by <strong>adapter id</strong>, matching <code>ConfiguredPhaseRoute.adapterId</code>, because that is what "route" already means in this repository</li>
+      <li><code class="status">[]</code> No measured value is accepted here. A test asserts the schema rejects any percentage, reset instant, or window id, so the amended intent line stays checkable rather than merely written</li>
+      <li><code class="status">[]</code> <code>core/src/config/load.ts</code>'s existing absolute-path and credential-shape refusals are unchanged and still apply to the new block</li>
+    </ul>
+
+    <h4>8. Testing Strategy</h4>
+    <p>Config tests only. No probe, no process, no network.</p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> A config with no <code>quota_stop</code> block loads and yields a disabled stop</li>
+      <li><code class="status">[]</code> A config with <code>default</code> only applies it to every adapter; a <code>by_adapter</code> entry overrides the default for that adapter alone</li>
+      <li><code class="status">[]</code> A block carrying a percentage, a <code>resetsAt</code>, or a window id is refused by name</li>
+      <li><code class="status">[]</code> A negative or non-integer <code>minutes</code> is refused</li>
+      <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green</li>
+    </ul>
+    <div class="loop">
+      🔁 <strong>Do not exit this phase until every box above is checked.</strong> If the amendment has not landed, this phase is <code>[f]</code> and the workstream waits — it does not route around the gate.
+    </div>
+  </div>
+  <!-- ================= M4 ================= -->
+  <div class="phase">
+    <h3><code class="status">[]</code> Milestone M4: The preflight readout the owner reads before starting</h3>
+    <p>The first of the workstream's three pieces, and the only one with a user-facing surface. It is a report and nothing else: it selects no provider, orders nothing, and recommends nothing.</p>
+
+    <h4>9. Map configured routes to measurable providers</h4>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Resolve the project through <code>awsf.project.yaml</code> and its plan repository, so the readout reports on <em>this project's</em> configured routes rather than on whatever the machine happens to be signed into</li>
+      <li><code class="status">[]</code> Map by <strong>adapter kind, never by adapter id</strong>: <code>claude-code → claude</code>, <code>pi-codex → codex</code>. An adapter id is an owner-chosen label and a project that names its Codex route <code>claude</code> would otherwise report the wrong provider's window with no error</li>
+      <li><code class="status">[]</code> <code>fixture</code> maps to nothing and is reported as <em>spends no quota</em> rather than omitted, so the stub route's absence from the report is explained rather than mysterious</li>
+      <li><code class="status">[]</code> <code>antigravity</code> maps to nothing measurable and is reported as <em>unmeasurable</em> with that stated reason</li>
+      <li><code class="status">[]</code> <code>composite-fusion</code> reports the kinds of its members. If they cannot be resolved, it reports unmeasurable rather than guessing one</li>
+      <li><code class="status">[]</code> A disabled adapter is not probed and not reported. The provider CSV is built from enabled routes only</li>
+    </ul>
+
+    <h4>10. Render the readout</h4>
+    <p class="serves"><code class="serves">AC-5</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> One row per configured route: adapter id, provider, effective percent remaining, <strong>minutes to reset</strong>, the configured threshold, and a verdict of <em>above</em>, <em>below</em>, <em>disabled</em> or <em>unknown</em></li>
+      <li><code class="status">[]</code> The effective percent is shown as the tool reports it, with its scope named. <strong>The row states in words that the figure is account-wide and that another client moves it</strong> — the same sentence the adjudication used to strip the attribution claim, placed where the number is read rather than in a design document</li>
+      <li><code class="status">[]</code> An unavailable route shows its reason code and its remedy where the tool supplies one, never a blank and never a zero</li>
+      <li><code class="status">[]</code> <strong>The readout record's field list is closed and asserted exhaustively.</strong> It carries no comparator, no sort order, no rank, no <em>preferred</em> or <em>recommended</em> field, and no boolean that answers "should I use this provider". Adding one turns the M7 fence red</li>
+      <li><code class="status">[]</code> The command spends no agent quota and makes exactly one probe invocation per run</li>
+    </ul>
+
+    <h4>11. Testing Strategy</h4>
+    <p class="serves"><code class="serves">AC-5</code></p>
+    <p>Rendering tests over the M1 fixtures with an injected fake <code>runCommand</code>, plus a snapshot of the rendered text so a wording change is a visible diff rather than an accident.</p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> <code>derived-windows-disagree.json</code> renders the effective figure. This is <code>AC-5</code> and it is the sharpest test in the milestone</li>
+      <li><code class="status">[]</code> An adapter id that collides with another provider's name still reports its own kind's provider</li>
+      <li><code class="status">[]</code> Each of the seven reason codes renders a distinct, non-blank row</li>
+      <li><code class="status">[]</code> The exhaustive field-list assertion fails when a <code>preferred</code> field is added, proven by adding one temporarily and restoring it</li>
+      <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green</li>
+    </ul>
+    <div class="loop">
+      🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+    </div>
+  </div>
+
+  <!-- ================= M5 ================= -->
+  <div class="phase">
+    <h3><code class="status">[]</code> Milestone M5: Q4's named upgrade, shipped rather than implied</h3>
+    <p>Q4 was decided with its upgrade named in the same breath, and the spine's checklist requires it to be <em>named rather than left implicit</em>. This milestone ships it as a rendered, journalled comparison. <strong>It does not become the stop condition in this workstream</strong> — that is the versioned change it earns, and Questionable Q3 records the reasoning.</p>
+    <div class="card warn">
+      <h5>One correction to the spine's shorthand, made in the open</h5>
+      <p>The decision says the observed median duration is something <em>"the projection already records"</em>. Precisely: <code>PhaseRow</code> in <code>core/src/observability/queries.ts</code> carries <code>phase_key</code>, <code>started_at</code> and <code>ended_at</code>, so <strong>the data is recorded and the statistic is not</strong>. There is no median query in that file today. The upgrade therefore costs one read-side query rather than zero, which is small but is not nothing, and a plan that repeated the shorthand would have under-scoped this milestone.</p>
+    </div>
+
+    <h4>12. The observed-median query and its history floor</h4>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Add <code>observedPhaseDurationMedian(db, phaseKey)</code> to <code>core/src/observability/queries.ts</code>, following that file's rules: a <code>SELECT</code> on a <code>readonly</code> connection with columns named explicitly</li>
+      <li><code class="status">[]</code> It counts only phases with both <code>started_at</code> and <code>ended_at</code> and a succeeded status. A phase that crashed is not an observation of how long that phase takes</li>
+      <li><code class="status">[]</code> <strong>History floor: fewer than five completed observations returns <code>insufficient-history</code>, never a number.</strong> A median of two is a number with the authority of a measurement and the reliability of a guess</li>
+      <li><code class="status">[]</code> The return is a duration and a count. The count is rendered beside the median so the reader can see what the figure rests on</li>
+      <li><code class="status">[]</code> No write path is added. Invariant 6 keeps SQLite writes to <code>sqlite.ts</code>, <code>projector.ts</code> and the protected migrations directory, and this milestone touches none of them</li>
+    </ul>
+
+    <h4>13. Testing Strategy</h4>
+    <p>Query tests against an in-memory projection seeded from journal records, plus a rendering test for the three-way verdict.</p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Four observations return <code>insufficient-history</code>; five return a median and the count</li>
+      <li><code class="status">[]</code> Even and odd observation counts both produce the expected median</li>
+      <li><code class="status">[]</code> A crashed phase with a <code>started_at</code> and no <code>ended_at</code> is excluded from both the median and the count</li>
+      <li><code class="status">[]</code> The readout renders <em>fits</em>, <em>does not fit</em>, or <em>insufficient history</em> — and renders the third rather than falling back to the threshold verdict, so a reader is never shown a comparison that did not happen</li>
+      <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green</li>
+    </ul>
+    <div class="loop">
+      🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+    </div>
+  </div>
+
+
+  <!-- ================= M6 ================= -->
+  <div class="phase">
+    <h3><code class="status">[]</code> Milestone M6: The phase-boundary snapshot, and the stop on <code>L26</code></h3>
+    <p>The second and third pieces. <strong>This milestone does not start until the owner's <span class="gate">G7-B</span> commit has landed</strong>, because the stop now has its own legal edge rather than borrowing two that exist for other reasons.</p>
+    <figure>
+      <pre class="mermaid">
+stateDiagram-v2
+  RUNNING --> RUNNING: boundary · snapshot journalled
+  RUNNING --> AWAITING_OWNER: L26 · new · host · guarded
+  RUNNING --> GATING: L7 · unchanged
+  AWAITING_OWNER --> RUNNING: L19 · human only
+  AWAITING_OWNER --> LANDING: L20 · needs gatesPass
+  note right of AWAITING_OWNER
+    no timeout · no clock reaches here
+  end note
+      </pre>
+      <figcaption>The snapshot happens at every boundary and the stop is <code>L26</code> alone — <code>L12</code> and <code>L15</code> are deliberately left carrying only the meanings they already had. <code>L20</code>'s existing <code>gatesPass</code> requirement is what makes a mid-<code>RUNNING</code> suspension safe.</figcaption>
+    </figure>
+
+    <h4>14. The snapshot record, labelled non-attributable in the record itself</h4>
+    <p class="serves"><code class="serves">AC-3</code> <code class="serves">INV-3</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Add <code>{ type: "quota-snapshot", ... }</code> to the <code>AttemptEvidence</code> union in <code>core/src/observability/attempt-evidence.ts</code>. <strong>Do not reuse the normalized <code>quota</code> event kind</strong> — that one is a provider-signalled refusal from inside a run, commented <em>"quota is never a retry"</em>, and conflating a blocking refusal with advisory context would make both unreadable</li>
+      <li><code class="status">[]</code> The record carries an explicit <code>attribution: "none"</code> field and a <code>scope: "account-window"</code> field. <strong>The label is a field, not a comment</strong> — a reader parsing the journal a year from now sees it without reading this plan</li>
+      <li><code class="status">[]</code> It also carries the boundary it sits at (the phase key just completed and the one not yet started), the effective percent, the minutes to reset, the reason code when unavailable, and the resolved quota-axi version</li>
+      <li><code class="status">[]</code> <strong>Journal-only.</strong> <code>applyAttemptEvidence</code> in <code>core/src/observability/projector.ts</code> has no <code>default</code> clause, so an unhandled type is a silent no-op and no table is needed. This deliberately avoids <code>core/src/observability/migrations/**</code>, which is a protected path — and it is the same reason <code>L26</code> costs no migration either</li>
+      <li><code class="status">[]</code> Every string in the record passes through the journal's existing <code>scrubCredentials</code>/<code>stringifyRedacted</code> path, which it does by construction because the journal applies them to every appended event</li>
+    </ul>
+
+    <h4>15. Verify the <code>L26</code> amendment, then move the test-side tables</h4>
+    <p class="serves"><code class="serves">INV-4</code> <code class="serves">INV-5</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Confirm the owner-authored <span class="gate">G7-B</span> commit has landed: <code>L26</code> is in <code>LEGAL_EDGES</code> as <code>{ from: "RUNNING", to: "AWAITING_OWNER", actors: ["host"], spawnSite: false, interactive: false }</code>, and its guard exists in <code>core/src/state/guards.ts</code>. <strong>If it has not, stop and mark this task <code>[f]</code> with the reason</strong> — <code>core/src/state/**</code> is protected and no agent writes it</li>
+      <li><code class="status">[]</code> Confirm the guard <strong>refuses a transition whose evidence carries no known minute figure</strong>. This is where <code>INV-4</code> becomes a property of the machine rather than of how a comparison happens to be written, and it is the whole reason this edge was worth its amendment</li>
+      <li><code class="status">[]</code> Confirm <code>L26</code> is <strong>not</strong> a spawn site and <strong>not</strong> a correction edge: <code>SPAWN_SITE_EDGES</code> and <code>CORRECTION_EDGES</code> are unchanged, and the derived <code>spawnSite</code>/<code>to</code> cross-check in <code>transitions.test.ts</code> still holds because <code>AWAITING_OWNER</code> is neither <code>RUNNING</code> nor <code>REVIEWING</code></li>
+      <li><code class="status">[]</code> Move the pair out of the illegal set in <code>core/test/unit/_lifecycle-tables.ts</code> and add <code>L26</code> to its mirror table. <strong>This is a single-cell amendment</strong>, exactly as the file records L25's was: only the "everything else" class changes and the first three classes' arithmetic is untouched. These are test files, so this task may write them</li>
+      <li><code class="status">[]</code> Update <code>assert.equal(LEGAL_EDGES.length, 25)</code> at <code>core/test/unit/transitions.test.ts:67</code> to 26, and the edge-id list beside it</li>
+      <li><code class="status">[]</code> <strong>Confirm no migration was needed.</strong> <code>0001-initial.sql</code> declares <code>from_state</code>, <code>to_state</code> and <code>edge_id</code> with no <code>CHECK</code>, so an <code>L26</code> row projects with the schema untouched. Assert it by projecting one</li>
+    </ul>
+
+    <h4>16. The stop at the boundary, and what never follows it</h4>
+    <p class="serves"><code class="serves">AC-4</code> <code class="serves">INV-5</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Take the snapshot at <strong>every</strong> phase boundary in the loop at <code>core/src/cli/commands/production-run.ts</code>, and journal it whether or not the threshold is configured</li>
+      <li><code class="status">[]</code> When the threshold is crossed at a boundary, take <code>L26</code> to <code>AWAITING_OWNER</code> rather than launching the next phase. <strong><code>L12</code> and <code>L15</code> gain no quota condition</strong> — entangling quota with the tier fork out of <code>GATING</code> or with review-verdict consistency would put a quota test inside two guards that exist for other reasons</li>
+      <li><code class="status">[]</code> The threshold fires only on a known minute figure. Unavailable, unknown, stale and unresolved all continue — and now cannot even form a legal transition, because the guard refuses evidence without one</li>
+      <li><code class="status">[]</code> <strong>No timer, no scheduled wake, no automatic resume, and no retry loop.</strong> Leaving <code>AWAITING_OWNER</code> toward work is <code>L19</code>, <code>L20</code> or <code>L25</code> — every one human- or owner-actored and interactive. The repository already states this property in <code>L21</code>'s comment; this task must not weaken it</li>
+      <li><code class="status">[]</code> The transition's reason names the threshold and the observed figure, so the owner reads why they were handed the task rather than inferring it</li>
+      <li><code class="status">[]</code> <strong>No task cost is computed from two readings anywhere.</strong> Two snapshots in one attempt are two independent context notes; nothing subtracts them</li>
+    </ul>
+
+    <h4>17. Testing Strategy</h4>
+    <p class="serves"><code class="serves">AC-3</code> <code class="serves">AC-4</code> <code class="serves">INV-3</code> <code class="serves">INV-4</code> <code class="serves">INV-5</code></p>
+    <p>End-to-end on the fixture adapter with an injected fake <code>runCommand</code> and an injected clock. Offline, no network, no agent quota.</p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> A journal line round-trips with <code>attribution: "none"</code> present — asserted on the parsed line, not on the object before it was written</li>
+      <li><code class="status">[]</code> A multi-phase run journals one snapshot per boundary and, with the threshold uncrossed, reaches <code>GATING</code> with no <code>L26</code> recorded</li>
+      <li><code class="status">[]</code> A minute figure below the configured threshold at a mid-<code>RUNNING</code> boundary records an <code>L26</code> transition to <code>AWAITING_OWNER</code>, with <code>actor: host</code>, <code>spawn_site: 0</code>, and a reason naming both the threshold and the figure</li>
+      <li><code class="status">[]</code> <strong>An unavailable reading is refused by the guard, not merely unused.</strong> Attempting <code>L26</code> with evidence carrying no known figure produces a guard violation — the assertion that makes <code>INV-4</code> structural</li>
+      <li><code class="status">[]</code> A task suspended by <code>L26</code> — no candidate, no gates run — <strong>cannot take <code>L20</code> to <code>LANDING</code></strong>. This is the gating-bypass objection, answered by exercising <code>L20</code>'s existing guard rather than by adding a new rule</li>
+      <li><code class="status">[]</code> <strong>After the stop, the injected clock is advanced well past every timeout in the system and no further transition is recorded.</strong> This is <code>AC-4</code>'s second half and the one a timer would fail</li>
+      <li><code class="status">[]</code> Projection of a journal containing both the new evidence type and an <code>L26</code> transition succeeds; the evidence writes no row and the transition writes one, with no schema change</li>
+      <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green — including <code>transitions.test.ts</code>, <code>actors.test.ts</code>, <code>rejection-order.test.ts</code> and <code>evidence.test.ts</code>, all of which read the mirror table this milestone moved</li>
+    </ul>
+    <div class="loop">
+      🔁 <strong>Do not exit this phase until every box above is checked.</strong> A stop that a timer resumes is not this feature; it is the daemon this project has refused twice.
+    </div>
+  </div>
+
+  <!-- ================= M7 ================= -->
+  <div class="phase">
+    <h3><code class="status">[]</code> Milestone M7: The fence, proven red before it is trusted, and the close</h3>
+    <p>Three legs, because one path glob cannot express what is being guaranteed. The weak leg is named rather than hidden.</p>
+
+    <h4>18. The transitive import fence</h4>
+    <p class="serves"><code class="serves">INV-1</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Build the relative-import graph across <code>core/src/**</code> using the existing <code>walkFiles</code> helper in <code>core/test/unit/meta/_walk.ts</code>, then compute the reachable closure from every file under <code>core/src/workflow/**</code> and assert <code>core/src/quota/**</code> is not in it</li>
+      <li><code class="status">[]</code> <strong>This is the repository's first transitive fence</strong>; every existing one is a direct-text scan. The file's header says so and says why: the spine's rule is <em>"may not reach the module at all"</em>, and a direct-import scan is satisfied by one intermediate file</li>
+      <li><code class="status">[]</code> <strong>Prove it red before trusting it.</strong> Add a temporary import of the quota module into a workflow file two hops away, watch the fence name the path it found, then restore. A fence nobody has seen fail is decoration</li>
+      <li><code class="status">[]</code> The failure message prints the whole path, not just the endpoints, so a red run names the hop that has to be removed</li>
+    </ul>
+
+    <h4>19. The routing-absence fence and the no-derived-cost fence</h4>
+    <p class="serves"><code class="serves">INV-2</code> <code class="serves">INV-3</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> <strong>State the weak leg plainly in the test file's header.</strong> The routing resolver and the legitimate consumer share one file — <code>core/src/cli/commands/production-run.ts</code> holds both the route resolution and the phase loop — so no path glob can bar one while permitting the other. The guarantee for the resolver is therefore different in kind, and pretending otherwise would be the weaker choice</li>
+      <li><code class="status">[]</code> <strong>Leg two, signatures:</strong> no route-resolution function accepts, returns, or closes over a type exported from <code>core/src/quota/**</code>. Assert it over the named resolution sites in <code>production-run.ts</code>, <code>review-phase.ts</code>, <code>rework.ts</code>, <code>start.ts</code> and <code>core/src/workflow/review-routing.ts</code></li>
+      <li><code class="status">[]</code> <strong>Leg three, shape:</strong> the readout record's exported field list is asserted exhaustively, so a comparator, rank, ordering or <em>preferred</em> field cannot be added without turning this red. This is the leg that actually stops the plausible future convenience, because it makes the routing feature unbuildable rather than merely unbuilt</li>
+      <li><code class="status">[]</code> A source scan asserts no subtraction, delta, or per-task rate is computed from two quota readings: no identifier matching <em>quota</em> plus <em>delta</em>, <em>cost</em>, <em>spent</em>, or <em>per-task</em> exists in <code>core/src</code></li>
+      <li><code class="status">[]</code> All three legs proven red, one at a time, then restored</li>
+    </ul>
+
+    <h4>20. Testing Strategy and the close</h4>
+    <p class="serves"><code class="serves">INV-1</code> <code class="serves">INV-2</code></p>
+    <p>The full offline suite, then the spine marker. This is the only task that touches <code>specs/awsf-v2-plan.html</code>.</p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> all green, with <strong>no network and no agent quota spent</strong> in the whole suite</li>
+      <li><code class="status">[]</code> <code>ticket-plan-sync.test.ts</code> green: every task in this plan has a ticket, states mirror markers, and each ticket's prompt is byte-identical to its Section B block</li>
+      <li><code class="status">[]</code> The identifier-spine coverage rows are green: every declaration is served, no claim is orphaned, and plan and ticket <code>serves</code> lists mirror each other</li>
+      <li><code class="status">[]</code> Every milestone above is <code>[x]</code> and every ticket in <code>specs/tickets/awsf-v2-w07-quota-telemetry/</code> is <code>done</code></li>
+      <li><code class="status">[]</code> <strong>Both amendments are recorded in this plan's Amendments section</strong> with their commit SHAs — <span class="gate">G7-A</span>'s config change and <span class="gate">G7-B</span>'s <code>L26</code>, each an owner-authored commit, so the plan that asked for them also records that they landed</li>
+      <li><code class="status">[]</code> The named absence is re-checked and its record updated: if the retention path from M2 captured a rate-limited response, it is scrubbed and promoted to a fixture and <code>PROVENANCE.md</code> says so; if it did not, the absence and its retention plan both stand</li>
+      <li><code class="status">[]</code> <strong>Only now:</strong> flip W07's marker in <code>specs/awsf-v2-plan.html</code> to <code>[x]</code> and <code>specs/tickets/awsf-v2-plan/W07.md</code> to <code>done</code>, in the same commit</li>
+    </ul>
+    <div class="loop">
+      🔁 <strong>Do not exit this phase until every box above is checked.</strong> The spine marker is the last thing that moves, and it moves only from here.
+    </div>
+  </div>
+</section>
+
+<section id="validation">
+  <h2>Validation Commands</h2>
+  <p>Execute these to validate the entire plan is complete. Every one is offline.</p>
+  <ul class="checklist">
+    <li><code class="status">[]</code> <code>npm run test:unit</code> — the whole suite green, including the parser over in-tree fixtures, the probe's seven reason codes, the version floor, the <code>L26</code> stop and its guard refusal, and the three fence legs</li>
+    <li><code class="status">[]</code> <code>npm run typecheck</code> — the closed reason-code union, the closed readout field list, and <code>L26</code>'s mandatory guard entry all hold</li>
+    <li><code class="status">[]</code> <code>npm run lint</code> — clean</li>
+    <li><code class="status">[]</code> <code>node --test core/test/unit/meta/quota-fence.test.ts</code> — the three legs, each having been seen red</li>
+    <li><code class="status">[]</code> <code>node --test core/test/unit/transitions.test.ts core/test/unit/actors.test.ts core/test/unit/rejection-order.test.ts core/test/unit/evidence.test.ts</code> — twenty-six edges, the mirror table moved, and the illegal-pair arithmetic still balancing</li>
+    <li><code class="status">[]</code> <code>node --test core/test/unit/meta/no-credentials-in-fixtures.test.ts</code> — the new fixture directory survives the credential sweep</li>
+    <li><code class="status">[]</code> <code>node --test core/test/unit/meta/ticket-plan-sync.test.ts</code> — plan, tickets and Section B agree byte for byte</li>
+    <li><code class="status">[]</code> <code>node --test core/test/unit/meta/child-process-fence.test.ts</code> — still exactly one importer; the quota module added none</li>
+    <li><code class="status">[]</code> <code>node --test core/test/unit/meta/dependency-allowlist.test.ts</code> — quota-axi entered no manifest</li>
+    <li><code class="status">[]</code> <code>node --test core/test/unit/meta/junk-drawer.test.ts</code> — the retention path committed nothing; invariant 10 holds</li>
+    <li><code class="status">[]</code> <code>git grep -n "npx -y quota-axi" core/src | wc -l</code> returns <code>0</code> — the unpinned fetch the source recommended is absent</li>
+  </ul>
+  <div class="loop">
+    🔁 <strong>The plan is not complete until every box is checked and every command passes. If a step is genuinely not possible, mark it <code>[f]</code>, record why, and move on if the rest can proceed.</strong>
+  </div>
+</section>
+<section id="questionables">
+  <h2>Questionables</h2>
+  <p><strong>All nine were decided by the owner on 2026-08-24.</strong> Every one is a constraint now, not a question — eight approved as recommended in the first pass, and Q9 approved on its revision in the second. <strong>Spine Q4 is decided upstream and is not reopened here</strong> — Q1, Q3 and Q4 below record <em>how</em> this plan implements it, which is what the spine's checklist asks for.</p>
+  <figure>
+    <pre class="mermaid">
+flowchart TD
+  D["Q4 decided · minutes to reset"] --> Q1["Q1 · L26 new legal edge"]
+  D --> Q3["Q3 · upgrade ships advisory"]
+  D --> Q4b["Q4 · route is adapter id"]
+  Q1 --> GB["G7-B owner commit"]
+  Q2["Q2 · threshold in awsf.config.yaml"] --> GA["G7-A owner commit"]
+  Q9["Q9 · retention is automatic"] --> M2["M2 · probe retains bytes"]
+  style D stroke:#4ADE80,stroke-width:2px
+  style GA stroke:#F59E0B,stroke-width:2px
+  style GB stroke:#F59E0B,stroke-width:2px
+  style M2 stroke:#4ADE80,stroke-width:2px
+    </pre>
+    <figcaption>Two owner commits gate this workstream, one from each of the first two decisions. Nothing on this diagram is still a question.</figcaption>
+  </figure>
+
+  <details data-review-options="Snapshot at every boundary, stop only where an AWAITING_OWNER edge exists|Add legal edge L26 RUNNING to AWAITING_OWNER (decided)|Stop by ending the attempt at BLOCKED">
+    <summary><span class="qdecided">DECIDED</span> Q1 — Where may the stop legally land? There is no <code>RUNNING → AWAITING_OWNER</code> edge.</summary>
+    <p class="decided"><b>Decided (2026-08-24):</b> <strong>add legal edge <code>L26 — RUNNING → AWAITING_OWNER</code></strong>, actor <code>host</code>, not a spawn site, not interactive, not a correction edge. This is <strong>against the authoring session's recommendation</strong>, and the re-measurement below is why the owner was right.</p>
+    <p class="qa-answer"><strong>The constraint, verified in source.</strong> <code>core/src/state/task-machine.ts</code> declares twenty-five legal edges. <code>RUNNING</code> reaches only <code>GATING</code> (<code>L7</code>), <code>BLOCKED</code> (<code>L8</code>) and <code>CANCELLED</code> (<code>L9</code>). The only host-actored edges into <code>AWAITING_OWNER</code> are <code>L12</code> from <code>GATING</code> and <code>L15</code> from <code>REVIEWING</code>. A multi-phase workflow spends its inter-phase boundaries inside the <code>RUNNING</code> sojourn, so the spine's <em>"the stop lands at <code>AWAITING_OWNER</code>"</em> and its <em>"phase-boundary"</em> could not both be taken literally without a new edge.</p>
+    <p class="qa-answer"><strong>A cost this plan claimed and then measured, wrongly stated the first time.</strong> The first draft priced this option as <em>"a twenty-sixth edge, the SQLite check constraints, the lifecycle tables, and a new way out of <code>RUNNING</code>."</em> <strong>The check-constraint half is false.</strong> <code>0001-initial.sql</code> declares <code>from_state TEXT NOT NULL, to_state TEXT NOT NULL</code> and <code>edge_id TEXT NOT NULL</code> — the last with the comment <code>-- 'L20'</code> and <em>no</em> <code>CHECK</code> on any of the three. No migration moves, so the protected <code>migrations/**</code> directory stays shut and this stays one amendment rather than two. The real cost is four items: two protected-file changes the owner makes (the edge, and a guard that <code>Readonly&lt;Record&lt;EdgeId, …&gt;&gt;</code> makes a typecheck error to omit), and two test files an agent may write (<code>_lifecycle-tables.ts</code>, where the pair moves out of the illegal set exactly as it did when <code>L25</code> was added, and the <code>assert.equal(LEGAL_EDGES.length, 25)</code> row in <code>transitions.test.ts</code>). That is materially cheaper than the recommendation was priced against.</p>
+    <p class="qa-answer"><strong>The objection the source itself raises, and its answer.</strong> <code>_lifecycle-tables.ts</code> records why this pair was illegal: <em>"RUNNING → AWAITING_OWNER skips gating."</em> That reasoning is about <em>advancing</em> work without gating it. A quota stop advances nothing — it suspends, with no candidate and no gate run. So the real question is whether a task suspended this way could then reach <code>LANDING</code> ungated, and <strong>it cannot: <code>L20</code>'s guard already requires <code>gatesPass</code>, a 40-hex candidate, and a displayed SHA equal to that candidate.</strong> The bypass is closed by machinery that predates this workstream — which is precisely the check the spine's fourth shared rule demands before a plan proposes a new guarantee of its own.</p>
+    <p class="qa-answer"><strong>What the edge buys, and what it lets this plan drop.</strong> <code>L26</code>'s guard is where <code>INV-4</code> stops being a property of how a comparison is written and becomes a property of the machine: <strong>an unavailable, stale, or unknown reading cannot form a legal transition at all.</strong> A later refactor that made the host try to stop on a broken gauge is refused by the state machine, not by a code shape. It also lets the plan <em>drop</em> the accepted overrun the recommendation carried — the stop now lands at the boundary where the decision is actually made — and it leaves <code>L12</code> and <code>L15</code> carrying only the meanings they already had, instead of putting a quota condition inside the tier fork out of <code>GATING</code> and inside review-verdict consistency.</p>
+    <p class="qa-answer"><strong>Still rejected: ending at <code>BLOCKED</code>.</strong> <code>BLOCKED</code> is terminal for the attempt, so a preventive pause would discard work in progress and force a fresh attempt. Nothing in the review changes that.</p>
+  </details>
+
+  <details data-review-options="awsf.config.yaml routing block, one owner amendment (decided)|awsf.project.yaml catalog|A new non-protected machine-local file">
+    <summary><span class="qdecided">DECIDED</span> Q2 — Where does the per-route threshold live? Both natural homes are protected paths.</summary>
+    <p class="decided"><b>Decided (2026-08-24):</b> <strong><code>awsf.config.yaml</code>, under <code>routing:</code>, behind one owner-authored amendment</strong> — gate <span class="gate">G7-A</span>.</p>
+    <p class="qa-answer"><strong>The problem nothing upstream noticed.</strong> Q4 says the threshold is <em>configured per route</em>. <code>policy.protected_paths</code> lists both <code>awsf.config.yaml</code> and <code>awsf.project.yaml</code>, and <code>path-policy</code> rejects <code>protected-path</code> independently of any write glob. The decision as written could not be implemented by an agent in either place without an owner commit first.</p>
+    <p class="qa-answer"><strong>Why the config file rather than the catalog.</strong> Route identity already lives there — <code>adapters:</code> defines the route surface and <code>routing:</code> defines how routes are chosen. The project catalog is per project and per repository, a different axis from a route, and putting a route-keyed value there would leave two files disagreeing about what a route is.</p>
+    <p class="qa-answer"><strong>The second half of the amendment, and why it is a narrowing.</strong> That file's header and <code>core/src/config/schema.ts</code>'s both state <em>"no quota fields."</em> The line is documentation, not a meta-test — <code>load.ts</code> checks absolute paths and credential shapes only. The amendment restates it: <em>measured quota state never appears here; a durable quota policy threshold may</em>. The original line was written because quota state is live and machine-local, which is invariant 1's territory. A threshold the owner chooses once is neither, and M3 adds a schema test refusing any percentage, reset instant, or window id — so the amended line ends up mechanically checked where the original never was.</p>
+    <p class="qa-answer"><strong>The rejected alternative worth naming.</strong> A new non-protected file would need no amendment and is exactly the <em>route around <code>path-policy</code></em> the spine's Q2 already refused for the catalog. Refusing it again here is consistency, not caution.</p>
+  </details>
+
+  <details data-review-options="Rendered and journalled advisory; the threshold still stops (decided)|The median becomes the stop condition now|Named in the plan, built in a later workstream">
+    <summary><span class="qdecided">DECIDED</span> Q3 — How does Q4's named upgrade ship, given the median statistic does not exist yet?</summary>
+    <p class="decided"><b>Decided (2026-08-24):</b> <strong>ship it as a rendered and journalled comparison; the configured threshold stays the thing that stops.</strong></p>
+    <p class="qa-answer">M5 adds the query, the readout shows <em>fits</em> / <em>does not fit</em> / <em>insufficient history</em> beside the observation count, and the snapshot carries the same figures. The upgrade is therefore <em>shipped</em> rather than <em>implied</em>, which is what the spine's checklist row asks for, and making it the stop condition later is a one-line, versioned change against data that by then has history.</p>
+    <p class="qa-answer"><strong>Why not make it the stop condition now.</strong> The stop would depend on a statistic that returns <code>insufficient-history</code> for every phase key on a fresh install — doing nothing until five runs complete, then changing behaviour without anyone changing configuration. A silent behaviour change on the fifth run is worse than a threshold the owner set on purpose.</p>
+    <p class="qa-answer"><strong>Why not defer it.</strong> The spine explicitly refuses that: the upgrade ships <em>named alongside</em> the threshold, and the catch it answers is real — time to reset says when the window resets, not how much work fits before then. A plan shipping only the threshold would have shipped the magic number the decision was retiring.</p>
+    <p class="qa-answer"><strong>The correction this milestone makes.</strong> The decision's phrase <em>"the projection already records"</em> is true of the data and not of the statistic. <code>PhaseRow</code> carries <code>phase_key</code>, <code>started_at</code> and <code>ended_at</code>; there is no median query. One read-side query, not zero.</p>
+  </details>
+
+  <details data-review-options="Adapter id, matching ConfiguredPhaseRoute (decided)|Adapter kind mapped to provider|Agent role">
+    <summary><span class="qdecided">DECIDED</span> Q4 — What is a "route" for the purpose of a per-route threshold?</summary>
+    <p class="decided"><b>Decided (2026-08-24):</b> <strong>adapter id</strong>, matching <code>ConfiguredPhaseRoute.adapterId</code>.</p>
+    <p class="qa-answer">That is what this repository already means by a route — <code>core/src/workflow/phase-launch-authorization.ts</code> defines <code>ConfiguredPhaseRoute</code> as <code>{ adapterId, role, launchAuthorization }</code> — so the threshold key joins to something the phase-launch path already carries.</p>
+    <p class="qa-answer"><strong>Two ids, deliberately not the same one.</strong> The <em>threshold</em> is keyed by adapter id. The <em>provider probed</em> is derived from the adapter's <strong>kind</strong> — <code>claude-code → claude</code>, <code>pi-codex → codex</code> — because an adapter id is an owner-chosen label. A project that named its Codex route <code>claude</code> would otherwise probe the wrong provider and report a plausible wrong number with no error anywhere. Both rules are written down in the ticket README so a reviewer edits the rule rather than re-deriving it.</p>
+    <p class="qa-answer"><strong>Why not agent role.</strong> Roles are many and adapters are few, so a role-keyed threshold is the same number repeated with more places to get it wrong. Two roles on one adapter share one account window; separate thresholds would suggest a distinction the window does not make.</p>
+  </details>
+
+  <details data-review-options="Floor 0.1.29, refuse below, parser catches drift above (decided)|Exact pin, refuse anything else|Floor plus an upper bound">
+    <summary><span class="qdecided">DECIDED</span> Q5 — What is the version floor, and how strictly is it enforced?</summary>
+    <p class="decided"><b>Decided (2026-08-24):</b> <strong>floor <code>0.1.29</code>, compared numerically, refused below with reason code <code>version-below-floor</code>.</strong></p>
+    <p class="qa-answer">That is the version the source pinned and the version the M1 capture is taken from, which is what makes it a floor rather than an arbitrary number: below it, the bytes in the tree are not evidence of anything.</p>
+    <p class="qa-answer"><strong>Necessary and not sufficient, and the module says so.</strong> A <code>0.x</code> minor bump can change a payload. What actually protects the readout is the parser's fault list: a version above the floor emitting a shape the parser cannot read produces an unavailable record with <code>unparseable</code>, failing open like every other failure. Two independent checks, neither pretending to be the other.</p>
+    <p class="qa-answer"><strong>Why not an exact pin.</strong> It breaks the readout on every upgrade, including upgrades that change nothing this plan reads — and an owner whose gauge breaks routinely stops reading the gauge. <strong>Why not an upper bound:</strong> it is an exact pin wearing a range, and it fails closed on a version that may well be fine, which is the wrong direction for a feature whose whole posture is fail-open.</p>
+  </details>
+
+  <details data-review-options="2500 ms boundary and 8000 ms preflight, both configurable (decided)|One fixed value for both|Measure on first use and adapt">
+    <summary><span class="qdecided">DECIDED</span> Q6 — What are the probe timeouts, and are they guesses?</summary>
+    <p class="decided"><b>Decided (2026-08-24):</b> <strong>2500 ms at the phase boundary, 8000 ms for the interactive readout, both configurable in the same block as the threshold.</strong></p>
+    <p class="qa-answer"><strong>They are estimates, and the plan says so rather than presenting them as measurements.</strong> quota-axi calls first-party provider endpoints over the network and nobody here has measured its latency distribution.</p>
+    <p class="qa-answer"><strong>Why two values.</strong> The boundary probe sits on the critical path between two phases, and a slow gauge there taxes every run; failing open at 2500 ms costs one journalled unavailability. The preflight readout is something a person asked for and will wait a moment for, and a timeout there is worse than a short wait.</p>
+    <p class="qa-answer"><strong>Why not adapt on first use.</strong> An adaptive timeout is state, and the only places it could live are a runtime artifact (invariant 10) or the projection (a write path this workstream deliberately does not open). A configurable constant is the cheapest thing that is also honest about being a guess.</p>
+  </details>
+
+  <details data-review-options="Journal-only; the projector ignores it (decided)|A new table via a migration|Fold it into an existing table">
+    <summary><span class="qdecided">DECIDED</span> Q7 — Is the snapshot projected into SQLite, or does it stay in the journal?</summary>
+    <p class="decided"><b>Decided (2026-08-24):</b> <strong>journal-only.</strong></p>
+    <p class="qa-answer"><code>applyAttemptEvidence</code> in <code>core/src/observability/projector.ts</code> switches on the evidence type with no <code>default</code> clause, so an unhandled member is a silent no-op. The record lands in the append-only journal — which invariant 10 names as the evidence store — and nothing else changes.</p>
+    <p class="qa-answer"><strong>What it avoids, now doubly relevant.</strong> <code>core/src/observability/migrations/**</code> is a protected path, and this workstream already asks the owner for two amendments. A third, for a dashboard surface no consumer has requested, would be the one this plan could not justify. W07's scope is a readout and a record, not a view.</p>
+    <p class="qa-answer"><strong>The named cost.</strong> The snapshot is not queryable from the projection, so a future reader charting account headroom over time reads journal lines rather than a table. The trigger to revisit is a real consumer, not a hypothetical one. <strong>M6 tests the assumption rather than trusting it:</strong> a journal carrying the new type must project successfully and write no row.</p>
+  </details>
+
+  <details data-review-options="Three legs, with the weak one named in the test header (decided)|Split production-run.ts so a path glob suffices|Accept a direct-import scan only">
+    <summary><span class="qdecided">DECIDED</span> Q8 — The import fence has one leg a path glob cannot express. How is that handled?</summary>
+    <p class="decided"><b>Decided (2026-08-24):</b> <strong>three legs of different kinds, with the weak one named in the test file's own header.</strong></p>
+    <p class="qa-answer"><strong>The problem.</strong> The fence must bar <code>core/src/workflow/**</code> <em>and the routing resolver</em>. The first is a clean glob. The second is not: <code>core/src/cli/commands/production-run.ts</code> holds both the route resolution and the phase loop that legitimately reads the quota module. One file, two roles, opposite permissions.</p>
+    <p class="qa-answer"><strong>The three legs.</strong> One: transitive unreachability from <code>core/src/workflow/**</code> — exact, and stronger than every existing fence here, all of which are direct-text scans. Two: a signature absence — no route-resolution function accepts, returns, or closes over a quota type. Three, the strongest and least obvious: <strong>the readout record's field list is closed and asserted exhaustively</strong>, so a comparator, rank, ordering, or <em>preferred</em> field cannot be added at all. Leg three is what makes the plausible future convenience unbuildable rather than merely unbuilt.</p>
+    <p class="qa-answer"><strong>Why not split the file.</strong> It would make leg two a clean glob at the price of refactoring the largest command in the repository for the benefit of one test — scope this workstream does not own, in a file W06 is already working near. <strong>Why not accept a direct scan:</strong> the spine's words are <em>"may not reach the module at all"</em>, and a direct scan is satisfied by a single intermediate file, which is exactly how this rule would be defeated by accident.</p>
+  </details>
+
+  <details>
+    <summary><span class="qdecided">DECIDED</span> Q9 — The named absence: the rate-limited quota-axi response, and what would close it</summary>
+    <p class="decided"><b>Returned <code>REVISE</code> (2026-08-24) with no note, then <code>APPROVE</code>d on the revision below (2026-08-24).</b> <strong>Retention is now a mechanism rather than a note</strong>, and the absence itself stands unchanged.</p>
+    <p class="qa-answer"><strong>What was actually weak, on re-reading.</strong> The absence itself was recorded honestly. The <em>retention plan</em> was not a plan: <em>"retain the next natural occurrence"</em> named no mechanism, so closing the gap depended on the owner happening to notice a rate-limited response at the moment it occurred and happening to still have the bytes. That is a note, not a plan, and a note is what the spine's own R5 risk is about — evidence retention weaker than the method requires.</p>
+    <p class="qa-answer"><strong>The revision as approved — a checklist row in M2 task 5.</strong> When the probe returns <code>unparseable</code> or <code>nonzero-exit</code>, it <strong>writes the raw bytes to the attempt's private uncommitted area at mode <code>0o600</code></strong> — the same idiom <code>production-run.ts</code> already uses for <code>raw/&lt;run-id&gt;</code> — and journals the <em>path</em> rather than the bytes. Retention becomes automatic instead of aspirational, and the owner's remaining job is to scrub and promote rather than to notice and capture.</p>
+    <p class="qa-answer"><strong>Why this does not breach anything.</strong> Invariant 10 forbids <em>committed</em> runtime artifacts; this file is uncommitted attempt-local state, exactly like the raw provider streams already written there. Invariant 9 is why the bytes are not journalled and not committed: a rate-limited payload may carry account identity, so it stays at <code>0o600</code> in the attempt directory until the owner scrubs it. Task 20 re-checks the outcome, so the absence either closes with a real fixture or stands with its record still accurate.</p>
+    <p class="qa-answer"><strong>What is unchanged.</strong> The failure posture already handles the outcome structurally — whatever those bytes are, they either parse into an unavailable record with a reason code or they do not parse, and both paths fail open. The absence costs fidelity of the reason code, never correctness of the behaviour. <strong>And it stays an absence:</strong> nothing here proposes producing those bytes deliberately, which would mean exhausting a real account window on purpose.</p>
+  </details>
+</section>
+
+<section id="notes">
+  <h2>Notes</h2>
+
+  <h3>What this workstream deliberately does not build</h3>
+  <ul>
+    <li><strong>Any influence of quota on routing.</strong> Not a preference, not a tie-break, not an ordering, not a warning that a router could read. Three of nineteen tasks exist to make this turn a test red.</li>
+    <li><strong>Any timer, scheduler, or automatic resume.</strong> The stop hands the task to a person and stops. Every edge out of <code>AWAITING_OWNER</code> toward work is human- or owner-actored and interactive, and M6 asserts that advancing the clock produces no transition. The repository already says this in <code>L21</code>'s comment — <em>"a task waiting on the owner waits forever, and that is the point"</em> — and <code>L26</code> is added without weakening it.</li>
+    <li><strong>Any per-task cost derived from two window readings.</strong> This is the claim the workstream lost, and not rebuilding it is a deliverable rather than an omission.</li>
+    <li><strong>Any resident process.</strong> Nothing runs between commands. The spine's Q3 — how a run is watched without a daemon — is W14's problem and is explicitly not answered here.</li>
+    <li><strong>Any dashboard surface.</strong> The snapshot is journal-only. A view is a later decision with a real consumer behind it.</li>
+  </ul>
+
+  <h3>Where a real per-task denominator actually comes from</h3>
+  <p>This is worth stating precisely, because the workstream's lost claim leaves an obvious gap and the obvious wrong way to fill it is to try again with better arithmetic.</p>
+  <p><code>core/src/contracts/normalized-events.ts</code> defines <code>UsageEventSchema</code> carrying a <code>TokenUsage</code>, and <code>core/src/adapters/stream/usage.ts</code> is the single place provider bytes become one. That module already holds the discipline the job needs: <code>null</code> and <code>0</code> are different facts, and collapsing them <em>"makes a subscription route look measured when it was not."</em> The projection then stores those figures per session, with <code>task_id</code>, <code>attempt</code>, <code>usage_authority</code> and <code>cost_authority</code> beside them in <code>SessionRow</code>.</p>
+  <p>That is a per-call, provider-authoritative number with task identity attached and its own authority field saying how much to trust it. An account-window percentage has none of those properties. Anyone reaching for a cost figure should reach there, and the reason Q4 named estimated-calls as <em>the right eventual unit</em> is that this is the history it will divide by once there is enough of it.</p>
+
+  <h3>Why the settled rules are settled — the reasons the source did not give</h3>
+  <table>
+    <thead><tr><th>Rule</th><th>The reason it holds in this repository specifically</th></tr></thead>
+    <tbody>
+      <tr><td>Spawn on PATH, never import</td><td>Invariant 7's dependency allowlist is <code>@sinclair/typebox</code> and <code>yaml</code> for core. Importing quota-axi would need an owner amendment to that list for a tool that executes; spawning it needs none, because a spawned executable enters no runtime import graph.</td></tr>
+      <tr><td>Never <code>node:child_process</code> in the module</td><td>Invariant 3 gives that import to <code>transport-broker.ts</code> alone, and <code>runSystemCommand</code> is documented there as <em>"the second and last thing in this repository that creates a process"</em>. Taking it as an injected capability is the established pattern, not a workaround.</td></tr>
+      <tr><td>Fixture-first parsing</td><td>The provider fixtures set the precedent and the provenance idiom: captured bytes or a stated transformation of captured bytes, never mixed. It is also what makes the whole workstream free to run.</td></tr>
+      <tr><td>Structural state detection</td><td>Exit <code>0</code> means <em>at least one provider returned data, fresh or stale</em>. A stale report keeps raw windows while its effective availability is unknown, so an exit-code branch reads a stale percentage as current headroom — the precise failure the rule was written after.</td></tr>
+      <tr><td>Never <code>--refresh</code> or <code>--tui</code></td><td><code>--refresh</code> makes the probe a poller, which is the resident shape this project has refused twice. <code>--tui</code> renders a live terminal report and never returns parseable output to a host. This plan adds <code>--once</code> and <code>--full</code> for the reasons given in the contract section.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Credential access, named before someone asks</h3>
+  <p><code>policy.protected_operations</code> includes <code>credential-access</code>, and quota-axi reads local provider auth sources. Three facts keep this workstream on the right side of that line, and all three are checkable. AWSF's module <strong>never opens an auth file</strong> — it spawns a process and reads that process's stdout. No secret value crosses the boundary: quota-axi's own <code>auth</code> surface reports availability without printing values, and <code>--full</code>, the flag that would expose account identity, is barred here. And the tool cannot spend what it measures, because it never launches an agent CLI.</p>
+  <p>One owner-side consequence, not a ticket: <strong>on macOS the first Keychain read requires a one-time consent</strong> the owner grants by running the tool once themselves. It belongs on the versioned Darwin checklist the spine already names as owner-side work, and this plan does not absorb it.</p>
+
+  <h3>Risks</h3>
+  <table>
+    <thead><tr><th>Risk</th><th>Why it is real</th><th>What holds it</th></tr></thead>
+    <tbody>
+      <tr><td><strong>The routing convenience gets built later</strong></td><td>"Prefer the provider with more headroom" is the most natural next feature anyone would propose, and it is the exact thing every rule here exists to prevent.</td><td>Leg three of the fence: the readout record has no field a router could branch on, and adding one is red. Unbuildable beats undocumented.</td></tr>
+      <tr><td><strong>Someone rebuilds the delta</strong></td><td>Two snapshots in one attempt sit in the same journal and subtracting them is one line.</td><td>The <code>attribution: "none"</code> field on the record, the source scan in task 18, and the note above pointing at the number that does carry task identity.</td></tr>
+      <tr><td><strong>The amendment never lands</strong></td><td>G7-A is an owner act and the workstream cannot proceed past M2 without it.</td><td>M1 and M2 are deliberately independent of it, so two of seven milestones deliver while it waits. M3's first row stops and marks <code>[f]</code> rather than routing around the gate.</td></tr>
+      <tr><td><strong>The timeouts are wrong</strong></td><td>They are estimates and the plan says so. Too tight taxes every boundary with a journalled unavailability; too loose taxes every run with waiting.</td><td>Both are configuration, both fail open, and the journalled reason code makes a too-tight setting visible as a run of <code>timeout</code> records rather than as a mystery.</td></tr>
+      <tr><td><strong>Two owner amendments, not one</strong></td><td>G7-A and G7-B are both owner-authored commits into protected paths, and a workstream the spine calls small now cannot finish without two acts only the owner can perform.</td><td>They gate different milestones — M3 and M6 — so M1, M2, M4 and M5 deliver between them. Both are stated on this plan's first page rather than discovered mid-build, and G7-B's true cost was re-measured against the schema rather than estimated.</td></tr>
+      <tr><td><strong><code>L26</code> becomes a general-purpose exit from <code>RUNNING</code></strong></td><td>A new host-actored edge out of the busiest state is a door someone else will want to use, and the next feature to want it will not be quota.</td><td>Its guard demands a known quota figure, so a caller with no quota evidence cannot form the transition. The edge is narrow by construction rather than by convention, and widening it is itself a protected-path change the owner must make.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Sequencing, and what can run in parallel</h3>
+  <p>M1 → M2 is a hard edge: the probe's failure posture is tested against the parser's records. M3 is gated by <span class="gate">G7-A</span> and by nothing else, so it can be prepared while M1 and M2 run and lands the moment the owner's commit does. M4 needs M3's threshold to render it and M5's median to render the comparison — M5 is the only milestone that could be reordered before M4, and is not, because rendering the median without a readout to render it into has no observable result. M6 needs everything before it <em>and</em> gate <span class="gate">G7-B</span>; the two gates are independent, so the owner may land them in either order or together. M7 needs the module to exist and could be written first as a red test, which is a legitimate way to run it: the fence naming a path that does not yet exist is a fence that will bite when it does.</p>
+
+  <h3>The one number this whole workstream refuses to compute</h3>
+  <figure>
+    <pre class="mermaid">
+flowchart LR
+  S1["snapshot at boundary A"] --> N1["context · attribution none"]
+  S2["snapshot at boundary B"] --> N2["context · attribution none"]
+  N1 -. "never subtracted" .-> X["task cost"]
+  N2 -. "never subtracted" .-> X
+  UE["usage events · per call"] --> C["cost with task identity"]
+  style X stroke:#F87171,stroke-width:2px,stroke-dasharray:4 3
+  style C stroke:#4ADE80,stroke-width:2px
+    </pre>
+    <figcaption>The dashed edges are the deliverable. Two labelled context notes stay two labelled context notes, and the solid path is where a cost figure has always been available.</figcaption>
+  </figure>
+</section>
+
+<section id="amendments">
+  <h2>Amendments</h2>
+  <details open>
+    <summary>2026-08-24 — owner review applied: <code>plan-sota-review v1</code>, nine verdicts, one revision</summary>
+    <p>An exported <code>plan-sota-review v1</code> block carried <strong>nine verdicts, no proposed statuses, and no annotations</strong>. <strong>No status marker moved</strong> — every milestone is still <code>[]</code>, and a Questionable verdict is not a marker.</p>
+    <p><strong>Eight decisions taken as recommended</strong> — Q2 through Q8 — and each now reads <code>DECIDED</code> with its date, its reasoning, and its full option set retained so the road not taken stays readable.</p>
+    <p><strong>Q1 went against the recommendation, and the plan was wrong about its price.</strong> The owner chose to add legal edge <code>L26 — RUNNING → AWAITING_OWNER</code>. Re-measuring the cost before rewriting found that the draft's claim about SQLite check constraints was false: <code>0001-initial.sql</code> declares <code>from_state</code>, <code>to_state</code> and <code>edge_id</code> with no <code>CHECK</code>, so <strong>no migration is touched and the protected migrations directory stays shut</strong>. It also found the answer to the objection the source records against this pair — <code>L20</code>'s guard already requires <code>gatesPass</code> and a real candidate, so a mid-<code>RUNNING</code> suspension cannot reach <code>LANDING</code> ungated. The option was cheaper and safer than it was priced against.</p>
+    <p><strong>What changed in the document because of Q1.</strong> A second ordering gate, <span class="gate">G7-B</span>, now sits beside G7-A and blocks M6. M6 gained a task and became four: the snapshot record, the amendment verification and test-table move, the stop itself, and the testing strategy — pushing M7 to tasks 18–20 and the plan to twenty tasks. The stop no longer borrows <code>L12</code> and <code>L15</code>, so neither guard gains a quota condition. <code>INV-4</code> was restated: fail-open is now enforced twice, once by the shape of the comparison and once by <code>L26</code>'s guard refusing evidence without a known figure — which is strictly stronger than the recommendation could offer. The accepted overrun the recommendation carried was <em>removed</em> rather than mitigated, and the Risks table lost that row and gained two: the cost of two owner amendments, and the hazard of <code>L26</code> becoming a general-purpose exit.</p>
+    <p><strong>Q9 was returned <code>REVISE</code> with no note</strong>, and is the one item still open. On re-reading, what was weak was not the recorded absence but its retention plan: <em>"retain the next natural occurrence"</em> named no mechanism. The revision makes retention automatic — the probe writes an unreadable payload's raw bytes to the attempt's private uncommitted area at <code>0o600</code> and journals the path, the same idiom the raw provider streams already use — and it is now a checklist row in M2 task 5. <strong>Because the verdict carried no note, that reading is proposed rather than settled</strong>, and Q9 is marked accordingly.</p>
+    <p><strong>Regenerated to match:</strong> the build prompts and all twenty tickets, with the plan-aware sync fence re-run to confirm plan, prompts and tickets still agree byte for byte.</p>
+  </details>
+  <details open>
+    <summary>2026-08-24 — Q9 approved on its revision; every Questionable is now a constraint</summary>
+    <p>A second <code>plan-sota-review v1</code> block carried <strong>one verdict</strong>: <code>APPROVE</code> on the revised Q9, with no note. <strong>No status marker moved.</strong></p>
+    <p><strong>What this settles.</strong> The retention mechanism proposed in the previous amendment is now a decision rather than a reading: on <code>unparseable</code> or <code>nonzero-exit</code> the probe writes the raw bytes to the attempt's private uncommitted area at <code>0o600</code> and journals the path, so the next natural rate-limited response is kept by the system instead of depending on the owner noticing it. It was already a checklist row in M2 task 5; what changed is that the row and its build prompt no longer describe themselves as provisional.</p>
+    <p><strong>What did not change.</strong> The absence itself. Nothing here proposes producing those bytes deliberately, which would mean exhausting a real account window on purpose, and task 20 still re-checks the outcome so the absence either closes with a real fixture or stands with its record still accurate.</p>
+    <p><strong>The plan now carries no open question.</strong> Both remaining preconditions are owner acts rather than decisions: <span class="gate">G7-A</span>'s configuration amendment before M3, and <span class="gate">G7-B</span>'s <code>L26</code> edge before M6.</p>
+  </details>
+  <details open>
+    <summary>2026-08-24 — <span class="gate">G7-A</span> narrowed to the permission only, after a load-order failure was observed</summary>
+    <p><strong>What was wrong.</strong> G7-A was written as one owner commit that both restated the durable-intent line <em>and</em> added the <code>routing.quota_stop</code> block. Preparing the exact diff for the owner surfaced the defect: <code>RoutingSchema</code> in <code>core/src/config/schema.ts</code> carries <code>additionalProperties: false</code>, and <code>load.ts</code> runs <code>Value.Check</code> and hard-fails. A block written before the schema accepts it breaks <em>every</em> AWSF command at load time.</p>
+    <p><strong>Observed rather than reasoned.</strong> Loading the committed config with the proposed block injected returned <code>config does not match awsf/v1: /routing/quota_stop: Unexpected property</code>. The unpatched file loads cleanly, so the failure is the block and nothing else.</p>
+    <p><strong>The correction.</strong> <span class="gate">G7-A</span> is now the one-line durable-intent change and nothing else — the permission, not the values. T07 extends the schema, which it may do because <code>core/src/config/**</code> is <em>not</em> a protected path. Threshold values become a separate, optional, later owner commit, and since an absent block means the stop is disabled, this repository's own config need never carry one at all. M3 task 7 gained a row forbidding a premature block, and the build prompts and ticket README were corrected to match.</p>
+    <p><strong>Why this is worth recording rather than quietly fixing.</strong> The plan asked the owner for a commit that would have broken the repository, and it did so in the same document that requires every deep plan to check whether a guarantee is already enforced somewhere stronger. The schema was the stronger enforcement, and the first draft did not read it.</p>
+  </details>
+</section>
+
+</main>
+<!-- ===== PLAN-SOTA REVIEW LAYER v1 — FIXED MACHINERY, COPY VERBATIM ===== -->
+<style>
+  .rv-btn { font: 600 11px/1 system-ui, sans-serif; padding: 3px 9px; border-radius: 999px;
+    border: 1px solid var(--muted, #8884); background: transparent; color: var(--fg, inherit);
+    cursor: pointer; opacity: .55; vertical-align: middle; margin-left: 8px; }
+  .rv-btn:hover { opacity: 1; border-color: var(--accent, #7c6cf0); }
+  .rv-btn.rv-on { opacity: 1; background: var(--accent, #7c6cf0); color: var(--bg, #fff); border-color: transparent; }
+  .rv-note-box { display: block; margin: 8px 0; padding: 8px 12px; border: 1px dashed var(--accent, #7c6cf0);
+    border-radius: 8px; font-size: 13px; min-height: 1.5em; background: color-mix(in srgb, var(--accent, #7c6cf0) 6%, transparent); outline: none; }
+  .rv-note-box:empty::before { content: attr(data-ph); opacity: .5; font-style: italic; }
+  .rv-note-box[hidden] { display: none; }
+  .rv-verdict { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 10px 0 2px; }
+  .rv-verdict-tag { font: 700 10px/1 system-ui, sans-serif; letter-spacing: .08em; opacity: .6; margin-right: 2px; }
+  .rv-status-chip { font: 600 11px/1 ui-monospace, monospace; margin-left: 10px; padding: 3px 9px;
+    border-radius: 999px; border: 1px dotted var(--muted, #8884); background: transparent;
+    color: var(--fg, inherit); cursor: pointer; opacity: .6; }
+  .rv-status-chip:hover { opacity: 1; }
+  .rv-status-chip.rv-on { opacity: 1; border-style: solid; border-color: var(--accent, #7c6cf0); color: var(--accent, #7c6cf0); }
+  #rv-drawer { position: fixed; right: 16px; bottom: 16px; z-index: 9999; font: 13px/1.45 system-ui, sans-serif;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  #rv-pill { font: 700 12px/1 system-ui, sans-serif; padding: 10px 16px; border-radius: 999px; border: none;
+    cursor: pointer; background: var(--accent, #7c6cf0); color: var(--bg, #fff); box-shadow: 0 4px 16px #0004; }
+  #rv-panel { width: min(420px, calc(100vw - 32px)); max-height: 60vh; overflow: auto; padding: 14px;
+    border-radius: 12px; border: 1px solid var(--muted, #8884); background: var(--bg, #fff);
+    color: var(--fg, inherit); box-shadow: 0 8px 32px #0005; }
+  #rv-panel h4 { margin: 0 0 8px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; opacity: .7; }
+  #rv-list { margin: 0 0 10px; padding: 0; list-style: none; font-size: 12px; }
+  #rv-list li { padding: 3px 0; border-bottom: 1px solid #8882; overflow-wrap: anywhere; }
+  #rv-out { width: 100%; min-height: 140px; margin-top: 10px; font: 11px/1.5 ui-monospace, monospace;
+    border: 1px solid var(--muted, #8884); border-radius: 8px; padding: 8px; background: transparent; color: inherit; }
+  #rv-msg { font-size: 11px; opacity: .75; margin-top: 6px; }
+  @media print { #rv-drawer { display: none; } }
+</style>
+<script>
+(function () {
+  'use strict';
+  var FILE = decodeURIComponent(location.pathname.split('/').pop() || 'plan.html');
+  var KEY = 'plan-sota-review:' + FILE;
+  var LEGACY_KEY = 'planf3-review:' + FILE; // pre-rename state; read once, never written
+  var PROPOSE = ['', '[]', '[wip]', '[x]', '[f]'];
+  var state = { a: {}, v: {}, s: {} }, persisted = true;
+  try { state = JSON.parse(localStorage.getItem(KEY) || localStorage.getItem(LEGACY_KEY) || 'null') || state; } catch (e) { persisted = false; }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); persisted = true; }
+    catch (e) { persisted = false; }
+    refresh();
+  }
+  function el(tag, cls, txt) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (txt) n.textContent = txt;
+    if (tag === 'button') { n.type = 'button'; n.setAttribute('data-lavish-action', ''); }
+    return n;
+  }
+  function clean(t) { return String(t || '').replace(/\|/g, '/').replace(/\s*\r?\n\s*/g, ' >> ').trim(); }
+  var registry = []; // {key, label, kind: 'section'|'phase'|'q'}
+
+  function noteBox(key, host, placeholder) {
+    var box = el('div', 'rv-note-box');
+    box.contentEditable = 'true';
+    box.setAttribute('data-ph', placeholder || 'Type your note for the agent…');
+    box.hidden = !(state.a[key]);
+    if (state.a[key]) box.textContent = state.a[key];
+    box.addEventListener('input', function () {
+      var t = box.textContent.trim();
+      if (t) state.a[key] = t; else delete state.a[key];
+      save();
+    });
+    host.appendChild(box);
+    return box;
+  }
+  function annotable(key, label, heading, host, kind) {
+    registry.push({ key: key, label: label, kind: kind });
+    var box = noteBox(key, host);
+    heading.insertAdjacentElement('afterend', box);
+    var btn = el('button', 'rv-btn' + (state.a[key] ? ' rv-on' : ''), '✎ note');
+    btn.addEventListener('click', function () {
+      box.hidden = !box.hidden;
+      if (!box.hidden) box.focus();
+    });
+    heading.appendChild(btn);
+    box.addEventListener('input', function () { btn.classList.toggle('rv-on', !!state.a[key]); });
+  }
+
+  // Sections
+  Array.prototype.forEach.call(document.querySelectorAll('main > section[id]'), function (sec) {
+    var h = sec.querySelector('h2'); if (!h) return;
+    annotable('#' + sec.id, h.textContent.trim(), h, sec, 'section');
+  });
+  // Phases: annotation + proposed-status chip
+  Array.prototype.forEach.call(document.querySelectorAll('#phases .phase'), function (ph, i) {
+    var h = ph.querySelector('h3'); if (!h) return;
+    var key = 'phase-' + (i + 1);
+    var label = h.textContent.replace(/^\s*\[[^\]]*\]\s*/, '').trim();
+    annotable(key, label, h, ph, 'phase');
+    var chip = el('button', 'rv-status-chip' + (state.s[key] ? ' rv-on' : ''));
+    chip.textContent = state.s[key] ? 'propose ' + state.s[key] : 'propose…';
+    chip.title = 'Cycle a PROPOSED status (exported as feedback — the file marker is only changed by the agent)';
+    chip.addEventListener('click', function () {
+      var next = PROPOSE[(PROPOSE.indexOf(state.s[key] || '') + 1) % PROPOSE.length];
+      if (next) state.s[key] = next; else delete state.s[key];
+      chip.textContent = next ? 'propose ' + next : 'propose…';
+      chip.classList.toggle('rv-on', !!next);
+      save();
+    });
+    h.appendChild(chip);
+  });
+  // Questionables: verdict / option buttons + note
+  Array.prototype.forEach.call(document.querySelectorAll('#questionables details'), function (d, i) {
+    var key = 'q-' + (i + 1);
+    var summary = d.querySelector('summary');
+    var label = summary ? summary.textContent.trim().slice(0, 120) : key;
+    registry.push({ key: key, label: label, kind: 'q' });
+    var opts = (d.getAttribute('data-review-options') || '').split('|').map(function (s) { return s.trim(); }).filter(Boolean);
+    if (!opts.length) opts = ['APPROVE', 'REJECT', 'REVISE', 'DEFER'];
+    var row = el('div', 'rv-verdict');
+    row.appendChild(el('span', 'rv-verdict-tag', 'YOUR CALL'));
+    opts.forEach(function (opt) {
+      var b = el('button', 'rv-btn' + ((state.v[key] || {}).c === opt ? ' rv-on' : ''), opt);
+      b.addEventListener('click', function () {
+        if ((state.v[key] || {}).c === opt) { delete state.v[key]; }
+        else { state.v[key] = { c: opt }; }
+        Array.prototype.forEach.call(row.querySelectorAll('.rv-btn'), function (x) {
+          x.classList.toggle('rv-on', x.textContent === ((state.v[key] || {}).c || null));
+        });
+        qbox.hidden = !state.v[key] && !state.a[key];
+        save();
+      });
+      row.appendChild(b);
+    });
+    d.appendChild(row);
+    var qbox = noteBox(key, d, 'Why / what to change instead…');
+    if (state.v[key]) qbox.hidden = false;
+  });
+
+  // Drawer
+  var drawer = el('div'); drawer.id = 'rv-drawer';
+  var panel = el('div'); panel.id = 'rv-panel'; panel.hidden = true;
+  var pill = el('button'); pill.id = 'rv-pill';
+  pill.addEventListener('click', function () { panel.hidden = !panel.hidden; });
+  var list = el('ul'); list.id = 'rv-list';
+  var actions = el('div');
+  var exportBtn = el('button', 'rv-btn rv-on', 'Export Feedback');
+  var clearBtn = el('button', 'rv-btn', 'Clear review');
+  var out = el('textarea'); out.id = 'rv-out'; out.readOnly = true; out.hidden = true;
+  var msg = el('div'); msg.id = 'rv-msg';
+  var head = el('h4', null, 'Review — pending feedback');
+  actions.appendChild(exportBtn); actions.appendChild(clearBtn);
+  panel.appendChild(head); panel.appendChild(list); panel.appendChild(actions);
+  panel.appendChild(out); panel.appendChild(msg);
+  drawer.appendChild(panel); drawer.appendChild(pill);
+  document.body.appendChild(drawer);
+
+  function findLabel(key) {
+    for (var i = 0; i < registry.length; i++) if (registry[i].key === key) return registry[i].label;
+    return key;
+  }
+  function refresh() {
+    var n = Object.keys(state.a).length + Object.keys(state.v).length + Object.keys(state.s).length;
+    pill.textContent = '✎ Review (' + n + ')';
+    list.textContent = '';
+    Object.keys(state.v).forEach(function (k) { list.appendChild(el('li', null, '[verdict] ' + findLabel(k) + ' → ' + state.v[k].c)); });
+    Object.keys(state.s).forEach(function (k) { list.appendChild(el('li', null, '[status] ' + findLabel(k) + ' → propose ' + state.s[k])); });
+    Object.keys(state.a).forEach(function (k) { list.appendChild(el('li', null, '[note] ' + findLabel(k) + ': ' + state.a[k].slice(0, 90))); });
+    if (!n) list.appendChild(el('li', null, 'Nothing yet — click ✎ note on any section, a verdict on a Questionable, or propose… on a phase.'));
+    if (!persisted) msg.textContent = '⚠ localStorage unavailable — review state lives only in this tab.';
+  }
+  function buildExport() {
+    var L = ['plan-sota-review v1', 'plan: ' + FILE, 'title: ' + clean(document.title), 'exported: ' + new Date().toISOString(), ''];
+    var vk = Object.keys(state.v), sk = Object.keys(state.s), ak = Object.keys(state.a);
+    L.push('## verdicts');
+    vk.length ? vk.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | ' + clean(state.v[k].c) + ' | note: ' + (clean(state.a[k]) || '-'));
+    }) : L.push('- (none)');
+    L.push('', '## statuses');
+    sk.length ? sk.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | propose ' + state.s[k]);
+    }) : L.push('- (none)');
+    L.push('', '## annotations');
+    var solo = ak.filter(function (k) { return !state.v[k]; });
+    solo.length ? solo.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | ' + clean(state.a[k]));
+    }) : L.push('- (none)');
+    return L.join('\n');
+  }
+  exportBtn.addEventListener('click', function () {
+    var text = buildExport();
+    out.hidden = false; out.value = text;
+    out.focus(); out.select();
+    function done(m) { msg.textContent = m; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done('Copied — paste it into your next agent session.'); },
+        function () { done('Clipboard blocked — copy from the box below.'); });
+    } else {
+      try { done(document.execCommand('copy') ? 'Copied — paste it into your next agent session.' : 'Clipboard blocked — copy from the box below.'); }
+      catch (e) { done('Clipboard blocked — copy from the box below.'); }
+    }
+    if (window.lavish && typeof window.lavish.queuePrompt === 'function') {
+      window.lavish.queuePrompt(text, { tag: 'plan-sota-review', queueKey: 'plan-sota-review' });
+      msg.textContent += ' Also queued to the agent via Lavish.';
+    }
+  });
+  clearBtn.addEventListener('click', function () {
+    if (!confirm('Clear all review state for this plan?')) return;
+    state = { a: {}, v: {}, s: {} };
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    location.reload();
+  });
+  refresh();
+})();
+</script>
+
+<!-- Mermaid runtime — renders every <pre class="mermaid"> block. Only external reference in the file. -->
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      primaryColor: '#171D25',
+      primaryTextColor: '#E8EDF3',
+      primaryBorderColor: '#2DD4BF',
+      lineColor: '#60A5FA',
+      fontFamily: 'Inter, system-ui, sans-serif'
+    }
+  });
+</script>
+</body>
+</html>
