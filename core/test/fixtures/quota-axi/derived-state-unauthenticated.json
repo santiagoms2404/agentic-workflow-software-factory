@@ -1,0 +1,41 @@
+{
+  "generatedAt": "2026-08-24T20:26:39.429Z",
+  "schemaVersion": 5,
+  "providers": [
+    {
+      "provider": "claude",
+      "plan": "pro",
+      "windows": [],
+      "state": {
+        "status": "auth_required",
+        "stale": false,
+        "reason": "credentials_unavailable",
+        "remedy": "authenticate the provider"
+      },
+      "quotaSemantics": {
+        "status": "unknown",
+        "effectiveAvailability": []
+      }
+    },
+    {
+      "provider": "codex",
+      "plan": "plus",
+      "windows": [],
+      "credits": {
+        "remaining": 7.6344825,
+        "unlimited": false,
+        "unit": "credits"
+      },
+      "state": {
+        "status": "auth_required",
+        "stale": false,
+        "reason": "credentials_unavailable",
+        "remedy": "authenticate the provider"
+      },
+      "quotaSemantics": {
+        "status": "unknown",
+        "effectiveAvailability": []
+      }
+    }
+  ]
+}

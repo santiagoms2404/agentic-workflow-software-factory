@@ -340,13 +340,13 @@ flowchart LR
     <h4>2. Derive the six transformation fixtures, each named as a transformation</h4>
     <p class="serves"><code class="serves">AC-5</code></p>
     <ul class="checklist">
-      <li><code class="status">[]</code> <code>derived-semantics-partial.json</code> — <code>quotaSemantics.status</code> is <code>partial</code> with <code>unresolvedWindowIds</code> populated</li>
-      <li><code class="status">[]</code> <code>derived-state-unauthenticated.json</code> — <code>state.status</code> reports an auth problem with its reason and remedy fields, and no usable window</li>
-      <li><code class="status">[]</code> <code>derived-stale.json</code> — raw windows retained for diagnostics while effective availability, pace, runway and selection are all unknown. <strong>This is the fixture that proves exit code 0 is not evidence of freshness</strong></li>
-      <li><code class="status">[]</code> <code>derived-exhausted-now.json</code> — zero runway</li>
-      <li><code class="status">[]</code> <code>derived-runway-unknown.json</code> — unmeasurable bounds named rather than a conclusion invented</li>
-      <li><code class="status">[]</code> <code>derived-windows-disagree.json</code> — <code>windows[]</code> reports generous headroom while <code>effectiveAvailability</code> reports little. <strong>This is the fixture the render-source rule is proved against</strong>, and it must be built by transformation from the capture rather than written from scratch</li>
-      <li><code class="status">[]</code> Every derivation is one stated sentence in <code>PROVENANCE.md</code>, and no derived file mixes captured and invented bytes without saying which is which</li>
+      <li><code class="status">[x]</code> <code>derived-semantics-partial.json</code> — <code>quotaSemantics.status</code> is <code>partial</code> with <code>unresolvedWindowIds</code> populated</li>
+      <li><code class="status">[x]</code> <code>derived-state-unauthenticated.json</code> — <code>state.status</code> reports an auth problem with its reason and remedy fields, and no usable window</li>
+      <li><code class="status">[x]</code> <code>derived-stale.json</code> — raw windows retained for diagnostics while effective availability, pace, runway and selection are all unknown. <strong>This is the fixture that proves exit code 0 is not evidence of freshness</strong></li>
+      <li><code class="status">[x]</code> <code>derived-exhausted-now.json</code> — zero runway</li>
+      <li><code class="status">[x]</code> <code>derived-runway-unknown.json</code> — unmeasurable bounds named rather than a conclusion invented</li>
+      <li><code class="status">[x]</code> <code>derived-windows-disagree.json</code> — <code>windows[]</code> reports generous headroom while <code>effectiveAvailability</code> reports little. <strong>This is the fixture the render-source rule is proved against</strong>, and it must be built by transformation from the capture rather than written from scratch</li>
+      <li><code class="status">[x]</code> Every derivation is one stated sentence in <code>PROVENANCE.md</code>, and no derived file mixes captured and invented bytes without saying which is which</li>
     </ul>
 
     <h4>3. Testing Strategy</h4>

@@ -1,0 +1,124 @@
+{
+  "generatedAt": "2026-08-24T20:26:39.429Z",
+  "schemaVersion": 5,
+  "providers": [
+    {
+      "provider": "claude",
+      "plan": "pro",
+      "windows": [
+        {
+          "id": "five_hour",
+          "label": "session",
+          "kind": "session",
+          "resetsAt": "2026-08-24T21:59:59.916798+00:00",
+          "percentRemaining": 53,
+          "pace": {
+            "status": "behind",
+            "reservePercentPoints": 21.8862,
+            "burnMultiple": 0.6823
+          }
+        },
+        {
+          "id": "seven_day",
+          "label": "week",
+          "kind": "weekly",
+          "resetsAt": "2026-08-26T10:59:59.916830+00:00",
+          "percentRemaining": 33,
+          "pace": {
+            "status": "behind",
+            "reservePercentPoints": 10.0502,
+            "burnMultiple": 0.8696
+          }
+        }
+      ],
+      "state": {
+        "status": "stale",
+        "stale": true
+      },
+      "quotaSemantics": {
+        "status": "unknown",
+        "effectiveAvailability": [
+          {
+            "scope": "all_models",
+            "status": "unknown",
+            "pace": {
+              "status": "unknown",
+              "unmeasurableWindowIds": [
+                "five_hour",
+                "seven_day"
+              ]
+            },
+            "runway": {
+              "status": "unknown",
+              "unmeasurableWindowIds": [
+                "five_hour",
+                "seven_day"
+              ]
+            },
+            "selection": {
+              "status": "unknown",
+              "unmeasurableWindowIds": [
+                "five_hour",
+                "seven_day"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "provider": "codex",
+      "plan": "plus",
+      "windows": [
+        {
+          "id": "weekly",
+          "label": "week",
+          "kind": "weekly",
+          "resetsAt": "2026-08-30T23:39:34.000Z",
+          "percentRemaining": 66,
+          "pace": {
+            "status": "ahead",
+            "reservePercentPoints": -21.6281,
+            "burnMultiple": 2.7482
+          }
+        }
+      ],
+      "credits": {
+        "remaining": 7.6344825,
+        "unlimited": false,
+        "unit": "credits"
+      },
+      "state": {
+        "status": "stale",
+        "stale": true
+      },
+      "quotaSemantics": {
+        "status": "unknown",
+        "effectiveAvailability": [
+          {
+            "scope": "all_models",
+            "status": "unknown",
+            "pace": {
+              "status": "unknown",
+              "unmeasurableWindowIds": [
+                "weekly"
+              ]
+            },
+            "runway": {
+              "status": "unknown",
+              "unmeasurableWindowIds": [
+                "weekly"
+              ]
+            },
+            "selection": {
+              "status": "unknown",
+              "unmeasurableWindowIds": [
+                "weekly"
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

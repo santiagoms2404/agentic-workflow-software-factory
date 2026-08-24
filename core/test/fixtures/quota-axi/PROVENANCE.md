@@ -48,10 +48,16 @@ Scrub audit:
 - All timestamps were retained because the parser reads them. The capture instant is
   recorded in the table above so tests can inject `now` rather than read a clock.
 
-## Derived fixtures
+## Derived fixtures — transformed from `nominal.json`
 
-None exist yet. Any later derived fixture must name every transformation here and must
-not present invented bytes as captured.
+Each file begins as a complete copy of the captured, scrubbed `nominal.json`; the stated changes below are invented test conditions, and every other byte is retained from that capture.
+
+- `derived-semantics-partial.json` changes Claude's `quotaSemantics.status` to `partial` and adds the invented `unresolvedWindowIds: ["seven_day"]`, retaining all other captured bytes.
+- `derived-state-unauthenticated.json` changes both providers to the invented `auth_required` state with `credentials_unavailable` reason and `authenticate the provider` remedy, and replaces their captured windows and effective availability with empty arrays.
+- `derived-stale.json` retains every captured raw window, changes both states to invented `stale`, and replaces each effective record with invented unknown availability, pace, runway, and selection values that name every raw id in `unmeasurableWindowIds`.
+- `derived-exhausted-now.json` changes every captured raw and effective remaining percentage to the invented value `0` and replaces each runway with an invented zero-second projected exhaustion at captured `generatedAt`.
+- `derived-runway-unknown.json` retains Claude's captured effective availability but replaces its runway with the invented `unknown` status and captured `boundedBy` ids named as `unmeasurableWindowIds`, without a duration or exhaustion time.
+- `derived-windows-disagree.json` changes Claude's captured raw window percentages to the invented generous value `92` while changing its captured effective percentage to the invented limiting value `4`, retaining the remaining captured bytes.
 
 ## Named absence — quota-axi itself rate-limited
 
