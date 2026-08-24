@@ -21,6 +21,6 @@ export async function requireHostExecution<T extends EnvelopeBase>(
 }
 
 /** Loads the same committed user prompt path named by awsf.config.yaml. */
-export function loadUserPrompt(role: "scout" | "planner" | "builder" | "documenter" | "reviewer" | "intake"): string {
+export function loadUserPrompt(role: "scout" | "planner" | "builder" | "documenter" | "reviewer" | "intake" | "designer" | "architecture-reviewer"): string {
   return readFileSync(new URL(`../../../prompts/${role}/user.md`, import.meta.url), "utf8");
 }

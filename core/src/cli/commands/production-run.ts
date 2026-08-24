@@ -86,6 +86,7 @@ import { buildReviewWorkflow } from "../../workflow/recipes/build-review.ts";
 import { planBuildTestWorkflow } from "../../workflow/recipes/plan-build-test.ts";
 import { simpleSdlcWorkflow } from "../../workflow/recipes/simple-sdlc.ts";
 import { intakeWorkflow } from "../../workflow/recipes/intake.ts";
+import { designToPlanWorkflow } from "../../workflow/recipes/design-to-plan.ts";
 import {
   nextActionFor,
   nextRevision,
@@ -112,6 +113,7 @@ const SUPPORTED = new Map<string, WorkflowRecipe>([
   [buildReviewWorkflow.id, buildReviewWorkflow],
   [simpleSdlcWorkflow.id, simpleSdlcWorkflow],
   [intakeWorkflow.id, intakeWorkflow],
+  [designToPlanWorkflow.id, designToPlanWorkflow],
 ]);
 
 const SUPPORTED_NAMES = [...SUPPORTED.keys()].join(", ");

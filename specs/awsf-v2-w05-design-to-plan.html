@@ -901,11 +901,11 @@ flowchart TD
       <h4>24. The recipe, the workflow id, and the registration</h4>
       <p class="serves"><code class="serves">INV-2</code></p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>core/src/workflow/recipes/design-to-plan.ts</code>: seven phases in Phase Contract order, <code>tier: 2</code>, three agent phases, <code>as const satisfies WorkflowRecipe</code></li>
-        <li><code class="status">[]</code> Each phase's <code>description</code> is earned — <code>assertEarnedDescription</code> rejects one that merely restates the phase id, and it fails at compile time rather than at run time</li>
-        <li><code class="status">[]</code> <code>design-to-plan</code> added to <code>KNOWN_WORKFLOW_IDS</code> in <code>core/src/config/schema.ts</code> — <strong>this is the task that must precede the owner's amendment</strong></li>
-        <li><code class="status">[]</code> Registered in <code>SUPPORTED</code> in <code>production-run.ts</code> and in the recipe list in <code>core/test/unit/workflow/recipes.test.ts</code>, whose "exactly seven" assertion becomes eight with its phase order and call count spelled out</li>
-        <li><code class="status">[]</code> <code>compileWorkflow(designToPlan, 2)</code> admits: <code>minimumCalls</code> is 3 against a tier-2 ceiling of 5, and the three host phases move nothing</li>
+        <li><code class="status">[x]</code> <code>core/src/workflow/recipes/design-to-plan.ts</code>: six phases in Phase Contract order, <code>tier: 2</code>, three agent phases, <code>as const satisfies WorkflowRecipe</code></li>
+        <li><code class="status">[x]</code> Each phase's <code>description</code> is earned — <code>assertEarnedDescription</code> rejects one that merely restates the phase id, and it fails at compile time rather than at run time</li>
+        <li><code class="status">[x]</code> <code>design-to-plan</code> added to <code>KNOWN_WORKFLOW_IDS</code> in <code>core/src/config/schema.ts</code> — <strong>this is the task that must precede the owner's amendment</strong></li>
+        <li><code class="status">[x]</code> Registered in <code>SUPPORTED</code> in <code>production-run.ts</code> and in the recipe list in <code>core/test/unit/workflow/recipes.test.ts</code>, whose "exactly seven" assertion becomes eight with its phase order and call count spelled out</li>
+        <li><code class="status">[x]</code> <code>compileWorkflow(designToPlan, 2)</code> admits: <code>minimumCalls</code> is 3 against a tier-2 ceiling of 5, and the three host phases move nothing</li>
       </ul>
 
       <h4>25. Bind <code>design-context</code>, and resolve the targets through W04's registry</h4>

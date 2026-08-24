@@ -9,6 +9,7 @@ import { planWorkflow } from "../../../src/workflow/recipes/plan.ts";
 import { scoutWorkflow } from "../../../src/workflow/recipes/scout.ts";
 import { simpleSdlcWorkflow } from "../../../src/workflow/recipes/simple-sdlc.ts";
 import { intakeWorkflow } from "../../../src/workflow/recipes/intake.ts";
+import { designToPlanWorkflow } from "../../../src/workflow/recipes/design-to-plan.ts";
 
 const recipes: readonly WorkflowRecipe[] = [
   scoutWorkflow,
@@ -18,6 +19,7 @@ const recipes: readonly WorkflowRecipe[] = [
   buildReviewWorkflow,
   simpleSdlcWorkflow,
   intakeWorkflow,
+  designToPlanWorkflow,
 ];
 
 const expected = {
@@ -31,9 +33,10 @@ const expected = {
   "build-review": { tier: 2, phases: ["request:engineer", "builder:agent", "tests:code", "review-context:code", "reviewer:agent"], calls: 2 },
   "simple-sdlc": { tier: 2, phases: ["planner:agent", "builder:agent", "tests:code", "documenter:agent", "final-tests:code", "review-context:code", "reviewer:agent"], calls: 4 },
   intake: { tier: 0, phases: ["request:engineer", "intake:agent"], calls: 1 },
+  "design-to-plan": { tier: 2, phases: ["request:engineer", "design:agent", "architecture-review:agent", "plan-context:code", "plan:agent", "plan-render:code"], calls: 3 },
 } as const;
 
-test("the shipped catalog is exactly seven data-shaped recipes with the Phase Contract order", () => {
+test("the shipped catalog is exactly eight data-shaped recipes with the Phase Contract order", () => {
   assert.deepEqual(recipes.map((recipe) => recipe.id), Object.keys(expected));
   for (const recipe of recipes) {
     const contract = expected[recipe.id as keyof typeof expected];
@@ -57,7 +60,7 @@ test("all recipe prompts compile from TypeBox schemas and render their handoff",
       // is host-composed evidence rather than the phase before it, and says so.
       // The claim under test is that the HOST renders the slot, not that every
       // phase calls it the same thing.
-      assert.match(rendered, /(?:Previous phase envelope|Host evidence):\s*null/);
+      assert.match(rendered, /(?:Previous phase envelope|Host evidence|Host context):\s*null/);
     }
   }
 });
