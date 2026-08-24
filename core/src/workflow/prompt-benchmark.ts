@@ -1,3 +1,4 @@
+import type { ModelResolutionProvenance } from "../contracts/normalized-events.ts";
 import type { ReviewFinding } from "../contracts/review-output.ts";
 import { reviewFindingSpecificity } from "../gates/review.ts";
 
@@ -39,6 +40,7 @@ export interface PromptBenchmarkRow {
 export interface PromptBenchmarkRouteExpectation {
   readonly provider: string;
   readonly requestedModel: string;
+  readonly modelProvenance: ModelResolutionProvenance;
   readonly measuresReviewerSpecificity: boolean;
   readonly requiresReviewerLimitation: boolean;
 }
@@ -162,7 +164,9 @@ function validateRow(
   if (row.provider !== route.provider) reasons.push(`${arm} provider does not match the protocol`);
   if (row.requestedModel !== route.requestedModel) reasons.push(`${arm} requested model does not match the protocol`);
   if (row.resolvedModel === null || row.resolvedModel.trim().length === 0) reasons.push(`${arm} resolved model authority is missing`);
-  if (row.modelProvenance !== "stream-authoritative") reasons.push(`${arm} resolved model is not stream-authoritative`);
+  if (row.modelProvenance !== route.modelProvenance) {
+    reasons.push(`${arm} resolved-model provenance does not match the protocol`);
+  }
   if (row.orderInPair !== expectedOrder(arm, row.repetition)) reasons.push(`${arm} arm order does not alternate by repetition`);
   if (row.usageAuthority !== "provider") reasons.push(`${arm} token usage is not provider-authoritative`);
   if (!nonNegativeInteger(row.inputTokens)) reasons.push(`${arm} input token count is missing or invalid`);

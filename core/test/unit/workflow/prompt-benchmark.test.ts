@@ -24,18 +24,21 @@ const PROTOCOL: PromptBenchmarkProtocol = {
     1: {
       provider: "worker-provider",
       requestedModel: "worker-model",
+      modelProvenance: "route-attributed",
       measuresReviewerSpecificity: false,
       requiresReviewerLimitation: false,
     },
     2: {
       provider: "worker-provider",
       requestedModel: "worker-model",
+      modelProvenance: "route-attributed",
       measuresReviewerSpecificity: false,
       requiresReviewerLimitation: false,
     },
     3: {
       provider: "review-provider",
       requestedModel: "review-model",
+      modelProvenance: "stream-authoritative",
       measuresReviewerSpecificity: true,
       requiresReviewerLimitation: true,
     },
@@ -72,7 +75,7 @@ function row(
     provider: route.provider,
     requestedModel: route.requestedModel,
     resolvedModel: `${route.requestedModel}-resolved`,
-    modelProvenance: "stream-authoritative",
+    modelProvenance: route.modelProvenance,
     usageAuthority: "provider",
     inputTokens: 100 + corpus * 10 + repetition + (arm === "candidate" ? 10 : 0),
     outputTokens: 80 + corpus * 10 + repetition - (arm === "candidate" ? 5 : 0),
@@ -142,6 +145,17 @@ test("missing provider usage authority invalidates the affected pair and contrib
   assert.equal(score.arms.baseline.inputTokens.length, 14, "both arms of the invalid pair are excluded");
   assert.equal(score.arms.candidate.inputTokens.length, 14);
   assert.equal(score.thresholds.passed, null);
+});
+
+test("resolved-model provenance must match each frozen route", () => {
+  let rows = replaceRow(completeRows(), 1, 1, "candidate", { modelProvenance: "stream-authoritative" });
+  rows = replaceRow(rows, 3, 1, "candidate", { modelProvenance: "route-attributed" });
+  const score = scorePromptBenchmark(PROTOCOL, rows);
+
+  assert.equal(score.validPairs.length, 13);
+  assert.equal(score.invalidPairs.length, 2);
+  assert.ok(score.invalidPairs.every((pair) =>
+    pair.reasons.some((reason) => reason.includes("provenance does not match"))));
 });
 
 test("missing, duplicate, declared-invalid, and identity-drift pairs are invalid", () => {
