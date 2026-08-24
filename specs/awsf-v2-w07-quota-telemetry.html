@@ -80,8 +80,8 @@ figcaption { margin-top:9px; color:var(--muted); font-size:12px; font-style:ital
     <summary>Metadata</summary>
     <dl>
       <dt>created</dt><dd>2026-08-24</dd>
-      <dt>modified</dt><dd>2026-08-24, 2026-08-24</dd>
-      <dt>commits</dt><dd>none — authoring only; no implementation was written or committed, none — owner review applied; still uncommitted</dd>
+      <dt>modified</dt><dd>2026-08-24, 2026-08-24, 2026-08-24</dd>
+      <dt>commits</dt><dd>none — authoring only; no implementation was written or committed, none — owner review applied; still uncommitted, <code>8d3f189</code> (M1 / T03 — pure quota parser and fixture tests)</dd>
       <dt>agent name</dt><dd>claude, claude</dd>
       <dt>session id</dt><dd>not recorded — AGENTS.md invariant 1 keeps live session state out of committed files, not recorded — the owner review block carried no session id into the plan</dd>
       <dt>back refs</dt><dd>./awsf-v2-plan.html (spine milestone M7 and Shared Invariants), ./tickets/awsf-v2-plan/W07.md (meta-prompt), ./awsf-v2-plan-build-prompts.md (§ Section B → W07), ./awsf-v2-candidates-fuse-version.md (§10 first, then §2.7 and §0.2), ./awsf-v2-w04-project-registry.html (the per-project shape this plan resolves against), ../AGENTS.md (invariants 1, 3, 7, 9, 10), ../awsf.config.yaml, ../awsf.project.yaml, core/src/contracts/normalized-events.ts, core/src/execution/transport-broker.ts, core/src/observability/attempt-evidence.ts, core/src/observability/queries.ts, core/src/state/task-machine.ts, core/src/state/guards.ts, core/src/cli/commands/production-run.ts</dd>
@@ -825,6 +825,11 @@ flowchart LR
     <p><strong>Observed rather than reasoned.</strong> Loading the committed config with the proposed block injected returned <code>config does not match awsf/v1: /routing/quota_stop: Unexpected property</code>. The unpatched file loads cleanly, so the failure is the block and nothing else.</p>
     <p><strong>The correction.</strong> <span class="gate">G7-A</span> is now the one-line durable-intent change and nothing else — the permission, not the values. T07 extends the schema, which it may do because <code>core/src/config/**</code> is <em>not</em> a protected path. Threshold values become a separate, optional, later owner commit, and since an absent block means the stop is disabled, this repository's own config need never carry one at all. M3 task 7 gained a row forbidding a premature block, and the build prompts and ticket README were corrected to match.</p>
     <p><strong>Why this is worth recording rather than quietly fixing.</strong> The plan asked the owner for a commit that would have broken the repository, and it did so in the same document that requires every deep plan to check whether a guarantee is already enforced somewhere stronger. The schema was the stronger enforcement, and the first draft did not read it.</p>
+  </details>
+  <details open>
+    <summary>2026-08-24 — M1 / T03 completed: pure quota parser over the in-tree fixtures</summary>
+    <p><strong>T03 is complete in commit <code>8d3f189</code>.</strong> <code>core/src/quota/parse.ts</code> parses default quota-axi JSON as a pure function of <code>(rawText, now)</code>, collects every readable fault, derives reset minutes only from the window id selected by <code>effectiveAvailability</code>, and preserves unknown values as <code>null</code>. The fixture suite proves structural stale and unresolved handling, effective figures winning when raw windows disagree, two pinned <code>now</code> instants producing different minute figures, and malformed input returning unavailable records without throwing.</p>
+    <p><strong>Verification.</strong> <code>npm run test:unit</code> passed 1326/1326 tests; <code>npm run typecheck</code> completed cleanly; <code>npm run lint</code> reported zero warnings and zero errors; and <code>ticket-plan-sync.test.ts</code> passed 14/14 after the marker changes. M1 is <code>[x]</code>, T03 is <code>done</code>, and the W07 spine marker remains untouched.</p>
   </details>
 </section>
 
