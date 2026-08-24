@@ -95,28 +95,13 @@ function write(root: string, path: string, text: string): void {
   writeFileSync(target, text);
 }
 
-function syntheticAgent(role: "designer" | "architecture-reviewer", base: AgentDefinition): AgentDefinition {
-  return {
-    ...base,
-    name: role,
-    purpose: role === "designer" ? "Produce a design spine." : "Review a design independently.",
-    prompt: { system: `prompts/${role}/system.md`, user: `prompts/${role}/user.md` },
-    writes: [],
-  };
-}
-
 function allAgents(): readonly AgentDefinition[] {
   const config = loadConfig(readFileSync(resolve("awsf.config.yaml"), "utf8"));
   assert.deepEqual(config.agents.map((agent) => agent.name), [
     "planner", "builder", "reviewer", "documenter", "scout", "intake",
+    "designer", "architecture-reviewer",
   ]);
-  const planner = config.agents.find((agent) => agent.name === "planner")!;
-  const reviewer = config.agents.find((agent) => agent.name === "reviewer")!;
-  return [
-    ...config.agents,
-    syntheticAgent("designer", planner),
-    syntheticAgent("architecture-reviewer", reviewer),
-  ];
+  return config.agents;
 }
 
 function prepareRoles(root: string): readonly AgentDefinition[] {
@@ -137,7 +122,7 @@ test("the approved common source is the only committed headless shared file and 
   assert.doesNotMatch(COMMON_SHARED_BYTES, /alias|\{[^}]*alias[^}]*\}/i);
 });
 
-test("all six configured roles and two synthetic W05 roles append through the same exact prefix and separator contract", async (t) => {
+test("all eight configured roles append through the same exact prefix and separator contract", async (t) => {
   const root = fixtureRoot(t);
   const configPath = join(root, "awsf.config.yaml");
   const agents = prepareRoles(root);
