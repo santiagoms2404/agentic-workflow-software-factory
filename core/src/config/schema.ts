@@ -3,9 +3,10 @@ import { Type, type Static } from "@sinclair/typebox";
 // awsf/v1 — the single committed tuning surface (awsf.config.yaml), shaped
 // exactly per the accepted proposal's §7.3.5 example
 // (specs/awsf-architecture-proposal.md). "Durable intent" per the Ownership
-// section: no machine paths, no credentials, no PIDs, no quota fields ever
-// belong here. load.ts enforces that boundary at load time; this file only
-// enforces shape.
+// section: no machine paths, no credentials, no PIDs, and no measured quota
+// state belong here. A durable quota policy threshold is permitted; the owner
+// chooses it rather than a probe measuring it. load.ts retains the machine-path
+// and credential boundaries, while this schema excludes measured quota fields.
 
 export const CONFIG_SCHEMA_ID = "awsf/v1";
 
@@ -92,11 +93,31 @@ const AdapterEntrySchema = Type.Object(
   { additionalProperties: false },
 );
 
+export const QuotaStopEntrySchema = Type.Object(
+  {
+    minutes: Type.Integer({ minimum: 0 }),
+    probe_timeout_ms: Type.Integer({ minimum: 1 }),
+  },
+  { additionalProperties: false },
+);
+
+const QuotaStopSchema = Type.Object(
+  {
+    default: QuotaStopEntrySchema,
+    // Keys are adapter ids, matching ConfiguredPhaseRoute.adapterId. Adapter
+    // membership is resolved by consumers against the configured route set.
+    by_adapter: Type.Optional(Type.Record(IdentifierString, QuotaStopEntrySchema)),
+  },
+  { additionalProperties: false },
+);
+
 const RoutingSchema = Type.Object(
   {
     default_worker: IdentifierString, // must reference a declared adapters key
     review: Type.Literal("invert-provider"),
     no_fallback: Type.Boolean(), // load.ts rejects any value other than `true`
+    // Omission disables the stop and preserves pre-W07 behavior.
+    quota_stop: Type.Optional(QuotaStopSchema),
   },
   { additionalProperties: false },
 );
@@ -240,4 +261,5 @@ export type AwsfConfig = Static<typeof AwsfConfigSchema>;
 export type AgentDefinition = Static<typeof AgentDefinitionSchema>;
 export type AdapterEntry = Static<typeof AdapterEntrySchema>;
 export type GateEntry = Static<typeof GateEntrySchema>;
+export type QuotaStopEntry = Static<typeof QuotaStopEntrySchema>;
 export type RiskTierName = Static<typeof RiskTier>;

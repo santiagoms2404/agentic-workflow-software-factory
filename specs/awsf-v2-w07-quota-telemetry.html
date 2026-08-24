@@ -409,16 +409,16 @@ flowchart LR
 
   <!-- ================= M3 ================= -->
   <div class="phase">
-    <h3><code class="status">[]</code> Milestone M3: The per-route threshold, behind gate G7-A</h3>
+    <h3><code class="status">[wip]</code> Milestone M3: The per-route threshold, behind gate G7-A</h3>
     <p><strong>This milestone does not start until the owner's amendment commit has landed.</strong> The first task is to verify it, not to write it — no agent can write either protected file, and inventing a route around that is the boundary working rather than an obstacle.</p>
 
     <h4>7. Verify the amendment, then read the threshold</h4>
     <ul class="checklist">
-      <li><code class="status">[]</code> Confirm the owner-authored commit has landed and that <code>awsf.config.yaml</code>'s durable-intent line now distinguishes measured quota state from a durable quota policy threshold. <strong>If it has not, stop and mark this task <code>[f]</code> with the reason</strong> — do not proceed and do not write the file. <strong>The file carries no <code>quota_stop</code> block yet and must not</strong>: until this task's schema change lands, one would fail <code>load.ts</code> and break every command</li>
-      <li><code class="status">[]</code> Extend <code>core/src/config/schema.ts</code> with the optional <code>routing.quota_stop</code> block: a <code>default</code> entry and a <code>by_adapter</code> map, each carrying <code>minutes</code> and <code>probe_timeout_ms</code>. Absent means the stop is disabled — <strong>the feature is opt-in and a project that configures nothing behaves exactly as it does today</strong></li>
-      <li><code class="status">[]</code> The threshold is keyed by <strong>adapter id</strong>, matching <code>ConfiguredPhaseRoute.adapterId</code>, because that is what "route" already means in this repository</li>
-      <li><code class="status">[]</code> No measured value is accepted here. A test asserts the schema rejects any percentage, reset instant, or window id, so the amended intent line stays checkable rather than merely written</li>
-      <li><code class="status">[]</code> <code>core/src/config/load.ts</code>'s existing absolute-path and credential-shape refusals are unchanged and still apply to the new block</li>
+      <li><code class="status">[x]</code> Confirm the owner-authored commit has landed and that <code>awsf.config.yaml</code>'s durable-intent line now distinguishes measured quota state from a durable quota policy threshold. <strong>If it has not, stop and mark this task <code>[f]</code> with the reason</strong> — do not proceed and do not write the file. <strong>The file carries no <code>quota_stop</code> block yet and must not</strong>: until this task's schema change lands, one would fail <code>load.ts</code> and break every command</li>
+      <li><code class="status">[x]</code> Extend <code>core/src/config/schema.ts</code> with the optional <code>routing.quota_stop</code> block: a <code>default</code> entry and a <code>by_adapter</code> map, each carrying <code>minutes</code> and <code>probe_timeout_ms</code>. Absent means the stop is disabled — <strong>the feature is opt-in and a project that configures nothing behaves exactly as it does today</strong></li>
+      <li><code class="status">[x]</code> The threshold is keyed by <strong>adapter id</strong>, matching <code>ConfiguredPhaseRoute.adapterId</code>, because that is what "route" already means in this repository</li>
+      <li><code class="status">[x]</code> No measured value is accepted here. A test asserts the schema rejects any percentage, reset instant, or window id, so the amended intent line stays checkable rather than merely written</li>
+      <li><code class="status">[x]</code> <code>core/src/config/load.ts</code>'s existing absolute-path and credential-shape refusals are unchanged and still apply to the new block</li>
     </ul>
 
     <h4>8. Testing Strategy</h4>
