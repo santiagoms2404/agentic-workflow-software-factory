@@ -16,6 +16,8 @@ import {
 
 const PROBE_SOURCE = new URL("../../../src/quota/probe.ts", import.meta.url);
 const CAPTURE_SOURCE = new URL("../../fixtures/quota-axi/capture-probe.ts", import.meta.url);
+const NOMINAL_FIXTURE = new URL("../../fixtures/quota-axi/nominal.json", import.meta.url);
+const STALE_FIXTURE = new URL("../../fixtures/quota-axi/derived-stale.json", import.meta.url);
 
 const ARGV_CONSTRUCTION_SITES = [
   { name: "runtime probe", argv: (): readonly string[] => buildQuotaAxiArgv("claude,codex") },
@@ -171,6 +173,73 @@ test("the interactive timeout is passed through and fails open with a journalled
   assert.equal(observedTimeout, 8_000);
   assert.equal(result.availability, "unavailable");
   assert.deepEqual(result.failure, { reasonCode: "timeout", command: "version", timeoutMs: 8_000 });
+  assert.deepEqual(journal, [result.failure]);
+});
+
+test("exit 0 with a stale fixture is unavailable by structural state, not exit code", async () => {
+  const stale = readFileSync(STALE_FIXTURE, "utf8");
+  const journal: unknown[] = [];
+  const script = [
+    { status: 0, stdout: "quota-axi 0.1.29\n", stderr: "", error: null },
+    { status: 0, stdout: stale, stderr: "", error: null },
+  ];
+  const result = await probeQuota({
+    resolveExecutable: () => "/project/bin/quota-axi",
+    runCommand: () => {
+      const response = script.shift();
+      assert.ok(response, "fake command script was exhausted");
+      return response;
+    },
+    routes: [{ provider: "claude" }, { provider: "codex" }],
+    purpose: "phase-boundary",
+    options: { env: { PATH: "/project/bin" } },
+    now: "2026-08-24T20:26:39.429Z",
+    journalFailure: (failure) => { journal.push(failure); },
+    retainFailureBytes: async () => { throw new Error("stale reports retain no bytes"); },
+  });
+
+  assert.equal(result.availability, "unavailable");
+  assert.deepEqual(result.failure, { reasonCode: "stale", providers: ["claude", "codex"] });
+  assert.deepEqual(result.parsed.readout.providers.map((provider) => provider.stateStatus), ["stale", "stale"]);
+  assert.deepEqual(journal, [result.failure]);
+});
+
+test("exit 1 retains its code while structurally parsing a well-formed payload", async () => {
+  const nominal = readFileSync(NOMINAL_FIXTURE, "utf8");
+  const journal: unknown[] = [];
+  const retained: string[] = [];
+  const script = [
+    { status: 0, stdout: "quota-axi 0.1.29\n", stderr: "", error: null },
+    { status: 1, stdout: nominal, stderr: "provider reported a partial failure", error: null },
+  ];
+  const result = await probeQuota({
+    resolveExecutable: () => "/project/bin/quota-axi",
+    runCommand: () => {
+      const response = script.shift();
+      assert.ok(response, "fake command script was exhausted");
+      return response;
+    },
+    routes: [{ provider: "claude" }, { provider: "codex" }],
+    purpose: "phase-boundary",
+    options: { env: { PATH: "/project/bin" } },
+    now: "2026-08-24T20:26:39.429Z",
+    journalFailure: (failure) => { journal.push(failure); },
+    retainFailureBytes: async (bytes) => {
+      retained.push(bytes);
+      return "raw/quota-probe.txt";
+    },
+  });
+
+  assert.equal(result.availability, "unavailable");
+  assert.deepEqual(result.failure, {
+    reasonCode: "nonzero-exit",
+    command: "probe",
+    exitCode: 1,
+    retainedPath: "raw/quota-probe.txt",
+  });
+  assert.equal(result.parsed.faults.length, 0);
+  assert.deepEqual(result.parsed.readout.providers.map((provider) => provider.provider), ["claude", "codex"]);
+  assert.deepEqual(retained, [`${nominal}provider reported a partial failure`]);
   assert.deepEqual(journal, [result.failure]);
 });
 

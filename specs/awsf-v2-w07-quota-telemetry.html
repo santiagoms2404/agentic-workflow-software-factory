@@ -367,7 +367,7 @@ flowchart LR
 
   <!-- ================= M2 ================= -->
   <div class="phase">
-    <h3><code class="status">[wip]</code> Milestone M2: The probe, the version floor, and the failure posture</h3>
+    <h3><code class="status">[x]</code> Milestone M2: The probe, the version floor, and the failure posture</h3>
     <p>Both of the source's smaller corrections land here, and neither was written down anywhere before this plan. The milestone spends nothing: every test drives an injected fake <code>runCommand</code>.</p>
 
     <h4>4. The probe as an injected capability</h4>
@@ -395,12 +395,12 @@ flowchart LR
     <p class="serves"><code class="serves">AC-2</code> <code class="serves">INV-4</code></p>
     <p>Every test drives a fake <code>runCommand</code> that returns a scripted <code>CommandResult</code>. No process is spawned in the suite; the only live invocation in this workstream was task 1.</p>
     <ul class="checklist">
-      <li><code class="status">[]</code> A supplied version below the floor produces <code>version-below-floor</code> — the red-on-lower-version proof the spine's checklist asks for by name</li>
-      <li><code class="status">[]</code> A fake that reports the timeout condition produces <code>timeout</code>, and the caller receives an unavailable record rather than an exception</li>
-      <li><code class="status">[]</code> Exit code <code>0</code> carrying <code>derived-stale.json</code> produces <code>stale</code>, proving state is read structurally and not from the exit code</li>
-      <li><code class="status">[]</code> Exit code <code>1</code> carrying a well-formed payload is still parsed structurally, for the same reason in the other direction</li>
-      <li><code class="status">[]</code> A test enumerates every construction site of the argv and asserts the four barred flags and the string <code>npx</code> are absent</li>
-      <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green</li>
+      <li><code class="status">[x]</code> A supplied version below the floor produces <code>version-below-floor</code> — the red-on-lower-version proof the spine's checklist asks for by name</li>
+      <li><code class="status">[x]</code> A fake that reports the timeout condition produces <code>timeout</code>, and the caller receives an unavailable record rather than an exception</li>
+      <li><code class="status">[x]</code> Exit code <code>0</code> carrying <code>derived-stale.json</code> produces <code>stale</code>, proving state is read structurally and not from the exit code</li>
+      <li><code class="status">[x]</code> Exit code <code>1</code> carrying a well-formed payload is still parsed structurally, for the same reason in the other direction</li>
+      <li><code class="status">[x]</code> A test enumerates every construction site of the argv and asserts the four barred flags and the string <code>npx</code> are absent</li>
+      <li><code class="status">[x]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green</li>
     </ul>
     <div class="loop">
       🔁 <strong>Do not exit this phase until every box above is checked.</strong> A failing command means fix the cause and re-run.
