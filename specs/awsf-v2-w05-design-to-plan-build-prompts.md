@@ -59,7 +59,7 @@ the whole file.**
 | D9 | **Two new roles, `designer` and `architecture-reviewer`**, because production resolves a phase's prompts through its `owner` and two phases with one owner get one prompt. | **Q3 — DECIDED 2026-08-23** |
 | D10 | **The chain READS every repository the project's catalog declares, and WRITES only into the one the attempt runs in.** A `design-context` host phase resolves them through W04's catalog and placement layers and records each one's head revision. **No policy change**: `path-policy` judges write targets only, and `sandbox-broker` already binds the whole filesystem read-only before binding the worktree writable. | **Q5 — DECIDED 2026-08-23**, against its own recommendation, after the premise was checked against source and found false |
 | D10b | **The reproducibility unit is a repository revision, not a byte.** `design_evidence_present` proves which revision was *available*, never which files were opened — weaker than `review_evidence_present`, and the right unit for a phase that explores rather than judges. | derived in this plan; carried on the passing gate note |
-| D11 | **A blocking verdict stops the attempt at `AWAITING_OWNER`**, findings journalled, no automatic resume. The owner override is `L19`: interactive, recorded, and it draws on a correction allowance. | **Q6 — DECIDED 2026-08-23** |
+| D11 | **A blocking verdict stops the attempt at `BLOCKED` through L8**, findings retained in the journalled review envelope, no automatic resume. No candidate exists yet for L19 owner re-entry. | **Q6 — OWNER-AMENDED DURING T26** |
 | D12b | **Cross-provider independence for the architecture review is a config choice, not the automatic inversion.** `isReviewPhase` gates the inversion block by schema id, so this phase is invisible to it; the amendment puts the reviewer on the adapter the designer is not on. Fresh-session independence — `continuity: none` — holds unconditionally. | source-verified; see "What the distinct schema id costs" |
 | D12 | **`awsf-plan-html/v1` is extended additively and its format id does not move.** A plan declaring no identifiers is a legitimate shape. The trigger for a real bump — making the spine mandatory — is written into the module comment. | derived in this plan |
 
@@ -731,14 +731,14 @@ DO
   is attached to the host plan-context phase, NOT to the review phase, and appears in no phase's
   correction path.
   Specify - in the comment, for task 26 to implement - that on failure the attempt stops at
-  AWAITING_OWNER with the findings journalled, THROUGH THE EXISTING EDGES ONLY.
+  BLOCKED with the findings journalled, through existing edge L8.
 
 DO NOT
   Add it to the architecture-review phase's gate list.
   Add a task state, a legal edge, or any file under core/src/state/. LEGAL_EDGES.length stays 25
   and core/test/unit/transitions.test.ts stays untouched - it already pins that in four places.
-  Add a bypass flag, an override option, or a "warn only" mode. Questionable Q6 decided the
-  override is an owner act through L19, taken in the open and drawing on a correction allowance.
+  Add a bypass flag, an override option, or a "warn only" mode. Questionable Q6 was amended
+  during task 26 because L19 requires a candidate and this boundary has not produced one.
 
 DEFINITION OF DONE
   npm run test:unit && npm run typecheck && npm run lint, with transitions.test.ts green and
@@ -1231,9 +1231,10 @@ READ FIRST
   specs/awsf-v2-w05-design-to-plan.html - milestone M7 task 24, and the phase table in Solution
 
 DO
-  core/src/workflow/recipes/design-to-plan.ts - six phases in order, tier: 2, three agent phases,
+  core/src/workflow/recipes/design-to-plan.ts - seven phases in order, tier: 1, three agent phases,
   as const satisfies WorkflowRecipe:
     request           engineer  awsf.plan-output/v1
+    design-context    code      awsf.design-context/v1                 gate design_evidence_present
     design            agent     awsf.design-output/v1                  gate spine_declared
     architecture-review agent   awsf.architecture-review-output/v1     gate architecture_verdict_consistent
     plan-context      code      awsf.plan-context/v1                   gate architecture_review_clear
@@ -1261,8 +1262,8 @@ DO NOT
   Add a fourth composition site, a new runner, or a new CLI command.
 
 DEFINITION OF DONE
-  npm run test:unit && npm run typecheck && npm run lint. compileWorkflow(designToPlan, 2) admits:
-  minimumCalls is 3 against a tier-2 ceiling of 5.
+  npm run test:unit && npm run typecheck && npm run lint. compileWorkflow(designToPlan, 1) admits:
+  minimumCalls is 3 against the tier-1 ceiling of 3.
   Full checklist: milestone M7 task 24 in the plan HTML.
 
 MARKERS
@@ -1347,8 +1348,8 @@ DO
   phase loop, keyed by its schema id - the same way review-context already is.
   Bind plan-render: it writes its three files into the managed worktree and the host commits them;
   no_protected_paths and diff_matches_claims run against that commit.
-  On a failed architecture_review_clear, the attempt stops at AWAITING_OWNER with the findings
-  journalled, THROUGH THE EXISTING EDGES ONLY.
+  On a failed architecture_review_clear, the attempt stops at BLOCKED with the findings retained
+  in the journalled review envelope, through existing edge L8.
   ASSERT THE COUNT: a test counts the independent system-prompt composition sites and fails if the
   number rose. After W06 that number is 1, and this task must leave it at 1.
 
@@ -1413,7 +1414,7 @@ DO
   ticket-plan-sync INCLUDING the new coverage assertions - the chain's product satisfies the
   chain's own gate.
   PASS TWO, whose canned review carries one high finding: NO plan context is composed, NO planning
-  call is reserved, the attempt stops, and the findings are in the journal.
+  call is reserved, the attempt stops at BLOCKED through L8, and the findings are in the journal.
 
 DO NOT
   Write awsf.config.yaml, AGENTS.md, or anything under core/src/state/ or core/src/policy/.

@@ -15,7 +15,9 @@ import { loadUserPrompt, requireHostExecution } from "../recipe-support.ts";
 
 export const designToPlanWorkflow = {
   id: "design-to-plan",
-  tier: 2,
+  // Architecture review is an ordinary workflow phase, not the task-level
+  // mandatory review that T2 routes through L11. Three calls fit T1 exactly.
+  tier: 1,
   phases: [
     {
       id: "request",

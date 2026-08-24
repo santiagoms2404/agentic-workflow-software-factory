@@ -21,11 +21,18 @@ import type { AwsfConfig, AgentDefinition, AdapterEntry } from "../../config/sch
 import type { BuildOutput } from "../../contracts/build-output.ts";
 import type { EnvelopeBase } from "../../contracts/envelope-base.ts";
 import type { IntakeOutput } from "../../contracts/intake-output.ts";
+import { DOCUMENT_OUTPUT_SCHEMA_ID, type DocumentOutput } from "../../contracts/document-output.ts";
 import { UNREPORTED_TOKEN_USAGE, isPersistableKind, type ModelResolutionProvenance, type NormalizedEvent, type TokenUsage } from "../../contracts/normalized-events.ts";
 import { parseEnvelope } from "../../contracts/parse-envelope.ts";
 import type { PlanOutput } from "../../contracts/plan-output.ts";
-import { ARCHITECTURE_REVIEW_OUTPUT_SCHEMA_ID } from "../../contracts/architecture-review-output.ts";
+import {
+  ARCHITECTURE_REVIEW_OUTPUT_SCHEMA_ID,
+  type ArchitectureReviewOutput,
+} from "../../contracts/architecture-review-output.ts";
 import { DESIGN_CONTEXT_SCHEMA_ID, type DesignContext } from "../../contracts/design-context.ts";
+import { DESIGN_OUTPUT_SCHEMA_ID, type DesignOutput } from "../../contracts/design-output.ts";
+import { DESIGN_PLAN_OUTPUT_SCHEMA_ID, type DesignPlanOutput } from "../../contracts/design-plan-output.ts";
+import { PLAN_CONTEXT_SCHEMA_ID, type PlanContext } from "../../contracts/plan-context.ts";
 import { wrapEnvelope, type StoredEnvelope } from "../../contracts/stored-envelope.ts";
 import type { TestOutput } from "../../contracts/test-output.ts";
 import { CallBudget, type Reservation } from "../../execution/call-budget.ts";
@@ -39,6 +46,7 @@ import { diffMatchesClaims, headAdvanced, noProtectedPaths, writesWithinGlobs } 
 import { GateReport, type GateId } from "../../gates/interface.ts";
 import { reviewEvidencePresent, verdictConsistent, type ReviewEvidenceExpectation } from "../../gates/review.ts";
 import { designEvidencePresent } from "../../gates/design-evidence.ts";
+import { architectureReviewClear } from "../../gates/architecture-review.ts";
 import { REVIEW_OUTPUT_SCHEMA_ID, type ReviewOutput } from "../../contracts/review-output.ts";
 import { REVIEW_CONTEXT_SCHEMA_ID, type ReviewContext } from "../../contracts/review-context.ts";
 import {
@@ -58,6 +66,7 @@ import { assertClean, captureChangeSet, changedPaths, changesSinceBase, runGit, 
 import { ContinuityStore, continuityHandle } from "../../execution/continuity-store.ts";
 import { loadCatalog } from "../../registry/catalog.ts";
 import { readPlacement } from "../../registry/placement.ts";
+import { renderPlanDocument } from "../../registry/plan-render.ts";
 import { resolveProject, type ResolvedProject } from "../../registry/resolve.ts";
 import { continuityFilePath } from "../../persistence/platform-paths.ts";
 import { TicketStore } from "../../persistence/ticket-store.ts";
@@ -104,7 +113,7 @@ import {
   type AttemptStatus,
 } from "./attempt.ts";
 
-const { chmod, mkdir, readFile, writeFile } = fs;
+const { chmod, lstat, mkdir, readFile, writeFile } = fs;
 
 const HOST = globalThis as unknown as {
   process: { env: Readonly<Record<string, string>> };
@@ -350,6 +359,147 @@ export async function composeProductionDesignContext(input: {
     targets,
   };
   return Object.freeze({ project, context });
+}
+
+export interface ComposedProductionPlanContext {
+  readonly context: PlanContext | null;
+  readonly report: GateReport;
+}
+
+/** Carries the exact stored design declarations only after the stored review clears them. */
+export function composeProductionPlanContext(
+  design: DesignOutput,
+  review: ArchitectureReviewOutput,
+): ComposedProductionPlanContext {
+  const identifierSet: PlanContext["identifierSet"] = {
+    invariants: design.invariants.map((declaration) => ({ ...declaration })),
+    acceptanceCriteria: design.acceptanceCriteria.map((declaration) => ({ ...declaration })),
+  };
+  const report = architectureReviewClear(review, {
+    design,
+    planContext: identifierSet,
+  });
+  if (!report.passed) return Object.freeze({ context: null, report });
+
+  const nonBlockingFindings: PlanContext["nonBlockingFindings"] = review.findings
+    .filter((finding) => finding.severity === "low" || finding.severity === "medium")
+    .map((finding) => ({ ...finding, severity: finding.severity as "low" | "medium" }));
+  const context: PlanContext = {
+    schema: PLAN_CONTEXT_SCHEMA_ID,
+    producerStatus: "success",
+    summary: design.summary,
+    artifacts: [],
+    notesForNextPhase: "Map every carried identifier onto at least one ordered plan step.",
+    identifierSet,
+    reviewVerdict: review.verdict,
+    nonBlockingFindings,
+    blockingFindingCount: 0,
+  };
+  return Object.freeze({ context: Object.freeze(context), report });
+}
+
+export interface ProductionPlanRenderResult {
+  readonly output: DocumentOutput;
+  readonly candidateSha: string | null;
+  readonly reports: readonly GateReport[];
+}
+
+async function managedPlanPath(worktree: string, path: string): Promise<string> {
+  const root = resolve(worktree);
+  const target = resolve(root, path);
+  const fromRoot = relative(root, target);
+  if (fromRoot === "" || fromRoot.startsWith("..") || isAbsolute(fromRoot)) {
+    throw new Error(`rendered plan path escapes the managed worktree: ${JSON.stringify(path)}`);
+  }
+
+  // Host writes do not pass through the agent sandbox. Walk each parent one
+  // component at a time so a tracked symlink cannot redirect mkdir/writeFile
+  // across the managed-worktree boundary.
+  let parent = root;
+  for (const component of fromRoot.split(/[\\/]/u).slice(0, -1)) {
+    parent = join(parent, component);
+    try {
+      const observed = await lstat(parent);
+      if (observed.isSymbolicLink() || !observed.isDirectory()) {
+        throw new Error(`rendered plan parent is not a managed directory: ${JSON.stringify(parent)}`);
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      await mkdir(parent);
+    }
+  }
+  try {
+    const observed = await lstat(target);
+    if (observed.isSymbolicLink() || !observed.isFile()) {
+      throw new Error(`rendered plan target is not a managed file: ${JSON.stringify(path)}`);
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  return target;
+}
+
+/** Writes and commits one rendered plan set inside the managed worktree only. */
+export async function renderProductionPlanIntoWorktree(input: {
+  readonly worktree: string;
+  readonly stem: string;
+  readonly plan: DesignPlanOutput;
+  readonly identifierSet: PlanContext["identifierSet"];
+  readonly protectedPaths: readonly string[];
+}): Promise<ProductionPlanRenderResult> {
+  const git = systemGitRunner(input.worktree);
+  assertClean(input.worktree, "before", git);
+  const phaseBase = runGit(git, ["rev-parse", "HEAD"]).trim();
+  const hostGit = createHostPhaseGit<DocumentOutput>({
+    repository: input.worktree,
+    commitMessage: (output) => output.proposedCommitMessage,
+  });
+  const documents = renderPlanDocument({
+    stem: input.stem,
+    plan: input.plan,
+    identifierSet: input.identifierSet,
+  });
+  for (const [path, content] of documents) {
+    const target = await managedPlanPath(input.worktree, path);
+    await writeFile(target, content, "utf8");
+  }
+
+  const observed = hostGit.captureDiff();
+  const output: DocumentOutput = {
+    schema: DOCUMENT_OUTPUT_SCHEMA_ID,
+    producerStatus: "success",
+    summary: `Rendered ${input.plan.summary}`,
+    artifacts: [...documents.keys()].map((path) => ({
+      path,
+      kind: path.endsWith(".html") ? "plan" as const : "documentation" as const,
+      description: `Rendered design-to-plan document ${path}`,
+    })),
+    notesForNextPhase: "Inspect and land the host-rendered plan set.",
+    changedFiles: [...observed],
+    documentedAreas: observed.map((path) => ({ subject: input.plan.summary, documentPath: path })),
+    proposedCommitMessage: `docs: render ${input.stem} plan`,
+  };
+  const parsed = parseEnvelope(JSON.stringify(output), DOCUMENT_OUTPUT_SCHEMA_ID);
+  if (!parsed.valid) {
+    throw new Error(`host composed an invalid plan-render envelope: ${parsed.violations.map((violation) => violation.message).join("; ")}`);
+  }
+
+  const beforeCommit = [
+    noProtectedPaths(observed, input.protectedPaths),
+    diffMatchesClaims(observed, output.changedFiles),
+  ] as const;
+  if (!beforeCommit.every((report) => report.passed)) {
+    return Object.freeze({ output, candidateSha: null, reports: Object.freeze(beforeCommit) });
+  }
+
+  const candidateSha = hostGit.commit(output, observed);
+  if (candidateSha === null) throw new Error("plan-render produced no candidate commit");
+  const committedPaths = changesSinceBase(input.worktree, phaseBase);
+  const reports = Object.freeze([
+    noProtectedPaths(committedPaths, input.protectedPaths),
+    diffMatchesClaims(committedPaths, output.changedFiles),
+  ]);
+  return Object.freeze({ output, candidateSha, reports });
 }
 
 /** Keeps the review's design handoff intact while carrying the host envelope beside it. */
@@ -1144,19 +1294,22 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
       // The engine renders once more at launch. Pin it to the exact prompt
       // persisted above, including architecture review's repository envelope.
       renderPrompt: () => renderedPrompt,
-      gates: phaseGates(
-        phase.id,
-        permission.profile.writes,
-        status.worktree!,
-        status.baseSha!,
-        options.config,
-        reviewContext,
-        () => changedPaths(permission.before, captureChangeSet(status.worktree!)),
-        // The exact text persisted as this phase's compiled user prompt above.
-        // `review_evidence_present` asks whether the evidence reached the model,
-        // and this is what reached it.
-        renderedPrompt,
-      ),
+      gates: [
+        ...phase.gates,
+        ...phaseGates(
+          phase.id,
+          permission.profile.writes,
+          status.worktree!,
+          status.baseSha!,
+          options.config,
+          reviewContext,
+          () => changedPaths(permission.before, captureChangeSet(status.worktree!)),
+          // The exact text persisted as this phase's compiled user prompt above.
+          // `review_evidence_present` asks whether the evidence reached the model,
+          // and this is what reached it.
+          renderedPrompt,
+        ),
+      ],
     };
     let phaseQueue = Promise.resolve();
     const onPhaseState = (next: PhaseState): void => {
@@ -1468,6 +1621,10 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
 
   let previous: EnvelopeBase | null = null;
   let designContext: DesignContext | null = null;
+  let designOutput: DesignOutput | null = null;
+  let architectureReviewOutput: ArchitectureReviewOutput | null = null;
+  let planContext: PlanContext | null = null;
+  let designPlanOutput: DesignPlanOutput | null = null;
   let candidateSha: string | null = null;
   let agentOrdinal = 0;
   let reviewPhase: { readonly phase: CompiledAgentPhase; readonly ordinal: number } | null = null;
@@ -1552,6 +1709,15 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
         const result = await runAgent(phase, index + 1, previous, reservation, agentOrdinal === 1, null);
         previous = result.envelope;
         if (phase.schemaId === "awsf.plan-output/v1") intent = result.envelope as PlanOutput;
+        if (phase.schemaId === DESIGN_OUTPUT_SCHEMA_ID) designOutput = result.envelope as DesignOutput;
+        if (phase.schemaId === ARCHITECTURE_REVIEW_OUTPUT_SCHEMA_ID) {
+          architectureReviewOutput = result.envelope as ArchitectureReviewOutput;
+          await persist("attempt.updated", {
+            lastActivityAt: infra.now(),
+            lastActivity: `${phase.id}: retained ${architectureReviewOutput.verdict} with ${String(architectureReviewOutput.findings.length)} finding(s) in the journalled envelope`,
+          });
+        }
+        if (phase.schemaId === DESIGN_PLAN_OUTPUT_SCHEMA_ID) designPlanOutput = result.envelope as DesignPlanOutput;
         if (result.candidateSha !== null) {
           candidateSha = result.candidateSha;
           await persist("attempt.updated", {
@@ -1590,6 +1756,55 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
         }
         previous = designContext;
         await persistPhase(phase.id, "SUCCEEDED");
+        continue;
+      }
+      if (phase.schemaId === PLAN_CONTEXT_SCHEMA_ID) {
+        try {
+          if (designOutput === null || architectureReviewOutput === null) {
+            throw new Error("plan-context requires the stored design and architecture-review envelopes");
+          }
+          const composed = composeProductionPlanContext(designOutput, architectureReviewOutput);
+          await persistGate(phase.id, composed.report, null);
+          if (composed.context === null) throw new PhaseGateFailure(phase.id, [composed.report]);
+          planContext = composed.context;
+          previous = planContext;
+          await persistHostEnvelope(phase.id, planContext);
+          await persistPhase(phase.id, "SUCCEEDED");
+        } catch (error) {
+          await persistPhase(phase.id, "FAILED", error as Error);
+          throw error;
+        }
+        continue;
+      }
+      if (phase.schemaId === DOCUMENT_OUTPUT_SCHEMA_ID) {
+        try {
+          if (designPlanOutput === null || planContext === null) {
+            throw new Error("plan-render requires the stored design-plan and plan-context envelopes");
+          }
+          const rendered = await renderProductionPlanIntoWorktree({
+            worktree: status.worktree!,
+            stem: status.taskId,
+            plan: designPlanOutput,
+            identifierSet: planContext.identifierSet,
+            protectedPaths: options.config.policy.protected_paths,
+          });
+          previous = rendered.output;
+          await persistHostEnvelope(phase.id, rendered.output);
+          for (const report of rendered.reports) await persistGate(phase.id, report, rendered.candidateSha);
+          if (rendered.candidateSha === null || !rendered.reports.every((report) => report.passed)) {
+            throw new PhaseGateFailure(phase.id, rendered.reports);
+          }
+          candidateSha = rendered.candidateSha;
+          await persist("attempt.updated", {
+            candidateSha,
+            lastActivityAt: infra.now(),
+            lastActivity: `${phase.id}: host committed ${String(rendered.output.changedFiles.length)} rendered file(s) as ${candidateSha}`,
+          });
+          await persistPhase(phase.id, "SUCCEEDED");
+        } catch (error) {
+          await persistPhase(phase.id, "FAILED", error as Error);
+          throw error;
+        }
         continue;
       }
       // The evidence phase is a code phase that runs no command: it reads Git

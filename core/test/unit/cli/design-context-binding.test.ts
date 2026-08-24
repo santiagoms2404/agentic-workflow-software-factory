@@ -132,7 +132,7 @@ test("three-repository design context records local heads without creating anoth
     assert.ok(!grant.writableRoots.includes(service));
     assert.ok(!grant.writableRoots.includes(application));
 
-    const compiled = compileWorkflow(designToPlanWorkflow, 2);
+    const compiled = compileWorkflow(designToPlanWorkflow, designToPlanWorkflow.tier);
     const designer = compiled.phases.find((phase) => phase.id === "design");
     const reviewer = compiled.phases.find((phase) => phase.id === "architecture-review");
     assert.ok(designer?.kind === "agent");

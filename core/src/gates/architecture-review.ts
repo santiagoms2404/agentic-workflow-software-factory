@@ -2,8 +2,8 @@
  * `architecture_review_clear` is attached to the host plan-context phase, not
  * the review phase, and appears in no phase's correction path because asking
  * the reviewer to reconsider an unchanged design rewards a softened finding.
- * Task 26 must journal the findings and stop a failed attempt at
- * `AWAITING_OWNER` through the existing task-state edges only.
+ * Task 26 journals the findings and stops a failed attempt at `BLOCKED`
+ * through existing edge L8. No candidate exists yet for owner re-entry.
  */
 
 import type {

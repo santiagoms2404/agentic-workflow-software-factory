@@ -171,7 +171,7 @@ flowchart LR
   P --> V["render<br/>host code · 0 calls"]
   D -. "INV-n / AC-n declared" .-> C
   C --> G{"zero blockers?"}
-  G -->|no| S["stop · AWAITING_OWNER"]
+  G -->|no| S["stop · BLOCKED (L8)"]
   V --> T["plan + prompts + tickets"]
   T --> X["coverage gate<br/>ticket-plan-sync"]
   style G stroke:#F97316,stroke-width:2px
@@ -254,7 +254,7 @@ flowchart TD
     <figure>
       <pre class="mermaid">
 flowchart TD
-  subgraph runtime["one attempt · tier 2 · 3 calls · 1 worktree"]
+  subgraph runtime["one attempt · tier 1 · 3 calls · 1 worktree"]
     R["request · engineer<br/>awsf.plan-output/v1"] --> E["design-context · code<br/>awsf.design-context/v1"]
     E --> D["design · agent<br/>awsf.design-output/v1"]
     D --> A["architecture-review · agent<br/>awsf.architecture-review-output/v1"]
@@ -286,7 +286,7 @@ flowchart TD
         <tr><td><code>plan-render</code></td><td>code · host</td><td><code>awsf.document-output/v1</code></td><td><code>no_protected_paths</code>, <code>diff_matches_claims</code></td><td>One validated envelope becomes three files by deterministic host code. No model writes the plan document.</td></tr>
       </tbody>
     </table>
-    <p><strong>Three agent calls against a tier-2 ceiling of five.</strong> <code>compileWorkflow</code> counts <code>minimumCalls</code> as the number of agent phases and admits through <code>admitWorkflow</code>; three host phases and one engineer phase move no ceiling, exactly as <code>review-context</code> already does not. <strong>Adding cross-repository reading therefore costs no quota at all</strong> — it is host work, and the ceiling does not notice it.</p>
+    <p><strong>Three agent calls against the tier-1 ceiling of three.</strong> <code>compileWorkflow</code> counts <code>minimumCalls</code> as the number of agent phases and admits through <code>admitWorkflow</code>; three host phases and one engineer phase move no ceiling, exactly as <code>review-context</code> already does not. The architecture review remains an ordinary workflow phase rather than the task-level mandatory review that T2 routes through <code>L11</code>. <strong>Adding cross-repository reading therefore costs no quota at all</strong> — it is host work, and the ceiling does not notice it.</p>
 
     <h3>The verdict is an envelope because the code already says which phases are transitions</h3>
     <p><code>core/src/cli/commands/production-run.ts:119-121</code> decides what a review <em>is</em> by schema id, not by name: <code>isReviewPhase</code> returns true for an agent phase whose <code>schemaId</code> is <code>awsf.review-output/v1</code>, and only such a phase is deferred to become the L11 spawn site out of <code>GATING</code>. <strong>Giving the architecture review its own schema id is therefore not cosmetic — it is the mechanism that keeps it out of the transition machinery.</strong> It runs as an ordinary agent phase inside the durable <code>RUNNING</code> sojourn; the twenty-five edges are untouched; and <code>core/test/unit/transitions.test.ts</code>, which pins <code>LEGAL_EDGES.length</code> at 25 in four separate assertions, is the fence that would catch a later drift back toward a transition. This plan adds no assertion for that property because a stronger one already exists.</p>
@@ -351,7 +351,7 @@ flowchart LR
     <div class="card warn">
       <h5>Why the zero-blocker gate must not be correctable, stated once and then enforced</h5>
       <p>Every other gate in this chain fails because the party who can fix it is still in the session. The zero-blocker gate is different: <strong>the party at fault is the designer, and the designer's session closed two phases ago.</strong> A correction round here would resume the <em>reviewer</em> and ask it to try again against an unchanged design — which is asking it to produce a different verdict about the same artifact. That is an incentive to soften a finding, and a tersely agreeable reviewer is precisely the rubber-stamped closure the independent review exists to prevent.</p>
-      <p>So the check does not live in a phase's gate list at all. It lives on the host <code>plan-context</code> phase, which composes the planner's input. A review that reports a blocker <strong>cannot produce a valid plan context</strong>, the plan phase's call is never reserved, and the attempt stops at <code>AWAITING_OWNER</code> with the findings in the journal. The owner may still continue — <code>L19</code> is a legal edge — but it is an interactive human act, recorded with actor <code>human</code>, and it draws on a correction allowance. An override that costs something and is written down is the right shape; an override a gate can be talked into is not.</p>
+      <p>So the check does not live in a phase's gate list at all. It lives on the host <code>plan-context</code> phase, which composes the planner's input. A review that reports a blocker <strong>cannot produce a valid plan context</strong>, the plan phase's call is never reserved, and the attempt stops at <code>BLOCKED</code> through existing edge <code>L8</code> with the findings retained in the journalled review envelope. No candidate exists yet, so <code>L19</code> cannot authorize owner re-entry without fabricated candidate evidence. Resuming architecture design within one attempt belongs to the later ladder workstream rather than to this binding.</p>
     </div>
 
     <h3>The limit belongs on the green row, not in a footnote</h3>
@@ -690,7 +690,7 @@ flowchart TD
   D["design envelope"] --> G1["spine_declared<br/>correctable"]
   A["review envelope"] --> G2["architecture_verdict_consistent<br/>correctable"]
   A --> G3["architecture_review_clear<br/>NOT correctable"]
-  G3 -->|blocker| S["no plan context<br/>stop · AWAITING_OWNER"]
+  G3 -->|blocker| S["no plan context<br/>stop · BLOCKED (L8)"]
   G3 -->|clear| C["plan context"]
   C --> P["plan envelope"] --> G4["spine_carried<br/>correctable"]
   style G3 stroke:#F97316,stroke-width:2px
@@ -734,7 +734,7 @@ flowchart TD
         <li><code class="status">[x]</code> Pure over the stored review envelope: blocking findings number zero and the verdict is <code>accept</code></li>
         <li><code class="status">[x]</code> The identifier set carried into the plan context equals the design's exactly, so the planner cannot be handed a set the reviewer never saw</li>
         <li><code class="status">[x]</code> It is attached to the host <code>plan-context</code> phase, <strong>not</strong> to the review phase, and it appears in no phase's correction path. The reason is written into the module comment, in one sentence a reader can disagree with</li>
-        <li><code class="status">[x]</code> On failure, the attempt stops at <code>AWAITING_OWNER</code> with the findings journalled, through the existing edges only. <strong><code>core/src/state/task-machine.ts</code> is not touched and <code>LEGAL_EDGES.length</code> stays 25</strong></li>
+        <li><code class="status">[x]</code> On failure, the attempt stops at <code>BLOCKED</code> through existing edge <code>L8</code>, with the findings retained in the journalled review envelope. <strong><code>core/src/state/task-machine.ts</code> is not touched and <code>LEGAL_EDGES.length</code> stays 25</strong></li>
         <li><code class="status">[x]</code> The passing note carries the same stated limit as task 12, because this is the row a reader of a green run actually sees</li>
       </ul>
 
@@ -901,11 +901,11 @@ flowchart TD
       <h4>24. The recipe, the workflow id, and the registration</h4>
       <p class="serves"><code class="serves">INV-2</code></p>
       <ul class="checklist">
-        <li><code class="status">[x]</code> <code>core/src/workflow/recipes/design-to-plan.ts</code>: six phases in Phase Contract order, <code>tier: 2</code>, three agent phases, <code>as const satisfies WorkflowRecipe</code></li>
+        <li><code class="status">[x]</code> <code>core/src/workflow/recipes/design-to-plan.ts</code>: seven phases in Phase Contract order, <code>tier: 1</code>, three agent phases, <code>as const satisfies WorkflowRecipe</code></li>
         <li><code class="status">[x]</code> Each phase's <code>description</code> is earned — <code>assertEarnedDescription</code> rejects one that merely restates the phase id, and it fails at compile time rather than at run time</li>
         <li><code class="status">[x]</code> <code>design-to-plan</code> added to <code>KNOWN_WORKFLOW_IDS</code> in <code>core/src/config/schema.ts</code> — <strong>this is the task that must precede the owner's amendment</strong></li>
         <li><code class="status">[x]</code> Registered in <code>SUPPORTED</code> in <code>production-run.ts</code> and in the recipe list in <code>core/test/unit/workflow/recipes.test.ts</code>, whose "exactly seven" assertion becomes eight with its phase order and call count spelled out</li>
-        <li><code class="status">[x]</code> <code>compileWorkflow(designToPlan, 2)</code> admits: <code>minimumCalls</code> is 3 against a tier-2 ceiling of 5, and the three host phases move nothing</li>
+        <li><code class="status">[x]</code> <code>compileWorkflow(designToPlan, 1)</code> admits: <code>minimumCalls</code> is 3 against the tier-1 ceiling of 3, and the three host phases move nothing</li>
       </ul>
 
       <h4>25. Bind <code>design-context</code>, and resolve the targets through W04's registry</h4>
@@ -920,11 +920,12 @@ flowchart TD
       <h4>26. Bind the remaining two host phases inside the one composition site</h4>
       <p class="serves"><code class="serves">INV-1</code> <code class="serves">INV-2</code></p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>plan-context</code> is composed by the host from the stored design and review envelopes, in the phase loop, keyed by its schema id — the same way <code>review-context</code> already is</li>
-        <li><code class="status">[]</code> <code>plan-render</code> writes its three files into the managed worktree and the host commits them; <code>no_protected_paths</code> and <code>diff_matches_claims</code> run against that commit</li>
-        <li><code class="status">[]</code> <strong>No new runner, no new CLI command, no new system-prompt composition path.</strong> <code>awsf new … --workflow design-to-plan</code> reaches the route through the machinery that already exists</li>
-        <li><code class="status">[]</code> Assert it: a test counts the independent system-prompt composition sites and fails if the number rose. After W06 that number is 1, and this milestone must leave it at 1</li>
-        <li><code class="status">[]</code> <code>isReviewPhase</code> is unchanged, so the architecture-review phase is <strong>not</strong> deferred to the L11 spawn site and takes no task-machine edge</li>
+        <li><code class="status">[x]</code> <code>plan-context</code> is composed by the host from the stored design and review envelopes, in the phase loop, keyed by its schema id — the same way <code>review-context</code> already is</li>
+        <li><code class="status">[x]</code> A failed <code>architecture_review_clear</code> produces no plan context, reserves no planning call, and stops at <code>BLOCKED</code> through existing edge <code>L8</code>; the review envelope retains the findings in the journal</li>
+        <li><code class="status">[x]</code> <code>plan-render</code> writes its three document groups into the managed worktree and the host commits them; <code>no_protected_paths</code> and <code>diff_matches_claims</code> run against that commit</li>
+        <li><code class="status">[x]</code> <strong>No new runner, no new CLI command, no new system-prompt composition path.</strong> <code>awsf new … --workflow design-to-plan</code> reaches the route through the machinery that already exists</li>
+        <li><code class="status">[x]</code> Assert it: a test counts the independent system-prompt composition sites and fails if the number rose. After W06 that number is 1, and this milestone leaves it at 1</li>
+        <li><code class="status">[x]</code> <code>isReviewPhase</code> is unchanged, so the architecture-review phase is <strong>not</strong> deferred to the L11 spawn site and takes no task-machine edge</li>
       </ul>
 
       <h4>27. The owner amendment lands, then the route runs end to end</h4>
@@ -932,7 +933,7 @@ flowchart TD
         <li><code class="status">[]</code> <strong>Owner act, not a task</strong>: the two <code>agents:</code> entries and <code>design-to-plan</code> in <code>workflows.enabled</code>, committed by the owner. This box is checked by observing the commit, never by writing the file — <code>awsf.config.yaml</code> is a protected path</li>
         <li><code class="status">[]</code> <code>npm run test:unit</code> — the config loads with the amended file, proving the vocabulary landed in the right order</li>
         <li><code class="status">[]</code> One end-to-end pass on the <code>stub</code> fixture adapter: request → design → review → context → plan → render, with canned envelopes. <strong>Offline, no provider, no quota</strong></li>
-        <li><code class="status">[]</code> A second pass whose canned review carries one <code>high</code> finding: no plan context is composed, no planning call is reserved, the attempt stops, and the findings are in the journal</li>
+        <li><code class="status">[]</code> A second pass whose canned review carries one <code>high</code> finding: no plan context is composed, no planning call is reserved, the attempt stops at <code>BLOCKED</code> through <code>L8</code>, and the findings are in the journal</li>
         <li><code class="status">[]</code> The rendered output of the first pass passes <code>ticket-plan-sync</code> including the new coverage assertions — <strong>the chain's product satisfies the chain's own gate</strong></li>
       </ul>
 
@@ -1054,12 +1055,12 @@ flowchart LR
     </details>
 
     <details data-review-options="Stop at AWAITING_OWNER; the owner may continue via L19|Stop at BLOCKED; only a retry mints a new attempt|Fail the plan-context phase and let the existing failure path decide">
-      <summary><span class="qdecided">DECIDED</span> Q6 — Where a blocking architecture review leaves the attempt</summary>
-      <p class="decided"><b>Decided (2026-08-23):</b> <strong>Stop at <code>AWAITING_OWNER</code>; the owner may continue via <code>L19</code></strong> — owner verdict via the exported <code>plan-sota-review v1</code> block, on the recommended option. See Amendments. <strong>A decided Questionable is a constraint, not an assignment: implement it, do not re-litigate it.</strong></p>
-      <span class="recommend"><b>Recommendation: <code>AWAITING_OWNER</code>, findings journalled, no automatic resume.</b> The design is wrong and a person has to decide what to do about it; that is what the state is for.</span>
-      <span class="consequence"><b>The cost:</b> <code>L19</code> lets the owner resume into <code>RUNNING</code>, so an owner who always continues makes the gate decorative. <b>That is accepted, deliberately.</b> The override is an interactive human act recorded with actor <code>human</code>, and it draws on a correction allowance — it costs something and it is written down. An override a gate can be <em>argued</em> into is the failure mode worth preventing; an override a person takes in the open is not.</span>
-      <p class="qa-answer"><strong>Why not <code>BLOCKED</code>.</strong> <code>BLOCKED</code> is terminal for the attempt, so a design with one high finding and an obvious fix would cost a whole new attempt. The findings are the useful output here, and the owner should be able to act on them without re-minting.</p>
-      <p class="qa-answer"><strong>Why the stop must not be a correction.</strong> Stated once in Solution and repeated because it is the single most important shape in this plan: resuming the reviewer against an unchanged design asks it to produce a different verdict about the same artifact. No gate in this chain may buy that turn.</p>
+      <summary><span class="qdecided">AMENDED</span> Q6 — Where a blocking architecture review leaves the attempt</summary>
+      <p class="decided"><b>Owner-amended during task 26:</b> <strong>stop at <code>BLOCKED</code> through existing edge <code>L8</code></strong>. The earlier <code>AWAITING_OWNER</code>/<code>L19</code> decision assumed a candidate existed. At this boundary no plan context, plan, or candidate commit exists, while <code>L19</code>'s guard requires a candidate SHA. See Amendments.</p>
+      <span class="recommend"><b>Implemented: <code>BLOCKED</code>, findings journalled, no automatic resume.</b> The validated architecture-review envelope already records every finding before the host rejects plan-context composition.</span>
+      <span class="consequence"><b>The cost:</b> correcting the design requires a new attempt rather than owner re-entry. That is the supported lifecycle today. A same-attempt design rework path would need an explicit lifecycle and execution contract in the ladder workstream; fabricating candidate evidence or bypassing the edge table is refused.</span>
+      <p class="qa-answer"><strong>Why <code>AWAITING_OWNER</code> was removed.</strong> The only incoming edges are <code>L12</code> from <code>GATING</code> and <code>L15</code> from <code>REVIEWING</code>. Reaching either would require a candidate commit and, for the latter, the L11 task-level review spawn that architecture review must not become.</p>
+      <p class="qa-answer"><strong>Why the stop must not be a correction.</strong> Resuming the reviewer against an unchanged design asks it to produce a different verdict about the same artifact. No gate in this chain may buy that turn.</p>
     </details>
   </section>
 
@@ -1084,7 +1085,7 @@ flowchart LR
         <tr><td>A read-only phase may read a repository other than its worktree</td><td><strong>Source-verified, and it overturned this plan's own recommendation.</strong> <code>sandbox-broker.ts:95</code> binds <code>--ro-bind / /</code>; <code>path-policy</code>'s three violation reasons are all write-target reasons. The original Q5 entry asserted the opposite from reasoning rather than from source.</td><td>Run the chain once against the three real repositories and confirm no write lands outside the plan repository's worktree. Task 25 asserts it; the assertion is the cheap version and the real run is the upgrade.</td></tr>
         <tr><td>Revision-level evidence is the right unit for a design phase</td><td><strong>Argued, not measured.</strong> The reviewer's byte-level digest exists because it judges a fixed diff; nothing yet shows a designer needs less.</td><td>Record which paths a design phase actually opened and compare against the declared targets — a per-tool-call record the harness does not retain today, which is why the claim is argued rather than shown.</td></tr>
         <tr><td>The chain rides the existing runner and adds no composition site</td><td><strong>Source-verified for the agent phases:</strong> <code>routePrompts</code> is built generically from <code>recipe.phases</code>. <strong>Not yet verified for the three host phases</strong>, each of which needs a branch keyed by schema id beside the one <code>review-context</code> already has.</td><td>Task 26's site count, which is the assertion, not the evidence. The evidence arrives when it runs.</td></tr>
-        <tr><td>Three agent calls fit a tier-2 ceiling</td><td><strong>Source-verified.</strong> <code>DEFAULT_CALL_CEILINGS</code> is <code>{0:1, 1:3, 2:5}</code>; <code>minimumCalls</code> counts agent phases only, which <code>review-context</code> already demonstrates.</td><td>Confirm what a correction round costs the ledger. A resumed session should not spend a second call, but this plan asserts the admission arithmetic and not that.</td></tr>
+        <tr><td>Three agent calls fit the tier-1 ceiling</td><td><strong>Source-verified.</strong> <code>DEFAULT_CALL_CEILINGS</code> is <code>{0:1, 1:3, 2:5}</code>; <code>minimumCalls</code> counts agent phases only, which <code>review-context</code> already demonstrates.</td><td>Confirm what a correction round costs the ledger. A resumed session should not spend a second call, but this plan asserts the admission arithmetic and not that.</td></tr>
       </tbody>
     </table>
 
@@ -1190,7 +1191,7 @@ gantt
     <details>
       <summary>2026-08-23 — owner review applied: five of six own Questionables decided, each on the recommended option; Q5 left open</summary>
       <p>An exported <code>plan-sota-review v1</code> block carried <strong>six verdicts</strong>, <strong>no proposed statuses</strong>, and <strong>no annotations</strong>. Applied in full. <strong>No status marker moved</strong> — every milestone in this plan is still <code>[]</code>, every ticket is still <code>todo</code>, and the spine's W05 marker is untouched. A Questionable verdict is not a marker.</p>
-      <p><strong>The six verdicts.</strong> <em>Q-A</em> — the implementation of the spine's Q5 was approved as written; the five rules and the M1 falsifier are unchanged. <em>Q1</em> — a new <code>awsf.design-plan-output/v1</code>, leaving <code>awsf.plan-output/v1</code> untouched; the three recipes that use the shared contract stay unjoinable and the <code>/v2</code> migration remains named rather than taken. <em>Q2</em> — this plan opts in as the coverage gate's first real instance and v1 stays history; M1's hand-threading still supplies the evidence a plan written before the grammar existed would have given. <em>Q3</em> — two new roles, <code>designer</code> and <code>architecture-reviewer</code>, because production resolves a phase's prompts through its <code>owner</code>. <em>Q4</em> — the render phase emits the plan, its build prompts and its ticket set together, which is what keeps the coverage gate from being vacuous on this chain's own output. <em>Q6</em> — a blocking verdict stops the attempt at <code>AWAITING_OWNER</code>, with the <code>L19</code> override kept as an interactive, recorded, allowance-drawing owner act.</p>
+      <p><strong>The six verdicts.</strong> <em>Q-A</em> — the implementation of the spine's Q5 was approved as written; the five rules and the M1 falsifier are unchanged. <em>Q1</em> — a new <code>awsf.design-plan-output/v1</code>, leaving <code>awsf.plan-output/v1</code> untouched; the three recipes that use the shared contract stay unjoinable and the <code>/v2</code> migration remains named rather than taken. <em>Q2</em> — this plan opts in as the coverage gate's first real instance and v1 stays history; M1's hand-threading still supplies the evidence a plan written before the grammar existed would have given. <em>Q3</em> — two new roles, <code>designer</code> and <code>architecture-reviewer</code>, because production resolves a phase's prompts through its <code>owner</code>. <em>Q4</em> — the render phase emits the plan, its build prompts and its ticket set together, which is what keeps the coverage gate from being vacuous on this chain's own output. <em>Q6</em> originally chose <code>AWAITING_OWNER</code>/<code>L19</code>; task 26's owner amendment below supersedes it after the edge guards proved that no candidate exists for that route.</p>
       <p><strong>Every verdict took the recommended option, so no milestone changed shape.</strong> The application was therefore a status change rather than a revision: each decided entry gained its decision line, its badge moved from <em>recommended</em> to <em>decided</em>, and the Questionables diagram and intro were rewritten to separate decided from open. Nothing in Purpose, Solution, Implementation Phases or Validation needed editing, because all six recommendations were already what the body describes.</p>
       <p><strong>Q5 received no verdict in this block and was recorded as open</strong>, not as approved by silence. It was decided later the same day, against its recommendation — see the entry below.</p>
     </details>
@@ -1217,6 +1218,12 @@ gantt
         <li><strong>Unresolvable qualified claim.</strong> Task 19's plan claim was changed from <code>AC-1</code> to <code>no-such-plan#AC-1</code>. <code>npm run test:unit</code> failed with the exact text <code>awsf-v2-w05-design-to-plan/no-such-plan#AC-1: Q5 rule broken: plan task T19 names unresolvable plan stem no-such-plan</code>. The claim was restored and the suite passed 1269/1269.</li>
       </ol>
       <p><strong>Every induced edit was restored before M5 closed.</strong> The spine's W05 marker remains untouched.</p>
+    </details>
+    <details>
+      <summary>Task 26 — owner amendment: use T1 and stop blocking architecture reviews at BLOCKED through L8</summary>
+      <p><strong>What failed in the prior decision.</strong> A blocking architecture review occurs in <code>RUNNING</code> before plan-context, planning, or plan-render creates a candidate. <code>L7</code> requires a successful candidate commit, <code>L12</code> rejects T2, and <code>L19</code> requires candidate evidence. The requested <code>AWAITING_OWNER</code> stop therefore had no legal route without fabricating evidence or turning architecture review into the <code>L11</code> task-level review spawn.</p>
+      <p><strong>What the owner amended.</strong> <code>design-to-plan</code> is T1: its three ordinary agent phases fit the three-call ceiling exactly, and architecture review remains inside <code>RUNNING</code>. A failed <code>architecture_review_clear</code> now exits through existing <code>L8</code> to <code>BLOCKED</code>; the validated review envelope retains every finding in the journal, and no planning call is reserved. Same-attempt design rework is left to the ladder workstream that can define it honestly.</p>
+      <p><strong>What stayed fixed.</strong> <code>LEGAL_EDGES.length</code> remains 25, <code>isReviewPhase</code> is unchanged, and the independent system-prompt composition-site count remains one. The spine's W05 marker is untouched.</p>
     </details>
   </section>
 

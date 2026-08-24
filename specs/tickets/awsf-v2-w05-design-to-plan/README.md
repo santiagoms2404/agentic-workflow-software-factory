@@ -28,7 +28,7 @@ downstream.
   | everywhere else | its immediate predecessor | each task reads or extends the output of the one before it |
 
 - **`tier`** and **`workflow`** are omitted entirely. This plan defines no risk-tier or named
-  workflow-route vocabulary **for its own tasks**. The tier-2 recipe and the `design-to-plan`
+  workflow-route vocabulary **for its own tasks**. The tier-1 recipe and the `design-to-plan`
   workflow id discussed throughout belong to the artifact being built, not to the meta-work of
   building it, and borrowing them here would misdescribe both. The sync fence treats both fields as
   optional and checks them only when present.
