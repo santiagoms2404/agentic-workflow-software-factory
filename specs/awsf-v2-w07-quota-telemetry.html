@@ -322,19 +322,19 @@ flowchart LR
 
   <!-- ================= M1 ================= -->
   <div class="phase">
-    <h3><code class="status">[]</code> Milestone M1: One real capture in the tree, and a pure parser over it</h3>
+    <h3><code class="status">[wip]</code> Milestone M1: One real capture in the tree, and a pure parser over it</h3>
     <p>The spine calls the missing in-tree fixture this workstream's <em>cheapest unused upgrade</em>, and it is first because everything after it is tested against these bytes. It is also the only milestone that touches a live process.</p>
 
     <h4>1. Capture one real reading, scrub it, and write its provenance</h4>
     <p class="serves"><code class="serves">AC-1</code></p>
     <ul class="checklist">
-      <li><code class="status">[]</code> Create <code>core/test/fixtures/quota-axi/capture-probe.ts</code>, which imports the module's own argv builder rather than hard-coding argv, so the argv under test and the argv that produced these bytes are the same argv by construction</li>
-      <li><code class="status">[]</code> Spend <strong>one</strong> bounded live invocation: <code>quota-axi --provider claude,codex --json</code> resolved on <code>PATH</code>. Record the resolved version, the exit code, the byte count, and whether stderr was empty</li>
-      <li><code class="status">[]</code> Write <code>nominal.json</code> as <strong>captured then scrubbed</strong>, and state every scrub in the provenance rather than editing silently</li>
-      <li><code class="status">[]</code> Scrub list, applied and recorded: any <code>account</code> identity or label, any address-shaped or email-shaped string, every absolute or home-relative path including cache and auth-source paths, and any <code>sourcesTried</code> entry naming a machine location. Timestamps are <strong>kept</strong> — they are what the parser reads — but the capture instant is recorded beside them so a test can pin <code>now</code></li>
-      <li><code class="status">[]</code> Write <code>PROVENANCE.md</code> in the idiom of <code>core/test/fixtures/providers/claude/PROVENANCE.md</code>: what ran, on which version, what was captured verbatim, what was scrubbed and why, and which files are derived</li>
-      <li><code class="status">[]</code> Record the <strong>named absence</strong> in the same file: the bytes quota-axi emits when it is itself rate-limited cannot be summoned safely, so no fixture for them exists. State the plan — retain the next natural occurrence — rather than leaving the gap silent</li>
-      <li><code class="status">[]</code> Confirm the new files survive <code>no-credentials-in-fixtures.test.ts</code>, which sweeps <code>.json</code> and <code>.md</code> under <code>core/test/fixtures</code></li>
+      <li><code class="status">[x]</code> Create <code>core/test/fixtures/quota-axi/capture-probe.ts</code>, which imports the module's own argv builder rather than hard-coding argv, so the argv under test and the argv that produced these bytes are the same argv by construction</li>
+      <li><code class="status">[x]</code> Spend <strong>one</strong> bounded live invocation: <code>quota-axi --provider claude,codex --json</code> resolved on <code>PATH</code>. Record the resolved version, the exit code, the byte count, and whether stderr was empty</li>
+      <li><code class="status">[x]</code> Write <code>nominal.json</code> as <strong>captured then scrubbed</strong>, and state every scrub in the provenance rather than editing silently</li>
+      <li><code class="status">[x]</code> Scrub list, applied and recorded: any <code>account</code> identity or label, any address-shaped or email-shaped string, every absolute or home-relative path including cache and auth-source paths, and any <code>sourcesTried</code> entry naming a machine location. Timestamps are <strong>kept</strong> — they are what the parser reads — but the capture instant is recorded beside them so a test can pin <code>now</code></li>
+      <li><code class="status">[x]</code> Write <code>PROVENANCE.md</code> in the idiom of <code>core/test/fixtures/providers/claude/PROVENANCE.md</code>: what ran, on which version, what was captured verbatim, what was scrubbed and why, and which files are derived</li>
+      <li><code class="status">[x]</code> Record the <strong>named absence</strong> in the same file: the bytes quota-axi emits when it is itself rate-limited cannot be summoned safely, so no fixture for them exists. State the plan — retain the next natural occurrence — rather than leaving the gap silent</li>
+      <li><code class="status">[x]</code> Confirm the new files survive <code>no-credentials-in-fixtures.test.ts</code>, which sweeps <code>.json</code> and <code>.md</code> under <code>core/test/fixtures</code></li>
     </ul>
 
     <h4>2. Derive the six transformation fixtures, each named as a transformation</h4>
