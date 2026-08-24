@@ -930,11 +930,11 @@ flowchart TD
 
       <h4>27. The owner amendment lands, then the route runs end to end</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> <strong>Owner act, not a task</strong>: the two <code>agents:</code> entries and <code>design-to-plan</code> in <code>workflows.enabled</code>, committed by the owner. This box is checked by observing the commit, never by writing the file — <code>awsf.config.yaml</code> is a protected path</li>
-        <li><code class="status">[]</code> <code>npm run test:unit</code> — the config loads with the amended file, proving the vocabulary landed in the right order</li>
-        <li><code class="status">[]</code> One end-to-end pass on the <code>stub</code> fixture adapter: request → design → review → context → plan → render, with canned envelopes. <strong>Offline, no provider, no quota</strong></li>
-        <li><code class="status">[]</code> A second pass whose canned review carries one <code>high</code> finding: no plan context is composed, no planning call is reserved, the attempt stops at <code>BLOCKED</code> through <code>L8</code>, and the findings are in the journal</li>
-        <li><code class="status">[]</code> The rendered output of the first pass passes <code>ticket-plan-sync</code> including the new coverage assertions — <strong>the chain's product satisfies the chain's own gate</strong></li>
+        <li><code class="status">[x]</code> <strong>Owner act, not a task</strong>: the two <code>agents:</code> entries and <code>design-to-plan</code> in <code>workflows.enabled</code>, committed by the owner. This box is checked by observing the commit, never by writing the file — <code>awsf.config.yaml</code> is a protected path</li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code> — the config loads with the amended file, proving the vocabulary landed in the right order</li>
+        <li><code class="status">[x]</code> One end-to-end pass on the <code>stub</code> fixture adapter: request → design → review → context → plan → render, with canned envelopes. <strong>Offline, no provider, no quota</strong></li>
+        <li><code class="status">[x]</code> A second pass whose canned review carries one <code>high</code> finding: no plan context is composed, no planning call is reserved, the attempt stops at <code>BLOCKED</code> through <code>L8</code>, and the findings are in the journal</li>
+        <li><code class="status">[x]</code> The rendered output of the first pass passes <code>ticket-plan-sync</code> including the new coverage assertions — <strong>the chain's product satisfies the chain's own gate</strong></li>
       </ul>
 
       <h4>28. Testing Strategy, full suite, and the workstream's close</h4>
