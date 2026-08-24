@@ -452,11 +452,11 @@ flowchart LR
     <h4>10. Render the readout</h4>
     <p class="serves"><code class="serves">AC-5</code></p>
     <ul class="checklist">
-      <li><code class="status">[]</code> One row per configured route: adapter id, provider, effective percent remaining, <strong>minutes to reset</strong>, the configured threshold, and a verdict of <em>above</em>, <em>below</em>, <em>disabled</em> or <em>unknown</em></li>
-      <li><code class="status">[]</code> The effective percent is shown as the tool reports it, with its scope named. <strong>The row states in words that the figure is account-wide and that another client moves it</strong> — the same sentence the adjudication used to strip the attribution claim, placed where the number is read rather than in a design document</li>
-      <li><code class="status">[]</code> An unavailable route shows its reason code and its remedy where the tool supplies one, never a blank and never a zero</li>
-      <li><code class="status">[]</code> <strong>The readout record's field list is closed and asserted exhaustively.</strong> It carries no comparator, no sort order, no rank, no <em>preferred</em> or <em>recommended</em> field, and no boolean that answers "should I use this provider". Adding one turns the M7 fence red</li>
-      <li><code class="status">[]</code> The command spends no agent quota and makes exactly one probe invocation per run</li>
+      <li><code class="status">[x]</code> One row per configured route: adapter id, provider, effective percent remaining, <strong>minutes to reset</strong>, the configured threshold, and a verdict of <em>above</em>, <em>below</em>, <em>disabled</em> or <em>unknown</em></li>
+      <li><code class="status">[x]</code> The effective percent is shown as the tool reports it, with its scope named. <strong>The row states in words that the figure is account-wide and that another client moves it</strong> — the same sentence the adjudication used to strip the attribution claim, placed where the number is read rather than in a design document</li>
+      <li><code class="status">[x]</code> An unavailable route shows its reason code and its remedy where the tool supplies one, never a blank and never a zero</li>
+      <li><code class="status">[x]</code> <strong>The readout record's field list is closed and asserted exhaustively.</strong> It carries no comparator, no sort order, no rank, no <em>preferred</em> or <em>recommended</em> field, and no boolean that answers "should I use this provider". Adding one turns the M7 fence red</li>
+      <li><code class="status">[x]</code> The command spends no agent quota and makes exactly one probe invocation per run</li>
     </ul>
 
     <h4>11. Testing Strategy</h4>

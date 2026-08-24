@@ -23,6 +23,7 @@ import { listProjects, registerProject, showProject, verifyRegisteredProject } f
 import { landCommand } from "./commands/land.ts";
 import { newCommand } from "./commands/new.ts";
 import { raiseCommand } from "./commands/raise.ts";
+import { quotaCommand } from "./commands/quota.ts";
 import { locateAttempt } from "./commands/attempt.ts";
 import { retryCommand } from "./commands/retry.ts";
 import { reviewCommand } from "./commands/review.ts";
@@ -37,7 +38,7 @@ import { watchCommand } from "./commands/watch.ts";
 /** The complete owner-facing command table; documentation reconciles against it. */
 export const CLI_COMMANDS = Object.freeze([
   "init", "project", "new", "start", "run", "status", "watch", "rework", "review", "raise", "journey", "land", "cancel", "retry",
-  "doctor", "gc", "dash", "db rebuild", "ticket", "backlog",
+  "doctor", "gc", "dash", "db rebuild", "ticket", "backlog", "quota",
 ]);
 
 const USAGE = `usage: awsf init [path] --project <slug>\n       awsf <${CLI_COMMANDS.join("|")}> [task] [options]`;
@@ -74,6 +75,12 @@ function parseArgs(args: readonly string[]): ParsedArgs {
     index += 1;
   }
   return { positionals, flags, repositories };
+}
+
+function commandEnvironment(env: NodeJS.ProcessEnv): Readonly<Record<string, string>> {
+  return Object.fromEntries(
+    Object.entries(env).filter((entry): entry is [string, string] => entry[1] !== undefined),
+  );
 }
 
 function tierOf(value: string): Tier {
@@ -169,6 +176,16 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       }
       out(`Rebuild refused: ${report.reason}; candidate retained at ${report.candidatePath}`);
       return 1;
+    }
+    if (command === "quota") {
+      if (parsed.positionals.length !== 0) throw new Error("usage: awsf quota [--catalog PATH] [--state-root PATH]");
+      const report = await quotaCommand({
+        catalogPath: resolve(parsed.flags.catalog ?? `${cwd}/awsf.project.yaml`),
+        stateRoot,
+        env: commandEnvironment(env),
+      });
+      for (const line of report.lines) out(line);
+      return 0;
     }
     if (command === "backlog") {
       if (parsed.positionals.length !== 0) throw new Error("usage: awsf backlog [--state-root PATH] [--plan <stem>]");
