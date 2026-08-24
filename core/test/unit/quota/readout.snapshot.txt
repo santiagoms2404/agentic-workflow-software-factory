@@ -1,0 +1,1 @@
+adapter=claude-route | provider=claude | effective remaining=4% (scope=all_models). This percentage is account-wide. Another client on the same account moves the same number, the figure is an integer percentage, and nothing in the payload carries task identity. | minutes to reset=2314 | threshold minutes=2400 | verdict=below | reason=available | remedy=not applicable
