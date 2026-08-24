@@ -367,16 +367,16 @@ flowchart LR
 
   <!-- ================= M2 ================= -->
   <div class="phase">
-    <h3><code class="status">[]</code> Milestone M2: The probe, the version floor, and the failure posture</h3>
+    <h3><code class="status">[wip]</code> Milestone M2: The probe, the version floor, and the failure posture</h3>
     <p>Both of the source's smaller corrections land here, and neither was written down anywhere before this plan. The milestone spends nothing: every test drives an injected fake <code>runCommand</code>.</p>
 
     <h4>4. The probe as an injected capability</h4>
     <ul class="checklist">
-      <li><code class="status">[]</code> <code>core/src/quota/probe.ts</code> takes <code>runCommand</code> and <code>resolveExecutable</code> as parameters, matching <code>SystemCommandOptions</code>. It imports <code>node:child_process</code> nowhere and needs no exemption from the invariant 3 fence</li>
-      <li><code class="status">[]</code> Argv is exactly <code>["--provider", "&lt;csv&gt;", "--json"]</code>. A test enumerates the argv and asserts that <code>--refresh</code>, <code>--tui</code>, <code>--once</code> and <code>--full</code> appear in no code path</li>
-      <li><code class="status">[]</code> The executable is <code>quota-axi</code> resolved against the spec's own <code>PATH</code>. <code>npx</code> appears nowhere; a test asserts the string is absent from the module</li>
-      <li><code class="status">[]</code> quota-axi is <strong>not</strong> added to any <code>package.json</code>. Invariant 7 bounds the runtime dependency surface, and a spawned tool that is absent degrades to a named unavailability rather than a broken install</li>
-      <li><code class="status">[]</code> The provider CSV contains only the providers this project's configured routes actually use — never a full sweep, because a sweep touches auth sources for providers the project does not use and buys nothing</li>
+      <li><code class="status">[x]</code> <code>core/src/quota/probe.ts</code> takes <code>runCommand</code> and <code>resolveExecutable</code> as parameters, matching <code>SystemCommandOptions</code>. It imports <code>node:child_process</code> nowhere and needs no exemption from the invariant 3 fence</li>
+      <li><code class="status">[x]</code> Argv is exactly <code>["--provider", "&lt;csv&gt;", "--json"]</code>. A test enumerates the argv and asserts that <code>--refresh</code>, <code>--tui</code>, <code>--once</code> and <code>--full</code> appear in no code path</li>
+      <li><code class="status">[x]</code> The executable is <code>quota-axi</code> resolved against the spec's own <code>PATH</code>. <code>npx</code> appears nowhere; a test asserts the string is absent from the module</li>
+      <li><code class="status">[x]</code> quota-axi is <strong>not</strong> added to any <code>package.json</code>. Invariant 7 bounds the runtime dependency surface, and a spawned tool that is absent degrades to a named unavailability rather than a broken install</li>
+      <li><code class="status">[x]</code> The provider CSV contains only the providers this project's configured routes actually use — never a full sweep, because a sweep touches auth sources for providers the project does not use and buys nothing</li>
     </ul>
 
     <h4>5. The version floor and the failure posture, both written down</h4>
