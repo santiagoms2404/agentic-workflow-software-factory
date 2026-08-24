@@ -868,7 +868,7 @@ flowchart LR
 
     <!-- ================= M7 ================= -->
     <div class="phase">
-      <h3><code class="status">[wip]</code> Milestone M7: <span class="gate">G1</span> — the route, the two roles, and the close</h3>
+      <h3><code class="status">[x]</code> Milestone M7: <span class="gate">G1</span> — the route, the two roles, and the close</h3>
       <div class="card warn">
         <h5>Precondition — ordering gate <span class="gate">G1</span>. This milestone does not start until it holds.</h5>
         <p><strong><code>specs/awsf-v2-w06-prompt-composition.html</code> must exist, and its centralisation milestone must be <code>[x]</code>.</strong> W06 turns three independent system-prompt composition sites into one. Every task below touches a role's prompt path, and adding a role before the sites are one site is what creates the fourth copy the gate exists to prevent. <strong>Milestones M1 through M6 have no such precondition and may already be complete.</strong> If W06's plan does not exist yet, stop here and say so — do not build the role prompts "so they are ready".</p>
@@ -940,13 +940,13 @@ flowchart TD
       <h4>28. Testing Strategy, full suite, and the workstream's close</h4>
       <p>The last task is the only one that touches the spine. Everything it asserts has already been asserted once inside a milestone; running it again as one sweep is what makes the close honest rather than accumulated.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>npm run test:unit</code> — the whole suite green, including every meta-test</li>
-        <li><code class="status">[]</code> <code>npm run typecheck</code> and <code>npm run lint</code></li>
-        <li><code class="status">[]</code> <code>npm run test:unit</code> — <code>doc-reconciliation.test.ts</code> green: no command was documented that does not exist, and none was added that is undocumented</li>
-        <li><code class="status">[]</code> <code>README.md</code> names the new workflow route in one line, and no more — a route is not a feature tour</li>
-        <li><code class="status">[]</code> Every milestone marker in this plan reads <code>[x]</code>, and every ticket in <code>specs/tickets/awsf-v2-w05-design-to-plan/</code> reads <code>state: done</code>, flipped in the same commit</li>
-        <li><code class="status">[]</code> <strong>Only now</strong>: flip milestone M5's marker in <code>specs/awsf-v2-plan.html</code> to <code>[x]</code>, check its seven workstream boxes, and flip <code>specs/tickets/awsf-v2-plan/W05.md</code> to <code>state: done</code> — all in one commit</li>
-        <li><code class="status">[]</code> Record in this plan's Amendments what was built, what was refused, and the Q5 outcome from M1</li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code> — the whole suite green, including every meta-test</li>
+        <li><code class="status">[x]</code> <code>npm run typecheck</code> and <code>npm run lint</code></li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code> — <code>doc-reconciliation.test.ts</code> green: no command was documented that does not exist, and none was added that is undocumented</li>
+        <li><code class="status">[x]</code> <code>README.md</code> names the new workflow route in one line, and no more — a route is not a feature tour</li>
+        <li><code class="status">[x]</code> Every milestone marker in this plan reads <code>[x]</code>, and every ticket in <code>specs/tickets/awsf-v2-w05-design-to-plan/</code> reads <code>state: done</code>, flipped in the same commit</li>
+        <li><code class="status">[x]</code> <strong>Only now</strong>: flip milestone M5's marker in <code>specs/awsf-v2-plan.html</code> to <code>[x]</code>, check its seven workstream boxes, and flip <code>specs/tickets/awsf-v2-plan/W05.md</code> to <code>state: done</code> — all in one commit</li>
+        <li><code class="status">[x]</code> Record in this plan's Amendments what was built, what was refused, and the Q5 outcome from M1</li>
       </ul>
       <div class="loop">🔁 <strong>Do not exit this milestone until every box above is checked.</strong> A failing command means fix the cause and re-run — never lower what the row asserts. If the owner amendment has not landed, tasks 27 and 25 stay open and the workstream stays open with them.</div>
     </div>
@@ -957,13 +957,13 @@ flowchart TD
     <h2>Validation Commands</h2>
     <p>Every command below is offline and spends no quota. Run them from the repository root.</p>
     <ul class="checklist">
-      <li><code class="status">[]</code> <code>npm run test:unit</code> — the whole suite, including <code>ticket-plan-sync</code> with its new coverage assertions and every other meta-test</li>
-      <li><code class="status">[]</code> <code>npm run typecheck</code> — the five new envelopes' static types reach every consumer</li>
-      <li><code class="status">[]</code> <code>npm run lint</code></li>
-      <li><code class="status">[]</code> <code>git diff --stat</code> — no plan other than this one was edited, and no runtime artifact was committed</li>
-      <li><code class="status">[]</code> The induced-drift runs from task 19 are recorded with their exact failure text, and the suite is green with everything restored</li>
-      <li><code class="status">[]</code> The stub end-to-end pass and the blocking-review pass from task 27 both behaved as written</li>
-      <li><code class="status">[]</code> Every milestone marker in this plan is <code>[x]</code>, every ticket is <code>done</code>, and the spine's M5 marker was flipped by task 28 and by nothing else</li>
+      <li><code class="status">[x]</code> <code>npm run test:unit</code> — the whole suite, including <code>ticket-plan-sync</code> with its new coverage assertions and every other meta-test</li>
+      <li><code class="status">[x]</code> <code>npm run typecheck</code> — the five new envelopes' static types reach every consumer</li>
+      <li><code class="status">[x]</code> <code>npm run lint</code></li>
+      <li><code class="status">[x]</code> <code>git diff --stat</code> — no plan other than this one and the required spine close was edited, and no runtime artifact was committed</li>
+      <li><code class="status">[x]</code> The induced-drift runs from task 19 are recorded with their exact failure text, and the suite is green with everything restored</li>
+      <li><code class="status">[x]</code> The stub end-to-end pass and the blocking-review pass from task 27 both behaved as written</li>
+      <li><code class="status">[x]</code> Every milestone marker in this plan is <code>[x]</code>, every ticket is <code>done</code>, and the spine's M5 marker was flipped by task 28 and by nothing else</li>
     </ul>
     <div class="loop">
       🔁 <strong>The plan is not complete until every box is checked and every command passes. If a step turns out to be impossible, mark it <code>[f]</code>, record why in Amendments, and move on if the rest can stand without it.</strong>
@@ -1218,6 +1218,13 @@ gantt
         <li><strong>Unresolvable qualified claim.</strong> Task 19's plan claim was changed from <code>AC-1</code> to <code>no-such-plan#AC-1</code>. <code>npm run test:unit</code> failed with the exact text <code>awsf-v2-w05-design-to-plan/no-such-plan#AC-1: Q5 rule broken: plan task T19 names unresolvable plan stem no-such-plan</code>. The claim was restored and the suite passed 1269/1269.</li>
       </ol>
       <p><strong>Every induced edit was restored before M5 closed.</strong> The spine's W05 marker remains untouched.</p>
+    </details>
+    <details>
+      <summary>2026-08-23 — Task 28: design-to-plan built and the workstream closed</summary>
+      <p><strong>What was built.</strong> The <code>design-to-plan</code> T1 route now carries typed request, design context, design, architecture review, plan context, plan, and rendered-document envelopes through three agent calls and host-owned composition. Five deterministic gates enforce repository evidence, declared and carried identifiers, verdict consistency, and the zero-blocker stop. The renderer emits the plan, build prompts, and ticket set from one envelope, and invariant 12's fence checks identifier coverage, orphans, plan-ticket mirroring, and qualified references. The two role prompts use W06's single composition site. The stub route proved both the successful render and the blocking-review path.</p>
+      <p><strong>What was refused.</strong> No installed skill, new CLI command, new runner, task-machine state or edge, prompt-composition site, read-policy expansion, second writable root, runtime artifact, receipt, or manifest was added. A blocking architecture review does not fabricate candidate evidence or enter task-level review; it stops at <code>BLOCKED</code> through existing edge <code>L8</code>. Cross-provider architecture-review inversion remains a named future separation of routing from transition selection rather than being coupled into this workstream.</p>
+      <p><strong>Q5 outcome.</strong> M1's hand-threading found <strong>0</strong> real cross-plan crossings in <code>specs/awsf-plan.html</code>. Q5 therefore remains confirmed: identifiers are unique per plan, qualified references use <code>&lt;plan-stem&gt;#INV-n</code>, and no shared allocator was introduced.</p>
+      <p><strong>Close evidence.</strong> <code>npm run test:unit</code> passed 1314/1314 tests, including every meta-test and <code>doc-reconciliation.test.ts</code>; <code>npm run typecheck</code> and <code>npm run lint</code> both exited 0, with lint reporting 0 warnings and 0 errors.</p>
     </details>
     <details>
       <summary>Task 26 — owner amendment: use T1 and stop blocking architecture reviews at BLOCKED through L8</summary>

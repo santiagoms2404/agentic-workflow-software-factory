@@ -199,7 +199,7 @@ npm run awsf -- db rebuild
 ```
 
 Drive a configured T1 workflow, with landing performed only by the owner at an
-interactive terminal:
+interactive terminal. The `design-to-plan` workflow route carries a request through design, architecture review, planning, and rendering.
 
 ```bash
 npm run awsf -- new T01 "describe the task" --workflow build --tier 1
