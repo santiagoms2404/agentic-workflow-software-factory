@@ -910,11 +910,11 @@ flowchart TD
 
       <h4>25. Bind <code>design-context</code>, and resolve the targets through W04's registry</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> The host composes <code>design-context</code> from the project's catalog plus the machine-local placement layer — both already built by W04 — and reads each target's <code>headSha</code> with the existing <code>systemGitRunner</code></li>
-        <li><code class="status">[]</code> The composed target paths reach the designer and the architecture reviewer as ordinary envelope content, so both phases know where to read without either one being told a path by a prompt</li>
-        <li><code class="status">[]</code> <strong>No policy change.</strong> <code>path-policy</code> judges write targets only, and <code>sandbox-broker</code> already binds the whole filesystem read-only before binding the worktree writable. Verify that rather than assume it, and <strong>do not add a read glob, a read policy, or a second writable root</strong></li>
-        <li><code class="status">[]</code> Writes stay in the one worktree: assert that a run over a three-repository project touches no file outside the plan repository's worktree</li>
-        <li><code class="status">[]</code> A project whose catalog declares one repository composes a one-entry <code>targets</code> and behaves exactly as before</li>
+        <li><code class="status">[x]</code> The host composes <code>design-context</code> from the project's catalog plus the machine-local placement layer — both already built by W04 — and reads each target's <code>headSha</code> with the existing <code>systemGitRunner</code></li>
+        <li><code class="status">[x]</code> The composed target paths reach the designer and the architecture reviewer as ordinary envelope content, so both phases know where to read without either one being told a path by a prompt</li>
+        <li><code class="status">[x]</code> <strong>No policy change.</strong> <code>path-policy</code> judges write targets only, and <code>sandbox-broker</code> already binds the whole filesystem read-only before binding the worktree writable. Verify that rather than assume it, and <strong>do not add a read glob, a read policy, or a second writable root</strong></li>
+        <li><code class="status">[x]</code> Writes stay in the one worktree: assert that a run over a three-repository project touches no file outside the plan repository's worktree</li>
+        <li><code class="status">[x]</code> A project whose catalog declares one repository composes a one-entry <code>targets</code> and behaves exactly as before</li>
       </ul>
 
       <h4>26. Bind the remaining two host phases inside the one composition site</h4>

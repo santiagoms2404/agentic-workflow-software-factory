@@ -33,7 +33,7 @@ const expected = {
   "build-review": { tier: 2, phases: ["request:engineer", "builder:agent", "tests:code", "review-context:code", "reviewer:agent"], calls: 2 },
   "simple-sdlc": { tier: 2, phases: ["planner:agent", "builder:agent", "tests:code", "documenter:agent", "final-tests:code", "review-context:code", "reviewer:agent"], calls: 4 },
   intake: { tier: 0, phases: ["request:engineer", "intake:agent"], calls: 1 },
-  "design-to-plan": { tier: 2, phases: ["request:engineer", "design:agent", "architecture-review:agent", "plan-context:code", "plan:agent", "plan-render:code"], calls: 3 },
+  "design-to-plan": { tier: 2, phases: ["request:engineer", "design-context:code", "design:agent", "architecture-review:agent", "plan-context:code", "plan:agent", "plan-render:code"], calls: 3 },
 } as const;
 
 test("the shipped catalog is exactly eight data-shaped recipes with the Phase Contract order", () => {

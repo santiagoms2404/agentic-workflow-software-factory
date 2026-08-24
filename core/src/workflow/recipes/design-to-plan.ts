@@ -2,6 +2,7 @@ import {
   ArchitectureReviewOutputSchema,
   type ArchitectureReviewOutput,
 } from "../../contracts/architecture-review-output.ts";
+import { DesignContextSchema } from "../../contracts/design-context.ts";
 import { DesignOutputSchema, type DesignOutput } from "../../contracts/design-output.ts";
 import { DesignPlanOutputSchema, type DesignPlanOutput } from "../../contracts/design-plan-output.ts";
 import { DocumentOutputSchema } from "../../contracts/document-output.ts";
@@ -26,6 +27,20 @@ export const designToPlanWorkflow = {
       maxCorrections: 0,
       gates: [],
       execute: (context) => requireHostExecution("request", context),
+    },
+    {
+      id: "design-context",
+      kind: "code",
+      owner: "host",
+      description: "Resolve every catalog repository to machine-local revision evidence before design begins",
+      schemaId: "awsf.design-context/v1",
+      outputSchema: DesignContextSchema,
+      maxCorrections: 0,
+      gates: [{
+        id: "design_evidence_present",
+        run: () => { throw new Error("design_evidence_present requires the production host's resolved project binding"); },
+      }],
+      execute: (context) => requireHostExecution("design-context", context),
     },
     {
       id: "design",

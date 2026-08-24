@@ -24,6 +24,8 @@ import type { IntakeOutput } from "../../contracts/intake-output.ts";
 import { UNREPORTED_TOKEN_USAGE, isPersistableKind, type ModelResolutionProvenance, type NormalizedEvent, type TokenUsage } from "../../contracts/normalized-events.ts";
 import { parseEnvelope } from "../../contracts/parse-envelope.ts";
 import type { PlanOutput } from "../../contracts/plan-output.ts";
+import { ARCHITECTURE_REVIEW_OUTPUT_SCHEMA_ID } from "../../contracts/architecture-review-output.ts";
+import { DESIGN_CONTEXT_SCHEMA_ID, type DesignContext } from "../../contracts/design-context.ts";
 import { wrapEnvelope, type StoredEnvelope } from "../../contracts/stored-envelope.ts";
 import type { TestOutput } from "../../contracts/test-output.ts";
 import { CallBudget, type Reservation } from "../../execution/call-budget.ts";
@@ -36,6 +38,7 @@ import { envelopeValid } from "../../gates/envelope.ts";
 import { diffMatchesClaims, headAdvanced, noProtectedPaths, writesWithinGlobs } from "../../gates/git-diff.ts";
 import { GateReport, type GateId } from "../../gates/interface.ts";
 import { reviewEvidencePresent, verdictConsistent, type ReviewEvidenceExpectation } from "../../gates/review.ts";
+import { designEvidencePresent } from "../../gates/design-evidence.ts";
 import { REVIEW_OUTPUT_SCHEMA_ID, type ReviewOutput } from "../../contracts/review-output.ts";
 import { REVIEW_CONTEXT_SCHEMA_ID, type ReviewContext } from "../../contracts/review-context.ts";
 import {
@@ -53,6 +56,9 @@ import {
 } from "../../workflow/review-routing.ts";
 import { assertClean, captureChangeSet, changedPaths, changesSinceBase, runGit, systemGitRunner } from "../../git/changes.ts";
 import { ContinuityStore, continuityHandle } from "../../execution/continuity-store.ts";
+import { loadCatalog } from "../../registry/catalog.ts";
+import { readPlacement } from "../../registry/placement.ts";
+import { resolveProject, type ResolvedProject } from "../../registry/resolve.ts";
 import { continuityFilePath } from "../../persistence/platform-paths.ts";
 import { TicketStore } from "../../persistence/ticket-store.ts";
 import { boundCommandOutput, renderCommandEvidence } from "../../gates/command-evidence.ts";
@@ -306,6 +312,55 @@ export function requestOutput(status: AttemptStatus, config: AwsfConfig): PlanOu
     risks: [{ risk: "Scope may be underspecified", mitigation: "Fail rather than infer a broader task" }],
     openQuestions: [],
   };
+}
+
+export interface ComposedProductionDesignContext {
+  readonly context: DesignContext;
+  readonly project: ResolvedProject;
+}
+
+/** Resolves every registered repository and records the revision already on disk. */
+export async function composeProductionDesignContext(input: {
+  readonly repository: string;
+  readonly stateRoot: string;
+  readonly projectSlug: string;
+  readonly request: string;
+}): Promise<ComposedProductionDesignContext> {
+  const catalog = loadCatalog(await readFile(join(input.repository, "awsf.project.yaml"), "utf8"));
+  const placement = await readPlacement(input.stateRoot, input.projectSlug);
+  const project = resolveProject(catalog, placement, input.stateRoot);
+  const planRepositories = Object.values(project.repositories).filter((repository) => repository.role === "plan");
+  if (planRepositories.length !== 1 || resolve(planRepositories[0]!.path) !== resolve(input.repository)) {
+    throw new Error(`attempt repository ${JSON.stringify(input.repository)} is not the resolved plan repository for project ${JSON.stringify(project.slug)}`);
+  }
+
+  const targets: DesignContext["targets"] = Object.values(project.repositories).map((repository) => ({
+    repositoryId: repository.id,
+    path: repository.path,
+    defaultBranch: repository.defaultBranch,
+    headSha: runGit(systemGitRunner(repository.path), ["rev-parse", "HEAD"]).trim(),
+  }));
+  const context: DesignContext = {
+    schema: DESIGN_CONTEXT_SCHEMA_ID,
+    producerStatus: "success",
+    // The next gate compares the designer's answer to this exact owner text.
+    summary: input.request,
+    artifacts: [],
+    notesForNextPhase: "Inspect the listed repositories at the host-recorded revisions. Write nowhere.",
+    targets,
+  };
+  return Object.freeze({ project, context });
+}
+
+/** Keeps the review's design handoff intact while carrying the host envelope beside it. */
+export function renderProductionAgentPrompt(
+  phase: Pick<CompiledAgentPhase, "schemaId" | "renderPrompt">,
+  previous: EnvelopeBase | null,
+  designContext: DesignContext | null,
+): string {
+  const rendered = phase.renderPrompt(previous);
+  if (phase.schemaId !== ARCHITECTURE_REVIEW_OUTPUT_SCHEMA_ID || designContext === null) return rendered;
+  return `${rendered}\n\nHost repository-context envelope:\n${JSON.stringify(designContext, null, 2)}\n`;
 }
 
 function artifactReader(worktree: string): (path: string) => ArtifactObservation {
@@ -1076,7 +1131,7 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
         : `chore: record ${phase.id} output`,
     });
     let hostGit = openHostGit();
-    const renderedPrompt = phase.renderPrompt(previous);
+    const renderedPrompt = renderProductionAgentPrompt(phase, previous, designContext);
     for (const [name, text] of [["system", route.systemPrompt], ["user", renderedPrompt]] as const) {
       await persist("attempt.updated", {}, {
         type: "compiled-prompt", phaseId: phaseDb, name, text,
@@ -1086,6 +1141,9 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
     }
     const gatedPhase = {
       ...phase,
+      // The engine renders once more at launch. Pin it to the exact prompt
+      // persisted above, including architecture review's repository envelope.
+      renderPrompt: () => renderedPrompt,
       gates: phaseGates(
         phase.id,
         permission.profile.writes,
@@ -1409,6 +1467,7 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
   };
 
   let previous: EnvelopeBase | null = null;
+  let designContext: DesignContext | null = null;
   let candidateSha: string | null = null;
   let agentOrdinal = 0;
   let reviewPhase: { readonly phase: CompiledAgentPhase; readonly ordinal: number } | null = null;
@@ -1505,6 +1564,34 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
       }
 
       await persistPhase(phase.id, "RUNNING");
+      if (phase.schemaId === DESIGN_CONTEXT_SCHEMA_ID) {
+        try {
+          const composed = await composeProductionDesignContext({
+            repository: status.repository,
+            stateRoot: options.stateRoot,
+            projectSlug: status.project,
+            request: status.request,
+          });
+          designContext = composed.context;
+          await persistHostEnvelope(phase.id, designContext);
+          const report = designEvidencePresent({
+            workflowId: compiled.id,
+            phaseId: phase.id,
+            worktree: status.worktree!,
+            previousEnvelope: previous,
+            envelope: designContext,
+            correctionRound: 0,
+          }, composed.project);
+          await persistGate(phase.id, report, null);
+          if (!report.passed) throw new PhaseGateFailure(phase.id, [report]);
+        } catch (error) {
+          await persistPhase(phase.id, "FAILED", error as Error);
+          throw error;
+        }
+        previous = designContext;
+        await persistPhase(phase.id, "SUCCEEDED");
+        continue;
+      }
       // The evidence phase is a code phase that runs no command: it reads Git
       // and the phases that already ran, and everything it produces is checked
       // for fitness here — BEFORE the review's call is held — so a review that
