@@ -868,7 +868,7 @@ flowchart LR
 
     <!-- ================= M7 ================= -->
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone M7: <span class="gate">G1</span> — the route, the two roles, and the close</h3>
+      <h3><code class="status">[wip]</code> Milestone M7: <span class="gate">G1</span> — the route, the two roles, and the close</h3>
       <div class="card warn">
         <h5>Precondition — ordering gate <span class="gate">G1</span>. This milestone does not start until it holds.</h5>
         <p><strong><code>specs/awsf-v2-w06-prompt-composition.html</code> must exist, and its centralisation milestone must be <code>[x]</code>.</strong> W06 turns three independent system-prompt composition sites into one. Every task below touches a role's prompt path, and adding a role before the sites are one site is what creates the fourth copy the gate exists to prevent. <strong>Milestones M1 through M6 have no such precondition and may already be complete.</strong> If W06's plan does not exist yet, stop here and say so — do not build the role prompts "so they are ready".</p>
@@ -891,11 +891,11 @@ flowchart TD
 
       <h4>23. Confirm <span class="gate">G1</span>, then write the two role prompts</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> <strong>First act of this milestone</strong>: open <code>specs/awsf-v2-w06-prompt-composition.html</code> and confirm its centralisation milestone reads <code>[x]</code>. If it does not, stop and report — this is gate <span class="gate">G1</span> and no later box may be checked without it</li>
-        <li><code class="status">[]</code> <code>prompts/designer/{system,user}.md</code> — the user prompt declares <code>{output_schema}</code> and <code>{previous_envelope}</code> and restates no shape by hand</li>
-        <li><code class="status">[]</code> <code>prompts/architecture-reviewer/{system,user}.md</code> — same rule, plus one instruction that is the point of the role: <strong>state what you did not check</strong>, because <code>limitations</code> is required non-empty and a reviewer that has not been asked will not answer</li>
-        <li><code class="status">[]</code> Neither system prompt duplicates whatever shared block W06 introduced. If a sentence belongs to every role, it belongs in W06's one place, and this task's job is to notice that rather than to copy it</li>
-        <li><code class="status">[]</code> <code>npm run test:unit</code> — <code>no-handwritten-schema.test.ts</code> stays green over the four new files</li>
+        <li><code class="status">[x]</code> <strong>First act of this milestone</strong>: open <code>specs/awsf-v2-w06-prompt-composition.html</code> and confirm its centralisation milestone reads <code>[x]</code>. If it does not, stop and report — this is gate <span class="gate">G1</span> and no later box may be checked without it</li>
+        <li><code class="status">[x]</code> <code>prompts/designer/{system,user}.md</code> — the user prompt declares <code>{output_schema}</code> and <code>{previous_envelope}</code> and restates no shape by hand</li>
+        <li><code class="status">[x]</code> <code>prompts/architecture-reviewer/{system,user}.md</code> — same rule, plus one instruction that is the point of the role: <strong>state what you did not check</strong>, because <code>limitations</code> is required non-empty and a reviewer that has not been asked will not answer</li>
+        <li><code class="status">[x]</code> Neither system prompt duplicates whatever shared block W06 introduced. If a sentence belongs to every role, it belongs in W06's one place, and this task's job is to notice that rather than to copy it</li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code> — <code>no-handwritten-schema.test.ts</code> stays green over the four new files</li>
       </ul>
 
       <h4>24. The recipe, the workflow id, and the registration</h4>

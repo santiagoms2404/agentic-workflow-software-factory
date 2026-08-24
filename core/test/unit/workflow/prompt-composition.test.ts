@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { test, type TestContext } from "node:test";
 import {
-  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -54,12 +53,12 @@ const EXPECTED = {
     user: "Refine the owner's request into one durable work ticket. Make the outcome concrete, acceptance criteria observable, dependencies explicit, and non-goals bounded. Preserve the ticket id when refining an existing ticket.\n\nPrevious phase envelope:\n{previous_envelope}\n\nReturn only an envelope satisfying this host-generated contract:\n{output_schema}\n",
   },
   designer: {
-    system: "You are the synthetic design worker fixture. Declare the design spine without writing files.\n",
-    user: "Design from the prior host context.\n\nPrevious phase envelope:\n{previous_envelope}\n\nReturn only an envelope satisfying this host-generated contract:\n{output_schema}\n",
+    system: "You are the read-only design worker. Turn the owner's request and host-recorded repository context into a coherent technical design grounded in repository evidence.\n\nInspect the relevant targets at the paths and revisions the host supplies. Make no edits. A designer that writes implementation is a builder.\n\nKeep architecture separate from implementation sequencing. Declare local design identifiers contiguously from 1, state each component's responsibility and boundary, make decisions explicit, and make every acceptance criterion independently observable. Preserve unresolved questions instead of hiding them.\n",
+    user: "Design the owner's request using the exact host context below. Answer the owner-recorded request rather than a nearby problem. Inspect relevant repository evidence before claiming current behavior, and keep proposed behavior within the stated scope.\n\nHost context:\n{previous_envelope}\n\nReturn only an envelope satisfying this host-generated contract:\n{output_schema}\n",
   },
   "architecture-reviewer": {
-    system: "You are the synthetic independent architecture-reviewer fixture. Report limitations and make no edits.\n",
-    user: "Review the design and state what you did not check.\n\nPrevious phase envelope:\n{previous_envelope}\n\nReturn only an envelope satisfying this host-generated contract:\n{output_schema}\n",
+    system: "You are the independent, read-only architecture reviewer. You are in a fresh session and did not write the design.\n\nJudge the proposed design against the owner's request, its declared claims, and repository evidence available to you. Inspect relevant targets yourself. Do not rewrite or fix the design, and make no edits.\n\nMake each finding concrete and tie its subject to a declared identifier or named component. State the evidence, the failure mechanism, and the consequence.\n\nState what you did not check. Name the specific surface or evidence you could not inspect and why. Always report at least one real limitation, even when accepting. Never use a generic placeholder or turn an unverified concern into a finding.\n",
+    user: "Review the exact design described by the host evidence below. Check its internal coherence, fit with the existing architecture, feasibility, boundaries, failure modes, and whether its acceptance evidence can prove its claims. Independently verify every claim you rely on.\n\nBefore returning, state what you did not check. Each limitation must identify a specific unchecked surface and the reason it remains unchecked.\n\nHost evidence:\n{previous_envelope}\n\nReturn only an envelope satisfying this host-generated contract:\n{output_schema}\n",
   },
 } as const;
 
@@ -143,17 +142,12 @@ test("all six configured roles and two synthetic W05 roles append through the sa
   const configPath = join(root, "awsf.config.yaml");
   const agents = prepareRoles(root);
 
-  assert.equal(existsSync(resolve("prompts/designer/system.md")), false);
-  assert.equal(existsSync(resolve("prompts/architecture-reviewer/system.md")), false);
-
   for (const agent of agents) {
     const role = agent.name as Role;
     const expected = EXPECTED[role];
     const sharedBytes = expectedSharedBytes(role);
-    if (role !== "designer" && role !== "architecture-reviewer") {
-      assert.equal(readFileSync(resolve(agent.prompt.user), "utf8"), expected.user, `${role} committed user bytes`);
-      assert.equal(readFileSync(resolve(agent.prompt.system), "utf8"), expected.system, `${role} committed system bytes`);
-    }
+    assert.equal(readFileSync(resolve(agent.prompt.user), "utf8"), expected.user, `${role} committed user bytes`);
+    assert.equal(readFileSync(resolve(agent.prompt.system), "utf8"), expected.system, `${role} committed system bytes`);
     for (const pathway of LOADERS) {
       const observed = await pathway.load(configPath, agent);
       const systemPrompt = [expected.system, sharedBytes].join(SEPARATOR);
