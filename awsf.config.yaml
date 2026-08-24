@@ -2,7 +2,10 @@
 # Shaped exactly per specs/awsf-architecture-proposal.md §7.3.5, adapted
 # from its illustrative flat src/ layout to this repo's actual two-workspace
 # File Manifest (core/src/**, dashboard/**).
-# Durable intent: no machine paths, no credentials, no PIDs, no quota fields.
+# Durable intent: no machine paths, no credentials, no PIDs, no measured quota state. 
+# A durable per-route quota POLICY THRESHOLD is permitted (W07/G7-A, 2026-08-24): it is 
+# a number the owner chooses once, not a reading that changes minute to minute, 
+# so invariant 1 does not reach it.
 # Validated by core/src/config/{schema,load}.ts against the awsf/v1 schema.
 
 schema: awsf/v1
