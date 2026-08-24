@@ -38,6 +38,11 @@ const WORKFLOWS = ["scout", "plan", "build", "plan-build-test", "build-review", 
 const TICKET_FILE = /^[TW]\d\d\.md$/;
 const TICKET_ID = /^[TW]\d\d$/;
 
+// Spine dependencies order deep-plan authoring, while their states track build
+// completion. G1 deliberately reverses this one build edge after both plans are
+// authored: W06 closes before W05 adds its new roles.
+const COMPLETION_DEPENDENCY_EXCEPTIONS = new Set(["awsf-v2-plan/W06->W05"]);
+
 interface PlanSet {
   /** What every failure message names, so a red test says WHICH plan drifted. */
   readonly label: string;
@@ -267,13 +272,17 @@ test("depends_on points only backwards at tickets that exist", () => {
   }
 });
 
-test("a done ticket never waits on unfinished work", () => {
+test("a done ticket never waits on unfinished work except at the declared G1 inversion", () => {
   for (const set of planSets()) {
     const all = tickets(set);
     const stateOf = new Map(all.map((t) => [t.id, t.state]));
     const offenders = all
       .filter((t) => t.state === "done")
-      .flatMap((t) => t.depends_on.filter((dep) => stateOf.get(dep) !== "done").map((dep) => `${set.label}/${t.id} is done but ${dep} is ${stateOf.get(dep)}`));
+      .flatMap((t) => t.depends_on
+        .filter((dep) => stateOf.get(dep) !== "done")
+        .filter((dep) => stateOf.get(dep) === "failed"
+          || !COMPLETION_DEPENDENCY_EXCEPTIONS.has(`${set.label}/${t.id}->${dep}`))
+        .map((dep) => `${set.label}/${t.id} is done but ${dep} is ${stateOf.get(dep)}`));
     assert.deepEqual(offenders, [], set.label);
   }
 });

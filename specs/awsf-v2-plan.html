@@ -647,7 +647,7 @@ flowchart LR
 
     <!-- ================= W06 ================= -->
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone M6: W06 — Prompt composition <span class="wtag core">v2 core</span></h3>
+      <h3><code class="status">[x]</code> Milestone M6: W06 — Prompt composition <span class="wtag core">v2 core</span></h3>
       <p class="deep-plan"><a href="awsf-v2-w06-prompt-composition.html">Deep plan: AWSF v2 W06 — Prompt composition and the shared per-role block</a> <span class="muted">not yet authored</span></p>
       <p><em>Exists because it must precede new agent roles or it multiplies duplicated prompt paths.</em> The order inside this workstream is the whole point: centralise first, share second. Written the other way round it creates a fourth copy of the thing it was meant to remove.</p>
       <h4>6. W06 — Prompt composition</h4>
@@ -666,13 +666,13 @@ flowchart LR
         Byte-exact composition across every role and all three execution paths. Digest persistence in route evidence, so one config snapshot cannot cover two different instruction sets. No alias section reaches a headless role. Reviewer-evidence regression fixtures that fail if the reviewer gets terser. And the benchmark recorded <strong>outside</strong> the offline suites, with its four metrics stated before it runs rather than chosen after.
       </div>
       <ul class="checklist">
-        <li><code class="status">[]</code> Deep plan <code>awsf-v2-w06-prompt-composition.html</code> authored with its build prompts and ticket set, and approved by the owner</li>
-        <li><code class="status">[]</code> Composition is centralised <em>before</em> the shared block is written — three sites become one, and the count is asserted</li>
-        <li><code class="status">[]</code> The shared block's bytes are in the same immutable route evidence as the role prompts</li>
-        <li><code class="status">[]</code> Reviewer-evidence regression fixtures exist and would fail on a terser reviewer</li>
-        <li><code class="status">[]</code> The benchmark ran on repeated matched tasks with its four metrics declared in advance, and its result is recorded outside the offline suites</li>
-        <li><code class="status">[]</code> Ordering gate <span class="gate">G1</span> is honoured: this lands before W05's new role code</li>
-        <li><code class="status">[]</code> The deep plan's own milestones all reach <code>[x]</code></li>
+        <li><code class="status">[x]</code> Deep plan <code>awsf-v2-w06-prompt-composition.html</code> authored with its build prompts and ticket set, and approved by the owner</li>
+        <li><code class="status">[x]</code> Composition is centralised <em>before</em> the shared block is written — three sites become one, and the count is asserted</li>
+        <li><code class="status">[x]</code> The shared block's bytes are in the same immutable route evidence as the role prompts</li>
+        <li><code class="status">[x]</code> Reviewer-evidence regression fixtures exist and would fail on a terser reviewer</li>
+        <li><code class="status">[x]</code> The benchmark ran on repeated matched tasks with its four metrics declared in advance, and its result is recorded outside the offline suites</li>
+        <li><code class="status">[x]</code> Ordering gate <span class="gate">G1</span> is honoured: this lands before W05's new role code</li>
+        <li><code class="status">[x]</code> The deep plan's own milestones all reach <code>[x]</code></li>
       </ul>
       <div class="loop">🔁 <strong>Do not exit this workstream until its deep plan's every box is checked.</strong> A failing command means fix the cause and re-run — never lower what the row asserts.</div>
     </div>

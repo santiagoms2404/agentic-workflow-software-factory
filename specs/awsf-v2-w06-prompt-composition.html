@@ -348,7 +348,7 @@ flowchart TD
   </div>
 
   <div class="phase">
-    <h3><code class="status">[wip]</code> Milestone M3: Measure repeated matched tasks outside offline suites</h3>
+    <h3><code class="status">[x]</code> Milestone M3: Measure repeated matched tasks outside offline suites</h3>
     <p>M3 starts only after M2 is <code>[x]</code>. Q3–Q5 were decided by the owner on 2026-08-23: three fixed task classes, five paired repetitions per arm for each task (30 route runs), safety non-inferiority with tokens descriptive, and journal detail plus a handle-free aggregate Amendment. It spends quota. The M1 commit is the baseline arm, the M2 commit is the candidate arm, and no feature flag or adapter branch is added for benchmarking.</p>
     <figure>
       <pre class="mermaid">
@@ -388,12 +388,12 @@ flowchart LR
     <h4>10. Testing Strategy, global validation, and workstream close</h4>
     <p>The benchmark itself is deliberately outside every offline suite. This task reruns the offline controls after the live measurement and reconciles all markers and tickets only if both evidence classes pass.</p>
     <ul class="checklist">
-      <li><code class="status">[]</code> <code>npm run test:unit</code> — full offline suite green; output must show no benchmark calls were made.</li>
-      <li><code class="status">[]</code> <code>npm run test:contract &amp;&amp; npm run test:sim &amp;&amp; npm run test:journeys</code> — offline contract, simulation, and journey suites green.</li>
-      <li><code class="status">[]</code> <code>npm run typecheck &amp;&amp; npm run lint</code> — both workspaces valid.</li>
-      <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/ticket-plan-sync.test.ts</code> — this plan, Section B, and T01–T10 remain synchronized.</li>
-      <li><code class="status">[]</code> Confirm M1–M3 and every task checklist are <code>[x]</code>, and T01–T10 are <code>state: done</code>, flipped in the same commits.</li>
-      <li><code class="status">[]</code> Only now flip the spine's M6/W06 marker and checklist in <code>specs/awsf-v2-plan.html</code> and <code>specs/tickets/awsf-v2-plan/W06.md</code> in the same commit. This authoring session does not perform that act.</li>
+      <li><code class="status">[x]</code> <code>npm run test:unit</code> — full offline suite green; output must show no benchmark calls were made.</li>
+      <li><code class="status">[x]</code> <code>npm run test:contract &amp;&amp; npm run test:sim &amp;&amp; npm run test:journeys</code> — offline contract, simulation, and journey suites green.</li>
+      <li><code class="status">[x]</code> <code>npm run typecheck &amp;&amp; npm run lint</code> — both workspaces valid.</li>
+      <li><code class="status">[x]</code> <code>node --experimental-strip-types --test core/test/unit/meta/ticket-plan-sync.test.ts</code> — this plan, Section B, and T01–T10 remain synchronized.</li>
+      <li><code class="status">[x]</code> Confirm M1–M3 and every task checklist are <code>[x]</code>, and T01–T10 are <code>state: done</code>, flipped in the same commits.</li>
+      <li><code class="status">[x]</code> Only now flip the spine's M6/W06 marker and checklist in <code>specs/awsf-v2-plan.html</code> and <code>specs/tickets/awsf-v2-plan/W06.md</code> in the same commit. This authoring session does not perform that act.</li>
     </ul>
     <div class="loop">🔁 <strong>Do not close W06 on offline tests alone or on fewer than the approved repeated matched runs.</strong> Both the deterministic gates and the predeclared benchmark thresholds must pass.</div>
   </div>
@@ -403,11 +403,11 @@ flowchart LR
   <h2>Validation Commands</h2>
   <p>These are the complete-plan gates. Every command is offline. The paid benchmark is a separately approved manual execution in M3 task 9 and is intentionally absent.</p>
   <ul class="checklist">
-    <li><code class="status">[]</code> <code>npm run test:unit</code> — all unit and meta-tests, including one-site, evidence, reviewer, and plan/ticket sync.</li>
-    <li><code class="status">[]</code> <code>npm run test:contract &amp;&amp; npm run test:sim &amp;&amp; npm run test:journeys</code> — remaining offline suites.</li>
-    <li><code class="status">[]</code> <code>npm run typecheck &amp;&amp; npm run lint</code> — static validation.</li>
-    <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/ticket-plan-sync.test.ts</code> — plan/tickets/build-prompt identity.</li>
-    <li><code class="status">[]</code> <code>git diff --check</code> — document and source whitespace integrity.</li>
+    <li><code class="status">[x]</code> <code>npm run test:unit</code> — all unit and meta-tests, including one-site, evidence, reviewer, and plan/ticket sync.</li>
+    <li><code class="status">[x]</code> <code>npm run test:contract &amp;&amp; npm run test:sim &amp;&amp; npm run test:journeys</code> — remaining offline suites.</li>
+    <li><code class="status">[x]</code> <code>npm run typecheck &amp;&amp; npm run lint</code> — static validation.</li>
+    <li><code class="status">[x]</code> <code>node --experimental-strip-types --test core/test/unit/meta/ticket-plan-sync.test.ts</code> — plan/tickets/build-prompt identity.</li>
+    <li><code class="status">[x]</code> <code>git diff --check</code> — document and source whitespace integrity.</li>
   </ul>
   <div class="loop">🔁 <strong>The workstream is incomplete until every offline command passes and M3's separately recorded benchmark satisfies its predeclared thresholds.</strong></div>
 </section>
@@ -549,6 +549,12 @@ flowchart TD
     <p><strong>Input tokens, descriptive.</strong> For the bounded source change, baseline median/range was 41,044 / 31,215–80,948 and candidate was 37,064 / 29,356–46,836; the median/range candidate-minus-baseline paired difference was −8,549 / −34,112–4,480. For the contract/envelope change, baseline was 57,181 / 48,226–70,082 and candidate was 63,972 / 57,858–74,962; paired difference 983 / −6,801–17,781. For the evidence-heavy review, baseline was 12 / 10–26 and candidate was 12 / 10–16; paired difference 0 / −16–4.</p>
     <p><strong>Output tokens, descriptive.</strong> For the bounded source change, baseline median/range was 2,683 / 2,546–3,357 and candidate was 2,657 / 2,183–3,754; the median/range paired difference was 28 / −429–397. For the contract/envelope change, baseline was 2,940 / 2,698–3,222 and candidate was 3,777 / 3,048–3,961; paired difference 668 / −128–1,115. For the evidence-heavy review, baseline was 8,557 / 6,469–13,612 and candidate was 7,437 / 6,435–8,277; paired difference −1,003 / −6,175–−34.</p>
     <p><strong>Safety metrics and verdict.</strong> Parse-correction totals were baseline 1 and candidate 0; the baseline distribution was fourteen zeros and one corrected envelope, while candidate had fifteen zeros. Reviewer-specificity run scores were baseline [4, 3.5, 4, 3.5, 3.5], median 3.5, and candidate [3.5, 4, 4, 4, 4], median 4. Every candidate review named the required omitted-evidence limitation. Candidate corrections were no higher, candidate median specificity was no lower, and no required limitation was lost. Protocol v2 therefore <strong>passed all three unchanged safety thresholds</strong>. Tokens remain descriptive and no claim extends beyond these task classes and resolved models.</p>
+  </details>
+  <details>
+    <summary>2026-08-24 — W06 global validation completed and workstream closed</summary>
+    <p>Post-benchmark controls passed: <code>npm run test:unit</code> passed 1304/1304; contract, simulation, and journey suites passed 53/53, 70/70, and 103/103; the focused ticket-plan-sync suite passed 14/14; both workspaces typechecked; lint reported zero warnings and zero errors; and <code>git diff --check</code> exited 0. No benchmark or provider API call was made by these commands. The contract suite launched configured provider CLIs with <code>--help</code> only and reported “no prompt sent”; <code>package.json</code> contains no benchmark script, and benchmark unit rows remain synthetic.</p>
+    <p>The focused sync fence now records G1 as its sole completion-order exception: spine dependencies order deep-plan authoring, while G1 deliberately closes W06 before W05's new-role build. A failed W05 remains blocking. No W05 marker moved. No runtime benchmark artifact is tracked. M1–M3 and every T01–T10 checklist are complete, both W06 tickets are <code>done</code>, and the spine's M6/W06 marker and checklist close in this commit.</p>
+    <p><strong>Closing commit:</strong> <code>test(workflow): close prompt composition workstream</code>.</p>
   </details>
 </section>
 
