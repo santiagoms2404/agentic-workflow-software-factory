@@ -37,6 +37,11 @@ function isText(value: unknown): boolean {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+/** A measured, non-negative count of minutes. `undefined` is the unavailable case, never zero. */
+function isMinutes(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
 function show(value: unknown): string {
   return value === undefined ? "(absent)" : JSON.stringify(value);
 }
@@ -436,6 +441,36 @@ const GUARDS: Readonly<Record<EdgeId, (input: TransitionInput) => string[]>> = {
       violations.push(
         `gatesInvalidated ${show(e.gatesInvalidated)} was asserted; L25 preserves the green it stands on and may not speak to invalidating it`,
       );
+    }
+    return violations;
+  },
+
+   // L26 — the quota stop. This is where fail-open stops being a property of how
+  // a comparison was written and becomes a property of the machine: a reading
+  // the host could not make carries no `minutesToReset`, so the edge cannot
+  // form. A later refactor that tried to stop on a broken gauge is refused here
+  // rather than in its caller. The crossing is checked too, so the host cannot
+  // take this edge gratuitously.
+  L26: (input) => {
+    const stop = input.evidence?.quotaStop;
+    if (stop === undefined) {
+      return ["no quota reading was attested; L26 exists only to carry a measured stop"];
+    }
+    const violations: string[] = [];
+    const { minutesToReset: minutes, thresholdMinutes: threshold } = stop;
+    if (!isMinutes(minutes)) {
+      violations.push(
+        `minutesToReset ${show(minutes)} is not a measured figure — an unavailable, stale or unknown reading may never stop a run`,
+      );
+    }
+    if (!isMinutes(threshold)) {
+      violations.push(`thresholdMinutes ${show(threshold)} is not configured, so nothing was crossed`);
+    }
+    if (isMinutes(minutes) && isMinutes(threshold) && minutes >= threshold) {
+      violations.push(`minutesToReset ${String(minutes)} is not below the configured threshold ${String(threshold)}`);
+    }
+    if (!isText(stop.route)) {
+      violations.push("no route was named, so the threshold cannot be attributed to a configured adapter");
     }
     return violations;
   },

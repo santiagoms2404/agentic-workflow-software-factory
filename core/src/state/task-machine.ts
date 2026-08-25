@@ -74,7 +74,7 @@ export type EdgeId =
   | "L1" | "L2" | "L3" | "L4" | "L5" | "L6" | "L7" | "L8"
   | "L9" | "L10" | "L11" | "L12" | "L13" | "L14" | "L15" | "L16"
   | "L17" | "L18" | "L19" | "L20" | "L21" | "L22" | "L23" | "L24"
-  | "L25";
+  | "L25" | "L26";
 
 export interface LegalEdge {
   readonly id: EdgeId;
@@ -115,6 +115,7 @@ export const LEGAL_EDGES: readonly LegalEdge[] = [
   { id: "L23", from: "LANDING",        to: "LANDED",         actors: ["host"],           spawnSite: false, interactive: false },
   { id: "L24", from: "LANDING",        to: "BLOCKED",        actors: ["host"],           spawnSite: false, interactive: false },
   { id: "L25", from: "AWAITING_OWNER", to: "REVIEWING",      actors: ["owner", "human"], spawnSite: true,  interactive: true  },
+  { id: "L26", from: "RUNNING",        to: "AWAITING_OWNER", actors: ["host"],           spawnSite: false, interactive: false },
 ];
 
 /** The four edges that draw on a correction allowance — escalation-ladder rungs 4 and 5. */
@@ -244,6 +245,15 @@ export interface TransitionEvidence {
   landing?: LandingEvidence;
   headSha?: string;
   checkoutClean?: boolean;
+   /**
+   * L26: the reading that authorised the quota stop. Supplied evidence, because
+   * `core/src/state/**` may neither spawn nor read a clock; the probe lives in
+   * the command that authorizes the edge. `minutesToReset` is a number when the
+   * read was usable and ABSENT when it was not — there is no "unknown" value to
+   * mistake for zero, which is what makes fail-open structural rather than
+   * conventional.
+   */
+  quotaStop?: QuotaStopEvidence;
 }
 
 /**
@@ -267,6 +277,15 @@ export interface CorrectionAllowance {
   auto: number;
   owner: number;
   ownerReentries: number;
+}
+
+export interface QuotaStopEvidence {
+  /** The adapter id whose configured threshold this reading was compared against. */
+  route?: string;
+  /** Minutes to the binding window's reset. Present only when the read was usable. */
+  minutesToReset?: number;
+  /** That route's configured threshold, in minutes. */
+  thresholdMinutes?: number;
 }
 
 /**
