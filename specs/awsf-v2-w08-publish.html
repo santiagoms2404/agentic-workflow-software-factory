@@ -589,7 +589,7 @@ flowchart LR
 
   <!-- ================= M3 ================= -->
   <div class="phase">
-    <h3><code class="status">[wip]</code> Milestone M3: The single argv site, and the observation that precedes the decision</h3>
+    <h3><code class="status">[x]</code> Milestone M3: The single argv site, and the observation that precedes the decision</h3>
     <p>The observation step exists so that every refusal is the table's. Letting the remote reject a non-fast-forward push produces the same outcome and fails the spine's requirement in the way that matters: the rule would be enforced by a code path that happens not to be reached rather than by a stated condition.</p>
 
     <h4>6. <code>publishArgv</code> — the only push token in <code>core/src</code></h4>
@@ -618,13 +618,13 @@ flowchart LR
     <p class="serves"><code class="serves">AC-2</code></p>
     <p>Against a real local bare remote, created per test in a temporary directory with <code>mkdtempSync</code> and <code>git init --bare</code>, in the idiom of <code>core/test/unit/git/dependency-seeds.test.ts</code>. <strong>Nothing in this file resolves a hostname or opens a socket.</strong></p>
     <ul class="checklist">
-      <li><code class="status">[]</code> Write <code>core/test/unit/publish/_bare.ts</code>: temporary root, bare repository, work repository with two commits, <code>origin</code> pointing at the bare path, and explicit <code>-c user.name</code>/<code>-c user.email</code> set to the owner's identity so invariant 11 holds inside a fixture</li>
-      <li><code class="status">[]</code> An exact-revision push of a landed candidate to an absent branch <strong>creates</strong> it: porcelain flag <code>*</code>, exit <code>0</code>, and the bare repository's <code>ls-remote</code> then reports that exact SHA</li>
-      <li><code class="status">[]</code> A fast-forward to a later candidate reports the space flag with <code>old..new</code> in the last field, and the parser reads the flag correctly <strong>because the line was not trimmed</strong> — asserted explicitly, since this is the workstream's most likely parsing bug</li>
-      <li><code class="status">[]</code> A non-fast-forward is refused by the <em>table</em>, before any push runs — proved by asserting the remote ref is unchanged <strong>and</strong> that the injected runner recorded no push invocation</li>
-      <li><code class="status">[]</code> <code>observePublishTarget</code> against an absent remote name produces <code>remote-unknown</code>, and against a remote URL pointing at a missing path produces <code>remote-unreadable</code>; neither error message carries the path or the Git prose</li>
-      <li><code class="status">[]</code> <code>parsePorcelain</code> tests cover all six flags including the two that must never occur, and assert the <code>To &lt;url&gt;</code> line is dropped rather than parsed</li>
-      <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green</li>
+      <li><code class="status">[x]</code> Write <code>core/test/unit/publish/_bare.ts</code>: temporary root, bare repository, work repository with two commits, <code>origin</code> pointing at the bare path, and explicit <code>-c user.name</code>/<code>-c user.email</code> set to the owner's identity so invariant 11 holds inside a fixture</li>
+      <li><code class="status">[x]</code> An exact-revision push of a landed candidate to an absent branch <strong>creates</strong> it: porcelain flag <code>*</code>, exit <code>0</code>, and the bare repository's <code>ls-remote</code> then reports that exact SHA</li>
+      <li><code class="status">[x]</code> A fast-forward to a later candidate reports the space flag with <code>old..new</code> in the last field, and the parser reads the flag correctly <strong>because the line was not trimmed</strong> — asserted explicitly, since this is the workstream's most likely parsing bug</li>
+      <li><code class="status">[x]</code> A non-fast-forward is refused by the <em>table</em>, before any push runs — proved by asserting the remote ref is unchanged <strong>and</strong> that the injected runner recorded no push invocation</li>
+      <li><code class="status">[x]</code> <code>observePublishTarget</code> against an absent remote name produces <code>remote-unknown</code>, and against a remote URL pointing at a missing path produces <code>remote-unreadable</code>; neither error message carries the path or the Git prose</li>
+      <li><code class="status">[x]</code> <code>parsePorcelain</code> tests cover all six flags including the two that must never occur, and assert the <code>To &lt;url&gt;</code> line is dropped rather than parsed</li>
+      <li><code class="status">[x]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green</li>
     </ul>
     <div class="loop">
       🔁 <strong>Do not exit this phase until every box above is checked.</strong> If any command fails, fix the cause and re-run — never lower what the row asserts.
