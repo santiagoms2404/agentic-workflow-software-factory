@@ -633,7 +633,7 @@ flowchart LR
 
   <!-- ================= M4 ================= -->
   <div class="phase">
-    <h3><code class="status">[]</code> Milestone M4: The inherited helper, and the narrower guarantee that survives it</h3>
+    <h3><code class="status">[wip]</code> Milestone M4: The inherited helper, and the narrower guarantee that survives it</h3>
     <p><em>Q3, decided 2026-08-25: inherit the owner's configured credential helper.</em> That makes <code>https</code> remotes work and it gives up the structural guarantee the rejected option had. This milestone's job is to state precisely what is left and make <em>that</em> checkable, rather than to keep claiming the guarantee that was traded away.</p>
     <div class="card warn">
       <h5>What the decision changes, said once so no task restates it wrongly</h5>
@@ -644,12 +644,12 @@ flowchart LR
     <h4>9. The env posture, and the failure that is no longer a refusal</h4>
     <p class="serves"><code class="serves">INV-4</code></p>
     <ul class="checklist">
-      <li><code class="status">[]</code> The argv carries <strong>no</strong> <code>-c credential.helper=</code>. The owner's configured helper chain applies exactly as it does when they run the command themselves</li>
-      <li><code class="status">[]</code> The env passed to <code>runSystemCommand</code> still sets <code>GIT_TERMINAL_PROMPT=0</code> over the inherited environment. <strong>This is not a credential control and must not be described as one</strong> — it exists because <code>spawnSync</code> captures stdio, so the subprocess has no terminal and a prompt would hang until the timeout rather than reach anybody. Measured: with prompting off, Git fails immediately with <code>terminal prompts disabled</code> at exit <code>128</code></li>
-      <li><code class="status">[]</code> <code>credentials-required</code> narrows to one case: the helper chain produced nothing and prompting is off. Its operator sentence names the helper as the thing to fix, not AWSF. The stderr that carried the diagnosis is still discarded</li>
-      <li><code class="status">[]</code> Before spawning, run the joined argv through <code>containsCredential</code> and refuse if it matches. It cannot match today — the argv holds a remote name and a SHA — and it is there so a future edit that puts a URL into the argv turns a test red rather than shipping</li>
-      <li><code class="status">[]</code> Nothing in the publish path writes to <code>~</code>, to the repository's Git config, or to any file. The only write AWSF makes is the journal record in M6</li>
-      <li><code class="status">[]</code> Record in a header comment what this posture does and does not promise, in the two sentences from the card above. A comment claiming credential non-persistence would be false after this decision</li>
+      <li><code class="status">[x]</code> The argv carries <strong>no</strong> <code>-c credential.helper=</code>. The owner's configured helper chain applies exactly as it does when they run the command themselves</li>
+      <li><code class="status">[x]</code> The env passed to <code>runSystemCommand</code> still sets <code>GIT_TERMINAL_PROMPT=0</code> over the inherited environment. <strong>This is not a credential control and must not be described as one</strong> — it exists because <code>spawnSync</code> captures stdio, so the subprocess has no terminal and a prompt would hang until the timeout rather than reach anybody. Measured: with prompting off, Git fails immediately with <code>terminal prompts disabled</code> at exit <code>128</code></li>
+      <li><code class="status">[x]</code> <code>credentials-required</code> narrows to one case: the helper chain produced nothing and prompting is off. Its operator sentence names the helper as the thing to fix, not AWSF. The stderr that carried the diagnosis is still discarded</li>
+      <li><code class="status">[x]</code> Before spawning, run the joined argv through <code>containsCredential</code> and refuse if it matches. It cannot match today — the argv holds a remote name and a SHA — and it is there so a future edit that puts a URL into the argv turns a test red rather than shipping</li>
+      <li><code class="status">[x]</code> Nothing in the publish path writes to <code>~</code>, to the repository's Git config, or to any file. The only write AWSF makes is the journal record in M6</li>
+      <li><code class="status">[x]</code> Record in a header comment what this posture does and does not promise, in the two sentences from the card above. A comment claiming credential non-persistence would be false after this decision</li>
     </ul>
 
     <h4>10. Testing Strategy</h4>
@@ -1110,6 +1110,11 @@ flowchart TD
     <summary>2026-08-25 — T08 completed: local bare-remote publication coverage</summary>
     <p><strong>T08 is complete in commit <code>48e089b</code>.</strong> The isolated bare-remote harness uses explicit owner identity and empty global and system Git configuration. It proves exact-SHA branch creation, the untrimmed literal-space fast-forward flag and <code>old..new</code> summary, table refusal before a non-fast-forward push, scrubbed remote observation failures, and all six porcelain flags with transport framing discarded. M3 is <code>[x]</code>, T08 is <code>done</code>, and the W08 spine marker remains untouched.</p>
     <p><strong>Verification:</strong> <code>npm run test:unit</code> passed 1395/1395 in 249.7 seconds, <code>npm run typecheck</code> completed cleanly, and <code>npm run lint</code> reported zero warnings and errors.</p>
+  </details>
+  <details>
+    <summary>2026-08-25 — T09 completed: inherited credential-helper posture</summary>
+    <p><strong>T09 is complete in commit <code>a84b12a</code>.</strong> System Git commands inherit the owner's environment and configured helper chain while disabling unreachable terminal prompts. The publication boundary checks its joined argv for credential-shaped values before execution, discards diagnostic stderr after selecting a closed failure code, and states the narrower INV-4 guarantee without claiming credential non-persistence. M4 is <code>[wip]</code>, T09 is <code>done</code>, and the W08 spine marker remains untouched.</p>
+    <p><strong>Verification:</strong> <code>npm run typecheck</code> completed cleanly, <code>npm run lint</code> reported zero warnings and errors, six direct bare-remote and porcelain assertions passed, and <code>no-credentials-in-fixtures.test.ts</code> passed 8/8.</p>
   </details>
 </section>
 
