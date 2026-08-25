@@ -17,6 +17,10 @@ import type { ProcessIdentity } from "../../execution/launcher-barrier.ts";
 import type { AttemptEvidence } from "../../observability/attempt-evidence.ts";
 import type { Tier } from "../../state/tiers.ts";
 
+// G8-B is the future home of this lifecycle vocabulary; T12 replaces this
+// local precondition with the state-machine export after that gate is verified.
+const SEALED_STATES = ["BLOCKED", "CANCELLED", "PUBLISHED"] as const satisfies readonly TaskState[];
+
 export interface PhaseMeter {
   readonly name: string;
   readonly state: string;
@@ -215,7 +219,16 @@ export async function persistAttempt(
         if (actual !== expectedRevision) {
           throw new Error(`attempt revision changed: expected ${String(expectedRevision)}, found ${String(actual)}`);
         }
-        if (current !== null && isTerminalStatus(current)) {
+        if (
+          current !== null &&
+          (SEALED_STATES as readonly TaskState[]).includes(current.lifecycleState)
+        ) {
+          throw new SealedAttempt(current.lifecycleState);
+        }
+        if (
+          current?.lifecycleState === "LANDED" &&
+          event.next.lifecycleState !== "PUBLISHED"
+        ) {
           throw new SealedAttempt(current.lifecycleState);
         }
         if (event.next.revision !== (current?.revision ?? 0) + 1) {
@@ -227,7 +240,10 @@ export async function persistAttempt(
         return { event, nextStatus: event.next };
       },
       ...(project === undefined ? {} : { project }),
-      sealWhenTerminal: (status) => isTerminalStatus(status) ? status.lifecycleState : null,
+      sealWhenTerminal: (status) =>
+        (SEALED_STATES as readonly TaskState[]).includes(status.lifecycleState)
+          ? status.lifecycleState
+          : null,
     });
   } finally {
     await journal.close();

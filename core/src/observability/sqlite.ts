@@ -117,11 +117,14 @@ function getUserVersion(db: DatabaseSync): number {
  * is already newer than the highest migration this binary ships — the
  * explicit fix for SSSF's marker-less additive `ALTER` list.
  */
-// SQLite refuses to change these two ("safety level") pragmas from inside a
-// transaction, so they run once, ahead of `BEGIN IMMEDIATE`, per migration
-// file; every other statement — including the trailing `PRAGMA user_version`
-// — runs inside the transaction exactly as the schema specifies.
-const TRANSACTION_UNSAFE_PRAGMA = /^PRAGMA\s+(journal_mode|synchronous)\s*=/i;
+// SQLite refuses to change journal_mode or synchronous from inside a
+// transaction, so they run ahead of `BEGIN IMMEDIATE`. foreign_keys must join
+// them for table rebuilds: measured, leaving it on fails at DROP with `FOREIGN
+// KEY constraint failed`, and defer_foreign_keys inside the transaction fails
+// identically because SQLite's RESTRICT is not deferrable. Its previous value
+// is restored after the migration so constraints stay enabled for the process.
+const TRANSACTION_UNSAFE_PRAGMA = /^PRAGMA\s+(journal_mode|synchronous|foreign_keys)\s*=/i;
+const FOREIGN_KEYS_PRAGMA = /^PRAGMA\s+foreign_keys\s*=/i;
 
 function splitStatements(sql: string): string[] {
   return sql
@@ -143,16 +146,26 @@ export function runMigrations(db: DatabaseSync, migrationsDir: string = DEFAULT_
     const statements = splitStatements(migration.sql);
     const preamble = statements.filter((s) => TRANSACTION_UNSAFE_PRAGMA.test(s));
     const transactional = statements.filter((s) => !TRANSACTION_UNSAFE_PRAGMA.test(s));
+    const changesForeignKeys = preamble.some((s) => FOREIGN_KEYS_PRAGMA.test(s));
+    const previousForeignKeys = changesForeignKeys
+      ? (db.prepare("PRAGMA foreign_keys").get() as { foreign_keys: number }).foreign_keys
+      : null;
 
-    for (const stmt of preamble) db.exec(stmt);
-
-    db.exec("BEGIN IMMEDIATE");
     try {
-      for (const stmt of transactional) db.exec(stmt);
-      db.exec("COMMIT");
-    } catch (err) {
-      db.exec("ROLLBACK");
-      throw err;
+      for (const stmt of preamble) db.exec(stmt);
+
+      db.exec("BEGIN IMMEDIATE");
+      try {
+        for (const stmt of transactional) db.exec(stmt);
+        db.exec("COMMIT");
+      } catch (err) {
+        db.exec("ROLLBACK");
+        throw err;
+      }
+    } finally {
+      if (previousForeignKeys !== null) {
+        db.exec(`PRAGMA foreign_keys = ${previousForeignKeys === 0 ? "OFF" : "ON"}`);
+      }
     }
   }
 }
