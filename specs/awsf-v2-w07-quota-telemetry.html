@@ -509,7 +509,7 @@ flowchart LR
 
   <!-- ================= M6 ================= -->
   <div class="phase">
-    <h3><code class="status">[]</code> Milestone M6: The phase-boundary snapshot, and the stop on <code>L26</code></h3>
+    <h3><code class="status">[wip]</code> Milestone M6: The phase-boundary snapshot, and the stop on <code>L26</code></h3>
     <p>The second and third pieces. <strong>This milestone does not start until the owner's <span class="gate">G7-B</span> commit has landed</strong>, because the stop now has its own legal edge rather than borrowing two that exist for other reasons.</p>
     <figure>
       <pre class="mermaid">
@@ -529,11 +529,11 @@ stateDiagram-v2
     <h4>14. The snapshot record, labelled non-attributable in the record itself</h4>
     <p class="serves"><code class="serves">AC-3</code> <code class="serves">INV-3</code></p>
     <ul class="checklist">
-      <li><code class="status">[]</code> Add <code>{ type: "quota-snapshot", ... }</code> to the <code>AttemptEvidence</code> union in <code>core/src/observability/attempt-evidence.ts</code>. <strong>Do not reuse the normalized <code>quota</code> event kind</strong> — that one is a provider-signalled refusal from inside a run, commented <em>"quota is never a retry"</em>, and conflating a blocking refusal with advisory context would make both unreadable</li>
-      <li><code class="status">[]</code> The record carries an explicit <code>attribution: "none"</code> field and a <code>scope: "account-window"</code> field. <strong>The label is a field, not a comment</strong> — a reader parsing the journal a year from now sees it without reading this plan</li>
-      <li><code class="status">[]</code> It also carries the boundary it sits at (the phase key just completed and the one not yet started), the effective percent, the minutes to reset, the reason code when unavailable, and the resolved quota-axi version</li>
-      <li><code class="status">[]</code> <strong>Journal-only.</strong> <code>applyAttemptEvidence</code> in <code>core/src/observability/projector.ts</code> has no <code>default</code> clause, so an unhandled type is a silent no-op and no table is needed. This deliberately avoids <code>core/src/observability/migrations/**</code>, which is a protected path — and it is the same reason <code>L26</code> costs no migration either</li>
-      <li><code class="status">[]</code> Every string in the record passes through the journal's existing <code>scrubCredentials</code>/<code>stringifyRedacted</code> path, which it does by construction because the journal applies them to every appended event</li>
+      <li><code class="status">[x]</code> Add <code>{ type: "quota-snapshot", ... }</code> to the <code>AttemptEvidence</code> union in <code>core/src/observability/attempt-evidence.ts</code>. <strong>Do not reuse the normalized <code>quota</code> event kind</strong> — that one is a provider-signalled refusal from inside a run, commented <em>"quota is never a retry"</em>, and conflating a blocking refusal with advisory context would make both unreadable</li>
+      <li><code class="status">[x]</code> The record carries an explicit <code>attribution: "none"</code> field and a <code>scope: "account-window"</code> field. <strong>The label is a field, not a comment</strong> — a reader parsing the journal a year from now sees it without reading this plan</li>
+      <li><code class="status">[x]</code> It also carries the boundary it sits at (the phase key just completed and the one not yet started), the effective percent, the minutes to reset, the reason code when unavailable, and the resolved quota-axi version</li>
+      <li><code class="status">[x]</code> <strong>Journal-only.</strong> <code>applyAttemptEvidence</code> in <code>core/src/observability/projector.ts</code> has no <code>default</code> clause, so an unhandled type is a silent no-op and no table is needed. This deliberately avoids <code>core/src/observability/migrations/**</code>, which is a protected path — and it is the same reason <code>L26</code> costs no migration either</li>
+      <li><code class="status">[x]</code> Every string in the record passes through the journal's existing <code>scrubCredentials</code>/<code>stringifyRedacted</code> path, which it does by construction because the journal applies them to every appended event</li>
     </ul>
 
     <h4>15. Verify the <code>L26</code> amendment, then move the test-side tables</h4>

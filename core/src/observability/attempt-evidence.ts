@@ -66,4 +66,5 @@ export type AttemptEvidence =
    * that quietly changed.
    */
   | { readonly type: "ceiling-grant"; readonly calls: number; readonly from: number; readonly to: number; readonly reason: string; readonly attempt: number; readonly at: string }
+  | { readonly type: "quota-snapshot"; readonly attribution: "none"; readonly scope: "account-window"; readonly completedPhaseKey: string; readonly nextPhaseKey: string; readonly effectivePercentRemaining: number | null; readonly minutesToReset: number | null; readonly reasonCode: string | null; readonly resolvedVersion: string | null }
   | { readonly type: "review"; readonly phaseId: string; readonly adapterId: string; readonly provider: string; readonly verdict: ReviewVerdict; readonly reviewedSha: string; readonly findingCount: number; readonly at: string };
