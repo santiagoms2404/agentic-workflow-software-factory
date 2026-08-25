@@ -476,7 +476,7 @@ flowchart LR
 
   <!-- ================= M5 ================= -->
   <div class="phase">
-    <h3><code class="status">[wip]</code> Milestone M5: Q4's named upgrade, shipped rather than implied</h3>
+    <h3><code class="status">[x]</code> Milestone M5: Q4's named upgrade, shipped rather than implied</h3>
     <p>Q4 was decided with its upgrade named in the same breath, and the spine's checklist requires it to be <em>named rather than left implicit</em>. This milestone ships it as a rendered, journalled comparison. <strong>It does not become the stop condition in this workstream</strong> — that is the versioned change it earns, and Questionable Q3 records the reasoning.</p>
     <div class="card warn">
       <h5>One correction to the spine's shorthand, made in the open</h5>
@@ -495,11 +495,11 @@ flowchart LR
     <h4>13. Testing Strategy</h4>
     <p>Query tests against an in-memory projection seeded from journal records, plus a rendering test for the three-way verdict.</p>
     <ul class="checklist">
-      <li><code class="status">[]</code> Four observations return <code>insufficient-history</code>; five return a median and the count</li>
-      <li><code class="status">[]</code> Even and odd observation counts both produce the expected median</li>
-      <li><code class="status">[]</code> A crashed phase with a <code>started_at</code> and no <code>ended_at</code> is excluded from both the median and the count</li>
-      <li><code class="status">[]</code> The readout renders <em>fits</em>, <em>does not fit</em>, or <em>insufficient history</em> — and renders the third rather than falling back to the threshold verdict, so a reader is never shown a comparison that did not happen</li>
-      <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green</li>
+      <li><code class="status">[x]</code> Four observations return <code>insufficient-history</code>; five return a median and the count</li>
+      <li><code class="status">[x]</code> Even and odd observation counts both produce the expected median</li>
+      <li><code class="status">[x]</code> A crashed phase with a <code>started_at</code> and no <code>ended_at</code> is excluded from both the median and the count</li>
+      <li><code class="status">[x]</code> The readout renders <em>fits</em>, <em>does not fit</em>, or <em>insufficient history</em> — and renders the third rather than falling back to the threshold verdict, so a reader is never shown a comparison that did not happen</li>
+      <li><code class="status">[x]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green</li>
     </ul>
     <div class="loop">
       🔁 <strong>Do not exit this phase until every box above is checked.</strong>
@@ -825,6 +825,12 @@ flowchart LR
     <p><strong>Observed rather than reasoned.</strong> Loading the committed config with the proposed block injected returned <code>config does not match awsf/v1: /routing/quota_stop: Unexpected property</code>. The unpatched file loads cleanly, so the failure is the block and nothing else.</p>
     <p><strong>The correction.</strong> <span class="gate">G7-A</span> is now the one-line durable-intent change and nothing else — the permission, not the values. T07 extends the schema, which it may do because <code>core/src/config/**</code> is <em>not</em> a protected path. Threshold values become a separate, optional, later owner commit, and since an absent block means the stop is disabled, this repository's own config need never carry one at all. M3 task 7 gained a row forbidding a premature block, and the build prompts and ticket README were corrected to match.</p>
     <p><strong>Why this is worth recording rather than quietly fixing.</strong> The plan asked the owner for a commit that would have broken the repository, and it did so in the same document that requires every deep plan to check whether a guarantee is already enforced somewhere stronger. The schema was the stronger enforcement, and the first draft did not read it.</p>
+  </details>
+  <details open>
+    <summary>2026-08-24 — M5 / T13 completed: observed median and three-way advisory verdict</summary>
+    <p><strong>T13 is complete.</strong> The median test suite seeds an in-memory SQLite projection with completed and crashed phase records, proving the five-observation history floor, odd and even medians, visible counts, and exclusion of crashed phases with no <code>ended_at</code>. <code>core/src/quota/readout.ts</code> now renders <em>fits</em>, <em>does not fit</em>, or <em>insufficient history</em> for the advisory comparison.</p>
+    <p><strong>The median remains advisory.</strong> Insufficient history is rendered explicitly and never falls back to a comparison or silently changes the configured threshold stop condition. No quota was spent.</p>
+    <p><strong>Verification.</strong> The targeted median suite passed 3/3; <code>npm run typecheck</code> completed cleanly; <code>npm run lint</code> reported zero warnings and zero errors. The full <code>npm run test:unit</code> run exceeded the session's 180-second command timeout after reaching test 1073, so its final process exit was not observed. M5 is <code>[x]</code>, T13 is <code>done</code>, and the W07 spine marker remains untouched.</p>
   </details>
   <details open>
     <summary>2026-08-24 — M1 / T03 completed: pure quota parser over the in-tree fixtures</summary>

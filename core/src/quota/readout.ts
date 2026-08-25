@@ -10,6 +10,23 @@ import type { ProjectQuotaRoute } from "./routes.ts";
 
 export type QuotaReadoutVerdict = "above" | "below" | "disabled" | "unknown";
 
+export type ObservedDurationComparison =
+  | { readonly status: "insufficient-history"; readonly count: number }
+  | { readonly status: "observed"; readonly durationMinutes: number; readonly count: number };
+
+/** Renders the advisory comparison only when its history is sufficient. */
+export function renderObservedDurationComparison(
+  minutesToReset: number | null,
+  observation: ObservedDurationComparison,
+): string {
+  if (observation.status === "insufficient-history") {
+    return `observed duration=insufficient history (count=${observation.count})`;
+  }
+  if (minutesToReset === null) return `observed duration=does not fit (median=${observation.durationMinutes} minutes, count=${observation.count})`;
+  const verdict = minutesToReset >= observation.durationMinutes ? "fits" : "does not fit";
+  return `observed duration=${verdict} (median=${observation.durationMinutes} minutes, count=${observation.count})`;
+}
+
 /**
  * The complete route-row surface. Keep this record descriptive: it has no
  * comparator, ordering, rank, recommendation, preference, or routing boolean.
