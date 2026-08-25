@@ -106,6 +106,10 @@ DEFINITION OF DONE
   Every box in M1 task 1. The file's entire import list is type-only imports plus SHA_PATTERN and
   the code tuple. npm run typecheck and npm run lint green.
   Mark this leaf task and T01 together; set M1 to [wip] and leave the spine W08 marker untouched.
+
+COMMIT REQUIREMENT
+  After completing this task and verifying its Definition of Done, create the required git commit
+  before ending the session. Do not wait for the owner to type `commit`.
 ```
 
 ### T02 — authorizePublish and the branded plan
@@ -147,6 +151,10 @@ DEFINITION OF DONE
   Every box in M1 task 2. The function is a pure expression of its four arguments. npm run
   typecheck and npm run lint green.
   Mark this leaf task and T02 together; leave M1 [wip] and the spine W08 marker untouched.
+
+COMMIT REQUIREMENT
+  After completing this task and verifying its Definition of Done, create the required git commit
+  before ending the session. Do not wait for the owner to type `commit`.
 ```
 
 ### T03 — Testing Strategy: totality, the thirteen adjacencies, and the state enumeration
@@ -183,6 +191,10 @@ DO NOT
 DEFINITION OF DONE
   Every box in M1 task 3. npm run test:unit, npm run typecheck and npm run lint green.
   Mark this leaf task and T03 together; set M1 to [x] and leave the spine W08 marker untouched.
+
+COMMIT REQUIREMENT
+  After completing this task and verifying its Definition of Done, create the required git commit
+  before ending the session. Do not wait for the owner to type `commit`.
 ```
 
 ### T04 — The publish block in the catalog, keyed on a remote name
@@ -220,6 +232,10 @@ DEFINITION OF DONE
   Every box in M2 task 4. npm run typecheck and npm run lint green, and
   node --test core/test/unit/meta/no-handwritten-schema.test.ts green.
   Mark this leaf task and T04 together; set M2 to [wip] and leave the spine W08 marker untouched.
+
+COMMIT REQUIREMENT
+  After completing this task and verifying its Definition of Done, create the required git commit
+  before ending the session. Do not wait for the owner to type `commit`.
 ```
 
 ### T05 — Testing Strategy: the loader rejections the block inherits
@@ -255,6 +271,10 @@ DEFINITION OF DONE
   Every box in M2 task 5. npm run test:unit, npm run typecheck and npm run lint green, and
   node --test core/test/unit/meta/no-credentials-in-fixtures.test.ts green.
   Mark this leaf task and T05 together; set M2 to [x] and leave the spine W08 marker untouched.
+
+COMMIT REQUIREMENT
+  After completing this task and verifying its Definition of Done, create the required git commit
+  before ending the session. Do not wait for the owner to type `commit`.
 ```
 
 ### T06 — publishArgv, the only push token in core/src
@@ -295,6 +315,10 @@ DO NOT
 DEFINITION OF DONE
   Every box in M3 task 6. npm run typecheck and npm run lint green.
   Mark this leaf task and T06 together; set M3 to [wip] and leave the spine W08 marker untouched.
+
+COMMIT REQUIREMENT
+  After completing this task and verifying its Definition of Done, create the required git commit
+  before ending the session. Do not wait for the owner to type `commit`.
 ```
 
 ### T07 — The observation step and its closed failure vocabulary
@@ -336,6 +360,10 @@ DEFINITION OF DONE
   Every box in M3 task 7. npm run typecheck, npm run lint and
   node --test core/test/unit/meta/child-process-fence.test.ts green.
   Mark this leaf task and T07 together; leave M3 [wip] and the spine W08 marker untouched.
+
+COMMIT REQUIREMENT
+  After completing this task and verifying its Definition of Done, create the required git commit
+  before ending the session. Do not wait for the owner to type `commit`.
 ```
 
 ### T08 — Testing Strategy: the local bare remote
@@ -372,6 +400,10 @@ DO NOT
 DEFINITION OF DONE
   Every box in M3 task 8. npm run test:unit, npm run typecheck and npm run lint green.
   Mark this leaf task and T08 together; set M3 to [x] and leave the spine W08 marker untouched.
+
+COMMIT REQUIREMENT
+  After completing this task and verifying its Definition of Done, create the required git commit
+  before ending the session. Do not wait for the owner to type `commit`.
 ```
 
 ### T09 — The env posture, and the failure that is no longer a refusal
@@ -412,6 +444,10 @@ DO NOT
 DEFINITION OF DONE
   Every box in M4 task 9. npm run typecheck and npm run lint green.
   Mark this leaf task and T09 together; set M4 to [wip] and leave the spine W08 marker untouched.
+
+COMMIT REQUIREMENT
+  After completing this task and verifying its Definition of Done, create the required git commit
+  before ending the session. Do not wait for the owner to type `commit`.
 ```
 
 ### T10 — Testing Strategy: the helper ran, and its answer went nowhere
@@ -449,6 +485,10 @@ DEFINITION OF DONE
   Every box in M4 task 10. npm run test:unit, npm run typecheck, npm run lint and
   node --test core/test/unit/meta/no-credentials-in-fixtures.test.ts green.
   Mark this leaf task and T10 together; set M4 to [x] and leave the spine W08 marker untouched.
+
+COMMIT REQUIREMENT
+  After completing this task and verifying its Definition of Done, create the required git commit
+  before ending the session. Do not wait for the owner to type `commit`.
 ```
 
 ### T11 — The two unprotected preconditions: the foreign-key hoist and the seal split
@@ -495,6 +535,10 @@ DEFINITION OF DONE
   Every box in M5 task 11. npm run test:unit, npm run typecheck and npm run lint green, with the
   six isTerminalStatus consumers verified by reading them.
   Mark this leaf task and T11 together; set M5 to [wip] and leave the spine W08 marker untouched.
+
+COMMIT REQUIREMENT
+  After completing this task and verifying its Definition of Done, create the required git commit
+  before ending the session. Do not wait for the owner to type `commit`.
 ```
 
 ### T12 — Verify G8-B and G8-C landed, then move the test-side tables
@@ -544,6 +588,10 @@ DEFINITION OF DONE
   Every box in M5 task 12, or this task and M5 both marked [f] with the reason recorded.
   npm run test:unit and npm run test:sim green.
   Mark this leaf task and T12 together; leave M5 [wip] and the spine W08 marker untouched.
+
+COMMIT REQUIREMENT
+  After completing this task and verifying its Definition of Done, create the required git commit
+  before ending the session. Do not wait for the owner to type `commit`.
 ```
 
 ### T13 — The dashboard's eleventh state
@@ -575,6 +623,10 @@ DEFINITION OF DONE
   Every box in M5 task 13. npm run typecheck:dashboard green - the union is exhaustively switched
   in more than one place and the compiler is what finds them. npm run test:unit green.
   Mark this leaf task and T13 together; leave M5 [wip] and the spine W08 marker untouched.
+
+COMMIT REQUIREMENT
+  After completing this task and verifying its Definition of Done, create the required git commit
+  before ending the session. Do not wait for the owner to type `commit`.
 ```
 
 ### T14 — Testing Strategy: the widened matrix, the seal, and the migration
@@ -613,6 +665,10 @@ DEFINITION OF DONE
   Every box in M5 task 14. npm run test:unit, npm run test:sim, npm run typecheck and npm run lint
   green.
   Mark this leaf task and T14 together; set M5 to [x] and leave the spine W08 marker untouched.
+
+COMMIT REQUIREMENT
+  After completing this task and verifying its Definition of Done, create the required git commit
+  before ending the session. Do not wait for the owner to type `commit`.
 ```
 
 ### T15 — The command, the single authorization call, and the L27 transition
@@ -659,6 +715,10 @@ DEFINITION OF DONE
   node --test core/test/unit/meta/no-write-route.test.ts and
   node --test core/test/unit/meta/no-land-route.test.ts green.
   Mark this leaf task and T15 together; set M6 to [wip] and leave the spine W08 marker untouched.
+
+COMMIT REQUIREMENT
+  After completing this task and verifying its Definition of Done, create the required git commit
+  before ending the session. Do not wait for the owner to type `commit`.
 ```
 
 ### T16 — The record, and what it must not carry
@@ -696,6 +756,10 @@ DEFINITION OF DONE
   Every box in M6 task 16. npm run typecheck, npm run lint and
   node --test core/test/unit/meta/junk-drawer.test.ts green.
   Mark this leaf task and T16 together; leave M6 [wip] and the spine W08 marker untouched.
+
+COMMIT REQUIREMENT
+  After completing this task and verifying its Definition of Done, create the required git commit
+  before ending the session. Do not wait for the owner to type `commit`.
 ```
 
 ### T17 — The seventh owner act, and everything that moves with it
@@ -737,6 +801,10 @@ DEFINITION OF DONE
   core/test/unit/meta/marimba-guard.test.ts, core/test/unit/meta/doc-reconciliation.test.ts and
   core/test/unit/meta/driving-tree.test.ts green.
   Mark this leaf task and T17 together; leave M6 [wip] and the spine W08 marker untouched.
+
+COMMIT REQUIREMENT
+  After completing this task and verifying its Definition of Done, create the required git commit
+  before ending the session. Do not wait for the owner to type `commit`.
 ```
 
 ### T18 — Testing Strategy: the sealed retry and the cascade meta-tests
@@ -775,6 +843,10 @@ DEFINITION OF DONE
   core/test/unit/meta/doc-reconciliation.test.ts core/test/unit/meta/driving-tree.test.ts
   core/test/unit/meta/no-land-route.test.ts core/test/unit/meta/no-write-route.test.ts green.
   Mark this leaf task and T18 together; set M6 to [x] and leave the spine W08 marker untouched.
+
+COMMIT REQUIREMENT
+  After completing this task and verifying its Definition of Done, create the required git commit
+  before ending the session. Do not wait for the owner to type `commit`.
 ```
 
 ### T19 — Verify the invariant 8 amendment landed, and stop if it did not
@@ -808,6 +880,10 @@ DO NOT
 DEFINITION OF DONE
   Every box in M7 task 19, or this task and M7 both marked [f] with the reason recorded.
   Mark this leaf task and T19 together; set M7 to [wip] and leave the spine W08 marker untouched.
+
+COMMIT REQUIREMENT
+  After completing this task and verifying its Definition of Done, create the required git commit
+  before ending the session. Do not wait for the owner to type `commit`.
 ```
 
 ### T20 — Amend the absence scan: remove one clause, add three
@@ -843,6 +919,10 @@ DEFINITION OF DONE
   Every box in M7 task 20. node --test core/test/unit/meta/no-destructive-paths.test.ts green
   against the tree, and each new pattern observed red against its synthetic offender.
   Mark this leaf task and T20 together; leave M7 [wip] and the spine W08 marker untouched.
+
+COMMIT REQUIREMENT
+  After completing this task and verifying its Definition of Done, create the required git commit
+  before ending the session. Do not wait for the owner to type `commit`.
 ```
 
 ### T21 — The three-leg publish fence, each leg seen red
@@ -885,6 +965,10 @@ DEFINITION OF DONE
   Every box in M7 task 21. node --test core/test/unit/meta/publish-fence.test.ts green, with each
   leg recorded as having been seen red against a deliberate violation that was then reverted.
   Mark this leaf task and T21 together; leave M7 [wip] and the spine W08 marker untouched.
+
+COMMIT REQUIREMENT
+  After completing this task and verifying its Definition of Done, create the required git commit
+  before ending the session. Do not wait for the owner to type `commit`.
 ```
 
 ### T22 — Testing Strategy: the fences bite and nothing else moved
@@ -922,6 +1006,10 @@ DEFINITION OF DONE
   core/test/unit/meta/state-purity-fence.test.ts
   core/test/unit/meta/sqlite-write-fence.test.ts green.
   Mark this leaf task and T22 together; set M7 to [x] and leave the spine W08 marker untouched.
+
+COMMIT REQUIREMENT
+  After completing this task and verifying its Definition of Done, create the required git commit
+  before ending the session. Do not wait for the owner to type `commit`.
 ```
 
 ### T23 — The journey: landed candidate to bare remote, offline
@@ -958,6 +1046,10 @@ DO NOT
 DEFINITION OF DONE
   Every box in M8 task 23. npm run test:journeys, npm run typecheck and npm run lint green.
   Mark this leaf task and T23 together; set M8 to [wip] and leave the spine W08 marker untouched.
+
+COMMIT REQUIREMENT
+  After completing this task and verifying its Definition of Done, create the required git commit
+  before ending the session. Do not wait for the owner to type `commit`.
 ```
 
 ### T24 — Testing Strategy and the close
@@ -996,4 +1088,8 @@ DEFINITION OF DONE
   Every box in M8 task 24 and every box in the plan's Validation Commands section. The whole suite
   green with no network anywhere in it.
   Mark this leaf task and T24 together; set M8 to [x]; flip the spine W08 marker LAST.
+
+COMMIT REQUIREMENT
+  After completing this task and verifying its Definition of Done, create the required git commit
+  before ending the session. Do not wait for the owner to type `commit`.
 ```
