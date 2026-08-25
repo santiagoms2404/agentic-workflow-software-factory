@@ -557,7 +557,7 @@ flowchart LR
 
   <!-- ================= M2 ================= -->
   <div class="phase">
-    <h3><code class="status">[wip]</code> Milestone M2: The allowlist in the catalog, keyed on a name</h3>
+    <h3><code class="status">[x]</code> Milestone M2: The allowlist in the catalog, keyed on a name</h3>
     <p>The spine states plainly that the allowlist "has to live in the catalog", and W04 reserved delivery policy for this workstream while deliberately leaving <code>delivery</code> a posture enum with no remote, endpoint or credential field. This milestone adds a sibling <code>publish</code> block and nothing else. <strong>The schema is agent work</strong> — <code>core/src/registry/**</code> is not a protected path — and this repository's own catalog values are a separate optional owner commit that no task here waits on.</p>
 
     <h4>4. The <code>publish</code> block, and why it holds no URL</h4>
@@ -575,12 +575,12 @@ flowchart LR
     <p class="serves"><code class="serves">INV-4</code></p>
     <p>Loader tests over YAML text, in the idiom of the existing catalog suite. The two most valuable assertions are about rejections that already existed before this block did — proving the new field inherits them rather than needing its own guard.</p>
     <ul class="checklist">
-      <li><code class="status">[]</code> A catalog whose <code>publish.host</code> carries <code>user:token@host</code> is refused with <code>CatalogCredentialShapedError</code> — <strong>inherited, not added</strong>: <code>containsCredential</code> already sweeps every string leaf</li>
-      <li><code class="status">[]</code> A catalog attempting to put an absolute path or a drive-letter path anywhere in the block is refused with <code>CatalogAbsolutePathError</code> — the same inheritance, and the reason the design keys on names</li>
-      <li><code class="status">[]</code> An unknown key inside <code>publish</code> is refused by <code>additionalProperties: false</code>. <strong>This is the test that keeps deployment out</strong>: an <code>environment</code>, <code>endpoint</code> or <code>release</code> field cannot be added without it going red, and the test names those three</li>
-      <li><code class="status">[]</code> An empty <code>remotes</code> or <code>branches</code> array is refused; a repository with no <code>publish</code> block loads fine and is simply not publishable</li>
-      <li><code class="status">[]</code> A remote name containing <code>/</code>, whitespace, a leading <code>+</code> or a <code>:</code> is refused, each with its own row</li>
-      <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green, and the existing catalog suite is unchanged</li>
+      <li><code class="status">[x]</code> A catalog whose <code>publish.host</code> carries <code>user:token@host</code> is refused with <code>CatalogCredentialShapedError</code> — <strong>inherited, not added</strong>: <code>containsCredential</code> already sweeps every string leaf</li>
+      <li><code class="status">[x]</code> A catalog attempting to put an absolute path or a drive-letter path anywhere in the block is refused with <code>CatalogAbsolutePathError</code> — the same inheritance, and the reason the design keys on names</li>
+      <li><code class="status">[x]</code> An unknown key inside <code>publish</code> is refused by <code>additionalProperties: false</code>. <strong>This is the test that keeps deployment out</strong>: an <code>environment</code>, <code>endpoint</code> or <code>release</code> field cannot be added without it going red, and the test names those three</li>
+      <li><code class="status">[x]</code> An empty <code>remotes</code> or <code>branches</code> array is refused; a repository with no <code>publish</code> block loads fine and is simply not publishable</li>
+      <li><code class="status">[x]</code> A remote name containing <code>/</code>, whitespace, a leading <code>+</code> or a <code>:</code> is refused, each with its own row</li>
+      <li><code class="status">[x]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green, and the existing catalog suite is unchanged</li>
     </ul>
     <div class="loop">
       🔁 <strong>Do not exit this phase until every box above is checked.</strong> If any command fails, fix the cause and re-run — never lower what the row asserts.

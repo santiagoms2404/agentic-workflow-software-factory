@@ -165,12 +165,14 @@ function assertContractReferences(catalog: ProjectCatalog): void {
 export function loadCatalog(yamlText: string): ProjectCatalog {
   const doc: unknown = parseYaml(yamlText);
 
+  // These document-wide sweeps intentionally precede structural validation so
+  // newly added fields inherit the durable-value restrictions automatically.
+  assertNoAbsolutePaths(doc, CatalogAbsolutePathError);
+  assertNoCredentialShapedValues(doc);
   assertStructure(doc);
   const catalog = doc as ProjectCatalog;
 
-  assertNoAbsolutePaths(doc, CatalogAbsolutePathError);
   assertRepositoryPaths(catalog);
-  assertNoCredentialShapedValues(doc);
   assertKnownGateIds(catalog);
   assertPlanRoleCardinality(catalog);
   assertContractReferences(catalog);
