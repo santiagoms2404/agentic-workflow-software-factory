@@ -515,17 +515,17 @@ flowchart LR
 
   <!-- ================= M1 ================= -->
   <div class="phase">
-    <h3><code class="status">[]</code> Milestone M1: The ordered truth table, pure and total</h3>
+    <h3><code class="status">[wip]</code> Milestone M1: The ordered truth table, pure and total</h3>
     <p>The table is written first because everything downstream is a consumer of it, and because the spine names writing it before the function as this workstream's cheapest unused upgrade. The bare-remote transcript that validates each row already exists in this plan's <a href="#table">Truth Table</a> section; this milestone turns it into a function and an exhaustive test.</p>
 
     <h4>1. The four input records and the closed refusal vocabulary</h4>
     <p class="serves"><code class="serves">INV-2</code></p>
     <ul class="checklist">
-      <li><code class="status">[]</code> Create <code>core/src/publish/authorize.ts</code> declaring <code>PublishStatusFacts</code>, <code>PublishRepositoryFacts</code>, <code>PublishRemoteFacts</code> and <code>PublishRefspec</code> as the four inputs named in the plan's Truth Table section — <strong>values only</strong>, no handles, no paths to read, no functions</li>
-      <li><code class="status">[]</code> Declare <code>PUBLISH_REFUSAL_ORDER</code> as a <code>readonly</code> tuple of the fourteen codes in evaluation order, and derive <code>PublishRefusalCode</code> from it, so the order and the vocabulary cannot disagree</li>
-      <li><code class="status">[]</code> Import <code>SHA_PATTERN</code> from <code>core/src/contracts/test-output.ts</code> rather than restating <code>^[0-9a-f]{40}$</code>; <code>guards.ts</code> sets the precedent and one unguarded copy is one place the rule does not hold</li>
-      <li><code class="status">[]</code> The file's import list contains <strong>only</strong> type-only imports and the two constants above. No <code>node:</code> import, no clock, no filesystem, no <code>child_process</code>, nothing from <code>core/src/execution/**</code></li>
-      <li><code class="status">[]</code> Write the header comment stating what this file is and is not, in the idiom of <code>core/src/state/guards.ts</code>'s: it decides <em>whether</em>, never <em>how</em>, and it never goes and looks</li>
+      <li><code class="status">[x]</code> Create <code>core/src/publish/authorize.ts</code> declaring <code>PublishStatusFacts</code>, <code>PublishRepositoryFacts</code>, <code>PublishRemoteFacts</code> and <code>PublishRefspec</code> as the four inputs named in the plan's Truth Table section — <strong>values only</strong>, no handles, no paths to read, no functions</li>
+      <li><code class="status">[x]</code> Declare <code>PUBLISH_REFUSAL_ORDER</code> as a <code>readonly</code> tuple of the fourteen codes in evaluation order, and derive <code>PublishRefusalCode</code> from it, so the order and the vocabulary cannot disagree</li>
+      <li><code class="status">[x]</code> Import <code>SHA_PATTERN</code> from <code>core/src/contracts/test-output.ts</code> rather than restating <code>^[0-9a-f]{40}$</code>; <code>guards.ts</code> sets the precedent and one unguarded copy is one place the rule does not hold</li>
+      <li><code class="status">[x]</code> The file's import list contains <strong>only</strong> type-only imports and the two constants above. No <code>node:</code> import, no clock, no filesystem, no <code>child_process</code>, nothing from <code>core/src/execution/**</code></li>
+      <li><code class="status">[x]</code> Write the header comment stating what this file is and is not, in the idiom of <code>core/src/state/guards.ts</code>'s: it decides <em>whether</em>, never <em>how</em>, and it never goes and looks</li>
     </ul>
 
     <h4>2. <code>authorizePublish</code> and the branded plan</h4>
