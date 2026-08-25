@@ -474,6 +474,25 @@ const GUARDS: Readonly<Record<EdgeId, (input: TransitionInput) => string[]>> = {
     }
     return violations;
   },
+  // L27 — publication uses the landing approval record. The operator must
+     // confirm the same candidate revision that was displayed for approval.
+     L27: (input) => {
+       const e = input.evidence;
+       const violations = candidate(input);
+       const landing = e?.landing;
+       if (landing === undefined) {
+         return [...violations, "no landing approval evidence was recorded"];
+       }
+       if (!isSha(landing.shaDisplayed)) {
+         violations.push(`the displayed SHA ${show(landing.shaDisplayed)} is not a 40-hex object id`);
+       } else if (landing.shaDisplayed !== e?.candidateSha) {
+         violations.push("the SHA shown to the human is not the candidate");
+       }
+       if (!isTrue(landing.confirmed)) {
+         violations.push("the human did not confirm publication");
+       }
+       return violations;
+     },
 };
 
 /** Step 10. Throws `InsufficientEvidence` naming every defect at once, or returns. */

@@ -1,4 +1,4 @@
-// The task lifecycle: ten states, twenty-five legal edges, seventy-five
+// The task lifecycle: eleven states, twenty-six legal edges, ninety-five
 // rejected ordered pairs, one ordered rejection contract.
 //
 // `transition()` is a pure function. It starts no process, reads no file, asks
@@ -46,13 +46,16 @@ export const TASK_STATES = [
   "AWAITING_OWNER",
   "LANDING",
   "LANDED",
+  "PUBLISHED",
   "BLOCKED",
   "CANCELLED",
 ] as const;
 export type TaskState = (typeof TASK_STATES)[number];
 
-/** Terminal for THIS attempt. `awsf retry` mints attempt n+1 at DRAFT — which is not a transition. */
-export const TERMINAL_STATES = ["LANDED", "BLOCKED", "CANCELLED"] as const;
+export const TERMINAL_STATES = ["LANDED", "PUBLISHED", "BLOCKED", "CANCELLED"] as const;
+
+   /** States after which this attempt permits no further transition. */
+   export const SEALED_STATES = ["BLOCKED", "CANCELLED", "PUBLISHED"] as const;
 
 /** `transitions.actor TEXT NOT NULL CHECK (actor IN ('host','owner','human'))`. */
 export const ACTORS = ["host", "owner", "human"] as const;
@@ -74,7 +77,7 @@ export type EdgeId =
   | "L1" | "L2" | "L3" | "L4" | "L5" | "L6" | "L7" | "L8"
   | "L9" | "L10" | "L11" | "L12" | "L13" | "L14" | "L15" | "L16"
   | "L17" | "L18" | "L19" | "L20" | "L21" | "L22" | "L23" | "L24"
-  | "L25" | "L26";
+  | "L25" | "L26" | "L27";
 
 export interface LegalEdge {
   readonly id: EdgeId;
@@ -116,6 +119,7 @@ export const LEGAL_EDGES: readonly LegalEdge[] = [
   { id: "L24", from: "LANDING",        to: "BLOCKED",        actors: ["host"],           spawnSite: false, interactive: false },
   { id: "L25", from: "AWAITING_OWNER", to: "REVIEWING",      actors: ["owner", "human"], spawnSite: true,  interactive: true  },
   { id: "L26", from: "RUNNING",        to: "AWAITING_OWNER", actors: ["host"],           spawnSite: false, interactive: false },
+  { id: "L27", from: "LANDED",         to: "PUBLISHED",      actors: ["human"],          spawnSite: false, interactive: true  },
 ];
 
 /** The four edges that draw on a correction allowance — escalation-ladder rungs 4 and 5. */
@@ -129,8 +133,8 @@ export function edgeFor(from: TaskState, to: TaskState): LegalEdge | undefined {
   return EDGE_BY_PAIR.get(`${from}->${to}`);
 }
 
-function isTerminal(state: TaskState): boolean {
-  return (TERMINAL_STATES as readonly string[]).includes(state);
+function isSealed(state: TaskState): boolean {
+     return (SEALED_STATES as readonly string[]).includes(state);
 }
 
 function isCorrectionEdge(id: EdgeId): boolean {
@@ -411,6 +415,10 @@ export function transition(input: TransitionInput): TransitionResult {
 
   // 2 — a sealed attempt must say "this attempt is over".
   //
+  // BLOCKED, CANCELLED, and PUBLISHED permit no outgoing transition.
+  // LANDED remains terminal for reporting but permits the human-authorized
+  // L27 transition to PUBLISHED.
+  //
   // Narrowed to `from !== to` deliberately. Read literally this step would
   // swallow BLOCKED → BLOCKED, LANDED → LANDED and CANCELLED → CANCELLED and
   // make the class counts 30/7; the plan's class table states 27/10 with the
@@ -418,7 +426,7 @@ export function transition(input: TransitionInput): TransitionResult {
   // as 27 + 10 + 6 + 33 only under this reading. The reasoning column justifies
   // steps 2 and 3 each against step 5 and never against one another, so the
   // overlap was simply not considered when the order was written.
-  if (isTerminal(from) && from !== to) {
+  if (isSealed(from) && from !== to) {
     throw new TerminalAttempt(from, to);
   }
 
