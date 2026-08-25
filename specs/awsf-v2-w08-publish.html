@@ -1,0 +1,1328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plan: AWSF v2 W08 — Publish</title>
+<style>
+:root {
+  --bg:#0E1116; --surface:#171D25; --surface-soft:#141922; --fg:#E8EDF3;
+  --muted:#8D99A8; --accent:#38BDF8; --cool:#A78BFA; --warn:#F59E0B;
+  --danger:#F87171; --good:#4ADE80; --border:#293341; --review:#FB7185;
+  --font-ui:Inter,system-ui,-apple-system,sans-serif;
+  --font-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,monospace;
+  --maxw:1120px;
+}
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.65 var(--font-ui); }
+main { max-width:var(--maxw); margin:auto; padding:48px 24px 150px; }
+h1,h2,h3,h4 { line-height:1.25; letter-spacing:-.01em; }
+h1 { font-size:30px; margin:0 0 6px; }
+h2 { font-size:21px; margin:54px 0 14px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+h3 { font-size:17px; margin:32px 0 8px; }
+h4 { font-size:14px; margin:24px 0 6px; color:var(--accent); }
+h5 { margin:0 0 6px; color:var(--muted); text-transform:uppercase; letter-spacing:.07em; font-size:11px; }
+p { margin:0 0 14px; }
+a { color:var(--cool); }
+strong { color:#fff; }
+em,.muted,.sub { color:var(--muted); }
+ul,ol { margin:0 0 14px; padding-left:22px; }
+li { margin:3px 0; }
+code { font:12px var(--font-mono); color:#A5DFF8; background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:1px 5px; }
+pre { background:var(--surface); border:1px solid var(--border); border-left:3px solid var(--accent); border-radius:8px; padding:14px 16px; overflow:auto; color:#D9E2EC; font:12.5px/1.6 var(--font-mono); }
+pre code { border:0; padding:0; background:none; color:inherit; }
+table { width:100%; border-collapse:collapse; margin:14px 0 20px; font-size:13px; display:block; overflow-x:auto; }
+th,td { border:1px solid var(--border); padding:8px 10px; text-align:left; vertical-align:top; }
+th { background:var(--surface); color:var(--accent); font-size:11.5px; text-transform:uppercase; letter-spacing:.05em; }
+tbody tr:nth-child(even) { background:#ffffff04; }
+.meta { margin-top:14px; font-size:13px; }
+.meta summary { cursor:pointer; color:var(--muted); font:12px var(--font-mono); }
+.meta dl { display:grid; grid-template-columns:130px 1fr; gap:5px 14px; padding:14px; background:var(--surface); border:1px solid var(--border); border-radius:8px; }
+.meta dt { color:var(--accent); font:11.5px var(--font-mono); }
+.meta dd { margin:0; color:var(--muted); font:11.5px var(--font-mono); overflow-wrap:anywhere; }
+figure { margin:26px 0; text-align:center; }
+figure svg, figure .mermaid { max-width:100%; height:auto; }
+figure .mermaid { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:20px 12px; overflow:auto; color:var(--muted); }
+figcaption { margin-top:9px; color:var(--muted); font-size:12px; font-style:italic; }
+.phase { margin:30px 0; padding:22px 24px; border:1px solid var(--border); border-radius:14px; background:#ffffff04; }
+.phase > h3 { margin-top:0; }
+.checklist { list-style:none; padding:0; }
+.checklist li { padding:4px 0; }
+.status { color:var(--accent); margin-right:5px; }
+.loop { margin-top:16px; padding:10px 14px; border:1px dashed var(--accent); border-radius:8px; background:#38bdf80a; font-size:13px; }
+.card { margin:14px 0; padding:12px 16px; background:var(--surface); border:1px solid var(--border); border-left:3px solid var(--cool); border-radius:8px; font-size:13px; }
+.card.rule { border-left-color:var(--accent); }
+.card.warn { border-left-color:var(--warn); }
+.card.danger { border-left-color:var(--danger); }
+.card.good { border-left-color:var(--good); }
+.gate { color:var(--warn); border:1px solid var(--warn); border-radius:3px; padding:0 5px; font:11px var(--font-mono); }
+.tag { display:inline-block; margin-right:6px; padding:1px 6px; border-radius:3px; font:10px var(--font-mono); text-transform:uppercase; letter-spacing:.06em; }
+.tag.existing { background:#27303C; color:var(--muted); }
+.tag.new { background:#123444; color:var(--accent); }
+.tag.owner { background:#3B2F14; color:var(--warn); }
+.files ul { list-style:none; padding:0; }
+.files li { padding:4px 0; border-bottom:1px solid #ffffff08; }
+.taskmeta th { width:165px; text-transform:none; letter-spacing:0; font-size:12px; }
+#questionables details,#amendments details { margin:10px 0; padding:10px 14px; background:var(--surface); border:1px solid var(--border); border-radius:8px; }
+#questionables summary,#amendments summary { cursor:pointer; font-weight:650; }
+.qa-answer { margin:10px 0 2px; color:var(--muted); font-size:13px; }
+.qopen { color:var(--warn); font:10px var(--font-mono); letter-spacing:.06em; margin-right:6px; }
+.qdecided { color:var(--good); font:10px var(--font-mono); letter-spacing:.06em; margin-right:6px; }
+.recommend { display:block; margin:8px 0; padding:8px 12px; border-left:3px solid var(--cool); background:#a78bfa0c; color:var(--fg); }
+.decided { display:block; margin:8px 0; padding:8px 12px; border-left:3px solid var(--good); background:#4ade800c; color:var(--fg); }
+.consequence { display:block; margin:8px 0; padding:8px 12px; border-left:3px solid var(--warn); background:#f59e0b0c; color:var(--fg); }
+.measured { display:block; margin:8px 0; padding:8px 12px; border-left:3px solid var(--good); background:#4ade800c; color:var(--fg); }
+.amend { background:var(--surface-soft); border:1px solid var(--warn); border-radius:10px; padding:16px 18px; margin:18px 0; }
+.amend h5 { color:var(--warn); }
+@media (max-width:720px) { main { padding:28px 14px 130px; } .meta dl { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>Plan: AWSF v2 W08 — Publish</h1>
+  <p class="sub">Workstream W08 of <a href="awsf-v2-plan.html">the AWSF v2 spine</a> · milestone M8 · <strong>publication is source publication</strong></p>
+  <details class="meta">
+    <summary>Metadata</summary>
+    <dl>
+      <dt>created</dt><dd>2026-08-24</dd>
+      <dt>modified</dt><dd>2026-08-24, 2026-08-25</dd>
+      <dt>commits</dt><dd>none — authoring only; no implementation was written and nothing was committed, none — owner review applied; still uncommitted</dd>
+      <dt>agent name</dt><dd>claude, claude</dd>
+      <dt>session id</dt><dd>not recorded — AGENTS.md invariant 1 keeps live session state out of committed files, not recorded — the owner review block carried no session id into the plan</dd>
+      <dt>back refs</dt><dd>./awsf-v2-plan.html (spine milestone M8, Shared Invariants, ordering gate G2, and the W13 block this plan must not cross into), ./tickets/awsf-v2-plan/W08.md (meta-prompt), ./awsf-v2-plan-build-prompts.md (§ Section B → W08), ./awsf-v2-candidates-fuse-version.md (§10 first, then §2.4 and the F-4/F-5 rows), ./awsf-v2-intent.md (decision 4 — the amendment shape), ./awsf-v2-w04-project-registry.html (the catalog this plan extends), ../AGENTS.md (invariants 1, 8, 9, 10), ../awsf.config.yaml, ../awsf.project.yaml, core/src/state/task-machine.ts, core/src/git/land.ts, core/src/cli/commands/land.ts, core/src/registry/catalog-schema.ts, core/src/execution/transport-broker.ts, core/test/unit/meta/no-destructive-paths.test.ts, core/test/unit/meta/no-land-route.test.ts, core/test/unit/meta/boundary-claims.test.ts</dd>
+      <dt>forward refs</dt><dd>./awsf-v2-w08-publish-build-prompts.md, ./tickets/awsf-v2-w08-publish/ (T01–T20 plus README.md)</dd>
+    </dl>
+  </details>
+</header>
+
+<figure>
+  <pre class="mermaid">
+flowchart LR
+  L["LANDED<br/>terminal state"] --> A["authorizePublish<br/>pure · ordered table"]
+  C["catalog allowlist<br/>remote + branch"] --> A
+  O["observed facts<br/>HEAD · clean · ls-remote"] --> A
+  A -->|"authorized plan"| V["publishArgv<br/>single fenced site"]
+  A -->|"one of 14 codes"| R["refused"]
+  V --> G["git push --porcelain"]
+  G --> J["journal record<br/>closed field vocabulary"]
+  A -. "no path exists" .-> P["any pre-LANDED state"]
+  style A stroke:#38BDF8,stroke-width:2px
+  style V stroke:#A78BFA,stroke-width:2px
+  style P stroke:#F87171,stroke-width:2px,stroke-dasharray:4 3
+  </pre>
+  <figcaption>Three inputs, one table, one argv site. The dashed edge is what the amended invariant 8 asserts is absent — and the only edge in this diagram a meta-test proves rather than describes.</figcaption>
+</figure>
+
+<section id="plain-language">
+  <h2>In Plain Language</h2>
+  <p>This section explains the whole plan without technical vocabulary. Everything after it says the same things precisely, for the people — and machines — building it.</p>
+
+  <h3>Getting the finished work off the workbench and into the shared cabinet</h3>
+  <p>The workshop currently finishes a piece of work and puts it on its own shelf, in its own building. That shelf is the end of the road: there is no way for the workshop to move anything to the shared cabinet elsewhere, deliberately, because moving things outside the building is the one thing it has never been allowed to do. The owner does it by hand instead. That works, and it leaves no record — nobody can later ask the workshop which piece went to the cabinet, when, or whether the bench was tidy at the time.</p>
+
+  <h3>Why now</h3>
+  <p>This is the last step the current round of work is aiming at. "Finished" for this round means the work exists in the shared cabinet <em>and</em> the workshop's own logbook says how it got there. Every earlier step built toward a piece of work that is approved, sealed, and sitting on the shelf. This step is the one that carries it across the yard, and it is the only step in the round that needs the workshop's rulebook changed before it can be built at all.</p>
+
+  <h3>What we are building, and the one rule that must change</h3>
+  <p>A single instruction the owner types, which does exactly one thing: it takes a piece of work that is already finished and already approved, and it copies that exact piece — not the shelf it sits on, not whatever happens to be on the bench — into one shared cabinet, on one shelf, both named in advance in a list the owner wrote. Before it moves anything it checks a list of conditions in a fixed order and stops at the first one that fails, saying which one. Doing the same thing twice changes nothing the second time.</p>
+  <p>The rule that must change is the workshop's own standing order: <em>nothing here may ever carry anything outside the building.</em> That order is checked by a machine that reads the workshop's blueprints looking for the phrase. The replacement says: <em>nothing may carry anything outside the building unless the piece is already finished and approved</em> — a condition, where before there was a flat refusal. Only the owner can change the standing order, and this plan asks for it in writing rather than changing it. There is an honest alternative that needs no change at all: leave things exactly as they are and let the owner keep carrying pieces across the yard by hand. What that costs is the logbook.</p>
+  <p>One thing was measured while writing this, and it changes how the trade should be read. The machine that checks the standing order looks for the phrase written the way a person types it at a keyboard. The workshop does not write instructions that way — it writes each word of an instruction as a separate item on a list, for a different safety reason entirely. So the phrase never appears, and the check would not have noticed the very thing it exists to forbid. The old rule was partly decorative. Three further spellings of "throw something away" slip past it in the same manner, and the replacement catches all three.</p>
+
+  <h3>How anyone would know it worked</h3>
+  <p>Everything is proved against a shared cabinet built on this same machine, in a temporary folder, with nothing reaching outside it at any point. A finished, approved piece arrives in that cabinet. The piece is then marked as delivered, and because delivered is the end of its life, asking for it to be delivered again is refused rather than quietly repeated. Every stage a piece can be in before it is finished is refused by the fixed list of conditions rather than by luck. The workshop uses whatever pass the owner already keeps for the cabinet and never looks at it: the pass appears in no instruction the workshop assembles, in no logbook entry, and in nothing the workshop writes down. The logbook entry afterwards names the piece and the shelf and nothing else: no address, no error text, no borrowed phrasing.</p>
+  <p>Two things had to change in the workshop's own paperwork to make "delivered" a real stage rather than a note in the margin, and both are the owner's to sign. One adds the stage to the list of stages a piece can be in. The other widens a form that only accepts the ten stage names it was printed with. Neither can be done by anyone but the owner, and this plan asks for both in writing rather than doing them.</p>
+  <p>And one thing is deliberately not being built, and is named here so it is not smuggled in: putting the work into service somewhere. That is a separate job, it is written down as a separate job, and this plan touches none of it.</p>
+</section>
+
+<section id="purpose">
+  <h2>Purpose</h2>
+  <p>Give the owner one command that moves an already-landed, already-approved revision to one allowlisted remote branch, refuses everything else by a stated rule rather than by an unreached code path, and leaves a record in the journal that names what the remote accepted. That record is the whole reason this workstream exists — a hand-typed push does the same mutation and produces no evidence at all.</p>
+  <p>The workstream is small and its risk is concentrated in one place: it is the first thing in this repository permitted to change something outside the machine, and the permission arrives by weakening a rule that currently reads as an absolute. Most of this plan is spent making the replacement condition mechanically checkable in more places than the absolute ever was.</p>
+</section>
+
+<section id="problem">
+  <h2>Problem</h2>
+  <p>Four problems, and the second one is not the one the spine expected to find.</p>
+
+  <p><strong>1 — Landing is the end of the line, and the line stops inside this machine.</strong> <code>completeLanding</code> in <code>core/src/git/land.ts</code> performs a local <code>merge --ff-only</code> and then proves canonical <code>HEAD</code> equals the approved candidate. Nothing after that exists. The journal's last word on a task is <code>LANDED</code>, and whether that revision ever reached a remote is a fact this repository neither records nor can be asked.</p>
+
+  <p><strong>2 — The scan invariant 8 rests on does not catch the thing it forbids.</strong> Invariant 8 is enforced by a nine-pattern text scan over <code>core/src</code>, whose push clause is <code>/git\s+push/</code>. This repository never writes those two words adjacently: invariant 4 bans <code>shell: true</code>, so every Git invocation is <code>runSystemCommand("git", [...argv])</code> and the push token is the string <code>"push"</code> inside an array. <strong>Measured, not reasoned</strong> — the nine patterns were run against six specimens:</p>
+  <table>
+    <thead><tr><th>Specimen</th><th>Result</th></tr></thead>
+    <tbody>
+      <tr><td><code>runGit(runner, ["push", remote, refspec])</code> — this repository's own idiom</td><td><strong>passes the scan</strong></td></tr>
+      <tr><td><code>runSystemCommand("git", ["-C", repo, "push", remote, spec], 30000)</code></td><td><strong>passes the scan</strong></td></tr>
+      <tr><td><code>["push", remote, "+refs/heads/main:refs/heads/main"]</code> — the argv form of force</td><td><strong>passes the scan</strong></td></tr>
+      <tr><td><code>["push", remote, ":refs/heads/main"]</code> — the argv form of delete</td><td><strong>passes the scan</strong></td></tr>
+      <tr><td><code>// never git push</code> — a comment</td><td>caught by <code>/git\s+push/</code></td></tr>
+      <tr><td><code>["push", "--force", remote]</code></td><td>caught by <code>/--force\b/</code></td></tr>
+    </tbody>
+  </table>
+  <p>The only push the scan catches is one written in prose. <strong>This reframes the amendment</strong>: part of what is being traded away was already unenforced, and two destructive spellings — the <code>+</code> prefix and the empty-source delete — go unenforced today with no amendment at all.</p>
+
+  <p><strong>3 — Git spells "delete this branch" as a well-formed exact-revision push.</strong> Measured against a local bare remote: <code>git push origin 0000000000000000000000000000000000000000:refs/heads/main</code> printed <code>- :refs/heads/main [deleted]</code> and exited <code>0</code>. An all-zeros object id is Git's deletion sentinel, so a refspec whose source is forty hex characters can still be a deletion. <strong>"Non-delete" therefore cannot be checked as "the source is non-empty."</strong></p>
+
+  <p><strong>4 — The source candidate specifies the state check and nothing else.</strong> §2.4 of the candidate record settles post-<code>LANDED</code>, human-initiated, exact-revision publication and names a state-aware meta-test. The adjudication upheld that this is <em>necessary and not sufficient</em>: an allowlisted remote and branch, canonical <code>HEAD</code> at the landed candidate, a clean checkout, a non-force non-delete refspec, credential non-persistence, idempotent retry, and a scrubbed record are all absent from the candidate. Seven of the fourteen refusal rows below come from that list; none of them exists in the source.</p>
+
+  <figure>
+    <pre class="mermaid">
+flowchart TD
+  S["invariant 8 push clause<br/>a text scan over core/src"] --> P1["argv-array push"]
+  S --> P2["+prefixed force refspec"]
+  S --> P3["empty-source delete"]
+  S --> P4["all-zeros-source delete"]
+  P1 --> U["passes · measured"]
+  P2 --> U
+  P3 --> U
+  P4 --> U
+  S --> C["a comment saying the words"]
+  C --> K["caught · measured"]
+  style U stroke:#F87171,stroke-width:2px
+  style K stroke:#F59E0B,stroke-width:2px
+    </pre>
+    <figcaption>What the retired scan actually holds. Four destructive spellings pass; a comment fails. This is why the replacement is not simply weaker than what it replaces.</figcaption>
+  </figure>
+</section>
+
+<section id="solution">
+  <h2>Solution</h2>
+  <p>One pure ordered truth table, one branded value that only the table can produce, one argv site that accepts nothing else, and a record with a closed field vocabulary.</p>
+
+  <p><strong>The table is pure and total.</strong> <code>authorizePublish(status, repository, remote, refspec)</code> reads four records of already-observed values. It performs no I/O, reads no clock, and resolves nothing. Every input either authorizes or names exactly one of fourteen refusal codes, and the codes are <strong>ordered</strong> in the manner <code>core/src/state/guards.ts</code> and <code>core/test/unit/rejection-order.test.ts</code> already establish for lifecycle transitions: for every adjacent pair there is an input violating both, and the earlier one must fire, so a rejection always names the real defect.</p>
+
+  <p><strong>The authorized value is the only key to the argv site.</strong> <code>authorizePublish</code> returns a branded <code>AuthorizedPublishPlan</code> carrying a <code>unique symbol</code> no other module can name. <code>publishArgv</code> in <code>core/src/publish/argv.ts</code> takes that type and nothing else, and is the sole place in <code>core/src</code> where the push token exists. The fence asserts three things: locality (one file), derivation (the argv builder's only parameter type originates in <code>authorize.ts</code>, and no other module constructs or casts to it), and condition (the table refuses every member of <code>TASK_STATES</code> except <code>LANDED</code>, enumerated from the imported constant rather than a copied list).</p>
+
+  <p><strong>The allowlist keys on remote <em>name</em>, and that is forced by code rather than chosen.</strong> <code>core/src/registry/catalog.ts</code> runs <code>assertNoAbsolutePaths</code> over every string leaf of the catalog, so a bare-remote path like <code>/tmp/x.git</code> or <code>C:\x.git</code> is rejected outright, and every test in this workstream needs exactly such a path. A remote <em>name</em> is machine-independent; the URL stays in the repository's own Git config where it already lives. The consequence is a security property rather than a compromise: <strong>no URL ever enters the argv</strong>, so a credential embedded in a remote URL cannot reach the process arguments, the journal, or an error message.</p>
+
+  <p><strong>The owner's credential helper is inherited, and no credential value passes through AWSF.</strong> <em>Q3, decided 2026-08-25.</em> The push carries no <code>-c credential.helper=</code>, so an <code>https</code> remote works exactly as it does when the owner types the command themselves. What AWSF guarantees is narrower and still checkable: no URL enters the argv, nothing the helper returns is read, held, logged or journalled, and AWSF itself writes no credential configuration and no credential file. <code>GIT_TERMINAL_PROMPT=0</code> stays regardless — the subprocess is spawned through <code>spawnSync</code> with captured stdio and has no terminal, so a prompt would hang until the timeout rather than reach anybody.</p>
+
+  <p><strong>Publication is a lifecycle transition to a new terminal state.</strong> <em>Q2, decided 2026-08-25.</em> <code>PUBLISHED</code> joins <code>TASK_STATES</code> as an eleventh state and <code>L27 — LANDED → PUBLISHED</code> as a twenty-seventh legal edge. That requires splitting one predicate that currently does two jobs: <code>TERMINAL_STATES</code> keeps its meaning — <em>this attempt's work is over</em>, which is what <code>retry</code>, <code>raise</code>, <code>watch</code>, sealing and <code>endedAt</code> all read — and gains <code>PUBLISHED</code>, while a new <code>SEALED_STATES</code> = {<code>BLOCKED</code>, <code>CANCELLED</code>, <code>PUBLISHED</code>} is what <code>transition()</code>'s step 2 and the journal's write protocol consult. <strong><code>LANDED</code> becomes terminal-for-work and not sealed</strong>, and exactly one edge and one journal record may follow it.</p>
+
+  <div class="card danger">
+    <h5>The seal, and a correction to what this plan told the owner before they chose</h5>
+    <p><strong>A landed attempt's journal is sealed, and nothing can be appended to it.</strong> <code>persistAttempt</code> in <code>core/src/cli/commands/attempt.ts</code> validates with <code>if (current !== null &amp;&amp; isTerminalStatus(current)) throw new SealedAttempt(...)</code>, and its <code>sealWhenTerminal</code> hook marks the lock sealed so every later <code>withLock</code> throws too. <code>LANDED</code> is in <code>TERMINAL_STATES</code>, so <strong>a <code>LANDED</code> attempt accepts no further record of any kind.</strong></p>
+    <p><strong>This plan's first draft was wrong about the consequence, and the error favoured the option it recommended.</strong> Q2's original answer priced the no-edge design at one owner-authored commit and the <code>PUBLISHED</code> design at two. The seal was not read. In fact the no-edge design was <em>also</em> blocked by it — journalling a <code>publish</code> evidence record on a <code>LANDED</code> attempt throws <code>SealedAttempt</code> — so the seal had to be opened either way, and the real comparison was one owner commit plus a seal change against three owner commits plus the same seal change. The owner's decision stands; the arithmetic they were shown did not.</p>
+    <p><strong>What the split buys, and it is the reason it is a split rather than a deletion.</strong> Removing <code>LANDED</code> from <code>TERMINAL_STATES</code> would have been the obvious move and it breaks six things: <code>retry</code> refuses a non-terminal prior attempt, <code>raise</code> would start accepting a landed one, <code>watch</code> would never stop, <code>endedAt</code> would stay <code>null</code> forever, and both seal sites would stop firing. Keeping <code>TERMINAL_STATES</code> intact and adding <code>SEALED_STATES</code> beside it leaves all six reading the predicate they were written against.</p>
+    <p><strong>The hole the split opens, and what closes it.</strong> An unsealed <code>LANDED</code> attempt would accept <em>any</em> further write, not only the publish transition. So the write protocol's validate gains one condition rather than losing one: refuse when the current state is sealed, <strong>and</strong> refuse any event on a <code>LANDED</code> attempt whose next state is not <code>PUBLISHED</code>. That is <code>INV-7</code>, and it is asserted directly rather than inferred from the edge table.</p>
+  </div>
+
+  <figure>
+    <pre class="mermaid">
+flowchart TB
+  subgraph pure["core/src/publish/ — pure, no I/O"]
+    AU["authorize.ts<br/>ordered table · brand"]
+    AV["argv.ts<br/>the only push token"]
+    AU --> AV
+  end
+  subgraph io["core/src/git/publish.ts — observation + spawn"]
+    OB["observe: rev-parse · status<br/>ls-remote · merge-base"]
+    RUN["run: injected GitRunner"]
+  end
+  CAT["catalog publish block<br/>remote · branch · host?"] --> AU
+  ST["AttemptStatus<br/>LANDED · landingApproval"] --> AU
+  OB --> AU
+  AV --> RUN
+  RUN --> REC["publish evidence<br/>porcelain flag only"]
+  style pure stroke:#38BDF8,stroke-width:2px
+  style REC stroke:#A78BFA,stroke-width:2px
+    </pre>
+    <figcaption>The observation step exists so the refusal is the table's. Letting the remote reject a non-fast-forward push would satisfy the behaviour and fail the spine's requirement that every refusal come from the table rather than from a code path that happens not to be reached.</figcaption>
+  </figure>
+</section>
+
+<section id="notdeploy">
+  <h2>What This Workstream Is Not</h2>
+  <div class="card danger">
+    <h5>Publication is source publication</h5>
+    <p><strong>This plan moves one already-landed revision to one Git remote branch. Nothing else.</strong> It does not put anything into service, does not read or write any environment's configuration, runs no migration, cuts no release, and has no notion of a target that is not a Git remote. The word "deploy" appears in this document only here and in the two rows below.</p>
+    <p><strong>W13 is the deploy workstream and it is declared, not built.</strong> The spine names the accidental widening of W08 into W13 as the single most likely in the whole set, because the two words sit one apart and the source record already had to be corrected for conflating them. Environment configuration, release migrations, rollback orchestration and operational acceptance are explicitly out of scope for v2 and belong to W13's own amendment and its own deep plan.</p>
+    <p><strong>The mechanical form of this rule.</strong> Nothing in <code>core/src/publish/**</code> may take an environment name, a target descriptor, a release identifier, or a host endpoint as an input; the catalog's <code>publish</code> block carries a remote name, a branch name, and an optional hostname, and its schema is closed with <code>additionalProperties: false</code>. A field that would be needed for deployment cannot be added without failing the schema test that pins the block's exact key set.</p>
+  </div>
+</section>
+
+<section id="amendment">
+  <h2>The Invariant 8 Amendment — Drafted, Not Landed</h2>
+  <p><strong>No agent can write <code>AGENTS.md</code>.</strong> <code>core/src/policy/path-policy.ts</code> treats <code>protected-path</code> as a rejection independent of the write globs, and <code>awsf.config.yaml</code> lists <code>AGENTS.md</code> under <code>policy.protected_paths</code>. Ordering gate <span class="gate">G2</span> makes the amendment an owner-authored commit that lands <em>before</em> this workstream starts building. This section drafts it in the five-part shape the intent's decision 4 requires — <em>the invariant, what it blocks today with evidence, the replacement guarantee in still-mechanically-checkable form, its cost, and the alternative that avoids the amendment entirely</em> — and does not land it. Do not invent a mechanism that routes around the protected path; that is the boundary working.</p>
+
+  <div class="amend">
+    <h5>Part 1 — the invariant, as it reads today</h5>
+    <pre><code>8. **No push, force, or auto-delete path exists anywhere in `core/src`.**
+   Landing is local fast-forward only; `awsf gc` lists, never deletes. Enforced
+   by the no-push/no-destructive-paths and no-land-route meta-tests.</code></pre>
+  </div>
+
+  <div class="amend">
+    <h5>Part 2 — what it blocks today, with evidence</h5>
+    <p><strong>It blocks the words, not the act.</strong> The push clause is the pattern <code>/git\s+push/</code> in <code>core/test/unit/meta/no-destructive-paths.test.ts</code>, run over the text of every file under <code>core/src</code>. Because invariant 4 bans <code>shell: true</code>, every Git call in this repository is an executable plus an argv array — <code>systemGitRunner</code> is literally <code>runSystemCommand("git", ["-C", repository, ...argv])</code> — so a push is the string <code>"push"</code> inside an array and the two words are never adjacent.</p>
+    <p><strong>Measured on 2026-08-24</strong>, the nine patterns against six specimens: the argv-array push passes, the argv-array push through <code>runSystemCommand</code> passes, a <code>+</code>-prefixed force refspec passes, an empty-source delete refspec passes; the two that are caught are a <em>comment</em> containing the words and an explicit <code>--force</code> flag. A seventh measurement, taken against a real local bare remote, shows why the third and fourth matter: <code>git push origin 0000…0000:refs/heads/main</code> printed <code>- :refs/heads/main [deleted]</code> and exited <code>0</code>, and <code>git push origin +&lt;sha&gt;:refs/heads/main</code> printed <code>(forced update)</code> and exited <code>0</code>.</p>
+    <p><strong>So the clause being amended is the one that was already least enforced</strong>, and two destructive spellings are unenforced today under an invariant that reads as absolute. That is the evidence, and it cuts both ways: it weakens the case that something valuable is being given up, and it strengthens the case that the current text is misleading and should not be left standing whatever the owner decides about publication.</p>
+  </div>
+
+  <div class="amend">
+    <h5>Part 3 — the replacement, in still-mechanically-checkable form</h5>
+    <p><strong>Proposed replacement text</strong> — the owner commits this verbatim, or a revision of it, into <code>AGENTS.md</code>:</p>
+    <pre><code>8. **No push path exists from any pre-`LANDED` state, and no force or
+   auto-delete path exists anywhere in `core/src`.** Landing is local
+   fast-forward only; `awsf gc` lists, never deletes. Publication is a
+   separate, human-initiated act on an already-landed revision: it is
+   authorized by the pure ordered truth table in
+   `core/src/publish/authorize.ts`, and the push argv it authorizes is
+   constructed in `core/src/publish/argv.ts` and nowhere else. The force and
+   auto-delete halves remain unconditional absences and now also cover the
+   argv-array spellings the previous scan never saw — a `+`-prefixed refspec
+   source, and an empty or all-zeros refspec source, which is how Git spells a
+   remote branch deletion. Enforced by the no-destructive-paths, publish-fence,
+   and no-land-route meta-tests.</code></pre>
+    <p><strong>Three checks replace one, and each is a test that can be shown red.</strong></p>
+    <table>
+      <thead><tr><th>Leg</th><th>What it asserts</th><th>How it can fail</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Locality</strong></td><td>The push token appears in exactly one file under <code>core/src</code>: <code>core/src/publish/argv.ts</code>. Same idiom as the <code>node:child_process</code> fence, whose single allowed importer is asserted by path.</td><td>Add the token to a second file.</td></tr>
+        <tr><td><strong>Derivation</strong></td><td><code>publishArgv</code>'s sole parameter type is declared in <code>core/src/publish/authorize.ts</code>, carries a <code>unique symbol</code> brand, and no other file in <code>core/src</code> constructs it or casts to it. Checked through the TypeScript compiler API, the way <code>quota-fence.test.ts</code> already checks route-resolution signatures.</td><td>Build a plan object by hand, or cast to the branded type outside <code>authorize.ts</code>.</td></tr>
+        <tr><td><strong>Condition</strong></td><td>For every member of <code>TASK_STATES</code> except <code>LANDED</code>, <code>authorizePublish</code> returns the <code>not-landed</code> refusal — enumerated from the imported constant, so a state added later is covered without editing the fence.</td><td>Relax the state row, or add a state the table silently authorizes.</td></tr>
+      </tbody>
+    </table>
+    <p><strong>The absence half stays an absence and gets wider.</strong> <code>no-destructive-paths.test.ts</code> keeps every pattern it has except <code>/git\s+push/</code>, and gains three: a <code>+</code>-prefixed refspec literal, an empty-source refspec literal, and an all-zeros-source refspec literal — each banned everywhere in <code>core/src</code> including <code>argv.ts</code>. So force and delete remain unconditional, and the amendment's net effect on them is stricter than the text it replaces.</p>
+  </div>
+
+  <div class="amend">
+    <h5>Part 4 — the cost, stated before it is asked for</h5>
+    <p><strong>What is traded.</strong> A reader could previously satisfy themselves about the push clause by reading one regular expression. After the amendment they must read three tests and understand a brand. An absence is checkable by anyone; a condition is checkable by anyone who understands the condition. That is a real loss of legibility and it is the honest core of the cost.</p>
+    <p><strong>What is not traded, and this is most of it.</strong> The force and delete clauses stay absences and get three new patterns. The <code>no-land-route</code> fence is untouched — the dashboard still has no write path to the lifecycle, and <code>publish</code> is added to neither the API route table nor any surface the browser reaches. Invariant 9 is untouched and gains a measured mechanism. Nothing in <code>core/src/state/**</code> moves.</p>
+    <p><strong>The residual, named rather than hidden.</strong> A <code>unique symbol</code> brand is defeatable by a cast, and the derivation leg detects a cast by scanning for one. A sufficiently indirect construction — a helper that launders the type through <code>unknown</code> across two files — could evade the scan. The locality leg is what still holds in that case, because the laundered value still has to reach an argv site, and there is only one. Stating the ceiling is the point: this is a strong fence, not an impossible one.</p>
+    <p><strong>The second-order cost.</strong> Once one conditional exception exists, the next one is easier to argue for. W13 will ask for an amendment of exactly this shape. The mitigation is that both are named in advance in the spine, each is an owner-authored commit, and each must produce a replacement guarantee that is mechanically checkable — the bar this one clears with three legs rather than one.</p>
+  </div>
+
+  <div class="amend">
+    <h5>Part 5 — the alternative that avoids the amendment entirely</h5>
+    <p><strong>Keep landing as the end of the line and let the owner push by hand.</strong> Invariant 8 stays as written, <code>core/src/publish/**</code> is never created, and the owner types the push themselves after each landing. It costs nothing to adopt and it is available today.</p>
+    <p><strong>What it costs, stated precisely rather than dismissively.</strong> The journal ends at <code>LANDED</code>. Nothing records which revision reached which remote branch, at what time, with what result, or that canonical <code>HEAD</code> was at the approved candidate and the checkout was clean at the moment of the push. The remote's reflog holds part of it and AWSF never reads it. The allowlist does not exist, so which branch and which remote are checked by the owner's attention rather than by a rule — and the two most consequential mistakes here, a mistyped branch and a force flag typed while tired, are exactly the mistakes attention is worst at catching. <strong>That evidence trail is the entire product of this workstream</strong>; the mutation itself is one Git command either way.</p>
+    <p><strong>The counterweight, because the alternative is genuinely reasonable.</strong> A hand-push is safe, cheap, and already understood. If the owner's honest answer is that the evidence trail is not worth a conditional exception to the strongest-reading invariant in the file, closing W08 unbuilt with that reason recorded is a legitimate outcome — and the spine's own §2 note about a declaration becoming a parking space does not apply, because the reason would be a decision rather than a deferral. <strong>One thing should happen regardless of the answer:</strong> part 2's measurement means invariant 8's current text overstates what it enforces. A one-line correction restoring the force and delete clauses to what the scan actually catches is worth landing whether or not publication is ever built.</p>
+  </div>
+
+  <div class="card warn">
+    <h5>What the owner is being asked to do, exactly</h5>
+    <p><strong>One commit, one file, one paragraph.</strong> Replace invariant 8 in <code>AGENTS.md</code> with part 3's text. Nothing else in that commit. It lands before task 15 and blocks milestone M6 only — M1 through M5 build against the invariant as it stands today, because none of them creates a push argv site. If the owner declines, task 15 marks itself <code>[f]</code>, M6 and M7 do not run, and the workstream closes with the alternative recorded. <strong>No agent may write <code>AGENTS.md</code> under any circumstance, and a session that finds the amendment absent must stop rather than route around it.</strong></p>
+  </div>
+</section>
+
+<section id="table">
+  <h2>The Truth Table</h2>
+  <p><strong>Written before the function, and every row checked by hand against a local bare remote on 2026-08-24.</strong> The spine names this as the cheapest unused upgrade — an hour, no network, and the only way to learn whether the table is total before code depends on it being so. It was taken during authoring rather than deferred to the build, and it changed three rows.</p>
+
+  <h3>The four inputs</h3>
+  <table class="taskmeta">
+    <tr><th><code>status</code></th><td>From <code>AttemptStatus</code>: <code>lifecycleState</code>, <code>candidateSha</code>, <code>landingApproval</code>. Values only — the table never reads a journal.</td></tr>
+    <tr><th><code>repository</code></th><td>Observed Git facts plus the catalog's allowlist: <code>headSha</code>, <code>checkoutClean</code>, and <code>allow: { remotes, branches, host? }</code>.</td></tr>
+    <tr><th><code>remote</code></th><td><code>name</code>, <code>branch</code>, <code>resolvedHost</code> (<code>null</code> for a local path), and <code>fastForward: boolean | null</code> — <code>null</code> when the branch does not yet exist on the remote, which is a creation rather than an update.</td></tr>
+    <tr><th><code>refspec</code></th><td>Parsed, never a raw string: <code>{ source, destination, forced, deleting }</code>. <code>forced</code> is the leading <code>+</code>; <code>deleting</code> is an empty <strong>or all-zeros</strong> source.</td></tr>
+  </table>
+
+  <h3>The ordered refusal contract</h3>
+  <p>Evaluated in order; the first violated row fires. The order is not cosmetic: for every adjacent pair there is an input violating both, and if the later one fired first, fixing what it named would let an illegitimate publish through.</p>
+  <table>
+    <thead><tr><th>#</th><th>Code</th><th>Condition to pass</th><th>Why here and not later</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td><code>not-landed</code></td><td><code>status.lifecycleState === "LANDED"</code></td><td>The amended invariant's condition, and the premise of every row below — an unlanded attempt's <code>candidateSha</code> and <code>headSha</code> mean something different.</td></tr>
+      <tr><td>2</td><td><code>no-landing-approval</code></td><td><code>status.landingApproval !== null</code></td><td><code>LANDED</code> without the human gate's record is a journal defect. Rows 3 and 4 read fields from that record.</td></tr>
+      <tr><td>3</td><td><code>approval-not-candidate</code></td><td><code>landingApproval.candidateSha === status.candidateSha</code></td><td>Before believing the candidate, prove the approved revision and the recorded candidate are the same one. Fixing row 4 first would validate the shape of a SHA nobody approved.</td></tr>
+      <tr><td>4</td><td><code>malformed-candidate</code></td><td><code>status.candidateSha</code> matches <code>^[0-9a-f]{40}$</code></td><td>The same <code>SHA_PATTERN</code> the envelope contracts and <code>guards.ts</code> already hold every object id to, imported rather than restated.</td></tr>
+      <tr><td>5</td><td><code>head-not-at-candidate</code></td><td><code>repository.headSha === status.candidateSha</code></td><td>Exact-revision publication. Canonical <code>HEAD</code> is where landing left it; if it has moved, the attempt's record no longer describes the tree.</td></tr>
+      <tr><td>6</td><td><code>dirty-checkout</code></td><td><code>repository.checkoutClean === true</code></td><td>Mirrors <code>assertPreflight</code> in <code>git/land.ts</code>. A dirty tree means something is happening that the record does not describe.</td></tr>
+      <tr><td>7</td><td><code>remote-not-allowlisted</code></td><td><code>remote.name ∈ allow.remotes</code></td><td>Measured: pushing to a remote nobody named succeeds at the Git level. The allowlist is the only thing that stops it.</td></tr>
+      <tr><td>8</td><td><code>branch-not-allowlisted</code></td><td><code>remote.branch ∈ allow.branches</code></td><td>Measured: <code>git push origin &lt;sha&gt;:refs/heads/sneaky</code> created the branch, exit <code>0</code>. Row 13 checks the destination <em>against</em> this branch, so this must clear first.</td></tr>
+      <tr><td>9</td><td><code>remote-host-mismatch</code></td><td><code>allow.host</code> absent, or <code>remote.resolvedHost === allow.host</code></td><td>A remote name is a local, rewritable binding. Opt-in for the same reason W04's <code>identity.root_commit</code> is optional — a local bare remote has no host — and its absence is silent, which is stated rather than papered over.</td></tr>
+      <tr><td>10</td><td><code>force-refspec</code></td><td><code>refspec.forced === false</code></td><td>Before the delete row, because <code>+:refs/heads/main</code> is both and force is the stronger prohibition. Measured to produce <code>(forced update)</code> at exit <code>0</code>.</td></tr>
+      <tr><td>11</td><td><code>delete-refspec</code></td><td><code>refspec.deleting === false</code> — empty <strong>and</strong> all-zeros source</td><td>Independent of row 12 on purpose. Row 12 already excludes all-zeros because a candidate is never all-zeros, but if row 12 were ever relaxed the deletion hole would reopen silently.</td></tr>
+      <tr><td>12</td><td><code>inexact-source</code></td><td><code>refspec.source === status.candidateSha</code></td><td>This is what "exact-revision" means mechanically: the source is the SHA, never <code>HEAD</code>, never a branch name, never a tag.</td></tr>
+      <tr><td>13</td><td><code>destination-not-declared-branch</code></td><td><code>refspec.destination === "refs/heads/" + remote.branch</code></td><td>Fully qualified, so <code>main</code> cannot resolve to a tag or a remote-tracking ref.</td></tr>
+      <tr><td>14</td><td><code>non-fast-forward</code></td><td><code>remote.fastForward !== false</code></td><td>Last, because it is an observation about a target already known legitimate. Reporting it about a remote nobody may push to would name the wrong defect.</td></tr>
+      <tr><td>✓</td><td><code>authorized</code></td><td>all fourteen pass</td><td>Returns the branded plan. There is no other way to obtain one.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>What the bare-remote transcript settled</h3>
+  <div class="measured">
+    <p><strong>Idempotence is Git's, not ours.</strong> A second push of the same SHA to the same branch printed <code>Everything up-to-date</code> at exit <code>0</code>; under <code>--porcelain</code>, <code>= &lt;sha&gt;:refs/heads/main [up to date]</code>. <strong>Nothing needs implementing</strong>, and the plan's job is to prove the property rather than build it.</p>
+    <p><strong>Exit code is not the signal, twice.</strong> <code>git ls-remote origin refs/heads/absent</code> returns empty stdout at exit <code>0</code> — an absent branch is not an error, it is a creation. And <code>git config --local --get-regexp '^credential\.'</code> exits <code>1</code> when there are no matches, which is the <em>good</em> outcome. Both are the same lesson W07 learned about <code>quota-axi</code>'s exit code and both are branch points a naive reading gets backwards.</p>
+    <p><strong><code>--porcelain</code> gives a closed one-character vocabulary on stdout.</strong> Measured: <code>*</code> new branch, <code>=</code> up to date, <code>&nbsp;</code> (a space) fast-forwarded, <code>!</code> rejected, <code>+</code> forced, <code>-</code> deleted. <strong>The fast-forward flag is a space</strong>, so trimming a line before splitting it loses the flag — the single most likely parsing bug in this workstream. The first stdout line is <code>To &lt;url&gt;</code> and the last is <code>Done</code>; prose and the URL-bearing error text go to stderr.</p>
+    <p><strong>A hostile local config cannot silently widen the push.</strong> With <code>remote.origin.mirror=true</code>, <code>push.default=matching</code>, <code>push.followTags=true</code> and <code>remote.origin.push=+refs/heads/*:refs/heads/*</code> all set, the explicit refspec produced <code>fatal: --mirror can't be combined with refspecs</code> at exit <code>128</code> and <strong>every other branch on the remote survived</strong>. Git refuses rather than reinterpreting, which closes a hole the truth table could not have seen.</p>
+    <p><strong>The credential posture works and the helper never runs.</strong> A configured helper that appends to a marker file ran on the baseline invocation and returned a password; with <code>-c credential.helper=</code> prepended the marker file was never created and Git failed with <code>terminal prompts disabled</code> at exit <code>128</code>. The <code>GIT_CONFIG_COUNT</code> environment form behaves identically.</p>
+  </div>
+</section>
+
+<section id="gates">
+  <h2>Three Ordering Gates, All Owner-Authored</h2>
+  <p><strong>Q2's decision took this workstream from one owner commit to three.</strong> Each is a protected path no agent can write, each is one commit doing one thing, and each blocks exactly one milestone. The bill below was measured rather than estimated, and two of the three were not visible until the state machine and the schema were read.</p>
+  <div class="card rule">
+    <h5><span class="gate">G8-A</span> — the invariant 8 amendment lands before M7 builds</h5>
+    <p>The spine's <span class="gate">G2</span>, instantiated. One owner-authored commit replacing invariant 8 in <code>AGENTS.md</code> with the text drafted above, landed before task 19. <strong>M1 through M6 do not wait on it</strong> — none of them removes the old scan or adds the new fence.</p>
+    <p><strong>Read that ordering carefully, because it is the one thing in this plan that could be got wrong quietly.</strong> Task 6 creates <code>core/src/publish/argv.ts</code> containing the push token, and <code>no-destructive-paths.test.ts</code> as it stands today does <em>not</em> catch it — that is problem 2, measured. So the suite stays green through M6 whether or not the amendment has landed, and nothing forces the gate. <strong>Task 19 is therefore an explicit verification step with a written failure posture</strong>: read <code>AGENTS.md</code>, confirm the amended text is present, and mark the task <code>[f]</code> and stop if it is not. A workstream whose gate is enforced only by a test that cannot see the violation is a workstream with no gate.</p>
+  </div>
+
+  <div class="card rule">
+    <h5><span class="gate">G8-B</span> — the <code>PUBLISHED</code> state and the <code>L27</code> edge land before M5 builds</h5>
+    <p><code>core/src/state/**</code> is a protected path. One owner-authored commit touching two files: <code>task-machine.ts</code> gains <code>PUBLISHED</code> in <code>TASK_STATES</code>, <code>PUBLISHED</code> in <code>TERMINAL_STATES</code>, a new <code>SEALED_STATES</code> = {<code>BLOCKED</code>, <code>CANCELLED</code>, <code>PUBLISHED</code>}, step 2 of <code>transition()</code> reading <code>SEALED_STATES</code> instead of <code>TERMINAL_STATES</code>, <code>L27</code> in the <code>EdgeId</code> union, and one row in <code>LEGAL_EDGES</code> — <code>L27 — LANDED → PUBLISHED</code>, actor <code>human</code>, not a spawn site, interactive, not a correction edge. <code>guards.ts</code> gains <code>L27</code>'s guard, which <code>Readonly&lt;Record&lt;EdgeId, …&gt;&gt;</code> makes a typecheck error to omit.</p>
+    <p><strong>Why the actor is <code>human</code> and the edge is interactive.</strong> Publication is human-initiated by the settled contract, and <code>L20</code> — the other edge a person drives — is exactly this shape. A <code>host</code>-actored edge would let a future scheduler publish.</p>
+    <p><strong>What the guard checks, and why it is not merely a copy of the truth table.</strong> <code>L27</code>'s guard demands the landing approval record, a 40-hex candidate equal to the displayed revision, and the operator's confirmation. That is where <code>INV-2</code> stops being a property of how <code>authorizePublish</code> is written and becomes a property of the machine: an attempt that never reached <code>LANDED</code> through <code>L23</code> cannot form this transition at all, whatever the publish module later says.</p>
+  </div>
+
+  <div class="card rule">
+    <h5><span class="gate">G8-C</span> — the <code>lifecycle_state</code> migration lands before M5 builds</h5>
+    <p><strong>Unlike W07's <code>L26</code>, this one does need a migration, and the difference is measured.</strong> W07 established that <code>transitions.from_state</code>, <code>to_state</code> and <code>edge_id</code> carry no <code>CHECK</code>, which is why a new <em>edge</em> is free. A new <em>state</em> is not: <code>sessions.lifecycle_state</code> in <code>0001-initial.sql</code> is declared <code>TEXT NOT NULL CHECK (lifecycle_state IN ('DRAFT','PREPARED','RUNNING','GATING','REVIEWING','AWAITING_OWNER','LANDING','LANDED','BLOCKED','CANCELLED'))</code>. Inserting <code>PUBLISHED</code> fails that constraint, verified directly against <code>node:sqlite</code>.</p>
+    <p><strong>SQLite cannot alter a <code>CHECK</code>, so <code>0004-published-state.sql</code> rebuilds the table</strong> — create <code>sessions_new</code> with the widened constraint and all forty-odd columns, copy, drop, rename, recreate <code>idx_sessions_recent</code>, <code>idx_sessions_state</code> and <code>idx_sessions_task</code>. <code>core/src/observability/migrations/**</code> is a protected path, so this is the third owner-authored commit.</p>
+    <p><strong>It cannot run against the migration runner as it stands, and that was measured before it was believed.</strong> <code>node:sqlite</code>'s <code>DatabaseSync</code> defaults <code>foreign_keys</code> to <strong>ON</strong> — <code>PRAGMA foreign_keys</code> returned <code>1</code> on a fresh connection — and seven tables carry <code>REFERENCES sessions(session_id) ON DELETE RESTRICT</code>. Three routes were tried against a miniature of the real schema:</p>
+    <table>
+      <thead><tr><th>Route</th><th>Result</th></tr></thead>
+      <tbody>
+        <tr><td>The runner as it stands — rebuild inside <code>BEGIN IMMEDIATE</code></td><td><strong>fails:</strong> <code>FOREIGN KEY constraint failed</code> at the <code>DROP</code></td></tr>
+        <tr><td><code>PRAGMA defer_foreign_keys = ON</code> inside the transaction</td><td><strong>fails identically</strong> — SQLite's <code>RESTRICT</code> is not deferrable</td></tr>
+        <tr><td><code>PRAGMA foreign_keys = OFF</code> hoisted ahead of <code>BEGIN IMMEDIATE</code></td><td><strong>works:</strong> rows copied, <code>PRAGMA foreign_key_check</code> empty afterwards, every child's <code>REFERENCES sessions(...)</code> intact through the rename, and an orphan child still correctly refused once the setting is restored</td></tr>
+      </tbody>
+    </table>
+    <p><strong>So one agent-writable change is a precondition of this gate.</strong> <code>runMigrations</code> hoists only <code>journal_mode</code> and <code>synchronous</code> out of the transaction; <code>foreign_keys</code> joins that list and is restored after the migration commits. <code>core/src/observability/sqlite.ts</code> is <em>not</em> protected — only <code>migrations/**</code> is — so task 11 does it, and it lands before the owner's migration can run. <strong>An owner who commits <code>0004</code> before task 11 lands will find every command failing to open the database</strong>, which is why the ordering is stated here rather than discovered.</p>
+  </div>
+
+  <div class="card good">
+    <h5>What is still not a gate</h5>
+    <p><strong>The repository's own catalog.</strong> <code>awsf.project.yaml</code> is protected, so a <code>publish</code> block for <em>this</em> repository is an owner act — but the schema is agent work under <code>core/src/registry/**</code>, the block is optional, an absent block means the repository is simply not publishable, and every test builds its own catalog in a temporary directory. Same shape as W07's threshold values: the gate is the permission, never the values.</p>
+    <p><strong>The seal split.</strong> <code>core/src/cli/commands/attempt.ts</code> is not protected, so opening the journal for exactly one post-<code>LANDED</code> record is agent work in task 11. It is a precondition rather than a gate, and it would have been required by the rejected no-edge design too.</p>
+  </div>
+</section>
+
+<section id="files" class="files">
+  <h2>Relevant Files</h2>
+
+  <h3>Existing Files</h3>
+  <ul>
+    <li><span class="tag existing">existing</span> <code>core/test/unit/meta/no-destructive-paths.test.ts</code> — the nine-pattern scan. Its push clause is what the amendment retires; its other eight stay and three are added. <strong>Measured to pass an argv-array push, a <code>+</code>-force refspec and an empty-source delete.</strong></li>
+    <li><span class="tag existing">existing</span> <code>core/test/unit/meta/no-land-route.test.ts</code> — the second fence invariant 8 names. <strong>Untouched</strong>: <code>publish</code> enters no API route and no dashboard surface, and this test's forbidden-substring list is unchanged.</li>
+    <li><span class="tag existing">existing</span> <code>core/src/state/task-machine.ts</code> — <code>TASK_STATES</code>, imported by the fence so the state row is enumerated rather than copied; <code>TERMINAL_STATES</code>; and step 2 of <code>transition()</code>, whose comment already records that it is read as narrowed to <code>from</code> terminal <em>and</em> <code>from !== to</code>. Protected path; <strong>owner-authored under <span class="gate">G8-B</span></strong>.</li>
+    <li><span class="tag existing">existing</span> <code>core/src/state/guards.ts</code> — <code>GUARDS: Readonly&lt;Record&lt;EdgeId, …&gt;&gt;</code>, so <code>L27</code> without a guard is a typecheck error rather than an oversight. <code>L20</code>'s guard is the model: displayed SHA equal to the candidate, the approval record, the confirmation. Protected path; <span class="gate">G8-B</span>.</li>
+    <li><span class="tag existing">existing</span> <code>core/src/cli/commands/attempt.ts</code> — <code>isTerminalStatus</code>, and <code>persistAttempt</code>'s <code>validate</code> throwing <code>SealedAttempt</code> when the current status is terminal, plus its <code>sealWhenTerminal</code> hook. <strong>This is what makes a landed attempt unwritable, and it is why the seal has to be split whichever shape publication takes.</strong> Not protected — task 11.</li>
+    <li><span class="tag existing">existing</span> <code>core/src/persistence/attempt-lock.ts</code> — <code>SealedAttempt</code> and the lock's own seal, which makes every later <code>withLock</code> throw. The second half of the seal, and the reason opening it is one condition rather than one deletion.</li>
+    <li><span class="tag existing">existing</span> <code>core/src/observability/migrations/0001-initial.sql</code> — <code>sessions.lifecycle_state TEXT NOT NULL CHECK (lifecycle_state IN (…))</code> with the ten current values, three indexes on <code>sessions</code>, and seven tables carrying <code>REFERENCES sessions(session_id) ON DELETE RESTRICT</code>. Protected path; <span class="gate">G8-C</span> adds <code>0004-published-state.sql</code> beside it.</li>
+    <li><span class="tag existing">existing</span> <code>core/src/observability/sqlite.ts</code> — <code>runMigrations</code> and <code>TRANSACTION_UNSAFE_PRAGMA</code>, which today hoists only <code>journal_mode</code> and <code>synchronous</code> out of <code>BEGIN IMMEDIATE</code>. <strong>Not protected</strong>, and the precondition <span class="gate">G8-C</span> cannot run without: <code>foreign_keys</code> joins that list in task 11.</li>
+    <li><span class="tag existing">existing</span> <code>core/test/unit/_lifecycle-tables.ts</code>, <code>core/test/unit/transitions.test.ts</code>, <code>core/test/unit/actors.test.ts</code>, <code>core/test/unit/rejection-order.test.ts</code> — the hand-maintained mirror of the matrix and its arithmetic: <code>27 + 10 + 6 + 31 = 74</code> over 100 pairs with 26 edges, plus <code>others.length === 22</code> in the actors suite. All four are tests, so an agent writes them; all four move with <code>PUBLISHED</code>.</li>
+    <li><span class="tag existing">existing</span> <code>core/test/simulation/_harness.ts</code> — a second, duplicated <code>TERMINAL_STATES</code> literal that no fence ties to the first. It moves too, and the duplication is worth noting rather than fixing here.</li>
+    <li><span class="tag existing">existing</span> <code>dashboard/shared/types.ts</code>, <code>dashboard/src/components/StateRibbon.vue</code>, <code>dashboard/src/display.ts</code> — the <code>LifecycleState</code> union, the eight-state ribbon that currently ends at <code>LANDED</code>, and <code>stateTone</code>/<code>stateLabel</code>. Agent-writable; task 13.</li>
+    <li><span class="tag existing">existing</span> <code>core/src/git/land.ts</code> — <code>inspectLanding</code>/<code>completeLanding</code>, the <code>LandingBlocked</code> code vocabulary, and the <code>clean()</code>/<code>head()</code>/<code>isAncestor()</code> helpers. The observation step copies these idioms rather than inventing new ones, and <code>LandingBlocked</code>'s closed-code shape is the model for <code>PublishBlocked</code>.</li>
+    <li><span class="tag existing">existing</span> <code>core/src/git/changes.ts</code> — <code>GitRunner</code>, <code>systemGitRunner</code>, <code>runGit</code>, <code>GitCommandFailed</code>. The publish runner takes a <code>GitRunner</code>, so every test injects one and no test spawns a process it did not construct.</li>
+    <li><span class="tag existing">existing</span> <code>core/src/cli/commands/land.ts</code> — the shape <code>publish.ts</code> follows: locate the attempt, display the facts, one <code>terminal.confirm</code>, then the single authorization call. Also where <code>landingApproval</code> is populated at <code>L20</code>, which rows 2 and 3 of the table read.</li>
+    <li><span class="tag existing">existing</span> <code>core/src/cli/main.ts</code> — <code>CLI_COMMANDS</code> and the <code>case</code> arms. Adding a <code>publish</code> arm that constructs <code>processOwnerTerminal()</code> makes it <strong>the seventh owner act</strong>, which is what triggers the document cascade in task 13.</li>
+    <li><span class="tag existing">existing</span> <code>core/test/unit/meta/boundary-claims.test.ts</code> — derives the owner acts from <code>main.ts</code> by finding the arms that construct an owner terminal, then requires every driving document enumerating four or more of them to enumerate <em>exactly</em> that set. <strong>This test goes red the moment the <code>publish</code> arm lands</strong>, and five documents plus one shell script move with it.</li>
+    <li><span class="tag existing">existing</span> <code>docs/driving/skills/awsf/cookbooks/owner_acts.md</code>, <code>docs/driving/skills/awsf/SKILL.md</code>, <code>docs/driving/skills/awsf/references/gotchas.md</code> — the three documents that enumerate the acts, at five sites. <code>owner_acts.md</code> opens with the literal word "Six".</li>
+    <li><span class="tag existing">existing</span> <code>docs/driving/marimba/delegation-guard.sh</code> — fence 2's verb loop, <code>for verb in land cancel rework review journey raise</code>. A seventh act that is not in this loop is an act a driving session can run.</li>
+    <li><span class="tag existing">existing</span> <code>core/test/unit/meta/marimba-guard.test.ts</code> — the behaviour matrix that runs the committed guard bytes. A deny row for the new verb belongs here, with the same three-part assertion the others carry: exit 2, reason on stderr, nothing on stdout.</li>
+    <li><span class="tag existing">existing</span> <code>core/src/registry/catalog-schema.ts</code> — <code>RepositorySchema</code> with <code>additionalProperties: false</code>, and the existing <code>delivery</code> enum W04 deliberately left as posture-only. The <code>publish</code> block is a sibling key here.</li>
+    <li><span class="tag existing">existing</span> <code>core/src/registry/catalog.ts</code> — <code>assertNoAbsolutePaths</code> and <code>containsCredential</code> already run over every string leaf. <strong>This is why the allowlist keys on a remote name</strong>, and it means a URL carrying <code>user:token@</code> is already refused by <code>CatalogCredentialShapedError</code> with no new code.</li>
+    <li><span class="tag existing">existing</span> <code>core/src/config/machine-path.ts</code> — <code>ABSOLUTE_PATH_PATTERN</code> and <code>scanStrings</code>. The pattern does <em>not</em> match a <code>file://</code> URL, which is exactly the loophole a URL-keyed allowlist would have to use to name a bare remote, and the reason not to key on URLs.</li>
+    <li><span class="tag existing">existing</span> <code>core/src/observability/attempt-evidence.ts</code> — the <code>AttemptEvidence</code> union. The publish record is a new member, following <code>quota-snapshot</code>'s precedent of a closed field list with no raw process bytes.</li>
+    <li><span class="tag existing">existing</span> <code>core/src/observability/projector.ts</code> — <code>applyAttemptEvidence</code>'s switch has no <code>default</code>, so an unhandled evidence type is a silent no-op. That is what makes the publish record journal-only with no migration and no touch of the protected <code>migrations/**</code>.</li>
+    <li><span class="tag existing">existing</span> <code>core/src/execution/transport-broker.ts</code> — <code>runSystemCommand(executable, argv, {timeoutMs, cwd, env, maxBuffer})</code> and <code>resolveExecutable</code>. Protected path, and the only importer of <code>node:child_process</code>; the publish path uses it through <code>systemGitRunner</code> and adds no importer.</li>
+    <li><span class="tag existing">existing</span> <code>core/src/policy/redaction.ts</code>, <code>dashboard/shared/credential-patterns.ts</code> — <code>containsCredential</code> and the ten patterns, including <code>(?:scheme://)[^\s/@:]+:[^\s/@]+@</code> which catches a credential embedded in a URL. Used as a belt-and-braces refusal over the constructed argv.</li>
+    <li><span class="tag existing">existing</span> <code>core/test/unit/rejection-order.test.ts</code>, <code>core/src/state/guards.ts</code> — the ordered-rejection contract this plan copies: eleven ordered steps, one purpose-built double violation per adjacency, plus single-violation inputs proving every step is reachable.</li>
+    <li><span class="tag existing">existing</span> <code>core/test/unit/meta/quota-fence.test.ts</code> — the TypeScript-compiler-API idiom for a semantic fence. The derivation leg is written against this file, not from scratch.</li>
+    <li><span class="tag existing">existing</span> <code>core/test/unit/git/dependency-seeds.test.ts</code> — the <code>mkdtempSync</code> + <code>git init</code> harness every bare-remote test copies, including the explicit <code>-c user.name</code>/<code>-c user.email</code> that keeps invariant 11 intact in a fixture.</li>
+    <li><span class="tag existing">existing</span> <code>core/test/journeys/human-gate.test.ts</code> — the end-to-end idiom for an owner act, and the assertion that the API source reaches neither <code>commands/land</code> nor <code>git/land</code>. The publish journey extends that assertion by name.</li>
+    <li><span class="tag existing">existing</span> <code>AGENTS.md</code> — invariant 8 (amended under <span class="gate">G8-A</span>, by the owner), 9 (credential non-persistence), 1 (no live task state), 10 (no committed runtime artifact). Protected: no agent writes it.</li>
+    <li><span class="tag existing">existing</span> <code>awsf.config.yaml</code> — <code>policy.protected_paths</code> and <code>policy.protected_operations</code>, which already declares <code>external-mutation</code>. Worth knowing that the vocabulary is loader-checked for membership and <strong>enforced nowhere</strong>: it is a declaration, not a gate, and this plan must not describe it as one.</li>
+    <li><span class="tag owner">owner-side</span> <code>awsf.project.yaml</code> — this repository's own catalog. A <code>publish</code> block here is an optional later owner commit and is not a gate; nothing in this workstream needs one.</li>
+  </ul>
+
+  <h3>New Files</h3>
+  <ul>
+    <li><span class="tag new">new</span> <code>core/src/publish/authorize.ts</code> — the four input records, the fourteen-code closed union, <code>PUBLISH_REFUSAL_ORDER</code>, the branded <code>AuthorizedPublishPlan</code>, and <code>authorizePublish</code>. Pure: no imports outside type-only ones, no clock, no filesystem, no process.</li>
+    <li><span class="tag new">new</span> <code>core/src/publish/argv.ts</code> — <code>publishArgv(plan: AuthorizedPublishPlan)</code>. The sole site of the push token in <code>core/src</code>, and the sole consumer of the branded type. Also <code>parsePorcelain</code>, because the output shape belongs beside the argv that produced it.</li>
+    <li><span class="tag new">new</span> <code>core/src/publish/refspec.ts</code> — the refspec parser: source, destination, <code>forced</code> from a leading <code>+</code>, <code>deleting</code> from an empty <strong>or all-zeros</strong> source. Separate because the all-zeros sentinel is a derived rule with its own README entry.</li>
+    <li><span class="tag new">new</span> <code>core/src/git/publish.ts</code> — the observation step and the run: <code>rev-parse HEAD</code>, <code>status --porcelain</code>, <code>remote get-url --push</code>, <code>ls-remote</code>, <code>merge-base --is-ancestor</code>, then the single push through the injected <code>GitRunner</code> with the credential env. <code>PublishBlocked</code> with its closed observation-failure codes.</li>
+    <li><span class="tag new">new</span> <code>core/src/cli/commands/publish.ts</code> — <code>awsf publish</code>, the seventh owner act. Displays the facts, takes one confirmation, calls <code>authorizePublish</code> once, journals the record.</li>
+    <li><span class="tag new">new</span> <code>core/test/unit/meta/publish-fence.test.ts</code> — the three legs: locality, derivation, condition. Each shown red before it is trusted.</li>
+    <li><span class="tag new">new</span> <code>core/test/unit/publish/*.test.ts</code> — <code>authorize.test.ts</code> (totality plus thirteen adjacencies), <code>refspec.test.ts</code>, <code>argv.test.ts</code>, <code>porcelain.test.ts</code>, <code>catalog-publish.test.ts</code>, <code>credentials.test.ts</code>, <code>bare-remote.test.ts</code>.</li>
+    <li><span class="tag new">new</span> <code>core/test/unit/publish/_bare.ts</code> — the shared bare-remote harness: a temporary directory, a bare repository, a work repository with two commits, and an <code>origin</code> pointing at the bare path. Also the credential-helper stub that writes a marker file, so "the helper did not run" is asserted by an absent file rather than by an absent symptom.</li>
+    <li><span class="tag new">new</span> <code>core/test/journeys/publish.test.ts</code> — landed candidate to bare remote, idempotent retry, and the refusal of every pre-<code>LANDED</code> state end to end.</li>
+    <li><span class="tag new">new</span> <code>core/test/unit/publish/seal.test.ts</code> — the one condition that replaces the seal: a <code>LANDED</code> attempt accepts the <code>L27</code> transition and refuses every other event by name; a <code>PUBLISHED</code> attempt accepts nothing.</li>
+    <li><span class="tag new">new</span> <code>core/test/unit/observability/migration-0004.test.ts</code> — the rebuild against a seeded database: every row carried, <code>PRAGMA foreign_key_check</code> empty, child foreign keys intact through the rename, a <code>PUBLISHED</code> row accepted, and an orphan child still refused.</li>
+    <li><span class="tag owner">owner-side</span> <code>core/src/observability/migrations/0004-published-state.sql</code> — the <code>sessions</code> rebuild. Protected directory; <span class="gate">G8-C</span>. Listed here because the plan specifies it, not because an agent writes it.</li>
+  </ul>
+</section>
+
+<section id="spine">
+  <h2>Identifier Spine</h2>
+  <p>This workstream's claims, declared here so the coverage gate can join them to the tasks that serve them. Ids are unique per plan, per the spine's decided Q5; a cross-plan reference would be written <code>&lt;plan-stem&gt;#INV-n</code>.</p>
+  <dl>
+    <dt><code class="inv">INV-1</code></dt>
+    <dd>A push argv is constructed in exactly one file under <code>core/src</code>, and its only input is a value <code>authorizePublish</code> produced. No other module constructs or casts to that value.</dd>
+    <dt><code class="inv">INV-2</code></dt>
+    <dd>No publish path exists from any pre-<code>LANDED</code> state. The refusal comes from the ordered table, enumerated over <code>TASK_STATES</code> as imported, never from a code path that happens not to be reached.</dd>
+    <dt><code class="inv">INV-3</code></dt>
+    <dd>No force and no delete refspec can be constructed anywhere in <code>core/src</code>, including the argv-array spellings the retired scan never saw: a <code>+</code>-prefixed source, and an empty or all-zeros source.</dd>
+    <dt><code class="inv">INV-4</code></dt>
+    <dd>No credential value passes through AWSF. The owner's configured helper is inherited and invoked by Git; nothing it returns is read, held, logged, or journalled; no URL enters the argv; and AWSF itself writes no credential configuration and no credential file.</dd>
+    <dt><code class="inv">INV-5</code></dt>
+    <dd>No remote URL, no process stderr, and no Git prose reaches the journal. The record is a closed field vocabulary derived from the porcelain flag.</dd>
+    <dt><code class="inv">INV-6</code></dt>
+    <dd>Publication writes no file outside the journal, and a repeat of the same revision changes nothing on the remote. The second publish of a revision is refused by the state machine, because <code>PUBLISHED</code> is sealed — so idempotence is a property of the lifecycle, and Git's own <code>up to date</code> is the backstop rather than the mechanism.</dd>
+    <dt><code class="inv">INV-7</code></dt>
+    <dd><code>LANDED</code> is terminal for the attempt's work and is not sealed; <code>PUBLISHED</code> is both. Every existing reader of <code>isTerminalStatus</code> keeps the meaning it was written against, and the journal accepts exactly one further record after <code>LANDED</code> — the <code>L27</code> transition — and refuses every other event on a landed attempt by name.</dd>
+    <dt><code class="ac">AC-1</code></dt>
+    <dd>The table is total and ordered: every input either authorizes or names exactly one code, and for each of the thirteen adjacent pairs there is an input violating both where the earlier code fires.</dd>
+    <dt><code class="ac">AC-2</code></dt>
+    <dd>A landed candidate publishes to a local bare remote with no network anywhere in the test. Observed by the bare repository's <code>ls-remote</code> reporting the exact candidate afterwards.</dd>
+    <dt><code class="ac">AC-3</code></dt>
+    <dd>A retry of the same SHA is a no-op reported as <code>already-current</code>. Observed by the porcelain <code>=</code> flag and by the remote ref being unchanged.</dd>
+    <dt><code class="ac">AC-4</code></dt>
+    <dd>Every pre-<code>LANDED</code> state is refused, enumerated from <code>TASK_STATES</code> rather than a copied list, so a state added later is covered without editing the fence.</dd>
+    <dt><code class="ac">AC-5</code></dt>
+    <dd>Nothing AWSF wrote carries a credential: the argv, the journal record and every operator message are credential-free, and AWSF created no configuration and no file of its own. Observed with a stub helper that records its own invocation, so the test proves the helper ran <em>and</em> that its answer went nowhere.</dd>
+    <dt><code class="ac">AC-6</code></dt>
+    <dd>The journalled record names the remote, the branch, the revision and what the remote did, and contains no URL, no stderr, and no Git prose. Observed on a round-tripped journal line.</dd>
+    <dt><code class="ac">AC-7</code></dt>
+    <dd>The widened lifecycle matrix balances: 11 states, 121 ordered pairs, 27 legal edges, 94 illegal pairs partitioned 30 / 11 / 6 / 47. The migration rebuilds <code>sessions</code> with every row carried, <code>PRAGMA foreign_key_check</code> empty afterwards, and every child table's foreign key intact.</dd>
+  </dl>
+</section>
+
+<section id="phases">
+  <h2>Implementation Phases</h2>
+  <p><strong>IMPORTANT:</strong> Execute every phase and task step by step, in order, top to bottom.</p>
+  <p>Status markers: <code>[]</code> idle · <code>[wip]</code> in progress · <code>[x]</code> complete · <code>[f]</code> failed. All start as <code>[]</code>. <strong>Flip this plan's own markers as you work</strong>, and flip the matching ticket's <code>state:</code> in the same commit. <strong>Never touch the W08 marker in <code>specs/awsf-v2-plan.html</code> — task 24 is the only task that does.</strong></p>
+  <p><strong>Every task is offline. No test in this workstream may touch the network</strong>, and the only remotes any of them know are bare repositories created in a temporary directory. <strong>M5 is gated by <span class="gate">G8-B</span> and <span class="gate">G8-C</span>; M7 by <span class="gate">G8-A</span>.</strong></p>
+
+  <figure>
+    <pre class="mermaid">
+flowchart LR
+  M1["M1 truth table"] --> M2["M2 catalog"]
+  M2 --> M3["M3 argv site"]
+  M3 --> M4["M4 credentials"]
+  M4 --> M5["M5 PUBLISHED state"]
+  M5 --> M6["M6 command · record"]
+  M6 --> M7["M7 amendment · fences"]
+  M7 --> M8["M8 journey · close"]
+  GB["G8-B owner commit<br/>state + L27"] -.-> M5
+  GC["G8-C owner commit<br/>migration 0004"] -.-> M5
+  GA["G8-A owner commit<br/>invariant 8"] -.-> M7
+  style M1 stroke:#38BDF8,stroke-width:2px
+  style M5 stroke:#F59E0B,stroke-width:2px
+  style M7 stroke:#F59E0B,stroke-width:2px
+  style GA stroke:#F87171,stroke-width:2px,stroke-dasharray:4 3
+  style GB stroke:#F87171,stroke-width:2px,stroke-dasharray:4 3
+  style GC stroke:#F87171,stroke-width:2px,stroke-dasharray:4 3
+    </pre>
+    <figcaption>Four milestones build against the machine as it stands. M5 waits on two owner commits and is where Q2's decision is paid for; M7 waits on the third and enforces its gate with a task rather than a test, because the test cannot see the violation.</figcaption>
+  </figure>
+
+  <!-- ================= M1 ================= -->
+  <div class="phase">
+    <h3><code class="status">[]</code> Milestone M1: The ordered truth table, pure and total</h3>
+    <p>The table is written first because everything downstream is a consumer of it, and because the spine names writing it before the function as this workstream's cheapest unused upgrade. The bare-remote transcript that validates each row already exists in this plan's <a href="#table">Truth Table</a> section; this milestone turns it into a function and an exhaustive test.</p>
+
+    <h4>1. The four input records and the closed refusal vocabulary</h4>
+    <p class="serves"><code class="serves">INV-2</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Create <code>core/src/publish/authorize.ts</code> declaring <code>PublishStatusFacts</code>, <code>PublishRepositoryFacts</code>, <code>PublishRemoteFacts</code> and <code>PublishRefspec</code> as the four inputs named in the plan's Truth Table section — <strong>values only</strong>, no handles, no paths to read, no functions</li>
+      <li><code class="status">[]</code> Declare <code>PUBLISH_REFUSAL_ORDER</code> as a <code>readonly</code> tuple of the fourteen codes in evaluation order, and derive <code>PublishRefusalCode</code> from it, so the order and the vocabulary cannot disagree</li>
+      <li><code class="status">[]</code> Import <code>SHA_PATTERN</code> from <code>core/src/contracts/test-output.ts</code> rather than restating <code>^[0-9a-f]{40}$</code>; <code>guards.ts</code> sets the precedent and one unguarded copy is one place the rule does not hold</li>
+      <li><code class="status">[]</code> The file's import list contains <strong>only</strong> type-only imports and the two constants above. No <code>node:</code> import, no clock, no filesystem, no <code>child_process</code>, nothing from <code>core/src/execution/**</code></li>
+      <li><code class="status">[]</code> Write the header comment stating what this file is and is not, in the idiom of <code>core/src/state/guards.ts</code>'s: it decides <em>whether</em>, never <em>how</em>, and it never goes and looks</li>
+    </ul>
+
+    <h4>2. <code>authorizePublish</code> and the branded plan</h4>
+    <p class="serves"><code class="serves">INV-1</code> <code class="serves">INV-2</code> <code class="serves">INV-3</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Implement <code>authorizePublish(status, repository, remote, refspec)</code> evaluating the fourteen rows in <code>PUBLISH_REFUSAL_ORDER</code> and returning on the first violation — the ordered contract, not a collected fault list, because a caller acting on the wrong defect would publish a different wrong thing</li>
+      <li><code class="status">[]</code> Return type is a discriminated union: <code>{ decision: "authorized", plan }</code> or <code>{ decision: "refused", code, detail }</code>. <code>detail</code> is a fixed sentence per code with no interpolated URL and no interpolated path</li>
+      <li><code class="status">[]</code> Declare <code>AuthorizedPublishPlan</code> carrying a module-private <code>unique symbol</code> brand, and construct it in this file and nowhere else. It carries <code>remoteName</code>, <code>branch</code> and <code>sha</code> — <strong>no URL, no host, no path</strong></li>
+      <li><code class="status">[]</code> Row 11 refuses an empty source <strong>and</strong> an all-zeros source independently of row 12, so relaxing row 12 later cannot reopen the deletion hole. Cite the measurement in a comment: an all-zeros source deleted the branch at exit <code>0</code></li>
+      <li><code class="status">[]</code> Row 14 treats <code>fastForward === null</code> as <em>pass</em>, because an absent remote branch is a creation. Measured: <code>ls-remote</code> of an absent ref is empty stdout at exit <code>0</code>, not an error</li>
+      <li><code class="status">[]</code> The function is a pure expression of its four arguments: given the same records it returns the same result, and it is called nowhere in this file</li>
+    </ul>
+
+    <h4>3. Testing Strategy</h4>
+    <p class="serves"><code class="serves">AC-1</code> <code class="serves">AC-4</code></p>
+    <p>The table is tested exactly the way <code>core/test/unit/rejection-order.test.ts</code> tests the lifecycle's eleven ordered rejections: single-violation inputs proving every code is reachable, one purpose-built double violation per adjacency proving the order, and a totality check. No I/O appears anywhere in this file — it constructs records and calls a function.</p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> <strong>Reachability</strong>: fourteen single-violation inputs, one per code, each derived from a valid baseline by changing exactly one field. A code no input can reach is a row that does not exist</li>
+      <li><code class="status">[]</code> <strong>Order</strong>: thirteen adjacency tests, each an input violating both members of one adjacent pair, asserting the earlier code fires. Each carries a one-line comment saying what fixing the later complaint would have let through</li>
+      <li><code class="status">[]</code> <strong>Totality</strong>: a generated sweep over the cartesian product of the discrete dimensions asserting every result is either <code>authorized</code> or a member of <code>PUBLISH_REFUSAL_ORDER</code>, and that no input produces a throw</li>
+      <li><code class="status">[]</code> <strong>The state row is enumerated, not listed</strong>: iterate <code>TASK_STATES</code> imported from <code>core/src/state/task-machine.ts</code>, assert <code>not-landed</code> for all nine non-<code>LANDED</code> members, and assert the count is <code>TASK_STATES.length - 1</code> so a new state cannot be silently skipped</li>
+      <li><code class="status">[]</code> A valid baseline authorizes, and the returned plan's fields equal the inputs they came from — the one positive test that stops a table which refuses everything from passing a refusal-only suite</li>
+      <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green</li>
+    </ul>
+    <div class="loop">
+      🔁 <strong>Do not exit this phase until every box above is checked.</strong> If any command fails, fix the cause and re-run — never lower what the row asserts.
+    </div>
+  </div>
+
+  <!-- ================= M2 ================= -->
+  <div class="phase">
+    <h3><code class="status">[]</code> Milestone M2: The allowlist in the catalog, keyed on a name</h3>
+    <p>The spine states plainly that the allowlist "has to live in the catalog", and W04 reserved delivery policy for this workstream while deliberately leaving <code>delivery</code> a posture enum with no remote, endpoint or credential field. This milestone adds a sibling <code>publish</code> block and nothing else. <strong>The schema is agent work</strong> — <code>core/src/registry/**</code> is not a protected path — and this repository's own catalog values are a separate optional owner commit that no task here waits on.</p>
+
+    <h4>4. The <code>publish</code> block, and why it holds no URL</h4>
+    <p class="serves"><code class="serves">INV-4</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Add an optional <code>publish</code> object to <code>RepositorySchema</code> in <code>core/src/registry/catalog-schema.ts</code>: <code>remotes</code> (non-empty array of Git remote names), <code>branches</code> (non-empty array of branch names), <code>host</code> (optional hostname). <code>additionalProperties: false</code>, as every sibling already is</li>
+      <li><code class="status">[]</code> <strong>Remote and branch names are validated as names</strong>, not free strings: no whitespace, no <code>/</code> in a remote name, no leading <code>+</code>, no <code>:</code>, and a branch that would not survive <code>git check-ref-format</code>'s obvious cases is refused at load</li>
+      <li><code class="status">[]</code> <code>host</code> is a hostname only — no scheme, no path, no port, no user-info. A value containing <code>@</code>, <code>/</code> or <code>:</code> is refused by the schema before <code>containsCredential</code> ever sees it</li>
+      <li><code class="status">[]</code> Write the derivation rule as a comment beside the block and in the ticket README: <strong>the allowlist keys on a remote NAME because <code>assertNoAbsolutePaths</code> refuses a bare-remote path outright</strong>, and a <code>file://</code> URL would pass that check only by smuggling a machine path past it. The URL stays in the repository's Git config, where it already is</li>
+      <li><code class="status">[]</code> <code>delivery</code> is <strong>not</strong> widened. It remains the four-value posture enum W04 shipped; widening it would be a breaking change to every existing catalog for no gain</li>
+      <li><code class="status">[]</code> Regenerate the emitted JSON Schema through <code>emitProjectCatalogJsonSchema</code> — never hand-maintain a copy; <code>no-handwritten-schema.test.ts</code> is watching</li>
+    </ul>
+
+    <h4>5. Testing Strategy</h4>
+    <p class="serves"><code class="serves">INV-4</code></p>
+    <p>Loader tests over YAML text, in the idiom of the existing catalog suite. The two most valuable assertions are about rejections that already existed before this block did — proving the new field inherits them rather than needing its own guard.</p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> A catalog whose <code>publish.host</code> carries <code>user:token@host</code> is refused with <code>CatalogCredentialShapedError</code> — <strong>inherited, not added</strong>: <code>containsCredential</code> already sweeps every string leaf</li>
+      <li><code class="status">[]</code> A catalog attempting to put an absolute path or a drive-letter path anywhere in the block is refused with <code>CatalogAbsolutePathError</code> — the same inheritance, and the reason the design keys on names</li>
+      <li><code class="status">[]</code> An unknown key inside <code>publish</code> is refused by <code>additionalProperties: false</code>. <strong>This is the test that keeps deployment out</strong>: an <code>environment</code>, <code>endpoint</code> or <code>release</code> field cannot be added without it going red, and the test names those three</li>
+      <li><code class="status">[]</code> An empty <code>remotes</code> or <code>branches</code> array is refused; a repository with no <code>publish</code> block loads fine and is simply not publishable</li>
+      <li><code class="status">[]</code> A remote name containing <code>/</code>, whitespace, a leading <code>+</code> or a <code>:</code> is refused, each with its own row</li>
+      <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green, and the existing catalog suite is unchanged</li>
+    </ul>
+    <div class="loop">
+      🔁 <strong>Do not exit this phase until every box above is checked.</strong> If any command fails, fix the cause and re-run — never lower what the row asserts.
+    </div>
+  </div>
+
+  <!-- ================= M3 ================= -->
+  <div class="phase">
+    <h3><code class="status">[]</code> Milestone M3: The single argv site, and the observation that precedes the decision</h3>
+    <p>The observation step exists so that every refusal is the table's. Letting the remote reject a non-fast-forward push produces the same outcome and fails the spine's requirement in the way that matters: the rule would be enforced by a code path that happens not to be reached rather than by a stated condition.</p>
+
+    <h4>6. <code>publishArgv</code> — the only push token in <code>core/src</code></h4>
+    <p class="serves"><code class="serves">INV-1</code> <code class="serves">INV-3</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Create <code>core/src/publish/refspec.ts</code>: parse a refspec into <code>{ source, destination, forced, deleting }</code>. <code>forced</code> is a leading <code>+</code>; <code>deleting</code> is an empty source <strong>or</strong> a source of forty zeros. Both spellings carry the measurement in a comment</li>
+      <li><code class="status">[]</code> Create <code>core/src/publish/argv.ts</code> exporting <code>publishArgv(plan: AuthorizedPublishPlan): readonly string[]</code>. It takes the branded type and nothing else, and it is the <strong>only</strong> file under <code>core/src</code> containing the push token</li>
+      <li><code class="status">[]</code> The argv is exactly <code>["-c", "credential.helper=", "push", "--porcelain", plan.remoteName, `${plan.sha}:refs/heads/${plan.branch}`]</code> — <strong>a remote name, never a URL</strong>, and a fully qualified destination so <code>main</code> cannot resolve to a tag</li>
+      <li><code class="status">[]</code> No <code>--force</code>, no <code>--mirror</code>, no <code>--delete</code>, no <code>--all</code>, no <code>--tags</code>, no <code>--follow-tags</code>, no <code>+</code> anywhere in the constructed strings. The file contains none of those literals at all</li>
+      <li><code class="status">[]</code> Add <code>parsePorcelain</code> in the same file, because the output shape belongs beside the argv that produced it. <strong>Drop the first stdout line (<code>To &lt;url&gt;</code>) and the trailing <code>Done</code>; parse only tab-separated ref lines; the flag is the first character and a <em>space</em> is the fast-forward flag</strong>, so the line must not be trimmed before the flag is read</li>
+      <li><code class="status">[]</code> Map the closed flag vocabulary to a closed outcome vocabulary: <code>*</code> → <code>created</code>, <code>=</code> → <code>already-current</code>, space → <code>fast-forwarded</code>, <code>!</code> → <code>rejected</code>. <code>+</code> and <code>-</code> map to a fault, because reaching either means something upstream failed and the record must say so rather than describe it neutrally</li>
+    </ul>
+
+    <h4>7. The observation step, and its closed failure vocabulary</h4>
+    <p class="serves"><code class="serves">INV-6</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Create <code>core/src/git/publish.ts</code> with <code>observePublishTarget(repository, remoteName, branch, runner)</code> returning the <code>PublishRepositoryFacts</code> and <code>PublishRemoteFacts</code> the table needs. It takes a <code>GitRunner</code>, exactly as <code>land.ts</code> does, so every test injects one</li>
+      <li><code class="status">[]</code> Observations, each one command: <code>rev-parse HEAD</code>; <code>status --porcelain</code> for cleanliness, copying <code>land.ts</code>'s <code>clean()</code>; <code>remote get-url --push &lt;name&gt;</code> for the host, parsed to a hostname and never stored whole; <code>ls-remote &lt;name&gt; refs/heads/&lt;branch&gt;</code> for the remote tip; <code>merge-base --is-ancestor</code> for <code>fastForward</code>, copying <code>land.ts</code>'s exit-status handling of <code>0</code>/<code>1</code>/other</li>
+      <li><code class="status">[]</code> <strong>Empty <code>ls-remote</code> output at exit 0 means the branch is absent</strong> → <code>fastForward: null</code> → a creation. Do not read the exit code as the signal; it is <code>0</code> in both cases</li>
+      <li><code class="status">[]</code> <code>PublishBlocked</code> with a closed code vocabulary for observation failures: <code>remote-unknown</code>, <code>remote-unreadable</code>, <code>credentials-required</code>, <code>mirror-configured</code>, <code>git-failure</code>. <strong>Raw process bytes are deliberately absent</strong> from every one, in the idiom of <code>QuotaProbeFailure</code></li>
+      <li><code class="status">[]</code> <code>mirror-configured</code> exists because it was measured: with <code>remote.&lt;name&gt;.mirror=true</code> an explicit refspec is <code>fatal: --mirror can't be combined with refspecs</code> at exit <code>128</code>. Git refuses rather than reinterpreting, and every other branch survived — but the operator deserves the real cause rather than <code>git-failure</code></li>
+      <li><code class="status">[]</code> The run step calls <code>authorizePublish</code> <strong>once</strong>, and reaches <code>publishArgv</code> only through the returned plan. There is no second authorization call and no branch that skips it</li>
+    </ul>
+
+    <h4>8. Testing Strategy</h4>
+    <p class="serves"><code class="serves">AC-2</code></p>
+    <p>Against a real local bare remote, created per test in a temporary directory with <code>mkdtempSync</code> and <code>git init --bare</code>, in the idiom of <code>core/test/unit/git/dependency-seeds.test.ts</code>. <strong>Nothing in this file resolves a hostname or opens a socket.</strong></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Write <code>core/test/unit/publish/_bare.ts</code>: temporary root, bare repository, work repository with two commits, <code>origin</code> pointing at the bare path, and explicit <code>-c user.name</code>/<code>-c user.email</code> set to the owner's identity so invariant 11 holds inside a fixture</li>
+      <li><code class="status">[]</code> An exact-revision push of a landed candidate to an absent branch <strong>creates</strong> it: porcelain flag <code>*</code>, exit <code>0</code>, and the bare repository's <code>ls-remote</code> then reports that exact SHA</li>
+      <li><code class="status">[]</code> A fast-forward to a later candidate reports the space flag with <code>old..new</code> in the last field, and the parser reads the flag correctly <strong>because the line was not trimmed</strong> — asserted explicitly, since this is the workstream's most likely parsing bug</li>
+      <li><code class="status">[]</code> A non-fast-forward is refused by the <em>table</em>, before any push runs — proved by asserting the remote ref is unchanged <strong>and</strong> that the injected runner recorded no push invocation</li>
+      <li><code class="status">[]</code> <code>observePublishTarget</code> against an absent remote name produces <code>remote-unknown</code>, and against a remote URL pointing at a missing path produces <code>remote-unreadable</code>; neither error message carries the path or the Git prose</li>
+      <li><code class="status">[]</code> <code>parsePorcelain</code> tests cover all six flags including the two that must never occur, and assert the <code>To &lt;url&gt;</code> line is dropped rather than parsed</li>
+      <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green</li>
+    </ul>
+    <div class="loop">
+      🔁 <strong>Do not exit this phase until every box above is checked.</strong> If any command fails, fix the cause and re-run — never lower what the row asserts.
+    </div>
+  </div>
+
+  <!-- ================= M4 ================= -->
+  <div class="phase">
+    <h3><code class="status">[]</code> Milestone M4: The inherited helper, and the narrower guarantee that survives it</h3>
+    <p><em>Q3, decided 2026-08-25: inherit the owner's configured credential helper.</em> That makes <code>https</code> remotes work and it gives up the structural guarantee the rejected option had. This milestone's job is to state precisely what is left and make <em>that</em> checkable, rather than to keep claiming the guarantee that was traded away.</p>
+    <div class="card warn">
+      <h5>What the decision changes, said once so no task restates it wrongly</h5>
+      <p><strong>Given up:</strong> AWSF no longer guarantees that no credential is read during a publish. It invokes the owner's helper, and whatever that helper persists is persisted. <strong>Kept, and now the whole of <code>INV-4</code>:</strong> no credential <em>value</em> passes through AWSF — nothing the helper returns is read, held, logged or journalled; no URL enters the argv; and AWSF writes no credential configuration and no credential file of its own.</p>
+      <p><strong>One consequence to name rather than absorb.</strong> <code>credential-access</code> is one of the six operations <code>awsf.config.yaml</code> lists under <code>policy.protected_operations</code>, and a publish now performs it. That vocabulary is <strong>loader-checked for membership and enforced nowhere</strong>, so nothing stops it and nothing was bypassed — but a plan that quietly performed a declared-protected operation without saying so would be doing what the spine's R1 names. It is said here.</p>
+    </div>
+
+    <h4>9. The env posture, and the failure that is no longer a refusal</h4>
+    <p class="serves"><code class="serves">INV-4</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> The argv carries <strong>no</strong> <code>-c credential.helper=</code>. The owner's configured helper chain applies exactly as it does when they run the command themselves</li>
+      <li><code class="status">[]</code> The env passed to <code>runSystemCommand</code> still sets <code>GIT_TERMINAL_PROMPT=0</code> over the inherited environment. <strong>This is not a credential control and must not be described as one</strong> — it exists because <code>spawnSync</code> captures stdio, so the subprocess has no terminal and a prompt would hang until the timeout rather than reach anybody. Measured: with prompting off, Git fails immediately with <code>terminal prompts disabled</code> at exit <code>128</code></li>
+      <li><code class="status">[]</code> <code>credentials-required</code> narrows to one case: the helper chain produced nothing and prompting is off. Its operator sentence names the helper as the thing to fix, not AWSF. The stderr that carried the diagnosis is still discarded</li>
+      <li><code class="status">[]</code> Before spawning, run the joined argv through <code>containsCredential</code> and refuse if it matches. It cannot match today — the argv holds a remote name and a SHA — and it is there so a future edit that puts a URL into the argv turns a test red rather than shipping</li>
+      <li><code class="status">[]</code> Nothing in the publish path writes to <code>~</code>, to the repository's Git config, or to any file. The only write AWSF makes is the journal record in M6</li>
+      <li><code class="status">[]</code> Record in a header comment what this posture does and does not promise, in the two sentences from the card above. A comment claiming credential non-persistence would be false after this decision</li>
+    </ul>
+
+    <h4>10. Testing Strategy</h4>
+    <p class="serves"><code class="serves">AC-5</code></p>
+    <p>The decision inverts what the stub helper proves. It is no longer evidence that the helper stayed unused; it is evidence that the helper <strong>ran</strong> and that its answer went nowhere AWSF can be held responsible for.</p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> <strong>The helper is invoked.</strong> With a stub helper configured, a publish causes it to run — asserted on the marker file the stub writes. A test that could not tell whether the helper ran cannot say anything about what happened to its answer</li>
+      <li><code class="status">[]</code> The stub's returned secret appears in <strong>no</strong> argv the runner received, <strong>no</strong> journal line, and <strong>no</strong> operator message — swept over the serialized journal and the captured argv, not over reconstructions. The stub's password literal is assembled from fragments so the test file survives <code>no-credentials-in-fixtures.test.ts</code></li>
+      <li><code class="status">[]</code> The argv contains no <code>-c credential.helper=</code>, asserted directly, so a later reinstatement of the cleared-helper posture is a deliberate change rather than a drift</li>
+      <li><code class="status">[]</code> <strong>AWSF wrote nothing:</strong> in a publish run against a repository with <em>no</em> helper configured, <code>git config --local --get-regexp '^credential\.'</code> reports nothing afterwards — asserted on the <strong>empty output</strong>, because it exits <code>1</code> when there are no matches and reading that exit code as failure inverts the test</li>
+      <li><code class="status">[]</code> <code>remote.origin.url</code> is byte-identical to what it was before, and no new dotfile appeared at the repository root or in its Git directory</li>
+      <li><code class="status">[]</code> The argv contains no <code>://</code>, no <code>@</code>, and no value that <code>containsCredential</code> matches</li>
+      <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code>, <code>npm run lint</code> and <code>node --test core/test/unit/meta/no-credentials-in-fixtures.test.ts</code> all green</li>
+    </ul>
+    <div class="loop">
+      🔁 <strong>Do not exit this phase until every box above is checked.</strong> If any command fails, fix the cause and re-run — never lower what the row asserts.
+    </div>
+  </div>
+
+  <!-- ================= M5 ================= -->
+  <div class="phase">
+    <h3><code class="status">[]</code> Milestone M5: The <code>PUBLISHED</code> state <span class="gate">G8-B</span> <span class="gate">G8-C</span></h3>
+    <p><em>Q2, decided 2026-08-25.</em> This is the milestone the decision bought, and it is the largest in the workstream. Two owner-authored commits gate it, one agent-writable precondition must land <strong>before</strong> the second of them can run, and eleven files move on the test and display side. Nothing here touches publication itself — that is M6.</p>
+
+    <figure>
+      <pre class="mermaid">
+stateDiagram-v2
+  LANDING --> LANDED: L23 host
+  LANDED --> PUBLISHED: L27 human
+  note right of LANDED
+    terminal for work
+    not sealed
+  end note
+  note right of PUBLISHED
+    terminal for work
+    sealed
+  end note
+      </pre>
+      <figcaption>The only edge leaving <code>LANDED</code>, and the two predicates that used to be one. Everything reading <code>isTerminalStatus</code> sees no change; only <code>transition()</code> step 2 and the journal's write protocol read the new one.</figcaption>
+    </figure>
+
+    <h4>11. The two unprotected preconditions: the foreign-key hoist and the seal split</h4>
+    <p class="serves"><code class="serves">INV-7</code></p>
+    <p>Both files are agent-writable and both must land before the owner's commits can do anything. Doing them first is what stops an owner committing a migration that bricks every command.</p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> In <code>core/src/observability/sqlite.ts</code>, add <code>foreign_keys</code> to <code>TRANSACTION_UNSAFE_PRAGMA</code> so <code>PRAGMA foreign_keys = OFF</code> is hoisted ahead of <code>BEGIN IMMEDIATE</code>, and restore the previous value after the migration commits. <strong>Measured</strong>: the rebuild fails with <code>FOREIGN KEY constraint failed</code> without this, and <code>PRAGMA defer_foreign_keys = ON</code> inside the transaction fails identically because SQLite's <code>RESTRICT</code> is not deferrable</li>
+      <li><code class="status">[]</code> Restore rather than assume: capture <code>PRAGMA foreign_keys</code> before the hoist and set it back afterwards. <code>node:sqlite</code>'s <code>DatabaseSync</code> defaults it to <strong>ON</strong> — verified — so leaving it off would silently disable every foreign key for the life of the process</li>
+      <li><code class="status">[]</code> Write the comment beside the widened list saying why the third pragma is there and what breaks without it, in the idiom of the existing two-pragma comment</li>
+      <li><code class="status">[]</code> In <code>core/src/cli/commands/attempt.ts</code>, split the seal. <code>persistAttempt</code>'s <code>validate</code> refuses when the current state is in <code>SEALED_STATES</code>, <strong>and</strong> refuses any event on a <code>LANDED</code> attempt whose <code>next.lifecycleState</code> is not <code>PUBLISHED</code>. Two conditions where there was one — the seal is narrowed, never removed</li>
+      <li><code class="status">[]</code> <code>sealWhenTerminal</code> becomes seal-when-<em>sealed</em>, so the lock seals at <code>PUBLISHED</code>, <code>BLOCKED</code> and <code>CANCELLED</code> and not at <code>LANDED</code></li>
+      <li><code class="status">[]</code> <code>isTerminalStatus</code> is <strong>unchanged</strong> and still reads <code>TERMINAL_STATES</code>. Verify by reading all six of its consumers — <code>attempt-projection.ts</code>'s <code>endedAt</code>, <code>retry.ts</code>, <code>raise.ts</code> twice, <code>watch.ts</code>, and <code>attempt.ts</code>'s own guard — and confirm each keeps the behaviour it has today for a landed attempt</li>
+      <li><code class="status">[]</code> Until <span class="gate">G8-B</span> lands there is no <code>SEALED_STATES</code> to import. Write this task against a locally declared constant with a comment naming <span class="gate">G8-B</span> as its future home, and task 12 replaces it with the import — rather than blocking task 11 on a commit it does not need</li>
+    </ul>
+
+    <h4>12. Verify <span class="gate">G8-B</span> and <span class="gate">G8-C</span> landed, then move the test-side tables</h4>
+    <p class="serves"><code class="serves">INV-7</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Read <code>core/src/state/task-machine.ts</code> and confirm: <code>PUBLISHED</code> in <code>TASK_STATES</code>, <code>PUBLISHED</code> in <code>TERMINAL_STATES</code>, a <code>SEALED_STATES</code> of exactly <code>BLOCKED</code>/<code>CANCELLED</code>/<code>PUBLISHED</code>, step 2 of <code>transition()</code> reading <code>SEALED_STATES</code>, <code>L27</code> in <code>EdgeId</code>, and the <code>LEGAL_EDGES</code> row <code>L27 — LANDED → PUBLISHED</code>, actor <code>human</code>, <code>spawnSite: false</code>, <code>interactive: true</code>. Read <code>guards.ts</code> and confirm <code>L27</code>'s guard exists</li>
+      <li><code class="status">[]</code> Read <code>core/src/observability/migrations/0004-published-state.sql</code> and confirm it rebuilds <code>sessions</code> with the eleven-value <code>CHECK</code>, copies every column, and recreates <code>idx_sessions_recent</code>, <code>idx_sessions_state</code> and <code>idx_sessions_task</code>. Confirm it ends with <code>PRAGMA user_version = 4</code></li>
+      <li><code class="status">[]</code> <strong>If either has not landed: mark this task <code>[f]</code>, mark M5 <code>[f]</code>, stop, and report.</strong> Do not write either protected path. Do not add an exemption. Do not proceed to M6 — every milestone after this one assumes the state exists</li>
+      <li><code class="status">[]</code> Replace task 11's local constant with the real <code>SEALED_STATES</code> import</li>
+      <li><code class="status">[]</code> Move the mirror in <code>core/test/unit/_lifecycle-tables.ts</code>: <code>TASK_STATES</code> gains <code>PUBLISHED</code>, <code>TERMINAL_STATES</code> gains it, a <code>SEALED_STATES</code> mirror appears, and the four class lists move to the measured arithmetic — <code>TERMINAL_ATTEMPT_PAIRS</code> 27 → <strong>30</strong> (three sealed sources × the other ten states, so <code>LANDED</code>'s nine leave and <code>PUBLISHED</code>'s ten plus <code>BLOCKED→PUBLISHED</code> and <code>CANCELLED→PUBLISHED</code> arrive), <code>ALREADY_IN_STATE_PAIRS</code> 10 → <strong>11</strong>, <code>HUMAN_GATE_BYPASS_PAIRS</code> <strong>6, unchanged</strong>, and everything-else 31 → <strong>47</strong></li>
+      <li><code class="status">[]</code> Extend that file's existing arithmetic comment rather than replacing it. It already records why the counts win over a literal reading of step 2, and why <code>L25</code> and <code>L26</code> were single-cell amendments. <strong><code>L27</code> is not single-cell</strong> — it adds a row and a column and moves a source out of the sealed set — and the comment must say so, because the next reader will otherwise assume the pattern held</li>
+      <li><code class="status">[]</code> Move <code>core/test/unit/transitions.test.ts</code>: 100 → <strong>121</strong> ordered pairs, 26 → <strong>27</strong> legal, 74 → <strong>94</strong> illegal, the partition assertion to <code>30 + 11 + 6 + 47 = 94</code>, and <code>LEGAL_EDGES.length</code> to 27</li>
+      <li><code class="status">[]</code> Move <code>core/test/unit/actors.test.ts</code>'s <code>others.length</code> from 22 to <strong>23</strong>, and add <code>L27</code>'s actor row</li>
+      <li><code class="status">[]</code> Add a <code>rejection-order.test.ts</code> reachability row proving <code>TerminalAttempt</code> fires from <code>PUBLISHED</code>, and confirm no existing adjacency changed — the eleven ordered steps are untouched by this workstream</li>
+      <li><code class="status">[]</code> Move the duplicated <code>TERMINAL_STATES</code> literal in <code>core/test/simulation/_harness.ts</code>. <strong>Note in a comment that no fence ties it to the real one</strong> — that is a standing gap this task exposes rather than creates, and naming it is cheaper than fixing it here</li>
+    </ul>
+
+    <h4>13. The dashboard's eleventh state</h4>
+    <ul class="checklist">
+      <li><code class="status">[]</code> <code>dashboard/shared/types.ts</code>: <code>LifecycleState</code> gains <code>"PUBLISHED"</code></li>
+      <li><code class="status">[]</code> <code>dashboard/src/components/StateRibbon.vue</code>: the ribbon currently ends at <code>LANDED</code> and gains <code>PUBLISHED</code> as its ninth cell. The ribbon is the happy path, not the whole state set — <code>BLOCKED</code> and <code>CANCELLED</code> are deliberately absent from it and stay absent</li>
+      <li><code class="status">[]</code> <code>dashboard/src/display.ts</code>: <code>stateTone</code> returns <code>"ok"</code> for <code>PUBLISHED</code> and <code>stateLabel</code> gives it a glyph. <strong>Do not perturb <code>formatCost</code> or any of the thirteen existing formatters</strong> — W02 pinned eighteen assertions across three files, and this task extends rather than touches them</li>
+      <li><code class="status">[]</code> <code>npm run typecheck:dashboard</code> green — the union is exhaustively switched in more than one place and the compiler is what finds them</li>
+    </ul>
+
+    <h4>14. Testing Strategy: the widened matrix, the seal, and the migration</h4>
+    <p class="serves"><code class="serves">AC-7</code></p>
+    <p>Three independent things to prove: the matrix balances, the seal admits exactly one record, and the migration carries the data without losing a foreign key.</p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> The full <code>121</code>-pair sweep passes with <code>27</code> accepted and <code>94</code> rejected, each rejection in the class the table names — the existing exhaustive test, re-run over the widened matrix</li>
+      <li><code class="status">[]</code> Write <code>core/test/unit/publish/seal.test.ts</code>: a <code>LANDED</code> attempt accepts an <code>L27</code> transition to <code>PUBLISHED</code>; the same attempt refuses an <code>attempt.updated</code> carrying no transition, refuses a transition to any other state, and refuses a second <code>L27</code> once <code>PUBLISHED</code>. Each refusal asserted by error name, not message text</li>
+      <li><code class="status">[]</code> A <code>PUBLISHED</code> attempt refuses every event with <code>SealedAttempt</code>, and its lock is sealed so a second <code>withLock</code> throws — the two halves asserted separately, because they are two mechanisms</li>
+      <li><code class="status">[]</code> The six <code>isTerminalStatus</code> consumers keep their behaviour for a landed attempt: <code>retry</code> mints attempt n+1, <code>raise</code> refuses with <code>CeilingRaiseAttemptNotLive</code>, <code>watch</code> returns, and <code>endedAt</code> is set. One row each, because a silent change to any of them is the failure mode the split exists to avoid</li>
+      <li><code class="status">[]</code> Write <code>core/test/unit/observability/migration-0004.test.ts</code> against a database seeded at <code>user_version = 3</code>: every <code>sessions</code> row survives the rebuild, <code>PRAGMA foreign_key_check</code> is empty afterwards, each child table's <code>REFERENCES sessions(session_id) ON DELETE RESTRICT</code> is intact in <code>sqlite_master</code>, a <code>PUBLISHED</code> row inserts, and an orphan child insert is still refused</li>
+      <li><code class="status">[]</code> The migration is run twice against the same database and the second run is a no-op — <code>user_version</code> gates it, and a rebuild that re-ran would drop the table it just created</li>
+      <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green</li>
+    </ul>
+    <div class="loop">
+      🔁 <strong>Do not exit this phase until every box above is checked.</strong> If either owner commit is absent, this milestone is <code>[f]</code> and the workstream stops here — M6 onward assumes the state exists.
+    </div>
+  </div>
+
+  <!-- ================= M6 ================= -->
+  <div class="phase">
+    <h3><code class="status">[]</code> Milestone M6: <code>awsf publish</code>, the record, and the seventh owner act</h3>
+    <p>Three things land together because they cannot land apart: the command makes <code>publish</code> an owner act, <code>boundary-claims.test.ts</code> derives the owner acts from <code>main.ts</code> and goes red the moment the arm appears, and the guard that denies owner acts in a driving session has to learn the new verb in the same breath.</p>
+
+    <h4>15. The command, the single authorization call, and the <code>L27</code> transition</h4>
+    <p class="serves"><code class="serves">INV-6</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Create <code>core/src/cli/commands/publish.ts</code> in the shape of <code>land.ts</code>: locate the attempt, resolve the repository's catalog <code>publish</code> block, observe, display, confirm once, authorize once, run, then transition</li>
+      <li><code class="status">[]</code> Display before the confirmation: the exact revision, the remote name, the branch, whether this is a creation or a fast-forward, and the fourteen-row verdict. <strong>Never the URL</strong></li>
+      <li><code class="status">[]</code> One <code>terminal.confirm</code>. Declining returns without a push, without a transition and without a journal record, exactly as declining a landing does</li>
+      <li><code class="status">[]</code> A repository with no <code>publish</code> block is refused with a sentence saying the catalog declares no publish policy — before any observation runs, so an unpublishable repository never spawns Git at all</li>
+      <li><code class="status">[]</code> <strong>The ordering that matters:</strong> the push runs <em>before</em> the <code>L27</code> transition is persisted, and the transition records what the remote did. A transition persisted first would claim a publication that had not happened; this is the opposite ordering from <code>L20</code>, where <code>LANDING</code> is made durable before Git moves, and the difference is deliberate — landing is recoverable locally, a push is not undoable</li>
+      <li><code class="status">[]</code> A push that succeeds and a transition that then fails leaves the remote ahead of the journal. Name that residual in a comment and handle it the way <code>recoverLanding</code> handles its own: a retry of <code>awsf publish</code> on the same revision observes <code>already-current</code> and completes the transition. <strong>Do not invent a rollback</strong> — there is none for a push</li>
+      <li><code class="status">[]</code> Add the <code>publish</code> arm to <code>core/src/cli/main.ts</code> constructing <code>processOwnerTerminal()</code>, and add <code>"publish"</code> to <code>CLI_COMMANDS</code></li>
+      <li><code class="status">[]</code> Nothing is added to <code>API_ROUTE_TABLE</code> and nothing under <code>core/src/api/**</code> imports the publish path — <code>no-write-route.test.ts</code> and <code>no-land-route.test.ts</code> stay green untouched</li>
+    </ul>
+
+    <h4>16. The record, and what it must not carry</h4>
+    <p class="serves"><code class="serves">INV-5</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Add a <code>publish</code> member to <code>AttemptEvidence</code>: <code>{ type, remote, branch, publishedSha, outcome, remotePriorSha, at }</code>. <code>outcome</code> is the closed vocabulary from task 6; <code>remotePriorSha</code> is <code>null</code> for a creation</li>
+      <li><code class="status">[]</code> <strong>No URL, no host, no stdout, no stderr, no Git prose, no exit code, no path.</strong> Follow <code>quota-snapshot</code>'s precedent exactly — a closed field list is a stronger scrub than a redacted blob, because redaction runs per value and a Git error message is prose that can carry a credential-bearing URL inside it</li>
+      <li><code class="status">[]</code> The record rides the <code>L27</code> transition's <code>attempt.transitioned</code> event rather than a separate <code>attempt.updated</code>. One event, one record, one state change — and it is the only record the seal admits after <code>LANDED</code></li>
+      <li><code class="status">[]</code> The projector's switch has no <code>default</code>, so the new evidence member is a silent no-op there. The <code>lifecycle_state</code> column, however, is <strong>not</strong> a no-op — it is what <span class="gate">G8-C</span>'s migration widened, and the projector writes <code>PUBLISHED</code> into it</li>
+      <li><code class="status">[]</code> Nothing is written to disk outside the journal and the projection — no summary file, no report, no receipt</li>
+      <li><code class="status">[]</code> A refused publish journals nothing and moves no state. The refusal is an operator-facing message; a record of something that did not happen is not evidence</li>
+    </ul>
+
+    <h4>17. The seventh owner act, and everything that moves with it</h4>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Add <code>publish</code> to the verb loop in <code>docs/driving/marimba/delegation-guard.sh</code>: <code>for verb in land cancel rework review journey raise publish</code>. A seventh act absent from this loop is an act a driving session can run</li>
+      <li><code class="status">[]</code> Add the matching rows to <code>core/test/unit/meta/marimba-guard.test.ts</code> with all three assertions the existing deny rows carry — exit <code>2</code>, the reason on stderr, and <strong>nothing on stdout</strong></li>
+      <li><code class="status">[]</code> Update the five enumeration sites <code>boundary-claims.test.ts</code> will otherwise fail on: <code>owner_acts.md</code> line 3 (which says the literal word "Six"), its body section for the new act, <code>SKILL.md</code> twice, and <code>gotchas.md</code> twice</li>
+      <li><code class="status">[]</code> Add <code>awsf publish</code> to <code>README.md</code> so <code>doc-reconciliation.test.ts</code>'s CLI-table check sees a documented command that exists</li>
+      <li><code class="status">[]</code> Write the <code>owner_acts.md</code> section for <code>publish</code> saying what it settles and what it forecloses — the gap that document already names as an open defect for <code>cancel</code>, <code>land</code> and <code>rework</code>, and the one thing a new act can avoid inheriting. <strong>It forecloses a great deal:</strong> the attempt becomes sealed, so this is the last act available on it</li>
+      <li><code class="status">[]</code> <code>lifecycle.md</code> in the driving references describes the state machine. Add <code>PUBLISHED</code> and <code>L27</code> there, or the tree describes a machine that no longer exists</li>
+    </ul>
+
+    <h4>18. Testing Strategy: idempotent retry and the cascade meta-tests</h4>
+    <p class="serves"><code class="serves">AC-3</code> <code class="serves">AC-6</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> <strong>Idempotent retry, and the decision changed what proves it.</strong> A second <code>awsf publish</code> on a <code>PUBLISHED</code> attempt is refused by the state machine with <code>SealedAttempt</code> — asserted first, because that is now the primary mechanism. Git's <code>already-current</code> is asserted separately, at the module level, as the backstop for a retry that reaches the push after a transition failed</li>
+      <li><code class="status">[]</code> A declined confirmation runs no push, persists no transition and journals nothing — asserted on the injected runner having recorded no push and on the journal length being unchanged</li>
+      <li><code class="status">[]</code> The journalled record round-trips and carries no <code>://</code>, no <code>@</code>, and no value <code>containsCredential</code> matches — swept over the serialized line, not over the object</li>
+      <li><code class="status">[]</code> The projection shows <code>lifecycle_state = 'PUBLISHED'</code> after a publish, which is the end-to-end proof that <span class="gate">G8-C</span>'s migration and the projector agree</li>
+      <li><code class="status">[]</code> <code>node --test core/test/unit/meta/boundary-claims.test.ts</code> green with <strong>seven</strong> derived acts, and the derivation still discriminates: <code>retry</code> is a case arm and must still not be derived as an act</li>
+      <li><code class="status">[]</code> <code>node --test core/test/unit/meta/marimba-guard.test.ts</code> green, with the new deny row observed failing first against the unmodified guard</li>
+      <li><code class="status">[]</code> <code>node --test core/test/unit/meta/doc-reconciliation.test.ts core/test/unit/meta/driving-tree.test.ts core/test/unit/meta/no-land-route.test.ts core/test/unit/meta/no-write-route.test.ts</code> green</li>
+      <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green</li>
+    </ul>
+    <div class="loop">
+      🔁 <strong>Do not exit this phase until every box above is checked.</strong> A failing command means fix the cause and re-run — never lower what the row asserts.
+    </div>
+  </div>
+
+  <!-- ================= M7 ================= -->
+  <div class="phase">
+    <h3><code class="status">[]</code> Milestone M7: The amendment verified, and the fence that replaces the scan <span class="gate">G8-A</span></h3>
+    <p>Everything before this milestone was buildable under invariant 8 as written, because the scan cannot see the argv site that has existed since task 6. That is precisely why the gate needs a verification step with teeth rather than a red test.</p>
+
+    <h4>19. Verify the amendment landed, and stop if it did not</h4>
+    <p class="serves"><code class="serves">INV-2</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Read <code>AGENTS.md</code> and confirm invariant 8 carries the amended text drafted in this plan's Amendment section — specifically the phrase <em>no push path exists from any pre-<code>LANDED</code> state</em> and the two named enforcing files</li>
+      <li><code class="status">[]</code> If the amendment has <strong>not</strong> landed: mark this task <code>[f]</code>, mark M7 <code>[f]</code>, stop, and report to the owner. <strong>Do not edit <code>AGENTS.md</code>. Do not add an override, an exemption, an allowlist entry, or a comment asking a future session to skip this check.</strong> No agent may write a protected path, and routing around one is not an option this ticket set offers</li>
+      <li><code class="status">[]</code> If it has landed, record the commit SHA in this plan's Amendments section in the same commit as the marker flip — so the plan that asked for the amendment also records that it arrived</li>
+      <li><code class="status">[]</code> Confirm no other invariant moved in that commit. An amendment that quietly widened a second rule is a different amendment from the one this plan drafted</li>
+    </ul>
+
+    <h4>20. Amend the absence scan: remove one clause, add three</h4>
+    <p class="serves"><code class="serves">INV-3</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> In <code>core/test/unit/meta/no-destructive-paths.test.ts</code>, remove <code>/git\s+push/</code> and <strong>nothing else</strong>. The other eight patterns stay exactly as they are</li>
+      <li><code class="status">[]</code> Add three patterns banned everywhere in <code>core/src</code> <em>including</em> <code>argv.ts</code>: a <code>+</code>-prefixed refspec literal, a refspec literal with an empty source, and a refspec literal with an all-zeros source. Each carries a comment citing what it was measured to do — <code>(forced update)</code> at exit <code>0</code>, and <code>[deleted]</code> at exit <code>0</code> twice</li>
+      <li><code class="status">[]</code> Rewrite the file's header to say what the invariant now claims and which of the three legs holds which half, so a reader who arrives at this file alone learns that the push clause moved rather than that it vanished</li>
+      <li><code class="status">[]</code> Add a bite companion in the same file: feed each new pattern a synthetic offender held in memory and assert it matches. The existing test walks real files and would pass vacuously against a pattern that never matches anything</li>
+      <li><code class="status">[]</code> Run the amended file against the tree and confirm it is green, then confirm each new pattern is red against its synthetic offender. <strong>A fence nobody has seen fail is decoration</strong></li>
+    </ul>
+
+    <h4>21. <code>publish-fence.test.ts</code> — locality, derivation, condition</h4>
+    <p class="serves"><code class="serves">INV-1</code> <code class="serves">INV-2</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> <strong>Locality</strong>: walk <code>core/src</code> and assert the push token appears in exactly one file, <code>core/src/publish/argv.ts</code> — the <code>child-process-fence.test.ts</code> idiom, single allowed path asserted by name</li>
+      <li><code class="status">[]</code> <strong>Derivation</strong>: through the TypeScript compiler API, in the idiom of <code>quota-fence.test.ts</code>, assert <code>publishArgv</code> declares exactly one parameter, that its type resolves to a declaration in <code>core/src/publish/authorize.ts</code>, and that no file under <code>core/src</code> other than <code>authorize.ts</code> constructs that type or casts to it</li>
+      <li><code class="status">[]</code> <strong>Condition</strong>: import <code>TASK_STATES</code> and assert <code>authorizePublish</code> returns <code>not-landed</code> for every member except <code>LANDED</code>, and that the number of refused states equals <code>TASK_STATES.length - 1</code>. <strong>With <code>PUBLISHED</code> in the list this now also proves a second publish is refused by the table</strong>, not only by the seal — two independent mechanisms for one property, which is what the decision bought</li>
+      <li><code class="status">[]</code> Write the file's header naming the residual the amendment already names: the brand is defeatable by a sufficiently indirect cast, the derivation leg scans for a cast, and the locality leg is what still holds if the scan is evaded. <strong>State the ceiling rather than implying there is none</strong></li>
+      <li><code class="status">[]</code> Prove each leg red before trusting it: add the token to a second file; construct a plan by hand in a third; and add a synthetic state to a copy of the state list and watch the count assertion fail. Revert all three</li>
+    </ul>
+
+    <h4>22. Testing Strategy: the fences bite and nothing else moved</h4>
+    <p class="serves"><code class="serves">AC-1</code> <code class="serves">AC-4</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> All three fence legs green against the tree, and each recorded as having been seen red against a deliberate violation that was then reverted</li>
+      <li><code class="status">[]</code> <code>node --test core/test/unit/meta/no-destructive-paths.test.ts</code> green, with the three new patterns each seen red against a synthetic offender</li>
+      <li><code class="status">[]</code> <code>node --test core/test/unit/meta/no-land-route.test.ts</code> green and <strong>unmodified</strong> — the second fence invariant 8 names is untouched by this workstream, and a diff on it would mean scope crossed a line</li>
+      <li><code class="status">[]</code> <code>node --test core/test/unit/meta/child-process-fence.test.ts</code> green — the publish path added no importer of <code>node:child_process</code></li>
+      <li><code class="status">[]</code> <code>node --test core/test/unit/meta/dependency-allowlist.test.ts</code> green — this workstream added no dependency</li>
+      <li><code class="status">[]</code> <code>node --test core/test/unit/meta/state-purity-fence.test.ts core/test/unit/meta/sqlite-write-fence.test.ts</code> green — the state module stayed pure through <span class="gate">G8-B</span> and only the three permitted files write SQLite through <span class="gate">G8-C</span></li>
+      <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green</li>
+    </ul>
+    <div class="loop">
+      🔁 <strong>Do not exit this phase until every box above is checked.</strong> If the amendment did not land, this milestone is <code>[f]</code> and the workstream closes with the alternative recorded — that is a legitimate outcome, and editing a protected path is not.
+    </div>
+  </div>
+
+  <!-- ================= M8 ================= -->
+  <div class="phase">
+    <h3><code class="status">[]</code> Milestone M8: The whole path end to end, and the close</h3>
+    <p>One journey test carries the workstream's whole claim, and one task closes the spine marker. Nothing else happens here.</p>
+
+    <h4>23. The journey: landed candidate to bare remote, offline</h4>
+    <p class="serves"><code class="serves">AC-2</code> <code class="serves">AC-3</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Create <code>core/test/journeys/publish.test.ts</code> in the idiom of <code>human-gate.test.ts</code>: drive a task to <code>LANDED</code> through the real command surface, then publish it to a bare remote created in a temporary directory</li>
+      <li><code class="status">[]</code> The bare repository's <code>ls-remote</code> reports the exact landed candidate afterwards; the attempt is <code>PUBLISHED</code>; the journal carries exactly one <code>publish</code> record naming that revision, on the <code>L27</code> transition</li>
+      <li><code class="status">[]</code> A second <code>awsf publish</code> on the same task is refused because the attempt is sealed, and the remote ref is byte-identical</li>
+      <li><code class="status">[]</code> Every pre-<code>LANDED</code> state is refused end to end: for each member of <code>TASK_STATES</code> except <code>LANDED</code> — <strong><code>PUBLISHED</code> included</strong> — drive or construct an attempt in that state, attempt a publish, and assert the refusal is <code>not-landed</code> and that <strong>the bare repository's refs are unchanged</strong></li>
+      <li><code class="status">[]</code> Extend <code>human-gate.test.ts</code>'s API-source assertion by name: the API source reaches neither <code>commands/publish</code> nor <code>git/publish</code>, exactly as it reaches neither landing module</li>
+      <li><code class="status">[]</code> <strong>Nothing in this file resolves a hostname, opens a socket, or names a remote outside the temporary directory.</strong> Assert it structurally: the only remote URLs configured in the whole file are paths under the test's own root</li>
+    </ul>
+
+    <h4>24. Testing Strategy and the close</h4>
+    <p class="serves"><code class="serves">AC-5</code> <code class="serves">AC-6</code> <code class="serves">AC-7</code></p>
+    <p>The full offline suite, then the spine marker. This is the only task that touches <code>specs/awsf-v2-plan.html</code>.</p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run test:contract</code>, <code>npm run test:sim</code>, <code>npm run test:journeys</code>, <code>npm run typecheck</code> and <code>npm run lint</code> all green, with <strong>no network anywhere in the suite</strong>. The simulation suite is named explicitly because it carries the second <code>TERMINAL_STATES</code> literal</li>
+      <li><code class="status">[]</code> <code>ticket-plan-sync.test.ts</code> green: every task has a ticket, states mirror markers, and each ticket's prompt is byte-identical to its Section B block</li>
+      <li><code class="status">[]</code> The identifier-spine coverage rows are green: every declaration is served, no claim is orphaned, and plan and ticket <code>serves</code> lists mirror each other</li>
+      <li><code class="status">[]</code> Every milestone above is <code>[x]</code> and every ticket in <code>specs/tickets/awsf-v2-w08-publish/</code> is <code>done</code></li>
+      <li><code class="status">[]</code> <strong>All three amendments are recorded in this plan's Amendments section</strong> with their commit SHAs — <span class="gate">G8-A</span>'s invariant, <span class="gate">G8-B</span>'s state and edge, and <span class="gate">G8-C</span>'s migration — each an owner-authored commit, so the plan that asked for them also records that they landed</li>
+      <li><code class="status">[]</code> The word <em>deploy</em> appears in <code>core/src/publish/**</code>, <code>core/src/git/publish.ts</code> and <code>core/src/cli/commands/publish.ts</code> exactly zero times, and no field in the catalog's <code>publish</code> block names an environment, an endpoint or a release — checked, because absorbing W13's scope is the failure mode the spine names for this workstream specifically</li>
+      <li><code class="status">[]</code> <strong>Only now:</strong> flip W08's marker in <code>specs/awsf-v2-plan.html</code> to <code>[x]</code> and <code>specs/tickets/awsf-v2-plan/W08.md</code> to <code>done</code>, in the same commit</li>
+    </ul>
+    <div class="loop">
+      🔁 <strong>Do not exit this phase until every box above is checked.</strong> The spine marker is the last thing that moves, and it moves only from here.
+    </div>
+  </div>
+</section>
+
+<section id="validation">
+  <h2>Validation Commands</h2>
+  <p>Execute these to validate the entire plan is complete. Every one is offline.</p>
+  <ul class="checklist">
+    <li><code class="status">[]</code> <code>npm run test:unit</code> — the whole suite green, including the fourteen reachability rows, the thirteen adjacencies, the totality sweep, the catalog rejections, the porcelain vocabulary and the three fence legs</li>
+    <li><code class="status">[]</code> <code>npm run test:journeys</code> — landed candidate to bare remote, the sealed second publish, and every pre-<code>LANDED</code> state refused end to end</li>
+    <li><code class="status">[]</code> <code>npm run test:sim</code> — the simulation harness's own <code>TERMINAL_STATES</code> literal moved with the real one</li>
+    <li><code class="status">[]</code> <code>npm run typecheck</code> — the branded plan type, the closed refusal union, the closed outcome vocabulary and the widened <code>LifecycleState</code> union all hold</li>
+    <li><code class="status">[]</code> <code>npm run lint</code> — clean</li>
+    <li><code class="status">[]</code> <code>node --test core/test/unit/transitions.test.ts core/test/unit/actors.test.ts core/test/unit/rejection-order.test.ts core/test/unit/evidence.test.ts</code> — 121 pairs, 27 edges, the partition at 30 / 11 / 6 / 47, and the eleven ordered rejection steps unchanged</li>
+    <li><code class="status">[]</code> <code>node --test core/test/unit/publish/seal.test.ts</code> — a landed attempt admits exactly one further record and a published one admits none</li>
+    <li><code class="status">[]</code> <code>node --test core/test/unit/observability/migration-0004.test.ts</code> — every row carried, <code>foreign_key_check</code> empty, child foreign keys intact, and a second run a no-op</li>
+    <li><code class="status">[]</code> <code>node --test core/test/unit/meta/publish-fence.test.ts</code> — locality, derivation and condition, each having been seen red</li>
+    <li><code class="status">[]</code> <code>node --test core/test/unit/meta/no-destructive-paths.test.ts</code> — eight patterns retained, three added, each new one seen red against a synthetic offender</li>
+    <li><code class="status">[]</code> <code>node --test core/test/unit/meta/no-land-route.test.ts</code> — untouched and green; publish reached no route table</li>
+    <li><code class="status">[]</code> <code>node --test core/test/unit/meta/boundary-claims.test.ts</code> — seven derived owner acts, and every enumerating document agreeing with the code</li>
+    <li><code class="status">[]</code> <code>node --test core/test/unit/meta/marimba-guard.test.ts</code> — the guard denies the seventh verb with exit 2, the reason on stderr, and nothing on stdout</li>
+    <li><code class="status">[]</code> <code>node --test core/test/unit/meta/no-credentials-in-fixtures.test.ts</code> — the credential-helper stub and its fixtures survive the sweep</li>
+    <li><code class="status">[]</code> <code>node --test core/test/unit/meta/junk-drawer.test.ts</code> — the publish path committed nothing; invariant 10 holds</li>
+    <li><code class="status">[]</code> <code>node --test core/test/unit/meta/ticket-plan-sync.test.ts</code> — plan, tickets and Section B agree byte for byte</li>
+    <li><code class="status">[]</code> <code>git grep -c "push" core/src | wc -l</code> reports exactly one file — the single argv site, stated as a command the owner can run without reading a test</li>
+  </ul>
+  <div class="loop">
+    🔁 <strong>The plan is not complete until every box is checked and every command passes. If a step is genuinely not possible, mark it <code>[f]</code>, record why, and move on if the rest can proceed.</strong>
+  </div>
+</section>
+
+<section id="questionables">
+  <h2>Questionables</h2>
+  <p><strong>All eight were decided by the owner on 2026-08-25.</strong> Six were approved as recommended; <strong>Q2 and Q3 went the other way</strong>, and both are implemented as decided rather than re-argued. Each entry below records the decision, what it constrains, and the option set that lost. The amendment itself was never a Questionable — it is drafted in full in its own section and it is the owner's commit to write or decline.</p>
+  <div class="card danger">
+    <h5>One correction the review surfaced, recorded where it was made</h5>
+    <p><strong>Q2's original answer priced the two options wrongly, and the error favoured the option this session recommended.</strong> It claimed the no-edge design cost one owner-authored commit and the <code>PUBLISHED</code> design cost two. Reading <code>persistAttempt</code> while implementing the decision showed that a <code>LANDED</code> attempt's journal is sealed, so the no-edge design was <em>also</em> blocked and would have needed the same seal change. Measured cost as built: <strong>three owner commits</strong> — the invariant, the state and edge, and a migration nobody had counted — plus two agent-writable preconditions. The decision stands; the arithmetic behind it did not.</p>
+  </div>
+  <figure>
+    <pre class="mermaid">
+flowchart TD
+  Q2["Q2 · a PUBLISHED state"] --> GB["G8-B state + L27"]
+  Q2 --> GC["G8-C migration 0004"]
+  Q2 --> SEAL["the seal must open"]
+  Q3["Q3 · inherit the helper"] --> M4["M4 · INV-4 narrowed"]
+  Q1["Q1 · keys on a name"] --> M2["M2 catalog"]
+  Q6["Q6 · sibling block"] --> M2
+  Q4["Q4 · stderr discarded"] --> M4
+  Q5["Q5 · observe first"] --> M3["M3 observation"]
+  Q7["Q7 · cascade in scope"] --> M6["M6 command"]
+  Q8["Q8 · require approval"] --> M1["M1 table rows 2-3"]
+  style Q2 stroke:#F59E0B,stroke-width:2px
+  style Q3 stroke:#F59E0B,stroke-width:2px
+  style GB stroke:#F87171,stroke-width:2px
+  style GC stroke:#F87171,stroke-width:2px
+  style SEAL stroke:#F87171,stroke-width:2px
+    </pre>
+    <figcaption>The two decisions that went against the recommendation are the two that reshaped the plan. Q2 alone added two owner-authored commits, a milestone, and four tasks; the seal it exposed would have been needed either way.</figcaption>
+  </figure>
+
+  <details data-review-options="Remote name and branch, optional host check|Full push URL in the catalog|Remote name and branch only, no host check">
+    <summary><span class="qdecided">DECIDED</span> Q1 — Does the allowlist name a remote, or a URL?</summary>
+    <p class="decided"><b>Decided 2026-08-25 — as recommended:</b> <strong>remote name and branch, with an optional <code>host</code> checked against the resolved push URL.</strong> Applied in task 4; the derivation rule is recorded in the ticket README so a reviewer edits the rule rather than re-deriving it.</p>
+    <p class="qa-answer"><strong>The constraint is code, not preference.</strong> <code>core/src/registry/catalog.ts</code> runs <code>assertNoAbsolutePaths</code> over every string leaf of the catalog, and <code>ABSOLUTE_PATH_PATTERN</code> refuses <code>/tmp/bare.git</code> and <code>C:\bare.git</code> alike. Every test in this workstream needs exactly such a path, so a URL-keyed allowlist could not express the local bare remote the spine requires the whole thing be tested against. The one spelling that would slip through — <code>file:///tmp/bare.git</code> — passes only because the pattern anchors on <code>/</code> and a drive letter, which is smuggling a machine path past a check rather than satisfying it.</p>
+    <p class="qa-answer"><strong>What the choice buys beyond compliance.</strong> Because the argv carries a remote name, <strong>no URL enters the process arguments at all</strong> — so a credential embedded in a remote URL cannot reach argv, the journal, or an operator message, and that property holds without any scrubbing code. The URL stays in the repository's Git config, which is where it already is and where the owner already manages it.</p>
+    <p class="qa-answer"><strong>The cost, and the mitigation that is deliberately optional.</strong> A remote name is a local, rewritable binding: <code>git remote set-url origin &lt;elsewhere&gt;</code> redirects the push and the catalog never notices. The optional <code>host</code> field closes that when declared, by comparing the resolved push URL's hostname. It is <em>optional</em> for the same reason W04's <code>identity.root_commit</code> is optional — a local bare remote has no host and a required field would make the mechanism unusable for the only target the tests can reach. <strong>The consequence is that this verification is opt-in and its absence is silent</strong>, which is the same honest limitation W04 recorded for its identity check and is stated here rather than discovered later.</p>
+    <p class="qa-answer"><strong>Why not remote name only.</strong> It is simpler and it is what the tests need, but it means the allowlist constrains a label and nothing about where that label points. The optional field costs one schema property and one comparison, and a project publishing to a real forge will want it.</p>
+  </details>
+
+    <details data-review-options="No edge; journalled evidence only|A new PUBLISHED state after LANDED|A self-edge LANDED to LANDED">
+    <summary><span class="qdecided">DECIDED</span> Q2 — Does publication need a lifecycle edge?</summary>
+    <p class="decided"><b>Decided 2026-08-25 — against this session's recommendation:</b> <strong>a new <code>PUBLISHED</code> state after <code>LANDED</code>.</strong> Implemented as decided in milestone M5.</p>
+    <p class="consequence"><b>What it constrains.</b> <code>PUBLISHED</code> joins <code>TASK_STATES</code>; <code>L27 — LANDED → PUBLISHED</code> joins <code>LEGAL_EDGES</code> with actor <code>human</code>, not a spawn site, interactive, not a correction edge; <code>TERMINAL_STATES</code> gains <code>PUBLISHED</code> and keeps <code>LANDED</code>; and a new <code>SEALED_STATES</code> = {<code>BLOCKED</code>, <code>CANCELLED</code>, <code>PUBLISHED</code>} becomes what <code>transition()</code>'s step 2 and the journal's write protocol read. Two owner-authored commits — <span class="gate">G8-B</span> and <span class="gate">G8-C</span> — and two agent-writable preconditions in task 11.</p>
+    <p class="qa-answer"><strong>The correction this decision forced, stated before its cost.</strong> The original answer priced no-edge at one owner commit and this option at two. That comparison was wrong in a way that favoured the recommendation: <code>persistAttempt</code>'s <code>validate</code> throws <code>SealedAttempt</code> when the current status is terminal, and <code>LANDED</code> is terminal — so <strong>the no-edge design could not have journalled its evidence record either.</strong> The seal had to be opened whichever option won. What the decision actually costs over the alternative is one further owner commit and the state-machine ripple below, not the whole of it.</p>
+    <p class="qa-answer"><strong>The bill, measured rather than estimated.</strong> Three owner-authored commits in total for this workstream: the invariant (<span class="gate">G8-A</span>), the state and edge (<span class="gate">G8-B</span>), and a migration nobody had counted (<span class="gate">G8-C</span>). <strong>The migration is the surprise.</strong> W07 established that a new <em>edge</em> is free because <code>transitions.from_state</code>, <code>to_state</code> and <code>edge_id</code> carry no <code>CHECK</code>. A new <em>state</em> is not: <code>sessions.lifecycle_state</code> is declared <code>CHECK (lifecycle_state IN (…))</code> with the ten current values, SQLite cannot alter a <code>CHECK</code>, and <code>core/src/observability/migrations/**</code> is protected. Verified directly: inserting <code>PUBLISHED</code> against the current schema fails with <code>CHECK constraint failed</code>.</p>
+    <p class="qa-answer"><strong>And the migration does not run against the current runner, which is the finding that would have been discovered mid-build.</strong> <code>node:sqlite</code> defaults <code>foreign_keys</code> to <strong>ON</strong>, seven tables reference <code>sessions</code> with <code>ON DELETE RESTRICT</code>, and <code>runMigrations</code> hoists only <code>journal_mode</code> and <code>synchronous</code> out of its transaction. A rebuild inside <code>BEGIN IMMEDIATE</code> fails with <code>FOREIGN KEY constraint failed</code>; <code>PRAGMA defer_foreign_keys = ON</code> fails identically because <code>RESTRICT</code> is not deferrable; hoisting <code>PRAGMA foreign_keys = OFF</code> works, with every child key intact and <code>foreign_key_check</code> empty afterwards. That hoist is agent work in <code>core/src/observability/sqlite.ts</code> and <strong>must land before the owner's migration commit</strong>, or every command fails to open the database.</p>
+    <p class="qa-answer"><strong>What the decision buys, and it is more than the recommendation credited.</strong> Idempotence stops being a property of Git's behaviour and becomes a property of the machine: a second publish is refused because the attempt is sealed, before any argv is built. <code>L27</code>'s guard gives the human-initiated requirement a second, independent home — an attempt that never reached <code>LANDED</code> through <code>L23</code> cannot form the transition whatever the publish module later says. And <code>awsf status</code> can answer "did this reach the remote" without reading the evidence stream, which the no-edge design could not do at all.</p>
+    <p class="qa-answer"><strong>What it costs beyond the commits.</strong> The lifecycle matrix widens from 100 ordered pairs to 121, the class partition moves from <code>27 / 10 / 6 / 31</code> to <code>30 / 11 / 6 / 47</code>, and four test files plus a duplicated literal in the simulation harness move with it. Three dashboard files gain an eleventh state. <strong><code>L25</code> and <code>L26</code> were single-cell amendments and <code>L27</code> is not</strong> — it adds a row, a column, and moves a source out of the sealed set — and the existing arithmetic comment in <code>_lifecycle-tables.ts</code> has to say so, because the next reader will assume the pattern held.</p>
+    <p class="qa-answer"><strong>The option set, retained so the road not taken stays readable.</strong> <em>No edge</em> was the cheapest and it was recommended on an incomplete reading; its real cost was one owner commit plus the same seal change, and its real limitation was that publication would have been invisible to the lifecycle — <code>awsf status</code> reporting <code>LANDED</code> whether or not the revision ever left the machine. <em>A self-edge <code>LANDED → LANDED</code></em> is rejected by the source twice over: step 2 throws <code>TerminalAttempt</code> for a terminal source and step 3 throws <code>AlreadyInState</code> for a self-transition, both before pair legality is consulted.</p>
+  </details>
+
+    <details data-review-options="Clear helpers and refuse by name|Inherit the owner's configured helper|Accept a token from the environment">
+    <summary><span class="qdecided">DECIDED</span> Q3 — What happens when the remote requires a credential?</summary>
+    <p class="decided"><b>Decided 2026-08-25 — against this session's recommendation:</b> <strong>inherit the owner's configured helper.</strong> Implemented as decided in milestone M4.</p>
+    <p class="consequence"><b>What it constrains.</b> The argv carries no <code>-c credential.helper=</code>. <code>GIT_TERMINAL_PROMPT=0</code> stays, for a reason that is not about credentials: <code>spawnSync</code> captures stdio, so the subprocess has no terminal and a prompt would hang until the timeout rather than reach anybody. <code>credentials-required</code> narrows to the case where the helper chain produced nothing. <code>INV-4</code> and <code>AC-5</code> are both restated, and task 10's stub-helper test inverts.</p>
+    <p class="qa-answer"><strong>What the decision gives up, said plainly.</strong> AWSF no longer guarantees that no credential is read during a publish. The rejected option made that guarantee structural — measured: with the helper chain cleared the stub helper's marker file was never created, so the helper genuinely did not run. Inheriting the chain means the helper runs and whatever it persists is persisted. <strong>That guarantee is gone and this plan does not pretend otherwise.</strong></p>
+    <p class="qa-answer"><strong>What is left, and it is what <code>INV-4</code> now says.</strong> No credential <em>value</em> passes through AWSF: nothing the helper returns is read, held, logged or journalled; no URL enters the argv, because the allowlist keys on a remote name and Q1 kept it that way; and AWSF itself writes no credential configuration and no credential file. All four halves are assertable, and task 10 asserts them with the stub helper now proving the helper <em>ran</em> and that its answer went nowhere.</p>
+    <p class="qa-answer"><strong>What it buys, and the recommendation understated it.</strong> An <code>https</code> remote works. The rejected option supported ssh remotes and local paths only, and refused everything else by name — a real restriction on a real workflow, imposed to protect a boundary that the config declares and does not enforce. Publishing that only works for some of the owner's remotes is a ceiling this workstream exists to remove, and the recommendation traded the ceiling for a guarantee whose enforcement was voluntary anyway.</p>
+    <p class="qa-answer"><strong>The consequence that must not be absorbed silently.</strong> <code>credential-access</code> is one of the six operations <code>awsf.config.yaml</code> lists under <code>policy.protected_operations</code>, and a publish now performs it. That vocabulary is <strong>loader-checked for membership and enforced nowhere</strong> — <code>core/src/config/load.ts</code> validates the names and no code consults them — so nothing stopped this and no boundary was bypassed. But a plan that quietly performed a declared-protected operation without saying so would be doing exactly what the spine's R1 names, so it is said in M4's own card, in <code>INV-4</code>, and here. <strong>Whether that vocabulary should become enforceable is a question for whichever workstream owns the config surface, and this plan does not answer it.</strong></p>
+    <p class="qa-answer"><strong>Still rejected: a token from the environment.</strong> It puts a credential in the process environment of a command that constructs argv and writes a journal, which is three places invariant 9's intent would have to be re-argued. The decision to inherit the helper does not reopen it — a helper is the owner's own machinery invoked by Git, and an environment token is a secret AWSF would be holding.</p>
+  </details>
+
+  <details data-review-options="Never retain; closed reason codes only|Retain at 0o600 in the attempt's private area|Retain only after scrubbing">
+    <summary><span class="qdecided">DECIDED</span> Q4 — Is a failed push's stderr retained, as W07 retains an unreadable payload?</summary>
+    <p class="decided"><b>Decided 2026-08-25 — as recommended:</b> <strong>never retain.</strong> Closed reason codes only, and the bytes are discarded. Applied in tasks 9 and 16. <strong>Q3's decision makes this one stricter, not looser:</strong> with the owner's helper inherited, a failed push's stderr can now carry material the helper supplied, so discarding it is the only posture consistent with <code>INV-4</code>.</p>
+    <p class="qa-answer"><strong>Why this differs from W07 deliberately.</strong> W07's Q9 made retention automatic because the bytes it could not parse were the evidence gap the workstream had named, and a <code>quota-axi</code> payload carries no credential by construction. <strong>Git's stderr is the opposite on both counts.</strong> Measured: a failed push to an unreachable host printed <code>fatal: unable to access 'https://example.invalid/x.git/'</code> — the URL, in prose, in the failure path. A credential-bearing URL would appear the same way, and prose is exactly what per-value redaction cannot reach.</p>
+    <p class="qa-answer"><strong>What is lost, and it is not nothing.</strong> A push that fails for a reason the closed vocabulary does not cover produces <code>git-failure</code> and no detail, and diagnosing it means re-running the command by hand. That is a real cost to an operator at an awkward moment. The mitigation is that the closed vocabulary is built from measurement rather than guesswork — <code>remote-unknown</code>, <code>remote-unreadable</code>, <code>credentials-required</code> and <code>mirror-configured</code> each correspond to a failure observed during authoring — so the uncovered residual is smaller than a vocabulary invented at a desk would leave.</p>
+    <p class="qa-answer"><strong>Why not retain after scrubbing.</strong> It sounds like the balanced option and it is the weakest. <code>scrubCredentials</code> replaces a value that matches a pattern; it does not rewrite prose, and a URL inside a sentence is not a value. Shipping a scrub that reads as safe while leaving prose intact is the half-closed hazard W01's guard header already refuses by name.</p>
+  </details>
+
+  <details data-review-options="Observe with ls-remote before deciding|Let the remote reject and map the porcelain flag|Both, with the observation advisory">
+    <summary><span class="qdecided">DECIDED</span> Q5 — Where does the fast-forward verdict come from?</summary>
+    <p class="decided"><b>Decided 2026-08-25 — as recommended:</b> <strong>observe with <code>ls-remote</code> before deciding</strong>, so row 14 is the table's refusal rather than the remote's. Applied in task 7.</p>
+    <p class="qa-answer"><strong>The spine's requirement is what decides this.</strong> Its stop condition says every pre-<code>LANDED</code> state must be refused "by the truth table rather than by a code path that happens not to be reached", and the same reasoning applies to every other row. Measured: a non-fast-forward push is rejected by the remote with exit <code>1</code> and porcelain <code>!</code>. Relying on that produces the correct <em>outcome</em> while making the rule an emergent property of Git's behaviour rather than a stated condition — and the moment someone changes the remote's <code>receive.denyNonFastForwards</code>, the rule silently stops existing.</p>
+    <p class="qa-answer"><strong>What it costs.</strong> Two round trips to the remote instead of one. Against a local bare remote that is free; against a real forge it is one extra fetch of a single ref, which is the cheapest operation Git has. Measured offline: <code>ls-remote</code> against a bare path returns in the same breath as any other local command.</p>
+    <p class="qa-answer"><strong>The trap this row must not fall into.</strong> <code>ls-remote</code> of an absent branch is <strong>empty stdout at exit <code>0</code></strong>, not an error. Reading the exit code as the signal makes a branch creation look like a successful read of a branch that exists, and the resulting <code>fastForward</code> would be computed against nothing. The observation must read the output, not the status.</p>
+  </details>
+
+  <details data-review-options="Sibling publish object|Widen delivery into an object|A top-level publish block keyed by repository id">
+    <summary><span class="qdecided">DECIDED</span> Q6 — Where in the catalog does the block go?</summary>
+    <p class="decided"><b>Decided 2026-08-25 — as recommended:</b> <strong>a sibling <code>publish</code> object inside each repository entry</strong>, leaving <code>delivery</code> exactly as W04 shipped it. Applied in task 4.</p>
+    <p class="qa-answer"><strong>W04 drew this line explicitly and it should be honoured rather than reinterpreted.</strong> Its plan states that <code>delivery</code> records posture only — <code>service</code>, <code>mobile</code>, <code>docs</code>, <code>none</code> — and carries no remote, endpoint or credential field, because "W08 owns delivery policy and its invariant 8 amendment, and this workstream must not pre-empt either". A sibling key is the shape that leaves W04's field meaning what it meant.</p>
+    <p class="qa-answer"><strong>Why not widen <code>delivery</code>.</strong> It is currently a string enum. Widening it to an object is a breaking change to every catalog that already declares one, including this repository's own, for no capability a sibling key does not provide. It would also conflate two different questions — <em>what kind of thing is this</em> and <em>where may its source go</em> — which happen to be independent: a <code>docs</code> repository and a <code>service</code> repository publish source identically.</p>
+    <p class="qa-answer"><strong>Why not a top-level block keyed by repository id.</strong> It would put a second place where repository identity is enumerated, and the join between the two could disagree. The catalog's whole shape is that a repository's facts live inside its own entry.</p>
+  </details>
+
+  <details data-review-options="Yes, W08 updates all six sites and the guard|Owner-side, outside the task graph|Defer the documents to W12">
+    <summary><span class="qdecided">DECIDED</span> Q7 — Is the owner-act document cascade inside this workstream?</summary>
+    <p class="decided"><b>Decided 2026-08-25 — as recommended:</b> <strong>yes.</strong> Applied in task 17, which grew by one site while the plan was revised: <code>docs/driving/skills/awsf/references/lifecycle.md</code> describes the state machine, and Q2's new state and edge belong there too.</p>
+    <p class="qa-answer"><strong>Two of the six are not optional in any answer.</strong> <code>boundary-claims.test.ts</code> derives the owner acts from <code>main.ts</code> by finding the case arms that construct an owner terminal, then requires every driving document naming four or more of them to name exactly that set. It goes red the moment the <code>publish</code> arm lands. And a seventh act absent from <code>delegation-guard.sh</code>'s verb loop is an act a driving session can execute — which is the boundary W01 exists to hold, failing open.</p>
+    <p class="qa-answer"><strong>The complication worth surfacing.</strong> After W01's amendment narrowed the documenter's <code>writes</code> to <code>["README.md"]</code>, <strong>no managed role's write globs reach <code>docs/driving/**</code> at all</strong>. So these edits cannot be made by a worker phase; they are made by the driving session that runs the task, the same way W01's own tasks were. That is a fact about who does the work, not a reason to move the work out of the plan — and it belongs in the ticket README so a later session does not discover it as a permission error.</p>
+    <p class="qa-answer"><strong>Why not owner-side.</strong> The spine's owner-side list is work that <em>cannot land from a managed worktree</em> — shell functions, installed skills, machine-local settings, upstream contributions. These files are in the repository and land through the normal route. Putting them on the owner-side list would be using that list as a place to defer things, which is the failure mode R6 names for W13 and W14.</p>
+    <p class="qa-answer"><strong>Why not defer to W12.</strong> W12 is the cheatsheet and it waits on the command surface to stop moving. Leaving <code>boundary-claims.test.ts</code> red between W08 and W12 would mean shipping a workstream with a failing meta-test, which no milestone in this plan is permitted to do.</p>
+  </details>
+
+  <details data-review-options="Require landingApproval and match its SHA|LANDED alone is sufficient">
+    <summary><span class="qdecided">DECIDED</span> Q8 — Does the table require the landing approval record, or is <code>LANDED</code> enough?</summary>
+    <p class="decided"><b>Decided 2026-08-25 — as recommended:</b> <strong>require it</strong> — rows 2 and 3, before the candidate is believed. Applied in task 2, and <strong>Q2 doubled it</strong>: <code>L27</code>'s guard demands the same record independently, so the requirement now holds in the state machine as well as in the table.</p>
+    <p class="qa-answer"><strong>What the record adds that the state does not.</strong> <code>LANDED</code> says the lifecycle reached its terminal state. <code>landingApproval</code> — populated at <code>L20</code> in <code>land.ts</code> with <code>candidateSha</code>, <code>summary</code> and <code>approvedAt</code> — says <em>a human confirmed this exact revision</em>. "Post-landed, <strong>human-initiated</strong>, exact-revision publication" is the settled contract, and the second word has a field behind it. Requiring the field is what makes the claim checkable rather than assumed.</p>
+    <p class="qa-answer"><strong>Row 3 is the one that earns its place.</strong> Comparing <code>landingApproval.candidateSha</code> to <code>status.candidateSha</code> catches a journal in which the approved revision and the recorded candidate have drifted apart. That should be impossible today, and a row that checks an impossible condition is exactly the row that will still be there when it becomes possible.</p>
+    <p class="qa-answer"><strong>What it costs.</strong> Two rows, and a hard dependency on a field an older journal may not carry. Attempts created before <code>landingApproval</code> existed would be refused with <code>no-landing-approval</code> rather than published. That is the correct answer — a revision whose human approval was never recorded should not be published by a machine — but it means the refusal message must say so plainly rather than reading like a defect.</p>
+    <p class="qa-answer"><strong>The case for <code>LANDED</code> alone.</strong> It is simpler, and <code>LANDED</code> is only reachable through <code>L20</code>, which is only reachable through a human confirmation — so the guarantee is already there structurally. The counter is that it is there by a two-hop argument through the state machine, and rows 2 and 3 make it a one-hop check on a field.</p>
+  </details>
+</section>
+
+<section id="notes">
+  <h2>Notes</h2>
+
+  <h3>What this plan measured, and where the measurements came from</h3>
+  <p>Every claim in this document that starts with "measured" was produced during authoring on 2026-08-24, offline, against temporary Git repositories in a scratch directory. None of it touched the network, spent quota, or wrote anything into this repository. Three groups:</p>
+  <ol>
+    <li><strong>The scan against six specimens.</strong> The nine <code>FORBIDDEN</code> patterns from <code>no-destructive-paths.test.ts</code>, run in isolation against six source strings. Four destructive spellings pass; a comment and an explicit <code>--force</code> flag are caught.</li>
+    <li><strong>Push semantics against a local bare remote.</strong> Creation, idempotent retry, fast-forward, non-fast-forward, an unallowlisted branch, the <code>+</code> force refspec, the empty-source delete, the all-zeros-source delete, the <code>--porcelain</code> flag vocabulary with stdout and stderr separated, and a hostile local config with <code>mirror</code>, <code>push.default</code>, <code>followTags</code> and a glob push refspec all set.</li>
+    <li><strong>The credential posture against a stub helper.</strong> A helper script appending to a marker file, invoked through <code>git credential fill</code>, with and without the empty helper argument and with the environment-variable form. <em>Taken to support the recommendation Q3 rejected; it survives as the reason task 10 can assert the helper ran.</em></li>
+    <li><strong>The schema and the migration runner, against <code>node:sqlite</code>.</strong> Added while applying Q2. A miniature of the real shape — a parent with a <code>CHECK</code>, a child with <code>ON DELETE RESTRICT</code>, an index — rebuilt three ways inside <code>BEGIN IMMEDIATE</code>. It established the default <code>foreign_keys</code> setting, which routes fail, which works, and that the child's foreign key survives the rename.</li>
+  </ol>
+  <p><strong>None of these transcripts is committed.</strong> Invariant 10 makes the repository's evidence store the journal and Git, and a captured terminal session is a runtime artifact. The findings live in this plan; the assertions live in the tests M1 through M7 write. Where a build task needs to see a behaviour rather than trust this document, its checklist says to reproduce it.</p>
+
+  <h3>Three derived rules that a later reader would otherwise reconstruct wrongly</h3>
+  <div class="card rule">
+    <h5>The all-zeros deletion sentinel</h5>
+    <p>A refspec source of forty zeros is a deletion, not a push of a nonexistent object. Measured: <code>git push origin 0000…0000:refs/heads/main</code> printed <code>remote: warning: deleting a non-existent ref</code> and <code>- :refs/heads/main [deleted]</code> at exit <code>0</code>. <strong>So "non-delete" is not "the source is non-empty"</strong>, and a check written that way would pass a deletion that also passes a forty-hex-character validator.</p>
+  </div>
+  <div class="card rule">
+    <h5>The porcelain flag is one character and one of them is a space</h5>
+    <p>The vocabulary is <code>*</code> created, <code>=</code> up to date, <code>&nbsp;</code> fast-forwarded, <code>!</code> rejected, <code>+</code> forced, <code>-</code> deleted. <strong>The fast-forward flag is a literal space</strong>, so <code>line.trim().split("\t")[0]</code> silently converts a fast-forward into the ref name. Read the first character of the untrimmed line, then split. The first stdout line is <code>To &lt;url&gt;</code> and is dropped; the last is <code>Done</code> and is dropped; prose and the URL-bearing failure text are on stderr and are never read.</p>
+  </div>
+  <div class="card rule">
+    <h5>Two commands whose exit code means the opposite of what it looks like</h5>
+    <p><code>git ls-remote &lt;remote&gt; refs/heads/&lt;branch&gt;</code> exits <code>0</code> with empty stdout when the branch does not exist — that is a creation, not a failure. <code>git config --local --get-regexp '^credential\.'</code> exits <code>1</code> when nothing matches — that is the outcome the credential test wants. Both are read from output, never from status. This is the same lesson W07 recorded about <code>quota-axi</code>'s exit code, arriving from a different direction, and it is why neither test asserts on a status.</p>
+  </div>
+
+  <div class="card rule">
+    <h5>A fourth derived rule, added by the review: a new state is not a new edge</h5>
+    <p>W07 established that adding a legal <em>edge</em> needs no migration, because <code>transitions.from_state</code>, <code>to_state</code> and <code>edge_id</code> carry no <code>CHECK</code>. <strong>It is easy to read that as "the lifecycle has no schema constraints" and it is not what it says.</strong> <code>sessions.lifecycle_state</code> does carry one, listing all ten current values, so a new <em>state</em> needs a table rebuild in a protected directory. The two facts sit four lines apart in the same file.</p>
+    <p>Downstream of that: <code>node:sqlite</code>'s <code>DatabaseSync</code> defaults <code>foreign_keys</code> to <strong>ON</strong>, where raw SQLite defaults it off, so a rebuild of a table seven others reference with <code>RESTRICT</code> fails inside the migration transaction. <code>PRAGMA foreign_keys = ON</code> at the top of <code>0001-initial.sql</code> is a no-op — it runs inside <code>BEGIN IMMEDIATE</code>, where SQLite ignores it, and the setting is per-connection and unsaved anyway. The behaviour is right by accident of the driver's default rather than by that line.</p>
+  </div>
+
+  <h3>Collisions this workstream inherits, and how each is handled</h3>
+  <table>
+    <thead><tr><th>Collision</th><th>Handling</th></tr></thead>
+    <tbody>
+      <tr><td><code>boundary-claims.test.ts</code> goes red when the <code>publish</code> arm lands, because it derives the owner acts from <code>main.ts</code> and holds five document sites to that set</td><td>Task 13 updates all five sites plus the guard, its meta-test and <code>README.md</code>, in the same milestone as the command. Q7 records why this is not deferred.</td></tr>
+      <tr><td><code>docs/driving/**</code> is reachable by no managed role's <code>writes</code> glob after W01's narrowing</td><td>Task 13's edits are made by the driving session that runs the task, exactly as W01's own were. Recorded in the ticket README so it is not met as a permission error.</td></tr>
+      <tr><td><code>no-destructive-paths.test.ts</code> cannot see the argv site task 6 creates, so nothing forces gate <span class="gate">G8-A</span></td><td>Task 15 is an explicit verification with a written <code>[f]</code> posture. Named in the Gates section as the one thing in this plan that could go wrong quietly.</td></tr>
+      <tr><td>W04 reserved delivery policy for W08 while leaving <code>delivery</code> a posture enum</td><td>A sibling <code>publish</code> block; <code>delivery</code> is not widened. Q6 records the alternative and its breaking-change cost.</td></tr>
+      <tr><td>The catalog loader refuses absolute machine paths, and every test here needs a temporary bare-remote path</td><td>The allowlist keys on remote name. Q1 records that this is forced by code rather than chosen, and what it buys.</td></tr>
+      <tr><td><code>policy.protected_operations</code> already declares <code>external-mutation</code> — and, after Q3, <code>credential-access</code> too</td><td>Named honestly in M4's card, in <code>INV-4</code> and in Q3: the vocabulary is <strong>loader-checked for membership and enforced nowhere</strong>. This plan does not describe it as a gate and does not build one; whether it should become one is a question for whichever workstream owns the config surface, not this one.</td></tr>
+      <tr><td>A <code>LANDED</code> attempt's journal is sealed, so nothing can be appended to it</td><td>Task 11 narrows the seal to two conditions rather than removing it. <strong>This was required by both Q2 options</strong>, and the plan's first draft missed it — recorded in Q2 and in the Solution section rather than quietly fixed.</td></tr>
+      <tr><td>The lifecycle matrix is mirrored by hand in four test files, and a fifth literal sits in the simulation harness with no fence tying it to the real one</td><td>Task 12 moves all five and names the missing fence in a comment. Closing that gap is not this workstream's job, and leaving it unnamed after touching it would be.</td></tr>
+      <tr><td>The migration runner hoists only two pragmas out of its transaction, and the rebuild needs a third</td><td>Task 11 adds <code>foreign_keys</code> to the hoist and restores it afterwards. <strong>It must land before <span class="gate">G8-C</span>'s commit</strong>, or the database will not open — stated in the Gates section because an owner committing in the wrong order is the way this goes wrong.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Absences, named</h3>
+  <ul>
+    <li><strong>No test in this workstream ever pushes to a real forge.</strong> So the behaviour of a real remote's ssh transport, its ref-advertisement, and its rejection messages are unobserved. What is observed is that the argv, the credential posture and the truth table are the same in both cases, and that the only difference is the transport. The first real publish is the owner's, and it is the cheapest unused upgrade this workstream will have once it is built.</li>
+    <li><strong>The <code>host</code> comparison is unexercised against a real hostname.</strong> A local bare remote has no host, so the row that would catch a rewritten remote URL is tested only against synthetic <code>PublishRemoteFacts</code>. Stated rather than hidden, and the same shape as W04's optional identity check.</li>
+    <li><strong>No signed push, no signed tag, no tag at all.</strong> Publication moves one branch ref. Tags, releases and signatures are absent and are not deferred to a later phase of this workstream — they are simply not in it.</li>
+    <li><strong>Nothing observes what happens on the remote afterwards.</strong> The record says what the remote accepted at the moment of the push and makes no claim about the remote's state at any later time. That distinction is why the record's field is <code>outcome</code> rather than <code>state</code>.</li>
+  </ul>
+
+  <h3>The one thing to re-read before building</h3>
+  <p>The spine names the accidental widening of publish into deploy as the single most likely failure across all fourteen workstreams, and it names the reason: the two words sit one apart and the source record already had to be corrected for conflating them once. <strong>The mechanical defences are the closed catalog block, the schema test naming <code>environment</code>, <code>endpoint</code> and <code>release</code> by name, and task 20's zero-occurrence check.</strong> The non-mechanical defence is reading the <a href="#notdeploy">What This Workstream Is Not</a> section at the start of every session that touches this plan.</p>
+</section>
+
+<section id="amendments">
+  <h2>Amendments</h2>
+  <p>Running history of changes made after this plan was first written. Append-only.</p>
+  <details>
+    <summary>2026-08-25 — owner review applied: eight Questionables decided, two against the recommendation, and the plan restructured around them</summary>
+    <p><strong>Six decisions were taken as recommended</strong> — Q1, Q4, Q5, Q6, Q7 and Q8 — and each is now recorded as a constraint with the task that applies it. <strong>Two went the other way and reshaped the workstream.</strong></p>
+    <p><strong>Q3 — inherit the owner's credential helper.</strong> <code>INV-4</code> is restated from <em>no credential is read</em> to <em>no credential value passes through AWSF</em>, <code>AC-5</code> follows it, and M4's two tasks are rewritten: the stub-helper test inverts from proving the helper stayed unused to proving it ran and that its answer went nowhere. The decision buys <code>https</code> remotes and gives up a structural guarantee, and it makes <code>credential-access</code> — a declared, unenforced protected operation — something a publish now performs. That is stated in three places rather than absorbed.</p>
+    <p><strong>Q2 — a new <code>PUBLISHED</code> state.</strong> This added a milestone, four tasks, two owner-authored commits, one identifier invariant and one acceptance criterion. The plan grew from 7 milestones and 20 tasks to 8 and 24.</p>
+    <p><strong>Two things were found while implementing Q2 that the first draft had wrong or had not read.</strong> First, <code>persistAttempt</code> throws <code>SealedAttempt</code> on a terminal attempt, so a landed attempt's journal accepts nothing — which means <em>both</em> Q2 options needed the seal opened, and the one-commit-versus-two comparison the owner was shown was wrong in favour of the recommendation. Second, <code>sessions.lifecycle_state</code> carries a <code>CHECK</code> constraint listing the ten current states, so a new state needs a migration in a protected directory — and that migration cannot run against the current migration runner, because <code>node:sqlite</code> defaults <code>foreign_keys</code> to ON and seven tables reference <code>sessions</code> with <code>RESTRICT</code>. Three rebuild routes were measured; one works, and it needs an agent-writable pragma hoist that must land before the owner's migration commit.</p>
+    <p><strong>No implementation code was written and nothing was committed.</strong> The build prompts and the ticket set were regenerated from the revised plan, and the ticket README records the new gates and derived rules.</p>
+  </details>
+</section>
+
+</main>
+
+<!-- ===== PLAN-SOTA REVIEW LAYER v1 — FIXED MACHINERY, COPY VERBATIM =====
+     Not a placeholder: reproduce this <style> + <script> pair exactly in every plan.
+     Annotations, Questionable verdicts, and proposed phase statuses persist to
+     localStorage (key: plan filename). The browser NEVER writes this file; canonical
+     []/[wip]/[x]/[f] markers stay agent-owned. Export produces a `plan-sota-review v1`
+     block (clipboard + visible box) and, when running under Lavish Editor, queues it
+     once via window.lavish.queuePrompt(). -->
+<style>
+  .rv-btn { font: 600 11px/1 system-ui, sans-serif; padding: 3px 9px; border-radius: 999px;
+    border: 1px solid var(--muted, #8884); background: transparent; color: var(--fg, inherit);
+    cursor: pointer; opacity: .55; vertical-align: middle; margin-left: 8px; }
+  .rv-btn:hover { opacity: 1; border-color: var(--accent, #7c6cf0); }
+  .rv-btn.rv-on { opacity: 1; background: var(--accent, #7c6cf0); color: var(--bg, #fff); border-color: transparent; }
+  .rv-note-box { display: block; margin: 8px 0; padding: 8px 12px; border: 1px dashed var(--accent, #7c6cf0);
+    border-radius: 8px; font-size: 13px; min-height: 1.5em; background: color-mix(in srgb, var(--accent, #7c6cf0) 6%, transparent); outline: none; }
+  .rv-note-box:empty::before { content: attr(data-ph); opacity: .5; font-style: italic; }
+  .rv-note-box[hidden] { display: none; }
+  .rv-verdict { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 10px 0 2px; }
+  .rv-verdict-tag { font: 700 10px/1 system-ui, sans-serif; letter-spacing: .08em; opacity: .6; margin-right: 2px; }
+  .rv-status-chip { font: 600 11px/1 ui-monospace, monospace; margin-left: 10px; padding: 3px 9px;
+    border-radius: 999px; border: 1px dotted var(--muted, #8884); background: transparent;
+    color: var(--fg, inherit); cursor: pointer; opacity: .6; }
+  .rv-status-chip:hover { opacity: 1; }
+  .rv-status-chip.rv-on { opacity: 1; border-style: solid; border-color: var(--accent, #7c6cf0); color: var(--accent, #7c6cf0); }
+  #rv-drawer { position: fixed; right: 16px; bottom: 16px; z-index: 9999; font: 13px/1.45 system-ui, sans-serif;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  #rv-pill { font: 700 12px/1 system-ui, sans-serif; padding: 10px 16px; border-radius: 999px; border: none;
+    cursor: pointer; background: var(--accent, #7c6cf0); color: var(--bg, #fff); box-shadow: 0 4px 16px #0004; }
+  #rv-panel { width: min(420px, calc(100vw - 32px)); max-height: 60vh; overflow: auto; padding: 14px;
+    border-radius: 12px; border: 1px solid var(--muted, #8884); background: var(--bg, #fff);
+    color: var(--fg, inherit); box-shadow: 0 8px 32px #0005; }
+  #rv-panel h4 { margin: 0 0 8px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; opacity: .7; }
+  #rv-list { margin: 0 0 10px; padding: 0; list-style: none; font-size: 12px; }
+  #rv-list li { padding: 3px 0; border-bottom: 1px solid #8882; overflow-wrap: anywhere; }
+  #rv-out { width: 100%; min-height: 140px; margin-top: 10px; font: 11px/1.5 ui-monospace, monospace;
+    border: 1px solid var(--muted, #8884); border-radius: 8px; padding: 8px; background: transparent; color: inherit; }
+  #rv-msg { font-size: 11px; opacity: .75; margin-top: 6px; }
+  @media print { #rv-drawer { display: none; } }
+</style>
+<script>
+(function () {
+  'use strict';
+  var FILE = decodeURIComponent(location.pathname.split('/').pop() || 'plan.html');
+  var KEY = 'plan-sota-review:' + FILE;
+  var LEGACY_KEY = 'planf3-review:' + FILE; // pre-rename state; read once, never written
+  var PROPOSE = ['', '[]', '[wip]', '[x]', '[f]'];
+  var state = { a: {}, v: {}, s: {} }, persisted = true;
+  try { state = JSON.parse(localStorage.getItem(KEY) || localStorage.getItem(LEGACY_KEY) || 'null') || state; } catch (e) { persisted = false; }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); persisted = true; }
+    catch (e) { persisted = false; }
+    refresh();
+  }
+  function el(tag, cls, txt) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (txt) n.textContent = txt;
+    if (tag === 'button') { n.type = 'button'; n.setAttribute('data-lavish-action', ''); }
+    return n;
+  }
+  function clean(t) { return String(t || '').replace(/\|/g, '/').replace(/\s*\r?\n\s*/g, ' >> ').trim(); }
+  var registry = []; // {key, label, kind: 'section'|'phase'|'q'}
+
+  function noteBox(key, host, placeholder) {
+    var box = el('div', 'rv-note-box');
+    box.contentEditable = 'true';
+    box.setAttribute('data-ph', placeholder || 'Type your note for the agent…');
+    box.hidden = !(state.a[key]);
+    if (state.a[key]) box.textContent = state.a[key];
+    box.addEventListener('input', function () {
+      var t = box.textContent.trim();
+      if (t) state.a[key] = t; else delete state.a[key];
+      save();
+    });
+    host.appendChild(box);
+    return box;
+  }
+  function annotable(key, label, heading, host, kind) {
+    registry.push({ key: key, label: label, kind: kind });
+    var box = noteBox(key, host);
+    heading.insertAdjacentElement('afterend', box);
+    var btn = el('button', 'rv-btn' + (state.a[key] ? ' rv-on' : ''), '✎ note');
+    btn.addEventListener('click', function () {
+      box.hidden = !box.hidden;
+      if (!box.hidden) box.focus();
+    });
+    heading.appendChild(btn);
+    box.addEventListener('input', function () { btn.classList.toggle('rv-on', !!state.a[key]); });
+  }
+
+  // Sections
+  Array.prototype.forEach.call(document.querySelectorAll('main > section[id]'), function (sec) {
+    var h = sec.querySelector('h2'); if (!h) return;
+    annotable('#' + sec.id, h.textContent.trim(), h, sec, 'section');
+  });
+  // Phases: annotation + proposed-status chip
+  Array.prototype.forEach.call(document.querySelectorAll('#phases .phase'), function (ph, i) {
+    var h = ph.querySelector('h3'); if (!h) return;
+    var key = 'phase-' + (i + 1);
+    var label = h.textContent.replace(/^\s*\[[^\]]*\]\s*/, '').trim();
+    annotable(key, label, h, ph, 'phase');
+    var chip = el('button', 'rv-status-chip' + (state.s[key] ? ' rv-on' : ''));
+    chip.textContent = state.s[key] ? 'propose ' + state.s[key] : 'propose…';
+    chip.title = 'Cycle a PROPOSED status (exported as feedback — the file marker is only changed by the agent)';
+    chip.addEventListener('click', function () {
+      var next = PROPOSE[(PROPOSE.indexOf(state.s[key] || '') + 1) % PROPOSE.length];
+      if (next) state.s[key] = next; else delete state.s[key];
+      chip.textContent = next ? 'propose ' + next : 'propose…';
+      chip.classList.toggle('rv-on', !!next);
+      save();
+    });
+    h.appendChild(chip);
+  });
+  // Questionables: verdict / option buttons + note
+  Array.prototype.forEach.call(document.querySelectorAll('#questionables details'), function (d, i) {
+    var key = 'q-' + (i + 1);
+    var summary = d.querySelector('summary');
+    var label = summary ? summary.textContent.trim().slice(0, 120) : key;
+    registry.push({ key: key, label: label, kind: 'q' });
+    var opts = (d.getAttribute('data-review-options') || '').split('|').map(function (s) { return s.trim(); }).filter(Boolean);
+    if (!opts.length) opts = ['APPROVE', 'REJECT', 'REVISE', 'DEFER'];
+    var row = el('div', 'rv-verdict');
+    row.appendChild(el('span', 'rv-verdict-tag', 'YOUR CALL'));
+    opts.forEach(function (opt) {
+      var b = el('button', 'rv-btn' + ((state.v[key] || {}).c === opt ? ' rv-on' : ''), opt);
+      b.addEventListener('click', function () {
+        if ((state.v[key] || {}).c === opt) { delete state.v[key]; }
+        else { state.v[key] = { c: opt }; }
+        Array.prototype.forEach.call(row.querySelectorAll('.rv-btn'), function (x) {
+          x.classList.toggle('rv-on', x.textContent === ((state.v[key] || {}).c || null));
+        });
+        qbox.hidden = !state.v[key] && !state.a[key];
+        save();
+      });
+      row.appendChild(b);
+    });
+    d.appendChild(row);
+    var qbox = noteBox(key, d, 'Why / what to change instead…');
+    if (state.v[key]) qbox.hidden = false;
+  });
+
+  // Drawer
+  var drawer = el('div'); drawer.id = 'rv-drawer';
+  var panel = el('div'); panel.id = 'rv-panel'; panel.hidden = true;
+  var pill = el('button'); pill.id = 'rv-pill';
+  pill.addEventListener('click', function () { panel.hidden = !panel.hidden; });
+  var list = el('ul'); list.id = 'rv-list';
+  var actions = el('div');
+  var exportBtn = el('button', 'rv-btn rv-on', 'Export Feedback');
+  var clearBtn = el('button', 'rv-btn', 'Clear review');
+  var out = el('textarea'); out.id = 'rv-out'; out.readOnly = true; out.hidden = true;
+  var msg = el('div'); msg.id = 'rv-msg';
+  var head = el('h4', null, 'Review — pending feedback');
+  actions.appendChild(exportBtn); actions.appendChild(clearBtn);
+  panel.appendChild(head); panel.appendChild(list); panel.appendChild(actions);
+  panel.appendChild(out); panel.appendChild(msg);
+  drawer.appendChild(panel); drawer.appendChild(pill);
+  document.body.appendChild(drawer);
+
+  function findLabel(key) {
+    for (var i = 0; i < registry.length; i++) if (registry[i].key === key) return registry[i].label;
+    return key;
+  }
+  function refresh() {
+    var n = Object.keys(state.a).length + Object.keys(state.v).length + Object.keys(state.s).length;
+    pill.textContent = '✎ Review (' + n + ')';
+    list.textContent = '';
+    Object.keys(state.v).forEach(function (k) { list.appendChild(el('li', null, '[verdict] ' + findLabel(k) + ' → ' + state.v[k].c)); });
+    Object.keys(state.s).forEach(function (k) { list.appendChild(el('li', null, '[status] ' + findLabel(k) + ' → propose ' + state.s[k])); });
+    Object.keys(state.a).forEach(function (k) { list.appendChild(el('li', null, '[note] ' + findLabel(k) + ': ' + state.a[k].slice(0, 90))); });
+    if (!n) list.appendChild(el('li', null, 'Nothing yet — click ✎ note on any section, a verdict on a Questionable, or propose… on a phase.'));
+    if (!persisted) msg.textContent = '⚠ localStorage unavailable — review state lives only in this tab.';
+  }
+  function buildExport() {
+    var L = ['plan-sota-review v1', 'plan: ' + FILE, 'title: ' + clean(document.title), 'exported: ' + new Date().toISOString(), ''];
+    var vk = Object.keys(state.v), sk = Object.keys(state.s), ak = Object.keys(state.a);
+    L.push('## verdicts');
+    vk.length ? vk.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | ' + clean(state.v[k].c) + ' | note: ' + (clean(state.a[k]) || '-'));
+    }) : L.push('- (none)');
+    L.push('', '## statuses');
+    sk.length ? sk.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | propose ' + state.s[k]);
+    }) : L.push('- (none)');
+    L.push('', '## annotations');
+    var solo = ak.filter(function (k) { return !state.v[k]; });
+    solo.length ? solo.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | ' + clean(state.a[k]));
+    }) : L.push('- (none)');
+    return L.join('\n');
+  }
+  exportBtn.addEventListener('click', function () {
+    var text = buildExport();
+    out.hidden = false; out.value = text;
+    out.focus(); out.select();
+    function done(m) { msg.textContent = m; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done('Copied — paste it into your next agent session.'); },
+        function () { done('Clipboard blocked — copy from the box below.'); });
+    } else {
+      try { done(document.execCommand('copy') ? 'Copied — paste it into your next agent session.' : 'Clipboard blocked — copy from the box below.'); }
+      catch (e) { done('Clipboard blocked — copy from the box below.'); }
+    }
+    if (window.lavish && typeof window.lavish.queuePrompt === 'function') {
+      window.lavish.queuePrompt(text, { tag: 'plan-sota-review', queueKey: 'plan-sota-review' });
+      msg.textContent += ' Also queued to the agent via Lavish.';
+    }
+  });
+  clearBtn.addEventListener('click', function () {
+    if (!confirm('Clear all review state for this plan?')) return;
+    state = { a: {}, v: {}, s: {} };
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    location.reload();
+  });
+  refresh();
+})();
+</script>
+
+<!-- Mermaid runtime — renders every <pre class="mermaid"> block. Only external reference in the file. -->
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      primaryColor: '#171D25',
+      primaryTextColor: '#E8EDF3',
+      primaryBorderColor: '#293341',
+      lineColor: '#8D99A8',
+      fontFamily: 'Inter,system-ui,-apple-system,sans-serif'
+    }
+  });
+</script>
+</body>
+</html>
