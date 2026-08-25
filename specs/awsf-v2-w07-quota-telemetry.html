@@ -509,7 +509,7 @@ flowchart LR
 
   <!-- ================= M6 ================= -->
   <div class="phase">
-    <h3><code class="status">[wip]</code> Milestone M6: The phase-boundary snapshot, and the stop on <code>L26</code></h3>
+    <h3><code class="status">[x]</code> Milestone M6: The phase-boundary snapshot, and the stop on <code>L26</code></h3>
     <p>The second and third pieces. <strong>This milestone does not start until the owner's <span class="gate">G7-B</span> commit has landed</strong>, because the stop now has its own legal edge rather than borrowing two that exist for other reasons.</p>
     <figure>
       <pre class="mermaid">
@@ -562,14 +562,14 @@ stateDiagram-v2
     <p class="serves"><code class="serves">AC-3</code> <code class="serves">AC-4</code> <code class="serves">INV-3</code> <code class="serves">INV-4</code> <code class="serves">INV-5</code></p>
     <p>End-to-end on the fixture adapter with an injected fake <code>runCommand</code> and an injected clock. Offline, no network, no agent quota.</p>
     <ul class="checklist">
-      <li><code class="status">[]</code> A journal line round-trips with <code>attribution: "none"</code> present — asserted on the parsed line, not on the object before it was written</li>
-      <li><code class="status">[]</code> A multi-phase run journals one snapshot per boundary and, with the threshold uncrossed, reaches <code>GATING</code> with no <code>L26</code> recorded</li>
-      <li><code class="status">[]</code> A minute figure below the configured threshold at a mid-<code>RUNNING</code> boundary records an <code>L26</code> transition to <code>AWAITING_OWNER</code>, with <code>actor: host</code>, <code>spawn_site: 0</code>, and a reason naming both the threshold and the figure</li>
-      <li><code class="status">[]</code> <strong>An unavailable reading is refused by the guard, not merely unused.</strong> Attempting <code>L26</code> with evidence carrying no known figure produces a guard violation — the assertion that makes <code>INV-4</code> structural</li>
-      <li><code class="status">[]</code> A task suspended by <code>L26</code> — no candidate, no gates run — <strong>cannot take <code>L20</code> to <code>LANDING</code></strong>. This is the gating-bypass objection, answered by exercising <code>L20</code>'s existing guard rather than by adding a new rule</li>
-      <li><code class="status">[]</code> <strong>After the stop, the injected clock is advanced well past every timeout in the system and no further transition is recorded.</strong> This is <code>AC-4</code>'s second half and the one a timer would fail</li>
-      <li><code class="status">[]</code> Projection of a journal containing both the new evidence type and an <code>L26</code> transition succeeds; the evidence writes no row and the transition writes one, with no schema change</li>
-      <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green — including <code>transitions.test.ts</code>, <code>actors.test.ts</code>, <code>rejection-order.test.ts</code> and <code>evidence.test.ts</code>, all of which read the mirror table this milestone moved</li>
+      <li><code class="status">[x]</code> A journal line round-trips with <code>attribution: "none"</code> present — asserted on the parsed line, not on the object before it was written</li>
+      <li><code class="status">[x]</code> A multi-phase run journals one snapshot per boundary and, with the threshold uncrossed, reaches <code>GATING</code> with no <code>L26</code> recorded</li>
+      <li><code class="status">[x]</code> A minute figure below the configured threshold at a mid-<code>RUNNING</code> boundary records an <code>L26</code> transition to <code>AWAITING_OWNER</code>, with <code>actor: host</code>, <code>spawn_site: 0</code>, and a reason naming both the threshold and the figure</li>
+      <li><code class="status">[x]</code> <strong>An unavailable reading is refused by the guard, not merely unused.</strong> Attempting <code>L26</code> with evidence carrying no known figure produces a guard violation — the assertion that makes <code>INV-4</code> structural</li>
+      <li><code class="status">[x]</code> A task suspended by <code>L26</code> — no candidate, no gates run — <strong>cannot take <code>L20</code> to <code>LANDING</code></strong>. This is the gating-bypass objection, answered by exercising <code>L20</code>'s existing guard rather than by adding a new rule</li>
+      <li><code class="status">[x]</code> <strong>After the stop, the injected clock is advanced well past every timeout in the system and no further transition is recorded.</strong> This is <code>AC-4</code>'s second half and the one a timer would fail</li>
+      <li><code class="status">[x]</code> Projection of a journal containing both the new evidence type and an <code>L26</code> transition succeeds; the evidence writes no row and the transition writes one, with no schema change</li>
+      <li><code class="status">[x]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green — including <code>transitions.test.ts</code>, <code>actors.test.ts</code>, <code>rejection-order.test.ts</code> and <code>evidence.test.ts</code>, all of which read the mirror table this milestone moved</li>
     </ul>
     <div class="loop">
       🔁 <strong>Do not exit this phase until every box above is checked.</strong> A stop that a timer resumes is not this feature; it is the daemon this project has refused twice.
@@ -825,6 +825,12 @@ flowchart LR
     <p><strong>Observed rather than reasoned.</strong> Loading the committed config with the proposed block injected returned <code>config does not match awsf/v1: /routing/quota_stop: Unexpected property</code>. The unpatched file loads cleanly, so the failure is the block and nothing else.</p>
     <p><strong>The correction.</strong> <span class="gate">G7-A</span> is now the one-line durable-intent change and nothing else — the permission, not the values. T07 extends the schema, which it may do because <code>core/src/config/**</code> is <em>not</em> a protected path. Threshold values become a separate, optional, later owner commit, and since an absent block means the stop is disabled, this repository's own config need never carry one at all. M3 task 7 gained a row forbidding a premature block, and the build prompts and ticket README were corrected to match.</p>
     <p><strong>Why this is worth recording rather than quietly fixing.</strong> The plan asked the owner for a commit that would have broken the repository, and it did so in the same document that requires every deep plan to check whether a guarantee is already enforced somewhere stronger. The schema was the stronger enforcement, and the first draft did not read it.</p>
+  </details>
+  <details open>
+    <summary>2026-08-24 — M6 / T17 completed: boundary snapshots, guarded stop, and silence after it</summary>
+    <p><strong>T17 is complete.</strong> <code>core/test/unit/quota/snapshot-stop.test.ts</code> drives the production phase loop through the fixture adapter with an injected <code>runCommand</code>, broker, and clock. A four-phase uncrossed run records all three boundaries, reaches <code>GATING</code> over <code>L7</code>, and records no <code>L26</code>. A crossed first boundary records <code>L26</code> to <code>AWAITING_OWNER</code> with host attribution, no spawn site, and both the five-minute threshold and four-minute figure in its reason, before the fixture route registers.</p>
+    <p><strong>The two structural objections are exercised directly.</strong> An attempted <code>L26</code> with no known minute figure throws <code>InsufficientEvidence</code>, and a task suspended before any candidate or gates exist cannot take <code>L20</code> to <code>LANDING</code>. The mocked timer clock then advances 366 days and the parsed transition sequence remains byte-for-byte unchanged. A round-tripped journal line retains <code>attribution: "none"</code>, and an in-memory projection carrying both the snapshot and <code>L26</code> writes no evidence row, writes exactly one transition row with <code>spawn_site: 0</code>, and leaves <code>PRAGMA user_version</code> unchanged.</p>
+    <p><strong>Verification.</strong> The targeted snapshot/stop suite passed 5/5. <code>npm run test:unit</code> passed 1355/1355 tests in 212.7 seconds; <code>npm run typecheck</code> completed cleanly; <code>npm run lint</code> reported zero warnings and zero errors. No provider or quota-axi process started, no network was reached, and no agent quota was spent. M6 is <code>[x]</code>, T17 is <code>done</code>, and the W07 spine marker remains untouched.</p>
   </details>
   <details open>
     <summary>2026-08-24 — M5 / T13 completed: observed median and three-way advisory verdict</summary>
