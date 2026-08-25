@@ -531,12 +531,12 @@ flowchart LR
     <h4>2. <code>authorizePublish</code> and the branded plan</h4>
     <p class="serves"><code class="serves">INV-1</code> <code class="serves">INV-2</code> <code class="serves">INV-3</code></p>
     <ul class="checklist">
-      <li><code class="status">[]</code> Implement <code>authorizePublish(status, repository, remote, refspec)</code> evaluating the fourteen rows in <code>PUBLISH_REFUSAL_ORDER</code> and returning on the first violation — the ordered contract, not a collected fault list, because a caller acting on the wrong defect would publish a different wrong thing</li>
-      <li><code class="status">[]</code> Return type is a discriminated union: <code>{ decision: "authorized", plan }</code> or <code>{ decision: "refused", code, detail }</code>. <code>detail</code> is a fixed sentence per code with no interpolated URL and no interpolated path</li>
-      <li><code class="status">[]</code> Declare <code>AuthorizedPublishPlan</code> carrying a module-private <code>unique symbol</code> brand, and construct it in this file and nowhere else. It carries <code>remoteName</code>, <code>branch</code> and <code>sha</code> — <strong>no URL, no host, no path</strong></li>
-      <li><code class="status">[]</code> Row 11 refuses an empty source <strong>and</strong> an all-zeros source independently of row 12, so relaxing row 12 later cannot reopen the deletion hole. Cite the measurement in a comment: an all-zeros source deleted the branch at exit <code>0</code></li>
-      <li><code class="status">[]</code> Row 14 treats <code>fastForward === null</code> as <em>pass</em>, because an absent remote branch is a creation. Measured: <code>ls-remote</code> of an absent ref is empty stdout at exit <code>0</code>, not an error</li>
-      <li><code class="status">[]</code> The function is a pure expression of its four arguments: given the same records it returns the same result, and it is called nowhere in this file</li>
+      <li><code class="status">[x]</code> Implement <code>authorizePublish(status, repository, remote, refspec)</code> evaluating the fourteen rows in <code>PUBLISH_REFUSAL_ORDER</code> and returning on the first violation — the ordered contract, not a collected fault list, because a caller acting on the wrong defect would publish a different wrong thing</li>
+      <li><code class="status">[x]</code> Return type is a discriminated union: <code>{ decision: "authorized", plan }</code> or <code>{ decision: "refused", code, detail }</code>. <code>detail</code> is a fixed sentence per code with no interpolated URL and no interpolated path</li>
+      <li><code class="status">[x]</code> Declare <code>AuthorizedPublishPlan</code> carrying a module-private <code>unique symbol</code> brand, and construct it in this file and nowhere else. It carries <code>remoteName</code>, <code>branch</code> and <code>sha</code> — <strong>no URL, no host, no path</strong></li>
+      <li><code class="status">[x]</code> Row 11 refuses an empty source <strong>and</strong> an all-zeros source independently of row 12, so relaxing row 12 later cannot reopen the deletion hole. Cite the measurement in a comment: an all-zeros source deleted the branch at exit <code>0</code></li>
+      <li><code class="status">[x]</code> Row 14 treats <code>fastForward === null</code> as <em>pass</em>, because an absent remote branch is a creation. Measured: <code>ls-remote</code> of an absent ref is empty stdout at exit <code>0</code>, not an error</li>
+      <li><code class="status">[x]</code> The function is a pure expression of its four arguments: given the same records it returns the same result, and it is called nowhere in this file</li>
     </ul>
 
     <h4>3. Testing Strategy</h4>
