@@ -557,18 +557,18 @@ flowchart LR
 
   <!-- ================= M2 ================= -->
   <div class="phase">
-    <h3><code class="status">[]</code> Milestone M2: The allowlist in the catalog, keyed on a name</h3>
+    <h3><code class="status">[wip]</code> Milestone M2: The allowlist in the catalog, keyed on a name</h3>
     <p>The spine states plainly that the allowlist "has to live in the catalog", and W04 reserved delivery policy for this workstream while deliberately leaving <code>delivery</code> a posture enum with no remote, endpoint or credential field. This milestone adds a sibling <code>publish</code> block and nothing else. <strong>The schema is agent work</strong> — <code>core/src/registry/**</code> is not a protected path — and this repository's own catalog values are a separate optional owner commit that no task here waits on.</p>
 
     <h4>4. The <code>publish</code> block, and why it holds no URL</h4>
     <p class="serves"><code class="serves">INV-4</code></p>
     <ul class="checklist">
-      <li><code class="status">[]</code> Add an optional <code>publish</code> object to <code>RepositorySchema</code> in <code>core/src/registry/catalog-schema.ts</code>: <code>remotes</code> (non-empty array of Git remote names), <code>branches</code> (non-empty array of branch names), <code>host</code> (optional hostname). <code>additionalProperties: false</code>, as every sibling already is</li>
-      <li><code class="status">[]</code> <strong>Remote and branch names are validated as names</strong>, not free strings: no whitespace, no <code>/</code> in a remote name, no leading <code>+</code>, no <code>:</code>, and a branch that would not survive <code>git check-ref-format</code>'s obvious cases is refused at load</li>
-      <li><code class="status">[]</code> <code>host</code> is a hostname only — no scheme, no path, no port, no user-info. A value containing <code>@</code>, <code>/</code> or <code>:</code> is refused by the schema before <code>containsCredential</code> ever sees it</li>
-      <li><code class="status">[]</code> Write the derivation rule as a comment beside the block and in the ticket README: <strong>the allowlist keys on a remote NAME because <code>assertNoAbsolutePaths</code> refuses a bare-remote path outright</strong>, and a <code>file://</code> URL would pass that check only by smuggling a machine path past it. The URL stays in the repository's Git config, where it already is</li>
-      <li><code class="status">[]</code> <code>delivery</code> is <strong>not</strong> widened. It remains the four-value posture enum W04 shipped; widening it would be a breaking change to every existing catalog for no gain</li>
-      <li><code class="status">[]</code> Regenerate the emitted JSON Schema through <code>emitProjectCatalogJsonSchema</code> — never hand-maintain a copy; <code>no-handwritten-schema.test.ts</code> is watching</li>
+      <li><code class="status">[x]</code> Add an optional <code>publish</code> object to <code>RepositorySchema</code> in <code>core/src/registry/catalog-schema.ts</code>: <code>remotes</code> (non-empty array of Git remote names), <code>branches</code> (non-empty array of branch names), <code>host</code> (optional hostname). <code>additionalProperties: false</code>, as every sibling already is</li>
+      <li><code class="status">[x]</code> <strong>Remote and branch names are validated as names</strong>, not free strings: no whitespace, no <code>/</code> in a remote name, no leading <code>+</code>, no <code>:</code>, and a branch that would not survive <code>git check-ref-format</code>'s obvious cases is refused at load</li>
+      <li><code class="status">[x]</code> <code>host</code> is a hostname only — no scheme, no path, no port, no user-info. A value containing <code>@</code>, <code>/</code> or <code>:</code> is refused by the schema before <code>containsCredential</code> ever sees it</li>
+      <li><code class="status">[x]</code> Write the derivation rule as a comment beside the block and in the ticket README: <strong>the allowlist keys on a remote NAME because <code>assertNoAbsolutePaths</code> refuses a bare-remote path outright</strong>, and a <code>file://</code> URL would pass that check only by smuggling a machine path past it. The URL stays in the repository's Git config, where it already is</li>
+      <li><code class="status">[x]</code> <code>delivery</code> is <strong>not</strong> widened. It remains the four-value posture enum W04 shipped; widening it would be a breaking change to every existing catalog for no gain</li>
+      <li><code class="status">[x]</code> Regenerate the emitted JSON Schema through <code>emitProjectCatalogJsonSchema</code> — never hand-maintain a copy; <code>no-handwritten-schema.test.ts</code> is watching</li>
     </ul>
 
     <h4>5. Testing Strategy</h4>

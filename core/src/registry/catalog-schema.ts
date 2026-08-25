@@ -8,6 +8,22 @@ export const PROJECT_DELIVERY_POSTURES = ["service", "mobile", "docs", "none"] a
 export const PROJECT_PLAN_FORMATS = ["awsf-plan-html/v1"] as const;
 
 const NonEmptyString = Type.String({ minLength: 1 });
+const GitRemoteNameSchema = Type.String({
+  minLength: 1,
+  pattern: "^(?!\\+)(?!.*\\s)(?!.*:)(?!.*/)[^\\s:/]+$",
+});
+// Matches the obvious rejections from `git check-ref-format --branch`: a leading
+// dash or dot, a trailing dot or slash, empty or `.lock` components, `..`, `@{`,
+// and the refname metacharacters.
+const GitBranchNameSchema = Type.String({
+  minLength: 1,
+  pattern: "^(?!\\+)(?!.*\\s)(?!.*:)(?!-)(?!\\.)(?!.*//)(?!.*(?:^|/)\\.)(?!.*(?:^|/)[^/]*\\.lock(?:/|$))(?!.*\\.\\.)(?!.*@\\{)(?!.*[~^?*\\[\\\\])(?!.*\\/$)(?!.*\\.$)(?!@$)[^\\s:]+$",
+});
+const HostnameSchema = Type.String({
+  minLength: 1,
+  maxLength: 253,
+  pattern: "^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\\.)*[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$",
+});
 export const ExplicitIdSchema = Type.String({ minLength: 1, pattern: "^[a-zA-Z0-9][a-zA-Z0-9._-]*$" });
 
 /** Shared verbatim by the parent catalog and every participating repository's projection. */
@@ -41,6 +57,19 @@ const RepositorySchema = Type.Object(
       ),
     ),
     delivery: Type.Optional(stringUnion(PROJECT_DELIVERY_POSTURES)),
+    // THE ALLOWLIST KEYS ON A REMOTE NAME because assertNoAbsolutePaths refuses
+    // a bare-remote path outright, and a file:// URL would pass that check only
+    // by smuggling a machine path past it.
+    publish: Type.Optional(
+      Type.Object(
+        {
+          remotes: Type.Array(GitRemoteNameSchema, { minItems: 1 }),
+          branches: Type.Array(GitBranchNameSchema, { minItems: 1 }),
+          host: Type.Optional(HostnameSchema),
+        },
+        { additionalProperties: false },
+      ),
+    ),
   },
   { additionalProperties: false },
 );
