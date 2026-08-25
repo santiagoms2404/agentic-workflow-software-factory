@@ -550,12 +550,12 @@ stateDiagram-v2
     <h4>16. The stop at the boundary, and what never follows it</h4>
     <p class="serves"><code class="serves">AC-4</code> <code class="serves">INV-5</code></p>
     <ul class="checklist">
-      <li><code class="status">[]</code> Take the snapshot at <strong>every</strong> phase boundary in the loop at <code>core/src/cli/commands/production-run.ts</code>, and journal it whether or not the threshold is configured</li>
-      <li><code class="status">[]</code> When the threshold is crossed at a boundary, take <code>L26</code> to <code>AWAITING_OWNER</code> rather than launching the next phase. <strong><code>L12</code> and <code>L15</code> gain no quota condition</strong> — entangling quota with the tier fork out of <code>GATING</code> or with review-verdict consistency would put a quota test inside two guards that exist for other reasons</li>
-      <li><code class="status">[]</code> The threshold fires only on a known minute figure. Unavailable, unknown, stale and unresolved all continue — and now cannot even form a legal transition, because the guard refuses evidence without one</li>
-      <li><code class="status">[]</code> <strong>No timer, no scheduled wake, no automatic resume, and no retry loop.</strong> Leaving <code>AWAITING_OWNER</code> toward work is <code>L19</code>, <code>L20</code> or <code>L25</code> — every one human- or owner-actored and interactive. The repository already states this property in <code>L21</code>'s comment; this task must not weaken it</li>
-      <li><code class="status">[]</code> The transition's reason names the threshold and the observed figure, so the owner reads why they were handed the task rather than inferring it</li>
-      <li><code class="status">[]</code> <strong>No task cost is computed from two readings anywhere.</strong> Two snapshots in one attempt are two independent context notes; nothing subtracts them</li>
+      <li><code class="status">[x]</code> Take the snapshot at <strong>every</strong> phase boundary in the loop at <code>core/src/cli/commands/production-run.ts</code>, and journal it whether or not the threshold is configured</li>
+      <li><code class="status">[x]</code> When the threshold is crossed at a boundary, take <code>L26</code> to <code>AWAITING_OWNER</code> rather than launching the next phase. <strong><code>L12</code> and <code>L15</code> gain no quota condition</strong> — entangling quota with the tier fork out of <code>GATING</code> or with review-verdict consistency would put a quota test inside two guards that exist for other reasons</li>
+      <li><code class="status">[x]</code> The threshold fires only on a known minute figure. Unavailable, unknown, stale and unresolved all continue — and now cannot even form a legal transition, because the guard refuses evidence without one</li>
+      <li><code class="status">[x]</code> <strong>No timer, no scheduled wake, no automatic resume, and no retry loop.</strong> Leaving <code>AWAITING_OWNER</code> toward work is <code>L19</code>, <code>L20</code> or <code>L25</code> — every one human- or owner-actored and interactive. The repository already states this property in <code>L21</code>'s comment; this task must not weaken it</li>
+      <li><code class="status">[x]</code> The transition's reason names the threshold and the observed figure, so the owner reads why they were handed the task rather than inferring it</li>
+      <li><code class="status">[x]</code> <strong>No task cost is computed from two readings anywhere.</strong> Two snapshots in one attempt are two independent context notes; nothing subtracts them</li>
     </ul>
 
     <h4>17. Testing Strategy</h4>

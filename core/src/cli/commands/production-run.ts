@@ -37,7 +37,13 @@ import { wrapEnvelope, type StoredEnvelope } from "../../contracts/stored-envelo
 import type { TestOutput } from "../../contracts/test-output.ts";
 import { CallBudget, type Reservation } from "../../execution/call-budget.ts";
 import type { BarrierRecord } from "../../execution/launcher-barrier.ts";
-import { ProcessTransportBroker, runSystemCommand, type BrokerOptions, type SystemCommandOptions } from "../../execution/transport-broker.ts";
+import {
+  ProcessTransportBroker,
+  resolveExecutable,
+  runSystemCommand,
+  type BrokerOptions,
+  type SystemCommandOptions,
+} from "../../execution/transport-broker.ts";
 import { artifactsExist, filesNonEmpty, jsonParses, type ArtifactObservation } from "../../gates/artifacts.ts";
 import { candidateHygiene } from "../../gates/candidate-hygiene.ts";
 import { commandsPass } from "../../gates/commands.ts";
@@ -70,6 +76,19 @@ import { renderPlanDocument } from "../../registry/plan-render.ts";
 import { resolveProject, type ResolvedProject } from "../../registry/resolve.ts";
 import { continuityFilePath } from "../../persistence/platform-paths.ts";
 import { TicketStore } from "../../persistence/ticket-store.ts";
+import {
+  DEFAULT_QUOTA_PROBE_TIMEOUTS,
+  isBelowQuotaStopThreshold,
+  knownMinuteFigure,
+  probeQuota,
+  retainQuotaFailureInAttempt,
+  type ResolveQuotaExecutable,
+} from "../../quota/probe.ts";
+import { buildQuotaReadout } from "../../quota/readout.ts";
+import {
+  configuredQuotaProbeRoutes,
+  mapConfiguredQuotaRoutes,
+} from "../../quota/routes.ts";
 import { boundCommandOutput, renderCommandEvidence } from "../../gates/command-evidence.ts";
 import { TEST_OUTPUT_TAIL_MAX_CHARS } from "../../contracts/test-output.ts";
 import {
@@ -185,6 +204,7 @@ export interface ProductionInfrastructure {
   adapterFor(entry: AdapterEntry, adapterId: string, config: AwsfConfig): HarnessAdapter | null;
   createBroker(options: BrokerOptions): TransportBroker;
   runCommand(executable: string, argv: readonly string[], options: SystemCommandOptions): ReturnType<typeof runSystemCommand>;
+  resolveExecutable: ResolveQuotaExecutable;
   writeSystemPrompt(text: string, directory: string): Promise<string>;
   now(): string;
   sandboxProbe?: SandboxProbe;
@@ -194,6 +214,7 @@ const DEFAULT_INFRASTRUCTURE: ProductionInfrastructure = {
   adapterFor: (_entry, adapterId, config) => registeredAdapter(config.adapters, adapterId, config.runtime),
   createBroker: (options) => new ProcessTransportBroker(options),
   runCommand: (executable, argv, options) => runSystemCommand(executable, argv, options),
+  resolveExecutable,
   writeSystemPrompt: writeSystemPromptFile,
   now: () => new Date().toISOString(),
 };
@@ -1643,6 +1664,141 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
   let reviewEvidence: ReviewContext | null = null;
   let reviewExpectation: ReviewEvidenceExpectation | null = null;
 
+  const quotaRoutesByAdapter = new Map(
+    mapConfiguredQuotaRoutes(options.config).map((route) => [route.adapterId, route]),
+  );
+  const quotaStopFor = (adapterId: string) => {
+    const configured = options.config.routing.quota_stop;
+    return configured === undefined
+      ? null
+      : configured.by_adapter?.[adapterId] ?? configured.default;
+  };
+  const phaseRoute = (phase: (typeof compiled.phases)[number]): Route | null =>
+    phase.kind === "agent" ? routes.get(phase.id) ?? null : null;
+
+  /**
+   * Records one context reading between two completed/queued phases. The next
+   * agent route selects the account window that could stop its launch; when the
+   * next phase is host-only, the completed agent route still supplies useful
+   * context but can never trigger L26.
+   */
+  const takePhaseBoundarySnapshot = async (
+    completed: (typeof compiled.phases)[number],
+    next: (typeof compiled.phases)[number],
+  ): Promise<boolean> => {
+    const nextRoute = phaseRoute(next);
+    const contextRoute = nextRoute ?? phaseRoute(completed);
+    const quotaRoute = contextRoute === null
+      ? null
+      : quotaRoutesByAdapter.get(contextRoute.adapterId) ?? null;
+    let effectivePercentRemaining: number | null = null;
+    let minutesToReset: number | null = null;
+    let reasonCode: string | null = quotaRoute?.reason ?? "boundary-has-no-quota-route";
+    let resolvedVersion: string | null = null;
+
+    if (quotaRoute !== null && quotaRoute.providers.length > 0) {
+      const threshold = quotaStopFor(quotaRoute.adapterId);
+      const boundaryAt = infra.now();
+      let reportedFailure: string | null = null;
+      const probeResult = await probeQuota({
+        runCommand: infra.runCommand,
+        resolveExecutable: infra.resolveExecutable,
+        routes: configuredQuotaProbeRoutes([quotaRoute]),
+        purpose: "phase-boundary",
+        timeouts: {
+          interactivePreflightMs: DEFAULT_QUOTA_PROBE_TIMEOUTS.interactivePreflightMs,
+          phaseBoundaryMs: threshold?.probe_timeout_ms ?? DEFAULT_QUOTA_PROBE_TIMEOUTS.phaseBoundaryMs,
+        },
+        options: {
+          cwd: status.worktree!,
+          env: HOST.process.env,
+          maxBuffer: options.config.runtime.max_output_bytes,
+        },
+        now: boundaryAt,
+        journalFailure: (failure) => { reportedFailure = failure.reasonCode; },
+        retainFailureBytes: retainQuotaFailureInAttempt(
+          options.attemptDir,
+          `${completed.id}-to-${next.id}`,
+        ),
+      });
+      const row = buildQuotaReadout({
+        routes: [quotaRoute],
+        probeResult,
+        defaultThreshold: options.config.routing.quota_stop?.default ?? null,
+        ...(options.config.routing.quota_stop?.by_adapter === undefined
+          ? {}
+          : { thresholdsByAdapter: options.config.routing.quota_stop.by_adapter }),
+      }).rows[0]!;
+      effectivePercentRemaining = row.effectivePercentRemaining;
+      minutesToReset = row.minutesToReset;
+      reasonCode = row.reasonCode ?? reportedFailure;
+      resolvedVersion = probeResult.resolvedVersion;
+    }
+
+    await persist("attempt.updated", {}, {
+      type: "quota-snapshot",
+      attribution: "none",
+      scope: "account-window",
+      completedPhaseKey: completed.id,
+      nextPhaseKey: next.id,
+      effectivePercentRemaining,
+      minutesToReset,
+      reasonCode,
+      resolvedVersion,
+    });
+
+    // A host-only next phase consumes no provider quota. Its snapshot remains
+    // context, but there is no route threshold whose crossing could stop it.
+    if (nextRoute === null || quotaRoute === null || nextRoute.adapterId !== quotaRoute.adapterId) {
+      return false;
+    }
+    const threshold = quotaStopFor(nextRoute.adapterId);
+    const figure = knownMinuteFigure(minutesToReset);
+    if (threshold === null || figure === null || !isBelowQuotaStopThreshold(figure, threshold.minutes)) {
+      return false;
+    }
+
+    const detail = `quota stop for route ${JSON.stringify(nextRoute.adapterId)}: configured threshold ${String(threshold.minutes)} minutes, observed ${String(figure.minutesToReset)} minutes to reset`;
+    options.assertAdvancement?.(status.sessionId, "AWAITING_OWNER");
+    // L4 may have held the first call before an initial host-only phase. The
+    // boundary stop prevents registration, so that never-launched call returns
+    // to the ledger before the attempt waits on its owner.
+    for (const reservation of budget.outstanding()) {
+      budget.releaseOnRegistrationFailure(reservation.id);
+    }
+    const l26 = budget.authorize({
+      from: "RUNNING",
+      to: "AWAITING_OWNER",
+      actor: "host",
+      reason: { source: "process", detail },
+      interactive: false,
+      evidence: {
+        quotaStop: {
+          route: nextRoute.adapterId,
+          minutesToReset: figure.minutesToReset,
+          thresholdMinutes: threshold.minutes,
+        },
+      },
+    });
+    await persistTransition(
+      "RUNNING",
+      "AWAITING_OWNER",
+      l26.result.edge,
+      "process",
+      null,
+      detail,
+      false,
+      {
+        budget: budget.snapshot(),
+        process: null,
+        phase: null,
+        blocker: null,
+        lastActivity: detail,
+      },
+    );
+    return true;
+  };
+
   const composeReviewEvidence = async (phaseId: string): Promise<ReviewContext> => {
     if (candidateSha === null) throw new Error("review evidence requires a host-created candidate SHA");
     if (lastTestOutput === null) throw new Error("review evidence requires a completed code phase to carry");
@@ -1682,6 +1838,13 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
 
   try {
     for (const [index, phase] of compiled.phases.entries()) {
+      if (index > 0) {
+        const completed = compiled.phases[index - 1]!;
+        if (phaseRecords.get(completed.id)?.status === "SUCCEEDED") {
+          const stopped = await takePhaseBoundarySnapshot(completed, phase);
+          if (stopped) return status;
+        }
+      }
       if (phase.kind === "engineer") {
         await persistPhase(phase.id, "RUNNING");
         const request = requestOutput(status, options.config);

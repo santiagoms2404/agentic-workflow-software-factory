@@ -589,7 +589,11 @@ test("immutable candidate hygiene blocks Markdown trailing spaces before configu
       infrastructure: {
         adapterFor: (_entry: AdapterEntry, id: string) => new ScriptedAdapter(id, prepared.worktree!, () => {}, "hygiene"),
         createBroker: fakeBroker, sandboxProbe: () => false,
-        runCommand: () => { configuredCommandRan = true; throw new Error("configured command must not run after structural hygiene fails"); },
+        runCommand: (_executable, argv) => {
+          if (argv[0] === "--version") throw new Error("quota probe unavailable in this offline journey");
+          configuredCommandRan = true;
+          throw new Error("configured command must not run after structural hygiene fails");
+        },
       },
     });
     assert.equal(status.lifecycleState, "BLOCKED");

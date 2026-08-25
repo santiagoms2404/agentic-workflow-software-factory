@@ -375,6 +375,7 @@ test("design-to-plan runs request through render on canned stub envelopes and it
       infrastructure: {
         adapterFor: () => adapter,
         createBroker: fakeBroker,
+        resolveExecutable: () => { throw new Error("quota probe unavailable in this offline unit test"); },
         sandboxProbe: () => false,
       },
     });
@@ -426,6 +427,7 @@ test("a high architecture finding blocks through L8 before context composition o
       infrastructure: {
         adapterFor: () => adapter,
         createBroker: fakeBroker,
+        resolveExecutable: () => { throw new Error("quota probe unavailable in this offline unit test"); },
         sandboxProbe: () => false,
       },
     });
