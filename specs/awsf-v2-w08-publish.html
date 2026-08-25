@@ -633,7 +633,7 @@ flowchart LR
 
   <!-- ================= M4 ================= -->
   <div class="phase">
-    <h3><code class="status">[wip]</code> Milestone M4: The inherited helper, and the narrower guarantee that survives it</h3>
+    <h3><code class="status">[x]</code> Milestone M4: The inherited helper, and the narrower guarantee that survives it</h3>
     <p><em>Q3, decided 2026-08-25: inherit the owner's configured credential helper.</em> That makes <code>https</code> remotes work and it gives up the structural guarantee the rejected option had. This milestone's job is to state precisely what is left and make <em>that</em> checkable, rather than to keep claiming the guarantee that was traded away.</p>
     <div class="card warn">
       <h5>What the decision changes, said once so no task restates it wrongly</h5>
@@ -656,13 +656,13 @@ flowchart LR
     <p class="serves"><code class="serves">AC-5</code></p>
     <p>The decision inverts what the stub helper proves. It is no longer evidence that the helper stayed unused; it is evidence that the helper <strong>ran</strong> and that its answer went nowhere AWSF can be held responsible for.</p>
     <ul class="checklist">
-      <li><code class="status">[]</code> <strong>The helper is invoked.</strong> With a stub helper configured, a publish causes it to run — asserted on the marker file the stub writes. A test that could not tell whether the helper ran cannot say anything about what happened to its answer</li>
-      <li><code class="status">[]</code> The stub's returned secret appears in <strong>no</strong> argv the runner received, <strong>no</strong> journal line, and <strong>no</strong> operator message — swept over the serialized journal and the captured argv, not over reconstructions. The stub's password literal is assembled from fragments so the test file survives <code>no-credentials-in-fixtures.test.ts</code></li>
-      <li><code class="status">[]</code> The argv contains no <code>-c credential.helper=</code>, asserted directly, so a later reinstatement of the cleared-helper posture is a deliberate change rather than a drift</li>
-      <li><code class="status">[]</code> <strong>AWSF wrote nothing:</strong> in a publish run against a repository with <em>no</em> helper configured, <code>git config --local --get-regexp '^credential\.'</code> reports nothing afterwards — asserted on the <strong>empty output</strong>, because it exits <code>1</code> when there are no matches and reading that exit code as failure inverts the test</li>
-      <li><code class="status">[]</code> <code>remote.origin.url</code> is byte-identical to what it was before, and no new dotfile appeared at the repository root or in its Git directory</li>
-      <li><code class="status">[]</code> The argv contains no <code>://</code>, no <code>@</code>, and no value that <code>containsCredential</code> matches</li>
-      <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code>, <code>npm run lint</code> and <code>node --test core/test/unit/meta/no-credentials-in-fixtures.test.ts</code> all green</li>
+      <li><code class="status">[x]</code> <strong>The helper is invoked.</strong> With a stub helper configured, a publish causes it to run — asserted on the marker file the stub writes. A test that could not tell whether the helper ran cannot say anything about what happened to its answer</li>
+      <li><code class="status">[x]</code> The stub's returned secret appears in <strong>no</strong> argv the runner received, <strong>no</strong> journal line, and <strong>no</strong> operator message — swept over the serialized journal and the captured argv, not over reconstructions. The stub's password literal is assembled from fragments so the test file survives <code>no-credentials-in-fixtures.test.ts</code></li>
+      <li><code class="status">[x]</code> The argv contains no <code>-c credential.helper=</code>, asserted directly, so a later reinstatement of the cleared-helper posture is a deliberate change rather than a drift</li>
+      <li><code class="status">[x]</code> <strong>AWSF wrote nothing:</strong> in a publish run against a repository with <em>no</em> helper configured, <code>git config --local --get-regexp '^credential\.'</code> reports nothing afterwards — asserted on the <strong>empty output</strong>, because it exits <code>1</code> when there are no matches and reading that exit code as failure inverts the test</li>
+      <li><code class="status">[x]</code> <code>remote.origin.url</code> is byte-identical to what it was before, and no new dotfile appeared at the repository root or in its Git directory</li>
+      <li><code class="status">[x]</code> The argv contains no <code>://</code>, no <code>@</code>, and no value that <code>containsCredential</code> matches</li>
+      <li><code class="status">[x]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code>, <code>npm run lint</code> and <code>node --test core/test/unit/meta/no-credentials-in-fixtures.test.ts</code> all green</li>
     </ul>
     <div class="loop">
       🔁 <strong>Do not exit this phase until every box above is checked.</strong> If any command fails, fix the cause and re-run — never lower what the row asserts.
@@ -1110,6 +1110,11 @@ flowchart TD
     <summary>2026-08-25 — T08 completed: local bare-remote publication coverage</summary>
     <p><strong>T08 is complete in commit <code>48e089b</code>.</strong> The isolated bare-remote harness uses explicit owner identity and empty global and system Git configuration. It proves exact-SHA branch creation, the untrimmed literal-space fast-forward flag and <code>old..new</code> summary, table refusal before a non-fast-forward push, scrubbed remote observation failures, and all six porcelain flags with transport framing discarded. M3 is <code>[x]</code>, T08 is <code>done</code>, and the W08 spine marker remains untouched.</p>
     <p><strong>Verification:</strong> <code>npm run test:unit</code> passed 1395/1395 in 249.7 seconds, <code>npm run typecheck</code> completed cleanly, and <code>npm run lint</code> reported zero warnings and errors.</p>
+  </details>
+  <details>
+    <summary>2026-08-25 — M4 completed: inherited credential-helper posture and coverage</summary>
+    <p><strong>M4 is complete in the T09 implementation commit and this T10 coverage commit.</strong> The helper fixture proves a configured helper runs and its synthetic answer is absent from captured argv, serialized publication output, and operator-facing values. A separate no-helper run proves publication leaves local credential configuration empty, preserves the remote URL byte-for-byte, and creates no dotfiles. M4 is <code>[x]</code>, T09–T10 are <code>done</code>, and the W08 spine marker remains untouched.</p>
+    <p><strong>Verification:</strong> <code>npm run test:unit</code>, <code>npm run typecheck</code>, <code>npm run lint</code>, and <code>node --test core/test/unit/meta/no-credentials-in-fixtures.test.ts</code> passed.</p>
   </details>
   <details>
     <summary>2026-08-25 — T09 completed: inherited credential-helper posture</summary>
