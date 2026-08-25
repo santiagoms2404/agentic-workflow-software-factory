@@ -515,7 +515,7 @@ flowchart LR
 
   <!-- ================= M1 ================= -->
   <div class="phase">
-    <h3><code class="status">[wip]</code> Milestone M1: The ordered truth table, pure and total</h3>
+    <h3><code class="status">[x]</code> Milestone M1: The ordered truth table, pure and total</h3>
     <p>The table is written first because everything downstream is a consumer of it, and because the spine names writing it before the function as this workstream's cheapest unused upgrade. The bare-remote transcript that validates each row already exists in this plan's <a href="#table">Truth Table</a> section; this milestone turns it into a function and an exhaustive test.</p>
 
     <h4>1. The four input records and the closed refusal vocabulary</h4>
@@ -541,14 +541,14 @@ flowchart LR
 
     <h4>3. Testing Strategy</h4>
     <p class="serves"><code class="serves">AC-1</code> <code class="serves">AC-4</code></p>
-    <p>The table is tested exactly the way <code>core/test/unit/rejection-order.test.ts</code> tests the lifecycle's eleven ordered rejections: single-violation inputs proving every code is reachable, one purpose-built double violation per adjacency proving the order, and a totality check. No I/O appears anywhere in this file — it constructs records and calls a function.</p>
+    <p>The table is tested in the idiom of <code>core/test/unit/rejection-order.test.ts</code>: single-rule inputs prove every code is reachable, twelve purpose-built double violations prove the independent adjacencies, rows 2 and 3 get a prerequisite-boundary test because absence of an approval and mismatch of an existing approval are structurally exclusive, and a totality check covers the discrete dimensions. No I/O appears anywhere in this file — it constructs records and calls a function.</p>
     <ul class="checklist">
-      <li><code class="status">[]</code> <strong>Reachability</strong>: fourteen single-violation inputs, one per code, each derived from a valid baseline by changing exactly one field. A code no input can reach is a row that does not exist</li>
-      <li><code class="status">[]</code> <strong>Order</strong>: thirteen adjacency tests, each an input violating both members of one adjacent pair, asserting the earlier code fires. Each carries a one-line comment saying what fixing the later complaint would have let through</li>
-      <li><code class="status">[]</code> <strong>Totality</strong>: a generated sweep over the cartesian product of the discrete dimensions asserting every result is either <code>authorized</code> or a member of <code>PUBLISH_REFUSAL_ORDER</code>, and that no input produces a throw</li>
-      <li><code class="status">[]</code> <strong>The state row is enumerated, not listed</strong>: iterate <code>TASK_STATES</code> imported from <code>core/src/state/task-machine.ts</code>, assert <code>not-landed</code> for all nine non-<code>LANDED</code> members, and assert the count is <code>TASK_STATES.length - 1</code> so a new state cannot be silently skipped</li>
-      <li><code class="status">[]</code> A valid baseline authorizes, and the returned plan's fields equal the inputs they came from — the one positive test that stops a table which refuses everything from passing a refusal-only suite</li>
-      <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green</li>
+      <li><code class="status">[x]</code> <strong>Reachability</strong>: fourteen single-rule inputs, one per code, each derived from a valid baseline by changing exactly one truth-table dimension. Dependent equality fields move together, so no other row fails. A code no input can reach is a row that does not exist</li>
+      <li><code class="status">[x]</code> <strong>Order</strong>: twelve adjacency tests each use an input violating both members of one independent adjacent pair and assert the earlier code fires. The structurally exclusive rows 2 and 3 use one prerequisite-boundary test with an assertion on each side of the boundary. Each test carries a one-line comment saying what fixing the later complaint would have let through</li>
+      <li><code class="status">[x]</code> <strong>Totality</strong>: a generated sweep over the cartesian product of the discrete dimensions asserting every result is either <code>authorized</code> or a member of <code>PUBLISH_REFUSAL_ORDER</code>, and that no input produces a throw</li>
+      <li><code class="status">[x]</code> <strong>The state row is enumerated, not listed</strong>: iterate <code>TASK_STATES</code> imported from <code>core/src/state/task-machine.ts</code>, assert <code>not-landed</code> for every non-<code>LANDED</code> member, and assert the count is <code>TASK_STATES.length - 1</code> so a new state cannot be silently skipped</li>
+      <li><code class="status">[x]</code> A valid baseline authorizes, and the returned plan's fields equal the inputs they came from — the one positive test that stops a table which refuses everything from passing a refusal-only suite</li>
+      <li><code class="status">[x]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green</li>
     </ul>
     <div class="loop">
       🔁 <strong>Do not exit this phase until every box above is checked.</strong> If any command fails, fix the cause and re-run — never lower what the row asserts.

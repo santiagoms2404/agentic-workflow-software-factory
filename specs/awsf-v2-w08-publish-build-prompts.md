@@ -173,10 +173,12 @@ READ FIRST
 
 DO
   Write core/test/unit/publish/authorize.test.ts. Fourteen reachability rows, one per code, each
-  derived from a valid baseline by changing exactly one field. Thirteen adjacency tests, each an
-  input violating both members of one adjacent pair, asserting the EARLIER code fires, each with a
-  one-line comment saying what fixing the later complaint would have let through. A totality sweep
-  over the cartesian product of the discrete dimensions asserting every result is either
+  derived from a valid baseline by changing exactly one truth-table dimension; dependent equality
+  fields move together so no other row fails. Use twelve double-violation adjacency tests asserting
+  the EARLIER code, plus one prerequisite-boundary test for rows 2 and 3 with an assertion on each
+  side because a missing approval and a mismatched existing approval are structurally exclusive.
+  Each adjacency test has a one-line comment saying what fixing the later complaint would have let
+  through. A totality sweep over the cartesian product asserting every result is either
   authorized or a member of PUBLISH_REFUSAL_ORDER and that no input throws. Enumerate the state row
   by iterating TASK_STATES AS IMPORTED: assert not-landed for every member except LANDED and assert
   the refused count equals TASK_STATES.length - 1, so the eleventh state G8-B adds is covered
