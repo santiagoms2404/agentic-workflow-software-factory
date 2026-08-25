@@ -578,16 +578,16 @@ stateDiagram-v2
 
   <!-- ================= M7 ================= -->
   <div class="phase">
-    <h3><code class="status">[]</code> Milestone M7: The fence, proven red before it is trusted, and the close</h3>
+    <h3><code class="status">[wip]</code> Milestone M7: The fence, proven red before it is trusted, and the close</h3>
     <p>Three legs, because one path glob cannot express what is being guaranteed. The weak leg is named rather than hidden.</p>
 
     <h4>18. The transitive import fence</h4>
     <p class="serves"><code class="serves">INV-1</code></p>
     <ul class="checklist">
-      <li><code class="status">[]</code> Build the relative-import graph across <code>core/src/**</code> using the existing <code>walkFiles</code> helper in <code>core/test/unit/meta/_walk.ts</code>, then compute the reachable closure from every file under <code>core/src/workflow/**</code> and assert <code>core/src/quota/**</code> is not in it</li>
-      <li><code class="status">[]</code> <strong>This is the repository's first transitive fence</strong>; every existing one is a direct-text scan. The file's header says so and says why: the spine's rule is <em>"may not reach the module at all"</em>, and a direct-import scan is satisfied by one intermediate file</li>
-      <li><code class="status">[]</code> <strong>Prove it red before trusting it.</strong> Add a temporary import of the quota module into a workflow file two hops away, watch the fence name the path it found, then restore. A fence nobody has seen fail is decoration</li>
-      <li><code class="status">[]</code> The failure message prints the whole path, not just the endpoints, so a red run names the hop that has to be removed</li>
+      <li><code class="status">[x]</code> Build the relative-import graph across <code>core/src/**</code> using the existing <code>walkFiles</code> helper in <code>core/test/unit/meta/_walk.ts</code>, then compute the reachable closure from every file under <code>core/src/workflow/**</code> and assert <code>core/src/quota/**</code> is not in it</li>
+      <li><code class="status">[x]</code> <strong>This is the repository's first transitive fence</strong>; every existing one is a direct-text scan. The file's header says so and says why: the spine's rule is <em>"may not reach the module at all"</em>, and a direct-import scan is satisfied by one intermediate file</li>
+      <li><code class="status">[x]</code> <strong>Prove it red before trusting it.</strong> Add a temporary import of the quota module into a workflow file two hops away, watch the fence name the path it found, then restore. A fence nobody has seen fail is decoration</li>
+      <li><code class="status">[x]</code> The failure message prints the whole path, not just the endpoints, so a red run names the hop that has to be removed</li>
     </ul>
 
     <h4>19. The routing-absence fence and the no-derived-cost fence</h4>
