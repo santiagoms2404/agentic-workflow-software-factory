@@ -1,5 +1,11 @@
 // Host-owned publication observation and execution. Raw Git output is reduced
 // to closed facts or closed failure codes before it leaves this module.
+//
+// INV-4 gives up the guarantee that no credential is read: publication inherits
+// and may invoke the owner's configured helper chain. It keeps the narrower
+// guarantee that no credential value passes through AWSF: nothing the helper
+// returns is read, held, logged, or journalled; no URL enters the argv; and AWSF
+// writes no credential configuration and no credential file.
 
 import {
   authorizePublish,
@@ -14,6 +20,7 @@ import {
   publishArgv,
   type PublishOutcome,
 } from "../publish/argv.ts";
+import { containsCredential } from "../policy/redaction.ts";
 import { systemGitRunner, type GitRunner, type GitResult } from "./changes.ts";
 
 export const PUBLISH_BLOCK_CODES = [
@@ -29,7 +36,7 @@ export type PublishBlockCode = (typeof PUBLISH_BLOCK_CODES)[number];
 const PUBLISH_BLOCK_DETAILS: Readonly<Record<PublishBlockCode, string>> = {
   "remote-unknown": "The publication remote is not configured.",
   "remote-unreadable": "The publication remote could not be read.",
-  "credentials-required": "The configured credential helper did not provide credentials.",
+  "credentials-required": "The owner's configured credential helper provided nothing; fix the helper configuration and retry.",
   "mirror-configured": "The publication remote is configured as a mirror.",
   "git-failure": "Git could not complete publication.",
 };
@@ -163,9 +170,13 @@ export function observePublishTarget(
 }
 
 function executionFailure(result: GitResult): PublishBlocked {
+  // stderr is inspected only to select a closed code and is discarded with the
+  // result. It never enters the error, a log, or the journal.
   if (/(?:--mirror.*refspec|refspec.*--mirror)/iu.test(result.stderr)) {
     return new PublishBlocked("mirror-configured");
   }
+  // With prompting disabled, this diagnosis means the configured helper chain
+  // produced nothing and Git had no terminal on which to ask the operator.
   if (/terminal prompts disabled/iu.test(result.stderr)) {
     return new PublishBlocked("credentials-required");
   }
@@ -183,9 +194,12 @@ export function runPublish(
   const authorization = authorizePublish(status, repository, remote, refspec);
   if (authorization.decision === "refused") return authorization;
 
+  const argv = publishArgv(authorization.plan);
+  if (containsCredential(argv.join(" "))) throw new PublishBlocked("git-failure");
+
   let result: GitResult;
   try {
-    result = runner(publishArgv(authorization.plan));
+    result = runner(argv);
   } catch {
     throw new PublishBlocked("git-failure");
   }

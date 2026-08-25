@@ -12,7 +12,19 @@ export type GitRunner = (argv: readonly string[]) => GitResult;
 export type ChangeSetFingerprint = Readonly<Record<string, string>>;
 
 export function systemGitRunner(repository: string): GitRunner {
-  return (argv) => runSystemCommand("git", ["-C", repository, ...argv], 30_000);
+  const env: Record<string, string> = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value !== undefined) env[key] = value;
+  }
+  // spawnSync captures stdio, so the subprocess has no terminal and a prompt
+  // would hang until the timeout rather than reach anybody. This is a process
+  // liveness setting, not a credential control.
+  env["GIT_TERMINAL_PROMPT"] = "0";
+
+  return (argv) => runSystemCommand("git", ["-C", repository, ...argv], {
+    timeoutMs: 30_000,
+    env,
+  });
 }
 
 export class GitCommandFailed extends Error {
