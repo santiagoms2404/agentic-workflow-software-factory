@@ -142,7 +142,9 @@ export function simEvent(runId: string, n: number, terminal: "completed" | "fail
   return { ...base, kind: "thinking.delta", text: `pondering ${n}` };
 }
 
-export const TERMINAL_STATES: readonly TaskState[] = ["LANDED", "BLOCKED", "CANCELLED"];
+// This simulation mirrors the lifecycle vocabulary by hand. No fence ties this
+// literal to `core/src/state/task-machine.ts`, so lifecycle changes must move it.
+export const TERMINAL_STATES: readonly TaskState[] = ["LANDED", "PUBLISHED", "BLOCKED", "CANCELLED"];
 
 export interface DriveOptions {
   attemptDir: string;

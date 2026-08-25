@@ -423,7 +423,7 @@ export function styleNote(): ReviewFinding {
 type EdgeInputs = Readonly<Record<EdgeId, () => TransitionInput>>;
 
 /**
- * A fully-guard-satisfying input for each of the twenty-six legal edges.
+ * A fully-guard-satisfying input for each of the twenty-seven legal edges.
  * These are the inputs the transition matrix asserts are ACCEPTED, so every
  * field here is load-bearing: remove one and the edge must start failing.
  */
@@ -637,6 +637,23 @@ const VALID_INPUTS: EdgeInputs = {
     reason: { source: "process", detail: "quota reset in 4 minutes; threshold is 5 minutes" },
     interactive: false, budget: budget({ callsSpent: 1 }),
     evidence: { quotaStop: { route: "pi-codex", minutesToReset: 4, thresholdMinutes: 5 } },
+  }),
+  L27: () => ({
+    from: "LANDED", to: "PUBLISHED", actor: "human", tier: 1,
+    reason: { source: "human", detail: "awsf publish" },
+    interactive: true, budget: budget({ callsSpent: 1 }),
+    evidence: {
+      candidateSha: CANDIDATE_SHA,
+      landing: {
+        shaDisplayed: CANDIDATE_SHA,
+        summaryDisplayed: "Publish the landed candidate.",
+        confirmed: true,
+        requiredReviewPresent: false,
+        journeyApproved: false,
+        protectedApprovalsValid: true,
+        fastForwardPreflightPasses: true,
+      },
+    },
   }),
 };
 

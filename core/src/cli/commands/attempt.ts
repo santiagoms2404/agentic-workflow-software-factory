@@ -11,15 +11,17 @@ import {
   statusFilePath,
 } from "../../persistence/platform-paths.ts";
 import { tryReadStatus } from "../../persistence/status-store.ts";
-import { TERMINAL_STATES, correctionAllowance, type BudgetState, type TaskState } from "../../state/task-machine.ts";
+import {
+  SEALED_STATES,
+  TERMINAL_STATES,
+  correctionAllowance,
+  type BudgetState,
+  type TaskState,
+} from "../../state/task-machine.ts";
 import type { ModelResolutionProvenance } from "../../contracts/normalized-events.ts";
 import type { ProcessIdentity } from "../../execution/launcher-barrier.ts";
 import type { AttemptEvidence } from "../../observability/attempt-evidence.ts";
 import type { Tier } from "../../state/tiers.ts";
-
-// G8-B is the future home of this lifecycle vocabulary; T12 replaces this
-// local precondition with the state-machine export after that gate is verified.
-const SEALED_STATES = ["BLOCKED", "CANCELLED", "PUBLISHED"] as const satisfies readonly TaskState[];
 
 export interface PhaseMeter {
   readonly name: string;

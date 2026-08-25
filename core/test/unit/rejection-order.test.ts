@@ -14,7 +14,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { REJECTION_ORDER, type RejectionName } from "./_lifecycle-tables.ts";
+import { REJECTION_ORDER, SEALED_STATES, type RejectionName } from "./_lifecycle-tables.ts";
 import {
   BASE_SHA,
   CANDIDATE_SHA,
@@ -49,7 +49,7 @@ test("1 before 2 — conversational evidence out of a sealed attempt is an evide
   // would be indistinguishable from a real one at every later step.
   await expectRejection(
     "NonDeterministicEvidence",
-    { ...matrixInput("LANDED", "PREPARED"), reason: { source: "conversation", detail: "the agent said it recovered" } },
+    { ...matrixInput("PUBLISHED", "PREPARED"), reason: { source: "conversation", detail: "the agent said it recovered" } },
     { because: "step 1 outranks step 2" },
   );
 });
@@ -57,20 +57,19 @@ test("1 before 2 — conversational evidence out of a sealed attempt is an evide
 test("2 before 3 — a sealed attempt hears 'this attempt is over', except when it is standing still", async () => {
   // THE ONE PLACE THE PLAN'S TWO NORMATIVE TABLES DISAGREE.
   //
-  // Read literally, step 2 ("from-state is BLOCKED / LANDED / CANCELLED")
-  // would swallow the three terminal self-pairs and make the class counts
-  // 30 TerminalAttempt / 7 AlreadyInState. The class table says 27 / 10, with
-  // the arithmetic spelled out ("3 × 9", "all ten X → X pairs"). After the
-  // single-cell L25 and L26 amendments, 74 decomposes as 27 + 10 + 6 + 31
-  // under that same reading. So step 2 is read as narrowed to `from` terminal
-  // AND `from !== to`,
-  // and this test pins the narrowing rather than leaving T5 to guess.
-  for (const terminal of ["BLOCKED", "LANDED", "CANCELLED"] as const) {
-    await expectRejection("TerminalAttempt", matrixInput(terminal, "DRAFT"), {
-      because: "step 2 governs every non-self pair out of a terminal state",
+  // Read literally, step 2 ("from-state is BLOCKED / CANCELLED / PUBLISHED")
+  // would swallow the three sealed self-pairs and make the widened class counts
+  // 33 TerminalAttempt / 8 AlreadyInState. The class table says 30 / 11, with
+  // the arithmetic spelled out ("3 × 10", "all eleven X → X pairs"). So step
+  // 2 is read as narrowed to `from` sealed AND `from !== to`, and this test
+  // pins the narrowing. L27 changed the members, not this adjacency or any of
+  // the eleven ordered steps.
+  for (const sealed of SEALED_STATES) {
+    await expectRejection("TerminalAttempt", matrixInput(sealed, "DRAFT"), {
+      because: "step 2 governs every non-self pair out of a sealed state",
     });
-    await expectRejection("AlreadyInState", matrixInput(terminal, terminal), {
-      because: "the class table counts terminal self-pairs among the ten, not the twenty-seven",
+    await expectRejection("AlreadyInState", matrixInput(sealed, sealed), {
+      because: "the class table counts sealed self-pairs among the eleven, not the thirty",
     });
   }
 });
@@ -85,7 +84,7 @@ test("3 before 4 — 'you are already there' outranks the human-gate complaint",
 });
 
 test("4 before 5 — an attempt to land names the violated invariant, not the unknown pair", async () => {
-  // DRAFT → LANDED is not on the 24, so step 5 applies too. An automation bug
+  // DRAFT → LANDED is not on the 27, so step 5 applies too. An automation bug
   // that tries to land must be identified as exactly that.
   await expectRejection("HumanGateBypass", matrixInput("DRAFT", "LANDED"), {
     because: "step 4 outranks step 5",
@@ -95,7 +94,7 @@ test("4 before 5 — an attempt to land names the violated invariant, not the un
 test("5 before 6 — an illegal pair dressed as an exhausted correction still hears 'illegal pair'", async () => {
   // Every field says "inter-state correction with the budget gone": target
   // RUNNING, a declared spawn, an owner actor, both tranches spent. But
-  // LANDING → RUNNING is not one of the 24, and that is the real defect —
+  // LANDING → RUNNING is not one of the 27, and that is the real defect —
   // restoring budget would not make this legal.
   const input: TransitionInput = {
     ...matrixInput("LANDING", "RUNNING"),
@@ -179,7 +178,7 @@ test("each of the eleven rejections is reachable on its own", async () => {
     input: TransitionInput;
   }[] = [
     { step: 1, error: "NonDeterministicEvidence", input: withReason("L1", { source: "model" }) },
-    { step: 2, error: "TerminalAttempt", input: matrixInput("LANDED", "PREPARED") },
+    { step: 2, error: "TerminalAttempt", input: matrixInput("PUBLISHED", "PREPARED") },
     { step: 3, error: "AlreadyInState", input: matrixInput("RUNNING", "RUNNING") },
     { step: 4, error: "HumanGateBypass", input: matrixInput("AWAITING_OWNER", "LANDED") },
     { step: 5, error: "IllegalTransition", input: matrixInput("DRAFT", "RUNNING") },
@@ -246,7 +245,7 @@ test("the order holds across non-adjacent pairs too", async () => {
     {
       label: "2 over 5 — a terminal source on an illegal pair",
       error: "TerminalAttempt",
-      input: matrixInput("LANDED", "RUNNING"),
+      input: matrixInput("PUBLISHED", "RUNNING"),
     },
     {
       label: "5 over 10 — an illegal pair with unusable evidence",

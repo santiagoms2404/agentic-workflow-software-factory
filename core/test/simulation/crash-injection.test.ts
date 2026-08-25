@@ -387,7 +387,7 @@ test("a status ahead of the journal BLOCKS on the key it is ahead on", async () 
   });
 });
 
-test("a lifecycle state outside the plan's ten BLOCKS as unknown-state", async () => {
+test("a lifecycle state outside the plan's eleven BLOCKS as unknown-state", async () => {
   await withStateRoot(async (root) => {
     const dir = await corruptedAttempt(root, (d) => {
       const path = statusFilePath(d);

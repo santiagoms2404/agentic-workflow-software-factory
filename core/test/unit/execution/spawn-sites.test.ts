@@ -102,7 +102,7 @@ function registrationFor(from: TaskState, to: TaskState): ProcessRegistration {
 }
 
 // ---------------------------------------------------------------------------
-// The six, and the ninety-four.
+// The six, and the hundred fifteen.
 // ---------------------------------------------------------------------------
 
 test("the broker's spawn sites are derived from the L-table and are exactly the plan's six", () => {
@@ -141,8 +141,8 @@ test("every ordered pair that is not a spawn site is refused, and no child is ev
       }
     }
 
-    // Ten states, a hundred ordered pairs, six of which may spawn.
-    assert.equal(refused, 94);
+    // Eleven states, 121 ordered pairs, six of which may spawn.
+    assert.equal(refused, 115);
     assert.equal(
       existsSync(sentinel.marker),
       false,

@@ -1,8 +1,8 @@
-// T4 — the 10 × 10 transition matrix.
+// T4 — the 11 × 11 transition matrix.
 //
-// 100 ordered pairs. Exactly 26 accept. Exactly 74 throw, and each throws the
-// error its class table row names: 27 TerminalAttempt · 10 AlreadyInState ·
-// 6 HumanGateBypass · 31 IllegalTransition.
+// 121 ordered pairs. Exactly 27 accept. Exactly 94 throw, and each throws the
+// error its class table row names: 30 TerminalAttempt · 11 AlreadyInState ·
+// 6 HumanGateBypass · 47 IllegalTransition.
 //
 // The legal set is enumerated literally in `_lifecycle-tables.ts` and is never
 // read back out of the implementation. RED until T5 writes
@@ -17,6 +17,7 @@ import {
   ILLEGAL_TRANSITION_PAIRS,
   LEGAL_EDGES,
   REJECTION_CLASS_BY_PAIR,
+  SEALED_STATES,
   SPAWN_SITE_EDGES,
   TASK_STATES,
   TERMINAL_ATTEMPT_PAIRS,
@@ -41,19 +42,19 @@ import {
 // a mistake in the tables would otherwise surface only as a mystery in T5.
 // ---------------------------------------------------------------------------
 
-test("the four rejection classes partition the 74 illegal pairs exactly", () => {
-  assert.equal(TERMINAL_ATTEMPT_PAIRS.length, 27, "terminal-source pairs");
-  assert.equal(ALREADY_IN_STATE_PAIRS.length, 10, "self-transition pairs");
+test("the four rejection classes partition the 94 illegal pairs exactly", () => {
+  assert.equal(TERMINAL_ATTEMPT_PAIRS.length, 30, "sealed-source pairs");
+  assert.equal(ALREADY_IN_STATE_PAIRS.length, 11, "self-transition pairs");
   assert.equal(HUMAN_GATE_BYPASS_PAIRS.length, 6, "human-gate-bypass pairs");
-  assert.equal(ILLEGAL_TRANSITION_PAIRS.length, 31, "everything-else pairs");
-  assert.equal(27 + 10 + 6 + 31, 74);
+  assert.equal(ILLEGAL_TRANSITION_PAIRS.length, 47, "everything-else pairs");
+  assert.equal(30 + 11 + 6 + 47, 94);
 
   // No pair is claimed by two classes, and none is claimed twice by one.
-  assert.equal(REJECTION_CLASS_BY_PAIR.size, 74, "a pair appears in two classes");
+  assert.equal(REJECTION_CLASS_BY_PAIR.size, 94, "a pair appears in two classes");
 
-  // 26 legal + 74 illegal = the whole 10 × 10 matrix, with no pair unaccounted for.
+  // 27 legal + 94 illegal = the whole 11 × 11 matrix, with no pair unaccounted for.
   const legal = new Set(LEGAL_EDGES.map((e) => pairKey(e.from, e.to)));
-  assert.equal(legal.size, 26, "the L-table names a pair twice");
+  assert.equal(legal.size, 27, "the L-table names a pair twice");
   const unclassified = allOrderedPairs()
     .map(([from, to]) => pairKey(from, to))
     .filter((key) => !legal.has(key) && !REJECTION_CLASS_BY_PAIR.has(key));
@@ -63,11 +64,11 @@ test("the four rejection classes partition the 74 illegal pairs exactly", () => 
   assert.deepEqual(bothLegalAndIllegal, [], "pairs claimed as both legal and illegal");
 });
 
-test("the L-table names twenty-six edges, L1 through L26, with six spawn sites", () => {
-  assert.equal(LEGAL_EDGES.length, 26);
+test("the L-table names twenty-seven edges, L1 through L27, with six spawn sites", () => {
+  assert.equal(LEGAL_EDGES.length, 27);
   assert.deepEqual(
     LEGAL_EDGES.map((e) => e.id),
-    Array.from({ length: 26 }, (_, i) => `L${i + 1}`),
+    Array.from({ length: 27 }, (_, i) => `L${i + 1}`),
   );
   // "spawn ⇔ entering an executing state" — the closure, not an enumeration.
   const bySpawnFlag = LEGAL_EDGES.filter((e) => e.spawnSite).map((e) => e.id);
@@ -80,12 +81,12 @@ test("the L-table names twenty-six edges, L1 through L26, with six spawn sites",
 // The machine.
 // ---------------------------------------------------------------------------
 
-test("the machine knows exactly the plan's ten states, in the plan's order", async () => {
+test("the machine knows exactly the plan's eleven states, in the plan's order", async () => {
   const { TASK_STATES: states } = await taskMachine();
   assert.deepEqual([...states], [...TASK_STATES]);
 });
 
-test("all twenty-six legal transitions are accepted with their guards satisfied", async () => {
+test("all twenty-seven legal transitions are accepted with their guards satisfied", async () => {
   const failures: string[] = [];
   for (const e of LEGAL_EDGES) {
     try {
@@ -100,7 +101,7 @@ test("all twenty-six legal transitions are accepted with their guards satisfied"
   assert.deepEqual(failures, []);
 });
 
-test("exactly 26 of the 100 ordered pairs are accepted, and they are the L-table's 26", async () => {
+test("exactly 27 of the 121 ordered pairs are accepted, and they are the L-table's 27", async () => {
   const accepted: string[] = [];
   for (const [from, to] of allOrderedPairs()) {
     if ((await rejectionNameOf(matrixInput(from, to))) === null) accepted.push(pairKey(from, to));
@@ -109,15 +110,15 @@ test("exactly 26 of the 100 ordered pairs are accepted, and they are the L-table
     accepted.sort(),
     LEGAL_EDGES.map((e) => pairKey(e.from, e.to)).sort(),
   );
-  assert.equal(accepted.length, 26);
+  assert.equal(accepted.length, 27);
 });
 
-test("exactly 74 of the 100 ordered pairs are rejected", async () => {
+test("exactly 94 of the 121 ordered pairs are rejected", async () => {
   let rejected = 0;
   for (const [from, to] of allOrderedPairs()) {
     if ((await rejectionNameOf(matrixInput(from, to))) !== null) rejected += 1;
   }
-  assert.equal(rejected, 74);
+  assert.equal(rejected, 94);
 });
 
 test("the class -> error mapping holds pair by pair across the whole matrix", async () => {
@@ -134,10 +135,10 @@ test("the class -> error mapping holds pair by pair across the whole matrix", as
 });
 
 const CLASS_CASES: readonly (readonly [RejectionName, readonly Pair[], number])[] = [
-  ["TerminalAttempt", TERMINAL_ATTEMPT_PAIRS, 27],
-  ["AlreadyInState", ALREADY_IN_STATE_PAIRS, 10],
+  ["TerminalAttempt", TERMINAL_ATTEMPT_PAIRS, 30],
+  ["AlreadyInState", ALREADY_IN_STATE_PAIRS, 11],
   ["HumanGateBypass", HUMAN_GATE_BYPASS_PAIRS, 6],
-  ["IllegalTransition", ILLEGAL_TRANSITION_PAIRS, 31],
+  ["IllegalTransition", ILLEGAL_TRANSITION_PAIRS, 47],
 ];
 
 for (const [expected, pairs, count] of CLASS_CASES) {
@@ -177,8 +178,8 @@ test("every rejection names the ordered pair it refused", async () => {
 });
 
 test("`awsf retry` is not a transition — a sealed attempt cannot walk back to DRAFT", async () => {
-  // The remedy for BLOCKED is attempt n+1 at DRAFT, minted outside the machine.
-  for (const from of ["BLOCKED", "LANDED", "CANCELLED"] as const) {
+  // The remedy for a sealed attempt is attempt n+1 at DRAFT, minted outside the machine.
+  for (const from of SEALED_STATES) {
     await expectRejection("TerminalAttempt", matrixInput(from, "DRAFT"), { because: "awsf retry" });
   }
 });
@@ -201,10 +202,10 @@ test("the six spawn-site edges accept a declared spawn and report spawnSite", as
   assert.deepEqual(failures, []);
 });
 
-test("the other twenty legal edges report spawnSite false and reserve no call", async () => {
+test("the other twenty-one legal edges report spawnSite false and reserve no call", async () => {
   const failures: string[] = [];
   const nonSpawn = LEGAL_EDGES.filter((e) => !e.spawnSite);
-  assert.equal(nonSpawn.length, 20);
+  assert.equal(nonSpawn.length, 21);
   for (const e of nonSpawn) {
     try {
       const result = await expectAccepted(validInput(e.id));
@@ -255,7 +256,7 @@ test("an illegal pair that also attempts a spawn still hears the pair complaint 
   const cases: readonly (readonly [TaskState, TaskState, RejectionName])[] = [
     ["DRAFT", "RUNNING", "IllegalTransition"],
     ["RUNNING", "REVIEWING", "IllegalTransition"],
-    ["LANDED", "RUNNING", "TerminalAttempt"],
+    ["PUBLISHED", "RUNNING", "TerminalAttempt"],
     ["RUNNING", "RUNNING", "AlreadyInState"],
   ];
   for (const [from, to, expected] of cases) {

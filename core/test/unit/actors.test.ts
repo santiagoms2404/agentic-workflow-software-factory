@@ -66,7 +66,7 @@ test("every legal edge accepts exactly the actors its L-table row names", async 
   assert.deepEqual(failures, []);
 });
 
-test("the host owns sixteen edges, the human nine, and the owner three", () => {
+test("the host owns sixteen edges, the human ten, and the owner three", () => {
   // A sanity check on the transcription itself: if the Actor column drifted,
   // the matrix test above would start passing for the wrong reason.
   const byActor = (actor: Actor) => LEGAL_EDGES.filter((e) => e.actors.includes(actor)).map((e) => e.id);
@@ -78,7 +78,7 @@ test("the host owns sixteen edges, the human nine, and the owner three", () => {
   // with the human — a replacement review is an owner act either way, and the
   // tranche map sends both to the same allowance.
   assert.deepEqual(byActor("owner"), ["L10", "L16", "L25"]);
-  assert.deepEqual(byActor("human"), ["L3", "L6", "L9", "L14", "L18", "L19", "L20", "L22", "L25"]);
+  assert.deepEqual(byActor("human"), ["L3", "L6", "L9", "L14", "L18", "L19", "L20", "L22", "L25", "L27"]);
 });
 
 // ---------------------------------------------------------------------------
@@ -135,7 +135,7 @@ test("every human edge demands an interactive session; no host edge does", async
   assert.deepEqual(failures, []);
   assert.deepEqual(
     LEGAL_EDGES.filter((e) => e.interactive).map((e) => e.id),
-    ["L3", "L6", "L9", "L14", "L18", "L19", "L20", "L22", "L25"],
+    ["L3", "L6", "L9", "L14", "L18", "L19", "L20", "L22", "L25", "L27"],
   );
 });
 
@@ -201,7 +201,7 @@ test("the host draws the automatic tranche and the owner draws the owner tranche
 test("no edge outside L10/L16/L19/L25 draws a correction tranche", async () => {
   const failures: string[] = [];
   const others = LEGAL_EDGES.filter((e) => !(CORRECTION_EDGES as readonly string[]).includes(e.id));
-  assert.equal(others.length, 22);
+  assert.equal(others.length, 23);
   for (const e of others) {
     try {
       const result = await expectAccepted(validInput(e.id));
