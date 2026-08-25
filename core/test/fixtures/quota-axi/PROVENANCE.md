@@ -68,6 +68,10 @@ in the private uncommitted attempt area, then scrub and promote it with its exac
 transformation recorded here. Until that happens, the absence remains explicit rather
 than being filled with invented bytes.
 
+Re-checked during the W07 close on 2026-08-24: the private retention area held
+no retained `quota-*.txt` payload. No natural occurrence was available to scrub
+and promote, so both the named absence and the automatic retention plan stand.
+
 ## Rules for whoever reads this next
 
 - **This fixture is replayed, never regenerated.** Re-running `capture-probe.ts` to

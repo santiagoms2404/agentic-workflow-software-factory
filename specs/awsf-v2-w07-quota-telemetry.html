@@ -578,7 +578,7 @@ stateDiagram-v2
 
   <!-- ================= M7 ================= -->
   <div class="phase">
-    <h3><code class="status">[wip]</code> Milestone M7: The fence, proven red before it is trusted, and the close</h3>
+    <h3><code class="status">[x]</code> Milestone M7: The fence, proven red before it is trusted, and the close</h3>
     <p>Three legs, because one path glob cannot express what is being guaranteed. The weak leg is named rather than hidden.</p>
 
     <h4>18. The transitive import fence</h4>
@@ -604,13 +604,13 @@ stateDiagram-v2
     <p class="serves"><code class="serves">INV-1</code> <code class="serves">INV-2</code></p>
     <p>The full offline suite, then the spine marker. This is the only task that touches <code>specs/awsf-v2-plan.html</code>.</p>
     <ul class="checklist">
-      <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> all green, with <strong>no network and no agent quota spent</strong> in the whole suite</li>
-      <li><code class="status">[]</code> <code>ticket-plan-sync.test.ts</code> green: every task in this plan has a ticket, states mirror markers, and each ticket's prompt is byte-identical to its Section B block</li>
-      <li><code class="status">[]</code> The identifier-spine coverage rows are green: every declaration is served, no claim is orphaned, and plan and ticket <code>serves</code> lists mirror each other</li>
-      <li><code class="status">[]</code> Every milestone above is <code>[x]</code> and every ticket in <code>specs/tickets/awsf-v2-w07-quota-telemetry/</code> is <code>done</code></li>
-      <li><code class="status">[]</code> <strong>Both amendments are recorded in this plan's Amendments section</strong> with their commit SHAs — <span class="gate">G7-A</span>'s config change and <span class="gate">G7-B</span>'s <code>L26</code>, each an owner-authored commit, so the plan that asked for them also records that they landed</li>
-      <li><code class="status">[]</code> The named absence is re-checked and its record updated: if the retention path from M2 captured a rate-limited response, it is scrubbed and promoted to a fixture and <code>PROVENANCE.md</code> says so; if it did not, the absence and its retention plan both stand</li>
-      <li><code class="status">[]</code> <strong>Only now:</strong> flip W07's marker in <code>specs/awsf-v2-plan.html</code> to <code>[x]</code> and <code>specs/tickets/awsf-v2-plan/W07.md</code> to <code>done</code>, in the same commit</li>
+      <li><code class="status">[x]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> all green, with <strong>no network and no agent quota spent</strong> in the whole suite</li>
+      <li><code class="status">[x]</code> <code>ticket-plan-sync.test.ts</code> green: every task in this plan has a ticket, states mirror markers, and each ticket's prompt is byte-identical to its Section B block</li>
+      <li><code class="status">[x]</code> The identifier-spine coverage rows are green: every declaration is served, no claim is orphaned, and plan and ticket <code>serves</code> lists mirror each other</li>
+      <li><code class="status">[x]</code> Every milestone above is <code>[x]</code> and every ticket in <code>specs/tickets/awsf-v2-w07-quota-telemetry/</code> is <code>done</code></li>
+      <li><code class="status">[x]</code> <strong>Both amendments are recorded in this plan's Amendments section</strong> with their commit SHAs — <span class="gate">G7-A</span>'s config change and <span class="gate">G7-B</span>'s <code>L26</code>, each an owner-authored commit, so the plan that asked for them also records that they landed</li>
+      <li><code class="status">[x]</code> The named absence is re-checked and its record updated: if the retention path from M2 captured a rate-limited response, it is scrubbed and promoted to a fixture and <code>PROVENANCE.md</code> says so; if it did not, the absence and its retention plan both stand</li>
+      <li><code class="status">[x]</code> <strong>Only now:</strong> flip W07's marker in <code>specs/awsf-v2-plan.html</code> to <code>[x]</code> and <code>specs/tickets/awsf-v2-plan/W07.md</code> to <code>done</code>, in the same commit</li>
     </ul>
     <div class="loop">
       🔁 <strong>Do not exit this phase until every box above is checked.</strong> The spine marker is the last thing that moves, and it moves only from here.
@@ -622,17 +622,17 @@ stateDiagram-v2
   <h2>Validation Commands</h2>
   <p>Execute these to validate the entire plan is complete. Every one is offline.</p>
   <ul class="checklist">
-    <li><code class="status">[]</code> <code>npm run test:unit</code> — the whole suite green, including the parser over in-tree fixtures, the probe's seven reason codes, the version floor, the <code>L26</code> stop and its guard refusal, and the three fence legs</li>
-    <li><code class="status">[]</code> <code>npm run typecheck</code> — the closed reason-code union, the closed readout field list, and <code>L26</code>'s mandatory guard entry all hold</li>
-    <li><code class="status">[]</code> <code>npm run lint</code> — clean</li>
-    <li><code class="status">[]</code> <code>node --test core/test/unit/meta/quota-fence.test.ts</code> — the three legs, each having been seen red</li>
-    <li><code class="status">[]</code> <code>node --test core/test/unit/transitions.test.ts core/test/unit/actors.test.ts core/test/unit/rejection-order.test.ts core/test/unit/evidence.test.ts</code> — twenty-six edges, the mirror table moved, and the illegal-pair arithmetic still balancing</li>
-    <li><code class="status">[]</code> <code>node --test core/test/unit/meta/no-credentials-in-fixtures.test.ts</code> — the new fixture directory survives the credential sweep</li>
-    <li><code class="status">[]</code> <code>node --test core/test/unit/meta/ticket-plan-sync.test.ts</code> — plan, tickets and Section B agree byte for byte</li>
-    <li><code class="status">[]</code> <code>node --test core/test/unit/meta/child-process-fence.test.ts</code> — still exactly one importer; the quota module added none</li>
-    <li><code class="status">[]</code> <code>node --test core/test/unit/meta/dependency-allowlist.test.ts</code> — quota-axi entered no manifest</li>
-    <li><code class="status">[]</code> <code>node --test core/test/unit/meta/junk-drawer.test.ts</code> — the retention path committed nothing; invariant 10 holds</li>
-    <li><code class="status">[]</code> <code>git grep -n "npx -y quota-axi" core/src | wc -l</code> returns <code>0</code> — the unpinned fetch the source recommended is absent</li>
+    <li><code class="status">[x]</code> <code>npm run test:unit</code> — the whole suite green, including the parser over in-tree fixtures, the probe's seven reason codes, the version floor, the <code>L26</code> stop and its guard refusal, and the three fence legs</li>
+    <li><code class="status">[x]</code> <code>npm run typecheck</code> — the closed reason-code union, the closed readout field list, and <code>L26</code>'s mandatory guard entry all hold</li>
+    <li><code class="status">[x]</code> <code>npm run lint</code> — clean</li>
+    <li><code class="status">[x]</code> <code>node --test core/test/unit/meta/quota-fence.test.ts</code> — the three legs, each having been seen red</li>
+    <li><code class="status">[x]</code> <code>node --test core/test/unit/transitions.test.ts core/test/unit/actors.test.ts core/test/unit/rejection-order.test.ts core/test/unit/evidence.test.ts</code> — twenty-six edges, the mirror table moved, and the illegal-pair arithmetic still balancing</li>
+    <li><code class="status">[x]</code> <code>node --test core/test/unit/meta/no-credentials-in-fixtures.test.ts</code> — the new fixture directory survives the credential sweep</li>
+    <li><code class="status">[x]</code> <code>node --test core/test/unit/meta/ticket-plan-sync.test.ts</code> — plan, tickets and Section B agree byte for byte</li>
+    <li><code class="status">[x]</code> <code>node --test core/test/unit/meta/child-process-fence.test.ts</code> — still exactly one importer; the quota module added none</li>
+    <li><code class="status">[x]</code> <code>node --test core/test/unit/meta/dependency-allowlist.test.ts</code> — quota-axi entered no manifest</li>
+    <li><code class="status">[x]</code> <code>node --test core/test/unit/meta/junk-drawer.test.ts</code> — the retention path committed nothing; invariant 10 holds</li>
+    <li><code class="status">[x]</code> <code>git grep -n "npx -y quota-axi" core/src | wc -l</code> returns <code>0</code> — the unpinned fetch the source recommended is absent</li>
   </ul>
   <div class="loop">
     🔁 <strong>The plan is not complete until every box is checked and every command passes. If a step is genuinely not possible, mark it <code>[f]</code>, record why, and move on if the rest can proceed.</strong>
@@ -825,6 +825,18 @@ flowchart LR
     <p><strong>Observed rather than reasoned.</strong> Loading the committed config with the proposed block injected returned <code>config does not match awsf/v1: /routing/quota_stop: Unexpected property</code>. The unpatched file loads cleanly, so the failure is the block and nothing else.</p>
     <p><strong>The correction.</strong> <span class="gate">G7-A</span> is now the one-line durable-intent change and nothing else — the permission, not the values. T07 extends the schema, which it may do because <code>core/src/config/**</code> is <em>not</em> a protected path. Threshold values become a separate, optional, later owner commit, and since an absent block means the stop is disabled, this repository's own config need never carry one at all. M3 task 7 gained a row forbidding a premature block, and the build prompts and ticket README were corrected to match.</p>
     <p><strong>Why this is worth recording rather than quietly fixing.</strong> The plan asked the owner for a commit that would have broken the repository, and it did so in the same document that requires every deep plan to check whether a guarantee is already enforced somewhere stronger. The schema was the stronger enforcement, and the first draft did not read it.</p>
+  </details>
+  <details open>
+    <summary>2026-08-24 — owner amendments G7-A and G7-B recorded as landed</summary>
+    <p><strong>G7-A landed in <code>9b342153bc34b0719d60fc575d249d380c0657ae</code>.</strong> The owner-authored config amendment permits a durable per-route quota policy threshold while continuing to bar measured quota state from committed configuration.</p>
+    <p><strong>G7-B landed in <code>f029c0bf3506592601039d3484905471a1edcc12</code>.</strong> The owner-authored state amendment adds <code>L26 — RUNNING → AWAITING_OWNER</code> and its mandatory known-quota guard.</p>
+    <p>Both commits record Santiago Marin as author and committer. G7-A preceded M3's schema build, and G7-B preceded M6's snapshot and stop build.</p>
+  </details>
+  <details open>
+    <summary>2026-08-24 — M7 / T20 completed: offline validation and W07 close</summary>
+    <p><strong>The full offline suite passed.</strong> <code>npm run test:unit</code> passed 1359/1359 tests in 253.7 seconds; <code>npm run typecheck</code> completed cleanly; and <code>npm run lint</code> reported zero warnings and zero errors. No network operation or agent process was invoked.</p>
+    <p><strong>The named validation commands passed.</strong> The quota fence passed 4/4; the transition, actor, rejection-order and evidence group passed 92/92; and the grouped credential, ticket sync, child-process, dependency and junk-drawer fences passed 27/27. Ticket sync included all four identifier-spine rows. The forbidden <code>npx -y quota-axi</code> source count was zero.</p>
+    <p><strong>The named absence was re-checked.</strong> The private retention area contained no <code>quota-*.txt</code> payload, so no natural rate-limited response was available to scrub and promote. The absence and automatic retention plan remain current.</p>
   </details>
   <details open>
     <summary>2026-08-24 — M6 / T17 completed: boundary snapshots, guarded stop, and silence after it</summary>

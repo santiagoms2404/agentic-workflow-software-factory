@@ -679,8 +679,8 @@ flowchart LR
 
     <!-- ================= W07 ================= -->
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone M7: W07 — Quota telemetry <span class="wtag core">v2 core</span></h3>
-      <p class="deep-plan"><a href="awsf-v2-w07-quota-telemetry.html">Deep plan: AWSF v2 W07 — Quota telemetry as a readout</a> <span class="muted">not yet authored</span></p>
+      <h3><code class="status">[x]</code> Milestone M7: W07 — Quota telemetry <span class="wtag core">v2 core</span></h3>
+      <p class="deep-plan"><a href="awsf-v2-w07-quota-telemetry.html">Deep plan: AWSF v2 W07 — Quota telemetry as a readout</a></p>
       <p><em>Exists because it is small, and because it needs the registry's per-project shape.</em> Its rules are the strongest evidence in the whole candidate set, because every one of them was produced by a failure rather than by a preference.</p>
       <h4>7. W07 — Quota telemetry</h4>
       <table class="taskmeta">
@@ -698,13 +698,13 @@ flowchart LR
         Fixture-first parsing over scrubbed captures held <em>in the tree</em>, covering every state the tool reports structurally. The import fence, asserted as an absence — nothing under <code>core/src/workflow/**</code> and no routing resolver may reach the module. A version-floor check that fails on a lower version. The probe's failure posture, exercised: timeout, fail-open, and the journalled record of the failure. And a test that the phase-boundary stop reaches <code>AWAITING_OWNER</code> and <strong>no timer resumes it</strong>. Offline; no quota.
       </div>
       <ul class="checklist">
-        <li><code class="status">[]</code> Deep plan <code>awsf-v2-w07-quota-telemetry.html</code> authored with its build prompts and ticket set, and approved by the owner</li>
-        <li><code class="status">[]</code> Q4 is <strong>applied as decided</strong> — minutes to window reset, threshold in config per route — with the observed-median-duration comparison named as the upgrade rather than left implicit</li>
-        <li><code class="status">[]</code> A scrubbed fixture exists in the tree; the fixture-first rule is satisfied by the repository, not by captures outside it</li>
-        <li><code class="status">[]</code> The snapshot is journalled as explicitly non-attributable, and no task cost is derived from two readings anywhere</li>
-        <li><code class="status">[]</code> A version floor is named and checked; the probe's failure posture is stated and exercised</li>
-        <li><code class="status">[]</code> The import fence is green, and the stop is <code>AWAITING_OWNER</code> with no timer and no automatic resume</li>
-        <li><code class="status">[]</code> The deep plan's own milestones all reach <code>[x]</code></li>
+        <li><code class="status">[x]</code> Deep plan <code>awsf-v2-w07-quota-telemetry.html</code> authored with its build prompts and ticket set, and approved by the owner</li>
+        <li><code class="status">[x]</code> Q4 is <strong>applied as decided</strong> — minutes to window reset, threshold in config per route — with the observed-median-duration comparison named as the upgrade rather than left implicit</li>
+        <li><code class="status">[x]</code> A scrubbed fixture exists in the tree; the fixture-first rule is satisfied by the repository, not by captures outside it</li>
+        <li><code class="status">[x]</code> The snapshot is journalled as explicitly non-attributable, and no task cost is derived from two readings anywhere</li>
+        <li><code class="status">[x]</code> A version floor is named and checked; the probe's failure posture is stated and exercised</li>
+        <li><code class="status">[x]</code> The import fence is green, and the stop is <code>AWAITING_OWNER</code> with no timer and no automatic resume</li>
+        <li><code class="status">[x]</code> The deep plan's own milestones all reach <code>[x]</code></li>
       </ul>
       <div class="loop">🔁 <strong>Do not exit this workstream until its deep plan's every box is checked.</strong> A failing command means fix the cause and re-run — never lower what the row asserts.</div>
     </div>
