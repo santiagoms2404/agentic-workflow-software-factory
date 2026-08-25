@@ -130,6 +130,57 @@ export function phaseForSession(db: DatabaseSync, sessionId: string, phaseRefere
   return row ?? null;
 }
 
+export type ObservedPhaseDurationMedian =
+  | {
+      readonly status: "insufficient-history";
+      readonly count: number;
+    }
+  | {
+      readonly status: "observed";
+      readonly durationMinutes: number;
+      readonly count: number;
+    };
+
+/**
+ * Median duration for successful completed instances of a phase key.
+ * Callers render both the duration and count, so the observation base stays visible.
+ */
+export function observedPhaseDurationMedian(
+  db: DatabaseSync,
+  phaseKey: string,
+): ObservedPhaseDurationMedian {
+  const row = db.prepare(`WITH observations AS (
+      SELECT (unixepoch(ended_at) - unixepoch(started_at)) / 60.0 AS duration_minutes
+      FROM phases
+      WHERE phase_key = ?
+        AND status = 'SUCCEEDED'
+        AND started_at IS NOT NULL
+        AND ended_at IS NOT NULL
+    ), ranked AS (
+      SELECT duration_minutes,
+        ROW_NUMBER() OVER (ORDER BY duration_minutes) AS ordinal,
+        COUNT(*) OVER () AS observation_count
+      FROM observations
+    )
+    SELECT
+      (SELECT COUNT(*) FROM observations) AS observation_count,
+      (SELECT AVG(duration_minutes) FROM ranked
+        WHERE ordinal IN ((observation_count + 1) / 2, (observation_count + 2) / 2)
+      ) AS median_duration_minutes`).get(phaseKey) as {
+    observation_count: number;
+    median_duration_minutes: number | null;
+  };
+
+  if (row.observation_count < 5 || row.median_duration_minutes === null) {
+    return { status: "insufficient-history", count: row.observation_count };
+  }
+  return {
+    status: "observed",
+    durationMinutes: row.median_duration_minutes,
+    count: row.observation_count,
+  };
+}
+
 export interface AgentRow {
   session_id: string;
   agent: string;

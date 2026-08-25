@@ -476,7 +476,7 @@ flowchart LR
 
   <!-- ================= M5 ================= -->
   <div class="phase">
-    <h3><code class="status">[]</code> Milestone M5: Q4's named upgrade, shipped rather than implied</h3>
+    <h3><code class="status">[wip]</code> Milestone M5: Q4's named upgrade, shipped rather than implied</h3>
     <p>Q4 was decided with its upgrade named in the same breath, and the spine's checklist requires it to be <em>named rather than left implicit</em>. This milestone ships it as a rendered, journalled comparison. <strong>It does not become the stop condition in this workstream</strong> — that is the versioned change it earns, and Questionable Q3 records the reasoning.</p>
     <div class="card warn">
       <h5>One correction to the spine's shorthand, made in the open</h5>
@@ -485,11 +485,11 @@ flowchart LR
 
     <h4>12. The observed-median query and its history floor</h4>
     <ul class="checklist">
-      <li><code class="status">[]</code> Add <code>observedPhaseDurationMedian(db, phaseKey)</code> to <code>core/src/observability/queries.ts</code>, following that file's rules: a <code>SELECT</code> on a <code>readonly</code> connection with columns named explicitly</li>
-      <li><code class="status">[]</code> It counts only phases with both <code>started_at</code> and <code>ended_at</code> and a succeeded status. A phase that crashed is not an observation of how long that phase takes</li>
-      <li><code class="status">[]</code> <strong>History floor: fewer than five completed observations returns <code>insufficient-history</code>, never a number.</strong> A median of two is a number with the authority of a measurement and the reliability of a guess</li>
-      <li><code class="status">[]</code> The return is a duration and a count. The count is rendered beside the median so the reader can see what the figure rests on</li>
-      <li><code class="status">[]</code> No write path is added. Invariant 6 keeps SQLite writes to <code>sqlite.ts</code>, <code>projector.ts</code> and the protected migrations directory, and this milestone touches none of them</li>
+      <li><code class="status">[x]</code> Add <code>observedPhaseDurationMedian(db, phaseKey)</code> to <code>core/src/observability/queries.ts</code>, following that file's rules: a <code>SELECT</code> on a <code>readonly</code> connection with columns named explicitly</li>
+      <li><code class="status">[x]</code> It counts only phases with both <code>started_at</code> and <code>ended_at</code> and a succeeded status. A phase that crashed is not an observation of how long that phase takes</li>
+      <li><code class="status">[x]</code> <strong>History floor: fewer than five completed observations returns <code>insufficient-history</code>, never a number.</strong> A median of two is a number with the authority of a measurement and the reliability of a guess</li>
+      <li><code class="status">[x]</code> The return is a duration and a count. The count is rendered beside the median so the reader can see what the figure rests on</li>
+      <li><code class="status">[x]</code> No write path is added. Invariant 6 keeps SQLite writes to <code>sqlite.ts</code>, <code>projector.ts</code> and the protected migrations directory, and this milestone touches none of them</li>
     </ul>
 
     <h4>13. Testing Strategy</h4>
