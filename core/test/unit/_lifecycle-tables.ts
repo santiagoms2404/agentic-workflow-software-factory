@@ -49,7 +49,7 @@ export type EdgeId =
   | "L1" | "L2" | "L3" | "L4" | "L5" | "L6" | "L7" | "L8"
   | "L9" | "L10" | "L11" | "L12" | "L13" | "L14" | "L15" | "L16"
   | "L17" | "L18" | "L19" | "L20" | "L21" | "L22" | "L23" | "L24"
-  | "L25";
+  | "L25" | "L26";
 
 export interface LegalEdge {
   readonly id: EdgeId;
@@ -64,9 +64,9 @@ export interface LegalEdge {
 }
 
 /**
- * The twenty-five legal transitions, in L-order, exactly as the plan's L-table
- * lists them. This array IS the legal set; no test may compute it from the
- * implementation.
+ * The twenty-six legal transitions, in L-order, exactly as the amended plan's
+ * L-table lists them. This array IS the legal set; no test may compute it from
+ * the implementation.
  */
 export const LEGAL_EDGES: readonly LegalEdge[] = [
   { id: "L1",  from: "DRAFT",          to: "PREPARED",       actors: ["host"],           spawnSite: false, interactive: false },
@@ -94,6 +94,7 @@ export const LEGAL_EDGES: readonly LegalEdge[] = [
   { id: "L23", from: "LANDING",        to: "LANDED",         actors: ["host"],           spawnSite: false, interactive: false },
   { id: "L24", from: "LANDING",        to: "BLOCKED",        actors: ["host"],           spawnSite: false, interactive: false },
   { id: "L25", from: "AWAITING_OWNER", to: "REVIEWING",      actors: ["owner", "human"], spawnSite: true,  interactive: true  },
+  { id: "L26", from: "RUNNING",        to: "AWAITING_OWNER", actors: ["host"],           spawnSite: false, interactive: false },
 ];
 
 /** "L4, L10, L11, L16, L19, L25 — precisely the edges entering RUNNING or REVIEWING." */
@@ -103,7 +104,7 @@ export const SPAWN_SITE_EDGES = ["L4", "L10", "L11", "L16", "L19", "L25"] as con
 export const CORRECTION_EDGES = ["L10", "L16", "L19", "L25"] as const;
 
 // ---------------------------------------------------------------------------
-// The seventy-five illegal ordered pairs, by class.
+// The seventy-four illegal ordered pairs, by class.
 // ---------------------------------------------------------------------------
 
 export type Pair = readonly [TaskState, TaskState];
@@ -119,17 +120,17 @@ export type Pair = readonly [TaskState, TaskState];
  * LANDED → LANDED and CANCELLED → CANCELLED, making the counts 30 / 7.
  *
  * The counts win, and step 2 is read as narrowed to `from` terminal AND
- * `from !== to`. Reasons: the 27 / 10 / 6 / 32 split is stated with explicit
- * arithmetic and repeated in four places (class table, T4 checklist, the
- * acceptance checklist, the build prompt) and 27 + 10 + 6 + 32 = 75 only
- * under this reading; whereas the reasoning column justifies steps 2 and 3
+ * `from !== to`. Reasons: the first three classes remain 27 / 10 / 6 after
+ * the single-cell L25 and L26 amendments; only the final class changed from
+ * 33 to 32 and then 31. The reasoning column justifies steps 2 and 3
  * each against step 5 ("illegal pair") and never against one another — the
  * overlap was not considered when the order was written. `rejection-order.test.ts`
  * pins this reading explicitly instead of leaving it implicit.
  *
  * The last class read 33 until L25 (`AWAITING_OWNER → REVIEWING`) became
- * legal. That is a single-cell amendment: only the "everything else" class
- * moved, and the first three classes' arithmetic is untouched.
+ * legal, then 31 when L26 (`RUNNING → AWAITING_OWNER`) became legal. Each is
+ * a single-cell amendment: only the "everything else" class moved, and the
+ * first three classes' arithmetic is untouched.
  */
 export const TERMINAL_ATTEMPT_PAIRS: readonly Pair[] = [
   ["LANDED", "DRAFT"], ["LANDED", "PREPARED"], ["LANDED", "RUNNING"],
@@ -164,7 +165,7 @@ export const HUMAN_GATE_BYPASS_PAIRS: readonly Pair[] = [
   ["AWAITING_OWNER", "LANDED"],
 ];
 
-/** 32 = everything else: skip-aheads, backward jumps not on the correction list, and LANDING's dead ends. */
+/** 31 = everything else: skip-aheads, backward jumps not on the correction list, and LANDING's dead ends. */
 export const ILLEGAL_TRANSITION_PAIRS: readonly Pair[] = [
   // DRAFT — 5 skip-aheads.
   ["DRAFT", "RUNNING"], ["DRAFT", "GATING"], ["DRAFT", "REVIEWING"],
@@ -175,9 +176,10 @@ export const ILLEGAL_TRANSITION_PAIRS: readonly Pair[] = [
   ["PREPARED", "AWAITING_OWNER"], ["PREPARED", "LANDING"],
 
   // RUNNING — 2 backward; RUNNING → REVIEWING is illegal because review reads a
-  // committed diff, so GATING is mandatory first; RUNNING → AWAITING_OWNER skips gating.
+  // committed diff, so GATING is mandatory first. RUNNING → AWAITING_OWNER left
+  // this class when L26 added a guarded quota suspension that advances no work.
   ["RUNNING", "DRAFT"], ["RUNNING", "PREPARED"], ["RUNNING", "REVIEWING"],
-  ["RUNNING", "AWAITING_OWNER"], ["RUNNING", "LANDING"],
+  ["RUNNING", "LANDING"],
 
   // GATING — 2 backward, 1 skip-ahead.
   ["GATING", "DRAFT"], ["GATING", "PREPARED"], ["GATING", "LANDING"],
@@ -228,7 +230,7 @@ export const REJECTION_ORDER: readonly RejectionStep[] = [
   { step: 2,  error: "TerminalAttempt",          firesWhen: "from-state is BLOCKED / LANDED / CANCELLED" },
   { step: 3,  error: "AlreadyInState",           firesWhen: "self-transition" },
   { step: 4,  error: "HumanGateBypass",          firesWhen: "target is LANDED from anything but LANDING" },
-  { step: 5,  error: "IllegalTransition",        firesWhen: "the pair is not one of the 24" },
+  { step: 5,  error: "IllegalTransition",        firesWhen: "the pair is not one of the 26" },
   { step: 6,  error: "CorrectionAllowanceExhausted", scope: "global",  firesWhen: "the whole correction budget is gone" },
   { step: 7,  error: "ActorNotPermitted",        firesWhen: "pair is legal, this actor may not make it" },
   { step: 8,  error: "InteractiveOwnerRequired", firesWhen: "a human edge attempted without a TTY" },

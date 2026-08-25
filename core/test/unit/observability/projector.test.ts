@@ -63,6 +63,42 @@ test("createSession is idempotent (INSERT OR IGNORE) and safe to call twice", ()
   assert.equal(count, 1);
 });
 
+test("an L26 transition projects against the unchanged transitions schema", () => {
+  const db = freshDb();
+  try {
+    const outcome = projectAttemptStatus(db, {
+      ...attempt({
+        type: "transition",
+        id: "transition-l26",
+        seq: 1,
+        from: "RUNNING",
+        to: "AWAITING_OWNER",
+        actor: "host",
+        edgeId: "L26",
+        reasonSource: "process",
+        reasonCode: null,
+        reasonDetail: "quota reset in 4 minutes; threshold is 5 minutes",
+        spawnSite: false,
+        at: SESSION.startedAt,
+      }),
+      lifecycleState: "AWAITING_OWNER",
+    }, 1);
+    assert.equal(outcome.ok, true);
+    const row = db.prepare(
+      "SELECT from_state, to_state, actor, edge_id, spawn_site FROM transitions WHERE transition_id = ?",
+    ).get("transition-l26");
+    assert.deepEqual({ ...row as object }, {
+      from_state: "RUNNING",
+      to_state: "AWAITING_OWNER",
+      actor: "host",
+      edge_id: "L26",
+      spawn_site: 0,
+    });
+  } finally {
+    db.close();
+  }
+});
+
 test("a run.started event is projected as one events row", () => {
   const db = seededDb();
   const rec = record(1, { seq: 1, runId: "run1", hostAt: "t0", providerAt: null, kind: "run.started", adapter: "claude-code", requestedModel: "sonnet-5" });

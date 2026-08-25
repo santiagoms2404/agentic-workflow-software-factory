@@ -84,6 +84,12 @@ export interface LandingEvidence {
   fastForwardPreflightPasses: boolean;
 }
 
+export interface QuotaStopEvidence {
+  route?: string;
+  minutesToReset?: number;
+  thresholdMinutes?: number;
+}
+
 export interface TransitionEvidence {
   // L1
   worktreeCreated?: boolean;
@@ -131,6 +137,8 @@ export interface TransitionEvidence {
   // L23
   headSha?: string;
   checkoutClean?: boolean;
+  // L26
+  quotaStop?: QuotaStopEvidence;
 }
 
 /**
@@ -415,7 +423,7 @@ export function styleNote(): ReviewFinding {
 type EdgeInputs = Readonly<Record<EdgeId, () => TransitionInput>>;
 
 /**
- * A fully-guard-satisfying input for each of the twenty-five legal edges.
+ * A fully-guard-satisfying input for each of the twenty-six legal edges.
  * These are the inputs the transition matrix asserts are ACCEPTED, so every
  * field here is load-bearing: remove one and the edge must start failing.
  */
@@ -623,6 +631,12 @@ const VALID_INPUTS: EdgeInputs = {
       candidateUnchanged: true,
     },
     spawn: { cost: 1 },
+  }),
+  L26: () => ({
+    from: "RUNNING", to: "AWAITING_OWNER", actor: "host", tier: 1,
+    reason: { source: "process", detail: "quota reset in 4 minutes; threshold is 5 minutes" },
+    interactive: false, budget: budget({ callsSpent: 1 }),
+    evidence: { quotaStop: { route: "pi-codex", minutesToReset: 4, thresholdMinutes: 5 } },
   }),
 };
 

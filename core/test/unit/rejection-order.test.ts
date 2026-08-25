@@ -60,10 +60,10 @@ test("2 before 3 — a sealed attempt hears 'this attempt is over', except when 
   // Read literally, step 2 ("from-state is BLOCKED / LANDED / CANCELLED")
   // would swallow the three terminal self-pairs and make the class counts
   // 30 TerminalAttempt / 7 AlreadyInState. The class table says 27 / 10, with
-  // the arithmetic spelled out ("3 × 9", "all ten X → X pairs"), and 75 only
-  // decomposes as 27 + 10 + 6 + 32 under that reading — which is also the
-  // split the T4 checklist, the acceptance checklist and the build prompt all
-  // repeat. So step 2 is read as narrowed to `from` terminal AND `from !== to`,
+  // the arithmetic spelled out ("3 × 9", "all ten X → X pairs"). After the
+  // single-cell L25 and L26 amendments, 74 decomposes as 27 + 10 + 6 + 31
+  // under that same reading. So step 2 is read as narrowed to `from` terminal
+  // AND `from !== to`,
   // and this test pins the narrowing rather than leaving T5 to guess.
   for (const terminal of ["BLOCKED", "LANDED", "CANCELLED"] as const) {
     await expectRejection("TerminalAttempt", matrixInput(terminal, "DRAFT"), {

@@ -1,8 +1,8 @@
 // T4 — the 10 × 10 transition matrix.
 //
-// 100 ordered pairs. Exactly 25 accept. Exactly 75 throw, and each throws the
+// 100 ordered pairs. Exactly 26 accept. Exactly 74 throw, and each throws the
 // error its class table row names: 27 TerminalAttempt · 10 AlreadyInState ·
-// 6 HumanGateBypass · 32 IllegalTransition.
+// 6 HumanGateBypass · 31 IllegalTransition.
 //
 // The legal set is enumerated literally in `_lifecycle-tables.ts` and is never
 // read back out of the implementation. RED until T5 writes
@@ -41,19 +41,19 @@ import {
 // a mistake in the tables would otherwise surface only as a mystery in T5.
 // ---------------------------------------------------------------------------
 
-test("the four rejection classes partition the 75 illegal pairs exactly", () => {
+test("the four rejection classes partition the 74 illegal pairs exactly", () => {
   assert.equal(TERMINAL_ATTEMPT_PAIRS.length, 27, "terminal-source pairs");
   assert.equal(ALREADY_IN_STATE_PAIRS.length, 10, "self-transition pairs");
   assert.equal(HUMAN_GATE_BYPASS_PAIRS.length, 6, "human-gate-bypass pairs");
-  assert.equal(ILLEGAL_TRANSITION_PAIRS.length, 32, "everything-else pairs");
-  assert.equal(27 + 10 + 6 + 32, 75);
+  assert.equal(ILLEGAL_TRANSITION_PAIRS.length, 31, "everything-else pairs");
+  assert.equal(27 + 10 + 6 + 31, 74);
 
   // No pair is claimed by two classes, and none is claimed twice by one.
-  assert.equal(REJECTION_CLASS_BY_PAIR.size, 75, "a pair appears in two classes");
+  assert.equal(REJECTION_CLASS_BY_PAIR.size, 74, "a pair appears in two classes");
 
-  // 25 legal + 75 illegal = the whole 10 × 10 matrix, with no pair unaccounted for.
+  // 26 legal + 74 illegal = the whole 10 × 10 matrix, with no pair unaccounted for.
   const legal = new Set(LEGAL_EDGES.map((e) => pairKey(e.from, e.to)));
-  assert.equal(legal.size, 25, "the L-table names a pair twice");
+  assert.equal(legal.size, 26, "the L-table names a pair twice");
   const unclassified = allOrderedPairs()
     .map(([from, to]) => pairKey(from, to))
     .filter((key) => !legal.has(key) && !REJECTION_CLASS_BY_PAIR.has(key));
@@ -63,11 +63,11 @@ test("the four rejection classes partition the 75 illegal pairs exactly", () => 
   assert.deepEqual(bothLegalAndIllegal, [], "pairs claimed as both legal and illegal");
 });
 
-test("the L-table names twenty-five edges, L1 through L25, with six spawn sites", () => {
-  assert.equal(LEGAL_EDGES.length, 25);
+test("the L-table names twenty-six edges, L1 through L26, with six spawn sites", () => {
+  assert.equal(LEGAL_EDGES.length, 26);
   assert.deepEqual(
     LEGAL_EDGES.map((e) => e.id),
-    Array.from({ length: 25 }, (_, i) => `L${i + 1}`),
+    Array.from({ length: 26 }, (_, i) => `L${i + 1}`),
   );
   // "spawn ⇔ entering an executing state" — the closure, not an enumeration.
   const bySpawnFlag = LEGAL_EDGES.filter((e) => e.spawnSite).map((e) => e.id);
@@ -85,7 +85,7 @@ test("the machine knows exactly the plan's ten states, in the plan's order", asy
   assert.deepEqual([...states], [...TASK_STATES]);
 });
 
-test("all twenty-five legal transitions are accepted with their guards satisfied", async () => {
+test("all twenty-six legal transitions are accepted with their guards satisfied", async () => {
   const failures: string[] = [];
   for (const e of LEGAL_EDGES) {
     try {
@@ -100,7 +100,7 @@ test("all twenty-five legal transitions are accepted with their guards satisfied
   assert.deepEqual(failures, []);
 });
 
-test("exactly 25 of the 100 ordered pairs are accepted, and they are the L-table's 25", async () => {
+test("exactly 26 of the 100 ordered pairs are accepted, and they are the L-table's 26", async () => {
   const accepted: string[] = [];
   for (const [from, to] of allOrderedPairs()) {
     if ((await rejectionNameOf(matrixInput(from, to))) === null) accepted.push(pairKey(from, to));
@@ -109,15 +109,15 @@ test("exactly 25 of the 100 ordered pairs are accepted, and they are the L-table
     accepted.sort(),
     LEGAL_EDGES.map((e) => pairKey(e.from, e.to)).sort(),
   );
-  assert.equal(accepted.length, 25);
+  assert.equal(accepted.length, 26);
 });
 
-test("exactly 75 of the 100 ordered pairs are rejected", async () => {
+test("exactly 74 of the 100 ordered pairs are rejected", async () => {
   let rejected = 0;
   for (const [from, to] of allOrderedPairs()) {
     if ((await rejectionNameOf(matrixInput(from, to))) !== null) rejected += 1;
   }
-  assert.equal(rejected, 75);
+  assert.equal(rejected, 74);
 });
 
 test("the class -> error mapping holds pair by pair across the whole matrix", async () => {
@@ -137,7 +137,7 @@ const CLASS_CASES: readonly (readonly [RejectionName, readonly Pair[], number])[
   ["TerminalAttempt", TERMINAL_ATTEMPT_PAIRS, 27],
   ["AlreadyInState", ALREADY_IN_STATE_PAIRS, 10],
   ["HumanGateBypass", HUMAN_GATE_BYPASS_PAIRS, 6],
-  ["IllegalTransition", ILLEGAL_TRANSITION_PAIRS, 32],
+  ["IllegalTransition", ILLEGAL_TRANSITION_PAIRS, 31],
 ];
 
 for (const [expected, pairs, count] of CLASS_CASES) {
@@ -201,10 +201,10 @@ test("the six spawn-site edges accept a declared spawn and report spawnSite", as
   assert.deepEqual(failures, []);
 });
 
-test("the other nineteen legal edges report spawnSite false and reserve no call", async () => {
+test("the other twenty legal edges report spawnSite false and reserve no call", async () => {
   const failures: string[] = [];
   const nonSpawn = LEGAL_EDGES.filter((e) => !e.spawnSite);
-  assert.equal(nonSpawn.length, 19);
+  assert.equal(nonSpawn.length, 20);
   for (const e of nonSpawn) {
     try {
       const result = await expectAccepted(validInput(e.id));
