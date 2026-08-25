@@ -78,7 +78,7 @@ export function contextMeterPercent(tokens: number | null, window: number | null
 }
 
 export function stateTone(state: LifecycleState): "ok" | "running" | "error" | "warn" {
-  if (state === "LANDED") return "ok";
+  if (state === "LANDED" || state === "PUBLISHED") return "ok";
   if (state === "BLOCKED" || state === "CANCELLED") return "error";
   if (state === "AWAITING_OWNER") return "warn";
   return "running";
@@ -86,6 +86,7 @@ export function stateTone(state: LifecycleState): "ok" | "running" | "error" | "
 
 export function stateLabel(state: LifecycleState): string {
   if (state === "LANDED") return "✓ landed";
+  if (state === "PUBLISHED") return "✓ published";
   if (state === "RUNNING") return "◌ running";
   if (state === "AWAITING_OWNER") return "! owner review";
   if (state === "BLOCKED") return "× blocked";

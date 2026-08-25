@@ -721,10 +721,10 @@ stateDiagram-v2
 
     <h4>13. The dashboard's eleventh state</h4>
     <ul class="checklist">
-      <li><code class="status">[]</code> <code>dashboard/shared/types.ts</code>: <code>LifecycleState</code> gains <code>"PUBLISHED"</code></li>
-      <li><code class="status">[]</code> <code>dashboard/src/components/StateRibbon.vue</code>: the ribbon currently ends at <code>LANDED</code> and gains <code>PUBLISHED</code> as its ninth cell. The ribbon is the happy path, not the whole state set — <code>BLOCKED</code> and <code>CANCELLED</code> are deliberately absent from it and stay absent</li>
-      <li><code class="status">[]</code> <code>dashboard/src/display.ts</code>: <code>stateTone</code> returns <code>"ok"</code> for <code>PUBLISHED</code> and <code>stateLabel</code> gives it a glyph. <strong>Do not perturb <code>formatCost</code> or any of the thirteen existing formatters</strong> — W02 pinned eighteen assertions across three files, and this task extends rather than touches them</li>
-      <li><code class="status">[]</code> <code>npm run typecheck:dashboard</code> green — the union is exhaustively switched in more than one place and the compiler is what finds them</li>
+      <li><code class="status">[x]</code> <code>dashboard/shared/types.ts</code>: <code>LifecycleState</code> gains <code>"PUBLISHED"</code></li>
+      <li><code class="status">[x]</code> <code>dashboard/src/components/StateRibbon.vue</code>: the ribbon currently ends at <code>LANDED</code> and gains <code>PUBLISHED</code> as its ninth cell. The ribbon is the happy path, not the whole state set — <code>BLOCKED</code> and <code>CANCELLED</code> are deliberately absent from it and stay absent</li>
+      <li><code class="status">[x]</code> <code>dashboard/src/display.ts</code>: <code>stateTone</code> returns <code>"ok"</code> for <code>PUBLISHED</code> and <code>stateLabel</code> gives it a glyph. <strong>Do not perturb <code>formatCost</code> or any of the thirteen existing formatters</strong> — W02 pinned eighteen assertions across three files, and this task extends rather than touches them</li>
+      <li><code class="status">[x]</code> <code>npm run typecheck:dashboard</code> green — the union is exhaustively switched in more than one place and the compiler is what finds them</li>
     </ul>
 
     <h4>14. Testing Strategy: the widened matrix, the seal, and the migration</h4>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { LifecycleState, TransitionSummary } from "../../shared/types.ts";
-const states: LifecycleState[] = ["DRAFT", "PREPARED", "RUNNING", "GATING", "REVIEWING", "AWAITING_OWNER", "LANDING", "LANDED"];
+const states: LifecycleState[] = ["DRAFT", "PREPARED", "RUNNING", "GATING", "REVIEWING", "AWAITING_OWNER", "LANDING", "LANDED", "PUBLISHED"];
 defineProps<{ state: LifecycleState; transitions: TransitionSummary[] }>();
 function transitionFor(to: string, transitions: TransitionSummary[]) { return transitions.findLast((transition) => transition.to === to) ?? null; }
 function detail(transition: TransitionSummary | null) { return transition ? `${transition.edgeId}: ${transition.actor}; ${transition.reason.source}${transition.reason.code ? `/${transition.reason.code}` : ""}${transition.reason.detail ? ` — ${transition.reason.detail}` : ""}` : "Not yet entered"; }

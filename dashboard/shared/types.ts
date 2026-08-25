@@ -7,6 +7,7 @@ export type LifecycleState =
   | "AWAITING_OWNER"
   | "LANDING"
   | "LANDED"
+  | "PUBLISHED"
   | "BLOCKED"
   | "CANCELLED";
 
