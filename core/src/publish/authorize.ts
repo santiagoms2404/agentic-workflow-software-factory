@@ -101,6 +101,68 @@ function refused(code: PublishRefusalCode): PublishAuthorization {
   return { decision: "refused", code, detail: PUBLISH_REFUSAL_DETAILS[code] };
 }
 
+/** The four already-observed records every row reads, and nothing else. */
+interface PublishFacts {
+  readonly status: PublishStatusFacts;
+  readonly repository: PublishRepositoryFacts;
+  readonly remote: PublishRemoteFacts;
+  readonly refspec: PublishRefspec;
+}
+
+export interface PublishVerdictRow {
+  readonly code: PublishRefusalCode;
+  readonly passed: boolean;
+  readonly detail: string;
+}
+
+/**
+ * One predicate per refusal code, declared in `PUBLISH_REFUSAL_ORDER`'s order.
+ * The decision and the fourteen-row verdict shown to the owner both read THIS
+ * table, so a displayed row and the refusal that follows it cannot disagree.
+ *
+ * Rows below the first violation are still evaluated for display, and some of
+ * them read a field an earlier row has not yet vouched for. That is why the
+ * ORDER decides and a row's own finding never does.
+ */
+const PUBLISH_ROW_PASSES: Readonly<Record<PublishRefusalCode, (facts: PublishFacts) => boolean>> = {
+  "not-landed": ({ status }) => status.lifecycleState === "LANDED",
+  "no-landing-approval": ({ status }) => status.landingApproval !== null,
+  "approval-not-candidate": ({ status }) => status.landingApproval?.candidateSha === status.candidateSha,
+  "malformed-candidate": ({ status }) => status.candidateSha !== null && _SHA.test(status.candidateSha),
+  "head-not-at-candidate": ({ status, repository }) => repository.headSha === status.candidateSha,
+  "dirty-checkout": ({ repository }) => repository.checkoutClean,
+  "remote-not-allowlisted": ({ repository, remote }) => repository.allow.remotes.includes(remote.name),
+  "branch-not-allowlisted": ({ repository, remote }) => repository.allow.branches.includes(remote.branch),
+  "remote-host-mismatch": ({ repository, remote }) =>
+    repository.allow.host === undefined || remote.resolvedHost === repository.allow.host,
+  "force-refspec": ({ refspec }) => !refspec.forced,
+  // Measured against a bare remote: an all-zeros source deleted the branch at exit 0.
+  "delete-refspec": ({ refspec }) => !refspec.deleting && refspec.source !== "" && refspec.source !== ZERO_SHA,
+  "inexact-source": ({ status, refspec }) => refspec.source === status.candidateSha,
+  "destination-not-declared-branch": ({ remote, refspec }) => refspec.destination === `refs/heads/${remote.branch}`,
+  // An absent ref is a creation: ls-remote returns empty stdout at exit 0.
+  "non-fast-forward": ({ remote }) => remote.fastForward !== false,
+};
+
+/**
+ * Every row's finding, for display before the owner is asked to confirm. It
+ * returns no plan and authorizes nothing — `authorizePublish` remains the only
+ * way to obtain one.
+ */
+export function publishVerdict(
+  status: PublishStatusFacts,
+  repository: PublishRepositoryFacts,
+  remote: PublishRemoteFacts,
+  refspec: PublishRefspec,
+): readonly PublishVerdictRow[] {
+  const facts: PublishFacts = { status, repository, remote, refspec };
+  return Object.freeze(PUBLISH_REFUSAL_ORDER.map((code) => Object.freeze({
+    code,
+    passed: PUBLISH_ROW_PASSES[code](facts),
+    detail: PUBLISH_REFUSAL_DETAILS[code],
+  })));
+}
+
 /** Decides the first applicable truth-table row without observing or mutating anything. */
 export function authorizePublish(
   status: PublishStatusFacts,
@@ -108,57 +170,20 @@ export function authorizePublish(
   remote: PublishRemoteFacts,
   refspec: PublishRefspec,
 ): PublishAuthorization {
-  if (status.lifecycleState !== "LANDED") {
-    return refused("not-landed");
-  }
-  if (status.landingApproval === null) {
-    return refused("no-landing-approval");
-  }
-  if (status.landingApproval.candidateSha !== status.candidateSha) {
-    return refused("approval-not-candidate");
-  }
-  if (status.candidateSha === null || !_SHA.test(status.candidateSha)) {
-    return refused("malformed-candidate");
-  }
-  if (repository.headSha !== status.candidateSha) {
-    return refused("head-not-at-candidate");
-  }
-  if (!repository.checkoutClean) {
-    return refused("dirty-checkout");
-  }
-  if (!repository.allow.remotes.includes(remote.name)) {
-    return refused("remote-not-allowlisted");
-  }
-  if (!repository.allow.branches.includes(remote.branch)) {
-    return refused("branch-not-allowlisted");
-  }
-  if (repository.allow.host !== undefined && remote.resolvedHost !== repository.allow.host) {
-    return refused("remote-host-mismatch");
-  }
-  if (refspec.forced) {
-    return refused("force-refspec");
-  }
-  // Measured against a bare remote: an all-zeros source deleted the branch at exit 0.
-  if (refspec.deleting || refspec.source === "" || refspec.source === ZERO_SHA) {
-    return refused("delete-refspec");
-  }
-  if (refspec.source !== status.candidateSha) {
-    return refused("inexact-source");
-  }
-  if (refspec.destination !== `refs/heads/${remote.branch}`) {
-    return refused("destination-not-declared-branch");
-  }
-  // An absent ref is a creation: ls-remote returns empty stdout at exit 0.
-  if (remote.fastForward === false) {
-    return refused("non-fast-forward");
+  const facts: PublishFacts = { status, repository, remote, refspec };
+  for (const code of PUBLISH_REFUSAL_ORDER) {
+    if (!PUBLISH_ROW_PASSES[code](facts)) return refused(code);
   }
 
+  // Row 4 proved the candidate is a 40-hex object id. This restates the table's
+  // own finding for the type system rather than checking the same fact twice.
+  const sha = status.candidateSha!;
   return {
     decision: "authorized",
     plan: {
       remoteName: remote.name,
       branch: remote.branch,
-      sha: status.candidateSha,
+      sha,
       [AUTHORIZED_PUBLISH_PLAN]: true,
     },
   };

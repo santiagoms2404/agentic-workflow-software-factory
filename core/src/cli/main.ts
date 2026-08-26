@@ -22,6 +22,7 @@ import { initCommand } from "./commands/init.ts";
 import { listProjects, registerProject, showProject, verifyRegisteredProject } from "./commands/project.ts";
 import { landCommand } from "./commands/land.ts";
 import { newCommand } from "./commands/new.ts";
+import { publishCommand } from "./commands/publish.ts";
 import { raiseCommand } from "./commands/raise.ts";
 import { quotaCommand } from "./commands/quota.ts";
 import { locateAttempt } from "./commands/attempt.ts";
@@ -37,7 +38,7 @@ import { watchCommand } from "./commands/watch.ts";
 
 /** The complete owner-facing command table; documentation reconciles against it. */
 export const CLI_COMMANDS = Object.freeze([
-  "init", "project", "new", "start", "run", "status", "watch", "rework", "review", "raise", "journey", "land", "cancel", "retry",
+  "init", "project", "new", "start", "run", "status", "watch", "rework", "review", "raise", "journey", "land", "publish", "cancel", "retry",
   "doctor", "gc", "dash", "db rebuild", "ticket", "backlog", "quota",
 ]);
 
@@ -468,6 +469,25 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         }
         out(`${result.status.lifecycleState}: ${result.status.lastActivity}`);
         return result.status.lifecycleState === "LANDED" ? 0 : 1;
+      }
+      case "publish": {
+        const result = await publishCommand({
+          attemptDir: located.attemptDir,
+          stateRoot,
+          terminal: options.terminal ?? processOwnerTerminal(),
+          projectRecord: projection.project,
+          assertAdvancement: projection.assertAdvancement,
+        });
+        if (result.outcome === "declined") {
+          out("Publication declined; state remains LANDED and nothing was pushed or recorded.");
+          return 1;
+        }
+        if (result.outcome !== "published") {
+          out(result.detail);
+          return 1;
+        }
+        out(`${result.status.lifecycleState}: ${result.status.lastActivity}`);
+        return result.status.lifecycleState === "PUBLISHED" ? 0 : 1;
       }
       case "cancel": {
         const result = await cancelCommand({
