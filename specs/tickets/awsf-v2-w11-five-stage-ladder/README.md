@@ -227,11 +227,10 @@ and the ladder has seven entries, not five.
    (`host`, `planner`, `builder`). The captures carry a `phaseOwners` list beside the single-value
    field; T06 needs to decide whether the contract carries one owner or the list.
 3. **Three of the five stages emit no envelope at all.** Only stages 3 and 4 produce anything in
-   `ENVELOPE_SCHEMAS`. Stages 1, 2 and 5 produce a stdout line and a command return value. This is
-   the single most consequential finding for T03 and `AC-3`: a schema-fit table over five stages
-   will find three misfits that are not schema gaps, and `INV-2`'s routing to W05 does not apply to
-   them, because there is no envelope for W05 to type. **Do not route these three to W05 and do not
-   invent an envelope for them.**
+   `ENVELOPE_SCHEMAS`. Stages 1, 2 and 5 produce a stdout line and a command return value. T03
+   therefore measured three explicit misfits. T04 routes them to W05 under `INV-2`, even though the
+   missing type is a host-command envelope rather than another workflow-phase envelope. W11 does
+   not invent or register that envelope.
 4. **Two of the four boundaries are crossed by hand-editing a file, not by a command.** `awsf init`
    writes only `awsf.config.yaml`; no command in `CLI_COMMANDS` produces an `awsf.project.yaml`, so
    the owner authors and commits the catalog between stages 1 and 2. And the configuration
@@ -274,6 +273,24 @@ workflow the configuration does not enable, and the refusal arrives one command 
   catalog, `tests-0.json` reads `"summary":"all configured commands passed"` with
   `"commands":[]`. A stage-4 fixture taken from a project with no configured gates records a
   vacuous pass, and any test written against it must not read that field as evidence a suite ran.
+
+## T03/T04 result — three schema misfits routed to W05
+
+`core/test/fixtures/stages/schema-fit.json` was measured with `parse-envelope.ts` against every one
+of the thirteen landed schema ids. S3 fits `awsf.document-output/v1` and S4 fits
+`awsf.test-output/v1`. S1, S2 and S5 fit none. The routed block is named
+**`W05-HOST-COMMAND-ENVELOPES`**.
+
+| Stage | Output no landed schema holds | Closest id and exact violation groups | W05 amendment request |
+| --- | --- | --- | --- |
+| S1 `init` | `kind`, printed `line`, `commitSha`, initialized `path` | `awsf.design-context/v1`, tied at 16 violations with `awsf.scout-output/v1` and `awsf.intake-output/v1`; missing-required and type/literal violations at `/schema`, `/producerStatus`, `/summary`, `/artifacts`, `/notesForNextPhase`, `/targets`; unexpected properties `/kind`, `/line`, `/commitSha`, `/path` | Add and register `awsf.init-output/v1` with the common envelope fields and those four command-result fields, then bind `awsf init` to emit it losslessly. |
+| S2 `project-register` | `kind`, printed `line`, returned `resolvedProject`, exact `placementFileBytes` | the same closest-id tie, 16 total, and six missing/type pairs as S1; unexpected properties `/kind`, `/line`, `/resolvedProject`, `/placementFileBytes` | Add and register `awsf.project-register-output/v1` carrying the returned project and placement bytes plus the common envelope fields, then bind `awsf project register` to emit it losslessly. |
+| S5 `publish` | `kind`, full `terminalLines`, structured `result`, exact `finalStatusBytes` | the same closest-id tie, 16 total, and six missing/type pairs as S1; unexpected properties `/kind`, `/terminalLines`, `/result`, `/finalStatusBytes` | Add and register `awsf.publish-output/v1` carrying the display, result and final-status bytes plus the common envelope fields, then bind `awsf publish` to emit it losslessly. |
+
+Per Q6, only **T18**, which requires a stored typed envelope at every boundary, is failed under this
+block. T05, M2, M3, M4 and T17 continue. T06 already represents a misfitting stage with no
+`schemaId`, so it does not force-fit one. Within T18, the route-log assertion remains unblocked.
+No file under `core/src/contracts/` was edited.
 
 ## Shared read-first set
 
