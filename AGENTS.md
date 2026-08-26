@@ -29,9 +29,16 @@ not a judgement call. Several are mechanically enforced by meta-tests under
    nothing, executes nothing, and appears in no runtime import graph. D2 bounds
    the *runtime* dependency surface, which this does not enter. Any addition
    that does execute still requires its own amendment.
-8. **No push, force, or auto-delete path exists anywhere in `core/src`.**
-   Landing is local fast-forward only; `awsf gc` lists, never deletes. Enforced
-   by the no-push/no-destructive-paths and no-land-route meta-tests.
+8. **No push path exists from any pre-`LANDED` state, and no force or auto-delete path exists anywhere in `core/src`.**
+   Landing is local fast-forward only; `awsf gc` lists, never deletes. 
+   Publication is a separate, human-initiated act on an already-landed revision: 
+   it is authorized by the pure ordered truth table in `core/src/publish/authorize.ts`, 
+   and the push argv it authorizes is constructed in `core/src/publish/argv.ts` and nowhere else. 
+   The force and auto-delete halves remain unconditional absences and now also cover 
+   the argv-array spellings the previous scan never saw — a `+`-prefixed refspec
+   source, and an empty or all-zeros refspec source, which is how Git spells a
+   remote branch deletion. Enforced by the no-destructive-paths, publish-fence,
+   and no-land-route meta-tests.
 9. **No credential-shaped value is committed, in fixtures or anywhere else.**
    Enforced by the credential-pattern meta-test.
 10. **No runtime artifact, receipt, or manifest file is committed.** Git and the
@@ -48,16 +55,16 @@ not a judgement call. Several are mechanically enforced by meta-tests under
     `<dl>`/Amendments, never in the commit itself. Enforced by the
     no-agent-coauthor meta-test, which scans this repository's own commit
     history (author, committer, and message trailers alike).
- 12. **A plan and its ticket set never disagree, and the pairing is resolved
-       through the registered plan source rather than through directory
-       adjacency.** Every ticket set belongs to exactly one plan. The plan's
-       status markers are the source of truth; a ticket's `state` mirrors them
-       and is flipped in the *same commit*, never a later one. A ticket's build
-       prompt stays byte-identical to its build-prompts § Section B block — the
-       tickets are a re-cut of that file, never a fork of it. A ticket set whose
-       plan cannot be resolved is a hard failure, not a skip; a plan whose
-       declared format the fence does not implement is refused by name rather
-       than parsed to zero tasks. Enforced by the ticket/plan-sync meta-test:
-       task coverage, milestone grouping, `state` against both the milestone
-       marker and the task's own checklist, prompt and title integrity,
-       `depends_on` ordering, and the frontmatter vocabularies.
+12. **A plan and its ticket set never disagree, and the pairing is resolved
+    through the registered plan source rather than through directory
+    adjacency.** Every ticket set belongs to exactly one plan. The plan's
+    status markers are the source of truth; a ticket's `state` mirrors them
+    and is flipped in the *same commit*, never a later one. A ticket's build
+    prompt stays byte-identical to its build-prompts § Section B block — the
+    tickets are a re-cut of that file, never a fork of it. A ticket set whose
+    plan cannot be resolved is a hard failure, not a skip; a plan whose
+    declared format the fence does not implement is refused by name rather
+    than parsed to zero tasks. Enforced by the ticket/plan-sync meta-test:
+    task coverage, milestone grouping, `state` against both the milestone
+    marker and the task's own checklist, prompt and title integrity,
+    `depends_on` ordering, and the frontmatter vocabularies.
