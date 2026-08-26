@@ -699,10 +699,10 @@ flowchart LR
     <h4>14. Leg two — nothing reachable from the stage module reaches a document tree</h4>
     <p class="serves"><code class="serves">INV-3</code> <code class="serves">INV-5</code></p>
     <ul class="checklist">
-      <li><code class="status">[]</code> Follow the transitive relative-import walk in <code>core/test/unit/meta/quota-fence.test.ts</code> — this repository's first transitive fence, written precisely because a direct-import scan is satisfied by placing one intermediate file between the two ends</li>
-      <li><code class="status">[]</code> Assert nothing transitively reachable from <code>core/src/stages/**</code> resolves a path into <code>docs/driving/**</code> or any <code>.claude</code> path, and report every hop of an offending chain rather than only the endpoint</li>
-      <li><code class="status">[]</code> Assert the same reach contains no import from <code>core/src/execution/**</code>, which is <code>INV-5</code>'s absence and shares this walk for free</li>
-      <li><code class="status">[]</code> Restate in the header what <code>execution-isolation.test.ts</code> already covers — pi's pinned <code>--no-skills</code> argv order, and the absence of <code>.claude/</code> at the repository root — and what this fence adds that neither of those asserts, so a later reader does not delete one believing the other covers it</li>
+      <li><code class="status">[x]</code> Follow the transitive relative-import walk in <code>core/test/unit/meta/quota-fence.test.ts</code> — this repository's first transitive fence, written precisely because a direct-import scan is satisfied by placing one intermediate file between the two ends</li>
+      <li><code class="status">[x]</code> Assert nothing transitively reachable from <code>core/src/stages/**</code> resolves a path into <code>docs/driving/**</code> or any <code>.claude</code> path, and report every hop of an offending chain rather than only the endpoint</li>
+      <li><code class="status">[x]</code> Assert the same reach contains no import from <code>core/src/execution/**</code>, which is <code>INV-5</code>'s absence and shares this walk for free</li>
+      <li><code class="status">[x]</code> Restate in the header what <code>execution-isolation.test.ts</code> already covers — pi's pinned <code>--no-skills</code> argv order, and the absence of <code>.claude/</code> at the repository root — and what this fence adds that neither of those asserts, so a later reader does not delete one believing the other covers it</li>
     </ul>
 
     <h4>15. Leg three — no gate reaches its verdict by reading a file</h4>
