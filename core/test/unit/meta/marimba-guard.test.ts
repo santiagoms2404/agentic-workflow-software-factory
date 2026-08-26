@@ -37,7 +37,7 @@ import { drivingDir } from "./_driving.ts";
 // that changing any of them is a decision someone has to make on purpose.
 //
 // HOW THIS FILE WAS WRITTEN, since it collides with its own subject: the
-// fixture text contains the six owner-act phrases, and a driving session's
+// fixture text contains the seven owner-act phrases, and a driving session's
 // guard denies any Bash command whose text contains one — including `echo` and
 // `grep`. So this file was authored with the file-writing tools, whose payloads
 // carry a `file_path` and no `command`. Running it is fine: the command line is
@@ -113,8 +113,8 @@ writeFileSync(join(STUB_BIN, "python3"), "#!/bin/sh\nexit 127\n");
 chmodSync(join(STUB_BIN, "python3"), 0o755);
 after(() => rmSync(STUB_BIN, { recursive: true, force: true }));
 
-/** The six acts that construct an owner terminal, in the guard's own order. */
-const OWNER_ACTS = ["land", "cancel", "rework", "review", "journey", "raise"] as const;
+/** The seven acts that construct an owner terminal, in the guard's own order. */
+const OWNER_ACTS = ["land", "cancel", "rework", "review", "journey", "raise", "publish"] as const;
 
 const GUARD_ROWS: readonly GuardRow[] = [
   // --- fence 2: owner acts in Bash command text ---------------------------
@@ -145,7 +145,7 @@ const GUARD_ROWS: readonly GuardRow[] = [
   ...OWNER_ACTS.map(
     (act): GuardRow => ({
       id: `bash · awsf ${act}`,
-      why: "one of the six acts the lifecycle reserves for the owner; all six are rows so none can be dropped from the guard unnoticed",
+      why: "one of the seven acts the lifecycle reserves for the owner; all seven are rows so none can be dropped from the guard unnoticed",
       payload: bash(`awsf ${act} T01`),
       expect: "deny",
       mentions: [new RegExp(`\\b${act}\\b`)],

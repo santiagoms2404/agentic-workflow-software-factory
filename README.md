@@ -182,6 +182,7 @@ journey with `awsf journey TASK --journey ID --sha REVISION` at a TTY — the
 the revision is the exact candidate — and only then may land. Landing has one
 human+TTY authorization
 site and mutates the canonical checkout only by a verified local fast-forward.
+After landing, `awsf publish TASK` publishes that landed revision to its configured remote branch and seals the attempt.
 The portability matrix is evidence-backed only where it says so; the two real
 pilots remain outstanding.
 

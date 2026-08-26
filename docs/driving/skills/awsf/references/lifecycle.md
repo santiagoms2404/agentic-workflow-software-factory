@@ -1,7 +1,8 @@
 # Lifecycle — a map, not a summary
 
-**This document contains no state list, no edge, no edge count, no rejection
-class and no ordering.** It says which file owns each of those, so you can read
+**This document contains no state list, edge list, edge count, rejection
+class or ordering.** It names the post-landing state and edge only: `PUBLISHED`
+is reached from `LANDED` through `L27`. It says which file owns each of those, so you can read
 the answer from the thing that is executed rather than from a paragraph that once
 described it.
 

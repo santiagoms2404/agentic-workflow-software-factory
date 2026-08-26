@@ -1,7 +1,7 @@
 # Owner acts
 
-Six commands are the owner's and not yours: `journey`, `land`, `cancel`,
-`rework`, `review`, `raise`. This document is about **which one the evidence
+Seven commands are the owner's and not yours: `journey`, `land`, `cancel`,
+`rework`, `review`, `raise`, `publish`. This document is about **which one the evidence
 supports** and **what to hand the owner before they decide**. It is not a table
 of what each one costs, and the reason is at the bottom.
 
@@ -11,7 +11,7 @@ Prepare and explain. Never perform, and never recommend performing one without
 the evidence its edge requires.
 
 This is not merely a convention you could talk yourself out of — the lifecycle
-refuses a non-interactive invocation. Every one of the six requires an
+refuses a non-interactive invocation. Every one of the seven requires an
 interactive owner terminal, and a piped or redirected standard input is
 refused by the normative machine *before* any process can receive a signal and
 before any call is reserved. That refusal is a terminal-shape check, not the
@@ -57,6 +57,8 @@ candidate, a summary, the fast-forward meter, and — when a review was replaced
 both verdicts side by side. Prepare it by making sure the gates, the required
 review and the attestation are all genuinely present, rather than by asking.
 
+**`publish`** settles that the exact landed revision reached its configured remote branch. It forecloses every later act on that attempt: publication transitions it to `PUBLISHED`, which seals it. Prepare it only when the owner should make this the attempt's final act, with the exact revision, remote name and branch they are about to confirm.
+
 **`cancel`** ends the attempt. Reach for it last. A cancelled attempt is still
 retained evidence, but the decision to stop is the owner's, and the case for it
 has to be made from what was read, not from impatience. Read
@@ -69,7 +71,7 @@ when you cannot name the defect, and it is **refused outright above the middle
 tier** for a structural reason worth understanding rather than memorising — see
 `gotchas.md`.
 
-**`raise`** is the only one of the six that buys nothing and moves no state. It
+**`raise`** is the only one of the seven that buys nothing and moves no state. It
 grants one named task more calls while its attempt is live, so a run that halted
 at its ceiling can continue instead of being cancelled and re-rolled. Two things
 about it are worth understanding rather than memorising. It is a **command and
@@ -96,7 +98,7 @@ The same shape every time, and it is short:
 - the handle — task, attempt, lifecycle state, calls spent against the ceiling;
 - what the evidence says, with the phase's claim and the host's measurement kept
   distinct;
-- which of the six the evidence supports, which it does not, and why;
+- which of the seven the evidence supports, which it does not, and why;
 - what remains — calls, correction rounds, and the attempt-scoped owner re-entry
   allowance, which is what several of these draw on and which does not refresh
   within an attempt.

@@ -45,7 +45,7 @@ just awsf db rebuild
 
 ## What only the owner may do
 
-`journey`, `land`, `cancel`, `rework`, `review` and `raise` are owner acts.
+`journey`, `land`, `cancel`, `rework`, `review`, `raise` and `publish` are owner acts.
 Prepare them and explain them; never perform one, and never recommend
 performing one without the evidence its edge requires. Landing is authorised
 by the owner at a terminal — the terminal check is a shape test, not the
@@ -80,7 +80,7 @@ one question is how a session arrives with a summary instead of an answer.
 | decide the workflow and the tier | `cookbooks/choose_the_workflow_and_tier.md` |
 | launch a run, watch it, or work out whether it is stuck | `cookbooks/run_and_observe.md` |
 | an attempt is blocked or waiting, and something has to be decided | `cookbooks/read_a_blocked_attempt.md` |
-| the owner is weighing `journey`, `land`, `cancel`, `rework`, `review` or `raise` | `cookbooks/owner_acts.md` |
+| the owner is weighing `journey`, `land`, `cancel`, `rework`, `review`, `raise` or `publish` | `cookbooks/owner_acts.md` |
 | where does a journal, envelope, gate row, process record or raw capture live | `references/evidence_map.md` |
 | which source owns a state, an edge, a guard, a ceiling or a recipe | `references/lifecycle.md` |
 | something behaved surprisingly, or a refusal looks like a bug | `references/gotchas.md` |

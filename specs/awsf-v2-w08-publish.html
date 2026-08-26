@@ -775,12 +775,12 @@ stateDiagram-v2
 
     <h4>17. The seventh owner act, and everything that moves with it</h4>
     <ul class="checklist">
-      <li><code class="status">[]</code> Add <code>publish</code> to the verb loop in <code>docs/driving/marimba/delegation-guard.sh</code>: <code>for verb in land cancel rework review journey raise publish</code>. A seventh act absent from this loop is an act a driving session can run</li>
-      <li><code class="status">[]</code> Add the matching rows to <code>core/test/unit/meta/marimba-guard.test.ts</code> with all three assertions the existing deny rows carry — exit <code>2</code>, the reason on stderr, and <strong>nothing on stdout</strong></li>
-      <li><code class="status">[]</code> Update the five enumeration sites <code>boundary-claims.test.ts</code> will otherwise fail on: <code>owner_acts.md</code> line 3 (which says the literal word "Six"), its body section for the new act, <code>SKILL.md</code> twice, and <code>gotchas.md</code> twice</li>
-      <li><code class="status">[]</code> Add <code>awsf publish</code> to <code>README.md</code> so <code>doc-reconciliation.test.ts</code>'s CLI-table check sees a documented command that exists</li>
-      <li><code class="status">[]</code> Write the <code>owner_acts.md</code> section for <code>publish</code> saying what it settles and what it forecloses — the gap that document already names as an open defect for <code>cancel</code>, <code>land</code> and <code>rework</code>, and the one thing a new act can avoid inheriting. <strong>It forecloses a great deal:</strong> the attempt becomes sealed, so this is the last act available on it</li>
-      <li><code class="status">[]</code> <code>lifecycle.md</code> in the driving references describes the state machine. Add <code>PUBLISHED</code> and <code>L27</code> there, or the tree describes a machine that no longer exists</li>
+      <li><code class="status">[x]</code> Add <code>publish</code> to the verb loop in <code>docs/driving/marimba/delegation-guard.sh</code>: <code>for verb in land cancel rework review journey raise publish</code>. A seventh act absent from this loop is an act a driving session can run</li>
+      <li><code class="status">[x]</code> Add the matching rows to <code>core/test/unit/meta/marimba-guard.test.ts</code> with all three assertions the existing deny rows carry — exit <code>2</code>, the reason on stderr, and <strong>nothing on stdout</strong></li>
+      <li><code class="status">[x]</code> Update the five enumeration sites <code>boundary-claims.test.ts</code> will otherwise fail on: <code>owner_acts.md</code> line 3 (which says the literal word "Six"), its body section for the new act, <code>SKILL.md</code> twice, and <code>gotchas.md</code> twice</li>
+      <li><code class="status">[x]</code> Add <code>awsf publish</code> to <code>README.md</code> so <code>doc-reconciliation.test.ts</code>'s CLI-table check sees a documented command that exists</li>
+      <li><code class="status">[x]</code> Write the <code>owner_acts.md</code> section for <code>publish</code> saying what it settles and what it forecloses — the gap that document already names as an open defect for <code>cancel</code>, <code>land</code> and <code>rework</code>, and the one thing a new act can avoid inheriting. <strong>It forecloses a great deal:</strong> the attempt becomes sealed, so this is the last act available on it</li>
+      <li><code class="status">[x]</code> <code>lifecycle.md</code> in the driving references describes the state machine. Add <code>PUBLISHED</code> and <code>L27</code> there, or the tree describes a machine that no longer exists</li>
     </ul>
 
     <h4>18. Testing Strategy: idempotent retry and the cascade meta-tests</h4>
