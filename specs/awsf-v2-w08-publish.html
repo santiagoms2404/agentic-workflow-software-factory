@@ -817,11 +817,11 @@ stateDiagram-v2
     <h4>20. Amend the absence scan: remove one clause, add three</h4>
     <p class="serves"><code class="serves">INV-3</code></p>
     <ul class="checklist">
-      <li><code class="status">[]</code> In <code>core/test/unit/meta/no-destructive-paths.test.ts</code>, remove <code>/git\s+push/</code> and <strong>nothing else</strong>. The other eight patterns stay exactly as they are</li>
-      <li><code class="status">[]</code> Add three patterns banned everywhere in <code>core/src</code> <em>including</em> <code>argv.ts</code>: a <code>+</code>-prefixed refspec literal, a refspec literal with an empty source, and a refspec literal with an all-zeros source. Each carries a comment citing what it was measured to do — <code>(forced update)</code> at exit <code>0</code>, and <code>[deleted]</code> at exit <code>0</code> twice</li>
-      <li><code class="status">[]</code> Rewrite the file's header to say what the invariant now claims and which of the three legs holds which half, so a reader who arrives at this file alone learns that the push clause moved rather than that it vanished</li>
-      <li><code class="status">[]</code> Add a bite companion in the same file: feed each new pattern a synthetic offender held in memory and assert it matches. The existing test walks real files and would pass vacuously against a pattern that never matches anything</li>
-      <li><code class="status">[]</code> Run the amended file against the tree and confirm it is green, then confirm each new pattern is red against its synthetic offender. <strong>A fence nobody has seen fail is decoration</strong></li>
+      <li><code class="status">[x]</code> In <code>core/test/unit/meta/no-destructive-paths.test.ts</code>, remove <code>/git\s+push/</code> and <strong>nothing else</strong>. The other eight patterns stay exactly as they are</li>
+      <li><code class="status">[x]</code> Add three patterns banned everywhere in <code>core/src</code> <em>including</em> <code>argv.ts</code>: a <code>+</code>-prefixed refspec literal, a refspec literal with an empty source, and a refspec literal with an all-zeros source. Each carries a comment citing what it was measured to do — <code>(forced update)</code> at exit <code>0</code>, and <code>[deleted]</code> at exit <code>0</code> twice</li>
+      <li><code class="status">[x]</code> Rewrite the file's header to say what the invariant now claims and which of the three legs holds which half, so a reader who arrives at this file alone learns that the push clause moved rather than that it vanished</li>
+      <li><code class="status">[x]</code> Add a bite companion in the same file: feed each new pattern a synthetic offender held in memory and assert it matches. The existing test walks real files and would pass vacuously against a pattern that never matches anything</li>
+      <li><code class="status">[x]</code> Run the amended file against the tree and confirm it is green, then confirm each new pattern is red against its synthetic offender. <strong>A fence nobody has seen fail is decoration</strong></li>
     </ul>
 
     <h4>21. <code>publish-fence.test.ts</code> — locality, derivation, condition</h4>
