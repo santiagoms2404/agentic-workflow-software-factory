@@ -671,7 +671,7 @@ flowchart LR
 
   <!-- ================= M5 ================= -->
   <div class="phase">
-    <h3><code class="status">[wip]</code> Milestone M5: The <code>PUBLISHED</code> state <span class="gate">G8-B</span> <span class="gate">G8-C</span></h3>
+    <h3><code class="status">[x]</code> Milestone M5: The <code>PUBLISHED</code> state <span class="gate">G8-B</span> <span class="gate">G8-C</span></h3>
     <p><em>Q2, decided 2026-08-25.</em> This is the milestone the decision bought, and it is the largest in the workstream. Two owner-authored commits gate it, one agent-writable precondition must land <strong>before</strong> the second of them can run, and eleven files move on the test and display side. Nothing here touches publication itself — that is M6.</p>
 
     <figure>
@@ -731,13 +731,13 @@ stateDiagram-v2
     <p class="serves"><code class="serves">AC-7</code></p>
     <p>Three independent things to prove: the matrix balances, the seal admits exactly one record, and the migration carries the data without losing a foreign key.</p>
     <ul class="checklist">
-      <li><code class="status">[]</code> The full <code>121</code>-pair sweep passes with <code>27</code> accepted and <code>94</code> rejected, each rejection in the class the table names — the existing exhaustive test, re-run over the widened matrix</li>
-      <li><code class="status">[]</code> Write <code>core/test/unit/publish/seal.test.ts</code>: a <code>LANDED</code> attempt accepts an <code>L27</code> transition to <code>PUBLISHED</code>; the same attempt refuses an <code>attempt.updated</code> carrying no transition, refuses a transition to any other state, and refuses a second <code>L27</code> once <code>PUBLISHED</code>. Each refusal asserted by error name, not message text</li>
-      <li><code class="status">[]</code> A <code>PUBLISHED</code> attempt refuses every event with <code>SealedAttempt</code>, and its lock is sealed so a second <code>withLock</code> throws — the two halves asserted separately, because they are two mechanisms</li>
-      <li><code class="status">[]</code> The six <code>isTerminalStatus</code> consumers keep their behaviour for a landed attempt: <code>retry</code> mints attempt n+1, <code>raise</code> refuses with <code>CeilingRaiseAttemptNotLive</code>, <code>watch</code> returns, and <code>endedAt</code> is set. One row each, because a silent change to any of them is the failure mode the split exists to avoid</li>
-      <li><code class="status">[]</code> Write <code>core/test/unit/observability/migration-0004.test.ts</code> against a database seeded at <code>user_version = 3</code>: every <code>sessions</code> row survives the rebuild, <code>PRAGMA foreign_key_check</code> is empty afterwards, each child table's <code>REFERENCES sessions(session_id) ON DELETE RESTRICT</code> is intact in <code>sqlite_master</code>, a <code>PUBLISHED</code> row inserts, and an orphan child insert is still refused</li>
-      <li><code class="status">[]</code> The migration is run twice against the same database and the second run is a no-op — <code>user_version</code> gates it, and a rebuild that re-ran would drop the table it just created</li>
-      <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green</li>
+      <li><code class="status">[x]</code> The full <code>121</code>-pair sweep passes with <code>27</code> accepted and <code>94</code> rejected, each rejection in the class the table names — the existing exhaustive test, re-run over the widened matrix</li>
+      <li><code class="status">[x]</code> Write <code>core/test/unit/publish/seal.test.ts</code>: a <code>LANDED</code> attempt accepts an <code>L27</code> transition to <code>PUBLISHED</code>; the same attempt refuses an <code>attempt.updated</code> carrying no transition, refuses a transition to any other state, and refuses a second <code>L27</code> once <code>PUBLISHED</code>. Each refusal asserted by error name, not message text</li>
+      <li><code class="status">[x]</code> A <code>PUBLISHED</code> attempt refuses every event with <code>SealedAttempt</code>, and its lock is sealed so a second <code>withLock</code> throws — the two halves asserted separately, because they are two mechanisms</li>
+      <li><code class="status">[x]</code> The six <code>isTerminalStatus</code> consumers keep their behaviour for a landed attempt: <code>retry</code> mints attempt n+1, <code>raise</code> refuses with <code>CeilingRaiseAttemptNotLive</code>, <code>watch</code> returns, and <code>endedAt</code> is set. One row each, because a silent change to any of them is the failure mode the split exists to avoid</li>
+      <li><code class="status">[x]</code> Write <code>core/test/unit/observability/migration-0004.test.ts</code> against a database seeded at <code>user_version = 3</code>: every <code>sessions</code> row survives the rebuild, <code>PRAGMA foreign_key_check</code> is empty afterwards, each child table's <code>REFERENCES sessions(session_id) ON DELETE RESTRICT</code> is intact in <code>sqlite_master</code>, a <code>PUBLISHED</code> row inserts, and an orphan child insert is still refused</li>
+      <li><code class="status">[x]</code> The migration is run twice against the same database and the second run is a no-op — <code>user_version</code> gates it, and a rebuild that re-ran would drop the table it just created</li>
+      <li><code class="status">[x]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green</li>
     </ul>
     <div class="loop">
       🔁 <strong>Do not exit this phase until every box above is checked.</strong> If either owner commit is absent, this milestone is <code>[f]</code> and the workstream stops here — M6 onward assumes the state exists.

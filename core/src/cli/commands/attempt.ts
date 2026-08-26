@@ -301,6 +301,7 @@ export function nextActionFor(state: TaskState, taskId: string): string {
     case "AWAITING_OWNER": return `run \`awsf rework ${taskId} "<concrete defect>"\`, \`awsf land ${taskId}\`, or \`awsf cancel ${taskId}\``;
     case "LANDING": return `rerun \`awsf land ${taskId}\` to recover the persisted landing`;
     case "LANDED": return "no action required; the approved candidate is canonical HEAD";
+    case "PUBLISHED": return "no action required; the landed candidate is published";
     case "BLOCKED": return `resolve the blocker, then run \`awsf retry ${taskId}\``;
     case "CANCELLED": return `run \`awsf retry ${taskId}\` only if the task should resume`;
   }
