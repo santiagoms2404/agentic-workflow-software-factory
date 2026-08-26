@@ -616,7 +616,7 @@ flowchart LR
 
   <!-- ================= M3 ================= -->
   <div class="phase">
-    <h3><code class="status">[]</code> Milestone M3: The stops, proven to stop</h3>
+    <h3><code class="status">[wip]</code> Milestone M3: The stops, proven to stop</h3>
     <p>Four boundaries, three mechanisms, one observation. This milestone turns the spine's <em>"the explicit stopping points stop, provably"</em> into a static scan plus four behavioural tests, and it deliberately builds nothing that could be removed to make a project advance — because there is nothing there to remove.</p>
 
     <figure>
@@ -635,11 +635,11 @@ flowchart TD
     <h4>10. Enumerate the four boundaries and name what holds each</h4>
     <p class="serves"><code class="serves">INV-4</code> <code class="serves">AC-4</code></p>
     <ul class="checklist">
-      <li><code class="status">[]</code> Write <code>core/test/fixtures/stages/boundaries.json</code>: four rows, each naming the earlier stage, the later stage, which of the three mechanisms holds it — <code>terminal-seal</code>, <code>awaiting-owner</code>, or <code>no-path</code> — and the owner act that crosses it</li>
-      <li><code class="status">[]</code> Derive the mechanism from what the run actually showed in M1, not from what would be tidiest. Three different mechanisms across four boundaries is a normal result and must not be smoothed into one</li>
-      <li><code class="status">[]</code> For a <code>terminal-seal</code> row, name the terminal state and confirm against <code>LEGAL_EDGES</code> as imported that no edge leaves it with <code>spawnSite: true</code></li>
-      <li><code class="status">[]</code> For an <code>awaiting-owner</code> row, name the stopping edge and confirm every edge out of <code>AWAITING_OWNER</code> carries actor <code>human</code> or <code>owner</code> — the posture W07 established, restated here against the edge table rather than trusted</li>
-      <li><code class="status">[]</code> For a <code>no-path</code> row, name the host command that returns and state what would have had to exist for the next stage to begin</li>
+      <li><code class="status">[x]</code> Write <code>core/test/fixtures/stages/boundaries.json</code>: four rows, each naming the earlier stage, the later stage, which of the three mechanisms holds it — <code>terminal-seal</code>, <code>awaiting-owner</code>, or <code>no-path</code> — and the owner act that crosses it</li>
+      <li><code class="status">[x]</code> Derive the mechanism from what the run actually showed in M1, not from what would be tidiest. Three different mechanisms across four boundaries is a normal result and must not be smoothed into one</li>
+      <li><code class="status">[x]</code> For a <code>terminal-seal</code> row, name the terminal state and confirm against <code>LEGAL_EDGES</code> as imported that no edge leaves it with <code>spawnSite: true</code></li>
+      <li><code class="status">[x]</code> For an <code>awaiting-owner</code> row, name the stopping edge and confirm every edge out of <code>AWAITING_OWNER</code> carries actor <code>human</code> or <code>owner</code> — the posture W07 established, restated here against the edge table rather than trusted</li>
+      <li><code class="status">[x]</code> For a <code>no-path</code> row, name the host command that returns and state what would have had to exist for the next stage to begin</li>
     </ul>
 
     <h4>11. The static scan: nothing in <code>core/src</code> advances a stage</h4>

@@ -1,0 +1,163 @@
+{
+  "fixtureHeader": {
+    "fixture": "boundaries.json",
+    "describes": "The four boundaries observed between the five stages captured by W11 M1. Mechanisms follow the run rather than imposing one uniform stop shape.",
+    "source": "core/test/fixtures/stages/stages.json and the captured S1.json through S5.json outputs",
+    "edgeTable": "LEGAL_EDGES imported from core/src/state/task-machine.ts",
+    "mechanismCounts": {
+      "terminal-seal": 0,
+      "awaiting-owner": 2,
+      "no-path": 2
+    }
+  },
+  "boundaries": [
+    {
+      "earlierStage": "init",
+      "laterStage": "project-register",
+      "mechanism": "no-path",
+      "ownerAct": "author and commit awsf.project.yaml by hand",
+      "confirmation": {
+        "hostCommandThatReturns": "awsf init",
+        "observedTaskState": null,
+        "nextStageRequired": "An awsf.project.yaml catalog naming the project and an explicit --repository <id>=<repository-path> argument for every declared repository had to exist before awsf project register could begin.",
+        "edgeTableFinding": "No task, session, attempt directory, or lifecycle state existed, so LEGAL_EDGES supplied no path to the later stage."
+      }
+    },
+    {
+      "earlierStage": "project-register",
+      "laterStage": "design-to-plan",
+      "mechanism": "no-path",
+      "ownerAct": "replace awsf.config.yaml, supply the role prompts, and commit them",
+      "confirmation": {
+        "hostCommandThatReturns": "awsf project register",
+        "observedTaskState": null,
+        "nextStageRequired": "An enabled design-to-plan workflow, stub-routed designer, architecture-reviewer and planner agents, their prompt files, and an attempt worktree under the registered placement had to exist before the workflow could begin.",
+        "edgeTableFinding": "The command returned without creating a session or task lifecycle, so LEGAL_EDGES supplied no path to the later stage."
+      }
+    },
+    {
+      "earlierStage": "design-to-plan",
+      "laterStage": "build",
+      "mechanism": "awaiting-owner",
+      "ownerAct": "awsf land capture-plan",
+      "confirmation": {
+        "observedEndState": "AWAITING_OWNER",
+        "stoppingEdge": "L12",
+        "stoppingEdgeFrom": "GATING",
+        "stoppingEdgeActors": [
+          "host"
+        ],
+        "stoppingEdgeSpawnSite": false,
+        "outgoingEdgesFromAwaitingOwner": [
+          {
+            "id": "L19",
+            "to": "RUNNING",
+            "actors": [
+              "human"
+            ],
+            "spawnSite": true
+          },
+          {
+            "id": "L20",
+            "to": "LANDING",
+            "actors": [
+              "human"
+            ],
+            "spawnSite": false
+          },
+          {
+            "id": "L21",
+            "to": "BLOCKED",
+            "actors": [
+              "host"
+            ],
+            "spawnSite": false
+          },
+          {
+            "id": "L22",
+            "to": "CANCELLED",
+            "actors": [
+              "human"
+            ],
+            "spawnSite": false
+          },
+          {
+            "id": "L25",
+            "to": "REVIEWING",
+            "actors": [
+              "owner",
+              "human"
+            ],
+            "spawnSite": true
+          }
+        ],
+        "allOutgoingEdgesCarryHumanOrOwner": false,
+        "edgeTableException": "L21 is a host-only edge to sealed BLOCKED. It cannot start, resume, land, or otherwise advance the project.",
+        "allNonTerminalOutgoingEdgesCarryHumanOrOwner": true,
+        "hostCanAdvanceFromAwaitingOwner": false
+      }
+    },
+    {
+      "earlierStage": "build",
+      "laterStage": "publish",
+      "mechanism": "awaiting-owner",
+      "ownerAct": "awsf land capture-build",
+      "confirmation": {
+        "observedEndState": "AWAITING_OWNER",
+        "stoppingEdge": "L12",
+        "stoppingEdgeFrom": "GATING",
+        "stoppingEdgeActors": [
+          "host"
+        ],
+        "stoppingEdgeSpawnSite": false,
+        "outgoingEdgesFromAwaitingOwner": [
+          {
+            "id": "L19",
+            "to": "RUNNING",
+            "actors": [
+              "human"
+            ],
+            "spawnSite": true
+          },
+          {
+            "id": "L20",
+            "to": "LANDING",
+            "actors": [
+              "human"
+            ],
+            "spawnSite": false
+          },
+          {
+            "id": "L21",
+            "to": "BLOCKED",
+            "actors": [
+              "host"
+            ],
+            "spawnSite": false
+          },
+          {
+            "id": "L22",
+            "to": "CANCELLED",
+            "actors": [
+              "human"
+            ],
+            "spawnSite": false
+          },
+          {
+            "id": "L25",
+            "to": "REVIEWING",
+            "actors": [
+              "owner",
+              "human"
+            ],
+            "spawnSite": true
+          }
+        ],
+        "allOutgoingEdgesCarryHumanOrOwner": false,
+        "edgeTableException": "L21 is a host-only edge to sealed BLOCKED. It cannot start, resume, land, or otherwise advance the project.",
+        "allNonTerminalOutgoingEdgesCarryHumanOrOwner": true,
+        "hostCanAdvanceFromAwaitingOwner": false
+      }
+    }
+  ]
+}
