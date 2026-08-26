@@ -389,6 +389,10 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
             reason: evidence.reason, attempt: evidence.attempt,
           }), evidence.at);
       return;
+    case "publish":
+      // Publication evidence is journal-only. `lifecycle_state` below still
+      // records PUBLISHED on this same transition.
+      return;
     case "review":
       // The verdict is the reviewer's own finding, recorded beside the provider
       // that produced it so the inversion is checkable from one row.

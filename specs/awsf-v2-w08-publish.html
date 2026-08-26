@@ -765,12 +765,12 @@ stateDiagram-v2
     <h4>16. The record, and what it must not carry</h4>
     <p class="serves"><code class="serves">INV-5</code></p>
     <ul class="checklist">
-      <li><code class="status">[]</code> Add a <code>publish</code> member to <code>AttemptEvidence</code>: <code>{ type, remote, branch, publishedSha, outcome, remotePriorSha, at }</code>. <code>outcome</code> is the closed vocabulary from task 6; <code>remotePriorSha</code> is <code>null</code> for a creation</li>
-      <li><code class="status">[]</code> <strong>No URL, no host, no stdout, no stderr, no Git prose, no exit code, no path.</strong> Follow <code>quota-snapshot</code>'s precedent exactly — a closed field list is a stronger scrub than a redacted blob, because redaction runs per value and a Git error message is prose that can carry a credential-bearing URL inside it</li>
-      <li><code class="status">[]</code> The record rides the <code>L27</code> transition's <code>attempt.transitioned</code> event rather than a separate <code>attempt.updated</code>. One event, one record, one state change — and it is the only record the seal admits after <code>LANDED</code></li>
-      <li><code class="status">[]</code> The projector's switch has no <code>default</code>, so the new evidence member is a silent no-op there. The <code>lifecycle_state</code> column, however, is <strong>not</strong> a no-op — it is what <span class="gate">G8-C</span>'s migration widened, and the projector writes <code>PUBLISHED</code> into it</li>
-      <li><code class="status">[]</code> Nothing is written to disk outside the journal and the projection — no summary file, no report, no receipt</li>
-      <li><code class="status">[]</code> A refused publish journals nothing and moves no state. The refusal is an operator-facing message; a record of something that did not happen is not evidence</li>
+      <li><code class="status">[x]</code> Add a <code>publish</code> member to <code>AttemptEvidence</code>: <code>{ type, remote, branch, publishedSha, outcome, remotePriorSha, at }</code>. <code>outcome</code> is the closed vocabulary from task 6; <code>remotePriorSha</code> is <code>null</code> for a creation</li>
+      <li><code class="status">[x]</code> <strong>No URL, no host, no stdout, no stderr, no Git prose, no exit code, no path.</strong> Follow <code>quota-snapshot</code>'s precedent exactly — a closed field list is a stronger scrub than a redacted blob, because redaction runs per value and a Git error message is prose that can carry a credential-bearing URL inside it</li>
+      <li><code class="status">[x]</code> The record rides the <code>L27</code> transition's <code>attempt.transitioned</code> event rather than a separate <code>attempt.updated</code>. One event, one record, one state change — and it is the only record the seal admits after <code>LANDED</code></li>
+      <li><code class="status">[x]</code> The projector's switch has no <code>default</code>, so the new evidence member is a silent no-op there. The <code>lifecycle_state</code> column, however, is <strong>not</strong> a no-op — it is what <span class="gate">G8-C</span>'s migration widened, and the projector writes <code>PUBLISHED</code> into it</li>
+      <li><code class="status">[x]</code> Nothing is written to disk outside the journal and the projection — no summary file, no report, no receipt</li>
+      <li><code class="status">[x]</code> A refused publish journals nothing and moves no state. The refusal is an operator-facing message; a record of something that did not happen is not evidence</li>
     </ul>
 
     <h4>17. The seventh owner act, and everything that moves with it</h4>

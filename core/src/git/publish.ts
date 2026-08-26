@@ -55,6 +55,8 @@ export class PublishBlocked extends Error {
 export interface ObservedPublishTarget {
   readonly repository: Pick<PublishRepositoryFacts, "headSha" | "checkoutClean">;
   readonly remote: PublishRemoteFacts;
+  /** `null` when the destination branch will be created. */
+  readonly remotePriorSha: string | null;
 }
 
 type PublishRefusal = Extract<PublishAuthorization, { readonly decision: "refused" }>;
@@ -166,6 +168,7 @@ export function observePublishTarget(
       resolvedHost: resolvedRemoteHost,
       fastForward: tip === null ? null : isAncestor(runner, tip, headSha),
     },
+    remotePriorSha: tip,
   };
 }
 

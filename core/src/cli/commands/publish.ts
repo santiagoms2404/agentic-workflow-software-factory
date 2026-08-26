@@ -268,7 +268,21 @@ export async function publishCommand(options: PublishCommandOptions): Promise<Pu
   const status = await persistAttempt(
     options.attemptDir,
     current.revision,
-    { kind: "attempt.transitioned", next: published },
+    {
+      kind: "attempt.transitioned",
+      next: published,
+      // Closed derived facts only. In particular, no transport output or error
+      // prose survives the Git boundary into the journal.
+      evidence: {
+        type: "publish",
+        remote: remoteName,
+        branch,
+        publishedSha: candidateSha,
+        outcome: run.outcomes[0] ?? "fault",
+        remotePriorSha: observed.remotePriorSha,
+        at: now,
+      },
+    },
     options.projectRecord,
   );
   return { outcome: "published", status, outcomes: run.outcomes };
