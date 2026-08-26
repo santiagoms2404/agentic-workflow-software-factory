@@ -576,12 +576,12 @@ flowchart LR
     <h4>7. The resolver — where is this project, and what does the owner do next</h4>
     <p class="serves"><code class="serves">INV-5</code> <code class="serves">INV-6</code></p>
     <ul class="checklist">
-      <li><code class="status">[]</code> Create <code>core/src/stages/resolve.ts</code>: a pure function from a <code>ResolvedProject</code> plus journal rows to <code>{ current, next, ownerAct, evidence }</code>. Given the same inputs it returns the same answer, and it is called nowhere in its own file</li>
-      <li><code class="status">[]</code> Journal rows arrive as <strong>arguments</strong>, read by the caller through <code>core/src/observability/queries.ts</code>. The resolver opens no database and holds no handle, so it stays testable on canned rows and cannot be the thing that reaches into the state root</li>
-      <li><code class="status">[]</code> <code>evidence</code> names the stored envelope that establishes the current stage — its schema id and the phase it belongs to — so the answer cites what it rests on rather than asserting a number</li>
-      <li><code class="status">[]</code> <code>ownerAct</code> is the command the owner types next, resolved from the stage contract. It is a <em>string the owner reads</em>, and nothing in <code>core/src</code> executes it</li>
-      <li><code class="status">[]</code> The two edges are answered: no session at all resolves to "before S1"; every stage complete resolves to "past S5". Neither is an error</li>
-      <li><code class="status">[]</code> This module imports nothing from <code>core/src/execution/**</code>, spawns nothing, writes nothing, and performs no lifecycle transition. <code>INV-5</code>'s absence is asserted by T14's import leg</li>
+      <li><code class="status">[x]</code> Create <code>core/src/stages/resolve.ts</code>: a pure function from a <code>ResolvedProject</code> plus journal rows to <code>{ current, next, ownerAct, evidence }</code>. Given the same inputs it returns the same answer, and it is called nowhere in its own file</li>
+      <li><code class="status">[x]</code> Journal rows arrive as <strong>arguments</strong>, read by the caller through <code>core/src/observability/queries.ts</code>. The resolver opens no database and holds no handle, so it stays testable on canned rows and cannot be the thing that reaches into the state root</li>
+      <li><code class="status">[x]</code> <code>evidence</code> names the stored envelope that establishes the current stage — its schema id and the phase it belongs to — so the answer cites what it rests on rather than asserting a number</li>
+      <li><code class="status">[x]</code> <code>ownerAct</code> is the command the owner types next, resolved from the stage contract. It is a <em>string the owner reads</em>, and nothing in <code>core/src</code> executes it</li>
+      <li><code class="status">[x]</code> The two edges are answered: no session at all resolves to "before S1"; every stage complete resolves to "past S5". Neither is an error</li>
+      <li><code class="status">[x]</code> This module imports nothing from <code>core/src/execution/**</code>, spawns nothing, writes nothing, and performs no lifecycle transition. <code>INV-5</code>'s absence is asserted by T14's import leg</li>
     </ul>
 
     <h4>8. The read-only readout</h4>
