@@ -1,0 +1,1219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plan: AWSF v2 W11 — The five-stage ladder</title>
+<style>
+:root {
+  --bg:#0E1116; --surface:#171D25; --surface-soft:#141922; --fg:#E8EDF3;
+  --muted:#8D99A8; --accent:#38BDF8; --cool:#A78BFA; --warn:#F59E0B;
+  --danger:#F87171; --good:#4ADE80; --border:#293341; --review:#FB7185;
+  --font-ui:Inter,system-ui,-apple-system,sans-serif;
+  --font-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,monospace;
+  --maxw:1120px;
+}
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.65 var(--font-ui); }
+main { max-width:var(--maxw); margin:auto; padding:48px 24px 150px; }
+h1,h2,h3,h4 { line-height:1.25; letter-spacing:-.01em; }
+h1 { font-size:30px; margin:0 0 6px; }
+h2 { font-size:21px; margin:54px 0 14px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+h3 { font-size:17px; margin:32px 0 8px; }
+h4 { font-size:14px; margin:24px 0 6px; color:var(--accent); }
+h5 { margin:0 0 6px; color:var(--muted); text-transform:uppercase; letter-spacing:.07em; font-size:11px; }
+p { margin:0 0 14px; }
+a { color:var(--cool); }
+strong { color:#fff; }
+em,.muted,.sub { color:var(--muted); }
+ul,ol { margin:0 0 14px; padding-left:22px; }
+li { margin:3px 0; }
+code { font:12px var(--font-mono); color:#A5DFF8; background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:1px 5px; }
+pre { background:var(--surface); border:1px solid var(--border); border-left:3px solid var(--accent); border-radius:8px; padding:14px 16px; overflow:auto; color:#D9E2EC; font:12.5px/1.6 var(--font-mono); }
+pre code { border:0; padding:0; background:none; color:inherit; }
+table { width:100%; border-collapse:collapse; margin:14px 0 20px; font-size:13px; display:block; overflow-x:auto; }
+th,td { border:1px solid var(--border); padding:8px 10px; text-align:left; vertical-align:top; }
+th { background:var(--surface); color:var(--accent); font-size:11.5px; text-transform:uppercase; letter-spacing:.05em; }
+tbody tr:nth-child(even) { background:#ffffff04; }
+.meta { margin-top:14px; font-size:13px; }
+.meta summary { cursor:pointer; color:var(--muted); font:12px var(--font-mono); }
+.meta dl { display:grid; grid-template-columns:130px 1fr; gap:5px 14px; padding:14px; background:var(--surface); border:1px solid var(--border); border-radius:8px; }
+.meta dt { color:var(--accent); font:11.5px var(--font-mono); }
+.meta dd { margin:0; color:var(--muted); font:11.5px var(--font-mono); overflow-wrap:anywhere; }
+figure { margin:26px 0; text-align:center; }
+figure svg, figure .mermaid { max-width:100%; height:auto; }
+figure .mermaid { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:20px 12px; overflow:auto; color:var(--muted); }
+figcaption { margin-top:9px; color:var(--muted); font-size:12px; font-style:italic; }
+.phase { margin:30px 0; padding:22px 24px; border:1px solid var(--border); border-radius:14px; background:#ffffff04; }
+.phase > h3 { margin-top:0; }
+.checklist { list-style:none; padding:0; }
+.checklist li { padding:4px 0; }
+.status { color:var(--accent); margin-right:5px; }
+.loop { margin-top:16px; padding:10px 14px; border:1px dashed var(--accent); border-radius:8px; background:#38bdf80a; font-size:13px; }
+.card { margin:14px 0; padding:12px 16px; background:var(--surface); border:1px solid var(--border); border-left:3px solid var(--cool); border-radius:8px; font-size:13px; }
+.card.rule { border-left-color:var(--accent); }
+.card.warn { border-left-color:var(--warn); }
+.card.danger { border-left-color:var(--danger); }
+.card.good { border-left-color:var(--good); }
+.gate { color:var(--warn); border:1px solid var(--warn); border-radius:3px; padding:0 5px; font:11px var(--font-mono); }
+.tag { display:inline-block; margin-right:6px; padding:1px 6px; border-radius:3px; font:10px var(--font-mono); text-transform:uppercase; letter-spacing:.06em; }
+.tag.existing { background:#27303C; color:var(--muted); }
+.tag.new { background:#123444; color:var(--accent); }
+.tag.owner { background:#3B2F14; color:var(--warn); }
+.files ul { list-style:none; padding:0; }
+.files li { padding:4px 0; border-bottom:1px solid #ffffff08; }
+.taskmeta th { width:165px; text-transform:none; letter-spacing:0; font-size:12px; }
+#questionables details,#amendments details { margin:10px 0; padding:10px 14px; background:var(--surface); border:1px solid var(--border); border-radius:8px; }
+#questionables summary,#amendments summary { cursor:pointer; font-weight:650; }
+.qa-answer { margin:10px 0 2px; color:var(--muted); font-size:13px; }
+.qopen { color:var(--warn); font:10px var(--font-mono); letter-spacing:.06em; margin-right:6px; }
+.qdecided { color:var(--good); font:10px var(--font-mono); letter-spacing:.06em; margin-right:6px; }
+.recommend { display:block; margin:8px 0; padding:8px 12px; border-left:3px solid var(--cool); background:#a78bfa0c; color:var(--fg); }
+.decided { display:block; margin:8px 0; padding:8px 12px; border-left:3px solid var(--good); background:#4ade800c; color:var(--fg); }
+.consequence { display:block; margin:8px 0; padding:8px 12px; border-left:3px solid var(--warn); background:#f59e0b0c; color:var(--fg); }
+.measured { display:block; margin:8px 0; padding:8px 12px; border-left:3px solid var(--good); background:#4ade800c; color:var(--fg); }
+.amend { background:var(--surface-soft); border:1px solid var(--warn); border-radius:10px; padding:16px 18px; margin:18px 0; }
+.amend h5 { color:var(--warn); }
+.serves { margin:0 0 8px; }
+code.serves { color:var(--cool); background:#a78bfa12; border-color:#a78bfa33; font-size:11px; }
+code.inv { color:var(--accent); } code.ac { color:var(--good); }
+.mockup { margin:22px 0; }
+.mockup-frame { background:var(--bg); border:1px solid var(--border); border-radius:10px; overflow:hidden; text-align:left; box-shadow:0 8px 28px #0006; }
+.mockup-frame .mbar { background:var(--surface); padding:7px 12px; border-bottom:1px solid var(--border); font:11px var(--font-mono); color:var(--muted); }
+.mockup-frame .mbody { padding:14px 16px; }
+.mk-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:12px 14px; margin:10px 0; font-size:12px; }
+.mk-id { color:var(--cool); font:700 12px var(--font-mono); }
+.mk-flow { color:var(--muted); font:11px var(--font-mono); }
+.mk-lane { display:flex; align-items:baseline; gap:8px; font:11px var(--font-mono); padding:2px 0; }
+.mk-lane .nm { width:78px; color:var(--muted); flex:none; }
+.mk-mono { font:11px var(--font-mono); color:var(--fg); }
+.mk-dim { color:var(--muted); } .mk-okc { color:var(--good); } .mk-warnc { color:var(--warn); }
+.mk-ribbon { display:flex; gap:4px; flex-wrap:wrap; font:10px var(--font-mono); margin:8px 0; }
+.mk-ribbon span { padding:2px 7px; border-radius:4px; border:1px solid var(--border); color:var(--muted); }
+.mk-ribbon span.done { color:var(--good); border-color:#4ade8044; }
+.mk-ribbon span.cur { color:var(--cool); border-color:#a78bfa66; background:#a78bfa14; }
+@media (max-width:720px) { main { padding:28px 14px 130px; } .meta dl { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>Plan: AWSF v2 W11 — The five-stage ladder</h1>
+  <p class="sub">Workstream W11 of <a href="awsf-v2-plan.html">the AWSF v2 spine</a> · milestone M11 · <strong>the capture pass is the first task, not a preliminary</strong></p>
+  <details class="meta">
+    <summary>Metadata</summary>
+    <dl>
+      <dt>created</dt><dd>2026-08-25</dd>
+      <dt>modified</dt><dd>2026-08-25, 2026-08-26</dd>
+      <dt>commits</dt><dd>none — authoring only; no implementation was written and nothing was committed, none — owner review applied; still uncommitted</dd>
+      <dt>agent name</dt><dd>claude-opus-5, claude-opus-5</dd>
+      <dt>session id</dt><dd>not recorded — AGENTS.md invariant 1 keeps live session state out of every committed file in this repository, not recorded — the owner review block carried no session id into the plan</dd>
+      <dt>back refs</dt><dd>./awsf-v2-plan.html (spine milestone M11, Shared Invariants and Constraints, the four rules the intent imposes), ./tickets/awsf-v2-plan/W11.md (meta-prompt), ./awsf-v2-plan-build-prompts.md (§ Section B → W11), ./awsf-v2-candidates-fuse-version.md (§10 first, then §2.3 route-to-strong item 4, §6 step 9, §8's ladder-envelope absence row, §5 decision 22), ./awsf-v2-intent.md (the W11 row and the four constraints on the plan), ./awsf-v2-w03-awsf-init.html, ./awsf-v2-w04-project-registry.html, ./awsf-v2-w05-design-to-plan.html, ./awsf-v2-w06-prompt-composition.html (the four workstreams this one consumes), ../AGENTS.md (invariants 1, 9, 10), ../awsf.config.yaml (policy.protected_paths — the eight globs INV-6 asserts this workstream never touches), core/src/contracts/registry.ts, core/src/workflow/recipes/design-to-plan.ts, core/src/state/task-machine.ts, core/src/observability/queries.ts, core/test/unit/meta/quota-fence.test.ts, core/test/unit/meta/execution-isolation.test.ts, core/test/unit/cli/design-to-plan-route.test.ts</dd>
+      <dt>forward refs</dt><dd>./awsf-v2-w11-five-stage-ladder-build-prompts.md, ./tickets/awsf-v2-w11-five-stage-ladder/ (T01–T20 plus README.md)</dd>
+    </dl>
+  </details>
+</header>
+
+<figure>
+  <pre class="mermaid">
+flowchart LR
+  H["one hand-run<br/>prose, once"] -.->|"never read directly"| M1
+  M1["M1 · capture<br/>fixtures land first"] --> M2["M2 · stage contract<br/>+ resolver"]
+  M2 --> M3["M3 · the stops<br/>proven as absence"]
+  M2 --> M4["M4 · no-skill fence<br/>three legs"]
+  M3 --> M5["M5 · journey<br/>stub route · zero quota"]
+  M4 --> M5
+  M5 --> M6["M6 · close"]
+  M1 -.->|"misfit"| W5["W05 owns<br/>any new envelope"]
+  style M1 stroke:#38BDF8,stroke-width:2px
+  style W5 stroke:#F59E0B,stroke-width:2px,stroke-dasharray:4 3
+  style H stroke:#F87171,stroke-width:1px,stroke-dasharray:3 3
+  </pre>
+  <figcaption>The whole plan is one ordering argument. Everything to the right of M1 is written against fixtures that M1 put in the tree; nothing is written against the prose on the left. The dashed amber edge is the only thing this workstream is allowed to build somewhere else.</figcaption>
+</figure>
+
+<section id="plain-language">
+  <h2>In Plain Language</h2>
+  <p>This section explains the whole plan without technical vocabulary. Everything after it says the same things precisely, for the people — and machines — building it.</p>
+
+  <h3>What this is about</h3>
+  <p>The factory being built here can already do several separate things well: start a brand-new project from nothing, keep track of which projects exist and where they live, turn an idea into a reviewed plan, and carry a piece of work from plan to finished-and-published. Each of those was built and proved on its own. What nobody has built is the <em>route</em> — the single path a project walks from the first idea to something published, passing through five landmarks along the way.</p>
+  <p>That route has been walked exactly once, by hand, by one person, who then wrote down what happened in ordinary sentences. Nothing was kept. There is no saved copy of what came out at each landmark — only the description of it. And a description of a thing you built once is a memory, not a record. Memories smooth over the parts that were awkward.</p>
+
+  <h3>Why now</h3>
+  <p>The four capabilities this route strings together have all just finished. The route is the last piece of ordinary building work left before the factory's plain-English handbook can be written, because the handbook has to describe a route that has stopped changing. Doing it now, while what it strings together is fresh, is cheaper than doing it later.</p>
+  <p>There is also a cost to waiting that grows quietly. Every week the only record of that hand-run stays a memory, the memory gets a little more confident and a little less accurate.</p>
+
+  <h3>What we are building</h3>
+  <p>Think of the route as five stops on a rail line, and think of the thing being built as two separate jobs done in a strict order.</p>
+  <p><strong>The first job is to ride the line once and take photographs at every stop.</strong> Not sketches from memory — photographs, saved where anyone can look at them later. That is the entire first stage of this work, and nothing else may start until the photographs exist. This matters more than it sounds. If you skip it and build the timetable first, you build a timetable around the stops you <em>remember</em>, and every test you write afterwards will agree with you, because you wrote both. That kind of agreement proves nothing at all.</p>
+  <p><strong>The second job is to build the timetable against those photographs.</strong> What each stop hands to the next one, what has to be true before a train may leave, and — the part that gets forgotten — the fact that no train leaves on its own. A person decides to travel each leg. There is deliberately no mechanism anywhere that moves a project from one stop to the next by itself, and a good part of this work is proving that no such mechanism exists rather than merely saying so.</p>
+  <p>One more rule runs through all of it, and it is the rule this particular piece of work is most likely to break. A five-stop route reads naturally like a set of instructions somebody follows. It must not be one. Nothing on this route may work by a machine having read a document first, because on one of the two routes the factory uses, documents are switched off entirely and cannot be reached at all. So the route is built out of checkable handovers, never out of instructions.</p>
+
+  <h3>How we know it worked</h3>
+  <p>Four things will be observably true, and none of them costs anything to check.</p>
+  <p>First, the photographs are in the tree, and they were put there before any of the timetable existed — the order is visible in the record itself. Second, a throwaway project travels the whole line from one end to the other, using a stand-in for the expensive parts, so the check is free and can be run as often as anyone likes. Third, at each of the four gaps between stops, a test confirms that nothing moved on its own: the journey stopped, and stayed stopped, until a person acted. Fourth, a check confirms that no stop on the line depends on any document having been read, and that check has itself been seen to fail on purpose, because a safety check nobody has ever watched fail is decoration.</p>
+  <p>And what is deliberately not part of this: no new machinery. This work is a route through capabilities that already exist. If building it turns out to need a new part, that is a signal the part belongs to whichever piece of work owns it, and this plan says so and hands it over rather than quietly building it here.</p>
+</section>
+
+<section id="purpose">
+  <h2>Purpose</h2>
+  <p>Turn four separately-proved capabilities into one route a project actually travels, and do it in the order that makes the route an observation rather than a design: <strong>capture the five stage outputs into the tree as fixtures first, then write the governed workflow against those fixtures.</strong></p>
+  <p>The spine names this workstream's evidence base as the weakest of any executable workstream in v2 — one hand-run of the five stages, in prose — and names the capture pass as its cheapest unused upgrade. Both statements point the same way, and this plan's whole structure is that arrow: M1 is the capture pass, M2 through M6 consume what M1 landed, and no task in M2 through M6 may cite the prose.</p>
+</section>
+
+<section id="problem">
+  <h2>Problem</h2>
+  <p>The stage envelopes have been produced exactly once, by hand, as prose. There is no fixture, no schema, and no evidence in this repository of what a stage output actually looks like. <code>specs/awsf-v2-candidates-fuse-version.md</code> §8 records this as a named absence — <em>"Ladder stage envelopes | Produced once, by hand, as prose | The capture pass that is #22's first task"</em> — and it is the only executable workstream in v2 whose evidence row is a single unrecorded run.</p>
+  <p>The failure mode is specific and it is not "the design might be wrong". It is that <strong>a workflow designed against remembered prose closes a loop with itself.</strong> The envelopes get designed from the memory; the fixtures get written to match the designed envelopes; the tests pass against the fixtures. Every step agrees with the one before it, the suite goes green, and at no point did anything get compared against what actually came out of a stage. The green is real and it means nothing, because the observation was never made.</p>
+  <figure>
+    <pre class="mermaid">
+flowchart TD
+  P["remembered prose"] --> D["envelopes designed<br/>from the memory"]
+  D --> F["fixtures written<br/>to match the design"]
+  F --> T["tests written<br/>against the fixtures"]
+  T --> G["suite green"]
+  G -->|"proves"| N["nothing was<br/>ever observed"]
+  style N stroke:#F87171,stroke-width:2px
+  style P stroke:#F87171,stroke-width:1px,stroke-dasharray:3 3
+    </pre>
+    <figcaption>Capture-last produces a closed loop. Each arrow is sound; the chain is worthless, because no link in it touches a real stage output. This is what the ordering in this plan exists to prevent, and it is why M1 cannot be a preliminary.</figcaption>
+  </figure>
+  <p>A second problem sits underneath the first and is easier to miss. <strong>The five stages are not enumerated anywhere a planning session is permitted to read.</strong> The spine's W11 block names the workstream and its constraints but never lists the stages. The intent's W11 row says <em>"capture pass first, then the governed workflow"</em> and stops there. The fused candidate record names the ladder six times and enumerates it none. The list exists in the frozen candidate record, which the authoring session was instructed not to open — and that instruction is correct, because a list lifted out of a frozen prose record is exactly the remembered-prose input the ordering rule refuses. So the stage list is not an input to this plan. It is the first thing M1 produces.</p>
+  <div class="card danger">
+    <h5>The consequence, stated plainly</h5>
+    <p><strong>This plan cannot name its own stages, and does not pretend to.</strong> Every section below refers to them positionally as <code>S1</code> through <code>S5</code>. M1 task 1 fills in the names, the owners, the producing commands and the entry preconditions, and records that list as a fixture. Everything after M1 is written against the shape every stage has regardless of what it turns out to be: an entry precondition, an owner, a typed envelope out of the thirteen W05 already landed, an exit stop, and a captured output. That shape is knowable now. The names are not, and inventing them here would be the defect this workstream exists to avoid.</p>
+  </div>
+</section>
+
+<section id="solution">
+  <h2>Solution</h2>
+  <p>Two acts, in a strict order, with the boundary between them enforced by the commit record rather than by intention.</p>
+  <p><strong>Act one — capture.</strong> Drive a throwaway project through the ladder by hand, against the four landed workstreams as they actually stand, on the zero-quota stub route. Record what came out. Scrub it per invariants 1 and 9, land it under <code>core/test/fixtures/stages/</code>, then attempt each capture against every schema id in <code>ENVELOPE_SCHEMAS</code> and record the fit or the exact violations. Nothing is designed in act one. Where a stage output fits no landed schema, the misfit is written up and routed to W05, which owns envelope schemas — it is not fixed here.</p>
+  <p><strong>Act two — the governed workflow.</strong> Declare the stage contract as values read from those fixtures, build a pure resolver that answers <em>which stage is this project at and what must the owner do next</em>, prove the four inter-stage boundaries stop by asserting the <em>absence</em> of any advancing code path, fence the whole thing against skill reach on three legs, and drive all five stages end to end on the stub route with no provider contacted.</p>
+  <figure>
+    <pre class="mermaid">
+flowchart LR
+  subgraph A1["act one — capture"]
+    R["hand-run<br/>stub route"] --> C["captures<br/>scrubbed"]
+    C --> SF["schema fit<br/>against the 13"]
+  end
+  subgraph A2["act two — governed workflow"]
+    SC["stage contract<br/>values only"] --> RS["resolver<br/>answers, never acts"]
+    RS --> ST["stops<br/>asserted as absence"]
+    SC --> FN["no-skill fence"]
+  end
+  SF --> SC
+  SF -.->|"misfit"| W5["W05"]
+  ST --> J["journey · zero quota"]
+  FN --> J
+  style A1 stroke:#38BDF8,stroke-width:2px
+  style W5 stroke:#F59E0B,stroke-dasharray:4 3
+    </pre>
+    <figcaption>The single arrow from act one to act two carries everything: the stage list, the five outputs, and the schema-fit table. There is no other input to act two, and no task in act two may cite the prose.</figcaption>
+  </figure>
+</section>
+
+<section id="consumes">
+  <h2>What This Consumes, and What It Refuses to Build</h2>
+  <p>The spine states it as a constraint: <em>"It adds no new mechanism of its own — if it needs one, that is a signal the mechanism belongs in the workstream that owns it."</em> That sentence is only useful if it names what "consumes" means concretely and what the refusal costs. Both tables below are enforced: the first by imports, the second by <code>INV-6</code> and its protected-path check.</p>
+
+  <h3>The four landed surfaces this workstream stands on</h3>
+  <table>
+    <thead><tr><th>From</th><th>What W11 uses</th><th>Where it already is</th></tr></thead>
+    <tbody>
+      <tr><td>W03</td><td>the host-owned bootstrap that turns an empty directory into a valid project with no provider contacted</td><td><code>core/src/cli/commands/init.ts</code>; <code>core/test/unit/meta/init-no-provider.test.ts</code></td></tr>
+      <tr><td>W04</td><td>project identity, machine-local repository placement, per-repository gate commands, and the registered plan source that makes a plan resolvable without directory adjacency</td><td><code>core/src/registry/{catalog,catalog-schema,placement,resolve,plan-source}.ts</code>; <code>awsf project</code></td></tr>
+      <tr><td>W05</td><td>the compiled <code>design-to-plan</code> recipe, its seven phases, its gates, and the thirteen typed envelope schemas</td><td><code>core/src/workflow/recipes/design-to-plan.ts</code>; <code>ENVELOPE_SCHEMAS</code> in <code>core/src/contracts/registry.ts</code></td></tr>
+      <tr><td>W06</td><td>one composition site for every role prompt any stage reaches, so a stage cannot introduce a fourth prompt path</td><td><code>core/src/workflow/prompt-composition.ts</code>; <code>core/test/unit/meta/prompt-composition-site.test.ts</code></td></tr>
+    </tbody>
+  </table>
+
+  <h3>Five things this workstream will be tempted to build, and where each one goes instead</h3>
+  <table>
+    <thead><tr><th>If the ladder turns out to need…</th><th>It belongs to</th><th>and this plan does</th></tr></thead>
+    <tbody>
+      <tr><td>a new envelope schema for a stage output that fits none of the thirteen</td><td><strong>W05</strong> — it owns typed envelopes and the schema registry</td><td>records the misfit with its exact violations, writes the amendment request, and blocks <em>only the tasks that consume that stage</em> (Q6)</td></tr>
+      <tr><td>a catalog field recording which stage a project is at</td><td><strong>W04</strong> — it owns the catalog, and <code>awsf.project.yaml</code> is a protected path with <code>additionalProperties: false</code></td><td>refuses. Stage position is <em>derived</em> from the journal by the resolver, never declared. A declared field would also be a second source of truth for something the journal already knows</td></tr>
+      <tr><td>a new lifecycle state or legal edge for "awaiting the next stage"</td><td>v1's state machine, behind an owner-authored commit into <code>core/src/state/**</code></td><td>refuses. The stop between stages is the <em>absence</em> of an advancing path, which is a stronger guarantee than a state and needs no protected commit. See <a href="#stops">The Stops</a></td></tr>
+      <tr><td>a process, timer, or daemon that advances a project from one stage to the next</td><td>nothing — the intent names resident background processes as explicitly out of scope for v2</td><td>refuses, and <code>INV-4</code> asserts the absence rather than describing the refusal</td></tr>
+      <tr><td>a document that a stage must have read for its gate to pass</td><td>nothing — the standing constraint refuses it outright</td><td>refuses, and <code>INV-3</code>'s three-leg fence is what makes the refusal checkable. See <a href="#noskill">No Skill In The Path</a></td></tr>
+    </tbody>
+  </table>
+  <div class="card rule">
+    <h5>The rule behind all five rows</h5>
+    <p>Every row above turns a temptation into either a routed request or an asserted absence. <strong>Neither of those is code in this workstream.</strong> That is what "adds no new mechanism" has to mean if it is going to survive contact with a build, and <code>INV-6</code> is the mechanical form of it: this workstream's diff touches no path in <code>policy.protected_paths</code>, and it needs no owner-authored commit to complete. If a task finds it cannot finish without one, that task has discovered a routed mechanism and its first act is to say so rather than to widen.</p>
+  </div>
+</section>
+
+<section id="capture">
+  <h2>The Capture Pass</h2>
+  <p>M1 is not preparation for the workstream. It is the workstream's first and highest-leverage task, and the spine says so twice: once under <em>Scope, and its order</em> and again under <em>Cheapest unused upgrade</em>, where the capture pass is named as the cheapest thing in the workstream that changes what gets built. Those are the same sentence pointed at from two directions.</p>
+
+  <h3>What is captured, and what "captured" means</h3>
+  <p>Three artifact families, all under <code>core/test/fixtures/stages/</code>:</p>
+  <table>
+    <thead><tr><th>Fixture</th><th>Holds</th><th>Produced by</th></tr></thead>
+    <tbody>
+      <tr><td><code>stages.json</code></td><td>the ordered list — exactly five entries, each with <code>id</code>, <code>ordinal</code>, <code>owner</code>, <code>producer</code> (the command or workflow id that produces it), <code>granularity</code> (task or phase, per Q4), and <code>entryPrecondition</code></td><td>T01, from the hand-run itself</td></tr>
+      <tr><td><code>S1.json</code> … <code>S5.json</code></td><td>each stage's output exactly as it left its producer, scrubbed per invariants 1 and 9 and with timestamps normalized to one fixed instant</td><td>T01, landed by T02</td></tr>
+      <tr><td><code>schema-fit.json</code></td><td>per stage: the schema id from <code>ENVELOPE_SCHEMAS</code> it validates against, or an explicit misfit carrying the closest id and its <code>ValidationViolation[]</code></td><td>T03, by driving <code>parse-envelope.ts</code> — never by reading the output and judging</td></tr>
+    </tbody>
+  </table>
+
+  <div class="card warn">
+    <h5>Two things T01 must not do, both of which read as helpful</h5>
+    <p><strong>It must not synthesize a stage it could not run.</strong> A hand-written envelope for an unreachable stage is the remembered prose again, wearing JSON. Per Q5's decision the stage is recorded as a stated absence with the evidence that would close it — the idiom the fused record's §8 already uses for every other gap in this project — and the journey covers four of five with the fifth marked <code>[f]</code> and its blocker named.</p>
+    <p><strong>It must not tidy an awkward output.</strong> The value of a capture is entirely in the parts that surprise. An output that is longer, messier, or differently shaped than expected is the finding; smoothing it produces a fixture that agrees with the memory, which is the closed loop from the Problem section reintroduced at the one point it was supposed to be broken.</p>
+  </div>
+
+  <h3>Why the capture runs on the stub route</h3>
+  <p>The stub adapter is a real provider process with no provider behind it — <code>core/src/adapters/stub.ts</code>, whose header records that every phase, gate, workflow and journey test in v1's plan runs on it, which is why those journeys cost zero quota. The capture is a capture of <em>envelope shape and stage sequence</em>, not of model quality, and shape is exactly what a scripted adapter reproduces faithfully. Running the capture live would spend quota to learn nothing this workstream needs.</p>
+  <div class="card">
+    <h5>The limit, stated where a reader of the fixtures will see it</h5>
+    <p>A stub-route capture establishes what a stage's output <em>is required to look like</em> and what the host does with it. It establishes nothing about what a real model puts in those fields. The distinction matters at exactly one place — <code>S</code>-stages produced by an agent rather than the host — and the fixture header for each such stage says so in one line, so a later reader does not mistake a shape fixture for a content sample.</p>
+  </div>
+</section>
+
+<section id="stops">
+  <h2>The Stops, and Why They Are Absences</h2>
+  <p>The spine's acceptance row reads: <em>"The explicit stopping points stop, provably"</em> — and the word doing the work is <strong>provably</strong>, set against the alternative it names two rows earlier, <em>"documented as stopping"</em>. A documented stop is a sentence. A proven stop is a test that would go red if the stop were removed. The two are only the same thing if you never remove the stop.</p>
+  <p>There are four boundaries between five stages. Each one is held by exactly one of three mechanisms, all of which already exist:</p>
+  <table>
+    <thead><tr><th>Mechanism</th><th>What holds the boundary</th><th>How the test observes it</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Terminal-state seal</strong></td><td>the earlier stage's task reaches a state from which <code>LEGAL_EDGES</code> offers no edge that could begin the next stage</td><td>enumerate <code>LEGAL_EDGES</code> from the terminal state and assert the set contains no edge whose <code>spawnSite</code> is true</td></tr>
+      <tr><td><strong><code>AWAITING_OWNER</code> stop</strong></td><td>the host advances into <code>AWAITING_OWNER</code> and every edge out of it carries actor <code>human</code> or <code>owner</code> — <code>L19</code>, <code>L20</code>, <code>L22</code>, <code>L25</code></td><td>assert the stop was reached, then assert no timer, no scheduled callback and no automatic resume exists — the posture W07 already established</td></tr>
+      <tr><td><strong>Absence of any path at all</strong></td><td>the earlier stage ends as a host command returning, and no code in <code>core/src</code> starts the next stage's producer</td><td>a static scan in the idiom of <code>no-land-route.test.ts</code>, plus the behavioural triple below</td></tr>
+    </tbody>
+  </table>
+  <p>The behavioural observation is the same at every boundary and it is an absence triple: after the earlier stage completes, <strong>no new session row exists in the projection, no new attempt directory exists on disk, and no provider process was launched.</strong> The third is observed with the <code>RouteLog</code> idiom from <code>core/test/journeys/t2-production.test.ts</code>, which records every provider actually contacted so "no substitute ran" is observed rather than assumed.</p>
+  <figure>
+    <pre class="mermaid">
+stateDiagram-v2
+  direction LR
+  [*] --> StageN
+  StageN --> Complete: host advances
+  Complete --> [*]
+  Complete --> StageN1: owner acts
+  StageN1: stage N+1
+  note right of Complete
+    nothing here starts stage N+1
+    INV-4 asserts the absence
+  end note
+    </pre>
+    <figcaption>The only edge out of a completed stage that reaches the next one is drawn by a person. This plan builds no other edge, and M3 proves none exists rather than asserting one was not added.</figcaption>
+  </figure>
+  <div class="card good">
+    <h5>Why an absence is the stronger guarantee here, and what it costs</h5>
+    <p>A new lifecycle state — <code>AWAITING_STAGE</code>, or similar — would be a <em>declaration</em> that the project is between stages. It would also be an owner-authored commit into <code>core/src/state/**</code>, a migration into the protected migrations directory, and a widening of the lifecycle matrix, which W08 has just demonstrated costs a milestone and two gates. An absence costs none of that and asserts something a state cannot: not that the project is waiting, but that <strong>nothing anywhere is capable of stopping it waiting.</strong></p>
+    <p>The cost is real and belongs here: an absence is invisible in the projection. A reader of the dashboard sees a completed task and nothing that says "and now a person acts". Q2's readout is what answers that, and it answers it by <em>reading</em> the journal rather than by writing a new state into it.</p>
+  </div>
+</section>
+
+<section id="noskill">
+  <h2>No Skill In The Path</h2>
+  <p>The spine names this workstream as the one most likely to break the standing constraint, and gives the reason: <em>"a five-stage ladder reads naturally as a document someone follows."</em> The constraint is not a style preference. <code>pi-codex</code> launches with <code>--no-skills</code> and four sibling clean-room flags, so a phase running on that route <strong>cannot reach an installed skill at all</strong> — a stage that depended on one would not be poorly-designed, it would be broken on half the routes the factory uses.</p>
+
+  <h3>What the repository already proves, and precisely what it does not</h3>
+  <p><code>core/test/unit/meta/execution-isolation.test.ts</code> holds two assertions and its header is careful about what each one buys. It pins <code>--no-skills</code> in the pi descriptor test's exact argv order, and it asserts <code>.claude/</code> does not exist at the repository root — reading the filesystem, because absence is the control. The header then states the asymmetry outright: <em>"claude-code has no verified equivalent … passes no flag that is known to disable project skill or command discovery."</em></p>
+  <p><strong>What no test in this repository currently covers is a recipe or a gate reaching for a skill.</strong> Both existing assertions are about the launch surface. Neither says anything about whether a phase's prompt tells a model to invoke one, or whether a gate's verdict depends on a file having been read. That gap is this workstream's to close, and closing it with a test is not building a mechanism — so it stays here rather than being routed away.</p>
+
+  <h3>Three legs, because there are three ways in</h3>
+  <table>
+    <thead><tr><th>Leg</th><th>Asserts</th><th>Technique</th><th>Task</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Prompt</strong></td><td>no prompt any stage names carries a skill-invocation shape: a leading-slash command, <code>SKILL.md</code>, a <code>skills/</code> path segment, or an instruction to read a named document before deciding</td><td>text scan over the prompt files the stage contract names, resolved through W06's single composition site so the scan sees the composed bytes rather than one fragment</td><td>T13</td></tr>
+      <tr><td><strong>Import</strong></td><td>nothing transitively reachable from the stage module resolves a path into <code>docs/driving/**</code> or any <code>.claude</code> path</td><td>the transitive relative-import walk from <code>core/test/unit/meta/quota-fence.test.ts</code> — this repository's first transitive fence, written because a direct-import scan is satisfied by one intermediate file</td><td>T14</td></tr>
+      <tr><td><strong>Gate input</strong></td><td>every gate the stage contract names takes its inputs from an envelope or from host-resolved evidence, and reads no file to reach its verdict</td><td>TypeScript AST over each named gate's closure and its transitive reach, asserting no filesystem read; scoped to this workstream's own gates per Q8</td><td>T15</td></tr>
+    </tbody>
+  </table>
+  <div class="card rule">
+    <h5>The third leg is the one that matters, and it is the one a reviewer will want to cut</h5>
+    <p>Legs one and two catch a stage that <em>asks</em> for a skill. Leg three catches the failure the constraint is actually written against: <strong>a gate that passes because a document said the right thing.</strong> That shape does not mention skills anywhere, imports nothing unusual, and reads as ordinary evidence-gathering. It is also the only one of the three that could plausibly be introduced by a well-meaning task in M2. Cutting leg three leaves the constraint asserted at exactly the two places nobody was going to break it.</p>
+  </div>
+  <p>All three legs are proven to bite in T16 by inducing one violation each in a throwaway and watching the suite go red. A fence nobody has seen fail is decoration — the rule this repository already applied when it proved the plan-aware sync fence with a ghost ticket directory.</p>
+</section>
+
+<section id="files" class="files">
+  <h2>Relevant Files</h2>
+  <p>Every path below was read while authoring this plan. <strong>Q1 was decided on 2026-08-26 and the directory name is <code>stages</code></strong>, so every path here is final and no task renames it.</p>
+
+  <h3>Existing Files</h3>
+  <ul>
+    <li><span class="tag existing">existing</span> <code>specs/awsf-v2-plan.html</code> — the W11 block, the Shared Invariants, the four rules the intent imposes on the plan, and the W12 block whose dependency list names W11 among the workstreams that change a command the reader types</li>
+    <li><span class="tag existing">existing</span> <code>specs/awsf-v2-candidates-fuse-version.md</code> — §10 first, then §2.3's route-to-strong item 4, §5's decision 22, §6 step 9, and §8's ladder-envelope absence row. The two frozen candidate records are <strong>not</strong> read, here or by any task</li>
+    <li><span class="tag existing">existing</span> <code>AGENTS.md</code> — invariants 1, 9 and 10 directly; 2, 11 and 12 for marker, commit and ticket discipline. Protected</li>
+    <li><span class="tag existing">existing</span> <code>awsf.config.yaml</code> — <code>policy.protected_paths</code>: the eight globs <code>INV-6</code> asserts this workstream's diff never touches. Protected</li>
+    <li><span class="tag existing">existing</span> <code>core/src/cli/commands/init.ts</code> — W03's host-only bootstrap; whichever stage turns out to be first, this is its producer</li>
+    <li><span class="tag existing">existing</span> <code>core/src/cli/commands/project.ts</code> — W04's register and resolve surface, and the shape a read-only stage readout would follow</li>
+    <li><span class="tag existing">existing</span> <code>core/src/registry/{catalog-schema,catalog,placement,resolve,plan-source}.ts</code> — the registry the resolver reads through. <code>ProjectCatalogSchema</code> is <code>additionalProperties: false</code>, which is why a stage field cannot be smuggled into the catalog even if someone wanted to</li>
+    <li><span class="tag existing">existing</span> <code>core/src/workflow/recipes/design-to-plan.ts</code> — W05's seven phases across three provider calls at tier 1. The clearest candidate for a whole stage that lives <em>inside</em> one task, which is why Q4 exists</li>
+    <li><span class="tag existing">existing</span> <code>core/src/workflow/recipes/simple-sdlc.ts</code> — v1's plan/build/test/document chain at tier 2, the other granularity Q4 has to reconcile</li>
+    <li><span class="tag existing">existing</span> <code>core/src/contracts/registry.ts</code> — <code>ENVELOPE_SCHEMAS</code> and its thirteen ids. <code>INV-2</code> forbids extending it from this workstream</li>
+    <li><span class="tag existing">existing</span> <code>core/src/contracts/parse-envelope.ts</code> — the parser T03 drives, so schema fit is measured rather than judged</li>
+    <li><span class="tag existing">existing</span> <code>core/src/contracts/stored-envelope.ts</code> — <code>ValidationViolation</code> and its five-kind vocabulary; the exact terms a misfit is recorded in</li>
+    <li><span class="tag existing">existing</span> <code>core/src/state/task-machine.ts</code> — <code>TASK_STATES</code>, <code>LEGAL_EDGES</code>, the <code>AWAITING_OWNER</code> edges <code>L12</code>/<code>L15</code>/<code>L19</code>–<code>L22</code>/<code>L25</code>/<code>L26</code>, and <code>spawnSite</code>. Protected: read, enumerated, never written</li>
+    <li><span class="tag existing">existing</span> <code>core/src/observability/queries.ts</code> — <code>listSessions</code>, <code>phasesForSession</code>, <code>envelopesForPhase</code>, <code>transitionsForSession</code>. This is the resolver's entire input surface; it declares no table of its own</li>
+    <li><span class="tag existing">existing</span> <code>core/src/workflow/prompt-composition.ts</code> — W06's single composition site. The prompt leg of the fence scans the composed bytes here rather than one role fragment</li>
+    <li><span class="tag existing">existing</span> <code>core/src/adapters/stub.ts</code> and <code>core/test/fixtures/providers/stub/</code> — the zero-quota route. Its header records that every phase, gate, workflow and journey test in v1 runs on it</li>
+    <li><span class="tag existing">existing</span> <code>core/test/unit/cli/design-to-plan-route.test.ts</code> — the existing offline <code>world()</code>: a temporary directory, a seeded <code>awsf.project.yaml</code>, a written placement, <code>newCommand</code> then <code>startCommand</code>. M5's journey extends this rather than inventing a second harness</li>
+    <li><span class="tag existing">existing</span> <code>core/test/journeys/t2-production.test.ts</code> — the <code>RouteLog</code> idiom that records every provider actually contacted, so "no provider ran" is observed</li>
+    <li><span class="tag existing">existing</span> <code>core/test/journeys/publish.test.ts</code> — the newest journey and the bare-remote fixture the final stage needs if publication turns out to be one</li>
+    <li><span class="tag existing">existing</span> <code>core/test/unit/meta/quota-fence.test.ts</code> — this repository's first transitive fence, and the technique T14 follows</li>
+    <li><span class="tag existing">existing</span> <code>core/test/unit/meta/no-land-route.test.ts</code> — the absence-scan idiom T11 follows</li>
+    <li><span class="tag existing">existing</span> <code>core/test/unit/meta/execution-isolation.test.ts</code> — what the no-skill claim already covers, and its header's explicit statement of what it does not</li>
+    <li><span class="tag existing">existing</span> <code>core/test/unit/meta/no-credentials-in-fixtures.test.ts</code> — <code>CREDENTIAL_PATTERNS</code> and the <code>ABSOLUTE_PATH</code> predicate T05's scrub test reuses rather than re-declares</li>
+    <li><span class="tag existing">existing</span> <code>core/test/unit/meta/junk-drawer.test.ts</code> — invariant 10's fence. It bans <code>*receipt*</code>/<code>*manifest*</code> basenames and log/database extensions; a <code>.json</code> under <code>core/test/fixtures/</code> is a permitted home, and <code>core/test/fixtures/quota-axi/</code> is W07's precedent for exactly this</li>
+    <li><span class="tag existing">existing</span> <code>core/test/unit/meta/ticket-plan-sync.test.ts</code> — the plan-aware fence, resolved through the registered plan source. T20 runs it last</li>
+    <li><span class="tag existing">existing</span> <code>core/test/unit/meta/loc-budget.test.ts</code> — advisory only, but <code>core/src/workflow</code> carries an 800-logical-line ceiling and <code>PER_FILE_MAX</code> is 450. The stage module sits outside <code>core/src/workflow</code> deliberately; see the Notes</li>
+  </ul>
+
+  <h3>New Files</h3>
+  <ul>
+    <li><span class="tag new">new</span> <code>core/test/fixtures/stages/stages.json</code> — the ordered stage list. <strong>The first file this workstream creates and the only source of the stage names anywhere</strong></li>
+    <li><span class="tag new">new</span> <code>core/test/fixtures/stages/S1.json</code> … <code>S5.json</code> — each stage's captured output, scrubbed</li>
+    <li><span class="tag new">new</span> <code>core/test/fixtures/stages/schema-fit.json</code> — per stage, the fitting schema id or the misfit with its violations</li>
+    <li><span class="tag new">new</span> <code>core/test/fixtures/stages/boundaries.json</code> — the four inter-stage boundaries, each naming which of the three mechanisms holds it</li>
+    <li><span class="tag new">new</span> <code>core/src/stages/contract.ts</code> — the five stage records as values only. No handles, no paths to read, no functions, in the idiom of W08's <code>authorize.ts</code> inputs</li>
+    <li><span class="tag new">new</span> <code>core/src/stages/resolve.ts</code> — the pure resolver: resolved project plus journal rows in, current stage and next owner act out. Answers, never acts</li>
+    <li><span class="tag new">new</span> <code>core/src/cli/commands/stage.ts</code> — the read-only readout, built per Q2 as decided. It resolves, reads and prints; it exposes no flag that acts and adds no API route</li>
+    <li><span class="tag new">new</span> <code>core/test/unit/stages/fixtures.test.ts</code> — the fixtures parse, are scrubbed, and are complete</li>
+    <li><span class="tag new">new</span> <code>core/test/unit/stages/contract.test.ts</code> — the join: <code>contract.ts</code>'s five records equal <code>stages.json</code>, so editing one alone goes red</li>
+    <li><span class="tag new">new</span> <code>core/test/unit/stages/resolve.test.ts</code> — the resolver over canned journal rows at each of the five positions plus both edges</li>
+    <li><span class="tag new">new</span> <code>core/test/unit/stages/stops.test.ts</code> — the four boundaries, each observed as the absence triple on the stub route</li>
+    <li><span class="tag new">new</span> <code>core/test/unit/meta/no-skill-in-stages.test.ts</code> — the three-leg fence</li>
+    <li><span class="tag new">new</span> <code>core/test/unit/meta/no-stage-advance.test.ts</code> — the static half of <code>INV-4</code>: no code path in <code>core/src</code> starts stage N+1 because stage N finished</li>
+    <li><span class="tag new">new</span> <code>core/test/journeys/five-stage.test.ts</code> — all five stages end to end on the stub route, zero quota, no network</li>
+    <li><span class="tag new">new</span> <code>specs/awsf-v2-w11-five-stage-ladder-build-prompts.md</code> — twenty prompts, one per task</li>
+    <li><span class="tag new">new</span> <code>specs/tickets/awsf-v2-w11-five-stage-ladder/</code> — <code>T01.md</code>–<code>T20.md</code> plus <code>README.md</code></li>
+  </ul>
+</section>
+
+<section id="spine">
+  <h2>Identifier Spine</h2>
+  <p>This workstream's claims, declared here so W05's coverage gate can join them to the tasks that serve them. Ids are unique per plan, per the spine's decided Q5; a cross-plan reference would be written <code>&lt;plan-stem&gt;#INV-n</code>.</p>
+  <dl>
+    <dt><code class="inv">INV-1</code></dt>
+    <dd>The stage list is evidence, not memory. Every stage name, ordinal, owner, producer and entry precondition asserted anywhere in <code>core/src</code> is equal to <code>core/test/fixtures/stages/stages.json</code>, and that fixture was produced by a run rather than transcribed from prose. Neither frozen candidate record is read by this plan or by any of its tasks.</dd>
+    <dt><code class="inv">INV-2</code></dt>
+    <dd><code>ENVELOPE_SCHEMAS</code> gains no entry from this workstream. Every stage output either validates against a schema id W05 already registered, or is recorded as an explicit misfit carrying at least one <code>ValidationViolation</code> and routed to W05 — never force-fitted, and never registered here.</dd>
+    <dt><code class="inv">INV-3</code></dt>
+    <dd>No stage reaches an installed skill and no gate this workstream declares reaches its verdict by reading a file. Asserted on three legs — composed prompt bytes, transitive import reach, and gate-closure inputs — each proven to go red on an induced violation.</dd>
+    <dt><code class="inv">INV-4</code></dt>
+    <dd>Nothing advances a project from one stage to the next. No code path in <code>core/src</code> starts stage N+1 because stage N finished, no timer resumes one, and after any stage completes there is no new session row, no new attempt directory and no launched provider until a person acts.</dd>
+    <dt><code class="inv">INV-5</code></dt>
+    <dd>The resolver answers and never acts. It is a pure function of resolved-project values and journal rows: no spawn, no write, no lifecycle transition, no filesystem reach, and no import from <code>core/src/execution/**</code>.</dd>
+    <dt><code class="inv">INV-6</code></dt>
+    <dd>This workstream adds no mechanism. Its diff touches no path matched by <code>policy.protected_paths</code>, it introduces no lifecycle state, no legal edge, no migration, no catalog field and no envelope schema, and it completes with no owner-authored commit. A task that cannot finish without one has found a routed mechanism and says so instead of widening.</dd>
+    <dt><code class="ac">AC-1</code></dt>
+    <dd>Five captured stage outputs and one stage list are in the tree before any file under <code>core/src/stages/</code> exists. Observed in the commit record — M1's commits precede M2's — and by the fixtures test passing with the module directory absent.</dd>
+    <dt><code class="ac">AC-2</code></dt>
+    <dd>Every capture is scrubbed: no session id, attempt id, run id, absolute machine path or credential-shaped value survives, and timestamps are normalized to one fixed instant. Observed by reusing <code>CREDENTIAL_PATTERNS</code> and the existing absolute-path predicate rather than a second copy of either.</dd>
+    <dt><code class="ac">AC-3</code></dt>
+    <dd>The schema-fit table names, for each of the five stages, either a schema id present in <code>ENVELOPE_SCHEMAS</code> or an explicit misfit with at least one violation. No stage is recorded as fitting a schema it does not validate against, and the table is produced by driving the parser rather than by reading and judging.</dd>
+    <dt><code class="ac">AC-4</code></dt>
+    <dd>Each of the four inter-stage boundaries stops, observed as the absence triple: after the earlier stage completes, no new session row, no new attempt directory and no launched provider. Each boundary also names which of the three mechanisms holds it, and that name is checked rather than asserted.</dd>
+    <dt><code class="ac">AC-5</code></dt>
+    <dd>Each of the fence's three legs has been seen to go red on an induced violation — a skill-shaped prompt, an import reaching the driving tree, and a gate closure that reads a file — and the suite returned to green once each was removed.</dd>
+    <dt><code class="ac">AC-6</code></dt>
+    <dd>A throwaway project travels all five stages end to end on the stub route with no provider contacted and no network touched, and at each boundary the stored envelope's schema id and required fields match that stage's captured fixture. Where Q5's absence applies, four of five travel and the fifth is <code>[f]</code> with its blocker named.</dd>
+    <dt><code class="ac">AC-7</code></dt>
+    <dd>The workstream's diff touches no protected path, observed by enumerating <code>policy.protected_paths</code> from the loaded config against the changed-file list rather than against a copied glob list.</dd>
+  </dl>
+</section>
+
+<section id="phases">
+  <h2>Implementation Phases</h2>
+  <p><strong>IMPORTANT:</strong> Execute every phase and task step by step, in order, top to bottom.</p>
+  <p>Status markers: <code>[]</code> idle · <code>[wip]</code> in progress · <code>[x]</code> complete · <code>[f]</code> failed. All start as <code>[]</code>. <strong>Flip this plan's own markers as you work</strong> — the milestone header and its checklist items — and flip the matching ticket's <code>state:</code> in the same commit. <strong>Never touch the W11 marker in <code>specs/awsf-v2-plan.html</code>: T20 is the only task that does.</strong></p>
+  <p><strong>Every task is offline and spends no agent quota.</strong> No test in this workstream may touch the network, and the only remotes any of them know are bare repositories created in a temporary directory.</p>
+  <p><strong>M1 is a hard barrier.</strong> No file under <code>core/src/stages/</code> may exist until <code>core/test/fixtures/stages/</code> is populated and committed. <code>AC-1</code> is observed in the commit record, so writing the module first fails the acceptance even if the fixtures are added afterwards.</p>
+
+  <figure>
+    <pre class="mermaid">
+flowchart LR
+  M1["M1 · capture<br/>T01–T05"] --> M2["M2 · contract<br/>+ resolver<br/>T06–T09"]
+  M2 --> M3["M3 · the stops<br/>T10–T12"]
+  M2 --> M4["M4 · no-skill fence<br/>T13–T16"]
+  M3 --> M5["M5 · journey<br/>T17–T19"]
+  M4 --> M5
+  M5 --> M6["M6 · close<br/>T20"]
+  style M1 stroke:#38BDF8,stroke-width:2px
+    </pre>
+    <figcaption>M3 and M4 are independent of each other and both consume M2, so they may be run in either order or in parallel. Everything else is a chain, and the M1→M2 edge is the one the acceptance criterion watches.</figcaption>
+  </figure>
+
+  <!-- ================= M1 ================= -->
+  <div class="phase">
+    <h3><code class="status">[]</code> Milestone M1: The capture pass</h3>
+    <p>The first task of the workstream, not a preliminary to it. Five stage outputs and one stage list go into the tree as fixtures, and the schema-fit table records what each one validates against. <strong>Nothing is designed in this milestone.</strong> The only judgement it makes is which of the thirteen landed schemas a capture validates against, and even that is made by the parser rather than by a reader.</p>
+
+    <figure>
+      <pre class="mermaid">
+flowchart LR
+  R["hand-run<br/>temp dir · stub route"] --> L["stages.json<br/>the list"]
+  R --> O["S1..S5.json<br/>raw outputs"]
+  O --> SC["scrub<br/>INV 1 · 9"]
+  SC --> P["parse-envelope<br/>x 13 schema ids"]
+  P --> F["schema-fit.json"]
+  F -.->|"misfit"| W5["route to W05"]
+  style L stroke:#38BDF8,stroke-width:2px
+      </pre>
+      <figcaption>The list is the artifact most easily forgotten and the one everything downstream is joined to. It is produced by the run, not written before it.</figcaption>
+    </figure>
+
+    <h4>1. Run the ladder by hand, and record the stage list</h4>
+    <p class="serves"><code class="serves">INV-1</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Work in a temporary directory outside this repository. Drive a throwaway project through the ladder against the four landed workstreams <strong>as they actually stand</strong>, on the stub route, spending no quota</li>
+      <li><code class="status">[]</code> Record the ordered stage list as it is observed: exactly five entries, each carrying <code>id</code>, <code>ordinal</code>, <code>owner</code> (<code>host</code> or a role name), <code>producer</code> (the command or workflow id that produced it), <code>granularity</code> (<code>task</code> or <code>phase</code>, per Q4), and <code>entryPrecondition</code> (what had to be true before this stage could start)</li>
+      <li><code class="status">[]</code> Record each stage's output <strong>exactly as it left its producer</strong>. Do not reformat, reorder, truncate or tidy. An output that is longer or messier than expected is the finding, and smoothing it is the one thing that makes this whole milestone worthless</li>
+      <li><code class="status">[]</code> <strong>Do not read either frozen candidate record</strong>, and do not reconstruct a stage from the spine's prose. If the run disagrees with what anybody remembers, the run wins and the disagreement is written down in the ticket README</li>
+      <li><code class="status">[]</code> <strong>Do not synthesize a stage that could not be run.</strong> Per Q5, record it as a stated absence naming what would close it — the idiom the fused record's §8 uses for every other gap in this project</li>
+      <li><code class="status">[]</code> Write down, per stage, whether its output came from the host or from an agent on the stub route, because the fixture header for each agent-produced stage must say that it is a shape sample and not a content sample</li>
+    </ul>
+
+    <h4>2. Scrub the captures and land them as fixtures</h4>
+    <p class="serves"><code class="serves">INV-1</code> <code class="serves">AC-2</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Create <code>core/test/fixtures/stages/</code> and write <code>stages.json</code> plus <code>S1.json</code>–<code>S5.json</code>. <code>core/test/fixtures/quota-axi/</code> is the precedent for a scrubbed capture living in this tree</li>
+      <li><code class="status">[]</code> Scrub per invariant 1: no session id, no attempt id, no run id, no task id belonging to a real run. Normalize every timestamp to one fixed instant, so no capture encodes when it was taken</li>
+      <li><code class="status">[]</code> Scrub per invariant 9: no credential-shaped value anywhere, checked against <code>CREDENTIAL_PATTERNS</code> as imported from <code>core/src/policy/redaction.ts</code> rather than against a re-declared list</li>
+      <li><code class="status">[]</code> Replace every absolute machine path with a stable placeholder. The temporary directory the capture ran in must not survive into the fixture</li>
+      <li><code class="status">[]</code> Give each fixture a header field stating what it is, when its stage ran on the host versus on the stub, and — for agent-produced stages — the one-line limit that it samples shape and not content</li>
+      <li><code class="status">[]</code> Confirm no fixture basename matches <code>*receipt*</code> or <code>*manifest*</code> and no extension is <code>.log</code>/<code>.db</code>/<code>.sqlite</code>, so invariant 10's junk-drawer fence stays green</li>
+    </ul>
+
+    <h4>3. Schema-fit every capture against the thirteen landed schemas</h4>
+    <p class="serves"><code class="serves">INV-2</code> <code class="serves">AC-3</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> For each of <code>S1</code>–<code>S5</code>, drive <code>core/src/contracts/parse-envelope.ts</code> against <strong>every</strong> id in <code>ENVELOPE_SCHEMAS</code> and record the result. The fit is measured, never judged by reading the output and deciding it looks like a build envelope</li>
+      <li><code class="status">[]</code> Write <code>core/test/fixtures/stages/schema-fit.json</code>: per stage, either <code>{ fits: "&lt;schema-id&gt;" }</code>, or <code>{ misfit: { closest: "&lt;schema-id&gt;", violations: [...] } }</code> carrying the real <code>ValidationViolation[]</code> from the parser, using the five-kind vocabulary in <code>stored-envelope.ts</code></li>
+      <li><code class="status">[]</code> Where two schemas both validate, record both and name which one the stage's producer actually declares — a stage whose output validates against a schema its producer never claims is itself a finding</li>
+      <li><code class="status">[]</code> <strong>Register nothing.</strong> <code>core/src/contracts/registry.ts</code> is not edited by this workstream and <code>ENVELOPE_SCHEMAS</code> keeps exactly thirteen entries</li>
+    </ul>
+
+    <h4>4. Route every misfit to W05, and bound the block to what consumes it</h4>
+    <p class="serves"><code class="serves">INV-2</code> <code class="serves">INV-6</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> For each misfitting stage, write the amendment request into this plan's Notes and the ticket README: which stage, what its output carries that no landed schema holds, which id came closest and by which violations, and what W05 would have to add</li>
+      <li><code class="status">[]</code> Per Q6, block <strong>only</strong> the tasks that consume that stage. M1's remaining work, M4's fence and M2's contract for the fitting stages all continue. Mark the blocked tasks <code>[f]</code> with the block named, rather than stalling the workstream</li>
+      <li><code class="status">[]</code> If <em>no</em> stage misfits, say so explicitly in the ticket README. "Every capture fit a landed schema" is the strongest possible confirmation that this workstream adds no mechanism, and it should be recorded as a result rather than left as a silence</li>
+      <li><code class="status">[]</code> Do not open <code>core/src/contracts/</code> for editing in this task under any circumstance. The route is a written request to another workstream, not a patch</li>
+    </ul>
+
+    <h4>5. Testing Strategy</h4>
+    <p class="serves"><code class="serves">AC-1</code> <code class="serves">AC-2</code> <code class="serves">AC-3</code></p>
+    <p>This milestone's test is a fixture test, and it runs with <code>core/src/stages/</code> absent — which is the mechanical form of the ordering claim. It reuses the two existing predicates rather than copying them, so the scrub assertion cannot drift away from the fence that already enforces the same rule elsewhere.</p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> <code>npm run test:unit</code> — <code>core/test/unit/stages/fixtures.test.ts</code>: every fixture parses as JSON; <code>stages.json</code> holds exactly five entries with contiguous ordinals 1–5 and all six required fields on each</li>
+      <li><code class="status">[]</code> The scrub assertion imports <code>CREDENTIAL_PATTERNS</code> from <code>core/src/policy/redaction.ts</code> and reuses the absolute-path predicate the fixture fence already applies. No new copy of either</li>
+      <li><code class="status">[]</code> An id-shape assertion: no value in any capture matches the shapes a session, attempt or run id takes in this project's own records</li>
+      <li><code class="status">[]</code> <code>schema-fit.json</code> covers all five stages, and every <code>fits</code> value is a key of <code>ENVELOPE_SCHEMAS</code> <strong>as imported</strong>, so a schema id removed later turns this red rather than silently passing</li>
+      <li><code class="status">[]</code> Every recorded <code>fits</code> claim is re-verified in the test by running the parser again — the table is checked, not trusted</li>
+      <li><code class="status">[]</code> <strong>The ordering check</strong>: assert <code>core/src/stages/</code> does not exist. It is deleted from this assertion by T06 and not before, and the commit history shows M1's commits preceding M2's</li>
+      <li><code class="status">[]</code> <code>npm run typecheck</code> and <code>npm run lint</code> green</li>
+    </ul>
+    <div class="loop">
+      🔁 <strong>Do not exit this milestone until every box above is checked.</strong> If a command fails, fix the cause and re-run — never lower what the row asserts. In particular: a fixture that will not scrub is not a fixture to relax the scrub for.
+    </div>
+  </div>
+
+  <!-- ================= M2 ================= -->
+  <div class="phase">
+    <h3><code class="status">[]</code> Milestone M2: The stage contract and the resolver</h3>
+    <p>Now the stages have names, and every name came from a fixture. This milestone declares them as values, builds a pure function that answers <em>where is this project and what does the owner do next</em>, and puts that answer on a read-only command. Nothing here acts on a project.</p>
+
+    <figure>
+      <pre class="mermaid">
+flowchart LR
+  F["stages.json"] ==>|"equality test"| C["contract.ts<br/>five records, values only"]
+  C --> R["resolve.ts<br/>pure"]
+  J["journal rows<br/>via queries.ts"] --> R
+  P["resolved project<br/>via registry"] --> R
+  R --> A["current stage<br/>next owner act"]
+  R -.->|"no such edge"| X["advance"]
+  style X stroke:#F87171,stroke-dasharray:4 3
+      </pre>
+      <figcaption>Two inputs, one answer, and one edge that deliberately does not exist. The double arrow is the equality test that stops the contract and the fixture drifting apart.</figcaption>
+    </figure>
+
+    <figure class="mockup">
+      <div class="mockup-frame">
+        <div class="mbar">awsf stage — decided under Q2, 2026-08-26</div>
+        <div class="mbody">
+          <div class="mk-mono mk-dim">$ awsf stage</div>
+          <div class="mk-card">
+            <div><span class="mk-id">smart-health</span> <span class="mk-flow">3 repositories · catalog v1</span></div>
+            <div class="mk-ribbon">
+              <span class="done">S1 ✓</span><span class="done">S2 ✓</span><span class="cur">S3 ▸</span><span>S4</span><span>S5</span>
+            </div>
+            <div class="mk-lane"><span class="nm">at</span><span class="mk-mono">stage 3 of 5 &nbsp;<span class="mk-dim">— name from stages.json</span></span></div>
+            <div class="mk-lane"><span class="nm">evidence</span><span class="mk-mono mk-okc">awsf.&lt;schema-id&gt;/v1 &nbsp;validated</span></div>
+            <div class="mk-lane"><span class="nm">next</span><span class="mk-mono">awsf &lt;command the owner types&gt;</span></div>
+            <div class="mk-lane"><span class="nm">status</span><span class="mk-mono mk-warnc">stopped — nothing advances this</span></div>
+          </div>
+          <div class="mk-mono mk-dim">no session id, no attempt id, no path — see the note below</div>
+        </div>
+      </div>
+      <figcaption>What T08 renders. <strong>Every identifier is elided in this mockup on purpose:</strong> invariant 1 keeps live task and session state out of every committed file, and a plan is a committed file. The readout prints real ids at runtime; this preview cannot.</figcaption>
+    </figure>
+
+    <h4>6. The stage record, values only, joined to the fixture</h4>
+    <p class="serves"><code class="serves">INV-1</code> <code class="serves">INV-6</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Create <code>core/src/stages/contract.ts</code> declaring the five stage records with the six fields <code>stages.json</code> carries — <strong>values only</strong>: no handles, no paths to read, no functions, no promises. The idiom is W08's <code>core/src/publish/authorize.ts</code> input records</li>
+      <li><code class="status">[]</code> Declare <code>STAGE_ORDER</code> as a <code>readonly</code> tuple of the five ids and derive the stage id type from it, so the order and the vocabulary cannot disagree — the same construction <code>PUBLISH_REFUSAL_ORDER</code> uses</li>
+      <li><code class="status">[]</code> <strong>Transcribe, do not generate.</strong> A generator would put a build step in the path and make the fixture's authority indirect. The five records are written by hand and T09's equality test is the join that keeps them honest</li>
+      <li><code class="status">[]</code> Each record's <code>schemaId</code> is a key of <code>ENVELOPE_SCHEMAS</code> <em>as imported</em>, never a string literal typed twice. A stage recorded as a misfit in M1 carries no <code>schemaId</code> and is marked blocked</li>
+      <li><code class="status">[]</code> The file's imports are type-only plus <code>ENVELOPE_SCHEMAS</code>. No <code>node:</code> import, no clock, no filesystem, nothing from <code>core/src/execution/**</code></li>
+      <li><code class="status">[]</code> Write the header comment in the idiom of <code>core/src/state/guards.ts</code>: it says what a stage is, and it never goes and looks</li>
+      <li><code class="status">[]</code> Delete the "<code>core/src/stages/</code> does not exist" assertion from T05's test in this same commit, so the barrier is lifted deliberately and visibly rather than by accident</li>
+    </ul>
+
+    <h4>7. The resolver — where is this project, and what does the owner do next</h4>
+    <p class="serves"><code class="serves">INV-5</code> <code class="serves">INV-6</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Create <code>core/src/stages/resolve.ts</code>: a pure function from a <code>ResolvedProject</code> plus journal rows to <code>{ current, next, ownerAct, evidence }</code>. Given the same inputs it returns the same answer, and it is called nowhere in its own file</li>
+      <li><code class="status">[]</code> Journal rows arrive as <strong>arguments</strong>, read by the caller through <code>core/src/observability/queries.ts</code>. The resolver opens no database and holds no handle, so it stays testable on canned rows and cannot be the thing that reaches into the state root</li>
+      <li><code class="status">[]</code> <code>evidence</code> names the stored envelope that establishes the current stage — its schema id and the phase it belongs to — so the answer cites what it rests on rather than asserting a number</li>
+      <li><code class="status">[]</code> <code>ownerAct</code> is the command the owner types next, resolved from the stage contract. It is a <em>string the owner reads</em>, and nothing in <code>core/src</code> executes it</li>
+      <li><code class="status">[]</code> The two edges are answered: no session at all resolves to "before S1"; every stage complete resolves to "past S5". Neither is an error</li>
+      <li><code class="status">[]</code> This module imports nothing from <code>core/src/execution/**</code>, spawns nothing, writes nothing, and performs no lifecycle transition. <code>INV-5</code>'s absence is asserted by T14's import leg</li>
+    </ul>
+
+    <h4>8. The read-only readout</h4>
+    <p class="serves"><code class="serves">INV-5</code></p>
+    <div class="card good">
+      <h5>Decided 2026-08-26 — this task is committed, and it is the one thing the review changed</h5>
+      <p>The spine's W12 block lists W11 among the workstreams that "add or change a command the reader will type", alongside W03's bootstrap, W07's readout and W08's publish. That evidence reversed this task's own recommendation during authoring, and the owner took it. <strong><code>awsf stage</code> is built.</strong> It also settles a debt the rest of the plan incurs: <code>INV-4</code>'s absence is invisible in the projection, so without this readout a stopped project and a finished one look identical. The readout is what makes the stop legible without making it a state.</p>
+    </div>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Create <code>core/src/cli/commands/stage.ts</code> and wire it in <code>core/src/cli/main.ts</code> beside <code>project</code> and <code>quota</code>, which are the two closest existing read-only commands</li>
+      <li><code class="status">[]</code> It resolves the project through the registry, reads the journal through <code>queries.ts</code>, calls the resolver, and prints. <strong>It takes no flag that acts</strong> — no <code>--advance</code>, no <code>--next</code>, no <code>--run</code></li>
+      <li><code class="status">[]</code> The rendered line for a stopped project says what stopped it and what the owner types, because the absence in <code>INV-4</code> is invisible in the projection and this readout is the only thing that makes it legible</li>
+      <li><code class="status">[]</code> No new API route. <code>core/test/unit/meta/no-land-route.test.ts</code> already bars lifecycle-write routes from the dashboard surface, and a stage route would be new surface this workstream has no reason to add</li>
+    </ul>
+
+    <h4>9. Testing Strategy</h4>
+    <p class="serves"><code class="serves">INV-1</code> <code class="serves">INV-5</code></p>
+    <p>Two tests, and the first is the one that matters. The contract test is a pure equality between a hand-written module and a captured fixture — it exists so that a later session which "improves" a stage name in the module, and not in the fixture, gets a red suite instead of a plausible-looking drift.</p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> <code>core/test/unit/stages/contract.test.ts</code>: <code>contract.ts</code>'s five records are deep-equal to <code>stages.json</code>'s five entries, field by field, in order. Editing either alone goes red</li>
+      <li><code class="status">[]</code> <code>STAGE_ORDER</code> has five members matching the fixture's ordinals, and every <code>schemaId</code> present is a key of <code>ENVELOPE_SCHEMAS</code></li>
+      <li><code class="status">[]</code> <code>core/test/unit/stages/resolve.test.ts</code>: the resolver at each of the five positions plus both edges, over canned journal rows built in the test rather than read from a database</li>
+      <li><code class="status">[]</code> A purity assertion: calling the resolver twice with the same inputs returns deep-equal answers, and the inputs are unmodified afterwards</li>
+      <li><code class="status">[]</code> <strong>Prove the join bites</strong>: rename one stage in <code>contract.ts</code> only, watch <code>contract.test.ts</code> go red, restore it, and watch it go green. Record the observation in the ticket</li>
+      <li><code class="status">[]</code> A readout test over a canned projection asserting the printed output contains no absolute path, and asserting the command exposes no acting flag</li>
+      <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green</li>
+    </ul>
+    <div class="loop">
+      🔁 <strong>Do not exit this milestone until every box above is checked.</strong> A failing equality between contract and fixture is never fixed by editing the fixture.
+    </div>
+  </div>
+
+  <!-- ================= M3 ================= -->
+  <div class="phase">
+    <h3><code class="status">[]</code> Milestone M3: The stops, proven to stop</h3>
+    <p>Four boundaries, three mechanisms, one observation. This milestone turns the spine's <em>"the explicit stopping points stop, provably"</em> into a static scan plus four behavioural tests, and it deliberately builds nothing that could be removed to make a project advance — because there is nothing there to remove.</p>
+
+    <figure>
+      <pre class="mermaid">
+flowchart TD
+  B["boundaries.json<br/>4 rows"] --> S["static scan<br/>no advance path in core/src"]
+  B --> T["4 behavioural tests<br/>stub route"]
+  T --> A1["no new session row"]
+  T --> A2["no new attempt dir"]
+  T --> A3["no provider launched"]
+  style S stroke:#38BDF8,stroke-width:2px
+      </pre>
+      <figcaption>The absence triple is the same at every boundary, which is what makes four tests one idea rather than four. The static scan is the half that keeps holding when nobody is running the journey.</figcaption>
+    </figure>
+
+    <h4>10. Enumerate the four boundaries and name what holds each</h4>
+    <p class="serves"><code class="serves">INV-4</code> <code class="serves">AC-4</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Write <code>core/test/fixtures/stages/boundaries.json</code>: four rows, each naming the earlier stage, the later stage, which of the three mechanisms holds it — <code>terminal-seal</code>, <code>awaiting-owner</code>, or <code>no-path</code> — and the owner act that crosses it</li>
+      <li><code class="status">[]</code> Derive the mechanism from what the run actually showed in M1, not from what would be tidiest. Three different mechanisms across four boundaries is a normal result and must not be smoothed into one</li>
+      <li><code class="status">[]</code> For a <code>terminal-seal</code> row, name the terminal state and confirm against <code>LEGAL_EDGES</code> as imported that no edge leaves it with <code>spawnSite: true</code></li>
+      <li><code class="status">[]</code> For an <code>awaiting-owner</code> row, name the stopping edge and confirm every edge out of <code>AWAITING_OWNER</code> carries actor <code>human</code> or <code>owner</code> — the posture W07 established, restated here against the edge table rather than trusted</li>
+      <li><code class="status">[]</code> For a <code>no-path</code> row, name the host command that returns and state what would have had to exist for the next stage to begin</li>
+    </ul>
+
+    <h4>11. The static scan: nothing in <code>core/src</code> advances a stage</h4>
+    <p class="serves"><code class="serves">INV-4</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Create <code>core/test/unit/meta/no-stage-advance.test.ts</code> in the idiom of <code>core/test/unit/meta/no-land-route.test.ts</code>: a source scan whose finding is an empty offender list, reported with the offending file and line when it is not empty</li>
+      <li><code class="status">[]</code> Assert nothing reachable from <code>core/src/stages/**</code> imports the transport broker, the process controller, or any spawn site, following the transitive walk rather than a direct-import check</li>
+      <li><code class="status">[]</code> Assert no timer primitive — <code>setTimeout</code>, <code>setInterval</code>, <code>setImmediate</code>, or a scheduled callback — appears anywhere under <code>core/src/stages/**</code>. W07 established that a stop with a timer behind it is not a stop</li>
+      <li><code class="status">[]</code> Assert <code>awsf stage</code> exposes no flag whose effect is to start the next stage. The check is over the parsed flag list, not over prose in a help string</li>
+      <li><code class="status">[]</code> Write the header comment stating what this fence buys and what it does not: it proves no advancing path exists in <code>core/src</code>, and it says nothing about what a person types</li>
+    </ul>
+
+    <h4>12. Testing Strategy</h4>
+    <p class="serves"><code class="serves">INV-4</code> <code class="serves">AC-4</code></p>
+    <p>The behavioural half. Each boundary is driven on the stub route to the point where the earlier stage completes, and then the absence triple is observed. The third element uses the <code>RouteLog</code> idiom from <code>core/test/journeys/t2-production.test.ts</code>, which records every provider actually contacted — so "nothing ran" is an observation about a log rather than an inference from a passing assertion.</p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> <code>core/test/unit/stages/stops.test.ts</code>: four tests, one per boundary, each driving the earlier stage to completion in a temporary directory on the stub route</li>
+      <li><code class="status">[]</code> Each test asserts the triple after completion: <code>listSessions</code> returns no session beyond the ones the earlier stage created; no new attempt directory exists on disk; and the route log recorded no provider launch</li>
+      <li><code class="status">[]</code> Each test also asserts the mechanism <code>boundaries.json</code> names for that row is the mechanism actually in play — a row claiming <code>terminal-seal</code> whose stage ends in <code>AWAITING_OWNER</code> is a wrong row, and it goes red</li>
+      <li><code class="status">[]</code> A wait-and-see assertion at one boundary: after the earlier stage completes, advance nothing and re-observe the triple a second time, so a deferred advance has somewhere to show up</li>
+      <li><code class="status">[]</code> <strong>Prove the static scan bites</strong>: add a <code>setTimeout</code> under <code>core/src/stages/</code> in a throwaway edit, watch <code>no-stage-advance.test.ts</code> go red, remove it, watch it go green. Record the observation</li>
+      <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green. No network, no quota</li>
+    </ul>
+    <div class="loop">
+      🔁 <strong>Do not exit this milestone until every box above is checked.</strong> A boundary that will not stop is a finding about the boundary, never a reason to weaken the triple.
+    </div>
+  </div>
+
+
+  <!-- ================= M4 ================= -->
+  <div class="phase">
+    <h3><code class="status">[]</code> Milestone M4: The no-skill fence</h3>
+    <p>The standing constraint made mechanical, on the three legs a stage can reach a document through. This milestone builds a test and nothing else, which is why it stays in W11 rather than being routed away: a test is not a mechanism. It is independent of M3 and may run before it, after it, or beside it.</p>
+
+    <figure>
+      <pre class="mermaid">
+flowchart LR
+  P["leg 1 · prompt<br/>composed bytes"] --> F["no-skill-in-stages.test.ts"]
+  I["leg 2 · import<br/>transitive walk"] --> F
+  G["leg 3 · gate input<br/>closure AST"] --> F
+  F --> R["each leg proven<br/>to go red"]
+  style G stroke:#38BDF8,stroke-width:2px
+  style R stroke:#4ADE80,stroke-width:2px
+      </pre>
+      <figcaption>Leg three is highlighted because it is the one that catches the failure the constraint is actually written against — a gate that passes because a document said the right thing — and the only one a reviewer is likely to want cut.</figcaption>
+    </figure>
+
+    <h4>13. Leg one — the composed prompt carries no skill-invocation shape</h4>
+    <p class="serves"><code class="serves">INV-3</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Create <code>core/test/unit/meta/no-skill-in-stages.test.ts</code>. For every stage in the contract whose owner is a role rather than the host, resolve its prompt <strong>through W06's single composition site</strong>, so the scan reads the bytes that actually reach a provider rather than one role fragment</li>
+      <li><code class="status">[]</code> Assert the composed bytes contain no leading-slash command invocation, no <code>SKILL.md</code>, no <code>skills/</code> path segment, and no <code>.claude</code> path</li>
+      <li><code class="status">[]</code> Assert the composed bytes contain no instruction of the form "read &lt;document&gt; before" — the shape that makes a phase depend on a document without ever naming a skill. Keep the pattern list short, name each one in a comment, and state in the header that it catches shapes rather than intentions</li>
+      <li><code class="status">[]</code> Report offenders as file plus matched text, so a failure says what was found rather than only that something was</li>
+    </ul>
+
+    <h4>14. Leg two — nothing reachable from the stage module reaches a document tree</h4>
+    <p class="serves"><code class="serves">INV-3</code> <code class="serves">INV-5</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Follow the transitive relative-import walk in <code>core/test/unit/meta/quota-fence.test.ts</code> — this repository's first transitive fence, written precisely because a direct-import scan is satisfied by placing one intermediate file between the two ends</li>
+      <li><code class="status">[]</code> Assert nothing transitively reachable from <code>core/src/stages/**</code> resolves a path into <code>docs/driving/**</code> or any <code>.claude</code> path, and report every hop of an offending chain rather than only the endpoint</li>
+      <li><code class="status">[]</code> Assert the same reach contains no import from <code>core/src/execution/**</code>, which is <code>INV-5</code>'s absence and shares this walk for free</li>
+      <li><code class="status">[]</code> Restate in the header what <code>execution-isolation.test.ts</code> already covers — pi's pinned <code>--no-skills</code> argv order, and the absence of <code>.claude/</code> at the repository root — and what this fence adds that neither of those asserts, so a later reader does not delete one believing the other covers it</li>
+    </ul>
+
+    <h4>15. Leg three — no gate reaches its verdict by reading a file</h4>
+    <p class="serves"><code class="serves">INV-3</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> For every gate the stage contract names, walk its <code>run</code> closure and that closure's transitive reach with the TypeScript AST, and assert no filesystem read appears — no <code>readFile</code>, no <code>readFileSync</code>, no <code>existsSync</code>, no directory walk</li>
+      <li><code class="status">[]</code> <strong>Scope the fence to this workstream's own gates</strong>, per Q8. Some existing gates legitimately observe the repository — the diff and command-evidence gates do — and widening this leg to all gates would fail on day one for the wrong reason</li>
+      <li><code class="status">[]</code> Assert positively as well as negatively: each named gate's inputs are drawn from <code>context.envelope</code>, <code>context.previousEnvelope</code>, or host-resolved evidence passed in as an argument. A gate reading an ambient value is the same defect wearing different clothes</li>
+      <li><code class="status">[]</code> Write the header stating the limit plainly: this proves a gate does not <em>read</em> a document. It does not prove the document is irrelevant to whoever wrote the gate, and no test can</li>
+    </ul>
+
+    <h4>16. Testing Strategy</h4>
+    <p class="serves"><code class="serves">AC-5</code></p>
+    <p>The fence is the deliverable, so this task's job is to prove the deliverable works — by breaking it three times. A fence nobody has watched fail is decoration, and this repository has already applied that rule once, proving the plan-aware sync fence with a ghost ticket directory before trusting it.</p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> <strong>Induce leg one</strong>: add a skill-shaped line to one stage's role prompt in a throwaway edit, watch the suite go red naming that prompt, revert, watch it go green</li>
+      <li><code class="status">[]</code> <strong>Induce leg two</strong>: add an import chain from <code>core/src/stages/</code> reaching <code>docs/driving/</code> through one intermediate file — the shape a direct scan would miss — watch it go red naming every hop, revert, watch it go green</li>
+      <li><code class="status">[]</code> <strong>Induce leg three</strong>: add a <code>readFileSync</code> to one gate closure, watch it go red, revert, watch it go green</li>
+      <li><code class="status">[]</code> Record all three observations in the ticket with the exact failure text each produced. An induced failure whose message does not identify the offender is a fence that will waste an hour the day it fires for real</li>
+      <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green with all three violations removed</li>
+    </ul>
+    <div class="loop">
+      🔁 <strong>Do not exit this milestone until every box above is checked.</strong> A leg that cannot be made to fail is not passing — it is not running.
+    </div>
+  </div>
+
+  <!-- ================= M5 ================= -->
+  <div class="phase">
+    <h3><code class="status">[]</code> Milestone M5: The journey — all five stages, zero quota</h3>
+    <p>The spine's stop-when condition, executed: <em>"A project travels all five stages through typed envelopes, and each stage's output is a fixture rather than a description."</em> One temporary directory, scripted adapters, no network, no quota — the same shape v1's twelve journeys already use.</p>
+
+    <figure>
+      <pre class="mermaid">
+flowchart LR
+  W["world()<br/>temp dir · seeded catalog"] --> S1["S1"]
+  S1 -->|"owner act"| S2["S2"]
+  S2 -->|"owner act"| S3["S3"]
+  S3 -->|"owner act"| S4["S4"]
+  S4 -->|"owner act"| S5["S5"]
+  S5 --> V["route log<br/>no provider contacted"]
+  S1 -.-> E["envelope join<br/>vs captured fixture"]
+  S3 -.-> E
+  S5 -.-> E
+  style V stroke:#4ADE80,stroke-width:2px
+      </pre>
+      <figcaption>Every arrow between stages is an owner act the test performs explicitly. There is no arrow the host draws by itself, which is the same claim M3 proves and this journey exercises end to end.</figcaption>
+    </figure>
+
+    <h4>17. The world — one temporary directory, five stages, scripted adapters</h4>
+    <p class="serves"><code class="serves">AC-6</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Create <code>core/test/journeys/five-stage.test.ts</code>, extending the existing offline <code>world()</code> in <code>core/test/unit/cli/design-to-plan-route.test.ts</code>: a temporary directory, a seeded <code>awsf.project.yaml</code>, a written placement, then the commands each stage needs. <strong>Do not invent a second harness</strong></li>
+      <li><code class="status">[]</code> Stage 1 begins from an empty directory through W03's <code>initCommand</code>, so the journey covers the bootstrap rather than starting from a repository that already exists</li>
+      <li><code class="status">[]</code> Every agent phase runs on the stub adapter with a scripted envelope. No live provider, no network, no quota anywhere in the file</li>
+      <li><code class="status">[]</code> If publication is one of the five stages, its remote is a bare repository created in the temporary directory, following <code>core/test/journeys/publish.test.ts</code> and its <code>bareFixture</code> helper</li>
+      <li><code class="status">[]</code> Where Q5's absence applies, the journey covers the four reachable stages, marks the fifth <code>[f]</code>, and names the blocker in the test's own header rather than skipping silently</li>
+    </ul>
+
+    <h4>18. The envelope join at each boundary</h4>
+    <p class="serves"><code class="serves">AC-6</code> <code class="serves">INV-2</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> At each boundary, read the stored envelope from the projection through <code>envelopesForPhase</code> and assert its schema id equals the one that stage's record in the contract names</li>
+      <li><code class="status">[]</code> Compare against the captured fixture by <strong>shape, not bytes</strong>: the schema id and the presence of every required field. The captured bytes are one run's output and asserting them would make the journey a snapshot test of a scripted adapter, which proves nothing about the join</li>
+      <li><code class="status">[]</code> Assert the later stage's input is derived from the earlier stage's stored envelope, and that nothing in the chain reconstructs a value from a file the earlier stage happened to write</li>
+      <li><code class="status">[]</code> Record the route log at the end and assert it contains no provider launch beyond the scripted stub, using the <code>RouteLog</code> idiom rather than a count</li>
+    </ul>
+
+    <h4>19. Testing Strategy</h4>
+    <p class="serves"><code class="serves">AC-6</code> <code class="serves">AC-7</code></p>
+    <p>The journey is itself the test, so this task's job is the surrounding evidence: that it cost nothing, touched nothing outside its temporary directory, and left the rest of the suite where it found it.</p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> <code>npm run test:journeys</code> green, and the new file's runtime recorded in the ticket. A journey that takes minutes is a journey nobody runs</li>
+      <li><code class="status">[]</code> A no-network assertion: nothing in the file resolves a hostname or opens a socket, and the only remote any part of it knows is a path inside the temporary directory</li>
+      <li><code class="status">[]</code> A no-residue assertion: after the test, the temporary directory is removed and nothing was written inside this repository's own tree or state root</li>
+      <li><code class="status">[]</code> <code>AC-7</code>'s protected-path check: enumerate <code>policy.protected_paths</code> from the loaded config and assert the workstream's changed-file list intersects none of them. Enumerate from the config, never from a copied glob list, so a glob added later is covered without editing this check</li>
+      <li><code class="status">[]</code> <code>npm run test</code> — the full suite — green, and the count recorded with the command that produced it</li>
+    </ul>
+    <div class="loop">
+      🔁 <strong>Do not exit this milestone until every box above is checked.</strong> A journey that needs quota to pass has stopped being this workstream's journey.
+    </div>
+  </div>
+
+  <!-- ================= M6 ================= -->
+  <div class="phase">
+    <h3><code class="status">[]</code> Milestone M6: Closing the workstream</h3>
+    <p>One task. It is the only task in this plan permitted to touch <code>specs/awsf-v2-plan.html</code>.</p>
+
+    <h4>20. Close the leaf, then close the spine</h4>
+    <p class="serves"><code class="serves">AC-7</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Confirm every milestone header and every checklist item in this plan is <code>[x]</code>, or <code>[f]</code> with its blocker named in the Amendments. A silent <code>[]</code> anywhere means this task is not ready to run</li>
+      <li><code class="status">[]</code> Confirm every ticket's <code>state:</code> in <code>specs/tickets/awsf-v2-w11-five-stage-ladder/</code> mirrors this plan's markers</li>
+      <li><code class="status">[]</code> <code>npm run test</code>, <code>npm run typecheck</code>, <code>npm run lint</code> — all green, with the counts recorded</li>
+      <li><code class="status">[]</code> <code>core/test/unit/meta/ticket-plan-sync.test.ts</code> green, resolving this plan through the registered plan source</li>
+      <li><code class="status">[]</code> Append the modified date and an Amendment recording what M1's capture actually found — the stage list, and whether any stage misfitted. <strong>That finding is the workstream's most reusable output</strong> and it must not live only in a fixture</li>
+      <li><code class="status">[]</code> Flip the W11 marker in <code>specs/awsf-v2-plan.html</code> and the state in <code>specs/tickets/awsf-v2-plan/W11.md</code>, in the same commit, and only now</li>
+      <li><code class="status">[]</code> Never name an agent, model or AI tool in commit identity or message</li>
+    </ul>
+    <div class="loop">
+      🔁 <strong>Do not exit this milestone until every box above is checked.</strong> The spine marker is earned by the boxes above it, per invariant 2.
+    </div>
+  </div>
+</section>
+
+<section id="validation">
+  <h2>Validation Commands</h2>
+  <p>Execute these to validate the whole workstream. Every one is offline and spends no quota.</p>
+  <ul class="checklist">
+    <li><code class="status">[]</code> <code>npm run test:unit</code> — the fixtures, the contract join, the resolver, the stops, and the three fence legs</li>
+    <li><code class="status">[]</code> <code>npm run test:journeys</code> — all five stages end to end on the stub route</li>
+    <li><code class="status">[]</code> <code>npm run test</code> — the full suite; nothing this workstream added perturbed v1's twelve journeys or the meta fences</li>
+    <li><code class="status">[]</code> <code>npm run typecheck</code> — core and dashboard</li>
+    <li><code class="status">[]</code> <code>npm run lint</code></li>
+    <li><code class="status">[]</code> <code>git ls-files core/test/fixtures/stages/</code> lists the stage list, five captures, the schema-fit table and the boundary table — the fixtures exist in the tree, which is <code>AC-1</code>'s subject</li>
+    <li><code class="status">[]</code> <code>git log --oneline --diff-filter=A -- core/test/fixtures/stages/ core/src/stages/</code> shows every fixture added before any module file — <code>AC-1</code>'s ordering, read out of the commit record</li>
+    <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/no-skill-in-stages.test.ts core/test/unit/meta/no-stage-advance.test.ts</code> — the two new fences alone, green</li>
+    <li><code class="status">[]</code> <code>git diff --name-only main...HEAD</code> intersected against <code>policy.protected_paths</code> is empty — <code>INV-6</code> and <code>AC-7</code></li>
+    <li><code class="status">[]</code> <code>git diff --stat main...HEAD -- core/src/contracts/registry.ts</code> is empty — <code>ENVELOPE_SCHEMAS</code> still holds thirteen entries</li>
+  </ul>
+  <div class="loop">
+    🔁 <strong>The workstream is not complete until every box is checked and every command passes. If a step is genuinely not possible, mark it <code>[f]</code>, name the blocker in the Amendments, and move on if the rest can proceed.</strong>
+  </div>
+</section>
+
+<section id="questionables">
+  <h2>Questionables</h2>
+  <p><strong>All eight were decided by the owner on 2026-08-26, and every one took the recommendation.</strong> They are constraints now, not questions: nothing below is still open, and no task may re-litigate one. The entries are kept in full — the recommendation, the evidence, and the argument against — because a decision whose reasoning has been deleted is a decision nobody can check.</p>
+  <p class="decided"><b>What the unanimous outcome does and does not mean.</b> It does not mean the questions were rhetorical. Three of them — Q2, Q6 and Q8 — were argued in the plan against a real alternative that would have produced a different workstream, and Q2's recommendation was <em>reversed</em> during authoring by evidence found in the spine's W12 block. It does mean the plan as written is the plan that will be built, and the only structural change this review produced is that <strong>T08 is now a committed task rather than a contingent one</strong>.</p>
+
+  <figure>
+    <pre class="mermaid">
+flowchart TD
+  Q4["Q4 · granularity<br/>task or phase?"] --> M1["shapes M1's capture"]
+  Q5["Q5 · unreachable stage"] --> M1
+  Q1["Q1 · the name"] --> M2["shapes M2's paths"]
+  Q2["Q2 · a command?"] --> M2
+  Q8["Q8 · fence leg 3 scope"] --> M4["shapes M4"]
+  Q6["Q6 · misfit blast radius"] --> M1
+  Q3["Q3 · what the stop is addressed to"] --> M3["shapes M3"]
+  Q7["Q7 · fixture home + scrub rule"] --> M1
+  style M1 stroke:#38BDF8,stroke-width:2px
+    </pre>
+    <figcaption>Four of the eight reached M1, the first task, which is why all eight were decided before the workstream starts rather than at the first milestone boundary. Every edge above is now a settled constraint carried into the milestone it points at.</figcaption>
+  </figure>
+
+  <details data-review-options="stages|ladder|progression">
+    <summary><span class="qdecided">DECIDED</span> Q1 — What is this called in the code? <code>ladder</code> already means two other things in <code>core/src</code>.</summary>
+    <p class="decided"><b>Decided 2026-08-26: <code>stages</code>.</b> Every path in this plan already carries it, so the decision costs nothing and closes the collision before a third meaning enters the tree. The workstream keeps its spine title and its filename; only the code identifier is settled here — <code>core/src/stages/</code>, <code>STAGE_ORDER</code>, <code>awsf stage</code>, <code>core/test/fixtures/stages/</code>. <strong>No task may rename it.</strong></p>
+    <p class="qa-answer"><strong>The collision is measured, not anticipated.</strong> <code>ladder</code> appears in <code>core/src</code> today meaning the <em>escalation ladder</em> (correction rungs, in <code>production-run.ts</code>, <code>task-machine.ts</code>, <code>launcher-barrier.ts</code> and both provider adapters) and the <em>cancellation ladder</em> (TERM → grace → KILL, in <code>process-controller.ts</code> and all three platform ports, whose header reads "ONE ladder"). A third meaning entering the same tree makes every future grep for either existing one ambiguous.</p>
+    <p class="qa-answer"><span class="recommend"><strong>Recommended: <code>stages</code>.</strong> It is what the spine's own stop-when condition calls them — "a project travels all five stages" — it collides with nothing, and it reads correctly in every position the code needs: <code>core/src/stages/</code>, <code>STAGE_ORDER</code>, <code>awsf stage</code>, <code>stages.json</code>. The workstream keeps its spine title and its filename; only the code identifier changes.</span></p>
+    <p class="qa-answer"><strong>Cost of deciding late:</strong> zero now, one substitution across this plan and its twenty tickets. After M2 it is a rename across a module, its tests, two fences and a command. Decide at review.</p>
+  </details>
+
+  <details data-review-options="read-only readout (recommended)|no command at all|a command that advances">
+    <summary><span class="qdecided">DECIDED</span> Q2 — Does W11 add a command, and if so, what may it do?</summary>
+    <p class="decided"><b>Decided 2026-08-26: a read-only readout.</b> <code>awsf stage</code> is built, and <strong>T08 is no longer contingent — it is a committed task</strong>. It exposes no flag that acts, adds no API route, and prints no absolute path. This is the one decision that changed the plan's structure: T08's gate card is removed, T09's and T11's conditional clauses become unconditional, and the Notes bullet describing what would happen if Q2 went the other way is retired. It also resolves W12's dependency on W11 — W11 does change a command the reader will type, and the cheatsheet will document this one.</p>
+    <p class="qa-answer"><strong>The spine says yes, and it is easy to miss.</strong> W12's block lists its dependencies as "every workstream that adds or changes a command the reader will type: W03's bootstrap, W07's readout, W08's publish, and W11's ladder." W11 is named among command-touching workstreams, so a plan that adds no command leaves that dependency unexplained.</p>
+    <p class="qa-answer"><span class="recommend"><strong>Recommended: a read-only readout</strong> — <code>awsf stage</code>, in the shape of <code>awsf project</code> and <code>awsf quota</code>. It resolves the project, reads the journal, prints where the project is and what the owner types next, and exposes no flag that acts. It is the answer to the real cost of <code>INV-4</code>: an absence is invisible in the projection, so without a readout a stopped project looks identical to a finished one.</span></p>
+    <p class="qa-answer"><strong>The third option is presented so the trade is visible, not because it is viable.</strong> A command that advances a project would be the mechanism <code>INV-4</code> asserts does not exist. Choosing it does not merely add a command — it deletes M3, changes what the workstream proves, and puts the standing constraint's most likely violation directly into the command surface.</p>
+  </details>
+
+  <details data-review-options="absence + readout names the act (recommended)|a per-project awaiting record|reuse AWAITING_OWNER at project level">
+    <summary><span class="qdecided">DECIDED</span> Q3 — What is an inter-stage stop addressed to, and how does the owner see it?</summary>
+    <p class="decided"><b>Decided 2026-08-26: keep the stop as an absence; Q2's readout names the act.</b> <code>INV-4</code> stands as written — no new lifecycle state, no per-project awaiting record, no owner-authored commit, and therefore no migration. M3 proves an absence rather than asserting a state. Paired with Q2, the pair is coherent: the absence is the guarantee and the readout is the legibility, and neither is asked to do the other's job.</p>
+    <p class="qa-answer">Within a task, W07 settled this: the host stops at <code>AWAITING_OWNER</code>, with no timer and no automatic resume. <strong>Between stages there is no state at all</strong> — the earlier task is terminal and the later one does not exist yet. So the stop is real but unaddressed, and nothing in the projection says "a person acts next".</p>
+    <p class="qa-answer"><span class="recommend"><strong>Recommended: keep the stop as an absence and let Q2's readout name the act.</strong> The absence is the stronger guarantee — it says nothing is capable of advancing, which a state cannot say — and the readout supplies the legibility the absence costs.</span></p>
+    <p class="qa-answer"><strong>What option B costs, priced from W08:</strong> a per-project awaiting record is a new lifecycle state. W08 has just paid that bill — one owner-authored commit into <code>core/src/state/**</code>, one migration into the protected migrations directory, a widened lifecycle matrix, and a whole milestone. It also introduces a second source of truth for something the journal already knows, which is the reason W04's catalog was kept out of this in the first place.</p>
+  </details>
+
+  <details data-review-options="mixed, recorded per stage (recommended)|force all five to task boundaries|force all five into one recipe">
+    <summary><span class="qdecided">DECIDED</span> Q4 — Is a stage a whole task, or phases inside one task?</summary>
+    <p class="decided"><b>Decided 2026-08-26: mixed, with granularity recorded per stage.</b> <code>granularity</code> is a required field on every entry in <code>stages.json</code>, and T01 fills it from what the run shows. <strong>There is no default and no fallback:</strong> a capture that cannot say whether a stage was a task or a set of phases is an incomplete capture, not a stage to guess about. Three different granularities across five stages is an expected result and must not be smoothed.</p>
+    <p class="qa-answer"><strong>The five stages are probably not uniform, and the code says so.</strong> W05's <code>design-to-plan</code> recipe runs seven phases — request, design-context, design, architecture-review, plan-context, plan, plan-render — inside <em>one</em> task at tier 1. v1's <code>simple-sdlc</code> runs plan/build/test/document inside another. But <code>awsf init</code> is a host command with no task at all, and publication is a separate human-initiated act on an already-landed revision. Those are three different granularities before the capture pass has run.</p>
+    <p class="qa-answer"><span class="recommend"><strong>Recommended: mixed, with granularity recorded per stage as a field in <code>stages.json</code>.</strong> It is the only option consistent with capture-first: the run reports the granularity, the fixture records it, and the contract carries it. Deciding uniformity in advance is designing the answer M1 exists to observe.</span></p>
+    <p class="qa-answer"><strong>Why option C is refused rather than offered neutrally:</strong> one recipe spanning all five stages would have to span <code>awsf init</code>, which is host-only and runs before a repository exists. There is no execution context for such a recipe, and inventing one is the pre-repository execution mode W03 was designed specifically to not need.</p>
+  </details>
+
+  <details data-review-options="stated absence, four of five travel (recommended)|hand-write the missing envelope|block the whole workstream">
+    <summary><span class="qdecided">DECIDED</span> Q5 — What does the capture pass do with a stage it cannot run?</summary>
+    <p class="decided"><b>Decided 2026-08-26: record a stated absence; four of five travel.</b> An unreachable stage is written up with the evidence that would close it, the journey covers what it can, and the fifth stage is <code>[f]</code> with its blocker named. <strong>Hand-writing the missing envelope is refused outright</strong> — once it is in the fixtures directory it is indistinguishable from a real capture, which makes it worse than no fixture at all.</p>
+    <p class="qa-answer">The capture runs against W03–W06 as they stand. If a stage turns out to need something not yet built — an optional adapter workstream, or W13's deploy — it cannot be captured, and the workstream needs a posture rather than an improvisation at the moment it happens.</p>
+    <p class="qa-answer"><span class="recommend"><strong>Recommended: record it as a stated absence naming the evidence that would close it</strong>, exactly as the fused record's §8 does for every other gap in this project, and let the journey cover four of five with the fifth <code>[f]</code> and its blocker named. An honest four-of-five is worth more than a five-of-five with one stage invented.</span></p>
+    <p class="qa-answer"><strong>Option B is the failure this whole workstream is ordered to prevent.</strong> A hand-written envelope for an unreachable stage is the remembered prose again, in JSON. It would also be indistinguishable from a real capture once it is in the fixtures directory, which makes it worse than no fixture.</p>
+  </details>
+
+  <details data-review-options="block only what consumes it (recommended)|block the whole workstream at M2">
+    <summary><span class="qdecided">DECIDED</span> Q6 — When a capture fits no landed schema, how much does the block stop?</summary>
+    <p class="decided"><b>Decided 2026-08-26: block only what consumes it.</b> M1 finishes, M4's fence proceeds — it depends on no stage fitting — and M2 declares the fitting stages. Only the tasks consuming the misfitting stage carry <code>[f]</code>, each with its block named. The accepted cost is stated plainly: <strong>a half-green acceptance may sit in the tree while W05 is amended</strong>, and M5's journey is the workstream's stop-when condition, so that half-green is visible in the plan's own markers rather than hidden.</p>
+    <p class="qa-answer">The owner has already decided the routing: a misfit goes to W05, which owns envelope schemas, and W11 does not register one. What is still open is the blast radius. A misfit on one stage does not make the other four unbuildable, and M4's fence does not depend on any stage fitting.</p>
+    <p class="qa-answer"><span class="recommend"><strong>Recommended: block only the tasks that consume the misfitting stage.</strong> M1 finishes, M4 proceeds, M2 declares the fitting stages, and the blocked tasks carry <code>[f]</code> with the block named. It keeps the workstream's other findings landing while the amendment is authored.</span></p>
+    <p class="qa-answer"><strong>The argument for option B, stated fairly:</strong> a partially-built ladder is a ladder that cannot be walked, and M5's journey is the workstream's stop-when condition. If the owner would rather not have a half-green acceptance sitting in the tree while W05 is amended, option B is the cleaner record. The cost is that M4's fence — which needs no stage to fit — waits for no reason.</p>
+  </details>
+
+  <details data-review-options="core/test/fixtures/stages/ + full scrub (recommended)|specs/ alongside the plan|fixtures with timestamps retained">
+    <summary><span class="qdecided">DECIDED</span> Q7 — Where do the captures live, and exactly what is scrubbed out of them?</summary>
+    <p class="decided"><b>Decided 2026-08-26: <code>core/test/fixtures/stages/</code>, full scrub, timestamps normalized rather than dropped.</b> Out go session ids, attempt ids, run ids, real task ids, absolute machine paths, and anything matching <code>CREDENTIAL_PATTERNS</code>. Timestamp fields are <em>kept</em> and their values set to one fixed instant, so a stage output whose shape includes a timestamp stays a faithful shape sample. <strong>This is the one edit T02 is permitted to make to a capture</strong>, it is recorded in each fixture's header, and invariant 1 is the reason it outranks T01's rule against tidying.</p>
+    <p class="qa-answer"><span class="recommend"><strong>Recommended: <code>core/test/fixtures/stages/</code>, with a full scrub.</strong> W07's <code>core/test/fixtures/quota-axi/</code> is the precedent for a scrubbed capture in this tree, invariant 10's junk-drawer fence permits a <code>.json</code> there, and a fixture under <code>specs/</code> would be a document rather than something a test loads.</span></p>
+    <p class="qa-answer"><strong>The scrub rule, stated so it can be argued with:</strong> out go session ids, attempt ids, run ids, real task ids, absolute machine paths, and anything matching <code>CREDENTIAL_PATTERNS</code>. Timestamps are <strong>normalized to one fixed instant</strong> rather than removed, because a stage output whose shape includes a timestamp field must keep the field to stay a faithful shape sample.</p>
+    <p class="qa-answer"><strong>Where the judgement call actually is:</strong> normalizing a timestamp is a small edit to a capture, and this plan's own M1 says not to tidy captures. The rule is that invariant 1 wins over fidelity — a committed file must not encode when a run happened — and the normalization is recorded in each fixture's header so a reader knows the field was touched and why. If the owner would rather drop timestamp fields entirely, that is option C's inverse and it is a legitimate call.</p>
+  </details>
+
+  <details data-review-options="this workstream's gates only (recommended)|all gates in core/src|drop leg three">
+    <summary><span class="qdecided">DECIDED</span> Q8 — How wide is the fence's third leg?</summary>
+    <p class="decided"><b>Decided 2026-08-26: this workstream's gates only, and leg three is built.</b> The option to drop it was refused. Scoping keeps the fence true and enforceable from the first commit; the limit goes in the test header so a green fence is never read as a claim about all gates. <strong>T15 is not optional and is not a stretch goal</strong> — it is the leg that catches a gate passing because a document said the right thing, which is the failure the standing constraint is actually written against.</p>
+    <p class="qa-answer">Leg three asserts that no gate reaches its verdict by reading a file. <strong>Some existing gates legitimately read the repository</strong> — the diff gates and the command-evidence gate observe the worktree, which is their job — so a fence over all gates would fail on day one for a reason that is not a defect.</p>
+    <p class="qa-answer"><span class="recommend"><strong>Recommended: scope it to the gates this workstream's stage contract names.</strong> Narrow, true, and enforceable from the first commit. The limit gets written into the test header rather than left implicit, so nobody later reads a green fence as a claim about all gates.</span></p>
+    <p class="qa-answer"><strong>Do not choose option C.</strong> Legs one and two catch a stage that <em>asks</em> for a skill. Leg three catches a gate that passes because a document said the right thing — which names no skill, imports nothing unusual, and is the only one of the three a well-meaning task in M2 could plausibly introduce. Dropping it asserts the constraint at exactly the two places nobody was going to break it.</p>
+  </details>
+</section>
+
+<section id="notes">
+  <h2>Notes</h2>
+
+  <h3>Two decisions the owner took while this plan was being authored</h3>
+  <p>Both are constraints, not assignments, and both are already applied throughout the body above.</p>
+  <table>
+    <thead><tr><th>Decision</th><th>What it settles</th><th>Where it lands</th></tr></thead>
+    <tbody>
+      <tr><td><strong>D1 — the capture pass derives the stage list</strong></td><td>The five stages are enumerated in no source this plan may read. Rather than lifting them from the frozen record or inventing them, M1 task 1 re-runs the ladder and records the list as its first fixture. The plan refers to stages positionally until then.</td><td><code>INV-1</code>; M1 T01; the Problem section's second half</td></tr>
+      <tr><td><strong>D2 — a misfit routes to W05 and never registers here</strong></td><td><code>ENVELOPE_SCHEMAS</code> gains nothing from this workstream. A stage output fitting none of the thirteen is recorded with its violations and handed to W05, which owns typed envelopes. Force-fitting into a landed schema is refused because it would put a distorted envelope in the tree as the thing the whole workflow is then built against.</td><td><code>INV-2</code>; M1 T03–T04; Q6 bounds only the blast radius</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Why the stage module sits outside <code>core/src/workflow/</code></h3>
+  <p><code>core/test/unit/meta/loc-budget.test.ts</code> gives <code>core/src/workflow</code> an advisory ceiling of 800 logical lines and every file a ceiling of 450. That is advisory and would not fail a run, so it is not the reason. The reason is structural: <strong>everything under <code>core/src/workflow/</code> runs inside a task</strong> — recipes, phases, gates, corrections, the engine. The stage module is the opposite thing. It reasons <em>across</em> tasks, it runs no phase, and per <code>INV-5</code> it never acts. Putting it under <code>workflow/</code> would place a module that must not execute anything inside the directory whose entire contents execute.</p>
+
+  <h3>Three things this plan deliberately does not build</h3>
+  <ul>
+    <li><strong>A stage field in the catalog.</strong> <code>ProjectCatalogSchema</code> is <code>additionalProperties: false</code> and <code>awsf.project.yaml</code> is a protected path, so a stage field is an owner commit plus a W04 schema change. It is also a second source of truth for something the journal already records, which is the objection W04's own scope cut was written against. Stage position is derived, always.</li>
+    <li><strong>A ladder recipe.</strong> A <code>WorkflowRecipe</code> runs inside one task. Under Q4's recommended answer at least one stage spans a whole task and at least one runs before any task exists, so a single recipe cannot express the ladder without inventing an execution context that W03 was specifically designed not to need.</li>
+    <li><strong>A dashboard surface.</strong> W02 owns evidence readability and <code>no-land-route.test.ts</code> already bars lifecycle-write routes from the dashboard. A stage panel would be new surface with a different owner, and Q2's terminal readout answers the same need inside this workstream's boundary.</li>
+  </ul>
+
+  <h3>Risks this plan carries knowingly</h3>
+  <figure>
+    <pre class="mermaid">
+flowchart LR
+  R1["R1 · capture is tidied"] --> C["closed loop returns"]
+  R2["R2 · stage list drifts<br/>from the fixture"] --> C
+  R3["R3 · leg three cut<br/>in review"] --> S["constraint asserted<br/>where nobody breaks it"]
+  R4["R4 · a stage needs<br/>a routed mechanism"] --> B["M2 partially blocked"]
+  style C stroke:#F87171,stroke-width:2px
+    </pre>
+    <figcaption>R1 and R2 both end at the same failure, from opposite directions: one puts memory into the fixture, the other lets the module drift away from it. The contract equality test in T09 is what closes the second; nothing but discipline closes the first, which is why T01 says it four times.</figcaption>
+  </figure>
+  <ul>
+    <li><strong>R1 — the capture gets tidied.</strong> The single highest risk in the workstream, and it produces no error anywhere. A capture smoothed to match expectations reintroduces the closed loop at the exact point the ordering was supposed to break it. The mitigation is instruction rather than mechanism, stated in T01 and repeated in the ticket README, and it is honest to say that no test catches this one.</li>
+    <li><strong>R2 — the contract drifts from the fixture.</strong> A later session renames a stage in <code>contract.ts</code> for clarity and does not touch <code>stages.json</code>. T09's equality test closes this, and T09 requires the drift to be induced and observed before the milestone exits.</li>
+    <li><strong>R3 — leg three gets cut in review as over-engineering.</strong> It is the leg with the least obvious payoff and the most implementation cost, and it is the only one that catches the failure mode the standing constraint actually names. Q8 exists so the cut is a decision rather than a drift.</li>
+    <li><strong>R4 — a stage needs something this workstream may not build.</strong> Handled by construction: the routing table in <a href="#consumes">What This Consumes</a> names the owner for each case, and Q6 bounds how much the block stops. The residual risk is that a stage needs a mechanism owned by <em>nothing</em> — a resident advancing process, or a document a gate must read — in which case the finding is that the ladder as remembered is not buildable under v2's constraints, and that finding belongs to the owner rather than to a task.</li>
+    <li><strong>R5 — the journey grows slow.</strong> Five stages in one temporary directory is the longest journey in the repository. v1's largest is 1012 lines. A journey nobody runs is a journey that is not protecting anything, which is why T19 records its runtime rather than only its verdict.</li>
+  </ul>
+
+  <h3>What would change this plan</h3>
+  <ul>
+    <li><strong>M1 finding fewer or more than five stages.</strong> The spine says five and the hand-run reported five; if the capture reports four or six, the fixture wins and the plan is amended. <code>stages.json</code> is the source of truth and the number five is not load-bearing anywhere except in the plan's title, which is the spine's name for the workstream rather than a claim about the code.</li>
+    <li><strong>Every capture fitting a landed schema on the first pass.</strong> Then <code>INV-2</code> is satisfied trivially, T04 becomes a one-line record, and the workstream's strongest result is that "adds no new mechanism" was true rather than aspirational. Record it as a result.</li>
+    <li><strong>Two stages turning out to be one.</strong> If the capture shows two of the five have no boundary between them — no owner act, no stop — then there are four boundaries claimed and three that exist, and M3 shrinks. That is a finding about the ladder, not an error in the capture.</li>
+    <li><strong>The readout needing something the journal does not hold.</strong> Q2 is decided and <code>awsf stage</code> is committed, but the resolver's entire input surface is <code>queries.ts</code>. If answering "where is this project" turns out to need a fact the journal never recorded, that is a finding for W02 or W04 rather than a reason to write a new record — and it would be the first real test of whether stage position is genuinely derivable.</li>
+  </ul>
+
+  <h3>Derived-field rules live in the ticket README</h3>
+  <p>Every frontmatter field the ticket set derives rather than reads off this plan — <code>milestone</code>, <code>depends_on</code>, <code>serves</code>, <code>state</code> — has its derivation rule written once in <code>specs/tickets/awsf-v2-w11-five-stage-ladder/README.md</code>, alongside the four rules that live in the code and would otherwise be reconstructed from an assumption that reads as correct and is not. Edit the rule there rather than re-deriving it downstream.</p>
+</section>
+
+<section id="amendments">
+  <h2>Amendments</h2>
+  <p>Append-only. Populated as this plan is executed and revised.</p>
+  <details>
+    <summary>2026-08-26 — Owner review applied: all eight Questionables decided, every one as recommended</summary>
+    <p>One <code>plan-sota-review v1</code> block, exported 2026-08-26T04:22:15Z: <strong>eight verdicts, zero proposed statuses, zero annotations.</strong> Every verdict took the plan's own recommendation, so no milestone was resequenced, no task was added, and no acceptance criterion moved.</p>
+    <p><strong>The one structural change is T08.</strong> Q2 selected the read-only readout, which promotes <code>core/src/cli/commands/stage.ts</code> from a contingent task to a committed one. Its gate card became a decision card, its Relevant-Files entry lost the contingency, and the two conditional clauses that depended on it — T09's readout test and T11's flag assertion — became unconditional. The Notes entry describing what would happen if Q2 went the other way was retired and replaced with the residual risk that actually remains: the resolver's input surface is <code>queries.ts</code> alone, so a readout needing a fact the journal never recorded is a finding for W02 or W04 rather than a licence to write a new record.</p>
+    <p><strong>Q1 fixed the name as <code>stages</code>.</strong> Every path in the plan already carried it, so the decision closed the <code>ladder</code> collision at zero cost and no task may now rename it. The remaining six — Q3 through Q8 — confirmed the plan as authored: the stop stays an absence with no new lifecycle state and no owner commit, stage granularity is recorded per stage with no default, an unrunnable stage becomes a stated absence rather than a hand-written envelope, a schema misfit blocks only its consumers, the captures live under <code>core/test/fixtures/stages/</code> with timestamps normalized rather than dropped, and the fence's third leg is built at this workstream's own gate scope.</p>
+    <p>All eight <code>&lt;details&gt;</code> entries were kept in full rather than collapsed to their outcomes, including the arguments against each chosen option. A unanimous outcome is worth less if the reasoning it beat has been deleted — and three of the eight were argued against a real alternative that would have produced a different workstream.</p>
+    <p><strong>Downstream, in the same pass:</strong> the build-prompts gate list now records the decisions as constraints rather than as a precondition, T08's prompt gate became a decision note, and the ticket README's Questionables table was rewritten from "none was decided" to the eight outcomes. The twenty tickets were regenerated from the build-prompts file rather than hand-edited, so the byte-identity the sync fence checks was never at risk. <code>ticket-plan-sync.test.ts</code> and <code>npm run test:unit</code> both re-run green afterwards.</p>
+  </details>
+</section>
+</main>
+
+<!-- ===== PLAN-SOTA REVIEW LAYER v1 — FIXED MACHINERY, COPY VERBATIM =====
+     Not a placeholder: reproduce this <style> + <script> pair exactly in every plan.
+     Annotations, Questionable verdicts, and proposed phase statuses persist to
+     localStorage (key: plan filename). The browser NEVER writes this file; canonical
+     []/[wip]/[x]/[f] markers stay agent-owned. Export produces a `plan-sota-review v1`
+     block (clipboard + visible box) and, when running under Lavish Editor, queues it
+     once via window.lavish.queuePrompt(). -->
+<style>
+  .rv-btn { font: 600 11px/1 system-ui, sans-serif; padding: 3px 9px; border-radius: 999px;
+    border: 1px solid var(--muted, #8884); background: transparent; color: var(--fg, inherit);
+    cursor: pointer; opacity: .55; vertical-align: middle; margin-left: 8px; }
+  .rv-btn:hover { opacity: 1; border-color: var(--accent, #7c6cf0); }
+  .rv-btn.rv-on { opacity: 1; background: var(--accent, #7c6cf0); color: var(--bg, #fff); border-color: transparent; }
+  .rv-note-box { display: block; margin: 8px 0; padding: 8px 12px; border: 1px dashed var(--accent, #7c6cf0);
+    border-radius: 8px; font-size: 13px; min-height: 1.5em; background: color-mix(in srgb, var(--accent, #7c6cf0) 6%, transparent); outline: none; }
+  .rv-note-box:empty::before { content: attr(data-ph); opacity: .5; font-style: italic; }
+  .rv-note-box[hidden] { display: none; }
+  .rv-verdict { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 10px 0 2px; }
+  .rv-verdict-tag { font: 700 10px/1 system-ui, sans-serif; letter-spacing: .08em; opacity: .6; margin-right: 2px; }
+  .rv-status-chip { font: 600 11px/1 ui-monospace, monospace; margin-left: 10px; padding: 3px 9px;
+    border-radius: 999px; border: 1px dotted var(--muted, #8884); background: transparent;
+    color: var(--fg, inherit); cursor: pointer; opacity: .6; }
+  .rv-status-chip:hover { opacity: 1; }
+  .rv-status-chip.rv-on { opacity: 1; border-style: solid; border-color: var(--accent, #7c6cf0); color: var(--accent, #7c6cf0); }
+  #rv-drawer { position: fixed; right: 16px; bottom: 16px; z-index: 9999; font: 13px/1.45 system-ui, sans-serif;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  #rv-pill { font: 700 12px/1 system-ui, sans-serif; padding: 10px 16px; border-radius: 999px; border: none;
+    cursor: pointer; background: var(--accent, #7c6cf0); color: var(--bg, #fff); box-shadow: 0 4px 16px #0004; }
+  #rv-panel { width: min(420px, calc(100vw - 32px)); max-height: 60vh; overflow: auto; padding: 14px;
+    border-radius: 12px; border: 1px solid var(--muted, #8884); background: var(--bg, #fff);
+    color: var(--fg, inherit); box-shadow: 0 8px 32px #0005; }
+  #rv-panel h4 { margin: 0 0 8px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; opacity: .7; }
+  #rv-list { margin: 0 0 10px; padding: 0; list-style: none; font-size: 12px; }
+  #rv-list li { padding: 3px 0; border-bottom: 1px solid #8882; overflow-wrap: anywhere; }
+  #rv-out { width: 100%; min-height: 140px; margin-top: 10px; font: 11px/1.5 ui-monospace, monospace;
+    border: 1px solid var(--muted, #8884); border-radius: 8px; padding: 8px; background: transparent; color: inherit; }
+  #rv-msg { font-size: 11px; opacity: .75; margin-top: 6px; }
+  @media print { #rv-drawer { display: none; } }
+</style>
+<script>
+(function () {
+  'use strict';
+  var FILE = decodeURIComponent(location.pathname.split('/').pop() || 'plan.html');
+  var KEY = 'plan-sota-review:' + FILE;
+  var LEGACY_KEY = 'planf3-review:' + FILE; // pre-rename state; read once, never written
+  var PROPOSE = ['', '[]', '[wip]', '[x]', '[f]'];
+  var state = { a: {}, v: {}, s: {} }, persisted = true;
+  try { state = JSON.parse(localStorage.getItem(KEY) || localStorage.getItem(LEGACY_KEY) || 'null') || state; } catch (e) { persisted = false; }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); persisted = true; }
+    catch (e) { persisted = false; }
+    refresh();
+  }
+  function el(tag, cls, txt) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (txt) n.textContent = txt;
+    if (tag === 'button') { n.type = 'button'; n.setAttribute('data-lavish-action', ''); }
+    return n;
+  }
+  function clean(t) { return String(t || '').replace(/\|/g, '/').replace(/\s*\r?\n\s*/g, ' >> ').trim(); }
+  var registry = []; // {key, label, kind: 'section'|'phase'|'q'}
+
+  function noteBox(key, host, placeholder) {
+    var box = el('div', 'rv-note-box');
+    box.contentEditable = 'true';
+    box.setAttribute('data-ph', placeholder || 'Type your note for the agent…');
+    box.hidden = !(state.a[key]);
+    if (state.a[key]) box.textContent = state.a[key];
+    box.addEventListener('input', function () {
+      var t = box.textContent.trim();
+      if (t) state.a[key] = t; else delete state.a[key];
+      save();
+    });
+    host.appendChild(box);
+    return box;
+  }
+  function annotable(key, label, heading, host, kind) {
+    registry.push({ key: key, label: label, kind: kind });
+    var box = noteBox(key, host);
+    heading.insertAdjacentElement('afterend', box);
+    var btn = el('button', 'rv-btn' + (state.a[key] ? ' rv-on' : ''), '✎ note');
+    btn.addEventListener('click', function () {
+      box.hidden = !box.hidden;
+      if (!box.hidden) box.focus();
+    });
+    heading.appendChild(btn);
+    box.addEventListener('input', function () { btn.classList.toggle('rv-on', !!state.a[key]); });
+  }
+
+  // Sections
+  Array.prototype.forEach.call(document.querySelectorAll('main > section[id]'), function (sec) {
+    var h = sec.querySelector('h2'); if (!h) return;
+    annotable('#' + sec.id, h.textContent.trim(), h, sec, 'section');
+  });
+  // Phases: annotation + proposed-status chip
+  Array.prototype.forEach.call(document.querySelectorAll('#phases .phase'), function (ph, i) {
+    var h = ph.querySelector('h3'); if (!h) return;
+    var key = 'phase-' + (i + 1);
+    var label = h.textContent.replace(/^\s*\[[^\]]*\]\s*/, '').trim();
+    annotable(key, label, h, ph, 'phase');
+    var chip = el('button', 'rv-status-chip' + (state.s[key] ? ' rv-on' : ''));
+    chip.textContent = state.s[key] ? 'propose ' + state.s[key] : 'propose…';
+    chip.title = 'Cycle a PROPOSED status (exported as feedback — the file marker is only changed by the agent)';
+    chip.addEventListener('click', function () {
+      var next = PROPOSE[(PROPOSE.indexOf(state.s[key] || '') + 1) % PROPOSE.length];
+      if (next) state.s[key] = next; else delete state.s[key];
+      chip.textContent = next ? 'propose ' + next : 'propose…';
+      chip.classList.toggle('rv-on', !!next);
+      save();
+    });
+    h.appendChild(chip);
+  });
+  // Questionables: verdict / option buttons + note
+  Array.prototype.forEach.call(document.querySelectorAll('#questionables details'), function (d, i) {
+    var key = 'q-' + (i + 1);
+    var summary = d.querySelector('summary');
+    var label = summary ? summary.textContent.trim().slice(0, 120) : key;
+    registry.push({ key: key, label: label, kind: 'q' });
+    var opts = (d.getAttribute('data-review-options') || '').split('|').map(function (s) { return s.trim(); }).filter(Boolean);
+    if (!opts.length) opts = ['APPROVE', 'REJECT', 'REVISE', 'DEFER'];
+    var row = el('div', 'rv-verdict');
+    row.appendChild(el('span', 'rv-verdict-tag', 'YOUR CALL'));
+    opts.forEach(function (opt) {
+      var b = el('button', 'rv-btn' + ((state.v[key] || {}).c === opt ? ' rv-on' : ''), opt);
+      b.addEventListener('click', function () {
+        if ((state.v[key] || {}).c === opt) { delete state.v[key]; }
+        else { state.v[key] = { c: opt }; }
+        Array.prototype.forEach.call(row.querySelectorAll('.rv-btn'), function (x) {
+          x.classList.toggle('rv-on', x.textContent === ((state.v[key] || {}).c || null));
+        });
+        qbox.hidden = !state.v[key] && !state.a[key];
+        save();
+      });
+      row.appendChild(b);
+    });
+    d.appendChild(row);
+    var qbox = noteBox(key, d, 'Why / what to change instead…');
+    if (state.v[key]) qbox.hidden = false;
+  });
+
+  // Drawer
+  var drawer = el('div'); drawer.id = 'rv-drawer';
+  var panel = el('div'); panel.id = 'rv-panel'; panel.hidden = true;
+  var pill = el('button'); pill.id = 'rv-pill';
+  pill.addEventListener('click', function () { panel.hidden = !panel.hidden; });
+  var list = el('ul'); list.id = 'rv-list';
+  var actions = el('div');
+  var exportBtn = el('button', 'rv-btn rv-on', 'Export Feedback');
+  var clearBtn = el('button', 'rv-btn', 'Clear review');
+  var out = el('textarea'); out.id = 'rv-out'; out.readOnly = true; out.hidden = true;
+  var msg = el('div'); msg.id = 'rv-msg';
+  var head = el('h4', null, 'Review — pending feedback');
+  actions.appendChild(exportBtn); actions.appendChild(clearBtn);
+  panel.appendChild(head); panel.appendChild(list); panel.appendChild(actions);
+  panel.appendChild(out); panel.appendChild(msg);
+  drawer.appendChild(panel); drawer.appendChild(pill);
+  document.body.appendChild(drawer);
+
+  function findLabel(key) {
+    for (var i = 0; i < registry.length; i++) if (registry[i].key === key) return registry[i].label;
+    return key;
+  }
+  function refresh() {
+    var n = Object.keys(state.a).length + Object.keys(state.v).length + Object.keys(state.s).length;
+    pill.textContent = '✎ Review (' + n + ')';
+    list.textContent = '';
+    Object.keys(state.v).forEach(function (k) { list.appendChild(el('li', null, '[verdict] ' + findLabel(k) + ' → ' + state.v[k].c)); });
+    Object.keys(state.s).forEach(function (k) { list.appendChild(el('li', null, '[status] ' + findLabel(k) + ' → propose ' + state.s[k])); });
+    Object.keys(state.a).forEach(function (k) { list.appendChild(el('li', null, '[note] ' + findLabel(k) + ': ' + state.a[k].slice(0, 90))); });
+    if (!n) list.appendChild(el('li', null, 'Nothing yet — click ✎ note on any section, a verdict on a Questionable, or propose… on a phase.'));
+    if (!persisted) msg.textContent = '⚠ localStorage unavailable — review state lives only in this tab.';
+  }
+  function buildExport() {
+    var L = ['plan-sota-review v1', 'plan: ' + FILE, 'title: ' + clean(document.title), 'exported: ' + new Date().toISOString(), ''];
+    var vk = Object.keys(state.v), sk = Object.keys(state.s), ak = Object.keys(state.a);
+    L.push('## verdicts');
+    vk.length ? vk.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | ' + clean(state.v[k].c) + ' | note: ' + (clean(state.a[k]) || '-'));
+    }) : L.push('- (none)');
+    L.push('', '## statuses');
+    sk.length ? sk.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | propose ' + state.s[k]);
+    }) : L.push('- (none)');
+    L.push('', '## annotations');
+    var solo = ak.filter(function (k) { return !state.v[k]; });
+    solo.length ? solo.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | ' + clean(state.a[k]));
+    }) : L.push('- (none)');
+    return L.join('\n');
+  }
+  exportBtn.addEventListener('click', function () {
+    var text = buildExport();
+    out.hidden = false; out.value = text;
+    out.focus(); out.select();
+    function done(m) { msg.textContent = m; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done('Copied — paste it into your next agent session.'); },
+        function () { done('Clipboard blocked — copy from the box below.'); });
+    } else {
+      try { done(document.execCommand('copy') ? 'Copied — paste it into your next agent session.' : 'Clipboard blocked — copy from the box below.'); }
+      catch (e) { done('Clipboard blocked — copy from the box below.'); }
+    }
+    if (window.lavish && typeof window.lavish.queuePrompt === 'function') {
+      window.lavish.queuePrompt(text, { tag: 'plan-sota-review', queueKey: 'plan-sota-review' });
+      msg.textContent += ' Also queued to the agent via Lavish.';
+    }
+  });
+  clearBtn.addEventListener('click', function () {
+    if (!confirm('Clear all review state for this plan?')) return;
+    state = { a: {}, v: {}, s: {} };
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    location.reload();
+  });
+  refresh();
+})();
+</script>
+
+<!-- Mermaid runtime — renders every <pre class="mermaid"> block. Only external reference in the file. -->
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      primaryColor: '#171D25',
+      primaryTextColor: '#E8EDF3',
+      primaryBorderColor: '#293341',
+      lineColor: '#8D99A8',
+      fontFamily: 'Inter,system-ui,-apple-system,sans-serif'
+    }
+  });
+</script>
+</body>
+</html>
