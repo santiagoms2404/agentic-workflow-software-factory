@@ -671,7 +671,7 @@ flowchart TD
 
   <!-- ================= M4 ================= -->
   <div class="phase">
-    <h3><code class="status">[]</code> Milestone M4: The no-skill fence</h3>
+    <h3><code class="status">[wip]</code> Milestone M4: The no-skill fence</h3>
     <p>The standing constraint made mechanical, on the three legs a stage can reach a document through. This milestone builds a test and nothing else, which is why it stays in W11 rather than being routed away: a test is not a mechanism. It is independent of M3 and may run before it, after it, or beside it.</p>
 
     <figure>
@@ -690,10 +690,10 @@ flowchart LR
     <h4>13. Leg one — the composed prompt carries no skill-invocation shape</h4>
     <p class="serves"><code class="serves">INV-3</code></p>
     <ul class="checklist">
-      <li><code class="status">[]</code> Create <code>core/test/unit/meta/no-skill-in-stages.test.ts</code>. For every stage in the contract whose owner is a role rather than the host, resolve its prompt <strong>through W06's single composition site</strong>, so the scan reads the bytes that actually reach a provider rather than one role fragment</li>
-      <li><code class="status">[]</code> Assert the composed bytes contain no leading-slash command invocation, no <code>SKILL.md</code>, no <code>skills/</code> path segment, and no <code>.claude</code> path</li>
-      <li><code class="status">[]</code> Assert the composed bytes contain no instruction of the form "read &lt;document&gt; before" — the shape that makes a phase depend on a document without ever naming a skill. Keep the pattern list short, name each one in a comment, and state in the header that it catches shapes rather than intentions</li>
-      <li><code class="status">[]</code> Report offenders as file plus matched text, so a failure says what was found rather than only that something was</li>
+      <li><code class="status">[x]</code> Create <code>core/test/unit/meta/no-skill-in-stages.test.ts</code>. For every stage in the contract whose owner is a role rather than the host, resolve its prompt <strong>through W06's single composition site</strong>, so the scan reads the bytes that actually reach a provider rather than one role fragment</li>
+      <li><code class="status">[x]</code> Assert the composed bytes contain no leading-slash command invocation, no <code>SKILL.md</code>, no <code>skills/</code> path segment, and no <code>.claude</code> path</li>
+      <li><code class="status">[x]</code> Assert the composed bytes contain no instruction of the form "read &lt;document&gt; before" — the shape that makes a phase depend on a document without ever naming a skill. Keep the pattern list short, name each one in a comment, and state in the header that it catches shapes rather than intentions</li>
+      <li><code class="status">[x]</code> Report offenders as file plus matched text, so a failure says what was found rather than only that something was</li>
     </ul>
 
     <h4>14. Leg two — nothing reachable from the stage module reaches a document tree</h4>
