@@ -489,10 +489,10 @@ flowchart LR
     <h4>3. Schema-fit every capture against the thirteen landed schemas</h4>
     <p class="serves"><code class="serves">INV-2</code> <code class="serves">AC-3</code></p>
     <ul class="checklist">
-      <li><code class="status">[]</code> For each of <code>S1</code>–<code>S5</code>, drive <code>core/src/contracts/parse-envelope.ts</code> against <strong>every</strong> id in <code>ENVELOPE_SCHEMAS</code> and record the result. The fit is measured, never judged by reading the output and deciding it looks like a build envelope</li>
-      <li><code class="status">[]</code> Write <code>core/test/fixtures/stages/schema-fit.json</code>: per stage, either <code>{ fits: "&lt;schema-id&gt;" }</code>, or <code>{ misfit: { closest: "&lt;schema-id&gt;", violations: [...] } }</code> carrying the real <code>ValidationViolation[]</code> from the parser, using the five-kind vocabulary in <code>stored-envelope.ts</code></li>
-      <li><code class="status">[]</code> Where two schemas both validate, record both and name which one the stage's producer actually declares — a stage whose output validates against a schema its producer never claims is itself a finding</li>
-      <li><code class="status">[]</code> <strong>Register nothing.</strong> <code>core/src/contracts/registry.ts</code> is not edited by this workstream and <code>ENVELOPE_SCHEMAS</code> keeps exactly thirteen entries</li>
+      <li><code class="status">[x]</code> For each of <code>S1</code>–<code>S5</code>, drive <code>core/src/contracts/parse-envelope.ts</code> against <strong>every</strong> id in <code>ENVELOPE_SCHEMAS</code> and record the result. The fit is measured, never judged by reading the output and deciding it looks like a build envelope</li>
+      <li><code class="status">[x]</code> Write <code>core/test/fixtures/stages/schema-fit.json</code>: per stage, either <code>{ fits: "&lt;schema-id&gt;" }</code>, or <code>{ misfit: { closest: "&lt;schema-id&gt;", violations: [...] } }</code> carrying the real <code>ValidationViolation[]</code> from the parser, using the five-kind vocabulary in <code>stored-envelope.ts</code></li>
+      <li><code class="status">[x]</code> Where two schemas both validate, record both and name which one the stage's producer actually declares — a stage whose output validates against a schema its producer never claims is itself a finding</li>
+      <li><code class="status">[x]</code> <strong>Register nothing.</strong> <code>core/src/contracts/registry.ts</code> is not edited by this workstream and <code>ENVELOPE_SCHEMAS</code> keeps exactly thirteen entries</li>
     </ul>
 
     <h4>4. Route every misfit to W05, and bound the block to what consumes it</h4>
