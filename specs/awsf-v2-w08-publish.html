@@ -852,18 +852,18 @@ stateDiagram-v2
 
   <!-- ================= M8 ================= -->
   <div class="phase">
-    <h3><code class="status">[]</code> Milestone M8: The whole path end to end, and the close</h3>
+    <h3><code class="status">[wip]</code> Milestone M8: The whole path end to end, and the close</h3>
     <p>One journey test carries the workstream's whole claim, and one task closes the spine marker. Nothing else happens here.</p>
 
     <h4>23. The journey: landed candidate to bare remote, offline</h4>
     <p class="serves"><code class="serves">AC-2</code> <code class="serves">AC-3</code></p>
     <ul class="checklist">
-      <li><code class="status">[]</code> Create <code>core/test/journeys/publish.test.ts</code> in the idiom of <code>human-gate.test.ts</code>: drive a task to <code>LANDED</code> through the real command surface, then publish it to a bare remote created in a temporary directory</li>
-      <li><code class="status">[]</code> The bare repository's <code>ls-remote</code> reports the exact landed candidate afterwards; the attempt is <code>PUBLISHED</code>; the journal carries exactly one <code>publish</code> record naming that revision, on the <code>L27</code> transition</li>
-      <li><code class="status">[]</code> A second <code>awsf publish</code> on the same task is refused because the attempt is sealed, and the remote ref is byte-identical</li>
-      <li><code class="status">[]</code> Every pre-<code>LANDED</code> state is refused end to end: for each member of <code>TASK_STATES</code> except <code>LANDED</code> — <strong><code>PUBLISHED</code> included</strong> — drive or construct an attempt in that state, attempt a publish, and assert the refusal is <code>not-landed</code> and that <strong>the bare repository's refs are unchanged</strong></li>
-      <li><code class="status">[]</code> Extend <code>human-gate.test.ts</code>'s API-source assertion by name: the API source reaches neither <code>commands/publish</code> nor <code>git/publish</code>, exactly as it reaches neither landing module</li>
-      <li><code class="status">[]</code> <strong>Nothing in this file resolves a hostname, opens a socket, or names a remote outside the temporary directory.</strong> Assert it structurally: the only remote URLs configured in the whole file are paths under the test's own root</li>
+      <li><code class="status">[x]</code> Create <code>core/test/journeys/publish.test.ts</code> in the idiom of <code>human-gate.test.ts</code>: drive a task to <code>LANDED</code> through the real command surface, then publish it to a bare remote created in a temporary directory</li>
+      <li><code class="status">[x]</code> The bare repository's <code>ls-remote</code> reports the exact landed candidate afterwards; the attempt is <code>PUBLISHED</code>; the journal carries exactly one <code>publish</code> record naming that revision, on the <code>L27</code> transition</li>
+      <li><code class="status">[x]</code> A second <code>awsf publish</code> on the same task is refused because the attempt is sealed, and the remote ref is byte-identical</li>
+      <li><code class="status">[x]</code> Every pre-<code>LANDED</code> state is refused end to end: for each member of <code>TASK_STATES</code> except <code>LANDED</code> — <strong><code>PUBLISHED</code> included</strong> — drive or construct an attempt in that state, attempt a publish, and assert the refusal is <code>not-landed</code> and that <strong>the bare repository's refs are unchanged</strong></li>
+      <li><code class="status">[x]</code> Extend <code>human-gate.test.ts</code>'s API-source assertion by name: the API source reaches neither <code>commands/publish</code> nor <code>git/publish</code>, exactly as it reaches neither landing module</li>
+      <li><code class="status">[x]</code> <strong>Nothing in this file resolves a hostname, opens a socket, or names a remote outside the temporary directory.</strong> Assert it structurally: the only remote URLs configured in the whole file are paths under the test's own root</li>
     </ul>
 
     <h4>24. Testing Strategy and the close</h4>

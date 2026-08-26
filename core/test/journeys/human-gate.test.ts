@@ -280,5 +280,8 @@ test("there is one L20 call site and no API module can reach it", () => {
     .filter((name) => name.endsWith(".ts"))
     .map((name) => readFileSync(join(api, name), "utf8"))
     .join("\n");
-  assert.doesNotMatch(apiSource, /commands\/land|git\/land|\blandCommand\b/);
+  assert.doesNotMatch(
+    apiSource,
+    /commands\/land|git\/land|\blandCommand\b|commands\/publish|git\/publish|\bpublishCommand\b/,
+  );
 });
