@@ -25,6 +25,7 @@ import { newCommand } from "./commands/new.ts";
 import { publishCommand } from "./commands/publish.ts";
 import { raiseCommand } from "./commands/raise.ts";
 import { quotaCommand } from "./commands/quota.ts";
+import { stageCommand } from "./commands/stage.ts";
 import { locateAttempt } from "./commands/attempt.ts";
 import { retryCommand } from "./commands/retry.ts";
 import { reviewCommand } from "./commands/review.ts";
@@ -39,7 +40,7 @@ import { watchCommand } from "./commands/watch.ts";
 /** The complete owner-facing command table; documentation reconciles against it. */
 export const CLI_COMMANDS = Object.freeze([
   "init", "project", "new", "start", "run", "status", "watch", "rework", "review", "raise", "journey", "land", "publish", "cancel", "retry",
-  "doctor", "gc", "dash", "db rebuild", "ticket", "backlog", "quota",
+  "doctor", "gc", "dash", "db rebuild", "ticket", "backlog", "quota", "stage",
 ]);
 
 const USAGE = `usage: awsf init [path] --project <slug>\n       awsf <${CLI_COMMANDS.join("|")}> [task] [options]`;
@@ -186,6 +187,17 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         env: commandEnvironment(env),
       });
       for (const line of report.lines) out(line);
+      return 0;
+    }
+    if (command === "stage") {
+      const unsupportedFlags = Object.keys(parsed.flags).filter((flag) => flag !== "catalog" && flag !== "state-root");
+      if (parsed.positionals.length !== 0 || parsed.repositories.length !== 0 || unsupportedFlags.length !== 0) {
+        throw new Error("usage: awsf stage [--catalog PATH] [--state-root PATH]");
+      }
+      for (const line of await stageCommand({
+        catalogPath: resolve(parsed.flags.catalog ?? `${cwd}/awsf.project.yaml`),
+        stateRoot,
+      })) out(line);
       return 0;
     }
     if (command === "backlog") {

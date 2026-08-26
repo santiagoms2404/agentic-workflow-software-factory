@@ -591,10 +591,10 @@ flowchart LR
       <p>The spine's W12 block lists W11 among the workstreams that "add or change a command the reader will type", alongside W03's bootstrap, W07's readout and W08's publish. That evidence reversed this task's own recommendation during authoring, and the owner took it. <strong><code>awsf stage</code> is built.</strong> It also settles a debt the rest of the plan incurs: <code>INV-4</code>'s absence is invisible in the projection, so without this readout a stopped project and a finished one look identical. The readout is what makes the stop legible without making it a state.</p>
     </div>
     <ul class="checklist">
-      <li><code class="status">[]</code> Create <code>core/src/cli/commands/stage.ts</code> and wire it in <code>core/src/cli/main.ts</code> beside <code>project</code> and <code>quota</code>, which are the two closest existing read-only commands</li>
-      <li><code class="status">[]</code> It resolves the project through the registry, reads the journal through <code>queries.ts</code>, calls the resolver, and prints. <strong>It takes no flag that acts</strong> — no <code>--advance</code>, no <code>--next</code>, no <code>--run</code></li>
-      <li><code class="status">[]</code> The rendered line for a stopped project says what stopped it and what the owner types, because the absence in <code>INV-4</code> is invisible in the projection and this readout is the only thing that makes it legible</li>
-      <li><code class="status">[]</code> No new API route. <code>core/test/unit/meta/no-land-route.test.ts</code> already bars lifecycle-write routes from the dashboard surface, and a stage route would be new surface this workstream has no reason to add</li>
+      <li><code class="status">[x]</code> Create <code>core/src/cli/commands/stage.ts</code> and wire it in <code>core/src/cli/main.ts</code> beside <code>project</code> and <code>quota</code>, which are the two closest existing read-only commands</li>
+      <li><code class="status">[x]</code> It resolves the project through the registry, reads the journal through <code>queries.ts</code>, calls the resolver, and prints. <strong>It takes no flag that acts</strong> — no <code>--advance</code>, no <code>--next</code>, no <code>--run</code></li>
+      <li><code class="status">[x]</code> The rendered line for a stopped project says what stopped it and what the owner types, because the absence in <code>INV-4</code> is invisible in the projection and this readout is the only thing that makes it legible</li>
+      <li><code class="status">[x]</code> No new API route. <code>core/test/unit/meta/no-land-route.test.ts</code> already bars lifecycle-write routes from the dashboard surface, and a stage route would be new surface this workstream has no reason to add</li>
     </ul>
 
     <h4>9. Testing Strategy</h4>
