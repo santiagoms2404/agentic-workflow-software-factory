@@ -802,16 +802,16 @@ stateDiagram-v2
 
   <!-- ================= M7 ================= -->
   <div class="phase">
-    <h3><code class="status">[]</code> Milestone M7: The amendment verified, and the fence that replaces the scan <span class="gate">G8-A</span></h3>
+    <h3><code class="status">[wip]</code> Milestone M7: The amendment verified, and the fence that replaces the scan <span class="gate">G8-A</span></h3>
     <p>Everything before this milestone was buildable under invariant 8 as written, because the scan cannot see the argv site that has existed since task 6. That is precisely why the gate needs a verification step with teeth rather than a red test.</p>
 
     <h4>19. Verify the amendment landed, and stop if it did not</h4>
     <p class="serves"><code class="serves">INV-2</code></p>
     <ul class="checklist">
-      <li><code class="status">[]</code> Read <code>AGENTS.md</code> and confirm invariant 8 carries the amended text drafted in this plan's Amendment section — specifically the phrase <em>no push path exists from any pre-<code>LANDED</code> state</em> and the two named enforcing files</li>
-      <li><code class="status">[]</code> If the amendment has <strong>not</strong> landed: mark this task <code>[f]</code>, mark M7 <code>[f]</code>, stop, and report to the owner. <strong>Do not edit <code>AGENTS.md</code>. Do not add an override, an exemption, an allowlist entry, or a comment asking a future session to skip this check.</strong> No agent may write a protected path, and routing around one is not an option this ticket set offers</li>
-      <li><code class="status">[]</code> If it has landed, record the commit SHA in this plan's Amendments section in the same commit as the marker flip — so the plan that asked for the amendment also records that it arrived</li>
-      <li><code class="status">[]</code> Confirm no other invariant moved in that commit. An amendment that quietly widened a second rule is a different amendment from the one this plan drafted</li>
+      <li><code class="status">[x]</code> Read <code>AGENTS.md</code> and confirm invariant 8 carries the amended text drafted in this plan's Amendment section — specifically the phrase <em>no push path exists from any pre-<code>LANDED</code> state</em> and the two named enforcing files</li>
+      <li><code class="status">[x]</code> If the amendment has <strong>not</strong> landed: mark this task <code>[f]</code>, mark M7 <code>[f]</code>, stop, and report to the owner. <strong>Do not edit <code>AGENTS.md</code>. Do not add an override, an exemption, an allowlist entry, or a comment asking a future session to skip this check.</strong> No agent may write a protected path, and routing around one is not an option this ticket set offers</li>
+      <li><code class="status">[x]</code> If it has landed, record the commit SHA in this plan's Amendments section in the same commit as the marker flip — so the plan that asked for the amendment also records that it arrived</li>
+      <li><code class="status">[x]</code> Confirm no other invariant moved in that commit. An amendment that quietly widened a second rule is a different amendment from the one this plan drafted</li>
     </ul>
 
     <h4>20. Amend the absence scan: remove one clause, add three</h4>
@@ -1086,6 +1086,11 @@ flowchart TD
     <p><strong>Q2 — a new <code>PUBLISHED</code> state.</strong> This added a milestone, four tasks, two owner-authored commits, one identifier invariant and one acceptance criterion. The plan grew from 7 milestones and 20 tasks to 8 and 24.</p>
     <p><strong>Two things were found while implementing Q2 that the first draft had wrong or had not read.</strong> First, <code>persistAttempt</code> throws <code>SealedAttempt</code> on a terminal attempt, so a landed attempt's journal accepts nothing — which means <em>both</em> Q2 options needed the seal opened, and the one-commit-versus-two comparison the owner was shown was wrong in favour of the recommendation. Second, <code>sessions.lifecycle_state</code> carries a <code>CHECK</code> constraint listing the ten current states, so a new state needs a migration in a protected directory — and that migration cannot run against the current migration runner, because <code>node:sqlite</code> defaults <code>foreign_keys</code> to ON and seven tables reference <code>sessions</code> with <code>RESTRICT</code>. Three rebuild routes were measured; one works, and it needs an agent-writable pragma hoist that must land before the owner's migration commit.</p>
     <p><strong>No implementation code was written and nothing was committed.</strong> The build prompts and the ticket set were regenerated from the revised plan, and the ticket README records the new gates and derived rules.</p>
+  </details>
+  <details>
+    <summary>2026-08-25 — G8-A landed: invariant 8 publication amendment</summary>
+    <p><strong>Owner-authored commit <code>96c72cc</code> landed the G8-A amendment.</strong> Invariant 8 now permits publication only from <code>LANDED</code>, names <code>core/src/publish/authorize.ts</code> and <code>core/src/publish/argv.ts</code> as the authorization and argv boundaries, and retains unconditional force and auto-delete prohibitions.</p>
+    <p><strong>Verification:</strong> <code>git diff-tree --no-commit-id --name-only -r 96c72cc</code> reports only <code>AGENTS.md</code>. The diff changes invariant 8; invariant 12's indentation also changed without changing its text or meaning. No other invariant was substantively widened or narrowed. Commit author and committer are <code>Santiago Marin &lt;santiagomarinsuarez@me.com&gt;</code>.</p>
   </details>
   <details>
     <summary>2026-08-25 — M1 completed: ordered authorization truth table</summary>
