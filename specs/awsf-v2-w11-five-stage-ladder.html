@@ -616,8 +616,8 @@ flowchart LR
 
   <!-- ================= M3 ================= -->
   <div class="phase">
-    <h3><code class="status">[wip]</code> Milestone M3: The stops, proven to stop</h3>
-    <p>Four boundaries, three mechanisms, one observation. This milestone turns the spine's <em>"the explicit stopping points stop, provably"</em> into a static scan plus four behavioural tests, and it deliberately builds nothing that could be removed to make a project advance — because there is nothing there to remove.</p>
+    <h3><code class="status">[x]</code> Milestone M3: The stops, proven to stop</h3>
+    <p>Four boundaries, two of the three mechanisms in play, one observation. This milestone turns the spine's <em>"the explicit stopping points stop, provably"</em> into a static scan plus four behavioural tests, and it deliberately builds nothing that could be removed to make a project advance — because there is nothing there to remove.</p>
 
     <figure>
       <pre class="mermaid">
@@ -656,12 +656,12 @@ flowchart TD
     <p class="serves"><code class="serves">INV-4</code> <code class="serves">AC-4</code></p>
     <p>The behavioural half. Each boundary is driven on the stub route to the point where the earlier stage completes, and then the absence triple is observed. The third element uses the <code>RouteLog</code> idiom from <code>core/test/journeys/t2-production.test.ts</code>, which records every provider actually contacted — so "nothing ran" is an observation about a log rather than an inference from a passing assertion.</p>
     <ul class="checklist">
-      <li><code class="status">[]</code> <code>core/test/unit/stages/stops.test.ts</code>: four tests, one per boundary, each driving the earlier stage to completion in a temporary directory on the stub route</li>
-      <li><code class="status">[]</code> Each test asserts the triple after completion: <code>listSessions</code> returns no session beyond the ones the earlier stage created; no new attempt directory exists on disk; and the route log recorded no provider launch</li>
-      <li><code class="status">[]</code> Each test also asserts the mechanism <code>boundaries.json</code> names for that row is the mechanism actually in play — a row claiming <code>terminal-seal</code> whose stage ends in <code>AWAITING_OWNER</code> is a wrong row, and it goes red</li>
-      <li><code class="status">[]</code> A wait-and-see assertion at one boundary: after the earlier stage completes, advance nothing and re-observe the triple a second time, so a deferred advance has somewhere to show up</li>
-      <li><code class="status">[]</code> <strong>Prove the static scan bites</strong>: add a <code>setTimeout</code> under <code>core/src/stages/</code> in a throwaway edit, watch <code>no-stage-advance.test.ts</code> go red, remove it, watch it go green. Record the observation</li>
-      <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green. No network, no quota</li>
+      <li><code class="status">[x]</code> <code>core/test/unit/stages/stops.test.ts</code>: four tests, one per boundary, each driving the earlier stage to completion in a temporary directory on the stub route</li>
+      <li><code class="status">[x]</code> Each test asserts the triple after completion: <code>listSessions</code> returns no session beyond the ones the earlier stage created; no new attempt directory exists on disk; and the route log recorded no provider launch</li>
+      <li><code class="status">[x]</code> Each test also asserts the mechanism <code>boundaries.json</code> names for that row is the mechanism actually in play — a row claiming <code>terminal-seal</code> whose stage ends in <code>AWAITING_OWNER</code> is a wrong row, and it goes red</li>
+      <li><code class="status">[x]</code> A wait-and-see assertion at one boundary: after the earlier stage completes, advance nothing and re-observe the triple a second time, so a deferred advance has somewhere to show up</li>
+      <li><code class="status">[x]</code> <strong>Prove the static scan bites</strong>: add a <code>setTimeout</code> under <code>core/src/stages/</code> in a throwaway edit, watch <code>no-stage-advance.test.ts</code> go red, remove it, watch it go green. Record the observation</li>
+      <li><code class="status">[x]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green. No network, no quota</li>
     </ul>
     <div class="loop">
       🔁 <strong>Do not exit this milestone until every box above is checked.</strong> A boundary that will not stop is a finding about the boundary, never a reason to weaken the triple.
@@ -996,6 +996,14 @@ flowchart LR
     <p><strong>M1 completed.</strong> The stub-route capture produced the ordered five-stage fixture and S1–S5 output fixtures. The scrub and schema-fit tests pass; S1, S2 and S5 are recorded misfits routed to W05 under <code>W05-HOST-COMMAND-ENVELOPES</code>, without a schema addition here.</p>
     <p><strong>M2 completed.</strong> The contract is joined to the fixture by field and order, the resolver is tested from canned journal rows at all five positions and both edges, and the read-only <code>awsf stage</code> readout is tested against a canned projection for path-free output and absence of acting flags. The induced contract-only rename failed with the expected <code>initialize</code> versus <code>init</code> deep-equality diff, then passed after restoration; the exact text is retained in T09.</p>
     <p>Validation: <code>npm run test:unit</code> passed 1429/1429 in 295.7 seconds; <code>npm run typecheck</code> and <code>npm run lint</code> exited 0.</p>
+  </details>
+  <details>
+    <summary>2026-08-26 — M3 completed: four boundaries, and only two of the three mechanisms are real</summary>
+    <p><strong>The finding the milestone was written to produce is a subtraction.</strong> <code>boundaries.json</code> records <code>terminal-seal</code> at zero. Two boundaries — <code>init</code>→<code>project-register</code> and <code>project-register</code>→<code>design-to-plan</code> — are held by <code>no-path</code>: the host command returns having created no session, no task and no lifecycle, so <code>LEGAL_EDGES</code> supplies nothing to advance. The other two — <code>design-to-plan</code>→<code>build</code> and <code>build</code>→<code>publish</code> — are held by <code>awaiting-owner</code> on stopping edge <code>L12</code> out of <code>GATING</code>. The vocabulary keeps all three names because a future stage may seal; what the run showed is two. The M3 header sentence was corrected from "three mechanisms" to match, and no checklist item moved.</p>
+    <p><strong>T10's <code>awaiting-owner</code> check would not hold as the plan literally worded it.</strong> The plan asked to confirm <em>every</em> edge out of <code>AWAITING_OWNER</code> carries actor <code>human</code> or <code>owner</code>. It does not: <code>L21</code> is host-only. What the edge table actually supports is the narrower claim, and it is the one the fixture records — <code>L21</code> lands in sealed <code>BLOCKED</code>, so every <em>non-terminal</em> edge out of <code>AWAITING_OWNER</code> carries <code>human</code> or <code>owner</code>, and no host edge can start, resume, land or otherwise advance the project. Both rows carry that exception in <code>edgeTableException</code> rather than in prose.</p>
+    <p><strong>T11's fence forced the one source change in this milestone.</strong> <code>core/src/stages/resolve.ts</code> imported <code>ResolvedProject</code> from <code>core/src/registry/resolve.ts</code> as a type. The transitive walk counts a type-only import as an edge — correctly, because the fence is about what the module reaches, not what survives compilation — and that edge ran <code>core/src/stages/resolve.ts → core/src/registry/resolve.ts → core/src/git/changes.ts → core/src/execution/transport-broker.ts</code>. The import was replaced by a local structural type carrying <code>slug</code> alone, which is what <code>INV-5</code> asks for anyway: values in, not a handle to the thing that resolves them.</p>
+    <p><strong>The static scan was seen to bite.</strong> A throwaway <code>setTimeout(() =&gt; {}, 0)</code> in <code>core/src/stages/contract.ts</code> failed <code>no-stage-advance.test.ts</code> with <code>'core/src/stages/contract.ts:90:1 uses setTimeout'</code> against an expected empty offender list; the fence returned 3/3 green once it was removed. The exact diff is retained in T12.</p>
+    <p>Validation: <code>npm run test:unit</code> passed 1436/1436 in 286.96 seconds; <code>npm run typecheck</code> and <code>npm run lint</code> exited 0.</p>
   </details>
 </section>
 </main>
