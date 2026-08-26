@@ -33,6 +33,22 @@ test("an exact landed revision creates an absent bare-remote branch", () => {
   }
 });
 
+test("Git reports already-current when a retry reaches the push after a failed transition", () => {
+  const fixture = bareFixture();
+  try {
+    checkout(fixture.work, fixture.firstSha);
+    assert.deepEqual(publish(fixture, fixture.firstSha), { decision: "published", outcomes: ["created"] });
+
+    // This is the transport backstop only. `awsf publish` normally refuses a
+    // PUBLISHED attempt before it builds argv, but a crash after this push and
+    // before that transition leaves a LANDED retry to reach Git again.
+    assert.deepEqual(publish(fixture, fixture.firstSha), { decision: "published", outcomes: ["already-current"] });
+    assert.equal(remoteSha(fixture, "published"), fixture.firstSha);
+  } finally {
+    fixture.dispose();
+  }
+});
+
 test("a fast-forward preserves the literal-space porcelain flag and old..new summary", () => {
   const fixture = bareFixture();
   try {

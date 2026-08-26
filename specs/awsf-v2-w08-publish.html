@@ -746,7 +746,7 @@ stateDiagram-v2
 
   <!-- ================= M6 ================= -->
   <div class="phase">
-    <h3><code class="status">[wip]</code> Milestone M6: <code>awsf publish</code>, the record, and the seventh owner act</h3>
+    <h3><code class="status">[x]</code> Milestone M6: <code>awsf publish</code>, the record, and the seventh owner act</h3>
     <p>Three things land together because they cannot land apart: the command makes <code>publish</code> an owner act, <code>boundary-claims.test.ts</code> derives the owner acts from <code>main.ts</code> and goes red the moment the arm appears, and the guard that denies owner acts in a driving session has to learn the new verb in the same breath.</p>
 
     <h4>15. The command, the single authorization call, and the <code>L27</code> transition</h4>
@@ -786,14 +786,14 @@ stateDiagram-v2
     <h4>18. Testing Strategy: idempotent retry and the cascade meta-tests</h4>
     <p class="serves"><code class="serves">AC-3</code> <code class="serves">AC-6</code></p>
     <ul class="checklist">
-      <li><code class="status">[]</code> <strong>Idempotent retry, and the decision changed what proves it.</strong> A second <code>awsf publish</code> on a <code>PUBLISHED</code> attempt is refused by the state machine with <code>SealedAttempt</code> — asserted first, because that is now the primary mechanism. Git's <code>already-current</code> is asserted separately, at the module level, as the backstop for a retry that reaches the push after a transition failed</li>
-      <li><code class="status">[]</code> A declined confirmation runs no push, persists no transition and journals nothing — asserted on the injected runner having recorded no push and on the journal length being unchanged</li>
-      <li><code class="status">[]</code> The journalled record round-trips and carries no <code>://</code>, no <code>@</code>, and no value <code>containsCredential</code> matches — swept over the serialized line, not over the object</li>
-      <li><code class="status">[]</code> The projection shows <code>lifecycle_state = 'PUBLISHED'</code> after a publish, which is the end-to-end proof that <span class="gate">G8-C</span>'s migration and the projector agree</li>
-      <li><code class="status">[]</code> <code>node --test core/test/unit/meta/boundary-claims.test.ts</code> green with <strong>seven</strong> derived acts, and the derivation still discriminates: <code>retry</code> is a case arm and must still not be derived as an act</li>
-      <li><code class="status">[]</code> <code>node --test core/test/unit/meta/marimba-guard.test.ts</code> green, with the new deny row observed failing first against the unmodified guard</li>
-      <li><code class="status">[]</code> <code>node --test core/test/unit/meta/doc-reconciliation.test.ts core/test/unit/meta/driving-tree.test.ts core/test/unit/meta/no-land-route.test.ts core/test/unit/meta/no-write-route.test.ts</code> green</li>
-      <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green</li>
+      <li><code class="status">[x]</code> <strong>Idempotent retry, and the decision changed what proves it.</strong> A second <code>awsf publish</code> on a <code>PUBLISHED</code> attempt is refused by the state machine with <code>SealedAttempt</code> — asserted first, because that is now the primary mechanism. Git's <code>already-current</code> is asserted separately, at the module level, as the backstop for a retry that reaches the push after a transition failed</li>
+      <li><code class="status">[x]</code> A declined confirmation runs no push, persists no transition and journals nothing — asserted on the injected runner having recorded no push and on the journal length being unchanged</li>
+      <li><code class="status">[x]</code> The journalled record round-trips and carries no <code>://</code>, no <code>@</code>, and no value <code>containsCredential</code> matches — swept over the serialized line, not over the object</li>
+      <li><code class="status">[x]</code> The projection shows <code>lifecycle_state = 'PUBLISHED'</code> after a publish, which is the end-to-end proof that <span class="gate">G8-C</span>'s migration and the projector agree</li>
+      <li><code class="status">[x]</code> <code>node --test core/test/unit/meta/boundary-claims.test.ts</code> green with <strong>seven</strong> derived acts, and the derivation still discriminates: <code>retry</code> is a case arm and must still not be derived as an act</li>
+      <li><code class="status">[x]</code> <code>node --test core/test/unit/meta/marimba-guard.test.ts</code> green, with the new deny row observed failing first against the unmodified guard</li>
+      <li><code class="status">[x]</code> <code>node --test core/test/unit/meta/doc-reconciliation.test.ts core/test/unit/meta/driving-tree.test.ts core/test/unit/meta/no-land-route.test.ts core/test/unit/meta/no-write-route.test.ts</code> green</li>
+      <li><code class="status">[x]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green</li>
     </ul>
     <div class="loop">
       🔁 <strong>Do not exit this phase until every box above is checked.</strong> A failing command means fix the cause and re-run — never lower what the row asserts.

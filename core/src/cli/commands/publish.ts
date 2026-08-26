@@ -40,6 +40,7 @@ import {
   type AttemptProjector,
   type AttemptStatus,
 } from "./attempt.ts";
+import { SealedAttempt } from "../../persistence/attempt-lock.ts";
 
 type PublishPolicy = NonNullable<ProjectCatalog["repositories"][string]["publish"]>;
 
@@ -186,6 +187,10 @@ function display(
 
 export async function publishCommand(options: PublishCommandOptions): Promise<PublishCommandResult> {
   const current = await readAttempt(options.attemptDir);
+  // PUBLISHED is sealed before policy resolution or Git observation. A repeat
+  // publish therefore has the persistence boundary's refusal and cannot reach
+  // the argv site.
+  if (current.lifecycleState === "PUBLISHED") throw new SealedAttempt("PUBLISHED");
   const actor = options.actor ?? "human";
 
   // BEFORE any observation: a repository the catalog declares no policy for
