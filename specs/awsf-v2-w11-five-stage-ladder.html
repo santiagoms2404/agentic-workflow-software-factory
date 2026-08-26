@@ -645,11 +645,11 @@ flowchart TD
     <h4>11. The static scan: nothing in <code>core/src</code> advances a stage</h4>
     <p class="serves"><code class="serves">INV-4</code></p>
     <ul class="checklist">
-      <li><code class="status">[]</code> Create <code>core/test/unit/meta/no-stage-advance.test.ts</code> in the idiom of <code>core/test/unit/meta/no-land-route.test.ts</code>: a source scan whose finding is an empty offender list, reported with the offending file and line when it is not empty</li>
-      <li><code class="status">[]</code> Assert nothing reachable from <code>core/src/stages/**</code> imports the transport broker, the process controller, or any spawn site, following the transitive walk rather than a direct-import check</li>
-      <li><code class="status">[]</code> Assert no timer primitive — <code>setTimeout</code>, <code>setInterval</code>, <code>setImmediate</code>, or a scheduled callback — appears anywhere under <code>core/src/stages/**</code>. W07 established that a stop with a timer behind it is not a stop</li>
-      <li><code class="status">[]</code> Assert <code>awsf stage</code> exposes no flag whose effect is to start the next stage. The check is over the parsed flag list, not over prose in a help string</li>
-      <li><code class="status">[]</code> Write the header comment stating what this fence buys and what it does not: it proves no advancing path exists in <code>core/src</code>, and it says nothing about what a person types</li>
+      <li><code class="status">[x]</code> Create <code>core/test/unit/meta/no-stage-advance.test.ts</code> in the idiom of <code>core/test/unit/meta/no-land-route.test.ts</code>: a source scan whose finding is an empty offender list, reported with the offending file and line when it is not empty</li>
+      <li><code class="status">[x]</code> Assert nothing reachable from <code>core/src/stages/**</code> imports the transport broker, the process controller, or any spawn site, following the transitive walk rather than a direct-import check</li>
+      <li><code class="status">[x]</code> Assert no timer primitive — <code>setTimeout</code>, <code>setInterval</code>, <code>setImmediate</code>, or a scheduled callback — appears anywhere under <code>core/src/stages/**</code>. W07 established that a stop with a timer behind it is not a stop</li>
+      <li><code class="status">[x]</code> Assert <code>awsf stage</code> exposes no flag whose effect is to start the next stage. The check is over the parsed flag list, not over prose in a help string</li>
+      <li><code class="status">[x]</code> Write the header comment stating what this fence buys and what it does not: it proves no advancing path exists in <code>core/src</code>, and it says nothing about what a person types</li>
     </ul>
 
     <h4>12. Testing Strategy</h4>

@@ -4,7 +4,6 @@
 // journal by the caller. This module holds no database handle, performs no
 // transition, and never goes and looks.
 
-import type { ResolvedProject } from "../registry/resolve.ts";
 import type {
   EnvelopeRow,
   PhaseRow,
@@ -20,6 +19,10 @@ export interface StageEnvelopeRow extends EnvelopeRow {
 
 export interface StageTransitionRow extends TransitionRow {
   readonly session_id: string;
+}
+
+interface ResolvedProjectValue {
+  readonly slug: string;
 }
 
 export interface StageJournalRows {
@@ -67,7 +70,7 @@ function compareEvidence(left: StageEnvelopeRow, right: StageEnvelopeRow, phases
 }
 
 /** Answers where the project is and what the owner types next. It never acts. */
-export function resolveStage(project: ResolvedProject, rows: StageJournalRows): StageResolution {
+export function resolveStage(project: ResolvedProjectValue, rows: StageJournalRows): StageResolution {
   const sessions = rows.sessions.filter((session) => session.project_slug === project.slug);
   if (sessions.length === 0) {
     const first = STAGES[0];
