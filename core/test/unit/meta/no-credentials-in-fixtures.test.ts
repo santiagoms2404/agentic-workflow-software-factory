@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { repoRoot, walkFiles, relRepo } from "./_walk.ts";
 import { DRIVING_REL, drivingTextFiles } from "./_driving.ts";
+import { ABSOLUTE_PATH } from "./_fixture-scrub.ts";
 import { CREDENTIAL_PATTERNS } from "../../../src/policy/redaction.ts";
 
 /** The one predicate every sweep below shares, so the companion test proves the real thing. */
@@ -26,8 +27,6 @@ const PUBLIC_REGISTRY = "https://registry.npmjs.org/";
 
 /** Keys npm writes when a registry required authentication. None may be present. */
 const AUTH_KEYS = ["_auth", "_authToken", "auth", "authToken", "password", "token", "certfile", "keyfile"];
-
-const ABSOLUTE_PATH = /^(\/|[A-Za-z]:[\\/]|\\\\|~\/|file:)/;
 
 test("no credential-shaped values in test fixtures", () => {
   // `.jsonl` and `.md` are on this list because M4's real-adapter fixtures are

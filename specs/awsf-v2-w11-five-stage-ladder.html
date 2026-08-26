@@ -447,7 +447,7 @@ flowchart LR
 
   <!-- ================= M1 ================= -->
   <div class="phase">
-    <h3><code class="status">[wip]</code> Milestone M1: The capture pass</h3>
+    <h3><code class="status">[x]</code> Milestone M1: The capture pass</h3>
     <p>The first task of the workstream, not a preliminary to it. Five stage outputs and one stage list go into the tree as fixtures, and the schema-fit table records what each one validates against. <strong>Nothing is designed in this milestone.</strong> The only judgement it makes is which of the thirteen landed schemas a capture validates against, and even that is made by the parser rather than by a reader.</p>
 
     <figure>
@@ -508,13 +508,13 @@ flowchart LR
     <p class="serves"><code class="serves">AC-1</code> <code class="serves">AC-2</code> <code class="serves">AC-3</code></p>
     <p>This milestone's test is a fixture test, and it runs with <code>core/src/stages/</code> absent — which is the mechanical form of the ordering claim. It reuses the two existing predicates rather than copying them, so the scrub assertion cannot drift away from the fence that already enforces the same rule elsewhere.</p>
     <ul class="checklist">
-      <li><code class="status">[]</code> <code>npm run test:unit</code> — <code>core/test/unit/stages/fixtures.test.ts</code>: every fixture parses as JSON; <code>stages.json</code> holds exactly five entries with contiguous ordinals 1–5 and all six required fields on each</li>
-      <li><code class="status">[]</code> The scrub assertion imports <code>CREDENTIAL_PATTERNS</code> from <code>core/src/policy/redaction.ts</code> and reuses the absolute-path predicate the fixture fence already applies. No new copy of either</li>
-      <li><code class="status">[]</code> An id-shape assertion: no value in any capture matches the shapes a session, attempt or run id takes in this project's own records</li>
-      <li><code class="status">[]</code> <code>schema-fit.json</code> covers all five stages, and every <code>fits</code> value is a key of <code>ENVELOPE_SCHEMAS</code> <strong>as imported</strong>, so a schema id removed later turns this red rather than silently passing</li>
-      <li><code class="status">[]</code> Every recorded <code>fits</code> claim is re-verified in the test by running the parser again — the table is checked, not trusted</li>
-      <li><code class="status">[]</code> <strong>The ordering check</strong>: assert <code>core/src/stages/</code> does not exist. It is deleted from this assertion by T06 and not before, and the commit history shows M1's commits preceding M2's</li>
-      <li><code class="status">[]</code> <code>npm run typecheck</code> and <code>npm run lint</code> green</li>
+      <li><code class="status">[x]</code> <code>npm run test:unit</code> — <code>core/test/unit/stages/fixtures.test.ts</code>: every fixture parses as JSON; <code>stages.json</code> holds exactly five entries with contiguous ordinals 1–5 and all six required fields on each</li>
+      <li><code class="status">[x]</code> The scrub assertion imports <code>CREDENTIAL_PATTERNS</code> from <code>core/src/policy/redaction.ts</code> and reuses the absolute-path predicate the fixture fence already applies. No new copy of either</li>
+      <li><code class="status">[x]</code> An id-shape assertion: no value in any capture matches the shapes a session, attempt or run id takes in this project's own records</li>
+      <li><code class="status">[x]</code> <code>schema-fit.json</code> covers all five stages, and every <code>fits</code> value is a key of <code>ENVELOPE_SCHEMAS</code> <strong>as imported</strong>, so a schema id removed later turns this red rather than silently passing</li>
+      <li><code class="status">[x]</code> Every recorded <code>fits</code> claim is re-verified in the test by running the parser again — the table is checked, not trusted</li>
+      <li><code class="status">[x]</code> <strong>The ordering check</strong>: assert <code>core/src/stages/</code> does not exist. It is deleted from this assertion by T06 and not before, and the commit history shows M1's commits preceding M2's</li>
+      <li><code class="status">[x]</code> <code>npm run typecheck</code> and <code>npm run lint</code> green</li>
     </ul>
     <div class="loop">
       🔁 <strong>Do not exit this milestone until every box above is checked.</strong> If a command fails, fix the cause and re-run — never lower what the row asserts. In particular: a fixture that will not scrub is not a fixture to relax the scrub for.
