@@ -523,7 +523,7 @@ flowchart LR
 
   <!-- ================= M2 ================= -->
   <div class="phase">
-    <h3><code class="status">[wip]</code> Milestone M2: The stage contract and the resolver</h3>
+    <h3><code class="status">[x]</code> Milestone M2: The stage contract and the resolver</h3>
     <p>Now the stages have names, and every name came from a fixture. This milestone declares them as values, builds a pure function that answers <em>where is this project and what does the owner do next</em>, and puts that answer on a read-only command. Nothing here acts on a project.</p>
 
     <figure>
@@ -601,13 +601,13 @@ flowchart LR
     <p class="serves"><code class="serves">INV-1</code> <code class="serves">INV-5</code></p>
     <p>Two tests, and the first is the one that matters. The contract test is a pure equality between a hand-written module and a captured fixture — it exists so that a later session which "improves" a stage name in the module, and not in the fixture, gets a red suite instead of a plausible-looking drift.</p>
     <ul class="checklist">
-      <li><code class="status">[]</code> <code>core/test/unit/stages/contract.test.ts</code>: <code>contract.ts</code>'s five records are deep-equal to <code>stages.json</code>'s five entries, field by field, in order. Editing either alone goes red</li>
-      <li><code class="status">[]</code> <code>STAGE_ORDER</code> has five members matching the fixture's ordinals, and every <code>schemaId</code> present is a key of <code>ENVELOPE_SCHEMAS</code></li>
-      <li><code class="status">[]</code> <code>core/test/unit/stages/resolve.test.ts</code>: the resolver at each of the five positions plus both edges, over canned journal rows built in the test rather than read from a database</li>
-      <li><code class="status">[]</code> A purity assertion: calling the resolver twice with the same inputs returns deep-equal answers, and the inputs are unmodified afterwards</li>
-      <li><code class="status">[]</code> <strong>Prove the join bites</strong>: rename one stage in <code>contract.ts</code> only, watch <code>contract.test.ts</code> go red, restore it, and watch it go green. Record the observation in the ticket</li>
-      <li><code class="status">[]</code> A readout test over a canned projection asserting the printed output contains no absolute path, and asserting the command exposes no acting flag</li>
-      <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green</li>
+      <li><code class="status">[x]</code> <code>core/test/unit/stages/contract.test.ts</code>: <code>contract.ts</code>'s five records are deep-equal to <code>stages.json</code>'s five entries, field by field, in order. Editing either alone goes red</li>
+      <li><code class="status">[x]</code> <code>STAGE_ORDER</code> has five members matching the fixture's ordinals, and every <code>schemaId</code> present is a key of <code>ENVELOPE_SCHEMAS</code></li>
+      <li><code class="status">[x]</code> <code>core/test/unit/stages/resolve.test.ts</code>: the resolver at each of the five positions plus both edges, over canned journal rows built in the test rather than read from a database</li>
+      <li><code class="status">[x]</code> A purity assertion: calling the resolver twice with the same inputs returns deep-equal answers, and the inputs are unmodified afterwards</li>
+      <li><code class="status">[x]</code> <strong>Prove the join bites</strong>: rename one stage in <code>contract.ts</code> only, watch <code>contract.test.ts</code> go red, restore it, and watch it go green. Record the observation in the ticket</li>
+      <li><code class="status">[x]</code> A readout test over a canned projection asserting the printed output contains no absolute path, and asserting the command exposes no acting flag</li>
+      <li><code class="status">[x]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green</li>
     </ul>
     <div class="loop">
       🔁 <strong>Do not exit this milestone until every box above is checked.</strong> A failing equality between contract and fixture is never fixed by editing the fixture.
@@ -990,6 +990,12 @@ flowchart LR
     <p><strong>Q1 fixed the name as <code>stages</code>.</strong> Every path in the plan already carried it, so the decision closed the <code>ladder</code> collision at zero cost and no task may now rename it. The remaining six — Q3 through Q8 — confirmed the plan as authored: the stop stays an absence with no new lifecycle state and no owner commit, stage granularity is recorded per stage with no default, an unrunnable stage becomes a stated absence rather than a hand-written envelope, a schema misfit blocks only its consumers, the captures live under <code>core/test/fixtures/stages/</code> with timestamps normalized rather than dropped, and the fence's third leg is built at this workstream's own gate scope.</p>
     <p>All eight <code>&lt;details&gt;</code> entries were kept in full rather than collapsed to their outcomes, including the arguments against each chosen option. A unanimous outcome is worth less if the reasoning it beat has been deleted — and three of the eight were argued against a real alternative that would have produced a different workstream.</p>
     <p><strong>Downstream, in the same pass:</strong> the build-prompts gate list now records the decisions as constraints rather than as a precondition, T08's prompt gate became a decision note, and the ticket README's Questionables table was rewritten from "none was decided" to the eight outcomes. The twenty tickets were regenerated from the build-prompts file rather than hand-edited, so the byte-identity the sync fence checks was never at risk. <code>ticket-plan-sync.test.ts</code> and <code>npm run test:unit</code> both re-run green afterwards.</p>
+  </details>
+  <details>
+    <summary>2026-08-26 — M1 and M2 completed</summary>
+    <p><strong>M1 completed.</strong> The stub-route capture produced the ordered five-stage fixture and S1–S5 output fixtures. The scrub and schema-fit tests pass; S1, S2 and S5 are recorded misfits routed to W05 under <code>W05-HOST-COMMAND-ENVELOPES</code>, without a schema addition here.</p>
+    <p><strong>M2 completed.</strong> The contract is joined to the fixture by field and order, the resolver is tested from canned journal rows at all five positions and both edges, and the read-only <code>awsf stage</code> readout is tested against a canned projection for path-free output and absence of acting flags. The induced contract-only rename failed with the expected <code>initialize</code> versus <code>init</code> deep-equality diff, then passed after restoration; the exact text is retained in T09.</p>
+    <p>Validation: <code>npm run test:unit</code> passed 1429/1429 in 295.7 seconds; <code>npm run typecheck</code> and <code>npm run lint</code> exited 0.</p>
   </details>
 </section>
 </main>
