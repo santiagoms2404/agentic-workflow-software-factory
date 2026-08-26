@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseEnvelope } from "../../../src/contracts/parse-envelope.ts";
 import { ENVELOPE_SCHEMAS } from "../../../src/contracts/registry.ts";
@@ -121,8 +121,4 @@ test("schema-fit.json covers each capture and re-verifies every recorded fit", (
     const result = parseEnvelope(JSON.stringify(subjectFromCapture(capture, row.subject)), schemaId);
     assert.equal(result.valid, true, `${stageId}.fits did not validate when parsed again`);
   }
-});
-
-test("the stage module does not exist before M2", () => {
-  assert.equal(existsSync(join(repoRoot(), "core", "src", "stages")), false);
 });

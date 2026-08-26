@@ -523,7 +523,7 @@ flowchart LR
 
   <!-- ================= M2 ================= -->
   <div class="phase">
-    <h3><code class="status">[]</code> Milestone M2: The stage contract and the resolver</h3>
+    <h3><code class="status">[wip]</code> Milestone M2: The stage contract and the resolver</h3>
     <p>Now the stages have names, and every name came from a fixture. This milestone declares them as values, builds a pure function that answers <em>where is this project and what does the owner do next</em>, and puts that answer on a read-only command. Nothing here acts on a project.</p>
 
     <figure>
@@ -564,13 +564,13 @@ flowchart LR
     <h4>6. The stage record, values only, joined to the fixture</h4>
     <p class="serves"><code class="serves">INV-1</code> <code class="serves">INV-6</code></p>
     <ul class="checklist">
-      <li><code class="status">[]</code> Create <code>core/src/stages/contract.ts</code> declaring the five stage records with the six fields <code>stages.json</code> carries — <strong>values only</strong>: no handles, no paths to read, no functions, no promises. The idiom is W08's <code>core/src/publish/authorize.ts</code> input records</li>
-      <li><code class="status">[]</code> Declare <code>STAGE_ORDER</code> as a <code>readonly</code> tuple of the five ids and derive the stage id type from it, so the order and the vocabulary cannot disagree — the same construction <code>PUBLISH_REFUSAL_ORDER</code> uses</li>
-      <li><code class="status">[]</code> <strong>Transcribe, do not generate.</strong> A generator would put a build step in the path and make the fixture's authority indirect. The five records are written by hand and T09's equality test is the join that keeps them honest</li>
-      <li><code class="status">[]</code> Each record's <code>schemaId</code> is a key of <code>ENVELOPE_SCHEMAS</code> <em>as imported</em>, never a string literal typed twice. A stage recorded as a misfit in M1 carries no <code>schemaId</code> and is marked blocked</li>
-      <li><code class="status">[]</code> The file's imports are type-only plus <code>ENVELOPE_SCHEMAS</code>. No <code>node:</code> import, no clock, no filesystem, nothing from <code>core/src/execution/**</code></li>
-      <li><code class="status">[]</code> Write the header comment in the idiom of <code>core/src/state/guards.ts</code>: it says what a stage is, and it never goes and looks</li>
-      <li><code class="status">[]</code> Delete the "<code>core/src/stages/</code> does not exist" assertion from T05's test in this same commit, so the barrier is lifted deliberately and visibly rather than by accident</li>
+      <li><code class="status">[x]</code> Create <code>core/src/stages/contract.ts</code> declaring the five stage records with the six fields <code>stages.json</code> carries — <strong>values only</strong>: no handles, no paths to read, no functions, no promises. The idiom is W08's <code>core/src/publish/authorize.ts</code> input records</li>
+      <li><code class="status">[x]</code> Declare <code>STAGE_ORDER</code> as a <code>readonly</code> tuple of the five ids and derive the stage id type from it, so the order and the vocabulary cannot disagree — the same construction <code>PUBLISH_REFUSAL_ORDER</code> uses</li>
+      <li><code class="status">[x]</code> <strong>Transcribe, do not generate.</strong> A generator would put a build step in the path and make the fixture's authority indirect. The five records are written by hand and T09's equality test is the join that keeps them honest</li>
+      <li><code class="status">[x]</code> Each record's <code>schemaId</code> is a key of <code>ENVELOPE_SCHEMAS</code> <em>as imported</em>, never a string literal typed twice. A stage recorded as a misfit in M1 carries no <code>schemaId</code> and is marked blocked</li>
+      <li><code class="status">[x]</code> The file's imports are type-only plus <code>ENVELOPE_SCHEMAS</code>. No <code>node:</code> import, no clock, no filesystem, nothing from <code>core/src/execution/**</code></li>
+      <li><code class="status">[x]</code> Write the header comment in the idiom of <code>core/src/state/guards.ts</code>: it says what a stage is, and it never goes and looks</li>
+      <li><code class="status">[x]</code> Delete the "<code>core/src/stages/</code> does not exist" assertion from T05's test in this same commit, so the barrier is lifted deliberately and visibly rather than by accident</li>
     </ul>
 
     <h4>7. The resolver — where is this project, and what does the owner do next</h4>
