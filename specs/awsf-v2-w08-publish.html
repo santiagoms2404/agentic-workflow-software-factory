@@ -802,7 +802,7 @@ stateDiagram-v2
 
   <!-- ================= M7 ================= -->
   <div class="phase">
-    <h3><code class="status">[wip]</code> Milestone M7: The amendment verified, and the fence that replaces the scan <span class="gate">G8-A</span></h3>
+    <h3><code class="status">[x]</code> Milestone M7: The amendment verified, and the fence that replaces the scan <span class="gate">G8-A</span></h3>
     <p>Everything before this milestone was buildable under invariant 8 as written, because the scan cannot see the argv site that has existed since task 6. That is precisely why the gate needs a verification step with teeth rather than a red test.</p>
 
     <h4>19. Verify the amendment landed, and stop if it did not</h4>
@@ -837,13 +837,13 @@ stateDiagram-v2
     <h4>22. Testing Strategy: the fences bite and nothing else moved</h4>
     <p class="serves"><code class="serves">AC-1</code> <code class="serves">AC-4</code></p>
     <ul class="checklist">
-      <li><code class="status">[]</code> All three fence legs green against the tree, and each recorded as having been seen red against a deliberate violation that was then reverted</li>
-      <li><code class="status">[]</code> <code>node --test core/test/unit/meta/no-destructive-paths.test.ts</code> green, with the three new patterns each seen red against a synthetic offender</li>
-      <li><code class="status">[]</code> <code>node --test core/test/unit/meta/no-land-route.test.ts</code> green and <strong>unmodified</strong> — the second fence invariant 8 names is untouched by this workstream, and a diff on it would mean scope crossed a line</li>
-      <li><code class="status">[]</code> <code>node --test core/test/unit/meta/child-process-fence.test.ts</code> green — the publish path added no importer of <code>node:child_process</code></li>
-      <li><code class="status">[]</code> <code>node --test core/test/unit/meta/dependency-allowlist.test.ts</code> green — this workstream added no dependency</li>
-      <li><code class="status">[]</code> <code>node --test core/test/unit/meta/state-purity-fence.test.ts core/test/unit/meta/sqlite-write-fence.test.ts</code> green — the state module stayed pure through <span class="gate">G8-B</span> and only the three permitted files write SQLite through <span class="gate">G8-C</span></li>
-      <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green</li>
+      <li><code class="status">[x]</code> All three fence legs green against the tree, and each recorded as having been seen red against a deliberate violation that was then reverted</li>
+      <li><code class="status">[x]</code> <code>node --test core/test/unit/meta/no-destructive-paths.test.ts</code> green, with the three new patterns each seen red against a synthetic offender</li>
+      <li><code class="status">[x]</code> <code>node --test core/test/unit/meta/no-land-route.test.ts</code> green and <strong>unmodified</strong> — the second fence invariant 8 names is untouched by this workstream, and a diff on it would mean scope crossed a line</li>
+      <li><code class="status">[x]</code> <code>node --test core/test/unit/meta/child-process-fence.test.ts</code> green — the publish path added no importer of <code>node:child_process</code></li>
+      <li><code class="status">[x]</code> <code>node --test core/test/unit/meta/dependency-allowlist.test.ts</code> green — this workstream added no dependency</li>
+      <li><code class="status">[x]</code> <code>node --test core/test/unit/meta/state-purity-fence.test.ts core/test/unit/meta/sqlite-write-fence.test.ts</code> green — the state module stayed pure through <span class="gate">G8-B</span> and only the three permitted files write SQLite through <span class="gate">G8-C</span></li>
+      <li><code class="status">[x]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green</li>
     </ul>
     <div class="loop">
       🔁 <strong>Do not exit this phase until every box above is checked.</strong> If the amendment did not land, this milestone is <code>[f]</code> and the workstream closes with the alternative recorded — that is a legitimate outcome, and editing a protected path is not.
