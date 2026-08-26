@@ -1126,6 +1126,11 @@ flowchart TD
     <p><strong>T11 is complete in commit <code>a1f14c7</code>.</strong> The migration runner hoists <code>foreign_keys</code> before its transaction and restores the connection's prior value afterwards. The attempt write protocol keeps <code>LANDED</code> terminal for existing consumers while admitting only the transition to <code>PUBLISHED</code>, then sealing the published attempt. M5 is <code>[wip]</code>, T11 is <code>done</code>, and the W08 spine marker remains untouched.</p>
     <p><strong>Verification:</strong> direct migration smoke coverage reached schema version 4 with <code>foreign_keys</code> restored to ON and an empty <code>foreign_key_check</code>; direct seal coverage refused a non-publish write after <code>LANDED</code>, admitted <code>PUBLISHED</code>, and refused the next write; <code>npm run lint</code> reported zero warnings and errors. G8-B and G8-C now exist as owner-authored commits, so T12 owns the expected lifecycle-table and exhaustive-switch updates they expose.</p>
   </details>
+  <details>
+    <summary>2026-08-25 — M5 completed: PUBLISHED lifecycle state, seal, and migration</summary>
+    <p><strong>M5 is complete through owner-authored gates <code>cd95732</code> and <code>0e41374</code>, followed by commits <code>a1f14c7</code>, <code>a9d554c</code>, <code>3662c4d</code>, and <code>2f0d920</code>.</strong> The lifecycle now admits only <code>L27 — LANDED → PUBLISHED</code> after landing, keeps <code>LANDED</code> terminal for existing consumers, seals <code>PUBLISHED</code>, widens the dashboard state surface, and migrates version-3 databases without losing session rows or any of the seven child foreign keys. The migration's second run is proved to make no schema, row, or change-count mutation. M5 is <code>[x]</code>, T11–T14 are <code>done</code>, and the W08 spine marker remains untouched.</p>
+    <p><strong>Verification:</strong> <code>npm run test:unit</code> passed 1410/1410 in 294.4 seconds, <code>npm run test:sim</code> passed 70/70 in 150.6 seconds, <code>npm run typecheck</code> completed cleanly, <code>npm run lint</code> reported zero warnings and errors, and <code>ticket-plan-sync.test.ts</code> passed 14/14.</p>
+  </details>
 </section>
 
 </main>
