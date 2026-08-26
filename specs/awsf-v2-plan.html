@@ -711,7 +711,7 @@ flowchart LR
 
     <!-- ================= W08 ================= -->
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone M8: W08 — Publish <span class="wtag core">v2 core</span></h3>
+      <h3><code class="status">[x]</code> Milestone M8: W08 — Publish <span class="wtag core">v2 core</span></h3>
       <p class="deep-plan"><a href="awsf-v2-w08-publish.html">Deep plan: AWSF v2 W08 — Publish</a> <span class="muted">not yet authored</span></p>
       <p><em>Exists because it is v2's ceiling.</em> Published source with evidence is what "done" means for v2, and this is the workstream that reaches it. It also carries the only invariant amendment v2's core requires.</p>
       <h4>8. W08 — Publish</h4>
@@ -730,13 +730,13 @@ flowchart LR
         The truth table exhaustively, as a pure-function test with no I/O. A single push argv site, fenced the way <code>node:child_process</code> is fenced — one file, asserted. End-to-end against a <strong>local bare remote</strong>: allowlisted remote and branch, canonical <code>HEAD</code> equal to the landed candidate, clean checkout, non-force non-delete refspec, idempotent retry on the same SHA, and a scrubbed record of the response. Credential non-persistence swept under invariant 9. <strong>No network in any test.</strong>
       </div>
       <ul class="checklist">
-        <li><code class="status">[]</code> Deep plan <code>awsf-v2-w08-publish.html</code> authored with its build prompts and ticket set, and approved by the owner</li>
-        <li><code class="status">[]</code> The invariant 8 amendment is drafted with its evidence, its replacement guarantee, its cost, and the alternative that avoids it — and lands as an owner-authored commit before the build (<span class="gate">G2</span>)</li>
-        <li><code class="status">[]</code> <code>authorizePublish</code> is pure and its truth table is total; every pre-<code>LANDED</code> state is refused by the table</li>
-        <li><code class="status">[]</code> One push argv site exists and a fence asserts it is the only one</li>
-        <li><code class="status">[]</code> The whole path is proven against a local bare remote with no network, including idempotent retry on the same SHA</li>
-        <li><code class="status">[]</code> The deep plan says publication is source publication, and nowhere implies deployment</li>
-        <li><code class="status">[]</code> The deep plan's own milestones all reach <code>[x]</code></li>
+        <li><code class="status">[x]</code> Deep plan <code>awsf-v2-w08-publish.html</code> authored with its build prompts and ticket set, and approved by the owner</li>
+        <li><code class="status">[x]</code> The invariant 8 amendment is drafted with its evidence, its replacement guarantee, its cost, and the alternative that avoids it — and lands as an owner-authored commit before the build (<span class="gate">G2</span>)</li>
+        <li><code class="status">[x]</code> <code>authorizePublish</code> is pure and its truth table is total; every pre-<code>LANDED</code> state is refused by the table</li>
+        <li><code class="status">[x]</code> One push argv site exists and a fence asserts it is the only one</li>
+        <li><code class="status">[x]</code> The whole path is proven against a local bare remote with no network, including idempotent retry on the same SHA</li>
+        <li><code class="status">[x]</code> The deep plan says publication is source publication, and nowhere implies deployment</li>
+        <li><code class="status">[x]</code> The deep plan's own milestones all reach <code>[x]</code></li>
       </ul>
       <div class="loop">🔁 <strong>Do not exit this workstream until its deep plan's every box is checked.</strong> A failing command means fix the cause and re-run — never lower what the row asserts.</div>
     </div>

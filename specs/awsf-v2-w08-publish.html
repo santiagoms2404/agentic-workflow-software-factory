@@ -852,7 +852,7 @@ stateDiagram-v2
 
   <!-- ================= M8 ================= -->
   <div class="phase">
-    <h3><code class="status">[wip]</code> Milestone M8: The whole path end to end, and the close</h3>
+    <h3><code class="status">[x]</code> Milestone M8: The whole path end to end, and the close</h3>
     <p>One journey test carries the workstream's whole claim, and one task closes the spine marker. Nothing else happens here.</p>
 
     <h4>23. The journey: landed candidate to bare remote, offline</h4>
@@ -870,13 +870,13 @@ stateDiagram-v2
     <p class="serves"><code class="serves">AC-5</code> <code class="serves">AC-6</code> <code class="serves">AC-7</code></p>
     <p>The full offline suite, then the spine marker. This is the only task that touches <code>specs/awsf-v2-plan.html</code>.</p>
     <ul class="checklist">
-      <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run test:contract</code>, <code>npm run test:sim</code>, <code>npm run test:journeys</code>, <code>npm run typecheck</code> and <code>npm run lint</code> all green, with <strong>no network anywhere in the suite</strong>. The simulation suite is named explicitly because it carries the second <code>TERMINAL_STATES</code> literal</li>
-      <li><code class="status">[]</code> <code>ticket-plan-sync.test.ts</code> green: every task has a ticket, states mirror markers, and each ticket's prompt is byte-identical to its Section B block</li>
-      <li><code class="status">[]</code> The identifier-spine coverage rows are green: every declaration is served, no claim is orphaned, and plan and ticket <code>serves</code> lists mirror each other</li>
-      <li><code class="status">[]</code> Every milestone above is <code>[x]</code> and every ticket in <code>specs/tickets/awsf-v2-w08-publish/</code> is <code>done</code></li>
-      <li><code class="status">[]</code> <strong>All three amendments are recorded in this plan's Amendments section</strong> with their commit SHAs — <span class="gate">G8-A</span>'s invariant, <span class="gate">G8-B</span>'s state and edge, and <span class="gate">G8-C</span>'s migration — each an owner-authored commit, so the plan that asked for them also records that they landed</li>
-      <li><code class="status">[]</code> The word <em>deploy</em> appears in <code>core/src/publish/**</code>, <code>core/src/git/publish.ts</code> and <code>core/src/cli/commands/publish.ts</code> exactly zero times, and no field in the catalog's <code>publish</code> block names an environment, an endpoint or a release — checked, because absorbing W13's scope is the failure mode the spine names for this workstream specifically</li>
-      <li><code class="status">[]</code> <strong>Only now:</strong> flip W08's marker in <code>specs/awsf-v2-plan.html</code> to <code>[x]</code> and <code>specs/tickets/awsf-v2-plan/W08.md</code> to <code>done</code>, in the same commit</li>
+      <li><code class="status">[x]</code> <code>npm run test:unit</code>, <code>npm run test:contract</code>, <code>npm run test:sim</code>, <code>npm run test:journeys</code>, <code>npm run typecheck</code> and <code>npm run lint</code> all green, with <strong>no network anywhere in the suite</strong>. The simulation suite is named explicitly because it carries the second <code>TERMINAL_STATES</code> literal</li>
+      <li><code class="status">[x]</code> <code>ticket-plan-sync.test.ts</code> green: every task has a ticket, states mirror markers, and each ticket's prompt is byte-identical to its Section B block</li>
+      <li><code class="status">[x]</code> The identifier-spine coverage rows are green: every declaration is served, no claim is orphaned, and plan and ticket <code>serves</code> lists mirror each other</li>
+      <li><code class="status">[x]</code> Every milestone above is <code>[x]</code> and every ticket in <code>specs/tickets/awsf-v2-w08-publish/</code> is <code>done</code></li>
+      <li><code class="status">[x]</code> <strong>All three amendments are recorded in this plan's Amendments section</strong> with their commit SHAs — <span class="gate">G8-A</span>'s invariant, <span class="gate">G8-B</span>'s state and edge, and <span class="gate">G8-C</span>'s migration — each an owner-authored commit, so the plan that asked for them also records that they landed</li>
+      <li><code class="status">[x]</code> The word <em>deploy</em> appears in <code>core/src/publish/**</code>, <code>core/src/git/publish.ts</code> and <code>core/src/cli/commands/publish.ts</code> exactly zero times, and no field in the catalog's <code>publish</code> block names an environment, an endpoint or a release — checked, because absorbing W13's scope is the failure mode the spine names for this workstream specifically</li>
+      <li><code class="status">[x]</code> <strong>Only now:</strong> flip W08's marker in <code>specs/awsf-v2-plan.html</code> to <code>[x]</code> and <code>specs/tickets/awsf-v2-plan/W08.md</code> to <code>done</code>, in the same commit</li>
     </ul>
     <div class="loop">
       🔁 <strong>Do not exit this phase until every box above is checked.</strong> The spine marker is the last thing that moves, and it moves only from here.
@@ -888,23 +888,23 @@ stateDiagram-v2
   <h2>Validation Commands</h2>
   <p>Execute these to validate the entire plan is complete. Every one is offline.</p>
   <ul class="checklist">
-    <li><code class="status">[]</code> <code>npm run test:unit</code> — the whole suite green, including the fourteen reachability rows, the thirteen adjacencies, the totality sweep, the catalog rejections, the porcelain vocabulary and the three fence legs</li>
-    <li><code class="status">[]</code> <code>npm run test:journeys</code> — landed candidate to bare remote, the sealed second publish, and every pre-<code>LANDED</code> state refused end to end</li>
-    <li><code class="status">[]</code> <code>npm run test:sim</code> — the simulation harness's own <code>TERMINAL_STATES</code> literal moved with the real one</li>
-    <li><code class="status">[]</code> <code>npm run typecheck</code> — the branded plan type, the closed refusal union, the closed outcome vocabulary and the widened <code>LifecycleState</code> union all hold</li>
-    <li><code class="status">[]</code> <code>npm run lint</code> — clean</li>
-    <li><code class="status">[]</code> <code>node --test core/test/unit/transitions.test.ts core/test/unit/actors.test.ts core/test/unit/rejection-order.test.ts core/test/unit/evidence.test.ts</code> — 121 pairs, 27 edges, the partition at 30 / 11 / 6 / 47, and the eleven ordered rejection steps unchanged</li>
-    <li><code class="status">[]</code> <code>node --test core/test/unit/publish/seal.test.ts</code> — a landed attempt admits exactly one further record and a published one admits none</li>
-    <li><code class="status">[]</code> <code>node --test core/test/unit/observability/migration-0004.test.ts</code> — every row carried, <code>foreign_key_check</code> empty, child foreign keys intact, and a second run a no-op</li>
-    <li><code class="status">[]</code> <code>node --test core/test/unit/meta/publish-fence.test.ts</code> — locality, derivation and condition, each having been seen red</li>
-    <li><code class="status">[]</code> <code>node --test core/test/unit/meta/no-destructive-paths.test.ts</code> — eight patterns retained, three added, each new one seen red against a synthetic offender</li>
-    <li><code class="status">[]</code> <code>node --test core/test/unit/meta/no-land-route.test.ts</code> — untouched and green; publish reached no route table</li>
-    <li><code class="status">[]</code> <code>node --test core/test/unit/meta/boundary-claims.test.ts</code> — seven derived owner acts, and every enumerating document agreeing with the code</li>
-    <li><code class="status">[]</code> <code>node --test core/test/unit/meta/marimba-guard.test.ts</code> — the guard denies the seventh verb with exit 2, the reason on stderr, and nothing on stdout</li>
-    <li><code class="status">[]</code> <code>node --test core/test/unit/meta/no-credentials-in-fixtures.test.ts</code> — the credential-helper stub and its fixtures survive the sweep</li>
-    <li><code class="status">[]</code> <code>node --test core/test/unit/meta/junk-drawer.test.ts</code> — the publish path committed nothing; invariant 10 holds</li>
-    <li><code class="status">[]</code> <code>node --test core/test/unit/meta/ticket-plan-sync.test.ts</code> — plan, tickets and Section B agree byte for byte</li>
-    <li><code class="status">[]</code> <code>git grep -c "push" core/src | wc -l</code> reports exactly one file — the single argv site, stated as a command the owner can run without reading a test</li>
+    <li><code class="status">[x]</code> <code>npm run test:unit</code> — the whole suite green, including the fourteen reachability rows, the thirteen adjacencies, the totality sweep, the catalog rejections, the porcelain vocabulary and the three fence legs</li>
+    <li><code class="status">[x]</code> <code>npm run test:journeys</code> — landed candidate to bare remote, the sealed second publish, and every pre-<code>LANDED</code> state refused end to end</li>
+    <li><code class="status">[x]</code> <code>npm run test:sim</code> — the simulation harness's own <code>TERMINAL_STATES</code> literal moved with the real one</li>
+    <li><code class="status">[x]</code> <code>npm run typecheck</code> — the branded plan type, the closed refusal union, the closed outcome vocabulary and the widened <code>LifecycleState</code> union all hold</li>
+    <li><code class="status">[x]</code> <code>npm run lint</code> — clean</li>
+    <li><code class="status">[x]</code> <code>node --test core/test/unit/transitions.test.ts core/test/unit/actors.test.ts core/test/unit/rejection-order.test.ts core/test/unit/evidence.test.ts</code> — 121 pairs, 27 edges, the partition at 30 / 11 / 6 / 47, and the eleven ordered rejection steps unchanged</li>
+    <li><code class="status">[x]</code> <code>node --test core/test/unit/publish/seal.test.ts</code> — a landed attempt admits exactly one further record and a published one admits none</li>
+    <li><code class="status">[x]</code> <code>node --test core/test/unit/observability/migration-0004.test.ts</code> — every row carried, <code>foreign_key_check</code> empty, child foreign keys intact, and a second run a no-op</li>
+    <li><code class="status">[x]</code> <code>node --test core/test/unit/meta/publish-fence.test.ts</code> — locality, derivation and condition, each having been seen red</li>
+    <li><code class="status">[x]</code> <code>node --test core/test/unit/meta/no-destructive-paths.test.ts</code> — eight patterns retained, three added, each new one seen red against a synthetic offender</li>
+    <li><code class="status">[x]</code> <code>node --test core/test/unit/meta/no-land-route.test.ts</code> — untouched and green; publish reached no route table</li>
+    <li><code class="status">[x]</code> <code>node --test core/test/unit/meta/boundary-claims.test.ts</code> — seven derived owner acts, and every enumerating document agreeing with the code</li>
+    <li><code class="status">[x]</code> <code>node --test core/test/unit/meta/marimba-guard.test.ts</code> — the guard denies the seventh verb with exit 2, the reason on stderr, and nothing on stdout</li>
+    <li><code class="status">[x]</code> <code>node --test core/test/unit/meta/no-credentials-in-fixtures.test.ts</code> — the credential-helper stub and its fixtures survive the sweep</li>
+    <li><code class="status">[x]</code> <code>node --test core/test/unit/meta/junk-drawer.test.ts</code> — the publish path committed nothing; invariant 10 holds</li>
+    <li><code class="status">[x]</code> <code>node --test core/test/unit/meta/ticket-plan-sync.test.ts</code> — plan, tickets and Section B agree byte for byte</li>
+    <li><code class="status">[x]</code> <code>git grep -lF '"push"' -- core/src | wc -l</code> reports exactly one file — the single argv site, stated as a command the owner can run without reading a test</li>
   </ul>
   <div class="loop">
     🔁 <strong>The plan is not complete until every box is checked and every command passes. If a step is genuinely not possible, mark it <code>[f]</code>, record why, and move on if the rest can proceed.</strong>
@@ -1133,7 +1133,7 @@ flowchart TD
   </details>
   <details>
     <summary>2026-08-25 — M5 completed: PUBLISHED lifecycle state, seal, and migration</summary>
-    <p><strong>M5 is complete through owner-authored gates <code>cd95732</code> and <code>0e41374</code>, followed by commits <code>a1f14c7</code>, <code>a9d554c</code>, <code>3662c4d</code>, and <code>2f0d920</code>.</strong> The lifecycle now admits only <code>L27 — LANDED → PUBLISHED</code> after landing, keeps <code>LANDED</code> terminal for existing consumers, seals <code>PUBLISHED</code>, widens the dashboard state surface, and migrates version-3 databases without losing session rows or any of the seven child foreign keys. The migration's second run is proved to make no schema, row, or change-count mutation. M5 is <code>[x]</code>, T11–T14 are <code>done</code>, and the W08 spine marker remains untouched.</p>
+    <p><strong>M5 is complete through owner-authored gate G8-B commit <code>cd95732</code> for the <code>PUBLISHED</code> state and <code>L27</code> edge, and owner-authored gate G8-C commit <code>0e41374</code> for migration 0004, followed by commits <code>a1f14c7</code>, <code>a9d554c</code>, <code>3662c4d</code>, and <code>2f0d920</code>.</strong> The lifecycle now admits only <code>L27 — LANDED → PUBLISHED</code> after landing, keeps <code>LANDED</code> terminal for existing consumers, seals <code>PUBLISHED</code>, widens the dashboard state surface, and migrates version-3 databases without losing session rows or any of the seven child foreign keys. The migration's second run is proved to make no schema, row, or change-count mutation. M5 is <code>[x]</code>, T11–T14 are <code>done</code>, and the W08 spine marker remains untouched.</p>
     <p><strong>Verification:</strong> <code>npm run test:unit</code> passed 1410/1410 in 294.4 seconds, <code>npm run test:sim</code> passed 70/70 in 150.6 seconds, <code>npm run typecheck</code> completed cleanly, <code>npm run lint</code> reported zero warnings and errors, and <code>ticket-plan-sync.test.ts</code> passed 14/14.</p>
   </details>
   <details>
