@@ -1153,6 +1153,11 @@ flowchart TD
     <p><strong>M7 is complete in commits <code>597f4ee</code>, <code>d5ff63e</code>, and <code>2bc2980</code>.</strong> The destructive-path scan now forbids force and both Git deletion refspec spellings everywhere in <code>core/src</code>. The publication fence separately proves push-token locality, branded authorization derivation, and refusal for every lifecycle state other than <code>LANDED</code>. The browser landing-route fence remains unmodified. M7 is <code>[x]</code>, T19–T22 are <code>done</code>, and the W08 spine marker remains untouched.</p>
     <p><strong>Verification:</strong> <code>npm run test:unit</code> passed 1419/1419 in 266.6 seconds, <code>npm run typecheck</code> completed cleanly, <code>npm run lint</code> reported zero warnings and errors, and the seven required M7 meta-test files passed 12/12. <code>git diff --quiet -- core/test/unit/meta/no-land-route.test.ts</code> exited 0.</p>
   </details>
+  <details>
+    <summary>2026-08-25 — M8 completed: offline journey, validation, and workstream close</summary>
+    <p><strong>M8 is complete through journey commit <code>7b3f585</code> and close commit <code>6a7e206</code>.</strong> The real owner path publishes one landed candidate to a temporary bare remote, records <code>PUBLISHED</code>, seals a second publication, and leaves every other lifecycle state inert. All eight milestones are <code>[x]</code>, T01–T24 are <code>done</code>, and the W08 spine marker and ticket closed in the same commit.</p>
+    <p><strong>Verification:</strong> the offline suites passed 1419/1419 unit, 53/53 contract, 70/70 simulation, and 104/104 journey tests; typecheck passed; lint reported zero warnings and errors; and ticket-plan sync plus all identifier-spine rows passed 14/14 after the marker changes. The publish source contains the exact push token in one file, contains zero occurrences of the word <em>deploy</em> across the three publication boundaries, and the catalog's closed publish block remains limited to <code>remotes</code>, <code>branches</code>, and optional <code>host</code>. The validation grep was corrected to search for the exact <code>"push"</code> token because the previous substring form also counted unrelated array <code>.push</code> calls.</p>
+  </details>
 </section>
 
 </main>
