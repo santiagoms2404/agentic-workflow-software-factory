@@ -1148,6 +1148,11 @@ flowchart TD
     <p><strong>Coverage:</strong> a repeat <code>awsf publish</code> on <code>PUBLISHED</code> throws <code>SealedAttempt</code> before Git observation, while the bare-remote module separately proves Git's <code>already-current</code> backstop after a failed transition. A declined confirmation records no push and leaves journal length unchanged. The serialized journal line round-trips, contains no URL delimiter or <code>@</code>, and fails no credential matcher. The SQLite projection records <code>lifecycle_state = 'PUBLISHED'</code>.</p>
     <p><strong>Verification:</strong> <code>npm run test:unit</code> passed 1415/1415 in 248.0 seconds, <code>npm run typecheck</code> completed cleanly, <code>npm run lint</code> reported zero warnings and errors, and the six required M6 meta-test files passed 63/63. The new marimba deny row was first observed failing against the pre-T17 guard, then passed with the committed guard.</p>
   </details>
+  <details>
+    <summary>2026-08-25 — M7 completed: publication fence verification</summary>
+    <p><strong>M7 is complete in commits <code>597f4ee</code>, <code>d5ff63e</code>, and <code>2bc2980</code>.</strong> The destructive-path scan now forbids force and both Git deletion refspec spellings everywhere in <code>core/src</code>. The publication fence separately proves push-token locality, branded authorization derivation, and refusal for every lifecycle state other than <code>LANDED</code>. The browser landing-route fence remains unmodified. M7 is <code>[x]</code>, T19–T22 are <code>done</code>, and the W08 spine marker remains untouched.</p>
+    <p><strong>Verification:</strong> <code>npm run test:unit</code> passed 1419/1419 in 266.6 seconds, <code>npm run typecheck</code> completed cleanly, <code>npm run lint</code> reported zero warnings and errors, and the seven required M7 meta-test files passed 12/12. <code>git diff --quiet -- core/test/unit/meta/no-land-route.test.ts</code> exited 0.</p>
+  </details>
 </section>
 
 </main>
