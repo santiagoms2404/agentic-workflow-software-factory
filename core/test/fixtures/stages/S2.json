@@ -1,0 +1,55 @@
+{
+  "fixtureHeader": {
+    "fixture": "S2.json",
+    "describes": "Stage 2 (project-register) — captured output of `awsf project register`, exactly as it left the command, scrubbed.",
+    "ranOn": "host only — writes one machine-local file (placement.yaml) and returns a value; no session row appears.",
+    "scrubbed": "Per Q7 (2026-08-26): session ids, attempt/task ids and absolute machine paths replaced with stable placeholders; every timestamp normalized to a single fixed instant (2026-01-01T00:00:00.000Z), field kept per invariant 1. No other value reformatted, reordered, truncated or tidied from the output as it left its producer."
+  },
+  "stage": "S2",
+  "producer": "awsf project register",
+  "ownerTyped": "awsf project register --catalog <TARGET>/awsf.project.yaml --repository canonical=<TARGET>",
+  "ownerActBefore": {
+    "wrote": "awsf.project.yaml",
+    "byHand": true,
+    "bytes": "version: awsf.project/v1\n\nproject:\n  slug: ladder-capture\n\nrepositories:\n  canonical:\n    role: plan\n    default_branch: master\n    gates: {}\n    publish:\n      remotes: [origin]\n      branches: [published]\n\nplans:\n  root: specs\n  format: awsf-plan-html/v1\n  default: capture-plan\n"
+  },
+  "exitCode": 0,
+  "stdout": [
+    "Registered ladder-capture with 1 repository(ies)."
+  ],
+  "stderr": [],
+  "output": {
+    "kind": "host command result — one stdout line plus the ResolvedProject the command function returns",
+    "line": "Registered ladder-capture with 1 repository(ies).",
+    "resolvedProject": {
+      "slug": "ladder-capture",
+      "repositories": {
+        "canonical": {
+          "id": "canonical",
+          "path": "<CAPTURE_ROOT>/g4/canonical",
+          "worktreeRoot": "<CAPTURE_ROOT>/g4/awsf-worktrees",
+          "role": "plan",
+          "defaultBranch": "master",
+          "gates": []
+        }
+      },
+      "plans": {
+        "root": "specs",
+        "format": "awsf-plan-html/v1",
+        "default": "capture-plan"
+      },
+      "contracts": []
+    },
+    "placementFileBytes": "version: awsf.placement/v1\nproject: ladder-capture\nrepositories:\n  canonical:\n    path: <CAPTURE_ROOT>/g4/canonical\n"
+  },
+  "observed": {
+    "stateRootEntries": [
+      "projects"
+    ],
+    "projectShow": [
+      "canonical: role=plan, branch=master, gates=none, worktree_root=<CAPTURE_ROOT>/g4/awsf-worktrees"
+    ],
+    "sessionRows": 0,
+    "attemptDirs": []
+  }
+}

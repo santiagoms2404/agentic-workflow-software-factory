@@ -1,0 +1,44 @@
+{
+  "fixtureHeader": {
+    "fixture": "S1.json",
+    "describes": "Stage 1 (init) — captured output of `awsf init`, exactly as it left the command, scrubbed.",
+    "ranOn": "host only — no task, no session, no attempt directory and no journal exist while this stage runs.",
+    "scrubbed": "Per Q7 (2026-08-26): session ids, attempt/task ids and absolute machine paths replaced with stable placeholders; every timestamp normalized to a single fixed instant (2026-01-01T00:00:00.000Z), field kept per invariant 1. No other value reformatted, reordered, truncated or tidied from the output as it left its producer."
+  },
+  "stage": "S1",
+  "producer": "awsf init",
+  "ownerTyped": "awsf init <TARGET> --project ladder-capture",
+  "exitCode": 0,
+  "stdout": [
+    "Initialized <CAPTURE_ROOT>/g4/canonical at a432e35372d2431ccf223bad703a8bcf4bfff70d."
+  ],
+  "stderr": [],
+  "output": {
+    "kind": "host command result printed to stdout",
+    "line": "Initialized <CAPTURE_ROOT>/g4/canonical at a432e35372d2431ccf223bad703a8bcf4bfff70d.",
+    "commitSha": "a432e35372d2431ccf223bad703a8bcf4bfff70d",
+    "path": "<CAPTURE_ROOT>/g4/canonical"
+  },
+  "observed": {
+    "worktreeEntries": [
+      ".git",
+      "awsf.config.yaml"
+    ],
+    "branch": "master",
+    "filesInCommit": [
+      "awsf.config.yaml"
+    ],
+    "commitAuthor": "Santiago Marin <santiagomarinsuarez@me.com>",
+    "commitCommitter": "Santiago Marin <santiagomarinsuarez@me.com>",
+    "commitSubject": "chore: awsf init baseline",
+    "configBytes": "schema: awsf/v1\nproject:\n  slug: ladder-capture\n  default_workflow: intake\nruntime:\n  silence_timeout_seconds: 1\n  process_grace_seconds: 0\n  max_output_bytes: 1\n  max_event_count: 1\n  seed_paths: []\nadapters:\n  claude:\n    kind: claude-code\n    enabled: true\nrouting:\n  default_worker: claude\n  review: invert-provider\n  no_fallback: true\nagents: []\nworkflows:\n  enabled:\n    - intake\ngates: {}\nrisk:\n  default: T0\n  call_ceiling:\n    T0: 1\n    T1: 1\n    T2: 1\n  correction_allowance:\n    auto: 0\n    owner: 0\n  paths: {}\npolicy:\n  protected_paths:\n    - AGENTS.md\n    - awsf.config.yaml\n  protected_operations: []\nobservability:\n  poll_ms: 1\n  db: state://awsf.db\n  persist_thinking_text: false\npricing:\n  display_mode: x\n  effective_date: null\n  models: {}\n",
+    "stateRootExists": false,
+    "sessionRows": 0,
+    "attemptDirs": [],
+    "rerunOnSameDirectory": {
+      "refused": true,
+      "name": "InitTargetNotEmptyError",
+      "message": "refusing to initialize target because it is not an empty directory: <CAPTURE_ROOT>/g4/canonical"
+    }
+  }
+}

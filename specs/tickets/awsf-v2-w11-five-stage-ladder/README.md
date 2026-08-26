@@ -186,6 +186,95 @@ unconditional, and resolved W12's dependency on W11: this workstream does change
 reader will type, and the cheatsheet will document it. Every other decision confirmed the tickets as
 generated, so no ticket was added, removed, or resequenced.
 
+## What T01's run found — 2026-08-26
+
+One throwaway project was driven through the ladder in a temporary directory outside this
+repository, against W03–W06 as they stand, on the stub route, spending no quota. The working notes
+are at **`/tmp/awsf-w11-t01-capture/`** (`NOTES.md` explains the layout and how to re-run the
+harness). They are *not* fixtures: they carry session ids, attempt ids, real timestamps and absolute
+machine paths, and T02 is the task that scrubs them per Q7 and lands them under
+`core/test/fixtures/stages/`.
+
+**The run reached all five stages and published.** No stage needed Q5's stated-absence treatment.
+
+### The five stages, as observed
+
+| # | id | owner | producer | granularity | output came from | exit stop |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | `init` | host | `awsf init` | command | host | the command returns |
+| 2 | `project-register` | host | `awsf project register` | command | host | the command returns |
+| 3 | `design-to-plan` | host + 3 roles | `design-to-plan` (workflow id) | task, 7 phases | host **and** agents | `AWAITING_OWNER` |
+| 4 | `build` | host + 2 roles | `plan-build-test` (workflow id) | task, 4 phases | host **and** agents | `AWAITING_OWNER` |
+| 5 | `publish` | host | `awsf publish` | command | host | `PUBLISHED` |
+
+The counting rule is recorded in `stages.observed.json` and stated here because it is a judgement
+and not a reading: **one entry per producer of durable project state that the owner starts by hand
+and that stops when it returns.** `awsf land` is deliberately *not* a stage — it is the owner act
+that crosses the `AWAITING_OWNER` stop the producing stage ended at. Count `awsf land` as a stage
+and the ladder has seven entries, not five.
+
+### Six things the run disagrees with, or that the plan's field vocabulary cannot hold
+
+1. **`granularity` needs a third value, and Q4 already said so.** The plan's field spec says
+   `task` or `phase`. Three of the five stages are neither: `awsf init`, `awsf project register`
+   and `awsf publish` run with no task, no session row and no attempt directory in existence.
+   Q4's own decision text anticipated this — *"Three different granularities across five stages is
+   an expected result and must not be smoothed"* — so the run and the decision agree and only the
+   two-value field spec is short. Recorded as `command`. **`phase` was not observed at all**: no
+   stage in this ladder is a set of phases sharing a task with another stage.
+2. **`owner` cannot be one value for a task stage.** Stage 3 has four owners across seven phases
+   (`host`, `designer`, `architecture-reviewer`, `planner`) and stage 4 has three across four
+   (`host`, `planner`, `builder`). The captures carry a `phaseOwners` list beside the single-value
+   field; T06 needs to decide whether the contract carries one owner or the list.
+3. **Three of the five stages emit no envelope at all.** Only stages 3 and 4 produce anything in
+   `ENVELOPE_SCHEMAS`. Stages 1, 2 and 5 produce a stdout line and a command return value. This is
+   the single most consequential finding for T03 and `AC-3`: a schema-fit table over five stages
+   will find three misfits that are not schema gaps, and `INV-2`'s routing to W05 does not apply to
+   them, because there is no envelope for W05 to type. **Do not route these three to W05 and do not
+   invent an envelope for them.**
+4. **Two of the four boundaries are crossed by hand-editing a file, not by a command.** `awsf init`
+   writes only `awsf.config.yaml`; no command in `CLI_COMMANDS` produces an `awsf.project.yaml`, so
+   the owner authors and commits the catalog between stages 1 and 2. And the configuration
+   `awsf init` writes enables only `intake`, declares zero agents and names no adapter any later
+   stage can reach, so the owner replaces it and supplies the role prompts between stages 2 and 3.
+   Both files are protected paths in the configuration this repository ships.
+5. **`awsf init` creates the branch `master`.** `initCommand` runs `git init` with no `-b`, so the
+   default branch is whatever the machine's Git is configured for. Every later stage reads
+   `default_branch` from the catalog the owner wrote, so a catalog saying `main` against a
+   repository on `master` is a mismatch the owner has to notice.
+6. **The owner-typed `awsf run` cannot reach the stub route.** Measured:
+   `ProductionRouteUnavailable: configured adapter "stub" is unavailable: adapter kind has no
+   production binding`. `adapters.stub` is `kind: fixture`, which `registeredAdapter` answers with
+   `null` on purpose, so a zero-quota capture is only reachable by injecting `adapterFor` through
+   `runProductionCommand`'s `infrastructure` seam. The capture did that; **M5's journey must too.**
+
+### Entry preconditions, measured by removing them
+
+Each was measured rather than read off the code. Full transcripts in `raw/PROBES-*.json`.
+
+| Stage | Precondition removed | What the run did |
+| --- | --- | --- |
+| 1 | target directory not empty | `InitTargetNotEmptyError`, nothing written |
+| 2 | no `awsf.project.yaml` authored | exit 1, `ENOENT … awsf.project.yaml` |
+| 3 | no placement from stage 2 | `BLOCKED` at `design-context`, **0 calls spent**, `ENOENT … placement.yaml` |
+| 3 | `workflows.enabled` omits `design-to-plan` | `awsf new` **accepts it**; `awsf start` refuses: *"workflow design-to-plan is not enabled by …"* |
+| 3 | attempt worktree outside the resolved `worktreeRoot` | `BLOCKED` at `design_evidence_present`, 0 calls spent (capture generation `g2`) |
+| 5 | attempt not `LANDED` | throws `TerminalAttempt` before any Git process is spawned |
+
+The `awsf new` / `awsf start` split in row four is worth carrying into T08: `awsf new` records a
+workflow the configuration does not enable, and the refusal arrives one command later.
+
+### Two measurements T02 and T19 will want
+
+- **One task's journal is 793,310 bytes across 101 lines.** 474,094 of those bytes — 59.8% — are
+  repeated copies of `configSnapshotJson`, because every `attempt.updated` event embeds the whole
+  `AttemptStatus`. The stage-3 capture file is 988 KB almost entirely for this reason. If the
+  fixtures are to stay readable, the journal is the part to summarize rather than carry.
+- **The `tests` phase passed with zero commands.** With `gates: {}` in both the config and the
+  catalog, `tests-0.json` reads `"summary":"all configured commands passed"` with
+  `"commands":[]`. A stage-4 fixture taken from a project with no configured gates records a
+  vacuous pass, and any test written against it must not read that field as evidence a suite ran.
+
 ## Shared read-first set
 
 Every fresh session reads `AGENTS.md`, the named task and containing milestone in the HTML plan, and

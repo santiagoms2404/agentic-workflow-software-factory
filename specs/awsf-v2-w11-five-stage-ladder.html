@@ -447,7 +447,7 @@ flowchart LR
 
   <!-- ================= M1 ================= -->
   <div class="phase">
-    <h3><code class="status">[]</code> Milestone M1: The capture pass</h3>
+    <h3><code class="status">[wip]</code> Milestone M1: The capture pass</h3>
     <p>The first task of the workstream, not a preliminary to it. Five stage outputs and one stage list go into the tree as fixtures, and the schema-fit table records what each one validates against. <strong>Nothing is designed in this milestone.</strong> The only judgement it makes is which of the thirteen landed schemas a capture validates against, and even that is made by the parser rather than by a reader.</p>
 
     <figure>
@@ -467,23 +467,23 @@ flowchart LR
     <h4>1. Run the ladder by hand, and record the stage list</h4>
     <p class="serves"><code class="serves">INV-1</code></p>
     <ul class="checklist">
-      <li><code class="status">[]</code> Work in a temporary directory outside this repository. Drive a throwaway project through the ladder against the four landed workstreams <strong>as they actually stand</strong>, on the stub route, spending no quota</li>
-      <li><code class="status">[]</code> Record the ordered stage list as it is observed: exactly five entries, each carrying <code>id</code>, <code>ordinal</code>, <code>owner</code> (<code>host</code> or a role name), <code>producer</code> (the command or workflow id that produced it), <code>granularity</code> (<code>task</code> or <code>phase</code>, per Q4), and <code>entryPrecondition</code> (what had to be true before this stage could start)</li>
-      <li><code class="status">[]</code> Record each stage's output <strong>exactly as it left its producer</strong>. Do not reformat, reorder, truncate or tidy. An output that is longer or messier than expected is the finding, and smoothing it is the one thing that makes this whole milestone worthless</li>
-      <li><code class="status">[]</code> <strong>Do not read either frozen candidate record</strong>, and do not reconstruct a stage from the spine's prose. If the run disagrees with what anybody remembers, the run wins and the disagreement is written down in the ticket README</li>
-      <li><code class="status">[]</code> <strong>Do not synthesize a stage that could not be run.</strong> Per Q5, record it as a stated absence naming what would close it — the idiom the fused record's §8 uses for every other gap in this project</li>
-      <li><code class="status">[]</code> Write down, per stage, whether its output came from the host or from an agent on the stub route, because the fixture header for each agent-produced stage must say that it is a shape sample and not a content sample</li>
+      <li><code class="status">[x]</code> Work in a temporary directory outside this repository. Drive a throwaway project through the ladder against the four landed workstreams <strong>as they actually stand</strong>, on the stub route, spending no quota</li>
+      <li><code class="status">[x]</code> Record the ordered stage list as it is observed: exactly five entries, each carrying <code>id</code>, <code>ordinal</code>, <code>owner</code> (<code>host</code> or a role name), <code>producer</code> (the command or workflow id that produced it), <code>granularity</code> (<code>task</code> or <code>phase</code>, per Q4), and <code>entryPrecondition</code> (what had to be true before this stage could start)</li>
+      <li><code class="status">[x]</code> Record each stage's output <strong>exactly as it left its producer</strong>. Do not reformat, reorder, truncate or tidy. An output that is longer or messier than expected is the finding, and smoothing it is the one thing that makes this whole milestone worthless</li>
+      <li><code class="status">[x]</code> <strong>Do not read either frozen candidate record</strong>, and do not reconstruct a stage from the spine's prose. If the run disagrees with what anybody remembers, the run wins and the disagreement is written down in the ticket README</li>
+      <li><code class="status">[x]</code> <strong>Do not synthesize a stage that could not be run.</strong> Per Q5, record it as a stated absence naming what would close it — the idiom the fused record's §8 uses for every other gap in this project</li>
+      <li><code class="status">[x]</code> Write down, per stage, whether its output came from the host or from an agent on the stub route, because the fixture header for each agent-produced stage must say that it is a shape sample and not a content sample</li>
     </ul>
 
     <h4>2. Scrub the captures and land them as fixtures</h4>
     <p class="serves"><code class="serves">INV-1</code> <code class="serves">AC-2</code></p>
     <ul class="checklist">
-      <li><code class="status">[]</code> Create <code>core/test/fixtures/stages/</code> and write <code>stages.json</code> plus <code>S1.json</code>–<code>S5.json</code>. <code>core/test/fixtures/quota-axi/</code> is the precedent for a scrubbed capture living in this tree</li>
-      <li><code class="status">[]</code> Scrub per invariant 1: no session id, no attempt id, no run id, no task id belonging to a real run. Normalize every timestamp to one fixed instant, so no capture encodes when it was taken</li>
-      <li><code class="status">[]</code> Scrub per invariant 9: no credential-shaped value anywhere, checked against <code>CREDENTIAL_PATTERNS</code> as imported from <code>core/src/policy/redaction.ts</code> rather than against a re-declared list</li>
-      <li><code class="status">[]</code> Replace every absolute machine path with a stable placeholder. The temporary directory the capture ran in must not survive into the fixture</li>
-      <li><code class="status">[]</code> Give each fixture a header field stating what it is, when its stage ran on the host versus on the stub, and — for agent-produced stages — the one-line limit that it samples shape and not content</li>
-      <li><code class="status">[]</code> Confirm no fixture basename matches <code>*receipt*</code> or <code>*manifest*</code> and no extension is <code>.log</code>/<code>.db</code>/<code>.sqlite</code>, so invariant 10's junk-drawer fence stays green</li>
+      <li><code class="status">[x]</code> Create <code>core/test/fixtures/stages/</code> and write <code>stages.json</code> plus <code>S1.json</code>–<code>S5.json</code>. <code>core/test/fixtures/quota-axi/</code> is the precedent for a scrubbed capture living in this tree</li>
+      <li><code class="status">[x]</code> Scrub per invariant 1: no session id, no attempt id, no run id, no task id belonging to a real run. Normalize every timestamp to one fixed instant, so no capture encodes when it was taken</li>
+      <li><code class="status">[x]</code> Scrub per invariant 9: no credential-shaped value anywhere, checked against <code>CREDENTIAL_PATTERNS</code> as imported from <code>core/src/policy/redaction.ts</code> rather than against a re-declared list</li>
+      <li><code class="status">[x]</code> Replace every absolute machine path with a stable placeholder. The temporary directory the capture ran in must not survive into the fixture</li>
+      <li><code class="status">[x]</code> Give each fixture a header field stating what it is, when its stage ran on the host versus on the stub, and — for agent-produced stages — the one-line limit that it samples shape and not content</li>
+      <li><code class="status">[x]</code> Confirm no fixture basename matches <code>*receipt*</code> or <code>*manifest*</code> and no extension is <code>.log</code>/<code>.db</code>/<code>.sqlite</code>, so invariant 10's junk-drawer fence stays green</li>
     </ul>
 
     <h4>3. Schema-fit every capture against the thirteen landed schemas</h4>

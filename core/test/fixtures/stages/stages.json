@@ -1,0 +1,317 @@
+{
+  "fixtureHeader": {
+    "fixture": "stages.json",
+    "describes": "The ordered five-stage list observed by one hand-run of the ladder (W11 T01), outside this repository, on the stub route, spending no quota. The only source of stage names anywhere in this repository.",
+    "ranOn": "mixed — see each stage entry's own owner/outputSource; stages 1, 2 and 5 ran entirely on the host, stages 3 and 4 ran host phases plus stub-route agent phases",
+    "shapeOnly": "Stage entries for stage 3 (design-to-plan) and stage 4 (build) name phases produced by stub-route agents. Those phases sample envelope SHAPE only, never CONTENT — see S3.json and S4.json for the one-line limit repeated against each such stage.",
+    "scrubbed": "Per Q7 (2026-08-26): session ids, attempt/task ids and absolute machine paths replaced with stable placeholders; every timestamp normalized to a single fixed instant (2026-01-01T00:00:00.000Z), field kept per invariant 1. No other value reformatted, reordered, truncated or tidied from the observed run."
+  },
+  "producedBy": "W11 T01, one run of the ladder outside the repository on the stub route",
+  "countingRule": "One entry per producer of durable project state that the owner starts by hand and that stops when it returns. `awsf land` is NOT counted as a stage: it is the owner act that crosses the AWAITING_OWNER stop the producing stage ended at.",
+  "stages": [
+    {
+      "id": "init",
+      "ordinal": 1,
+      "owner": "host",
+      "producer": "awsf init",
+      "producerKind": "cli command (core/src/cli/commands/init.ts → initCommand)",
+      "granularity": "command",
+      "granularityNote": "Neither `task` nor `phase`. No task, no session, no attempt directory and no journal exist when this stage runs — observed: stateRootExists=false and zero attempt directories after it.",
+      "entryPrecondition": "The target path is an empty directory or does not exist yet.",
+      "entryPreconditionMeasuredBy": "S1.observed.rerunOnSameDirectory — a second run on the same directory throws InitTargetNotEmptyError.",
+      "outputSource": "host",
+      "outputKind": "one stdout line plus the command's { commitSha, path } return value",
+      "outputFile": "S1.json",
+      "exitStop": "the command returns; nothing is running and nothing is scheduled",
+      "typedEnvelope": null,
+      "observed": {
+        "branch": "master",
+        "filesInCommit": [
+          "awsf.config.yaml"
+        ],
+        "commitAuthor": "Santiago Marin <santiagomarinsuarez@me.com>",
+        "stateRootExists": false,
+        "attemptDirs": [],
+        "sessionRows": 0
+      }
+    },
+    {
+      "id": "project-register",
+      "ordinal": 2,
+      "owner": "host",
+      "producer": "awsf project register",
+      "producerKind": "cli command (core/src/cli/commands/project.ts → registerProject)",
+      "granularity": "command",
+      "granularityNote": "No task. Writes one machine-local file and returns a value; no session row appears.",
+      "entryPrecondition": "An awsf.project.yaml catalog exists and names this project's slug; every repository id the catalog declares receives an explicit --repository <id>=<absolute-path>; no placement is already registered for the slug.",
+      "entryPreconditionMeasuredBy": "PROBES P1 — with only `awsf init`'s output present the command exits 1 with ENOENT on awsf.project.yaml: \"Error: ENOENT: no such file or directory, open '<CAPTURE_ROOT>/probes/p1/canonical/awsf.project.yaml'\"",
+      "outputSource": "host",
+      "outputKind": "one stdout line plus the ResolvedProject the command returns; one placement.yaml on disk",
+      "outputFile": "S2.json",
+      "exitStop": "the command returns; nothing is running and nothing is scheduled",
+      "typedEnvelope": null,
+      "observed": {
+        "stdout": [
+          "Registered ladder-capture with 1 repository(ies)."
+        ],
+        "stateRootEntries": [
+          "projects"
+        ],
+        "projectShow": [
+          "canonical: role=plan, branch=master, gates=none, worktree_root=<CAPTURE_ROOT>/g4/awsf-worktrees"
+        ],
+        "sessionRows": 0,
+        "attemptDirs": [],
+        "ownerActBefore": "the owner authored and committed awsf.project.yaml by hand; awsf init writes no catalog"
+      }
+    },
+    {
+      "id": "design-to-plan",
+      "ordinal": 3,
+      "owner": "host",
+      "ownerNote": "The single-owner field cannot hold what ran. Four of seven phases are host-owned and three are agent-owned; the stage's terminal envelope and its commit are the host's.",
+      "phaseOwners": [
+        {
+          "phase": "architecture-review",
+          "agent": "architecture-reviewer",
+          "schemaId": "awsf.architecture-review-output/v1",
+          "bytes": 1032
+        },
+        {
+          "phase": "design",
+          "agent": "designer",
+          "schemaId": "awsf.design-output/v1",
+          "bytes": 1176
+        },
+        {
+          "phase": "design-context",
+          "agent": "host",
+          "schemaId": "awsf.design-context/v1",
+          "bytes": 918
+        },
+        {
+          "phase": "plan",
+          "agent": "planner",
+          "schemaId": "awsf.design-plan-output/v1",
+          "bytes": 1076
+        },
+        {
+          "phase": "plan-context",
+          "agent": "host",
+          "schemaId": "awsf.plan-context/v1",
+          "bytes": 1186
+        },
+        {
+          "phase": "plan-render",
+          "agent": "host",
+          "schemaId": "awsf.document-output/v1",
+          "bytes": 1717
+        },
+        {
+          "phase": "request",
+          "agent": "host",
+          "schemaId": "awsf.plan-output/v1",
+          "bytes": 1108
+        }
+      ],
+      "producer": "design-to-plan",
+      "producerKind": "workflow id, driven by `awsf new --workflow design-to-plan --tier 1`, `awsf start`, `awsf run`",
+      "granularity": "task",
+      "granularityNote": "One task containing seven phases. Observed: one session row, one attempt directory.",
+      "entryPrecondition": "S2's placement exists for the slug; the loaded config's workflows.enabled includes design-to-plan; the config declares designer, architecture-reviewer and planner on an adapter the host can build; each role's system prompt resolves relative to the config path; the attempt worktree is inside the worktreeRoot the placement resolves to.",
+      "entryPreconditionMeasuredBy": [
+        "PROBES P5 — no placement: BLOCKED at design-context, 0 calls spent, \"Error: ENOENT: no such file or directory, open '<CAPTURE_ROOT>/probes2/p5b/state/projects/probe-five/placement.yaml'\"",
+        "PROBES P6 — workflow not enabled: `awsf new` accepts it and `awsf start` refuses: \"workflow design-to-plan is not enabled by <CAPTURE_ROOT>/probes2/p6b/canonical/awsf.config.yaml\"",
+        "generation g2 of this capture — attempt worktree outside the resolved worktreeRoot: BLOCKED at design_evidence_present, 0 calls spent",
+        "PROBE-owner-typed-route — the owner-typed `awsf run` cannot reach the stub adapter at all: \"ProductionRouteUnavailable: configured adapter \\\"stub\\\" is unavailable: adapter kind has no production binding\""
+      ],
+      "outputSource": "host and agent",
+      "outputSourceDetail": "three of seven stored envelopes were produced by agents on the stub route (designer, architecture-reviewer, planner) and four by the host. SHAPE SAMPLE ONLY for the three agent-produced envelopes: a scripted adapter reproduces envelope shape faithfully and says nothing about what a real model puts in those fields.",
+      "outputKind": "seven stored envelopes under <attempt>/envelopes/, exactly as the host wrote them",
+      "outputFile": "S3.json",
+      "terminalEnvelope": "plan-render-0.json",
+      "exitStop": "AWAITING_OWNER",
+      "typedEnvelope": "awsf.document-output/v1 (terminal); six further envelope schema ids inside the task",
+      "observed": {
+        "lifecycleState": "AWAITING_OWNER",
+        "nextAction": "run `awsf rework capture-plan \"<concrete defect>\"`, `awsf land capture-plan`, or `awsf cancel capture-plan`",
+        "callsSpent": 3,
+        "realStubProviderProcessRan": false,
+        "renderedFiles": [
+          "specs/capture-plan-build-prompts.md",
+          "specs/capture-plan.html",
+          "specs/tickets/capture-plan/README.md",
+          "specs/tickets/capture-plan/T01.md"
+        ],
+        "sessionRowsBeforeAfter": [
+          1,
+          2
+        ],
+        "attemptDirsBeforeAfter": [
+          [
+            "capture-probe/1"
+          ],
+          [
+            "capture-probe/1",
+            "capture-plan/1"
+          ]
+        ],
+        "journalBytes": 793310,
+        "journalLines": 101
+      }
+    },
+    {
+      "id": "build",
+      "ordinal": 4,
+      "owner": "host",
+      "ownerNote": "Two of four phases are host-owned and two are agent-owned; the candidate commit is the host's.",
+      "phaseOwners": [
+        {
+          "phase": "builder",
+          "agent": "builder",
+          "schemaId": "awsf.build-output/v1",
+          "bytes": 789
+        },
+        {
+          "phase": "planner",
+          "agent": "planner",
+          "schemaId": "awsf.plan-output/v1",
+          "bytes": 1033
+        },
+        {
+          "phase": "request",
+          "agent": "host",
+          "schemaId": "awsf.plan-output/v1",
+          "bytes": 1092
+        },
+        {
+          "phase": "tests",
+          "agent": "host",
+          "schemaId": "awsf.test-output/v1",
+          "bytes": 581
+        }
+      ],
+      "producer": "plan-build-test",
+      "producerKind": "workflow id — the project's configured project.default_workflow — driven by `awsf new`, `awsf start`, `awsf run`",
+      "granularity": "task",
+      "granularityNote": "One task containing four phases.",
+      "entryPrecondition": "S3's rendered plan and tickets are on the repository's default branch (the owner ran `awsf land`); the same registry, config, prompt and worktree preconditions as S3.",
+      "entryPreconditionMeasuredBy": "BOUNDARY-S3-S4.raw.json — the plan set reaches the default branch only through `awsf land`, which required an interactive confirmation and reported `canonical ahead 0, behind 1`.",
+      "outputSource": "host and agent",
+      "outputSourceDetail": "two of four stored envelopes were produced by agents on the stub route (planner, builder) and two by the host. SHAPE SAMPLE ONLY for the two agent-produced envelopes.",
+      "outputKind": "four stored envelopes under <attempt>/envelopes/, exactly as the host wrote them",
+      "outputFile": "S4.json",
+      "terminalEnvelope": "tests-0.json",
+      "exitStop": "AWAITING_OWNER",
+      "typedEnvelope": "awsf.test-output/v1 (terminal); three further envelope schema ids inside the task",
+      "observed": {
+        "lifecycleState": "AWAITING_OWNER",
+        "nextAction": "run `awsf rework capture-build \"<concrete defect>\"`, `awsf land capture-build`, or `awsf cancel capture-build`",
+        "callsSpent": 2,
+        "realStubProviderProcessRan": false,
+        "candidateFiles": [
+          "core/src/recorded.ts"
+        ],
+        "sessionRowsBeforeAfter": [
+          2,
+          3
+        ],
+        "attemptDirsBeforeAfter": [
+          [
+            "capture-probe/1",
+            "capture-plan/1"
+          ],
+          [
+            "capture-probe/1",
+            "capture-build/1",
+            "capture-plan/1"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "publish",
+      "ordinal": 5,
+      "owner": "host",
+      "ownerNote": "The act is initiated by a person and the code that performs it is the host's. No agent is reached and no provider is contacted.",
+      "producer": "awsf publish",
+      "producerKind": "cli command (core/src/cli/commands/publish.ts → publishCommand)",
+      "granularity": "command",
+      "granularityNote": "No task and no new session; it acts on the already-landed attempt of stage 4.",
+      "entryPrecondition": "The attempt is LANDED; the catalog declares a publish block for the resolved repository; the named remote and branch are both allowlisted there; HEAD is at the candidate; the checkout is clean; the update is a fast-forward or a branch creation.",
+      "entryPreconditionMeasuredBy": "PROBES P4 — on an attempt that is not LANDED it throws before any Git process: \"BLOCKED -> PUBLISHED: BLOCKED is terminal for this attempt; `awsf retry` mints attempt n+1 at DRAFT\"",
+      "outputSource": "host",
+      "outputKind": "the terminal display the command writes — revision, remote, branch, update kind and fourteen named authorization rows — plus its PublishCommandResult",
+      "outputFile": "S5.json",
+      "exitStop": "PUBLISHED; nextAction reads \"no action required; the landed candidate is published\"",
+      "typedEnvelope": null,
+      "observed": {
+        "terminalLines": [
+          "Revision: f0ea5cd7118450ee09c20075159279dfe614e824",
+          "Remote: origin",
+          "Branch: published",
+          "Update: creation — the branch does not exist on the remote",
+          "Authorization rows:",
+          "   1 not-landed                       pass",
+          "   2 no-landing-approval              pass",
+          "   3 approval-not-candidate           pass",
+          "   4 malformed-candidate              pass",
+          "   5 head-not-at-candidate            pass",
+          "   6 dirty-checkout                   pass",
+          "   7 remote-not-allowlisted           pass",
+          "   8 branch-not-allowlisted           pass",
+          "   9 remote-host-mismatch             pass",
+          "  10 force-refspec                    pass",
+          "  11 delete-refspec                   pass",
+          "  12 inexact-source                   pass",
+          "  13 destination-not-declared-branch  pass",
+          "  14 non-fast-forward                 pass"
+        ],
+        "outcome": "published",
+        "outcomes": [
+          "created"
+        ],
+        "lifecycleState": "PUBLISHED",
+        "remoteRefsAfter": "f0ea5cd7118450ee09c20075159279dfe614e824\trefs/heads/published\n"
+      }
+    }
+  ],
+  "boundaries": [
+    {
+      "between": [
+        "init",
+        "project-register"
+      ],
+      "ownerAct": "author and commit awsf.project.yaml by hand",
+      "isCommand": false,
+      "note": "`awsf init` writes only awsf.config.yaml. No command in the CLI table produces a catalog."
+    },
+    {
+      "between": [
+        "project-register",
+        "design-to-plan"
+      ],
+      "ownerAct": "replace awsf.config.yaml and supply the role prompts, then commit",
+      "isCommand": false,
+      "note": "The configuration `awsf init` writes enables only `intake`, declares zero agents and names no adapter any later stage can reach. awsf.config.yaml is also a protected path in the configuration this repository ships."
+    },
+    {
+      "between": [
+        "design-to-plan",
+        "build"
+      ],
+      "ownerAct": "awsf land",
+      "isCommand": true,
+      "note": "The stage's exit stop is AWAITING_OWNER; the owner confirms interactively and the host fast-forwards."
+    },
+    {
+      "between": [
+        "build",
+        "publish"
+      ],
+      "ownerAct": "awsf land",
+      "isCommand": true,
+      "note": "Same shape as the previous boundary."
+    }
+  ]
+}
