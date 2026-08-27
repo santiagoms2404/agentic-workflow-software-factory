@@ -45,7 +45,10 @@ test("register, list, and show round-trip a project placement", async () => {
       repositories: [`plans=${repository}`],
     });
 
-    assert.equal(registered.slug, "project-command");
+    assert.equal(registered.resolvedProject.slug, "project-command");
+    assert.equal(registered.schema, "awsf.project-register-output/v1");
+    assert.equal(registered.line, "Registered project-command with 1 repository(ies).");
+    assert.equal(registered.placementFileBytes, readFileSync(placementFilePath(stateRoot, "project-command"), "utf8"));
     assert.deepEqual(await listProjects(stateRoot), ["project-command: 1 repository(ies), resolves: yes"]);
     assert.deepEqual(await showProject(stateRoot, "project-command"), [
       `plans: role=plan, branch=main, gates=none, worktree_root=${join(root, "awsf-worktrees")}`,

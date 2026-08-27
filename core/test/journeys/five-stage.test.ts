@@ -248,9 +248,9 @@ test("a throwaway project travels all five captured stages on the stub route wit
     });
     travelled.push("project-register");
 
-    assert.equal(registered.slug, SLUG);
-    assert.equal(registered.repositories[REPOSITORY_ID]?.path, canonical);
-    assert.equal(registered.repositories[REPOSITORY_ID]?.worktreeRoot, worktreeRoot);
+    assert.equal(registered.resolvedProject.slug, SLUG);
+    assert.equal(registered.resolvedProject.repositories[REPOSITORY_ID]?.path, canonical);
+    assert.equal(registered.resolvedProject.repositories[REPOSITORY_ID]?.worktreeRoot, worktreeRoot);
     assert.equal(existsSync(join(stateRoot, "projects", SLUG, "placement.yaml")), true);
     // S2's captured observation: a placement and nothing else under the state root.
     assert.deepEqual(readdirSync(stateRoot), ["projects"]);

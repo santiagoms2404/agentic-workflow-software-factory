@@ -18,6 +18,11 @@ import {
 } from "./design-plan-output.ts";
 import { DocumentOutputSchema, DOCUMENT_OUTPUT_SCHEMA_ID, type DocumentOutput } from "./document-output.ts";
 import { InitOutputSchema, INIT_OUTPUT_SCHEMA_ID, type InitOutput } from "./init-output.ts";
+import {
+  ProjectRegisterOutputSchema,
+  PROJECT_REGISTER_OUTPUT_SCHEMA_ID,
+  type ProjectRegisterOutput,
+} from "./project-register-output.ts";
 import { IntakeOutputSchema, INTAKE_OUTPUT_SCHEMA_ID, type IntakeOutput } from "./intake-output.ts";
 import { PlanContextSchema, PLAN_CONTEXT_SCHEMA_ID, type PlanContext } from "./plan-context.ts";
 import { PlanOutputSchema, PLAN_OUTPUT_SCHEMA_ID, type PlanOutput } from "./plan-output.ts";
@@ -48,6 +53,7 @@ export const ENVELOPE_SCHEMAS = {
   [SCOUT_OUTPUT_SCHEMA_ID]: ScoutOutputSchema,
   [INTAKE_OUTPUT_SCHEMA_ID]: IntakeOutputSchema,
   [INIT_OUTPUT_SCHEMA_ID]: InitOutputSchema,
+  [PROJECT_REGISTER_OUTPUT_SCHEMA_ID]: ProjectRegisterOutputSchema,
 } as const;
 
 export type EnvelopeSchemaId = keyof typeof ENVELOPE_SCHEMAS;
@@ -68,6 +74,7 @@ export interface EnvelopeTypeById {
   [SCOUT_OUTPUT_SCHEMA_ID]: ScoutOutput;
   [INTAKE_OUTPUT_SCHEMA_ID]: IntakeOutput;
   [INIT_OUTPUT_SCHEMA_ID]: InitOutput;
+  [PROJECT_REGISTER_OUTPUT_SCHEMA_ID]: ProjectRegisterOutput;
 }
 
 export const ENVELOPE_SCHEMA_IDS = Object.keys(ENVELOPE_SCHEMAS) as EnvelopeSchemaId[];

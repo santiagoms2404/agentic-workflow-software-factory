@@ -291,7 +291,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
           throw new Error("usage: awsf project register --catalog <path> --repository <id>=<absolute-path> [...]");
         }
         const result = await registerProject({ stateRoot, catalogPath: resolve(catalogPath), repositories: parsed.repositories });
-        out(`Registered ${result.slug} with ${Object.keys(result.repositories).length} repository(ies).`);
+        out(result.line);
         return 0;
       }
       if (action === "list" && parsed.positionals.length === 1) {

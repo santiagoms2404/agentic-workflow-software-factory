@@ -972,11 +972,11 @@ flowchart TD
 
       <h4>30. <code>awsf.project-register-output/v1</code></h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>core/src/contracts/project-register-output.ts</code>: the common envelope fields plus <code>kind</code>, the printed <code>line</code>, the returned <code>resolvedProject</code> and the exact <code>placementFileBytes</code>. The placement bytes are bytes, not a re-serialization — W11 recorded them exactly because a round-trip through a YAML writer is the thing that would quietly change them</li>
-        <li><code class="status">[]</code> Registered in <code>ENVELOPE_SCHEMAS</code> and <code>EnvelopeTypeById</code>; the table reaches fifteen</li>
-        <li><code class="status">[]</code> <code>awsf project register</code> returns the validated envelope and writes no journal row, the same session-less shape <span class="gate">Q7</span> decided for task 29</li>
-        <li><code class="status">[]</code> <code>core/test/fixtures/stages/S2.json</code> replayed through <code>parse-envelope.ts</code> against the new id, zero violations</li>
-        <li><code class="status">[]</code> <strong>No registry change.</strong> W04 owns the catalog and the placement layer. This task types what <code>project register</code> already returns and does not move where a project is recorded</li>
+        <li><code class="status">[x]</code> <code>core/src/contracts/project-register-output.ts</code>: the common envelope fields plus <code>kind</code>, the printed <code>line</code>, the returned <code>resolvedProject</code> and the exact <code>placementFileBytes</code>. The placement bytes are bytes, not a re-serialization — W11 recorded them exactly because a round-trip through a YAML writer is the thing that would quietly change them</li>
+        <li><code class="status">[x]</code> Registered in <code>ENVELOPE_SCHEMAS</code> and <code>EnvelopeTypeById</code>; the table reaches fifteen</li>
+        <li><code class="status">[x]</code> <code>awsf project register</code> returns the validated envelope and writes no journal row, the same session-less shape <span class="gate">Q7</span> decided for task 29</li>
+        <li><code class="status">[x]</code> <code>core/test/fixtures/stages/S2.json</code> replayed through <code>parse-envelope.ts</code> against the new id, zero violations</li>
+        <li><code class="status">[x]</code> <strong>No registry change.</strong> W04 owns the catalog and the placement layer. This task types what <code>project register</code> already returns and does not move where a project is recorded</li>
       </ul>
 
       <h4>31. <code>awsf.publish-output/v1</code>, then release the block</h4>

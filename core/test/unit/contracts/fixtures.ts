@@ -9,6 +9,7 @@ import type {
   IntakeOutput,
   PlanContext,
   PlanOutput,
+  ProjectRegisterOutput,
   ReviewContext,
   ReviewOutput,
   ScoutOutput,
@@ -304,6 +305,34 @@ export function validInitOutput(): InitOutput {
   };
 }
 
+export function validProjectRegisterOutput(): ProjectRegisterOutput {
+  return {
+    schema: "awsf.project-register-output/v1",
+    producerStatus: "success",
+    summary: "Registered project with 1 repository(ies).",
+    artifacts: [],
+    notesForNextPhase: "",
+    kind: "host command result — one stdout line plus the ResolvedProject the command function returns",
+    line: "Registered project with 1 repository(ies).",
+    resolvedProject: {
+      slug: "project",
+      repositories: {
+        plans: {
+          id: "plans",
+          path: "/tmp/plans",
+          worktreeRoot: "/tmp/awsf-worktrees",
+          role: "plan",
+          defaultBranch: "main",
+          gates: [],
+        },
+      },
+      plans: { root: "specs", format: "awsf-plan-html/v1" },
+      contracts: [],
+    },
+    placementFileBytes: "version: awsf.placement/v1\nproject: project\nrepositories:\n  plans:\n    path: /tmp/plans\n",
+  };
+}
+
 export function validIntakeOutput(): IntakeOutput {
   return {
     schema: "awsf.intake-output/v1",
@@ -343,4 +372,5 @@ export const VALID_ENVELOPES = {
   "awsf.scout-output/v1": validScoutOutput,
   "awsf.intake-output/v1": validIntakeOutput,
   "awsf.init-output/v1": validInitOutput,
+  "awsf.project-register-output/v1": validProjectRegisterOutput,
 } as const;

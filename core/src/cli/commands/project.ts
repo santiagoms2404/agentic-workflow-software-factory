@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { access, readdir, readFile } from "node:fs/promises";
+import { Value } from "@sinclair/typebox/value";
 import type { Dirent } from "node:fs";
 import { join } from "node:path";
 import { stringify as toYaml } from "yaml";
@@ -10,6 +11,11 @@ import type { Placement } from "../../registry/placement-schema.ts";
 import { resolveProject, type ResolvedProject } from "../../registry/resolve.ts";
 import { loadContractProjection, type ContractProjection } from "../../registry/contracts.ts";
 import { placementFilePath } from "../../persistence/platform-paths.ts";
+import {
+  PROJECT_REGISTER_OUTPUT_SCHEMA_ID,
+  ProjectRegisterOutputSchema,
+  type ProjectRegisterOutput,
+} from "../../contracts/project-register-output.ts";
 
 export interface RegisterProjectOptions {
   readonly stateRoot: string;
@@ -66,8 +72,31 @@ async function resolvedRegisteredProject(stateRoot: string, slug: string): Promi
   return resolveProject(await catalogAtRegisteredRoots(placement), placement, stateRoot);
 }
 
+function serializableResolvedProject(project: ResolvedProject): ProjectRegisterOutput["resolvedProject"] {
+  return {
+    slug: project.slug,
+    repositories: Object.fromEntries(Object.entries(project.repositories).map(([id, repository]) => [id, {
+      id: repository.id,
+      path: repository.path,
+      worktreeRoot: repository.worktreeRoot,
+      role: repository.role,
+      defaultBranch: repository.defaultBranch,
+      ...(repository.identity === undefined ? {} : { identity: repository.identity }),
+      ...(repository.delivery === undefined ? {} : { delivery: repository.delivery }),
+      gates: repository.gates.map((gate) => ({ gateId: gate.gateId, argv: [...gate.argv], timeout_seconds: gate.timeout_seconds })),
+    }])),
+    plans: project.plans,
+    contracts: project.contracts.map((contract) => ({
+      id: contract.id,
+      digest: contract.digest,
+      producer: { ...contract.producer },
+      consumers: contract.consumers.map((consumer) => ({ ...consumer })),
+    })),
+  };
+}
+
 /** Registers explicitly supplied clone paths after their catalog pair resolves. */
-export async function registerProject(options: RegisterProjectOptions): Promise<ResolvedProject> {
+export async function registerProject(options: RegisterProjectOptions): Promise<ProjectRegisterOutput> {
   const catalog = loadCatalog(await readFile(options.catalogPath, "utf8"));
   const repositories = repositoryPaths(options.repositories);
   const missing = Object.keys(catalog.repositories).filter((id) => repositories[id] === undefined);
@@ -83,7 +112,23 @@ export async function registerProject(options: RegisterProjectOptions): Promise<
 
   const resolved = resolveProject(catalog, placement, options.stateRoot);
   await writePlacement(options.stateRoot, catalog.project.slug, placement);
-  return resolved;
+  const placementFileBytes = await readFile(placementPath, "utf8");
+  const line = `Registered ${resolved.slug} with ${Object.keys(resolved.repositories).length} repository(ies).`;
+  const output: ProjectRegisterOutput = {
+    schema: PROJECT_REGISTER_OUTPUT_SCHEMA_ID,
+    producerStatus: "success",
+    summary: line,
+    artifacts: [],
+    notesForNextPhase: "",
+    kind: "host command result — one stdout line plus the ResolvedProject the command function returns",
+    line,
+    resolvedProject: serializableResolvedProject(resolved),
+    placementFileBytes,
+  };
+  if (!Value.Check(ProjectRegisterOutputSchema, output)) {
+    throw new Error("host composed an invalid project register envelope");
+  }
+  return output;
 }
 
 /** Lists registered placements and whether their explicitly registered roots resolve as a project. */
