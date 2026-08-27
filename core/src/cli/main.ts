@@ -279,7 +279,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       const slug = parsed.flags.project;
       if (slug === undefined) throw new Error("usage: awsf init [path] --project <slug>");
       const result = await initCommand({ path: parsed.positionals[0] ?? cwd, slug });
-      out(`Initialized ${result.path} at ${result.commitSha}.`);
+      out(result.line);
       return 0;
     }
 

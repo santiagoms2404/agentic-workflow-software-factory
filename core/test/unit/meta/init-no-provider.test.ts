@@ -10,12 +10,16 @@ const ENTRYPOINTS = [
 ] as const;
 
 // Exact rather than prefix-based: adding any new dependency requires explaining
-// why deterministic initialization needs it. TypeBox and the tier files are the
-// schema-validation and schema-bound constants used by the config builder.
+// why deterministic initialization needs it. TypeBox, the envelope contract,
+// and the tier files validate the init result and config builder at their sources.
 const ALLOWED_LOCAL_MODULES = [
   "core/src/cli/commands/init.ts",
   "core/src/config/init-template.ts",
   "core/src/config/schema.ts",
+  "core/src/contracts/envelope-base.ts",
+  "core/src/contracts/init-output.ts",
+  "core/src/contracts/test-output.ts",
+  "core/src/contracts/typebox.ts",
   "core/src/execution/transport-broker.ts",
   "core/src/git/changes.ts",
   "core/src/git/commit.ts",

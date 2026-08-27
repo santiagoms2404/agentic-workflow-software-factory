@@ -1,7 +1,9 @@
 import { mkdir, readdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { Value } from "@sinclair/typebox/value";
 import { stringify as toYaml } from "yaml";
 import { buildMinimalConfig } from "../../config/init-template.ts";
+import { INIT_OUTPUT_SCHEMA_ID, InitOutputSchema, type InitOutput } from "../../contracts/init-output.ts";
 import { systemGitRunner, runGit } from "../../git/changes.ts";
 import { commitAsHost } from "../../git/commit.ts";
 
@@ -10,10 +12,7 @@ export interface InitCommandOptions {
   readonly slug: string;
 }
 
-export interface InitCommandResult {
-  readonly commitSha: string;
-  readonly path: string;
-}
+export type InitCommandResult = InitOutput;
 
 export class InitTargetNotEmptyError extends Error {
   constructor(path: string) {
@@ -42,8 +41,23 @@ export async function initCommand(options: InitCommandOptions): Promise<InitComm
   runGit(runner, ["init"]);
   await writeFile(join(path, "awsf.config.yaml"), toYaml(buildMinimalConfig(options.slug)), "utf8");
   const commitSha = commitAsHost({ repository: path, message: "chore: awsf init baseline" });
+  const line = `Initialized ${path} at ${commitSha}.`;
+  const output: InitOutput = {
+    schema: INIT_OUTPUT_SCHEMA_ID,
+    producerStatus: "success",
+    summary: line,
+    artifacts: [],
+    notesForNextPhase: "",
+    kind: "host command result printed to stdout",
+    line,
+    commitSha,
+    path,
+  };
+  if (!Value.Check(InitOutputSchema, output)) {
+    throw new Error("host composed an invalid init envelope");
+  }
 
-  return { commitSha, path };
+  return output;
 }
 
 function hasCode(error: unknown, code: string): boolean {

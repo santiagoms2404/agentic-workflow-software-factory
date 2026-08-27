@@ -5,6 +5,7 @@ import type {
   DesignOutput,
   DesignPlanOutput,
   DocumentOutput,
+  InitOutput,
   IntakeOutput,
   PlanContext,
   PlanOutput,
@@ -289,6 +290,20 @@ export function validScoutOutput(): ScoutOutput {
   };
 }
 
+export function validInitOutput(): InitOutput {
+  return {
+    schema: "awsf.init-output/v1",
+    producerStatus: "success",
+    summary: `Initialized /tmp/project at ${SHA_A}.`,
+    artifacts: [],
+    notesForNextPhase: "",
+    kind: "host command result printed to stdout",
+    line: `Initialized /tmp/project at ${SHA_A}.`,
+    commitSha: SHA_A,
+    path: "/tmp/project",
+  };
+}
+
 export function validIntakeOutput(): IntakeOutput {
   return {
     schema: "awsf.intake-output/v1",
@@ -327,4 +342,5 @@ export const VALID_ENVELOPES = {
   "awsf.document-output/v1": validDocumentOutput,
   "awsf.scout-output/v1": validScoutOutput,
   "awsf.intake-output/v1": validIntakeOutput,
+  "awsf.init-output/v1": validInitOutput,
 } as const;

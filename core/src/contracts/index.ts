@@ -19,6 +19,7 @@ export * from "./design-plan-output.ts";
 export * from "./document-output.ts";
 export * from "./intake-output.ts";
 export * from "./scout-output.ts";
+export * from "./init-output.ts";
 export * from "./normalized-events.ts";
 export * from "./stored-envelope.ts";
 export * from "./registry.ts";

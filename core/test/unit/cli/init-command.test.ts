@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { initCommand, InitTargetNotEmptyError } from "../../../src/cli/commands/init.ts";
 import { loadConfig } from "../../../src/config/load.ts";
+import { parseEnvelope } from "../../../src/contracts/parse-envelope.ts";
 import { HOST_AUTHOR } from "../../../src/git/commit.ts";
 
 function git(repository: string, ...argv: string[]): string {
@@ -20,6 +21,10 @@ test("initCommand creates a clean one-commit AWSF repository", async () => {
 
     assert.equal(result.path, target);
     assert.match(result.commitSha, /^[0-9a-f]{40}$/);
+    assert.equal(result.schema, "awsf.init-output/v1");
+    assert.equal(result.kind, "host command result printed to stdout");
+    assert.equal(result.line, `Initialized ${target} at ${result.commitSha}.`);
+    assert.equal(parseEnvelope(JSON.stringify(result), result.schema).valid, true);
     assert.ok(existsSync(join(target, ".git")));
     assert.equal(loadConfig(readFileSync(join(target, "awsf.config.yaml"), "utf8")).project.slug, "fresh-project");
     assert.equal(git(target, "rev-list", "--count", "HEAD"), "1");
