@@ -194,7 +194,7 @@ figcaption { color:var(--muted); font-size:12px; margin-top:10px; font-style:ita
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-08-20</dd>
-        <dt>modified</dt>     <dd>2026-08-20, 2026-08-21</dd>
+        <dt>modified</dt>     <dd>2026-08-20, 2026-08-21, 2026-08-27</dd>
         <dt>commits</dt>      <dd>0c56e9e (the spine, its build prompts and its ticket set — authored 2026-08-20, four Questionables decided by owner review 2026-08-21, committed together as one deliverable)</dd>
         <dt>agent name</dt>   <dd>claude-opus-5, claude-opus-5</dd>
         <dt>session id</dt>   <dd>not recorded — AGENTS.md invariant 1 keeps live session state out of every committed file in this repository</dd>
@@ -801,7 +801,7 @@ flowchart LR
 
     <!-- ================= W11 ================= -->
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone M11: W11 — The five-stage ladder <span class="wtag core">v2 core</span></h3>
+      <h3><code class="status">[x]</code> Milestone M11: W11 — The five-stage ladder <span class="wtag core">v2 core</span></h3>
       <p class="deep-plan"><a href="awsf-v2-w11-five-stage-ladder.html">Deep plan: AWSF v2 W11 — The five-stage ladder</a> <span class="muted">not yet authored</span></p>
       <p><em>Exists last among executable work, because it consumes W03 through W06.</em> It is the workstream that turns four separate capabilities into one route a project actually travels.</p>
       <h4>11. W11 — The five-stage ladder</h4>
@@ -818,12 +818,12 @@ flowchart LR
         Captured envelopes for all five stages, in the tree, before the workflow is written against them. Then the governed workflow end to end on the stub route, with <strong>zero quota</strong> — the same shape v1's journeys already use. A test asserting no stage reaches for an installed skill. And the explicit stopping points between stages, proven to stop rather than documented as stopping.
       </div>
       <ul class="checklist">
-        <li><code class="status">[]</code> Deep plan <code>awsf-v2-w11-five-stage-ladder.html</code> authored with its build prompts and ticket set, and approved by the owner</li>
-        <li><code class="status">[]</code> The capture pass is the first task and its envelopes land in the tree as fixtures</li>
-        <li><code class="status">[]</code> The governed workflow runs end to end on the stub route with zero quota</li>
-        <li><code class="status">[]</code> No stage depends on a document having been read; a test proves it</li>
-        <li><code class="status">[]</code> The explicit stopping points stop, provably</li>
-        <li><code class="status">[]</code> The deep plan's own milestones all reach <code>[x]</code></li>
+        <li><code class="status">[x]</code> Deep plan <code>awsf-v2-w11-five-stage-ladder.html</code> authored with its build prompts and ticket set, and approved by the owner</li>
+        <li><code class="status">[x]</code> The capture pass is the first task and its envelopes land in the tree as fixtures</li>
+        <li><code class="status">[x]</code> The governed workflow runs end to end on the stub route with zero quota</li>
+        <li><code class="status">[x]</code> No stage depends on a document having been read; a test proves it</li>
+        <li><code class="status">[x]</code> The explicit stopping points stop, provably</li>
+        <li><code class="status">[x]</code> The deep plan's own milestones all reach <code>[x]</code></li>
       </ul>
       <div class="loop">🔁 <strong>Do not exit this workstream until its deep plan's every box is checked.</strong> A failing command means fix the cause and re-run — never lower what the row asserts.</div>
     </div>
@@ -1115,6 +1115,12 @@ stateDiagram-v2
     <details>
       <summary>2026-08-25 — W08 landed: milestone M8 goes [x]</summary>
       <p><code>awsf-v2-w08-publish.html</code>'s twenty-four tasks and eight milestones are complete. Publication is restricted to an exact, approved <code>LANDED</code> revision, one allowlisted Git remote branch, one fenced push argv site, and one closed journal record; no deployment scope entered the workstream. The owner amendments landed first: G8-A in <code>96c72cc</code>, G8-B in <code>cd95732</code>, and G8-C in <code>0e41374</code>. The offline suites passed 1419/1419 unit, 53/53 contract, 70/70 simulation, and 104/104 journey tests; typecheck and lint passed; ticket-plan sync and all identifier-spine rows passed 14/14. W08 closed in <code>6a7e206</code> and is <code>[x]</code>.</p>
+    </details>
+
+    <details>
+      <summary>2026-08-27 — W11 landed: milestone M11 goes [x]</summary>
+      <p>W11 captured and governed five stages: <code>init</code>, <code>project-register</code>, <code>design-to-plan</code>, <code>build</code>, and <code>publish</code>. S1, S2, and S5 initially misfit all landed schemas and were routed to W05; W05 M8 released the three host-command envelope schemas, so no stage remains misfitted. The governed route proves the four owner stops, the no-skill fence, and the all-five-stage stub journey with zero quota.</p>
+      <p><code>npm run test</code> passed 1,718/1,718, <code>npm run typecheck</code> passed, and <code>npm run lint</code> found 0 warnings and 0 errors across 403 files. The registered-plan-source ticket-plan-sync fence passed 14/14. W11 is <code>[x]</code>.</p>
     </details>
   </section>
 

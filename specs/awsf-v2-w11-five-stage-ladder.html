@@ -105,7 +105,7 @@ code.inv { color:var(--accent); } code.ac { color:var(--good); }
     <summary>Metadata</summary>
     <dl>
       <dt>created</dt><dd>2026-08-25</dd>
-      <dt>modified</dt><dd>2026-08-25, 2026-08-26</dd>
+      <dt>modified</dt><dd>2026-08-25, 2026-08-26, 2026-08-27</dd>
       <dt>commits</dt><dd>none — authoring only; no implementation was written and nothing was committed, none — owner review applied; still uncommitted</dd>
       <dt>agent name</dt><dd>claude-opus-5, claude-opus-5</dd>
       <dt>session id</dt><dd>not recorded — AGENTS.md invariant 1 keeps live session state out of every committed file in this repository, not recorded — the owner review block carried no session id into the plan</dd>
@@ -788,19 +788,19 @@ flowchart LR
 
   <!-- ================= M6 ================= -->
   <div class="phase">
-    <h3><code class="status">[]</code> Milestone M6: Closing the workstream</h3>
+    <h3><code class="status">[x]</code> Milestone M6: Closing the workstream</h3>
     <p>One task. It is the only task in this plan permitted to touch <code>specs/awsf-v2-plan.html</code>.</p>
 
     <h4>20. Close the leaf, then close the spine</h4>
     <p class="serves"><code class="serves">AC-7</code></p>
     <ul class="checklist">
-      <li><code class="status">[]</code> Confirm every milestone header and every checklist item in this plan is <code>[x]</code>, or <code>[f]</code> with its blocker named in the Amendments. A silent <code>[]</code> anywhere means this task is not ready to run</li>
-      <li><code class="status">[]</code> Confirm every ticket's <code>state:</code> in <code>specs/tickets/awsf-v2-w11-five-stage-ladder/</code> mirrors this plan's markers</li>
-      <li><code class="status">[]</code> <code>npm run test</code>, <code>npm run typecheck</code>, <code>npm run lint</code> — all green, with the counts recorded</li>
-      <li><code class="status">[]</code> <code>core/test/unit/meta/ticket-plan-sync.test.ts</code> green, resolving this plan through the registered plan source</li>
-      <li><code class="status">[]</code> Append the modified date and an Amendment recording what M1's capture actually found — the stage list, and whether any stage misfitted. <strong>That finding is the workstream's most reusable output</strong> and it must not live only in a fixture</li>
-      <li><code class="status">[]</code> Flip the W11 marker in <code>specs/awsf-v2-plan.html</code> and the state in <code>specs/tickets/awsf-v2-plan/W11.md</code>, in the same commit, and only now</li>
-      <li><code class="status">[]</code> Never name an agent, model or AI tool in commit identity or message</li>
+      <li><code class="status">[x]</code> Confirm every milestone header and every checklist item in this plan is <code>[x]</code>, or <code>[f]</code> with its blocker named in the Amendments. A silent <code>[]</code> anywhere means this task is not ready to run</li>
+      <li><code class="status">[x]</code> Confirm every ticket's <code>state:</code> in <code>specs/tickets/awsf-v2-w11-five-stage-ladder/</code> mirrors this plan's markers</li>
+      <li><code class="status">[x]</code> <code>npm run test</code>, <code>npm run typecheck</code>, <code>npm run lint</code> — all green, with the counts recorded</li>
+      <li><code class="status">[x]</code> <code>core/test/unit/meta/ticket-plan-sync.test.ts</code> green, resolving this plan through the registered plan source</li>
+      <li><code class="status">[x]</code> Append the modified date and an Amendment recording what M1's capture actually found — the stage list, and whether any stage misfitted. <strong>That finding is the workstream's most reusable output</strong> and it must not live only in a fixture</li>
+      <li><code class="status">[x]</code> Flip the W11 marker in <code>specs/awsf-v2-plan.html</code> and the state in <code>specs/tickets/awsf-v2-plan/W11.md</code>, in the same commit, and only now</li>
+      <li><code class="status">[x]</code> Never name an agent, model or AI tool in commit identity or message</li>
     </ul>
     <div class="loop">
       🔁 <strong>Do not exit this milestone until every box above is checked.</strong> The spine marker is earned by the boxes above it, per invariant 2.
@@ -812,16 +812,16 @@ flowchart LR
   <h2>Validation Commands</h2>
   <p>Execute these to validate the whole workstream. Every one is offline and spends no quota.</p>
   <ul class="checklist">
-    <li><code class="status">[]</code> <code>npm run test:unit</code> — the fixtures, the contract join, the resolver, the stops, and the three fence legs</li>
-    <li><code class="status">[]</code> <code>npm run test:journeys</code> — all five stages end to end on the stub route</li>
-    <li><code class="status">[]</code> <code>npm run test</code> — the full suite; nothing this workstream added perturbed v1's twelve journeys or the meta fences</li>
-    <li><code class="status">[]</code> <code>npm run typecheck</code> — core and dashboard</li>
-    <li><code class="status">[]</code> <code>npm run lint</code></li>
-    <li><code class="status">[]</code> <code>git ls-files core/test/fixtures/stages/</code> lists the stage list, five captures, the schema-fit table and the boundary table — the fixtures exist in the tree, which is <code>AC-1</code>'s subject</li>
-    <li><code class="status">[]</code> <code>git log --oneline --diff-filter=A -- core/test/fixtures/stages/ core/src/stages/</code> shows every fixture added before any module file — <code>AC-1</code>'s ordering, read out of the commit record</li>
-    <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/no-skill-in-stages.test.ts core/test/unit/meta/no-stage-advance.test.ts</code> — the two new fences alone, green</li>
-    <li><code class="status">[]</code> <code>git diff --name-only main...HEAD</code> intersected against <code>policy.protected_paths</code> is empty — <code>INV-6</code> and <code>AC-7</code></li>
-    <li><code class="status">[]</code> <code>git diff --stat main...HEAD -- core/src/contracts/registry.ts</code> is empty — <code>ENVELOPE_SCHEMAS</code> still holds thirteen entries</li>
+    <li><code class="status">[x]</code> <code>npm run test:unit</code> — the fixtures, the contract join, the resolver, the stops, and the three fence legs</li>
+    <li><code class="status">[x]</code> <code>npm run test:journeys</code> — all five stages end to end on the stub route</li>
+    <li><code class="status">[x]</code> <code>npm run test</code> — the full suite; nothing this workstream added perturbed v1's twelve journeys or the meta fences</li>
+    <li><code class="status">[x]</code> <code>npm run typecheck</code> — core and dashboard</li>
+    <li><code class="status">[x]</code> <code>npm run lint</code></li>
+    <li><code class="status">[x]</code> <code>git ls-files core/test/fixtures/stages/</code> lists the stage list, five captures, the schema-fit table and the boundary table — the fixtures exist in the tree, which is <code>AC-1</code>'s subject</li>
+    <li><code class="status">[x]</code> <code>git log --oneline --diff-filter=A -- core/test/fixtures/stages/ core/src/stages/</code> shows every fixture added before any module file — <code>AC-1</code>'s ordering, read out of the commit record</li>
+    <li><code class="status">[x]</code> <code>node --experimental-strip-types --test core/test/unit/meta/no-skill-in-stages.test.ts core/test/unit/meta/no-stage-advance.test.ts</code> — the two new fences alone, green</li>
+    <li><code class="status">[x]</code> <code>git diff --name-only main...HEAD</code> intersected against <code>policy.protected_paths</code> is empty — <code>INV-6</code> and <code>AC-7</code></li>
+    <li><code class="status">[x]</code> <code>git diff --stat main...HEAD -- core/src/contracts/registry.ts</code> is empty — <code>ENVELOPE_SCHEMAS</code> still holds thirteen entries</li>
   </ul>
   <div class="loop">
     🔁 <strong>The workstream is not complete until every box is checked and every command passes. If a step is genuinely not possible, mark it <code>[f]</code>, name the blocker in the Amendments, and move on if the rest can proceed.</strong>
@@ -1045,6 +1045,12 @@ flowchart LR
     <p><strong>Nothing was added to close the gap.</strong> No schema, no synthetic session, no host-command store, no migration, no lifecycle state, no legal edge, no catalog field, no automatic advance. <code>ENVELOPE_SCHEMAS</code> is untouched by this workstream and <strong>no file under <code>core/src</code> changed at all</strong> — the whole implementation is <code>core/test/journeys/five-stage.test.ts</code>. <code>specs/awsf-v2-plan.html</code> was not edited; T20 alone closes the spine marker.</p>
     <p><strong>Validation.</strong> <code>node --experimental-strip-types --test core/test/journeys/five-stage.test.ts</code> passed 3/3 in 46.34 seconds; the end-to-end journey itself took 16.23 seconds. <code>npm run test:journeys</code> passed 107/107 in 188.00 seconds. <code>npm run test</code> passed 1,718/1,718 in 645 seconds wall time: unit 1,488, contract 53, simulation 70, journeys 107. <code>npm run typecheck</code> and <code>npm run lint</code> exited 0, the latter over 403 files with 97 rules and zero findings.</p>
     <p><strong>M5 is <code>[x]</code>.</strong> T18 and T19 are both <code>[x]</code> and both tickets read <code>state: done</code>. Every criterion the amended AC-6 states is true of the implementation, so the milestone closes on earned boxes rather than on a revised standard. M6 has not started and the W11 marker in <code>specs/awsf-v2-plan.html</code> is untouched.</p>
+  </details>
+  <details>
+    <summary>2026-08-27 — M6 completed: W11 closed after full validation</summary>
+    <p><strong>M1's capture found five stages:</strong> <code>init</code>, <code>project-register</code>, <code>design-to-plan</code>, <code>build</code>, and <code>publish</code>. The first, second, and fifth are host commands; the third and fourth are task workflows with host and agent phases. The two workflow stages reached <code>AWAITING_OWNER</code>; publish reached <code>PUBLISHED</code>.</p>
+    <p><strong>Three initial schema misfits were measured:</strong> S1, S2, and S5. They were routed as <code>W05-HOST-COMMAND-ENVELOPES</code>; W05 M8 subsequently added the three typed host-command envelopes, releasing the final journey assertion. No stage remains misfitted.</p>
+    <p>Validation: <code>npm run test</code> passed 1,718/1,718 (unit 1,488, contract 53, simulation 70, journeys 107); <code>npm run typecheck</code> passed; <code>npm run lint</code> found 0 warnings and 0 errors across 403 files. The registered-plan-source sync fence passed 14/14. The stage fixtures, ordering record, two stage fences, protected-path check, and schema-registry diff check all passed.</p>
   </details>
 </section>
 </main>
