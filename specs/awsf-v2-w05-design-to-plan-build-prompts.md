@@ -1497,10 +1497,10 @@ READ FIRST
   core/src/contracts/registry.ts - ENVELOPE_SCHEMAS and EnvelopeTypeById
   core/src/cli/commands/init.ts - what the command returns today
 
-FIRST ACT
-  Open the Questionables section and confirm Q7 reads DECIDED. If it still reads OPEN, STOP and
-  report. `awsf init` opens no session, so there is no answer yet to where its envelope goes, and
-  a task that guesses puts a store in the tree that nobody agreed to.
+Q7 IS DECIDED (2026-08-26): return-value only for the two session-less commands, a journal row
+  for publish. `awsf init` opens no session, so it gets a registered schema and validation against
+  it, and NO journal row. Do not add a store - not a synthetic session, not a second envelope
+  table. Read the Questionable and the Amendment before the first edit; both are in the plan.
 
 DO
   core/src/contracts/init-output.ts: INIT_OUTPUT_SCHEMA_ID = "awsf.init-output/v1" and a TypeBox
@@ -1508,8 +1508,10 @@ DO
   commitSha, and the initialized path.
   Register it in ENVELOPE_SCHEMAS and EnvelopeTypeById. The table goes from thirteen entries to
   fourteen; move every count assertion that names thirteen.
-  Emit it from core/src/cli/commands/init.ts through whatever Q7 decided. The command's existing
-  return shape stays a superset of what callers already read.
+  Return the validated envelope from core/src/cli/commands/init.ts and write no journal row. Its
+  current return is { commitSha, path } at line 46; the new shape stays a superset of it, so no
+  existing caller changes. Validated but unstored is the decided shape, not a shortfall - the
+  envelope is typed where it is produced and nothing reads it back through envelopesForPhase.
   Replay core/test/fixtures/stages/S1.json through parse-envelope.ts against the new id and assert
   ZERO violations.
 
@@ -1552,8 +1554,8 @@ DO
   "awsf.project-register-output/v1" and a TypeBox schema carrying the common envelope fields plus
   kind, the printed line, the returned resolvedProject, and the exact placementFileBytes.
   Register it in ENVELOPE_SCHEMAS and EnvelopeTypeById; the table reaches fifteen.
-  Emit it from `awsf project register` through Q7's route, under the same session-less constraint
-  as task 29.
+  Return the validated envelope from `awsf project register` and write no journal row - the same
+  session-less shape Q7 decided for task 29.
   Replay core/test/fixtures/stages/S2.json through parse-envelope.ts against the new id and assert
   ZERO violations.
 
@@ -1598,14 +1600,14 @@ DO
   core/src/contracts/publish-output.ts: PUBLISH_OUTPUT_SCHEMA_ID = "awsf.publish-output/v1" and a
   TypeBox schema carrying the common envelope fields plus kind, the full terminalLines, the
   structured result, and the exact finalStatusBytes. Registered; the table reaches sixteen.
-  publish is the one of the three that runs inside an attempt, so its envelope takes a REAL
-  journal row and becomes readable through envelopesForPhase, whatever Q7 decided for the other two.
+  publish is the one of the three that runs inside an attempt, so per Q7 it is the one that takes
+  a REAL journal row and is readable back through envelopesForPhase. The other two are not.
   Replay core/test/fixtures/stages/S5.json through parse-envelope.ts against the new id, zero
   violations.
   npm run test:unit && npm run typecheck && npm run lint - all green, counts recorded.
   Record in this plan's Amendments WHICH of W11's three [f] rows this milestone releases and which
-  it does not, naming the reason for each. On Q7's recommended answer the S4->S5 boundary becomes
-  readable and S1->S2 and S2->S3 do not, so at least one row stays [f].
+  it does not, naming the reason for each. Under Q7 the S4->S5 boundary becomes readable and
+  S1->S2 and S2->S3 do not, so rows stay [f] and W11's task 18 does not reach [x].
   ONLY NOW: flip milestone M8's marker and T29-T31 to done, then flip milestone M5's marker in
   specs/awsf-v2-plan.html back to [x], re-check its deep-plan box, and return
   specs/tickets/awsf-v2-plan/W05.md to state: done - all in ONE commit.
