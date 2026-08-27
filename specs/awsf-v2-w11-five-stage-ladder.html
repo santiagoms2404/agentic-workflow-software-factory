@@ -708,10 +708,10 @@ flowchart LR
     <h4>15. Leg three — no gate reaches its verdict by reading a file</h4>
     <p class="serves"><code class="serves">INV-3</code></p>
     <ul class="checklist">
-      <li><code class="status">[]</code> For every gate the stage contract names, walk its <code>run</code> closure and that closure's transitive reach with the TypeScript AST, and assert no filesystem read appears — no <code>readFile</code>, no <code>readFileSync</code>, no <code>existsSync</code>, no directory walk</li>
-      <li><code class="status">[]</code> <strong>Scope the fence to this workstream's own gates</strong>, per Q8. Some existing gates legitimately observe the repository — the diff and command-evidence gates do — and widening this leg to all gates would fail on day one for the wrong reason</li>
-      <li><code class="status">[]</code> Assert positively as well as negatively: each named gate's inputs are drawn from <code>context.envelope</code>, <code>context.previousEnvelope</code>, or host-resolved evidence passed in as an argument. A gate reading an ambient value is the same defect wearing different clothes</li>
-      <li><code class="status">[]</code> Write the header stating the limit plainly: this proves a gate does not <em>read</em> a document. It does not prove the document is irrelevant to whoever wrote the gate, and no test can</li>
+      <li><code class="status">[x]</code> For every gate the stage contract names, walk its <code>run</code> closure and that closure's transitive reach with the TypeScript AST, and assert no filesystem read appears — no <code>readFile</code>, no <code>readFileSync</code>, no <code>existsSync</code>, no directory walk</li>
+      <li><code class="status">[x]</code> <strong>Scope the fence to this workstream's own gates</strong>, per Q8. Some existing gates legitimately observe the repository — the diff and command-evidence gates do — and widening this leg to all gates would fail on day one for the wrong reason</li>
+      <li><code class="status">[x]</code> Assert positively as well as negatively: each named gate's inputs are drawn from <code>context.envelope</code>, <code>context.previousEnvelope</code>, or host-resolved evidence passed in as an argument. A gate reading an ambient value is the same defect wearing different clothes</li>
+      <li><code class="status">[x]</code> Write the header stating the limit plainly: this proves a gate does not <em>read</em> a document. It does not prove the document is irrelevant to whoever wrote the gate, and no test can</li>
     </ul>
 
     <h4>16. Testing Strategy</h4>
