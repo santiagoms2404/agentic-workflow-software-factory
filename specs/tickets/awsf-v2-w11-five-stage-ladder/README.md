@@ -305,10 +305,18 @@ and checks task coverage, milestone, marker and checklist state, title, dependen
 Section B prompt bytes, and the identifier-spine COVERAGE / ORPHANS / MIRROR rules. The HTML plan is
 the status source of truth.
 
-## T19 verification record — 2026-08-26
+## T18 / T19 verification record — 2026-08-27
+
+T18's contract was amended by the owner on 2026-08-27 after W05's M8 closed
+`W05-HOST-COMMAND-ENVELOPES`: typed shape for all five stages, stored-envelope evidence wherever a
+session exists, and an explicit owner handoff wherever one does not. The plan's Amendment of the
+same date records why the old every-boundary projection and derivation wording could not be earned.
+The obsolete addendum on this ticket — the one instructing a session to leave all three rows
+`failed` — is retired, and T18's build prompt is regenerated from Section B rather than hand-edited.
 
 - `node --experimental-strip-types --test core/test/journeys/five-stage.test.ts`: 3/3 passed in
-  47.83 seconds. The end-to-end journey took 16.09 seconds.
-- `npm run test:journeys`: 107/107 passed in 200.14 seconds.
-- `npm run test`: 1,718/1,718 passed in 681.02 seconds wall time: unit 1,488, contract 53,
+  46.34 seconds. The end-to-end journey took 16.23 seconds.
+- `npm run test:journeys`: 107/107 passed in 188.00 seconds.
+- `npm run test`: 1,718/1,718 passed in 645 seconds wall time: unit 1,488, contract 53,
   simulation 70, journeys 107.
+- `npm run typecheck` and `npm run lint` exited 0.

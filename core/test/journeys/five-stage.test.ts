@@ -8,13 +8,22 @@
 // time and this file exercises across the whole ladder.
 //
 // Q5's ABSENCE DOES NOT APPLY. All five captured stages are reachable, so all
-// five travel and none of them is [f]. The block that does exist is narrower
-// and belongs to T18: under `W05-HOST-COMMAND-ENVELOPES`, stages 1, 2 and 5
-// store no typed envelope, because their captured command results fit none of
-// the thirteen registered schema ids (the plan's T04 amendment request records
-// the three ids W05 would have to add). This file therefore joins each stage to
-// its captured fixture by the facts the stage actually produces; the stored
-// envelope join at every boundary is T18's row and stays [f] until W05 lands.
+// five travel and none of them is [f].
+//
+// THE ENVELOPE JOIN, as AC-6 was amended on 2026-08-27. W05's milestone M8
+// closed `W05-HOST-COMMAND-ENVELOPES` by registering the three host-command
+// schema ids W11's T04 asked for, and by deciding under its Q7 that a
+// session-less command's envelope is a validated return value stored nowhere.
+// So the join splits, and the split is the contract rather than a shortfall:
+//   * all five stage outputs validate against the schema id their record names
+//     and carry every field their capture recorded — shape, never bytes;
+//   * where a session exists — S3, S4, S5 — that output is read back out of the
+//     projection through `envelopesForPhase`, and S4->S5 is the one boundary
+//     M8 made projection-observable;
+//   * where none exists — S1->S2 and S2->S3 — the later stage's inputs are
+//     owner-authored, and the boundary is an absence with no journal, no
+//     attempt directory and no launch, so there is no envelope-derived advance
+//     to assert at either.
 //
 // THE HARNESS IS NOT A NEW ONE. It is the offline world of
 // `core/test/unit/cli/design-to-plan-route.test.ts`, factored into
@@ -45,13 +54,19 @@ import { toConfigSnapshotJson } from "../../src/config/effective-config.ts";
 import { loadConfig } from "../../src/config/load.ts";
 import type { BuildOutput } from "../../src/contracts/build-output.ts";
 import type { EnvelopeBase } from "../../src/contracts/envelope-base.ts";
+import { INIT_OUTPUT_SCHEMA_ID } from "../../src/contracts/init-output.ts";
+import { parseEnvelope } from "../../src/contracts/parse-envelope.ts";
 import type { PlanOutput } from "../../src/contracts/plan-output.ts";
+import { PROJECT_REGISTER_OUTPUT_SCHEMA_ID } from "../../src/contracts/project-register-output.ts";
+import { PUBLISH_OUTPUT_SCHEMA_ID, type PublishOutput } from "../../src/contracts/publish-output.ts";
+import { ENVELOPE_SCHEMAS, schemaForId, type EnvelopeSchemaId } from "../../src/contracts/registry.ts";
+import type { StoredEnvelope } from "../../src/contracts/stored-envelope.ts";
 import type { GitResult } from "../../src/git/changes.ts";
-import { phasesForSession } from "../../src/observability/queries.ts";
+import { envelopesForPhase, phasesForSession, type EnvelopeRow, type PhaseRow } from "../../src/observability/queries.ts";
 import { openDatabase } from "../../src/observability/sqlite.ts";
 import { defaultWorktreeRoot } from "../../src/persistence/platform-paths.ts";
 import { matchesPathGlob } from "../../src/policy/path-policy.ts";
-import { STAGE_ORDER, type StageId } from "../../src/stages/contract.ts";
+import { STAGES, STAGE_ORDER, type StageId } from "../../src/stages/contract.ts";
 import {
   CannedStubAdapter,
   RouteLog,
@@ -76,6 +91,22 @@ const PLAN_REQUEST = "Make design claims traceable into rendered tickets.";
 const BUILD_REQUEST = "Write one bounded source file the host can gate.";
 const REPOSITORY_ROOT = join(import.meta.dirname, "..", "..", "..");
 const W11_PLAN = "specs/awsf-v2-w11-five-stage-ladder.html";
+const FIXTURE_ROOT = join(REPOSITORY_ROOT, "core", "test", "fixtures", "stages");
+
+/**
+ * The schema ids W05 registered for the three stages that run without a session.
+ *
+ * W11 registered none of them — `INV-2` forbade it, T04 routed them instead, and
+ * W05's M8 landed all three. Naming them here rather than in
+ * `core/src/stages/contract.ts` keeps that ownership visible: the contract
+ * records what the M1 capture measured against the thirteen ids that existed
+ * then, and this table records what the routed request returned.
+ */
+const ROUTED_SCHEMA_IDS: Readonly<Partial<Record<StageId, EnvelopeSchemaId>>> = {
+  "init": INIT_OUTPUT_SCHEMA_ID,
+  "project-register": PROJECT_REGISTER_OUTPUT_SCHEMA_ID,
+  "publish": PUBLISH_OUTPUT_SCHEMA_ID,
+};
 
 const NETWORK_MODULES = new Set([
   "node:dgram", "node:dns", "node:http", "node:http2", "node:https", "node:net", "node:tls", "undici",
@@ -183,6 +214,168 @@ function workstreamChangedFiles(): readonly string[] {
     ["diff", "--name-only", `${introduced[0]}^`, "HEAD", "--"],
     { cwd: REPOSITORY_ROOT, encoding: "utf8", env: GIT_ENV },
   ).trim().split("\n").filter(Boolean).sort();
+}
+
+// ---- The envelope join, and the two boundaries that have nothing to join ----
+
+interface BoundaryRow {
+  readonly earlierStage: StageId;
+  readonly laterStage: StageId;
+  readonly mechanism: "terminal-seal" | "awaiting-owner" | "no-path";
+  readonly ownerAct: string;
+  readonly confirmation: Record<string, unknown>;
+}
+
+const BOUNDARIES = (JSON.parse(readFileSync(join(FIXTURE_ROOT, "boundaries.json"), "utf8")) as {
+  boundaries: BoundaryRow[];
+}).boundaries;
+
+function stageRecord(stage: StageId): (typeof STAGES)[number] {
+  const found = STAGES.find((candidate) => candidate.id === stage);
+  assert.notEqual(found, undefined, `${stage} is not a captured stage`);
+  return found!;
+}
+
+/** The one registered schema id this stage's output validates against. */
+function schemaIdFor(stage: StageId): EnvelopeSchemaId {
+  const record = stageRecord(stage);
+  const id = record.blocked ? ROUTED_SCHEMA_IDS[stage] : record.schemaId;
+  assert.notEqual(id, undefined, `${stage} names no schema id`);
+  assert.equal(Object.hasOwn(ENVELOPE_SCHEMAS, id!), true, `${id} is not registered`);
+  return id!;
+}
+
+function requiredFieldsOf(schemaId: EnvelopeSchemaId): readonly string[] {
+  const required = (schemaForId(schemaId) as { required?: readonly string[] }).required ?? [];
+  assert.ok(required.length > 0, `${schemaId} declares no required field`);
+  return [...required].sort();
+}
+
+interface StageCapture {
+  readonly stage: string;
+  readonly output: Record<string, unknown>;
+}
+
+/**
+ * What M1's capture recorded as this stage's output.
+ *
+ * A stage that ran with no session recorded the command result itself. A stage
+ * that ran inside one recorded its attempt's stored envelopes, of which exactly
+ * one carries the schema id the stage's record names.
+ */
+function capturedOutput(stage: StageId, schemaId: EnvelopeSchemaId): Record<string, unknown> {
+  const file = join(FIXTURE_ROOT, `S${stageRecord(stage).ordinal}.json`);
+  const capture = JSON.parse(readFileSync(file, "utf8")) as StageCapture;
+  assert.equal(capture.stage, `S${stageRecord(stage).ordinal}`, `${file} is not stage ${stage}`);
+  const stored = capture.output["storedEnvelopes"];
+  if (stored === undefined) return capture.output;
+  const matching = Object.values(stored as Record<string, string>)
+    .map((bytes) => JSON.parse(bytes) as StoredEnvelope<EnvelopeBase>)
+    .filter((envelope) => envelope.schemaId === schemaId);
+  assert.equal(matching.length, 1, `${file} must carry exactly one captured ${schemaId} envelope`);
+  assert.notEqual(matching[0]!.payload, null, `${file}'s captured ${schemaId} envelope is invalid`);
+  return matching[0]!.payload as unknown as Record<string, unknown>;
+}
+
+/**
+ * The typed-shape half of the join, for every stage.
+ *
+ * BY SHAPE, NEVER BYTES. The capture is one run's output, so only its field set
+ * travels into this assertion; comparing its values would make the journey a
+ * snapshot of a scripted adapter and prove nothing about the join.
+ */
+function assertStageShape(stage: StageId, produced: Record<string, unknown>): void {
+  const schemaId = schemaIdFor(stage);
+  assert.equal(produced["schema"], schemaId, `${stage} declares a schema id its record does not name`);
+  const parsed = parseEnvelope(JSON.stringify(produced), schemaId);
+  assert.deepEqual(parsed.valid ? [] : parsed.violations, [], `${stage} does not validate against ${schemaId}`);
+  assert.deepEqual(
+    requiredFieldsOf(schemaId).filter((field) => !Object.hasOwn(produced, field)),
+    [],
+    `${stage} is missing a field ${schemaId} requires`,
+  );
+  assert.deepEqual(
+    Object.keys(capturedOutput(stage, schemaId)).sort().filter((field) => !Object.hasOwn(produced, field)),
+    [],
+    `${stage} dropped a field its capture recorded`,
+  );
+}
+
+/** The stored envelope this session holds for one stage, read through the projection. */
+function storedStageEnvelope(
+  db: ReturnType<typeof openDatabase>,
+  sessionId: string,
+  stage: StageId,
+): { readonly phase: PhaseRow; readonly row: EnvelopeRow } {
+  const schemaId = schemaIdFor(stage);
+  const found = phasesForSession(db, sessionId).flatMap((phase) =>
+    envelopesForPhase(db, sessionId, phase.phase_id)
+      .filter((row) => row.schema_id === schemaId)
+      .map((row) => ({ phase, row })));
+  assert.equal(found.length, 1, `session ${sessionId} must store exactly one ${schemaId} envelope for ${stage}`);
+  assert.equal(found[0]!.row.valid, 1, `${stage}'s stored envelope is invalid`);
+  return found[0]!;
+}
+
+/** Every path under the state root, so an absence can be stated exhaustively. */
+function stateRootPaths(stateRoot: string): readonly string[] {
+  if (!existsSync(stateRoot)) return [];
+  const found: string[] = [];
+  const walk = (directory: string): void => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) walk(path);
+      else found.push(relative(stateRoot, path));
+    }
+  };
+  walk(stateRoot);
+  return found.sort();
+}
+
+function stringValues(value: unknown, into: string[] = []): string[] {
+  if (typeof value === "string") into.push(value);
+  else if (Array.isArray(value)) for (const item of value) stringValues(item, into);
+  else if (value !== null && typeof value === "object") for (const item of Object.values(value)) stringValues(item, into);
+  return into;
+}
+
+/**
+ * A boundary where no session exists, so no envelope-derived advance can.
+ *
+ * Under W05's Q7 the earlier stage's envelope is a validated return value stored
+ * nowhere, and the run recorded the boundary as `no-path`: no task, no session,
+ * no attempt directory and no lifecycle, so `LEGAL_EDGES` supplies nothing to
+ * advance and there is no earlier stored envelope for the later stage to derive
+ * from. `ownerSupplied` is the list of inputs the later stage requires that the
+ * owner therefore has to author — none of which the earlier envelope carries.
+ */
+function assertOwnerHeldBoundary(
+  earlierStage: StageId,
+  produced: Record<string, unknown>,
+  world: { readonly stateRoot: string; readonly log: RouteLog; readonly expectedStatePaths: readonly string[] },
+  ownerSupplied: readonly string[],
+): void {
+  const row = BOUNDARIES.find((candidate) => candidate.earlierStage === earlierStage);
+  assert.notEqual(row, undefined, `boundaries.json records no boundary after ${earlierStage}`);
+  assert.equal(row!.mechanism, "no-path", `${earlierStage} is not held by no-path`);
+  assert.equal(row!.confirmation["observedTaskState"], null, `${earlierStage} claims no-path but recorded a task state`);
+  assert.equal(row!.confirmation["hostCommandThatReturns"], stageRecord(earlierStage).producer);
+  assert.ok(row!.ownerAct.length > 0, `${earlierStage}'s boundary names no owner act`);
+
+  // The absence, stated exhaustively rather than as a count: no journal exists,
+  // so no session row and no envelope row do either, and no attempt directory
+  // and no provider launch appeared while the boundary was open.
+  assert.deepEqual(stateRootPaths(world.stateRoot), [...world.expectedStatePaths].sort(), `${earlierStage} left state behind`);
+  assert.equal(existsSync(join(world.stateRoot, "awsf.db")), false, `${earlierStage} left a journal behind`);
+  assert.deepEqual(world.log.launches, [], `${earlierStage} launched a provider across its boundary`);
+
+  // The later stage's inputs are the owner's, not the earlier envelope's.
+  const carried = stringValues(produced);
+  assert.deepEqual(
+    ownerSupplied.filter((value) => carried.includes(value)),
+    [],
+    `${earlierStage}'s envelope already carries an input the owner must supply`,
+  );
 }
 
 function catalog(defaultBranch: string): string {
@@ -316,15 +509,27 @@ test("a throwaway project travels all five captured stages on the stub route wit
     assertRemotesStayUnder(root, canonical);
 
     // ---- Boundary S1 -> S2 · owner act ------------------------------------
-    // `awsf init` writes no catalog. The owner authors and commits one.
-    writeFileSync(join(canonical, "awsf.project.yaml"), catalog(defaultBranch));
+    // `awsf init` writes no catalog and, per W05's Q7, stores no envelope. The
+    // owner authors and commits one, and the two inputs `awsf project register`
+    // requires are values this test supplies rather than values S1 produced.
+    const catalogPath = join(canonical, "awsf.project.yaml");
+    const catalogBytes = catalog(defaultBranch);
+    const repositoryArgument = `${REPOSITORY_ID}=${canonical}`;
+    assert.equal(existsSync(catalogPath), false, "S1 wrote no catalog for S2 to read");
+    assertOwnerHeldBoundary(
+      "init",
+      initialized as unknown as Record<string, unknown>,
+      { stateRoot, log, expectedStatePaths: [] },
+      [catalogPath, catalogBytes, repositoryArgument],
+    );
+    writeFileSync(catalogPath, catalogBytes);
     commit(canonical, "chore: declare the project catalog", "awsf.project.yaml");
 
     // ---- Stage 2 · project register ---------------------------------------
     const registered = await registerProject({
       stateRoot,
-      catalogPath: join(canonical, "awsf.project.yaml"),
-      repositories: [`${REPOSITORY_ID}=${canonical}`],
+      catalogPath,
+      repositories: [repositoryArgument],
     });
     travelled.push("project-register");
 
@@ -337,10 +542,19 @@ test("a throwaway project travels all five captured stages on the stub route wit
 
     // ---- Boundary S2 -> S3 · owner act ------------------------------------
     // The configuration `awsf init` wrote enables only `intake` and declares no
-    // agent. The owner replaces it and supplies the role prompts.
+    // agent, and `awsf project register` stores no envelope either. The owner
+    // replaces the configuration and supplies the role prompts; every name S3
+    // needs arrives that way rather than out of S2's return value.
     const config = fixtureConfig({ slug: SLUG, roles: ROLES });
     const configPath = join(canonical, "awsf.config.yaml");
-    writeFileSync(configPath, stringify(config));
+    const configBytes = stringify(config);
+    assertOwnerHeldBoundary(
+      "project-register",
+      registered as unknown as Record<string, unknown>,
+      { stateRoot, log, expectedStatePaths: [join("projects", SLUG, "placement.yaml")] },
+      [configBytes, ...ROLES, "design-to-plan"],
+    );
+    writeFileSync(configPath, configBytes);
     installPrompts(canonical, ROLES);
     commit(canonical, "chore: configure the stub route and its prompts", "awsf.config.yaml", "prompts");
 
@@ -514,6 +728,36 @@ test("a throwaway project travels all five captured stages on the stub route wit
         ["tests", "SUCCEEDED"],
         ["publish", "SUCCEEDED"],
       ]);
+
+      // ---- The envelope join, stage by stage -------------------------------
+      // Typed shape for all five. S1 and S2 are the validated return values the
+      // commands handed back, because Q7 stores neither; S3, S4 and S5 come out
+      // of the projection, because each ran inside a session that holds one.
+      assertStageShape("init", initialized as unknown as Record<string, unknown>);
+      assertStageShape("project-register", registered as unknown as Record<string, unknown>);
+
+      const planRender = storedStageEnvelope(db, planTask.sessionId, "design-to-plan");
+      assertStageShape("design-to-plan", JSON.parse(planRender.row.payload_json) as Record<string, unknown>);
+
+      const tests = storedStageEnvelope(db, buildTask.sessionId, "build");
+      assertStageShape("build", JSON.parse(tests.row.payload_json) as Record<string, unknown>);
+
+      const publication = storedStageEnvelope(db, buildTask.sessionId, "publish");
+      assertStageShape("publish", JSON.parse(publication.row.payload_json) as Record<string, unknown>);
+
+      // ---- Boundary S4 -> S5, the one M8 made projection-observable --------
+      // S4 and S5 share the attempt's session, so the publication envelope is
+      // reachable by the same session id the build stage stored its own under,
+      // and it names the exact revision S4 produced. This is stored evidence of
+      // the boundary, not derivation across it: `awsf land` and `awsf publish`
+      // are both owner acts this test performs.
+      assert.equal(publication.phase.session_id, tests.phase.session_id, "S4 and S5 are not the same attempt");
+      assert.ok(publication.phase.ordinal > tests.phase.ordinal, "S5's phase does not follow S4's");
+      assert.equal(publication.row.schema_id, schemaIdFor("publish"));
+      const publicationPayload = JSON.parse(publication.row.payload_json) as PublishOutput;
+      assert.equal(publicationPayload.result.status.candidateSha, built.candidateSha);
+      assert.equal(publicationPayload.result.status.lifecycleState, "PUBLISHED");
+      assert.equal(publicationPayload.result.status.sessionId, buildTask.sessionId);
     } finally {
       db.close();
     }
