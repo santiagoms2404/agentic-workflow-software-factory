@@ -671,7 +671,7 @@ flowchart TD
 
   <!-- ================= M4 ================= -->
   <div class="phase">
-    <h3><code class="status">[wip]</code> Milestone M4: The no-skill fence</h3>
+    <h3><code class="status">[x]</code> Milestone M4: The no-skill fence</h3>
     <p>The standing constraint made mechanical, on the three legs a stage can reach a document through. This milestone builds a test and nothing else, which is why it stays in W11 rather than being routed away: a test is not a mechanism. It is independent of M3 and may run before it, after it, or beside it.</p>
 
     <figure>
@@ -718,11 +718,11 @@ flowchart LR
     <p class="serves"><code class="serves">AC-5</code></p>
     <p>The fence is the deliverable, so this task's job is to prove the deliverable works — by breaking it three times. A fence nobody has watched fail is decoration, and this repository has already applied that rule once, proving the plan-aware sync fence with a ghost ticket directory before trusting it.</p>
     <ul class="checklist">
-      <li><code class="status">[]</code> <strong>Induce leg one</strong>: add a skill-shaped line to one stage's role prompt in a throwaway edit, watch the suite go red naming that prompt, revert, watch it go green</li>
-      <li><code class="status">[]</code> <strong>Induce leg two</strong>: add an import chain from <code>core/src/stages/</code> reaching <code>docs/driving/</code> through one intermediate file — the shape a direct scan would miss — watch it go red naming every hop, revert, watch it go green</li>
-      <li><code class="status">[]</code> <strong>Induce leg three</strong>: add a <code>readFileSync</code> to one gate closure, watch it go red, revert, watch it go green</li>
-      <li><code class="status">[]</code> Record all three observations in the ticket with the exact failure text each produced. An induced failure whose message does not identify the offender is a fence that will waste an hour the day it fires for real</li>
-      <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green with all three violations removed</li>
+      <li><code class="status">[x]</code> <strong>Induce leg one</strong>: add a skill-shaped line to one stage's role prompt in a throwaway edit, watch the suite go red naming that prompt, revert, watch it go green</li>
+      <li><code class="status">[x]</code> <strong>Induce leg two</strong>: add an import chain from <code>core/src/stages/</code> reaching <code>docs/driving/</code> through one intermediate file — the shape a direct scan would miss — watch it go red naming every hop, revert, watch it go green</li>
+      <li><code class="status">[x]</code> <strong>Induce leg three</strong>: add a <code>readFileSync</code> to one gate closure, watch it go red, revert, watch it go green</li>
+      <li><code class="status">[x]</code> Record all three observations in the ticket with the exact failure text each produced. An induced failure whose message does not identify the offender is a fence that will waste an hour the day it fires for real</li>
+      <li><code class="status">[x]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> green with all three violations removed</li>
     </ul>
     <div class="loop">
       🔁 <strong>Do not exit this milestone until every box above is checked.</strong> A leg that cannot be made to fail is not passing — it is not running.
@@ -1004,6 +1004,24 @@ flowchart LR
     <p><strong>T11's fence forced the one source change in this milestone.</strong> <code>core/src/stages/resolve.ts</code> imported <code>ResolvedProject</code> from <code>core/src/registry/resolve.ts</code> as a type. The transitive walk counts a type-only import as an edge — correctly, because the fence is about what the module reaches, not what survives compilation — and that edge ran <code>core/src/stages/resolve.ts → core/src/registry/resolve.ts → core/src/git/changes.ts → core/src/execution/transport-broker.ts</code>. The import was replaced by a local structural type carrying <code>slug</code> alone, which is what <code>INV-5</code> asks for anyway: values in, not a handle to the thing that resolves them.</p>
     <p><strong>The static scan was seen to bite.</strong> A throwaway <code>setTimeout(() =&gt; {}, 0)</code> in <code>core/src/stages/contract.ts</code> failed <code>no-stage-advance.test.ts</code> with <code>'core/src/stages/contract.ts:90:1 uses setTimeout'</code> against an expected empty offender list; the fence returned 3/3 green once it was removed. The exact diff is retained in T12.</p>
     <p>Validation: <code>npm run test:unit</code> passed 1436/1436 in 286.96 seconds; <code>npm run typecheck</code> and <code>npm run lint</code> exited 0.</p>
+  </details>
+  <details>
+    <summary>2026-08-26 — M4 completed: all three legs broken and repaired, each naming its offender</summary>
+    <p><strong>Leg one</strong> — a line appended to <code>prompts/designer/system.md</code> ("Run /land before you finish to confirm the design lands cleanly") failed <code>no composed stage prompt carries a skill-invocation shape</code>:</p>
+    <pre>+ ['prompts/designer/system.md:7 (designer, slash-command) "/land"']
+- []</pre>
+    <p><strong>Leg two</strong> — a relative import added to <code>core/src/stages/resolve.ts</code>, reaching a first throwaway file under <code>core/src/observability/</code> that itself imported a second, which spelled <code>join(root, "docs", "driving", "cookbook.md")</code>. Placing the two throwaway files directly under <code>core/src/stages/</code> was tried first and collapsed the reported chain to one hop, because the walk treats every file under that prefix as its own start node; moving them outside restored the intended shape. The failure named every hop:</p>
+    <pre>+ ['core/src/observability/_leg2-hop2.ts:4 (driving-tree-path) "docs/driving/cookbook.md"
+    via core/src/stages/resolve.ts -> core/src/observability/_leg2-hop1.ts -> core/src/observability/_leg2-hop2.ts']
+- []</pre>
+    <p><strong>Leg three</strong> — a <code>readFileSync("package.json", "utf8")</code> added inside <code>spineDeclared</code> in <code>core/src/gates/design-spine.ts</code>, reached from the <code>spine_declared</code> gate's closure, failed <code>no gate the stage contract names reaches a filesystem read</code>:</p>
+    <pre>+ ['core/src/gates/design-spine.ts:114 (node-fs-binding) readFileSync from "fs"
+    via gate spine_declared -> core/src/gates/design-spine.ts:109 spineDeclared',
+   'core/src/gates/design-spine.ts:114 (read-file) readFileSync
+    via gate spine_declared -> core/src/gates/design-spine.ts:109 spineDeclared']
+- []</pre>
+    <p>All three messages named their offender on first read — file, line, and either the matched text or the closure chain — so none needed strengthening. Each was reverted with <code>git checkout</code> (leg one and three) or file deletion (leg two's two throwaway files), confirmed green individually, then all three confirmed together.</p>
+    <p>Validation: <code>npm run test:unit</code> passed 1449/1449 in 311.5 seconds; <code>npm run typecheck</code> and <code>npm run lint</code> exited 0.</p>
   </details>
 </section>
 </main>
