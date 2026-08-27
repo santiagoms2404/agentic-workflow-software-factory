@@ -1475,3 +1475,152 @@ DEFINITION OF DONE
   The full Validation Commands checklist in specs/awsf-v2-w05-design-to-plan.html is checked, the
   spine's M5 marker is [x], and the workstream is closed.
 ```
+
+### T29 — awsf.init-output/v1, and the store question answered first
+
+```
+[CHOOSE YOUR PROVIDER — pick by live quota]
+  MODEL   Opus 5 · EFFORT high
+  CLAUDE  claude:opus · /effort high
+  GPT     codex:gpt-5.6-terra · reasoning high
+  WHY     the first of the three, and the one that has to hold the store decision. A schema that
+          renames a captured field to fit an existing envelope's vocabulary is the failure mode.
+
+TASK 29 of 31. Plan: specs/awsf-v2-w05-design-to-plan.html, milestone M8.
+PREDECESSORS: T01-T28 are [x]. Milestone M8 is new work on a reopened workstream.
+
+READ FIRST
+  specs/awsf-v2-w05-design-to-plan.html - milestone M8 task 29, Questionable Q7, and the
+    2026-08-26 Amendment that reopened this workstream
+  specs/awsf-v2-w11-five-stage-ladder.html - the T04 amendment request table under Notes
+  core/test/fixtures/stages/S1.json - the captured init output, and the input this task replays
+  core/src/contracts/registry.ts - ENVELOPE_SCHEMAS and EnvelopeTypeById
+  core/src/cli/commands/init.ts - what the command returns today
+
+FIRST ACT
+  Open the Questionables section and confirm Q7 reads DECIDED. If it still reads OPEN, STOP and
+  report. `awsf init` opens no session, so there is no answer yet to where its envelope goes, and
+  a task that guesses puts a store in the tree that nobody agreed to.
+
+DO
+  core/src/contracts/init-output.ts: INIT_OUTPUT_SCHEMA_ID = "awsf.init-output/v1" and a TypeBox
+  schema carrying the common envelope fields plus the four W11 recorded - kind, the printed line,
+  commitSha, and the initialized path.
+  Register it in ENVELOPE_SCHEMAS and EnvelopeTypeById. The table goes from thirteen entries to
+  fourteen; move every count assertion that names thirteen.
+  Emit it from core/src/cli/commands/init.ts through whatever Q7 decided. The command's existing
+  return shape stays a superset of what callers already read.
+  Replay core/test/fixtures/stages/S1.json through parse-envelope.ts against the new id and assert
+  ZERO violations.
+
+DO NOT
+  Rename a captured value to fit an existing envelope's vocabulary. Lossless means every field the
+  capture holds survives under the name the capture gave it. The request came with bytes attached
+  precisely so this is checkable.
+  Add an agent phase, a gate, a recipe, or a task-machine edge.
+  Treat the capture as an expectation. It is the INPUT to the replay; the assertion is that the
+  schema holds it, not that the bytes match a snapshot.
+  Name an agent, model, or AI tool as author, committer, co-author or collaborator in any commit -
+  AGENTS.md invariant 11, mechanically enforced.
+
+DONE WHEN
+  npm run test:unit is green, S1.json parses against awsf.init-output/v1 with zero violations, and
+  task 29's checklist in specs/awsf-v2-w05-design-to-plan.html is [x].
+```
+
+### T30 — awsf.project-register-output/v1
+
+```
+[CHOOSE YOUR PROVIDER — pick by live quota]
+  MODEL   Sonnet 5 · EFFORT medium
+  CLAUDE  claude:sonnet · /effort medium
+  GPT     codex:gpt-5.6-terra · reasoning medium
+  WHY     the same shape as task 29 with the store question already answered, except for one trap:
+          placementFileBytes are bytes, and a round-trip through a YAML writer silently changes them.
+
+TASK 30 of 31. Plan: specs/awsf-v2-w05-design-to-plan.html, milestone M8.
+PREDECESSORS: T29 is [x].
+
+READ FIRST
+  specs/awsf-v2-w05-design-to-plan.html - milestone M8 task 30 and Questionable Q7
+  core/test/fixtures/stages/S2.json - the captured project-register output
+  core/src/contracts/init-output.ts - task 29's shape, which this one follows
+  core/src/cli/commands/project.ts - what the command returns today
+
+DO
+  core/src/contracts/project-register-output.ts: PROJECT_REGISTER_OUTPUT_SCHEMA_ID =
+  "awsf.project-register-output/v1" and a TypeBox schema carrying the common envelope fields plus
+  kind, the printed line, the returned resolvedProject, and the exact placementFileBytes.
+  Register it in ENVELOPE_SCHEMAS and EnvelopeTypeById; the table reaches fifteen.
+  Emit it from `awsf project register` through Q7's route, under the same session-less constraint
+  as task 29.
+  Replay core/test/fixtures/stages/S2.json through parse-envelope.ts against the new id and assert
+  ZERO violations.
+
+DO NOT
+  Re-serialize the placement file. placementFileBytes is what was written, byte for byte. Reading
+  the YAML and writing it back is the thing that changes it, and W11 recorded it exactly so the
+  change would be visible.
+  Move where a project is recorded. W04 owns the catalog and the placement layer; this task types
+  what the command already returns.
+  Name an agent, model, or AI tool as author, committer, co-author or collaborator in any commit -
+  AGENTS.md invariant 11, mechanically enforced.
+
+DONE WHEN
+  npm run test:unit is green, S2.json parses against awsf.project-register-output/v1 with zero
+  violations, and task 30's checklist in specs/awsf-v2-w05-design-to-plan.html is [x].
+```
+
+### T31 — awsf.publish-output/v1, then release the block
+
+```
+[CHOOSE YOUR PROVIDER — pick by live quota]
+  MODEL   Opus 5 · EFFORT high
+  CLAUDE  claude:opus · /effort high
+  GPT     codex:gpt-5.6-terra · reasoning high
+  WHY     the third schema is the easy half. Saying which of W11's blocked rows this milestone does
+          NOT release, and why, is the half that actually closes the request.
+
+TASK 31 of 31. Plan: specs/awsf-v2-w05-design-to-plan.html, milestone M8.
+PREDECESSORS: T29 and T30 are [x].
+
+THIS IS THE ONLY TASK IN MILESTONE M8 THAT TOUCHES THE SPINE.
+
+READ FIRST
+  specs/awsf-v2-w05-design-to-plan.html - milestone M8 task 31, Questionable Q7, and the
+    2026-08-26 Amendment
+  specs/awsf-v2-w11-five-stage-ladder.html - task 18's three [f] rows and what each one asserts
+  core/test/fixtures/stages/S5.json - the captured publish output
+  core/src/cli/commands/publish.ts - it already holds current.sessionId
+  core/src/observability/queries.ts - envelopesForPhase, and what it keys on
+
+DO
+  core/src/contracts/publish-output.ts: PUBLISH_OUTPUT_SCHEMA_ID = "awsf.publish-output/v1" and a
+  TypeBox schema carrying the common envelope fields plus kind, the full terminalLines, the
+  structured result, and the exact finalStatusBytes. Registered; the table reaches sixteen.
+  publish is the one of the three that runs inside an attempt, so its envelope takes a REAL
+  journal row and becomes readable through envelopesForPhase, whatever Q7 decided for the other two.
+  Replay core/test/fixtures/stages/S5.json through parse-envelope.ts against the new id, zero
+  violations.
+  npm run test:unit && npm run typecheck && npm run lint - all green, counts recorded.
+  Record in this plan's Amendments WHICH of W11's three [f] rows this milestone releases and which
+  it does not, naming the reason for each. On Q7's recommended answer the S4->S5 boundary becomes
+  readable and S1->S2 and S2->S3 do not, so at least one row stays [f].
+  ONLY NOW: flip milestone M8's marker and T29-T31 to done, then flip milestone M5's marker in
+  specs/awsf-v2-plan.html back to [x], re-check its deep-plan box, and return
+  specs/tickets/awsf-v2-plan/W05.md to state: done - all in ONE commit.
+
+DO NOT
+  Edit specs/awsf-v2-w11-five-stage-ladder.html or any ticket under
+  specs/tickets/awsf-v2-w11-five-stage-ladder/. Record the release here and let that workstream's
+  own close read it. Flipping another plan's [f] from outside it is how a blocker gets cleared
+  without anyone checking whether the work it named actually happened.
+  Claim a row is released because a schema now exists. Two of the three rows need a STORED envelope
+  at a boundary that still has none.
+  Name an agent, model, or AI tool as author, committer, co-author or collaborator in any commit -
+  AGENTS.md invariant 11, mechanically enforced.
+
+DONE WHEN
+  All three envelopes are registered and replay clean, the Amendment states exactly which W11 rows
+  are released, and the spine's M5 marker is back to [x].
+```
