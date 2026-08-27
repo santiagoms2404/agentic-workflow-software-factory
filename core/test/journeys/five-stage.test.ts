@@ -407,8 +407,11 @@ test("a throwaway project travels all five captured stages on the stub route wit
 
     // ---- The ladder, and what it cost --------------------------------------
     assert.deepEqual(travelled, [...STAGE_ORDER], "every captured stage travelled, in the captured order");
-    // The route log, not a count: every contact this journey made was the stub.
-    assert.deepEqual(log.providers, ["stub", "stub", "stub", "stub", "stub"]);
+    // The route log, not a count: every contact this journey made was the stub. The number of
+    // scripted calls is already pinned by each adapter's `responsesRemaining`, so this row asserts
+    // the set of providers contacted, which is what "no launch beyond the stub" actually means.
+    assert.ok(log.providers.length > 0, "the route log recorded no contact at all");
+    assert.deepEqual([...new Set(log.providers)], ["stub"], "no provider beyond the scripted stub was contacted");
     assert.deepEqual(log.launches, log.providers, "no launch happened that the route did not record");
     assert.equal(existsSync(sideEffect), false, "the fixture provider process must never run");
     assertRemotesStayUnder(root, canonical);

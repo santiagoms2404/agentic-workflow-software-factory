@@ -767,7 +767,7 @@ flowchart LR
       <li><code class="status">[f]</code> <strong>Blocked by W05-HOST-COMMAND-ENVELOPES:</strong> at each boundary, read the stored envelope from the projection through <code>envelopesForPhase</code> and assert its schema id equals the one that stage's record in the contract names. S1, S2 and S5 currently produce no stored envelope</li>
       <li><code class="status">[f]</code> <strong>Blocked by W05-HOST-COMMAND-ENVELOPES:</strong> compare against the captured fixture by <strong>shape, not bytes</strong>: the schema id and the presence of every required field. No landed schema holds S1, S2 or S5's captured command-result shape</li>
       <li><code class="status">[f]</code> <strong>Blocked by W05-HOST-COMMAND-ENVELOPES:</strong> assert the later stage's input is derived from the earlier stage's stored envelope, and that nothing in the chain reconstructs a value from a file the earlier stage happened to write. The S1→S2 and S2→S3 boundaries have no earlier stored envelope</li>
-      <li><code class="status">[]</code> Record the route log at the end and assert it contains no provider launch beyond the scripted stub, using the <code>RouteLog</code> idiom rather than a count</li>
+      <li><code class="status">[x]</code> Record the route log at the end and assert it contains no provider launch beyond the scripted stub, using the <code>RouteLog</code> idiom rather than a count</li>
     </ul>
 
     <h4>19. Testing Strategy</h4>
