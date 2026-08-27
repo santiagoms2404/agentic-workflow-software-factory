@@ -731,7 +731,7 @@ flowchart LR
 
   <!-- ================= M5 ================= -->
   <div class="phase">
-    <h3><code class="status">[]</code> Milestone M5: The journey — all five stages, zero quota</h3>
+    <h3><code class="status">[wip]</code> Milestone M5: The journey — all five stages, zero quota</h3>
     <p>The spine's stop-when condition, executed: <em>"A project travels all five stages through typed envelopes, and each stage's output is a fixture rather than a description."</em> One temporary directory, scripted adapters, no network, no quota — the same shape v1's twelve journeys already use.</p>
 
     <figure>
@@ -754,11 +754,11 @@ flowchart LR
     <h4>17. The world — one temporary directory, five stages, scripted adapters</h4>
     <p class="serves"><code class="serves">AC-6</code></p>
     <ul class="checklist">
-      <li><code class="status">[]</code> Create <code>core/test/journeys/five-stage.test.ts</code>, extending the existing offline <code>world()</code> in <code>core/test/unit/cli/design-to-plan-route.test.ts</code>: a temporary directory, a seeded <code>awsf.project.yaml</code>, a written placement, then the commands each stage needs. <strong>Do not invent a second harness</strong></li>
-      <li><code class="status">[]</code> Stage 1 begins from an empty directory through W03's <code>initCommand</code>, so the journey covers the bootstrap rather than starting from a repository that already exists</li>
-      <li><code class="status">[]</code> Every agent phase runs on the stub adapter with a scripted envelope. No live provider, no network, no quota anywhere in the file</li>
-      <li><code class="status">[]</code> If publication is one of the five stages, its remote is a bare repository created in the temporary directory, following <code>core/test/journeys/publish.test.ts</code> and its <code>bareFixture</code> helper</li>
-      <li><code class="status">[]</code> Where Q5's absence applies, the journey covers the four reachable stages, marks the fifth <code>[f]</code>, and names the blocker in the test's own header rather than skipping silently</li>
+      <li><code class="status">[x]</code> Create <code>core/test/journeys/five-stage.test.ts</code>, extending the existing offline <code>world()</code> in <code>core/test/unit/cli/design-to-plan-route.test.ts</code>: a temporary directory, a seeded <code>awsf.project.yaml</code>, a written placement, then the commands each stage needs. <strong>Do not invent a second harness</strong></li>
+      <li><code class="status">[x]</code> Stage 1 begins from an empty directory through W03's <code>initCommand</code>, so the journey covers the bootstrap rather than starting from a repository that already exists</li>
+      <li><code class="status">[x]</code> Every agent phase runs on the stub adapter with a scripted envelope. No live provider, no network, no quota anywhere in the file</li>
+      <li><code class="status">[x]</code> If publication is one of the five stages, its remote is a bare repository created in the temporary directory, following <code>core/test/journeys/publish.test.ts</code> and its <code>bareFixture</code> helper</li>
+      <li><code class="status">[x]</code> Where Q5's absence applies, the journey covers the four reachable stages, marks the fifth <code>[f]</code>, and names the blocker in the test's own header rather than skipping silently</li>
     </ul>
 
     <h4>18. The envelope join at each boundary</h4>
