@@ -67,5 +67,16 @@ export type AttemptEvidence =
    */
   | { readonly type: "ceiling-grant"; readonly calls: number; readonly from: number; readonly to: number; readonly reason: string; readonly attempt: number; readonly at: string }
   | { readonly type: "quota-snapshot"; readonly attribution: "none"; readonly scope: "account-window"; readonly completedPhaseKey: string; readonly nextPhaseKey: string; readonly effectivePercentRemaining: number | null; readonly minutesToReset: number | null; readonly reasonCode: string | null; readonly resolvedVersion: string | null }
-  | { readonly type: "publish"; readonly remote: string; readonly branch: string; readonly publishedSha: string; readonly outcome: "created" | "already-current" | "fast-forwarded" | "rejected" | "fault"; readonly remotePriorSha: string | null; readonly at: string }
+  | {
+      readonly type: "publish";
+      readonly remote: string;
+      readonly branch: string;
+      readonly publishedSha: string;
+      readonly outcome: "created" | "already-current" | "fast-forwarded" | "rejected" | "fault";
+      readonly remotePriorSha: string | null;
+      readonly at: string;
+      /** Added with awsf.publish-output/v1; absent on historical publication records. */
+      readonly phaseId?: string;
+      readonly envelope?: StoredEnvelope<EnvelopeBase>;
+    }
   | { readonly type: "review"; readonly phaseId: string; readonly adapterId: string; readonly provider: string; readonly verdict: ReviewVerdict; readonly reviewedSha: string; readonly findingCount: number; readonly at: string };

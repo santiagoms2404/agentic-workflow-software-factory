@@ -10,6 +10,7 @@ import type {
   PlanContext,
   PlanOutput,
   ProjectRegisterOutput,
+  PublishOutput,
   ReviewContext,
   ReviewOutput,
   ScoutOutput,
@@ -333,6 +334,67 @@ export function validProjectRegisterOutput(): ProjectRegisterOutput {
   };
 }
 
+export function validPublishOutput(): PublishOutput {
+  const status = {
+    schema: "awsf/attempt-status/v1" as const,
+    sessionId: "publish-session",
+    project: "project",
+    taskId: "T01",
+    attempt: 1,
+    repository: "/tmp/project",
+    worktree: "/tmp/worktree",
+    workflow: "plan-build-test",
+    tier: 1 as const,
+    request: "Build and publish the candidate.",
+    configSnapshotJson: "{}",
+    lifecycleState: "PUBLISHED" as const,
+    baseSha: SHA_A,
+    candidateSha: SHA_B,
+    phase: null,
+    budget: {
+      attempt: 1,
+      callsSpent: 2,
+      callsReserved: 0,
+      correctionsAuto: 0,
+      correctionsOwner: 0,
+      ownerReentries: 0,
+      allowance: { auto: 1, owner: 1, ownerReentries: 1 },
+      ceiling: 3,
+    },
+    ceilingGrants: [],
+    model: { resolved: "stub-model-1", provenance: "stream-authoritative" as const },
+    lastActivityAt: "2026-01-01T00:00:00.000Z",
+    lastActivity: `L27 published ${SHA_B} to origin/published: created`,
+    nextAction: "no action required; the landed candidate is published",
+    gatesPass: true,
+    requiredReviewPresent: false,
+    journeyApproved: true,
+    protectedApprovalsValid: true,
+    process: null,
+    landingApproval: { candidateSha: SHA_B, summary: "Publish this revision.", approvedAt: "2026-01-01T00:00:00.000Z" },
+    blocker: null,
+    revision: 10,
+    lastSourceSeq: 10,
+  };
+  return {
+    schema: "awsf.publish-output/v1",
+    producerStatus: "success",
+    summary: status.lastActivity,
+    artifacts: [],
+    notesForNextPhase: "",
+    kind: "host command result — the terminal lines the command wrote, plus its PublishCommandResult",
+    terminalLines: [
+      `Revision: ${SHA_B}`,
+      "Remote: origin",
+      "Branch: published",
+      "Update: creation — the branch does not exist on the remote",
+      "Authorization rows:",
+    ],
+    result: { outcome: "published", status, outcomes: ["created"] },
+    finalStatusBytes: JSON.stringify(status),
+  };
+}
+
 export function validIntakeOutput(): IntakeOutput {
   return {
     schema: "awsf.intake-output/v1",
@@ -373,4 +435,5 @@ export const VALID_ENVELOPES = {
   "awsf.intake-output/v1": validIntakeOutput,
   "awsf.init-output/v1": validInitOutput,
   "awsf.project-register-output/v1": validProjectRegisterOutput,
+  "awsf.publish-output/v1": validPublishOutput,
 } as const;

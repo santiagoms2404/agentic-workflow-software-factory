@@ -9,7 +9,7 @@ import { nextRevision, persistAttempt, readAttempt, type AttemptStatus } from ".
 import { newCommand } from "../../../src/cli/commands/new.ts";
 import { createDashboardProjection } from "../../../src/cli/commands/dashboard-projection.ts";
 import type { OwnerTerminal } from "../../../src/cli/tty.ts";
-import { getSession } from "../../../src/observability/queries.ts";
+import { envelopesForPhase, getSession } from "../../../src/observability/queries.ts";
 import { openDatabase } from "../../../src/observability/sqlite.ts";
 import { containsCredential } from "../../../src/policy/redaction.ts";
 import { SealedAttempt } from "../../../src/persistence/attempt-lock.ts";
@@ -17,8 +17,8 @@ import { bareFixture } from "./_bare.ts";
 
 const AT = "2026-08-25T00:00:00.000Z";
 
-function terminal(confirm: boolean): OwnerTerminal {
-  return { interactive: true, write: () => {}, confirm: async () => confirm };
+function terminal(confirm: boolean, lines: string[] = []): OwnerTerminal {
+  return { interactive: true, write: (line) => { lines.push(line); }, confirm: async () => confirm };
 }
 
 const GIT_ENV = { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_SYSTEM: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" };
@@ -133,10 +133,11 @@ test("publication journals a scrubbed round-trippable record and projects PUBLIS
   try {
     const sha = configurePublish(fixture.work);
     const created = await landed(join(fixture.root, "state"), fixture.work, "T18-record", sha, projection.project);
+    const terminalLines: string[] = [];
     const result = await publishCommand({
       attemptDir: created.attemptDir,
       stateRoot: join(fixture.root, "state"),
-      terminal: terminal(true),
+      terminal: terminal(true, terminalLines),
       gitRunner: fixture.runner,
       projectRecord: projection.project,
       assertAdvancement: projection.assertAdvancement,
@@ -145,9 +146,12 @@ test("publication journals a scrubbed round-trippable record and projects PUBLIS
 
     assert.equal(result.outcome, "published");
     const line = journalLines(created.attemptDir).at(-1)!;
-    const record = JSON.parse(line) as { event: { evidence?: { type: string; remote: string; branch: string; publishedSha: string } } };
+    const record = JSON.parse(line) as {
+      event: { evidence?: { type: string; remote: string; branch: string; publishedSha: string; phaseId?: string } };
+    };
     assert.equal(JSON.stringify(record), line, "the serialized journal line round-trips");
     assert.equal(record.event.evidence?.type, "publish");
+    assert.equal(record.event.evidence?.phaseId, "T18-record-session:publish");
     assert.equal(line.includes("://"), false);
     assert.equal(line.includes("@"), false);
     assert.equal(containsCredential(line), false, "sweep the serialized line, never the record object");
@@ -155,6 +159,18 @@ test("publication journals a scrubbed round-trippable record and projects PUBLIS
     const db = openDatabase(join(fixture.root, "state", "awsf.db"));
     try {
       assert.equal(getSession(db, "T18-record-session")?.lifecycle_state, "PUBLISHED");
+      const envelopes = envelopesForPhase(db, "T18-record-session", "T18-record-session:publish");
+      assert.equal(envelopes.length, 1);
+      assert.equal(envelopes[0]?.schema_id, "awsf.publish-output/v1");
+      assert.equal(envelopes[0]?.valid, 1);
+      const payload = JSON.parse(envelopes[0]!.payload_json) as {
+        terminalLines: string[];
+        result: { status: AttemptStatus };
+        finalStatusBytes: string;
+      };
+      assert.deepEqual(payload.terminalLines, terminalLines);
+      assert.deepEqual(payload.result.status, result.status);
+      assert.equal(payload.finalStatusBytes, readFileSync(join(created.attemptDir, "status.json"), "utf8"));
     } finally {
       db.close();
     }

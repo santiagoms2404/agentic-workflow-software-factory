@@ -207,6 +207,31 @@ function totalTokens(usage: { inputTokens: number | null; outputTokens: number |
   return usage.reasoningRelation === "additive" ? base + (usage.reasoningTokens ?? 0) : base;
 }
 
+function insertEnvelope(
+  db: DatabaseSync,
+  sessionId: string,
+  phaseId: string,
+  envelope: Extract<AttemptEvidence, { type: "envelope" }>["envelope"],
+): void {
+  db.prepare(`INSERT OR IGNORE INTO envelopes
+    (envelope_id, session_id, phase_id, agent, schema_id, correction_round, valid,
+     producer_status, payload_json, violations_json, file_path, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    envelope.envelopeId,
+    sessionId,
+    phaseId,
+    scrubCredentialString(envelope.agent),
+    envelope.schemaId,
+    envelope.correctionRound,
+    envelope.valid ? 1 : 0,
+    envelope.payload?.producerStatus ?? null,
+    stringifyRedacted(envelope.payload),
+    stringifyRedacted(envelope.violations),
+    scrubCredentialString(envelope.rawOutputPath),
+    envelope.createdAt,
+  );
+}
+
 function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: number, evidence: AttemptEvidence): void {
   switch (evidence.type) {
     case "transition":
@@ -268,18 +293,9 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
           evidence.releasedAt, evidence.endedAt, evidence.exitCode, evidence.exitSignal);
       return;
     }
-    case "envelope": {
-      const envelope = evidence.envelope;
-      db.prepare(`INSERT OR IGNORE INTO envelopes
-        (envelope_id, session_id, phase_id, agent, schema_id, correction_round, valid,
-         producer_status, payload_json, violations_json, file_path, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-        .run(envelope.envelopeId, sessionId, evidence.phaseId, scrubCredentialString(envelope.agent),
-          envelope.schemaId, envelope.correctionRound, envelope.valid ? 1 : 0,
-          envelope.payload?.producerStatus ?? null, stringifyRedacted(envelope.payload),
-          stringifyRedacted(envelope.violations), scrubCredentialString(envelope.rawOutputPath), envelope.createdAt);
+    case "envelope":
+      insertEnvelope(db, sessionId, evidence.phaseId, evidence.envelope);
       return;
-    }
     case "gate":
       db.prepare(`INSERT OR REPLACE INTO gate_results
         (gate_result_id, session_id, phase_id, correction_round, gate_id, gate_kind, candidate_sha,
@@ -390,8 +406,22 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
           }), evidence.at);
       return;
     case "publish":
-      // Publication evidence is journal-only. `lifecycle_state` below still
-      // records PUBLISHED on this same transition.
+      // Historical publication records carry only the remote facts. New ones
+      // also carry the validated host-command envelope on this same final
+      // journal row, because PUBLISHED seals the attempt against a later write.
+      if (evidence.phaseId === undefined && evidence.envelope === undefined) return;
+      if (evidence.phaseId === undefined || evidence.envelope === undefined) {
+        throw new Error("publish evidence must carry phaseId and envelope together");
+      }
+      db.prepare(`INSERT OR IGNORE INTO phases
+        (phase_id, session_id, ordinal, phase_key, name, kind, owner, description, status,
+         correction_count, max_corrections, error_code, error_message, started_at, ended_at, created_at)
+        SELECT ?, ?, COALESCE(MAX(ordinal), 0) + 1, 'publish', 'publish', 'code', 'host',
+          'Validate and retain the awsf publish host-command result.', 'SUCCEEDED',
+          0, 0, NULL, NULL, ?, ?, ? FROM phases WHERE session_id = ?`).run(
+        evidence.phaseId, sessionId, evidence.at, evidence.at, evidence.at, sessionId,
+      );
+      insertEnvelope(db, sessionId, evidence.phaseId, evidence.envelope);
       return;
     case "review":
       // The verdict is the reviewer's own finding, recorded beside the provider

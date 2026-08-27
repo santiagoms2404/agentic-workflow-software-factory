@@ -10,6 +10,12 @@
 
 import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { parseEnvelope } from "../../contracts/parse-envelope.ts";
+import {
+  PUBLISH_OUTPUT_KIND,
+  PUBLISH_OUTPUT_SCHEMA_ID,
+} from "../../contracts/publish-output.ts";
+import { wrapEnvelope } from "../../contracts/stored-envelope.ts";
 import { systemGitRunner, type GitRunner } from "../../git/changes.ts";
 import { observePublishTarget, runPublish } from "../../git/publish.ts";
 import type { PublishOutcome } from "../../publish/argv.ts";
@@ -172,17 +178,20 @@ function display(
   candidateSha: string,
   remote: PublishRemoteFacts,
   rows: readonly { readonly code: PublishRefusalCode; readonly passed: boolean }[],
-): void {
+): string[] {
   // The remote URL is never read here and never displayed. `observePublishTarget`
   // reduces it to a hostname inside the Git boundary and this command never sees it.
-  terminal.write(`Revision: ${candidateSha}`);
-  terminal.write(`Remote: ${remote.name}`);
-  terminal.write(`Branch: ${remote.branch}`);
-  terminal.write(`Update: ${updateKind(remote)}`);
-  terminal.write("Authorization rows:");
-  rows.forEach((row, index) => {
-    terminal.write(`  ${String(index + 1).padStart(2, " ")} ${row.code.padEnd(32, " ")} ${row.passed ? "pass" : "REFUSES"}`);
-  });
+  const lines = [
+    `Revision: ${candidateSha}`,
+    `Remote: ${remote.name}`,
+    `Branch: ${remote.branch}`,
+    `Update: ${updateKind(remote)}`,
+    "Authorization rows:",
+    ...rows.map((row, index) =>
+      `  ${String(index + 1).padStart(2, " ")} ${row.code.padEnd(32, " ")} ${row.passed ? "pass" : "REFUSES"}`),
+  ];
+  lines.forEach((line) => terminal.write(line));
+  return lines;
 }
 
 export async function publishCommand(options: PublishCommandOptions): Promise<PublishCommandResult> {
@@ -231,7 +240,7 @@ export async function publishCommand(options: PublishCommandOptions): Promise<Pu
   const refspec = parseRefspec(`${candidateSha}:refs/heads/${branch}`);
   const facts = statusFacts(current);
   const rows = publishVerdict(facts, repository, observed.remote, refspec);
-  display(options.terminal, candidateSha, observed.remote, rows);
+  const terminalLines = display(options.terminal, candidateSha, observed.remote, rows);
 
   const refusing = rows.find((row) => !row.passed);
   if (refusing !== undefined) {
@@ -270,14 +279,42 @@ export async function publishCommand(options: PublishCommandOptions): Promise<Pu
     nextAction: nextActionFor(decision.to, current.taskId),
     blocker: null,
   });
+  const result = { outcome: "published" as const, status: published, outcomes: run.outcomes };
+  const output = {
+    schema: PUBLISH_OUTPUT_SCHEMA_ID,
+    producerStatus: "success" as const,
+    summary: published.lastActivity,
+    artifacts: [],
+    notesForNextPhase: "",
+    kind: PUBLISH_OUTPUT_KIND,
+    terminalLines,
+    result,
+    // status.json uses this exact JSON.stringify call, with no trailing newline.
+    finalStatusBytes: JSON.stringify(published),
+  };
+  const parsed = parseEnvelope(JSON.stringify(output), PUBLISH_OUTPUT_SCHEMA_ID);
+  if (!parsed.valid) {
+    throw new Error(`invalid ${PUBLISH_OUTPUT_SCHEMA_ID}: ${parsed.violations.map((violation) => `${violation.path || "/"} ${violation.message}`).join("; ")}`);
+  }
+  const phaseId = `${current.sessionId}:publish`;
+  const envelope = wrapEnvelope({
+    envelopeId: `${phaseId}:0`,
+    sessionId: current.sessionId,
+    phaseId: "publish",
+    correctionRound: 0,
+    agent: "host",
+    schemaId: PUBLISH_OUTPUT_SCHEMA_ID,
+    createdAt: now,
+    // The canonical raw payload is on the same final journal row. No duplicate
+    // artifact can be written after PUBLISHED seals the attempt.
+    rawOutputPath: "journal.jsonl",
+  }, parsed);
   const status = await persistAttempt(
     options.attemptDir,
     current.revision,
     {
       kind: "attempt.transitioned",
       next: published,
-      // Closed derived facts only. In particular, no transport output or error
-      // prose survives the Git boundary into the journal.
       evidence: {
         type: "publish",
         remote: remoteName,
@@ -286,6 +323,8 @@ export async function publishCommand(options: PublishCommandOptions): Promise<Pu
         outcome: run.outcomes[0] ?? "fault",
         remotePriorSha: observed.remotePriorSha,
         at: now,
+        phaseId,
+        envelope,
       },
     },
     options.projectRecord,
