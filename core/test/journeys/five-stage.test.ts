@@ -26,10 +26,11 @@
 
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative } from "node:path";
 import { test } from "node:test";
+import ts from "typescript";
 import { stringify } from "yaml";
 
 import { readAttempt } from "../../src/cli/commands/attempt.ts";
@@ -41,6 +42,7 @@ import { publishCommand } from "../../src/cli/commands/publish.ts";
 import { runProductionCommand } from "../../src/cli/commands/production-run.ts";
 import type { OwnerTerminal } from "../../src/cli/tty.ts";
 import { toConfigSnapshotJson } from "../../src/config/effective-config.ts";
+import { loadConfig } from "../../src/config/load.ts";
 import type { BuildOutput } from "../../src/contracts/build-output.ts";
 import type { EnvelopeBase } from "../../src/contracts/envelope-base.ts";
 import type { PlanOutput } from "../../src/contracts/plan-output.ts";
@@ -48,6 +50,7 @@ import type { GitResult } from "../../src/git/changes.ts";
 import { phasesForSession } from "../../src/observability/queries.ts";
 import { openDatabase } from "../../src/observability/sqlite.ts";
 import { defaultWorktreeRoot } from "../../src/persistence/platform-paths.ts";
+import { matchesPathGlob } from "../../src/policy/path-policy.ts";
 import { STAGE_ORDER, type StageId } from "../../src/stages/contract.ts";
 import {
   CannedStubAdapter,
@@ -71,6 +74,16 @@ const BRANCH = "published";
 const ROLES = ["designer", "architecture-reviewer", "planner", "builder"] as const;
 const PLAN_REQUEST = "Make design claims traceable into rendered tickets.";
 const BUILD_REQUEST = "Write one bounded source file the host can gate.";
+const REPOSITORY_ROOT = join(import.meta.dirname, "..", "..", "..");
+const W11_PLAN = "specs/awsf-v2-w11-five-stage-ladder.html";
+
+const NETWORK_MODULES = new Set([
+  "node:dgram", "node:dns", "node:http", "node:http2", "node:https", "node:net", "node:tls", "undici",
+]);
+const NETWORK_CALLS = new Set([
+  "connect", "createConnection", "createServer", "createSocket", "fetch", "get", "listen", "lookup", "request",
+  "resolve", "resolve4", "resolve6", "resolveAny", "reverse", "WebSocket", "XMLHttpRequest",
+]);
 
 /** No inherited Git configuration reaches the publication remote. */
 const GIT_ENV: NodeJS.ProcessEnv = {
@@ -118,6 +131,58 @@ function assertRemotesStayUnder(root: string, repository: string): void {
     assert.equal(isAbsolute(url), true, `${url} is not a local absolute path`);
     assert.equal(relative(root, url).startsWith(".."), false, `${url} escapes ${root}`);
   }
+}
+
+function repositorySnapshot(root: string, directory = root, snapshot = new Map<string, string>()): ReadonlyMap<string, string> {
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    if (entry.name === ".git" || entry.name === "node_modules") continue;
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) {
+      repositorySnapshot(root, path, snapshot);
+    } else if (entry.isFile()) {
+      snapshot.set(relative(root, path), readFileSync(path).toString("base64"));
+    }
+  }
+  return snapshot;
+}
+
+function noNetworkOffenders(): readonly string[] {
+  const path = import.meta.filename;
+  const source = ts.createSourceFile(path, readFileSync(path, "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const offenders: string[] = [];
+  const lineOf = (node: ts.Node): string => String(source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1);
+  const calledName = (expression: ts.Expression): string | null => {
+    if (ts.isIdentifier(expression)) return expression.text;
+    if (ts.isPropertyAccessExpression(expression)) return expression.name.text;
+    return null;
+  };
+  const visit = (node: ts.Node): void => {
+    if (ts.isImportDeclaration(node) && ts.isStringLiteralLike(node.moduleSpecifier)
+      && NETWORK_MODULES.has(node.moduleSpecifier.text)) {
+      offenders.push(`${path}:${lineOf(node)} imports ${node.moduleSpecifier.text}`);
+    }
+    if (ts.isCallExpression(node) || ts.isNewExpression(node)) {
+      const name = calledName(node.expression);
+      if (name !== null && NETWORK_CALLS.has(name)) offenders.push(`${path}:${lineOf(node)} calls ${name}`);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return offenders.sort();
+}
+
+function workstreamChangedFiles(): readonly string[] {
+  const introduced = execFileSync(
+    "git",
+    ["log", "--diff-filter=A", "--format=%H", "--reverse", "--", W11_PLAN],
+    { cwd: REPOSITORY_ROOT, encoding: "utf8", env: GIT_ENV },
+  ).trim().split("\n").filter(Boolean);
+  assert.equal(introduced.length, 1, `${W11_PLAN} must have one introducing commit`);
+  return execFileSync(
+    "git",
+    ["diff", "--name-only", `${introduced[0]}^`, "HEAD", "--"],
+    { cwd: REPOSITORY_ROOT, encoding: "utf8", env: GIT_ENV },
+  ).trim().split("\n").filter(Boolean).sort();
 }
 
 function catalog(defaultBranch: string): string {
@@ -199,7 +264,22 @@ function applyBuild(worktree: string): (response: EnvelopeBase) => void {
   };
 }
 
+test("the five-stage journey imports no networking API or socket-opening call", () => {
+  assert.deepEqual(noNetworkOffenders(), []);
+});
+
+test("the W11 changed-file list touches no protected path from the loaded config", () => {
+  const config = loadConfig(readFileSync(join(REPOSITORY_ROOT, "awsf.config.yaml"), "utf8"));
+  const changed = workstreamChangedFiles();
+  assert.ok(changed.length > 0, "the W11 changed-file list is empty");
+  const offenders = changed.flatMap((path) => config.policy.protected_paths
+    .filter((glob) => matchesPathGlob(path, glob))
+    .map((glob) => `${path} matches ${glob}`));
+  assert.deepEqual(offenders, []);
+});
+
 test("a throwaway project travels all five captured stages on the stub route without a provider or a network", async () => {
+  const repositoryBefore = repositorySnapshot(REPOSITORY_ROOT);
   const root = mkdtempSync(join(tmpdir(), "awsf-five-stage-"));
   const canonical = join(root, "canonical");
   const stateRoot = join(root, "state");
@@ -432,6 +512,7 @@ test("a throwaway project travels all five captured stages on the stub route wit
         ["planner", "SUCCEEDED"],
         ["builder", "SUCCEEDED"],
         ["tests", "SUCCEEDED"],
+        ["publish", "SUCCEEDED"],
       ]);
     } finally {
       db.close();
@@ -440,6 +521,11 @@ test("a throwaway project travels all five captured stages on the stub route wit
     projection?.close();
     rmSync(root, { recursive: true, force: true });
   }
-  // No residue: the whole journey lived under one temporary directory.
+  // No residue: the state root was beneath the temporary root, and neither
+  // survives cleanup. The repository snapshot catches any accidental write to
+  // this checkout while the journey ran.
+  assert.equal(relative(root, stateRoot).startsWith(".."), false, "the state root escaped the temporary directory");
   assert.equal(existsSync(root), false);
+  assert.equal(existsSync(stateRoot), false);
+  assert.deepEqual(repositorySnapshot(REPOSITORY_ROOT), repositoryBefore, "the journey wrote inside this repository");
 });

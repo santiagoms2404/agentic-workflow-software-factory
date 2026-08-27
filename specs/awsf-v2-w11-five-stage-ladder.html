@@ -1023,6 +1023,12 @@ flowchart LR
     <p>All three messages named their offender on first read — file, line, and either the matched text or the closure chain — so none needed strengthening. Each was reverted with <code>git checkout</code> (leg one and three) or file deletion (leg two's two throwaway files), confirmed green individually, then all three confirmed together.</p>
     <p>Validation: <code>npm run test:unit</code> passed 1449/1449 in 311.5 seconds; <code>npm run typecheck</code> and <code>npm run lint</code> exited 0.</p>
   </details>
+  <details>
+    <summary>2026-08-26 — M5 T19 verification recorded; M5 remains in progress</summary>
+    <p><strong>T19's verification evidence is recorded, but its status remains unmarked.</strong> <code>core/test/journeys/five-stage.test.ts</code> now statically rejects hostname-resolution and socket-opening APIs, verifies every configured remote is an absolute local path beneath its temporary root, removes that root and its state root, and compares this checkout before and after the journey. Its protected-path check loads <code>awsf.config.yaml</code> through <code>loadConfig</code>, derives W11's changed-file list from the plan-introducing commit, and matches every path against the loaded <code>policy.protected_paths</code>.</p>
+    <p>Validation: <code>npm run test:journeys</code> passed 107/107 in 200.14 seconds. The three tests in <code>five-stage.test.ts</code> completed in 47.83 seconds, including the end-to-end journey in 16.09 seconds. <code>npm run test</code> passed 1,718/1,718: unit 1,488, contract 53, simulation 70, journeys 107, in 681.02 seconds wall time.</p>
+    <p><strong>M5 remains <code>[wip]</code>.</strong> T18 is still <code>[f]</code> under <code>W05-HOST-COMMAND-ENVELOPES</code>; its plan requirement is a stored projection envelope at every boundary, while W05's landed decision keeps the three session-less command envelopes as return values rather than projection rows. Marking M5 complete would make the ticket and plan statuses false.</p>
+  </details>
 </section>
 </main>
 

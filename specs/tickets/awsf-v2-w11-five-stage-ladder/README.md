@@ -304,3 +304,11 @@ exist in this repository and must not be invented to satisfy a template.
 and checks task coverage, milestone, marker and checklist state, title, dependency ordering, exact
 Section B prompt bytes, and the identifier-spine COVERAGE / ORPHANS / MIRROR rules. The HTML plan is
 the status source of truth.
+
+## T19 verification record — 2026-08-26
+
+- `node --experimental-strip-types --test core/test/journeys/five-stage.test.ts`: 3/3 passed in
+  47.83 seconds. The end-to-end journey took 16.09 seconds.
+- `npm run test:journeys`: 107/107 passed in 200.14 seconds.
+- `npm run test`: 1,718/1,718 passed in 681.02 seconds wall time: unit 1,488, contract 53,
+  simulation 70, journeys 107.
