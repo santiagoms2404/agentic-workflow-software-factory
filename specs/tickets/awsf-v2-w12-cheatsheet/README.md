@@ -130,6 +130,9 @@ it supplies no answer about how the factory works.
 
 ### What becomes an entry
 
+The primary measure is consultation rather than surprise because the factory's author cannot be
+surprised by workings he already knows. Reaching outside the document remains observable.
+
 There are two entry classes:
 
 1. **Consultation.** Record any consultation of a source other than the document in order to
@@ -150,9 +153,9 @@ observations only, not a diagnosis and not a fix.
 An author-driven run cannot prove that the document is comprehensible to somebody new. It can prove
 only that the document is sufficient to drive with. No later task may report the stronger claim.
 
-This same protocol runs unchanged twice in M5. Its entry classes, six legs, and recording fields may
-not be adjusted before or between those runs. Changing the protocol makes the consultation delta
-between the two runs meaningless.
+The M1 drive and both M5 graduation runs use this exact protocol. It runs unchanged twice in M5;
+its entry classes, six legs, and recording fields may not be adjusted before or between those runs.
+Changing the protocol makes the consultation delta between the two runs meaningless.
 
 ## Seven derived rules that live in the work itself, recorded here because each has a wrong answer that produces a plausible result with no error anywhere
 
