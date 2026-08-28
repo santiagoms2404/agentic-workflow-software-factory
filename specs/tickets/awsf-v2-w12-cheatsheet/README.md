@@ -321,13 +321,372 @@ Named here so no ticket absorbs it:
   one, which means **the factory does it, not W12**. The cheatsheet's own design becomes the input to
   the first job driven through the finished factory.
 
-## The friction log — filled by T02 and T03
+## The friction log — T02 observed; T03 classification pending
 
-*Empty at authoring time.* T02 records every consultation, verbatim and numbered in occurrence order,
-plus what marimba invoked at each leg — which is the raw material M4 writes the reference half from.
-T03 merges the six inherited stops, marks each entry INHERITED or OBSERVED, gives every one exactly
-one disposition (**document**, **route**, **owner-side**, **accepted absence**) and assigns it to a
-half (**walkthrough** or **reference**).
+The owner drove one real implementation job through marimba with no cheatsheet open. The record
+below is scrubbed: it carries no task, attempt, session or run handle, no revision, no machine path,
+and no live quota or aggregate state. `TASK`, `HISTORICAL_TASK`, `BASE`, `CANDIDATE`, `SETTINGS` and
+`STATE_ROOT` are inert placeholders. T03 still owes every entry one disposition (**document**,
+**route**, **owner-side**, or **accepted absence**) and one half (**walkthrough** or **reference**).
+
+**The limit remains:** this author-driven run proves only that the eventual document can be tested
+for sufficiency to drive with. It cannot prove that the document is comprehensible to somebody new.
+
+### Numbered observation log
+
+#### O01 · Consultation · Leg 2
+
+- **Consulted:** the support transcript instead of the ticket README alone.
+- **Question answered, verbatim:** “Explain everything in the W12 ticket README here in chat.”
+
+#### O02 · Consultation · Leg 3
+
+- **Consulted:** the support transcript, which read the observation and implementation tickets.
+- **Question answered, verbatim:** “What task do I need to perform to drive it?”
+
+#### O03 · Expectation mismatch · Legs 2–3
+
+- **Expected:** Prime would finish before the owner selected and requested a job, matching the frozen six-leg order.
+- **Observed:** the owner selected the implementation ticket before opening and priming marimba.
+
+#### O04 · Consultation · Leg 2
+
+- **Consulted:** the support transcript, the repository's marimba documents, and the local Pi launch documentation.
+- **Question answered, verbatim:** “Is there a special command alias to open a marimba session?”
+
+#### O05 · Expectation mismatch · Leg 2
+
+- **Expected:** a marimba alias and equivalent guarded launchers for Claude and Pi.
+- **Observed:** no repository-defined alias was found; the tested hook boundary had a Claude launcher and no equivalent Pi launcher.
+
+#### O06 · Expectation mismatch · Leg 2
+
+- **Expected:** the first supplied multi-line launch text would open marimba.
+- **Observed:** a line break split a command substitution, the shell waited, and the owner interrupted it.
+
+#### O07 · Expectation mismatch · Leg 2
+
+- **Expected:** pasting the displayed command block would open marimba.
+- **Observed:** the Markdown fence entered the terminal and Claude rejected an unknown `--bash` option.
+
+#### O08 · Consultation · Leg 2
+
+- **Consulted:** the support transcript.
+- **Question answered, verbatim:** “Provide a command that I can paste into the Herdr pane.”
+
+#### O09 · Expectation mismatch · Leg 2
+
+- **Expected:** the revised launch text would remain one shell command.
+- **Observed:** hard line breaks detached option values and removed shell expansions; the launcher reported a missing settings argument and the shell treated later text as separate commands.
+
+#### O10 · Consultation · Leg 2
+
+- **Consulted:** the support transcript and the launcher help.
+- **Question answered:** how to launch without shell variables or command substitution.
+
+#### O11 · Expectation mismatch · Leg 2
+
+- **Expected:** the first session that opened would display the marimba banner.
+- **Observed:** Claude opened, but no banner appeared in the TUI.
+
+#### O12 · Consultation · Leg 2
+
+- **Consulted:** the support transcript, owner-side settings, and the repository hook scripts.
+- **Question answered, verbatim:** “What do you recommend the marimba driving-session model and effort be, and how is the banner supposed to look?”
+
+#### O13 · Expectation mismatch · Leg 2
+
+- **Expected:** a debug-enabled launch would make the banner visible.
+- **Observed:** the session opened with hook debugging enabled and still showed no banner.
+
+#### O14 · Consultation · Leg 2
+
+- **Consulted:** the external Claude debug log.
+- **Question answered:** whether the `SessionStart` hook executed despite the absent banner.
+
+#### O15 · Expectation mismatch · Leg 2
+
+- **Expected:** successful plain-text `SessionStart` output would be visible in the TUI.
+- **Observed:** the debug log recorded the hook and its complete banner as successful while the TUI displayed none of it.
+
+#### O16 · Expectation mismatch · Leg 2
+
+- **Expected:** the prescribed convenience wrapper would run the diagnosis.
+- **Observed:** the wrapper executable was unavailable; marimba used the equivalent root npm invocation and received a healthy result.
+
+#### O17 · Expectation mismatch · Leg 3
+
+- **Expected:** “Drive W12 T05 to completion” would cause marimba to prepare and launch the work.
+- **Observed:** marimba first asked the owner to choose a full factory drive, preparation without provider launch, or the repository's prior direct-worker convention.
+
+#### O18 · Consultation · Leg 3
+
+- **Consulted:** the support transcript.
+- **Question answered:** which offered route satisfied the requirement to drive one real job end to end through marimba.
+
+#### O19 · Expectation mismatch · Leg 3
+
+- **Expected:** the provider named in marimba's route-selection prompt would run the worker.
+- **Observed:** the configured builder on the other provider ran instead.
+
+#### O20 · Consultation · Leg 4
+
+- **Consulted:** the dashboard.
+- **Question answered:** whether the task had entered the factory and reached `PREPARED`.
+
+#### O21 · Consultation · Leg 4
+
+- **Consulted:** the dashboard session card.
+- **Question answered:** whether execution had actually started.
+
+#### O22 · Consultation · Leg 4
+
+- **Consulted:** the request-phase waterfall evidence and events.
+- **Question answered:** what request the factory had received and recorded.
+
+#### O23 · Consultation · Leg 4
+
+- **Consulted:** the builder-phase waterfall evidence and events.
+- **Question answered:** what the builder was doing and what evidence it produced.
+
+#### O24 · Consultation · Leg 4
+
+- **Consulted:** the tests-phase waterfall evidence and events.
+- **Question answered:** whether the configured checks ran and passed.
+
+#### O25 · Consultation · Leg 4
+
+- **Consulted:** the dashboard session card and waterfall.
+- **Question answered:** whether execution had finished and reached `AWAITING_OWNER`.
+
+#### O26 · Consultation · Leg 4
+
+- **Consulted:** the marimba terminal while alternating with the dashboard.
+- **Question answered:** what marimba was doing while the factory progressed. The retrospective account cannot recover the exact number or timing of these repeated checks.
+
+#### O27 · Consultation · Leg 6
+
+- **Consulted:** marimba's owner-gate handoff.
+- **Question answered:** what the factory produced, whether its gates passed, where it stopped, what it cost, and which owner decisions were available.
+
+#### O28 · Expectation mismatch · Leg 6
+
+- **Expected:** the driven ticket's required single commit, including its prescribed message, plan markers, and ticket state.
+- **Observed:** the candidate changed one test file under a different host commit message and contained no plan-marker or ticket-state change.
+
+#### O29 · Consultation · Leg 5
+
+- **Consulted:** a historical sealed attempt's status, journal, review envelopes, and the v1 plan Amendment that analysed it.
+- **Question answered:** what the factory refused, which evidence precondition failed, and which owner decision remained available.
+
+#### O30 · Expectation mismatch · Leg 5
+
+- **Expected:** a refusal connected to the current drive.
+- **Observed:** the current drive had no refusal, so marimba selected a historical v1 Pilot 2 refusal from the shared state store without mutating either attempt.
+
+#### O31 · Expectation mismatch · Legs 5–6
+
+- **Expected:** the refusal leg would occur before the owner-gate stop.
+- **Observed:** the successful current drive reached the owner gate first; the historical refusal was read afterwards because the current drive contained none.
+
+#### O32 · Consultation · Leg 5
+
+- **Consulted:** the support transcript.
+- **Question answered, verbatim:** “Why is it talking about a task that I ran in the v1 plan?”
+
+#### O33 · Consultation · Leg 6
+
+- **Consulted:** the support transcript.
+- **Question answered, verbatim:** “Can I tell marimba to land it?”
+
+#### O34 · Consultation · Leg 6
+
+- **Consulted:** the stored request, candidate commit, builder write allowlist, builder role prompts, and host commit implementation.
+- **Question answered, verbatim:** “Is the reason it lacks the marker/state changes and has the wrong commit message because it did not pass the actual ticket prompt?”
+
+#### O35 · Expectation mismatch · Leg 3, discovered at Leg 6
+
+- **Expected:** marimba would pass the ticket's build prompt, including its exact commit and marker instructions, unchanged.
+- **Observed:** the stored request carried the implementation and acceptance substance but explicitly said not to commit, not to flip markers or ticket state, and not to touch the W12 plan or ticket tree; it said land time would handle those items.
+
+#### O36 · Expectation mismatch · Leg 3, discovered at Leg 6
+
+- **Expected:** the selected worker route could write every path required by the ticket.
+- **Observed:** its write allowlist covered source, tests, dashboard, and prompts, but excluded the W12 plan and ticket paths.
+
+#### O37 · Consultation · Leg 6
+
+- **Consulted:** marimba's final read-only command, lifecycle, edge, and gate report.
+- **Question answered:** which commands ran in each leg, which states and edges were observed, which checks decided the outcomes, and whether either attempt was mutated.
+
+#### O38 · Expectation mismatch · Leg 6
+
+- **Expected:** the final report would use the frozen order: Install, Prime, Ask for one job, Watch, Read a refusal, Stop.
+- **Observed:** marimba labelled Prime as Leg 1, split preparation and launch into Legs 2 and 3, and omitted Install as its own leg.
+
+#### O39 · Expectation mismatch · Leg 6
+
+- **Expected:** every invoked command would be reported exactly.
+- **Observed:** most command shapes were supplied, but the task request, Git formatting, and several state-store reads remained summarized placeholders.
+
+#### O40 · Consultation · Leg 6
+
+- **Consulted:** the support transcript.
+- **Question answered, verbatim:** “What do you recommend doing now; what happens to the marimba session, T05, and T02?”
+
+#### O41 · Consultation · Leg 4, clarified at Leg 6
+
+- **Consulted:** the support transcript.
+- **Question answered, verbatim:** “What does ‘What question did you use the dashboard to answer?’ mean?”
+
+### Per-leg capture of what marimba invoked
+
+#### Leg 1 — Install
+
+The checkout already existed. Dependency installation reported that the tree was up to date:
+
+```text
+npm install
+```
+
+#### Leg 2 — Prime
+
+The successful launcher selected the marimba settings and contract without committing a machine path:
+
+```text
+claude --model sonnet --effort medium --debug hooks --dangerously-skip-permissions \
+  --settings SETTINGS --append-system-prompt-file docs/driving/marimba/CONTRACT.md
+```
+
+The external debug log recorded the `SessionStart` hook as successful: settings loaded, guard
+present and executable, payload parser ran, three checks confirmed and zero fixes named. It did not
+claim that the next `PreToolUse` hook would fire. The TUI displayed none of that banner.
+
+Marimba reported reading, in order: `AGENTS.md`; the task machine, guards and tiers; the phase
+machine and workflow layer; the committed configuration and schema; the state-root layout; and the
+v1 plan's markers and Amendments. It then ran:
+
+```text
+npm test
+npm run lint
+just awsf doctor          # command unavailable
+npm run awsf -- doctor    # equivalent fallback
+```
+
+The full suite exited 0, including 107/107 journeys. Lint exited 0 with no warnings across 403
+files. Diagnosis exited 0 and reported the 27-edge, 11-state matrix healthy. Priming observed no
+lifecycle state and stopped without a task status board.
+
+#### Leg 3 — Ask marimba for one job
+
+The owner asked marimba to drive the implementation ticket. After the route-selection consultation,
+marimba ran these scrubbed command shapes:
+
+```text
+npm run awsf -- new TASK "<request>" --workflow build --tier T1
+npm run awsf -- status TASK
+npm run awsf -- quota
+npm run awsf -- start TASK
+npm run awsf -- status TASK
+npm run awsf -- run TASK
+```
+
+The quota read was advisory rather than a gate. Start passed adapter, sandbox and observability
+preflight, pinned `BASE`, and materialized a detached worktree. The lifecycle then moved:
+
+```text
+DRAFT --L1--> PREPARED --L4--> RUNNING --L7--> GATING --L12--> AWAITING_OWNER
+```
+
+L4 reserved one builder call. The T1 route skipped review; no review, correction or blocked state
+occurred, and no correction round was used.
+
+The stored request differed from the ticket at the closure boundary. The ticket required one exact
+commit with marker and state changes. The request told the worker not to commit, not to change those
+files, and said land time would handle them. Independently, the configured builder route could not
+write the W12 plan or ticket paths. The host created `CANDIDATE` from the builder envelope's proposed
+message.
+
+#### Leg 4 — Watch it
+
+The owner used the dashboard as the primary monitoring surface. The session card first showed
+`PREPARED`, then execution. The owner opened the request, builder and tests waterfall phases to read
+their evidence and events, saw the checks pass, watched the state reach `AWAITING_OWNER`, and then
+returned to marimba's handoff.
+
+Marimba reported these read-only command shapes while gathering evidence:
+
+```text
+npm run awsf -- status TASK
+npm run awsf -- doctor
+git diff --stat BASE CANDIDATE
+git diff --name-status BASE CANDIDATE
+git diff BASE CANDIDATE
+git log -1 --format=<format> CANDIDATE
+git show CANDIDATE:core/test/unit/meta/doc-reconciliation.test.ts
+git status --porcelain
+git rev-parse --short HEAD
+python3 <reads of status, journal, request, builder and tests envelopes>
+```
+
+The builder's reported check sequence was:
+
+```text
+node --experimental-strip-types --test core/test/unit/meta/doc-reconciliation.test.ts  # RED
+node --experimental-strip-types --test core/test/unit/meta/doc-reconciliation.test.ts  # green
+npm run test:unit
+npm run lint
+npm run typecheck
+```
+
+The host then ran the configured candidate gates:
+
+| Gate | Result | Measured duration |
+| --- | --- | ---: |
+| `npm run test:unit` | exit 0, 1489 pass / 0 fail | 79,190 ms |
+| `npm run typecheck` | exit 0, core + dashboard | 28,027 ms |
+| `npm run lint` | exit 0, 0 warnings | 522 ms |
+
+The widened README and v1 Validation scan found no offending command. The candidate changed only
+`core/test/unit/meta/doc-reconciliation.test.ts`, by +23/−5. The canonical checkout remained clean
+and unchanged; the process cleaned up; the drive reached `AWAITING_OWNER` with passing gates and no
+blocker.
+
+#### Leg 5 — Read a refusal
+
+The successful current drive contained no refusal. Without triggering or mutating one, marimba read
+a historical sealed refusal using these scrubbed command shapes:
+
+```text
+find STATE_ROOT/projects -name status.json
+python3 <reads of historical status, journal, review envelopes, review context and retained text>
+wc -l <composed review diff>
+```
+
+The historical lifecycle was:
+
+```text
+PREPARED → RUNNING → GATING → REVIEWING → AWAITING_OWNER → REVIEWING → BLOCKED
+```
+
+Its build and host gates passed. An original review had accepted without receiving source evidence,
+so the owner spent the one re-entry on a replacement review with diff-scoped context. The replacement
+returned five file-attributed findings, and each carried an extra `level` property beside the valid
+`severity` property. The closed schema rejected all five extra properties, leaving no valid required
+review; the malformed-review edge sealed the attempt in `BLOCKED`. The recorded owner option was a
+new retry carrying prior spend. No historical state changed during this read.
+
+#### Leg 6 — Stop at an owner act with its evidence
+
+Marimba performed no owner act. It reported the workflow and tier, base and candidate evidence,
+worker route, calls and corrections, lifecycle state, gate and blocker result, process cleanup,
+canonical-checkout cleanliness, candidate scope, RED-before-green evidence, configured gate results,
+and the widened fence's zero-offender result.
+
+The drive stopped at `AWAITING_OWNER`. The candidate was not landed. It had passing implementation
+gates and a one-file diff, while its commit message, marker changes and ticket-state change differed
+from the ticket's closure contract. Marimba stood down with land, rework and cancel left to the
+owner.
 
 ### Inherited from W11's T01 — carried forward, to be confirmed against the drive
 
