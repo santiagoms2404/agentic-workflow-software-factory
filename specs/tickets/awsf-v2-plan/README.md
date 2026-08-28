@@ -1,4 +1,4 @@
-# Tickets — AWSF v2 spine, W01–W14
+# Tickets — AWSF v2 spine, W01–W15
 
 One file per **workstream**, split from
 [`../../awsf-v2-plan-build-prompts.md`](../../awsf-v2-plan-build-prompts.md) § Section B on
@@ -27,7 +27,7 @@ it the moment it exists.
 
 | Field | Type | Source |
 |---|---|---|
-| `id` | `W01`–`W14`, zero-padded | filename; maps to the spine's task number (`W05` = spine task 5 = milestone M5) |
+| `id` | `W01`–`W15`, zero-padded | filename; maps to the spine's task number (`W05` = spine task 5 = milestone M5) |
 | `title` | string, always quoted | the Section B heading, verbatim |
 | `milestone` | `M1`–`M14` | the spine's Workstreams grouping — one milestone per workstream |
 | `state` | `todo` \| `wip` \| `done` \| `failed` | mirrors the spine's `[]` / `[wip]` / `[x]` / `[f]` markers |
@@ -57,7 +57,7 @@ prompts do. It is not a build order.
 | `W10` | `W04` | first real customer of W04's multi-repo capability. |
 | `W11` | `W03`, `W04`, `W05`, `W06` | it consumes all four and adds no mechanism of its own. |
 | `W12` | `W03`, `W07`, `W08`, `W11` | every workstream that adds or changes a command the reader will type. |
-| `W13`, `W14` | `W12` | both are authored after v2's core lands; W12 is the last core workstream, so it is the marker. |
+| `W13`, `W14`, `W15` | `W12` | all three are authored after v2's core lands; W12 is the last core workstream, so it is the marker. `W15` was declared later than the other two: it comes from W12's own friction log rather than from the original spine. |
 
 **One edge runs the other way, and it is not in this field.** Ordering gate **G1**: W05's deep plan
 is authored before W06's, but W05's new agent-role code lands after W06's centralisation. Build-order
@@ -90,4 +90,4 @@ The spine's status markers are the source of truth. When a workstream's marker f
 
 A spine marker moves to `[wip]` when the owner approves that workstream's deep plan, and to `[x]`
 only when that deep plan's own final phase completes. **The session that authors a deep plan flips
-nothing here.** Current plan-aligned states: **W01–W14 `todo`.**
+nothing here.** Current plan-aligned states: **W01–W15 `todo`.**

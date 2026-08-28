@@ -1163,3 +1163,72 @@ STOP WHEN
   The deep plan is authored, every open decision is surfaced, and the owner has it in hand - or
   you have reported that Q3 is still open and stopped without authoring.
 ```
+
+### T15 — W15 · Ticket closure
+
+```
+[CHOOSE YOUR PROVIDER — pick by live quota]
+  MODEL   Opus 5 · EFFORT high
+  CLAUDE  claude:opus · /effort high
+  GPT     codex:gpt-5.6-sol · reasoning high
+  WHY     the tempting answer is a one-line config change that removes the only fence standing
+          in front of the plan a worker is judged against.
+
+DO NOT RUN THIS PROMPT YET.
+W15 is DECLARED, NOT BUILT IN v2. Its deep plan is authored only after v2's core has landed -
+W01 through W08, W11 and W12 all [x] in specs/awsf-v2-plan.html - AND after the owner has decided
+between host-owned closure and closure that stays manual.
+
+You are authoring a DEEP PLAN. You write no implementation code.
+
+WORKSTREAM: W15 - Ticket closure. Spine milestone M15.
+PREDECESSORS: v2's core, complete. Plus the owner's decision named above.
+
+READ FIRST
+  specs/awsf-v2-plan.html - the W15 block IN FULL and "Shared Invariants and Constraints"
+  specs/tickets/awsf-v2-w12-cheatsheet/README.md - the friction log, entries O28, O34, O35, O36,
+    and the two blocks W01-TICKET-PROMPT-FIDELITY and OWNER-BUILDER-WRITE-SCOPE
+  core/src/cli/commands/land.ts - confirm for yourself that it still flips nothing
+  awsf.config.yaml - every role's `writes`, and `policy.protected_paths`
+  core/test/unit/meta/ticket-plan-sync.test.ts - what it checks, and what it does not
+
+THE CONTRADICTION THIS WORKSTREAM EXISTS TO RESOLVE
+  Every ticket prompt requires the plan marker and the ticket `state:` to flip in the same commit.
+  No role can write specs/*.html. Nothing in core/src flips either one. So no task driven through
+  the factory can close its own ticket, and every one so far was closed by hand afterwards.
+
+DO
+  Invoke /plan-sota with QUESTIONABLE true to author specs/awsf-v2-w15-ticket-closure.html, its
+  own -build-prompts.md, and specs/tickets/awsf-v2-w15-ticket-closure/ with a README recording
+  any derived-field rule.
+
+  BEFORE ANY OF THAT: confirm no role's `writes` was widened into specs/ under another
+  workstream's name while W15 sat declared. If one was, that is the finding, and report it before
+  authoring anything.
+
+THE PROPERTY THAT IS FIXED REGARDLESS OF THE DESIGN
+  Whatever closes a ticket must not be able to change what that ticket asked for. Hold your first
+  line to it.
+
+WHY A WIDENED WRITE SCOPE IS NOT THE ANSWER, AT ANY WIDTH
+  specs/ is not in policy.protected_paths, so the write glob is the ONLY fence in front of it.
+  A role that can write specs/** can edit the plan's AC-n and INV-n declarations, the ticket's
+  acceptance rows and the Section B prompt bytes, all three consistently, and
+  ticket-plan-sync.test.ts still passes - it checks that plan and tickets AGREE, never that
+  either is unchanged. Narrowing does not rescue it: that same test requires a task's plan
+  checklist and its ticket state to move together, so a scope covering specs/tickets/** alone
+  produces a candidate that fails its own configured gates.
+
+INVARIANTS THIS WORKSTREAM TOUCHES
+  2 and 12 directly. If the chosen shape needs a protected-config or invariant amendment, gate G2
+  applies: the owner-authored commit lands BEFORE the build that needs it.
+
+DO NOT
+  Write implementation code. Commit. Flip W15's marker. Read either frozen candidate record.
+  Start before v2's core is [x] and the owner's decision is taken. Widen any role's `writes` into
+  specs/ - if your design needs that, you have found the wrong design.
+
+STOP WHEN
+  The deep plan is authored, every open decision is surfaced, and the owner has it in hand - or
+  you have reported that the owner's decision is still open and stopped without authoring.
+```

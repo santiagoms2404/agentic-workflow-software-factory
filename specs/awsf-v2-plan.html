@@ -908,6 +908,32 @@ flowchart LR
       </ul>
       <div class="loop">🔁 <strong>Declared, not built.</strong> This workstream's marker does not move in v2, and a session that moves it has broken invariant 2.</div>
     </div>
+
+    <!-- ================= W15 ================= -->
+    <div class="phase declared">
+      <h3><code class="status">[]</code> Milestone M15: W15 — Ticket closure <span class="wtag decl">declared, not built in v2</span></h3>
+      <p class="deep-plan"><a href="awsf-v2-w15-ticket-closure.html">Deep plan: AWSF v2 W15 — Ticket closure</a> <span class="muted">not yet authored</span></p>
+      <p><em>Exists because W12's friction log measured a contradiction the factory cannot resolve from inside any existing workstream: a task driven through the factory cannot close its own ticket.</em> <strong>Its deep plan is authored after v2's core lands.</strong> Nothing about it is built in v2.</p>
+      <h4>15. W15 — Ticket closure</h4>
+      <table class="taskmeta">
+        <tr><th>Why it is declared and not built</th><td><strong>The closure work has no owner anywhere in the factory, and this was measured rather than reasoned.</strong> Four facts, each verified in the tree: every ticket prompt requires the plan marker and the ticket <code>state:</code> to flip in the same commit, which is invariant 12; the <code>builder</code> role's <code>writes</code> is <code>core/src/**</code>, <code>core/test/**</code>, <code>dashboard/**</code>, <code>prompts/**</code> and covers no part of <code>specs/</code>; <code>intake</code> can write <code>specs/tickets/**</code> but <strong>no role can write <code>specs/*.html</code></strong>; and <code>core/src/cli/commands/land.ts</code> flips no marker and no ticket state, as nothing else in <code>core/src</code> does either. So marimba's report that <em>"land time would handle them"</em> named a mechanism that does not exist. Every ticket this factory has driven was closed by hand afterwards.</td></tr>
+        <tr><th>The line it must not cross</th><td><strong>This must not be solved by widening a role's write scope</strong>, and the reason is mechanical rather than cautious. <code>specs/</code> is not in <code>policy.protected_paths</code>, so a write glob is the <em>only</em> fence in front of it — there is no second boundary behind a widened one. A role that can write <code>specs/**</code> can edit the plan's own <code>AC-n</code> and <code>INV-n</code> declarations, the ticket's acceptance rows, and the Section B prompt bytes, all three consistently, and <code>ticket-plan-sync.test.ts</code> still passes because it checks that plan and tickets <em>agree</em>, never that either is unchanged. A narrower widening is worse, not safer: <code>ticket-plan-sync.test.ts</code> requires a task's plan checklist and its ticket <code>state:</code> to move together, so a scope covering <code>specs/tickets/**</code> alone produces a candidate that fails its own configured gates.</td></tr>
+        <tr><th>What it will need before it can be planned</th><td>An owner decision between two shapes. <strong>Host-owned closure:</strong> the landing command already holds the ticket id, so it flips the ticket <code>state:</code> and the plan checklist deterministically with no model, in <code>awsf init</code>'s posture. <strong>Or closure stays manual</strong>, performed by the owner's session after landing, and the ticket prompts stop asking a worker for something no worker can do. The second is what happens today; naming it as a decision is what stops it being an accident.</td></tr>
+        <tr><th>Evidence it rests on</th><td>W12's M1 drive, recorded in <code>specs/tickets/awsf-v2-w12-cheatsheet/README.md</code>: entry <strong>O28</strong> measured the candidate arriving with a different commit message and no marker or state change; <strong>O35</strong> and <strong>O36</strong> found its two independent causes; <strong>O34</strong> is the consultation that required reading <code>core/src</code> and the role prompts to diagnose it. The four facts in the first row were each verified against the tree while classifying that log.</td></tr>
+        <tr><th>Stop when</th><td>v2's core has landed and the owner has taken the decision between host-owned and manual closure. Only then is its deep plan authored.</td></tr>
+      </table>
+      <div class="card rule">
+        <h5>Testing strategy — what the deep plan must be able to prove</h5>
+        One property is already fixed regardless of which shape is chosen: <strong>whatever closes a ticket must not be able to change what that ticket asked for.</strong> That is a test a deep plan can be held to from its first line, and it is the property a widened write scope cannot satisfy at any width.
+      </div>
+      <ul class="checklist">
+        <li><code class="status">[]</code> v2's core lands (W01–W08, W11, W12 all <code>[x]</code>)</li>
+        <li><code class="status">[]</code> The owner takes the decision between host-owned closure and closure that stays manual</li>
+        <li><code class="status">[]</code> Deep plan <code>awsf-v2-w15-ticket-closure.html</code> is authored and approved</li>
+        <li><code class="status">[]</code> No role's <code>writes</code> was widened into <code>specs/</code> under any other workstream's name while this sat declared</li>
+      </ul>
+      <div class="loop">🔁 <strong>Declared, not built.</strong> This workstream's marker does not move in v2, and a session that moves it has broken invariant 2.</div>
+    </div>
   </section>
 
   <!-- ===== GLOBAL VALIDATION ===== -->
