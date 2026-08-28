@@ -321,16 +321,57 @@ Named here so no ticket absorbs it:
   one, which means **the factory does it, not W12**. The cheatsheet's own design becomes the input to
   the first job driven through the finished factory.
 
-## The friction log — T02 observed; T03 classification pending
+## The friction log — T02 observed, T03 classified
 
 The owner drove one real implementation job through marimba with no cheatsheet open. The record
 below is scrubbed: it carries no task, attempt, session or run handle, no revision, no machine path,
 and no live quota or aggregate state. `TASK`, `HISTORICAL_TASK`, `BASE`, `CANDIDATE`, `SETTINGS` and
-`STATE_ROOT` are inert placeholders. T03 still owes every entry one disposition (**document**,
-**route**, **owner-side**, or **accepted absence**) and one half (**walkthrough** or **reference**).
+`STATE_ROOT` are inert placeholders.
 
 **The limit remains:** this author-driven run proves only that the eventual document can be tested
 for sufficiency to drive with. It cannot prove that the document is comprehensible to somebody new.
+
+### How T03 classified, and the two rules that decide the hard cases
+
+Every entry — forty-one observed by T02, seven inherited from W11's T01 — carries **exactly one**
+disposition and **exactly one** half. Nothing is unclassified and nothing was merged into a
+neighbour because the two read alike. Where one entry asked two questions, the disposition follows
+the clause the entry's own verbatim record leads with, and the other clause is named as carried
+elsewhere rather than folded in.
+
+**Rule one — the half is decided by which milestone can answer, and the reference half is closed.**
+`INV-2` and this set's seventh prohibition together mean the reference half may carry only the six
+fenced fact classes: commands, lifecycle states, legal edges, owner acts, workflows and gates, and
+risk tiers and ceilings. An entry whose answer is one of those six is **reference**, written by M4.
+Every other answerable entry is **walkthrough**, written by M3 in the spine's In Plain Language
+register as narrative rather than as an enumeration. An entry that is routed, owner-side, or an
+accepted absence still carries the half it *would* have landed in, so that a later session reopening
+it knows which milestone owns the reopening.
+
+**Rule two — owner-side is confirmed against the spine or it is not owner-side.** Each owner-side
+entry below resolves to a named bullet in `../../awsf-v2-plan.html` § Owner-side work or to the
+Shared Invariants rule that lists shell functions, installed skills and machine-local settings. One
+candidate failed that check and was reclassified: O16's missing `just` wrapper is a toolchain
+absence the spine does not name, so it is answered by the document's command class instead. The
+check is the point — an unconfirmed owner-side label is how work disappears.
+
+**What the classification produced.** Twenty-five **document** entries (fifteen walkthrough, ten
+reference), eight **route** entries across three named blocks, eight **owner-side** entries across
+two blocks, and seven **accepted absences**. Ten entries land in the reference half and thirty-eight
+in the walkthrough half.
+
+| Disposition | Entries | Count |
+| --- | --- | ---: |
+| **document** — answered in the document at the point it occurred | O02, O03, O04, O16, O17, O18, O19, O20, O21, O22, O23, O24, O25, O26, O27, O28, O29, O32, O33, O34, O37, O40, I4, I5, I7 | 25 |
+| **route** — a change to the factory, requested and not made here | O11, O13, O14, O15, O35, I1, I2, I3 | 8 |
+| **owner-side** — cannot land from a managed worktree | O05, O06, O07, O08, O09, O10, O12, O36 | 8 |
+| **accepted absence** — reason and reopening evidence written | O01, O30, O31, O38, O39, O41, I6 | 7 |
+| | | **48** |
+
+| Half | Entries | Count |
+| --- | --- | ---: |
+| **reference** (M4) | O16, O20, O21, O24, O25, O27, O33, O37, O39, I7 | 10 |
+| **walkthrough** (M3) | every other entry | 38 |
 
 ### Numbered observation log
 
@@ -338,206 +379,288 @@ for sufficiency to drive with. It cannot prove that the document is comprehensib
 
 - **Consulted:** the support transcript instead of the ticket README alone.
 - **Question answered, verbatim:** “Explain everything in the W12 ticket README here in chat.”
+- **Disposition:** accepted absence · **Half:** walkthrough
+- **Why:** The consultation asked for an explanation of this workstream's own ticket README, which is W12's execution surface rather than the factory. **Reason:** the document's subject is driving the factory; it does not teach the observation protocol, and a section that did would be a fact class with no source to fence it against. **What reopens it:** the same consultation recorded in an M5 run, where the driver follows the document instead of a ticket protocol — that would make it a leg-2 document gap.
 
 #### O02 · Consultation · Leg 3
 
 - **Consulted:** the support transcript, which read the observation and implementation tickets.
 - **Question answered, verbatim:** “What task do I need to perform to drive it?”
+- **Disposition:** document · **Half:** walkthrough
+- **Why:** Leg 3 states what the reader brings: a described result and its acceptance boundary, never a chosen command and never a ticket id. The walkthrough carries one worked description in that shape.
 
 #### O03 · Expectation mismatch · Legs 2–3
 
 - **Expected:** Prime would finish before the owner selected and requested a job, matching the frozen six-leg order.
 - **Observed:** the owner selected the implementation ticket before opening and priming marimba.
+- **Disposition:** document · **Half:** walkthrough
+- **Why:** Leg 3 states that the six legs are an order of observation, not an order the factory enforces, and that deciding the job before priming is legal and changes nothing the factory checks.
 
 #### O04 · Consultation · Leg 2
 
 - **Consulted:** the support transcript, the repository's marimba documents, and the local Pi launch documentation.
 - **Question answered, verbatim:** “Is there a special command alias to open a marimba session?”
+- **Disposition:** document · **Half:** walkthrough
+- **Why:** Leg 2 states that no repository command opens a marimba session: it is opened by an owner-installed launcher carrying marimba's settings and the appended contract. The document says this for a reader who has installed neither, per the plan's owner-side note. The installation itself is `OWNER-MARIMBA-LAUNCH` below; the statement is what stops that block from absorbing document work.
 
 #### O05 · Expectation mismatch · Leg 2
 
 - **Expected:** a marimba alias and equivalent guarded launchers for Claude and Pi.
 - **Observed:** no repository-defined alias was found; the tested hook boundary had a Claude launcher and no equivalent Pi launcher.
+- **Disposition:** owner-side · **Half:** walkthrough
+- **Why:** `OWNER-MARIMBA-LAUNCH` row 1.
 
 #### O06 · Expectation mismatch · Leg 2
 
 - **Expected:** the first supplied multi-line launch text would open marimba.
 - **Observed:** a line break split a command substitution, the shell waited, and the owner interrupted it.
+- **Disposition:** owner-side · **Half:** walkthrough
+- **Why:** `OWNER-MARIMBA-LAUNCH` row 2.
 
 #### O07 · Expectation mismatch · Leg 2
 
 - **Expected:** pasting the displayed command block would open marimba.
 - **Observed:** the Markdown fence entered the terminal and Claude rejected an unknown `--bash` option.
+- **Disposition:** owner-side · **Half:** walkthrough
+- **Why:** `OWNER-MARIMBA-LAUNCH` row 3.
 
 #### O08 · Consultation · Leg 2
 
 - **Consulted:** the support transcript.
 - **Question answered, verbatim:** “Provide a command that I can paste into the Herdr pane.”
+- **Disposition:** owner-side · **Half:** walkthrough
+- **Why:** `OWNER-MARIMBA-LAUNCH` row 4.
 
 #### O09 · Expectation mismatch · Leg 2
 
 - **Expected:** the revised launch text would remain one shell command.
 - **Observed:** hard line breaks detached option values and removed shell expansions; the launcher reported a missing settings argument and the shell treated later text as separate commands.
+- **Disposition:** owner-side · **Half:** walkthrough
+- **Why:** `OWNER-MARIMBA-LAUNCH` row 5.
 
 #### O10 · Consultation · Leg 2
 
 - **Consulted:** the support transcript and the launcher help.
 - **Question answered:** how to launch without shell variables or command substitution.
+- **Disposition:** owner-side · **Half:** walkthrough
+- **Why:** `OWNER-MARIMBA-LAUNCH` row 6.
 
 #### O11 · Expectation mismatch · Leg 2
 
 - **Expected:** the first session that opened would display the marimba banner.
 - **Observed:** Claude opened, but no banner appeared in the TUI.
+- **Disposition:** route · **Half:** walkthrough
+- **Why:** `W01-SESSION-GUARD-CONFIRMATION` row 1.
 
 #### O12 · Consultation · Leg 2
 
 - **Consulted:** the support transcript, owner-side settings, and the repository hook scripts.
 - **Question answered, verbatim:** “What do you recommend the marimba driving-session model and effort be, and how is the banner supposed to look?”
+- **Disposition:** owner-side · **Half:** walkthrough
+- **Why:** `OWNER-MARIMBA-LAUNCH` row 7 — the model and effort a driving session runs at are per-invocation launch settings. The entry's second clause, how the banner is supposed to look, is carried by `W01-SESSION-GUARD-CONFIRMATION` and is not merged into this one.
 
 #### O13 · Expectation mismatch · Leg 2
 
 - **Expected:** a debug-enabled launch would make the banner visible.
 - **Observed:** the session opened with hook debugging enabled and still showed no banner.
+- **Disposition:** route · **Half:** walkthrough
+- **Why:** `W01-SESSION-GUARD-CONFIRMATION` row 2.
 
 #### O14 · Consultation · Leg 2
 
 - **Consulted:** the external Claude debug log.
 - **Question answered:** whether the `SessionStart` hook executed despite the absent banner.
+- **Disposition:** route · **Half:** walkthrough
+- **Why:** `W01-SESSION-GUARD-CONFIRMATION` row 3.
 
 #### O15 · Expectation mismatch · Leg 2
 
 - **Expected:** successful plain-text `SessionStart` output would be visible in the TUI.
 - **Observed:** the debug log recorded the hook and its complete banner as successful while the TUI displayed none of it.
+- **Disposition:** route · **Half:** walkthrough
+- **Why:** `W01-SESSION-GUARD-CONFIRMATION` row 4.
 
 #### O16 · Expectation mismatch · Leg 2
 
 - **Expected:** the prescribed convenience wrapper would run the diagnosis.
 - **Observed:** the wrapper executable was unavailable; marimba used the equivalent root npm invocation and received a healthy result.
+- **Disposition:** document · **Half:** reference
+- **Why:** Fact class one. The command class renders in one canonical form and the reference half states that the three invocation forms are equivalent, with `just` named as a thin wrapper over the root scripts and never a second source of truth. Measured: `justfile` declares the `awsf *args` target, and `just` was absent from the machine's `PATH`, so the fallback was the same command in another form.
 
 #### O17 · Expectation mismatch · Leg 3
 
 - **Expected:** “Drive W12 T05 to completion” would cause marimba to prepare and launch the work.
 - **Observed:** marimba first asked the owner to choose a full factory drive, preparation without provider launch, or the repository's prior direct-worker convention.
+- **Disposition:** document · **Half:** walkthrough
+- **Why:** Leg 3 states that the reader is asked to choose a route before anything launches, and names which choice drives one job end to end through the factory.
 
 #### O18 · Consultation · Leg 3
 
 - **Consulted:** the support transcript.
 - **Question answered:** which offered route satisfied the requirement to drive one real job end to end through marimba.
+- **Disposition:** document · **Half:** walkthrough
+- **Why:** Leg 3 states what each offered route does, so the choice is made from the document rather than from a consultation.
 
 #### O19 · Expectation mismatch · Leg 3
 
 - **Expected:** the provider named in marimba's route-selection prompt would run the worker.
 - **Observed:** the configured builder on the other provider ran instead.
+- **Disposition:** document · **Half:** walkthrough
+- **Why:** Leg 3 states that the worker which runs is the configured agent on its own adapter, which need not be the driving session's provider. Measured in `awsf.config.yaml`: the `builder` agent is `model: codex:gpt-5.6-sol` with `harness.adapter: codex` while the session ran on claude.
 
 #### O20 · Consultation · Leg 4
 
 - **Consulted:** the dashboard.
 - **Question answered:** whether the task had entered the factory and reached `PREPARED`.
+- **Disposition:** document · **Half:** reference
+- **Why:** Fact class two — `PREPARED` is a member of `TASK_STATES`.
 
 #### O21 · Consultation · Leg 4
 
 - **Consulted:** the dashboard session card.
 - **Question answered:** whether execution had actually started.
+- **Disposition:** document · **Half:** reference
+- **Why:** Fact class two — `RUNNING` is a member of `TASK_STATES`.
 
 #### O22 · Consultation · Leg 4
 
 - **Consulted:** the request-phase waterfall evidence and events.
 - **Question answered:** what request the factory had received and recorded.
+- **Disposition:** document · **Half:** walkthrough
+- **Why:** Leg 4 states that the request phase's evidence is where the factory records what it was asked to do.
 
 #### O23 · Consultation · Leg 4
 
 - **Consulted:** the builder-phase waterfall evidence and events.
 - **Question answered:** what the builder was doing and what evidence it produced.
+- **Disposition:** document · **Half:** walkthrough
+- **Why:** Leg 4 states that the builder phase's evidence and events are where the work itself is readable.
 
 #### O24 · Consultation · Leg 4
 
 - **Consulted:** the tests-phase waterfall evidence and events.
 - **Question answered:** whether the configured checks ran and passed.
+- **Disposition:** document · **Half:** reference
+- **Why:** Fact class five — which checks are configured is extracted from the loaded configuration's `gates`.
 
 #### O25 · Consultation · Leg 4
 
 - **Consulted:** the dashboard session card and waterfall.
 - **Question answered:** whether execution had finished and reached `AWAITING_OWNER`.
+- **Disposition:** document · **Half:** reference
+- **Why:** Fact class two — `AWAITING_OWNER` is a member of `TASK_STATES`.
 
 #### O26 · Consultation · Leg 4
 
 - **Consulted:** the marimba terminal while alternating with the dashboard.
 - **Question answered:** what marimba was doing while the factory progressed. The retrospective account cannot recover the exact number or timing of these repeated checks.
+- **Disposition:** document · **Half:** walkthrough
+- **Why:** Leg 4 states which surface answers which question, so the reader stops alternating between marimba and the dashboard. The unrecoverable count limits what this entry weighs; it is not itself a document gap.
 
 #### O27 · Consultation · Leg 6
 
 - **Consulted:** marimba's owner-gate handoff.
 - **Question answered:** what the factory produced, whether its gates passed, where it stopped, what it cost, and which owner decisions were available.
+- **Disposition:** document · **Half:** reference
+- **Why:** Fact class four — what the owner may do at the owner gate is the owner-acts class.
 
 #### O28 · Expectation mismatch · Leg 6
 
 - **Expected:** the driven ticket's required single commit, including its prescribed message, plan markers, and ticket state.
 - **Observed:** the candidate changed one test file under a different host commit message and contained no plan-marker or ticket-state change.
+- **Disposition:** document · **Half:** walkthrough
+- **Why:** Leg 6 states that passing gates do not prove a ticket's closure contract was met, and that checking the candidate against what was requested is part of the owner act. Its two causes stay separate: O35 is routed and O36 is owner-side.
 
 #### O29 · Consultation · Leg 5
 
 - **Consulted:** a historical sealed attempt's status, journal, review envelopes, and the v1 plan Amendment that analysed it.
 - **Question answered:** what the factory refused, which evidence precondition failed, and which owner decision remained available.
+- **Disposition:** document · **Half:** walkthrough
+- **Why:** Leg 5 states that a refusal is readable from the factory's own surfaces — status, journal and the review envelopes — without opening a plan Amendment. Reaching for the Amendment is the insufficiency this entry records.
 
 #### O30 · Expectation mismatch · Leg 5
 
 - **Expected:** a refusal connected to the current drive.
 - **Observed:** the current drive had no refusal, so marimba selected a historical v1 Pilot 2 refusal from the shared state store without mutating either attempt.
+- **Disposition:** accepted absence · **Half:** walkthrough
+- **Why:** **Reason:** the factory refuses only when a precondition actually fails, so a drive that succeeds produces no refusal, and W12 may not manufacture one — `INV-5` forbids routing around a refusal, and staging one would fabricate the evidence leg 5 exists to read. Reading a sealed historical attempt without mutating it is the honest substitute. **What reopens it:** a graduation run in M5 that produces a genuine refusal, which then replaces the historical example in the walkthrough.
 
 #### O31 · Expectation mismatch · Legs 5–6
 
 - **Expected:** the refusal leg would occur before the owner-gate stop.
 - **Observed:** the successful current drive reached the owner gate first; the historical refusal was read afterwards because the current drive contained none.
+- **Disposition:** accepted absence · **Half:** walkthrough
+- **Why:** **Reason:** the six legs are an order of observation, not a sequence the factory enforces; a drive with no refusal reaches the owner gate before any refusal can be read, by construction. Reordering the protocol to match is forbidden — T01 froze it and both M5 runs must use it unchanged. **What reopens it:** an M5 run in which the factory refuses mid-drive, which restores the frozen order and lets the consultation delta be read leg by leg.
 
 #### O32 · Consultation · Leg 5
 
 - **Consulted:** the support transcript.
 - **Question answered, verbatim:** “Why is it talking about a task that I ran in the v1 plan?”
+- **Disposition:** document · **Half:** walkthrough
+- **Why:** Leg 5 states that the state root is one per machine with projects namespaced inside it, so attempts from earlier work stay visible, and that reading one mutates nothing.
 
 #### O33 · Consultation · Leg 6
 
 - **Consulted:** the support transcript.
 - **Question answered, verbatim:** “Can I tell marimba to land it?”
+- **Disposition:** document · **Half:** reference
+- **Why:** Fact class four — landing is an owner act, and the owner-acts class is what says the driving session cannot perform it.
 
 #### O34 · Consultation · Leg 6
 
 - **Consulted:** the stored request, candidate commit, builder write allowlist, builder role prompts, and host commit implementation.
 - **Question answered, verbatim:** “Is the reason it lacks the marker/state changes and has the wrong commit message because it did not pass the actual ticket prompt?”
+- **Disposition:** document · **Half:** walkthrough
+- **Why:** Leg 6 states where the factory records the request it actually sent, so a candidate that does not match its ticket is diagnosable from the evidence surfaces rather than from source. This entry is the consultation that found O35 and O36; it is a document gap in its own right because the diagnosis required reading `core/src` and the role prompts.
 
 #### O35 · Expectation mismatch · Leg 3, discovered at Leg 6
 
 - **Expected:** marimba would pass the ticket's build prompt, including its exact commit and marker instructions, unchanged.
 - **Observed:** the stored request carried the implementation and acceptance substance but explicitly said not to commit, not to flip markers or ticket state, and not to touch the W12 plan or ticket tree; it said land time would handle those items.
+- **Disposition:** route · **Half:** walkthrough
+- **Why:** `W01-TICKET-PROMPT-FIDELITY` row 1.
 
 #### O36 · Expectation mismatch · Leg 3, discovered at Leg 6
 
 - **Expected:** the selected worker route could write every path required by the ticket.
 - **Observed:** its write allowlist covered source, tests, dashboard, and prompts, but excluded the W12 plan and ticket paths.
+- **Disposition:** owner-side · **Half:** walkthrough
+- **Why:** `OWNER-BUILDER-WRITE-SCOPE`.
 
 #### O37 · Consultation · Leg 6
 
 - **Consulted:** marimba's final read-only command, lifecycle, edge, and gate report.
 - **Question answered:** which commands ran in each leg, which states and edges were observed, which checks decided the outcomes, and whether either attempt was mutated.
+- **Disposition:** document · **Half:** reference
+- **Why:** Fact classes one, two, three and five at once — commands, states, edges and gates are the reference half's whole subject, and this consultation is the question it is written to answer.
 
 #### O38 · Expectation mismatch · Leg 6
 
 - **Expected:** the final report would use the frozen order: Install, Prime, Ask for one job, Watch, Read a refusal, Stop.
 - **Observed:** marimba labelled Prime as Leg 1, split preparation and launch into Legs 2 and 3, and omitted Install as its own leg.
+- **Disposition:** accepted absence · **Half:** walkthrough
+- **Why:** **Reason:** the six legs are W12's observation protocol, committed in this ticket set. marimba has never been given them and `docs/driving/marimba/CONTRACT.md` does not define them, so a report that numbers its own legs differently is not a factory defect. **What reopens it:** an M5 run in which the numbering mismatch makes the consultation delta unreadable — that would be a contract change owned by W01, not a document change, and it would be routed then rather than assumed now.
 
 #### O39 · Expectation mismatch · Leg 6
 
 - **Expected:** every invoked command would be reported exactly.
 - **Observed:** most command shapes were supplied, but the task request, Git formatting, and several state-store reads remained summarized placeholders.
+- **Disposition:** accepted absence · **Half:** reference
+- **Why:** **Reason:** the reference half's six classes are extracted from exports and the loaded configuration, never from a session's report, so a summarized command shape in this capture cannot make the document wrong or incomplete. **What reopens it:** a walkthrough leg in M3 that needs an exact invocation no source can supply — a git formatting argument, say — at which point the gap becomes a document gap and is recorded as one.
 
 #### O40 · Consultation · Leg 6
 
 - **Consulted:** the support transcript.
 - **Question answered, verbatim:** “What do you recommend doing now; what happens to the marimba session, T05, and T02?”
+- **Disposition:** document · **Half:** walkthrough
+- **Why:** Leg 6 states what an unlanded candidate at `AWAITING_OWNER` leaves available and that closing the driving session changes no task state. The clause about T05 and T02 specifically is workstream process and is not what the document answers.
 
 #### O41 · Consultation · Leg 4, clarified at Leg 6
 
 - **Consulted:** the support transcript.
 - **Question answered, verbatim:** “What does ‘What question did you use the dashboard to answer?’ mean?”
+- **Disposition:** accepted absence · **Half:** walkthrough
+- **Why:** **Reason:** the phrasing belongs to T01's frozen protocol, which is committed here and may not be adjusted before or between the M5 runs; the cheatsheet does not teach the protocol. **What reopens it:** nothing in the document. If the same question recurs in M5, the finding is about the protocol's wording and belongs in the plan's Amendments.
 
 ### Per-leg capture of what marimba invoked
 
@@ -688,20 +811,121 @@ gates and a one-file diff, while its commit message, marker changes and ticket-s
 from the ticket's closure contract. Marimba stood down with land, rework and cancel left to the
 owner.
 
-### Inherited from W11's T01 — carried forward, to be confirmed against the drive
+### Inherited from W11's T01 — INHERITED, not OBSERVED, and each checked against the drive
 
-| # | Inherited stop | Confirmed? |
+W11's T01 drove a throwaway project through all five stages on 2026-08-26. Its six measured stops
+plus the stale-lifecycle finding are merged here **marked `INHERITED`**, so no reader mistakes them
+for something this drive saw. Each was then checked twice: against the drive's record above, and
+against the source as it stands today.
+
+**The finding the check was written to produce did not occur: no inherited stop has been fixed.**
+Every one is still present in the tree at the line named below. Three were not hit because Q6 scoped
+this drive to an already-registered checkout, one was not hit because this checkout configures
+gates, one was not hit because the driver never opened a journal, and two were hit. *An inherited
+stop the owner does not hit is a stop that has been fixed since — that is the finding this column
+was for, and it is empty.*
+
+| # | Inherited stop | Hit on this drive? | Still present? | Disposition · half |
+| --- | --- | --- | --- | --- |
+| I1 | Two of the four inter-stage boundaries are crossed by hand-authoring and committing a file; no command produces an `awsf.project.yaml` | **No** — Q6 scoped the drive to this checkout, which already carries a catalog, so no stage boundary was crossed | **Yes.** `core/src/stages/contract.ts:56` still states *"An `awsf.project.yaml` catalog exists"* as S2's entry precondition, and `core/src/registry/resolve.ts:61` still tells the owner to pass `--catalog <path-to-awsf.project.yaml>`. Every reference in `core/src` consumes the file; none writes it | route → `W03-GREENFIELD-ENTRY` · walkthrough |
+| I2 | The configuration `awsf init` writes enables only `intake`, declares zero agents, and names no adapter any later stage can reach | **No** — same reason as I1; `awsf init` never ran | **Yes.** `core/src/config/init-template.ts` still writes `workflows: { enabled: ["intake"] }`, `agents: []` and `gates: {}` | route → `W03-GREENFIELD-ENTRY` · walkthrough |
+| I3 | `awsf init` runs `git init` with no `-b`, so the branch is the machine default (measured `master`) while the catalog usually says `main` | **No** — same reason as I1 | **Yes.** `core/src/cli/commands/init.ts:41` is still `runGit(runner, ["init"])`, with no branch argument anywhere in the command | route → `W03-GREENFIELD-ENTRY` · walkthrough |
+| I4 | The owner-typed `awsf run` cannot reach the zero-quota stub route — `adapters.stub` is `kind: fixture` and the production binding answers `null` on purpose | **Yes, in substance.** Leg 3's `awsf run TASK` reserved and spent one real builder call on the configured route. There was no free rehearsal and the drive did not look for one | **Yes.** `awsf.config.yaml:30` is still `stub: { kind: fixture }` | document · walkthrough |
+| I5 | With no configured gates, the `tests` phase records `"all configured commands passed"` with `"commands":[]` — a vacuous green | **No** — masked. This checkout configures three gates and Leg 4 recorded all three running with measured durations, so the pass the driver saw was not vacuous | **Yes.** `core/src/cli/commands/production-run.ts:1191` still emits `"all configured commands passed"` from `failures.length === 0`, which an empty command list satisfies | document · walkthrough |
+| I6 | One task's journal measured 793,310 bytes, 59.8% of it repeated configuration snapshots | **No** — the driver used the dashboard as the primary monitoring surface for the whole of Leg 4 and never opened a journal for the current drive. He read a historical journal at Leg 5 without measuring it | **Not re-measured.** Neither confirmed nor refuted by this drive | accepted absence · walkthrough |
+| I7 | The README's lifecycle description is stale in every number, so a reader who consults it to understand the factory is currently misled | **Yes, from the other side.** Leg 2's diagnosis reported the 27-edge, 11-state matrix healthy — the true numbers the README contradicts. The driver did not consult the README for the lifecycle, so he was not misled by it on this run | **Yes, and worse than recorded.** `README.md:36` says *10 states · 24 edges · 76 ordered rejections* while `README.md:62` says *Ten states, twenty-five legal edges, seventy-five rejected pairs*. The two disagree with each other as well as with the source: `TASK_STATES` has 11 entries and `LEGAL_EDGES` has 27 | document · reference |
+
+**I4's document answer, stated once here because it decides what the walkthrough costs:** driving one
+job through the factory spends real provider quota, and there is no free rehearsal route. The
+document says so before the reader starts, which is the whole reason W11's T01 measured it.
+
+**I5's document answer:** the `tests` phase reports that all *configured* commands passed, and that
+sentence is worth exactly what the configured gate list is worth. The gate list is fenced fact class
+five, so the walkthrough points the reader at it rather than restating it.
+
+**I6's reason, as an accepted absence:** the document never sends the reader to a journal — Leg 4's
+whole finding is that watching means the dashboard — so journal size does not reach the reader
+through anything this document says. No workstream in the spine owns journal composition either:
+W02's scope is the dashboard's rendering of evidence, not what the journal stores, so a route would
+name no owner. **What reopens it:** a graduation run in which the dashboard fails to answer a leg-4
+question and the driver opens a journal to get the answer. That makes journal readability
+document-facing and gives it an owner, and it is recorded then rather than assumed now.
+
+### Routed requests — three blocks, in W11 T04's shape
+
+W11's precedent: the route is a written request and never a patch. Nothing below was implemented,
+no file under `core/src` or `docs/driving/` was edited by this task, and every named workstream
+exists in the spine.
+
+#### `W01-SESSION-GUARD-CONFIRMATION` → W01, marimba's operating contract
+
+The banner exists, runs, and reports success into an external debug log, and the driver never saw
+it. Four entries, four distinct missing things.
+
+| Entry | What is missing | Why W12 cannot supply it | What would close it |
+| --- | --- | --- | --- |
+| O11 | A session that opened produced no visible confirmation that it was guarded. `docs/driving/marimba/session-banner.sh` exists to give *"positive confirmation anywhere that a session was running guarded"*, and on this launch it gave none | `INV-7` — W12 adds and changes no command, and writes nothing under `docs/driving/`. A document cannot make an invisible banner visible, and a document that told the reader to expect a banner that does not appear would teach the wrong thing | A capture proving which surface, if any, renders `SessionStart` output for this host, checked into W01's capture set beside the refusals it already carries |
+| O13 | Raising hook debugging did not surface it either, so the absence is not a verbosity setting the driver can change | Same `INV-7` boundary, and the debug level is a launch flag W12 may not prescribe | The same capture, taken at both debug levels, so W01 can state whether the banner is renderable at all rather than leaving a driver to raise verbosity and learn nothing |
+| O14 | There is no in-session read that answers *"is this session guarded?"*. The driver had to open an external Claude debug log outside the repository to find out | The answer would be a new read-only command or a contract clause, and `INV-7` forbids the first while the second is W01's file | Either a contract clause naming what a driver may ask the session to confirm the guard is loaded, or — if nothing in-session can confirm it — W01 recording that as a named gap, since the banner's stated purpose is exactly this |
+| O15 | The debug log recorded the hook *and its complete banner* as successful while the TUI displayed none of it. A hook that succeeds invisibly is the gap the banner's own header says it exists to stop papering over | W12 cannot amend the banner's three rules, and it may not weaken them by documenting a workaround | W01 deciding between the two possibilities its own captures would settle: the host renders no `SessionStart` output, in which case the banner is replaced by something the driver can request; or it does under some condition, in which case that condition is written into `docs/driving/marimba/README.md` |
+
+#### `W01-TICKET-PROMPT-FIDELITY` → W01, marimba's operating contract
+
+| Entry | What is missing | Why W12 cannot supply it | What would close it |
+| --- | --- | --- | --- |
+| O35 | The contract does not require a ticket's build prompt to reach the stored request unaltered, and does not forbid marimba substituting its own closure policy for the ticket's. The stored request carried the implementation and acceptance substance but told the worker not to commit, not to flip markers or ticket state, and not to touch the W12 plan or ticket tree — saying land time would handle them. The ticket required one exact commit carrying all three | `INV-7` — W12 changes no command and writes nothing under `docs/driving/`. Documenting the substitution would tell the reader to expect a request that does not match the ticket, which leaves the substitution in place and teaches the reader to tolerate it | A contract clause requiring that, when a ticket is the subject, the ticket's build-prompt bytes are carried into the request verbatim — closure instructions included — plus a captured transcript in W01's set proving marimba refuses to paraphrase them. W01 should decide this together with `OWNER-BUILDER-WRITE-SCOPE`: a verbatim prompt the route still cannot satisfy is a second, quieter failure |
+
+#### `W03-GREENFIELD-ENTRY` → W03, `awsf init`
+
+Three inherited stops, all still present, none of which this drive could hit because Q6 scoped it to
+an already-registered checkout. The plan's own scope table routes the first of these here in
+advance: *"A starter `awsf.project.yaml` template … goes to W03. Record the stop, route the request,
+and keep the walkthrough scoped to this checkout per Q6."*
+
+| Entry | What is missing | Why W12 cannot supply it | What would close it |
+| --- | --- | --- | --- |
+| I1 | No command produces an `awsf.project.yaml`, so two of the four inter-stage boundaries are crossed by hand-authoring and committing a file. A greenfield reader stops at the first one | W12's `INV-7` adds no command, and this set's fifth prohibition and the plan's scope table both name the starter template as the tempting wrong answer. Writing one here would move a stop into a document instead of removing it | `awsf init`, or a sibling under W03's deterministic host-owned banner, emitting a minimal catalog that names the project's slug and its own repository — enough for `awsf project register` to accept it without the owner authoring YAML |
+| I2 | The configuration `awsf init` writes enables only `intake`, declares zero agents and configures no gates, so a recognised project can run nothing. The reader reaches the second boundary and stops one step later | Changing `core/src/config/init-template.ts` is a code change, which `INV-7` forbids. It is also W03's declared subject: *"create the directory, `git init`, write a minimal config, and make a baseline commit — that is the whole command"* | W03 deciding what the minimal config owes a project that intends to run something: either a second workflow and one agent, or an explicit refusal at the next stage that names what is missing rather than a project that is merely inert |
+| I3 | `awsf init` runs `git init` with no `-b`, so the initial branch is whatever the machine defaults to — measured `master` — while catalogs usually declare `main`. The mismatch is silent at creation and surfaces later as a confusing refusal | Same code boundary, same owning workstream | Passing the catalog's declared default branch to `git init -b`, or refusing at registration when the repository's branch does not match the catalog's declared one, with the mismatch named in the refusal |
+
+### Owner-side, each confirmed against the spine
+
+`../../awsf-v2-plan.html` § Owner-side work names *"marimba's guard installation. It lives at a
+per-user path and is passed per invocation via `--settings`"* and *"Every invariant and
+protected-config amendment. One owner-authored commit each"*; its Shared Invariants add that *"the
+owner's shell functions, installed skills, machine-local settings … are all named as owner-side and
+none of them is a ticket."* Both blocks below resolve to those. Neither absorbs document work: what
+the document still owes because of them is carried by O04, which is a **document** entry.
+
+#### `OWNER-MARIMBA-LAUNCH` — seven entries, one installation act
+
+| Entry | The owner-side act | Spine bullet it confirms against |
 | --- | --- | --- |
-| I1 | Two of the four inter-stage boundaries are crossed by hand-authoring and committing a file; no command produces an `awsf.project.yaml` | |
-| I2 | The configuration `awsf init` writes enables only `intake`, declares zero agents, and names no adapter any later stage can reach | |
-| I3 | `awsf init` runs `git init` with no `-b`, so the branch is the machine default (measured `master`) while the catalog usually says `main` | |
-| I4 | The owner-typed `awsf run` cannot reach the zero-quota stub route — `adapters.stub` is `kind: fixture` and the production binding answers `null` on purpose | |
-| I5 | With no configured gates, the `tests` phase records `"all configured commands passed"` with `"commands":[]` — a vacuous green | |
-| I6 | One task's journal measured 793,310 bytes, 59.8% of it repeated configuration snapshots | |
-| I7 | The README's lifecycle description is stale in every number, so a reader who consults it to understand the factory is currently misled | |
+| O05 | No Pi launcher exists beside the Claude one at the tested hook boundary. Launchers are shell functions at per-user paths | shell functions and machine-local settings |
+| O06 | The launch text must survive as one shell command; a line break split a command substitution and the shell waited | the guard *"is passed per invocation via `--settings`"* — the invocation is the owner's |
+| O07 | The launch text is copied without its fence characters, and every option in it must be one the launcher accepts | same |
+| O08 | A launch line that can be pasted into the owner's pane manager is a property of the owner's shell, not of this repository | shell functions and machine-local settings |
+| O09 | Options and their values stay on one line, with no shell variables and no expansions that a paste can strip | the per-invocation bullet |
+| O10 | A launch form containing no shell variables and no command substitution is an owner-authored form | the per-invocation bullet |
+| O12 | The model and effort a driving session runs at are per-invocation launch settings the owner chooses. `INV-3` also forbids this repository carrying a machine-local setting | shell functions, installed skills, machine-local settings |
 
-An inherited stop the owner does **not** hit is a stop that has been fixed since W11's run, and
-saying so is a finding.
+**What the document still owes, so this block absorbs nothing:** O04's walkthrough statement at Leg 2
+that no repository command opens a marimba session, that the session is opened by an owner-installed
+launcher carrying marimba's settings and the appended contract, and that both must be working before
+Leg 2 begins. The plan already requires it: *"the document's first two legs must be readable by
+somebody who has done neither."*
+
+#### `OWNER-BUILDER-WRITE-SCOPE` — one protected-config amendment
+
+| Entry | The owner-side act | Spine bullet it confirms against |
+| --- | --- | --- |
+| O36 | The `builder` agent's `writes` list in `awsf.config.yaml:57` is `["core/src/**", "core/test/**", "dashboard/**", "prompts/**"]`, which excludes `specs/**`. The worker could not have flipped a plan marker or a ticket `state` even had the request asked it to. Widening or re-scoping that list is a protected-config change: `awsf.config.yaml` is in `policy.protected_paths`, this set's third prohibition forbids writing it, and gate **G2** requires the amendment to land as an owner-approved commit before the workstream that needs it builds | *"Every invariant and protected-config amendment. One owner-authored commit each, one at a time, recorded in the Amendments section of the plan that needed it"* |
+
+**Read this beside `W01-TICKET-PROMPT-FIDELITY`.** O35 and O36 are two independent causes of the one
+mismatch O28 recorded, and fixing either alone leaves the mismatch: a verbatim ticket prompt still
+cannot write `specs/**`, and a widened write scope still receives a request that told the worker not
+to. The owner decides whether the ticket's closure work belongs to the worker at all or stays with
+the host at land time — and that decision, not either fix, is what closes O28.
 
 ## The graduation record — filled by T19, T20 and T21
 
