@@ -1,0 +1,1319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plan: AWSF v2 W12 — The non-technical cheatsheet</title>
+<style>
+:root {
+  --bg:#051F20; --surface:#0B2B26; --surface-soft:#163832; --fg:#DAF1DE;
+  --muted:#8EB69B; --accent:#F26A1B; --cool:#5FCF8E; --warn:#E2B25C;
+  --danger:#F08A72; --good:#5FCF8E; --border:#235347; --accent-soft:rgba(242,106,27,.16);
+  --font-ui:Archivo,"Helvetica Neue",Helvetica,Arial,sans-serif;
+  --font-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --maxw:1120px;
+}
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body { margin:0; background:var(--bg); color:var(--fg); font:400 15.5px/1.7 var(--font-ui); }
+main { max-width:var(--maxw); margin:auto; padding:48px 24px 150px; }
+h1,h2,h3,h4 { line-height:1.2; letter-spacing:-.028em; }
+h1 { font:800 32px/1.05 var(--font-ui); margin:0 0 6px; }
+h2 { font:800 24px/1.12 var(--font-ui); margin:56px 0 14px; padding-bottom:9px; border-bottom:1px solid var(--border); }
+h3 { font:700 18px/1.25 var(--font-ui); margin:32px 0 8px; }
+h4 { font:600 11px/1 var(--font-ui); letter-spacing:.16em; text-transform:uppercase; margin:26px 0 8px; color:var(--accent); }
+h5 { margin:0 0 6px; color:var(--muted); text-transform:uppercase; letter-spacing:.16em; font:600 10px/1 var(--font-ui); }
+p { margin:0 0 14px; max-width:78ch; }
+a { color:var(--accent); text-decoration:none; border-bottom:1px solid rgba(242,106,27,.40); }
+a:hover { border-bottom-color:var(--accent); }
+strong { color:#fff; font-weight:700; }
+em,.muted,.sub { color:var(--muted); }
+ul,ol { margin:0 0 14px; padding-left:22px; }
+li { margin:3px 0; }
+code { font:400 12.6px/1.5 var(--font-mono); color:#BFE6CE; background:var(--surface-soft); border-radius:5px; padding:1.5px 5px; word-break:break-word; }
+pre { background:var(--surface-soft); border:1px solid var(--border); border-radius:12px; padding:14px 16px; overflow-x:auto; color:var(--fg); font:400 12.6px/1.62 var(--font-mono); }
+pre code { padding:0; background:none; color:inherit; }
+table { width:100%; border-collapse:collapse; margin:14px 0 22px; font:400 13.2px/1.5 var(--font-ui); display:block; overflow-x:auto; }
+th,td { border-bottom:1px solid var(--border); padding:11px 14px; text-align:left; vertical-align:top; }
+th { font:600 9.5px/1.3 var(--font-ui); letter-spacing:.16em; text-transform:uppercase; color:var(--muted); white-space:nowrap; }
+.meta { margin-top:14px; font-size:13px; }
+.meta summary { cursor:pointer; color:var(--muted); font:400 12px var(--font-mono); }
+.meta dl { display:grid; grid-template-columns:130px 1fr; gap:5px 14px; padding:16px; background:var(--surface); border:1px solid var(--border); border-radius:14px; }
+.meta dt { color:var(--accent); font:400 11.5px var(--font-mono); }
+.meta dd { margin:0; color:var(--muted); font:400 11.5px var(--font-mono); overflow-wrap:anywhere; }
+figure { margin:26px 0; text-align:center; }
+figure svg, figure .mermaid { max-width:100%; height:auto; }
+figure .mermaid { background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:22px 12px; overflow:auto; color:var(--muted); }
+figcaption { margin-top:10px; color:var(--muted); font:400 12.6px/1.5 var(--font-ui); font-style:normal; max-width:74ch; margin-left:auto; margin-right:auto; }
+.phase { margin:30px 0; padding:22px 26px; border:1px solid var(--border); border-radius:20px; background:var(--surface); }
+.phase > h3 { margin-top:0; }
+.checklist { list-style:none; padding:0; }
+.checklist li { padding:4px 0; }
+.status { color:var(--accent); margin-right:5px; font:400 12px var(--font-mono); }
+.loop { margin-top:16px; padding:12px 16px; border-left:2px solid var(--accent); background:var(--accent-soft); border-radius:0 12px 12px 0; font-size:13.6px; }
+.card { margin:14px 0; padding:14px 18px; background:var(--surface-soft); border:1px solid var(--border); border-radius:14px; font-size:13.6px; }
+.card.rule { border-left:2px solid var(--accent); border-radius:0 14px 14px 0; background:var(--accent-soft); }
+.card.warn { border-left:2px solid var(--warn); border-radius:0 14px 14px 0; }
+.card.danger { border-left:2px solid var(--danger); border-radius:0 14px 14px 0; }
+.card.good { border-left:2px solid var(--good); border-radius:0 14px 14px 0; }
+.tag { display:inline-block; margin-right:6px; padding:3px 8px; border-radius:6px; font:500 10px var(--font-mono); text-transform:uppercase; letter-spacing:.06em; background:var(--surface-soft); border:1px solid var(--border); color:var(--muted); }
+.tag.new { background:var(--accent-soft); border-color:rgba(242,106,27,.34); color:var(--accent); }
+.tag.owner { background:rgba(226,178,92,.14); border-color:rgba(226,178,92,.34); color:var(--warn); }
+.tag.dir { background:rgba(95,207,142,.12); border-color:rgba(95,207,142,.30); color:var(--cool); }
+.files ul { list-style:none; padding:0; }
+.files li { padding:6px 0; border-bottom:1px solid var(--border); }
+.taskmeta th { width:190px; text-transform:none; letter-spacing:0; font-size:12.5px; color:var(--fg); font-weight:600; }
+#questionables details,#amendments details { margin:10px 0; padding:2px 18px; background:var(--surface); border:1px solid var(--border); border-radius:14px; }
+#questionables summary,#amendments summary { cursor:pointer; font:600 14.6px/1.45 var(--font-ui); padding:14px 0; }
+.qa-answer { margin:10px 0 2px; color:var(--muted); font-size:13.6px; }
+.qopen { color:var(--warn); font:500 10px var(--font-mono); letter-spacing:.06em; margin-right:6px; }
+.qdecided { color:var(--good); font:500 10px var(--font-mono); letter-spacing:.06em; margin-right:6px; }
+.recommend { display:block; margin:10px 0; padding:10px 14px; border-left:2px solid var(--cool); background:rgba(95,207,142,.08); border-radius:0 10px 10px 0; }
+.decided { display:block; margin:10px 0; padding:10px 14px; border-left:2px solid var(--good); background:rgba(95,207,142,.10); border-radius:0 10px 10px 0; }
+.consequence { display:block; margin:10px 0; padding:10px 14px; border-left:2px solid var(--warn); background:rgba(226,178,92,.09); border-radius:0 10px 10px 0; }
+.measured { display:block; margin:10px 0; padding:10px 14px; border-left:2px solid var(--accent); background:var(--accent-soft); border-radius:0 10px 10px 0; }
+.serves { margin:0 0 8px; }
+code.serves { color:var(--cool); background:rgba(95,207,142,.10); font-size:11px; }
+code.inv { color:var(--accent); } code.ac { color:var(--good); }
+.mockup { margin:22px 0; }
+.mockup-frame { background:#DAF1DE; color:#051F20; border:1px solid var(--border); border-radius:20px; overflow:hidden; text-align:left; box-shadow:0 10px 30px rgba(0,0,0,.28); }
+.mockup-frame .mbar { background:#C6E4CF; padding:9px 14px; border-bottom:1px solid #8EB69B; font:400 11px var(--font-mono); color:#235347; }
+.mockup-frame .mbody { padding:20px 24px; font:400 14px/1.7 var(--font-ui); }
+.mockup-frame h6 { margin:0 0 6px; font:800 19px/1.1 var(--font-ui); letter-spacing:-.028em; color:#051F20; }
+.mockup-frame .meyebrow { font:600 10px/1 var(--font-ui); letter-spacing:.2em; text-transform:uppercase; color:#A8480E; display:block; margin-bottom:8px; }
+.mockup-frame .mstep { margin:0 0 16px; }
+.mockup-frame .mnum { display:inline-block; width:22px; height:22px; line-height:22px; text-align:center; border-radius:6px; background:#051F20; color:#DAF1DE; font:600 10px var(--font-mono); margin-right:9px; }
+.mockup-frame pre.mcmd { background:#C6E4CF; color:#051F20; border:1px solid #8EB69B; font:400 12px/1.6 var(--font-mono); padding:11px 14px; margin:9px 0 6px; border-radius:12px; }
+.mockup-frame .mnote { color:#235347; font-size:13px; }
+.mockup-frame .mcurtain { border-left:2px solid #A8480E; background:rgba(168,72,14,.10); border-radius:0 12px 12px 0; padding:11px 15px; font-size:12.6px; color:#235347; margin:10px 0; }
+.mockup-frame .mcurtain b { color:#051F20; }
+@media (max-width:720px) { main { padding:28px 14px 130px; } .meta dl { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>Plan: AWSF v2 W12 — The non-technical cheatsheet</h1>
+  <p class="sub">Workstream W12 of <a href="awsf-v2-plan.html">the AWSF v2 spine</a> · milestone M12 · <strong>one document, and the factory's graduation</strong></p>
+  <details class="meta">
+    <summary>Metadata</summary>
+    <dl>
+      <dt>created</dt><dd>2026-08-27</dd>
+      <dt>modified</dt><dd>2026-08-27, 2026-08-27, 2026-08-27</dd>
+      <dt>commits</dt><dd>none — authoring only; no implementation code was written, none — first owner review applied, none — second owner review applied; the plan, its build prompts and its ticket set land in this commit</dd>
+      <dt>agent name</dt><dd>claude-opus-5</dd>
+      <dt>session id</dt><dd>not recorded — AGENTS.md invariant 1 keeps live session state out of every committed file in this repository</dd>
+      <dt>back refs</dt><dd>./awsf-v2-plan.html (spine milestone M12, the In Plain Language register, Shared Invariants and Constraints), ./tickets/awsf-v2-plan/W12.md (meta-prompt), ./awsf-v2-plan-build-prompts.md (§ Section B → W12), ./awsf-v2-candidates-fuse-version.md (§10 first, then §2.6 and the DR7 row of §1), ./awsf-v2-w01-marimba-contract.html (the driving role this document teaches), ./awsf-v2-w02-evidence-readability.html (the dashboard the graduation run rebuilds), ./awsf-v2-w03-awsf-init.html, ./awsf-v2-w07-quota-telemetry.html, ./awsf-v2-w08-publish.html, ./awsf-v2-w11-five-stage-ladder.html, ./tickets/awsf-v2-w11-five-stage-ladder/README.md (T01's measured stop list, inherited), ../README.md, ../AGENTS.md (invariants 1, 10), ../docs/driving/ (the agent-facing tree this document must not duplicate), ../core/test/unit/meta/doc-reconciliation.test.ts, ../core/src/cli/main.ts, ../core/src/state/task-machine.ts, ../core/src/state/tiers.ts, ../awsf.config.yaml, owner-side reference: "Factory Body Mind — Technical Reference" (§08 and §19; outside this repository)</dd>
+      <dt>forward refs</dt><dd>./awsf-v2-w12-cheatsheet-build-prompts.md, ./tickets/awsf-v2-w12-cheatsheet/ (T01–T23 plus README.md)</dd>
+    </dl>
+  </details>
+</header>
+
+<figure>
+  <pre class="mermaid">
+flowchart LR
+  A["M1 · friction log<br/>drive it with no guide"] --> C
+  B["M2 · the fences<br/>six fact classes + structure"] --> C
+  C["M3 · shell + walkthrough<br/>one authored file"] --> D["M4 · behind the curtain<br/>+ figures"]
+  D --> E["M5 · graduation<br/>two real tasks"]
+  E --> F["M6 · close v2"]
+  style A stroke:#F26A1B,stroke-width:2px
+  style B stroke:#5FCF8E,stroke-width:2px
+  style E stroke:#E2B25C,stroke-width:2px
+  </pre>
+  <figcaption>Two independent starts, one join, then the graduation. The friction log is gathered by driving the factory with no document; the fences are built while that happens. One file is authored, with two registers inside it, and it is judged by two real tasks driven end to end through it.</figcaption>
+</figure>
+
+<section id="plain-language">
+  <h2>In Plain Language</h2>
+  <p class="sub">This section explains the whole plan without technical vocabulary. Everything after it says the same things precisely, for the people — and machines — building it.</p>
+
+  <h3>What this is about</h3>
+  <p>There is a machine that takes a job you describe in ordinary words, hands it to an assistant working inside a sealed copy of your project, runs your own checks on whatever comes back, and then holds the result in a waiting room until a person personally signs for it. It works. One person knows how to drive it, and that person built it.</p>
+  <p>This is the plan for the guide that lets somebody else drive it — and, at the same time, the plan for putting the machine through its own final exam.</p>
+  <p>The guide is <strong>one file</strong> with two halves inside it. The <strong>front half</strong> is a walked route: six steps, plain words, no jargon, from a computer with nothing installed to the moment a human signature is required. You never type anything to the machine yourself — you talk to an assistant that drives it for you, and the guide teaches you what to ask for and how to read what comes back. The <strong>back half</strong> lifts the curtain: what that assistant actually did on your behalf, which stages the work passed through, which checkpoint decided what, and what each thing costs.</p>
+
+  <h3>Why now, and the thing we found while looking</h3>
+  <p>The guide comes last because the thing it describes had to stop changing first. Four separate pieces of work each added or altered something a reader would use. All four are finished, so the ground has stopped moving.</p>
+  <p>Then, while writing this plan, something turned up that changed it. <strong>Three facts written down in this project are simply wrong</strong> — not opinions, countable things. The front page says the machine tracks ten stages; it tracks eleven. It says twenty-five connections between them in one place and twenty-four in another; there are twenty-seven. A note at the top of a safety script says it blocks six actions; the script itself blocks seven.</p>
+  <p>None of those were sloppy. Each was true when written, and then something was added and the sentence stayed behind. Nobody noticed, because the existing automatic check only asks <em>"does this instruction exist?"</em> — it has no opinion about a count, or about something missing entirely.</p>
+  <p><strong>And one of the wrong numbers has already spread.</strong> The "six actions" from that stale note was copied, as if true, into a second document. Nobody transcribed a mistake; something read a stale line and believed it. That is not a hypothetical argument about documents going out of date. It is the thing happening, in this project, right now, twice over.</p>
+
+  <h3>What we are building</h3>
+  <p>Think of the guide as a route card for a building. Not a floor plan of every room — one walked route, with a note at each place a person actually gets stuck, written by watching somebody get stuck there. The back half is then a set of labelled panels along that route, each showing the machinery behind that particular stretch of wall.</p>
+  <p>The order is what makes it earn its keep:</p>
+  <ol>
+    <li><strong>Drive the machine first, with no guide at all</strong>, and write down every single time you have to go and look something up somewhere else in order to carry on. Each of those is a place the guide will have to answer.</li>
+    <li><strong>At the same time, build the checks</strong> — and make them stronger than the ones that missed those three wrong facts. The new rule is that the guide's list of stages must be <em>exactly the same</em> as the machine's real list. Not a subset. Exactly. So if the guide invents something, the check fails — and if the guide is <em>missing</em> something, the check fails too. Add a new stage to the machine next year and the whole thing goes red until somebody updates the guide. <strong>That is how you promise "this covers everything" and can actually prove it.</strong></li>
+    <li><strong>Then write it.</strong> Both halves, into one file.</li>
+    <li><strong>Then take the exam.</strong> Drive two real, useful jobs all the way through the machine using nothing but the guide.</li>
+  </ol>
+  <p>An earlier draft of this plan had the guide existing twice — a plain text version and a designed one — with a program to build the second from the first and a check to keep them matching. That whole apparatus is gone. There is <strong>one designed file</strong>, written by hand, and nothing generated. One file cannot disagree with itself, and a program that does not exist cannot go wrong. The plan lost a chunk of work and gained a guarantee. The file loads nothing from the internet, so it opens on any computer, offline — which also happens to solve the awkward question of how somebody reads the guide before they have installed anything.</p>
+
+  <h3>How we know it worked</h3>
+  <p>It worked if two real jobs go all the way through the machine, driven by a person following the guide and nothing else, each reaching the signature with everything that signature needs.</p>
+  <p><strong>There is a catch, and it is written into the plan rather than hidden in it.</strong> The person driving is the person who built the machine. He cannot be surprised by his own work, so he cannot prove the guide is understandable to a newcomer. What he <em>can</em> prove is narrower and still worth having: every time he has to look something up outside the guide, that is a hole, and holes do not care who found them.</p>
+  <p><strong>Doing it twice buys something one run could not.</strong> The number of times he has to look elsewhere should drop between the first job and the second. If it does not drop, the guide is not teaching anything, and that is a finding about the guide rather than about him. If it drops to nothing, we check whether he was reading it or remembering it, and write down which. The guide is deliberately not edited between the two runs — otherwise the difference would be measuring the edit.</p>
+  <p>Underneath all that, several things are checked by machine instead of by anyone's judgement: every instruction the guide shows really exists; the six things it claims to cover completely really are complete, checked in both directions; the guide's contents list matches its actual sections; it really does open with the internet switched off; and it really does say, before showing a single instruction, that you are not meant to type any of them.</p>
+  <p>Three things are deliberately left out, and each is written down rather than assumed. <strong>The guide changes nothing about the machine</strong> — anything a reader needed that does not exist yet is handed to whoever owns that part, named, and left undone here. <strong>The guide does not plan the exam's two jobs</strong> — the machine plans them, because that is the entire point of the exam. And <strong>nothing goes in the back half that cannot be checked automatically</strong>. If some part of the machine has no way to be checked, that is a finding about the machine, and the honest answer is to say so rather than write the section anyway and hope.</p>
+</section>
+
+<section id="purpose">
+  <h2>Purpose</h2>
+  <p>Produce the document that lets a person drive this factory through <a href="awsf-v2-w01-marimba-contract.html">marimba</a> — describing what they want rather than typing commands — and that also shows them what marimba did on the other side of the curtain. <strong>One file, two registers</strong>: a plain walkthrough a person follows, and a reference that shows the mechanism, every fact class of it bound to its source by a test.</p>
+  <p>W12 is last in v2 because every command it describes had to stop moving first. W03, W07, W08 and W11 all read <code>[x]</code>, so the surface is settled. <strong>It is also the factory's graduation.</strong> The owner drives two real tasks through the factory by following this document, and what those runs need is what the document has to contain.</p>
+</section>
+
+<section id="problem">
+  <h2>Problem</h2>
+  <p>Three problems, and the third is the one that decided how the document is checked.</p>
+
+  <h3>One — "every command and flow" has no finish line</h3>
+  <p>Taken literally it produces a second copy of the routed command tree, a tree that already has an owner. Two documents claiming one truth drift apart at the first change, and this repository has already paid to learn that: invariant 12 exists solely because a plan and its tickets could disagree. Acceptance therefore stays a <strong>walkthrough</strong>. The owner's review asked for the behind-the-curtain half anyway and asked for it to be complete, which means the drift objection has to be answered mechanically rather than by refusing the content. <strong>That answer is the third problem below.</strong></p>
+
+  <h3>Two — the test that catches an invented command is partly blind</h3>
+  <p><code>doc-reconciliation.test.ts</code> extracts commands with <code>/(?:^|\s)awsf (db rebuild|[a-z]+)\b/</code>. It sees <code>awsf land TASK</code> and <code>just awsf land TASK</code>. It does <strong>not</strong> see <code>npm run awsf -- land TASK</code>, because the token after <code>awsf </code> is <code>--</code>. Measured 2026-08-27:</p>
+  <pre><code>"npm run awsf -- land TASK"    CLI: []        JUST: []
+"just awsf land TASK"          CLI: ['land']  JUST: ['awsf']
+"awsf land TASK"               CLI: ['land']  JUST: []</code></pre>
+  <p><code>README.md</code>'s install, usage and verification blocks are written entirely in the invisible form, so <strong>every <code>awsf</code> command in the README is checked by nothing today</strong>, and the test passes because it finds nothing to check.</p>
+
+  <h3>Three — documents in this project go stale silently, and it has already happened three times</h3>
+  <p>Measured while authoring, not assumed. Every number below came from an export or from the script itself.</p>
+  <table>
+    <thead><tr><th>Fact</th><th>What the code says</th><th>What a document says</th><th>Where</th></tr></thead>
+    <tbody>
+      <tr><td>lifecycle states</td><td><strong>11</strong> — <code>TASK_STATES</code>, including <code>PUBLISHED</code></td><td>10 / "Ten"</td><td><code>README.md</code>, both the diagram label and the prose</td></tr>
+      <tr><td>legal edges</td><td><strong>27</strong> — <code>LEGAL_EDGES</code></td><td>24 in the diagram, "twenty-five" in the prose</td><td><code>README.md</code>, <em>disagreeing with itself</em></td></tr>
+      <tr><td>owner acts</td><td><strong>7</strong> — the verb loop at line 118</td><td>"one of the six acts"</td><td><code>docs/driving/marimba/delegation-guard.sh</code> header</td></tr>
+    </tbody>
+  </table>
+  <div class="card danger">
+    <h5>The stale fact reproduced itself in a second document</h5>
+    The guard's "six" is repeated verbatim in the owner's external technical-reference document, whose W01 row reads <em>"the six owner-act command shapes"</em>. Nobody transcribed a wrong number; a session read a stale comment and believed it. <strong>That is the drift argument demonstrated rather than asserted</strong>, and it is why the behind-the-curtain half cannot be hand-written and merely reviewed. It has to be joined to its source by a test.
+  </div>
+  <p><code>PUBLISHED</code> arrived with W08 and <code>publish</code> arrived with it in the guard. Both landed correctly; both left a document behind. The existing fence caught neither, because <strong>it checks that named commands exist and nothing else</strong> — it has no opinion about a count, a state list, or a missing entry.</p>
+  <figure>
+    <pre class="mermaid">
+flowchart TD
+  SRC["the source<br/>TASK_STATES · LEGAL_EDGES · guard verbs"] --> R{"what checks<br/>the document?"}
+  R -->|"command NAMES only"| OLD["existing fence<br/>caught none of the three"]
+  R -->|"nothing at all"| COUNTS["counts · state lists · gate lists"]
+  COUNTS --> DRIFT["README stale · guard header stale"]
+  DRIFT --> PROP["copied into a second document<br/>as if it were true"]
+  style DRIFT stroke:#F08A72,stroke-width:2px
+  style PROP stroke:#F08A72,stroke-width:2px
+    </pre>
+    <figcaption>The gap is not that documents are unchecked — it is that only one class of fact is checked. A name that exists passes; a count that is wrong, a state that is missing, and an act that was added all pass too.</figcaption>
+  </figure>
+</section>
+
+<section id="solution">
+  <h2>Solution</h2>
+  <p>Keep the walkthrough as acceptance. Answer the drift objection with <strong>set equality against the source, per class of fact, in both directions</strong>. And author <strong>one file</strong>, so there is nothing for a second copy to drift from.</p>
+
+  <h3>The document has two halves, and only one of them is written in plain language</h3>
+  <p>The <strong>walkthrough half</strong> is six legs a person follows: install, prime, ask marimba for one job, watch it, read a refusal, stop at the act only a person may perform. No acronyms, no state names, no ids. The <strong>reference half</strong> is behind the curtain: what marimba invoked, which states the work passed through, which gate decided what, what each act costs. It is written for a reader who wants to look, and it is the half the fences bind.</p>
+
+  <h3>Six fact classes, set-equal to their sources, both directions</h3>
+  <p>This is what turns <em>"document everything the factory can do"</em> from an unbounded promise into a test. For each class, the document's set and the source's set must be <strong>equal</strong> — so an invented entry fails, and a <strong>missing</strong> entry fails too. A lifecycle state added next year makes the suite red until the document mentions it.</p>
+  <table>
+    <thead><tr><th>Class</th><th>Source of truth</th><th>Extracted from</th></tr></thead>
+    <tbody>
+      <tr><td>Commands</td><td><code>CLI_COMMANDS</code></td><td><code>core/src/cli/main.ts</code> — an exported frozen array</td></tr>
+      <tr><td>Lifecycle states</td><td><code>TASK_STATES</code></td><td><code>core/src/state/task-machine.ts</code> — exported, 11 entries</td></tr>
+      <tr><td>Legal edges</td><td><code>LEGAL_EDGES</code></td><td>same file — exported, 27 entries</td></tr>
+      <tr><td>Owner acts</td><td>the guard's verb loop</td><td><code>docs/driving/marimba/delegation-guard.sh</code> — <strong>the loop, never the header</strong></td></tr>
+      <tr><td>Workflows and gates</td><td>the loaded configuration</td><td><code>awsf.config.yaml</code>, read through the loader rather than parsed by hand</td></tr>
+      <tr><td>Risk tiers and ceilings</td><td><code>TIERS</code>, <code>DEFAULT_CALL_CEILINGS</code></td><td><code>core/src/state/tiers.ts</code> — exported</td></tr>
+    </tbody>
+  </table>
+  <div class="card rule">
+    <h5>Why this is stronger than what was originally planned, and why it is affordable</h5>
+    The first draft of this plan proposed one fence: every command the document names must exist. That would have caught <strong>none of the three stale facts measured above.</strong> Set equality catches all three, catches the next one automatically, and costs six extractors and twelve assertions — because every source is already an export or a loaded config. <strong>Nothing here parses prose or guesses.</strong> Each class is marked in the document with a machine-readable attribute, so extraction from the document is exact rather than a prose scan.
+  </div>
+
+  <h3>One authored file, and nothing generated</h3>
+  <p>The document is <code>docs/cheatsheet.html</code>: hand-authored, self-contained, themed in both modes, with a sticky index and hand-drawn figures. <strong>There is no markdown twin and no renderer.</strong> An earlier draft proposed authoring markdown and generating the HTML from it, with a rebuild-and-compare test to keep them honest; the owner took the stronger option instead — <strong>one file cannot drift from itself, and a generator that does not exist cannot emit a non-deterministic byte.</strong> The plan lost a milestone's worth of work and gained a guarantee.</p>
+  <p>Two things the vanished generator was doing still need doing, and both become fences instead of code. The index was going to be generated from the headings; it is now hand-written and held to the sections by <strong>set equality</strong>, the same shape as the six fact classes. And the file was going to be self-contained by construction; it is now self-contained by assertion — no external reference of any kind, so it opens on a machine with nothing installed and no network. <strong>That last property is also the answer to how the reader gets the document in the first place.</strong></p>
+  <figure>
+    <pre class="mermaid">
+flowchart LR
+  DOC["docs/cheatsheet.html<br/>one authored file"] --> F1["commands resolve"]
+  DOC --> F2["six classes set-equal"]
+  DOC --> F3["index = sections"]
+  DOC --> F4["no external reference"]
+  SRC["exports · loaded config · guard loop"] -.->|"joined by test"| F2
+  style DOC stroke:#F26A1B,stroke-width:2px
+  style F2 stroke:#5FCF8E,stroke-width:2px
+    </pre>
+    <figcaption>Four fences over one file. Nothing is generated, nothing is duplicated, and every claim the document makes about the factory is joined to the thing it describes rather than to a review.</figcaption>
+  </figure>
+
+  <h3>The reader does not type the commands, and the document says so before it shows one</h3>
+  <p>Because the reader drives a session rather than a terminal, the commands in this document are mostly <em>illustrative of what marimba runs</em>. An earlier draft banned command-shaped text from prose entirely, on the grounds that a reader who cannot tell an example from a sentence will type both. <strong>The owner's answer removes the premise:</strong> the document states up front that these are not for typing, so prose keeps the exemption the driving tree already grants it, and the warning carries the weight the ban was carrying.</p>
+  <p>A warning that a later edit could quietly delete would be worse than the ban it replaced, so <strong>the warning is itself asserted</strong>: it must exist, and it must appear before the document's first command block.</p>
+</section>
+
+<section id="scope">
+  <h2>What This Builds, and What It Refuses to Build</h2>
+
+  <h3>Why acceptance is still a walkthrough, even though the document is now larger</h3>
+  <div class="card rule">
+    <h5>The review expanded the content and kept the acceptance test, and those are separable</h5>
+    <ol>
+      <li><strong>Coverage as acceptance is still refused.</strong> "Complete" is not a finish line a session can check by reading. The finish line stays: real tasks go through the factory, driven by a person following this document.</li>
+      <li><strong>Coverage as content is now funded, because it became checkable.</strong> The six set-equality fences make completeness a mechanical property of six named classes rather than an unbounded claim about everything. <strong>The rejected thing was an unbounded promise; what is being built is a bounded, tested one.</strong></li>
+      <li><strong>Duplication is prevented by joining, not by omitting.</strong> The reference half restates facts that live elsewhere, and every one is tied to its source by a test that fails in both directions. A restatement that cannot drift is a rendering, not a second owner.</li>
+    </ol>
+  </div>
+
+  <h3>Six things this workstream will be tempted to build, and where each one goes instead</h3>
+  <table>
+    <thead><tr><th>Temptation</th><th>Why it is tempting</th><th>Where it goes</th></tr></thead>
+    <tbody>
+      <tr><td>A hand-written command table in the reference half</td><td>It is one paste away and it looks complete.</td><td><strong>Only behind a fence.</strong> Any fact class without a set-equality test is the rejected shape. If a class cannot be extracted, it is not documented.</td></tr>
+      <tr><td>A markdown copy of the cheatsheet, "for reading in the repository"</td><td>Every other document here is markdown, and a diff of an HTML file is unpleasant.</td><td><strong>Nowhere.</strong> Q10 decided one file. A second copy is exactly the drift this workstream exists to prevent, and it would arrive wearing a convenience argument.</td></tr>
+      <tr><td>A starter <code>awsf.project.yaml</code> template so a brand-new project can be registered</td><td>W11 measured that two of five stage boundaries are crossed by hand-authoring a protected file.</td><td><strong>W03.</strong> Record the stop, route the request, and keep the walkthrough scoped to this checkout per Q6.</td></tr>
+      <tr><td>A new read-only command that prints "what to do next"</td><td>W11 landed <code>awsf stage</code>; a friendlier one feels small.</td><td><strong>W11, or nowhere.</strong> <code>INV-7</code> forbids adding or changing a command here.</td></tr>
+      <tr><td>Fixing the README's stale lifecycle numbers quietly</td><td>They are wrong and they are two lines.</td><td><strong>Inside this workstream, but recorded.</strong> T06 repairs them with the measurement that shows they were wrong. What is forbidden is narrowing a matcher instead.</td></tr>
+      <tr><td>Planning the tasks the graduation runs will drive</td><td>The runs need work, and specifying it feels like preparation.</td><td><strong>The factory plans them.</strong> That is the demonstration. W12 supplies a request per run, not a plan — if W12 plans the task, the run proves nothing about the factory.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>The acceptance test has no external subject, and the plan says so rather than working around it</h3>
+  <p>The owner answered Q1 as <em>no such reader exists</em> and Q9 as <em>owner acts as reader, limit stated</em>. So the graduation runs are driven by the person who built the factory, and <strong>that person cannot be surprised by it.</strong> Pretending otherwise would be the exact defect the whole v2 spine was written to correct.</p>
+  <div class="card warn">
+    <h5>What an author-driven run can still measure, and it is more than it first appears</h5>
+    The owner cannot measure <em>"did I have to ask?"</em>. He can measure something observable and nearly as sharp: <strong>every time he consults anything other than this document in order to proceed</strong> — the source, the plan, a previous transcript, or his own memory of how it works. Each consultation is a place the document was insufficient, it is recorded when it happens, and it does not depend on being surprised. <strong>That converts an unrunnable test into a runnable one</strong>, and it is what M1 and M5 both measure.
+    <br><br><strong>Two runs give it a second dimension.</strong> Consultations should fall between the first graduation task and the second. If they do not, the document is not being learned from — and if they fall to zero because the driver has memorised it rather than read it, that is visible too and gets recorded rather than counted as success.
+    <br><br>The residual limit is real and stated: an author-driven run cannot prove the document is <em>comprehensible</em> to somebody new. Only a second reader can, and Q7 defers that rather than faking it.
+  </div>
+</section>
+
+<section id="inherited">
+  <h2>The Friction Log Starts Non-Empty</h2>
+  <p>The spine's cheapest unused upgrade was to attempt the walkthrough <em>before v2 changed anything</em>. <strong>That half has expired</strong> — seven workstreams have landed since — and reporting a run against today's factory as that baseline would be a fabricated measurement. What survives is the ordering, and it was nearly all of the value: <strong>drive it first, write second.</strong></p>
+  <p>It does not start from zero. W11's T01 drove a throwaway project through all five stages on 2026-08-26 and recorded what a person hits.</p>
+  <table>
+    <thead><tr><th>Inherited from W11 T01</th><th>What it does to the reader</th></tr></thead>
+    <tbody>
+      <tr><td>Two of the four inter-stage boundaries are crossed by hand-authoring and committing a file. No command produces an <code>awsf.project.yaml</code>.</td><td><strong>A hard stop</strong> for a greenfield project — and the measured reason Q6 was decided as this checkout rather than a new one.</td></tr>
+      <tr><td>The configuration <code>awsf init</code> writes enables only <code>intake</code>, declares zero agents, and names no adapter any later stage can reach.</td><td>A hard stop one step later: a recognised project that can run nothing.</td></tr>
+      <tr><td><code>awsf init</code> runs <code>git init</code> with no <code>-b</code>, so the branch is the machine default — measured <code>master</code> — while the catalog usually says <code>main</code>.</td><td>A silent mismatch that surfaces later as a confusing refusal.</td></tr>
+      <tr><td>The owner-typed <code>awsf run</code> cannot reach the zero-quota stub route: <code>adapters.stub</code> is <code>kind: fixture</code> and the production binding answers <code>null</code> on purpose.</td><td><strong>Decides what the walkthrough costs.</strong> If the guide's worked example cannot be free, the document must say so before the reader starts.</td></tr>
+      <tr><td>With no configured gates, the <code>tests</code> phase records <code>"all configured commands passed"</code> with <code>"commands":[]</code>.</td><td>A vacuous green a reader will take as proof their code works. The document has to name it or it teaches false confidence.</td></tr>
+      <tr><td>One task's journal measured 793,310 bytes, 59.8% repeated configuration snapshots.</td><td>Shapes what "watch it" can honestly mean: the dashboard, not the journal.</td></tr>
+    </tbody>
+  </table>
+  <p>Plus the three stale facts measured while authoring this plan, which are friction of a different kind — <strong>a reader who consults the README to understand the lifecycle is currently misled</strong>, and the fences are what fix it.</p>
+</section>
+
+<section id="mechanical">
+  <h2>The Mechanical Half</h2>
+  <p>The spine's requirement: <em>"A cheatsheet that names a command the factory does not have fails a test, not a review."</em> The owner's review raised the bar: a cheatsheet that <em>omits</em> something the factory does have should also fail. Five legs make both true, over one file.</p>
+
+  <h3>Leg one — see all three invocation forms</h3>
+  <p>Normalizing <code>npm run awsf -- X</code> and <code>just awsf X</code> to <code>awsf X</code> ahead of the existing matcher closes the blind spot in one place, for every document the fence already covers. Its first effect is on the README, not on the cheatsheet.</p>
+  <div class="card danger">
+    <h5>The suite may go red on a file this workstream did not write, and that is the point</h5>
+    <strong>Record every offender before changing anything, and never narrow the matcher to restore green.</strong> A narrowed matcher looks exactly like a test fix and leaves a weaker guarantee than the one it replaced.
+  </div>
+
+  <h3>Leg two — six fact classes, set-equal in both directions</h3>
+  <p>Each class extracts a set from the source and a set from the document, and asserts equality. <strong>Both failure directions must be proven by induction</strong>: remove an entry from the document and watch it go red; add an invented one and watch it go red. A fence proven in only one direction is half a fence, and the missing half is the one that catches staleness.</p>
+
+  <h3>Leg three — commands are checked where they are shown, and prose keeps its exemption</h3>
+  <p>Commands appear in <code>&lt;pre&gt;</code> blocks and every one of them must resolve. Inline <code>&lt;code&gt;</code> in prose is exempt, exactly as the driving tree exempts markdown prose and for the reason its header already gives: a regex over explanatory prose produces false positives that teach authors to stop marking up commands at all. <strong>The residual gap is named and accepted</strong>, and what pays for it is the warning — the document states, before it shows a single command, that the reader does not type these. <strong>That statement is asserted to exist and to precede the first command block</strong>, so it cannot be edited away by someone tidying an introduction.</p>
+
+  <h3>Leg four — the index is set-equal to the sections</h3>
+  <p>With no renderer, the sticky index is hand-written, which makes it the one part of the document that can silently disagree with the rest of it. It is held by the same mechanism as the fact classes: every index entry resolves to a section, and every section has an index entry. A new section without a nav entry fails; a nav entry pointing nowhere fails.</p>
+
+  <h3>Leg five — nothing external, so it opens anywhere</h3>
+  <p>No <code>http</code> or protocol-relative URL, no script source, no external stylesheet, no remote font, no remote image. This is what makes the file a real handover: one attachment, no installation, no network. It is also what the owner's own design rules already require of this family of documents.</p>
+  <figure>
+    <pre class="mermaid">
+flowchart TD
+  X["one extractor<br/>three invocation forms"] --> RDM["README + v1 Validation"]
+  X --> DRV["docs/driving/ fences"]
+  X --> CS["docs/cheatsheet.html"]
+  L2["six classes, set-equal<br/>both directions"] --> CS
+  L3["warning before<br/>the first command block"] --> CS
+  L4["index = sections"] --> CS
+  L5["no external reference"] --> CS
+  SPEC["in-memory specimens<br/>every leg, every direction"] -.->|"proves each bites"| CS
+  style SPEC stroke:#E2B25C,stroke-width:2px,stroke-dasharray:4 3
+  style CS stroke:#F26A1B,stroke-width:2px
+    </pre>
+    <figcaption>Five legs over one file, and one shared extractor. The dashed guard is the only part that works before the document exists, and it is why the other four can be trusted the first time they run.</figcaption>
+  </figure>
+</section>
+
+<section id="files" class="files">
+  <h2>Relevant Files</h2>
+  <p>Every path below was read while authoring this plan.</p>
+
+  <h3>Existing Files</h3>
+  <ul>
+    <li><span class="tag">existing</span> <code>specs/awsf-v2-plan.html</code> — the spine. Milestone M12 is the contract; the In Plain Language section is the register the walkthrough half is written in.</li>
+    <li><span class="tag">existing</span> <code>core/test/unit/meta/doc-reconciliation.test.ts</code> — the fence this workstream extends. Its <code>AWSF_CLI</code> matcher is the measured blind spot; its driving-tree header is the prose-exemption precedent leg three now <em>follows</em> rather than departs from. Its <code>commandText(source, html)</code> path already reads <code>&lt;code&gt;</code> out of the v1 plan, which is the shape the cheatsheet's scanner extends.</li>
+    <li><span class="tag">existing</span> <code>core/test/unit/meta/_driving.ts</code> — the vacuous-until-it-lands warning that the specimens answer, and the junk-drawer caution: no tracked basename may contain <code>receipt</code> or <code>manifest</code>.</li>
+    <li><span class="tag">existing</span> <code>core/src/cli/main.ts</code> — <code>CLI_COMMANDS</code>, 23 entries, <code>db rebuild</code> the sole two-word command. Fact class one.</li>
+    <li><span class="tag">existing</span> <code>core/src/state/task-machine.ts</code> — <code>TASK_STATES</code> (11) and <code>LEGAL_EDGES</code> (27). Fact classes two and three, and the source the README currently disagrees with.</li>
+    <li><span class="tag">existing</span> <code>core/src/state/tiers.ts</code> — <code>TIERS</code>, <code>DEFAULT_CALL_CEILINGS</code>, <code>MAX_CALL_CEILING</code>. Fact class six.</li>
+    <li><span class="tag">existing</span> <code>awsf.config.yaml</code> — workflows and gates, read through <code>core/src/config/load.ts</code> rather than parsed by hand. Fact class five. Protected: no agent writes it.</li>
+    <li><span class="tag">existing</span> <code>docs/driving/marimba/delegation-guard.sh</code> — fact class four. <strong>Read the verb loop at line 118; the header's count is stale.</strong></li>
+    <li><span class="tag">existing</span> <code>docs/driving/skills/awsf/SKILL.md</code> — the agent-facing tree. Its posture rules bind this document too; its routes table is not copied.</li>
+    <li><span class="tag">existing</span> <code>docs/driving/commands/prime-awsf.md</code> — what "prime" means in leg two, and an owner-side installation the reader cannot perform from the repository.</li>
+    <li><span class="tag">existing</span> <code>README.md</code> — the engineer-facing owner of install and verification. Also the file whose <code>awsf</code> commands leg one makes checkable, and whose lifecycle numbers leg two makes red.</li>
+    <li><span class="tag">existing</span> <code>dashboard/</code> — the surface the two graduation tasks change. <strong>W12 does not touch it</strong>; the factory does, driven through the document.</li>
+    <li><span class="tag">existing</span> <code>specs/tickets/awsf-v2-w11-five-stage-ladder/README.md</code> — W11 T01's measured run, and the precedent for recording findings in a ticket README rather than a committed report file.</li>
+    <li><span class="tag">existing</span> <code>AGENTS.md</code> — invariants 1 and 10 directly in scope; 2, 11 and 12 govern markers, commits and tickets.</li>
+    <li><span class="tag owner">owner-side</span> <em>"Factory Body Mind — Technical Reference"</em>, outside this repository — §19's extension template and design rules (Forest ramp, dot language, inline SVG, offline, a diagram must show a mechanism), and §08 whose W11 and W01 rows are now stale. <strong>Updating it is owner-side and is not a ticket here</strong>; T23 hands over the content and the prompt.</li>
+  </ul>
+
+  <h3>New Files</h3>
+  <ul>
+    <li><span class="tag new">new</span> <code>docs/cheatsheet.html</code> — <strong>the document. One file, hand-authored.</strong> Both halves, the Forest ramp in both themes, a sticky index, hand-drawn figures, self-contained and offline. There is no markdown twin and no generator.</li>
+    <li><span class="tag new">new</span> <code>core/test/unit/meta/cheatsheet-reconciliation.test.ts</code> — all five fence legs and the in-memory specimens that prove each one bites.</li>
+    <li><span class="tag new">new</span> <code>specs/awsf-v2-w12-cheatsheet-build-prompts.md</code> — twenty-three task prompts, Section B.</li>
+    <li><span class="tag dir">dir</span> <code>specs/tickets/awsf-v2-w12-cheatsheet/</code> — <code>T01.md</code>–<code>T23.md</code> plus <code>README.md</code>, which carries the derived-field rules, the friction log and the graduation record.</li>
+  </ul>
+  <div class="card rule">
+    <h5>Three files this workstream deliberately does not create</h5>
+    <strong>No markdown copy of the cheatsheet.</strong> Q10 decided one file, and a second copy is the drift this workstream exists to prevent. <strong>No renderer.</strong> Nothing is generated, so nothing can be non-deterministic. <strong>No report file of any kind</strong> — invariant 10 permits no committed receipt or manifest, and the friction log and graduation record live in the ticket README as W11's capture findings do.
+  </div>
+</section>
+
+<section id="spine">
+  <h2>Identifier Spine</h2>
+  <p>This workstream's claims. Ids are unique per plan, per the spine's decided Q5; a cross-plan reference would be written <code>&lt;plan-stem&gt;#INV-n</code>.</p>
+  <dl>
+    <dt><code class="inv">INV-1</code></dt>
+    <dd>Every command the document shows sits in a command block, and each resolves against <code>CLI_COMMANDS</code>, the root <code>package.json</code> scripts, or a <code>justfile</code> target, in any of the three invocation forms. The document states, <strong>before its first command block</strong>, that the reader does not type these — an assistant does — and that statement is asserted to exist and to precede the first block. Commands named in prose are exempt from the resolution check, and that exemption is what the statement pays for.</dd>
+    <dt><code class="inv">INV-2</code></dt>
+    <dd>The document restates no fact it does not also fence. Every class of fact in the reference half is joined to its source by a set-equality test; a class that cannot be extracted from a source is not documented at all. No fact is carried by review alone.</dd>
+    <dt><code class="inv">INV-3</code></dt>
+    <dd>No live task, attempt, session or run identifier, and no absolute machine path, appears in the document or in any file this workstream commits. Every worked example uses a placeholder that cannot be mistaken for a real id, matching the landed <code>docs/driving/</code> convention.</dd>
+    <dt><code class="inv">INV-4</code></dt>
+    <dd>This workstream commits no runtime report, receipt or manifest file. Its friction log and graduation record live in the ticket set's <code>README.md</code>; raw notes stay outside the repository.</dd>
+    <dt><code class="inv">INV-5</code></dt>
+    <dd>The document never instructs the reader to route around a refusal. It contains no push, no protected-path edit, no hand-written lifecycle or journal repair, and no instruction to bypass a guard, a gate or a terminal check.</dd>
+    <dt><code class="inv">INV-6</code></dt>
+    <dd>Nothing this workstream produces is in the execution path. No gate, transition, guard, reservation or accounting decision depends on the document having been read, and nothing under <code>core/src</code> reads it at runtime.</dd>
+    <dt><code class="inv">INV-7</code></dt>
+    <dd>This workstream adds no CLI command, changes no command's behaviour, and writes no path matched by <code>policy.protected_paths</code>. A friction point that could only be answered by changing the factory is routed to the workstream that owns it. <strong>The tasks the graduation runs drive are planned by the factory, not by this workstream</strong>, which supplies one request per run and nothing more.</dd>
+    <dt><code class="inv">INV-8</code></dt>
+    <dd>The document's index is set-equal to its sections: every index entry resolves to a section that exists, and every section has an index entry. Hand-written navigation is the one part of a single-file document that can silently disagree with the rest of it, so it is held by the same mechanism as the fact classes.</dd>
+    <dt><code class="inv">INV-9</code></dt>
+    <dd>The document is self-contained and opens offline: no CDN, no external script, no remote font, no remote image, no network reference of any kind. It is theme-aware through token variables and every figure is hand-authored inline SVG.</dd>
+    <dt><code class="ac">AC-1</code></dt>
+    <dd>A friction log exists in the ticket README before the document's first sentence, produced by driving the factory with no document, recording every consultation of any source other than the document as a numbered entry. Observed in the commit record: M1's commits precede M3's.</dd>
+    <dt><code class="ac">AC-2</code></dt>
+    <dd>The command extractor resolves all three invocation forms, proven by a specimen in which one command is written all three ways and all three are extracted, and by the test failing when the normalization is removed.</dd>
+    <dt><code class="ac">AC-3</code></dt>
+    <dd>An invented command inside a command block fails the suite in each of the three invocation forms, proven against an in-memory specimen and then once against the real document by inducing the violation and removing it.</dd>
+    <dt><code class="ac">AC-4</code></dt>
+    <dd>The reader warning is load-bearing and is proven so: deleting it makes the suite red, and moving it to after the first command block makes the suite red. A command named in prose does <strong>not</strong> fail, and a specimen proves that too, so the exemption is deliberate rather than accidental.</dd>
+    <dt><code class="ac">AC-5</code></dt>
+    <dd>Every friction-log entry carries exactly one disposition — answered in the document at the point it occurred, routed to a named workstream with the request written, declared owner-side, or accepted as an absence with its reason — and one half. No entry is unclassified and none is silently dropped.</dd>
+    <dt><code class="ac">AC-6</code></dt>
+    <dd>Six fact classes — commands, lifecycle states, legal edges, owner acts, workflows and gates, risk tiers and ceilings — are each set-equal between the document and their source. <strong>Both directions are proven by induction on every class</strong>: removing an entry from the document goes red, and adding an invented one goes red. The sources are exports and the loaded configuration, never prose.</dd>
+    <dt><code class="ac">AC-7</code></dt>
+    <dd>The index fence is proven in both directions: a section with no index entry goes red, and an index entry pointing at no section goes red.</dd>
+    <dt><code class="ac">AC-8</code></dt>
+    <dd>The document contains no external reference — a scan finds no <code>http</code> or protocol-relative resource URL, no script source, no external stylesheet, no remote font and no remote image — and it renders correctly with the machine offline. An injected external reference is proven to go red.</dd>
+    <dt><code class="ac">AC-9</code></dt>
+    <dd><strong>Two real tasks</strong> are driven end to end through the factory by a person following the document, each reaching the owner act with the evidence that act requires. Every consultation of a source other than the document is recorded verbatim, and each record states plainly that the driver is the factory's author and what that limits the run to proving.</dd>
+    <dt><code class="ac">AC-10</code></dt>
+    <dd>The delta between the two runs is recorded and interpreted: how many consultations each needed, which sections were consulted in the first and not the second, and which were never opened in either. A flat or rising count is a finding about the document; a fall to zero is checked against whether the driver read it or remembered it.</dd>
+    <dt><code class="ac">AC-11</code></dt>
+    <dd>No consultation from either run is left unaddressed. Each is answered in the document, or named in the ticket README as an absence with the workstream that owns it, and the plan's marker reflects which. What the factory produced for each real task is recorded separately from what the document proved.</dd>
+    <dt><code class="ac">AC-12</code></dt>
+    <dd><code>npm test</code>, <code>npm run lint</code> and <code>npm run typecheck</code> are green at close, with suite counts recorded, and no marker reads <code>[x]</code> without the evidence its row names.</dd>
+  </dl>
+</section>
+
+<section id="phases">
+  <h2>Implementation Phases</h2>
+  <p><strong>IMPORTANT:</strong> Execute every phase and task in order, top to bottom — with the one declared exception below.</p>
+  <p>Status markers: <code>[]</code> idle · <code>[wip]</code> in progress · <code>[x]</code> complete · <code>[f]</code> failed. All start as <code>[]</code>.</p>
+  <div class="card rule">
+    <h5>The one place the order forks, and why</h5>
+    <strong>M1 and M2 are independent and neither waits on the other.</strong> M1 needs a person and a session; M2 needs neither. Serializing them idles the mechanical work behind a scheduling problem, and reading a dependency off the task numbers is exactly the mistake W11's ticket README had to write down for its own fork. <strong>M3 is the join.</strong> Everything after it is linear.
+  </div>
+
+  <!-- ================= M1 ================= -->
+  <div class="phase">
+    <h3><code class="status">[]</code> Milestone M1: The friction log — drive it with no document</h3>
+    <p><em>The cheapest unused upgrade, in the only form still available.</em> The owner drives the factory through marimba with no guide, and records every time he consults anything else in order to proceed. Nothing in this milestone writes a sentence for the reader.</p>
+    <figure>
+      <pre class="mermaid">
+sequenceDiagram
+  participant D as driver
+  participant M as marimba
+  participant F as the factory
+  D->>D: freeze the protocol (T01)
+  D->>M: describe a job in words
+  M->>F: invokes commands
+  F-->>M: refusal / evidence / stop
+  M-->>D: reports back
+  D->>D: consulted anything else? record it
+  Note over D,F: every consultation is a friction entry
+  D->>D: classify and route (T03)
+      </pre>
+      <figcaption>The measurement is not surprise, which the factory's author cannot feel. It is consultation: every time the driver reaches for the source, the plan, a transcript or memory, the document was insufficient at that exact point.</figcaption>
+    </figure>
+
+    <h4>1. Freeze the observation protocol, adapted for a driver who cannot be surprised</h4>
+    <p class="serves"><code class="serves">AC-1</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Confirm the owner's twelve decided Questionables and that Q13 is recorded as dissolved rather than open</li>
+      <li><code class="status">[]</code> Write the walkthrough as six numbered legs in the spine's order — install, prime, ask marimba for one job, watch it, read a refusal, stop at an owner act with its evidence — each stating what the driver is asked to <em>achieve</em>, never which command to type</li>
+      <li><code class="status">[]</code> Define a friction entry as <strong>any consultation of a source other than the document in order to proceed</strong>: the source tree, a plan, a previous transcript, the dashboard used as a substitute for an explanation, or unaided memory of how it works</li>
+      <li><code class="status">[]</code> Define the second entry class: anything that behaved differently from what the driver expected, recorded even when the driver knew the reason</li>
+      <li><code class="status">[]</code> State what is recorded — what was consulted, what question it answered, and where on the leg it happened. Not a diagnosis and not a fix</li>
+      <li><code class="status">[]</code> State the limit in writing: an author-driven run cannot prove the document is comprehensible to somebody new, only that it is sufficient to drive with. No later task may report the stronger claim</li>
+      <li><code class="status">[]</code> State that the same protocol runs unchanged in M5, twice, so the two runs are comparable — a protocol adjusted between runs makes the delta meaningless</li>
+      <li><code class="status">[]</code> Commit the protocol to the ticket README before the drive, so it cannot be adjusted once entries start arriving</li>
+    </ul>
+
+    <h4>2. Drive the factory with no document, and record every consultation</h4>
+    <p class="serves"><code class="serves">AC-1</code> <code class="serves">INV-3</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Drive one job end to end through marimba in this checkout, per Q6's decided scope, with no guide open</li>
+      <li><code class="status">[]</code> Record every consultation as it happens, numbered in occurrence order, with the leg it occurred on</li>
+      <li><code class="status">[]</code> Record what marimba invoked at each leg — the commands, the states the work passed through, the gate that decided — because <strong>this is the raw material of the reference half</strong> and it is cheapest to capture while driving</li>
+      <li><code class="status">[]</code> Record where the drive ended, whether or not that is the end of the script</li>
+      <li><code class="status">[]</code> Record every place the factory behaved differently from expectation, including the three stale-document facts if they are encountered in use</li>
+      <li><code class="status">[]</code> Keep raw notes outside this repository; scrub every identifier and absolute machine path before anything lands (<code>INV-3</code>)</li>
+    </ul>
+
+    <h4>3. Classify every entry, and route what needs a change to the factory</h4>
+    <p class="serves"><code class="serves">AC-5</code> <code class="serves">INV-7</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Merge W11 T01's six inherited stops, marked inherited rather than observed, and confirm each against the drive — an inherited stop not hit is a stop that has been fixed, and saying so is a finding</li>
+      <li><code class="status">[]</code> Give every entry exactly one disposition: <strong>document</strong>, <strong>route</strong>, <strong>owner-side</strong>, or <strong>accepted absence</strong></li>
+      <li><code class="status">[]</code> Split every entry into the half it belongs to — walkthrough or reference — because the two are written by different milestones in different registers</li>
+      <li><code class="status">[]</code> For each <strong>route</strong>, name the owning workstream from the spine and write the request in W11 T04's shape — what is missing, why this workstream cannot supply it, what would close it</li>
+      <li><code class="status">[]</code> For each <strong>owner-side</strong>, confirm it against the spine's owner-side list; an owner-side label is how work disappears</li>
+      <li><code class="status">[]</code> Change no code, add no command, write no template. A friction point that needs one is a <strong>route</strong> (<code>INV-7</code>)</li>
+    </ul>
+
+    <h4>4. Testing Strategy</h4>
+    <p>M1 produces evidence rather than code, so its proof is that the record exists, is complete, and is clean. The cleanliness check reuses the repository's existing credential and absolute-path predicates rather than adding a second copy.</p>
+    <p class="serves"><code class="serves">AC-1</code> <code class="serves">INV-4</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> The friction log is in <code>specs/tickets/awsf-v2-w12-cheatsheet/README.md</code>, every entry numbered, one disposition each, one half each</li>
+      <li><code class="status">[]</code> The stated limit on what an author-driven run proves is written in the log, not only in this plan</li>
+      <li><code class="status">[]</code> No report, receipt or manifest file was committed (<code>INV-4</code>)</li>
+      <li><code class="status">[]</code> A grep of this milestone's diff for identifier shapes and absolute machine paths returns nothing</li>
+      <li><code class="status">[]</code> <code>npm run test:unit</code> — the junk-drawer and no-live-state meta-tests pass over the new content</li>
+      <li><code class="status">[]</code> Every <strong>route</strong> entry names a workstream that exists in the spine</li>
+    </ul>
+    <div class="loop">🔁 <strong>Do not exit this milestone until every box is checked.</strong> A consultation that was not written down because it felt obvious is the one defect this milestone can produce, and no later test can find it.</div>
+  </div>
+
+  <!-- ================= M2 ================= -->
+  <div class="phase">
+    <h3><code class="status">[]</code> Milestone M2: The fences — before there is anything to fence</h3>
+    <p><em>Independent of M1 and startable immediately.</em> All five legs land here, over a document that does not exist yet, each shipping with the specimen that proves it bites. Leg one is a repair to an existing test whose first effect is on the README.</p>
+    <figure>
+      <pre class="mermaid">
+flowchart LR
+  SRC["source of truth<br/>exports · loaded config · guard loop"] --> S["set A"]
+  DOC["the document"] --> B["set B"]
+  S --> EQ{"A = B ?"}
+  B --> EQ
+  EQ -->|"equal"| G["green"]
+  EQ -->|"B missing an entry"| R1["RED · the document is stale"]
+  EQ -->|"B has an invented entry"| R2["RED · the document is wrong"]
+  style R1 stroke:#F08A72,stroke-width:2px
+  style R2 stroke:#F08A72,stroke-width:2px
+      </pre>
+      <figcaption>Both failure directions matter and only one was ever checked before. The left-hand red is the one that catches a lifecycle state added next year, and it is the direction all three measured stale facts would have tripped.</figcaption>
+    </figure>
+
+    <h4>5. Normalize the three invocation forms in one extractor</h4>
+    <p class="serves"><code class="serves">AC-2</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Reproduce the gap first: assert the current matcher extracts nothing from <code>npm run awsf -- land TASK</code>, so the repair has a failing test before it has a fix</li>
+      <li><code class="status">[]</code> Normalize <code>npm run awsf -- &lt;rest&gt;</code> and <code>just awsf &lt;rest&gt;</code> to <code>awsf &lt;rest&gt;</code> ahead of the existing match, in one place used by every consumer</li>
+      <li><code class="status">[]</code> Preserve the two-word <code>db rebuild</code> case, and keep <code>just awsf</code> still resolving as a justfile target — both claims are true of that line</li>
+      <li><code class="status">[]</code> Run the widened fence over <code>README.md</code> and the v1 Validation section; record every offender before changing anything</li>
+      <li><code class="status">[]</code> Repair each offender at its owner. <strong>Do not narrow the matcher to restore green</strong></li>
+      <li><code class="status">[]</code> Leave the driving-tree fence's fenced-only scope unchanged; leg one widens what a command looks like, not where prose is read</li>
+    </ul>
+
+    <h4>6. The six fact classes, set-equal in both directions</h4>
+    <p class="serves"><code class="serves">AC-6</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Extract each class from its source: <code>CLI_COMMANDS</code>; <code>TASK_STATES</code>; <code>LEGAL_EDGES</code>; the guard's verb loop; workflows and gates through the config loader; <code>TIERS</code> and <code>DEFAULT_CALL_CEILINGS</code></li>
+      <li><code class="status">[]</code> Read the guard's <strong>loop</strong>, never its header comment, and say so in the extractor's own comment with the measured discrepancy</li>
+      <li><code class="status">[]</code> Read the configuration through <code>core/src/config/load.ts</code> rather than parsing YAML by hand, so the fence cannot disagree with what the factory actually loads</li>
+      <li><code class="status">[]</code> Define one machine-readable marker per class — a data attribute on the element carrying the set — so extraction from the document is exact rather than a prose scan, and write the convention into the test header</li>
+      <li><code class="status">[]</code> Assert set equality per class and make each failure message name the class, the direction, and the differing entries</li>
+      <li><code class="status">[]</code> Repair the README's stale lifecycle numbers as part of this task, recording the measurement that shows they were wrong — the fence makes it mandatory rather than optional</li>
+    </ul>
+
+    <h4>7. Check commands where they are shown, and make the reader warning load-bearing</h4>
+    <p class="serves"><code class="serves">INV-1</code> <code class="serves">AC-3</code> <code class="serves">AC-4</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Add <code>core/test/unit/meta/cheatsheet-reconciliation.test.ts</code>, scoped to <code>docs/cheatsheet.html</code>, with a header stating why it is a separate file from <code>doc-reconciliation.test.ts</code></li>
+      <li><code class="status">[]</code> Assert every command in a command block resolves against <code>CLI_COMMANDS</code>, the root scripts, or a justfile target — using T05's extractor, never a second copy</li>
+      <li><code class="status">[]</code> Leave commands named in prose exempt, and write the reason into the header: the reader drives a session rather than a terminal, so the hazard the ban would have addressed is answered by the warning instead</li>
+      <li><code class="status">[]</code> Assert the reader warning exists and appears <strong>before</strong> the first command block, and make the failure message say what the warning is for</li>
+      <li><code class="status">[]</code> Make the fence fail loudly, not vacuously, when the document is missing — one known path, and its absence is a defect</li>
+    </ul>
+
+    <h4>8. The structure fences: the index, and nothing external</h4>
+    <p class="serves"><code class="serves">INV-8</code> <code class="serves">INV-9</code> <code class="serves">AC-7</code> <code class="serves">AC-8</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Assert set equality between the index entries and the section ids, in both directions, with the failure message naming the direction</li>
+      <li><code class="status">[]</code> Assert the document contains no external reference — no <code>http</code> or protocol-relative URL, no script source, no external stylesheet, no remote font, no remote image</li>
+      <li><code class="status">[]</code> Write into the header why a hand-written index needs a fence at all: it is the one part of a single-file document that can silently disagree with the rest of it</li>
+      <li><code class="status">[]</code> Keep both assertions in the same test file as T07's, and say in the ticket why that serialization is deliberate rather than a dependency</li>
+    </ul>
+
+    <h4>9. Ship the companion specimens, so a vacuous green is impossible</h4>
+    <p class="serves"><code class="serves">AC-3</code> <code class="serves">AC-4</code> <code class="serves">AC-6</code> <code class="serves">AC-7</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Build one in-memory specimen for the command leg: a real command in each of the three invocation forms; an invented command in each; a command named in prose, which must <strong>not</strong> be reported; and the warning both before and after the first command block</li>
+      <li><code class="status">[]</code> Build, per fact class, one synthetic document with a <strong>missing</strong> entry and one with an <strong>invented</strong> entry, and assert each is reported with its direction named — twelve cases</li>
+      <li><code class="status">[]</code> Build two index specimens: a section with no entry, and an entry pointing at no section</li>
+      <li><code class="status">[]</code> Build one external-reference specimen per reference kind the assertion claims to catch</li>
+      <li><code class="status">[]</code> Assert the extractors' exact output, not merely that they found something</li>
+      <li><code class="status">[]</code> State in the header that deleting these tests leaves fences that report green forever, quoting <code>_driving.ts</code>'s own warning as the precedent</li>
+    </ul>
+
+    <h4>10. Testing Strategy</h4>
+    <p>Offline, no network, no quota. Every assertion runs against the repository's tracked files or an in-memory specimen. The milestone's proof is the induced-failure pass on every leg and every class, in both directions.</p>
+    <p class="serves"><code class="serves">AC-2</code> <code class="serves">AC-3</code> <code class="serves">AC-4</code> <code class="serves">AC-6</code> <code class="serves">AC-7</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> <code>npm run test:unit</code> — green with the widened extractor active over the README</li>
+      <li><code class="status">[]</code> Removing the normalization makes leg one red; restoring it returns green (<code>AC-2</code>)</li>
+      <li><code class="status">[]</code> An invented command is reported in all three invocation forms, and a command in prose is not (<code>AC-3</code>, <code>AC-4</code>)</li>
+      <li><code class="status">[]</code> Deleting the warning goes red; moving it after the first command block goes red (<code>AC-4</code>)</li>
+      <li><code class="status">[]</code> <strong>All six classes are proven red in both directions</strong> — twelve induced failures, each observed and recorded (<code>AC-6</code>)</li>
+      <li><code class="status">[]</code> The index fence is proven red in both directions (<code>AC-7</code>)</li>
+      <li><code class="status">[]</code> The README's repaired lifecycle numbers are recorded with the export that measured them</li>
+      <li><code class="status">[]</code> <code>npm run lint</code> and <code>npm run typecheck</code> — exit 0</li>
+    </ul>
+    <div class="loop">🔁 <strong>Do not exit this milestone until every box is checked.</strong> A class proven in only one direction is half a fence, and the missing half is the one that catches staleness.</div>
+  </div>
+
+  <!-- ================= M3 ================= -->
+  <div class="phase">
+    <h3><code class="status">[]</code> Milestone M3: The shell, and the walkthrough half</h3>
+    <p><em>The join.</em> It needs M1's friction log and M2's fences. The shell comes first because with no renderer the document's skeleton has to exist before a sentence can be written into it. Then six legs, in the reader's order, in the spine's In Plain Language register.</p>
+    <figure>
+      <pre class="mermaid">
+flowchart TD
+  S1["1 · install"] --> S2["2 · prime a session"]
+  S2 --> S3["3 · ask marimba for one job"]
+  S3 --> S4["4 · watch it"]
+  S4 --> S5["5 · read a refusal"]
+  S5 --> S6["6 · stop at the signature"]
+  S6 --> OUT["evidence in hand<br/>the person decides"]
+  style S5 stroke:#E2B25C,stroke-width:2px
+  style S6 stroke:#5FCF8E,stroke-width:2px
+      </pre>
+      <figcaption>Six legs, one path. The reader describes a job; marimba types. The two marked legs are the hard ones: a refusal must be readable by someone who did not cause it, and the last leg ends by handing a decision to a person rather than by completing anything.</figcaption>
+    </figure>
+
+    <figure class="mockup">
+      <div class="mockup-frame">
+        <div class="mbar">docs/cheatsheet.html — leg 3 of 6</div>
+        <div class="mbody">
+          <span class="meyebrow">Walkthrough · leg 3</span>
+          <h6>Give it one small job</h6>
+          <p class="mnote"><strong>You will not type any of the commands in this guide.</strong> You describe the job in your own words; the assistant does the typing. Commands are shown so you can see what it did on your behalf.</p>
+          <div class="mstep">
+            <p><span class="mnum">1</span>Tell it what you want.</p>
+            <pre class="mcmd">Prepare a small task: remove the duplicate blank line
+in the generated file, then run it at the lowest risk tier.</pre>
+            <p class="mnote">That is a sentence, not a command. Nothing in your project changes yet — the work happens in a sealed copy that is thrown away if anything goes wrong.</p>
+          </div>
+          <div class="mcurtain">
+            <b>Behind the curtain →</b> three commands run here: the job is registered, a sealed copy is made, and the work starts. The job passes through two of the eleven states the factory tracks. <span style="opacity:.75">Full detail in the reference half, §3.</span>
+          </div>
+          <div class="mstep">
+            <p><span class="mnum">2</span>If it refuses, read the refusal. Leg 5 shows you how.</p>
+          </div>
+        </div>
+      </div>
+      <figcaption>The proposed register, and the join between the two halves. The warning in bold is the one <code>AC-4</code> asserts must appear before any command block. <strong>Illustrative only</strong> — the real legs come from M1's friction log, "eleven states" is fence-bound to <code>TASK_STATES</code>, and every identifier is a placeholder under <code>INV-3</code>.</figcaption>
+    </figure>
+
+    <h4>11. Build the shell: the Forest ramp, both themes, the index, and nothing external</h4>
+    <p class="serves"><code class="serves">INV-9</code> <code class="serves">INV-8</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Create <code>docs/cheatsheet.html</code> with the Forest token block for both themes and the toggle the owner's reference document uses, so the page respects the reader's system setting and remembers an explicit choice</li>
+      <li><code class="status">[]</code> Build the sticky index and the section-head pattern, with one section id per section so the index fence has something exact to join against</li>
+      <li><code class="status">[]</code> Adopt the dot status language for anything that has a state, and never mark something built that is not</li>
+      <li><code class="status">[]</code> Keep it self-contained from the first commit: no CDN, no external script, no remote font, no remote image (<code>INV-9</code>)</li>
+      <li><code class="status">[]</code> Confirm the index fence and the external-reference fence both go green against the shell before any prose is written — the structure is checked before it carries content</li>
+    </ul>
+
+    <h4>12. Write the six legs, in the reader's order, against the friction log</h4>
+    <p class="serves"><code class="serves">AC-5</code> <code class="serves">INV-2</code> <code class="serves">INV-1</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Write the six legs in the order the reader travels them</li>
+      <li><code class="status">[]</code> <strong>Write the reader warning before the first command block</strong> — the reader does not type these; an assistant does — because the prose exemption is paid for by that sentence (<code>INV-1</code>)</li>
+      <li><code class="status">[]</code> Answer each <strong>document</strong> entry assigned to this half at the exact point on the leg where it occurred — not in a gotchas section, which is where an answer goes to be missed</li>
+      <li><code class="status">[]</code> Write it for a person driving marimba: what to ask for, and how to read what comes back. The reader personally performs installation and the owner acts, and nothing else</li>
+      <li><code class="status">[]</code> Give every leg a short behind-the-curtain note that links into the reference half, so the two registers join rather than sit apart</li>
+      <li><code class="status">[]</code> Use <code>TASK</code> and <code>PROJECT</code> as the only placeholders, matching the landed <code>docs/driving/</code> convention (<code>INV-3</code>)</li>
+      <li><code class="status">[]</code> State up front what the walkthrough costs, decided against W11 T01's measured finding about the stub route rather than assumed</li>
+      <li><code class="status">[]</code> Use one small reproducible task as the worked example, per Q12 — the next reader must be able to run the example, and a one-off real task cannot be re-run by them</li>
+    </ul>
+
+    <h4>13. Write the two hard legs: reading a refusal, and stopping at a signature</h4>
+    <p class="serves"><code class="serves">INV-3</code> <code class="serves">INV-5</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Write leg five so a reader can read a refusal they did not cause: what refused, what it was protecting, what was <em>not</em> spent, and what they may now decide</li>
+      <li><code class="status">[]</code> Teach the distinction the whole spine is built on — a thing that stops something, and a record that reports something afterwards — in plain words, because a reader who confuses them trusts the wrong one</li>
+      <li><code class="status">[]</code> Write leg six from the guard's verb loop, and say plainly that these are the acts a person performs and an assistant is refused</li>
+      <li><code class="status">[]</code> Name exactly what evidence must be in hand before the reader decides — and stop there. The document does not tell the reader which way to decide</li>
+      <li><code class="status">[]</code> Use placeholders in every worked refusal and every worked owner act; a pasted real refusal carries live state into a committed file (<code>INV-3</code>)</li>
+    </ul>
+
+    <h4>14. Write the boundaries, the ownership declaration, and the limits</h4>
+    <p class="serves"><code class="serves">INV-5</code> <code class="serves">INV-6</code> <code class="serves">INV-2</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> State what the reader must never be asked to do and must never do alone: push anything, edit a protected file, repair state by hand, or work around a refusal (<code>INV-5</code>)</li>
+      <li><code class="status">[]</code> Give each a one-sentence reason; a rule without a reason is a rule a reader routes around the first time it is inconvenient</li>
+      <li><code class="status">[]</code> Declare in the document that it owns the reader's route and the six fenced fact classes, and nothing else, pointing at the files that own the rest (<code>INV-2</code>)</li>
+      <li><code class="status">[]</code> State that nothing in the factory reads this document and no outcome depends on having read it (<code>INV-6</code>)</li>
+      <li><code class="status">[]</code> Carry the accepted absences from T03 into an honest limits section — what this document does not cover and who owns it</li>
+      <li><code class="status">[]</code> State the acceptance limit in the document itself: it has been driven by its author and not yet by anyone else</li>
+    </ul>
+
+    <h4>15. Testing Strategy</h4>
+    <p>The document's first real fence run, plus the induced failures that prove the legs bite on the actual file rather than only on a specimen.</p>
+    <p class="serves"><code class="serves">AC-3</code> <code class="serves">AC-4</code> <code class="serves">AC-7</code> <code class="serves">AC-8</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> <code>npm run test:unit</code> — green with the real document in the tree</li>
+      <li><code class="status">[]</code> An invented command in a real command block goes red and names the file and the command; removing it returns green (<code>AC-3</code>)</li>
+      <li><code class="status">[]</code> Deleting the reader warning goes red, and moving it after the first command block goes red; restoring it returns green (<code>AC-4</code>)</li>
+      <li><code class="status">[]</code> Removing a section's index entry goes red, and adding an entry for no section goes red (<code>AC-7</code>)</li>
+      <li><code class="status">[]</code> An injected external reference goes red; removing it returns green, and the file opens with the network disabled (<code>AC-8</code>)</li>
+      <li><code class="status">[]</code> Every <strong>document</strong> entry assigned to this half is answered, and the ticket README records where (<code>AC-5</code>)</li>
+      <li><code class="status">[]</code> A scan finds no identifier that is not <code>TASK</code> or <code>PROJECT</code>, and no absolute machine path (<code>INV-3</code>)</li>
+      <li><code class="status">[]</code> <code>npm run lint</code> and <code>npm run typecheck</code> — exit 0</li>
+    </ul>
+    <div class="loop">🔁 <strong>Do not exit this milestone until every box is checked.</strong> A fence never watched failing on the real file has only been tested against a specimen.</div>
+  </div>
+
+  <!-- ================= M4 ================= -->
+  <div class="phase">
+    <h3><code class="status">[]</code> Milestone M4: Behind the curtain, and the figures</h3>
+    <p><em>The half the owner's review added, and the reason it is safe to add.</em> Every fact class here is bound by M2's set-equality fences, so completeness is a test rather than a promise. This milestone is three tasks rather than five because Q10 removed the renderer.</p>
+
+    <h4>16. Write the reference half, to satisfy the fences rather than to look complete</h4>
+    <p class="serves"><code class="serves">INV-2</code> <code class="serves">AC-6</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Write one section per fact class, each carrying its full set in the marker T06 defined, and add each section to the index</li>
+      <li><code class="status">[]</code> Write what marimba invokes at each of the six legs, taken from T02's captured record of the real drive rather than from reading the source</li>
+      <li><code class="status">[]</code> Explain each class in a sentence a reader can use — what a state means, what a gate decides, what an act costs — beside the fenced set rather than instead of it</li>
+      <li><code class="status">[]</code> Answer every <strong>document</strong> entry from the friction log that was assigned to this half</li>
+      <li><code class="status">[]</code> Document no fact class that has no fence. If a class cannot be extracted from a source, it does not go in — that is a finding about the factory, and it gets routed (<code>INV-2</code>)</li>
+      <li><code class="status">[]</code> Write no subset of a class because the full set is long: the fence asserts equality, and a subset is a red suite</li>
+    </ul>
+
+    <h4>17. Author the figures: inline SVG, theme-aware, offline</h4>
+    <p class="serves"><code class="serves">INV-9</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Author each figure as hand-written inline SVG using semantic classes that inherit the theme tokens — no CDN, no external script, no remote font</li>
+      <li><code class="status">[]</code> Draw only figures that show a mechanism. If a paragraph carries it as well, write the paragraph</li>
+      <li><code class="status">[]</code> Measure every text element against its card and the viewBox rather than eyeballing it</li>
+      <li><code class="status">[]</code> Keep every figure legible in both themes, checked by rendering under each</li>
+    </ul>
+
+    <h4>18. Testing Strategy</h4>
+    <p>The full fence set against the finished document, with every leg and every class observed failing and returning.</p>
+    <p class="serves"><code class="serves">AC-6</code> <code class="serves">AC-7</code> <code class="serves">AC-8</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> <code>npm run test:unit</code> — green with the finished document in the tree</li>
+      <li><code class="status">[]</code> All six classes are set-equal against the real document, and the twelve induced failures re-run against it rather than only against specimens (<code>AC-6</code>)</li>
+      <li><code class="status">[]</code> The index fence is green over the added reference sections and still bites in both directions (<code>AC-7</code>)</li>
+      <li><code class="status">[]</code> The no-external-reference scan is green and the document opens with the network disabled (<code>AC-8</code>)</li>
+      <li><code class="status">[]</code> Every figure is legible in both themes and no text overflows its card</li>
+      <li><code class="status">[]</code> <code>npm run lint</code> and <code>npm run typecheck</code> — exit 0</li>
+    </ul>
+    <div class="loop">🔁 <strong>Do not exit this milestone until every box is checked.</strong> A reference half whose classes are not all fenced is the rejected shape wearing a test suite.</div>
+  </div>
+
+  <!-- ================= M5 ================= -->
+  <div class="phase">
+    <h3><code class="status">[]</code> Milestone M5: The graduation — two real tasks</h3>
+    <p><em>This is the acceptance test.</em> Two real jobs go through the factory, each driven by a person following the document and nothing else. The driver is the factory's author, so each run is asymmetric — it can fail meaningfully and it cannot pass meaningfully — and <strong>the second run is what the first one cannot be</strong>: a check on whether the document is being read rather than remembered.</p>
+    <figure>
+      <pre class="mermaid">
+flowchart LR
+  R1["run 1 · dashboard redesign<br/>request only, factory plans it"] --> C1["consultations recorded"]
+  C1 --> R2["run 2 · backlog view<br/>same protocol, unchanged"]
+  R2 --> C2["consultations recorded"]
+  C1 --> D{"the delta"}
+  C2 --> D
+  D -->|"falls"| L["the document is being learned from"]
+  D -->|"flat or rises"| F["a finding about the document"]
+  D -->|"zero"| M["read, or remembered? check and record"]
+  style F stroke:#F08A72,stroke-width:2px
+  style M stroke:#E2B25C,stroke-width:2px
+      </pre>
+      <figcaption>Two runs give the author-driven test a second dimension it could not have had with one. W12 supplies a request per run and nothing more — if W12 plans the task, the run proves nothing about the factory.</figcaption>
+    </figure>
+
+    <h4>19. Run one — the dashboard visual redesign</h4>
+    <p class="serves"><code class="serves">AC-9</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Write the request as a paragraph of what is wanted — the dashboard carried to the Forest palette in a desktop view, keeping its existing structure — <strong>not</strong> as a plan, a task breakdown or an acceptance list</li>
+      <li><code class="status">[]</code> Drive it end to end through marimba by following the document and nothing else, to the owner act with the evidence that act requires</li>
+      <li><code class="status">[]</code> Record every consultation of any source other than the document, verbatim, with where on the leg it happened and what question it answered</li>
+      <li><code class="status">[]</code> Record where the driver looked first before consulting — a document whose answers are in the wrong order fails the same way as one missing them</li>
+      <li><code class="status">[]</code> Record what the reference half was used for and what in it was never opened</li>
+      <li><code class="status">[]</code> Record the run's cost, and whether it matched what the document said it would cost</li>
+      <li><code class="status">[]</code> State the limit in the record: the driver is the factory's author, so this proves the document is <em>sufficient to drive with</em> and not that it is <em>comprehensible to somebody new</em></li>
+      <li><code class="status">[]</code> Scrub and keep raw notes outside the repository (<code>INV-3</code>)</li>
+    </ul>
+
+    <h4>20. Run two — the backlog view, and the delta between the runs</h4>
+    <p class="serves"><code class="serves">AC-9</code> <code class="serves">AC-10</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Write the second request as a paragraph — the dashboard's backlog view brought up to date so it reads the spine, the deep plans and the ticket states — and let the factory plan it</li>
+      <li><code class="status">[]</code> Run the same protocol, <strong>unchanged</strong>. A protocol adjusted between runs makes the delta meaningless</li>
+      <li><code class="status">[]</code> Record consultations exactly as in run one, so the two counts are comparable</li>
+      <li><code class="status">[]</code> Record the delta: how many consultations each run needed, which sections were consulted in the first and not the second, and which were never opened in either</li>
+      <li><code class="status">[]</code> Interpret it honestly — a fall means the document is being learned from; <strong>flat or rising is a finding about the document</strong>; and a fall to zero is checked against whether the driver read it or remembered it, and recorded either way (<code>AC-10</code>)</li>
+      <li><code class="status">[]</code> Record a section never opened in either run as a finding about the document's shape, not as proof it is unnecessary</li>
+      <li><code class="status">[]</code> Do not repair the document between the two runs. Editing it mid-series makes the delta a measurement of the edit</li>
+    </ul>
+
+    <h4>21. Close the residue — answer it, route it, or name it as an absence</h4>
+    <p class="serves"><code class="serves">AC-11</code> <code class="serves">INV-7</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Give every recorded consultation from both runs exactly one disposition, using T03's four categories</li>
+      <li><code class="status">[]</code> Answer every <strong>document</strong> consultation at the point on the leg where it happened, then re-run every fence</li>
+      <li><code class="status">[]</code> Write every <strong>route</strong> request against its owning workstream and mark the corresponding plan row <code>[f]</code> with the block named</li>
+      <li><code class="status">[]</code> Record every <strong>accepted absence</strong> in the document's limits section and in the ticket README</li>
+      <li><code class="status">[]</code> Build nothing to close a consultation. One that needs a command is a route (<code>INV-7</code>)</li>
+      <li><code class="status">[]</code> Record what the factory produced for each real task, and whether each landed — <strong>separately</strong> from what the document proved, because they are different claims</li>
+    </ul>
+
+    <h4>22. Testing Strategy</h4>
+    <p>The acceptance evidence is a record, checked for completeness and for honesty about its own strength. Every fence is re-run because T21 edited the document.</p>
+    <p class="serves"><code class="serves">AC-10</code> <code class="serves">AC-11</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Every consultation from both runs appears in the ticket README with exactly one disposition (<code>AC-11</code>)</li>
+      <li><code class="status">[]</code> The delta is recorded and interpreted, and the record says which of the three readings it fell under (<code>AC-10</code>)</li>
+      <li><code class="status">[]</code> The record states plainly what the runs prove and what they do not, and names the deferred two-reader attempt as future work rather than as a pending gate</li>
+      <li><code class="status">[]</code> <code>npm run test:unit</code> — green over the edited document, with every induced-failure leg re-run</li>
+      <li><code class="status">[]</code> Any row that cannot be made green is <code>[f]</code> with its blocking workstream named in the plan, not in the ticket alone</li>
+    </ul>
+    <div class="loop">🔁 <strong>Do not exit this milestone until every box is checked.</strong> Reporting an author-driven run as a clean external pass is the single failure this workstream must not commit, because the whole spine exists to stop exactly that.</div>
+  </div>
+
+  <!-- ================= M6 ================= -->
+  <div class="phase">
+    <h3><code class="status">[]</code> Milestone M6: Close the leaf, then close v2</h3>
+    <p><em>W12 is the last workstream in v2's core.</em> Closing it closes the expansion, so this milestone's spine Amendment is the record of what v2 delivered as much as of what W12 did. It also hands the owner the one package that cannot land from here.</p>
+
+    <h4>23. Close, and hand over the owner-side package</h4>
+    <p class="serves"><code class="serves">AC-12</code> <code class="serves">INV-4</code></p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> Confirm every marker in this plan reads <code>[x]</code> or <code>[f]</code>, and that every <code>[f]</code> names its blocking workstream</li>
+      <li><code class="status">[]</code> <code>npm test</code> — record suite counts and wall time; <code>npm run lint</code> and <code>npm run typecheck</code> exit 0 (<code>AC-12</code>)</li>
+      <li><code class="status">[]</code> Append the M6 closing Amendment to this plan: what W12 delivered, every task's final state, the friction, and the landing SHAs</li>
+      <li><code class="status">[]</code> In the same commit, flip <code>specs/awsf-v2-plan.html</code>'s Milestone M12 / W12 marker and its checklist, and <code>specs/tickets/awsf-v2-plan/W12.md</code>'s state</li>
+      <li><code class="status">[]</code> Append the closing Amendment to the spine: what W12 delivered claim by claim, what it routed and to whom, every <code>[f]</code> row with its block, and — per Q9 — whether W12 satisfies the <em>"v2's core lands"</em> precondition W13 and W14 both name</li>
+      <li><code class="status">[]</code> Prepare the <strong>owner-side handover</strong>, which is not committed here: the corrected §08 rows for the external technical-reference document, a new marimba subsection describing how a person drives the factory, a link to the cheatsheet, and the extension prompt in the shape that document's own §19 specifies</li>
+      <li><code class="status">[]</code> Name the deferred two-reader attempt as future work with what it would prove, so it is scheduled rather than forgotten</li>
+      <li><code class="status">[]</code> Confirm no runtime report, receipt or manifest file was committed by any milestone (<code>INV-4</code>)</li>
+      <li><code class="status">[]</code> Leave W09, W10, W13 and W14 markers untouched</li>
+    </ul>
+    <div class="loop">🔁 <strong>This is the only task that writes to the spine.</strong> A marker flipped before its evidence exists is invariant 2 breached by the workstream whose subject is trust.</div>
+  </div>
+</section>
+
+<section id="validation">
+  <h2>Validation Commands</h2>
+  <p>Every command here is offline. The two graduation runs in M5 are the only part of this workstream that spends provider quota, and they spend it on real tasks rather than on tests.</p>
+  <ul class="checklist">
+    <li><code class="status">[]</code> <code>npm run test:unit</code> — the reconciliation fences, the meta-tests, and the plan/ticket sync fence</li>
+    <li><code class="status">[]</code> <code>npm run typecheck</code> — the new meta-test typechecks under the core project</li>
+    <li><code class="status">[]</code> <code>npm run lint</code> — exit 0</li>
+    <li><code class="status">[]</code> <code>npm test</code> — all four layers at close, counts recorded in the M6 Amendment</li>
+    <li><code class="status">[]</code> The leg-one normalization removed → red; restored → green (<code>AC-2</code>)</li>
+    <li><code class="status">[]</code> An invented command in a real command block → red, in each of the three invocation forms; a command in prose → still green (<code>AC-3</code>)</li>
+    <li><code class="status">[]</code> The reader warning deleted → red; moved after the first command block → red (<code>AC-4</code>)</li>
+    <li><code class="status">[]</code> <strong>Twelve induced failures across six fact classes</strong> — one omission and one invention per class — each observed red and returned green (<code>AC-6</code>)</li>
+    <li><code class="status">[]</code> A section with no index entry → red; an index entry for no section → red (<code>AC-7</code>)</li>
+    <li><code class="status">[]</code> An injected external reference → red; removed → green, and the document opens with the network disabled (<code>AC-8</code>)</li>
+    <li><code class="status">[]</code> The friction log and both graduation records are in the ticket README, every entry with one disposition, and the delta is recorded and interpreted (<code>AC-1</code>, <code>AC-5</code>, <code>AC-9</code>, <code>AC-10</code>, <code>AC-11</code>)</li>
+    <li><code class="status">[]</code> No committed file in this workstream's diff carries an identifier or an absolute machine path (<code>INV-3</code>); no report file exists in the diff (<code>INV-4</code>)</li>
+  </ul>
+  <div class="loop">🔁 <strong>The plan is not complete until every box is checked and every command passes.</strong> If a step is genuinely impossible, mark it <code>[f]</code>, name the blocking condition, and move on.</div>
+</section>
+
+<section id="questionables">
+  <h2>Questionables</h2>
+  <p><strong>Twelve are decided and one is dissolved.</strong> Eight were taken on 2026-08-27 in the first review; four more in the second, which also removed the thirteenth by removing the thing it asked about. Each keeps its full option set so the road not taken stays readable. <strong>Nothing in this workstream is still an open question</strong>, and it waits on no owner commit.</p>
+  <figure>
+    <pre class="mermaid">
+flowchart LR
+  R1["review 1<br/>8 decided"] --> EXP["2 answers expanded<br/>the workstream"]
+  EXP --> NEW["Q10–Q13 created"]
+  NEW --> R2["review 2<br/>4 decided"]
+  R2 --> DIS["Q13 dissolved<br/>no renderer to place"]
+  R2 --> SIMP["Q10 removed a milestone<br/>of work"]
+  style SIMP stroke:#5FCF8E,stroke-width:2px
+  style DIS stroke:#8EB69B,stroke-width:2px,stroke-dasharray:4 3
+    </pre>
+    <figcaption>The second review is the rare one that made the plan smaller. Choosing a single authored file removed the renderer, the byte-identity fence and two tasks, and dissolved the question about where the renderer should live.</figcaption>
+  </figure>
+
+  <details data-review-options="A named person|The owner on a clean machine|A colleague, unnamed for now|No such reader exists">
+    <summary><span class="qdecided">DECIDED</span> Q1 — Who is the intended reader, concretely?</summary>
+    <p class="qa-answer">The options were a named person, the owner on a clean machine, an unnamed colleague, or nobody. A persona cannot be surprised, so evaluating the document against an imagined reader would be a green with nothing behind it.</p>
+    <span class="decided"><strong>Decided 2026-08-27: no such reader exists yet, and the owner drives it himself.</strong> The factory has had two successful real runs, both v1 pilots, and the owner wants to use it on more real work and learn its limits before handing it to anyone. A friend will attempt it later. <strong>This routes to Q9</strong>, which he also decided.</span>
+    <span class="consequence"><strong>The cost, carried into the plan, the ticket README, the document's own limits and the closing Amendment:</strong> an author-driven run cannot prove the document is comprehensible to somebody new. It can prove the document is <em>sufficient to drive with</em>. No task may report the stronger claim.</span>
+  </details>
+
+  <details data-review-options="They drive a session|They type the CLI|Both, session primary">
+    <summary><span class="qdecided">DECIDED</span> Q2 — Does the reader type the commands, or drive a session that types them?</summary>
+    <p class="qa-answer">Typing the commands makes it a command guide, which drifts toward duplicating the routed command tree. Driving a session makes it a guide to asking for work and reading what comes back.</p>
+    <span class="decided"><strong>Decided 2026-08-27: the reader drives a marimba session — and the document also shows what is behind the curtain:</strong> what marimba invokes, the lifecycles, every gate, and what happens across a full session.</span>
+    <span class="consequence"><strong>This is the decision that expanded the workstream</strong>, and it is also the one that later made Q5 easy: a reader who never types a command is not endangered by a command appearing in a sentence.</span>
+  </details>
+
+  <details data-review-options="docs/cheatsheet.md|a new docs/ subtree|inside docs/driving/|a section of README.md">
+    <summary><span class="qdecided">DECIDED</span> Q3 — Where does the document live?</summary>
+    <p class="qa-answer"><code>docs/driving/</code> was refused as a category error: it is the tree a driving session loads, routed by a table whose every path the suite asserts resolves. A README section was refused because the README's audience and register are an engineer's.</p>
+    <span class="decided"><strong>Decided 2026-08-27: in <code>docs/</code>, outside the driving tree</strong>, styled after the owner's existing technical reference — its Forest palette, its SVG conventions, its organisation, its dot status language — because the same design will later be carried into the dashboard.</span>
+    <span class="consequence"><strong>Q10 later settled the file itself: <code>docs/cheatsheet.html</code>, and no markdown twin.</strong> The design rules inherited from that document — inline SVG, no CDN, works offline, a diagram must show a mechanism, never mark something built that is not — are adopted wholesale as <code>INV-9</code> and M3/M4.</span>
+  </details>
+
+  <details data-review-options="The owner hands it over|README links to it|A rendered copy outside the repo">
+    <summary><span class="qdecided">DECIDED</span> Q4 — How does the reader reach the document before they have the repository?</summary>
+    <p class="qa-answer">The document's first leg is installation, and installation is how the reader gets the file the document lives in.</p>
+    <span class="decided"><strong>Decided 2026-08-27: the owner hands it over.</strong></span>
+    <span class="recommend"><strong>Q3 and Q10 together make this work properly rather than merely acceptably.</strong> A single self-contained file with no external reference is one attachment, opens on any machine with nothing installed and no network, and carries the design. That is why <code>INV-9</code> is an invariant rather than a preference.</span>
+  </details>
+
+  <details data-review-options="Prose ban, enforced|Fenced-only, prose exempt|Fenced-only plus a warning">
+    <summary><span class="qdecided">DECIDED</span> Q5 — Fence discipline: does prose get exempted, as in the driving tree?</summary>
+    <p class="qa-answer">The plan recommended banning command-shaped text from prose, on the grounds that a reader who cannot tell an example from a sentence will type both. The driving tree exempts prose and states why: a regex over explanatory prose produces false positives that teach authors to stop marking up commands at all.</p>
+    <span class="decided"><strong>Decided 2026-08-27: fenced-only plus a warning.</strong> Commands in command blocks are checked; commands named in prose are exempt; and the document says plainly that <strong>there is no need to type the commands at all</strong>, because the assistant runs them.</span>
+    <span class="consequence"><strong>The decision removed the ban's premise rather than overruling it.</strong> Q2 had already established that the reader drives a session rather than a terminal, so the commands in this document are mostly illustrative of what marimba runs — and the reference half will name commands in explanatory sentences constantly. A ban would have degraded the writing exactly as <code>_driving.ts</code> warns.
+    <br><br><strong>What replaces it:</strong> the warning is asserted rather than trusted. <code>AC-4</code> requires it to exist and to appear before the first command block, and both failure modes are proven. A warning a later edit could quietly delete would be weaker than the ban it replaced.</span>
+    <span class="consequence"><strong>One note on the record.</strong> The owner's written reason arrived truncated — <em>"we can just mention in the cheatsheet that there is no need to type the commands and that"</em> — so the reading taken here is the one the selected option and Q2 both support. If the unfinished clause carried a further condition, it belongs in an Amendment before T07.</span>
+  </details>
+
+  <details data-review-options="This checkout, one throwaway task|Greenfield via awsf init|Both, greenfield deferred">
+    <summary><span class="qdecided">DECIDED</span> Q6 — Which walkthrough: the factory's own checkout, or a brand-new project?</summary>
+    <p class="qa-answer">W11's capture pass measured why this matters: a new project requires the owner to hand-author and commit an <code>awsf.project.yaml</code> and role prompts between stages, because no command produces them, and the configuration <code>awsf init</code> writes enables one workflow, declares zero agents and names no reachable adapter.</p>
+    <span class="decided"><strong>Decided 2026-08-27: this checkout</strong>, because preparing a greenfield project is work that can be omitted — and the walkthrough should drive <strong>real tasks rather than throwaway ones</strong>, naming two: the dashboard's visual redesign, and its backlog view brought up to date.</span>
+    <span class="consequence"><strong>The greenfield gap is recorded as a routed request to W03, not closed here</strong>, and the cost is stated in the document's own limits: the reader never sees the factory pointed at their own project, which is what the registry workstream was for. The real-task half became Q12.</span>
+  </details>
+
+  <details data-review-options="A second reader|Same reader, limit stated|Two readers if available">
+    <summary><span class="qdecided">DECIDED</span> Q7 — Second attempt: a fresh reader, or the same one?</summary>
+    <p class="qa-answer">A reader who has already been stopped by everything knows the answers, so a completion is weak evidence. The failure direction survives contamination entirely.</p>
+    <span class="decided"><strong>Decided 2026-08-27: plan for two readers, and accept that neither exists yet.</strong> The owner drives first; two friends may attempt it once the document is finished, and may then build something with the factory.</span>
+    <span class="consequence"><strong>So the two-reader attempt is future work, not a gate.</strong> W12 closes on the graduation runs in M5, and T23 records the deferred attempt with what it would prove. Writing it as a pending gate would leave W12 permanently unclosable, which is a worse answer than naming the limit.</span>
+  </details>
+
+  <details data-review-options="Linear, no index|A short index|Index only if it exceeds a length">
+    <summary><span class="qdecided">DECIDED</span> Q8 — Does the cheatsheet get an index?</summary>
+    <p class="qa-answer">The original recommendation was no index, because a linear walkthrough has one path and an index invites <em>what else is in here?</em> — a question whose honest answer was <em>nothing</em>.</p>
+    <span class="decided"><strong>Decided 2026-08-27: include one.</strong> The condition is met either way: Q2's reference half gives <em>what else is in here</em> an answer — six fenced fact classes — and a reader genuinely needs to find them.</span>
+    <span class="consequence"><strong>Q10 changed how it is kept honest.</strong> With no renderer, the index cannot be generated from the headings, so it is hand-written and held to the sections by set equality instead — <code>INV-8</code>, proven in both directions. That is the one new obligation the single-file decision created.</span>
+  </details>
+
+  <details data-review-options="Close [f] with the block named|Ship the mechanical half only|Hold W12 open|Owner acts as reader, limit stated">
+    <summary><span class="qdecided">DECIDED</span> Q9 — What does W12 do if the walkthrough cannot be attempted by an external reader?</summary>
+    <p class="qa-answer">Three of the four options were honest; writing the document and declaring it accepted on review was the dishonest one and was not offered.</p>
+    <span class="decided"><strong>Decided 2026-08-27: the owner acts as reader, and the limit is stated.</strong> His framing is the one this plan adopts — <em>the graduation of the factory, with its author as the grader</em>.</span>
+    <span class="consequence"><strong>The spine consequence still needs an explicit answer at close.</strong> W13 and W14 both name <em>"v2's core lands (W01–W08, W11, W12 all <code>[x]</code>)"</em> as a precondition. If any W12 row closes <code>[f]</code>, T23 must say in the spine Amendment whether that satisfies it, rather than leaving a later session to resolve the ambiguity by guessing.</span>
+  </details>
+
+  <details data-review-options="Markdown is truth, HTML is a rebuildable projection|HTML is the only authored file|Two hand-maintained files">
+    <summary><span class="qdecided">DECIDED</span> Q10 — What is the relationship between the two renderings?</summary>
+    <p class="qa-answer">The plan recommended authoring markdown and generating the HTML from it, with a rebuild-and-compare test to keep them honest — the documentation form of this repository's journal-and-projection rule. It noted that a single HTML file was cheaper and stronger, and was being refused only because the earlier review had asked for the markdown too.</p>
+    <span class="decided"><strong>Decided 2026-08-27: HTML is the only authored file.</strong> <code>docs/cheatsheet.html</code>, hand-authored, self-contained. No markdown twin, no renderer, no byte-identity fence.</span>
+    <span class="consequence"><strong>This is the decision that made the plan smaller.</strong> It removed the renderer, <code>INV-8</code>'s original rebuildable-projection form, the render meta-test and two tasks, and it dissolved Q13 entirely. <strong>One file cannot drift from itself, and a generator that does not exist cannot emit a non-deterministic byte</strong> — the plan lost a milestone's worth of work and gained a guarantee.</span>
+    <span class="consequence"><strong>Two obligations it created.</strong> The index is now hand-written, so it gets its own set-equality fence (<code>INV-8</code>, reassigned). And self-containment is no longer a property of the generator, so it becomes an assertion (<code>INV-9</code>, <code>AC-8</code>). Both are cheaper than what they replace. <strong>The one thing to guard against is a markdown copy arriving later wearing a convenience argument</strong> — the scope table names it.</span>
+  </details>
+
+  <details data-review-options="Set-equality fences per fact class|Generate the reference half from source|Hand-written, reviewed only">
+    <summary><span class="qdecided">DECIDED</span> Q11 — How is the behind-the-curtain half kept true?</summary>
+    <p class="qa-answer">This decides whether Q2's expansion is defensible engineering or the rejected shape with more words. Three facts in this project were measured stale while authoring, and one had already been copied into a second document as if true. None was caught by review, and none by the existing fence.</p>
+    <span class="decided"><strong>Decided 2026-08-27: set-equality fences per fact class.</strong> Six classes, each extracted from an export or the loaded configuration, each asserted equal to the document's set, in both directions.</span>
+    <span class="consequence"><strong>This is what makes "documents everything the factory can do" a test rather than a promise.</strong> An invented entry fails; a missing entry fails. It is self-maintaining — a lifecycle state added next year makes the suite red until the document mentions it — and it costs six extractors and twelve assertions because every source is already machine-readable.</span>
+    <span class="consequence"><strong>The rule it creates, and it will be tested by temptation:</strong> a class with no extractable source cannot be documented at all (<code>INV-2</code>). If something the owner wants covered has no machine-readable source, that is a finding about the factory and it gets routed. Writing the section anyway is the single edit that turns "complete, provably" back into "complete, we think", and nothing mechanical catches it.</span>
+  </details>
+
+  <details data-review-options="A small reproducible task in the guide, a real one in the run|Real task only|Throwaway only">
+    <summary><span class="qdecided">DECIDED</span> Q12 — What task does the walkthrough use: the written example, and the graduation run?</summary>
+    <p class="qa-answer">Two questions wearing one name: what the document's worked example is, and what the graduation run drives.</p>
+    <span class="decided"><strong>Decided 2026-08-27: a small reproducible task in the written example, and <em>two</em> real tasks in the graduation</strong> — the dashboard's visual redesign, and its backlog view brought up to date so it reads the spine, the deep plans and the ticket states.</span>
+    <span class="consequence"><strong>The second run buys something the first cannot.</strong> With one author-driven run the test is asymmetric and one-dimensional. With two, the <em>delta</em> between them is evidence: consultations should fall, and a flat or rising count is a finding about the document rather than about the driver. A fall to zero is checked against whether the document was read or remembered. <code>AC-10</code> requires the delta to be recorded and interpreted, and T20 forbids editing the document between the runs — an edit mid-series makes the delta a measurement of the edit.</span>
+    <span class="consequence"><strong>Two things to stay explicit about.</strong> <strong>W12 must not plan either task</strong> — it supplies one paragraph per run and the factory does the design, the plan and the build; if W12 plans them, the runs prove nothing about the factory. And the ordering works: both tasks were scheduled for after v2, and W12 closes v2, so they are the first jobs through the finished factory rather than a detour inside it.</span>
+    <span class="consequence"><strong>A risk accepted:</strong> acceptance now depends on two real tasks succeeding. If the factory fails one for reasons unrelated to the document, T21 records that separately — what the factory produced and what the document proved are different claims.</span>
+  </details>
+
+  <details data-review-options="A script under core/ with a meta-test|A dashboard build step|A standalone tool outside the workspaces">
+    <summary><span class="qdecided">DISSOLVED</span> Q13 — Where does the renderer live, and what may it depend on?</summary>
+    <p class="qa-answer">This asked where to put the markdown-to-HTML renderer and whether it could take a dependency, given the per-workspace allowlist meta-test.</p>
+    <span class="decided"><strong>Dissolved 2026-08-27 by Q10.</strong> There is no renderer. Nothing is generated, no dependency is needed, and the allowlist is untouched. The question had no remaining subject.</span>
+    <span class="consequence"><strong>What replaced it was decided rather than asked, because each part follows from Q10 with no real alternative.</strong> The document is authored directly as HTML. Each fact class carries a machine-readable marker attribute so the fence extracts exactly rather than scanning prose. The index is hand-written and fenced by set equality. The figures stay hand-authored inline SVG. There is no build step of any kind: the file is committed and checked by meta-tests, like every other document in this repository.</span>
+  </details>
+</section>
+
+<section id="notes">
+  <h2>Notes</h2>
+
+  <h3>What the two reviews changed, in one place</h3>
+  <table>
+    <thead><tr><th>Decision</th><th>What it changed</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Q1 + Q9</strong> — owner as reader, limit stated</td><td>M1 and M5 are built around a measure that survives an unsurprisable driver: <strong>consultation</strong>, not surprise. The acceptance claim narrowed to <em>sufficient to drive with</em>, stated in four places.</td></tr>
+      <tr><td><strong>Q2</strong> — drive a session, and show behind the curtain</td><td>Added the reference half, which added the six set-equality fences. Also removed Q5's premise before Q5 was answered.</td></tr>
+      <tr><td><strong>Q3 + Q10</strong> — one self-contained HTML file in the Forest design</td><td>Added the shell, the figures and <code>INV-9</code>; <strong>removed</strong> the renderer, the markdown twin and two tasks. Made Q4's handover a real answer rather than an acceptable one.</td></tr>
+      <tr><td><strong>Q5</strong> — fenced-only plus a warning</td><td>Prose keeps its exemption and the warning becomes load-bearing and asserted. The reference half can now name commands in sentences, which it needs to do constantly.</td></tr>
+      <tr><td><strong>Q6 + Q12</strong> — this checkout, two real tasks</td><td>M5 became two graduation runs with a measurable delta between them, and the tasks became the factory's to plan.</td></tr>
+      <tr><td><strong>Q8 + Q10</strong> — an index, hand-written</td><td><code>INV-8</code> was reassigned from the rebuildable-projection rule to index-equals-sections, which is the obligation the single-file decision created.</td></tr>
+      <tr><td><strong>Q11</strong> — set-equality fences</td><td>Made the expansion defensible. Without it the reference half is the rejected shape.</td></tr>
+    </tbody>
+  </table>
+  <p>Across both reviews the plan went from sixteen tasks in five milestones, to twenty-two in six, to <strong>twenty-three in six</strong> — but the second review removed a renderer and a whole class of failure while adding a second graduation run. <strong>The acceptance definition never changed</strong>, which is the part worth noticing: both reviews expanded what the document contains and left what makes it finished alone.</p>
+
+  <h3>Three stale facts, measured while authoring, and how to reproduce them</h3>
+  <pre><code>node --experimental-strip-types -e '
+import("./core/src/state/task-machine.ts").then(m => {
+  console.log("states:", m.TASK_STATES.length);   // 11
+  console.log("edges:",  m.LEGAL_EDGES.length);   // 27
+});'
+
+grep -n "six acts" docs/driving/marimba/delegation-guard.sh    # header, line 16
+sed -n "118p"          docs/driving/marimba/delegation-guard.sh # loop: 7 verbs
+grep -n "Ten states\|10 states" README.md                       # both say ten</code></pre>
+  <p><code>PUBLISHED</code> arrived with W08 and <code>publish</code> arrived with it in the guard's loop. Both landed correctly and both left a document behind. <strong>The README also disagrees with itself</strong> — 24 edges in the diagram label, twenty-five in the prose, against 27 in the export. T06 repairs the README as part of building the fence and records the measurement rather than quietly editing the numbers.</p>
+
+  <h3>Owner-side work this workstream produces but cannot land</h3>
+  <ul>
+    <li><strong>The external technical-reference document's update.</strong> It lives outside this repository, so per the spine's rule it is owner-side and is not a ticket. T23 prepares the package: the corrected §08 rows (W11 is now <code>[x]</code>, W12's state changes, and W01's "six owner-act command shapes" is seven), a marimba subsection on how a person drives the factory, a link to the cheatsheet, and the extension prompt in the shape that document's own §19 specifies.</li>
+    <li><strong>Installing <code>/prime-awsf</code> and marimba's guard.</strong> Both live at per-user paths. The document's first two legs must be readable by someone who has done neither, which is a friction entry M1 will almost certainly record.</li>
+    <li><strong>Carrying the Forest palette into the dashboard.</strong> Named by the owner as post-v2 work — and now the subject of the first graduation run, which means <strong>the factory does it, not W12</strong>. The cheatsheet's own design becomes the input to the first job driven through the finished factory.</li>
+  </ul>
+
+  <h3>Three things this plan deliberately does not build</h3>
+  <ul>
+    <li><strong>A starter project template.</strong> W03 owns bootstrap. The gap is measured and routed, not filled.</li>
+    <li><strong>Any new or changed command.</strong> <code>INV-7</code>. A friction point that needs one is a route, in the shape W11's T04 established.</li>
+    <li><strong>A plan for either graduation task.</strong> The factory plans them. That is what is being demonstrated.</li>
+  </ul>
+
+  <h3>A conflict between the planning skill and this repository, resolved in the repository's favour</h3>
+  <p>The current <code>plan-sota</code> skill says the ticket directory should be the only prompt artifact and no <code>&lt;plan-stem&gt;-build-prompts.md</code> should exist. <strong>This repository's landed fence requires it</strong>: <code>ticket-plan-sync.test.ts</code> asserts <code>existsSync(source.promptsPath)</code> for every plan with a ticket set, and separately asserts byte-identity with each ticket's prompt. This plan follows the repository, as every landed v2 deep plan does. The conflict is worth settling at some point — closing it means amending the fence — and it is named here rather than resolved from inside W12.</p>
+
+  <h3>Risks this plan carries knowingly</h3>
+  <table>
+    <thead><tr><th>Risk</th><th>What holds it</th></tr></thead>
+    <tbody>
+      <tr><td><strong>R1 — an author-driven run is reported as a clean pass.</strong> The single failure this workstream must not commit.</td><td>Q1 and Q9's stated limit, repeated in the plan, the ticket README, the document's own limits section and the closing Amendment. M5's loop banner names it directly.</td></tr>
+      <tr><td><strong>R2 — the reference half becomes a hand-written command tree.</strong></td><td><code>INV-2</code> and Q11: a class with no fence is not documented. T16's checklist forbids it explicitly, including the subtler version — writing a subset of a class because the full set is long.</td></tr>
+      <tr><td><strong>R3 — a markdown copy appears later "for readability".</strong></td><td>Q10 and the scope table's second row. It would arrive as a convenience and reintroduce exactly the drift the single-file decision removed.</td></tr>
+      <tr><td><strong>R4 — the reader warning is edited away by someone tidying an introduction.</strong> It is now carrying what a fence used to carry.</td><td><code>AC-4</code>: deleting it goes red, and moving it after the first command block goes red. Both proven by induction, not assumed.</td></tr>
+      <tr><td><strong>R5 — leg one turns the README red and the fix is to narrow the matcher.</strong></td><td>T05's explicit prohibition and the danger card in the mechanical section. Offenders are recorded before anything changes, so a narrowing is visible in the record.</td></tr>
+      <tr><td><strong>R6 — the graduation runs fail for reasons unrelated to the document.</strong> Acceptance now depends on two real tasks succeeding.</td><td>T21 keeps the two claims apart: what the factory produced, and what the document proved. A factory failure is recorded as one and does not fail the document's rows.</td></tr>
+      <tr><td><strong>R7 — the document is edited between the two runs</strong>, making the delta a measurement of the edit rather than of the document.</td><td>T20's explicit prohibition and <code>AC-10</code>. Repairs happen in T21, after both runs are recorded.</td></tr>
+      <tr><td><strong>R8 — a fact class the owner wants covered has no extractable source.</strong></td><td>Named in Q11's second consequence: it is a finding about the factory and gets routed, rather than a licence to write the section unfenced.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>What would change this plan again</h3>
+  <ul>
+    <li>The unfinished clause in Q5's note carrying a further condition — an Amendment before T07, which is the only task that depends on it.</li>
+    <li>A friend becoming available before M5 — Q7 is revisited, a run stops being author-driven, and the acceptance claim strengthens to what the spine originally wanted.</li>
+    <li>A graduation task turning out to need work the factory cannot yet do — that is a routed request and a finding about the factory, not a reason to change the task.</li>
+  </ul>
+
+  <figure>
+    <pre class="mermaid">
+flowchart LR
+  V2["v2 core<br/>W01–W08 · W11"] --> W12["W12 · the guide<br/>+ the graduation"]
+  W12 --> CLOSE["v2 core closes"]
+  CLOSE -.->|"precondition"| W13["W13 deploy"]
+  CLOSE -.->|"precondition"| W14["W14 monitor"]
+  W12 -.->|"routed, not built"| W03["W03 · starter template"]
+  W12 -.->|"owner-side handover"| EXT["external technical reference"]
+  W12 --> RUNS["dashboard redesign · backlog view<br/>planned and built BY the factory"]
+  style W12 stroke:#F26A1B,stroke-width:2px
+  style W03 stroke:#E2B25C,stroke-width:2px,stroke-dasharray:4 3
+  style EXT stroke:#E2B25C,stroke-width:2px,stroke-dasharray:4 3
+  style RUNS stroke:#5FCF8E,stroke-width:2px
+    </pre>
+    <figcaption>W12 closes v2's core and is the precondition two declared workstreams name. The dashed edges are the two things it produces without building. The two dashboard tasks are inside W12's acceptance and outside its authorship — the factory plans and builds them, which is the whole point of calling it a graduation.</figcaption>
+  </figure>
+
+  <h3>Derived-field rules live in the ticket README</h3>
+  <p>Every ticket frontmatter field derived rather than read off this plan — <code>milestone</code>, <code>depends_on</code>, <code>serves</code>, <code>state</code> — has its derivation rule written once in <code>specs/tickets/awsf-v2-w12-cheatsheet/README.md</code>, together with the judgement calls in the work itself that a later session would otherwise reconstruct from a plausible and wrong assumption.</p>
+</section>
+
+<section id="amendments">
+  <h2>Amendments</h2>
+  <details>
+    <summary>2026-08-27 — first owner review: eight Questionables decided, four new ones created, the workstream re-shaped</summary>
+    <p><strong>Decided.</strong> Q1 (no external reader; the owner drives), Q2 (drive a marimba session, and show behind the curtain), Q3 (in <code>docs/</code>, in the Forest design), Q4 (the owner hands it over), Q6 (this checkout, real tasks), Q7 (plan for two readers, neither available yet), Q8 (include an index), Q9 (the owner acts as reader with the limit stated). Q5 was not reached.</p>
+    <p><strong>Changed.</strong> The Problem section gained a third problem — three measured stale facts, one already propagated into a second document — which is what justifies the set-equality fences. The Solution gained the two-half structure and the fact-class table. A milestone was added for the reference half and the rendering; M5 became a graduation run; the spine grew to nine and eleven declarations; tasks went from sixteen to twenty-two. Q10–Q13 were surfaced rather than decided. The palette moved to the Forest ramp.</p>
+  </details>
+  <details open>
+    <summary>2026-08-27 — second owner review: the last four decided, one dissolved, and the plan got smaller</summary>
+    <p><strong>Decided.</strong> Q5 (fenced-only plus a warning), Q10 (HTML is the only authored file), Q11 (set-equality fences per fact class), Q12 (a small reproducible task in the guide, and <em>two</em> real tasks in the graduation). <strong>Q13 dissolved</strong>: it asked where the renderer should live, and Q10 removed the renderer.</p>
+    <p><strong>What Q10 removed.</strong> The markdown twin, the renderer, the regenerate-and-diff fence, and two tasks. <code>INV-8</code> was reassigned from <em>the HTML is a rebuildable projection of the markdown</em> to <em>the index is set-equal to the sections</em>, which is the obligation a hand-written index creates. <code>AC-7</code> was reassigned the same way. Self-containment moved from a property of the generator to an assertion. <strong>This is the rare review change that made the plan both smaller and stronger</strong>: one file cannot drift from itself.</p>
+    <p><strong>What Q5 changed.</strong> The prose ban is gone and the driving tree's exemption is adopted, because Q2 had already removed the ban's premise — a reader who drives a session never types a command. The warning that replaces it is asserted rather than trusted: <code>AC-4</code> requires it to exist and to precede the first command block, both proven by induction. <strong>The owner's written reason arrived truncated</strong>, and the reading taken is recorded in Q5 so it can be corrected before T07 if the unfinished clause carried a further condition.</p>
+    <p><strong>What Q12 added.</strong> A second graduation run, and with it a dimension the single run could not have: the delta in consultations between run one and run two. <code>AC-10</code> requires it to be recorded and interpreted, T20 forbids editing the document between the runs, and a flat or rising count is written down as a finding about the document rather than about the driver. Tasks went from twenty-two to twenty-three.</p>
+    <p><strong>What did not change, across both reviews.</strong> Acceptance is a walkthrough and not coverage. Both reviews expanded what the document contains and left the definition of finished alone.</p>
+  </details>
+</section>
+
+</main>
+
+<!-- ===== PLAN-SOTA REVIEW LAYER v1 — FIXED MACHINERY, COPY VERBATIM =====
+     Not a placeholder: reproduce this <style> + <script> pair exactly in every plan.
+     Annotations, Questionable verdicts, and proposed phase statuses persist to
+     localStorage (key: plan filename). The browser NEVER writes this file; canonical
+     []/[wip]/[x]/[f] markers stay agent-owned. Export produces a `plan-sota-review v1`
+     block (clipboard + visible box) and, when running under Lavish Editor, queues it
+     once via window.lavish.queuePrompt(). -->
+<style>
+  .rv-btn { font: 600 11px/1 system-ui, sans-serif; padding: 3px 9px; border-radius: 999px;
+    border: 1px solid var(--muted, #8884); background: transparent; color: var(--fg, inherit);
+    cursor: pointer; opacity: .55; vertical-align: middle; margin-left: 8px; }
+  .rv-btn:hover { opacity: 1; border-color: var(--accent, #7c6cf0); }
+  .rv-btn.rv-on { opacity: 1; background: var(--accent, #7c6cf0); color: var(--bg, #fff); border-color: transparent; }
+  .rv-note-box { display: block; margin: 8px 0; padding: 8px 12px; border: 1px dashed var(--accent, #7c6cf0);
+    border-radius: 8px; font-size: 13px; min-height: 1.5em; background: color-mix(in srgb, var(--accent, #7c6cf0) 6%, transparent); outline: none; }
+  .rv-note-box:empty::before { content: attr(data-ph); opacity: .5; font-style: italic; }
+  .rv-note-box[hidden] { display: none; }
+  .rv-verdict { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 10px 0 2px; }
+  .rv-verdict-tag { font: 700 10px/1 system-ui, sans-serif; letter-spacing: .08em; opacity: .6; margin-right: 2px; }
+  .rv-status-chip { font: 600 11px/1 ui-monospace, monospace; margin-left: 10px; padding: 3px 9px;
+    border-radius: 999px; border: 1px dotted var(--muted, #8884); background: transparent;
+    color: var(--fg, inherit); cursor: pointer; opacity: .6; }
+  .rv-status-chip:hover { opacity: 1; }
+  .rv-status-chip.rv-on { opacity: 1; border-style: solid; border-color: var(--accent, #7c6cf0); color: var(--accent, #7c6cf0); }
+  #rv-drawer { position: fixed; right: 16px; bottom: 16px; z-index: 9999; font: 13px/1.45 system-ui, sans-serif;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  #rv-pill { font: 700 12px/1 system-ui, sans-serif; padding: 10px 16px; border-radius: 999px; border: none;
+    cursor: pointer; background: var(--accent, #7c6cf0); color: var(--bg, #fff); box-shadow: 0 4px 16px #0004; }
+  #rv-panel { width: min(420px, calc(100vw - 32px)); max-height: 60vh; overflow: auto; padding: 14px;
+    border-radius: 12px; border: 1px solid var(--muted, #8884); background: var(--bg, #fff);
+    color: var(--fg, inherit); box-shadow: 0 8px 32px #0005; }
+  #rv-panel h4 { margin: 0 0 8px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; opacity: .7; }
+  #rv-list { margin: 0 0 10px; padding: 0; list-style: none; font-size: 12px; }
+  #rv-list li { padding: 3px 0; border-bottom: 1px solid #8882; overflow-wrap: anywhere; }
+  #rv-out { width: 100%; min-height: 140px; margin-top: 10px; font: 11px/1.5 ui-monospace, monospace;
+    border: 1px solid var(--muted, #8884); border-radius: 8px; padding: 8px; background: transparent; color: inherit; }
+  #rv-msg { font-size: 11px; opacity: .75; margin-top: 6px; }
+  @media print { #rv-drawer { display: none; } }
+</style>
+<script>
+(function () {
+  'use strict';
+  var FILE = decodeURIComponent(location.pathname.split('/').pop() || 'plan.html');
+  var KEY = 'plan-sota-review:' + FILE;
+  var LEGACY_KEY = 'planf3-review:' + FILE; // pre-rename state; read once, never written
+  var PROPOSE = ['', '[]', '[wip]', '[x]', '[f]'];
+  var state = { a: {}, v: {}, s: {} }, persisted = true;
+  try { state = JSON.parse(localStorage.getItem(KEY) || localStorage.getItem(LEGACY_KEY) || 'null') || state; } catch (e) { persisted = false; }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); persisted = true; }
+    catch (e) { persisted = false; }
+    refresh();
+  }
+  function el(tag, cls, txt) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (txt) n.textContent = txt;
+    if (tag === 'button') { n.type = 'button'; n.setAttribute('data-lavish-action', ''); }
+    return n;
+  }
+  function clean(t) { return String(t || '').replace(/\|/g, '/').replace(/\s*\r?\n\s*/g, ' >> ').trim(); }
+  var registry = []; // {key, label, kind: 'section'|'phase'|'q'}
+
+  function noteBox(key, host, placeholder) {
+    var box = el('div', 'rv-note-box');
+    box.contentEditable = 'true';
+    box.setAttribute('data-ph', placeholder || 'Type your note for the agent…');
+    box.hidden = !(state.a[key]);
+    if (state.a[key]) box.textContent = state.a[key];
+    box.addEventListener('input', function () {
+      var t = box.textContent.trim();
+      if (t) state.a[key] = t; else delete state.a[key];
+      save();
+    });
+    host.appendChild(box);
+    return box;
+  }
+  function annotable(key, label, heading, host, kind) {
+    registry.push({ key: key, label: label, kind: kind });
+    var box = noteBox(key, host);
+    heading.insertAdjacentElement('afterend', box);
+    var btn = el('button', 'rv-btn' + (state.a[key] ? ' rv-on' : ''), '✎ note');
+    btn.addEventListener('click', function () {
+      box.hidden = !box.hidden;
+      if (!box.hidden) box.focus();
+    });
+    heading.appendChild(btn);
+    box.addEventListener('input', function () { btn.classList.toggle('rv-on', !!state.a[key]); });
+  }
+
+  // Sections
+  Array.prototype.forEach.call(document.querySelectorAll('main > section[id]'), function (sec) {
+    var h = sec.querySelector('h2'); if (!h) return;
+    annotable('#' + sec.id, h.textContent.trim(), h, sec, 'section');
+  });
+  // Phases: annotation + proposed-status chip
+  Array.prototype.forEach.call(document.querySelectorAll('#phases .phase'), function (ph, i) {
+    var h = ph.querySelector('h3'); if (!h) return;
+    var key = 'phase-' + (i + 1);
+    var label = h.textContent.replace(/^\s*\[[^\]]*\]\s*/, '').trim();
+    annotable(key, label, h, ph, 'phase');
+    var chip = el('button', 'rv-status-chip' + (state.s[key] ? ' rv-on' : ''));
+    chip.textContent = state.s[key] ? 'propose ' + state.s[key] : 'propose…';
+    chip.title = 'Cycle a PROPOSED status (exported as feedback — the file marker is only changed by the agent)';
+    chip.addEventListener('click', function () {
+      var next = PROPOSE[(PROPOSE.indexOf(state.s[key] || '') + 1) % PROPOSE.length];
+      if (next) state.s[key] = next; else delete state.s[key];
+      chip.textContent = next ? 'propose ' + next : 'propose…';
+      chip.classList.toggle('rv-on', !!next);
+      save();
+    });
+    h.appendChild(chip);
+  });
+  // Questionables: verdict / option buttons + note
+  Array.prototype.forEach.call(document.querySelectorAll('#questionables details'), function (d, i) {
+    var key = 'q-' + (i + 1);
+    var summary = d.querySelector('summary');
+    var label = summary ? summary.textContent.trim().slice(0, 120) : key;
+    registry.push({ key: key, label: label, kind: 'q' });
+    var opts = (d.getAttribute('data-review-options') || '').split('|').map(function (s) { return s.trim(); }).filter(Boolean);
+    if (!opts.length) opts = ['APPROVE', 'REJECT', 'REVISE', 'DEFER'];
+    var row = el('div', 'rv-verdict');
+    row.appendChild(el('span', 'rv-verdict-tag', 'YOUR CALL'));
+    opts.forEach(function (opt) {
+      var b = el('button', 'rv-btn' + ((state.v[key] || {}).c === opt ? ' rv-on' : ''), opt);
+      b.addEventListener('click', function () {
+        if ((state.v[key] || {}).c === opt) { delete state.v[key]; }
+        else { state.v[key] = { c: opt }; }
+        Array.prototype.forEach.call(row.querySelectorAll('.rv-btn'), function (x) {
+          x.classList.toggle('rv-on', x.textContent === ((state.v[key] || {}).c || null));
+        });
+        qbox.hidden = !state.v[key] && !state.a[key];
+        save();
+      });
+      row.appendChild(b);
+    });
+    d.appendChild(row);
+    var qbox = noteBox(key, d, 'Why / what to change instead…');
+    if (state.v[key]) qbox.hidden = false;
+  });
+
+  // Drawer
+  var drawer = el('div'); drawer.id = 'rv-drawer';
+  var panel = el('div'); panel.id = 'rv-panel'; panel.hidden = true;
+  var pill = el('button'); pill.id = 'rv-pill';
+  pill.addEventListener('click', function () { panel.hidden = !panel.hidden; });
+  var list = el('ul'); list.id = 'rv-list';
+  var actions = el('div');
+  var exportBtn = el('button', 'rv-btn rv-on', 'Export Feedback');
+  var clearBtn = el('button', 'rv-btn', 'Clear review');
+  var out = el('textarea'); out.id = 'rv-out'; out.readOnly = true; out.hidden = true;
+  var msg = el('div'); msg.id = 'rv-msg';
+  var head = el('h4', null, 'Review — pending feedback');
+  actions.appendChild(exportBtn); actions.appendChild(clearBtn);
+  panel.appendChild(head); panel.appendChild(list); panel.appendChild(actions);
+  panel.appendChild(out); panel.appendChild(msg);
+  drawer.appendChild(panel); drawer.appendChild(pill);
+  document.body.appendChild(drawer);
+
+  function findLabel(key) {
+    for (var i = 0; i < registry.length; i++) if (registry[i].key === key) return registry[i].label;
+    return key;
+  }
+  function refresh() {
+    var n = Object.keys(state.a).length + Object.keys(state.v).length + Object.keys(state.s).length;
+    pill.textContent = '✎ Review (' + n + ')';
+    list.textContent = '';
+    Object.keys(state.v).forEach(function (k) { list.appendChild(el('li', null, '[verdict] ' + findLabel(k) + ' → ' + state.v[k].c)); });
+    Object.keys(state.s).forEach(function (k) { list.appendChild(el('li', null, '[status] ' + findLabel(k) + ' → propose ' + state.s[k])); });
+    Object.keys(state.a).forEach(function (k) { list.appendChild(el('li', null, '[note] ' + findLabel(k) + ': ' + state.a[k].slice(0, 90))); });
+    if (!n) list.appendChild(el('li', null, 'Nothing yet — click ✎ note on any section, a verdict on a Questionable, or propose… on a phase.'));
+    if (!persisted) msg.textContent = '⚠ localStorage unavailable — review state lives only in this tab.';
+  }
+  function buildExport() {
+    var L = ['plan-sota-review v1', 'plan: ' + FILE, 'title: ' + clean(document.title), 'exported: ' + new Date().toISOString(), ''];
+    var vk = Object.keys(state.v), sk = Object.keys(state.s), ak = Object.keys(state.a);
+    L.push('## verdicts');
+    vk.length ? vk.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | ' + clean(state.v[k].c) + ' | note: ' + (clean(state.a[k]) || '-'));
+    }) : L.push('- (none)');
+    L.push('', '## statuses');
+    sk.length ? sk.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | propose ' + state.s[k]);
+    }) : L.push('- (none)');
+    L.push('', '## annotations');
+    var solo = ak.filter(function (k) { return !state.v[k]; });
+    solo.length ? solo.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | ' + clean(state.a[k]));
+    }) : L.push('- (none)');
+    return L.join('\n');
+  }
+  exportBtn.addEventListener('click', function () {
+    var text = buildExport();
+    out.hidden = false; out.value = text;
+    out.focus(); out.select();
+    function done(m) { msg.textContent = m; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done('Copied — paste it into your next agent session.'); },
+        function () { done('Clipboard blocked — copy from the box below.'); });
+    } else {
+      try { done(document.execCommand('copy') ? 'Copied — paste it into your next agent session.' : 'Clipboard blocked — copy from the box below.'); }
+      catch (e) { done('Clipboard blocked — copy from the box below.'); }
+    }
+    if (window.lavish && typeof window.lavish.queuePrompt === 'function') {
+      window.lavish.queuePrompt(text, { tag: 'plan-sota-review', queueKey: 'plan-sota-review' });
+      msg.textContent += ' Also queued to the agent via Lavish.';
+    }
+  });
+  clearBtn.addEventListener('click', function () {
+    if (!confirm('Clear all review state for this plan?')) return;
+    state = { a: {}, v: {}, s: {} };
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    location.reload();
+  });
+  refresh();
+})();
+</script>
+
+
+<!-- Mermaid runtime — renders every <pre class="mermaid"> block. Only external reference in the file. -->
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      primaryColor: '#0B2B26',
+      primaryTextColor: '#DAF1DE',
+      primaryBorderColor: '#235347',
+      lineColor: '#8EB69B',
+      fontFamily: 'Archivo,"Helvetica Neue",Helvetica,Arial,sans-serif'
+    }
+  });
+</script>
+</body>
+</html>
