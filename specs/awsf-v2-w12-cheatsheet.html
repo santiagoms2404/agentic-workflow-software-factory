@@ -569,10 +569,10 @@ flowchart LR
     <h4>8. The structure fences: the index, and nothing external</h4>
     <p class="serves"><code class="serves">INV-8</code> <code class="serves">INV-9</code> <code class="serves">AC-7</code> <code class="serves">AC-8</code></p>
     <ul class="checklist">
-      <li><code class="status">[]</code> Assert set equality between the index entries and the section ids, in both directions, with the failure message naming the direction</li>
-      <li><code class="status">[]</code> Assert the document contains no external reference — no <code>http</code> or protocol-relative URL, no script source, no external stylesheet, no remote font, no remote image</li>
-      <li><code class="status">[]</code> Write into the header why a hand-written index needs a fence at all: it is the one part of a single-file document that can silently disagree with the rest of it</li>
-      <li><code class="status">[]</code> Keep both assertions in the same test file as T07's, and say in the ticket why that serialization is deliberate rather than a dependency</li>
+      <li><code class="status">[x]</code> Assert set equality between the index entries and the section ids, in both directions, with the failure message naming the direction</li>
+      <li><code class="status">[x]</code> Assert the document contains no external reference — no <code>http</code> or protocol-relative URL, no script source, no external stylesheet, no remote font, no remote image</li>
+      <li><code class="status">[x]</code> Write into the header why a hand-written index needs a fence at all: it is the one part of a single-file document that can silently disagree with the rest of it</li>
+      <li><code class="status">[x]</code> Keep both assertions in the same test file as T07's, and say in the ticket why that serialization is deliberate rather than a dependency</li>
     </ul>
 
     <h4>9. Ship the companion specimens, so a vacuous green is impossible</h4>

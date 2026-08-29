@@ -35,6 +35,12 @@ import { repoRoot } from "./_walk.ts";
 // `ID|FROM->TO|actors=A,B|spawn=BOOLEAN|interactive=BOOLEAN`; configured items
 // use `workflow|ID` or `gate|ID`; tiers use `Tn|default=CALLS`.
 //
+// INDEX AND SELF-CONTAINMENT: Q10 removed the generator. Its hand-written
+// index is now the one part of this single-file document that can silently
+// disagree with the rest, so `nav[data-awsf-index]` anchors and section ids are
+// set-equal. Self-containment used to be a generator property; it is now an
+// assertion, because there is no generator to provide it.
+//
 // M2 builds these fences before M3 creates their subject. The explicit path
 // assertion below keeps that intentional absence loud rather than vacuously
 // green; the content assertions become live as soon as the file lands.
@@ -202,6 +208,50 @@ test("every command in a cheatsheet command block exists", () => {
   );
 });
 
+function indexEntries(html: string): readonly string[] {
+  const index = /<nav\b[^>]*\bdata-awsf-index(?:=(?:"[^"]*"|'[^']*'|[^\s>]+))?[^>]*>([\s\S]*?)<\/nav>/i.exec(html);
+  assert.ok(index, "docs/cheatsheet.html needs one nav[data-awsf-index] carrying its hand-written index");
+  return [...(index[1] ?? "").matchAll(/<a\b[^>]*\bhref\s*=\s*["']#([^"'#\s>]+)["'][^>]*>/gi)].map(
+    (match) => match[1] ?? "",
+  );
+}
+
+function sectionIds(html: string): readonly string[] {
+  return [...html.matchAll(/<section\b[^>]*\bid\s*=\s*["']([^"'\s>]+)["'][^>]*>/gi)].map(
+    (match) => match[1] ?? "",
+  );
+}
+
+function assertIndexMatchesSections(html: string): void {
+  const index = new Set(indexEntries(html));
+  const sections = new Set(sectionIds(html));
+  const missingFromIndex = difference(sections, index);
+  const pointingAtNoSection = difference(index, sections);
+
+  assert.deepEqual(
+    missingFromIndex,
+    [],
+    `sections -> index differs; sections missing from index: ${JSON.stringify(missingFromIndex)}`,
+  );
+  assert.deepEqual(
+    pointingAtNoSection,
+    [],
+    `index -> sections differs; index entries pointing at no section: ${JSON.stringify(pointingAtNoSection)}`,
+  );
+}
+
+function externalReferences(html: string): readonly string[] {
+  const patterns: readonly [string, RegExp][] = [
+    ["http URL", /https?:\/\//i],
+    ["protocol-relative URL", /(^|["'=(\s])\/\//m],
+    ["script source", /<script\b[^>]*\bsrc\s*=/i],
+    ["external stylesheet", /<link\b[^>]*\brel\s*=\s*["']?stylesheet\b/i],
+    ["remote font", /@font-face\b[\s\S]*?url\(\s*["']?(?:https?:)?\/\//i],
+    ["remote image", /<img\b[^>]*\bsrc\s*=\s*["']?(?:https?:)?\/\//i],
+  ];
+  return patterns.filter(([, pattern]) => pattern.test(html)).map(([name]) => name);
+}
+
 test("the reader warning exists before the first command block", () => {
   if (CHEATSHEET === undefined) return;
   const warning = READER_WARNING_BLOCK.exec(CHEATSHEET);
@@ -229,6 +279,27 @@ test("the reader warning exists before the first command block", () => {
       "the reader warning must appear before the first command block so the reader knows an assistant, not the reader, runs what follows",
     );
   }
+});
+
+test("the hand-written index is set-equal to section ids", () => {
+  assert.ok(
+    CHEATSHEET !== undefined,
+    "docs/cheatsheet.html is missing; the index fence has one known subject, so absence is a defect, not a vacuous pass",
+  );
+  assertIndexMatchesSections(CHEATSHEET);
+});
+
+test("the cheatsheet has no external references", () => {
+  assert.ok(
+    CHEATSHEET !== undefined,
+    "docs/cheatsheet.html is missing; the self-containment fence has one known subject, so absence is a defect, not a vacuous pass",
+  );
+  const references = externalReferences(CHEATSHEET);
+  assert.deepEqual(
+    references,
+    [],
+    `docs/cheatsheet.html must be self-contained; external references found: ${references.join(", ")}`,
+  );
 });
 
 for (const factClass of FACT_CLASSES) {
