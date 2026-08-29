@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="system">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWSF &mdash; driving the factory</title>
+<style>
+:root {
+  --bg:#DAF1DE; --surface:#C6E4CF; --surface-soft:#CFE9D7; --fg:#051F20;
+  --muted:#235347; --accent:#A8480E; --cool:#1E7A4B; --warn:#8A6318;
+  --danger:#9B3A22; --good:#1E7A4B; --border:#8EB69B;
+  --accent-soft:rgba(168,72,14,.12); --accent-line:rgba(168,72,14,.40);
+  --pending:#8EB69B; --strong:#051F20;
+  --font-ui:Archivo,"Helvetica Neue",Helvetica,Arial,sans-serif;
+  --font-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --rail:252px; --maxw:864px;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:#051F20; --surface:#0B2B26; --surface-soft:#163832; --fg:#DAF1DE;
+    --muted:#8EB69B; --accent:#F26A1B; --cool:#5FCF8E; --warn:#E2B25C;
+    --danger:#F08A72; --good:#5FCF8E; --border:#235347;
+    --accent-soft:rgba(242,106,27,.16); --accent-line:rgba(242,106,27,.40);
+    --pending:#4C7C63; --strong:#FFFFFF;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg:#051F20; --surface:#0B2B26; --surface-soft:#163832; --fg:#DAF1DE;
+  --muted:#8EB69B; --accent:#F26A1B; --cool:#5FCF8E; --warn:#E2B25C;
+  --danger:#F08A72; --good:#5FCF8E; --border:#235347;
+  --accent-soft:rgba(242,106,27,.16); --accent-line:rgba(242,106,27,.40);
+  --pending:#4C7C63; --strong:#FFFFFF;
+  color-scheme:dark;
+}
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body { margin:0; background:var(--bg); color:var(--fg); font:400 17px/1.68 var(--font-ui); }
+
+html, .rail { scrollbar-width:thin; scrollbar-color:var(--border) transparent; }
+::-webkit-scrollbar { width:12px; height:12px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:var(--border); border-radius:999px; border:3px solid var(--bg); }
+::-webkit-scrollbar-thumb:hover { background:var(--accent); }
+::-webkit-scrollbar-corner { background:transparent; }
+h1,h2,h3 { line-height:1.2; letter-spacing:-.028em; }
+h1 { font:800 33px/1.06 var(--font-ui); margin:0 0 7px; }
+h2 { font:800 25.5px/1.14 var(--font-ui); margin:0 0 11px; }
+p { margin:0 0 14px; max-width:74ch; }
+a { color:var(--accent); text-decoration:none; }
+strong { color:var(--strong); font-weight:700; }
+code { font:400 13.6px/1.5 var(--font-mono); background:var(--surface-soft); border-radius:5px; padding:1.5px 5px; word-break:break-word; }
+ul { margin:0 0 14px; padding-left:20px; }
+li { margin:3px 0; }
+
+.page { display:grid; grid-template-columns:var(--rail) minmax(0,1fr); gap:40px; max-width:calc(var(--rail) + var(--maxw) + 40px); margin:auto; padding:0 24px; }
+
+.rail { position:sticky; top:0; align-self:start; max-height:100vh; overflow-y:auto; padding:34px 0 60px; }
+.rail-group { margin:22px 0 7px; font:600 10.5px/1 var(--font-ui); letter-spacing:.18em; text-transform:uppercase; color:var(--muted); }
+.rail-group:first-child { margin-top:0; }
+.rail a { display:flex; align-items:center; gap:9px; padding:4px 10px 4px 8px; border-radius:8px; font-size:14.4px; color:var(--muted); border-left:2px solid transparent; }
+.rail a:hover { color:var(--fg); background:var(--surface); border-left-color:var(--accent); }
+
+.dot { flex:none; width:8px; height:8px; border-radius:50%; background:var(--pending); box-shadow:0 0 0 1px var(--border) inset; }
+.dot.built { background:var(--good); }
+.dot.part { background:var(--warn); }
+.dot.pending { background:transparent; box-shadow:0 0 0 1.5px var(--pending) inset; }
+
+.doc { padding:34px 0 140px; min-width:0; }
+header.masthead { padding-bottom:22px; border-bottom:1px solid var(--border); margin-bottom:8px; }
+.eyebrow { font:600 11px/1 var(--font-ui); letter-spacing:.2em; text-transform:uppercase; color:var(--accent); margin:0 0 9px; }
+.sub { color:var(--muted); margin:0 0 16px; }
+
+.topbar { display:flex; align-items:center; justify-content:space-between; gap:16px; padding-top:34px; }
+.themetoggle { display:inline-flex; align-items:center; gap:8px; background:var(--surface); color:var(--muted); border:1px solid var(--border); border-radius:999px; padding:7px 14px; font:500 12.5px/1 var(--font-ui); letter-spacing:.04em; cursor:pointer; }
+.themetoggle:hover { color:var(--fg); border-color:var(--accent); }
+.themetoggle svg { width:15px; height:15px; fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
+.themetoggle .glyph { display:none; }
+:root[data-theme="system"] .themetoggle .glyph.system,
+:root[data-theme="light"] .themetoggle .glyph.light,
+:root[data-theme="dark"] .themetoggle .glyph.dark { display:inline-flex; }
+
+.reader-warning { max-width:none; margin:20px 0 8px; padding:13px 17px; background:var(--accent-soft); border-left:2px solid var(--accent); border-radius:0 12px 12px 0; font-size:15.4px; }
+
+.legend { display:flex; flex-wrap:wrap; gap:16px; margin:16px 0 0; padding:12px 17px; background:var(--surface); border:1px solid var(--border); border-radius:12px; font-size:13.6px; color:var(--muted); }
+.legend span.item { display:inline-flex; align-items:center; gap:8px; }
+
+section { padding:34px 0; border-top:1px solid var(--border); scroll-margin-top:24px; }
+.secstatus { display:flex; align-items:baseline; gap:9px; color:var(--muted); font-size:14.4px; }
+.secstatus .dot { position:relative; top:1px; }
+[data-awsf-fact-class] { list-style:none; padding:0; margin:14px 0 0; display:flex; flex-wrap:wrap; gap:6px; }
+[data-awsf-fact-class] li { margin:0; }
+[data-awsf-fact-class] code { display:inline-block; border:1px solid var(--border); background:var(--surface); padding:4px 9px; font-size:13.2px; }
+
+@media (max-width:900px) {
+  .page { grid-template-columns:minmax(0,1fr); gap:0; padding:0 16px; }
+  .rail { position:static; max-height:none; padding:0 0 8px; border-bottom:1px solid var(--border); }
+  .doc { padding-top:20px; }
+  .topbar { padding-top:20px; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+<nav class="rail" data-awsf-index aria-label="Index">
+  <div class="topbar">
+    <span class="rail-group" style="margin:0">Index</span>
+    <button type="button" class="themetoggle" id="theme-toggle" aria-live="polite">
+      <span class="glyph system"><svg viewBox="0 0 24 24"><rect x="2.5" y="4" width="19" height="13" rx="2"></rect><path d="M9 20h6"></path></svg></span>
+      <span class="glyph light"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.2"></circle><path d="M12 2v2M12 20v2M4.2 4.2l1.5 1.5M18.3 18.3l1.5 1.5M2 12h2M20 12h2M4.2 19.8l1.5-1.5M18.3 5.7l1.5-1.5"></path></svg></span>
+      <span class="glyph dark"><svg viewBox="0 0 24 24"><path d="M20 14.5A8.3 8.3 0 0 1 9.5 4 8.4 8.4 0 1 0 20 14.5Z"></path></svg></span>
+      <span id="theme-label">System</span>
+    </button>
+  </div>
+  <p class="rail-group">Orientation</p>
+    <a href="#start-here"><span class="dot pending"></span>Start here</a>
+  <p class="rail-group">Walkthrough</p>
+    <a href="#install"><span class="dot pending"></span>Install it</a>
+    <a href="#prime-a-session"><span class="dot pending"></span>Prime a session</a>
+    <a href="#one-small-job"><span class="dot pending"></span>Give it one small job</a>
+    <a href="#watch-it"><span class="dot pending"></span>Watch it work</a>
+    <a href="#read-a-refusal"><span class="dot pending"></span>Read a refusal</a>
+    <a href="#stop-at-the-signature"><span class="dot pending"></span>Stop at the signature</a>
+  <p class="rail-group">Boundaries</p>
+    <a href="#boundaries"><span class="dot pending"></span>What you are never asked to do</a>
+    <a href="#what-this-owns"><span class="dot pending"></span>What this document owns</a>
+    <a href="#limits"><span class="dot pending"></span>What this document does not cover</a>
+  <p class="rail-group">Reference</p>
+    <a href="#reference-commands"><span class="dot part"></span>Commands</a>
+    <a href="#reference-lifecycle-states"><span class="dot part"></span>Lifecycle states</a>
+    <a href="#reference-legal-edges"><span class="dot part"></span>Legal edges</a>
+    <a href="#reference-owner-acts"><span class="dot part"></span>Owner acts</a>
+    <a href="#reference-workflows-and-gates"><span class="dot part"></span>Workflows and gates</a>
+    <a href="#reference-risk-tiers"><span class="dot part"></span>Risk tiers and call ceilings</a>
+</nav>
+
+<main class="doc">
+<header class="masthead">
+  <p class="eyebrow">AWSF</p>
+  <h1>Driving the factory</h1>
+  <p class="sub">One file. Open it anywhere, with nothing installed and no network.</p>
+  <p class="reader-warning" data-awsf-reader-warning><strong>You will not type any of the commands in this guide.</strong> You describe the job in your own words, and marimba &mdash; the assistant &mdash; runs them for you. Commands are shown only so you can see what it did on your behalf.</p>
+  <p class="legend">
+    <span class="item"><span class="dot built"></span>written</span>
+    <span class="item"><span class="dot part"></span>partly written</span>
+    <span class="item"><span class="dot pending"></span>not yet written</span>
+    <span class="item">A dot never says built about something that is not.</span>
+  </p>
+</header>
+
+<section id="start-here">
+  <p class="eyebrow">Orientation</p>
+  <h2>Start here</h2>
+  <p class="secstatus"><span class="dot pending"></span>Not yet written. What this document is, who it is for, and what it costs to follow. Task 12.</p>
+</section>
+
+<section id="install">
+  <p class="eyebrow">Walkthrough &middot; leg 1 of 6</p>
+  <h2>Install it</h2>
+  <p class="secstatus"><span class="dot pending"></span>Not yet written. The one leg the reader performs personally. Task 12.</p>
+</section>
+
+<section id="prime-a-session">
+  <p class="eyebrow">Walkthrough &middot; leg 2 of 6</p>
+  <h2>Prime a session</h2>
+  <p class="secstatus"><span class="dot pending"></span>Not yet written. Opening a session that already knows about the factory. Task 12.</p>
+</section>
+
+<section id="one-small-job">
+  <p class="eyebrow">Walkthrough &middot; leg 3 of 6</p>
+  <h2>Give it one small job</h2>
+  <p class="secstatus"><span class="dot pending"></span>Not yet written. The worked example, described in the reader&rsquo;s own words. Task 12.</p>
+</section>
+
+<section id="watch-it">
+  <p class="eyebrow">Walkthrough &middot; leg 4 of 6</p>
+  <h2>Watch it work</h2>
+  <p class="secstatus"><span class="dot pending"></span>Not yet written. What to look at while a job runs, and what each thing means. Task 12.</p>
+</section>
+
+<section id="read-a-refusal">
+  <p class="eyebrow">Walkthrough &middot; leg 5 of 6</p>
+  <h2>Read a refusal</h2>
+  <p class="secstatus"><span class="dot pending"></span>Not yet written. Reading a refusal you did not cause. Task 13.</p>
+</section>
+
+<section id="stop-at-the-signature">
+  <p class="eyebrow">Walkthrough &middot; leg 6 of 6</p>
+  <h2>Stop at the signature</h2>
+  <p class="secstatus"><span class="dot pending"></span>Not yet written. The acts a person performs and an assistant is refused. Task 13.</p>
+</section>
+
+<section id="boundaries">
+  <p class="eyebrow">Boundaries</p>
+  <h2>What you are never asked to do</h2>
+  <p class="secstatus"><span class="dot pending"></span>Not yet written. Each boundary with the one sentence that says why. Task 14.</p>
+</section>
+
+<section id="what-this-owns">
+  <p class="eyebrow">Boundaries</p>
+  <h2>What this document owns</h2>
+  <p class="secstatus"><span class="dot pending"></span>Not yet written. The reader&rsquo;s route and six fenced fact classes, and nothing else. Task 14.</p>
+</section>
+
+<section id="limits">
+  <p class="eyebrow">Boundaries</p>
+  <h2>What this document does not cover</h2>
+  <p class="secstatus"><span class="dot pending"></span>Not yet written. Accepted absences, who owns each, and the acceptance limit. Task 14.</p>
+</section>
+
+<section id="reference-commands">
+  <p class="eyebrow">Reference &middot; class 1 of 6</p>
+  <h2>Commands</h2>
+  <p class="secstatus"><span class="dot part"></span>Fenced set in place &mdash; prose not yet written. Set-equal to <code>CLI_COMMANDS</code>. The explanation beside it is task 16.</p>
+  <ul data-awsf-fact-class="commands">
+    <li><code>init</code></li>
+    <li><code>project</code></li>
+    <li><code>new</code></li>
+    <li><code>start</code></li>
+    <li><code>run</code></li>
+    <li><code>status</code></li>
+    <li><code>watch</code></li>
+    <li><code>rework</code></li>
+    <li><code>review</code></li>
+    <li><code>raise</code></li>
+    <li><code>journey</code></li>
+    <li><code>land</code></li>
+    <li><code>publish</code></li>
+    <li><code>cancel</code></li>
+    <li><code>retry</code></li>
+    <li><code>doctor</code></li>
+    <li><code>gc</code></li>
+    <li><code>dash</code></li>
+    <li><code>db rebuild</code></li>
+    <li><code>ticket</code></li>
+    <li><code>backlog</code></li>
+    <li><code>quota</code></li>
+    <li><code>stage</code></li>
+  </ul>
+</section>
+
+<section id="reference-lifecycle-states">
+  <p class="eyebrow">Reference &middot; class 2 of 6</p>
+  <h2>Lifecycle states</h2>
+  <p class="secstatus"><span class="dot part"></span>Fenced set in place &mdash; prose not yet written. Set-equal to <code>TASK_STATES</code>. The explanation beside it is task 16.</p>
+  <ul data-awsf-fact-class="lifecycle-states">
+    <li><code>DRAFT</code></li>
+    <li><code>PREPARED</code></li>
+    <li><code>RUNNING</code></li>
+    <li><code>GATING</code></li>
+    <li><code>REVIEWING</code></li>
+    <li><code>AWAITING_OWNER</code></li>
+    <li><code>LANDING</code></li>
+    <li><code>LANDED</code></li>
+    <li><code>PUBLISHED</code></li>
+    <li><code>BLOCKED</code></li>
+    <li><code>CANCELLED</code></li>
+  </ul>
+</section>
+
+<section id="reference-legal-edges">
+  <p class="eyebrow">Reference &middot; class 3 of 6</p>
+  <h2>Legal edges</h2>
+  <p class="secstatus"><span class="dot part"></span>Fenced set in place &mdash; prose not yet written. Set-equal to <code>LEGAL_EDGES</code>. The explanation beside it is task 16.</p>
+  <ul data-awsf-fact-class="legal-edges">
+    <li><code>L1|DRAFT->PREPARED|actors=host|spawn=false|interactive=false</code></li>
+    <li><code>L2|DRAFT->BLOCKED|actors=host|spawn=false|interactive=false</code></li>
+    <li><code>L3|DRAFT->CANCELLED|actors=human|spawn=false|interactive=true</code></li>
+    <li><code>L4|PREPARED->RUNNING|actors=host|spawn=true|interactive=false</code></li>
+    <li><code>L5|PREPARED->BLOCKED|actors=host|spawn=false|interactive=false</code></li>
+    <li><code>L6|PREPARED->CANCELLED|actors=human|spawn=false|interactive=true</code></li>
+    <li><code>L7|RUNNING->GATING|actors=host|spawn=false|interactive=false</code></li>
+    <li><code>L8|RUNNING->BLOCKED|actors=host|spawn=false|interactive=false</code></li>
+    <li><code>L9|RUNNING->CANCELLED|actors=human|spawn=false|interactive=true</code></li>
+    <li><code>L10|GATING->RUNNING|actors=host,owner|spawn=true|interactive=false</code></li>
+    <li><code>L11|GATING->REVIEWING|actors=host|spawn=true|interactive=false</code></li>
+    <li><code>L12|GATING->AWAITING_OWNER|actors=host|spawn=false|interactive=false</code></li>
+    <li><code>L13|GATING->BLOCKED|actors=host|spawn=false|interactive=false</code></li>
+    <li><code>L14|GATING->CANCELLED|actors=human|spawn=false|interactive=true</code></li>
+    <li><code>L15|REVIEWING->AWAITING_OWNER|actors=host|spawn=false|interactive=false</code></li>
+    <li><code>L16|REVIEWING->RUNNING|actors=owner|spawn=true|interactive=false</code></li>
+    <li><code>L17|REVIEWING->BLOCKED|actors=host|spawn=false|interactive=false</code></li>
+    <li><code>L18|REVIEWING->CANCELLED|actors=human|spawn=false|interactive=true</code></li>
+    <li><code>L19|AWAITING_OWNER->RUNNING|actors=human|spawn=true|interactive=true</code></li>
+    <li><code>L20|AWAITING_OWNER->LANDING|actors=human|spawn=false|interactive=true</code></li>
+    <li><code>L21|AWAITING_OWNER->BLOCKED|actors=host|spawn=false|interactive=false</code></li>
+    <li><code>L22|AWAITING_OWNER->CANCELLED|actors=human|spawn=false|interactive=true</code></li>
+    <li><code>L23|LANDING->LANDED|actors=host|spawn=false|interactive=false</code></li>
+    <li><code>L24|LANDING->BLOCKED|actors=host|spawn=false|interactive=false</code></li>
+    <li><code>L25|AWAITING_OWNER->REVIEWING|actors=owner,human|spawn=true|interactive=true</code></li>
+    <li><code>L26|RUNNING->AWAITING_OWNER|actors=host|spawn=false|interactive=false</code></li>
+    <li><code>L27|LANDED->PUBLISHED|actors=human|spawn=false|interactive=true</code></li>
+  </ul>
+</section>
+
+<section id="reference-owner-acts">
+  <p class="eyebrow">Reference &middot; class 4 of 6</p>
+  <h2>Owner acts</h2>
+  <p class="secstatus"><span class="dot part"></span>Fenced set in place &mdash; prose not yet written. Set-equal to the delegation guard&rsquo;s verb loop. The explanation beside it is task 16.</p>
+  <ul data-awsf-fact-class="owner-acts">
+    <li><code>land</code></li>
+    <li><code>cancel</code></li>
+    <li><code>rework</code></li>
+    <li><code>review</code></li>
+    <li><code>journey</code></li>
+    <li><code>raise</code></li>
+    <li><code>publish</code></li>
+  </ul>
+</section>
+
+<section id="reference-workflows-and-gates">
+  <p class="eyebrow">Reference &middot; class 5 of 6</p>
+  <h2>Workflows and gates</h2>
+  <p class="secstatus"><span class="dot part"></span>Fenced set in place &mdash; prose not yet written. Set-equal to the loaded configuration. The explanation beside it is task 16.</p>
+  <ul data-awsf-fact-class="workflows-and-gates">
+    <li><code>workflow|scout</code></li>
+    <li><code>workflow|plan</code></li>
+    <li><code>workflow|build</code></li>
+    <li><code>workflow|plan-build-test</code></li>
+    <li><code>workflow|build-review</code></li>
+    <li><code>workflow|simple-sdlc</code></li>
+    <li><code>workflow|intake</code></li>
+    <li><code>workflow|design-to-plan</code></li>
+    <li><code>gate|test</code></li>
+    <li><code>gate|typecheck</code></li>
+    <li><code>gate|lint</code></li>
+  </ul>
+</section>
+
+<section id="reference-risk-tiers">
+  <p class="eyebrow">Reference &middot; class 6 of 6</p>
+  <h2>Risk tiers and call ceilings</h2>
+  <p class="secstatus"><span class="dot part"></span>Fenced set in place &mdash; prose not yet written. Set-equal to <code>TIERS</code> and <code>DEFAULT_CALL_CEILINGS</code>. The explanation beside it is task 16.</p>
+  <ul data-awsf-fact-class="risk-tiers-and-ceilings">
+    <li><code>T0|default=1</code></li>
+    <li><code>T1|default=3</code></li>
+    <li><code>T2|default=5</code></li>
+  </ul>
+</section>
+
+</main>
+</div>
+<script>
+(function () {
+  var KEY = "awsf-cheatsheet-theme";
+  var ORDER = ["system", "light", "dark"];
+  var LABEL = { system: "System", light: "Light", dark: "Dark" };
+  var root = document.documentElement;
+  var button = document.getElementById("theme-toggle");
+  var label = document.getElementById("theme-label");
+
+  function read() {
+    try {
+      var stored = window.localStorage.getItem(KEY);
+      return ORDER.indexOf(stored) === -1 ? "system" : stored;
+    } catch (error) {
+      return "system";
+    }
+  }
+
+  function apply(mode) {
+    root.setAttribute("data-theme", mode);
+    label.textContent = LABEL[mode];
+    button.setAttribute("aria-label", "Theme: " + LABEL[mode] + ". Click to change.");
+  }
+
+  apply(read());
+
+  button.addEventListener("click", function () {
+    var next = ORDER[(ORDER.indexOf(read()) + 1) % ORDER.length];
+    try {
+      if (next === "system") window.localStorage.removeItem(KEY);
+      else window.localStorage.setItem(KEY, next);
+    } catch (error) { /* storage unavailable: the choice lasts this page view */ }
+    apply(next);
+  });
+})();
+</script>
+</body>
+</html>
