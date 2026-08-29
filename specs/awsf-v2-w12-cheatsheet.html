@@ -99,7 +99,7 @@ code.inv { color:var(--accent); } code.ac { color:var(--good); }
     <summary>Metadata</summary>
     <dl>
       <dt>created</dt><dd>2026-08-27</dd>
-      <dt>modified</dt><dd>2026-08-27, 2026-08-27, 2026-08-27, 2026-08-28, 2026-08-29, 2026-08-29</dd>
+      <dt>modified</dt><dd>2026-08-27, 2026-08-27, 2026-08-27, 2026-08-28, 2026-08-29, 2026-08-29, 2026-08-29</dd>
       <dt>commits</dt><dd>none — authoring only; no implementation code was written, none — first owner review applied, none — second owner review applied; the plan, its build prompts and its ticket set land in this commit</dd>
       <dt>agent name</dt><dd>claude-opus-5</dd>
       <dt>session id</dt><dd>not recorded — AGENTS.md invariant 1 keeps live session state out of every committed file in this repository</dd>
@@ -707,7 +707,7 @@ in the generated file, then run it at the lowest risk tier.</pre>
 
   <!-- ================= M4 ================= -->
   <div class="phase">
-    <h3><code class="status">[wip]</code> Milestone M4: Behind the curtain, and the figures</h3>
+    <h3><code class="status">[x]</code> Milestone M4: Behind the curtain, and the figures</h3>
     <p><em>The half the owner's review added, and the reason it is safe to add.</em> Every fact class here is bound by M2's set-equality fences, so completeness is a test rather than a promise. This milestone is three tasks rather than five because Q10 removed the renderer.</p>
 
     <h4>16. Write the reference half, to satisfy the fences rather than to look complete</h4>
@@ -734,12 +734,12 @@ in the generated file, then run it at the lowest risk tier.</pre>
     <p>The full fence set against the finished document, with every leg and every class observed failing and returning.</p>
     <p class="serves"><code class="serves">AC-6</code> <code class="serves">AC-7</code> <code class="serves">AC-8</code></p>
     <ul class="checklist">
-      <li><code class="status">[]</code> <code>npm run test:unit</code> — green with the finished document in the tree</li>
-      <li><code class="status">[]</code> All six classes are set-equal against the real document, and the twelve induced failures re-run against it rather than only against specimens (<code>AC-6</code>)</li>
-      <li><code class="status">[]</code> The index fence is green over the added reference sections and still bites in both directions (<code>AC-7</code>)</li>
-      <li><code class="status">[]</code> The no-external-reference scan is green and the document opens with the network disabled (<code>AC-8</code>)</li>
-      <li><code class="status">[]</code> Every figure is legible in both themes and no text overflows its card</li>
-      <li><code class="status">[]</code> <code>npm run lint</code> and <code>npm run typecheck</code> — exit 0</li>
+      <li><code class="status">[x]</code> <code>npm run test:unit</code> — green with the finished document in the tree</li>
+      <li><code class="status">[x]</code> All six classes are set-equal against the real document, and the twelve induced failures re-run against it rather than only against specimens (<code>AC-6</code>)</li>
+      <li><code class="status">[x]</code> The index fence is green over the added reference sections and still bites in both directions (<code>AC-7</code>)</li>
+      <li><code class="status">[x]</code> The no-external-reference scan is green and the document opens with the network disabled (<code>AC-8</code>)</li>
+      <li><code class="status">[x]</code> Every figure is legible in both themes and no text overflows its card</li>
+      <li><code class="status">[x]</code> <code>npm run lint</code> and <code>npm run typecheck</code> — exit 0</li>
     </ul>
     <div class="loop">🔁 <strong>Do not exit this milestone until every box is checked.</strong> A reference half whose classes are not all fenced is the rejected shape wearing a test suite.</div>
   </div>
@@ -1100,6 +1100,14 @@ flowchart LR
     <p><strong>Friction and later action.</strong> The full unit suite takes longer than the initial three-minute gate allowance, so M3's close reran it with a ten-minute allowance. M4 must keep its real-file induced-failure work distinct: it owns the six reference fact classes and their twelve directions, which M3 deliberately did not claim.</p>
     <p><strong>Decision made here.</strong> No new product decision was made. M3 records the verification boundary explicitly: command, warning, index, offline, walkthrough-entry and scrub checks are proven here; fact-class assertions remain M4 work.</p>
     <p><strong>Landing evidence.</strong> M3 commits: <code>6c42a32</code> (T11), <code>def29b7</code> (T12), <code>ea156c6</code> (T13), <code>7b6ab01</code> (T14), and this T15 landing commit. At close, <code>npm run test:unit</code> passed 1509/1509, <code>npm run lint</code> passed with 0 warnings and 0 errors across 404 files, and <code>npm run typecheck</code> exited 0 for core and dashboard.</p>
+  </details>
+  <details open>
+    <summary>2026-08-29 — M4 closed: every fact class and every fence proven against the finished document</summary>
+    <p><strong>Observably true.</strong> All six fact classes are fenced and set-equal against <code>docs/cheatsheet.html</code>: commands (23 entries), lifecycle states (11), legal edges (27), owner acts (7), workflows and gates (11), and risk tiers and ceilings (3). Every class had an extractable source, so <strong>none was routed</strong> under <code>INV-2</code>. The twelve induced failures were re-run against the real file rather than only against specimens: omitting the first entry of each class produced <code>&lt;class&gt;: source -&gt; document differs; missing entries: [&hellip;]</code> naming <code>init</code>, <code>DRAFT</code>, <code>L1|DRAFT-&gt;PREPARED|actors=host|spawn=false|interactive=false</code>, <code>land</code>, <code>workflow|scout</code> and <code>T0|default=1</code> respectively; injecting <code>INVENTED-XYZ</code> into each class produced <code>document -&gt; source differs; invented entries: ["INVENTED-XYZ"]</code>. Every violation was removed and the real-file fence returned green. The index fence is green over the six added reference sections (16 sections, 16 index anchors) and still bites both ways: dropping the <code>#start-here</code> anchor gave <code>sections -&gt; index differs</code>, and adding a <code>#ghost-xyz</code> anchor gave <code>index -&gt; sections differs</code>. The no-external-reference scan is green; an injected <code>https</code> reference gave <code>external references found: http URL</code> and removal returned green. The document was opened with the network disabled and rendered correctly: it has no <code>&lt;link&gt;</code>, no <code>&lt;script src&gt;</code>, no <code>@font-face</code> or <code>@import</code>, its only <code>url()</code> references are internal SVG fragment ids, and its one inline script touches only <code>localStorage</code> and the DOM. All three figures are inline SVG whose every element binds a theme token with no hardcoded color, and every <code>&lt;text&gt;</code> coordinate sits inside its card rect and the viewBox in both themes.</p>
+    <p><strong>Final task states.</strong> T16 <code>[x]</code>, T17 <code>[x]</code>, T18 <code>[x]</code>. There are no <code>[f]</code> rows or blocking blocks in M4.</p>
+    <p><strong>Friction and later action.</strong> Each isolated <code>tsx --test</code> invocation cold-starts in roughly 25 seconds, so the seventeen-run real-document induced-failure sweep took about seven minutes and had to run detached rather than inside one gate window. M5 runs <code>npm test</code> across all four layers as a graduation gate and must budget for a run of that length rather than assuming the unit suite's allowance covers it.</p>
+    <p><strong>Decisions made here.</strong> The induced-failure sweep mutates <code>docs/cheatsheet.html</code> in place and restores it from the original text held in memory, guarded by an exit and signal handler, because <code>cheatsheet-reconciliation.test.ts</code> binds a fixed path and cannot be pointed at a copy. This is the <em>induce then remove</em> method <code>AC-6</code> already names, applied to the committed file. Offline was verified as two claims, not one: the <code>externalReferences</code> scan is green, and a separate static audit confirmed nothing in the render path fetches. Figure legibility was verified by measuring every text coordinate against its card and viewBox, not by eye.</p>
+    <p><strong>Landing evidence.</strong> M4 commits: <code>d42aeaa</code> (T16), <code>3bf189a</code> (T17), and this T18 landing commit. At close, <code>npm run test:unit</code> passed 1509/1509, <code>npm run lint</code> passed with 0 warnings and 0 errors across 404 files, and <code>npm run typecheck</code> exited 0 for core and dashboard.</p>
   </details>
 </section>
 
