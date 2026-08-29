@@ -4,7 +4,15 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { CLI_COMMANDS } from "../../../src/cli/main.ts";
 import { repoRoot, relRepo } from "./_walk.ts";
-import { DRIVING_REL, drivingDocs } from "./_driving.ts";
+import {
+  AWSF_CLI,
+  DRIVING_REL,
+  JUST_TARGET,
+  NPM_RUN,
+  commandsIn,
+  drivingDocs,
+  justRecipes,
+} from "./_driving.ts";
 
 const ROOT = repoRoot();
 const README = readFileSync(join(ROOT, "README.md"), "utf8");
@@ -28,22 +36,6 @@ function commandText(source: string, html = false): string[] {
 
 const DOCUMENTED = [...commandText(README), ...commandText(validationSection(), true)];
 
-const NPM_RUN = /\bnpm run ([a-z][\w:-]*)\b/g;
-/** `db rebuild` is the one two-word command; the alternation cannot match a hyphen. */
-const AWSF_CLI = /(?:^|\s)awsf (db rebuild|[a-z]+)\b/g;
-const JUST_TARGET = /(?:^|\s)just ([a-z][\w-]*)\b/g;
-
-function normalizeAwsfInvocation(text: string): string {
-  return text.replace(/(^|\s)(?:npm run awsf --|just awsf)\s+/g, "$1awsf ");
-}
-
-function commandsIn(texts: string[], pattern: RegExp): string[] {
-  return texts.flatMap((text) => {
-    const commandSource = pattern === AWSF_CLI ? normalizeAwsfInvocation(text) : text;
-    return [...commandSource.matchAll(pattern)].map((match) => match[1] ?? "");
-  });
-}
-
 function commands(pattern: RegExp): string[] {
   return commandsIn(DOCUMENTED, pattern);
 }
@@ -63,14 +55,6 @@ const npmScripts = commands(NPM_RUN);
 const cliCommands = commands(AWSF_CLI);
 const justTargets = commands(JUST_TARGET);
 
-function justRecipes(): Map<string, string> {
-  const recipes = new Map<string, string>();
-  for (const match of JUSTFILE.matchAll(/^([a-z][\w-]*)(?:\s+\*args)?:\n((?: {4}.*\n?)+)/gm)) {
-    recipes.set(match[1] ?? "", match[2] ?? "");
-  }
-  return recipes;
-}
-
 test("every README and Validation npm run command is a root package script", () => {
   assert.deepEqual([...new Set(npmScripts.filter((script) => !(script in PACKAGE.scripts)))], []);
 });
@@ -80,7 +64,7 @@ test("every README and Validation awsf command is in the CLI command table", () 
 });
 
 test("every README and Validation just command is a justfile target", () => {
-  const recipes = justRecipes();
+  const recipes = justRecipes(JUSTFILE);
   assert.deepEqual([...new Set(justTargets.filter((target) => !recipes.has(target)))], []);
 });
 
@@ -121,7 +105,7 @@ function fencedShellLines(markdown: string): string[] {
 test("every command in a driving-document shell fence exists", () => {
   // Vacuous until docs/driving/ exists — `walkFiles` returns [] for a missing
   // directory. The test below is what proves this one will bite when it does.
-  const recipes = justRecipes();
+  const recipes = justRecipes(JUSTFILE);
   const offenders: string[] = [];
   for (const file of drivingDocs()) {
     const lines = fencedShellLines(readFileSync(file, "utf8"));
@@ -179,7 +163,7 @@ test("the driving-tree scanner reads fences and not prose, and its matchers bite
 });
 
 test("just targets only delegate to canonical root npm scripts", () => {
-  const recipes = justRecipes();
+  const recipes = justRecipes(JUSTFILE);
   const offenders: string[] = [];
   for (const [target, body] of recipes) {
     const npmTest = /\bnpm test\b/.test(body);

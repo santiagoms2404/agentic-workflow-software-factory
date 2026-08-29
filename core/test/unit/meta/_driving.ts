@@ -1,6 +1,31 @@
 import { join } from "node:path";
 import { repoRoot, walkFiles } from "./_walk.ts";
 
+export const NPM_RUN = /\bnpm run ([a-z][\w:-]*)\b/g;
+/** `db rebuild` is the one two-word command; the alternation cannot match a hyphen. */
+export const AWSF_CLI = /(?:^|\s)awsf (db rebuild|[a-z]+)\b/g;
+export const JUST_TARGET = /(?:^|\s)just ([a-z][\w-]*)\b/g;
+
+function normalizeAwsfInvocation(text: string): string {
+  return text.replace(/(^|\s)(?:npm run awsf --|just awsf)\s+/g, "$1awsf ");
+}
+
+/** Shared by every document fence so the three invocation forms cannot drift. */
+export function commandsIn(texts: readonly string[], pattern: RegExp): string[] {
+  return texts.flatMap((text) => {
+    const commandSource = pattern === AWSF_CLI ? normalizeAwsfInvocation(text) : text;
+    return [...commandSource.matchAll(pattern)].map((match) => match[1] ?? "");
+  });
+}
+
+export function justRecipes(justfile: string): Map<string, string> {
+  const recipes = new Map<string, string>();
+  for (const match of justfile.matchAll(/^([a-z][\w-]*)(?:\s+\*args)?:\n((?: {4}.*\n?)+)/gm)) {
+    recipes.set(match[1] ?? "", match[2] ?? "");
+  }
+  return recipes;
+}
+
 /**
  * The driving-document tree: the owner-side skill and command documents that
  * teach a driving session how to operate AWSF.

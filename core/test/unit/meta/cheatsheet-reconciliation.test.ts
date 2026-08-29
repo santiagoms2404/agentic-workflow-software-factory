@@ -6,13 +6,22 @@ import { CLI_COMMANDS } from "../../../src/cli/main.ts";
 import { loadConfig } from "../../../src/config/load.ts";
 import { LEGAL_EDGES, TASK_STATES } from "../../../src/state/task-machine.ts";
 import { DEFAULT_CALL_CEILINGS, TIERS } from "../../../src/state/tiers.ts";
+import { AWSF_CLI, JUST_TARGET, NPM_RUN, commandsIn, justRecipes } from "./_driving.ts";
 import { repoRoot } from "./_walk.ts";
 
 // ---------------------------------------------------------------------------
-// The cheatsheet gets its own reconciliation file because it is one future
-// HTML document with exact, marked fact sets. doc-reconciliation.test.ts scans
-// command-shaped text across existing documents; widening that prose scanner
-// would make both contracts less precise.
+// The cheatsheet has its own reconciliation file because it is one known HTML
+// path whose absence is a defect. doc-reconciliation.test.ts owns the README,
+// the v1 plan, and an optional driving-document tree. Mixing those scopes would
+// hide their different absence contracts and scatter this document's five HTML
+// fences across an unrelated suite.
+//
+// COMMAND SCOPE: only `<pre>` command blocks are claims. Commands named in
+// prose remain exempt, as they are in the driving tree. Here the reader drives
+// a session rather than a terminal, so the hazard a prose ban would address is
+// answered by the document's own warning: the reader does not type commands;
+// an assistant runs them. The warning carries that trade, so it must have the
+// `data-awsf-reader-warning` marker and precede the first command block.
 //
 // MARKER CONVENTION (the contract T16 writes against): each of the six classes
 // appears exactly once as `<ul data-awsf-fact-class="CLASS">`. The marked ul is
@@ -26,15 +35,19 @@ import { repoRoot } from "./_walk.ts";
 // `ID|FROM->TO|actors=A,B|spawn=BOOLEAN|interactive=BOOLEAN`; configured items
 // use `workflow|ID` or `gate|ID`; tiers use `Tn|default=CALLS`.
 //
-// The file is deliberately inert while docs/cheatsheet.html is absent. M2
-// builds fences before M4 writes their subject. Once that one known path exists,
-// every class assertion below becomes live and a missing marker fails loudly.
+// M2 builds these fences before M3 creates their subject. The explicit path
+// assertion below keeps that intentional absence loud rather than vacuously
+// green; the content assertions become live as soon as the file lands.
 // ---------------------------------------------------------------------------
 
 const ROOT = repoRoot();
 const CHEATSHEET_PATH = join(ROOT, "docs", "cheatsheet.html");
 const CONFIG_PATH = join(ROOT, "awsf.config.yaml");
 const GUARD_PATH = join(ROOT, "docs", "driving", "marimba", "delegation-guard.sh");
+const PACKAGE = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")) as {
+  scripts: Record<string, string>;
+};
+const JUSTFILE = readFileSync(join(ROOT, "justfile"), "utf8");
 const CHEATSHEET = existsSync(CHEATSHEET_PATH) ? readFileSync(CHEATSHEET_PATH, "utf8") : undefined;
 
 interface FactClass {
@@ -143,6 +156,80 @@ function assertSetEquality(factClass: FactClass, sourceEntries: readonly string[
     `${factClass.name}: document -> source differs; invented entries: ${JSON.stringify(inventedByDocument)}`,
   );
 }
+
+const COMMAND_BLOCK = /<pre\b[^>]*>([\s\S]*?)<\/pre>/gi;
+const READER_WARNING_BLOCK =
+  /<([a-z][\w-]*)\b[^>]*\bdata-awsf-reader-warning(?:=(?:"[^"]*"|'[^']*'|[^\s>]+))?[^>]*>([\s\S]*?)<\/\1>/i;
+
+function commandBlocks(html: string): string[] {
+  return [...html.matchAll(COMMAND_BLOCK)].map((match) => match[1] ?? "");
+}
+
+function visibleText(html: string): string {
+  return html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function unknownCommands(html: string): string[] {
+  const blocks = commandBlocks(html);
+  const recipes = justRecipes(JUSTFILE);
+  return [
+    ...commandsIn(blocks, NPM_RUN)
+      .filter((script) => !(script in PACKAGE.scripts))
+      .map((script) => `npm run ${script}`),
+    ...commandsIn(blocks, AWSF_CLI)
+      .filter((command) => !CLI_COMMANDS.includes(command))
+      .map((command) => `awsf ${command}`),
+    ...commandsIn(blocks, JUST_TARGET)
+      .filter((target) => !recipes.has(target))
+      .map((target) => `just ${target}`),
+  ];
+}
+
+test("the cheatsheet exists at its one required path", () => {
+  assert.ok(
+    CHEATSHEET !== undefined,
+    "docs/cheatsheet.html is missing; this fence has one known subject, so absence is a defect, not a vacuous pass",
+  );
+});
+
+test("every command in a cheatsheet command block exists", () => {
+  if (CHEATSHEET === undefined) return;
+  const offenders = [...new Set(unknownCommands(CHEATSHEET))];
+  assert.deepEqual(
+    offenders,
+    [],
+    `docs/cheatsheet.html command blocks name commands that do not exist: ${offenders.join(", ")}`,
+  );
+});
+
+test("the reader warning exists before the first command block", () => {
+  if (CHEATSHEET === undefined) return;
+  const warning = READER_WARNING_BLOCK.exec(CHEATSHEET);
+  assert.ok(
+    warning,
+    "docs/cheatsheet.html needs a data-awsf-reader-warning statement: it replaces the prose command ban for a reader who drives a session instead of a terminal",
+  );
+
+  const text = visibleText(warning[2] ?? "");
+  assert.match(
+    text,
+    /(?:no need to type|(?:do|will) not type|never type)[^.]{0,160}\bcommands?\b/i,
+    "the reader warning must say that the reader does not type the commands; this is what keeps command-shaped prose exempt",
+  );
+  assert.match(
+    text,
+    /\b(?:assistant|marimba)\b[^.]{0,160}\b(?:runs?|types?|typing)\b/i,
+    "the reader warning must say that an assistant runs the commands; this answers the hazard the prose ban would have addressed",
+  );
+
+  const firstCommandBlock = /<pre\b[^>]*>/i.exec(CHEATSHEET)?.index;
+  if (firstCommandBlock !== undefined) {
+    assert.ok(
+      warning.index < firstCommandBlock,
+      "the reader warning must appear before the first command block so the reader knows an assistant, not the reader, runs what follows",
+    );
+  }
+});
 
 for (const factClass of FACT_CLASSES) {
   test(`${factClass.name} are set-equal between the source and cheatsheet`, () => {

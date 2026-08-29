@@ -559,11 +559,11 @@ flowchart LR
     <h4>7. Check commands where they are shown, and make the reader warning load-bearing</h4>
     <p class="serves"><code class="serves">INV-1</code> <code class="serves">AC-3</code> <code class="serves">AC-4</code></p>
     <ul class="checklist">
-      <li><code class="status">[]</code> Add <code>core/test/unit/meta/cheatsheet-reconciliation.test.ts</code>, scoped to <code>docs/cheatsheet.html</code>, with a header stating why it is a separate file from <code>doc-reconciliation.test.ts</code></li>
-      <li><code class="status">[]</code> Assert every command in a command block resolves against <code>CLI_COMMANDS</code>, the root scripts, or a justfile target — using T05's extractor, never a second copy</li>
-      <li><code class="status">[]</code> Leave commands named in prose exempt, and write the reason into the header: the reader drives a session rather than a terminal, so the hazard the ban would have addressed is answered by the warning instead</li>
-      <li><code class="status">[]</code> Assert the reader warning exists and appears <strong>before</strong> the first command block, and make the failure message say what the warning is for</li>
-      <li><code class="status">[]</code> Make the fence fail loudly, not vacuously, when the document is missing — one known path, and its absence is a defect</li>
+      <li><code class="status">[x]</code> Add <code>core/test/unit/meta/cheatsheet-reconciliation.test.ts</code>, scoped to <code>docs/cheatsheet.html</code>, with a header stating why it is a separate file from <code>doc-reconciliation.test.ts</code></li>
+      <li><code class="status">[x]</code> Assert every command in a command block resolves against <code>CLI_COMMANDS</code>, the root scripts, or a justfile target — using T05's extractor, never a second copy</li>
+      <li><code class="status">[x]</code> Leave commands named in prose exempt, and write the reason into the header: the reader drives a session rather than a terminal, so the hazard the ban would have addressed is answered by the warning instead</li>
+      <li><code class="status">[x]</code> Assert the reader warning exists and appears <strong>before</strong> the first command block, and make the failure message say what the warning is for</li>
+      <li><code class="status">[x]</code> Make the fence fail loudly, not vacuously, when the document is missing — one known path, and its absence is a defect</li>
     </ul>
 
     <h4>8. The structure fences: the index, and nothing external</h4>
