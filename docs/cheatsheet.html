@@ -290,7 +290,7 @@ npm run awsf -- status TASK</pre>
 <section id="read-a-refusal">
   <p class="eyebrow">Walkthrough &middot; leg 5 of 6</p>
   <h2>Read a refusal</h2>
-  <p class="secstatus"><span class="dot part"></span>The route is written. The worked refusal, and the difference between a thing that stops you and a record that reports on you, are Task 13.</p>
+  <p class="secstatus"><span class="dot built"></span>How to read a refusal you did not cause, and the one distinction everything else in this factory rests on.</p>
 
   <p>A refusal is the factory declining to go on without something it requires. It is not a crash and it is not an error message: it is a recorded decision, with a reason attached, that leaves the job somewhere you can still act on it.</p>
 
@@ -314,13 +314,40 @@ npm run awsf -- status TASK</pre>
     <li><b>What you may now decide</b>A refused job is not a dead job. The factory names what remains open, and that list is what leg 6 hands you.</li>
   </ul>
 
+  <h3>A worked refusal</h3>
+  <p>Here is one of each of those four, with every name replaced by a placeholder. It is the <em>shape</em> of a refusal rather than a picture of one: the real thing carries your job&rsquo;s own name and your job&rsquo;s own numbers.</p>
+  <p>The story behind it is short. The work was built, the project&rsquo;s configured checks ran and passed, and a second opinion was asked for. The opinion came back carrying a field the factory does not recognise. The factory will not record an opinion it cannot read in full, so the job arrived at the point where a valid opinion is required without one, and it stopped there.</p>
+  <pre>Job TASK, in project PROJECT
+
+  stopped at    the point where a second opinion is recorded
+  what refused  the check that reads an opinion before recording it
+  required      an opinion in the shape the factory accepts
+  received      an opinion carrying one field the factory does not know
+  spent         the calls the build itself used, before any of this
+  not spent     nothing at all was spent on the refusal
+  still open    the acts named on leg 6, and what is left to spend on them</pre>
+
+  <p><strong>Read <em>what refused</em> and <em>required</em> together and you have the whole refusal.</strong> Every other line is the situation around it. Notice what the refusal is not: nothing crashed, nothing was lost, and nothing about the job was undone. A condition the factory requires was not met, so it declined to go further and left everything where it was.</p>
+
+  <p><strong>&ldquo;What was not spent&rdquo; is the line people skip, and it is the one that decides what you can afford next.</strong> Stopping is free. What was already spent getting to the stop is gone and does not come back, and it stays attached to the job rather than to the run &mdash; so asking for the same job again starts from what is left, not from the beginning. A second run started without knowing that number is a run that may not have enough left to finish.</p>
+
+  <h3>A thing that stops you, and a record that reports on you</h3>
+  <p>This is the distinction worth carrying away from this guide. Nearly everything in the factory is one of the two, they are easy to confuse in writing, and <strong>a reader who confuses them trusts the wrong one</strong>.</p>
+  <p><strong>A lock stops you at the door. A camera above the door tells somebody afterwards that you went through.</strong> Both are worth having, neither does the other&rsquo;s job, and no quantity of camera ever adds up to a lock.</p>
+  <ul class="answers">
+    <li><b>Things that stop</b>The refusal you just read. The job did not go on. Something was actually prevented, at the moment it was attempted.</li>
+    <li><b>Things that report</b>The dashboard, the status text, and the factory&rsquo;s running account of what happened. They watched, and they wrote it down. They prevented nothing, and were never built to.</li>
+  </ul>
+  <p><strong>Where this bites in practice.</strong> The checks row on leg 4 is a report: a list ran, and nothing in it failed. That is a true and useful thing to be told. Read as though it had <em>stopped</em> something, it becomes a promise nobody made. The confusion runs the other way too &mdash; hunting through the records for the trace of something a stop prevented is hunting for a thing that, by design, never happened.</p>
+  <p>So when anyone tells you the factory will not let something happen &mdash; this guide included &mdash; the useful question is which of the two they mean. <strong>And a thing that stops, stops in one place.</strong> The refusal you read stopped that job at that point. It is not a claim that nothing anywhere could ever get past. It is the shape of what this factory accepts, which is what the top of this leg said, and it is why the move is always to change the request.</p>
+
   <p class="curtain"><span class="lbl">Behind the curtain</span> A refusal names a condition, and the conditions are properties of the moves the factory is permitted to make; those moves are in <a href="#reference-legal-edges">Legal edges</a>. The stage a refused job comes to rest in is one of the entries in <a href="#reference-lifecycle-states">Lifecycle states</a>, and it is a resting place rather than a dead end.</p>
 </section>
 
 <section id="stop-at-the-signature">
   <p class="eyebrow">Walkthrough &middot; leg 6 of 6</p>
   <h2>Stop at the signature</h2>
-  <p class="secstatus"><span class="dot part"></span>The route is written. The acts themselves, and the evidence each one demands, are Task 13.</p>
+  <p class="secstatus"><span class="dot built"></span>The seven acts that are yours, and exactly what to have in hand before you choose one.</p>
 
   <p>The route ends in front of you. The factory has done everything it is allowed to do and stopped, holding a candidate change that has not been merged into anything. <strong>This is the second and last thing you do personally.</strong></p>
 
@@ -332,11 +359,29 @@ npm run awsf -- status TASK</pre>
 
   <p><strong>Nothing expires while you decide.</strong> A candidate waiting for a person stays waiting. Closing the session, shutting the machine, or coming back tomorrow changes nothing about the job&rsquo;s recorded state &mdash; the session was the thing driving, never the thing holding. And a candidate you never sign for changes nothing at all, which is exactly what makes the worked example safe for the next person to run.</p>
 
+  <h3>The seven acts that are yours</h3>
+  <p>Seven acts can move a job from here, and every one of them is yours: <code>land</code>, <code>cancel</code>, <code>rework</code>, <code>review</code>, <code>journey</code>, <code>raise</code> and <code>publish</code>. What makes them one set is not what they do, because they do quite different things. It is who may do them. <strong>Each is a decision a person takes, and each is refused to an assistant.</strong></p>
+
+  <p><em>Refused</em> is the exact word, and this is the place to use leg 5&rsquo;s distinction on something that matters. The refusal is a thing that stops, not a record that reports: the surface marimba runs through denies the call before the act can begin. So it holds whether or not the assistant has read any instruction, agrees with it, or has been talked round to a different view. What you will see instead is marimba preparing the act, explaining it, and stopping. <strong>That stop is the machine, not the manners.</strong></p>
+
+  <p>Each of the seven shows you what it is about to do and then asks. <strong>That screen is the authority on what the act costs and what it settles</strong> &mdash; for your job, at that moment, worked out there rather than copied from anywhere, this guide included. Read it before you answer it. What each of the seven is for is in <a href="#reference-owner-acts">Owner acts</a>.</p>
+
   <pre>npm run awsf -- status TASK
 npm run awsf -- land TASK</pre>
-  <p>The first is the evidence. The second is the act, and you type it yourself. marimba will prepare it and explain it, and it is refused by the machine if it tries to run it &mdash; not out of politeness, but because the tool surface denies it.</p>
+  <p>The first is the evidence. The second is the act, and you type it yourself. <code>TASK</code> stands for whatever name your job was given; you will see the real one in the session. <strong><code>land</code> is shown here because it is the act this route most often ends at, not because it is the one to pick.</strong> marimba will prepare and explain whichever of the seven the evidence supports, and it is denied all seven equally.</p>
 
-  <p><strong>This guide stops here.</strong> It tells you what to have in hand before you decide. It does not tell you which way to decide, and it never will.</p>
+  <h3>What must be in hand before you decide</h3>
+  <p>marimba&rsquo;s whole job on this leg is to put a fixed set of things in front of you. The set is short and it is the same every time. If one of them is missing, that missing thing is what to ask for.</p>
+  <ul class="answers">
+    <li><b>The handle</b>Which job this is, and which stage it has come to rest in.</li>
+    <li><b>What was asked for</b>The request as the factory received it &mdash; not as you said it. Leg 4 is where that gap first becomes visible; this is the leg where it costs you something.</li>
+    <li><b>What came back</b>The candidate change, set beside the boundary you wrote at leg 3.</li>
+    <li><b>Claim and measurement, kept apart</b>What the worker said it did, and what the checks measured, as two separate statements. The first is not evidence for the second, and where they disagree, the measurement is the one that is right.</li>
+    <li><b>What is left</b>What the job may still spend, how many correction rounds remain, and what is left of the allowance for sending it back for another look. Your job&rsquo;s numbers, not general ones.</li>
+    <li><b>Which acts the evidence supports</b>Of the seven, which ones the evidence would carry, which ones it would not, and the reason for each.</li>
+  </ul>
+
+  <p><strong>This guide stops here, and the stop is deliberate.</strong> It tells you what to have in hand before you decide. It does not tell you which way to decide, and it never will.</p>
 
   <p class="curtain"><span class="lbl">Behind the curtain</span> The acts only a person may perform are the list in <a href="#reference-owner-acts">Owner acts</a>, and each one makes a recorded move of its own in <a href="#reference-legal-edges">Legal edges</a>. That an assistant is refused them is a property of the tool surface it runs under, which is why it holds whether or not the assistant has read anything.</p>
 </section>
