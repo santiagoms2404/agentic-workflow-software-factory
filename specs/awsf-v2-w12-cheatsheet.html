@@ -548,12 +548,12 @@ flowchart LR
     <h4>6. The six fact classes, set-equal in both directions</h4>
     <p class="serves"><code class="serves">AC-6</code></p>
     <ul class="checklist">
-      <li><code class="status">[]</code> Extract each class from its source: <code>CLI_COMMANDS</code>; <code>TASK_STATES</code>; <code>LEGAL_EDGES</code>; the guard's verb loop; workflows and gates through the config loader; <code>TIERS</code> and <code>DEFAULT_CALL_CEILINGS</code></li>
-      <li><code class="status">[]</code> Read the guard's <strong>loop</strong>, never its header comment, and say so in the extractor's own comment with the measured discrepancy</li>
-      <li><code class="status">[]</code> Read the configuration through <code>core/src/config/load.ts</code> rather than parsing YAML by hand, so the fence cannot disagree with what the factory actually loads</li>
-      <li><code class="status">[]</code> Define one machine-readable marker per class — a data attribute on the element carrying the set — so extraction from the document is exact rather than a prose scan, and write the convention into the test header</li>
-      <li><code class="status">[]</code> Assert set equality per class and make each failure message name the class, the direction, and the differing entries</li>
-      <li><code class="status">[]</code> Repair the README's stale lifecycle numbers as part of this task, recording the measurement that shows they were wrong — the fence makes it mandatory rather than optional</li>
+      <li><code class="status">[x]</code> Extract each class from its source: <code>CLI_COMMANDS</code>; <code>TASK_STATES</code>; <code>LEGAL_EDGES</code>; the guard's verb loop; workflows and gates through the config loader; <code>TIERS</code> and <code>DEFAULT_CALL_CEILINGS</code></li>
+      <li><code class="status">[x]</code> Read the guard's <strong>loop</strong>, never its header comment, and say so in the extractor's own comment with the measured discrepancy</li>
+      <li><code class="status">[x]</code> Read the configuration through <code>core/src/config/load.ts</code> rather than parsing YAML by hand, so the fence cannot disagree with what the factory actually loads</li>
+      <li><code class="status">[x]</code> Define one machine-readable marker per class — a data attribute on the element carrying the set — so extraction from the document is exact rather than a prose scan, and write the convention into the test header</li>
+      <li><code class="status">[x]</code> Assert set equality per class and make each failure message name the class, the direction, and the differing entries</li>
+      <li><code class="status">[x]</code> Repair the README's stale lifecycle numbers as part of this task, recording the measurement that shows they were wrong — the fence makes it mandatory rather than optional</li>
     </ul>
 
     <h4>7. Check commands where they are shown, and make the reader warning load-bearing</h4>

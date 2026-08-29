@@ -33,7 +33,7 @@ tier ceiling.
 
 ```mermaid
 flowchart LR
-  subgraph SM["STATE MACHINE — governs the task · 10 states · 24 edges · 76 ordered rejections"]
+  subgraph SM["STATE MACHINE — governs the task · 11 states · 27 edges · 94 ordered rejections"]
     PREP["PREPARED"] --> RUN
     subgraph RUN["RUNNING — the phase engine governs the sojourn"]
       direction LR
@@ -59,7 +59,7 @@ Six pillars carry the design (full detail in the plan's [Solution](specs/awsf-pl
 
 ### The lifecycle
 
-Ten states, twenty-five legal edges, seventy-five rejected pairs evaluated
+Eleven states, twenty-seven legal edges, ninety-four rejected pairs evaluated
 against an eleven-step ordered rejection contract. The only path into
 `LANDED` passes through a human at a TTY and the persisted `LANDING` state.
 
@@ -98,8 +98,8 @@ stateDiagram-v2
   end note
 ```
 
-This lifecycle is implemented and exhaustively tested: all 25 legal edges,
-all 75 rejected pairs, and the ordered rejection contract are green. The
+This lifecycle is implemented and exhaustively tested: all 27 legal edges,
+all 94 rejected pairs, and the ordered rejection contract are green. The
 owner CLI supplies the interactive L19 `awsf rework TASK "<concrete defect>"`
 path, the interactive L25
 `awsf review TASK --reason "<why the recorded review is not evidence>"` path,
