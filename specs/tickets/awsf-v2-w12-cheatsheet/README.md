@@ -1010,6 +1010,21 @@ checked against whether the driver read it or remembered it.
 **The stated limit** *(repeated by both runs)*: the driver is the factory's author, so these runs
 prove the document is sufficient to drive with, not that it is comprehensible to somebody new.
 
+## M3 close — T15 walkthrough coverage and fence evidence
+
+The sixteen `document · walkthrough` entries are answered at the point where the reader needs them:
+
+| Entries | Where in `docs/cheatsheet.html` |
+| --- | --- |
+| O02, O03, O17, O18, O19 | **Give it one small job** — the requested result, six-leg order, route choice, and configured worker |
+| O04 | **Prime a session** — the owner-installed launcher boundary |
+| O22, O23, O26, I5 | **Watch it work** — request, builder, checks, and the dashboard/session split |
+| O28, O34, O40 | **Stop at the signature** — candidate versus request, evidence, and unchanged waiting state |
+| O29, O32 | **Read a refusal** — readable refusal evidence and durable project-namespaced history |
+| I4 | **Start here** and **Give it one small job** — real provider cost and the spend point |
+
+T15 induced each real-file failure with `node --experimental-strip-types --test core/test/unit/meta/cheatsheet-reconciliation.test.ts`: `docs/cheatsheet.html` plus `awsf frobnicate`; deleted and late reader warning; missing `limits` index entry and dangling `no-section` entry; and an external stylesheet at `https://example.test/induced.css`. Each run failed one target assertion and restored green. A local Chrome headless render of the file with `--host-resolver-rules="MAP * 0.0.0.0"` succeeded. The live-id scan found no task, attempt, session, run, revision, or UUID-shaped identifier beyond the `TASK` and `PROJECT` placeholders; the absolute-path scan found none. Tier labels are canonical fenced values, not live identifiers.
+
 ## Shared read-first set
 
 Every fresh session reads `AGENTS.md`, the named task and containing milestone in the HTML plan, and

@@ -99,7 +99,7 @@ code.inv { color:var(--accent); } code.ac { color:var(--good); }
     <summary>Metadata</summary>
     <dl>
       <dt>created</dt><dd>2026-08-27</dd>
-      <dt>modified</dt><dd>2026-08-27, 2026-08-27, 2026-08-27, 2026-08-28, 2026-08-29</dd>
+      <dt>modified</dt><dd>2026-08-27, 2026-08-27, 2026-08-27, 2026-08-28, 2026-08-29, 2026-08-29</dd>
       <dt>commits</dt><dd>none — authoring only; no implementation code was written, none — first owner review applied, none — second owner review applied; the plan, its build prompts and its ticket set land in this commit</dd>
       <dt>agent name</dt><dd>claude-opus-5</dd>
       <dt>session id</dt><dd>not recorded — AGENTS.md invariant 1 keeps live session state out of every committed file in this repository</dd>
@@ -604,7 +604,7 @@ flowchart LR
 
   <!-- ================= M3 ================= -->
   <div class="phase">
-    <h3><code class="status">[wip]</code> Milestone M3: The shell, and the walkthrough half</h3>
+    <h3><code class="status">[x]</code> Milestone M3: The shell, and the walkthrough half</h3>
     <p><em>The join.</em> It needs M1's friction log and M2's fences. The shell comes first because with no renderer the document's skeleton has to exist before a sentence can be written into it. Then six legs, in the reader's order, in the spine's In Plain Language register.</p>
     <figure>
       <pre class="mermaid">
@@ -693,14 +693,14 @@ in the generated file, then run it at the lowest risk tier.</pre>
     <p>The document's first real fence run, plus the induced failures that prove the legs bite on the actual file rather than only on a specimen.</p>
     <p class="serves"><code class="serves">AC-3</code> <code class="serves">AC-4</code> <code class="serves">AC-7</code> <code class="serves">AC-8</code></p>
     <ul class="checklist">
-      <li><code class="status">[]</code> <code>npm run test:unit</code> — green with the real document in the tree</li>
-      <li><code class="status">[]</code> An invented command in a real command block goes red and names the file and the command; removing it returns green (<code>AC-3</code>)</li>
-      <li><code class="status">[]</code> Deleting the reader warning goes red, and moving it after the first command block goes red; restoring it returns green (<code>AC-4</code>)</li>
-      <li><code class="status">[]</code> Removing a section's index entry goes red, and adding an entry for no section goes red (<code>AC-7</code>)</li>
-      <li><code class="status">[]</code> An injected external reference goes red; removing it returns green, and the file opens with the network disabled (<code>AC-8</code>)</li>
-      <li><code class="status">[]</code> Every <strong>document</strong> entry assigned to this half is answered, and the ticket README records where (<code>AC-5</code>)</li>
-      <li><code class="status">[]</code> A scan finds no identifier that is not <code>TASK</code> or <code>PROJECT</code>, and no absolute machine path (<code>INV-3</code>)</li>
-      <li><code class="status">[]</code> <code>npm run lint</code> and <code>npm run typecheck</code> — exit 0</li>
+      <li><code class="status">[x]</code> <code>npm run test:unit</code> — green with the real document in the tree</li>
+      <li><code class="status">[x]</code> An invented command in a real command block goes red and names the file and the command; removing it returns green (<code>AC-3</code>)</li>
+      <li><code class="status">[x]</code> Deleting the reader warning goes red, and moving it after the first command block goes red; restoring it returns green (<code>AC-4</code>)</li>
+      <li><code class="status">[x]</code> Removing a section's index entry goes red, and adding an entry for no section goes red (<code>AC-7</code>)</li>
+      <li><code class="status">[x]</code> An injected external reference goes red; removing it returns green, and the file opens with the network disabled (<code>AC-8</code>)</li>
+      <li><code class="status">[x]</code> Every <strong>document</strong> entry assigned to this half is answered, and the ticket README records where (<code>AC-5</code>)</li>
+      <li><code class="status">[x]</code> A scan finds no identifier that is not <code>TASK</code> or <code>PROJECT</code>, and no absolute machine path (<code>INV-3</code>)</li>
+      <li><code class="status">[x]</code> <code>npm run lint</code> and <code>npm run typecheck</code> — exit 0</li>
     </ul>
     <div class="loop">🔁 <strong>Do not exit this milestone until every box is checked.</strong> A fence never watched failing on the real file has only been tested against a specimen.</div>
   </div>
@@ -1092,6 +1092,14 @@ flowchart LR
     <p><strong>Final task states.</strong> T05 <code>[x]</code>, T06 <code>[x]</code>, T07 <code>[x]</code>, T08 <code>[x]</code>, T09 <code>[x]</code>, T10 <code>[x]</code>. There are no <code>[f]</code> rows or blocking blocks in M2.</p>
     <p><strong>Friction and decision.</strong> M2 intentionally precedes <code>docs/cheatsheet.html</code>. The required-path, index, and external-reference tests therefore failed only for that absent M3 subject: the full unit run recorded 1506 passing and 3 expected missing-subject failures. Owner direction on 2026-08-29 closes M2 with those three failures accepted until M3 creates the file. M3 must rerun the command, warning, index, and external-reference induced failures against the real document and turn the three missing-subject failures green.</p>
     <p><strong>Landing evidence.</strong> M2 commits: <code>4673b03</code> (T05), <code>e102bf9</code> (T06), <code>de7318d</code> (T07), <code>6b376dd</code> (T08), <code>e232688</code> (T09), and this T10 landing commit. <code>npm run lint</code> passed with 0 warnings and 0 errors across 404 files; <code>npm run typecheck</code> exited 0 for core and dashboard.</p>
+  </details>
+  <details open>
+    <summary>2026-08-29 — M3 closed: the real walkthrough document is fenced and complete</summary>
+    <p><strong>Observably true.</strong> <code>docs/cheatsheet.html</code> contains the self-contained Forest shell and all six walkthrough legs. The command fence rejected <code>awsf frobnicate</code> in a real command block; deleting the reader warning and moving it after the first command block each failed; an index entry omitted and a dangling index entry each failed; and an injected external stylesheet failed. Each violation was removed and the real-file fence returned green. The document rendered locally in Chrome with network resolution disabled. The ticket README records where all sixteen walkthrough <code>document</code> entries are answered, and the live-id and absolute-path scans found no prohibited value.</p>
+    <p><strong>Final task states.</strong> T11 <code>[x]</code>, T12 <code>[x]</code>, T13 <code>[x]</code>, T14 <code>[x]</code>, T15 <code>[x]</code>. There are no <code>[f]</code> rows or blocking blocks in M3.</p>
+    <p><strong>Friction and later action.</strong> The full unit suite takes longer than the initial three-minute gate allowance, so M3's close reran it with a ten-minute allowance. M4 must keep its real-file induced-failure work distinct: it owns the six reference fact classes and their twelve directions, which M3 deliberately did not claim.</p>
+    <p><strong>Decision made here.</strong> No new product decision was made. M3 records the verification boundary explicitly: command, warning, index, offline, walkthrough-entry and scrub checks are proven here; fact-class assertions remain M4 work.</p>
+    <p><strong>Landing evidence.</strong> M3 commits: <code>6c42a32</code> (T11), <code>def29b7</code> (T12), <code>ea156c6</code> (T13), <code>7b6ab01</code> (T14), and this T15 landing commit. At close, <code>npm run test:unit</code> passed 1509/1509, <code>npm run lint</code> passed with 0 warnings and 0 errors across 404 files, and <code>npm run typecheck</code> exited 0 for core and dashboard.</p>
   </details>
 </section>
 
