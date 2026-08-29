@@ -355,10 +355,18 @@ candidate failed that check and was reclassified: O16's missing `just` wrapper i
 absence the spine does not name, so it is answered by the document's command class instead. The
 check is the point — an unconfirmed owner-side label is how work disappears.
 
-**What the classification produced.** Twenty-five **document** entries (fifteen walkthrough, ten
+**What the classification produced.** Twenty-five **document** entries (sixteen walkthrough, nine
 reference), eight **route** entries across three named blocks, eight **owner-side** entries across
 two blocks, and seven **accepted absences**. Ten entries land in the reference half and thirty-eight
 in the walkthrough half.
+
+**The two reference-half numbers are allowed to differ, and the difference is not an error.** Ten
+entries sit in the reference half; **nine** of them are `document` entries. O39 is the tenth: it is
+an accepted absence that belongs to the reference half, so it carries the half without ever becoming
+something M4 writes. The count that binds a milestone is the disposition count, so M3 answers sixteen
+walkthrough `document` entries and M4 answers nine reference ones. Corrected on 2026-08-29 during
+T12, which answered the sixteen and counted them: the earlier reading of fifteen and ten subtracted
+the reference half's whole ten from the twenty-five instead of its nine `document` entries.
 
 | Disposition | Entries | Count |
 | --- | --- | ---: |
