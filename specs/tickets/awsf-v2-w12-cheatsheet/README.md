@@ -883,6 +883,29 @@ their requests changes. The one thing W01 no longer has to determine is whether 
 does. Neither the probe's settings file nor its output is committed: both carry an absolute machine
 path and stayed outside this repository under `INV-3`.
 
+**Confirmed a second time, in a live driving session, and it produced one further finding.** The
+headless probe was repeated interactively: the session was asked to run a Bash command containing
+`awsf land`, and fence 2 denied it. The session then explained the denial correctly, cited
+`docs/driving/marimba/CONTRACT.md` § 3 items 1 and 2 accurately, declined to perform the act —
+*"`awsf land` is an owner act regardless. In a driving session I prepare and explain it; the owner
+runs it themselves"* — and separately satisfied the harmless string-printing request by splitting
+the verb across two arguments. **That split is a documented property, not a hole:** § 3 item 1
+states that a quoted or split verb is not denied and that *"whitespace is the only shell
+transformation the fence undoes"*, and says the gap is *"stated rather than closed"* on purpose.
+The session drew the line in the right place — it refused the act and worked around only the
+over-denial that § 3 item 2 names.
+
+**The finding is a register mismatch between two W01 artifacts, and it is one this document must
+not inherit.** The guard's denial text ends *"this fence is the one that holds"*, which a driver
+reads at the moment of refusal as a statement that the boundary is a wall. `CONTRACT.md` § 3 ends
+the opposite way: *"Read that list as the operating envelope, not as a menu of ways around the
+fences. A driving session that decides to route around them can… the list above is here so no later
+session mistakes the envelope for a wall."* Both are true — the denial line is comparing the fence
+to the TTY check, not claiming inviolability — but a reader who sees only the denial over-trusts it.
+**The walkthrough's Leg 5 carries `CONTRACT.md`'s framing, never the denial line's**, because what a
+reader takes away is the whole subject of this workstream. This changes no entry's disposition and
+adds no route; W01's four requests stand as written.
+
 #### `W01-TICKET-PROMPT-FIDELITY` → W01, marimba's operating contract
 
 | Entry | What is missing | Why W12 cannot supply it | What would close it |
