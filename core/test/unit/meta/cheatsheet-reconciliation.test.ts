@@ -44,6 +44,11 @@ import { repoRoot } from "./_walk.ts";
 // M2 builds these fences before M3 creates their subject. The explicit path
 // assertion below keeps that intentional absence loud rather than vacuously
 // green; the content assertions become live as soon as the file lands.
+//
+// These in-memory specimens are the companion proof for every matcher below.
+// Delete them and the remaining fences report green forever while their subject
+// is absent: `_driving.ts` names the same danger, "delete the companion and what
+// is left reports green forever and catches nothing."
 // ---------------------------------------------------------------------------
 
 const ROOT = repoRoot();
@@ -251,6 +256,86 @@ function externalReferences(html: string): readonly string[] {
   ];
   return patterns.filter(([, pattern]) => pattern.test(html)).map(([name]) => name);
 }
+
+// The synthetic documents below keep every fence live while M3 has not yet
+// created docs/cheatsheet.html. Exact extracted output, rather than a truthy
+// result, prevents a widened or narrowed matcher from passing by accident.
+const COMMAND_SPECIMEN = [
+  "<p>Prose may name awsf frobnicate without becoming a command claim.</p>",
+  '<p data-awsf-reader-warning>You do not type commands. An assistant runs them.</p>',
+  "<pre>awsf status TASK\nnpm run awsf -- status TASK\njust awsf status TASK\nawsf frobnicate TASK\nnpm run awsf -- frobnicate TASK\njust awsf frobnicate TASK</pre>",
+].join("\n");
+
+test("the command specimen proves all invocation forms, prose exemption, and warning order", () => {
+  const blocks = commandBlocks(COMMAND_SPECIMEN);
+  assert.deepEqual(blocks, [
+    "awsf status TASK\nnpm run awsf -- status TASK\njust awsf status TASK\nawsf frobnicate TASK\nnpm run awsf -- frobnicate TASK\njust awsf frobnicate TASK",
+  ]);
+  assert.deepEqual(commandsIn(blocks, AWSF_CLI), ["status", "status", "status", "frobnicate", "frobnicate", "frobnicate"]);
+  assert.deepEqual(commandsIn(blocks, NPM_RUN), ["awsf", "awsf"]);
+  assert.deepEqual(commandsIn(blocks, JUST_TARGET), ["awsf", "awsf"]);
+  assert.deepEqual(unknownCommands(COMMAND_SPECIMEN), ["awsf frobnicate", "awsf frobnicate", "awsf frobnicate"]);
+
+  const lateWarning = COMMAND_SPECIMEN.replace(
+    '<p data-awsf-reader-warning>You do not type commands. An assistant runs them.</p>\n',
+    "",
+  ).concat('\n<p data-awsf-reader-warning>You do not type commands. An assistant runs them.</p>');
+  const warning = READER_WARNING_BLOCK.exec(COMMAND_SPECIMEN);
+  const late = READER_WARNING_BLOCK.exec(lateWarning);
+  assert.deepEqual(
+    [
+      (warning?.index ?? Infinity) < (/<pre\b/i.exec(COMMAND_SPECIMEN)?.index ?? -1),
+      (late?.index ?? -1) > (/<pre\b/i.exec(lateWarning)?.index ?? Infinity),
+    ],
+    [true, true],
+  );
+});
+
+for (const factClass of FACT_CLASSES) {
+  test(`${factClass.name} specimens name both set-equality directions`, () => {
+    const source = factClass.source();
+    assert.ok(source.length > 0, `${factClass.name}: specimen requires a non-empty source`);
+    const missing = source.slice(1);
+    const invented = [...source, "INVENTED"];
+    const list = (entries: readonly string[]) =>
+      `<ul data-awsf-fact-class="${factClass.marker}">${entries.map((entry) => `<li><code>${entry}</code></li>`).join("")}</ul>`;
+
+    assert.deepEqual(documentFacts(list(missing), factClass), missing);
+    assert.throws(
+      () => assertSetEquality(factClass, source, documentFacts(list(missing), factClass)),
+      new RegExp(escapeRegExp(`${factClass.name}: source -> document differs; missing entries: ${JSON.stringify([source[0]])}`)),
+    );
+    assert.deepEqual(documentFacts(list(invented), factClass), invented);
+    assert.throws(
+      () => assertSetEquality(factClass, source, documentFacts(list(invented), factClass)),
+      new RegExp(escapeRegExp(`${factClass.name}: document -> source differs; invented entries: ${JSON.stringify(["INVENTED"])}`)),
+    );
+  });
+}
+
+test("index specimens name a missing entry and an entry pointing at no section", () => {
+  const missingEntry = '<nav data-awsf-index><a href="#one">one</a></nav><section id="one"></section><section id="two"></section>';
+  const danglingEntry = '<nav data-awsf-index><a href="#one">one</a><a href="#ghost">ghost</a></nav><section id="one"></section>';
+
+  assert.deepEqual(indexEntries(missingEntry), ["one"]);
+  assert.deepEqual(sectionIds(missingEntry), ["one", "two"]);
+  assert.throws(() => assertIndexMatchesSections(missingEntry), /sections -> index differs; sections missing from index: \["two"\]/);
+  assert.deepEqual(indexEntries(danglingEntry), ["one", "ghost"]);
+  assert.deepEqual(sectionIds(danglingEntry), ["one"]);
+  assert.throws(() => assertIndexMatchesSections(danglingEntry), /index -> sections differs; index entries pointing at no section: \["ghost"\]/);
+});
+
+test("external-reference specimens pin every claimed reference kind", () => {
+  const specimens: readonly [string, string, readonly string[]][] = [
+    ["http URL", '<a href="https://example.test">link</a>', ["http URL"]],
+    ["protocol-relative URL", '<a href="//example.test">link</a>', ["protocol-relative URL"]],
+    ["script source", '<script src="local.js"></script>', ["script source"]],
+    ["external stylesheet", '<link rel="stylesheet" href="local.css">', ["external stylesheet"]],
+    ["remote font", "<style>@font-face { src: url(//example.test/font.woff2); }</style>", ["protocol-relative URL", "remote font"]],
+    ["remote image", '<img src="//example.test/image.svg">', ["protocol-relative URL", "remote image"]],
+  ];
+  for (const [, html, expected] of specimens) assert.deepEqual(externalReferences(html), expected);
+});
 
 test("the reader warning exists before the first command block", () => {
   if (CHEATSHEET === undefined) return;
