@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 import type { AgentSummary, PhaseSummary, SessionDetailResponse } from "../../shared/types.ts";
 import { axisTicks, contextMeterPercent, formatDuration, formatTokens, providerMark } from "../display.ts";
 import { layoutTimeline } from "../timeline.ts";
+import LaneIcon from "./LaneIcon.vue";
 
 const props = defineProps<{ session: SessionDetailResponse; selectedPhaseId: string | null }>();
 const emit = defineEmits<{ inspect: [phaseId: string] }>();
@@ -110,9 +111,9 @@ function scrollTimeline(direction: -1 | 1): void {
             <span v-for="(tick, index) in ticks" :key="tick.percent" class="axis-label" :class="{ 'edge-start': index === 0, 'edge-end': index === ticks.length - 1 }" :style="{ left: `${tick.percent}%` }">{{ tick.label }}</span>
           </div>
         </div>
-        <div v-for="lane in lanes" :key="lane.key" class="waterfall-row lane-row" :class="{ 'evidence-lane': lane.key === 'code' && (session.gates.length > 0 || Boolean(session.candidateSha)) }">
+        <div v-for="lane in lanes" :key="lane.key" class="waterfall-row lane-row" :class="{ 'agent-lane': Boolean(lane.agent), 'evidence-lane': lane.key === 'code' && (session.gates.length > 0 || Boolean(session.candidateSha)) }">
           <div class="waterfall-label">
-            <strong :style="{ color: lane.color }"><span aria-hidden="true">{{ lane.agent ? "▣" : lane.key === "code" ? "⌘" : "♙" }}</span>{{ lane.label }}</strong>
+            <strong :style="{ color: lane.color }"><LaneIcon :lane-key="lane.key" :agent="lane.agent?.agent" />{{ lane.label }}</strong>
             <span>{{ lane.role }}</span>
             <template v-if="lane.agent">
               <span class="lane-provider"><b aria-hidden="true">{{ providerMark(lane.agent.provider) }}</b>{{ lane.agent.provider }}</span>

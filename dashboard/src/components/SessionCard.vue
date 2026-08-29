@@ -2,6 +2,7 @@
 import { computed, ref } from "vue";
 import type { ActivityPoint, AgentSummary, PhaseSummary, SessionCard as Session } from "../../shared/types.ts";
 import { axisTicks, costAuthorityLabel, formatCost, formatDate, formatDuration, formatTokens, formatUsage, stateLabel, stateTone } from "../display.ts";
+import LaneIcon from "./LaneIcon.vue";
 
 const props = defineProps<{ session: Session }>();
 const archived = ref(false);
@@ -22,7 +23,7 @@ const ticks = computed(() => axisTicks(span.value, 4));
 const phaseById = computed(() => new Map(props.session.phases.map((phase) => [phase.phaseId, phase])));
 const palette = ["var(--purple)", "var(--cyan)", "var(--red)", "var(--amber)", "var(--violet)"];
 
-interface CardLane { key: string; label: string; color: string; points: ActivityPoint[] }
+interface CardLane { key: string; label: string; color: string; agent: string | null; points: ActivityPoint[] }
 
 const lanes = computed<CardLane[]>(() => {
   const ordered: string[] = [];
@@ -41,7 +42,7 @@ const lanes = computed<CardLane[]>(() => {
       if (!phase) return false;
       return (phase.kind === "agent" ? `agent:${phase.owner}` : phase.kind) === key;
     });
-    return { key, label: labels.get(key) ?? key, color, points };
+    return { key, label: labels.get(key) ?? key, color, agent: owner, points };
   });
 });
 const overflowing = computed(() => lanes.value.length > 4);
@@ -96,7 +97,7 @@ async function archiveSession(): Promise<void> {
         </span>
       </div>
       <div v-for="lane in visibleLanes" :key="lane.key" class="mini-row">
-        <span class="mini-agent" :style="{ color: lane.color }" :title="lane.label">{{ lane.label }}</span>
+        <span class="mini-agent" :style="{ color: lane.color }" :title="lane.label"><LaneIcon :lane-key="lane.key" :agent="lane.agent" /><span>{{ lane.label }}</span></span>
         <span class="mini-track">
           <i
             v-for="point in lane.points"
