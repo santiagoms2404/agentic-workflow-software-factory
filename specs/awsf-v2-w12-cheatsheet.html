@@ -516,7 +516,7 @@ sequenceDiagram
 
   <!-- ================= M2 ================= -->
   <div class="phase">
-    <h3><code class="status">[]</code> Milestone M2: The fences — before there is anything to fence</h3>
+    <h3><code class="status">[wip]</code> Milestone M2: The fences — before there is anything to fence</h3>
     <p><em>Independent of M1 and startable immediately.</em> All five legs land here, over a document that does not exist yet, each shipping with the specimen that proves it bites. Leg one is a repair to an existing test whose first effect is on the README.</p>
     <figure>
       <pre class="mermaid">
@@ -537,12 +537,12 @@ flowchart LR
     <h4>5. Normalize the three invocation forms in one extractor</h4>
     <p class="serves"><code class="serves">AC-2</code></p>
     <ul class="checklist">
-      <li><code class="status">[]</code> Reproduce the gap first: assert the current matcher extracts nothing from <code>npm run awsf -- land TASK</code>, so the repair has a failing test before it has a fix</li>
-      <li><code class="status">[]</code> Normalize <code>npm run awsf -- &lt;rest&gt;</code> and <code>just awsf &lt;rest&gt;</code> to <code>awsf &lt;rest&gt;</code> ahead of the existing match, in one place used by every consumer</li>
-      <li><code class="status">[]</code> Preserve the two-word <code>db rebuild</code> case, and keep <code>just awsf</code> still resolving as a justfile target — both claims are true of that line</li>
-      <li><code class="status">[]</code> Run the widened fence over <code>README.md</code> and the v1 Validation section; record every offender before changing anything</li>
-      <li><code class="status">[]</code> Repair each offender at its owner. <strong>Do not narrow the matcher to restore green</strong></li>
-      <li><code class="status">[]</code> Leave the driving-tree fence's fenced-only scope unchanged; leg one widens what a command looks like, not where prose is read</li>
+      <li><code class="status">[x]</code> Reproduce the gap first: assert the current matcher extracts nothing from <code>npm run awsf -- land TASK</code>, so the repair has a failing test before it has a fix</li>
+      <li><code class="status">[x]</code> Normalize <code>npm run awsf -- &lt;rest&gt;</code> and <code>just awsf &lt;rest&gt;</code> to <code>awsf &lt;rest&gt;</code> ahead of the existing match, in one place used by every consumer</li>
+      <li><code class="status">[x]</code> Preserve the two-word <code>db rebuild</code> case, and keep <code>just awsf</code> still resolving as a justfile target — both claims are true of that line</li>
+      <li><code class="status">[x]</code> Run the widened fence over <code>README.md</code> and the v1 Validation section; record every offender before changing anything</li>
+      <li><code class="status">[x]</code> Repair each offender at its owner. <strong>Do not narrow the matcher to restore green</strong></li>
+      <li><code class="status">[x]</code> Leave the driving-tree fence's fenced-only scope unchanged; leg one widens what a command looks like, not where prose is read</li>
     </ul>
 
     <h4>6. The six fact classes, set-equal in both directions</h4>

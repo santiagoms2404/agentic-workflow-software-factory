@@ -28,18 +28,36 @@ function commandText(source: string, html = false): string[] {
 
 const DOCUMENTED = [...commandText(README), ...commandText(validationSection(), true)];
 
+const NPM_RUN = /\bnpm run ([a-z][\w:-]*)\b/g;
+/** `db rebuild` is the one two-word command; the alternation cannot match a hyphen. */
+const AWSF_CLI = /(?:^|\s)awsf (db rebuild|[a-z]+)\b/g;
+const JUST_TARGET = /(?:^|\s)just ([a-z][\w-]*)\b/g;
+
+function normalizeAwsfInvocation(text: string): string {
+  return text.replace(/(^|\s)(?:npm run awsf --|just awsf)\s+/g, "$1awsf ");
+}
+
 function commandsIn(texts: string[], pattern: RegExp): string[] {
-  return texts.flatMap((text) => [...text.matchAll(pattern)].map((match) => match[1] ?? ""));
+  return texts.flatMap((text) => {
+    const commandSource = pattern === AWSF_CLI ? normalizeAwsfInvocation(text) : text;
+    return [...commandSource.matchAll(pattern)].map((match) => match[1] ?? "");
+  });
 }
 
 function commands(pattern: RegExp): string[] {
   return commandsIn(DOCUMENTED, pattern);
 }
 
-const NPM_RUN = /\bnpm run ([a-z][\w:-]*)\b/g;
-/** `db rebuild` is the one two-word command; the alternation cannot match a hyphen. */
-const AWSF_CLI = /(?:^|\s)awsf (db rebuild|[a-z]+)\b/g;
-const JUST_TARGET = /(?:^|\s)just ([a-z][\w-]*)\b/g;
+test("awsf command extraction recognizes every invocation form", () => {
+  const npmInvocation = "npm run awsf -- land TASK";
+  assert.deepEqual([...npmInvocation.matchAll(AWSF_CLI)].map((match) => match[1] ?? ""), []);
+  assert.deepEqual(
+    commandsIn(["awsf land TASK", npmInvocation, "just awsf land TASK"], AWSF_CLI),
+    ["land", "land", "land"],
+  );
+  assert.deepEqual(commandsIn(["npm run awsf -- db rebuild"], AWSF_CLI), ["db rebuild"]);
+  assert.deepEqual(commandsIn(["just awsf doctor"], JUST_TARGET), ["awsf"]);
+});
 
 const npmScripts = commands(NPM_RUN);
 const cliCommands = commands(AWSF_CLI);
