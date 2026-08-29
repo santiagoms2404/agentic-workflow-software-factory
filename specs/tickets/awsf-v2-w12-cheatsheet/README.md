@@ -869,6 +869,20 @@ it. Four entries, four distinct missing things.
 | O14 | There is no in-session read that answers *"is this session guarded?"*. The driver had to open an external Claude debug log outside the repository to find out | The answer would be a new read-only command or a contract clause, and `INV-7` forbids the first while the second is W01's file | Either a contract clause naming what a driver may ask the session to confirm the guard is loaded, or — if nothing in-session can confirm it — W01 recording that as a named gap, since the banner's stated purpose is exactly this |
 | O15 | The debug log recorded the hook *and its complete banner* as successful while the TUI displayed none of it. A hook that succeeds invisibly is the gap the banner's own header says it exists to stop papering over | W12 cannot amend the banner's three rules, and it may not weaken them by documenting a workaround | W01 deciding between the two possibilities its own captures would settle: the host renders no `SessionStart` output, in which case the banner is replaced by something the driver can request; or it does under some condition, in which case that condition is written into `docs/driving/marimba/README.md` |
 
+**Verified after T03 closed, and it narrows this block rather than closing it.** The four entries
+above left one question genuinely open: the banner's own header says *"a hook registration that
+loads is not a hook that fires"*, so an invisible banner left no evidence that the M1 drive ran
+guarded at all. That question is now answered. A headless session launched with marimba's settings
+was asked to run a Bash command containing `awsf land`; `delegation-guard.sh` intercepted it at
+`PreToolUse`, exited 2 with the owner-act denial, and the command never executed. The same script
+was checked offline first and denies the owner-act payload while passing a harmless one.
+
+**So the `PreToolUse` fence fires and the M1 drive was guarded.** What W01 owes is a missing
+*signal*, not a missing *boundary* — which is what O11, O13, O14 and O15 each describe, and none of
+their requests changes. The one thing W01 no longer has to determine is whether the guard runs; it
+does. Neither the probe's settings file nor its output is committed: both carry an absolute machine
+path and stayed outside this repository under `INV-3`.
+
 #### `W01-TICKET-PROMPT-FIDELITY` → W01, marimba's operating contract
 
 | Entry | What is missing | Why W12 cannot supply it | What would close it |
