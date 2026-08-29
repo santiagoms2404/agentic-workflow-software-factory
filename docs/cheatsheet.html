@@ -102,6 +102,9 @@ h3 { font:700 18.5px/1.28 var(--font-ui); margin:28px 0 8px; }
 pre { margin:16px 0; padding:14px 18px; background:var(--surface-soft); border:1px solid var(--border); border-radius:12px; overflow-x:auto; font:400 13.4px/1.66 var(--font-mono); }
 .curtain { max-width:none; margin:20px 0 0; padding:13px 18px; background:var(--accent-soft); border-left:2px solid var(--accent); border-radius:0 12px 12px 0; font-size:15.4px; }
 .curtain .lbl { font:700 10.5px/1 var(--font-ui); letter-spacing:.16em; text-transform:uppercase; color:var(--accent); margin-right:9px; }
+.curtain p { max-width:none; margin:0 0 10px; }
+.curtain p:last-child { margin:0; }
+.curtain pre { margin:12px 0; background:var(--surface); font-size:12.8px; }
 .warnnote { max-width:none; margin:16px 0; padding:2px 0 2px 16px; border-left:2px solid var(--warn); }
 .answers { list-style:none; margin:16px 0; padding:0; }
 .answers li { display:grid; grid-template-columns:minmax(0,27ch) minmax(0,1fr); gap:16px; margin:0; padding:10px 0; border-top:1px solid var(--border); }
@@ -144,12 +147,12 @@ pre { margin:16px 0; padding:14px 18px; background:var(--surface-soft); border:1
     <a href="#what-this-owns"><span class="dot pending"></span>What this document owns</a>
     <a href="#limits"><span class="dot pending"></span>What this document does not cover</a>
   <p class="rail-group">Reference</p>
-    <a href="#reference-commands"><span class="dot part"></span>Commands</a>
-    <a href="#reference-lifecycle-states"><span class="dot part"></span>Lifecycle states</a>
-    <a href="#reference-legal-edges"><span class="dot part"></span>Legal edges</a>
-    <a href="#reference-owner-acts"><span class="dot part"></span>Owner acts</a>
-    <a href="#reference-workflows-and-gates"><span class="dot part"></span>Workflows and gates</a>
-    <a href="#reference-risk-tiers"><span class="dot part"></span>Risk tiers and call ceilings</a>
+    <a href="#reference-commands"><span class="dot built"></span>Commands</a>
+    <a href="#reference-lifecycle-states"><span class="dot built"></span>Lifecycle states</a>
+    <a href="#reference-legal-edges"><span class="dot built"></span>Legal edges</a>
+    <a href="#reference-owner-acts"><span class="dot built"></span>Owner acts</a>
+    <a href="#reference-workflows-and-gates"><span class="dot built"></span>Workflows and gates</a>
+    <a href="#reference-risk-tiers"><span class="dot built"></span>Risk tiers and call ceilings</a>
 </nav>
 
 <main class="doc">
@@ -203,7 +206,12 @@ pre { margin:16px 0; padding:14px 18px; background:var(--surface-soft); border:1
 
   <p class="warnnote"><strong>Two more things have to be installed before leg 2, and neither of them is in the <code>README.md</code>, because neither of them lives in the repository.</strong> Leg 2 names them. If somebody handed you this file, that is the point where you may have to go back to them.</p>
 
-  <p class="curtain"><span class="lbl">Behind the curtain</span> None of this is the factory&rsquo;s business yet: no job exists and it records nothing. The one thing that carries forward is that the checks pass, because the factory later runs the project&rsquo;s own configured checks against whatever it produces. Which checks a project has configured is in <a href="#reference-workflows-and-gates">Workflows and gates</a>.</p>
+  <div class="curtain">
+    <p><span class="lbl">Behind the curtain</span> None of this is the factory&rsquo;s business yet: no job exists and it records nothing. The one thing that carries forward is that the checks pass, because the factory later runs the project&rsquo;s own configured checks against whatever it produces. Which checks a project has configured is in <a href="#reference-workflows-and-gates">Workflows and gates</a>.</p>
+    <p><strong>On the drive this guide was written from</strong>, leg 1 was one command, and it was the only one anybody typed outside a session:</p>
+<pre>npm install</pre>
+    <p>The checkout already existed, so it reported the tree up to date. No job was registered, no state was recorded, and nothing was spent.</p>
+  </div>
 </section>
 
 <section id="prime-a-session">
@@ -224,7 +232,18 @@ pre { margin:16px 0; padding:14px 18px; background:var(--surface-soft); border:1
   <h3>How to read what comes back</h3>
   <p>A healthy report, and then silence. <strong>A primed session should not volunteer a status board</strong>, and if yours does, the problem is with the session rather than with you: state printed before you have asked for anything was stale before you read it. Nothing about your job exists at this point, because you have not described one yet.</p>
 
-  <p class="curtain"><span class="lbl">Behind the curtain</span> Priming reads; it does not act. The self-diagnosis it runs is read-only and has no repair path, so a finding is evidence for you and never permission for the assistant to change something. It is one of the names in <a href="#reference-commands">Commands</a>.</p>
+  <div class="curtain">
+    <p><span class="lbl">Behind the curtain</span> Priming reads; it does not act. The self-diagnosis it runs is read-only and has no repair path, so a finding is evidence for you and never permission for the assistant to change something. It is one of the names in <a href="#reference-commands">Commands</a>.</p>
+    <p><strong>On the drive this guide was written from</strong>, the session was opened by a launcher rather than by anything in the repository:</p>
+<pre>claude --model sonnet --effort medium --debug hooks --dangerously-skip-permissions \
+  --settings SETTINGS --append-system-prompt-file docs/driving/marimba/CONTRACT.md</pre>
+    <p><code>SETTINGS</code> stands for the per-machine settings file the launcher points at &mdash; the one this guide cannot tell you how to install. Priming then read the sources that govern the factory, in a fixed order: the repository&rsquo;s agent instructions; the task machine, its guards and its tiers; the phase machine and the workflow layer; the committed configuration and its schema; the layout of the durable records; and the plan&rsquo;s markers. Then it ran:</p>
+<pre>npm test
+npm run lint
+just awsf doctor          # not installed on that machine
+npm run awsf -- doctor    # the same command, in another form</pre>
+    <p>All of them exited 0, and the diagnosis reported the state machine healthy &mdash; the states in <a href="#reference-lifecycle-states">Lifecycle states</a> and the moves in <a href="#reference-legal-edges">Legal edges</a> are the matrix it was reporting on. The missing <code>just</code> wrapper cost nothing, which is what <a href="#reference-commands">Commands</a> means by three spellings of one thing. Priming observed no lifecycle state at all, because no job existed yet.</p>
+  </div>
 </section>
 
 <section id="one-small-job">
@@ -259,7 +278,20 @@ npm run awsf -- start TASK
 npm run awsf -- run TASK</pre>
   <p>Three commands in that order: the job is registered, a sealed copy of the project is made ready, and the work begins &mdash; and it is that third step, not the second, where a provider call is reserved and spent. Stopping after the second one costs nothing. marimba also passes options that pick the route and the risk setting; those belong to the other half of this file rather than to anything you have to decide. <code>TASK</code> stands for whatever name your job is given &mdash; you will see the real one in the session.</p>
 
-  <p class="curtain"><span class="lbl">Behind the curtain</span> Those three are names in <a href="#reference-commands">Commands</a>, and between them the job makes the first of the recorded moves in <a href="#reference-legal-edges">Legal edges</a>. The reservation made at the third step is what <a href="#reference-risk-tiers">Risk tiers and call ceilings</a> governs: a run cannot quietly spend more than the job was allowed.</p>
+  <div class="curtain">
+    <p><span class="lbl">Behind the curtain</span> Those three are names in <a href="#reference-commands">Commands</a>, and between them the job makes the first of the recorded moves in <a href="#reference-legal-edges">Legal edges</a>. The reservation made at the third step is what <a href="#reference-risk-tiers">Risk tiers and call ceilings</a> governs: a run cannot quietly spend more than the job was allowed.</p>
+    <p><strong>On the drive this guide was written from</strong>, marimba ran the three commands above with the options it had chosen, and read the state between them:</p>
+<pre>npm run awsf -- new TASK "&lt;request&gt;" --workflow build --tier T1
+npm run awsf -- status TASK
+npm run awsf -- quota
+npm run awsf -- start TASK
+npm run awsf -- status TASK
+npm run awsf -- run TASK</pre>
+    <p>The two <code>status</code> reads and the <code>quota</code> read cost nothing and decided nothing &mdash; the quota read is advice rather than a gate. <code>--workflow</code> and <code>--tier</code> are the two choices marimba makes on your behalf, and both sets are below. <code>start</code> passed its preflight, pinned the commit the sealed copy starts from, and materialized the copy; the call was reserved by <code>run</code>, one step later.</p>
+    <p>The job then made these recorded moves, and no others:</p>
+<pre>DRAFT --L1--> PREPARED --L4--> RUNNING --L7--> GATING --L12--> AWAITING_OWNER</pre>
+    <p>L4 is the one with <code>spawn=true</code>, and it is the move that reserved the builder call. The <code>build</code> route buys no second opinion, so the job never entered <code>REVIEWING</code>, and no correction round was used.</p>
+  </div>
 </section>
 
 <section id="watch-it">
@@ -284,7 +316,23 @@ npm run awsf -- status TASK</pre>
 
   <p class="warnnote"><strong>Read the checks row exactly.</strong> When it passes, it says that <em>all configured commands passed</em>. That is a statement about the list of checks this project has configured &mdash; and if that list is empty, the same green sentence appears with nothing at all behind it. It is not a claim that your code is good; it is a claim that a list ran and nothing in it failed. Which checks a project has configured is in <a href="#reference-workflows-and-gates">Workflows and gates</a>, and that is the thing to check rather than the sentence.</p>
 
-  <p class="curtain"><span class="lbl">Behind the curtain</span> Everything on this leg is read-only: watching a job changes nothing about it. While you watch, the job passes through several recorded stages, and every move between them is recorded rather than inferred &mdash; the stages are in <a href="#reference-lifecycle-states">Lifecycle states</a> and the moves in <a href="#reference-legal-edges">Legal edges</a>.</p>
+  <div class="curtain">
+    <p><span class="lbl">Behind the curtain</span> Everything on this leg is read-only: watching a job changes nothing about it. While you watch, the job passes through several recorded stages, and every move between them is recorded rather than inferred &mdash; the stages are in <a href="#reference-lifecycle-states">Lifecycle states</a> and the moves in <a href="#reference-legal-edges">Legal edges</a>.</p>
+    <p><strong>On the drive this guide was written from</strong>, the driver watched the dashboard and marimba gathered evidence beside him. Every shape it ran was a read:</p>
+<pre>npm run awsf -- status TASK
+npm run awsf -- doctor
+git diff --stat BASE CANDIDATE
+git diff --name-status BASE CANDIDATE
+git log -1 --format=&lt;format&gt; CANDIDATE
+git status --porcelain</pre>
+    <p><code>BASE</code> is the commit the sealed copy started from and <code>CANDIDATE</code> is the commit the factory produced. That last read is the one that answers &ldquo;did anything happen to my checkout&rdquo;, and on that drive the answer was no: the canonical checkout stayed clean and unchanged throughout.</p>
+    <p>Inside the sealed copy, the worker ran its own checks first &mdash; the new test observed failing before the change, then passing after it, then the suite, the linter and the typechecker:</p>
+<pre>node --experimental-strip-types --test core/test/unit/meta/doc-reconciliation.test.ts
+npm run test:unit
+npm run lint
+npm run typecheck</pre>
+    <p>Those are the worker&rsquo;s claim. The measurement is separate: the host then ran this project&rsquo;s three configured gates against the candidate itself, and all three exited 0. Which three, and why that sentence is worth exactly those three, is <a href="#reference-workflows-and-gates">Workflows and gates</a>.</p>
+  </div>
 </section>
 
 <section id="read-a-refusal">
@@ -341,7 +389,15 @@ npm run awsf -- status TASK</pre>
   <p><strong>Where this bites in practice.</strong> The checks row on leg 4 is a report: a list ran, and nothing in it failed. That is a true and useful thing to be told. Read as though it had <em>stopped</em> something, it becomes a promise nobody made. The confusion runs the other way too &mdash; hunting through the records for the trace of something a stop prevented is hunting for a thing that, by design, never happened.</p>
   <p>So when anyone tells you the factory will not let something happen &mdash; this guide included &mdash; the useful question is which of the two they mean. <strong>And a thing that stops, stops in one place.</strong> The refusal you read stopped that job at that point. It is not a claim that nothing anywhere could ever get past. It is the shape of what this factory accepts, which is what the top of this leg said, and it is why the move is always to change the request.</p>
 
-  <p class="curtain"><span class="lbl">Behind the curtain</span> A refusal names a condition, and the conditions are properties of the moves the factory is permitted to make; those moves are in <a href="#reference-legal-edges">Legal edges</a>. The stage a refused job comes to rest in is one of the entries in <a href="#reference-lifecycle-states">Lifecycle states</a>, and it is a resting place rather than a dead end.</p>
+  <div class="curtain">
+    <p><span class="lbl">Behind the curtain</span> A refusal names a condition, and the conditions are properties of the moves the factory is permitted to make; those moves are in <a href="#reference-legal-edges">Legal edges</a>. The stage a refused job comes to rest in is one of the entries in <a href="#reference-lifecycle-states">Lifecycle states</a>, and it is a resting place rather than a dead end.</p>
+    <p><strong>On the drive this guide was written from</strong>, the job succeeded, so there was no refusal of its own to read. marimba went and found a sealed one instead, and read it without touching it:</p>
+<pre>find STATE_ROOT/projects -name status.json</pre>
+    <p><code>STATE_ROOT</code> stands for the one place per machine where durable records live, with each project kept separate inside it. Everything after that was a read of the recorded status, the running account of what happened, and the envelopes of the opinions that were asked for.</p>
+    <p>The historical job&rsquo;s recorded path was:</p>
+<pre>PREPARED -> RUNNING -> GATING -> REVIEWING -> AWAITING_OWNER -> REVIEWING -> BLOCKED</pre>
+    <p>Every arrow there is one of the entries in <a href="#reference-legal-edges">Legal edges</a>, including the return to <code>REVIEWING</code>: the owner spent a replacement review on a candidate that had not changed. Its build and its configured gates had all passed. What failed was the shape of the second opinion &mdash; five findings, each carrying one field the factory does not know, and a review is either readable in full or not recorded at all. With no valid review where the route required one, the attempt sealed in <code>BLOCKED</code>. Reading it moved nothing: no historical state changed.</p>
+  </div>
 </section>
 
 <section id="stop-at-the-signature">
@@ -383,7 +439,11 @@ npm run awsf -- land TASK</pre>
 
   <p><strong>This guide stops here, and the stop is deliberate.</strong> It tells you what to have in hand before you decide. It does not tell you which way to decide, and it never will.</p>
 
-  <p class="curtain"><span class="lbl">Behind the curtain</span> The acts only a person may perform are the list in <a href="#reference-owner-acts">Owner acts</a>, and each one makes a recorded move of its own in <a href="#reference-legal-edges">Legal edges</a>. That an assistant is refused them is a property of the tool surface it runs under, which is why it holds whether or not the assistant has read anything.</p>
+  <div class="curtain">
+    <p><span class="lbl">Behind the curtain</span> The acts only a person may perform are the list in <a href="#reference-owner-acts">Owner acts</a>, and each one makes a recorded move of its own in <a href="#reference-legal-edges">Legal edges</a>. That an assistant is refused them is a property of the tool surface it runs under, which is why it holds whether or not the assistant has read anything.</p>
+    <p><strong>On the drive this guide was written from, marimba invoked nothing at all on this leg.</strong> That is the leg working. It reported instead, and the report is the fixed set above: the workflow and tier the job ran under, the base and the candidate, which worker route ran it, the calls and corrections used, the state it came to rest in, the gate results and whether anything blocked, that the sealed copy had been cleaned up, that the canonical checkout was clean, what the candidate changed, and the failing-then-passing evidence behind it.</p>
+    <p>The drive stopped at <code>AWAITING_OWNER</code> with the candidate unlanded. Its gates had passed and its diff was one file &mdash; and what it had committed differed from what the job asked for. That is the whole reason this leg tells you to compare the candidate against the boundary you wrote rather than against the green. <code>land</code>, <code>rework</code> and <code>cancel</code> were all still open, and all three were the owner&rsquo;s to run.</p>
+  </div>
 </section>
 
 <section id="boundaries">
@@ -432,7 +492,10 @@ npm run awsf -- land TASK</pre>
 <section id="reference-commands">
   <p class="eyebrow">Reference &middot; class 1 of 6</p>
   <h2>Commands</h2>
-  <p class="secstatus"><span class="dot part"></span>Fenced set in place &mdash; prose not yet written. Set-equal to <code>CLI_COMMANDS</code>. The explanation beside it is task 16.</p>
+  <p class="secstatus"><span class="dot built"></span>Every name the factory answers to, held equal to <code>CLI_COMMANDS</code>.</p>
+
+  <p>A command is a name the factory answers to. This is the whole set: a name that is not here does not exist, and a name added to the factory tomorrow makes this list wrong until somebody adds it.</p>
+
   <ul data-awsf-fact-class="commands">
     <li><code>init</code></li>
     <li><code>project</code></li>
@@ -458,12 +521,21 @@ npm run awsf -- land TASK</pre>
     <li><code>quota</code></li>
     <li><code>stage</code></li>
   </ul>
+
+  <h3>One command, three spellings</h3>
+  <p><code>awsf status TASK</code>, <code>npm run awsf -- status TASK</code> and <code>just awsf status TASK</code> are the same command reached three ways. The <code>just</code> targets are thin wrappers over the repository&rsquo;s npm scripts, so they are a convenience and never a second source of truth. On the drive this guide was written from, <code>just</code> was not installed on the machine at all; marimba used the npm form and got the same healthy result. <strong>A missing wrapper is a missing convenience, not a missing command.</strong></p>
+
+  <h3>Most of these are not on your route</h3>
+  <p>The six legs use seven of them: <code>new</code>, <code>start</code> and <code>run</code> to give the factory a job, <code>status</code>, <code>dash</code> and <code>watch</code> to see what it is doing, and <code>doctor</code> to check the machine before you start. Seven more are the owner acts below, which a driving session is denied. The rest set a project up, read the backlog, or maintain the durable records.</p>
 </section>
 
 <section id="reference-lifecycle-states">
   <p class="eyebrow">Reference &middot; class 2 of 6</p>
   <h2>Lifecycle states</h2>
-  <p class="secstatus"><span class="dot part"></span>Fenced set in place &mdash; prose not yet written. Set-equal to <code>TASK_STATES</code>. The explanation beside it is task 16.</p>
+  <p class="secstatus"><span class="dot built"></span>Where a job can come to rest, held equal to <code>TASK_STATES</code>.</p>
+
+  <p>A state is where a job <em>is</em>, not what it is doing. A job is in exactly one of them at any moment, and it is the thing the dashboard card on leg 4 shows you. Planning, building and testing are deliberately not states &mdash; they are phases, and they happen inside <code>RUNNING</code>.</p>
+
   <ul data-awsf-fact-class="lifecycle-states">
     <li><code>DRAFT</code></li>
     <li><code>PREPARED</code></li>
@@ -477,12 +549,31 @@ npm run awsf -- land TASK</pre>
     <li><code>BLOCKED</code></li>
     <li><code>CANCELLED</code></li>
   </ul>
+
+  <ul class="answers">
+    <li><b><code>DRAFT</code></b>Registered and nothing more. No sealed copy exists and nothing has been spent.</li>
+    <li><b><code>PREPARED</code></b>The sealed copy exists and the job is ready to run. Still nothing spent &mdash; this is the last free stop on the route.</li>
+    <li><b><code>RUNNING</code></b>A worker is doing the work inside the sealed copy. This is where the money goes.</li>
+    <li><b><code>GATING</code></b>The work is done and the project&rsquo;s own configured checks are running against it.</li>
+    <li><b><code>REVIEWING</code></b>A second opinion is being taken on the candidate. A route that does not buy one never enters it.</li>
+    <li><b><code>AWAITING_OWNER</code></b>The factory has done everything it is allowed to do and is waiting for a person. <strong>This is where this guide&rsquo;s route ends.</strong></li>
+    <li><b><code>LANDING</code></b>A person has signed and the candidate is being merged. The approval is recorded before Git moves, so an interrupted landing can be replayed rather than guessed at.</li>
+    <li><b><code>LANDED</code></b>The candidate is in the base branch.</li>
+    <li><b><code>PUBLISHED</code></b>The landed work has been pushed to the remote. The one step nothing can take back.</li>
+    <li><b><code>BLOCKED</code></b>A refusal came to rest here. The attempt is sealed, so what remains open is a decision rather than a repair.</li>
+    <li><b><code>CANCELLED</code></b>A person ended the attempt.</li>
+  </ul>
+
+  <p class="warnnote"><strong>Read the lifecycle here rather than in prose anywhere else.</strong> The repository&rsquo;s own <code>README.md</code> has described this lifecycle in words and been wrong about it &mdash; in every number &mdash; while reading exactly as though it were authoritative. The set above is not a description that somebody keeps up to date. It is held equal to the source, in both directions, by a test that goes red the day they disagree.</p>
 </section>
 
 <section id="reference-legal-edges">
   <p class="eyebrow">Reference &middot; class 3 of 6</p>
   <h2>Legal edges</h2>
-  <p class="secstatus"><span class="dot part"></span>Fenced set in place &mdash; prose not yet written. Set-equal to <code>LEGAL_EDGES</code>. The explanation beside it is task 16.</p>
+  <p class="secstatus"><span class="dot built"></span>Every move the factory may make, held equal to <code>LEGAL_EDGES</code>.</p>
+
+  <p>An edge is one permitted move from one state to another. There is no general &ldquo;set the state&rdquo; operation anywhere in the factory, so every change of state a job undergoes is one of these, recorded with the actor who made it. A move that is not here cannot happen.</p>
+
   <ul data-awsf-fact-class="legal-edges">
     <li><code>L1|DRAFT->PREPARED|actors=host|spawn=false|interactive=false</code></li>
     <li><code>L2|DRAFT->BLOCKED|actors=host|spawn=false|interactive=false</code></li>
@@ -512,12 +603,24 @@ npm run awsf -- land TASK</pre>
     <li><code>L26|RUNNING->AWAITING_OWNER|actors=host|spawn=false|interactive=false</code></li>
     <li><code>L27|LANDED->PUBLISHED|actors=human|spawn=false|interactive=true</code></li>
   </ul>
+
+  <h3>How to read one</h3>
+  <p><code>L12|GATING-&gt;AWAITING_OWNER|actors=host|spawn=false|interactive=false</code> is the move your job made at the end of leg 4. The three properties after the arrow are the ones worth knowing:</p>
+  <ul class="answers">
+    <li><b><code>actors</code></b>Who may make the move. <code>host</code> is the factory acting on its own. <code>human</code> is a person at a terminal. <code>owner</code> is an owner-authorized route the factory then drives. A <code>human</code> edge is not something an assistant can take for you, and that is what makes leg 6 a stop rather than a courtesy.</li>
+    <li><b><code>spawn</code></b><code>spawn=true</code> means the move launches a worker, so it is a move that spends. Every other move is free. If you want to know where a job&rsquo;s money went, these are the only places it can have gone.</li>
+    <li><b><code>interactive</code></b><code>interactive=true</code> means the move requires a person at a terminal. Every one of them belongs to the acts below.</li>
+  </ul>
+  <p>The moves your job actually made are named in the behind-the-curtain notes on <a href="#one-small-job">leg 3</a> and <a href="#read-a-refusal">leg 5</a>.</p>
 </section>
 
 <section id="reference-owner-acts">
   <p class="eyebrow">Reference &middot; class 4 of 6</p>
   <h2>Owner acts</h2>
-  <p class="secstatus"><span class="dot part"></span>Fenced set in place &mdash; prose not yet written. Set-equal to the delegation guard&rsquo;s verb loop. The explanation beside it is task 16.</p>
+  <p class="secstatus"><span class="dot built"></span>The seven verbs a driving session is denied, read from the guard&rsquo;s own loop.</p>
+
+  <p>These are the acts a person performs. The set is not a policy written down in a document and hoped for: it is the verb loop inside the guard that every driving session runs under, so an assistant is denied them by the tool surface before the act can begin &mdash; whatever it has read, whatever it agrees with, and whatever it has been talked round to.</p>
+
   <ul data-awsf-fact-class="owner-acts">
     <li><code>land</code></li>
     <li><code>cancel</code></li>
@@ -527,12 +630,29 @@ npm run awsf -- land TASK</pre>
     <li><code>raise</code></li>
     <li><code>publish</code></li>
   </ul>
+
+  <p><strong>So &ldquo;can I just tell marimba to land it?&rdquo; has one answer: no, and not because it is being careful.</strong> It will prepare the act, show you what it would do, and stop. What you do with that is the whole of leg 6.</p>
+
+  <ul class="answers">
+    <li><b><code>land</code></b>Merges the candidate into the base branch. The approval is made durable before Git moves, because a merge can be replayed and a lost approval cannot be reconstructed.</li>
+    <li><b><code>cancel</code></b>Ends the attempt. Nothing is undone in your checkout, because nothing was ever done to it; the record stays readable.</li>
+    <li><b><code>rework</code></b>Sends the candidate back for another round. This one launches a worker, so it is one of the acts that spends.</li>
+    <li><b><code>review</code></b>Buys one replacement second opinion on an unchanged candidate. It is available only when the recorded review is defective as evidence, so it cannot be used to shop for a verdict you like better.</li>
+    <li><b><code>journey</code></b>Your attestation that you ran the built software yourself and it worked. Nothing inside the factory can answer that question, which is why the answer has to enter through a person &mdash; and why this act cannot pass itself.</li>
+    <li><b><code>raise</code></b>Lifts one job&rsquo;s spending ceiling, for that job alone, bounded and recorded. A ceiling is a checkpoint rather than a cap; this is the checkpoint being answered by the person paying.</li>
+    <li><b><code>publish</code></b>Pushes landed work to the remote. The only act whose effect the factory cannot take back, and the reason it records what the remote actually did rather than what it intended.</li>
+  </ul>
+
+  <p><strong>What each one costs and settles for <em>your</em> job is worked out on that act&rsquo;s own confirmation screen, at the moment you run it.</strong> That screen is the authority on the number. This list is the authority on what the act is for.</p>
 </section>
 
 <section id="reference-workflows-and-gates">
   <p class="eyebrow">Reference &middot; class 5 of 6</p>
   <h2>Workflows and gates</h2>
-  <p class="secstatus"><span class="dot part"></span>Fenced set in place &mdash; prose not yet written. Set-equal to the loaded configuration. The explanation beside it is task 16.</p>
+  <p class="secstatus"><span class="dot built"></span>The routes this project enables and the checks it runs, read through the configuration loader.</p>
+
+  <p>Two different things out of one file, <code>awsf.config.yaml</code> &mdash; and read through the loader that decides what the factory will actually accept, rather than by reading the YAML by eye.</p>
+
   <ul data-awsf-fact-class="workflows-and-gates">
     <li><code>workflow|scout</code></li>
     <li><code>workflow|plan</code></li>
@@ -546,17 +666,46 @@ npm run awsf -- land TASK</pre>
     <li><code>gate|typecheck</code></li>
     <li><code>gate|lint</code></li>
   </ul>
+
+  <h3>A workflow is the route</h3>
+  <p>It is the ordered set of phases a job runs, it is what <code>--workflow</code> picks on leg 3, and it decides whether a second opinion is bought at all.</p>
+  <ul class="answers">
+    <li><b><code>scout</code></b>One read-only survey. Nothing is built.</li>
+    <li><b><code>plan</code></b>A plan, and nothing after it.</li>
+    <li><b><code>build</code></b>Build, then the checks. The shortest route that produces a candidate, and the one the worked example runs on.</li>
+    <li><b><code>plan-build-test</code></b>Plan first, then build, then the checks.</li>
+    <li><b><code>build-review</code></b>Build, checks, then a second opinion on the result.</li>
+    <li><b><code>simple-sdlc</code></b>Plan, build, checks, documentation, and the checks again afterwards.</li>
+    <li><b><code>intake</code></b>Turns a rough request into something the other routes can take.</li>
+    <li><b><code>design-to-plan</code></b>Design work, then an architecture review of the design.</li>
+  </ul>
+
+  <h3>A gate is a check this project runs against the candidate</h3>
+  <p>Three are configured here: <code>test</code> runs the project&rsquo;s own suite, <code>typecheck</code> runs its typechecker, and <code>lint</code> runs its linter. Each has a command and a timeout, and the host runs all of them against the candidate rather than trusting the worker&rsquo;s account of having run them.</p>
+  <p class="warnnote"><strong>This list is what leg 4&rsquo;s green sentence is worth.</strong> &ldquo;All configured commands passed&rdquo; is a statement about exactly these three, and a project that configures none gets the same sentence with nothing at all behind it. The list is the thing to read; the sentence only reports on it.</p>
 </section>
 
 <section id="reference-risk-tiers">
   <p class="eyebrow">Reference &middot; class 6 of 6</p>
   <h2>Risk tiers and call ceilings</h2>
-  <p class="secstatus"><span class="dot part"></span>Fenced set in place &mdash; prose not yet written. Set-equal to <code>TIERS</code> and <code>DEFAULT_CALL_CEILINGS</code>. The explanation beside it is task 16.</p>
+  <p class="secstatus"><span class="dot built"></span>What a job at each tier may spend, held equal to <code>TIERS</code> and <code>DEFAULT_CALL_CEILINGS</code>.</p>
+
+  <p>A tier is how much the factory is willing to let one job spend before it stops and asks. <code>Tn|default=CALLS</code> is the number of provider calls a job at that tier gets when nothing has overridden it.</p>
+
   <ul data-awsf-fact-class="risk-tiers-and-ceilings">
     <li><code>T0|default=1</code></li>
     <li><code>T1|default=3</code></li>
     <li><code>T2|default=5</code></li>
   </ul>
+
+  <ul class="answers">
+    <li><b><code>T0</code></b>Read-only analysis. One call, and no second opinion to buy.</li>
+    <li><b><code>T1</code></b>Localized, reversible change. Three calls. The drive this guide was written from ran here.</li>
+    <li><b><code>T2</code></b>Security, process control, persistent data, cross-component or weakly tested work. Five calls &mdash; which is what pays for the opposite-provider review that T2 also requires.</li>
+  </ul>
+
+  <p><strong>The ceiling is a checkpoint, not a cap.</strong> A job that reaches it stops, says where it is, and waits for the person paying. The configuration can set a different ceiling per tier, and <code>raise</code> can lift one job&rsquo;s ceiling while it is running &mdash; but the bound on both lives in code rather than in configuration, so no sequence of raises turns a subscription into an open account.</p>
+  <p><strong>Spend follows the job, not the run.</strong> What a job has already spent stays attached to it, so asking for the same job again starts from what is left rather than from the beginning. That is the number leg 5 says to read before deciding what you can afford next.</p>
 </section>
 
 </main>
