@@ -945,9 +945,26 @@ the host at land time — and that decision, not either fix, is what closes O28.
 
 *Empty at authoring time.* Two runs, one protocol, no edits between them.
 
+**Two rows that are allowed to disagree, and why they were split.** `AC-9` asks whether a run
+*reached the owner act with the evidence that act requires*. T02's drive did exactly that —
+`AWAITING_OWNER`, three gates green, full evidence — and the candidate still did not do what the
+ticket asked (**O28**). By `AC-9`'s letter that run was a success, which is the one reading this
+workstream cannot afford. So the record carries **two separate rows**: whether the run reached the
+owner act, and whether the candidate met the acceptance boundary stated before it started. A run
+where the two disagree is a **finding**, not a pass, and it is recorded as one.
+
+**The boundary is written before the run, not after it.** The frozen protocol's Leg 3 already
+requires the driver to describe *"the desired result and acceptance boundary"*; this row is where
+that description is recorded, at the time it is given, so the comparison afterwards is against
+something that cannot be adjusted to fit what arrived. An empty boundary row invalidates the run
+rather than passing it.
+
 | | Run one | Run two |
 | --- | --- | --- |
 | Request | the dashboard carried to the Forest palette, desktop view | the backlog view reading the spine, deep plans and ticket states |
+| **Acceptance boundary, written before the run starts** | | |
+| **Reached the owner act with the evidence it requires** (`AC-9`) | | |
+| **Candidate met the stated acceptance boundary** — recorded separately, and allowed to disagree with the row above | | |
 | Consultations | | |
 | Where the driver looked first | | |
 | Reference sections used | | |
