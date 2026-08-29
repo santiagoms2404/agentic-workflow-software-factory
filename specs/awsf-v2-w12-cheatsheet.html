@@ -99,7 +99,7 @@ code.inv { color:var(--accent); } code.ac { color:var(--good); }
     <summary>Metadata</summary>
     <dl>
       <dt>created</dt><dd>2026-08-27</dd>
-      <dt>modified</dt><dd>2026-08-27, 2026-08-27, 2026-08-27, 2026-08-28</dd>
+      <dt>modified</dt><dd>2026-08-27, 2026-08-27, 2026-08-27, 2026-08-28, 2026-08-29</dd>
       <dt>commits</dt><dd>none — authoring only; no implementation code was written, none — first owner review applied, none — second owner review applied; the plan, its build prompts and its ticket set land in this commit</dd>
       <dt>agent name</dt><dd>claude-opus-5</dd>
       <dt>session id</dt><dd>not recorded — AGENTS.md invariant 1 keeps live session state out of every committed file in this repository</dd>
@@ -516,7 +516,7 @@ sequenceDiagram
 
   <!-- ================= M2 ================= -->
   <div class="phase">
-    <h3><code class="status">[wip]</code> Milestone M2: The fences — before there is anything to fence</h3>
+    <h3><code class="status">[x]</code> Milestone M2: The fences — before there is anything to fence</h3>
     <p><em>Independent of M1 and startable immediately.</em> All five legs land here, over a document that does not exist yet, each shipping with the specimen that proves it bites. Leg one is a repair to an existing test whose first effect is on the README.</p>
     <figure>
       <pre class="mermaid">
@@ -590,14 +590,14 @@ flowchart LR
     <p>Offline, no network, no quota. Every assertion runs against the repository's tracked files or an in-memory specimen. The milestone's proof is the induced-failure pass on every leg and every class, in both directions.</p>
     <p class="serves"><code class="serves">AC-2</code> <code class="serves">AC-3</code> <code class="serves">AC-4</code> <code class="serves">AC-6</code> <code class="serves">AC-7</code></p>
     <ul class="checklist">
-      <li><code class="status">[]</code> <code>npm run test:unit</code> — green with the widened extractor active over the README</li>
-      <li><code class="status">[]</code> Removing the normalization makes leg one red; restoring it returns green (<code>AC-2</code>)</li>
-      <li><code class="status">[]</code> An invented command is reported in all three invocation forms, and a command in prose is not (<code>AC-3</code>, <code>AC-4</code>)</li>
-      <li><code class="status">[]</code> Deleting the warning goes red; moving it after the first command block goes red (<code>AC-4</code>)</li>
-      <li><code class="status">[]</code> <strong>All six classes are proven red in both directions</strong> — twelve induced failures, each observed and recorded (<code>AC-6</code>)</li>
-      <li><code class="status">[]</code> The index fence is proven red in both directions (<code>AC-7</code>)</li>
-      <li><code class="status">[]</code> The README's repaired lifecycle numbers are recorded with the export that measured them</li>
-      <li><code class="status">[]</code> <code>npm run lint</code> and <code>npm run typecheck</code> — exit 0</li>
+      <li><code class="status">[x]</code> <code>npm run test:unit</code> — green with the widened extractor active over the README</li>
+      <li><code class="status">[x]</code> Removing the normalization makes leg one red; restoring it returns green (<code>AC-2</code>)</li>
+      <li><code class="status">[x]</code> An invented command is reported in all three invocation forms, and a command in prose is not (<code>AC-3</code>, <code>AC-4</code>)</li>
+      <li><code class="status">[x]</code> Deleting the warning goes red; moving it after the first command block goes red (<code>AC-4</code>)</li>
+      <li><code class="status">[x]</code> <strong>All six classes are proven red in both directions</strong> — twelve induced failures, each observed and recorded (<code>AC-6</code>)</li>
+      <li><code class="status">[x]</code> The index fence is proven red in both directions (<code>AC-7</code>)</li>
+      <li><code class="status">[x]</code> The README's repaired lifecycle numbers are recorded with the export that measured them</li>
+      <li><code class="status">[x]</code> <code>npm run lint</code> and <code>npm run typecheck</code> — exit 0</li>
     </ul>
     <div class="loop">🔁 <strong>Do not exit this milestone until every box is checked.</strong> A class proven in only one direction is half a fence, and the missing half is the one that catches staleness.</div>
   </div>
@@ -1084,6 +1084,14 @@ flowchart LR
     <p><strong>Friction and later action.</strong> The drive found an invisible guard signal, ticket-prompt fidelity and greenfield-entry gaps. M2 must add the planned meta-test rather than relying on this close-time inspection; M3 and M4 answer only the entries assigned to their respective halves, while W01 and W03 own the routed changes.</p>
     <p><strong>Decision made here.</strong> M1 reuses the existing junk-drawer, live-state and absolute-path predicates for verification and adds no duplicate test or predicate before M2.</p>
     <p><strong>Landing evidence.</strong> M1 record commits: <code>1cc5158</code> (T01), <code>e345157</code> (T02), <code>5a52172</code> (T03), <code>296819f</code> (guard confirmation). At close, <code>npm run test:unit</code> passed 1488/1488, <code>npm run lint</code> passed with 0 warnings and 0 errors across 403 files, and <code>npm run typecheck</code> exited 0 for core and dashboard.</p>
+  </details>
+  <details open>
+    <summary>2026-08-29 — M2 closed: every mechanical fence was observed failing before it was trusted</summary>
+    <p><strong>Observably true.</strong> The shared extractor reads direct, <code>npm run awsf --</code>, and <code>just awsf</code> invocation forms. Removing its normalization made leg one red and restoring it returned green. The widened README scan exposed and T06 repaired the lifecycle claim: <code>TASK_STATES</code> exports 11 values, including <code>PUBLISHED</code>, rather than 10. An invented <code>awsf frobnicate</code> in direct, npm, and just forms was reported three times, while its prose-only occurrence remained green. Deleting the reader warning and moving it after the first command block each made the specimen red, then returned green on restore.</p>
+    <p><strong>All twelve induced class failures.</strong> Commands: <code>source -&gt; document differs; missing entries: ["init"]</code>; <code>document -&gt; source differs; invented entries: ["INVENTED"]</code>. Lifecycle states: <code>source -&gt; document differs; missing entries: ["DRAFT"]</code>; <code>document -&gt; source differs; invented entries: ["INVENTED"]</code>. Legal edges: <code>source -&gt; document differs; missing entries: ["L1|DRAFT-&gt;PREPARED|actors=host|spawn=false|interactive=false"]</code>; <code>document -&gt; source differs; invented entries: ["INVENTED"]</code>. Owner acts: <code>source -&gt; document differs; missing entries: ["land"]</code>; <code>document -&gt; source differs; invented entries: ["INVENTED"]</code>. Workflows and gates: <code>source -&gt; document differs; missing entries: ["workflow|scout"]</code>; <code>document -&gt; source differs; invented entries: ["INVENTED"]</code>. Risk tiers and ceilings: <code>source -&gt; document differs; missing entries: ["T0|default=1"]</code>; <code>document -&gt; source differs; invented entries: ["INVENTED"]</code>. Each message names its class and direction. The index failed with <code>sections -&gt; index differs; sections missing from index: ["two"]</code> and <code>index -&gt; sections differs; index entries pointing at no section: ["ghost"]</code>, then returned green.</p>
+    <p><strong>Final task states.</strong> T05 <code>[x]</code>, T06 <code>[x]</code>, T07 <code>[x]</code>, T08 <code>[x]</code>, T09 <code>[x]</code>, T10 <code>[x]</code>. There are no <code>[f]</code> rows or blocking blocks in M2.</p>
+    <p><strong>Friction and decision.</strong> M2 intentionally precedes <code>docs/cheatsheet.html</code>. The required-path, index, and external-reference tests therefore failed only for that absent M3 subject: the full unit run recorded 1506 passing and 3 expected missing-subject failures. Owner direction on 2026-08-29 closes M2 with those three failures accepted until M3 creates the file. M3 must rerun the command, warning, index, and external-reference induced failures against the real document and turn the three missing-subject failures green.</p>
+    <p><strong>Landing evidence.</strong> M2 commits: <code>4673b03</code> (T05), <code>e102bf9</code> (T06), <code>de7318d</code> (T07), <code>6b376dd</code> (T08), <code>e232688</code> (T09), and this T10 landing commit. <code>npm run lint</code> passed with 0 warnings and 0 errors across 404 files; <code>npm run typecheck</code> exited 0 for core and dashboard.</p>
   </details>
 </section>
 
