@@ -389,19 +389,44 @@ npm run awsf -- land TASK</pre>
 <section id="boundaries">
   <p class="eyebrow">Boundaries</p>
   <h2>What you are never asked to do</h2>
-  <p class="secstatus"><span class="dot pending"></span>Not yet written. Each boundary with the one sentence that says why. Task 14.</p>
+  <p class="secstatus"><span class="dot built"></span>These are rules, not gaps for you or marimba to fill.</p>
+
+  <ul class="answers">
+    <li><b>Push anything</b>Never push a branch or publish a change, because this route ends before the human decision and publication is a separate human-initiated act.</li>
+    <li><b>Edit a protected file</b>Never edit one yourself or ask marimba to edit one, because those files define the factory&rsquo;s policy and state boundaries and require their own owner-approved change.</li>
+    <li><b>Repair state by hand</b>Never alter a journal, status record, lifecycle, reservation, or Git state to make a job move, because a record changed outside the factory is evidence the factory did not create.</li>
+    <li><b>Work around a refusal</b>Never bypass, retry around, or manufacture a refusal, because the refusal names a condition the factory requires and a detour would fabricate the evidence it is meant to protect.</li>
+    <li><b>Open <code>private/</code></b>Never open it, because it contains host-private continuity material and prompts; naming the boundary makes it a rule rather than relying on habit to avoid an unmentioned directory.</li>
+  </ul>
 </section>
 
 <section id="what-this-owns">
   <p class="eyebrow">Boundaries</p>
   <h2>What this document owns</h2>
-  <p class="secstatus"><span class="dot pending"></span>Not yet written. The reader&rsquo;s route and six fenced fact classes, and nothing else. Task 14.</p>
+  <p class="secstatus"><span class="dot built"></span>The reader&rsquo;s route and six fenced fact classes, and nothing else.</p>
+
+  <p>This file owns the six-leg route you have just read and its six reference classes: commands, lifecycle states, legal edges, owner acts, workflows and gates, and risk tiers and call ceilings. Each class is held equal to its source, so this file may describe those sets without becoming their owner.</p>
+  <p>The sources own the rest: <code>README.md</code> owns installation and repository verification; <code>docs/driving/skills/awsf/SKILL.md</code> owns how a driving session operates; <code>core/src/</code> owns factory behaviour; <code>awsf.config.yaml</code> owns the configured route and checks; and the source files named beside each reference class own its exact facts. This guide points to them. It does not replace, configure, or change them.</p>
+  <p><strong>Nothing in the factory reads this document.</strong> No gate, transition, guard, reservation, accounting decision, or outcome depends on anybody having read it. If the factory needs this guide to be safe or correct, the factory has a defect that belongs in its code.</p>
 </section>
 
 <section id="limits">
   <p class="eyebrow">Boundaries</p>
   <h2>What this document does not cover</h2>
-  <p class="secstatus"><span class="dot pending"></span>Not yet written. Accepted absences, who owns each, and the acceptance limit. Task 14.</p>
+  <p class="secstatus"><span class="dot built"></span>Known limits, named with the person or workstream that owns each next step.</p>
+
+  <ul class="answers">
+    <li><b>The W12 observation protocol</b>This guide does not explain the ticket set or its recording questions, because <code>specs/tickets/awsf-v2-w12-cheatsheet/README.md</code> owns that protocol; a later drive that needs it to proceed is a documented gap.</li>
+    <li><b>A refusal from your current job</b>This guide cannot promise one, because a successful job has no real refusal; read an existing refusal without changing it until an M5 graduation run supplies a genuine one.</li>
+    <li><b>The order or numbering in a session report</b>The six legs are this guide&rsquo;s observation order, not a factory sequence; if a session&rsquo;s numbering makes the graduation record unreadable, W01 owns the contract change.</li>
+    <li><b>Exact session-specific invocations outside the six classes</b>This guide does not list task-request, Git-formatting, or state-store read arguments, because no fenced source owns a complete set; if the route needs one, it reopens as a document gap rather than becoming an unfenced list.</li>
+    <li><b>Journal size or composition</b>This guide sends you to the dashboard rather than a journal, and no current workstream owns changing what the journal stores.</li>
+    <li><b>A new project&rsquo;s entry path</b>This route is for this checkout, because preparing a greenfield project currently requires protected configuration; W03 owns that missing entry path.</li>
+    <li><b>Installing marimba or its launcher</b>Those are per-person, per-machine setup owned by the person who hands you this file, not by this repository or this guide.</li>
+  </ul>
+
+  <h3>What this has been shown to prove</h3>
+  <p>This guide has been driven by its author and not yet by anyone else. It is known to be sufficient to drive with; it is not known to be understandable to somebody new. Only a second reader can establish that, and this document does not claim it has happened.</p>
 </section>
 
 <section id="reference-commands">
