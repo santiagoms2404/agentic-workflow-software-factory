@@ -93,6 +93,22 @@ section { padding:34px 0; border-top:1px solid var(--border); scroll-margin-top:
 [data-awsf-fact-class] li { margin:0; }
 [data-awsf-fact-class] code { display:inline-block; border:1px solid var(--border); background:var(--surface); padding:4px 9px; font-size:13.2px; }
 
+h3 { font:700 18.5px/1.28 var(--font-ui); margin:28px 0 8px; }
+.lede { font-size:18.4px; }
+.ask { margin:16px 0; padding:15px 18px; background:var(--surface); border:1px solid var(--border); border-radius:12px; }
+.ask .lbl { display:block; font:600 10.5px/1 var(--font-ui); letter-spacing:.18em; text-transform:uppercase; color:var(--accent); margin-bottom:9px; }
+.ask p { margin:0 0 9px; max-width:none; }
+.ask p:last-child { margin:0; }
+pre { margin:16px 0; padding:14px 18px; background:var(--surface-soft); border:1px solid var(--border); border-radius:12px; overflow-x:auto; font:400 13.4px/1.66 var(--font-mono); }
+.curtain { max-width:none; margin:20px 0 0; padding:13px 18px; background:var(--accent-soft); border-left:2px solid var(--accent); border-radius:0 12px 12px 0; font-size:15.4px; }
+.curtain .lbl { font:700 10.5px/1 var(--font-ui); letter-spacing:.16em; text-transform:uppercase; color:var(--accent); margin-right:9px; }
+.warnnote { max-width:none; margin:16px 0; padding:2px 0 2px 16px; border-left:2px solid var(--warn); }
+.answers { list-style:none; margin:16px 0; padding:0; }
+.answers li { display:grid; grid-template-columns:minmax(0,27ch) minmax(0,1fr); gap:16px; margin:0; padding:10px 0; border-top:1px solid var(--border); }
+.answers li:last-child { border-bottom:1px solid var(--border); }
+.answers b { color:var(--strong); font-weight:700; }
+@media (max-width:640px) { .answers li { grid-template-columns:minmax(0,1fr); gap:2px; } }
+
 @media (max-width:900px) {
   .page { grid-template-columns:minmax(0,1fr); gap:0; padding:0 16px; }
   .rail { position:static; max-height:none; padding:0 0 8px; border-bottom:1px solid var(--border); }
@@ -141,7 +157,7 @@ section { padding:34px 0; border-top:1px solid var(--border); scroll-margin-top:
   <p class="eyebrow">AWSF</p>
   <h1>Driving the factory</h1>
   <p class="sub">One file. Open it anywhere, with nothing installed and no network.</p>
-  <p class="reader-warning" data-awsf-reader-warning><strong>You will not type any of the commands in this guide.</strong> You describe the job in your own words, and marimba &mdash; the assistant &mdash; runs them for you. Commands are shown only so you can see what it did on your behalf.</p>
+  <p class="reader-warning" data-awsf-reader-warning><strong>You do not type the commands in this guide.</strong> You describe the job in your own words, and marimba &mdash; the assistant that drives the factory &mdash; runs them for you. They are shown so you can see what it did on your behalf. Two things are yours to do personally, and the guide says so when it reaches them: installing the repository, and the act at the end that only a person may perform.</p>
   <p class="legend">
     <span class="item"><span class="dot built"></span>written</span>
     <span class="item"><span class="dot part"></span>partly written</span>
@@ -153,43 +169,176 @@ section { padding:34px 0; border-top:1px solid var(--border); scroll-margin-top:
 <section id="start-here">
   <p class="eyebrow">Orientation</p>
   <h2>Start here</h2>
-  <p class="secstatus"><span class="dot pending"></span>Not yet written. What this document is, who it is for, and what it costs to follow. Task 12.</p>
+  <p class="secstatus"><span class="dot built"></span>What this is, who does what, and what it costs before you begin.</p>
+
+  <p class="lede">This is one route through a factory that turns a job you describe in ordinary words into a change waiting for a person to sign for it. Six legs, in the order you travel them. Everything on the route is something you ask for. Almost nothing on it is something you type.</p>
+
+  <h3>Who does what</h3>
+  <ul class="answers">
+    <li><b>You</b>describe the job you want and the boundary that decides whether it is done, then read what comes back and decide what happens to it.</li>
+    <li><b>marimba</b>is the assistant you talk to. It picks and runs the commands, watches the work, and explains what came back. It never performs the act at the end.</li>
+    <li><b>The factory</b>does the work in a sealed copy of the project, records everything it did, runs the project&rsquo;s own checks against the result, and then stops in front of a person.</li>
+  </ul>
+
+  <h3>What this costs, before you start rather than after</h3>
+  <p><strong>Leg 3 spends real money and the other five legs are free.</strong> When you ask for a job, a paid provider is called, and that call is spent whether or not you like what comes back. The worked example on leg 3 should be one call &mdash; one job, one attempt, and no second opinion bought on top of it.</p>
+  <p><strong>There is no free rehearsal, and that was measured rather than assumed.</strong> The repository&rsquo;s <code>README.md</code> describes a route that spends nothing, and the route is real &mdash; but a job you drive cannot reach it. Somebody ran that experiment on a real drive before this guide was written, which is why the sentence is on the first page instead of being discovered by you at leg 3 with the money already gone. If you want to practise for nothing, practise the other five legs: installing, priming, watching, reading a refusal and stopping at the signature all cost nothing.</p>
+  <p><strong>Nothing on this route lands anything.</strong> The route ends with the work waiting for a signature that this guide never tells you to give, so the checkout you start from is the checkout you finish with. That is what lets the worked example be run again, by you and by whoever reads this after you.</p>
+
+  <h3>The other half of this file</h3>
+  <p>Everything from <a href="#reference-commands">Commands</a> onward is the same factory described from the other side: what the assistant actually invoked, what the stages and moves are called, what only a person may do, and what a run is allowed to spend. It is there for when you want to look rather than to be read first. Each leg below ends with a short note pointing into the part of it that belongs to that leg.</p>
 </section>
 
 <section id="install">
   <p class="eyebrow">Walkthrough &middot; leg 1 of 6</p>
   <h2>Install it</h2>
-  <p class="secstatus"><span class="dot pending"></span>Not yet written. The one leg the reader performs personally. Task 12.</p>
+  <p class="secstatus"><span class="dot built"></span>The one leg you perform yourself, at a terminal, before any assistant is involved.</p>
+
+  <p>You are aiming at one thing: a copy of the repository on your machine that passes its own checks. Not a configured project and not a running job &mdash; a checkout that works.</p>
+
+  <p><strong>The repository&rsquo;s own <code>README.md</code> owns this leg, and this guide deliberately does not repeat it.</strong> Follow its <em>Install and usage</em> section, then its <em>Verifying these claims</em> section, in that order. The second one is the part people skip and the part that matters: it is how you find out the install worked instead of assuming it did.</p>
+  <p>The reason for pointing rather than copying is the same reason this whole document exists. A second copy of an install sequence goes stale quietly, and a stale install sequence sends you down a path the repository no longer takes.</p>
+
+  <p>You are done with leg 1 when the repository&rsquo;s verification finishes without complaint. If it does not, stop here. Every later leg assumes it did, and a factory driven from a broken checkout produces confusing refusals instead of obvious ones.</p>
+
+  <p class="warnnote"><strong>Two more things have to be installed before leg 2, and neither of them is in the <code>README.md</code>, because neither of them lives in the repository.</strong> Leg 2 names them. If somebody handed you this file, that is the point where you may have to go back to them.</p>
+
+  <p class="curtain"><span class="lbl">Behind the curtain</span> None of this is the factory&rsquo;s business yet: no job exists and it records nothing. The one thing that carries forward is that the checks pass, because the factory later runs the project&rsquo;s own configured checks against whatever it produces. Which checks a project has configured is in <a href="#reference-workflows-and-gates">Workflows and gates</a>.</p>
 </section>
 
 <section id="prime-a-session">
   <p class="eyebrow">Walkthrough &middot; leg 2 of 6</p>
   <h2>Prime a session</h2>
-  <p class="secstatus"><span class="dot pending"></span>Not yet written. Opening a session that already knows about the factory. Task 12.</p>
+  <p class="secstatus"><span class="dot built"></span>Opening an assistant that already knows the factory, and getting it to stop.</p>
+
+  <p><strong>No command in this repository opens a driving session.</strong> A marimba session is opened by a launcher installed on your machine: it starts an assistant with marimba&rsquo;s own settings file and appends the driving contract to that assistant&rsquo;s instructions. The launcher and the settings are per-person and per-machine. Neither is in the checkout you just installed, so nothing you run from it will produce one.</p>
+  <p>This guide cannot tell you how to install them, because they live outside the repository and differ from machine to machine. If you do not already have both working, leg 2 cannot start, and the person who handed you this file is who to ask. Everything from here on assumes a session that opened with marimba&rsquo;s settings and contract in place.</p>
+
+  <p>Once a session is open, prime it. In a session that has the command installed, <code>/prime-awsf</code> is the whole instruction; otherwise ask for it in words:</p>
+  <p class="ask"><span class="lbl">Ask for</span>&ldquo;Prime this session for driving the factory, then stop.&rdquo;</p>
+
+  <p>Priming reads the sources that govern the factory, in a fixed order, and then runs a toolchain check &mdash; the repository&rsquo;s own install-and-verify sequence from leg 1, plus the factory&rsquo;s self-diagnosis:</p>
+  <pre>npm run awsf -- doctor</pre>
+  <p>You may see that same command written three ways &mdash; as an npm script, as a <code>just</code> target, or as a bare <code>awsf</code> command. They are three spellings of one thing rather than three commands, and <a href="#reference-commands">Commands</a> is the list of names that actually exist.</p>
+
+  <h3>How to read what comes back</h3>
+  <p>A healthy report, and then silence. <strong>A primed session should not volunteer a status board</strong>, and if yours does, the problem is with the session rather than with you: state printed before you have asked for anything was stale before you read it. Nothing about your job exists at this point, because you have not described one yet.</p>
+
+  <p class="curtain"><span class="lbl">Behind the curtain</span> Priming reads; it does not act. The self-diagnosis it runs is read-only and has no repair path, so a finding is evidence for you and never permission for the assistant to change something. It is one of the names in <a href="#reference-commands">Commands</a>.</p>
 </section>
 
 <section id="one-small-job">
   <p class="eyebrow">Walkthrough &middot; leg 3 of 6</p>
   <h2>Give it one small job</h2>
-  <p class="secstatus"><span class="dot pending"></span>Not yet written. The worked example, described in the reader&rsquo;s own words. Task 12.</p>
+  <p class="secstatus"><span class="dot built"></span>The worked example, the choice you will be asked to make, and the only leg that spends anything.</p>
+
+  <p><strong>What you bring is a result and a boundary &mdash; not a command, and not a ticket number.</strong> Describe what you want to be true when the job is finished, and describe how anyone would tell that it is. You do not pick a command, you do not need a ticket to point at, and you do not have to know which part of the factory will do it. Choosing the command is marimba&rsquo;s job, and it is the reason the route has an assistant on it at all.</p>
+
+  <h3>The worked example</h3>
+  <p class="ask"><span class="lbl">Ask for</span>&ldquo;The repository has a <code>justfile</code> whose targets are meant to be thin wrappers over the project&rsquo;s npm scripts. Add one test that checks that promise: every target that delegates to an npm script must name a script that actually exists. Put it with the other tests that check documents and configuration against the code. Do not change the <code>justfile</code> and do not change any existing test. It is done when the new test passes and the whole suite still passes.&rdquo;</p>
+  <p>That is a paragraph of English with a boundary at the end of it. It names a result, the place the result belongs, two things not to touch, and the condition that decides it is finished.</p>
+  <p><strong>Why an example and not a real job.</strong> This one can be run again &mdash; by you, tomorrow, and by the next person who reads this file &mdash; because the route never lands anything, so the checkout is unchanged afterwards and the job is still missing when the next person asks for it. A real job is only new once, which makes it useless as something to practise on.</p>
+
+  <h3>Four things that surprise people here</h3>
+  <p><strong>The six legs are the order you travel, not an order the factory enforces.</strong> If you decided what you wanted before you opened a session &mdash; most people do &mdash; nothing is wrong and nothing needs redoing. The factory checks the shape of what it is handed, never the order in which you thought of it.</p>
+
+  <p><strong>Before anything launches, you will be asked to choose.</strong> marimba does not start work on a description. It comes back with the ways it could proceed and waits for you. Expect three:</p>
+  <ul class="answers">
+    <li><b>Drive it through the factory</b>The whole route: registered, sealed, run, checked, and stopped in front of you. <strong>This is the one this guide describes</strong>, and the one that spends a call.</li>
+    <li><b>Prepare it without launching</b>The job is registered and everything is made ready, and it stops before anything is spent. Useful when you want to see what would happen; it is not this route.</li>
+    <li><b>Hand it straight to a worker</b>The older convention, which skips the factory. Nothing is recorded, no checks are run against the result, and there is nothing waiting for a signature at the end. If you pick this one you are not driving the factory, you are just using an assistant.</li>
+  </ul>
+
+  <p><strong>The thing that does the work may not be the assistant you are talking to.</strong> The worker is a configured role with its own provider, chosen by the project&rsquo;s configuration rather than by your session, so a session running on one provider can hand the job to a worker running on another. That is normal rather than a fault, and it is settled by configuration rather than by conversation.</p>
+
+  <p><strong>The work happens in a sealed copy.</strong> Nothing in your checkout changes while the job runs. If the job goes wrong, the sealed copy is what goes wrong.</p>
+
+  <h3>What marimba runs, once you have chosen</h3>
+  <pre>npm run awsf -- new TASK "&lt;the paragraph you wrote&gt;"
+npm run awsf -- start TASK
+npm run awsf -- run TASK</pre>
+  <p>Three commands in that order: the job is registered, a sealed copy of the project is made ready, and the work begins &mdash; and it is that third step, not the second, where a provider call is reserved and spent. Stopping after the second one costs nothing. marimba also passes options that pick the route and the risk setting; those belong to the other half of this file rather than to anything you have to decide. <code>TASK</code> stands for whatever name your job is given &mdash; you will see the real one in the session.</p>
+
+  <p class="curtain"><span class="lbl">Behind the curtain</span> Those three are names in <a href="#reference-commands">Commands</a>, and between them the job makes the first of the recorded moves in <a href="#reference-legal-edges">Legal edges</a>. The reservation made at the third step is what <a href="#reference-risk-tiers">Risk tiers and call ceilings</a> governs: a run cannot quietly spend more than the job was allowed.</p>
 </section>
 
 <section id="watch-it">
   <p class="eyebrow">Walkthrough &middot; leg 4 of 6</p>
   <h2>Watch it work</h2>
-  <p class="secstatus"><span class="dot pending"></span>Not yet written. What to look at while a job runs, and what each thing means. Task 12.</p>
+  <p class="secstatus"><span class="dot built"></span>Which surface answers which question, so you stop alternating between two of them.</p>
+
+  <p><strong>Watch the dashboard; ask marimba.</strong> They are not two views of the same thing, and flipping between them is the most reliable way to spend a run learning nothing. The dashboard answers <em>what is happening</em>. marimba answers <em>why</em>, and <em>what happens next</em>.</p>
+
+  <pre>npm run awsf -- dash
+npm run awsf -- status TASK</pre>
+  <p>The first serves the dashboard. The second is the same story as text, in the session, if you would rather not leave it.</p>
+
+  <h3>Where each question is answered</h3>
+  <ul class="answers">
+    <li><b>Has it started, and where has it got to?</b>The job&rsquo;s card on the dashboard. This is the question the dashboard is best at, and the one you should stop asking marimba.</li>
+    <li><b>What was the factory actually asked to do?</b>The request row&rsquo;s evidence. This is the request as the factory received it, which is not always the request as you said it &mdash; leg 6 is where that distinction earns its own row.</li>
+    <li><b>What did the worker do, and what did it produce?</b>The builder row&rsquo;s evidence and its events. The work itself is readable there, as it happens, rather than summarised afterwards.</li>
+    <li><b>Did the project&rsquo;s checks run, and did they pass?</b>The checks row &mdash; with the caution below.</li>
+    <li><b>Why is it doing that, and what should I do about it?</b>marimba. Anything that needs a judgement rather than a value is a question for the session.</li>
+  </ul>
+
+  <p class="warnnote"><strong>Read the checks row exactly.</strong> When it passes, it says that <em>all configured commands passed</em>. That is a statement about the list of checks this project has configured &mdash; and if that list is empty, the same green sentence appears with nothing at all behind it. It is not a claim that your code is good; it is a claim that a list ran and nothing in it failed. Which checks a project has configured is in <a href="#reference-workflows-and-gates">Workflows and gates</a>, and that is the thing to check rather than the sentence.</p>
+
+  <p class="curtain"><span class="lbl">Behind the curtain</span> Everything on this leg is read-only: watching a job changes nothing about it. While you watch, the job passes through several recorded stages, and every move between them is recorded rather than inferred &mdash; the stages are in <a href="#reference-lifecycle-states">Lifecycle states</a> and the moves in <a href="#reference-legal-edges">Legal edges</a>.</p>
 </section>
 
 <section id="read-a-refusal">
   <p class="eyebrow">Walkthrough &middot; leg 5 of 6</p>
   <h2>Read a refusal</h2>
-  <p class="secstatus"><span class="dot pending"></span>Not yet written. Reading a refusal you did not cause. Task 13.</p>
+  <p class="secstatus"><span class="dot part"></span>The route is written. The worked refusal, and the difference between a thing that stops you and a record that reports on you, are Task 13.</p>
+
+  <p>A refusal is the factory declining to go on without something it requires. It is not a crash and it is not an error message: it is a recorded decision, with a reason attached, that leaves the job somewhere you can still act on it.</p>
+
+  <p><strong>Read a refusal as the shape of what the factory will accept, not as a wall to get past.</strong> The boundaries are an operating envelope &mdash; they describe the conditions under which work goes forward. Nothing in this guide will ever tell you how to route around one, and if you find yourself looking for a way around, the thing to change is the request.</p>
+
+  <p><strong>You may not get one, and you must not manufacture one.</strong> The factory refuses only when something it needs is genuinely missing, so a drive that goes well produces no refusal at all. Do not stage one to see what it looks like; a staged refusal is a fabricated record, and it teaches you the wrong thing about the real ones. Ask marimba to read a real one instead.</p>
+
+  <p class="ask"><span class="lbl">Ask for</span>&ldquo;Find a refusal that already happened and walk me through it. Read it only &mdash; change nothing.&rdquo;</p>
+
+  <p><strong>Earlier work stays visible, including work that was never yours.</strong> Durable records live in one place per machine, with each project kept separate inside it, so attempts from months ago are still there to be read. If marimba comes back with a job you do not recognise, it has not lost track of yours &mdash; it went and found a real refusal to show you. Reading one changes nothing about it.</p>
+
+  <p><strong>A refusal is readable from the factory&rsquo;s own records.</strong> What refused, what it required, and what it left available are all in what the factory writes as it goes: the job&rsquo;s status, its running account of what happened, and the envelope of any opinion it asked for along the way. You should not need to open a plan document to understand one. If a question here can only be answered from a plan, that is a gap in this guide rather than something you did wrong.</p>
+
+  <pre>npm run awsf -- status TASK</pre>
+
+  <h3>The four things to get out of it</h3>
+  <ul class="answers">
+    <li><b>What refused</b>Which part of the factory stopped, and at which point of the job.</li>
+    <li><b>What it was protecting</b>The condition that was not met. This is the sentence worth reading twice; everything else follows from it.</li>
+    <li><b>What was not spent</b>A refusal usually costs less than a success. Knowing what is still available decides what you can afford to try next.</li>
+    <li><b>What you may now decide</b>A refused job is not a dead job. The factory names what remains open, and that list is what leg 6 hands you.</li>
+  </ul>
+
+  <p class="curtain"><span class="lbl">Behind the curtain</span> A refusal names a condition, and the conditions are properties of the moves the factory is permitted to make; those moves are in <a href="#reference-legal-edges">Legal edges</a>. The stage a refused job comes to rest in is one of the entries in <a href="#reference-lifecycle-states">Lifecycle states</a>, and it is a resting place rather than a dead end.</p>
 </section>
 
 <section id="stop-at-the-signature">
   <p class="eyebrow">Walkthrough &middot; leg 6 of 6</p>
   <h2>Stop at the signature</h2>
-  <p class="secstatus"><span class="dot pending"></span>Not yet written. The acts a person performs and an assistant is refused. Task 13.</p>
+  <p class="secstatus"><span class="dot part"></span>The route is written. The acts themselves, and the evidence each one demands, are Task 13.</p>
+
+  <p>The route ends in front of you. The factory has done everything it is allowed to do and stopped, holding a candidate change that has not been merged into anything. <strong>This is the second and last thing you do personally.</strong></p>
+
+  <p><strong>Passing checks do not mean the job was done.</strong> They mean a list of checks ran against whatever was produced and nothing in it failed. Whether what was produced is what you asked for is a separate question, and it is yours. On the drive this guide was written from, a job arrived here with everything green and a candidate that had done a different thing from the one requested. <strong>Comparing the candidate against the boundary you wrote at leg 3 is part of the act, not a formality before it.</strong></p>
+
+  <p><strong>If the candidate does not match what you asked for, read the request the factory actually sent.</strong> It is recorded, and marimba can read it back to you. A mismatch is usually visible there in plain words &mdash; a clause dropped, or a constraint the request added on its own. What you should not have to do is read the source code to find out why; if you do, that is a gap in this guide, and it is worth saying so.</p>
+
+  <p class="ask"><span class="lbl">Ask for</span>&ldquo;Show me the request as the factory received it, and how the candidate compares with the boundary I gave you.&rdquo;</p>
+
+  <p><strong>Nothing expires while you decide.</strong> A candidate waiting for a person stays waiting. Closing the session, shutting the machine, or coming back tomorrow changes nothing about the job&rsquo;s recorded state &mdash; the session was the thing driving, never the thing holding. And a candidate you never sign for changes nothing at all, which is exactly what makes the worked example safe for the next person to run.</p>
+
+  <pre>npm run awsf -- status TASK
+npm run awsf -- land TASK</pre>
+  <p>The first is the evidence. The second is the act, and you type it yourself. marimba will prepare it and explain it, and it is refused by the machine if it tries to run it &mdash; not out of politeness, but because the tool surface denies it.</p>
+
+  <p><strong>This guide stops here.</strong> It tells you what to have in hand before you decide. It does not tell you which way to decide, and it never will.</p>
+
+  <p class="curtain"><span class="lbl">Behind the curtain</span> The acts only a person may perform are the list in <a href="#reference-owner-acts">Owner acts</a>, and each one makes a recorded move of its own in <a href="#reference-legal-edges">Legal edges</a>. That an assistant is refused them is a property of the tool surface it runs under, which is why it holds whether or not the assistant has read anything.</p>
 </section>
 
 <section id="boundaries">
