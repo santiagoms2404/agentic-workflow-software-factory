@@ -110,6 +110,31 @@ pre { margin:16px 0; padding:14px 18px; background:var(--surface-soft); border:1
 .answers li { display:grid; grid-template-columns:minmax(0,27ch) minmax(0,1fr); gap:16px; margin:0; padding:10px 0; border-top:1px solid var(--border); }
 .answers li:last-child { border-bottom:1px solid var(--border); }
 .answers b { color:var(--strong); font-weight:700; }
+figure { margin:22px 0; padding:16px 14px 0; background:var(--surface-soft); border:1px solid var(--border); border-radius:14px; }
+figure svg { display:block; width:100%; height:auto; }
+figcaption { margin:12px 2px 0; padding:12px 0 14px; border-top:1px solid var(--border); font-size:14.4px; color:var(--muted); max-width:none; }
+figcaption strong { color:var(--strong); }
+.fig-card { fill:var(--surface); stroke:var(--border); stroke-width:1; }
+.fig-ghost { fill:none; stroke:var(--border); stroke-width:1; stroke-dasharray:5 4; }
+.fig-seal { fill:var(--surface); stroke:var(--accent-line); stroke-width:1.5; stroke-dasharray:7 5; }
+.fig-zone { fill:var(--accent-soft); }
+.fig-stop { fill:var(--accent); }
+.fig-line { fill:none; stroke:var(--muted); stroke-width:1.4; }
+.fig-line-acc { fill:none; stroke:var(--accent); stroke-width:2; }
+.fig-line-dash { fill:none; stroke:var(--border); stroke-width:1.4; stroke-dasharray:5 4; }
+.fig-line-dot { fill:none; stroke:var(--border); stroke-width:1.4; stroke-dasharray:2 4; }
+.fig-rule { fill:none; stroke:var(--accent); stroke-width:1.5; stroke-dasharray:5 4; }
+.fig-head { fill:var(--muted); }
+.fig-head-acc { fill:var(--accent); }
+.fig-head-dim { fill:var(--border); }
+.fig-h { font:700 12.5px var(--font-ui); fill:var(--strong); }
+.fig-t { font:700 13px var(--font-ui); fill:var(--strong); }
+.fig-t-dim { font:700 13px var(--font-ui); fill:var(--muted); }
+.fig-m { font:400 13px var(--font-mono); fill:var(--strong); }
+.fig-s { font:400 11px var(--font-ui); fill:var(--muted); }
+.fig-s-acc { font:700 11px var(--font-ui); fill:var(--accent); }
+.fig-lbl { font:400 10.5px var(--font-mono); fill:var(--muted); }
+.fig-lbl-acc { font:400 10.5px var(--font-mono); fill:var(--accent); }
 @media (max-width:640px) { .answers li { grid-template-columns:minmax(0,1fr); gap:2px; } }
 
 @media (max-width:900px) {
@@ -278,6 +303,44 @@ npm run awsf -- start TASK
 npm run awsf -- run TASK</pre>
   <p>Three commands in that order: the job is registered, a sealed copy of the project is made ready, and the work begins &mdash; and it is that third step, not the second, where a provider call is reserved and spent. Stopping after the second one costs nothing. marimba also passes options that pick the route and the risk setting; those belong to the other half of this file rather than to anything you have to decide. <code>TASK</code> stands for whatever name your job is given &mdash; you will see the real one in the session.</p>
 
+  <figure>
+    <svg viewBox="0 0 720 200" role="img" aria-label="The three commands of leg 3 cause two recorded moves. new registers the job as DRAFT, start makes the move L1 to PREPARED with spawn false, and run makes the move L4 to RUNNING with spawn true. A dashed boundary sits on L4: nothing is spent to the left of it, and one provider call is reserved to the right.">
+      <defs>
+        <marker id="f1h" viewBox="0 0 10 8" refX="9.5" refY="4" markerWidth="10" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0 L10 4 L0 8 Z" class="fig-head"/></marker>
+        <marker id="f1a" viewBox="0 0 10 8" refX="9.5" refY="4" markerWidth="10" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0 L10 4 L0 8 Z" class="fig-head-acc"/></marker>
+      </defs>
+      <rect class="fig-zone" x="444" y="48" width="268" height="104" rx="14"/>
+      <rect class="fig-card" x="65" y="14" width="70" height="26" rx="13"/>
+      <rect class="fig-card" x="305" y="14" width="70" height="26" rx="13"/>
+      <rect class="fig-card" x="585" y="14" width="70" height="26" rx="13"/>
+      <text class="fig-m" x="100" y="31" text-anchor="middle">new</text>
+      <text class="fig-m" x="340" y="31" text-anchor="middle">start</text>
+      <text class="fig-m" x="620" y="31" text-anchor="middle">run</text>
+      <line class="fig-line-dash" x1="100" y1="40" x2="100" y2="64"/>
+      <line class="fig-line-dash" x1="340" y1="40" x2="340" y2="64"/>
+      <line class="fig-line-dash" x1="620" y1="40" x2="620" y2="64"/>
+      <rect class="fig-card" x="25" y="64" width="150" height="64" rx="10"/>
+      <rect class="fig-card" x="265" y="64" width="150" height="64" rx="10"/>
+      <rect class="fig-card" x="545" y="64" width="150" height="64" rx="10"/>
+      <text class="fig-m" x="100" y="92" text-anchor="middle">DRAFT</text>
+      <text class="fig-s" x="100" y="112" text-anchor="middle">registered only</text>
+      <text class="fig-m" x="340" y="92" text-anchor="middle">PREPARED</text>
+      <text class="fig-s" x="340" y="112" text-anchor="middle">sealed copy ready</text>
+      <text class="fig-m" x="620" y="92" text-anchor="middle">RUNNING</text>
+      <text class="fig-s" x="620" y="112" text-anchor="middle">worker at work</text>
+      <line class="fig-line" x1="183" y1="96" x2="255" y2="96" marker-end="url(#f1h)"/>
+      <line class="fig-line-acc" x1="423" y1="96" x2="535" y2="96" marker-end="url(#f1a)"/>
+      <text class="fig-lbl" x="220" y="84" text-anchor="middle">L1</text>
+      <text class="fig-lbl" x="220" y="118" text-anchor="middle">spawn=false</text>
+      <text class="fig-lbl-acc" x="495" y="84" text-anchor="middle">L4</text>
+      <text class="fig-lbl-acc" x="495" y="118" text-anchor="middle">spawn=true</text>
+      <line class="fig-rule" x1="440" y1="40" x2="440" y2="160"/>
+      <text class="fig-s" x="432" y="176" text-anchor="end">nothing spent yet</text>
+      <text class="fig-s-acc" x="448" y="176" text-anchor="start">one provider call reserved</text>
+    </svg>
+    <figcaption>Three commands, two recorded moves, one spend. <code>start</code> reaches <code>PREPARED</code> without spending, because <code>L1</code> launches nothing. The call is reserved by <code>L4</code> &mdash; the move <code>run</code> causes &mdash; because that is the move that launches a worker. <strong>The boundary sits on the move, not on the command</strong>, which is why stopping after <code>start</code> costs nothing.</figcaption>
+  </figure>
+
   <div class="curtain">
     <p><span class="lbl">Behind the curtain</span> Those three are names in <a href="#reference-commands">Commands</a>, and between them the job makes the first of the recorded moves in <a href="#reference-legal-edges">Legal edges</a>. The reservation made at the third step is what <a href="#reference-risk-tiers">Risk tiers and call ceilings</a> governs: a run cannot quietly spend more than the job was allowed.</p>
     <p><strong>On the drive this guide was written from</strong>, marimba ran the three commands above with the options it had chosen, and read the state between them:</p>
@@ -315,6 +378,44 @@ npm run awsf -- status TASK</pre>
   </ul>
 
   <p class="warnnote"><strong>Read the checks row exactly.</strong> When it passes, it says that <em>all configured commands passed</em>. That is a statement about the list of checks this project has configured &mdash; and if that list is empty, the same green sentence appears with nothing at all behind it. It is not a claim that your code is good; it is a claim that a list ran and nothing in it failed. Which checks a project has configured is in <a href="#reference-workflows-and-gates">Workflows and gates</a>, and that is the thing to check rather than the sentence.</p>
+
+  <figure>
+    <svg viewBox="0 0 700 370" role="img" aria-label="Your checkout pins the commit BASE into a sealed copy. Inside the seal the worker builds from BASE, runs its own checks, and commits CANDIDATE; everything inside the seal is the worker's claim. The host sits outside the seal and runs the configured gates against CANDIDATE; that is the measurement. A dashed return path from CANDIDATE to your checkout is taken only if a person lands it.">
+      <defs>
+        <marker id="f2h" viewBox="0 0 10 8" refX="9.5" refY="4" markerWidth="10" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0 L10 4 L0 8 Z" class="fig-head"/></marker>
+        <marker id="f2d" viewBox="0 0 10 8" refX="9.5" refY="4" markerWidth="10" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0 L10 4 L0 8 Z" class="fig-head-dim"/></marker>
+      </defs>
+      <rect class="fig-seal" x="70" y="110" width="560" height="150" rx="18"/>
+      <text class="fig-s" x="88" y="134">the sealed copy</text>
+      <rect class="fig-card" x="68" y="20" width="160" height="54" rx="10"/>
+      <text class="fig-t" x="148" y="46" text-anchor="middle">your checkout</text>
+      <text class="fig-s" x="148" y="64" text-anchor="middle">unchanged throughout</text>
+      <line class="fig-line" x1="148" y1="74" x2="148" y2="104" marker-end="url(#f2h)"/>
+      <text class="fig-lbl" x="158" y="96">pins BASE</text>
+      <rect class="fig-card" x="92" y="150" width="112" height="64" rx="10"/>
+      <text class="fig-m" x="148" y="178" text-anchor="middle">BASE</text>
+      <text class="fig-s" x="148" y="198" text-anchor="middle">start commit</text>
+      <line class="fig-line" x1="210" y1="182" x2="268" y2="182" marker-end="url(#f2h)"/>
+      <text class="fig-lbl" x="240" y="172" text-anchor="middle">builds</text>
+      <rect class="fig-card" x="276" y="150" width="130" height="64" rx="10"/>
+      <text class="fig-t" x="341" y="178" text-anchor="middle">worker</text>
+      <text class="fig-s" x="341" y="198" text-anchor="middle">runs its own checks</text>
+      <line class="fig-line" x1="412" y1="182" x2="470" y2="182" marker-end="url(#f2h)"/>
+      <text class="fig-lbl" x="442" y="172" text-anchor="middle">commits</text>
+      <rect class="fig-card" x="478" y="150" width="130" height="64" rx="10"/>
+      <text class="fig-m" x="543" y="178" text-anchor="middle">CANDIDATE</text>
+      <text class="fig-s" x="543" y="198" text-anchor="middle">produced commit</text>
+      <text class="fig-s-acc" x="341" y="242" text-anchor="middle">the worker&rsquo;s claim</text>
+      <line class="fig-line" x1="543" y1="296" x2="543" y2="222" marker-end="url(#f2h)"/>
+      <text class="fig-s" x="533" y="276" text-anchor="end">runs the configured gates</text>
+      <rect class="fig-card" x="463" y="300" width="160" height="54" rx="10"/>
+      <text class="fig-t" x="543" y="324" text-anchor="middle">the host</text>
+      <text class="fig-s-acc" x="543" y="343" text-anchor="middle">the measurement</text>
+      <polyline class="fig-line-dash" points="608,182 668,182 668,54 240,54" marker-end="url(#f2d)"/>
+      <text class="fig-s" x="445" y="44" text-anchor="middle">only if a person lands it</text>
+    </svg>
+    <figcaption>Nothing on this leg touches your checkout: it pins a commit into the seal and is not written to again. <strong>The seal is what separates a claim from a measurement.</strong> The worker&rsquo;s own checks run inside it, on its own account. The host&rsquo;s configured gates run outside it, against the candidate itself. The only path back across the seal is leg 6, and only a person may take it.</figcaption>
+  </figure>
 
   <div class="curtain">
     <p><span class="lbl">Behind the curtain</span> Everything on this leg is read-only: watching a job changes nothing about it. While you watch, the job passes through several recorded stages, and every move between them is recorded rather than inferred &mdash; the stages are in <a href="#reference-lifecycle-states">Lifecycle states</a> and the moves in <a href="#reference-legal-edges">Legal edges</a>.</p>
@@ -382,6 +483,41 @@ npm run typecheck</pre>
   <h3>A thing that stops you, and a record that reports on you</h3>
   <p>This is the distinction worth carrying away from this guide. Nearly everything in the factory is one of the two, they are easy to confuse in writing, and <strong>a reader who confuses them trusts the wrong one</strong>.</p>
   <p><strong>A lock stops you at the door. A camera above the door tells somebody afterwards that you went through.</strong> Both are worth having, neither does the other&rsquo;s job, and no quantity of camera ever adds up to a lock.</p>
+  <figure>
+    <svg viewBox="0 0 700 336" role="img" aria-label="Two topologies for the same attempt. A thing that stops sits in the path: the attempt reaches the refusal and goes no further, so what lay beyond it was never reached. A record that reports sits beside the path: the attempt goes through to its outcome, and the record observes it from the side and writes it down, preventing nothing.">
+      <defs>
+        <marker id="f3h" viewBox="0 0 10 8" refX="9.5" refY="4" markerWidth="10" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0 L10 4 L0 8 Z" class="fig-head"/></marker>
+        <marker id="f3d" viewBox="0 0 10 8" refX="9.5" refY="4" markerWidth="10" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0 L10 4 L0 8 Z" class="fig-head-dim"/></marker>
+      </defs>
+      <text class="fig-h" x="24" y="24">a thing that stops</text>
+      <rect class="fig-card" x="24" y="44" width="138" height="54" rx="10"/>
+      <text class="fig-t" x="93" y="70" text-anchor="middle">an attempt</text>
+      <text class="fig-s" x="93" y="88" text-anchor="middle">a move the job makes</text>
+      <line class="fig-line" x1="166" y1="71" x2="220" y2="71" marker-end="url(#f3h)"/>
+      <rect class="fig-stop" x="228" y="36" width="10" height="70" rx="3"/>
+      <text class="fig-s-acc" x="233" y="124" text-anchor="middle">the refusal</text>
+      <line class="fig-line-dot" x1="246" y1="71" x2="286" y2="71"/>
+      <rect class="fig-ghost" x="290" y="44" width="170" height="54" rx="10"/>
+      <text class="fig-t-dim" x="375" y="70" text-anchor="middle">not reached</text>
+      <text class="fig-s" x="375" y="88" text-anchor="middle">the move never happened</text>
+      <text class="fig-s" x="476" y="75">prevented, at the moment it is made</text>
+      <text class="fig-h" x="24" y="176">a record that reports</text>
+      <rect class="fig-card" x="24" y="196" width="138" height="54" rx="10"/>
+      <text class="fig-t" x="93" y="222" text-anchor="middle">an attempt</text>
+      <text class="fig-s" x="93" y="240" text-anchor="middle">a move the job makes</text>
+      <line class="fig-line" x1="166" y1="223" x2="284" y2="223" marker-end="url(#f3h)"/>
+      <rect class="fig-card" x="290" y="196" width="170" height="54" rx="10"/>
+      <text class="fig-t" x="375" y="222" text-anchor="middle">it happened</text>
+      <text class="fig-s" x="375" y="240" text-anchor="middle">the move went through</text>
+      <line class="fig-line-dash" x1="226" y1="223" x2="226" y2="266" marker-end="url(#f3d)"/>
+      <text class="fig-lbl" x="216" y="250" text-anchor="end">observes</text>
+      <rect class="fig-card" x="157" y="268" width="138" height="54" rx="10"/>
+      <text class="fig-t" x="226" y="290" text-anchor="middle">the record</text>
+      <text class="fig-s" x="226" y="309" text-anchor="middle">writes it down</text>
+      <text class="fig-s" x="476" y="227">nothing was prevented</text>
+    </svg>
+    <figcaption>The same attempt, under each. <strong>A thing that stops is in the path</strong>: the move is not made, so there is nothing beyond it to find. <strong>A record is beside the path</strong>: it watches what went through and writes it down, and the move happens either way. That is why searching the records for the trace of something a stop prevented finds nothing &mdash; by design, it never happened.</figcaption>
+  </figure>
   <ul class="answers">
     <li><b>Things that stop</b>The refusal you just read. The job did not go on. Something was actually prevented, at the moment it was attempted.</li>
     <li><b>Things that report</b>The dashboard, the status text, and the factory&rsquo;s running account of what happened. They watched, and they wrote it down. They prevented nothing, and were never built to.</li>
