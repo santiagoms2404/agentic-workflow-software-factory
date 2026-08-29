@@ -1206,6 +1206,19 @@ DO
   workstream's name while W15 sat declared. If one was, that is the finding, and report it before
   authoring anything.
 
+YOUR DEEP PLAN'S FIRST TASK IS FIXED IN ADVANCE
+  Milestone one, task one: an owner-authored amendment adding `specs/*.html` to
+  policy.protected_paths in awsf.config.yaml. It lands under gate G2, BEFORE any closure
+  mechanism is designed or built.
+  Verified expressible: path-policy's globSource compiles a single `*` to `[^/]*`, so
+  `specs/*.html` matches every plan file and leaves intake's `specs/tickets/**` untouched.
+  path-policy rejects a protected path INDEPENDENTLY of the write globs, so this fence holds even
+  against a glob widened later - including one widened by this workstream.
+  WHY IT IS FIRST AND NOT LAST: this workstream is the first thing that will want to touch specs/
+  write access, and a fence written by the session doing the widening is a weaker fence than one
+  that was already standing. Do not reorder it, and do not fold it into the milestone that builds
+  the mechanism.
+
 THE PROPERTY THAT IS FIXED REGARDLESS OF THE DESIGN
   Whatever closes a ticket must not be able to change what that ticket asked for. Hold your first
   line to it.

@@ -99,7 +99,7 @@ code.inv { color:var(--accent); } code.ac { color:var(--good); }
     <summary>Metadata</summary>
     <dl>
       <dt>created</dt><dd>2026-08-27</dd>
-      <dt>modified</dt><dd>2026-08-27, 2026-08-27, 2026-08-27</dd>
+      <dt>modified</dt><dd>2026-08-27, 2026-08-27, 2026-08-27, 2026-08-28</dd>
       <dt>commits</dt><dd>none — authoring only; no implementation code was written, none — first owner review applied, none — second owner review applied; the plan, its build prompts and its ticket set land in this commit</dd>
       <dt>agent name</dt><dd>claude-opus-5</dd>
       <dt>session id</dt><dd>not recorded — AGENTS.md invariant 1 keeps live session state out of every committed file in this repository</dd>
@@ -445,7 +445,7 @@ flowchart TD
 
   <!-- ================= M1 ================= -->
   <div class="phase">
-    <h3><code class="status">[wip]</code> Milestone M1: The friction log — drive it with no document</h3>
+    <h3><code class="status">[x]</code> Milestone M1: The friction log — drive it with no document</h3>
     <p><em>The cheapest unused upgrade, in the only form still available.</em> The owner drives the factory through marimba with no guide, and records every time he consults anything else in order to proceed. Nothing in this milestone writes a sentence for the reader.</p>
     <figure>
       <pre class="mermaid">
@@ -504,12 +504,12 @@ sequenceDiagram
     <p>M1 produces evidence rather than code, so its proof is that the record exists, is complete, and is clean. The cleanliness check reuses the repository's existing credential and absolute-path predicates rather than adding a second copy.</p>
     <p class="serves"><code class="serves">AC-1</code> <code class="serves">INV-4</code></p>
     <ul class="checklist">
-      <li><code class="status">[]</code> The friction log is in <code>specs/tickets/awsf-v2-w12-cheatsheet/README.md</code>, every entry numbered, one disposition each, one half each</li>
-      <li><code class="status">[]</code> The stated limit on what an author-driven run proves is written in the log, not only in this plan</li>
-      <li><code class="status">[]</code> No report, receipt or manifest file was committed (<code>INV-4</code>)</li>
-      <li><code class="status">[]</code> A grep of this milestone's diff for identifier shapes and absolute machine paths returns nothing</li>
-      <li><code class="status">[]</code> <code>npm run test:unit</code> — the junk-drawer and no-live-state meta-tests pass over the new content</li>
-      <li><code class="status">[]</code> Every <strong>route</strong> entry names a workstream that exists in the spine</li>
+      <li><code class="status">[x]</code> The friction log is in <code>specs/tickets/awsf-v2-w12-cheatsheet/README.md</code>, every entry numbered, one disposition each, one half each</li>
+      <li><code class="status">[x]</code> The stated limit on what an author-driven run proves is written in the log, not only in this plan</li>
+      <li><code class="status">[x]</code> No report, receipt or manifest file was committed (<code>INV-4</code>)</li>
+      <li><code class="status">[x]</code> A grep of this milestone's diff for identifier shapes and absolute machine paths returns nothing</li>
+      <li><code class="status">[x]</code> <code>npm run test:unit</code> — the junk-drawer and no-live-state meta-tests pass over the new content</li>
+      <li><code class="status">[x]</code> Every <strong>route</strong> entry names a workstream that exists in the spine</li>
     </ul>
     <div class="loop">🔁 <strong>Do not exit this milestone until every box is checked.</strong> A consultation that was not written down because it felt obvious is the one defect this milestone can produce, and no later test can find it.</div>
   </div>
@@ -1076,6 +1076,14 @@ flowchart LR
     <p><strong>What Q5 changed.</strong> The prose ban is gone and the driving tree's exemption is adopted, because Q2 had already removed the ban's premise — a reader who drives a session never types a command. The warning that replaces it is asserted rather than trusted: <code>AC-4</code> requires it to exist and to precede the first command block, both proven by induction. <strong>The owner's written reason arrived truncated</strong>, and the reading taken is recorded in Q5 so it can be corrected before T07 if the unfinished clause carried a further condition.</p>
     <p><strong>What Q12 added.</strong> A second graduation run, and with it a dimension the single run could not have: the delta in consultations between run one and run two. <code>AC-10</code> requires it to be recorded and interpreted, T20 forbids editing the document between the runs, and a flat or rising count is written down as a finding about the document rather than about the driver. Tasks went from twenty-two to twenty-three.</p>
     <p><strong>What did not change, across both reviews.</strong> Acceptance is a walkthrough and not coverage. Both reviews expanded what the document contains and left the definition of finished alone.</p>
+  </details>
+  <details open>
+    <summary>2026-08-28 — M1 closed: the friction log is complete, classified, and clean</summary>
+    <p><strong>Observably true.</strong> The ticket README holds forty-one observed entries and seven inherited entries. Each has one disposition and one half, the author-driven limit is in the log, all routed requests name W01 or W03 in the spine, and the M1 diff contains neither a live-state identifier nor an absolute machine path. No report, receipt or manifest entered the milestone.</p>
+    <p><strong>Final task states.</strong> T01 <code>[x]</code>, T02 <code>[x]</code>, T03 <code>[x]</code>, T04 <code>[x]</code>. There are no <code>[f]</code> rows or blocking blocks in M1.</p>
+    <p><strong>Friction and later action.</strong> The drive found an invisible guard signal, ticket-prompt fidelity and greenfield-entry gaps. M2 must add the planned meta-test rather than relying on this close-time inspection; M3 and M4 answer only the entries assigned to their respective halves, while W01 and W03 own the routed changes.</p>
+    <p><strong>Decision made here.</strong> M1 reuses the existing junk-drawer, live-state and absolute-path predicates for verification and adds no duplicate test or predicate before M2.</p>
+    <p><strong>Landing evidence.</strong> M1 record commits: <code>1cc5158</code> (T01), <code>e345157</code> (T02), <code>5a52172</code> (T03), <code>296819f</code> (guard confirmation). At close, <code>npm run test:unit</code> passed 1488/1488, <code>npm run lint</code> passed with 0 warnings and 0 errors across 403 files, and <code>npm run typecheck</code> exited 0 for core and dashboard.</p>
   </details>
 </section>
 
