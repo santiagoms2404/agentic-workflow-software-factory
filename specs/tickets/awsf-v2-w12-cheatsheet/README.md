@@ -991,16 +991,16 @@ boundary as supplied before launch, rather than adjusting it to fit what arrived
 
 | | Run one | Run two |
 | --- | --- | --- |
-| Request | Carry the desktop dashboard into named light and dark palettes while preserving its structure and information hierarchy; retain the current style as an option; add a minimal Lab-palette menu with palette and Light/Dark/System selection; enlarge selected type and replace and enlarge the agent-phase icons. The six added ramps came from an owner-side external style guide. | the backlog view reading the spine, deep plans and ticket states |
-| **Acceptance boundary, written before the run starts** | The desktop dashboard consistently applies the selected colors without replacing the current style or changing its structure; the menu, three display modes, larger type and distinct enlarged phase icons work; the repository checks still pass. This was broader than T19's planned Forest-only request and named the worker roles rather than leaving the route wholly to marimba. | |
-| **Reached the owner act with the evidence it requires** (`AC-9`) | **Yes.** The first visual handoff was a static reconstruction and was insufficient. The owner asked for the actual candidate, then inspected it in Chrome at desktop size. Instrumented checks covered 34 captures, persistence, live System-mode response, overflow, clipping, overlap and Classic comparison. The task remained at `AWAITING_OWNER`; no owner act was performed. | |
-| **Candidate met the stated acceptance boundary** — recorded separately, and allowed to disagree with the row above | **Owner judged yes after inspecting the live candidate, with disclosed deviations.** The structure and information hierarchy remained, while larger type made the page and agent lanes taller. Classic retained its surfaces, borders and text colors but intentionally inherited the new accent and font size. The reviewer also recorded low contrast in one dark palette, light shadow halos in dark palettes, a mode-label mismatch for Classic and two tests that assert shadowed declarations rather than runtime values. | |
-| Consultations | **11**, recorded verbatim below. | |
-| Where the driver looked first | `Prime a session` before priming; the support conversation rather than `Give it one small job` before writing the expanded request; the dashboard card before asking about prepared and running state; `Stop at the signature` before requesting the final comparison; the static reconstruction before requesting the live candidate. | |
-| Reference sections used | **None.** | |
-| Reference sections never opened | `Commands`; `Lifecycle states`; `Legal edges`; `Owner acts`; `Workflows and gates`; `Risk tiers and call ceilings`. | |
-| Cost, against what the document said | **Two provider calls:** one build and one review. The refused first launch spent zero. This matched the document's claims that only Leg 3 spends, that no free driven rehearsal exists, and that a review route buys another opinion. It did not match the walkthrough example's one-call expectation because the expanded request explicitly chose a build-and-review route. Spend remained inside the T2 ceiling of five, though the driver never opened that reference section. | |
-| What the factory produced, and whether it landed | Seven dashboard files changed: runtime palette and mode handling, persistence, a Lab-palette menu, larger type, and distinct enlarged phase icons. Unit tests reported 1509 pass and 0 fail; typecheck exited 0; lint reported no warnings or errors; the dashboard build and diff check exited 0. **It landed after the graduation protocol stopped.** The protocol itself stopped before the owner act; afterwards the owner personally attested the live journey and landed the existing candidate by local fast-forward, with no rebuild and no further provider call. | |
+| Request | Carry the desktop dashboard into named light and dark palettes while preserving its structure and information hierarchy; retain the current style as an option; add a minimal Lab-palette menu with palette and Light/Dark/System selection; enlarge selected type and replace and enlarge the agent-phase icons. The six added ramps came from an owner-side external style guide. | Bring the dashboard backlog up to date so it reads the spine, deep plans and ticket states. Group expandable tickets by plan; show each ticket byte-identically to its Markdown source; add informative, filterable, multi-select plan cards in one horizontally scrollable styled row; render no tickets until a plan is selected; and provide Select all. |
+| **Acceptance boundary, written before the run starts** | The desktop dashboard consistently applies the selected colors without replacing the current style or changing its structure; the menu, three display modes, larger type and distinct enlarged phase icons work; the repository checks still pass. This was broader than T19's planned Forest-only request and named the worker roles rather than leaving the route wholly to marimba. | Every selected spine or deep-plan card shows its own status counts and groups all of its tickets in the backlog; every ticket expands to the byte-identical Markdown source; multi-selection, Select all, filtering and the styled overflow row work; no selection renders no tickets. The owner supplied the result as one paragraph and left the plan to the factory. |
+| **Reached the owner act with the evidence it requires** (`AC-9`) | **Yes.** The first visual handoff was a static reconstruction and was insufficient. The owner asked for the actual candidate, then inspected it in Chrome at desktop size. Instrumented checks covered 34 captures, persistence, live System-mode response, overflow, clipping, overlap and Classic comparison. The task remained at `AWAITING_OWNER`; no owner act was performed. | **Yes, as a refusal rather than a candidate handoff.** Workflow compilation refused the prepared attempt before its planning phase because the mandatory opposite-provider review resolved to the same provider as the phase the inversion logic treated as the worker. The handoff named the failed precondition, zero spend and the available owner decisions. The owner performed none. |
+| **Candidate met the stated acceptance boundary** — recorded separately, and allowed to disagree with the row above | **Owner judged yes after inspecting the live candidate, with disclosed deviations.** The structure and information hierarchy remained, while larger type made the page and agent lanes taller. Classic retained its surfaces, borders and text colors but intentionally inherited the new accent and font size. The reviewer also recorded low contrast in one dark palette, light shadow halos in dark palettes, a mode-label mismatch for Classic and two tests that assert shadowed declarations rather than runtime values. | **No candidate existed.** No phase ran, so the acceptance boundary was not evaluated. This is a factory result, separate from what the document proved. |
+| Consultations | **11**, recorded verbatim below. | **8**, recorded below. |
+| Where the driver looked first | `Prime a session` before priming; the support conversation rather than `Give it one small job` before writing the expanded request; the dashboard card before asking about prepared and running state; `Stop at the signature` before requesting the final comparison; the static reconstruction before requesting the live candidate. | marimba's priming handoff before making the request; unaided memory of run one rather than any document section while writing it; the refusal handoff when launch stopped; then the support conversation and marimba's diagnosis while deciding whether a two-provider route could proceed. |
+| Reference sections used | **None.** | **None.** The driver opened no part of the document during run two. |
+| Reference sections never opened | `Commands`; `Lifecycle states`; `Legal edges`; `Owner acts`; `Workflows and gates`; `Risk tiers and call ceilings`. | `Commands`; `Lifecycle states`; `Legal edges`; `Owner acts`; `Workflows and gates`; `Risk tiers and call ceilings`. |
+| Cost, against what the document said | **Two provider calls:** one build and one review. The refused first launch spent zero. This matched the document's claims that only Leg 3 spends, that no free driven rehearsal exists, and that a review route buys another opinion. It did not match the walkthrough example's one-call expectation because the expanded request explicitly chose a build-and-review route. Spend remained inside the T2 ceiling of five, though the driver never opened that reference section. | **Zero provider calls.** The document says a driven job spends on Leg 3; this request was refused during pre-launch workflow compilation, so the refusal itself cost nothing and the planned work never began. |
+| What the factory produced, and whether it landed | Seven dashboard files changed: runtime palette and mode handling, persistence, a Lab-palette menu, larger type, and distinct enlarged phase icons. Unit tests reported 1509 pass and 0 fail; typecheck exited 0; lint reported no warnings or errors; the dashboard build and diff check exited 0. **It landed after the graduation protocol stopped.** The protocol itself stopped before the owner act; afterwards the owner personally attested the live journey and landed the existing candidate by local fast-forward, with no rebuild and no further provider call. | The factory produced a zero-spend refusal with the failed provider-inversion precondition and owner choices. It produced no plan, candidate or gate evidence, and nothing landed. |
 
 ### Run one consultations, in occurrence order
 
@@ -1064,14 +1064,72 @@ the scrub. Raw notes remain outside the repository.
 4. The live candidate closed that evidence gap, but disclosed the layout growth, Classic accent
    difference and four reviewer tradeoffs recorded in the table above.
 
-**The delta, and which of the three readings it fell under:** *(filled by T20)* — a fall means the
-document is being learned from; flat or rising is a finding about the document; a fall to zero is
-checked against whether the driver read it or remembered it.
+### Run two consultations, in occurrence order
 
-**The stated limit** *(repeated by both runs)*: the driver is the factory's author, so this run proves
-the document is sufficient to drive with, not that it is comprehensible to somebody new. The eleven
-consultations prevent reporting it as a clean external pass and become the input to T20's delta and
-T21's dispositions.
+The quotations preserve the owner's words where a question was asked. Every live handle, attempt
+number, revision, timestamp, machine path and owner-side memory filename was removed during the
+scrub. Raw notes remain outside the repository.
+
+1. **Leg 2, after priming — marimba's priming handoff.** No question was asked; it confirmed the
+   governing reads in their prescribed order, a green toolchain preflight, the guard boundary and
+   readiness to drive. First look: marimba's response.
+2. **Leg 3, while writing the request — unaided memory of run one.** Question answered: how to shape
+   the second graduation request. The owner said verbatim: **“memory since I performed the first
+   graduation task in the previous ticket.”** First look: memory of performing run one. No section
+   of the document was opened.
+3. **Leg 3, at launch — marimba's refusal handoff.** No question was asked; it answered why no phase
+   ran, which provider-inversion precondition failed, what remained unspent and which owner decisions
+   were available. First look: marimba's handoff.
+4. **Leg 6, after the refusal — support conversation.** The owner's question was verbatim: **“I do
+   want to use the double provider so what should we do?”** It answered which read-only diagnosis to
+   request before choosing a route. First look: the refusal handoff.
+5. **Leg 6, route diagnosis — marimba's read-only account of the runner and committed routing.**
+   Question answered: whether provider availability, authentication, environment or committed
+   routing caused the refusal. It found committed routing: review inversion keys off the first agent
+   phase, which is the planner on this workflow, while the configured reviewer resolves to the same
+   provider. First look: marimba's diagnosis.
+6. **Leg 6, after diagnosis — support conversation.** The owner's question was verbatim: **“how
+   should I procede now?”** It answered that the two-provider route which already worked omitted the
+   factory-planning phase required by this graduation, so the run should stop at the factory finding
+   rather than switch routes. First look: marimba's diagnosis.
+7. **Leg 6, deciding the immediate next step — support conversation.** The owner's question was
+   verbatim: **“then what should we do?”** It answered how to stop without an owner act or a
+   replacement task, and what evidence the graduation record still needed. First look: the prior
+   support answer.
+8. **Leg 6, final stop — marimba's handoff.** No question was asked; it confirmed the provider-
+   inversion finding, zero spend, no owner act, no replacement and the blocked attempt left
+   unchanged. First look: marimba's response.
+
+### Run two expectation mismatches
+
+1. **Before the drive, monitoring setup:** this task session was expected only to monitor and record
+   the owner's separate marimba drive. It initially began the protocol itself and attempted to
+   create the factory job. The command aborted before creation, the owner corrected the boundary,
+   and no repository change resulted.
+2. **Leg 3:** the selected workflow was expected to plan and run the backlog job. Instead, workflow
+   compilation treated its first agent phase as the worker for review inversion, resolved the
+   mandatory reviewer to the same provider, and blocked before the planning call.
+3. **Leg 6:** the existing two-provider workflow was expected to be a possible replacement, but its
+   route does not contain the factory-planning phase this graduation requires. Switching to it would
+   have changed the acceptance boundary rather than completed the request.
+
+**The delta, and which of the three readings it fell under:** consultations fell from **11 in run
+one to 8 in run two**, a delta of **−3**, so this is the plan's **fall** reading: the document is
+being learned from. The evidence is limited and mixed. The driver opened no section in run two and
+said explicitly that fresh memory of run one supplied the request shape; memory was itself recorded
+as consultation 2, and seven more outside consultations were still needed. The two sections opened
+in run one and not run two were `Prime a session` and `Stop at the signature`. The sections never
+opened in either run were `Start here`, `Install it`, `Give it one small job`, `Watch it work`, `Read
+a refusal`, `What you are never asked to do`, `What this document owns`, `What this document does
+not cover`, `Commands`, `Lifecycle states`, `Legal edges`, `Owner acts`, `Workflows and gates`, and
+`Risk tiers and call ceilings`. That is a finding about the document's shape and the driver's route
+through it, not proof that any unopened section is unnecessary.
+
+**The stated limit** *(repeated by both runs)*: the driver is the factory's author, so these runs
+prove only that the document is sufficient to drive with, not that it is comprehensible to somebody
+new. Run two's eight consultations and its reliance on memory prevent reporting it as a clean
+external pass. The factory's zero-spend refusal is a separate finding and does not strengthen or
+weaken that document claim.
 
 ## M3 close — T15 walkthrough coverage and fence evidence
 
