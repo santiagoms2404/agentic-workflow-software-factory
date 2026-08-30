@@ -151,9 +151,10 @@ function configTextWithCommand(exitCode = 0): string {
 }
 
 async function fixture(
-  workflow: "build" | "plan-build-test" | "simple-sdlc",
+  workflow: "build" | "plan-build-test" | "build-review" | "simple-sdlc",
   commandExit = 0,
   configure: (config: AwsfConfig) => AwsfConfig = (config) => config,
+  tier: 1 | 2 = 1,
 ) {
   const root = mkdtempSync(join(tmpdir(), "awsf-production-runner-"));
   const canonical = join(root, "canonical");
@@ -178,7 +179,7 @@ async function fixture(
   mkdirSync(resolve(sharedPrompt, ".."), { recursive: true });
   writeFileSync(sharedPrompt, readFileSync(resolve("prompts/shared/headless-role.md"), "utf8"));
   const projection = createDashboardProjection(stateRoot);
-  const created = await newCommand({ stateRoot, project: config.project.slug, taskId: `fixture-${workflow}`, repository: canonical, request: "write one bounded source", workflow, tier: 1, configSnapshotJson: JSON.stringify(config), projectRecord: projection.project });
+  const created = await newCommand({ stateRoot, project: config.project.slug, taskId: `fixture-${workflow}`, repository: canonical, request: "write one bounded source", workflow, tier, configSnapshotJson: JSON.stringify(config), projectRecord: projection.project });
   await startCommand({ attemptDir: created.attemptDir, worktreeRoot: join(root, "worktrees"), configPath, preflight: () => ({ adapter: true, sandbox: true, observability: true }), projectRecord: projection.project });
   return { root, canonical, stateRoot, config, configPath, projection, created };
 }
@@ -445,6 +446,97 @@ for (const scenario of ["malformed", "permission", "gate"] as const) {
     }
   });
 }
+
+test("simple-sdlc accepts planner=A, builder=B, reviewer=A before launch", async () => {
+  const world = await fixture("simple-sdlc", 0, (config) => config, 2);
+  let brokerCreated = false;
+  let providerReleased = false;
+  try {
+    const prepared = await readAttempt(world.created.attemptDir);
+    const status = await runProductionCommand({
+      attemptDir: world.created.attemptDir, stateRoot: world.stateRoot,
+      config: world.config, configPath: world.configPath,
+      projectRecord: world.projection.project,
+      infrastructure: {
+        adapterFor: (_entry: AdapterEntry, id: string) => new ScriptedAdapter(id, prepared.worktree!, () => { providerReleased = true; }),
+        createBroker: (options) => { brokerCreated = true; return registrationFailingBroker(options); },
+        sandboxProbe: () => false,
+      },
+    });
+    assert.equal(brokerCreated, true, "valid builder-relative inversion reaches execution setup");
+    assert.equal(providerReleased, false, "the fixture registration failure releases no provider process");
+    assert.equal(status.budget.callsSpent, 0);
+    assert.doesNotMatch(status.blocker?.detail ?? "", /InvalidReviewInversion/);
+  } finally {
+    world.projection.close();
+    rmSync(world.root, { recursive: true, force: true });
+  }
+});
+
+test("simple-sdlc rejects reviewer=B when builder=B before launch", async () => {
+  const world = await fixture("simple-sdlc", 0, (config) => ({
+    ...config,
+    agents: config.agents.map((agent) => agent.name === "reviewer"
+      ? { ...agent, model: "codex:gpt-5.6-sol", harness: { ...agent.harness, adapter: "codex" } }
+      : agent),
+  }), 2);
+  let brokerCreated = false;
+  try {
+    const prepared = await readAttempt(world.created.attemptDir);
+    const status = await runProductionCommand({
+      attemptDir: world.created.attemptDir, stateRoot: world.stateRoot,
+      config: world.config, configPath: world.configPath,
+      projectRecord: world.projection.project,
+      infrastructure: {
+        adapterFor: (_entry: AdapterEntry, id: string) => new ScriptedAdapter(id, prepared.worktree!, () => assert.fail("provider released")),
+        createBroker: (options) => { brokerCreated = true; return registrationFailingBroker(options); },
+      },
+    });
+    assert.equal(status.lifecycleState, "BLOCKED");
+    assert.match(status.blocker?.detail ?? "", /InvalidReviewInversion/);
+    assert.equal(status.budget.callsSpent, 0);
+    assert.equal(status.budget.callsReserved, 0);
+    assert.equal(brokerCreated, false, "invalid inversion fails before process setup");
+  } finally {
+    world.projection.close();
+    rmSync(world.root, { recursive: true, force: true });
+  }
+});
+
+test("build-review still accepts builder=A, reviewer=B before launch", async () => {
+  const world = await fixture("build-review", 0, (config) => ({
+    ...config,
+    agents: config.agents.map((agent) => {
+      if (agent.name === "builder") {
+        return { ...agent, model: "claude:opus", harness: { ...agent.harness, adapter: "claude" } };
+      }
+      if (agent.name === "reviewer") {
+        return { ...agent, model: "codex:gpt-5.6-sol", harness: { ...agent.harness, adapter: "codex" } };
+      }
+      return agent;
+    }),
+  }), 2);
+  let brokerCreated = false;
+  try {
+    const prepared = await readAttempt(world.created.attemptDir);
+    const status = await runProductionCommand({
+      attemptDir: world.created.attemptDir, stateRoot: world.stateRoot,
+      config: world.config, configPath: world.configPath,
+      projectRecord: world.projection.project,
+      infrastructure: {
+        adapterFor: (_entry: AdapterEntry, id: string) => new ScriptedAdapter(id, prepared.worktree!, () => assert.fail("provider released")),
+        createBroker: (options) => { brokerCreated = true; return registrationFailingBroker(options); },
+        sandboxProbe: () => false,
+      },
+    });
+    assert.equal(brokerCreated, true, "the existing opposite-provider build-review route remains valid");
+    assert.equal(status.budget.callsSpent, 0);
+    assert.doesNotMatch(status.blocker?.detail ?? "", /InvalidReviewInversion/);
+  } finally {
+    world.projection.close();
+    rmSync(world.root, { recursive: true, force: true });
+  }
+});
 
 test("unavailable configured adapter blocks before provider launch", async () => {
   const world = await fixture("build");

@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { OUTPUT_SCHEMA_PLACEHOLDER, PREVIOUS_ENVELOPE_PLACEHOLDER } from "../../../src/contracts/json-schema.ts";
-import { compileWorkflow, type WorkflowRecipe } from "../../../src/workflow/compiler.ts";
+import {
+  InvalidReviewBuildProducerCount,
+  compileWorkflow,
+  type WorkflowRecipe,
+} from "../../../src/workflow/compiler.ts";
 import { buildReviewWorkflow } from "../../../src/workflow/recipes/build-review.ts";
 import { buildWorkflow } from "../../../src/workflow/recipes/build.ts";
 import { planBuildTestWorkflow } from "../../../src/workflow/recipes/plan-build-test.ts";
@@ -63,6 +67,43 @@ test("all recipe prompts compile from TypeBox schemas and render their handoff",
       assert.match(rendered, /(?:Previous phase envelope|Host evidence|Host context):\s*null/);
     }
   }
+});
+
+test("review workflows identify the build-producing agent by output schema", () => {
+  assert.equal(compileWorkflow(simpleSdlcWorkflow, 2).reviewBuildPhaseId, "builder");
+  assert.equal(compileWorkflow(buildReviewWorkflow, 2).reviewBuildPhaseId, "builder");
+  assert.equal(compileWorkflow(buildWorkflow, 1).reviewBuildPhaseId, null);
+});
+
+test("review workflows fail closed unless exactly one agent produces build output", () => {
+  let launchCount = 0;
+  const compileBeforeLaunch = (workflow: WorkflowRecipe) => {
+    const compiled = compileWorkflow(workflow, workflow.tier);
+    launchCount += 1;
+    return compiled;
+  };
+  const missing = {
+    ...buildReviewWorkflow,
+    id: "review-without-build",
+    phases: buildReviewWorkflow.phases.filter((phase) => phase.id !== "builder"),
+  } satisfies WorkflowRecipe;
+  assert.throws(
+    () => compileBeforeLaunch(missing),
+    (error: Error) => error instanceof InvalidReviewBuildProducerCount && error.count === 0,
+  );
+
+  const builder = buildReviewWorkflow.phases.find((phase) => phase.id === "builder")!;
+  const ambiguous = {
+    ...buildReviewWorkflow,
+    id: "review-with-two-builds",
+    phases: [...buildReviewWorkflow.phases, { ...builder, id: "second-builder" }],
+  } satisfies WorkflowRecipe;
+  assert.throws(
+    () => compileBeforeLaunch(ambiguous),
+    (error: Error) => error instanceof InvalidReviewBuildProducerCount &&
+      error.count === 2 && error.phaseIds.join(",") === "builder,second-builder",
+  );
+  assert.equal(launchCount, 0, "invalid review topology is rejected before launch");
 });
 
 test("a real shipped workflow whose minimum cannot fit the selected tier is rejected before execution", () => {

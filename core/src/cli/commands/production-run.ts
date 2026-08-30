@@ -848,9 +848,11 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
     // returns the provider the adapter will actually reach.
     const reviewPhase = compiled.phases.find(isReviewPhase);
     if (reviewPhase !== undefined) {
-      const workerPhase = compiled.phases.find((phase) => phase.kind === "agent" && !isReviewPhase(phase));
-      if (workerPhase === undefined) throw new ProductionRouteUnavailable(reviewPhase.id, "a review phase has no worker phase to invert against");
-      const workerProvider = routes.get(workerPhase.id)!.model.provider;
+      const buildPhaseId = compiled.reviewBuildPhaseId;
+      if (buildPhaseId === null) {
+        throw new InvalidReviewInversion("the compiled review workflow has no build-producing agent phase");
+      }
+      const workerProvider = routes.get(buildPhaseId)!.model.provider;
       const pair = providerPairFrom([...routes.values()].map((route) => route.model.provider));
       const required = oppositeProvider(workerProvider, pair);
       const configured = routes.get(reviewPhase.id)!.model.provider;

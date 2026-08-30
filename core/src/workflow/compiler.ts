@@ -1,8 +1,10 @@
+import { BUILD_OUTPUT_SCHEMA_ID } from "../contracts/build-output.ts";
 import type { EnvelopeBase } from "../contracts/envelope-base.ts";
 import {
   PREVIOUS_ENVELOPE_PLACEHOLDER,
   injectOutputSchema,
 } from "../contracts/json-schema.ts";
+import { REVIEW_OUTPUT_SCHEMA_ID } from "../contracts/review-output.ts";
 import { schemaForId } from "../contracts/registry.ts";
 import { admitWorkflow } from "../execution/call-budget.ts";
 import type { ResolvedCeiling, Tier } from "../state/tiers.ts";
@@ -110,9 +112,40 @@ export interface WorkflowRecipe extends WorkflowDefinition {
   readonly tier: Tier;
 }
 
+export class InvalidReviewBuildProducerCount extends Error {
+  readonly count: number;
+  readonly phaseIds: readonly string[];
+
+  constructor(phaseIds: readonly string[]) {
+    super(
+      `a workflow with a review phase requires exactly one build-producing agent phase ` +
+        `with schema ${JSON.stringify(BUILD_OUTPUT_SCHEMA_ID)}; found ${phaseIds.length}` +
+        (phaseIds.length === 0 ? "" : ` (${phaseIds.join(", ")})`),
+    );
+    this.name = "InvalidReviewBuildProducerCount";
+    this.count = phaseIds.length;
+    this.phaseIds = Object.freeze([...phaseIds]);
+  }
+}
+
+function reviewBuildPhaseId(phases: readonly PhaseDefinition[]): string | null {
+  const hasReview = phases.some(
+    (phase) => phase.kind === "agent" && phase.schemaId === REVIEW_OUTPUT_SCHEMA_ID,
+  );
+  if (!hasReview) return null;
+
+  const buildPhaseIds = phases
+    .filter((phase) => phase.kind === "agent" && phase.schemaId === BUILD_OUTPUT_SCHEMA_ID)
+    .map((phase) => phase.id);
+  if (buildPhaseIds.length !== 1) throw new InvalidReviewBuildProducerCount(buildPhaseIds);
+  return buildPhaseIds[0]!;
+}
+
 export interface CompiledWorkflow {
   readonly id: string;
   readonly minimumCalls: number;
+  /** Structural build producer that an optional review must invert against. */
+  readonly reviewBuildPhaseId: string | null;
   readonly phases: readonly CompiledPhase[];
 }
 
@@ -130,10 +163,12 @@ export function compileWorkflow(
     ids.add(phase.id);
   }
   const minimumCalls = workflow.phases.filter((phase) => phase.kind === "agent").length;
+  const buildPhaseId = reviewBuildPhaseId(workflow.phases);
   admitWorkflow({ id: workflow.id, minimumCalls }, tier, committedCalls, resolvedCeiling);
   return Object.freeze({
     id: workflow.id,
     minimumCalls,
+    reviewBuildPhaseId: buildPhaseId,
     phases: Object.freeze(workflow.phases.map((phase) => compilePhase(phase))),
   });
 }
