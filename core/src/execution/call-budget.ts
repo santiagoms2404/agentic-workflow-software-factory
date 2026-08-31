@@ -451,9 +451,9 @@ export class CallBudget {
    * Decide a phase transition against the live correction counters.
    *
    * Structurally incapable of touching the call ledger: it never calls
-   * `reserve` or `settle`. Intra-phase corrections re-prompt the SAME provider
-   * session — they cost tokens, not calls, and this is where that is enforced
-   * rather than remembered.
+   * `reserve` or `settle`. Same-session corrections cost tokens only. A cold
+   * correction is authorized by this allowance too, then its caller must make
+   * a separate ordinary reservation against the tier ceiling before GO.
    */
   recordPhaseTransition(
     input: Omit<PhaseTransitionInput, "corrections" | "allowance">,

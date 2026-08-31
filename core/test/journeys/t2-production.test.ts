@@ -68,6 +68,7 @@ type ReviewBehaviour =
   | { readonly kind: "concern" }
   | { readonly kind: "stale-sha" }
   | { readonly kind: "finding-outside" }
+  | { readonly kind: "missing-consequence-once" }
   | { readonly kind: "transport-failure" }
   | { readonly kind: "quota-exhausted" };
 
@@ -75,6 +76,7 @@ type ReviewBehaviour =
 class RouteLog {
   readonly providers: string[] = [];
   readonly launches: string[] = [];
+  readonly prompts: string[] = [];
 }
 
 /** What the scripted builder does to the tree — an addition, or a removal only. */
@@ -87,6 +89,7 @@ class ScriptedT2Adapter implements HarnessAdapter {
   readonly #behaviour: ReviewBehaviour;
   readonly #candidateSha: () => string | null;
   readonly #builds: BuilderBehaviour;
+  #reviewTurns = 0;
 
   constructor(
     id: string,
@@ -132,6 +135,7 @@ class ScriptedT2Adapter implements HarnessAdapter {
   ): AsyncIterable<NormalizedEvent> {
     const reviewing = this.id === "claude";
     this.#log.providers.push(this.#provider());
+    this.#log.prompts.push(request.prompt);
     await broker.startProcess(registration, this.buildSpec(request), signal);
     this.#log.launches.push(this.#provider());
 
@@ -145,6 +149,7 @@ class ScriptedT2Adapter implements HarnessAdapter {
     let payload: BuildOutput | ReviewOutput;
     if (reviewing) {
       const candidate = this.#candidateSha() ?? "0".repeat(40);
+      const reviewTurn = this.#reviewTurns++;
       if (this.#behaviour.kind === "stale-sha") payload = review("b".repeat(40));
       else if (this.#behaviour.kind === "finding-outside") {
         payload = review(candidate, [{ id: "f1", severity: "medium", file: "README.md", line: null, title: "unrelated", detail: "about a file this change never touched", evidence: "fixture" }]);
@@ -155,6 +160,19 @@ class ScriptedT2Adapter implements HarnessAdapter {
           detail: "The gates would accept a path that always returns the generated value.",
           evidence: "`generated` is assigned `true` before the configured branch is checked.",
         }]);
+      } else if (this.#behaviour.kind === "missing-consequence-once") {
+        const findings: ReviewOutput["findings"] = Array.from({ length: 6 }, (_, index) => ({
+          id: `advisory-${String(index + 1)}`,
+          severity: index === 0 ? "medium" as const : "low" as const,
+          file: SOURCE,
+          line: 1,
+          title: index < 2 ? "Polling branch observation" : "Polling branch can slow dashboard requests",
+          detail: index < 2 && reviewTurn === 0
+            ? "The route reads the ticket set during each configured poll."
+            : "The route reads the ticket set during each configured poll, which causes dashboard requests to slow as the set grows.",
+          evidence: "`loadTickets` calls `readFile` inside the polling request handler.",
+        }));
+        payload = { ...review(candidate, findings), verdict: "accept" };
       } else payload = review(candidate);
     } else if (this.#builds === "deletes-a-file") {
       rmSync(join(this.#worktree, REMOVABLE));
@@ -337,6 +355,54 @@ test("a tier-2 build-review reaches the owner with the review provider inverse o
   }
 });
 
+test("an accept review with two incomplete findings is cold-corrected and retains all six findings", async () => {
+  const world = await fixture(2);
+  try {
+    const { status, log } = await withLiveCandidate(world, { kind: "missing-consequence-once" })();
+    assert.equal(status.lifecycleState, "AWAITING_OWNER", status.blocker?.detail);
+    assert.equal(status.requiredReviewPresent, true);
+    assert.equal(status.budget.callsSpent, 3, "builder, initial review, and one paid cold correction");
+    assert.equal(status.budget.correctionsAuto, 1);
+    assert.deepEqual(log.providers, ["openai-codex", "anthropic", "anthropic"]);
+    const correctionPrompt = log.prompts.at(-1) ?? "";
+    assert.match(correctionPrompt, /Previous response whose substance must be preserved:/);
+    assert.match(correctionPrompt, new RegExp(status.candidateSha!));
+    for (let index = 1; index <= 6; index += 1) {
+      assert.match(correctionPrompt, new RegExp(`advisory-${String(index)}`));
+    }
+    assert.match(correctionPrompt, /findings state a concrete consequence: missing consequence: advisory-1, advisory-2/);
+
+    const first = JSON.parse(readFileSync(join(world.created.attemptDir, "envelopes", "reviewer-0.json"), "utf8")) as {
+      payload: ReviewOutput;
+    };
+    const corrected = JSON.parse(readFileSync(join(world.created.attemptDir, "envelopes", "reviewer-1.json"), "utf8")) as {
+      payload: ReviewOutput;
+    };
+    assert.equal(first.payload.findings.length, 6);
+    assert.equal(corrected.payload.findings.length, 6);
+    assert.deepEqual(
+      corrected.payload.findings.map((finding) => finding.id),
+      first.payload.findings.map((finding) => finding.id),
+      "the correction completes the same review rather than replacing its substance",
+    );
+
+    const db = openDatabase(join(world.stateRoot, "awsf.db"), { readonly: true });
+    try {
+      const rows = gatesForSession(db, status.sessionId, `${status.sessionId}:reviewer`);
+      const induced = rows.find((gate) => gate.correction_round === 0 && gate.gate_id === "envelope_valid");
+      assert.equal(induced?.passed, 0);
+      assert.match(induced?.violations_json ?? "", /missing consequence: advisory-1, advisory-2/);
+      const removed = rows.find((gate) => gate.correction_round === 1 && gate.gate_id === "envelope_valid");
+      assert.equal(removed?.passed, 1);
+      const verdict = rows.find((gate) => gate.correction_round === 1 && gate.gate_id === "verdict_consistent");
+      assert.equal(verdict?.passed, 1);
+    } finally { db.close(); }
+  } finally {
+    world.projection.close();
+    rmSync(world.root, { recursive: true, force: true });
+  }
+});
+
 test("the reviewer's compiled prompt carries the request, the changed files, and the diff", async () => {
   // The plan promised a diff-scoped reviewer and the implementation supplied a
   // test-command exit code and a truncated tail: no diff, no file list, no
@@ -441,9 +507,8 @@ test("an unreachable reviewer blocks after exactly one transport retry, with no 
   try {
     const { status, log } = await withLiveCandidate(world, { kind: "transport-failure" })();
     assert.equal(status.lifecycleState, "BLOCKED");
-    // L17 is the only REVIEWING -> BLOCKED edge. Its vocabulary is three codes;
-    // `review-unavailable` is the one a transport failure earns, and the only
-    // one this runner classifies today.
+    // L17 is the only REVIEWING -> BLOCKED edge. Transport unavailability
+    // earns its dedicated code only after the fixed route has failed twice.
     assert.equal(status.blocker?.code, "review-unavailable");
     assert.match(status.blocker?.detail ?? "", /no substitute was attempted/);
     assert.deepEqual(log.providers, ["openai-codex", "anthropic", "anthropic"], "one fixed route, one retry, never the worker's provider again");
@@ -455,16 +520,18 @@ test("an unreachable reviewer blocks after exactly one transport retry, with no 
   }
 });
 
-test("an exhausted reviewer quota is never retried and never forged into a blocker", async () => {
+test("an exhausted reviewer quota is never retried and settles to a named blocker", async () => {
   const world = await fixture(2);
   try {
-    // Quota is structurally not a transport fault, so it does not earn L17's
-    // retry, and L17 has no word for it. The host refuses to invent one: the
-    // error surfaces and the attempt stays in REVIEWING for the owner to cancel.
-    await assert.rejects(withLiveCandidate(world, { kind: "quota-exhausted" })(), /E_QUOTA_EXHAUSTED/);
-    const status = await readAttempt(world.created.attemptDir);
-    assert.equal(status.lifecycleState, "REVIEWING");
+    // Quota is structurally not a transport fault, so it earns no retry. The
+    // exited review process now settles on L17 instead of leaving a dead
+    // REVIEWING status with no process.
+    const { status } = await withLiveCandidate(world, { kind: "quota-exhausted" })();
+    assert.equal(status.lifecycleState, "BLOCKED");
+    assert.equal(status.blocker?.code, "quota-exhausted");
+    assert.match(status.blocker?.detail ?? "", /E_QUOTA_EXHAUSTED/);
     assert.equal(status.budget.callsSpent, 2, "one worker call and one review call; no retry");
+    assert.match(status.nextAction, /awsf retry/);
   } finally {
     world.projection.close();
     rmSync(world.root, { recursive: true, force: true });
@@ -475,16 +542,15 @@ for (const [label, behaviour, violation] of [
   ["names a different tree", { kind: "stale-sha" } as ReviewBehaviour, /reviewed SHA exact/],
   ["finds a defect outside the candidate", { kind: "finding-outside" } as ReviewBehaviour, /finding paths inside candidate context/],
 ] as const) {
-  test(`a review that ${label} fails verdict_consistent and never reaches the owner`, async () => {
+  test(`a review that ${label} fails verdict_consistent and reaches a terminal blocker`, async () => {
     const world = await fixture(2);
     try {
-      await assert.rejects(withLiveCandidate(world, behaviour)(), /verdict_consistent/);
-      const status = await readAttempt(world.created.attemptDir);
-      // A review that answered inconsistently is not an unreachable reviewer, so
-      // it gets no L17 blocker. It stays in REVIEWING with its failed gate on
-      // the record, and the owner decides.
-      assert.equal(status.lifecycleState, "REVIEWING");
+      const { status } = await withLiveCandidate(world, behaviour)();
+      assert.equal(status.lifecycleState, "BLOCKED");
+      assert.equal(status.blocker?.code, "review-inconsistent");
+      assert.match(status.blocker?.detail ?? "", /verdict_consistent/);
       assert.equal(status.journeyApproved, false);
+      assert.match(status.nextAction, /awsf retry/);
       const db = openDatabase(join(world.stateRoot, "awsf.db"), { readonly: true });
       try {
         const verdict = gatesForSession(db, status.sessionId).find((gate) => gate.gate_id === "verdict_consistent");

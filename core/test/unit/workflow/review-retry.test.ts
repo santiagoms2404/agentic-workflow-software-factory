@@ -88,21 +88,21 @@ test("transport is classified before contract, so a transport fault is never mis
   assert.deepEqual(asked, ["transport", "transport"], "the contract predicate is never consulted for a transport fault");
 });
 
-test("the contract correction carries the violations and nothing about the verdict", async () => {
+test("the contract correction carries the previous review and violations without owner direction", async () => {
   const base = "ORIGINAL PROMPT WITH THE COMPOSED EVIDENCE";
-  const prompt = contractRetryPrompt(base, ["/findings/0/level: Unexpected property"]);
+  const previous = '{"verdict":"concern","findings":[{"id":"F1"}]}';
+  const prompt = contractRetryPrompt(base, previous, ["/findings/0/level: Unexpected property"]);
   assert.ok(prompt.startsWith(base), "the original prompt is a prefix, so evidence containment still holds");
   assert.match(prompt, new RegExp(CONTRACT_RETRY_HEADING));
   assert.match(prompt, /\/findings\/0\/level: Unexpected property/);
+  assert.ok(prompt.includes(previous), "the cold reviewer can retain the original verdict and finding set");
   assert.match(prompt, /unchanged in substance/, "the retry is told to keep its findings, not to revise them");
-  // The owner's reason and the superseded verdict are the two things a reviewer
-  // must never be briefed on; a correction about form may not smuggle either in.
-  for (const forbidden of [/accept/i, /concern/i, /owner/i, /superseded/i, /reject/i]) {
-    assert.doesNotMatch(prompt, forbidden);
-  }
+  // The owner's reason and superseded review remain absent. Only this reviewer's
+  // own prior verdict comes back to the cold correction.
+  for (const forbidden of [/owner/i, /superseded/i, /reject/i]) assert.doesNotMatch(prompt, forbidden);
 });
 
 test("an unextractable envelope still produces a usable correction", async () => {
-  const prompt = contractRetryPrompt("BASE", []);
+  const prompt = contractRetryPrompt("BASE", "not-json", []);
   assert.match(prompt, /no envelope was extracted/);
 });

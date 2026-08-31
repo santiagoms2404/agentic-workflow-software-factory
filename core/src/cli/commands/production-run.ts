@@ -50,7 +50,13 @@ import { commandsPass } from "../../gates/commands.ts";
 import { envelopeValid } from "../../gates/envelope.ts";
 import { diffMatchesClaims, headAdvanced, noProtectedPaths, writesWithinGlobs } from "../../gates/git-diff.ts";
 import { GateReport, type GateId } from "../../gates/interface.ts";
-import { reviewEvidencePresent, verdictConsistent, type ReviewEvidenceExpectation } from "../../gates/review.ts";
+import {
+  REVIEW_FINDING_COMPLETENESS_ITEMS,
+  reviewEnvelopeComplete,
+  reviewEvidencePresent,
+  verdictConsistent,
+  type ReviewEvidenceExpectation,
+} from "../../gates/review.ts";
 import { designEvidencePresent } from "../../gates/design-evidence.ts";
 import { architectureReviewClear } from "../../gates/architecture-review.ts";
 import { REVIEW_OUTPUT_SCHEMA_ID, type ReviewOutput } from "../../contracts/review-output.ts";
@@ -97,6 +103,7 @@ import {
   type OpenConversation,
 } from "../../workflow/phase-launch-authorization.ts";
 import type { AttemptEvidence, PhaseEvidenceRecord } from "../../observability/attempt-evidence.ts";
+import { readAttemptEvidence } from "./review-record.ts";
 import { PermissionBreach } from "../../policy/path-policy.ts";
 import { openPermissionSession, type PermissionSession, type SandboxProbe } from "../../policy/sandbox-broker.ts";
 import { transition, type EdgeId, type TaskState } from "../../state/task-machine.ts";
@@ -117,7 +124,9 @@ import type { GateDefinition } from "../../workflow/phase.ts";
 import type { PhaseState } from "../../state/phase-machine.ts";
 import { buildWorkflow } from "../../workflow/recipes/build.ts";
 import { buildReviewWorkflow } from "../../workflow/recipes/build-review.ts";
+import { planWorkflow } from "../../workflow/recipes/plan.ts";
 import { planBuildTestWorkflow } from "../../workflow/recipes/plan-build-test.ts";
+import { scoutWorkflow } from "../../workflow/recipes/scout.ts";
 import { simpleSdlcWorkflow } from "../../workflow/recipes/simple-sdlc.ts";
 import { intakeWorkflow } from "../../workflow/recipes/intake.ts";
 import { designToPlanWorkflow } from "../../workflow/recipes/design-to-plan.ts";
@@ -142,6 +151,8 @@ const HOST = globalThis as unknown as {
 };
 
 const SUPPORTED = new Map<string, WorkflowRecipe>([
+  [scoutWorkflow.id, scoutWorkflow],
+  [planWorkflow.id, planWorkflow],
   [buildWorkflow.id, buildWorkflow],
   [planBuildTestWorkflow.id, planBuildTestWorkflow],
   [buildReviewWorkflow.id, buildReviewWorkflow],
@@ -151,6 +162,10 @@ const SUPPORTED = new Map<string, WorkflowRecipe>([
 ]);
 
 const SUPPORTED_NAMES = [...SUPPORTED.keys()].join(", ");
+const READ_ONLY_RESULT_SCHEMA_BY_WORKFLOW: ReadonlyMap<string, "awsf.scout-output/v1" | "awsf.plan-output/v1"> = new Map([
+  [scoutWorkflow.id, "awsf.scout-output/v1"],
+  [planWorkflow.id, "awsf.plan-output/v1"],
+]);
 
 /** A review phase is one that produces a review envelope; the id is not the evidence. */
 function isReviewPhase(phase: { readonly kind: string; readonly schemaId?: string }): boolean {
@@ -598,6 +613,7 @@ function phaseGates(
           report.check("steps have acceptance", plan.implementationSteps.length > 0 && plan.implementationSteps.every((step) => step.acceptanceCriteria.length > 0), `${plan.implementationSteps.length} step(s)`);
           report.check("no blocking open questions", plan.openQuestions.length === 0, `${plan.openQuestions.length} open question(s)`);
         }
+        if (review !== null) reportWith(report, reviewEnvelopeComplete(envelope as ReviewOutput).checks);
         return report;
       },
     },
@@ -686,12 +702,43 @@ export function isReviewTransportFailure(error: unknown): boolean {
   return ["E_TERMINAL_MISSING", "E_BACKEND_FAILURE", "E_TRANSPORT"].includes(error.code);
 }
 
+const COLD_ENVELOPE_GATE_IDS: ReadonlySet<GateId> = new Set([
+  "envelope_valid",
+  "artifacts_exist",
+  "files_non_empty",
+]);
+
+/** A cold re-ask repairs envelope form only; substantive and policy gates still block. */
+export function isColdEnvelopeCorrection(reports: readonly GateReport[]): boolean {
+  const failed = reports.filter((report) => !report.passed);
+  return failed.length > 0 && failed.every((report) => COLD_ENVELOPE_GATE_IDS.has(report.gateId));
+}
+
 function gateKind(gateId: GateId): "pure" | "filesystem" | "git" | "subprocess" | "journey" {
   if (gateId === "commands_pass") return "subprocess";
   if (gateId === "head_advanced" || gateId === "diff_matches_claims" || gateId === "candidate_hygiene") return "git";
   if (["artifacts_exist", "files_non_empty", "json_parses", "no_protected_paths", "writes_within_globs"].includes(gateId)) return "filesystem";
   if (gateId === "journey_passes") return "journey";
   return "pure";
+}
+
+function productionReviewBlocker(error: unknown): { code: string; detail: string } {
+  const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+  if (error instanceof MandatoryReviewUnavailable) return { code: "review-unavailable", detail };
+  if (error instanceof EnvelopeValidationFailure) return { code: "review-malformed", detail };
+  if (error instanceof PhaseGateFailure) {
+    const failed = error.reports.filter((report) => !report.passed);
+    if (failed.some((report) => report.gateId === "review_evidence_present")) {
+      return { code: "review-evidence-invalid", detail };
+    }
+    if (failed.some((report) => report.gateId === "verdict_consistent")) {
+      return { code: "review-inconsistent", detail };
+    }
+    if (failed.length > 0 && failed.every((report) => COLD_ENVELOPE_GATE_IDS.has(report.gateId))) {
+      return { code: "review-malformed", detail };
+    }
+  }
+  return closestBlocker(error);
 }
 
 function closestBlocker(error: unknown): { code: string; detail: string } {
@@ -719,10 +766,94 @@ function closestBlocker(error: unknown): { code: string; detail: string } {
   return { code: "phase-abort", detail };
 }
 
-/** Real T1 production runner. The fixture-only run command remains separate. */
+async function settleExitedReview(
+  options: ProductionRunOptions,
+  status: AttemptStatus,
+  now: string,
+): Promise<AttemptStatus | null> {
+  if (
+    status.lifecycleState !== "REVIEWING" ||
+    status.process !== null ||
+    status.budget.callsReserved !== 0 ||
+    status.phase === null ||
+    status.blocker !== null
+  ) {
+    return null;
+  }
+
+  const evidence = await readAttemptEvidence(options.attemptDir);
+  const phaseId = dbPhaseId(status.sessionId, status.phase.name);
+  const terminalProcessObserved = evidence.some((record) =>
+    record.type === "process" &&
+    record.phaseId === phaseId &&
+    ["EXITED", "FAILED", "CANCELLED"].includes(record.status));
+  if (status.phase.state !== "FAILED" && !terminalProcessObserved) return null;
+  const failed = evidence.filter((record): record is Extract<AttemptEvidence, { type: "gate" }> =>
+    record.type === "gate" && record.phaseId === phaseId && !record.passed);
+  const completenessItems: ReadonlySet<string> = new Set(Object.values(REVIEW_FINDING_COMPLETENESS_ITEMS));
+  const failedVerdicts = failed.filter((gate) => gate.gateId === "verdict_consistent");
+  const legacyCompletenessFailure = failedVerdicts.length > 0 && failedVerdicts.every((gate) => {
+    const failedChecks = gate.checks.filter((check) => !check.ok);
+    return failedChecks.length > 0 && failedChecks.every((check) => completenessItems.has(check.item));
+  });
+  let code = "phase-abort";
+  if (failed.some((gate) => gate.gateId === "review_evidence_present")) {
+    code = "review-evidence-invalid";
+  } else if (
+    legacyCompletenessFailure ||
+    failed.some((gate) => COLD_ENVELOPE_GATE_IDS.has(gate.gateId)) ||
+    status.lastActivity.includes("EnvelopeValidationFailure")
+  ) {
+    code = "review-malformed";
+  } else if (failedVerdicts.length > 0) {
+    code = "review-inconsistent";
+  }
+  const violations = failed.flatMap((gate) => gate.violations);
+  const detail = `recovered an exited ${status.phase.name} phase with no live process: ${violations.join("; ") || status.lastActivity}`;
+  const decision = transition({
+    from: "REVIEWING",
+    to: "BLOCKED",
+    actor: "host",
+    tier: status.tier,
+    reason: { source: "process", code, detail },
+    interactive: false,
+    budget: status.budget,
+    evidence: { reviewTransportRetries: 0, reviewFailure: code },
+  });
+  const seq = status.revision + 1;
+  return persistAttempt(options.attemptDir, status.revision, {
+    kind: "attempt.transitioned",
+    evidence: {
+      type: "transition",
+      id: `${status.sessionId}:recovery:${String(seq)}`,
+      seq,
+      from: "REVIEWING",
+      to: "BLOCKED",
+      actor: "host",
+      edgeId: decision.edge,
+      reasonSource: "process",
+      reasonCode: code,
+      reasonDetail: detail,
+      spawnSite: false,
+      at: now,
+    },
+    next: nextRevision(status, {
+      lifecycleState: "BLOCKED",
+      process: null,
+      blocker: { code, detail, ahead: null, behind: null },
+      lastActivityAt: now,
+      lastActivity: detail,
+      nextAction: nextActionFor("BLOCKED", status.taskId),
+    }),
+  }, options.projectRecord);
+}
+
+/** Production runner for every shipped workflow. The fixture-only run command remains separate. */
 export async function runProductionCommand(options: ProductionRunOptions): Promise<AttemptStatus> {
   const infra: ProductionInfrastructure = { ...DEFAULT_INFRASTRUCTURE, ...options.infrastructure };
   let status = await readAttempt(options.attemptDir);
+  const recoveredReview = await settleExitedReview(options, status, infra.now());
+  if (recoveredReview !== null) return recoveredReview;
   if (status.lifecycleState !== "PREPARED") throw new Error(`production run requires PREPARED, got ${status.lifecycleState}`);
   const recipe = SUPPORTED.get(status.workflow);
   // The attempt's tier and the recipe's tier must agree, and the tier is then
@@ -1264,6 +1395,20 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
   ): Promise<{ envelope: EnvelopeBase; candidateSha: string | null }> => {
     const route = routes.get(phase.id)!;
     const purpose = reviewContext === null ? "worker" : "review";
+    // A cold correction is a paid provider call. Preserve enough headroom for
+    // every later agent phase before exposing one here, so fixing an envelope
+    // can never consume the mandatory review's call or strand the workflow at
+    // a later ordinary phase.
+    const futureInitialCalls = compiled.phases
+      .slice(ordinal)
+      .filter((candidate) => candidate.kind === "agent")
+      .length;
+    const coldCorrectionHeadroom = (): number => Math.max(0, budget.remaining - futureInitialCalls);
+    const routeMaximumCorrections = route.continuity
+      ? phase.maxCorrections
+      : Math.min(phase.maxCorrections, coldCorrectionHeadroom());
+    const configuredRecord = phaseRecords.get(phase.id)!;
+    phaseRecords.set(phase.id, { ...configuredRecord, maxCorrections: routeMaximumCorrections });
     // A retried review is a distinct process and a distinct spent call, so it
     // needs its own run id; reusing one would collide with the retained raw
     // output and envelope of the attempt that failed.
@@ -1416,42 +1561,16 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
       send: async (prompt): Promise<AgentTurn> => {
         const turn = turnIndex;
         turnIndex += 1;
-        if (turn > 0 && !route.continuity) {
-          throw new Error("configured and verified continuity is none; a second turn is not authorized");
-        }
         await phaseQueue;
-        const controller = new HOST.AbortController();
-        let idle: unknown | null = null;
-        const arm = (): void => {
-          if (idle !== null) HOST.clearTimeout(idle);
-          idle = HOST.setTimeout(() => {
-            controller.abort(new Error("configured silence timeout elapsed"));
-            void launch.transport?.cancel("configured silence timeout elapsed");
-          }, options.config.runtime.silence_timeout_seconds * 1_000);
-          (idle as { unref?: () => void }).unref?.();
-        };
-        const sandboxingBroker: TransportBroker = {
-          startProcess: async (registration, spec, signal) => {
-            const grant = permission.sandbox(spec);
-            const launchAt = infra.now();
-            await persist("attempt.updated", { lastActivityAt: launchAt, lastActivity: `${phase.id}: route and sandbox grant recorded before GO` }, {
-              type: "agent-start", phaseId: phaseDb, agent: route.agent.name, adapterId: route.adapterId,
-              provider: route.model.provider, color: route.agent.color, requestedModel: route.agent.model,
-              sandboxBadge: grant.badge, sandboxMechanism: grant.mechanism, purpose, at: launchAt,
-            });
-            const transport = await broker.startProcess(registration, grant.spec, signal);
-            launch.transport = transport;
-            return transport;
-          },
-        };
-        // A correction turn proves it can resume BEFORE it launches: the store
-        // proves the route is unchanged and a turn has completed; the adapter
-        // proves the conversation is where it says it is. Either refusal throws
-        // here, with no process created and no call at risk.
         const turnRunId = runIdFor(turn);
-        if (turn > 0) launches.set(turnRunId, launch);
+        const turnLaunch = turn === 0
+          ? launch
+          : { phaseId: phaseDb, adapterId: route.adapterId, role: route.agent.name, registeredAt: infra.now() };
+        launches.set(turnRunId, turnLaunch);
         let registration: BrokerProcessRegistration = realRegistration;
-        if (turn > 0) {
+        if (turn > 0 && route.continuity) {
+          // A call-neutral correction proves it can resume before launch. The
+          // private store and adapter both bind it to the original conversation.
           const record = continuity.assertCorrectable(handle, {
             adapter: route.adapter.id,
             provider: route.model.provider,
@@ -1462,13 +1581,53 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
             { cwd: status.worktree! },
           );
           const snapshot = budget.snapshot();
-          // The phase machine charged a tranche on `VALIDATING → CORRECTING`
-          // immediately before this send; whichever counter moved is the one
-          // this launch is drawn against.
           const tranche: "auto" | "owner" = snapshot.correctionsAuto > 0 ? "auto" : "owner";
           registration = correctionRegistrationFor(phase, ordinal, route, reservation, turnRunId, turn, tranche);
           await persist("attempt.updated", { lastActivityAt: infra.now(), lastActivity: `${phase.id}: resuming ${handle} for correction round ${String(turn)} (${evidence.proof})` });
+        } else if (turn > 0) {
+          // No conversation exists to resume. This is an ordinary, fully paid
+          // provider launch on the exact preflighted route, bounded by both the
+          // phase allowance and the task call ceiling.
+          const held = budget.reserve({ cost: 1, subject: `${compiled.id}:${phase.id}:cold-correction-${String(turn)}` });
+          await persist("attempt.updated", {
+            budget: budget.snapshot(),
+            lastActivityAt: infra.now(),
+            lastActivity: `held one call for ${phase.id} cold correction round ${String(turn)}`,
+          });
+          registration = registrationFor(
+            phase,
+            ordinal,
+            route,
+            held,
+            turnRunId,
+            false,
+            reviewContext !== null,
+          );
         }
+        const controller = new HOST.AbortController();
+        let idle: unknown | null = null;
+        const arm = (): void => {
+          if (idle !== null) HOST.clearTimeout(idle);
+          idle = HOST.setTimeout(() => {
+            controller.abort(new Error("configured silence timeout elapsed"));
+            void turnLaunch.transport?.cancel("configured silence timeout elapsed");
+          }, options.config.runtime.silence_timeout_seconds * 1_000);
+          (idle as { unref?: () => void }).unref?.();
+        };
+        const sandboxingBroker: TransportBroker = {
+          startProcess: async (registered, spec, signal) => {
+            const grant = permission.sandbox(spec);
+            const launchAt = infra.now();
+            await persist("attempt.updated", { lastActivityAt: launchAt, lastActivity: `${phase.id}: route and sandbox grant recorded before GO` }, {
+              type: "agent-start", phaseId: phaseDb, agent: route.agent.name, adapterId: route.adapterId,
+              provider: route.model.provider, color: route.agent.color, requestedModel: route.agent.model,
+              sandboxBadge: grant.badge, sandboxMechanism: grant.mechanism, purpose, at: launchAt,
+            });
+            const transport = await broker.startProcess(registered, grant.spec, signal);
+            turnLaunch.transport = transport;
+            return transport;
+          },
+        };
         const request: ModelRequest = {
           model: route.agent.model, prompt, systemPromptPath, cwd: status.worktree!,
           env: HOST.process.env, effort: route.agent.thinking,
@@ -1497,18 +1656,20 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
             }
           }
         } catch (error) {
-          await launch.transport?.cancel("canonical provider-event persistence or transport failed").catch(() => undefined);
+          await turnLaunch.transport?.cancel("canonical provider-event persistence or transport failed").catch(() => undefined);
           throw error;
         } finally {
           if (idle !== null) HOST.clearTimeout(idle);
         }
         const endedAt = infra.now();
         const exitCode = terminal?.kind === "run.completed" ? terminal.exitCode : null;
-        if (launch.record !== undefined) {
+        if (turnLaunch.record !== undefined) {
           await persist("attempt.updated", { process: null, lastActivityAt: endedAt }, {
             type: "process", phaseId: phaseDb, adapterId: route.adapterId, role: route.agent.name,
-            record: redactLocators(launch.record), status: terminal?.kind === "run.completed" && exitCode === 0 ? "EXITED" : "FAILED",
-            registeredAt, releasedAt: launch.releasedAt ?? registeredAt, endedAt, exitCode, exitSignal: null,
+            record: redactLocators(turnLaunch.record), status: terminal?.kind === "run.completed" && exitCode === 0 ? "EXITED" : "FAILED",
+            registeredAt: turnLaunch.registeredAt,
+            releasedAt: turnLaunch.releasedAt ?? turnLaunch.registeredAt,
+            endedAt, exitCode, exitSignal: null,
           });
         }
         if (terminal?.kind === "run.failed") throw new AdapterError(route.adapter.id, terminal.errorCode, terminal.message);
@@ -1555,7 +1716,10 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
           usageAuthority: route.model.usageAuthority, usage, contextTokens: contextTokens(usage), costUsd: null, costAuthority: route.model.costAuthority, purpose, at: endedAt,
         });
         return {
-          identity: session.identity,
+          identity: {
+            ...session.identity,
+            sessionId: route.continuity ? session.identity.sessionId : `none:${turnRunId}`,
+          },
           rawOutput: output,
           usage,
           costUsd: null,
@@ -1582,28 +1746,55 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
         persistence: { persist: (envelope, raw) => persistEnvelope(phase.id, runIdFor(envelope.correctionRound), envelope, raw) },
         agentSessionId: status.sessionId,
         onPhaseState,
+        onGateReport: async (report, round) => {
+          if (!report.passed) {
+            await persistGate(phase.id, report, reviewContext?.candidateSha ?? null, round);
+          }
+        },
+        onCorrectionAuthorized: async ({ correctionRound, transport }) => {
+          const current = phaseRecords.get(phase.id)!;
+          phaseRecords.set(phase.id, { ...current, correctionCount: correctionRound });
+          await persist("attempt.updated", {
+            budget: budget.snapshot(),
+            lastActivityAt: infra.now(),
+            lastActivity: `${phase.id}: authorized ${transport} correction round ${String(correctionRound)}`,
+          });
+        },
         /**
-         * The automatic tranche first, and no owner tranche here.
-         *
-         * `awsf run` is non-interactive by construction, and the lifecycle makes
-         * the owner tranche owner-authorized — L10's second correction is
-         * owner-only. A runner that drew it on the owner's behalf would be
-         * spending an authorization nobody gave, so it draws `auto` while `auto`
-         * remains and refuses afterwards. Exhaustion returns null, which the
-         * engine turns into the same `PhaseGateFailure` that blocks on L8 today.
+         * `awsf run` draws only the automatic tranche. Same-session routes are
+         * token-only. A `continuity: none` route may spend one ordinary provider
+         * call only for envelope-form failures, and only when that call fits the
+         * task ceiling after every later required phase has retained headroom.
          */
-        authorizeCorrection: ({ correctionRound }) => {
-          if (!route.continuity) return null;
+        authorizeCorrection: ({ cause, correctionRound, reports }) => {
           const snapshot = budget.snapshot();
-          if (snapshot.correctionsAuto >= snapshot.allowance.auto) return null;
-          if (correctionRound > phase.maxCorrections) return null;
-          return "host";
+          if (snapshot.correctionsAuto >= snapshot.allowance.auto) {
+            return { actor: null, reason: `automatic correction allowance is spent (${String(snapshot.correctionsAuto)}/${String(snapshot.allowance.auto)})` };
+          }
+          if (correctionRound > phase.maxCorrections) {
+            return { actor: null, reason: `round ${String(correctionRound)} exceeds the phase limit ${String(phase.maxCorrections)}` };
+          }
+          if (route.continuity) return { actor: "host", transport: "same-session" };
+          if (cause === "gate-violation" && !isColdEnvelopeCorrection(reports)) {
+            const failed = reports.filter((report) => !report.passed).map((report) => report.gateId).join(", ");
+            return { actor: null, reason: `cold correction is limited to envelope-form gates; failed gates: ${failed}` };
+          }
+          const headroom = coldCorrectionHeadroom();
+          if (headroom < 1) {
+            return {
+              actor: null,
+              reason: `route continuity is none and a cold correction needs one provider call, but 0 remain after reserving ${String(futureInitialCalls)} later required call(s)`,
+            };
+          }
+          return { actor: "host", transport: "cold" };
         },
         ...(verifyCandidate === null ? {} : { verifyCandidate }),
       });
       await phaseQueue;
       const gatedSha = reviewContext === null ? result.candidateSha : reviewContext.candidateSha;
-      for (const report of result.gateReports) await persistGate(phase.id, report, gatedSha);
+      for (const report of result.gateReports) {
+        await persistGate(phase.id, report, gatedSha, result.correctionRounds);
+      }
       if (phase.id === "builder") {
         const report = headAdvanced({ baseSha: status.baseSha!, headSha: result.candidateSha, hostCommitExists: result.candidateSha !== null });
         await persistGate(phase.id, report, result.candidateSha);
@@ -1622,11 +1813,18 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
       await phaseQueue;
       let failure = error;
       if (error instanceof PhaseGateFailure) {
-        for (const report of error.reports) await persistGate(phase.id, report, null);
-        // Path gates retain their full evidence, but a real policy breach is the
+        // Failed reports were persisted at the round that produced them. Path
+        // gates retain their full evidence, but a real policy breach is the
         // terminal classification and remains non-correctable.
         try { permission.enforce(); } catch (permissionError) { failure = permissionError; }
       }
+      // A terminal phase has no correction still available. Pin the displayed
+      // maximum to what actually ran so status never claims a dead round remains.
+      const failedRecord = phaseRecords.get(phase.id)!;
+      phaseRecords.set(phase.id, {
+        ...failedRecord,
+        maxCorrections: failedRecord.correctionCount,
+      });
       await persistPhase(phase.id, "FAILED", failure as Error);
       throw failure;
     }
@@ -2016,13 +2214,34 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
       await persistPhase(phase.id, "SUCCEEDED");
     }
 
-    if (candidateSha === null) throw new Error("workflow completed without a host candidate");
+    const readOnlySchema = READ_ONLY_RESULT_SCHEMA_BY_WORKFLOW.get(compiled.id);
+    const readOnlyResult = readOnlySchema === undefined
+      ? null
+      : (() => {
+          const schema = previous?.schema;
+          if (schema !== readOnlySchema) {
+            throw new Error(`read-only workflow ${JSON.stringify(compiled.id)} completed with schema ${JSON.stringify(schema)}, expected ${JSON.stringify(readOnlySchema)}`);
+          }
+          return { schema: readOnlySchema, writesObserved: false } as const;
+        })();
+    if (candidateSha === null && readOnlyResult === null) {
+      throw new Error("workflow completed without a host candidate");
+    }
+    const l7Evidence = readOnlyResult === null
+      ? { requiredPhasesTerminalSuccess: true, hostCommitCreated: true, baseSha: status.baseSha!, candidateSha: candidateSha! }
+      : { requiredPhasesTerminalSuccess: true, hostCommitCreated: false, baseSha: status.baseSha!, readOnlyResult };
     const l7 = transition({
       from: "RUNNING", to: "GATING", actor: "host", tier: status.tier, reason: { source: "git" }, interactive: false,
-      budget: budget.snapshot(), evidence: { requiredPhasesTerminalSuccess: true, hostCommitCreated: true, baseSha: status.baseSha!, candidateSha },
+      budget: budget.snapshot(), evidence: l7Evidence,
     });
-    await persistTransition("RUNNING", "GATING", l7.edge, "git", null, "all required phases and exact candidate gates succeeded", false, {
-      candidateSha, budget: budget.snapshot(), phase: null, lastActivity: "L7 entered host gating on the exact candidate",
+    const completionDetail = readOnlyResult === null
+      ? "all required phases and exact candidate gates succeeded"
+      : `all required phases succeeded with read-only ${readOnlyResult.schema} evidence and no worktree writes`;
+    await persistTransition("RUNNING", "GATING", l7.edge, "git", null, completionDetail, false, {
+      candidateSha, budget: budget.snapshot(), phase: null,
+      lastActivity: readOnlyResult === null
+        ? "L7 entered host gating on the exact candidate"
+        : `L7 retained the read-only ${readOnlyResult.schema} result with no candidate tree`,
     });
     options.assertAdvancement?.(status.sessionId, "AWAITING_OWNER");
     // Below T2 the gates are the whole story and L12 carries the task to the
@@ -2034,14 +2253,22 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
       throw new InvalidReviewInversion(`workflow ${JSON.stringify(compiled.id)} is tier 2 but declares no review phase to invert`);
     }
     if (reviewPhase === null) {
+      const l12Evidence = readOnlyResult === null
+        ? { gatesPass: true, candidateSha: candidateSha! }
+        : { gatesPass: true, hostCommitCreated: false, baseSha: status.baseSha!, readOnlyResult };
       const l12 = transition({
         from: "GATING", to: "AWAITING_OWNER", actor: "host", tier: status.tier, reason: { source: "gate" }, interactive: false,
-        budget: budget.snapshot(), evidence: { gatesPass: true, candidateSha },
+        budget: budget.snapshot(), evidence: l12Evidence,
       });
       await persistTransition("GATING", "AWAITING_OWNER", l12.edge, "gate", null, `all required T${status.tier} gates passed`, false, {
         candidateSha, budget: budget.snapshot(), gatesPass: true,
         requiredReviewPresent: false, journeyApproved: true, protectedApprovalsValid: true, blocker: null,
-        lastActivity: `all T${status.tier} production phases and gates passed; awaiting owner`,
+        lastActivity: readOnlyResult === null
+          ? `all T${status.tier} production phases and gates passed; awaiting owner`
+          : `read-only ${readOnlyResult.schema} result passed every gate; awaiting owner inspection`,
+        ...(readOnlyResult === null ? {} : {
+          nextAction: `inspect the retained ${readOnlyResult.schema} envelope, then run \`awsf cancel ${status.taskId}\` when finished`,
+        }),
       });
       return status;
     }
@@ -2050,6 +2277,7 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
     // the host gates just cleared, and the provider is the one the preflight
     // derived by exclusion.
     const reviewed = candidateSha;
+    if (reviewed === null) throw new Error("a review-bearing workflow completed without a candidate");
     const reviewRoute = routes.get(reviewPhase.phase.id)!;
     const l11 = budget.authorize({
       from: "GATING", to: "REVIEWING", actor: "host", reason: { source: "gate" }, interactive: false,
@@ -2127,31 +2355,27 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
       });
       return status;
     }
-    // L17 is the only REVIEWING → BLOCKED edge. Its vocabulary is three codes —
-    // `review-unavailable`, `review-malformed`, `review-evidence-invalid` —
-    // because all three are failures the host can determine without interpreting
-    // a verdict. This path emits only the first: a malformed envelope or a
-    // failed evidence gate is still rethrown below rather than classified, so
-    // the guard admits an exit this runner does not yet take.
-    //
-    // A review that DID answer but answered inconsistently is refused by L15's
-    // own guard instead, and the attempt is left in REVIEWING with its failed
-    // gate recorded, because inventing a terminal state for it would mean the
-    // host deciding what a bad review means. The owner's exits from there are
-    // L18 cancel and L16 rework.
+    // L17 settles every review process that has already exited. The host keeps
+    // the exact classification and never reinterprets a verdict: a failed
+    // consistency gate is recorded as `review-inconsistent`, while contract,
+    // evidence, policy, quota, and transport failures retain their own names.
+    // This prevents a dead REVIEWING status with no process and no legal remedy.
     if (failedFrom === "REVIEWING") {
-      if (!(error instanceof MandatoryReviewUnavailable)) throw error;
-      const detail = `${error.name}: ${error.message}`;
+      const reason = productionReviewBlocker(error);
+      const reviewFailure = reason.code === "review-unavailable" ? undefined : reason.code;
       const decision = transition({
         from: "REVIEWING", to: "BLOCKED", actor: "host", tier: status.tier,
-        reason: { source: "process", code: "review-unavailable", detail },
+        reason: { source: "process", code: reason.code, detail: reason.detail },
         interactive: false, budget: budget.snapshot(),
-        evidence: { reviewTransportRetries },
+        evidence: {
+          reviewTransportRetries,
+          ...(reviewFailure === undefined ? {} : { reviewFailure }),
+        },
       });
-      await persistTransition("REVIEWING", "BLOCKED", decision.edge, "process", "review-unavailable", detail, false, {
+      await persistTransition("REVIEWING", "BLOCKED", decision.edge, "process", reason.code, reason.detail, false, {
         budget: budget.snapshot(), process: null,
-        blocker: { code: "review-unavailable", detail, ahead: null, behind: null },
-        lastActivity: detail,
+        blocker: { code: reason.code, detail: reason.detail, ahead: null, behind: null },
+        lastActivity: reason.detail,
       });
       return status;
     }

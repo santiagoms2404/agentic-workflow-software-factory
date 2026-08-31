@@ -68,6 +68,17 @@ export function assertCorrectionIdentity(
   if (differences.length > 0) throw new CorrectionIdentityMismatch(differences);
 }
 
+/** A paid cold correction may open a new session, but never change its configured route. */
+export function assertCorrectionRouteIdentity(
+  expected: AgentSessionIdentity,
+  actual: AgentSessionIdentity,
+): void {
+  const differences = IDENTITY_FIELDS
+    .filter((field) => field !== "sessionId" && expected[field] !== actual[field])
+    .map((field) => `${field} ${JSON.stringify(expected[field])} became ${JSON.stringify(actual[field])}`);
+  if (differences.length > 0) throw new CorrectionIdentityMismatch(differences);
+}
+
 function tail(value: string): string {
   return value.length <= MAX_GATE_OUTPUT_TAIL_CHARS
     ? value
@@ -124,6 +135,8 @@ export interface CorrectionRequest {
   readonly previousEnvelopeRef: string;
   readonly schemaViolations: readonly ValidationViolation[];
   readonly gateReports: readonly CorrectionGateReport[];
+  /** Flat failed checks, in host-observed order, for a correction to act on directly. */
+  readonly violations: readonly string[];
   readonly remainingCallBudget: number;
   /** Present only when a deterministic command gate failed at an exact candidate. */
   readonly candidate?: CorrectionCandidateEvidence;
@@ -137,17 +150,26 @@ export function createCorrectionRequest(input: {
   remainingCallBudget: number;
   candidate?: CorrectionCandidateEvidence;
 }): CorrectionRequest {
+  const schemaViolations = Object.freeze([...input.previousEnvelope.violations]);
+  const gateReports = Object.freeze(input.gateReports.map((report) => Object.freeze({
+    gateId: report.gateId,
+    passed: report.passed,
+    checks: Object.freeze(report.checks.map((check) => Object.freeze({ ...check, note: tail(check.note) }))),
+  })));
+  const violations = Object.freeze([
+    ...schemaViolations.map((violation) => `${violation.path || "(root)"}: ${violation.message}`),
+    ...gateReports.flatMap((report) => report.checks
+      .filter((check) => !check.ok)
+      .map((check) => `${check.item}: ${check.note}`)),
+  ]);
   return Object.freeze({
     kind: "awsf.correction-request/v1",
     phase: input.phase,
     round: input.round,
     previousEnvelopeRef: input.previousEnvelope.envelopeId,
-    schemaViolations: Object.freeze([...input.previousEnvelope.violations]),
-    gateReports: Object.freeze(input.gateReports.map((report) => Object.freeze({
-      gateId: report.gateId,
-      passed: report.passed,
-      checks: Object.freeze(report.checks.map((check) => Object.freeze({ ...check, note: tail(check.note) }))),
-    }))),
+    schemaViolations,
+    gateReports,
+    violations,
     remainingCallBudget: input.remainingCallBudget,
     ...(input.candidate === undefined ? {} : {
       candidate: Object.freeze({
@@ -198,6 +220,36 @@ export function renderCorrectionRequest(request: CorrectionRequest): string {
   }
   parts.push(JSON.stringify(request, null, 2));
   return parts.join("\n\n");
+}
+
+/**
+ * A cold route has no prior conversation, so it receives the original request
+ * as well as the exact correction record. The call is a replacement-format
+ * attempt, not a second opinion: substance is preserved while the named
+ * envelope defects are repaired. Every cold send is still a provider call and
+ * the production runner reserves it against the task ceiling before GO.
+ */
+export function renderColdCorrectionRequest(
+  originalPrompt: string,
+  previousResponse: unknown,
+  request: CorrectionRequest,
+): string {
+  const retainedResponse = typeof previousResponse === "string"
+    ? previousResponse
+    : JSON.stringify(previousResponse, null, 2);
+  return [
+    "This is a fresh, bounded correction call for a previous response from the same configured role.",
+    "Preserve the previous response's substance. Repair only the host-listed envelope defects and return one replacement envelope.",
+    "",
+    "Original phase request:",
+    originalPrompt,
+    "",
+    "Previous response whose substance must be preserved:",
+    retainedResponse,
+    "",
+    "Host correction record:",
+    renderCorrectionRequest(request),
+  ].join("\n");
 }
 
 export function renderParseFixRequest(input: {

@@ -6,7 +6,7 @@
 // test here, in both directions: satisfied, and each component removed.
 //
 // The load-bearing ones:
-//   L7  — a 40-hex candidate SHA that is not the base ("said done, wrote nothing")
+//   L7  — a real candidate SHA, or host-observed T0 read-only result evidence
 //   L10 — the failed command AND its output, or a correction is hearsay
 //   L16 — severity >= medium with file and detail; a style note is not a defect
 //   L21 — record faults only; NO CLOCK may produce it, because AWAITING_OWNER
@@ -76,6 +76,20 @@ function withReview(id: EdgeId, patch: Partial<ReviewEvidence>): TransitionInput
   const review = base.evidence?.review;
   if (!review) throw new Error(`the ${id} fixture must carry review evidence`);
   return { ...base, evidence: { ...base.evidence, review: { ...review, ...patch } } };
+}
+
+function readOnlyCompletion(id: "L7" | "L12"): TransitionInput {
+  const base = withoutEvidence(id, "candidateSha");
+  return {
+    ...base,
+    tier: 0,
+    evidence: {
+      ...base.evidence,
+      baseSha: BASE_SHA,
+      hostCommitCreated: false,
+      readOnlyResult: { schema: "awsf.plan-output/v1", writesObserved: false },
+    },
+  };
 }
 
 async function expectAllInsufficient(cases: readonly (readonly [string, TransitionInput])[]): Promise<void> {
@@ -150,6 +164,24 @@ test("L7 accepts a real commit", async () => {
   const result = await expectAccepted(validInput("L7"));
   assert.equal(result.edge, "L7");
   assert.equal(result.to, "GATING");
+});
+
+test("L7 and L12 admit a host-observed T0 read-only result without inventing a candidate", async () => {
+  assert.equal((await expectAccepted(readOnlyCompletion("L7"))).to, "GATING");
+  assert.equal((await expectAccepted(readOnlyCompletion("L12"))).to, "AWAITING_OWNER");
+
+  const l7 = readOnlyCompletion("L7");
+  await expectAllInsufficient([
+    ["read-only work wrote to the tree", {
+      ...l7,
+      evidence: { ...l7.evidence, readOnlyResult: { schema: "awsf.plan-output/v1", writesObserved: true } },
+    }],
+    ["read-only completion is restricted to T0", { ...readOnlyCompletion("L12"), tier: 1 }],
+    ["read-only completion may not carry a candidate", {
+      ...l7,
+      evidence: { ...l7.evidence, candidateSha: CANDIDATE_SHA },
+    }],
+  ]);
 });
 
 // ---------------------------------------------------------------------------
@@ -302,7 +334,7 @@ test("L17 requires the mandatory review to have been retried once and still be u
   await expectAccepted(withEvidence("L17", { reviewTransportRetries: 1 }));
 });
 
-test("L17 also blocks on the two review failures the host can determine without judging content", async () => {
+test("L17 also blocks on review failures the host can classify after process exit", async () => {
   // The dead end this repairs predates L25: a malformed reviewer envelope
   // satisfies neither L15 (no valid verdict) nor L16 (no finding of severity
   // >= medium exists to accept) nor the old L17 (a review that ANSWERED was
@@ -312,7 +344,16 @@ test("L17 also blocks on the two review failures the host can determine without 
     const base = withoutEvidence("L17", "reviewTransportRetries");
     return { ...base, evidence: { ...base.evidence, ...patch } };
   };
-  for (const code of ["review-malformed", "review-evidence-invalid"] as const) {
+  for (const code of [
+    "review-malformed",
+    "review-evidence-invalid",
+    "review-inconsistent",
+    "quota-exhausted",
+    "silence",
+    "phase-abort",
+    "permission-breach",
+    "budget-exhausted",
+  ] as const) {
     const accepted = await expectAccepted({
       ...noRetry({ reviewFailure: code }),
       reason: { source: "process", code },
@@ -322,37 +363,36 @@ test("L17 also blocks on the two review failures the host can determine without 
   }
 });
 
-test("L17 refuses a verdict_consistent failure — an inconsistent verdict is content", async () => {
-  // Deliberately NOT a host-determinable failure. The host does not decide what
-  // a bad review means, so the attempt stays in REVIEWING with the failed gate
-  // recorded and the owner's own edges are the exits.
-  await expectAllInsufficient([
-    [
-      "an inconsistent verdict is not a blocker",
-      {
-        ...withoutEvidence("L17", "reviewTransportRetries"),
-        reason: { source: "process", code: "review-malformed" },
-        evidence: { reviewFailure: "verdict-inconsistent" },
-      },
-    ],
-    [
-      "an off-vocabulary failure code proves nothing",
-      {
-        ...withoutEvidence("L17", "reviewTransportRetries"),
-        reason: { source: "process", code: "review-unavailable" },
-        evidence: { reviewFailure: "reviewer-was-unconvincing" },
-      },
-    ],
-  ]);
+test("L17 records an inconsistent verdict without interpreting it", async () => {
+  const base = withoutEvidence("L17", "reviewTransportRetries");
+  const accepted = await expectAccepted({
+    ...base,
+    reason: { source: "process", code: "review-inconsistent" },
+    evidence: { reviewFailure: "review-inconsistent" },
+  });
+  assert.equal(accepted.edge, "L17");
+
+  await expectAllInsufficient([[
+    "the evidence must match the blocker code",
+    {
+      ...base,
+      reason: { source: "process", code: "review-inconsistent" },
+      evidence: { reviewFailure: "reviewer-was-unconvincing" },
+    },
+  ]]);
 });
 
-test("L17's blocker vocabulary is exactly three codes", async () => {
-  assert.deepEqual(
-    [...EDGE_BLOCKER_CODES.L17],
-    ["review-unavailable", "review-malformed", "review-evidence-invalid"],
-  );
-  await expectAllInsufficient([
-    ["verdict-inconsistent is not in the vocabulary", withReason("L17", { code: "verdict-inconsistent" })],
+test("L17's blocker vocabulary covers every exited review classification", async () => {
+  assert.deepEqual([...EDGE_BLOCKER_CODES.L17], [
+    "review-unavailable",
+    "review-malformed",
+    "review-evidence-invalid",
+    "review-inconsistent",
+    "quota-exhausted",
+    "silence",
+    "phase-abort",
+    "permission-breach",
+    "budget-exhausted",
   ]);
 });
 
@@ -603,7 +643,10 @@ test("every blocking edge accepts its own codes and refuses every other edge's",
 
     for (const code of own) {
       try {
-        await expectAccepted(withReason(id, { code }));
+        const input = withReason(id, { code });
+        await expectAccepted(id === "L17" && code !== "review-unavailable"
+          ? { ...input, evidence: { ...input.evidence, reviewFailure: code } }
+          : input);
       } catch (error) {
         failures.push(`${id} must accept ${code}: ${(error as Error).message}`);
       }

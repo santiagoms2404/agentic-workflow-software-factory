@@ -12,9 +12,10 @@ import {
   MAX_PARSE_FIX_ATTEMPTS,
   UsageAccumulator,
   assertCorrectionIdentity,
+  assertCorrectionRouteIdentity,
   createCorrectionRequest,
+  renderColdCorrectionRequest,
   renderCorrectionRequest,
-  renderParseFixRequest,
   type AgentTurn,
   type CorrectionCandidateEvidence,
   type CorrectionSession,
@@ -70,6 +71,19 @@ export function createHostPhaseGit<T extends EnvelopeBase>(options: {
 }
 
 export type CorrectionActor = "host" | "owner" | "human";
+export type CorrectionTransport = "same-session" | "cold";
+
+export interface CorrectionAuthorization {
+  readonly actor: CorrectionActor;
+  readonly transport: CorrectionTransport;
+}
+
+export interface CorrectionRefusal {
+  readonly actor: null;
+  readonly reason: string;
+}
+
+export type CorrectionDecision = CorrectionActor | CorrectionAuthorization | CorrectionRefusal | null;
 
 /**
  * What the host measured about the candidate this phase just produced.
@@ -105,11 +119,19 @@ export interface RunAgentPhaseOptions<T extends EnvelopeBase> {
   readonly rawOutputPath?: (correctionRound: number) => string;
   /** Durable/event observer; receives QUEUED first and FAILED on every abnormal exit. */
   readonly onPhaseState?: (state: PhaseState) => void;
-  /** Return null to refuse a further correction. Defaults to the automatic tranche. */
+  /** Receives each report at the round that produced it, including superseded failures. */
+  readonly onGateReport?: (report: GateReport, correctionRound: number) => Promise<void> | void;
+  /** Called after the phase budget authorizes a correction and before its transport launches. */
+  readonly onCorrectionAuthorized?: (input: {
+    readonly correctionRound: number;
+    readonly transport: CorrectionTransport;
+  }) => Promise<void> | void;
+  /** Return a refusal with a reason when no further correction can run. */
   readonly authorizeCorrection?: (input: {
     cause: "schema-violation" | "gate-violation";
     correctionRound: number;
-  }) => CorrectionActor | null;
+    reports: readonly GateReport[];
+  }) => CorrectionDecision;
   /**
    * Runs the host's deterministic gates against the exact candidate this phase
    * just committed. Absent means the phase ends at its commit, which is the
@@ -147,24 +169,67 @@ export interface AgentPhaseResult<T extends EnvelopeBase> {
   readonly correctionRounds: number;
 }
 
+interface PhaseFailureContext {
+  readonly correctionRound?: number;
+  readonly maxCorrections?: number;
+  readonly terminalReason?: string;
+}
+
+function failureContext(context: PhaseFailureContext): string {
+  const round = context.correctionRound ?? 0;
+  const maximum = context.maxCorrections;
+  const rounds = maximum === undefined
+    ? `at correction round ${String(round)}`
+    : `after ${String(round)} of ${String(maximum)} configured correction round(s)`;
+  return `${rounds}${context.terminalReason === undefined ? "" : `; ${context.terminalReason}`}`;
+}
+
+function failedCheckSummary(reports: readonly GateReport[]): string {
+  const details = reports.flatMap((report) => {
+    const failed = report.checks.filter((check) => !check.ok);
+    return failed.length === 0
+      ? (report.passed ? [] : [`${report.gateId}: gate reported failure without a failed sub-check`])
+      : failed.map((check) => `${report.gateId}/${check.item}: ${check.note}`);
+  });
+  const rendered = details.join("; ") || "none recorded";
+  return rendered.length <= 4_000 ? rendered : `${rendered.slice(0, 4_000)}…`;
+}
+
 export class EnvelopeValidationFailure extends Error {
   readonly envelopes: readonly StoredEnvelope<EnvelopeBase>[];
+  readonly correctionRound: number;
+  readonly terminalReason: string | null;
 
-  constructor(phaseId: string, envelopes: readonly StoredEnvelope<EnvelopeBase>[]) {
-    super(`phase ${phaseId} did not emit a valid envelope within ${MAX_PARSE_FIX_ATTEMPTS} parse fixes`);
+  constructor(
+    phaseId: string,
+    envelopes: readonly StoredEnvelope<EnvelopeBase>[],
+    context: PhaseFailureContext = {},
+  ) {
+    super(
+      `phase ${phaseId} emitted no valid envelope ${failureContext(context)}; ` +
+        `schema violations: ${envelopes.at(-1)?.violations.map((violation) => `${violation.path || "(root)"}: ${violation.message}`).join("; ") || "none recorded"}`,
+    );
     this.name = "EnvelopeValidationFailure";
     this.envelopes = Object.freeze([...envelopes]);
+    this.correctionRound = context.correctionRound ?? 0;
+    this.terminalReason = context.terminalReason ?? null;
   }
 }
 
 export class PhaseGateFailure extends Error {
   readonly reports: readonly GateReport[];
+  readonly correctionRound: number;
+  readonly terminalReason: string | null;
 
-  constructor(phaseId: string, reports: readonly GateReport[]) {
-    const failed = reports.filter((report) => !report.passed).map((report) => report.gateId);
-    super(`phase ${phaseId} exhausted gate corrections; failed gates: ${failed.join(", ")}`);
+  constructor(phaseId: string, reports: readonly GateReport[], context: PhaseFailureContext = {}) {
+    super(
+      `phase ${phaseId} reached a terminal gate failure ${failureContext(context)}; ` +
+        `failed checks: ${failedCheckSummary(reports)}`,
+    );
     this.name = "PhaseGateFailure";
     this.reports = Object.freeze([...reports]);
+    this.correctionRound = context.correctionRound ?? 0;
+    this.terminalReason = context.terminalReason ?? null;
   }
 }
 
@@ -176,6 +241,7 @@ async function send(
   options: RunAgentPhaseOptions<EnvelopeBase>,
   prompt: string,
   correctionRound: number,
+  transport: CorrectionTransport = "same-session",
 ): Promise<AgentTurn> {
   let turn: AgentTurn;
   try {
@@ -189,8 +255,11 @@ async function send(
     throw error;
   }
   // Identity failure is a protocol breach, not a transport failure. Keeping it
-  // outside the catch also prevents a mismatch from looking retryable.
-  assertCorrectionIdentity(options.session.identity, turn.identity);
+  // outside the catch also prevents a mismatch from looking retryable. A paid
+  // cold correction may mint a session, but its adapter/provider/model route is
+  // still fixed by preflight and must remain exact.
+  if (transport === "cold") assertCorrectionRouteIdentity(options.session.identity, turn.identity);
+  else assertCorrectionIdentity(options.session.identity, turn.identity);
   return turn;
 }
 
@@ -227,15 +296,17 @@ async function runGates<T extends EnvelopeBase>(
   };
   const reports: GateReport[] = [];
   for (const gate of options.phase.gates) {
-    reports.push(await gate.run({ ...context, envelope: payload, correctionRound }));
+    const report = await gate.run({ ...context, envelope: payload, correctionRound });
+    reports.push(report);
+    await options.onGateReport?.(report, correctionRound);
   }
   return Object.freeze(reports);
 }
 
 /**
- * Drives one agent phase. The caller opens and books the initial provider
- * session; every send here is another turn in that same object and therefore
- * cannot reserve a tier call or manufacture a fallback session.
+ * Drives one agent phase. Same-session corrections remain call-neutral. A
+ * caller may explicitly authorize a cold correction, but its session transport
+ * must reserve a new call against the task ceiling before that send reaches GO.
  */
 export async function runAgentPhase<T extends EnvelopeBase>(
   options: RunAgentPhaseOptions<T>,
@@ -253,49 +324,70 @@ export async function runAgentPhase<T extends EnvelopeBase>(
   const correct = async (
     cause: "schema-violation" | "gate-violation",
     previous: StoredEnvelope<T>,
+    previousRawOutput: string,
     reports: readonly GateReport[],
     candidate?: CorrectionCandidateEvidence,
   ): Promise<AgentTurn> => {
     const nextRound = correctionRound + 1;
-    const actor = options.authorizeCorrection === undefined
+    const decision: CorrectionDecision = options.authorizeCorrection === undefined
       ? "host"
-      : options.authorizeCorrection({ cause, correctionRound: nextRound });
-    if (actor === null) {
+      : options.authorizeCorrection({ cause, correctionRound: nextRound, reports });
+    if (decision === null || (typeof decision === "object" && decision.actor === null)) {
+      const reason = decision === null
+        ? "the caller exposed no correction transport"
+        : decision.reason;
+      const context = {
+        correctionRound,
+        maxCorrections: options.phase.maxCorrections,
+        terminalReason: `correction unavailable: ${reason}`,
+      };
       throw cause === "schema-violation"
-        ? new EnvelopeValidationFailure(options.phase.id, envelopes)
-        : new PhaseGateFailure(options.phase.id, reports);
+        ? new EnvelopeValidationFailure(options.phase.id, envelopes, context)
+        : new PhaseGateFailure(options.phase.id, reports, context);
     }
+    const authorization: CorrectionAuthorization = typeof decision === "string"
+      ? { actor: decision, transport: "same-session" }
+      : decision;
     options.budget.recordPhaseTransition({
       phase: options.phase.id,
       from: "VALIDATING",
       to: "CORRECTING",
       session: expectedSession,
       cause,
-      actor,
+      actor: authorization.actor,
+      correctionTransport: authorization.transport,
     });
+    await options.onCorrectionAuthorized?.({ correctionRound: nextRound, transport: authorization.transport });
     execution.correcting();
-    const prompt = cause === "schema-violation"
-      ? renderParseFixRequest({
-          phase: options.phase.id,
-          round: nextRound,
-          previousEnvelope: previous,
-          remainingCallBudget: options.budget.remaining,
-        })
-      : renderCorrectionRequest(createCorrectionRequest({
-          phase: options.phase.id,
-          round: nextRound,
-          previousEnvelope: previous,
-          gateReports: reports,
-          remainingCallBudget: options.budget.remaining,
-          ...(candidate === undefined ? {} : { candidate }),
-        }));
-    const turn = await send(options as RunAgentPhaseOptions<EnvelopeBase>, prompt, nextRound);
+    const request = createCorrectionRequest({
+      phase: options.phase.id,
+      round: nextRound,
+      previousEnvelope: previous,
+      gateReports: reports,
+      remainingCallBudget: options.budget.remaining,
+      ...(candidate === undefined ? {} : { candidate }),
+    });
+    const correctionPrompt = renderCorrectionRequest(request);
+    const prompt = authorization.transport === "cold"
+      ? renderColdCorrectionRequest(
+          options.phase.renderPrompt(options.previousEnvelope),
+          previous.payload ?? previousRawOutput,
+          request,
+        )
+      : correctionPrompt;
+    const turn = await send(
+      options as RunAgentPhaseOptions<EnvelopeBase>,
+      prompt,
+      nextRound,
+      authorization.transport,
+    );
     options.budget.recordPhaseTransition({
       phase: options.phase.id,
       from: "CORRECTING",
       to: "RUNNING",
       session: expectedSession,
       resumeSession: phaseSession(turn.identity),
+      correctionTransport: authorization.transport,
     });
     execution.running();
     correctionRound = nextRound;
@@ -320,21 +412,29 @@ export async function runAgentPhase<T extends EnvelopeBase>(
       envelopes.push(envelope);
       if (!envelope.valid || envelope.payload === null) {
         if (parseFixes >= MAX_PARSE_FIX_ATTEMPTS) {
-          throw new EnvelopeValidationFailure(options.phase.id, envelopes);
+          throw new EnvelopeValidationFailure(options.phase.id, envelopes, {
+            correctionRound,
+            maxCorrections: options.phase.maxCorrections,
+            terminalReason: `parse-fix limit ${String(MAX_PARSE_FIX_ATTEMPTS)} reached`,
+          });
         }
         parseFixes += 1;
-        turn = await correct("schema-violation", envelope, []);
+        turn = await correct("schema-violation", envelope, turn.rawOutput, []);
         continue;
       }
 
       lastReports = await runGates(options, envelope.payload, correctionRound);
       if (!lastReports.every((report) => report.passed)) {
         if (gateRound >= options.phase.maxCorrections) {
-          throw new PhaseGateFailure(options.phase.id, lastReports);
+          throw new PhaseGateFailure(options.phase.id, lastReports, {
+            correctionRound,
+            maxCorrections: options.phase.maxCorrections,
+            terminalReason: `configured correction limit ${String(options.phase.maxCorrections)} reached`,
+          });
         }
         gateRound += 1;
         parseFixes = 0;
-        turn = await correct("gate-violation", envelope, lastReports);
+        turn = await correct("gate-violation", envelope, turn.rawOutput, lastReports);
         continue;
       }
 
@@ -360,13 +460,18 @@ export async function runAgentPhase<T extends EnvelopeBase>(
       // The candidate exists and is red. It stays — a failed candidate is
       // evidence, and the next round builds on it rather than replacing it.
       if (gateRound >= options.phase.maxCorrections) {
-        throw new PhaseGateFailure(options.phase.id, [...lastReports, ...verification.reports]);
+        throw new PhaseGateFailure(options.phase.id, [...lastReports, ...verification.reports], {
+          correctionRound,
+          maxCorrections: options.phase.maxCorrections,
+          terminalReason: `configured correction limit ${String(options.phase.maxCorrections)} reached`,
+        });
       }
       gateRound += 1;
       parseFixes = 0;
       turn = await correct(
         "gate-violation",
         envelope,
+        turn.rawOutput,
         verification.reports,
         verification.evidence ?? undefined,
       );

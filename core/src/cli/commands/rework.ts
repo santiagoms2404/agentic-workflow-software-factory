@@ -1307,12 +1307,9 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
     /**
      * The T2 review failed, and REVIEWING is where the attempt is.
      *
-     * The same three answers `awsf review` gives, for the same reason: a review
-     * that ANSWERED and then lost its projection is worth more than the call it
-     * cost, so it is held rather than blocked; a host-determined failure takes
-     * L17; and everything else is recorded with the owner's own exits named,
-     * because inventing a terminal state for a bad review would mean the host
-     * deciding what a bad review means.
+     * An answer whose projection failed is held for database rebuild. Every
+     * exited review failure takes L17 with its host-observed classification, so
+     * no dead review sojourn survives after the command returns.
      */
     if (status.lifecycleState === "REVIEWING") {
       if (reviewState.answered) {
@@ -1366,16 +1363,7 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
           : failure;
       const named = safeFailure(terminationFailure);
       const detail = `${named.name}: ${named.message}`;
-      const reason = reviewFailureBlocker(named, detail) ?? { code: "phase-abort", detail, edge: null as "L17" | null };
-      if (reason.edge === null) {
-        await recoverPersist("attempt.updated", {
-          budget: budget.snapshot(), process: null,
-          blocker: { code: reason.code, detail: reason.detail, ahead: null, behind: null },
-          lastActivityAt: recoveryAt, lastActivity: reason.detail,
-          nextAction: `run \`awsf cancel ${status.taskId}\`; REVIEWING has no host exit for ${reason.code}`,
-        });
-        return { status, confirmed: true };
-      }
+      const reason = reviewFailureBlocker(named, detail) ?? { code: "phase-abort", detail, edge: "L17" as const };
       const l17 = transition({
         from: "REVIEWING", to: "BLOCKED", actor: "host", tier: status.tier,
         reason: { source: "process", code: reason.code, detail: reason.detail },

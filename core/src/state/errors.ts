@@ -53,14 +53,22 @@ export const EDGE_BLOCKER_CODES = {
   L5: ["crash", "silence", "quota-exhausted", "phase-abort", "permission-breach", "budget-exhausted"],
   L8: ["crash", "silence", "quota-exhausted", "phase-abort", "permission-breach", "budget-exhausted"],
   L13: ["correction-budget-exhausted"],
-  // L17 names the three review failures the HOST can declare terminal without
-  // interpreting a verdict. `review-unavailable` is transport after one retry;
-  // `review-malformed` is an envelope TypeBox either validated or did not;
-  // `review-evidence-invalid` is a `review_evidence_present` row that failed or
-  // a post-review revalidation that found the tree moved. A `verdict_consistent`
-  // failure is deliberately absent — an inconsistent verdict is CONTENT, and
-  // the host does not decide what a bad review means.
-  L17: ["review-unavailable", "review-malformed", "review-evidence-invalid"],
+  // L17 names every review failure the host can classify after the review
+  // process exits. The first three are review-specific contract/evidence
+  // faults. The rest preserve the ordinary process classification. No exited
+  // runner may leave REVIEWING with no process, no blocker, and no usable next
+  // command.
+  L17: [
+    "review-unavailable",
+    "review-malformed",
+    "review-evidence-invalid",
+    "review-inconsistent",
+    "quota-exhausted",
+    "silence",
+    "phase-abort",
+    "permission-breach",
+    "budget-exhausted",
+  ],
   L21: ["record-corrupt", "unknown-state", "ambiguous-pid", "unreadable-worktree"],
   L24: ["non-fast-forward", "dirty-canonical-tree", "git-failure", "ambiguous-recovery"],
 } as const satisfies Record<string, readonly string[]>;

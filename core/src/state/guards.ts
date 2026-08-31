@@ -64,6 +64,21 @@ function humanInput(input: TransitionInput): string[] {
     : [`cancellation must come from explicit human input, not from reason.source ${JSON.stringify(source)}`];
 }
 
+function readOnlyResult(input: TransitionInput): string[] {
+  const result = input.evidence?.readOnlyResult;
+  if (result === undefined) return ["no read-only result was attested"];
+  const violations: string[] = [];
+  if (input.tier !== 0) violations.push(`read-only result completion is a T0 path, not T${input.tier}`);
+  if (!["awsf.scout-output/v1", "awsf.plan-output/v1"].includes(result.schema)) {
+    violations.push(`read-only result schema ${show(result.schema)} is not a shipped scout or plan envelope`);
+  }
+  if (result.writesObserved !== false) violations.push("the read-only workflow changed the managed worktree");
+  if (input.evidence?.hostCommitCreated !== false) violations.push("a read-only result must attest that no host commit was created");
+  if (input.evidence?.candidateSha !== undefined) violations.push("a read-only result may not name a candidate SHA");
+  if (!isSha(input.evidence?.baseSha)) violations.push(`base SHA ${show(input.evidence?.baseSha)} is not a 40-hex object id`);
+  return violations;
+}
+
 /** A candidate SHA carried for identity on an edge that does not otherwise reason about it. */
 function candidate(input: TransitionInput): string[] {
   const sha = input.evidence?.candidateSha;
@@ -140,6 +155,10 @@ const GUARDS: Readonly<Record<EdgeId, (input: TransitionInput) => string[]>> = {
     if (!isTrue(e?.requiredPhasesTerminalSuccess)) {
       violations.push("not every required phase reached terminal success");
     }
+    if (e?.readOnlyResult !== undefined) {
+      violations.push(...readOnlyResult(input));
+      return violations;
+    }
     if (!isTrue(e?.hostCommitCreated)) violations.push("no host commit was created");
     if (!isSha(base)) {
       violations.push(`base SHA ${show(base)} is not a 40-hex object id, so "differs from base" is unprovable`);
@@ -195,7 +214,9 @@ const GUARDS: Readonly<Record<EdgeId, (input: TransitionInput) => string[]>> = {
   },
 
   L12: (input) => {
-    const violations = candidate(input);
+    const violations = input.evidence?.readOnlyResult === undefined
+      ? candidate(input)
+      : readOnlyResult(input);
     if (!isTrue(input.evidence?.gatesPass)) violations.push("the gates did not pass");
     if (input.tier >= 2) violations.push("a T2 task may not skip the opposite-provider review");
     return violations;
@@ -282,33 +303,25 @@ const GUARDS: Readonly<Record<EdgeId, (input: TransitionInput) => string[]>> = {
     return violations;
   },
 
-  // L17 — the review failures the host may declare terminal, and only those.
+  // L17 — every exited review process gets a terminal, named settlement.
   //
-  // Transport unavailability after one retry was the original reason, and the
-  // reason it qualified is that it needs no interpretation. Two more failures
-  // have exactly that property: an envelope TypeBox either validated or did
-  // not, and a `review_evidence_present` row either passed or did not. Neither
-  // asks the host what a bad review MEANS.
-  //
-  // Never a substitute provider: routing may not read quota and a mandatory
-  // review is mandatory. And a `verdict_consistent` failure still has no exit
-  // here, deliberately — an inconsistent verdict is content.
-  //
-  // Widening this repairs a dead end that predates L25: a malformed reviewer
-  // envelope satisfies neither L15 (no valid verdict), nor L16 (no finding of
-  // severity >= medium exists to accept), nor the old L17 (a review that
-  // ANSWERED was never a transport failure), so cancel was the only edge and
-  // the candidate was lost to a parse error.
+  // Transport unavailability still requires its one fixed-route retry. Every
+  // other admitted code is a host-observed contract, gate, policy, budget, or
+  // process fact and must match `reviewFailure` exactly. This includes an
+  // internally inconsistent verdict: the host does not reinterpret it, but it
+  // can record that the deterministic consistency gate rejected it. Leaving
+  // REVIEWING after the process exited would provide no recovery path.
   L17: (input) => {
     const violations = blockerCode("L17", input);
     const retries = input.evidence?.reviewTransportRetries;
     const failure = input.evidence?.reviewFailure;
-    const deterministic = failure === "review-malformed" || failure === "review-evidence-invalid";
-    if (!deterministic && (retries === undefined || retries < 1)) {
-      violations.push(
-        `the mandatory review was retried ${show(retries)} times and reviewFailure is ${show(failure)}; ` +
-          "blocking needs one transport retry, or a host-determined review-malformed / review-evidence-invalid failure",
-      );
+    const code = input.reason.code;
+    if (code === "review-unavailable") {
+      if (retries === undefined || retries < 1) {
+        violations.push(`the mandatory review was retried ${show(retries)} times; review-unavailable requires one fixed-route transport retry`);
+      }
+    } else if (failure !== code) {
+      violations.push(`reviewFailure ${show(failure)} does not match reason.code ${show(code)}`);
     }
     return violations;
   },

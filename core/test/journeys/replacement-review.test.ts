@@ -750,11 +750,11 @@ test("a candidate moved between preflight and GO is refused with the call releas
   const launches: string[] = [];
   try {
     const result = await run(fixture, "move-before-go", { launches });
-    assert.equal(result.status.lifecycleState, "REVIEWING", "durably REVIEWING, nothing spent");
+    assert.equal(result.status.lifecycleState, "BLOCKED", "the pre-GO identity failure settles after releasing the call");
     assert.equal(result.status.budget.callsSpent, 2, "the reservation never reached GO");
     assert.equal(result.status.budget.callsReserved, 0);
     assert.equal(result.status.budget.ownerReentries, 0, "an authorization that bought nothing gives the allowance back");
-    assert.equal(result.status.blocker?.code, "candidate-moved");
+    assert.equal(result.status.blocker?.code, "review-evidence-invalid");
     assert.match(result.status.blocker?.detail ?? "", /moved between preflight and GO/);
     assert.deepEqual(launches, [], "the child was never started");
   } finally { await cleanup(fixture); }
@@ -867,16 +867,15 @@ test("a replacement whose declared evidence does not exist blocks on L17 with re
   } finally { await cleanup(fixture); }
 });
 
-test("an inconsistent verdict does not block: it is content, and the host does not decide what a bad review means", async () => {
-  // The one residual named by the design rather than fixed. `verdict_consistent`
-  // is deliberately outside L17's vocabulary, so the attempt stays in REVIEWING
-  // with its failed gate on the record and the owner decides.
+test("an inconsistent replacement review settles after its failed gate is recorded", async () => {
+  // The host records the deterministic inconsistency without choosing a verdict
+  // on the reviewer's behalf, then exits the dead REVIEWING sojourn through L17.
   const fixture = await world();
   try {
     const result = await run(fixture, "stale-sha");
-    assert.equal(result.status.lifecycleState, "REVIEWING");
+    assert.equal(result.status.lifecycleState, "BLOCKED");
     assert.equal(result.status.blocker?.code, "review-inconsistent");
-    assert.match(result.status.nextAction, /awsf cancel/);
+    assert.match(result.status.nextAction, /awsf retry/);
     assert.equal(result.status.budget.callsSpent, 3);
     const db = openDatabase(join(fixture.stateRoot, "awsf.db"), { readonly: true });
     try {
@@ -891,10 +890,10 @@ test("a permission breach by the readonly reviewer is classified explicitly rath
   const fixture = await world();
   try {
     const result = await run(fixture, "writes");
-    assert.equal(result.status.lifecycleState, "REVIEWING", "a policy breach is not a review vocabulary word");
+    assert.equal(result.status.lifecycleState, "BLOCKED", "the exited policy breach has a legal terminal settlement");
     assert.equal(result.status.blocker?.code, "permission-breach");
     assert.match(result.status.blocker?.detail ?? "", /PermissionBreach/);
-    assert.match(result.status.nextAction, /awsf cancel/);
+    assert.match(result.status.nextAction, /awsf retry/);
     assert.equal(result.status.budget.callsSpent, 3);
     assert.equal(result.status.budget.callsReserved, 0);
     assert.equal(result.status.process, null);
@@ -925,19 +924,21 @@ test("a crash between L25 and GO releases the call and rewinds the owner re-entr
     assert.equal(held?.budget.callsReserved, 1);
     assert.equal(held?.budget.ownerReentries, 1);
 
-    assert.equal(result.status.lifecycleState, "REVIEWING", "rerunnable rather than blocked");
+    assert.equal(result.status.lifecycleState, "BLOCKED", "an exited pre-GO launch cannot remain in REVIEWING");
     assert.equal(result.status.budget.callsSpent, 2, "a provider that never executed never costs a call");
     assert.equal(result.status.budget.callsReserved, 0);
     assert.equal(result.status.budget.ownerReentries, 0, "the tranche charge is rewound");
     assert.equal(result.status.process, null);
+    assert.equal(result.status.blocker?.code, "phase-abort");
+    assert.match(result.status.nextAction, /awsf retry/);
     assert.deepEqual(launches, []);
   } finally { await cleanup(fixture); }
 });
 
-test("re-running awsf review on a stale reservation reconciles it first, then refuses on the reconciled state", async () => {
+test("re-running awsf review on a stale reservation releases it and records a retryable blocker", async () => {
   // The cross-process half: a host that died holding the reservation leaves a
-  // durable REVIEWING with `callsReserved > 0`, which `awsf retry` refuses to
-  // touch. Recovery runs first, and only then does the command refuse.
+  // durable REVIEWING with `callsReserved > 0`. Recovery releases the call and
+  // exits that otherwise dead sojourn through L17.
   const fixture = await world();
   try {
     await append(fixture, {
@@ -948,12 +949,14 @@ test("re-running awsf review on a stale reservation reconciles it first, then re
       lifecycleState: "REVIEWING",
       budget: { ...fixture.status.budget, callsSpent: 2, callsReserved: 1, ownerReentries: 1 },
     });
-    await assert.rejects(run(fixture, "accept"), /AlreadyInState|REVIEWING/);
-    const status = await readAttempt(fixture.attemptDir);
-    assert.equal(status.lifecycleState, "REVIEWING");
+    const result = await run(fixture, "accept");
+    const status = result.status;
+    assert.equal(status.lifecycleState, "BLOCKED");
     assert.equal(status.budget.callsReserved, 0, "the stale reservation is released");
     assert.equal(status.budget.ownerReentries, 0, "and the charge for a launch that never happened is rewound");
+    assert.equal(status.blocker?.code, "phase-abort");
     assert.match(status.lastActivity, /stale L25 reservation/);
+    assert.match(status.nextAction, /awsf retry/);
   } finally { await cleanup(fixture); }
 });
 

@@ -9,7 +9,11 @@ import { loadConfig } from "../../src/config/load.ts";
 import { PiCodexAdapter } from "../../src/adapters/pi-codex.ts";
 import { createApiRouter } from "../../src/api/routes.ts";
 import type { BuildOutput } from "../../src/contracts/build-output.ts";
+import type { DocumentOutput } from "../../src/contracts/document-output.ts";
+import type { IntakeOutput } from "../../src/contracts/intake-output.ts";
 import type { PlanOutput } from "../../src/contracts/plan-output.ts";
+import type { ReviewOutput } from "../../src/contracts/review-output.ts";
+import type { ScoutOutput } from "../../src/contracts/scout-output.ts";
 import type { NormalizedEvent } from "../../src/contracts/normalized-events.ts";
 import type {
   Availability,
@@ -27,9 +31,11 @@ import { createDashboardProjection } from "../../src/cli/commands/dashboard-proj
 import { newCommand } from "../../src/cli/commands/new.ts";
 import { startCommand } from "../../src/cli/commands/start.ts";
 import { runProductionCommand, ProductionConfigSnapshotMismatch, ProductionWorkflowUnsupported } from "../../src/cli/commands/production-run.ts";
-import { readAttempt } from "../../src/cli/commands/attempt.ts";
+import { nextRevision, persistAttempt, readAttempt } from "../../src/cli/commands/attempt.ts";
+import type { AttemptEvidence } from "../../src/observability/attempt-evidence.ts";
 import { agentsForSession, gatesForSession, getSession, phasesForSession, pollEvents, processesForSession } from "../../src/observability/queries.ts";
 import { openDatabase } from "../../src/observability/sqlite.ts";
+import { TicketStore } from "../../src/persistence/ticket-store.ts";
 
 function git(repository: string, ...argv: string[]): string {
   return execFileSync("git", ["-C", repository, ...argv], { encoding: "utf8" }).trim();
@@ -44,6 +50,67 @@ function plan(): PlanOutput {
   };
 }
 
+function scout(): ScoutOutput {
+  return {
+    schema: "awsf.scout-output/v1",
+    producerStatus: "success",
+    summary: "observed the bounded source",
+    artifacts: [],
+    notesForNextPhase: "The owner can inspect the retained reconnaissance.",
+    findings: [{ file: "README.md", note: "The repository contains the seeded source description." }],
+  };
+}
+
+function intake(): IntakeOutput {
+  return {
+    schema: "awsf.intake-output/v1",
+    producerStatus: "success",
+    summary: "refined one bounded ticket",
+    artifacts: [{ path: "specs/tickets/T99.md", kind: "documentation", description: "validated intake ticket" }],
+    notesForNextPhase: "Inspect and land the ticket candidate.",
+    ticket: {
+      id: "T99",
+      title: "Write one bounded source",
+      milestone: "M1",
+      tier: 1,
+      state: "todo",
+      depends_on: [],
+      workflow: "build",
+      outcome: "The bounded source exists.",
+      context: ["The owner requested one bounded source."],
+      acceptance: ["The configured command passes."],
+      non_goals: ["Changing unrelated files."],
+    },
+  };
+}
+
+function document(): DocumentOutput {
+  return {
+    schema: "awsf.document-output/v1",
+    producerStatus: "success",
+    summary: "documented the bounded source",
+    artifacts: [{ path: "README.md", kind: "documentation", description: "updated source note" }],
+    notesForNextPhase: "Run the final host commands.",
+    changedFiles: ["README.md"],
+    documentedAreas: [{ subject: "bounded source", documentPath: "README.md" }],
+    proposedCommitMessage: "docs: describe generated source",
+  };
+}
+
+function review(worktree: string): ReviewOutput {
+  return {
+    schema: "awsf.review-output/v1",
+    producerStatus: "success",
+    summary: "reviewed the exact candidate",
+    artifacts: [],
+    notesForNextPhase: "The owner decides.",
+    verdict: "accept",
+    reviewedSha: git(worktree, "rev-parse", "HEAD"),
+    findings: [],
+    limitations: ["Scripted offline review."],
+  };
+}
+
 function build(path = "core/src/generated.ts"): BuildOutput {
   return {
     schema: "awsf.build-output/v1", producerStatus: "success", summary: "wrote one source",
@@ -53,13 +120,21 @@ function build(path = "core/src/generated.ts"): BuildOutput {
   };
 }
 
-type Scenario = "success" | "malformed" | "permission" | "gate" | "hygiene";
+type Scenario =
+  | "success"
+  | "malformed"
+  | "permission"
+  | "gate"
+  | "hygiene"
+  | "planner-open-question-once"
+  | "planner-planned-artifact-once";
 
 class ScriptedAdapter implements HarnessAdapter {
   readonly id: string;
   readonly #worktree: string;
   readonly #onReleased: () => void;
   readonly #scenario: Scenario;
+  #turn = 0;
   constructor(id: string, worktree: string, onReleased: () => void, scenario: Scenario = "success") { this.id = id; this.#worktree = worktree; this.#onReleased = onReleased; this.#scenario = scenario; }
   async isAvailable(): Promise<Availability> { return { status: "available" }; }
   async getModelInfo(model: string): Promise<ModelInfo> {
@@ -74,7 +149,34 @@ class ScriptedAdapter implements HarnessAdapter {
     this.#onReleased();
     const at = "2026-08-11T00:00:00.000Z";
     const model = request.model;
-    let payload: PlanOutput | BuildOutput = model.startsWith("claude:") ? plan() : build();
+    const turn = this.#turn++;
+    let payload: PlanOutput | BuildOutput | DocumentOutput | IntakeOutput | ReviewOutput | ScoutOutput;
+    if (request.prompt.includes("awsf.scout-output/v1")) payload = scout();
+    else if (request.prompt.includes("awsf.intake-output/v1")) {
+      payload = intake();
+      await new TicketStore(join(this.#worktree, "specs", "tickets")).write(payload.ticket, "# T99 — Write one bounded source\n");
+    } else if (request.prompt.includes("awsf.document-output/v1")) {
+      payload = document();
+      writeFileSync(join(this.#worktree, "README.md"), "base\n\nThe generated source is host-verified.\n");
+    } else if (request.prompt.includes("awsf.review-output/v1")) payload = review(this.#worktree);
+    else payload = model.startsWith("claude:") ? plan() : build();
+    if (model.startsWith("claude:") && turn === 0 && this.#scenario === "planner-open-question-once") {
+      payload = {
+        ...plan(),
+        notesForNextPhase: "The implementation decisions are recorded here.",
+        openQuestions: ["None blocking. Decisions were made rather than asked and are recorded in notesForNextPhase."],
+      };
+    }
+    if (model.startsWith("claude:") && turn === 0 && this.#scenario === "planner-planned-artifact-once") {
+      payload = {
+        ...plan(),
+        artifacts: [{ path: "core/src/future-output.ts", kind: "source", description: "file the builder will create" }],
+        implementationSteps: [{
+          ...plan().implementationSteps[0]!,
+          files: ["core/src/future-output.ts"],
+        }],
+      };
+    }
     if (!model.startsWith("claude:")) {
       mkdirSync(join(this.#worktree, "core", "src"), { recursive: true });
       if (this.#scenario === "hygiene") {
@@ -151,10 +253,10 @@ function configTextWithCommand(exitCode = 0): string {
 }
 
 async function fixture(
-  workflow: "build" | "plan-build-test" | "build-review" | "simple-sdlc",
+  workflow: "scout" | "plan" | "build" | "plan-build-test" | "build-review" | "simple-sdlc" | "intake",
   commandExit = 0,
   configure: (config: AwsfConfig) => AwsfConfig = (config) => config,
-  tier: 1 | 2 = 1,
+  tier: 0 | 1 | 2 = 1,
 ) {
   const root = mkdtempSync(join(tmpdir(), "awsf-production-runner-"));
   const canonical = join(root, "canonical");
@@ -183,6 +285,106 @@ async function fixture(
   await startCommand({ attemptDir: created.attemptDir, worktreeRoot: join(root, "worktrees"), configPath, preflight: () => ({ adapter: true, sandbox: true, observability: true }), projectRecord: projection.project });
   return { root, canonical, stateRoot, config, configPath, projection, created };
 }
+
+for (const workflow of ["scout", "plan"] as const) {
+  test(`production ${workflow} retains a read-only result and reaches the owner without a candidate commit`, async () => {
+    const world = await fixture(workflow, 0, (config) => config, 0);
+    try {
+      const prepared = await readAttempt(world.created.attemptDir);
+      const status = await runProductionCommand({
+        attemptDir: world.created.attemptDir,
+        stateRoot: world.stateRoot,
+        config: world.config,
+        configPath: world.configPath,
+        projectRecord: world.projection.project,
+        assertAdvancement: world.projection.assertAdvancement,
+        assertLaunchProjection: world.projection.assertLaunchPermitted,
+        infrastructure: {
+          adapterFor: (_entry: AdapterEntry, id: string) => new ScriptedAdapter(id, prepared.worktree!, () => {}),
+          createBroker: fakeBroker,
+          sandboxProbe: () => false,
+        },
+      });
+
+      assert.equal(status.lifecycleState, "AWAITING_OWNER", status.blocker?.detail);
+      assert.equal(status.candidateSha, null);
+      assert.equal(status.budget.callsSpent, 1);
+      assert.equal(status.gatesPass, true);
+      assert.match(status.nextAction, /inspect the retained awsf\.(?:scout|plan)-output\/v1 envelope/);
+      assert.doesNotMatch(status.nextAction, /awsf land/);
+      assert.equal(git(prepared.worktree!, "rev-parse", "HEAD"), status.baseSha);
+      assert.equal(git(prepared.worktree!, "status", "--porcelain"), "");
+    } finally {
+      world.projection.close();
+      rmSync(world.root, { recursive: true, force: true });
+    }
+  });
+}
+
+test("production intake writes one validated ticket candidate and reaches the owner", async () => {
+  const world = await fixture("intake", 0, (config) => ({
+    ...config,
+    agents: config.agents.map((agent) => agent.name === "intake"
+      ? { ...agent, harness: { ...agent.harness, continuity: "none" as const } }
+      : agent),
+  }), 0);
+  try {
+    const prepared = await readAttempt(world.created.attemptDir);
+    const status = await runProductionCommand({
+      attemptDir: world.created.attemptDir,
+      stateRoot: world.stateRoot,
+      config: world.config,
+      configPath: world.configPath,
+      projectRecord: world.projection.project,
+      assertAdvancement: world.projection.assertAdvancement,
+      assertLaunchProjection: world.projection.assertLaunchPermitted,
+      infrastructure: {
+        adapterFor: (_entry: AdapterEntry, id: string) => new ScriptedAdapter(id, prepared.worktree!, () => {}),
+        createBroker: fakeBroker,
+        sandboxProbe: () => false,
+      },
+    });
+
+    assert.equal(status.lifecycleState, "AWAITING_OWNER", status.blocker?.detail);
+    assert.equal(status.budget.callsSpent, 1);
+    assert.ok(status.candidateSha);
+    assert.equal(git(prepared.worktree!, "rev-parse", "HEAD"), status.candidateSha);
+    const [ticket] = await new TicketStore(join(prepared.worktree!, "specs", "tickets")).load();
+    assert.equal(ticket?.ticket?.id, "T99");
+  } finally {
+    world.projection.close();
+    rmSync(world.root, { recursive: true, force: true });
+  }
+});
+
+test("production simple-sdlc completes planner, builder, tests, and inverse review", async () => {
+  const world = await fixture("simple-sdlc", 0, (config) => config, 2);
+  try {
+    const prepared = await readAttempt(world.created.attemptDir);
+    const status = await runProductionCommand({
+      attemptDir: world.created.attemptDir,
+      stateRoot: world.stateRoot,
+      config: world.config,
+      configPath: world.configPath,
+      projectRecord: world.projection.project,
+      assertAdvancement: world.projection.assertAdvancement,
+      assertLaunchProjection: world.projection.assertLaunchPermitted,
+      infrastructure: {
+        adapterFor: (_entry: AdapterEntry, id: string) => new ScriptedAdapter(id, prepared.worktree!, () => {}),
+        createBroker: fakeBroker,
+        sandboxProbe: () => false,
+      },
+    });
+
+    assert.equal(status.lifecycleState, "AWAITING_OWNER", status.blocker?.detail);
+    assert.equal(status.budget.callsSpent, 4, "planner, builder, documenter, and mandatory reviewer");
+    assert.equal(status.requiredReviewPresent, true);
+    assert.ok(status.candidateSha);
+  } finally {
+    world.projection.close();
+    rmSync(world.root, { recursive: true, force: true });
+  }
+});
 
 for (const [workflow, expectedCalls] of [["build", 1], ["plan-build-test", 2]] as const) {
   test(`production ${workflow} uses ${expectedCalls} configured call(s), exact host gates, and no fallback`, async () => {
@@ -422,7 +624,7 @@ function registrationFailingBroker(options: BrokerOptions): TransportBroker {
 }
 
 for (const scenario of ["malformed", "permission", "gate"] as const) {
-  test(`${scenario} production evidence blocks on the first turn with no held reservation`, async () => {
+  test(`${scenario} production evidence reaches a terminal blocker with no held reservation`, async () => {
     const world = await fixture("build");
     try {
       const prepared = await readAttempt(world.created.attemptDir);
@@ -435,11 +637,59 @@ for (const scenario of ["malformed", "permission", "gate"] as const) {
         },
       });
       assert.equal(status.lifecycleState, "BLOCKED");
-      assert.equal(status.budget.callsSpent, 1);
+      assert.equal(status.budget.callsSpent, scenario === "malformed" ? 2 : 1);
       assert.equal(status.budget.callsReserved, 0);
-      if (scenario === "malformed") assert.match(status.blocker?.detail ?? "", /EnvelopeValidationFailure/);
+      if (scenario === "malformed") {
+        assert.match(status.blocker?.detail ?? "", /EnvelopeValidationFailure/);
+        assert.equal(status.budget.correctionsAuto, 1, "the cold envelope correction was actually spent");
+      }
       if (scenario === "permission") assert.equal(status.blocker?.code, "permission-breach");
       if (scenario === "gate") assert.match(status.blocker?.detail ?? "", /PhaseGateFailure/);
+    } finally {
+      world.projection.close();
+      rmSync(world.root, { recursive: true, force: true });
+    }
+  });
+}
+
+for (const [scenario, failedGate, failedCheck] of [
+  ["planner-open-question-once", "envelope_valid", "no blocking open questions"],
+  ["planner-planned-artifact-once", "artifacts_exist", "core/src/future-output.ts"],
+] as const) {
+  test(`${scenario} is induced, cold-corrected, and then reaches the owner`, async () => {
+    const world = await fixture("plan-build-test");
+    try {
+      const prepared = await readAttempt(world.created.attemptDir);
+      const status = await runProductionCommand({
+        attemptDir: world.created.attemptDir,
+        stateRoot: world.stateRoot,
+        config: world.config,
+        configPath: world.configPath,
+        projectRecord: world.projection.project,
+        assertAdvancement: world.projection.assertAdvancement,
+        assertLaunchProjection: world.projection.assertLaunchPermitted,
+        infrastructure: {
+          adapterFor: (_entry: AdapterEntry, id: string) => new ScriptedAdapter(id, prepared.worktree!, () => {}, scenario),
+          createBroker: fakeBroker,
+          sandboxProbe: () => false,
+        },
+      });
+
+      assert.equal(status.lifecycleState, "AWAITING_OWNER", status.blocker?.detail);
+      assert.equal(status.budget.callsSpent, 3, "two ordinary phases plus one paid cold correction");
+      assert.equal(status.budget.correctionsAuto, 0, "the next phase refreshes the per-phase meter");
+      assert.equal(existsSync(join(world.created.attemptDir, "envelopes", "planner-0.json")), true);
+      assert.equal(existsSync(join(world.created.attemptDir, "envelopes", "planner-1.json")), true);
+
+      const db = openDatabase(join(world.stateRoot, "awsf.db"), { readonly: true });
+      try {
+        const plannerGates = gatesForSession(db, status.sessionId, `${status.sessionId}:planner`);
+        const induced = plannerGates.find((gate) => gate.correction_round === 0 && gate.gate_id === failedGate);
+        assert.equal(induced?.passed, 0);
+        assert.match(induced?.violations_json ?? "", new RegExp(failedCheck.replaceAll(".", "\\.")));
+        const removed = plannerGates.find((gate) => gate.correction_round === 1 && gate.gate_id === failedGate);
+        assert.equal(removed?.passed, 1);
+      } finally { db.close(); }
     } finally {
       world.projection.close();
       rmSync(world.root, { recursive: true, force: true });
@@ -752,6 +1002,85 @@ test("projector degradation holds successful work at GATING rather than killing 
     assert.equal(status.lifecycleState, "GATING");
     assert.equal(status.budget.callsReserved, 0);
     assert.equal(status.blocker?.code, "sqlite-projection-failed");
+  } finally {
+    world.projection.close();
+    rmSync(world.root, { recursive: true, force: true });
+  }
+});
+
+test("rerunning an exited legacy review settles the stale REVIEWING attempt to a retryable blocker", async () => {
+  const world = await fixture("build-review", 0, (config) => config, 2);
+  try {
+    const prepared = await readAttempt(world.created.attemptDir);
+    const at = "2026-08-30T12:00:00.000Z";
+    const evidence = {
+      type: "gate",
+      id: `${prepared.sessionId}:reviewer:0:verdict_consistent`,
+      phaseId: `${prepared.sessionId}:reviewer`,
+      round: 0,
+      gateId: "verdict_consistent",
+      kind: "pure",
+      candidateSha: null,
+      passed: false,
+      exitCode: null,
+      checks: [{ item: "findings state a concrete consequence", ok: false, note: "missing consequence: advisory-1" }],
+      violations: ["findings state a concrete consequence: missing consequence: advisory-1"],
+      outputPath: null,
+      startedAt: at,
+      endedAt: at,
+    } satisfies AttemptEvidence;
+    const reviewing = await persistAttempt(world.created.attemptDir, prepared.revision, {
+      kind: "attempt.updated",
+      evidence,
+      next: nextRevision(prepared, {
+        lifecycleState: "REVIEWING",
+        phase: { name: "reviewer", state: "VALIDATING", round: 0, maximumRounds: 1 },
+        process: null,
+        blocker: null,
+        budget: { ...prepared.budget, callsSpent: 2, callsReserved: 0 },
+        lastActivityAt: at,
+        lastActivity: "reviewer process exited before phase settlement",
+        nextAction: "wait for the mandatory review",
+      }),
+    });
+    await persistAttempt(world.created.attemptDir, reviewing.revision, {
+      kind: "attempt.updated",
+      evidence: {
+        type: "process",
+        phaseId: `${prepared.sessionId}:reviewer`,
+        adapterId: "claude",
+        role: "reviewer",
+        record: {
+          identity: { pid: 4242, pgid: 4242, startIdentity: "fixture:4242", startIdentitySource: "fixture" },
+          runId: `${prepared.sessionId}:reviewer:run`,
+          edge: "L11",
+          reservationId: "fixture-review-reservation",
+          command: ["/usr/bin/node", "-e", ""],
+          cwd: prepared.worktree!,
+        },
+        status: "EXITED",
+        registeredAt: at,
+        releasedAt: at,
+        endedAt: at,
+        exitCode: 0,
+        exitSignal: null,
+      },
+      next: nextRevision(reviewing, {}),
+    });
+
+    let routeResolved = false;
+    const recovered = await runProductionCommand({
+      attemptDir: world.created.attemptDir,
+      stateRoot: world.stateRoot,
+      config: world.config,
+      configPath: world.configPath,
+      infrastructure: { adapterFor: () => { routeResolved = true; return null; } },
+    });
+    assert.equal(routeResolved, false, "recovery spends no provider call and resolves no route");
+    assert.equal(recovered.lifecycleState, "BLOCKED");
+    assert.equal(recovered.blocker?.code, "review-malformed");
+    assert.match(recovered.blocker?.detail ?? "", /missing consequence: advisory-1/);
+    assert.match(recovered.nextAction, /awsf retry/);
   } finally {
     world.projection.close();
     rmSync(world.root, { recursive: true, force: true });

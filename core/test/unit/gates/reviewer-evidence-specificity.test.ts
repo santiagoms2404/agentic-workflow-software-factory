@@ -4,6 +4,7 @@ import { test } from "node:test";
 import type { ReviewContext } from "../../../src/contracts/review-context.ts";
 import type { ReviewFinding, ReviewOutput } from "../../../src/contracts/review-output.ts";
 import {
+  reviewEnvelopeComplete,
   reviewFindingSpecificity,
   verdictConsistent,
 } from "../../../src/gates/review.ts";
@@ -53,6 +54,10 @@ function failedItems(review: ReviewOutput, candidate: ReviewContext = context())
   return report(review, candidate).checks.filter((check) => !check.ok).map((check) => check.item);
 }
 
+function incompleteItems(review: ReviewOutput): readonly string[] {
+  return reviewEnvelopeComplete(review).checks.filter((check) => !check.ok).map((check) => check.item);
+}
+
 test("a detailed concern earns all four specificity points and passes", () => {
   const review = output();
   const score = reviewFindingSpecificity(review.findings[0]!, new Set([PATH]));
@@ -64,6 +69,7 @@ test("a detailed concern earns all four specificity points and passes", () => {
     score: 4,
   });
   assert.equal(report(review).passed, true);
+  assert.equal(reviewEnvelopeComplete(review).passed, true);
 });
 
 test("one-word evidence is vague even when the rest of the finding sounds decisive", () => {
@@ -71,7 +77,8 @@ test("one-word evidence is vague even when the rest of the finding sounds decisi
   const score = reviewFindingSpecificity(review.findings[0]!, new Set([PATH]));
   assert.equal(score.observedMechanismOrCondition, false);
   assert.equal(score.score, 3);
-  assert.deepEqual(failedItems(review), ["findings state an observed mechanism or condition"]);
+  assert.equal(report(review).passed, true, "finding completeness is not verdict content");
+  assert.deepEqual(incompleteItems(review), ["findings state an observed mechanism or condition"]);
 });
 
 test("a finding without a concrete consequence cannot borrow specificity from detailed evidence", () => {
@@ -79,7 +86,8 @@ test("a finding without a concrete consequence cannot borrow specificity from de
     title: "Parser branch condition",
     detail: "The branch is present in this function.",
   })] });
-  assert.deepEqual(failedItems(review), ["findings state a concrete consequence"]);
+  assert.equal(report(review).passed, true, "the verdict remains internally consistent");
+  assert.deepEqual(incompleteItems(review), ["findings state a concrete consequence"]);
 });
 
 test("accept and concern keep their existing meaning while specificity remains mandatory", () => {
@@ -88,6 +96,7 @@ test("accept and concern keep their existing meaning while specificity remains m
     findings: [finding({ severity: "medium" })],
   });
   assert.equal(report(acceptWithNonBlockingFinding).passed, true);
+  assert.equal(reviewEnvelopeComplete(acceptWithNonBlockingFinding).passed, true);
   assert.equal(report(output({ verdict: "concern" })).passed, true);
 });
 

@@ -622,18 +622,18 @@ test("a review that names the superseded revision never reaches the owner, so th
   try {
     const result = await rework(fixture, script);
     const status = result.status;
-    assert.equal(status.lifecycleState, "REVIEWING", "an inconsistent verdict is content; the host invents no terminal state for it");
+    assert.equal(status.lifecycleState, "BLOCKED", "the exited inconsistent review is classified without interpreting it");
     assert.equal(status.blocker?.code, "review-inconsistent");
     assert.equal(status.requiredReviewPresent, false, "and the landing guard is never handed a review of another tree");
     assert.notEqual(status.candidateSha, fixture.candidateA, "the reworked candidate is retained");
     assert.equal(status.budget.callsSpent, 4);
     assert.equal(status.budget.callsReserved, 0);
-    assert.match(status.nextAction, /awsf cancel /);
+    assert.match(status.nextAction, /awsf retry /);
     const db = openDatabase(join(fixture.stateRoot, "awsf.db"), { readonly: true });
     try {
       const rows = gatesForSession(db, status.sessionId).filter((gate) => gate.phase_id.endsWith(":reviewer-rw1"));
       assert.ok(rows.some((gate) => gate.gate_id === "verdict_consistent" && gate.passed === 0), "the failed gate is on record");
-      assert.equal(transitionsForSession(db, status.sessionId).slice(-1)[0]?.edge_id, "L11");
+      assert.equal(transitionsForSession(db, status.sessionId).slice(-1)[0]?.edge_id, "L17");
     } finally { db.close(); }
   } finally { await cleanup(fixture); }
 });

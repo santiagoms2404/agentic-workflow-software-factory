@@ -28,6 +28,12 @@ const OBSERVATION_WORD = /\b(?:adds?|after|before|calls?|contains?|declares?|del
 const CONSEQUENCE_WORD = /\b(?:accepts?|allows?|blocks?|bypasses?|cannot|causes?|corrupts?|crashes?|drops?|duplicates?|exposes?|fails?|leaks?|loses?|omits?|overwrites?|prevents?|rejects?|results?|returns?|stale|throws?|unable|unreachable|widens?|will|would|wrong)\b/i;
 const CODE_SHAPE = /[`'"()[\]{}=<>:/]|\.|->/;
 
+export const REVIEW_FINDING_COMPLETENESS_ITEMS = Object.freeze({
+  scope: "findings name a line or explicit file-wide scope",
+  mechanism: "findings state an observed mechanism or condition",
+  consequence: "findings state a concrete consequence",
+} as const);
+
 function terms(value: string): readonly string[] {
   return value.match(/[\p{L}\p{N}_]+/gu) ?? [];
 }
@@ -81,6 +87,46 @@ function hasRequiredEvidenceLimitation(output: ReviewOutput, context: ReviewCont
   return { required, ok: relevant.length > 0 && named, paths };
 }
 
+/**
+ * Completeness checks a reviewer can repair without changing its verdict.
+ *
+ * These checks deliberately report under `envelope_valid`, not
+ * `verdict_consistent`. Missing scope, mechanism, or consequence is a malformed
+ * finding record. The verdict may still be substantively consistent, and
+ * treating record completeness as verdict content used to strand a green
+ * candidate in REVIEWING with no legal lifecycle exit.
+ */
+export function reviewEnvelopeComplete(output: ReviewOutput): GateReport {
+  const report = new GateReport("envelope_valid");
+  const declaredPaths = new Set(output.findings.map((finding) => finding.file));
+  const specificity = output.findings.map((finding) => ({
+    id: finding.id,
+    result: reviewFindingSpecificity(finding, declaredPaths),
+  }));
+  const failing = (point: keyof Omit<ReviewFindingSpecificity, "score">): readonly string[] =>
+    specificity.filter((finding) => !finding.result[point]).map((finding) => finding.id);
+
+  const badScope = failing("lineOrFileWideScope");
+  report.check(
+    REVIEW_FINDING_COMPLETENESS_ITEMS.scope,
+    badScope.length === 0,
+    badScope.length === 0 ? `${output.findings.length} finding scope(s) verified` : `missing scope: ${badScope.join(", ")}`,
+  );
+  const badMechanism = failing("observedMechanismOrCondition");
+  report.check(
+    REVIEW_FINDING_COMPLETENESS_ITEMS.mechanism,
+    badMechanism.length === 0,
+    badMechanism.length === 0 ? `${output.findings.length} finding mechanism(s) verified` : `vague evidence: ${badMechanism.join(", ")}`,
+  );
+  const badConsequence = failing("concreteConsequence");
+  report.check(
+    REVIEW_FINDING_COMPLETENESS_ITEMS.consequence,
+    badConsequence.length === 0,
+    badConsequence.length === 0 ? `${output.findings.length} finding consequence(s) verified` : `missing consequence: ${badConsequence.join(", ")}`,
+  );
+  return report;
+}
+
 export function verdictConsistent(output: ReviewOutput, context: ReviewGateContext): GateReport {
   const report = new GateReport("verdict_consistent");
   const blocking = output.findings.filter((finding) =>
@@ -89,12 +135,6 @@ export function verdictConsistent(output: ReviewOutput, context: ReviewGateConte
   const concreteFindings = output.findings.filter(concrete);
   const candidatePaths = new Set(context.candidatePaths);
   const outside = output.findings.filter((finding) => !candidatePaths.has(finding.file));
-  const specificity = output.findings.map((finding) => ({
-    id: finding.id,
-    result: reviewFindingSpecificity(finding, candidatePaths),
-  }));
-  const failing = (point: keyof Omit<ReviewFindingSpecificity, "score">): readonly string[] =>
-    specificity.filter((finding) => !finding.result[point]).map((finding) => finding.id);
   const evidenceLimitation = context.reviewContext === null
     ? null
     : hasRequiredEvidenceLimitation(output, context.reviewContext);
@@ -114,24 +154,6 @@ export function verdictConsistent(output: ReviewOutput, context: ReviewGateConte
     "finding paths inside candidate context",
     outside.length === 0,
     outside.length === 0 ? `${output.findings.length} finding path(s) verified` : `outside candidate: ${outside.map((finding) => finding.file).join(", ")}`,
-  );
-  const badScope = failing("lineOrFileWideScope");
-  report.check(
-    "findings name a line or explicit file-wide scope",
-    badScope.length === 0,
-    badScope.length === 0 ? `${output.findings.length} finding scope(s) verified` : `missing scope: ${badScope.join(", ")}`,
-  );
-  const badMechanism = failing("observedMechanismOrCondition");
-  report.check(
-    "findings state an observed mechanism or condition",
-    badMechanism.length === 0,
-    badMechanism.length === 0 ? `${output.findings.length} finding mechanism(s) verified` : `vague evidence: ${badMechanism.join(", ")}`,
-  );
-  const badConsequence = failing("concreteConsequence");
-  report.check(
-    "findings state a concrete consequence",
-    badConsequence.length === 0,
-    badConsequence.length === 0 ? `${output.findings.length} finding consequence(s) verified` : `missing consequence: ${badConsequence.join(", ")}`,
   );
   report.check(
     "candidate context available for specificity",

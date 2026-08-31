@@ -322,12 +322,20 @@ export const EDGE_BLOCKER_CODES = {
   L8: ["crash", "silence", "quota-exhausted", "phase-abort", "permission-breach", "budget-exhausted"],
   // L13 — "gates failed, correction budget exhausted".
   L13: ["correction-budget-exhausted"],
-  // L17 — the three review failures the host may declare terminal without
-  // interpreting a verdict: "mandatory review unavailable after one transport
-  // retry", an envelope that failed schema validation, and a
-  // `review_evidence_present` row that failed. A `verdict_consistent` failure
-  // is deliberately not among them.
-  L17: ["review-unavailable", "review-malformed", "review-evidence-invalid"],
+  // L17 — every host-classified failure after the review process exits. An
+  // inconsistent verdict is recorded as a failed deterministic gate, never
+  // reinterpreted. Transport unavailability still requires its fixed-route retry.
+  L17: [
+    "review-unavailable",
+    "review-malformed",
+    "review-evidence-invalid",
+    "review-inconsistent",
+    "quota-exhausted",
+    "silence",
+    "phase-abort",
+    "permission-breach",
+    "budget-exhausted",
+  ],
   // L21 — the plan names these four and only these four.
   L21: ["record-corrupt", "unknown-state", "ambiguous-pid", "unreadable-worktree"],
   // L24 — "non-FF, dirty canonical tree, Git failure, ambiguous crash recovery".

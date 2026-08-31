@@ -209,6 +209,14 @@ export interface LandingEvidence {
   fastForwardPreflightPasses: boolean;
 }
 
+/** Host-observed proof that a shipped T0 analysis intentionally produced no tree. */
+export interface ReadOnlyResultEvidence {
+  /** The two shipped analysis envelopes that intentionally produce no candidate tree. */
+  schema: "awsf.scout-output/v1" | "awsf.plan-output/v1";
+  /** Host observation across the managed worktree, never an agent claim. */
+  writesObserved: boolean;
+}
+
 /** Everything the Guard column can ask for. Every field is somebody else's finding, never this layer's. */
 export interface TransitionEvidence {
   worktreeCreated?: boolean;
@@ -218,6 +226,8 @@ export interface TransitionEvidence {
   workflowCompiled?: boolean;
   requiredPhasesTerminalSuccess?: boolean;
   hostCommitCreated?: boolean;
+  /** Present only for a successful T0 scout/plan result that intentionally creates no candidate. */
+  readOnlyResult?: ReadOnlyResultEvidence;
   candidateSha?: string;
   treeTerminated?: boolean;
   survivorsReported?: boolean;

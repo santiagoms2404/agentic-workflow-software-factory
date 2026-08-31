@@ -2,9 +2,10 @@
 //
 // The task matrix (T4's five suites) is the contract for the ten task states.
 // This is the contract for what happens INSIDE a phase, and its load-bearing
-// rule is the one the plan states in capitals: CORRECTING → RUNNING must
-// resume the SAME adapter, provider, model and provider session. "No cold
-// restart disguised as a correction."
+// rule is explicit about price: a call-neutral CORRECTING → RUNNING resumes
+// the SAME adapter, provider, model and provider session. A host-declared cold
+// correction may change only the session id; the broker separately proves it
+// has an ordinary paid reservation.
 //
 // The edges are transcribed from the plan's phase-submachine diagram, not read
 // back out of `phase-machine.ts`.
@@ -212,6 +213,30 @@ test("a correction that changes ANY of adapter, provider, model or session id is
     assert.equal(broken.name, "SessionIdentityBroken", `a changed ${field} must not pass as a correction`);
     assert.equal(broken.differences.length, 1);
     assert.match(broken.differences[0] ?? "", new RegExp(`^${field} `));
+  }
+});
+
+test("a paid cold correction may mint a session id but may not change its route", () => {
+  const cold = { ...SESSION, sessionId: "01J8Z5Q7WQ2222222222222222" };
+  const result = phaseTransition(input({
+    from: "CORRECTING",
+    to: "RUNNING",
+    resumeSession: cold,
+    correctionTransport: "cold",
+  }));
+  assert.deepEqual(result.session, cold);
+
+  for (const resumeSession of [
+    { ...cold, adapter: "codex" },
+    { ...cold, provider: "openai" },
+    { ...cold, model: "gpt" },
+  ]) {
+    identityBreak(() => phaseTransition(input({
+      from: "CORRECTING",
+      to: "RUNNING",
+      resumeSession,
+      correctionTransport: "cold",
+    })));
   }
 });
 

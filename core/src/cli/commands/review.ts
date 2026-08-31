@@ -375,22 +375,19 @@ function validateAttempt(status: AttemptStatus, config: AwsfConfig): WorkflowRec
 }
 
 /**
- * Every non-transport review failure gets a name, and the two that L17 admits
- * get an edge.
+ * Every exited review failure gets a name and an L17 settlement.
  *
  * `ReviewCandidateMoved` is this command's own — the shared module knows
  * nothing about the three revalidations — so it is answered here and everything
  * else is deferred to the one classifier both commands read.
  */
-function classify(error: unknown): { code: string; detail: string; edge: "L17" | null } {
+function classify(error: unknown): { code: string; detail: string; edge: "L17" } {
   const failure = safeFailure(error);
   const detail = `${failure.name}: ${failure.message}`;
   if (failure instanceof ReviewCandidateMoved) {
-    return failure.afterReview
-      ? { code: "review-evidence-invalid", detail, edge: "L17" }
-      : { code: "candidate-moved", detail, edge: null };
+    return { code: "review-evidence-invalid", detail, edge: "L17" };
   }
-  return reviewFailureBlocker(failure, detail) ?? { code: "phase-abort", detail, edge: null };
+  return reviewFailureBlocker(failure, detail) ?? { code: "phase-abort", detail, edge: "L17" };
 }
 
 // ---------------------------------------------------------------------------
@@ -409,6 +406,7 @@ async function runReviewCommand(options: ReviewCommandOptions): Promise<ReviewCo
   // owner re-entry charged for a launch that never happened is confiscation.
   if (status.lifecycleState === "REVIEWING" && status.budget.callsReserved > 0) {
     status = await reconcileStaleReservation(options, status, infra);
+    if (status.lifecycleState === "BLOCKED") return { status, confirmed: true };
   }
 
   // Steps 1–9 of the ordered rejection contract outrank every measurement: a
@@ -729,19 +727,6 @@ async function runReviewCommand(options: ReviewCommandOptions): Promise<ReviewCo
         ? new Error(`${failure.message}; surviving processes [${survivorReport.survivors.join(", ")}]`)
         : failure;
     const reason2 = classify(terminationFailure);
-    if (reason2.edge === null) {
-      // Named rather than rethrown. REVIEWING has no host exit for a policy
-      // breach or an inconsistent verdict — inventing one would mean the host
-      // deciding what a bad review means — so the classification is recorded
-      // and the owner's own exits are stated.
-      await recoverPersist("attempt.updated", {
-        budget: budget.snapshot(), process: null,
-        blocker: { code: reason2.code, detail: reason2.detail, ahead: null, behind: null },
-        lastActivityAt: recoveryAt, lastActivity: reason2.detail,
-        nextAction: `run \`awsf cancel ${status.taskId}\`; REVIEWING has no host exit for ${reason2.code}`,
-      });
-      return { status, confirmed: true };
-    }
     const l17 = transition({
       from: "REVIEWING", to: "BLOCKED", actor: "host", tier: status.tier,
       reason: { source: "process", code: reason2.code, detail: reason2.detail },
@@ -774,8 +759,8 @@ async function runReviewCommand(options: ReviewCommandOptions): Promise<ReviewCo
  * spend was never persisted, and a spend is persisted before the child's first
  * instruction — so the reservation is released and, when no process for the
  * replacement phase ever reached RUNNING, the owner re-entry it charged is
- * rewound. The attempt is left rerunnable rather than blocked; the rerun then
- * refuses, because REVIEWING is not where L25 starts.
+ * rewound. Since L25 cannot be entered again from REVIEWING, recovery settles
+ * the exited launch to a named L17 blocker instead of leaving a dead sojourn.
  */
 async function reconcileStaleReservation(
   options: ReviewCommandOptions,
@@ -797,11 +782,44 @@ async function reconcileStaleReservation(
     callsReserved: 0,
     ownerReentries: rewind ? status.budget.ownerReentries - 1 : status.budget.ownerReentries,
   };
+  const detail = `recovered a stale L25 reservation; ${rewind ? "no provider launched, so the owner re-entry was rewound" : "a provider had already launched, so the charge stands"}`;
+  const code = "phase-abort";
+  const decision = transition({
+    from: "REVIEWING",
+    to: "BLOCKED",
+    actor: "host",
+    tier: status.tier,
+    reason: { source: "process", code, detail },
+    interactive: false,
+    budget,
+    evidence: { reviewTransportRetries: 0, reviewFailure: code },
+  });
+  const seq = evidence.reduce((maximum, record) =>
+    record.type === "transition" ? Math.max(maximum, record.seq) : maximum, 0) + 1;
   return persistAttempt(options.attemptDir, status.revision, {
-    kind: "attempt.updated",
+    kind: "attempt.transitioned",
+    evidence: {
+      type: "transition",
+      id: `${status.sessionId}:L17:${String(seq)}`,
+      seq,
+      from: "REVIEWING",
+      to: "BLOCKED",
+      actor: "host",
+      edgeId: decision.edge,
+      reasonSource: "process",
+      reasonCode: code,
+      reasonDetail: detail,
+      spawnSite: false,
+      at,
+    },
     next: nextRevision(status, {
-      budget, process: null, lastActivityAt: at,
-      lastActivity: `recovered a stale L25 reservation; ${rewind ? "no provider launched, so the owner re-entry was rewound" : "a provider had already launched, so the charge stands"}`,
+      lifecycleState: "BLOCKED",
+      budget,
+      process: null,
+      blocker: { code, detail, ahead: null, behind: null },
+      lastActivityAt: at,
+      lastActivity: detail,
+      nextAction: nextActionFor("BLOCKED", status.taskId),
     }),
   }, options.projectRecord);
 }

@@ -70,7 +70,7 @@ import { artifactsExist, jsonParses, type ArtifactObservation } from "../../gate
 import { envelopeValid } from "../../gates/envelope.ts";
 import { noProtectedPaths, writesWithinGlobs } from "../../gates/git-diff.ts";
 import { GateReport, type GateId } from "../../gates/interface.ts";
-import { reviewEvidencePresent, verdictConsistent } from "../../gates/review.ts";
+import { reviewEnvelopeComplete, reviewEvidencePresent, verdictConsistent } from "../../gates/review.ts";
 import { captureChangeSet, changedPaths } from "../../git/changes.ts";
 import type { AttemptEvidence, PhaseEvidenceRecord } from "../../observability/attempt-evidence.ts";
 import { PermissionBreach } from "../../policy/path-policy.ts";
@@ -163,11 +163,7 @@ export class ReplacementReviewEvidenceInvalid extends Error {
   }
 }
 
-/**
- * The one residual, named rather than fixed. An inconsistent verdict is
- * CONTENT, so the host does not decide what it means and invents no terminal
- * state for it: the attempt stays in REVIEWING with the failed gate recorded.
- */
+/** The host records the failed consistency gate without reinterpreting its content. */
 export class ReplacementReviewInconsistent extends Error {
   constructor(detail: string) {
     super(`the review answered inconsistently: ${detail}`);
@@ -177,41 +173,39 @@ export class ReplacementReviewInconsistent extends Error {
 
 /**
  * Every review failure the host can classify without interpreting a verdict,
- * and which of them L17 admits as an exit from REVIEWING.
+ * and which host-observed code L17 records after the process exits.
  *
- * `null` means this module does not recognise the failure; the caller then
- * applies its own vocabulary. A permission breach is deliberately NOT
- * `review-evidence-invalid`: a breach is a policy failure, not a statement
- * about the evidence, and mapping it onto a review vocabulary would let the
- * host declare a policy violation terminal under a word that does not mean
- * that.
+ * `null` means this module does not recognise the failure, so the caller uses
+ * `phase-abort`. Policy failures keep their own names rather than being folded
+ * into review-evidence-invalid.
  */
 export function reviewFailureBlocker(
   failure: Error,
   detail: string,
-): { readonly code: string; readonly detail: string; readonly edge: "L17" | null } | null {
+): { readonly code: string; readonly detail: string; readonly edge: "L17" } | null {
   if (failure instanceof MandatoryReviewUnavailable) return { code: "review-unavailable", detail, edge: "L17" };
   if (failure instanceof ReplacementReviewMalformed) return { code: "review-malformed", detail, edge: "L17" };
   if (failure instanceof ReplacementReviewEvidenceInvalid) return { code: "review-evidence-invalid", detail, edge: "L17" };
   if (failure instanceof ReviewEvidenceUnfit) return { code: "review-evidence-invalid", detail, edge: "L17" };
-  if (failure instanceof PermissionBreach) return { code: "permission-breach", detail, edge: null };
-  if (failure instanceof ReplacementReviewInconsistent) return { code: "review-inconsistent", detail, edge: null };
-  if (failure instanceof AdapterError && failure.code === "E_QUOTA_EXHAUSTED") return { code: "quota-exhausted", detail, edge: null };
+  if (failure instanceof PermissionBreach) return { code: "permission-breach", detail, edge: "L17" };
+  if (failure instanceof ReplacementReviewInconsistent) return { code: "review-inconsistent", detail, edge: "L17" };
+  if (failure instanceof AdapterError && failure.code === "E_QUOTA_EXHAUSTED") return { code: "quota-exhausted", detail, edge: "L17" };
   return null;
 }
 
 /**
  * The correction handed to a COLD reviewer's second turn.
  *
- * It carries the schema violations and nothing else. It does not carry the
- * owner's reason, the owner's defect, the superseded verdict, or any hint about
- * what this reviewer should conclude — the same rule that keeps those out of
- * the first prompt applies with equal force here, because a reviewer told what
- * to find is not a reviewer. Naming the paths that failed is a correction about
- * FORM, and the instruction to leave the substance alone is what stops a retry
- * becoming a second opinion the owner never bought.
+ * It carries the rejected response and schema violations, but never the owner's
+ * reason, defect, superseded verdict, or a hint about what this reviewer should
+ * conclude. The prior response lets a cold session preserve every finding while
+ * the listed paths keep the correction about form rather than verdict content.
  */
-export function contractRetryPrompt(prompt: string, violations: readonly string[]): string {
+export function contractRetryPrompt(
+  prompt: string,
+  previousResponse: string,
+  violations: readonly string[],
+): string {
   const listed = violations.length === 0
     ? "  - no envelope was extracted from the response"
     : violations.map((violation) => `  - ${violation}`).join("\n");
@@ -219,7 +213,10 @@ export function contractRetryPrompt(prompt: string, violations: readonly string[
     prompt,
     "",
     CONTRACT_RETRY_HEADING,
-    `Your previous response did not validate against ${REVIEW_OUTPUT_SCHEMA_ID} and was discarded unread.`,
+    `Your previous response did not validate against ${REVIEW_OUTPUT_SCHEMA_ID}. The host did not reinterpret it.`,
+    "Previous response whose substance must be preserved:",
+    previousResponse,
+    "Host-observed contract violations:",
     listed,
     "Return the SAME review, unchanged in substance — same verdict, same findings, same limitations —",
     "as a single JSON envelope that validates. The schema permits no property beyond those it names.",
@@ -738,6 +735,7 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
     const phaseDb = `${subject.sessionId}:${phaseKey}`;
     const createdAt = infra.now();
     let contractViolations: readonly string[] = [];
+    let contractPreviousResponse = "";
 
     let contextPhase: PhaseEvidenceRecord = {
       phaseId: `${subject.sessionId}:${contextKey}`, ordinal: runOptions.ordinal, key: contextKey, name: contextKey,
@@ -967,8 +965,14 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
 
       const reader = artifactReader(subject.worktree);
       const mutations = changedPaths(permission.before, captureChangeSet(subject.worktree));
+      const envelopeReport = envelopeValid(parsed);
+      if (payload !== null) {
+        for (const check of reviewEnvelopeComplete(payload).checks) {
+          envelopeReport.check(check.item, check.ok, check.note);
+        }
+      }
       const structural = [
-        envelopeValid(parsed),
+        envelopeReport,
         ...(payload === null ? [] : [artifactsExist(payload.artifacts, reader), jsonParses(payload.artifacts, reader)]),
         noProtectedPaths(mutations, config.policy.protected_paths),
         // A reviewer that edits is not a reviewer: `writes: []` makes any
@@ -994,12 +998,24 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
       // A real policy breach outranks every gate reading of it.
       permission.enforce();
       if (!parsed.valid) {
-        // Retained for the retry's contract correction, which names the paths
-        // that failed and nothing about what the review should say.
+        // Retained for the cold correction so it can preserve all review
+        // substance while repairing only the host-listed contract paths.
+        contractPreviousResponse = output;
         contractViolations = parsed.violations.map((violation) => `${violation.path || "(root)"}: ${violation.message}`);
         throw new ReplacementReviewMalformed(contractViolations.join("; ") || "no envelope was extracted");
       }
-      if (payload === null) throw new ReplacementReviewMalformed("the envelope validated but carried no payload");
+      if (payload === null) {
+        contractPreviousResponse = output;
+        contractViolations = ["(root): the envelope validated but carried no payload"];
+        throw new ReplacementReviewMalformed(contractViolations[0]!);
+      }
+      if (!envelopeReport.passed) {
+        contractPreviousResponse = JSON.stringify(payload);
+        contractViolations = envelopeReport.checks
+          .filter((check) => !check.ok)
+          .map((check) => `${check.item}: ${check.note}`);
+        throw new ReplacementReviewMalformed(contractViolations.join("; "));
+      }
       const failedEvidence = structural.find((report) => report.gateId === "review_evidence_present" && !report.passed);
       if (failedEvidence !== undefined) {
         throw new ReplacementReviewEvidenceInvalid(failedEvidence.checks.filter((check) => !check.ok).map((check) => check.item).join("; "));
@@ -1050,7 +1066,7 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
         // original prompt; a contract retry appends the violations it must fix.
         const turnPrompt = attempt === 1 || contractViolations.length === 0
           ? renderedPrompt
-          : contractRetryPrompt(renderedPrompt, contractViolations);
+          : contractRetryPrompt(renderedPrompt, contractPreviousResponse, contractViolations);
         const turnPreflight = turnPrompt === renderedPrompt ? preflight : preflightFor(turnPrompt);
         return runTurn(held, attempt, turnPrompt, turnPreflight);
       },

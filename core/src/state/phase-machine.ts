@@ -6,10 +6,10 @@
 //
 // Two rules carry the weight:
 //
-//   * CORRECTING → RUNNING must resume the SAME adapter, provider, model and
-//     provider session. A cold restart wearing a correction's name loses every
-//     turn of context the correction exists to build on, and bills for it
-//     twice.
+//   * A call-neutral CORRECTING → RUNNING resumes the SAME adapter, provider,
+//     model and provider session. A separately reserved cold correction may
+//     change only the session id; its adapter/provider/model route stays exact.
+//     The process broker proves the cold launch has a paid reservation.
 //   * Success must be EARNED. A phase is constructed FAILED-equivalent — it
 //     starts QUEUED and any abnormal exit records a failure. Only a clean exit
 //     through VALIDATING flips it to SUCCEEDED.
@@ -83,6 +83,8 @@ export interface PhaseCorrections {
   owner: number;
 }
 
+export type PhaseCorrectionTransport = "same-session" | "cold";
+
 export interface PhaseTransitionInput {
   /** The phase id, for the message a human reads in the trace. */
   phase: string;
@@ -90,8 +92,10 @@ export interface PhaseTransitionInput {
   to: PhaseState;
   /** The session the phase is bound to now. */
   session: PhaseSession;
-  /** CORRECTING → RUNNING only: the session the resume would actually run in. */
+  /** CORRECTING → RUNNING only: the session the next turn would actually run in. */
   resumeSession?: PhaseSession;
+  /** Cold means the host reserved a separate provider call; omitted means call-neutral resume. */
+  correctionTransport?: PhaseCorrectionTransport;
   /** VALIDATING → CORRECTING, and every → FAILED: what went wrong. */
   cause?: PhaseCause;
   /** Who authorizes a correction. `host` draws `auto`, `owner`/`human` draw `owner`. */
@@ -142,8 +146,14 @@ export function settleAbnormalExit(state: PhaseState): PhaseState {
   return isPhaseTerminal(state) ? state : "FAILED";
 }
 
-function sessionDifferences(current: PhaseSession, resumed: PhaseSession): string[] {
-  const fields = ["adapter", "provider", "model", "sessionId"] as const;
+function sessionDifferences(
+  current: PhaseSession,
+  resumed: PhaseSession,
+  transport: PhaseCorrectionTransport,
+): string[] {
+  const fields = transport === "cold"
+    ? (["adapter", "provider", "model"] as const)
+    : (["adapter", "provider", "model", "sessionId"] as const);
   return fields
     .filter((field) => current[field] !== resumed[field])
     .map((field) => `${field} ${JSON.stringify(current[field])} became ${JSON.stringify(resumed[field])}`);
@@ -185,12 +195,13 @@ export function phaseTransition(input: PhaseTransitionInput): PhaseTransitionRes
     }
   }
 
-  // The one identity check. It runs on the resume, not on the correction, so a
-  // provider that dropped the session between the two is caught here rather
-  // than discovered as a suspiciously context-free reply.
+  // The identity check runs on the next turn, not on CORRECTING. A call-neutral
+  // resume must preserve all four identity fields. A cold paid correction may
+  // mint a session id, while changing its configured route remains terminal.
+  const transport = input.correctionTransport ?? "same-session";
+  const resumed = input.resumeSession ?? session;
   if (from === "CORRECTING" && to === "RUNNING") {
-    const resumed = input.resumeSession ?? session;
-    const differences = sessionDifferences(session, resumed);
+    const differences = sessionDifferences(session, resumed, transport);
     if (differences.length > 0) {
       throw new SessionIdentityBroken(phase, differences);
     }
@@ -201,7 +212,7 @@ export function phaseTransition(input: PhaseTransitionInput): PhaseTransitionRes
     from,
     to,
     terminal: isPhaseTerminal(to),
-    session,
+    session: from === "CORRECTING" && to === "RUNNING" && transport === "cold" ? resumed : session,
     correctionTranche,
   };
 }

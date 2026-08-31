@@ -160,6 +160,41 @@ test("gate correction stays in-session, is call-neutral, bounds evidence, and ac
   assert.equal(result.candidateSha, "candidate-sha");
 });
 
+test("a paid cold correction may change only session identity and carries flat gate violations", async () => {
+  let gateRuns = 0;
+  const gate = {
+    id: "envelope_valid",
+    run: () => new GateReport("envelope_valid").check(
+      "findings state a concrete consequence",
+      gateRuns++ > 0,
+      "missing consequence: F1",
+    ),
+  };
+  const coldIdentity = { ...identity, sessionId: "provider-s2" };
+  const session = new ScriptedSession([
+    turn(JSON.stringify(payload("first"))),
+    turn(JSON.stringify(payload("same substance, complete envelope")), 4, 3, coldIdentity),
+  ]);
+  const observed: string[] = [];
+  const result = await runAgentPhase(options(session, compiled([gate]), { persist: () => undefined }, {
+    authorizeCorrection: () => ({ actor: "host", transport: "cold" }),
+    onGateReport: (report, round) => {
+      observed.push(`${String(round)}:${report.passed ? "pass" : "fail"}`);
+    },
+  }));
+
+  assert.equal(result.state, "SUCCEEDED");
+  assert.equal(result.correctionRounds, 1);
+  assert.deepEqual(observed, ["0:fail", "1:pass"]);
+  assert.match(session.prompts[1]!, /fresh, bounded correction call/);
+  assert.match(session.prompts[1]!, /Build it\./, "a cold session receives the original request");
+  assert.match(session.prompts[1]!, /Previous response whose substance must be preserved:/);
+  assert.match(session.prompts[1]!, /"summary": "first"/, "the fresh session receives the prior response's substance");
+  assert.match(session.prompts[1]!, /"changedFiles": \[/);
+  assert.match(session.prompts[1]!, /"violations": \[/);
+  assert.match(session.prompts[1]!, /findings state a concrete consequence: missing consequence: F1/);
+});
+
 test("at most two in-session parse fixes are attempted and every invalid envelope is retained", async () => {
   const session = new ScriptedSession([turn("not json"), turn("[]"), turn('{"schema":"wrong"}')]);
   const stored: { valid: boolean; violations: unknown[] }[] = [];

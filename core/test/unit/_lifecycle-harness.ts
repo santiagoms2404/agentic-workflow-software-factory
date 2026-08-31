@@ -102,6 +102,10 @@ export interface TransitionEvidence {
   // L7
   requiredPhasesTerminalSuccess?: boolean;
   hostCommitCreated?: boolean;
+  readOnlyResult?: {
+    schema: "awsf.scout-output/v1" | "awsf.plan-output/v1";
+    writesObserved: boolean;
+  };
   // L7, L11, L15, L16, L20, L23
   candidateSha?: string;
   // L9
