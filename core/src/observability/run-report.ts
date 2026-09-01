@@ -141,7 +141,7 @@ export function renderRunReport(
   });
 
   const findings = review?.findings.map((finding) =>
-    `${finding.severity.toUpperCase()} ${finding.file}:${finding.line === null ? "file-wide" : String(finding.line)} — ${finding.title}\n  ${finding.detail}`,
+    `${finding.severity.toUpperCase()} ${finding.file}:${finding.line === null ? "file-wide" : String(finding.line)} — ${finding.title}\n  ${finding.detail}\n  Consequence: ${finding.consequence}`,
   ) ?? [];
   const agentCalls = evidence
     .filter((record): record is Extract<AttemptEvidence, { type: "agent" }> => record.type === "agent");

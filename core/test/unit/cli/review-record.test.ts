@@ -32,7 +32,7 @@ function review(reviewedSha: string, verdict: ReviewOutput["verdict"] = "accept"
     schema: "awsf.review-output/v1", producerStatus: "success", summary: "fixture review",
     artifacts: [], notesForNextPhase: "owner decides", verdict, reviewedSha,
     findings: verdict === "concern"
-      ? [{ id: "f1", severity: "high", file: "core/src/generated.ts", line: 1, title: "defect", detail: "detail", evidence: "evidence" }]
+      ? [{ id: "f1", severity: "high", file: "core/src/generated.ts", line: 1, title: "defect", detail: "detail", consequence: "consequence", evidence: "evidence" }]
       : [],
     limitations: [],
   };

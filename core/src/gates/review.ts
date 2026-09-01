@@ -49,14 +49,13 @@ export function reviewFindingSpecificity(
   const observedMechanismOrCondition = evidenceTerms.length >= 2 && (
     CODE_SHAPE.test(finding.evidence) || OBSERVATION_WORD.test(finding.evidence)
   );
-  // Consequences are prose, not a fixed list of failure verbs. Accept the
-  // prompt's explicit marker or ordinary conditional/causal grammar; both
-  // distinguish an outcome from a long mechanism-only observation without
-  // requiring the outcome to use one particular verb.
-  const consequenceText = `${finding.title} ${finding.detail}`;
-  const consequenceRelation = /\b(?:because|can(?:not)?|could|if|unless|when(?:ever)?|where|with(?:out)?|would|will|causes?|leads?|results?|therefore|so)\b/iu;
-  const concreteConsequence = terms(finding.detail).length >= 4 &&
-    (/\bConsequence\s*:/iu.test(finding.detail) || consequenceRelation.test(consequenceText));
+  // The consequence is a contract field, not a sentence the host parses. Two
+  // regexes lived here and both were wrong in both directions: a declarative
+  // outcome ("an owner who mistypes one path loses the attempt") failed, and a
+  // mechanism-only observation passed on the word `with`. Reading the key the
+  // reviewer was told to fill is mechanical, cannot fail on word choice, and
+  // is repairable in one correction round because the model is told which key.
+  const concreteConsequence = finding.consequence.trim().length > 0;
   return Object.freeze({
     candidateFile,
     lineOrFileWideScope,

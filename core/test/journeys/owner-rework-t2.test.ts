@@ -116,6 +116,7 @@ function supersededReview(candidateSha: string): ReviewOutput {
     findings: [{
       id: "f1", severity: "high", file: SOURCE, line: 1, title: "duplicate whitespace in a declaration",
       detail: "the declaration reads `export  const`, which the gates do not catch",
+      consequence: "a reader of the landed source sees a malformed declaration the gates reported clean",
       evidence: "read from the supplied diff",
     }],
     limitations: ["scripted original review"],
@@ -401,6 +402,7 @@ class ScriptedReviewer implements HarnessAdapter {
           id: "f2", severity: "medium", file: SOURCE, line: 1,
           title: "generated flag remains unconditional",
           detail: "Callers would still receive the generated path when the feature is disabled.",
+          consequence: "a caller with the feature disabled receives the generated path anyway",
           evidence: "`generated` remains assigned `true` without a feature-condition branch.",
         }]
       : [];

@@ -381,6 +381,7 @@ class ScriptedReviewAdapter implements HarnessAdapter {
           id: "f1", severity: "high", file: SOURCE, line: 1,
           title: "generated flag bypasses the configured branch",
           detail: "The gates would accept a path that always returns the generated value.",
+          consequence: "any configuration selects the generated value, so the configured branch never runs",
           evidence: "`generated` is assigned `true` before the configured branch is checked.",
         }]
       : [];

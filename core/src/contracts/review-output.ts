@@ -33,6 +33,13 @@ export const ReviewFindingSchema = Type.Object(
     line: Type.Union([Type.Integer({ minimum: 1 }), Type.Null()]),
     title: Type.String({ minLength: 1 }),
     detail: Type.String({ minLength: 1 }),
+    // The completeness gate reads this key, never the prose of `detail`. A
+    // regex over English decided whether a finding was complete, and it both
+    // rejected ordinary declarative outcomes ("the owner loses the attempt")
+    // and admitted mechanism-only prose that happened to contain `with`. The
+    // host is entitled to require a structured fact; it is not entitled to
+    // adjudicate a model's sentence construction as a lifecycle condition.
+    consequence: Type.String({ minLength: 1 }),
     evidence: Type.String({ minLength: 1 }),
   },
   { additionalProperties: false },

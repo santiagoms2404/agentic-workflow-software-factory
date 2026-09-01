@@ -148,7 +148,7 @@ test("every declared path field, in every envelope, obeys the same worktree rule
 
   const review = VALID_ENVELOPES["awsf.review-output/v1"]();
   review.findings = [
-    { id: "F1", severity: "high", file: traversal, line: null, title: "t", detail: "d", evidence: "e" },
+    { id: "F1", severity: "high", file: traversal, line: null, title: "t", detail: "d", consequence: "c", evidence: "e" },
   ];
   assert.equal(Value.Check(ENVELOPE_SCHEMAS["awsf.review-output/v1"], review), false);
 
@@ -284,6 +284,7 @@ test("ReviewFinding.severity is the four-value ordered set, and line may be null
     line: 42,
     title: "t",
     detail: "d",
+    consequence: "c",
     evidence: "e",
   };
 
@@ -292,4 +293,12 @@ test("ReviewFinding.severity is the four-value ordered set, and line may be null
 
   const { line: _line, ...withoutLine } = finding;
   assert.equal(Value.Check(schema, { ...base, findings: [withoutLine] }), false);
+
+  // `consequence` is the completeness gate's only input. If the schema ever
+  // stops requiring it, the gate reads `undefined` and every finding is
+  // complete; if it stops rejecting the empty string, the gate is the only
+  // thing left refusing it.
+  const { consequence: _consequence, ...withoutConsequence } = finding;
+  assert.equal(Value.Check(schema, { ...base, findings: [withoutConsequence] }), false);
+  assert.equal(Value.Check(schema, { ...base, findings: [{ ...finding, consequence: "" }] }), false);
 });

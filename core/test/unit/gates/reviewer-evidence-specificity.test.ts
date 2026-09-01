@@ -22,6 +22,7 @@ function finding(patch: Partial<ReviewFinding> = {}): ReviewFinding {
     line: 42,
     title: "Outermost-object scan accepts a trailing brace",
     detail: "A trailing prose brace would widen the JSON slice and fail strict parsing.",
+    consequence: "a final message ending in prose braces widens the slice and fails strict parsing",
     evidence: "`scanObject` calls `lastIndexOf('}')` after locating the first opening brace.",
     ...patch,
   };
@@ -85,17 +86,65 @@ test("a finding without a concrete consequence cannot borrow specificity from de
   const review = output({ findings: [finding({
     title: "Parser branch condition",
     detail: "The branch is present in this function.",
+    consequence: "   ",
   })] });
   assert.equal(report(review).passed, true, "the verdict remains internally consistent");
   assert.deepEqual(incompleteItems(review), ["findings state a concrete consequence"]);
 });
 
-test("a prose-only consequence is accepted without a keyword or structured marker", () => {
-  const proseOnly = output({ findings: [finding({
-    title: "Null input changes the rendered selection",
-    detail: "With a null selection, dashboard readers receive an empty card and abandon the valid queued work.",
+// ---------------------------------------------------------------------------
+// The consequence is read from its own contract field, never from the prose of
+// `title` or `detail`. Two regexes stood here before and were wrong in both
+// directions at once. These four cases are the measured evidence: the first two
+// are real findings whose consequence is an ordinary declarative sentence and
+// which the regex rejected; the third is a mechanism-only observation with no
+// outcome at all, which the regex accepted on the word `with`.
+// ---------------------------------------------------------------------------
+
+test("a declarative consequence passes on the field, whatever verb the prose uses", () => {
+  for (const [detail, consequence] of [
+    [
+      "blockDraft transitions the attempt DRAFT to BLOCKED. BLOCKED permits no outgoing transition.",
+      "An owner who mistypes one prompt path loses the attempt and must create a new one.",
+    ],
+    [
+      "locateRunReport sorts the matching names and returns the first. A newer report never replaces an older name.",
+      "The status display names the older file.",
+    ],
+  ] as const) {
+    const review = output({ findings: [finding({ detail, consequence })] });
+    assert.equal(
+      reviewFindingSpecificity(review.findings[0]!, new Set([PATH])).concreteConsequence,
+      true,
+      `declarative consequence rejected: ${consequence}`,
+    );
+    assert.equal(reviewEnvelopeComplete(review).passed, true);
+  }
+});
+
+test("a mechanism-only finding fails however conditional its prose sounds", () => {
+  const mechanismOnly = output({ findings: [finding({
+    title: "Boolean flag set membership",
+    detail: "The BOOLEAN_FLAGS set is declared with one member and is consulted after the equals-form branch in parseArgs.",
+    consequence: "\t\n ",
   })] });
-  assert.equal(reviewEnvelopeComplete(proseOnly).passed, true);
+  assert.equal(
+    reviewFindingSpecificity(mechanismOnly.findings[0]!, new Set([PATH])).concreteConsequence,
+    false,
+  );
+  assert.deepEqual(incompleteItems(mechanismOnly), ["findings state a concrete consequence"]);
+});
+
+test("no phrasing of the consequence field is preferred over another", () => {
+  for (const consequence of [
+    "With a null selection, dashboard readers receive an empty card.",
+    "Readers receive an empty card and abandon the valid queued work.",
+    "Consequence: readers receive an empty card.",
+    "Empty card.",
+  ]) {
+    const review = output({ findings: [finding({ consequence })] });
+    assert.equal(reviewEnvelopeComplete(review).passed, true, `rejected: ${consequence}`);
+  }
 });
 
 test("accept and concern keep their existing meaning while specificity remains mandatory", () => {

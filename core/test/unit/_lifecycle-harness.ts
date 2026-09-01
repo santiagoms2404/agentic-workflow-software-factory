@@ -409,6 +409,7 @@ export function finding(overrides: Partial<ReviewFinding> = {}): ReviewFinding {
     line: 42,
     title: "Exit code is swallowed",
     detail: "The catch block returns 0 even when the command failed.",
+    consequence: "a failing command reports success to its caller and the shell script continues",
     evidence: "core/src/cli/main.ts:42 returns 0 in the catch arm.",
     ...overrides,
   };

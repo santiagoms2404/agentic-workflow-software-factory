@@ -200,6 +200,7 @@ test("specificity uses Q2 finding points, a per-run median, and zero for a misse
     line: 12,
     title: "Fallback branch exposes an unavailable value",
     detail: "Callers would receive the stale value and fail the authority check.",
+    consequence: "a caller reading an unavailable authority receives the stale value and passes its check",
     evidence: "`formatValue` returns `raw` when authority equals unavailable.",
   };
   const vague: ReviewFinding = { ...detailed, id: "F-vague", evidence: "Observed" };

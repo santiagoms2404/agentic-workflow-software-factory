@@ -97,6 +97,7 @@ export function validReviewOutput(): ReviewOutput {
         line: 42,
         title: "Outermost-object scan is not brace-balanced",
         detail: "A trailing prose brace would widen the slice.",
+        consequence: "a final message ending in prose braces parses to the wrong object",
         evidence: "trimmed.lastIndexOf('}')",
       },
     ],

@@ -152,12 +152,13 @@ class ScriptedT2Adapter implements HarnessAdapter {
       const reviewTurn = this.#reviewTurns++;
       if (this.#behaviour.kind === "stale-sha") payload = review("b".repeat(40));
       else if (this.#behaviour.kind === "finding-outside") {
-        payload = review(candidate, [{ id: "f1", severity: "medium", file: "README.md", line: null, title: "unrelated", detail: "about a file this change never touched", evidence: "fixture" }]);
+        payload = review(candidate, [{ id: "f1", severity: "medium", file: "README.md", line: null, title: "unrelated", detail: "about a file this change never touched", consequence: "a reader is pointed at a file this candidate never changed", evidence: "fixture" }]);
       } else if (this.#behaviour.kind === "concern") {
         payload = review(candidate, [{
           id: "f1", severity: "high", file: SOURCE, line: 1,
           title: "generated flag bypasses the configured branch",
           detail: "The gates would accept a path that always returns the generated value.",
+          consequence: "any configuration selects the generated value, so the configured branch never runs",
           evidence: "`generated` is assigned `true` before the configured branch is checked.",
         }]);
       } else if (this.#behaviour.kind === "missing-consequence-once") {
@@ -167,9 +168,15 @@ class ScriptedT2Adapter implements HarnessAdapter {
           file: SOURCE,
           line: 1,
           title: index < 2 ? "Polling branch observation" : "Polling branch can slow dashboard requests",
-          detail: index < 2 && reviewTurn === 0
-            ? "The route reads the ticket set during each configured poll."
-            : "The route reads the ticket set during each configured poll, which causes dashboard requests to slow as the set grows.",
+          detail: "The route reads the ticket set during each configured poll.",
+          // Turn 0 leaves the required key blank on two findings. Blank, not
+          // absent and not empty: `minLength: 1` makes an empty string a schema
+          // violation, which is a different correction path. This journey is
+          // about the completeness gate's own round, so the induced defect has
+          // to be one the envelope parses and the gate rejects.
+          consequence: index < 2 && reviewTurn === 0
+            ? " "
+            : "a dashboard request against a grown ticket set waits for the whole set to be re-read",
           evidence: "`loadTickets` calls `readFile` inside the polling request handler.",
         }));
         payload = { ...review(candidate, findings), verdict: "accept" };
