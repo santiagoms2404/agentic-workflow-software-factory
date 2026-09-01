@@ -9,11 +9,11 @@ import { utf8ByteLength } from "./typebox.ts";
 // Rules, from the Envelope & Gate Contract:
 //   - Final assistant content must be exactly one JSON object.
 //   - Prose and code fences are rejected — but the parser strips fences and
-//     takes the outermost `{…}` *before* rejecting. So salvage is attempted
-//     first and recorded (`extraction`), and only a payload that survives
-//     neither salvage is rejected. The trace therefore distinguishes "the
-//     model emitted clean JSON" from "the host had to dig it out", without
-//     burning a correction round on the latter.
+//     salvages a complete JSON object *before* rejecting. It first tries the
+//     outermost `{…}`, then the last complete object when a provider abandoned
+//     a partial object and emitted a corrected one in the same final message.
+//     The trace distinguishes clean JSON from host extraction without burning
+//     a correction round on transport-shaped duplication.
 //   - Maximum envelope size 256 KiB.
 //   - Unknown fields rejected (every schema is `additionalProperties: false`).
 //   - Invalid envelopes are retained with their violations.
@@ -66,15 +66,23 @@ function extract(raw: string): { extraction: EnvelopeExtraction; value: unknown 
     if (parsed.ok) return { extraction: "fence-stripped", value: parsed.value };
   }
 
-  // Outermost `{…}` — first opening brace to last closing brace. Not a
-  // balanced-brace scan on purpose: anything cleverer starts guessing at
-  // which of several objects the model meant, and a wrong guess is worse
-  // than a clean rejection the model can be re-prompted about.
+  // First opening brace to last closing brace handles ordinary prose wrapping.
   const first = trimmed.indexOf("{");
   const last = trimmed.lastIndexOf("}");
   if (first !== -1 && last > first) {
     const parsed = tryParseObject(trimmed.slice(first, last + 1));
     if (parsed.ok) return { extraction: "outermost-object", value: parsed.value };
+
+    // Some provider streams retain an abandoned partial object immediately
+    // before the corrected final object. Work backward from the final closing
+    // brace and accept only a suffix that parses whole. The bound prevents a
+    // brace-heavy malformed response from turning salvage into unbounded work.
+    let opening = trimmed.lastIndexOf("{", last - 1);
+    for (let attempts = 0; opening > first && attempts < 1_024; attempts += 1) {
+      const suffix = tryParseObject(trimmed.slice(opening, last + 1));
+      if (suffix.ok) return { extraction: "outermost-object", value: suffix.value };
+      opening = trimmed.lastIndexOf("{", opening - 1);
+    }
   }
 
   return null;

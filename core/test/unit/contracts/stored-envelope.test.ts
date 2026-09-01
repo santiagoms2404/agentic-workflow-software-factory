@@ -70,6 +70,15 @@ test("wrapEnvelope copies the violation list rather than aliasing the caller's a
   assert.equal(stored.violations.length, 1);
 });
 
+test("the parser salvages a corrected final object after an abandoned provider object", () => {
+  const abandoned = '{"schema":"awsf.build-output/v1","producerStatus":"success","summary":"unfinished';
+  const result = parseEnvelope(`${abandoned}${JSON.stringify(validBuildOutput())}`, "awsf.build-output/v1");
+  assert.equal(result.valid, true);
+  if (!result.valid) return;
+  assert.equal(result.extraction, "outermost-object");
+  assert.deepEqual(result.payload, validBuildOutput());
+});
+
 test("a parse failure flows straight into a retained stored envelope", () => {
   const result = parseEnvelope("I gave up.", "awsf.build-output/v1");
   assert.equal(result.valid, false);
