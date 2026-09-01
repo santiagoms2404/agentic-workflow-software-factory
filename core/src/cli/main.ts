@@ -74,7 +74,7 @@ function parseArgs(args: readonly string[]): ParsedArgs {
     }
     const key = arg.slice(2);
     const value = args[index + 1];
-    if ((value === undefined || value.startsWith("--")) && BOOLEAN_FLAGS.has(key)) {
+    if (BOOLEAN_FLAGS.has(key)) {
       flags[key] = "true";
       continue;
     }

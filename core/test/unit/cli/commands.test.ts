@@ -250,6 +250,16 @@ test("new, start, status, cancel, and retry preserve the lifecycle and task-life
     }
     assert.ok(lines.every((line) => line.includes("—")), "every status line explains what its value means");
 
+    const statusOut: string[] = [];
+    const statusErrors: string[] = [];
+    assert.equal(await main({
+      argv: ["status", "--evidence", created.status.taskId, "--state-root", stateRoot],
+      cwd: resolve("."),
+      writeOut: (line) => statusOut.push(line),
+      writeError: (line) => statusErrors.push(line),
+    }), 0, statusErrors.join("\n"));
+    assert.ok(statusOut.some((line) => line === "Evidence:"), "a valueless boolean flag does not consume the task id");
+
     // A projected ledger snapshot represents spend accumulated by the workflow;
     // cancellation and retry must carry it rather than buy a fresh ceiling.
     const withSpend = nextRevision(prepared, {
