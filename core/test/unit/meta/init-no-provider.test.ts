@@ -16,6 +16,7 @@ const ALLOWED_LOCAL_MODULES = [
   "core/src/cli/commands/init.ts",
   "core/src/config/init-template.ts",
   "core/src/config/schema.ts",
+  "core/src/config/workflow-ids.ts",
   "core/src/contracts/envelope-base.ts",
   "core/src/contracts/init-output.ts",
   "core/src/contracts/test-output.ts",

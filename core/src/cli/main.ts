@@ -10,7 +10,7 @@ import { loadConfig } from "../config/load.ts";
 import { loadCatalog } from "../registry/catalog.ts";
 import { resolvePlanSources } from "../registry/plan-source.ts";
 import { resolveStateRoot } from "../persistence/platform-paths.ts";
-import { callCeilingsOf, type Tier } from "../state/tiers.ts";
+import { callCeilingsOf } from "../state/tiers.ts";
 import { processOwnerTerminal, type OwnerTerminal } from "./tty.ts";
 import { backlogCommand } from "./commands/backlog.ts";
 import { cancelCommand } from "./commands/cancel.ts";
@@ -36,14 +36,17 @@ import { defaultWorktreeRoot, startCommand } from "./commands/start.ts";
 import { statusCommand } from "./commands/status.ts";
 import { intakeRequest, listTickets, showTicket, ticketStoreFor, ticketStoreForPlan } from "./commands/ticket.ts";
 import { watchCommand } from "./commands/watch.ts";
+import { selectWorkflow, workflowsCommand } from "./commands/workflows.ts";
 
 /** The complete owner-facing command table; documentation reconciles against it. */
 export const CLI_COMMANDS = Object.freeze([
   "init", "project", "new", "start", "run", "status", "watch", "rework", "review", "raise", "journey", "land", "publish", "cancel", "retry",
-  "doctor", "gc", "dash", "db rebuild", "ticket", "backlog", "quota", "stage",
+  "doctor", "gc", "dash", "db rebuild", "ticket", "backlog", "quota", "stage", "workflows",
 ]);
 
 const USAGE = `usage: awsf init [path] --project <slug>\n       awsf <${CLI_COMMANDS.join("|")}> [task] [options]`;
+
+const BOOLEAN_FLAGS: ReadonlySet<string> = new Set(["evidence"]);
 
 interface ParsedArgs {
   readonly positionals: readonly string[];
@@ -71,6 +74,10 @@ function parseArgs(args: readonly string[]): ParsedArgs {
     }
     const key = arg.slice(2);
     const value = args[index + 1];
+    if ((value === undefined || value.startsWith("--")) && BOOLEAN_FLAGS.has(key)) {
+      flags[key] = "true";
+      continue;
+    }
     if (value === undefined || value.startsWith("--")) throw new Error(`--${key} requires a value`);
     if (key === "repository") repositories.push(value);
     else flags[key] = value;
@@ -83,12 +90,6 @@ function commandEnvironment(env: NodeJS.ProcessEnv): Readonly<Record<string, str
   return Object.fromEntries(
     Object.entries(env).filter((entry): entry is [string, string] => entry[1] !== undefined),
   );
-}
-
-function tierOf(value: string): Tier {
-  const number = Number(value.replace(/^T/, ""));
-  if (number !== 0 && number !== 1 && number !== 2) throw new Error(`tier must be 0, 1, or 2; got ${value}`);
-  return number;
 }
 
 class PlanSelectionRequiredError extends Error {
@@ -283,6 +284,16 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       return 0;
     }
 
+    if (command === "workflows") {
+      if (parsed.positionals.length !== 0 || parsed.repositories.length !== 0) {
+        throw new Error("usage: awsf workflows [--config PATH]");
+      }
+      const configPath = resolve(parsed.flags.config ?? `${cwd}/awsf.config.yaml`);
+      const config = loadConfig(await readFile(configPath, "utf8"));
+      for (const line of workflowsCommand(config)) out(line);
+      return 0;
+    }
+
     if (command === "project") {
       const action = parsed.positionals[0];
       if (action === "register" && parsed.positionals.length === 1) {
@@ -322,14 +333,20 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
     if (command === "new") {
       const request = parsed.positionals.slice(1).join(" ").trim();
       if (request.length === 0) throw new Error("awsf new requires a request after the task id");
+      const selection = selectWorkflow(
+        config,
+        parsed.flags.workflow ?? config.project.default_workflow,
+        parsed.flags.tier,
+      );
+      const { workflow, tier } = selection;
       const result = await newCommand({
         stateRoot,
         project,
         taskId,
         repository: cwd,
         request,
-        workflow: parsed.flags.workflow ?? config.project.default_workflow,
-        tier: tierOf(parsed.flags.tier ?? config.risk.default),
+        workflow,
+        tier,
         configSnapshotJson: toConfigSnapshotJson(config),
         callCeilings: callCeilingsOf(config.risk.call_ceiling),
         allowance: config.risk.correction_allowance,
@@ -376,10 +393,12 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
           assertLaunchProjection: projection.assertLaunchPermitted,
         });
         out(`${status.lifecycleState}: ${status.nextAction}`);
+        const reportLine = (await statusCommand(located.attemptDir)).find((line) => line.startsWith("Run report:"));
+        if (reportLine !== undefined) out(reportLine);
         return status.lifecycleState === "AWAITING_OWNER" ? 0 : 1;
       }
       case "status":
-        for (const line of await statusCommand(located.attemptDir)) out(line);
+        for (const line of await statusCommand(located.attemptDir, { evidence: parsed.flags.evidence === "true" })) out(line);
         return 0;
       case "watch":
         await watchCommand({ attemptDir: located.attemptDir, pollMs: config.observability.poll_ms, write: out });

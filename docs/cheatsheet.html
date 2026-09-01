@@ -298,10 +298,11 @@ npm run awsf -- doctor    # the same command, in another form</pre>
   <p><strong>The work happens in a sealed copy.</strong> Nothing in your checkout changes while the job runs. If the job goes wrong, the sealed copy is what goes wrong.</p>
 
   <h3>What marimba runs, once you have chosen</h3>
-  <pre>npm run awsf -- new TASK "&lt;the paragraph you wrote&gt;"
+  <pre>npm run awsf -- workflows
+npm run awsf -- new TASK "&lt;the paragraph you wrote&gt;"
 npm run awsf -- start TASK
 npm run awsf -- run TASK</pre>
-  <p>Three commands in that order: the job is registered, a sealed copy of the project is made ready, and the work begins &mdash; and it is that third step, not the second, where a provider call is reserved and spent. Stopping after the second one costs nothing. marimba also passes options that pick the route and the risk setting; those belong to the other half of this file rather than to anything you have to decide. <code>TASK</code> stands for whatever name your job is given &mdash; you will see the real one in the session.</p>
+  <p><code>workflows</code> is a read-only catalogue of the enabled routes, their required tiers, baseline provider calls, ceilings, and phase order. The next three commands register the job, make a sealed copy ready, and begin the work. The provider call is reserved by <code>run</code>, never by <code>start</code>, so stopping after <code>start</code> costs nothing. <code>TASK</code> stands for whatever name your job is given &mdash; you will see the real one in the session.</p>
 
   <figure>
     <svg viewBox="0 0 720 200" role="img" aria-label="The three commands of leg 3 cause two recorded moves. new registers the job as DRAFT, start makes the move L1 to PREPARED with spawn false, and run makes the move L4 to RUNNING with spawn true. A dashed boundary sits on L4: nothing is spent to the left of it, and one provider call is reserved to the right.">
@@ -453,7 +454,8 @@ npm run typecheck</pre>
 
   <p><strong>A refusal is readable from the factory&rsquo;s own records.</strong> What refused, what it required, and what it left available are all in what the factory writes as it goes: the job&rsquo;s status, its running account of what happened, and the envelope of any opinion it asked for along the way. You should not need to open a plan document to understand one. If a question here can only be answered from a plan, that is a gap in this guide rather than something you did wrong.</p>
 
-  <pre>npm run awsf -- status TASK</pre>
+  <pre>npm run awsf -- status TASK --evidence</pre>
+  <p>The evidence form prints the exact blocker, the latest failing gate checks, the last retained envelope, and the retained process outcome. After a run, ordinary <code>status</code> also prints the full local path to the human-readable run report.</p>
 
   <h3>The four things to get out of it</h3>
   <ul class="answers">
@@ -656,6 +658,7 @@ npm run awsf -- land TASK</pre>
     <li><code>backlog</code></li>
     <li><code>quota</code></li>
     <li><code>stage</code></li>
+    <li><code>workflows</code></li>
   </ul>
 
   <h3>One command, three spellings</h3>
@@ -811,7 +814,7 @@ npm run awsf -- land TASK</pre>
     <li><b><code>build</code></b>Build, then the checks. The shortest route that produces a candidate, and the one the worked example runs on.</li>
     <li><b><code>plan-build-test</code></b>Plan first, then build, then the checks.</li>
     <li><b><code>build-review</code></b>Build, checks, then a second opinion on the result.</li>
-    <li><b><code>simple-sdlc</code></b>Plan, build, checks, documentation, and the checks again afterwards.</li>
+    <li><b><code>simple-sdlc</code></b>Capture the owner request, plan, build, run checks, write the private run report, update project documentation only when needed, run the checks again, and obtain an opposite-provider review.</li>
     <li><b><code>intake</code></b>Turns a rough request into something the other routes can take.</li>
     <li><b><code>design-to-plan</code></b>Design work, then an architecture review of the design.</li>
   </ul>

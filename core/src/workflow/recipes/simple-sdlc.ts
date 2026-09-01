@@ -12,6 +12,17 @@ export const simpleSdlcWorkflow = {
   tier: 2,
   phases: [
     {
+      id: "request",
+      kind: "engineer",
+      owner: "engineer",
+      description: "Capture the exact owner request and acceptance boundary without starting a provider",
+      schemaId: "awsf.plan-output/v1",
+      outputSchema: PlanOutputSchema,
+      maxCorrections: 0,
+      gates: [],
+      execute: (context) => requireHostExecution("request", context),
+    },
+    {
       id: "planner",
       kind: "agent",
       owner: "planner",

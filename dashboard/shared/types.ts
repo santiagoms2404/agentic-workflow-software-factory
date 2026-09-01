@@ -191,6 +191,8 @@ export interface SessionDetailResponse extends SessionCard {
   ownerReentries: number;
   stateRevision: number;
   landingSummary: LandingSummary | null;
+  /** Task-relative private-state path; the API never exposes an absolute path or report body. */
+  runReportPath: string | null;
   transitions: TransitionSummary[];
   gates: GateSummary[];
   processes: ProcessSummary[];

@@ -8,7 +8,7 @@ How to work through it:
 2. Open the changed files and read them. The diff shows what moved; the files show what it moved into.
 3. Use the supplied diff for anything the files alone do not explain — you have no shell, so it is your only view of what the candidate removed.
 4. Accept only when no blocking defect remains. Every concern must cite concrete repository evidence you verified.
-5. Check every finding before returning: `line` names a positive line or is `null` for explicit file-wide scope; `evidence` states the observed mechanism or condition; `title` or `detail` states the concrete consequence, including what becomes wrong and when.
+5. Check every finding before returning: `line` names a positive line or is `null` for explicit file-wide scope; `evidence` states the observed mechanism or condition; `detail` ends with `Consequence: <specific input or state leads to a specific wrong outcome>`.
 
 Two things about the evidence you must respect:
 

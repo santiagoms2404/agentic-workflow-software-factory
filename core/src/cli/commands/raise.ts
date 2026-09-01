@@ -183,6 +183,7 @@ export async function raiseCommand(options: RaiseCommandOptions): Promise<RaiseC
   options.terminal.write(`Reason on record: ${reason}`);
   options.terminal.write(`This grant is recorded on ${status.taskId} alone and widens no other task; awsf.config.yaml is not edited, so the attempt's configuration snapshot still matches and \`awsf rework\`/\`awsf review\` remain available.`);
   options.terminal.write(`The ceiling stays a bound: no grant may carry it past ${MAX_CALL_CEILING} calls.`);
+  options.terminal.write("Confirming records an irreversible grant and reason. It spends no call now, does not invalidate gates, and cannot later lower this task's ceiling; cancellation remains available while the attempt is live.");
   const confirmed = await options.terminal.confirm(`Raise ${status.taskId}'s ceiling to ${to} call(s)?`);
   if (!confirmed) return { status, confirmed: false, ceiling: from };
 

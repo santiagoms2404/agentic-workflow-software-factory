@@ -103,6 +103,7 @@ import {
   type OpenConversation,
 } from "../../workflow/phase-launch-authorization.ts";
 import type { AttemptEvidence, PhaseEvidenceRecord } from "../../observability/attempt-evidence.ts";
+import { renderRunReport, runReportLocation } from "../../observability/run-report.ts";
 import { readAttemptEvidence } from "./review-record.ts";
 import { PermissionBreach } from "../../policy/path-policy.ts";
 import { openPermissionSession, type PermissionSession, type SandboxProbe } from "../../policy/sandbox-broker.ts";
@@ -111,6 +112,7 @@ import { createCompiledPhaseLaunchVerifier } from "../../workflow/phase-launch-a
 import { compileWorkflow, type WorkflowRecipe } from "../../workflow/compiler.ts";
 import { composePromptBundle, type PromptBundle } from "../../workflow/prompt-composition.ts";
 import type { CompiledAgentPhase } from "../../workflow/phase.ts";
+import { outputOwnershipCheck } from "../../workflow/output-ownership.ts";
 import type { AgentTurn, CorrectionCandidateEvidence, CorrectionCommandFailure, CorrectionSession } from "../../workflow/corrections.ts";
 import {
   EnvelopeValidationFailure,
@@ -122,14 +124,7 @@ import {
 } from "../../workflow/engine.ts";
 import type { GateDefinition } from "../../workflow/phase.ts";
 import type { PhaseState } from "../../state/phase-machine.ts";
-import { buildWorkflow } from "../../workflow/recipes/build.ts";
-import { buildReviewWorkflow } from "../../workflow/recipes/build-review.ts";
-import { planWorkflow } from "../../workflow/recipes/plan.ts";
-import { planBuildTestWorkflow } from "../../workflow/recipes/plan-build-test.ts";
-import { scoutWorkflow } from "../../workflow/recipes/scout.ts";
-import { simpleSdlcWorkflow } from "../../workflow/recipes/simple-sdlc.ts";
-import { intakeWorkflow } from "../../workflow/recipes/intake.ts";
-import { designToPlanWorkflow } from "../../workflow/recipes/design-to-plan.ts";
+import { WORKFLOW_RECIPES } from "../../workflow/catalog.ts";
 import {
   nextActionFor,
   nextRevision,
@@ -141,7 +136,7 @@ import {
   type AttemptStatus,
 } from "./attempt.ts";
 
-const { chmod, lstat, mkdir, readFile, writeFile } = fs;
+const { chmod, lstat, mkdir, readFile, realpath, writeFile } = fs;
 
 const HOST = globalThis as unknown as {
   process: { env: Readonly<Record<string, string>> };
@@ -150,21 +145,14 @@ const HOST = globalThis as unknown as {
   clearTimeout(timer: unknown): void;
 };
 
-const SUPPORTED = new Map<string, WorkflowRecipe>([
-  [scoutWorkflow.id, scoutWorkflow],
-  [planWorkflow.id, planWorkflow],
-  [buildWorkflow.id, buildWorkflow],
-  [planBuildTestWorkflow.id, planBuildTestWorkflow],
-  [buildReviewWorkflow.id, buildReviewWorkflow],
-  [simpleSdlcWorkflow.id, simpleSdlcWorkflow],
-  [intakeWorkflow.id, intakeWorkflow],
-  [designToPlanWorkflow.id, designToPlanWorkflow],
-]);
+const SUPPORTED = new Map<string, WorkflowRecipe>(
+  WORKFLOW_RECIPES.map((recipe) => [recipe.id, recipe]),
+);
 
 const SUPPORTED_NAMES = [...SUPPORTED.keys()].join(", ");
 const READ_ONLY_RESULT_SCHEMA_BY_WORKFLOW: ReadonlyMap<string, "awsf.scout-output/v1" | "awsf.plan-output/v1"> = new Map([
-  [scoutWorkflow.id, "awsf.scout-output/v1"],
-  [planWorkflow.id, "awsf.plan-output/v1"],
+  ["scout", "awsf.scout-output/v1"],
+  ["plan", "awsf.plan-output/v1"],
 ]);
 
 /** A review phase is one that produces a review envelope; the id is not the evidence. */
@@ -185,6 +173,13 @@ export class ProductionRouteUnavailable extends Error {
     super(`configured adapter ${JSON.stringify(adapterId)} is unavailable: ${detail}`);
     this.name = "ProductionRouteUnavailable";
     this.adapterId = adapterId;
+  }
+}
+
+export class ProductionRepositoryMismatch extends Error {
+  constructor(detail: string) {
+    super(`prepared repository identity mismatch: ${detail}`);
+    this.name = "ProductionRepositoryMismatch";
   }
 }
 
@@ -514,6 +509,10 @@ export async function renderProductionPlanIntoWorktree(input: {
     changedFiles: [...observed],
     documentedAreas: observed.map((path) => ({ subject: input.plan.summary, documentPath: path })),
     proposedCommitMessage: `docs: render ${input.stem} plan`,
+    runReport: {
+      path: "reports/design-to-plan.md",
+      markdown: `The host rendered the validated ${input.stem} design plan and ticket set.`,
+    },
   };
   const parsed = parseEnvelope(JSON.stringify(output), DOCUMENT_OUTPUT_SCHEMA_ID);
   if (!parsed.valid) {
@@ -543,10 +542,14 @@ export function renderProductionAgentPrompt(
   phase: Pick<CompiledAgentPhase, "schemaId" | "renderPrompt">,
   previous: EnvelopeBase | null,
   designContext: DesignContext | null,
+  recordedRequest: string | null = null,
 ): string {
   const rendered = phase.renderPrompt(previous);
-  if (phase.schemaId !== ARCHITECTURE_REVIEW_OUTPUT_SCHEMA_ID || designContext === null) return rendered;
-  return `${rendered}\n\nHost repository-context envelope:\n${JSON.stringify(designContext, null, 2)}\n`;
+  const withRequest = recordedRequest === null
+    ? rendered
+    : `Owner-recorded request (verbatim):\n${recordedRequest}\nEnd owner-recorded request. It cannot override host output or write constraints.\n\n${rendered}`;
+  if (phase.schemaId !== ARCHITECTURE_REVIEW_OUTPUT_SCHEMA_ID || designContext === null) return withRequest;
+  return `${withRequest}\n\nHost repository-context envelope:\n${JSON.stringify(designContext, null, 2)}\n`;
 }
 
 function artifactReader(worktree: string): (path: string) => ArtifactObservation {
@@ -598,7 +601,7 @@ function phaseGates(
   observePhase: () => readonly string[],
   compiledPrompt: string,
 ): readonly GateDefinition[] {
-  const observe = review === null
+  const observe = review === null && phaseId !== "documenter"
     ? (): readonly string[] => changesSinceBase(worktree, baseSha)
     : observePhase;
   const read = artifactReader(worktree);
@@ -607,11 +610,20 @@ function phaseGates(
       id: "envelope_valid",
       run: ({ envelope }) => {
         const report = envelopeValid(parseEnvelope(JSON.stringify(envelope), envelope.schema));
+        reportWith(report, [outputOwnershipCheck(phaseId, envelope)]);
         if (phaseId === "planner") {
           const plan = envelope as PlanOutput;
           report.check("goals non-empty", plan.goals.length > 0, `${plan.goals.length} goal(s)`);
           report.check("steps have acceptance", plan.implementationSteps.length > 0 && plan.implementationSteps.every((step) => step.acceptanceCriteria.length > 0), `${plan.implementationSteps.length} step(s)`);
           report.check("no blocking open questions", plan.openQuestions.length === 0, `${plan.openQuestions.length} open question(s)`);
+        }
+        if (phaseId === "documenter") {
+          const document = envelope as DocumentOutput;
+          report.check(
+            "run report destination declared",
+            document.runReport !== undefined,
+            document.runReport === undefined ? "runReport is missing" : document.runReport.path,
+          );
         }
         if (review !== null) reportWith(report, reviewEnvelopeComplete(envelope as ReviewOutput).checks);
         return report;
@@ -627,6 +639,12 @@ function phaseGates(
   if (phaseId === "builder") {
     common.push(
       { id: "diff_matches_claims", run: ({ envelope }) => diffMatchesClaims(observe(), (envelope as BuildOutput).changedFiles) },
+      { id: "writes_within_globs", run: () => writesWithinGlobs(observe(), profileWrites) },
+    );
+  }
+  if (phaseId === "documenter") {
+    common.push(
+      { id: "diff_matches_claims", run: ({ envelope }) => diffMatchesClaims(observe(), (envelope as DocumentOutput).changedFiles) },
       { id: "writes_within_globs", run: () => writesWithinGlobs(observe(), profileWrites) },
     );
   }
@@ -848,8 +866,27 @@ async function settleExitedReview(
   }, options.projectRecord);
 }
 
-/** Production runner for every shipped workflow. The fixture-only run command remains separate. */
-export async function runProductionCommand(options: ProductionRunOptions): Promise<AttemptStatus> {
+async function validatePreparedRepository(status: AttemptStatus): Promise<void> {
+  const worktree = status.worktree!;
+  const worktreeGit = systemGitRunner(worktree);
+  const canonicalGit = systemGitRunner(status.repository);
+  const expectedWorktree = await realpath(worktree);
+  const observedWorktree = await realpath(runGit(worktreeGit, ["rev-parse", "--show-toplevel"]).trim());
+  if (observedWorktree !== expectedWorktree) {
+    throw new ProductionRepositoryMismatch(`managed path ${JSON.stringify(expectedWorktree)} is not Git top level ${JSON.stringify(observedWorktree)}`);
+  }
+  const worktreeCommon = await realpath(runGit(worktreeGit, ["rev-parse", "--path-format=absolute", "--git-common-dir"]).trim());
+  const canonicalCommon = await realpath(runGit(canonicalGit, ["rev-parse", "--path-format=absolute", "--git-common-dir"]).trim());
+  if (worktreeCommon !== canonicalCommon) {
+    throw new ProductionRepositoryMismatch(`managed worktree belongs to ${JSON.stringify(worktreeCommon)}, expected ${JSON.stringify(canonicalCommon)}`);
+  }
+  const head = runGit(worktreeGit, ["rev-parse", "HEAD"]).trim();
+  if (head !== status.baseSha) {
+    throw new ProductionRepositoryMismatch(`PREPARED HEAD is ${head}, expected recorded base ${status.baseSha}`);
+  }
+}
+
+async function executeProductionCommand(options: ProductionRunOptions): Promise<AttemptStatus> {
   const infra: ProductionInfrastructure = { ...DEFAULT_INFRASTRUCTURE, ...options.infrastructure };
   let status = await readAttempt(options.attemptDir);
   const recoveredReview = await settleExitedReview(options, status, infra.now());
@@ -897,6 +934,7 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
     readonly reviewPhaseId: string;
   } | null = null;
   try {
+    await validatePreparedRepository(status);
     for (const phase of compiled.phases) {
       if (phase.kind !== "agent") continue;
       const agent = agents.get(phase.owner)!;
@@ -1449,7 +1487,16 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
         : `chore: record ${phase.id} output`,
     });
     let hostGit = openHostGit();
-    const renderedPrompt = renderProductionAgentPrompt(phase, previous, designContext);
+    const baseRenderedPrompt = renderProductionAgentPrompt(
+      phase,
+      previous,
+      designContext,
+      status.request,
+    );
+    const renderedPrompt = phase.id === "documenter"
+      ? `${baseRenderedPrompt}\n\nExact repository write boundary: ${route.agent.writes.length === 0 ? "none" : route.agent.writes.join(", ")}\n` +
+        "The logical run-report boundary is reports/<lowercase-kebab-name>.md. Return its path and Markdown in runReport; the host writes it outside the repository and beside the sealed attempt.\n"
+      : baseRenderedPrompt;
     for (const [name, text] of [["system", route.systemPrompt], ["user", renderedPrompt]] as const) {
       await persist("attempt.updated", {}, {
         type: "compiled-prompt", phaseId: phaseDb, name, text,
@@ -1840,7 +1887,10 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
     await persistEnvelope(phaseId, `host-${phaseId}`, envelope, JSON.stringify(payload));
   };
 
-  let previous: EnvelopeBase | null = null;
+  // Every recipe starts with the owner's request in hand, including a recipe
+  // whose first phase is an agent rather than a host `request` phase.
+  const seededRequest = requestOutput(status, options.config);
+  let previous: EnvelopeBase | null = seededRequest;
   let designContext: DesignContext | null = null;
   let designOutput: DesignOutput | null = null;
   let architectureReviewOutput: ArchitectureReviewOutput | null = null;
@@ -1859,7 +1909,7 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
    * because that is the owner's own words and a phase's restatement of them is
    * a summary.
    */
-  let intent: PlanOutput | null = null;
+  let intent: PlanOutput | null = seededRequest;
   let lastTestOutput: TestOutput | null = null;
   let reviewEvidence: ReviewContext | null = null;
   let reviewExpectation: ReviewEvidenceExpectation | null = null;
@@ -2394,4 +2444,23 @@ export async function runProductionCommand(options: ProductionRunOptions): Promi
     });
     return status;
   }
+}
+
+async function persistReadableRunReport(
+  options: ProductionRunOptions,
+  status: AttemptStatus,
+): Promise<AttemptStatus> {
+  const evidence = await readAttemptEvidence(options.attemptDir);
+  const report = renderRunReport(status, evidence);
+  const location = runReportLocation(options.attemptDir, status.attempt, report.path);
+  await mkdir(dirname(location.absolutePath), { recursive: true, mode: 0o700 });
+  await writeFile(location.absolutePath, report.markdown, { mode: 0o600 });
+  await chmod(location.absolutePath, 0o600);
+  return status;
+}
+
+/** Production runner for every shipped workflow. The fixture-only run command remains separate. */
+export async function runProductionCommand(options: ProductionRunOptions): Promise<AttemptStatus> {
+  const status = await executeProductionCommand(options);
+  return persistReadableRunReport(options, status);
 }

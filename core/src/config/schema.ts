@@ -1,4 +1,5 @@
 import { Type, type Static } from "@sinclair/typebox";
+import { WORKFLOW_IDS } from "./workflow-ids.ts";
 
 // awsf/v1 — the single committed tuning surface (awsf.config.yaml), shaped
 // exactly per the accepted proposal's §7.3.5 example
@@ -20,16 +21,7 @@ export const CONFIG_SCHEMA_ID = "awsf/v1";
 // kind -> module, the same way `claude-code`/`pi-codex`/`antigravity` map to
 // their same-named files.
 export const KNOWN_ADAPTER_KINDS = ["claude-code", "pi-codex", "antigravity", "fixture", "composite-fusion"] as const;
-export const KNOWN_WORKFLOW_IDS = [
-  "scout",
-  "plan",
-  "build",
-  "plan-build-test",
-  "build-review",
-  "simple-sdlc",
-  "intake",
-  "design-to-plan",
-] as const;
+export const KNOWN_WORKFLOW_IDS = WORKFLOW_IDS;
 // §7.3.5 configures the argv-driven gates; the others (envelope validation,
 // artifact/diff/write/hygiene checks, review verdict, journey) are
 // structural and take no configuration. This set is loader-checked, not

@@ -6,25 +6,13 @@ import {
   compileWorkflow,
   type WorkflowRecipe,
 } from "../../../src/workflow/compiler.ts";
+import { WORKFLOW_RECIPES } from "../../../src/workflow/catalog.ts";
 import { buildReviewWorkflow } from "../../../src/workflow/recipes/build-review.ts";
 import { buildWorkflow } from "../../../src/workflow/recipes/build.ts";
 import { planBuildTestWorkflow } from "../../../src/workflow/recipes/plan-build-test.ts";
-import { planWorkflow } from "../../../src/workflow/recipes/plan.ts";
-import { scoutWorkflow } from "../../../src/workflow/recipes/scout.ts";
 import { simpleSdlcWorkflow } from "../../../src/workflow/recipes/simple-sdlc.ts";
-import { intakeWorkflow } from "../../../src/workflow/recipes/intake.ts";
-import { designToPlanWorkflow } from "../../../src/workflow/recipes/design-to-plan.ts";
 
-const recipes: readonly WorkflowRecipe[] = [
-  scoutWorkflow,
-  planWorkflow,
-  buildWorkflow,
-  planBuildTestWorkflow,
-  buildReviewWorkflow,
-  simpleSdlcWorkflow,
-  intakeWorkflow,
-  designToPlanWorkflow,
-];
+const recipes: readonly WorkflowRecipe[] = WORKFLOW_RECIPES;
 
 const expected = {
   scout: { tier: 0, phases: ["request:engineer", "scout:agent"], calls: 1 },
@@ -35,7 +23,7 @@ const expected = {
   // evidence the reviewer is judged against and buys no call, so `calls` — and
   // therefore every tier ceiling — is unchanged by its presence.
   "build-review": { tier: 2, phases: ["request:engineer", "builder:agent", "tests:code", "review-context:code", "reviewer:agent"], calls: 2 },
-  "simple-sdlc": { tier: 2, phases: ["planner:agent", "builder:agent", "tests:code", "documenter:agent", "final-tests:code", "review-context:code", "reviewer:agent"], calls: 4 },
+  "simple-sdlc": { tier: 2, phases: ["request:engineer", "planner:agent", "builder:agent", "tests:code", "documenter:agent", "final-tests:code", "review-context:code", "reviewer:agent"], calls: 4 },
   intake: { tier: 0, phases: ["request:engineer", "intake:agent"], calls: 1 },
   "design-to-plan": { tier: 1, phases: ["request:engineer", "design-context:code", "design:agent", "architecture-review:agent", "plan-context:code", "plan:agent", "plan-render:code"], calls: 3 },
 } as const;

@@ -51,6 +51,8 @@ export async function cancelCommand(options: CancelCommandOptions): Promise<{ st
     });
     throw new Error("unreachable cancellation authorization");
   }
+  options.terminal.write("Cost: 0 new provider calls. Any recorded live process tree is terminated before cancellation is recorded.");
+  options.terminal.write("Confirming seals this attempt as CANCELLED: its candidate cannot be landed, its gates and review cannot be reused, and continuing the task requires awsf retry with prior spend carried forward.");
   const confirmed = await options.terminal.confirm(`Cancel ${current.taskId} attempt ${current.attempt}?`);
   if (!confirmed) return { status: current, report: noTree() };
 

@@ -1,4 +1,7 @@
 import { ceilingFor } from "../../state/tiers.ts";
+import type { AttemptEvidence } from "../../observability/attempt-evidence.ts";
+import { locateRunReport } from "../../observability/run-report.ts";
+import { readAttemptEvidence } from "./review-record.ts";
 import { readAttempt, type AttemptStatus } from "./attempt.ts";
 
 function phaseLine(status: AttemptStatus): string {
@@ -49,6 +52,57 @@ export function formatStatus(status: AttemptStatus): readonly string[] {
   ]);
 }
 
-export async function statusCommand(attemptDir: string): Promise<readonly string[]> {
-  return formatStatus(await readAttempt(attemptDir));
+function boundedJson(value: unknown, maximum = 12_000): string {
+  const rendered = JSON.stringify(value, null, 2);
+  return rendered.length <= maximum ? rendered : `${rendered.slice(0, maximum)}\n… ${String(rendered.length - maximum)} character(s) omitted`;
+}
+
+/** The blocker plus the three retained records needed to diagnose it. */
+export function formatStatusEvidence(evidence: readonly AttemptEvidence[]): readonly string[] {
+  const latestGates = new Map<string, Extract<AttemptEvidence, { type: "gate" }>>();
+  let envelope: Extract<AttemptEvidence, { type: "envelope" }> | null = null;
+  let process: Extract<AttemptEvidence, { type: "process" }> | null = null;
+  for (const record of evidence) {
+    if (record.type === "gate") latestGates.set(`${record.phaseId}|${record.gateId}`, record);
+    if (record.type === "envelope") envelope = record;
+    if (record.type === "process") process = record;
+  }
+  const failing = [...latestGates.values()].filter((record) => !record.passed);
+  const lines: string[] = ["Evidence:", "Failing gate rows:"];
+  if (failing.length === 0) lines.push("  none");
+  for (const gate of failing) {
+    lines.push(`  ${gate.phaseId} round ${gate.round} ${gate.gateId}: FAIL`);
+    for (const check of gate.checks.filter((candidate) => !candidate.ok)) {
+      lines.push(`    ${check.item}: ${check.note}`);
+    }
+  }
+  lines.push("Last envelope:");
+  if (envelope === null) lines.push("  none");
+  else {
+    lines.push(`  ${envelope.phaseId} round ${envelope.envelope.correctionRound} ${envelope.envelope.schemaId} valid=${String(envelope.envelope.valid)}`);
+    for (const row of boundedJson(envelope.envelope.payload ?? envelope.envelope.violations).split("\n")) lines.push(`  ${row}`);
+  }
+  lines.push("Retained process record:");
+  if (process === null) lines.push("  none");
+  else {
+    lines.push(`  ${process.phaseId} ${process.status}; exit=${process.exitCode === null ? "none" : String(process.exitCode)}; signal=${process.exitSignal ?? "none"}`);
+    lines.push(`  command=${JSON.stringify(process.record.command)}`);
+    lines.push(`  cwd=${process.record.cwd}`);
+  }
+  return Object.freeze(lines);
+}
+
+export async function statusCommand(
+  attemptDir: string,
+  options: { readonly evidence?: boolean } = {},
+): Promise<readonly string[]> {
+  const [status, records, report] = await Promise.all([
+    readAttempt(attemptDir),
+    readAttemptEvidence(attemptDir),
+    locateRunReport(attemptDir),
+  ]);
+  const lines = [...formatStatus(status)];
+  if (report !== null) lines.push(`Run report: ${report.absolutePath} — human-readable projection of the retained attempt evidence`);
+  if (options.evidence === true) lines.push(...formatStatusEvidence(records));
+  return Object.freeze(lines);
 }

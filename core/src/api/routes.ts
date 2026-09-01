@@ -2,6 +2,7 @@ import { dirname, resolve } from "node:path";
 import { queryBacklog } from "../backlog.ts";
 import { TicketStore } from "../persistence/ticket-store.ts";
 import { readLandingSummary } from "../persistence/landing-summary.ts";
+import { locateRunReport } from "../observability/run-report.ts";
 import { attemptDir } from "../persistence/platform-paths.ts";
 import type { DatabaseSync } from "../observability/sqlite.ts";
 import { openDatabase, setSessionArchived } from "../observability/sqlite.ts";
@@ -347,12 +348,16 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
     session: safely(async (_request, params) => {
       const row = requireSession(readDb, params.id ?? "");
       const base = card(readDb, row);
-      const summary = await readLandingSummary(attemptDir(
+      const directory = attemptDir(
         options.stateRoot ?? dirname(options.dbPath),
         row.project_slug,
         row.task_id,
         String(row.attempt),
-      ));
+      );
+      const [summary, runReport] = await Promise.all([
+        readLandingSummary(directory),
+        locateRunReport(directory),
+      ]);
       const response: SessionDetailResponse = {
         ...base,
         baseSha: row.base_sha,
@@ -368,6 +373,7 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
         ownerReentries: row.owner_reentries,
         stateRevision: row.state_revision,
         landingSummary: summary,
+        runReportPath: runReport?.taskRelativePath ?? null,
         transitions: transitionsForSession(readDb, row.session_id).map((item) => ({
           id: item.transition_id,
           seq: item.seq,

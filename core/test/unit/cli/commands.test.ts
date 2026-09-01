@@ -14,7 +14,8 @@ import { locateAttempt, nextRevision, persistAttempt, readAttempt } from "../../
 import { newCommand } from "../../../src/cli/commands/new.ts";
 import { retryCommand } from "../../../src/cli/commands/retry.ts";
 import { startCommand } from "../../../src/cli/commands/start.ts";
-import { statusCommand } from "../../../src/cli/commands/status.ts";
+import { formatStatusEvidence, statusCommand } from "../../../src/cli/commands/status.ts";
+import type { AttemptEvidence } from "../../../src/observability/attempt-evidence.ts";
 
 function git(repository: string, ...argv: string[]): string {
   return execFileSync("git", ["-C", repository, ...argv], { encoding: "utf8" }).trim();
@@ -63,6 +64,50 @@ test("a missing configured seed fails actionably before PREPARED", async () => {
   }
 });
 
+test("start rejects a missing configured prompt before worktree creation or adapter preflight", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-cli-missing-prompt-"));
+  try {
+    const repo = repository(root);
+    const stateRoot = join(root, "state");
+    const configPath = join(root, "awsf.config.yaml");
+    writeFileSync(
+      configPath,
+      readFileSync(resolve("awsf.config.yaml"), "utf8")
+        .replace("system: prompts/builder/system.md", "system: prompts/builder/missing-system.md"),
+    );
+    mkdirSync(join(root, "prompts", "builder"), { recursive: true });
+    mkdirSync(join(root, "prompts", "shared"), { recursive: true });
+    writeFileSync(join(root, "prompts", "builder", "user.md"), readFileSync(resolve("prompts/builder/user.md"), "utf8"));
+    writeFileSync(join(root, "prompts", "shared", "headless-role.md"), readFileSync(resolve("prompts/shared/headless-role.md"), "utf8"));
+    const created = await newCommand({
+      stateRoot,
+      project: "agentic-workflow-software-factory",
+      taskId: "missing-prompt",
+      repository: repo,
+      request: "refuse before spending a call",
+      workflow: "build",
+      tier: 1,
+    });
+
+    await assert.rejects(
+      startCommand({
+        attemptDir: created.attemptDir,
+        worktreeRoot: join(root, "worktrees"),
+        configPath,
+      }),
+      /missing-system\.md/,
+    );
+    const blocked = await readAttempt(created.attemptDir);
+    assert.equal(blocked.lifecycleState, "BLOCKED");
+    assert.equal(blocked.worktree, null);
+    assert.equal(blocked.baseSha, null);
+    assert.equal(blocked.budget.callsSpent, 0);
+    assert.equal(blocked.blocker?.code, "preflight-failed");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("the retry CLI snapshots the currently loaded effective config and allowance", async () => {
   const root = mkdtempSync(join(tmpdir(), "awsf-cli-retry-config-"));
   try {
@@ -104,6 +149,42 @@ test("the retry CLI snapshots the currently loaded effective config and allowanc
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("status evidence names failed checks, the last envelope, and retained process outcome", () => {
+  const records = [
+    {
+      type: "gate", id: "gate-1", phaseId: "session:builder", round: 0,
+      gateId: "commands_pass", kind: "subprocess", candidateSha: "a".repeat(40), passed: false,
+      exitCode: 2, checks: [{ item: "npm test", ok: false, note: "exit 2: assertion failed" }],
+      violations: [], outputPath: null, startedAt: "2026-08-07T00:00:00.000Z", endedAt: "2026-08-07T00:00:01.000Z",
+    },
+    {
+      type: "envelope", phaseId: "session:builder", envelope: {
+        envelopeId: "envelope-1", sessionId: "session", phaseId: "session:builder", correctionRound: 0,
+        agent: "builder", schemaId: "awsf.build-output/v1", valid: false,
+        payload: null, violations: [{ path: "/changedFiles", kind: "schema-mismatch", message: "is required", received: null }],
+        rawOutputPath: "raw/builder.txt", createdAt: "2026-08-07T00:00:00.000Z",
+      },
+    },
+    {
+      type: "process", phaseId: "session:builder", adapterId: "pi", role: "builder", status: "EXITED",
+      registeredAt: "2026-08-07T00:00:00.000Z", releasedAt: "2026-08-07T00:00:00.100Z",
+      endedAt: "2026-08-07T00:00:01.000Z", exitCode: 2, exitSignal: null,
+      record: {
+        identity: { pid: 42, pgid: 42, startIdentity: "fixture:42", startIdentitySource: "fixture" },
+        runId: "run-1", edge: null, reservationId: "reservation-1", command: ["pi", "--mode", "json"], cwd: "/managed/worktree",
+      },
+    },
+  ] as const satisfies readonly AttemptEvidence[];
+
+  const lines = formatStatusEvidence(records).join("\n");
+  assert.match(lines, /commands_pass: FAIL/);
+  assert.match(lines, /npm test: exit 2: assertion failed/);
+  assert.match(lines, /awsf\.build-output\/v1 valid=false/);
+  assert.match(lines, /changedFiles/);
+  assert.match(lines, /exit=2/);
+  assert.match(lines, /command=\["pi","--mode","json"\]/);
 });
 
 test("new, start, status, cancel, and retry preserve the lifecycle and task-lifetime budget", async () => {

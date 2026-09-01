@@ -43,7 +43,7 @@ test("vague intent becomes a ready ticket that drives a zero-spend stub run", as
         id: "T37",
         title: "Generate release notes from landed changes",
         milestone: "M11",
-        tier: 1,
+        tier: 2,
         state: "todo",
         depends_on: [],
         workflow: "simple-sdlc",

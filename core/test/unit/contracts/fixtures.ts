@@ -278,6 +278,10 @@ export function validDocumentOutput(): DocumentOutput {
     changedFiles: ["README.md"],
     documentedAreas: [{ subject: "contracts", documentPath: "README.md" }],
     proposedCommitMessage: "docs: describe the envelope contracts",
+    runReport: {
+      path: "reports/envelope-contracts.md",
+      markdown: "The contracts were documented after the candidate passed host verification.",
+    },
   };
 }
 

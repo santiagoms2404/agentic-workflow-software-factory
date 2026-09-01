@@ -209,9 +209,15 @@ function workstreamChangedFiles(): readonly string[] {
     { cwd: REPOSITORY_ROOT, encoding: "utf8", env: GIT_ENV },
   ).trim().split("\n").filter(Boolean);
   assert.equal(introduced.length, 1, `${W11_PLAN} must have one introducing commit`);
+  const completed = execFileSync(
+    "git",
+    ["log", "-1", "--format=%H", "--", W11_PLAN],
+    { cwd: REPOSITORY_ROOT, encoding: "utf8", env: GIT_ENV },
+  ).trim();
+  assert.notEqual(completed, "", `${W11_PLAN} has no completion-side commit`);
   return execFileSync(
     "git",
-    ["diff", "--name-only", `${introduced[0]}^`, "HEAD", "--"],
+    ["diff", "--name-only", `${introduced[0]}^`, completed, "--"],
     { cwd: REPOSITORY_ROOT, encoding: "utf8", env: GIT_ENV },
   ).trim().split("\n").filter(Boolean).sort();
 }

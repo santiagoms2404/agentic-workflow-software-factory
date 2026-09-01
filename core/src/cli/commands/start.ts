@@ -1,10 +1,12 @@
-import { readFile } from "node:fs/promises";
+import { readFile, realpath } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { registeredAdapter } from "../../adapters/registry.ts";
 import { loadConfig } from "../../config/load.ts";
 import { runGit, systemGitRunner } from "../../git/changes.ts";
 import { createWorktree, seedWorktreePaths } from "../../git/worktrees.ts";
 import { transition } from "../../state/task-machine.ts";
+import { workflowRecipe } from "../../workflow/catalog.ts";
+import { composePromptBundle } from "../../workflow/prompt-composition.ts";
 import {
   nextActionFor,
   nextRevision,
@@ -45,6 +47,70 @@ async function defaultPreflight(status: AttemptStatus, configPath: string): Prom
   return { adapter, sandbox: true, observability: true };
 }
 
+async function validateConfiguredPrompts(
+  configPath: string,
+  config: ReturnType<typeof loadConfig>,
+  workflow: string,
+): Promise<void> {
+  const recipe = workflowRecipe(workflow);
+  if (recipe === null) throw new Error(`workflow ${JSON.stringify(workflow)} has no shipped recipe`);
+  const agents = new Map(config.agents.map((agent) => [agent.name, agent]));
+  const checked = new Set<string>();
+  for (const phase of recipe.phases) {
+    if (phase.kind !== "agent" || checked.has(phase.owner)) continue;
+    checked.add(phase.owner);
+    const agent = agents.get(phase.owner);
+    if (agent === undefined) {
+      throw new Error(`workflow ${JSON.stringify(workflow)} requires configured agent ${JSON.stringify(phase.owner)}`);
+    }
+    await composePromptBundle({ configPath, agent });
+  }
+}
+
+async function validateCanonicalRepository(repository: string): Promise<void> {
+  const expected = await realpath(repository);
+  const git = systemGitRunner(repository);
+  const observed = await realpath(runGit(git, ["rev-parse", "--show-toplevel"]).trim());
+  if (observed !== expected) {
+    throw new Error(`attempt repository ${JSON.stringify(repository)} resolves to ${JSON.stringify(expected)}, but Git identifies ${JSON.stringify(observed)} as its top level`);
+  }
+  if (runGit(git, ["rev-parse", "--is-inside-work-tree"]).trim() !== "true") {
+    throw new Error(`attempt repository ${JSON.stringify(repository)} is not a Git working tree`);
+  }
+}
+
+async function blockDraft(
+  options: StartCommandOptions,
+  current: AttemptStatus,
+  detail: string,
+): Promise<void> {
+  const decision = transition({
+    from: "DRAFT",
+    to: "BLOCKED",
+    actor: "host",
+    tier: current.tier,
+    reason: { source: "record", code: "preflight-failed", detail },
+    interactive: false,
+    budget: current.budget,
+  });
+  const at = (options.now ?? ((): string => new Date().toISOString()))();
+  await persistAttempt(
+    options.attemptDir,
+    current.revision,
+    {
+      kind: "attempt.transitioned",
+      next: nextRevision(current, {
+        lifecycleState: decision.to,
+        lastActivityAt: at,
+        lastActivity: detail,
+        nextAction: nextActionFor(decision.to, current.taskId),
+        blocker: { code: "preflight-failed", detail, ahead: null, behind: null },
+      }),
+    },
+    options.projectRecord,
+  );
+}
+
 /** Materialize and persist L1. Provider launch remains the workflow host's L4. */
 export async function startCommand(options: StartCommandOptions): Promise<AttemptStatus> {
   const current = await readAttempt(options.attemptDir);
@@ -69,6 +135,32 @@ export async function startCommand(options: StartCommandOptions): Promise<Attemp
   }
   if (!config.workflows.enabled.includes(current.workflow)) {
     throw new Error(`workflow ${current.workflow} is not enabled by ${configPath}`);
+  }
+  const recipe = workflowRecipe(current.workflow);
+  if (recipe === null) throw new Error(`workflow ${JSON.stringify(current.workflow)} has no shipped recipe`);
+  if (recipe.tier !== current.tier) {
+    const detail = `workflow ${JSON.stringify(current.workflow)} requires --tier T${recipe.tier}; attempt recorded T${current.tier}`;
+    await blockDraft(options, current, detail);
+    throw new Error(detail);
+  }
+  try {
+    await validateCanonicalRepository(current.repository);
+  } catch (error) {
+    const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+    await blockDraft(options, current, detail);
+    throw error;
+  }
+  // Production validates every configured prompt path and its physical
+  // containment before creating a worktree or contacting an adapter. Tests may
+  // inject the complete preflight seam and therefore own this check themselves.
+  if (options.preflight === undefined) {
+    try {
+      await validateConfiguredPrompts(configPath, config, current.workflow);
+    } catch (error) {
+      const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+      await blockDraft(options, current, detail);
+      throw error;
+    }
   }
 
   const baseSha = runGit(systemGitRunner(current.repository), ["rev-parse", "HEAD"]).trim();

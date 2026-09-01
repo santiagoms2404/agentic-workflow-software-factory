@@ -28,6 +28,9 @@ const runtimeEnd = computed(() => {
     <span class="sha-line" :title="session.candidateSha ?? session.baseSha ?? 'No candidate SHA recorded'">
       candidate <code>{{ session.candidateSha ?? "not yet recorded" }}</code>
     </span>
+    <span v-if="session.runReportPath" class="sha-line" title="Attempt-relative path under private AWSF state">
+      run report <code>{{ session.runReportPath }}</code>
+    </span>
     <details class="lifecycle-disclosure">
       <summary>Lifecycle audit · {{ stateLabel(session.state) }} · {{ session.transitions.length }} recorded transitions</summary>
       <StateRibbon :state="session.state" :transitions="session.transitions" />

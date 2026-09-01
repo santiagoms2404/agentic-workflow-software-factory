@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdir } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { createApiRouter } from "../../../src/api/routes.ts";
 import { processesForSession } from "../../../src/observability/queries.ts";
@@ -86,6 +86,8 @@ test("session and phase detail expose summaries but no private file, process, or
     verification: "- Deterministic gates: passed",
     risks: "- Risk tier: T1",
   });
+  await mkdir(join(dirname(summaryDir), "run-reports"), { recursive: true });
+  await writeFile(join(dirname(summaryDir), "run-reports", "attempt-1-owner-readable.md"), "# Run report\n");
   const router = createApiRouter({ dbPath: fixture.path, config: fixture.config });
   try {
     const sessionResponse = await router.dispatch(request("/api/v1/sessions/session-1"));
@@ -93,6 +95,7 @@ test("session and phase detail expose summaries but no private file, process, or
     assert.equal(session.transitions[0]?.edgeId, "L4");
     assert.equal(session.gates[0]?.passed, true);
     assert.equal(session.processes[0]?.adapterId, "pi-codex");
+    assert.equal(session.runReportPath, "run-reports/attempt-1-owner-readable.md");
     assert.deepEqual(session.landingSummary, {
       problem: "Build the API",
       changes: "feat: add the read surface\n2 files changed",

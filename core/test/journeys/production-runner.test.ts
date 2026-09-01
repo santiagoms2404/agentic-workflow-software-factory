@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { isAbsolute, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import type { AwsfConfig, AdapterEntry } from "../../src/config/schema.ts";
 import { loadConfig } from "../../src/config/load.ts";
 import { PiCodexAdapter } from "../../src/adapters/pi-codex.ts";
@@ -30,6 +30,7 @@ import { ProcessTransportBroker, type BrokerOptions } from "../../src/execution/
 import { createDashboardProjection } from "../../src/cli/commands/dashboard-projection.ts";
 import { newCommand } from "../../src/cli/commands/new.ts";
 import { startCommand } from "../../src/cli/commands/start.ts";
+import { statusCommand } from "../../src/cli/commands/status.ts";
 import { runProductionCommand, ProductionConfigSnapshotMismatch, ProductionWorkflowUnsupported } from "../../src/cli/commands/production-run.ts";
 import { nextRevision, persistAttempt, readAttempt } from "../../src/cli/commands/attempt.ts";
 import type { AttemptEvidence } from "../../src/observability/attempt-evidence.ts";
@@ -94,6 +95,10 @@ function document(): DocumentOutput {
     changedFiles: ["README.md"],
     documentedAreas: [{ subject: "bounded source", documentPath: "README.md" }],
     proposedCommitMessage: "docs: describe generated source",
+    runReport: {
+      path: "reports/bounded-source.md",
+      markdown: "The bounded source was planned, built, and passed the configured host gate.",
+    },
   };
 }
 
@@ -127,15 +132,16 @@ type Scenario =
   | "gate"
   | "hygiene"
   | "planner-open-question-once"
-  | "planner-planned-artifact-once";
+  | "planner-planned-artifact-once"
+  | "documenter-noop";
 
 class ScriptedAdapter implements HarnessAdapter {
   readonly id: string;
   readonly #worktree: string;
-  readonly #onReleased: () => void;
+  readonly #onReleased: (request: ModelRequest) => void;
   readonly #scenario: Scenario;
   #turn = 0;
-  constructor(id: string, worktree: string, onReleased: () => void, scenario: Scenario = "success") { this.id = id; this.#worktree = worktree; this.#onReleased = onReleased; this.#scenario = scenario; }
+  constructor(id: string, worktree: string, onReleased: (request: ModelRequest) => void, scenario: Scenario = "success") { this.id = id; this.#worktree = worktree; this.#onReleased = onReleased; this.#scenario = scenario; }
   async isAvailable(): Promise<Availability> { return { status: "available" }; }
   async getModelInfo(model: string): Promise<ModelInfo> {
     return { adapter: this.id, provider: this.id === "claude" ? "anthropic" : "openai-codex", requestedModel: model, contextWindow: null, supportsThinking: true, supportsTools: true, supportsImages: false, continuity: "none", usageAuthority: "provider", costAuthority: "unavailable" };
@@ -146,7 +152,7 @@ class ScriptedAdapter implements HarnessAdapter {
   async *parse(_transport: ProcessTransport): AsyncIterable<NormalizedEvent> { yield* []; }
   async *execute(request: ModelRequest, broker: TransportBroker, registration: BrokerProcessRegistration, signal: Parameters<TransportBroker["startProcess"]>[2]): AsyncIterable<NormalizedEvent> {
     await broker.startProcess(registration, this.buildSpec(request), signal);
-    this.#onReleased();
+    this.#onReleased(request);
     const at = "2026-08-11T00:00:00.000Z";
     const model = request.model;
     const turn = this.#turn++;
@@ -156,8 +162,12 @@ class ScriptedAdapter implements HarnessAdapter {
       payload = intake();
       await new TicketStore(join(this.#worktree, "specs", "tickets")).write(payload.ticket, "# T99 — Write one bounded source\n");
     } else if (request.prompt.includes("awsf.document-output/v1")) {
-      payload = document();
-      writeFileSync(join(this.#worktree, "README.md"), "base\n\nThe generated source is host-verified.\n");
+      payload = this.#scenario === "documenter-noop"
+        ? { ...document(), artifacts: [], changedFiles: [], documentedAreas: [], proposedCommitMessage: "docs: no project documentation change" }
+        : document();
+      if (this.#scenario !== "documenter-noop") {
+        writeFileSync(join(this.#worktree, "README.md"), "base\n\nThe generated source is host-verified.\n");
+      }
     } else if (request.prompt.includes("awsf.review-output/v1")) payload = review(this.#worktree);
     else payload = model.startsWith("claude:") ? plan() : build();
     if (model.startsWith("claude:") && turn === 0 && this.#scenario === "planner-open-question-once") {
@@ -361,6 +371,7 @@ test("production simple-sdlc completes planner, builder, tests, and inverse revi
   const world = await fixture("simple-sdlc", 0, (config) => config, 2);
   try {
     const prepared = await readAttempt(world.created.attemptDir);
+    const prompts: string[] = [];
     const status = await runProductionCommand({
       attemptDir: world.created.attemptDir,
       stateRoot: world.stateRoot,
@@ -370,7 +381,7 @@ test("production simple-sdlc completes planner, builder, tests, and inverse revi
       assertAdvancement: world.projection.assertAdvancement,
       assertLaunchProjection: world.projection.assertLaunchPermitted,
       infrastructure: {
-        adapterFor: (_entry: AdapterEntry, id: string) => new ScriptedAdapter(id, prepared.worktree!, () => {}),
+        adapterFor: (_entry: AdapterEntry, id: string) => new ScriptedAdapter(id, prepared.worktree!, (request) => prompts.push(request.prompt)),
         createBroker: fakeBroker,
         sandboxProbe: () => false,
       },
@@ -380,6 +391,49 @@ test("production simple-sdlc completes planner, builder, tests, and inverse revi
     assert.equal(status.budget.callsSpent, 4, "planner, builder, documenter, and mandatory reviewer");
     assert.equal(status.requiredReviewPresent, true);
     assert.ok(status.candidateSha);
+    assert.equal(prompts.length, 4);
+    assert.ok(prompts.every((prompt) => prompt.includes(`Owner-recorded request (verbatim):\n${prepared.request}\n`)));
+    const reportPath = join(dirname(world.created.attemptDir), "run-reports", "attempt-1-bounded-source.md");
+    assert.equal(reportPath.startsWith(`${world.created.attemptDir}/`), false, "the report projection never writes into a sealed attempt");
+    assert.equal(existsSync(reportPath), true);
+    assert.ok((await statusCommand(world.created.attemptDir)).includes(`Run report: ${reportPath} — human-readable projection of the retained attempt evidence`));
+    const report = readFileSync(reportPath, "utf8");
+    assert.match(report, /## Request/);
+    assert.match(report, /## Host gates/);
+    assert.match(report, /Verdict: accept/);
+    assert.match(report, /State: AWAITING_OWNER/);
+    assert.match(report, /Calls: 4 spent/);
+  } finally {
+    world.projection.close();
+    rmSync(world.root, { recursive: true, force: true });
+  }
+});
+
+test("simple-sdlc documenter with no project-doc change succeeds and still authors the run report", async () => {
+  const world = await fixture("simple-sdlc", 0, (config) => config, 2);
+  try {
+    const prepared = await readAttempt(world.created.attemptDir);
+    const status = await runProductionCommand({
+      attemptDir: world.created.attemptDir,
+      stateRoot: world.stateRoot,
+      config: world.config,
+      configPath: world.configPath,
+      projectRecord: world.projection.project,
+      assertAdvancement: world.projection.assertAdvancement,
+      assertLaunchProjection: world.projection.assertLaunchPermitted,
+      infrastructure: {
+        adapterFor: (_entry: AdapterEntry, id: string) => new ScriptedAdapter(id, prepared.worktree!, () => {}, "documenter-noop"),
+        createBroker: fakeBroker,
+        sandboxProbe: () => false,
+      },
+    });
+
+    assert.equal(status.lifecycleState, "AWAITING_OWNER", status.blocker?.detail);
+    assert.notEqual(status.blocker?.code, "permission-breach");
+    assert.equal(git(prepared.worktree!, "show", `${status.candidateSha}:README.md`), "base");
+    const report = readFileSync(join(dirname(world.created.attemptDir), "run-reports", "attempt-1-bounded-source.md"), "utf8");
+    assert.match(report, /The bounded source was planned, built/);
+    assert.match(report, /State: AWAITING_OWNER/);
   } finally {
     world.projection.close();
     rmSync(world.root, { recursive: true, force: true });
@@ -1114,9 +1168,40 @@ test("production refuses a current config that differs from durable attempt evid
   }
 });
 
-test("unsupported production workflow fails before lifecycle mutation", async () => {
-  const world = await fixture("simple-sdlc");
+test("production rejects a prepared worktree identity change before adapter resolution or provider launch", async () => {
+  const world = await fixture("build");
+  let routeResolved = false;
   try {
+    const prepared = await readAttempt(world.created.attemptDir);
+    writeFileSync(join(prepared.worktree!, "README.md"), "base\nchanged outside AWSF\n");
+    git(prepared.worktree!, "add", "README.md");
+    git(prepared.worktree!, "-c", "user.name=Santiago Marin", "-c", "user.email=santiagomarinsuarez@me.com", "commit", "-m", "test: move prepared head");
+
+    const status = await runProductionCommand({
+      attemptDir: world.created.attemptDir,
+      stateRoot: world.stateRoot,
+      config: world.config,
+      configPath: world.configPath,
+      infrastructure: { adapterFor: () => { routeResolved = true; return null; } },
+    });
+    assert.equal(status.lifecycleState, "BLOCKED");
+    assert.equal(routeResolved, false);
+    assert.equal(status.budget.callsSpent, 0);
+    assert.match(status.blocker?.detail ?? "", /prepared repository identity mismatch.*PREPARED HEAD/);
+  } finally {
+    world.projection.close();
+    rmSync(world.root, { recursive: true, force: true });
+  }
+});
+
+test("unsupported production workflow fails before lifecycle mutation", async () => {
+  const world = await fixture("build");
+  try {
+    const prepared = await readAttempt(world.created.attemptDir);
+    await persistAttempt(world.created.attemptDir, prepared.revision, {
+      kind: "attempt.updated",
+      next: nextRevision(prepared, { workflow: "unregistered-workflow" }),
+    }, world.projection.project);
     const before = readFileSync(join(world.created.attemptDir, "journal.jsonl"), "utf8");
     await assert.rejects(runProductionCommand({ attemptDir: world.created.attemptDir, stateRoot: world.stateRoot, config: world.config, configPath: world.configPath }), ProductionWorkflowUnsupported);
     assert.equal(readFileSync(join(world.created.attemptDir, "journal.jsonl"), "utf8"), before);

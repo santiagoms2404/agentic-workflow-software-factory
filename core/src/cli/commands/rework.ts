@@ -598,12 +598,15 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
   options.terminal.write(`Summary: ${firstInspection.summary}`);
   options.terminal.write(`Route: ${route.adapterId} / ${route.model.provider} / ${route.agent.model}`);
   options.terminal.write(`Budget: ${remainingCalls} call(s) and ${remainingOwner} owner re-entry allowance(s) remain`);
+  options.terminal.write("This act spends one owner re-entry, invalidates every candidate gate and review, and gives up the option to land or cancel the current candidate unchanged.");
   if (recipe !== null) {
     options.terminal.write(
       `This T${status.tier} rework spends one call on the builder and one on the mandatory opposite-provider review of the new candidate, ` +
         "and holds one more for that review's single permitted retry.",
     );
     options.terminal.write("The end-user journey attestation does not survive a new candidate; `awsf journey` runs again before landing.");
+  } else {
+    options.terminal.write("This T1 rework spends exactly one builder call; any correction would require separate remaining allowance and call headroom.");
   }
   options.terminal.write(`Defect: ${defect}`);
   const confirmed = await options.terminal.confirm(`Rework exact candidate ${firstInspection.candidate}?`);

@@ -113,6 +113,8 @@ export async function journeyCommand(options: JourneyCommandOptions): Promise<Jo
     throw new JourneyEvidenceRejected(report.checks.filter((check) => !check.ok).map((check) => `${check.item}: ${check.note}`));
   }
 
+  options.terminal.write("Cost: 0 provider calls. This records your attestation without changing the candidate or invalidating gates; a later rework of the candidate invalidates the attestation.");
+  options.terminal.write("Once confirmed, this evidence remains in the journal and cannot be edited or withdrawn on this attempt.");
   const confirmed = await options.terminal.confirm(
     `Do you attest that you ran ${trimmedId} against ${status.candidateSha} and it passed?`,
   );

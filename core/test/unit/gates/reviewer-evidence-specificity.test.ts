@@ -90,6 +90,14 @@ test("a finding without a concrete consequence cannot borrow specificity from de
   assert.deepEqual(incompleteItems(review), ["findings state a concrete consequence"]);
 });
 
+test("a prose-only consequence is accepted without a keyword or structured marker", () => {
+  const proseOnly = output({ findings: [finding({
+    title: "Null input changes the rendered selection",
+    detail: "With a null selection, dashboard readers receive an empty card and abandon the valid queued work.",
+  })] });
+  assert.equal(reviewEnvelopeComplete(proseOnly).passed, true);
+});
+
 test("accept and concern keep their existing meaning while specificity remains mandatory", () => {
   const acceptWithNonBlockingFinding = output({
     verdict: "accept",

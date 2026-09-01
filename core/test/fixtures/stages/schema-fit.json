@@ -5044,7 +5044,11 @@
               "documentPath": "specs/tickets/capture-plan/T01.md"
             }
           ],
-          "proposedCommitMessage": "docs: render capture-plan plan"
+          "proposedCommitMessage": "docs: render capture-plan plan",
+          "runReport": {
+            "path": "reports/design-to-plan.md",
+            "markdown": "The host rendered the validated capture-plan design plan and ticket set."
+          }
         }
       },
       "awsf.scout-output/v1": {

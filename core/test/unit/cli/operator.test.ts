@@ -238,7 +238,7 @@ test("the bounded fixture window is RUNNING in WAL and rebuild preserves its fin
     writeFileSync(join(canonical, "node_modules", "fixture", "index.js"), "dependency\n");
     const created = await newCommand({
       stateRoot, project: "agentic-workflow-software-factory", taskId: "T26-live",
-      repository: canonical, request: "bounded live fixture", workflow: "simple-sdlc", tier: 1,
+      repository: canonical, request: "bounded live fixture", workflow: "simple-sdlc", tier: 2,
       projectRecord: projection.project,
     });
     await startCommand({

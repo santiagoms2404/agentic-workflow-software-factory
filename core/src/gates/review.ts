@@ -25,7 +25,6 @@ export interface ReviewFindingSpecificity {
 }
 
 const OBSERVATION_WORD = /\b(?:adds?|after|before|calls?|contains?|declares?|deletes?|equals?|false|if|invokes?|is|lacks?|missing|null|references?|removes?|returns?|sets?|throws?|true|undefined|uses?|when|while|writes?)\b/i;
-const CONSEQUENCE_WORD = /\b(?:accepts?|allows?|blocks?|bypasses?|cannot|causes?|corrupts?|crashes?|drops?|duplicates?|exposes?|fails?|leaks?|loses?|omits?|overwrites?|prevents?|rejects?|results?|returns?|stale|throws?|unable|unreachable|widens?|will|would|wrong)\b/i;
 const CODE_SHAPE = /[`'"()[\]{}=<>:/]|\.|->/;
 
 export const REVIEW_FINDING_COMPLETENESS_ITEMS = Object.freeze({
@@ -44,14 +43,20 @@ export function reviewFindingSpecificity(
   candidatePaths: ReadonlySet<string>,
 ): ReviewFindingSpecificity {
   const evidenceTerms = terms(finding.evidence);
-  const consequenceText = `${finding.title} ${finding.detail}`;
   const candidateFile = candidatePaths.has(finding.file);
   // `null` is the contract's explicit file-wide scope. It is never replaced by a fake line.
   const lineOrFileWideScope = finding.line === null || (Number.isInteger(finding.line) && finding.line > 0);
   const observedMechanismOrCondition = evidenceTerms.length >= 2 && (
     CODE_SHAPE.test(finding.evidence) || OBSERVATION_WORD.test(finding.evidence)
   );
-  const concreteConsequence = terms(consequenceText).length >= 4 && CONSEQUENCE_WORD.test(consequenceText);
+  // Consequences are prose, not a fixed list of failure verbs. Accept the
+  // prompt's explicit marker or ordinary conditional/causal grammar; both
+  // distinguish an outcome from a long mechanism-only observation without
+  // requiring the outcome to use one particular verb.
+  const consequenceText = `${finding.title} ${finding.detail}`;
+  const consequenceRelation = /\b(?:because|can(?:not)?|could|if|unless|when(?:ever)?|where|with(?:out)?|would|will|causes?|leads?|results?|therefore|so)\b/iu;
+  const concreteConsequence = terms(finding.detail).length >= 4 &&
+    (/\bConsequence\s*:/iu.test(finding.detail) || consequenceRelation.test(consequenceText));
   return Object.freeze({
     candidateFile,
     lineOrFileWideScope,

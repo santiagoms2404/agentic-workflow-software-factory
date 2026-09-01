@@ -263,6 +263,8 @@ export async function landCommand(options: LandCommandOptions): Promise<LandComm
   for (const line of supersededReviewLines(recordedReviews(await readAttemptEvidence(options.attemptDir), current.sessionId))) {
     options.terminal.write(line);
   }
+  options.terminal.write("Cost: 0 provider calls. This locally fast-forwards the canonical branch to the exact candidate and invalidates no passing gate.");
+  options.terminal.write("Confirming seals this attempt as LANDED: rework, replacement review, cancellation, and landing a different candidate are no longer available; publication remains a separate owner act.");
   const confirmed = await options.terminal.confirm(`Land exact candidate ${current.candidateSha}?`);
   if (!confirmed) return { status: current, confirmed: false };
 

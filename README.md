@@ -196,6 +196,7 @@ npm test
 awsf init ./my-project --project my-project
 npm run awsf -- project register --catalog ./my-project/awsf.project.yaml --repository app=/absolute/path/to/app
 npm run awsf -- doctor
+npm run awsf -- workflows
 npm run awsf -- db rebuild
 ```
 

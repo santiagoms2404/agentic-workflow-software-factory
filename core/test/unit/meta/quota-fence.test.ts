@@ -249,7 +249,7 @@ function assertRouteFunctionQuotaFree(
 }
 
 function productionInlineResolver(source: ts.SourceFile): ts.Block {
-  const command = functionDeclaration(source, "runProductionCommand");
+  const command = functionDeclaration(source, "executeProductionCommand");
   const matches: ts.Block[] = [];
   const visit = (node: ts.Node): void => {
     if (ts.isTryStatement(node)) {

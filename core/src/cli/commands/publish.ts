@@ -250,6 +250,12 @@ export async function publishCommand(options: PublishCommandOptions): Promise<Pu
     return { outcome: "refused", code: refusing.code, detail: refusing.detail };
   }
 
+  const disclosureLines = [
+    "Cost: 0 provider calls. This performs one non-force, non-delete Git push of the displayed revision and invalidates no gate.",
+    "The remote update cannot be rolled back by AWSF. Confirming seals this attempt as PUBLISHED, so no different revision or destination can be chosen on it.",
+  ];
+  disclosureLines.forEach((line) => options.terminal.write(line));
+  terminalLines.push(...disclosureLines);
   const confirmed = await options.terminal.confirm(`Publish exact revision ${candidateSha} to ${remoteName}/${branch}?`);
   if (!confirmed) return { outcome: "declined" };
 

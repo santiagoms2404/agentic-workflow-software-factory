@@ -33,7 +33,7 @@ import { startCommand } from "../../src/cli/commands/start.ts";
 import { runProductionCommand } from "../../src/cli/commands/production-run.ts";
 import { journeyCommand, JourneyEvidenceRejected, JourneyNotApplicable } from "../../src/cli/commands/journey.ts";
 import { landCommand } from "../../src/cli/commands/land.ts";
-import { readAttempt } from "../../src/cli/commands/attempt.ts";
+import { nextRevision, persistAttempt, readAttempt } from "../../src/cli/commands/attempt.ts";
 import { compiledPromptEvents, gatesForSession, getSession } from "../../src/observability/queries.ts";
 import { openDatabase } from "../../src/observability/sqlite.ts";
 import type { OwnerTerminal } from "../../src/cli/tty.ts";
@@ -223,7 +223,11 @@ function configText(): string {
     .replace("  lint: { argv: [npm, run, lint], timeout_seconds: 300 }\n", "");
 }
 
-async function fixture(tier: 1 | 2 = 2, configure: (config: AwsfConfig) => AwsfConfig = (config) => config) {
+async function fixture(
+  tier: 1 | 2 = 2,
+  configure: (config: AwsfConfig) => AwsfConfig = (config) => config,
+  workflow: "build" | "build-review" = "build-review",
+) {
   const root = mkdtempSync(join(tmpdir(), "awsf-t2-"));
   const canonical = join(root, "canonical");
   const stateRoot = join(root, "state");
@@ -251,8 +255,8 @@ async function fixture(tier: 1 | 2 = 2, configure: (config: AwsfConfig) => AwsfC
   writeFileSync(sharedPrompt, readFileSync(resolve("prompts/shared/headless-role.md"), "utf8"));
   const projection = createDashboardProjection(stateRoot);
   const created = await newCommand({
-    stateRoot, project: config.project.slug, taskId: `fixture-t2-${tier}`, repository: canonical,
-    request: "write one bounded source", workflow: "build-review", tier,
+    stateRoot, project: config.project.slug, taskId: `fixture-t2-${tier}-${workflow}`, repository: canonical,
+    request: "write one bounded source", workflow, tier,
     configSnapshotJson: JSON.stringify(config), projectRecord: projection.project,
   });
   await startCommand({
@@ -624,24 +628,45 @@ test("landing a tier-2 candidate is refused until the owner records the journey,
 });
 
 test("the journey command refuses a piped owner and a tier that never bought a journey", async () => {
-  const world = await fixture(1);
+  const tierOne = await fixture(1, (config) => config, "build");
   try {
     await assert.rejects(
       journeyCommand({
-        attemptDir: world.created.attemptDir, terminal: { interactive: false, write: () => {}, confirm: async () => true },
-        journeyId: "t2-journey", observedSha: "HEAD", projectRecord: world.projection.project,
+        attemptDir: tierOne.created.attemptDir, terminal: terminal(true),
+        journeyId: "t1-journey", observedSha: "HEAD", projectRecord: tierOne.projection.project,
       }),
       JourneyNotApplicable,
     );
   } finally {
-    world.projection.close();
-    rmSync(world.root, { recursive: true, force: true });
+    tierOne.projection.close();
+    rmSync(tierOne.root, { recursive: true, force: true });
+  }
+
+  const piped = await fixture(2);
+  try {
+    const { status } = await withLiveCandidate(piped, { kind: "accept" })();
+    await assert.rejects(
+      journeyCommand({
+        attemptDir: piped.created.attemptDir,
+        terminal: { interactive: false, write: () => {}, confirm: async () => true },
+        journeyId: "t2-journey", observedSha: status.candidateSha!, projectRecord: piped.projection.project,
+      }),
+      /interactive owner terminal/,
+    );
+  } finally {
+    piped.projection.close();
+    rmSync(piped.root, { recursive: true, force: true });
   }
 });
 
 test("a tier-1 attempt may not run a tier-2 recipe", async () => {
-  const world = await fixture(1);
+  const world = await fixture(1, (config) => config, "build");
   try {
+    const prepared = await readAttempt(world.created.attemptDir);
+    await persistAttempt(world.created.attemptDir, prepared.revision, {
+      kind: "attempt.updated",
+      next: nextRevision(prepared, { workflow: "build-review" }),
+    }, world.projection.project);
     await assert.rejects(
       runProductionCommand({
         attemptDir: world.created.attemptDir, stateRoot: world.stateRoot, config: world.config, configPath: world.configPath,

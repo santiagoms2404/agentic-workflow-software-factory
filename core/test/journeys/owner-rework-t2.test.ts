@@ -687,7 +687,8 @@ test("a declined tier-2 rework spends nothing and a tier that its workflow does 
 
   // A tier-1 recipe recorded against a tier-2 attempt: neither branch is the
   // one this attempt bought, and the fork is not relaxed to guess.
-  const mismatched = await world({ workflow: "build", tier: 2 });
+  const mismatched = await world({ workflow: "build", tier: 1 });
+  await append(mismatched, null, { tier: 2 });
   const mismatchedScript = scripted(mismatched);
   try {
     await assert.rejects(rework(mismatched, mismatchedScript), ReworkTierUnsupported);
