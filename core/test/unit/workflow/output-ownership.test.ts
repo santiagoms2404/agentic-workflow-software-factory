@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import { WORKFLOW_RECIPES } from "../../../src/workflow/catalog.ts";
 import { outputOwnershipCheck, PHASE_OUTPUT_OWNERSHIP } from "../../../src/workflow/output-ownership.ts";
-import { validBuildOutput, validDocumentOutput, validReviewOutput } from "../contracts/fixtures.ts";
+import { validBuildOutput, validDocumentOutput, validPlanOutput, validReviewOutput } from "../contracts/fixtures.ts";
 
 test("shipped work products have one central phase owner", () => {
   assert.deepEqual(PHASE_OUTPUT_OWNERSHIP.planner?.outputs, ["plan"]);
@@ -21,7 +21,12 @@ test("every phase in every shipped recipe has an output owner", () => {
   }
 });
 
-test("an agent cannot claim a nearby artifact class owned by another phase", () => {
+test("read-only plan artifacts remain evidence while writers cannot claim another phase's output class", () => {
+  const planWithSourceEvidence = {
+    ...validPlanOutput(),
+    artifacts: [{ path: "core/src/index.ts", kind: "source" as const, description: "existing implementation evidence" }],
+  };
+  assert.equal(outputOwnershipCheck("planner", planWithSourceEvidence).ok, true);
   assert.equal(outputOwnershipCheck("builder", validBuildOutput()).ok, true);
   assert.equal(outputOwnershipCheck("documenter", validDocumentOutput()).ok, true);
   assert.equal(outputOwnershipCheck("reviewer", validReviewOutput()).ok, true);
