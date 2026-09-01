@@ -5,8 +5,10 @@ import { loadConfig } from "../../config/load.ts";
 import { runGit, systemGitRunner } from "../../git/changes.ts";
 import { createWorktree, seedWorktreePaths } from "../../git/worktrees.ts";
 import { transition } from "../../state/task-machine.ts";
-import { workflowRecipe } from "../../workflow/catalog.ts";
+import { callCeilingsOf } from "../../state/tiers.ts";
+import { correctionsFundableFor, minimumCallsFor, workflowRecipe } from "../../workflow/catalog.ts";
 import { composePromptBundle } from "../../workflow/prompt-composition.ts";
+import { correctionHeadroom } from "./workflows.ts";
 import {
   nextActionFor,
   nextRevision,
@@ -138,6 +140,24 @@ export async function startCommand(options: StartCommandOptions): Promise<Attemp
   }
   const recipe = workflowRecipe(current.workflow);
   if (recipe === null) throw new Error(`workflow ${JSON.stringify(current.workflow)} has no shipped recipe`);
+  // Zero cost, and deliberately BEFORE the worktree and BEFORE any adapter is
+  // contacted. It also deliberately does NOT block the DRAFT: `awsf raise` is
+  // legal on a live attempt and terminal on a BLOCKED one, so blocking here
+  // would seal away the one remedy the message names.
+  const ceiling = current.budget.ceiling ?? callCeilingsOf(config.risk.call_ceiling);
+  const headroom = correctionHeadroom(config, recipe, ceiling);
+  if (headroom.unfundable) {
+    throw new Error(
+      `workflow ${JSON.stringify(current.workflow)} declares a correction round on ${String(headroom.coldCorrectingPhases.length)} cold phase(s) ` +
+        `(${headroom.coldCorrectingPhases.join(", ")}) that this attempt cannot fund: ` +
+        `${String(minimumCallsFor(recipe))} provider call(s) are required and the ceiling is ` +
+        `${String(minimumCallsFor(recipe) + correctionsFundableFor(recipe, ceiling))}, ` +
+        `so corrections fundable = ${String(correctionsFundableFor(recipe, ceiling))}. ` +
+        `The first envelope defect would be terminal on its first occurrence. ` +
+        `Run \`awsf raise ${current.taskId} ${String(headroom.callsNeeded)} --reason "<why>"\` and start again; ` +
+        `the attempt stays DRAFT and no call has been spent.`,
+    );
+  }
   if (recipe.tier !== current.tier) {
     const detail = `workflow ${JSON.stringify(current.workflow)} requires --tier T${recipe.tier}; attempt recorded T${current.tier}`;
     await blockDraft(options, current, detail);

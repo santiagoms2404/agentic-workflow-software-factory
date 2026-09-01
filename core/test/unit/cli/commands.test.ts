@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { main } from "../../../src/cli/main.ts";
@@ -12,6 +12,7 @@ import { AlreadyInState } from "../../../src/state/errors.ts";
 import { SealedAttempt } from "../../../src/persistence/attempt-lock.ts";
 import { locateAttempt, nextRevision, persistAttempt, readAttempt } from "../../../src/cli/commands/attempt.ts";
 import { newCommand } from "../../../src/cli/commands/new.ts";
+import { raiseCommand } from "../../../src/cli/commands/raise.ts";
 import { retryCommand } from "../../../src/cli/commands/retry.ts";
 import { startCommand } from "../../../src/cli/commands/start.ts";
 import { formatStatusEvidence, statusCommand } from "../../../src/cli/commands/status.ts";
@@ -310,6 +311,72 @@ test("new, start, status, cancel, and retry preserve the lifecycle and task-life
       assert.equal(retried.status[field], created.status[field], `${field} is task identity and must not change`);
     }
     assert.equal((await readAttempt(retried.attemptDir)).sessionId, "cli-retry-session");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a recipe whose declared correction round no call can pay for is refused at start, DRAFT intact", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-cli-unfundable-"));
+  try {
+    const repo = repository(root);
+    const stateRoot = join(root, "state");
+    const configPath = join(root, "awsf.config.yaml");
+    writeFileSync(configPath, readFileSync(resolve("awsf.config.yaml"), "utf8"));
+    const created = await newCommand({
+      stateRoot, project: "agentic-workflow-software-factory", taskId: "unfundable-correction",
+      repository: repo, request: "prove the headroom refusal", workflow: "scout", tier: 0,
+    });
+    const worktreeRoot = join(root, "worktrees");
+    await assert.rejects(
+      startCommand({ attemptDir: created.attemptDir, worktreeRoot, configPath,
+        preflight: () => ({ adapter: true, sandbox: true, observability: true }) }),
+      /declares a correction round on 1 cold phase\(s\) \(scout\).*corrections fundable = 0.*awsf raise unfundable-correction 1 --reason/su,
+    );
+
+    // The refusal has to leave `raise` legal. A BLOCKED attempt is terminal and
+    // `raise` refuses it, so blocking here would seal away its own remedy.
+    const afterRefusal = await readAttempt(created.attemptDir);
+    assert.equal(afterRefusal.lifecycleState, "DRAFT");
+    assert.equal(afterRefusal.budget.callsSpent, 0);
+    assert.equal(existsSync(worktreeRoot), false, "no worktree is created by a refused start");
+
+    // Remove the induced condition the way the message says to, and the same
+    // start proceeds past the check.
+    const raised = await raiseCommand({
+      attemptDir: created.attemptDir, calls: 1,
+      reason: "fund one cold correction on scout", terminal: yesTerminal,
+    });
+    assert.equal(raised.ceiling, 2);
+    const prepared = await startCommand({ attemptDir: created.attemptDir, worktreeRoot, configPath,
+      preflight: () => ({ adapter: true, sandbox: true, observability: true }) });
+    assert.equal(prepared.lifecycleState, "PREPARED");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a route with spare headroom, and a warm route with none, both start unchanged", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-cli-fundable-"));
+  try {
+    const repo = repository(root);
+    const stateRoot = join(root, "state");
+    const configPath = join(root, "awsf.config.yaml");
+    writeFileSync(configPath, readFileSync(resolve("awsf.config.yaml"), "utf8"));
+    for (const [taskId, workflow, tier] of [
+      ["fundable-build", "build", 1],
+      ["warm-intake", "intake", 0],
+    ] as const) {
+      const created = await newCommand({
+        stateRoot, project: "agentic-workflow-software-factory", taskId,
+        repository: repo, request: "prove the headroom check admits this route", workflow, tier,
+      });
+      const prepared = await startCommand({
+        attemptDir: created.attemptDir, worktreeRoot: join(root, "worktrees", taskId), configPath,
+        preflight: () => ({ adapter: true, sandbox: true, observability: true }),
+      });
+      assert.equal(prepared.lifecycleState, "PREPARED", taskId);
+    }
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

@@ -1,5 +1,6 @@
 import type { WorkflowRecipe } from "./compiler.ts";
 import { WORKFLOW_IDS } from "../config/workflow-ids.ts";
+import { ceilingFor, type ResolvedCeiling } from "../state/tiers.ts";
 import { buildWorkflow } from "./recipes/build.ts";
 import { buildReviewWorkflow } from "./recipes/build-review.ts";
 import { designToPlanWorkflow } from "./recipes/design-to-plan.ts";
@@ -37,4 +38,18 @@ export function workflowRecipe(id: string): WorkflowRecipe | null {
 
 export function minimumCallsFor(recipe: WorkflowRecipe): number {
   return recipe.phases.filter((phase) => phase.kind === "agent").length;
+}
+
+/**
+ * The number every correction round on a cold route is spent from: what the
+ * ceiling allows minus what the route must spend to finish once.
+ *
+ * A route whose agents are `continuity: none` pays a whole provider call to
+ * re-ask a phase, so this number — not `maxCorrections` — decides whether a
+ * declared correction round exists in practice. Three enabled recipes sit at
+ * zero, which is why the first envelope defect on them was terminal on its
+ * first occurrence while the recipe declared it recoverable.
+ */
+export function correctionsFundableFor(recipe: WorkflowRecipe, resolved?: ResolvedCeiling): number {
+  return ceilingFor(recipe.tier, resolved) - minimumCallsFor(recipe);
 }
