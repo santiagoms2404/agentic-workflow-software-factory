@@ -60,3 +60,40 @@ export function classifyRisk(
 export function tierForPaths(paths: readonly string[], policy: RiskPolicy): RiskTierName {
   return classifyRisk(paths, policy).tier;
 }
+
+/** `RiskTierName` as the numeric tier the lifecycle counts in. */
+export function tierNumberOf(tier: RiskTierName): 0 | 1 | 2 {
+  const rank = tierRank(tier);
+  return rank === 2 ? 2 : rank === 1 ? 1 : 0;
+}
+
+export interface RiskAdmission {
+  readonly classified: RiskTierName;
+  readonly sufficient: boolean;
+  /** The path/glob pairs that raised the classification above the attempt's tier. */
+  readonly raisedBy: readonly { path: string; glob: string; tier: RiskTierName }[];
+}
+
+/**
+ * Whether an attempt at `tier` may touch these paths under `policy`.
+ *
+ * This is the reader `risk.paths` never had. Without it the configuration block
+ * that declares which paths deserve tighter controls had no effect on any
+ * attempt: an owner could raise a glob to T2 and change nothing, and get no
+ * error saying so.
+ */
+export function admitRisk(
+  paths: readonly string[],
+  tier: 0 | 1 | 2,
+  policy: RiskPolicy,
+): RiskAdmission {
+  const classification = classifyRisk(paths, policy);
+  const classified = classification.classifiedTier;
+  return Object.freeze({
+    classified,
+    sufficient: tierNumberOf(classified) <= tier,
+    raisedBy: Object.freeze(
+      classification.matched.filter((match) => tierNumberOf(match.tier) > tier),
+    ),
+  });
+}

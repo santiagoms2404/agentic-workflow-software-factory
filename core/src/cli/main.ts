@@ -76,7 +76,16 @@ function parseArgs(args: readonly string[]): ParsedArgs {
     const key = arg.slice(2);
     const value = args[index + 1];
     if (CLI_BOOLEAN_FLAGS.has(key)) {
-      flags[key] = "true";
+      // `--stub true`, `--tier T2`, `--live-ms 0`: the value spelling is what
+      // every other flag in this CLI uses, so a driver types `--evidence true`
+      // and used to bind the task id to `true` — silently, with the error
+      // telling them to create a task by that name. Consume the token when it
+      // IS the boolean, and only then; `--evidence TASK` must still leave TASK
+      // a positional. A task literally named `true` or `false` is spelled
+      // `--evidence=true TASK`.
+      const spelled = value === "true" || value === "false";
+      flags[key] = spelled ? value : "true";
+      if (spelled) index += 1;
       continue;
     }
     if (value === undefined || value.startsWith("--")) throw new Error(`--${key} requires a value`);

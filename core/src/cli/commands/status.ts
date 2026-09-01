@@ -1,6 +1,6 @@
 import { ceilingFor } from "../../state/tiers.ts";
 import type { AttemptEvidence } from "../../observability/attempt-evidence.ts";
-import { locateRunReport } from "../../observability/run-report.ts";
+import { locateRunReport, runReportRevision } from "../../observability/run-report.ts";
 import { readAttemptEvidence } from "./review-record.ts";
 import { readAttempt, type AttemptStatus } from "./attempt.ts";
 
@@ -102,7 +102,16 @@ export async function statusCommand(
     locateRunReport(attemptDir),
   ]);
   const lines = [...formatStatus(status)];
-  if (report !== null) lines.push(`Run report: ${report.absolutePath} — human-readable projection of the retained attempt evidence`);
+  if (report !== null) {
+    // Every command that moves the candidate, the verdict or the lifecycle
+    // re-renders this. The stamp is the belt-and-braces: a writer that forgets
+    // makes the report say so instead of presenting a superseded run as current.
+    const rendered = await runReportRevision(report.absolutePath);
+    const stale = rendered !== null && rendered !== status.revision
+      ? ` (stale: rendered at revision ${String(rendered)}, attempt is at ${String(status.revision)})`
+      : "";
+    lines.push(`Run report: ${report.absolutePath} — human-readable projection of the retained attempt evidence${stale}`);
+  }
   if (options.evidence === true) lines.push(...formatStatusEvidence(records));
   return Object.freeze(lines);
 }

@@ -14,6 +14,9 @@ export interface RunReportLocation {
   readonly taskRelativePath: string;
 }
 
+/** The attempt revision a report was rendered from, read back from its own stamp. */
+export const RUN_REPORT_REVISION_STAMP = "Rendered at attempt revision:";
+
 /** Reports are disposable projections beside attempts, never post-seal writes inside one. */
 export function runReportLocation(
   attemptDirectory: string,
@@ -34,6 +37,29 @@ export function runReportLocation(
   });
 }
 
+/** The revision stamped into a rendered report, or null when it carries none. */
+export async function runReportRevision(absolutePath: string): Promise<number | null> {
+  try {
+    const text = await fs.readFile(absolutePath, "utf8");
+    const stamped = new RegExp(`^${RUN_REPORT_REVISION_STAMP} (\\d+)$`, "mu").exec(text);
+    const revision = stamped === null ? Number.NaN : Number(stamped[1]);
+    return Number.isSafeInteger(revision) ? revision : null;
+  } catch (error) {
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return null;
+    throw error;
+  }
+}
+
+/**
+ * The CURRENT report for an attempt.
+ *
+ * This used to `sort()` the matching names and take the first, which answers
+ * "alphabetically first" rather than "newest". The filename is derived from the
+ * documenter's own chosen path, so an attempt whose report is re-rendered under
+ * a different name would keep resolving to the older file forever. Resolution
+ * is by the revision each report stamps into itself — a content fact, not a
+ * clock reading — with the name as a stable tiebreak.
+ */
 export async function locateRunReport(attemptDirectory: string): Promise<RunReportLocation | null> {
   const attempt = basename(attemptDirectory);
   const prefix = `attempt-${attempt}-`;
@@ -46,9 +72,18 @@ export async function locateRunReport(attemptDirectory: string): Promise<RunRepo
       .map((entry) => entry.name)
       .sort();
     if (names[0] === undefined) return null;
+    let newest = names[0];
+    let newestRevision = -1;
+    for (const name of names) {
+      const revision = await runReportRevision(join(directory, name)) ?? -1;
+      if (revision > newestRevision) {
+        newest = name;
+        newestRevision = revision;
+      }
+    }
     return Object.freeze({
-      absolutePath: join(directory, names[0]),
-      taskRelativePath: `run-reports/${names[0]}`,
+      absolutePath: join(directory, newest),
+      taskRelativePath: `run-reports/${newest}`,
     });
   } catch (error) {
     if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return null;
@@ -60,6 +95,7 @@ export interface RenderedRunReport {
   readonly path: string;
   readonly markdown: string;
   readonly documenterDraftPresent: boolean;
+  readonly renderedRevision: number;
 }
 
 function latestEnvelope<T>(
@@ -110,6 +146,7 @@ function sectionList(values: readonly string[], empty: string): string {
   return values.length === 0 ? empty : values.map((value) => `- ${value}`).join("\n");
 }
 
+
 /** A readable projection. The journal and Git remain the evidence stores. */
 export function renderRunReport(
   status: AttemptStatus,
@@ -156,6 +193,11 @@ export function renderRunReport(
     `# AWSF run report: ${status.taskId}`,
     "",
     "> This is a readable projection of the attempt journal and Git evidence. It is not a receipt or a second evidence store.",
+    "",
+    // The stamp is what lets `awsf status` say a report is stale rather than
+    // presenting a superseded candidate and verdict as current, and what lets
+    // `locateRunReport` answer "newest" instead of "alphabetically first".
+    `${RUN_REPORT_REVISION_STAMP} ${String(status.revision)}`,
     "",
     "## Request",
     "",
@@ -209,5 +251,31 @@ export function renderRunReport(
     "",
   ].join("\n");
 
-  return Object.freeze({ path, markdown, documenterDraftPresent: draft !== undefined });
+  return Object.freeze({ path, markdown, documenterDraftPresent: draft !== undefined, renderedRevision: status.revision });
+}
+
+/**
+ * Render and persist the report for an attempt, from whatever evidence exists
+ * now.
+ *
+ * `awsf run` was the only writer, so every later owner act — rework, a
+ * replacement review, land, publish — changed the candidate, the verdict, the
+ * gate rows and the lifecycle state while `awsf status` went on naming a report
+ * whose Build, Review and Final lifecycle sections described the run before it.
+ * Every command that moves those facts calls this.
+ *
+ * The destination is beside the attempt directory, not inside it, so a sealed
+ * terminal attempt can still have its projection refreshed.
+ */
+export async function writeRunReport(
+  attemptDirectory: string,
+  status: AttemptStatus,
+  evidence: readonly AttemptEvidence[],
+): Promise<RunReportLocation> {
+  const report = renderRunReport(status, evidence);
+  const location = runReportLocation(attemptDirectory, status.attempt, report.path);
+  await fs.mkdir(dirname(location.absolutePath), { recursive: true, mode: 0o700 });
+  await fs.writeFile(location.absolutePath, report.markdown, { mode: 0o600 });
+  await fs.chmod(location.absolutePath, 0o600);
+  return location;
 }

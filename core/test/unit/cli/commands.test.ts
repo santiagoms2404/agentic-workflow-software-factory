@@ -270,11 +270,21 @@ test("new, start, status, cancel, and retry preserve the lifecycle and task-life
       kind: "attempt.updated",
       next: withSpend,
     });
+    // The confirmation states what this seal writes off, computed at the
+    // prompt. Two constant sentences stood here and the owner confirmed an
+    // irreversible act without seeing the spend, the candidate, the re-entry
+    // allowance, or whether a process tree was about to be reaped.
+    const disclosure: string[] = [];
     const cancelled = await cancelCommand({
       attemptDir: created.attemptDir,
-      terminal: yesTerminal,
+      terminal: { ...yesTerminal, write: (line: string) => disclosure.push(line) },
       now: () => "2026-08-07T00:02:00.000Z",
     });
+    assert.match(disclosure.join("\n"), /Spend written off: 2 of 5 call\(s\) already spent/u);
+    assert.match(disclosure.join("\n"), /Candidate: none — nothing has been built to lose/u);
+    assert.match(disclosure.join("\n"), /Owner re-entries: 0\/1 used/u);
+    assert.match(disclosure.join("\n"), /Cost: 0 new provider calls; no live process is recorded/u);
+    assert.match(disclosure.join("\n"), /^Task: agentic-workflow-software-factory\/.+ attempt 1, T2, PREPARED$/mu);
     assert.equal(cancelled.status.lifecycleState, "CANCELLED");
     assert.deepEqual(cancelled.report.survivors, []);
     await assert.rejects(
@@ -376,6 +386,59 @@ test("a route with spare headroom, and a warm route with none, both start unchan
         preflight: () => ({ adapter: true, sandbox: true, observability: true }),
       });
       assert.equal(prepared.lifecycleState, "PREPARED", taskId);
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a registered boolean flag reads its value spelling instead of eating the task id", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-cli-boolean-flag-"));
+  try {
+    const repo = repository(root);
+    const stateRoot = join(root, "state");
+    const configPath = join(root, "awsf.config.yaml");
+    writeFileSync(configPath, readFileSync(resolve("awsf.config.yaml"), "utf8"));
+    await newCommand({
+      stateRoot, project: "agentic-workflow-software-factory", taskId: "flag-spelling",
+      repository: repo, request: "prove the boolean flag parse", workflow: "build", tier: 1,
+    });
+
+    async function status(...argv: string[]): Promise<{ code: number; lines: string[]; errors: string[] }> {
+      const lines: string[] = [];
+      const errors: string[] = [];
+      const code = await main({
+        argv: [...argv, "--state-root", stateRoot, "--config", configPath],
+        cwd: resolve("."), writeOut: (line) => lines.push(line), writeError: (line) => errors.push(line),
+      });
+      return { code, lines, errors };
+    }
+
+    // `--evidence true` used to bind the task id to `true` and fail with an
+    // error telling the owner to create a task by that name.
+    for (const argv of [
+      ["status", "--evidence", "true", "flag-spelling"],
+      ["status", "flag-spelling", "--evidence", "true"],
+      ["status", "--evidence", "flag-spelling"],
+      ["status", "flag-spelling", "--evidence"],
+      ["status", "--evidence=true", "flag-spelling"],
+    ]) {
+      const result = await status(...argv);
+      assert.equal(result.code, 0, `${argv.join(" ")}: ${result.errors.join("\n")}`);
+      assert.ok(result.lines.some((line) => line.startsWith("State: DRAFT")), argv.join(" "));
+      assert.ok(result.lines.includes("Evidence:"), `${argv.join(" ")} should render the evidence section`);
+    }
+
+    // The false spelling is consumed too, and suppresses the section rather
+    // than becoming a positional.
+    for (const argv of [
+      ["status", "--evidence", "false", "flag-spelling"],
+      ["status", "--evidence=false", "flag-spelling"],
+    ]) {
+      const result = await status(...argv);
+      assert.equal(result.code, 0, `${argv.join(" ")}: ${result.errors.join("\n")}`);
+      assert.ok(result.lines.some((line) => line.startsWith("State: DRAFT")), argv.join(" "));
+      assert.equal(result.lines.includes("Evidence:"), false, argv.join(" "));
     }
   } finally {
     rmSync(root, { recursive: true, force: true });

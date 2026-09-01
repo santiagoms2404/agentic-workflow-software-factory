@@ -29,6 +29,10 @@ import { isTaskEdgeRegistration, reservationIdOf } from "../../src/adapters/inte
 import { ProcessTransportBroker, type BrokerOptions } from "../../src/execution/transport-broker.ts";
 import { createDashboardProjection } from "../../src/cli/commands/dashboard-projection.ts";
 import { newCommand } from "../../src/cli/commands/new.ts";
+import { raiseCommand } from "../../src/cli/commands/raise.ts";
+import { correctionHeadroom } from "../../src/cli/commands/workflows.ts";
+import { WORKFLOW_RECIPES, workflowRecipe } from "../../src/workflow/catalog.ts";
+import { writePlacement } from "../../src/registry/placement.ts";
 import { startCommand } from "../../src/cli/commands/start.ts";
 import { statusCommand } from "../../src/cli/commands/status.ts";
 import { runProductionCommand, ProductionConfigSnapshotMismatch, ProductionWorkflowUnsupported } from "../../src/cli/commands/production-run.ts";
@@ -267,6 +271,8 @@ async function fixture(
   commandExit = 0,
   configure: (config: AwsfConfig) => AwsfConfig = (config) => config,
   tier: 0 | 1 | 2 = 1,
+  request = "write one bounded source",
+  seed: (canonical: string) => void = () => {},
 ) {
   const root = mkdtempSync(join(tmpdir(), "awsf-production-runner-"));
   const canonical = join(root, "canonical");
@@ -275,6 +281,7 @@ async function fixture(
   writeFileSync(join(canonical, "README.md"), "base\n");
   git(canonical, "add", "README.md");
   git(canonical, "-c", "user.name=Santiago Marin", "-c", "user.email=santiagomarinsuarez@me.com", "commit", "-m", "test: seed production runner");
+  seed(canonical);
   const configText = configTextWithCommand(commandExit);
   const config = configure(loadConfig(configText));
   const configPath = join(root, "awsf.config.yaml");
@@ -291,7 +298,19 @@ async function fixture(
   mkdirSync(resolve(sharedPrompt, ".."), { recursive: true });
   writeFileSync(sharedPrompt, readFileSync(resolve("prompts/shared/headless-role.md"), "utf8"));
   const projection = createDashboardProjection(stateRoot);
-  const created = await newCommand({ stateRoot, project: config.project.slug, taskId: `fixture-${workflow}`, repository: canonical, request: "write one bounded source", workflow, tier, configSnapshotJson: JSON.stringify(config), projectRecord: projection.project });
+  const created = await newCommand({ stateRoot, project: config.project.slug, taskId: `fixture-${workflow}`, repository: canonical, request, workflow, tier, configSnapshotJson: JSON.stringify(config), projectRecord: projection.project });
+  // scout, plan and design-to-plan need every call their ceiling allows, so
+  // `awsf start` refuses their unfundable correction round. Take the owner's
+  // own remedy — which is also what proves the remedy works.
+  const headroom = correctionHeadroom(config, workflowRecipe(workflow)!);
+  if (headroom.unfundable) {
+    await raiseCommand({
+      attemptDir: created.attemptDir, calls: headroom.callsNeeded,
+      reason: `fixture funds ${String(headroom.callsNeeded)} cold correction on ${workflow}`,
+      terminal: { interactive: true, write: () => {}, confirm: async () => true },
+      projectRecord: projection.project,
+    });
+  }
   await startCommand({ attemptDir: created.attemptDir, worktreeRoot: join(root, "worktrees"), configPath, preflight: () => ({ adapter: true, sandbox: true, observability: true }), projectRecord: projection.project });
   return { root, canonical, stateRoot, config, configPath, projection, created };
 }
@@ -1211,3 +1230,105 @@ test("unsupported production workflow fails before lifecycle mutation", async ()
     rmSync(world.root, { recursive: true, force: true });
   }
 });
+
+// ---------------------------------------------------------------------------
+// A1's regression boundary, on every enabled recipe rather than on one.
+//
+// The owner's request reaching the first agent is the single most damaging
+// failure this factory has had: `simple-sdlc`'s planner ran with
+// `Previous phase envelope: null`, planned the one defect it had evidence for —
+// its own empty input — and the builder implemented that. `1755/1755` was green
+// throughout. The runner fix is uniform, so the class is closed structurally;
+// this is the boundary that says so for each route, because a change that keeps
+// the phase list and drops the `recordedRequest` argument on some of them would
+// otherwise be caught for `simple-sdlc` alone.
+//
+// It does not need a full drive per recipe. The first agent phase's composed
+// prompt is captured and the run is then allowed to go wherever it goes.
+// ---------------------------------------------------------------------------
+
+for (const recipe of WORKFLOW_RECIPES) {
+  test(`production ${recipe.id} composes the owner's recorded request into its first agent prompt`, async () => {
+    const request = `carry this verbatim into ${recipe.id}'s first agent`;
+    // Two routes need more than the generic fixture supplies, and neither has
+    // anything to do with A1: `intake` is the one configured `same-session`
+    // agent and the scripted adapter reports `none`; `design-to-plan`'s host
+    // head reads the project catalog off the canonical repository.
+    const world = await fixture(
+      recipe.id as Parameters<typeof fixture>[0],
+      0,
+      (config) => recipe.id !== "intake" ? config : {
+        ...config,
+        agents: config.agents.map((agent) => agent.name === "intake"
+          ? { ...agent, harness: { ...agent.harness, continuity: "none" as const } }
+          : agent),
+      },
+      recipe.tier,
+      request,
+      (canonical) => {
+        if (recipe.id !== "design-to-plan") return;
+        writeFileSync(join(canonical, "awsf.project.yaml"), [
+          "version: awsf.project/v1",
+          "project:",
+          "  slug: agentic-workflow-software-factory",
+          "repositories:",
+          "  primary:",
+          "    role: plan",
+          "    default_branch: main",
+          "plans:",
+          "  root: specs",
+          "  format: awsf-plan-html/v1",
+          "",
+        ].join("\n"));
+        git(canonical, "add", "awsf.project.yaml");
+        git(canonical, "-c", "user.name=Santiago Marin", "-c", "user.email=santiagomarinsuarez@me.com", "commit", "-m", "chore: declare the project catalog");
+      },
+    );
+    try {
+      if (recipe.id === "design-to-plan") {
+        await writePlacement(world.stateRoot, world.config.project.slug, {
+          version: "awsf.placement/v1",
+          project: world.config.project.slug,
+          repositories: { primary: { path: world.canonical } },
+          worktree_root: join(world.root, "worktrees"),
+        });
+      }
+      const prepared = await readAttempt(world.created.attemptDir);
+      const prompts: string[] = [];
+      // The blocker, when there is one, is what makes a failure here readable.
+      let outcome = "the run threw";
+      try {
+        outcome = JSON.stringify((await runProductionCommand({
+          attemptDir: world.created.attemptDir,
+          stateRoot: world.stateRoot,
+          config: world.config,
+          configPath: world.configPath,
+          projectRecord: world.projection.project,
+          assertAdvancement: world.projection.assertAdvancement,
+          assertLaunchProjection: world.projection.assertLaunchPermitted,
+          infrastructure: {
+            adapterFor: (_entry: AdapterEntry, id: string) =>
+              new ScriptedAdapter(id, prepared.worktree!, (r) => prompts.push(r.prompt)),
+            createBroker: fakeBroker,
+            sandboxProbe: () => false,
+          },
+        })).blocker);
+      } catch (error) {
+        // Where the run ends is another test's subject. This one is about the
+        // first thing the first agent was told.
+        if (prompts.length === 0) throw error;
+      }
+      const first = recipe.phases.find((phase) => phase.kind === "agent");
+      assert.ok(first, `${recipe.id} has an agent phase`);
+      assert.ok(prompts.length > 0, `${recipe.id} never launched its ${first.id} phase: ${outcome}`);
+      assert.ok(
+        prompts[0]!.includes(`Owner-recorded request (verbatim):\n${request}\n`),
+        `${recipe.id}: ${first.id} was composed without the recorded request`,
+      );
+      assert.equal(prepared.request, request);
+    } finally {
+      world.projection.close();
+      rmSync(world.root, { recursive: true, force: true });
+    }
+  });
+}

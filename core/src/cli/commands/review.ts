@@ -48,6 +48,7 @@ import { ProcessTransportBroker } from "../../execution/transport-broker.ts";
 import { assertClean, runGit, systemGitRunner } from "../../git/changes.ts";
 import { HOST_AUTHOR } from "../../git/commit.ts";
 import type { AttemptEvidence, PhaseEvidenceRecord } from "../../observability/attempt-evidence.ts";
+import { writeRunReport } from "../../observability/run-report.ts";
 import { REDACTED_VALUE, scrubCredentialString, scrubCredentials } from "../../policy/redaction.ts";
 import { transition, type EdgeId, type TaskState, type TransitionEvidence } from "../../state/task-machine.ts";
 import { ceilingFor } from "../../state/tiers.ts";
@@ -824,9 +825,24 @@ async function reconcileStaleReservation(
   }, options.projectRecord);
 }
 
+
+/**
+ * Keep the readable projection level with the record this act just moved.
+ *
+ * A projection is disposable and Git plus the journal remain authoritative, so
+ * this is deliberately last and deliberately cheap. It is not optional: a
+ * report naming a superseded candidate while `awsf status` calls it current is
+ * how an owner reads the wrong review of the wrong change.
+ */
+async function refreshRunReport(attemptDir: string, status: AttemptStatus): Promise<void> {
+  await writeRunReport(attemptDir, status, await readAttemptEvidence(attemptDir));
+}
+
 export async function reviewCommand(options: ReviewCommandOptions): Promise<ReviewCommandResult> {
   try {
-    return await runReviewCommand(options);
+    const result = await runReviewCommand(options);
+    if (result.confirmed) await refreshRunReport(options.attemptDir, result.status);
+    return result;
   } catch (error) {
     throw safeFailure(error);
   }

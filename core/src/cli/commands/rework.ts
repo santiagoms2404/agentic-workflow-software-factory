@@ -47,6 +47,7 @@ import { GateReport, type GateId } from "../../gates/interface.ts";
 import { assertClean, captureChangeSet, changedPaths, runGit, systemGitRunner } from "../../git/changes.ts";
 import { commitAsHost, HOST_AUTHOR } from "../../git/commit.ts";
 import type { AttemptEvidence, PhaseEvidenceRecord } from "../../observability/attempt-evidence.ts";
+import { writeRunReport } from "../../observability/run-report.ts";
 import { PermissionBreach } from "../../policy/path-policy.ts";
 import {
   REDACTED_VALUE,
@@ -1400,9 +1401,24 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
   }
 }
 
+
+/**
+ * Keep the readable projection level with the record this act just moved.
+ *
+ * A projection is disposable and Git plus the journal remain authoritative, so
+ * this is deliberately last and deliberately cheap. It is not optional: a
+ * report naming a superseded candidate while `awsf status` calls it current is
+ * how an owner reads the wrong review of the wrong change.
+ */
+async function refreshRunReport(attemptDir: string, status: AttemptStatus): Promise<void> {
+  await writeRunReport(attemptDir, status, await readAttemptEvidence(attemptDir));
+}
+
 export async function reworkCommand(options: ReworkCommandOptions): Promise<ReworkCommandResult> {
   try {
-    return await runReworkCommand(options);
+    const result = await runReworkCommand(options);
+    if (result.confirmed) await refreshRunReport(options.attemptDir, result.status);
+    return result;
   } catch (error) {
     throw safeFailure(error);
   }

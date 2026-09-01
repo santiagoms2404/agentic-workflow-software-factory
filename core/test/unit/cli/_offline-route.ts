@@ -24,7 +24,6 @@ import type {
 import { isTaskEdgeRegistration, reservationIdOf } from "../../../src/adapters/interface.ts";
 import type { AwsfConfig } from "../../../src/config/schema.ts";
 import { toConfigSnapshotJson } from "../../../src/config/effective-config.ts";
-import { loadConfig } from "../../../src/config/load.ts";
 import type { ArchitectureReviewOutput } from "../../../src/contracts/architecture-review-output.ts";
 import type { DesignOutput } from "../../../src/contracts/design-output.ts";
 import type { DesignPlanOutput } from "../../../src/contracts/design-plan-output.ts";
@@ -33,6 +32,10 @@ import type { EnvelopeBase } from "../../../src/contracts/envelope-base.ts";
 import type { AttemptProjector } from "../../../src/cli/commands/attempt.ts";
 import { createDashboardProjection } from "../../../src/cli/commands/dashboard-projection.ts";
 import { newCommand } from "../../../src/cli/commands/new.ts";
+import { raiseCommand } from "../../../src/cli/commands/raise.ts";
+import { correctionHeadroom } from "../../../src/cli/commands/workflows.ts";
+import { workflowRecipe } from "../../../src/workflow/catalog.ts";
+import { loadConfig } from "../../../src/config/load.ts";
 import { startCommand } from "../../../src/cli/commands/start.ts";
 import type { BrokerOptions } from "../../../src/execution/transport-broker.ts";
 import { writePlacement } from "../../../src/registry/placement.ts";
@@ -272,6 +275,33 @@ export interface PreparedTask {
 }
 
 /** `newCommand` then `startCommand`: one task minted at DRAFT and prepared at L1. */
+/**
+ * Grant the one call `awsf start` now refuses to proceed without.
+ *
+ * `scout`, `plan` and `design-to-plan` need exactly as many provider calls as
+ * their tier ceiling allows, so every correction round they declare is
+ * unfundable and `start` refuses. A fixture that wants to drive them takes the
+ * owner's own remedy — which is also what proves the remedy works.
+ */
+export async function fundCorrections(
+  attemptDir: string,
+  config: AwsfConfig,
+  workflow: string,
+  projectRecord?: AttemptProjector,
+): Promise<void> {
+  const recipe = workflowRecipe(workflow);
+  if (recipe === null) return;
+  const headroom = correctionHeadroom(config, recipe);
+  if (!headroom.unfundable) return;
+  await raiseCommand({
+    attemptDir,
+    calls: headroom.callsNeeded,
+    reason: `fixture funds ${String(headroom.callsNeeded)} cold correction on ${workflow}`,
+    terminal: { interactive: true, write: () => {}, confirm: async () => true },
+    ...(projectRecord === undefined ? {} : { projectRecord }),
+  });
+}
+
 export async function prepareTask(input: PrepareTaskInput): Promise<PreparedTask> {
   const created = await newCommand({
     stateRoot: input.stateRoot,
@@ -284,6 +314,12 @@ export async function prepareTask(input: PrepareTaskInput): Promise<PreparedTask
     configSnapshotJson: input.configSnapshotJson,
     projectRecord: input.projectRecord,
   });
+  await fundCorrections(
+    created.attemptDir,
+    loadConfig(readFileSync(input.configPath, "utf8")),
+    input.workflow,
+    input.projectRecord,
+  );
   const prepared = await startCommand({
     attemptDir: created.attemptDir,
     worktreeRoot: input.worktreeRoot,

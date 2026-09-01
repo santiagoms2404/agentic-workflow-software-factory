@@ -22,6 +22,7 @@ import { initCommand } from "../../../src/cli/commands/init.ts";
 import { newCommand } from "../../../src/cli/commands/new.ts";
 import { registerProject } from "../../../src/cli/commands/project.ts";
 import { runProductionCommand } from "../../../src/cli/commands/production-run.ts";
+import { fundCorrections } from "../cli/_offline-route.ts";
 import { startCommand } from "../../../src/cli/commands/start.ts";
 import { readAttempt } from "../../../src/cli/commands/attempt.ts";
 import { createDashboardProjection } from "../../../src/cli/commands/dashboard-projection.ts";
@@ -360,6 +361,7 @@ async function workflowWorld(
     configSnapshotJson: toConfigSnapshotJson(config),
     projectRecord: world.projection.project,
   });
+  await fundCorrections(created.attemptDir, config, workflow, world.projection.project);
   const prepared = await startCommand({
     attemptDir: created.attemptDir,
     worktreeRoot: join(world.root, "worktrees"),

@@ -47,6 +47,8 @@ import {
   type AttemptStatus,
 } from "./attempt.ts";
 import { SealedAttempt } from "../../persistence/attempt-lock.ts";
+import { readAttemptEvidence } from "./review-record.ts";
+import { writeRunReport } from "../../observability/run-report.ts";
 
 type PublishPolicy = NonNullable<ProjectCatalog["repositories"][string]["publish"]>;
 
@@ -335,5 +337,18 @@ export async function publishCommand(options: PublishCommandOptions): Promise<Pu
     },
     options.projectRecord,
   );
+  await refreshRunReport(options.attemptDir, status);
   return { outcome: "published", status, outcomes: run.outcomes };
+}
+
+/**
+ * Keep the readable projection level with the record this act just moved.
+ *
+ * A projection is disposable and Git plus the journal remain authoritative, so
+ * this is deliberately last and deliberately cheap. It is not optional: a
+ * report naming a superseded candidate while `awsf status` calls it current is
+ * how an owner reads the wrong review of the wrong change.
+ */
+async function refreshRunReport(attemptDir: string, status: AttemptStatus): Promise<void> {
+  await writeRunReport(attemptDir, status, await readAttemptEvidence(attemptDir));
 }

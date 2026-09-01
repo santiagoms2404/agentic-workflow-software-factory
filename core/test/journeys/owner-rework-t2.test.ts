@@ -53,6 +53,9 @@ import type { BrokerOptions } from "../../src/execution/transport-broker.ts";
 import { agentsForSession, gatesForSession, getSession, transitionsForSession } from "../../src/observability/queries.ts";
 import { openDatabase } from "../../src/observability/sqlite.ts";
 import type { AttemptEvidence } from "../../src/observability/attempt-evidence.ts";
+import { locateRunReport, runReportRevision, writeRunReport } from "../../src/observability/run-report.ts";
+import { readAttemptEvidence } from "../../src/cli/commands/review-record.ts";
+import { statusCommand } from "../../src/cli/commands/status.ts";
 import { callCeilingsOf } from "../../src/state/tiers.ts";
 import { composePromptBundle } from "../../src/workflow/prompt-composition.ts";
 import type { OwnerTerminal } from "../../src/cli/tty.ts";
@@ -494,6 +497,15 @@ test("a T2 rework spends builder plus review and returns to AWAITING_OWNER with 
   const retained = snapshot(RETAINED(fixture.attemptDir, fixture.candidateA));
   try {
     const before = await readAttempt(fixture.attemptDir);
+    // The projection `awsf run` would have left behind: candidate A, the
+    // superseded verdict, and the revision it was rendered at. Rework
+    // invalidates every one of those facts.
+    const staleReport = await writeRunReport(
+      fixture.attemptDir, before, await readAttemptEvidence(fixture.attemptDir),
+    );
+    assert.equal(await runReportRevision(staleReport.absolutePath), before.revision);
+    assert.match(readFileSync(staleReport.absolutePath, "utf8"), /duplicate whitespace in a declaration/u);
+
     const result = await rework(fixture, script, { lines });
     const status = result.status;
     assert.equal(status.lifecycleState, "AWAITING_OWNER", status.blocker?.detail);
@@ -572,6 +584,23 @@ test("a T2 rework spends builder plus review and returns to AWAITING_OWNER with 
       const agents = agentsForSession(db, status.sessionId);
       assert.equal(agents.find((row) => row.agent === "builder")?.call_count, 2, "the original builder call and the rework's");
     } finally { db.close(); }
+
+    // F5: the report `awsf status` names is the reworked run's, not the one it
+    // replaced. Before this, status printed a report whose Build section
+    // carried candidate A and whose Review section carried the verdict rework
+    // had just invalidated, and called it the current projection.
+    const refreshed = await locateRunReport(fixture.attemptDir);
+    assert.equal(refreshed?.absolutePath, staleReport.absolutePath, "the same attempt keeps one report");
+    assert.equal(await runReportRevision(refreshed!.absolutePath), status.revision);
+    const body = readFileSync(refreshed!.absolutePath, "utf8");
+    assert.match(body, new RegExp(`Candidate: ${candidateB}`, "u"));
+    assert.doesNotMatch(body, /duplicate whitespace in a declaration/u, "the superseded finding is gone");
+    assert.match(body, /## Final lifecycle\n\nState: AWAITING_OWNER/u);
+    const statusLines = await statusCommand(fixture.attemptDir);
+    assert.ok(
+      statusLines.some((line) => line.startsWith("Run report:") && !line.includes("stale:")),
+      statusLines.filter((line) => line.startsWith("Run report:")).join("\n"),
+    );
 
     assert.ok(lines.some((line) => line.includes("mandatory opposite-provider review")));
   } finally { await cleanup(fixture); }

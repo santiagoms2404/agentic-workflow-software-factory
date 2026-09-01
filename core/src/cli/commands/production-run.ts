@@ -45,6 +45,8 @@ import {
   type SystemCommandOptions,
 } from "../../execution/transport-broker.ts";
 import { artifactsExist, filesNonEmpty, jsonParses, type ArtifactObservation } from "../../gates/artifacts.ts";
+import type { Tier } from "../../state/tiers.ts";
+import { riskTierSufficient } from "../../gates/risk.ts";
 import { candidateHygiene } from "../../gates/candidate-hygiene.ts";
 import { commandsPass } from "../../gates/commands.ts";
 import { envelopeValid } from "../../gates/envelope.ts";
@@ -103,7 +105,7 @@ import {
   type OpenConversation,
 } from "../../workflow/phase-launch-authorization.ts";
 import type { AttemptEvidence, PhaseEvidenceRecord } from "../../observability/attempt-evidence.ts";
-import { renderRunReport, runReportLocation } from "../../observability/run-report.ts";
+import { writeRunReport } from "../../observability/run-report.ts";
 import { readAttemptEvidence } from "./review-record.ts";
 import { PermissionBreach } from "../../policy/path-policy.ts";
 import { openPermissionSession, type PermissionSession, type SandboxProbe } from "../../policy/sandbox-broker.ts";
@@ -600,6 +602,8 @@ function phaseGates(
   review: ReviewPhaseSubject | null,
   observePhase: () => readonly string[],
   compiledPrompt: string,
+  tier: Tier,
+  buildsCandidate: boolean,
 ): readonly GateDefinition[] {
   const observe = review === null && phaseId !== "documenter"
     ? (): readonly string[] => changesSinceBase(worktree, baseSha)
@@ -617,14 +621,12 @@ function phaseGates(
           report.check("steps have acceptance", plan.implementationSteps.length > 0 && plan.implementationSteps.every((step) => step.acceptanceCriteria.length > 0), `${plan.implementationSteps.length} step(s)`);
           report.check("no blocking open questions", plan.openQuestions.length === 0, `${plan.openQuestions.length} open question(s)`);
         }
-        if (phaseId === "documenter") {
-          const document = envelope as DocumentOutput;
-          report.check(
-            "run report destination declared",
-            document.runReport !== undefined,
-            document.runReport === undefined ? "runReport is missing" : document.runReport.path,
-          );
-        }
+        // `run report destination declared` used to sit here. `runReport` is
+        // required and closed in `DocumentOutputSchema`, so `parseEnvelope` had
+        // already rejected its absence and `envelope_valid` had already failed:
+        // the row passed whenever the envelope was valid and appeared beside a
+        // schema violation when it was not. A line that cannot fail
+        // independently reads as coverage and is none.
         if (review !== null) reportWith(report, reviewEnvelopeComplete(envelope as ReviewOutput).checks);
         return report;
       },
@@ -634,12 +636,41 @@ function phaseGates(
     { id: "no_protected_paths", run: () => noProtectedPaths(observe(), config.policy.protected_paths) },
   ];
   if (phaseId === "planner") {
-    common.push({ id: "files_non_empty", run: ({ envelope }) => filesNonEmpty(envelope.artifacts, read) });
+    common.push(
+      { id: "files_non_empty", run: ({ envelope }) => filesNonEmpty(envelope.artifacts, read) },
+    );
+    // `risk.paths` had no production reader at all: an owner could raise the
+    // controls on `core/src/state/**` and change nothing, with no error saying
+    // so. The plan declares the files a later build will touch, so this is the
+    // earliest point the dial can be honoured and the cheapest place to refuse.
+    //
+    // Only on a route that will actually build. Planning a T2 change is not
+    // making one: `scout` and `plan` write nothing, and holding their declared
+    // files to the attempt's tier would refuse every read-only analysis of a
+    // risky path — which is the analysis most worth having.
+    if (buildsCandidate) {
+      common.push({
+        id: "risk_tier_sufficient",
+        run: ({ envelope }) => riskTierSufficient(
+          (envelope as PlanOutput).implementationSteps.flatMap((step) => step.files),
+          tier,
+          config.risk,
+          "the plan declares",
+        ),
+      });
+    }
   }
   if (phaseId === "builder") {
     common.push(
       { id: "diff_matches_claims", run: ({ envelope }) => diffMatchesClaims(observe(), (envelope as BuildOutput).changedFiles) },
       { id: "writes_within_globs", run: () => writesWithinGlobs(observe(), profileWrites) },
+      // The plan is a declaration; this is what the candidate actually touched.
+      // A plan that named no risky path and a build that wrote one is exactly
+      // the case the declaration cannot catch.
+      {
+        id: "risk_tier_sufficient",
+        run: () => riskTierSufficient(observe(), tier, config.risk, "the candidate changes"),
+      },
     );
   }
   if (phaseId === "documenter") {
@@ -1523,6 +1554,8 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
           // `review_evidence_present` asks whether the evidence reached the model,
           // and this is what reached it.
           renderedPrompt,
+          status.tier,
+          recipe.phases.some((candidate) => candidate.kind === "agent" && candidate.owner === "builder"),
         ),
       ],
     };
@@ -2450,12 +2483,7 @@ async function persistReadableRunReport(
   options: ProductionRunOptions,
   status: AttemptStatus,
 ): Promise<AttemptStatus> {
-  const evidence = await readAttemptEvidence(options.attemptDir);
-  const report = renderRunReport(status, evidence);
-  const location = runReportLocation(options.attemptDir, status.attempt, report.path);
-  await mkdir(dirname(location.absolutePath), { recursive: true, mode: 0o700 });
-  await writeFile(location.absolutePath, report.markdown, { mode: 0o600 });
-  await chmod(location.absolutePath, 0o600);
+  await writeRunReport(options.attemptDir, status, await readAttemptEvidence(options.attemptDir));
   return status;
 }
 

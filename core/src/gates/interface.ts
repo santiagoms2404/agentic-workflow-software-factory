@@ -7,6 +7,7 @@ export const GATE_IDS = [
   "head_advanced",
   "candidate_hygiene",
   "no_protected_paths",
+  "risk_tier_sufficient",
   "writes_within_globs",
   "verdict_consistent",
   "review_evidence_present",

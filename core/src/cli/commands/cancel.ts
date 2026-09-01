@@ -1,6 +1,7 @@
 import { runSystemCommand } from "../../execution/transport-broker.ts";
 import { createHostController } from "../../execution/process-controller.ts";
 import type { TerminationReport } from "../../execution/launcher-barrier.ts";
+import { ceilingFor } from "../../state/tiers.ts";
 import { transition } from "../../state/task-machine.ts";
 import type { OwnerTerminal } from "../tty.ts";
 import {
@@ -51,7 +52,20 @@ export async function cancelCommand(options: CancelCommandOptions): Promise<{ st
     });
     throw new Error("unreachable cancellation authorization");
   }
-  options.terminal.write("Cost: 0 new provider calls. Any recorded live process tree is terminated before cancellation is recorded.");
+  // Computed at the prompt, to `awsf review`'s standard. Two constant sentences
+  // stood here: the owner confirmed an irreversible seal without seeing what it
+  // wrote off. Every number below is already in `AttemptStatus` and in the
+  // cancellation report this command builds moments later.
+  const ceiling = ceilingFor(current.tier, current.budget.ceiling);
+  const spent = current.budget.callsSpent;
+  const tree = current.process === null
+    ? "no live process is recorded, so nothing is terminated"
+    : `a recorded process tree (pid ${String(current.process.pid)}, pgid ${String(current.process.pgid)}) is terminated first`;
+  options.terminal.write(`Task: ${current.project}/${current.taskId} attempt ${current.attempt}, T${current.tier}, ${current.lifecycleState}`);
+  options.terminal.write(`Spend written off: ${spent} of ${ceiling} call(s) already spent on this task, and ${current.budget.callsReserved} reserved; cancelling buys nothing back and a retry carries the ${spent} forward.`);
+  options.terminal.write(`Candidate: ${current.candidateSha ?? "none — nothing has been built to lose"}${current.candidateSha === null ? "" : ` (gates ${current.gatesPass ? "passed" : "not passed"}, review ${current.requiredReviewPresent ? "present" : "absent"}, journey ${current.journeyApproved ? "approved" : "not approved"})`}`);
+  options.terminal.write(`Owner re-entries: ${current.budget.ownerReentries}/${current.budget.allowance.ownerReentries} used — the remainder dies with this attempt.`);
+  options.terminal.write(`Cost: 0 new provider calls; ${tree}.`);
   options.terminal.write("Confirming seals this attempt as CANCELLED: its candidate cannot be landed, its gates and review cannot be reused, and continuing the task requires awsf retry with prior spend carried forward.");
   const confirmed = await options.terminal.confirm(`Cancel ${current.taskId} attempt ${current.attempt}?`);
   if (!confirmed) return { status: current, report: noTree() };
