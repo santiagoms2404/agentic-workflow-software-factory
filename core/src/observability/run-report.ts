@@ -146,6 +146,31 @@ function sectionList(values: readonly string[], empty: string): string {
   return values.length === 0 ? empty : values.map((value) => `- ${value}`).join("\n");
 }
 
+/**
+ * Push the documenter's own headings below the host's, so the embed reads as
+ * one document.
+ *
+ * The draft used to arrive with its own `#` title and its own `## Request` and
+ * `## Plan` under the host's `## Documenter narrative`, which produced a nested
+ * H1 and the request stated twice in two voices. The prompt no longer asks for
+ * those sections; this is what keeps a draft that still writes headings from
+ * competing with the host's outline. Fenced blocks are left alone — a `#` at
+ * the start of a line inside a fence is a shell comment, not a heading.
+ */
+export function demoteHeadings(markdown: string, by = 2): string {
+  let fenced = false;
+  return markdown.split("\n").map((line) => {
+    if (/^\s{0,3}(?:```|~~~)/u.test(line)) {
+      fenced = !fenced;
+      return line;
+    }
+    if (fenced) return line;
+    const heading = /^(#{1,6})(\s)/u.exec(line);
+    if (heading === null) return line;
+    const level = Math.min(6, heading[1]!.length + by);
+    return `${"#".repeat(level)}${heading[2]!}${line.slice(heading[0].length)}`;
+  }).join("\n");
+}
 
 /** A readable projection. The journal and Git remain the evidence stores. */
 export function renderRunReport(
@@ -225,7 +250,9 @@ export function renderRunReport(
     "",
     "## Documenter narrative",
     "",
-    draft?.markdown ?? "The documenter did not run before this attempt stopped. The host generated the remaining sections from retained evidence.",
+    draft === undefined
+      ? "The documenter did not run before this attempt stopped. The host generated the remaining sections from retained evidence."
+      : demoteHeadings(draft.markdown),
     "",
     "## Review",
     "",

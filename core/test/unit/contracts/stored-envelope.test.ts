@@ -75,8 +75,31 @@ test("the parser salvages a corrected final object after an abandoned provider o
   const result = parseEnvelope(`${abandoned}${JSON.stringify(validBuildOutput())}`, "awsf.build-output/v1");
   assert.equal(result.valid, true);
   if (!result.valid) return;
-  assert.equal(result.extraction, "outermost-object");
+  // The salvage returns an INNER object, so the trace must not claim the host
+  // took the outermost one. That mislabel is what made a wrong salvage
+  // unreadable after the fact.
+  assert.equal(result.extraction, "trailing-object");
   assert.deepEqual(result.payload, validBuildOutput());
+});
+
+test("the two brace-scan kinds are distinguishable in the retained trace", () => {
+  // Prose either side: the first-brace-to-last-brace slice parses whole, and
+  // the outermost object is the right answer.
+  const wrapped = parseEnvelope(
+    `Here is the envelope:\n${JSON.stringify(validBuildOutput())}\nThat is all.`,
+    "awsf.build-output/v1",
+  );
+  assert.equal(wrapped.valid, true);
+  assert.equal(wrapped.extraction, "outermost-object");
+
+  // A valid envelope followed by a second object: the backward scan takes the
+  // trailing one, which then fails validation. The label says which was taken.
+  const trailing = parseEnvelope(
+    `${JSON.stringify(validBuildOutput())}\n{"note":"an example, not the envelope"}`,
+    "awsf.build-output/v1",
+  );
+  assert.equal(trailing.valid, false);
+  assert.equal(trailing.extraction, "trailing-object");
 });
 
 test("a parse failure flows straight into a retained stored envelope", () => {

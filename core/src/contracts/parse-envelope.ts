@@ -21,7 +21,20 @@ import { utf8ByteLength } from "./typebox.ts";
 export const MAX_ENVELOPE_BYTES = 256 * 1024;
 
 /** How the JSON object was recovered from the model's final message. */
-export type EnvelopeExtraction = "exact" | "fence-stripped" | "outermost-object";
+export type EnvelopeExtraction =
+  | "exact"
+  | "fence-stripped"
+  | "outermost-object"
+  /**
+   * The backward suffix salvage, and its own kind on purpose.
+   *
+   * It is not an outermost-object extraction: it deliberately returns an INNER
+   * object, the last suffix that parses whole. Labelling it `outermost-object`
+   * made the retained trace claim the host had taken the outermost object when
+   * it had taken a trailing one, which is unreadable afterwards precisely when
+   * the salvage went wrong.
+   */
+  | "trailing-object";
 
 export type ParseEnvelopeResult<T extends EnvelopeBase> =
   | { valid: true; payload: T; extraction: EnvelopeExtraction }
@@ -80,7 +93,7 @@ function extract(raw: string): { extraction: EnvelopeExtraction; value: unknown 
     let opening = trimmed.lastIndexOf("{", last - 1);
     for (let attempts = 0; opening > first && attempts < 1_024; attempts += 1) {
       const suffix = tryParseObject(trimmed.slice(opening, last + 1));
-      if (suffix.ok) return { extraction: "outermost-object", value: suffix.value };
+      if (suffix.ok) return { extraction: "trailing-object", value: suffix.value };
       opening = trimmed.lastIndexOf("{", opening - 1);
     }
   }

@@ -50,10 +50,26 @@ test("cancelling a run reaps a grandchild the host never spawned, and reports tr
     assert.equal(report.terminated, true);
 
     // Asked of the kernel. `terminated: true` is a claim; these are the facts.
-    assert.equal(isRunning(provider), false, "the provider outlived its own cancellation");
-    assert.equal(isRunning(grandchild), false, "the grandchild outlived its parent's cancellation");
-    assert.deepEqual([...run.controller.groupMembers(run.transport.identity)], []);
-    assert.deepEqual(processesMentioning(run.runId), []);
+    //
+    // Bounded rather than instantaneous, and the bound is the point: `kill(pid,
+    // 0)` succeeds for a process that has exited but not yet been reaped, so an
+    // immediate read observed a zombie and called it a survivor. That flake ran
+    // in the layer `npm test` chained the journeys behind, so a teardown race
+    // in the simulation layer could delete the journey signal entirely. Five
+    // seconds is the same deadline the self-exit case below already uses; a
+    // process still alive after it is a real survivor.
+    assert.equal(await within(5_000, () => !isRunning(provider)), true, "the provider outlived its own cancellation");
+    assert.equal(await within(5_000, () => !isRunning(grandchild)), true, "the grandchild outlived its parent's cancellation");
+    assert.equal(
+      await within(5_000, () => run.controller.groupMembers(run.transport.identity).length === 0),
+      true,
+      `the process group outlived the cancellation: ${run.controller.groupMembers(run.transport.identity).join(", ")}`,
+    );
+    assert.equal(
+      await within(5_000, () => processesMentioning(run.runId).length === 0),
+      true,
+      `a process still names this run: ${processesMentioning(run.runId).join(", ")}`,
+    );
   } finally {
     await run.end();
   }

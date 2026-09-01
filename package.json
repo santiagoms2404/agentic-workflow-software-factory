@@ -14,7 +14,7 @@
     "awsf": "core/src/cli/main.ts"
   },
   "scripts": {
-    "test": "npm run test:unit && npm run test:contract && npm run test:sim && npm run test:journeys",
+    "test": "npm run test:unit; u=$?; npm run test:contract; c=$?; npm run test:sim; s=$?; npm run test:journeys; j=$?; echo \"layers: unit=$u contract=$c sim=$s journeys=$j\"; exit $((u|c|s|j))",
     "test:unit": "node --experimental-strip-types --test \"core/test/unit/**/*.test.ts\"",
     "test:contract": "node --experimental-strip-types --test \"core/test/contract/**/*.test.ts\"",
     "test:sim": "node --experimental-strip-types --test \"core/test/simulation/**/*.test.ts\"",
