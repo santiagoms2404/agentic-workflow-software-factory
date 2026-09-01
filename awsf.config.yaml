@@ -78,7 +78,7 @@ agents:
     prompt: { system: prompts/documenter/system.md, user: prompts/documenter/user.md }
     harness: { adapter: claude, continuity: none }
     tools: { profile: managed-worker, allow: [read, grep, find, ls, edit, write] }
-    writes: ["README.md"]
+    writes: ["README.md", "docs/**"]
 
   - name: scout
     model: claude:sonnet
@@ -151,6 +151,7 @@ policy:
     - core/src/policy/**
     - core/src/observability/migrations/**
     - core/src/execution/transport-broker.ts
+    - docs/driving/**
   protected_operations: [credential-access, external-mutation, delete, migration, release-cutover, credit-billed-model]
 
 observability:
