@@ -30,15 +30,27 @@ The blocker code is a vocabulary, not a sentence: it names the *class* of the
 refusal. The detail beside it is the instance. Read both — a session that reports
 only the code has told the owner which drawer the answer is in.
 
-**2. The last envelope.** The phase's own claim about what it did lives under the
-attempt's `envelopes/` directory, one immutable file per phase and correction
-round. This is where a producer says it succeeded, which is a different question
-from whether the host agreed.
+**2. The last envelope.** The phase's own claim about what it did. This is where
+a producer says it succeeded, which is a different question from whether the host
+agreed.
 
 **3. The gate rows.** What the host measured, per gate, for that phase. This is
 the half that disagrees with step 2, and the disagreement is the finding. A phase
 claiming success beside a failed gate row is not a contradiction to resolve — it
 is the normal shape of a block, and the gate is the one that is right.
+
+Steps 2, 3 and 5 are one command:
+
+```bash
+just awsf status TASK --evidence
+```
+
+It appends three sections under the nine the state line already prints: the
+failing gate rows with each failed sub-check and its note, the last envelope
+verbatim with its validity, and the retained process record. The envelopes stay
+on disk under the attempt's `envelopes/` directory, one immutable file per phase
+and correction round, and `evidence_map.md` says where each lives — read them
+directly when you need a round the command does not surface.
 
 **4. The retained command output.** When a configured command is what failed, its
 bounded evidence carries three windows — the opening, the first failure with its
@@ -47,7 +59,7 @@ Read the middle one first. It exists because a trailing window alone can hold th
 count or the cause but never both.
 
 **5. The process record.** Only when steps 1–4 disagree with each other, or when
-nothing appears to have run at all.
+nothing appears to have run at all. `--evidence` prints it too.
 
 `evidence_map.md` says where each of these lives. `lifecycle.md` says which
 source owns the vocabulary each one speaks.
@@ -83,26 +95,22 @@ reached.
 
 ## What is deliberately not in this document
 
-**The gathering.** Steps 2, 3 and 5 above are archaeology: the blocker is
-displayed, but the failing gate rows, the last envelope and the retained process
-record are not, so reading them means walking the state root by hand. That is
-work a command should do, and prose asking a human to do it reliably is a defect
-wearing a cookbook's costume.
+**The gathering used to be archaeology.** It is not any more. The status display
+prints nine lines — the blocker code and detail, the phase and its state,
+correction rounds against their maximum, calls spent and reserved against the
+ceiling, the resolved model with its provenance, the last activity, the per-phase
+correction budget, the attempt-scoped owner re-entry allowance, and a next action
+— and `awsf status TASK --evidence` prints the three that were missing beside
+them: the failing gate rows, the last envelope, and the retained process record.
+Use the flag. Walking the state root by hand is now a fallback for a specific
+round or a raw output window, not the normal path.
 
-The gap is **narrower than it is sometimes described**, and the narrowing is
-worth stating rather than repeating a stale claim. The status display is not one
-budget line; it prints nine, and it already carries the blocker code and detail,
-the phase and its state, correction rounds against their maximum, calls spent and
-reserved against the ceiling, the resolved model with its provenance, the last
-activity, the per-phase correction budget, the attempt-scoped owner re-entry
-allowance, and a next action. What it does **not** print is the failing gate
-rows, the last envelope, and the retained process record — which is precisely
-steps 2, 3 and 5.
+What this document still does not contain is **the judgment**, and that is
+deliberate. The command gathers; it does not tell you which disagreement between
+step 2 and step 3 is the finding, which owner act the evidence supports, or when
+the honest answer is that nothing ran. That is the whole of the reading above and
+it is not a gap.
 
-So the backlog item is an evidence mode on the status command that prints those
-three beside the blocker it already shows, and it is recorded in the plan's
-Amendments in those terms. It does not exist today, and `awsf status` accepts no
-flags of its own — do not write one into a runnable block on the strength of this
-paragraph. Until it lands, this cookbook teaches the judgment and the archaeology
-is done by hand, which is an open defect and not a habit this document has
-quietly absorbed.
+One thing the command cannot do is decide for the owner. Every remedy is an owner
+act at a terminal, and `--evidence` makes the case readable rather than making it
+for you.

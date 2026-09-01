@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { CLI_COMMANDS } from "../../../src/cli/main.ts";
+import { CLI_BOOLEAN_FLAGS, CLI_COMMANDS } from "../../../src/cli/main.ts";
 import { repoRoot, relRepo } from "./_walk.ts";
 import {
   AWSF_CLI,
@@ -173,4 +173,125 @@ test("just targets only delegate to canonical root npm scripts", () => {
     }
   }
   assert.deepEqual(offenders, []);
+});
+
+// ---------------------------------------------------------------------------
+// A driving document may not deny a surface the CLI actually has.
+//
+// The fence-only scan above catches an invented command inside a runnable
+// block. It cannot catch the opposite failure, which is what actually happened:
+// three cookbook sections went on asserting gaps the code had already closed,
+// and one told the driver not to type `awsf status --evidence` — a flag that
+// exists and answers the question the same paragraph poses.
+//
+// This is deliberately NOT the "cleverer regex over prose" the comment above
+// refuses. It does not read backticks as existence claims. It reads a short,
+// explicit list of DENIAL phrases, and holds each one to two rules:
+//
+//   A. It must name its subject in backticks. A denial that names nothing
+//      cannot be checked by anything, which is how all three survived.
+//   B. Every subject it names must be genuinely absent from the live table.
+//
+// The phrase list is narrow on purpose. "No command can supply this line for
+// you" (how_to_prompt_for_the_owner.md) and "No flag bypasses it"
+// (gotchas.md) are true, are about judgement rather than the catalogue, and
+// must keep passing. Widen the list only with the same test in front of you.
+// ---------------------------------------------------------------------------
+
+const DENIAL_PHRASES: readonly RegExp[] = Object.freeze([
+  /\bno command prints\b/iu,
+  /\bdoes not exist (?:today|yet)\b/iu,
+  /\baccepts no flags\b/iu,
+  /\bno such command\b/iu,
+  /\bno flag named\b/iu,
+]);
+
+/** The flags `main.ts` actually reads, derived from it rather than restated. */
+function liveFlags(): ReadonlySet<string> {
+  const source = readFileSync(join(ROOT, "core", "src", "cli", "main.ts"), "utf8");
+  const names = [
+    ...[...source.matchAll(/\bflags\.([a-zA-Z][\w]*)/gu)].map((match) => match[1] ?? ""),
+    ...[...source.matchAll(/\bflags\["([a-z][\w-]*)"\]/gu)].map((match) => match[1] ?? ""),
+    ...CLI_BOOLEAN_FLAGS,
+  ];
+  return new Set(names.filter((name) => name.length > 0));
+}
+
+function paragraphs(markdown: string): string[] {
+  return markdown.split(/\n\s*\n/u);
+}
+
+/** Backticked `awsf <command>` and `--flag` subjects a denial paragraph names. */
+function deniedSubjects(paragraph: string): { commands: string[]; flags: string[] } {
+  const quoted = [...paragraph.matchAll(/`([^`]+)`/gu)].map((match) => match[1] ?? "");
+  return {
+    commands: commandsIn(quoted, AWSF_CLI),
+    flags: quoted.flatMap((text) => [...text.matchAll(/--([a-z][\w-]*)/gu)].map((match) => match[1] ?? "")),
+  };
+}
+
+function denialOffences(markdown: string, flags: ReadonlySet<string>): string[] {
+  const offences: string[] = [];
+  for (const paragraph of paragraphs(markdown)) {
+    const phrase = DENIAL_PHRASES.find((pattern) => pattern.test(paragraph));
+    if (phrase === undefined) continue;
+    const named = deniedSubjects(paragraph);
+    const live = [
+      ...named.commands.filter((command) => CLI_COMMANDS.includes(command)).map((command) => `awsf ${command}`),
+      ...named.flags.filter((flag) => flags.has(flag)).map((flag) => `--${flag}`),
+    ];
+    if (live.length > 0) {
+      offences.push(`denies a live surface (${[...new Set(live)].join(", ")}) near ${String(phrase)}`);
+      continue;
+    }
+    if (named.commands.length === 0 && named.flags.length === 0) {
+      offences.push(`denial ${String(phrase)} names no subject in backticks, so nothing can check it`);
+    }
+  }
+  return offences;
+}
+
+test("no driving document denies a command or flag the CLI actually has", () => {
+  const flags = liveFlags();
+  // The derivation has to have found something, or the rule is vacuous.
+  assert.ok(flags.has("evidence") && flags.has("tier") && flags.size >= 10, `live flags: ${[...flags].join(", ")}`);
+
+  const offenders: string[] = [];
+  for (const file of drivingDocs()) {
+    offenders.push(
+      ...denialOffences(readFileSync(file, "utf8"), flags).map((offence) => `${relRepo(file)}: ${offence}`),
+    );
+  }
+  assert.deepEqual(offenders, []);
+});
+
+test("the denial fence bites on the three sections that carried this defect, and spares judgement prose", () => {
+  const flags = liveFlags();
+
+  // Verbatim from the cookbooks before this change. Each must be reported.
+  const historical = [
+    "There is a real gap behind that restraint, and it is worth naming rather than\nabsorbing: **no command prints the enabled workflows, their phases or the tier\nceilings.**",
+    "So the backlog item is an evidence mode on the status command that prints those\nthree beside the blocker it already shows. It does not exist today, and `awsf status` accepts no\nflags of its own — do not write one into a runnable block.",
+    "Read them there — a number copied here goes stale in\nsilence. No command prints that catalogue today.",
+  ];
+  for (const paragraph of historical) {
+    assert.equal(denialOffences(paragraph, flags).length > 0, true, paragraph.slice(0, 48));
+  }
+  // The one that denies a live surface says which, rather than only that a
+  // subject was missing.
+  assert.match(denialOffences(historical[1]!, flags)[0] ?? "", /denies a live surface \(awsf status\)/u);
+
+  // Judgement prose about what a command cannot decide is not a catalogue
+  // claim, and stays legal.
+  for (const spared of [
+    "that is a finding to report rather than a gap to paper over. No command can\nsupply this line for you — it is the one place where the judgment is irreducible.",
+    "**Guard.** No flag bypasses it, but a PTY makes the check pass.",
+    "What this document still does not contain is the judgment, and that is deliberate.",
+  ]) {
+    assert.deepEqual(denialOffences(spared, flags), [], spared.slice(0, 48));
+  }
+
+  // A denial of a genuinely absent command stays legal — the rule is about
+  // truth, not about forbidding the vocabulary.
+  assert.deepEqual(denialOffences("`awsf frobnicate` does not exist today.", flags), []);
 });

@@ -46,7 +46,8 @@ export const CLI_COMMANDS = Object.freeze([
 
 const USAGE = `usage: awsf init [path] --project <slug>\n       awsf <${CLI_COMMANDS.join("|")}> [task] [options]`;
 
-const BOOLEAN_FLAGS: ReadonlySet<string> = new Set(["evidence"]);
+/** Flags that take no value. Documentation reconciles against this too. */
+export const CLI_BOOLEAN_FLAGS: ReadonlySet<string> = new Set(["evidence"]);
 
 interface ParsedArgs {
   readonly positionals: readonly string[];
@@ -74,7 +75,7 @@ function parseArgs(args: readonly string[]): ParsedArgs {
     }
     const key = arg.slice(2);
     const value = args[index + 1];
-    if (BOOLEAN_FLAGS.has(key)) {
+    if (CLI_BOOLEAN_FLAGS.has(key)) {
       flags[key] = "true";
       continue;
     }

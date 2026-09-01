@@ -99,10 +99,21 @@ is single-sourced in `awsf.config.yaml` and `core/src/`, and a copy here would b
 a second source of truth that goes wrong quietly — a renamed recipe, a changed
 ceiling — with nothing to catch it.
 
-There is a real gap behind that restraint, and it is worth naming rather than
-absorbing: **no command prints the enabled workflows, their phases or the tier
-ceilings.** The diagnosis command reports locks, processes, projection health and
-the size of the state matrix; it does not report the catalogue. Until it does,
-"the CLI supplies what exists" is true of a *configuration file* and not of a
-command, and this document points at files for a reason it would rather not have.
-It is carried as named backlog in the plan's Amendments.
+The gap behind that restraint is closed. `awsf workflows` prints the catalogue
+from the live registry: one row per enabled recipe with its tier, its minimum
+provider calls, its ceiling, how many correction rounds that ceiling can fund,
+and its ordered phase list, above a header line of the configured tier ceilings.
+Run it instead of reading a table here.
+
+The restraint itself stands and is the reason the command exists rather than a
+table: the command reads `awsf.config.yaml` and the shipped recipes at the moment
+you ask, so it cannot go stale the way a copy in prose does. The diagnosis command
+still reports locks, processes, projection health and the size of the state
+matrix, and still does not report the catalogue — that is `awsf workflows`' job.
+
+Read `corrections fundable` before you commit to a route. It is
+`ceiling − minimum calls`, and a `0 (none)` means every correction round the
+recipe declares is unpayable on a route whose agents start cold: the first
+envelope defect ends the attempt on its first occurrence. `awsf start` refuses
+such a route rather than letting you discover it mid-run, and names the
+`awsf raise` that lifts it while the attempt is still a draft.
