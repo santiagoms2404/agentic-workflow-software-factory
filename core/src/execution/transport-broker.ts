@@ -93,14 +93,20 @@ export class SpawnRegistrationInvalid extends Error {
 /** The executable a spec names could not be resolved to something runnable. */
 export class ExecutableNotFound extends Error {
   readonly executable: string;
+  /** Errors that were not "absent here", kept so a machine fault is not read as a missing file. */
+  readonly obstructions: readonly string[];
 
-  constructor(executable: string, searched: readonly string[]) {
+  constructor(executable: string, searched: readonly string[], obstructions: readonly string[] = []) {
     super(
       `executable ${JSON.stringify(executable)} is not runnable` +
-        (searched.length === 0 ? "" : ` (searched ${searched.join(delimiter)})`),
+        (searched.length === 0 ? "" : ` (searched ${searched.join(delimiter)})`) +
+        (obstructions.length === 0
+          ? ""
+          : `; the search was obstructed rather than empty-handed: ${obstructions.join("; ")}`),
     );
     this.name = "ExecutableNotFound";
     this.executable = executable;
+    this.obstructions = Object.freeze([...obstructions]);
   }
 }
 
@@ -172,16 +178,30 @@ function assertSpecSafe(
  * resolved: it would mean "relative to whatever cwd this child happens to hold".
  */
 export function resolveExecutable(executable: string, env: Readonly<Record<string, string>>): string {
+  // `ENOENT` is the ordinary answer — the file is simply not in this directory —
+  // and saying so for every entry on a long PATH would bury the interesting
+  // case. Anything else is a machine condition rather than an absence: EACCES,
+  // EMFILE, ENOMEM, EIO. Those are kept.
+  //
+  // A blocked run made the distinction worth having. Every entry on a PATH that
+  // demonstrably contained the executable returned false at one instant and
+  // true immediately afterwards, and the phase reported `is not runnable` — so
+  // two sessions went looking for a missing or misconfigured binary that was
+  // neither. Whatever the syscall actually said was discarded by a bare
+  // `catch`, which is the same defect the envelope parser carried.
+  const obstructions: string[] = [];
   const runnable = (candidate: string): boolean => {
     try {
       accessSync(candidate, constants.X_OK);
       return true;
-    } catch {
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code ?? "UNKNOWN";
+      if (code !== "ENOENT") obstructions.push(`${candidate}: ${code}`);
       return false;
     }
   };
   if (isAbsolute(executable)) {
-    if (!runnable(executable)) throw new ExecutableNotFound(executable, []);
+    if (!runnable(executable)) throw new ExecutableNotFound(executable, [], obstructions);
     return executable;
   }
   if (executable.includes("/")) throw new ExecutableNotFound(executable, []);
@@ -190,7 +210,7 @@ export function resolveExecutable(executable: string, env: Readonly<Record<strin
     const candidate = join(dir, executable);
     if (runnable(candidate)) return candidate;
   }
-  throw new ExecutableNotFound(executable, searched);
+  throw new ExecutableNotFound(executable, searched, obstructions);
 }
 
 /**
