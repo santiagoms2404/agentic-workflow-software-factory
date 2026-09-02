@@ -54,16 +54,22 @@ function bound(value: unknown): string | null {
   return `${rendered.slice(0, VIOLATION_VALUE_MAX_CHARS - 1)}…`;
 }
 
-function tryParseObject(text: string): { ok: true; value: unknown } | { ok: false } {
+function tryParseObject(text: string): { ok: true; value: unknown } | { ok: false; why: string } {
   try {
     return { ok: true, value: JSON.parse(text) as unknown };
-  } catch {
-    return { ok: false };
+  } catch (error) {
+    // The reason is KEPT, not swallowed. A `not-json` violation used to carry
+    // only a bounded head of the payload, so a 30 KB envelope broken at line 98
+    // and a payload with a conversational preamble were indistinguishable in
+    // the record — and both a driving session and a review session read the
+    // real case as the cosmetic one and proposed a fix for the wrong defect.
+    // The parser already knows which it is; this is only a matter of saying so.
+    return { ok: false, why: error instanceof Error ? error.message : String(error) };
   }
 }
 
 /** Recovers the single JSON object from a model's final message, recording how much digging it took. */
-function extract(raw: string): { extraction: EnvelopeExtraction; value: unknown } | null {
+function extract(raw: string): { extraction: EnvelopeExtraction; value: unknown } | { why: string | null } {
   const trimmed = raw.trim();
 
   // The whole message is already valid JSON. Whether it is an *object* is the
@@ -82,9 +88,14 @@ function extract(raw: string): { extraction: EnvelopeExtraction; value: unknown 
   // First opening brace to last closing brace handles ordinary prose wrapping.
   const first = trimmed.indexOf("{");
   const last = trimmed.lastIndexOf("}");
+  let sliceFailure: string | null = null;
   if (first !== -1 && last > first) {
     const parsed = tryParseObject(trimmed.slice(first, last + 1));
     if (parsed.ok) return { extraction: "outermost-object", value: parsed.value };
+    // Held for the violation. Prose either side of a WELL-FORMED object is
+    // recovered here, so reaching this line means the object itself is broken,
+    // and where it broke is the only fact that distinguishes the two.
+    sliceFailure = parsed.why;
 
     // Some provider streams retain an abandoned partial object immediately
     // before the corrected final object. Work backward from the final closing
@@ -98,7 +109,7 @@ function extract(raw: string): { extraction: EnvelopeExtraction; value: unknown 
     }
   }
 
-  return null;
+  return { why: sliceFailure };
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -149,7 +160,12 @@ export function parseEnvelope(raw: string, schemaId: string): ParseEnvelopeResul
   }
 
   const extracted = extract(raw);
-  if (extracted === null) {
+  if (!("extraction" in extracted)) {
+    // Naming WHERE it broke is what separates a broken object from a payload
+    // that is merely wrapped in prose — prose around a well-formed object is
+    // recovered, so a failure here is the object's own. Without this the two
+    // read identically in the record and get the same wrong diagnosis.
+    const why = extracted.why === null ? "" : `; the outermost object did not parse: ${extracted.why}`;
     return {
       valid: false,
       extraction: null,
@@ -157,7 +173,7 @@ export function parseEnvelope(raw: string, schemaId: string): ParseEnvelopeResul
         {
           kind: "not-json",
           path: "",
-          message: "final message is not a single JSON object, with or without fences",
+          message: `final message is not a single JSON object, with or without fences${why}`,
           received: bound(raw.trim()),
         },
       ],

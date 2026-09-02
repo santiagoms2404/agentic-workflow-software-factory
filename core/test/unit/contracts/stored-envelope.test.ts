@@ -131,3 +131,45 @@ test("correctionRound is host-assigned and starts at zero", () => {
     false,
   );
 });
+
+// ---------------------------------------------------------------------------
+// A `not-json` violation must say WHICH failure it is.
+//
+// A real drive returned 30 KB of prose-plus-JSON whose object was broken at
+// line 98. The violation carried only a bounded head of the payload, so what
+// the record showed was a conversational sentence followed by `{"schema": ...`
+// — and two separate sessions read that as "the model prefixed a preamble" and
+// proposed fixing the preamble. Prose around a WELL-FORMED object is recovered,
+// so the preamble was never the defect and that fix would have changed nothing.
+// The parser knew the difference all along; it just discarded it in a `catch`.
+// ---------------------------------------------------------------------------
+
+test("prose wrapped around a well-formed object is recovered, so a preamble is not a defect", () => {
+  const result = parseEnvelope(
+    `I'll ground the plan in the actual code before writing it.${JSON.stringify(validBuildOutput())}`,
+    "awsf.build-output/v1",
+  );
+  assert.equal(result.valid, true);
+  assert.equal(result.extraction, "outermost-object");
+});
+
+test("a broken object names where it broke, and is distinguishable from prose", () => {
+  // The shape of the real failure: a string property, then a bracket closing an
+  // array that was never opened.
+  const broken = '{"schema":"awsf.build-output/v1","notesForNextPhase":"a long note"\n  ],\n  "goals": []}';
+  const result = parseEnvelope(`I'll ground the plan first.${broken}`, "awsf.build-output/v1");
+  assert.equal(result.valid, false);
+  if (result.valid) return;
+  const message = result.violations[0]?.message ?? "";
+  assert.match(message, /the outermost object did not parse/u);
+  assert.match(message, /position \d+/u, "the position is what separates this from a preamble");
+});
+
+test("a payload with no object at all carries no parse position to report", () => {
+  const result = parseEnvelope("I gave up.", "awsf.build-output/v1");
+  assert.equal(result.valid, false);
+  if (result.valid) return;
+  const message = result.violations[0]?.message ?? "";
+  assert.match(message, /not a single JSON object/u);
+  assert.doesNotMatch(message, /did not parse/u, "there was no object to fail at a position");
+});
