@@ -11,6 +11,9 @@ performed by the two scripts in this directory.
 | `delegation-guard.sh` | The `PreToolUse` hook. Two fences: a delegation-shaped tool name, and a shell command invoking one of the six acts the lifecycle reserves for the owner. |
 | `session-banner.sh` | The `SessionStart` hook. Prints what it was able to confirm about the guard's presence, and names what it could not. |
 | `settings.example.json` | The settings marimba is launched with, as a template. Two absolute paths are left as placeholders. |
+| `marimba-guard-rules.ts` | Both fences as pure rules, importing nothing. The one place either harness's lists are written. |
+| `marimba-guard.pi.ts` | The pi port of the guard: the same two fences bound to `tool_call` and `session_start`. |
+| `aliases.example.sh` | Launch aliases per harness, model and effort, as a template. One absolute path is left as a placeholder. |
 | `README.md` | This file. |
 
 **Read the guard's header before trusting it with anything.** It names, with
@@ -83,23 +86,50 @@ at launch rather than anything this repository configures.
 
 ### A harness swap is a boundary change, not a preference
 
-**The two fences are hooks of one specific harness.** `settings.example.json`
-declares them as `PreToolUse` and `SessionStart` entries, and the deny list that
-accompanies them is that harness's own. marimba runs with permission prompts
-turned off, so those hooks are not one safeguard among several — they are the
-entire boundary.
+**The fences are per-invocation denials at the tool surface, and each harness
+supplies that surface differently.** `settings.example.json` declares them as
+`PreToolUse` and `SessionStart` entries; the pi port registers `tool_call` and
+`session_start` instead. marimba runs with permission prompts turned off, so
+these are not one safeguard among several — they are the entire boundary.
 
-A marimba launched under a *different* harness therefore carries **neither
-fence** unless an equivalent per-invocation hook has been wired up and proven
-there. Nothing about the model changes that, and a stronger model does not
+A marimba launched under a harness with **no** such guard carries **neither
+fence**. Nothing about the model changes that, and a stronger model does not
 substitute for it: fence 2 exists precisely because a capable session asked to
 drive will otherwise reach for an owner act when one looks like the obvious next
-step.
+step. Treat such a session as read-only.
 
-Until an equivalent guard exists and is proven against the same payload matrix,
-treat a marimba on another harness as **read-only**: status, watching, reading
-evidence, drafting a request. Not launching, and never an owner act. That is a
-real piece of work and deserves its own task rather than an assumption.
+### The second harness: pi
+
+`marimba-guard.pi.ts` is the port. Both harnesses read their rules from
+`marimba-guard-rules.ts`, which imports nothing, and the suite asserts the shell
+script's own `for` loops still name exactly what that module exports — so
+editing one harness's list without the other fails a test rather than silently
+producing two different boundaries.
+
+Install is an owner act, and it is one step rather than four: the guard is
+passed per launch instead of registered in a settings file.
+
+```bash
+pi -e /absolute/path/to/checkout/docs/driving/marimba/marimba-guard.pi.ts
+```
+
+`aliases.example.sh` in this directory carries that with the model and effort
+variants already spelled out. Copy it into your own shell profile and replace
+the one placeholder.
+
+**The `-e` is not optional, and this port's one weakness is that forgetting it
+is silent.** The shell guard fails *closed* when its interpreter cannot run — a
+machine defect denies everything and says why. An extension that is simply not
+loaded denies nothing and says nothing. So the guard announces itself at
+`session_start`: **a marimba session whose banner does not name the guard is not
+guarded, whatever the alias was called.** That is a weaker signal than failing
+closed, it is the honest cost of the port, and it is why the banner matters more
+here than on the reference harness.
+
+Two differences beyond that, both stated in the extension's own header: there is
+no external interpreter, so neither of the shell guard's two parser-failure
+branches exists; and fence 2's ceiling and over-denials are identical by
+construction, because both harnesses call the same function.
 
 ## What the banner tells you, and what it does not
 

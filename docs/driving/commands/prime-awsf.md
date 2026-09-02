@@ -8,26 +8,38 @@ Read the following in this order. Each is the source of truth for what it
 covers, and nothing here restates any of it: a copy is a second source of truth
 that goes wrong quietly.
 
-1. `AGENTS.md` — the invariants a session working *on* this repository may not
+1. `../skills/awsf/SKILL.md` — **the judgment layer, and the entry
+   point this command exists to serve.** It carries the posture, the hard rules,
+   and the routes table that says which cookbook answers which request. Read its
+   table now; read the cookbook a request calls for when the request arrives,
+   and no more. Everything below is a source that table points at.
+
+   This is first for a reason that was learned the expensive way: the skill said
+   *"run `/prime-awsf` first"* while this command never pointed back, so a
+   session primed from the cheatsheet knew every source of truth and none of the
+   judgment for using them — including the preflight that resolves a request
+   against the repository before a call is reserved. A pointer that goes one way
+   is how a driving session arrives well-read and unprepared.
+2. `AGENTS.md` — the invariants a session working *on* this repository may not
    break. Invariant 1 is the one that shapes this command: no committed file
    ever encodes which task, attempt or session is running.
-2. **The lifecycle contract** — `core/src/state/task-machine.ts` for the task
+3. **The lifecycle contract** — `core/src/state/task-machine.ts` for the task
    states, the legal edges and the ordered rejection contract;
    `core/src/state/guards.ts` for the evidence each edge demands;
    `core/src/state/tiers.ts` for the risk tiers and their call ceilings. The
    numbers live there and only there.
-3. **The phase submachine and the escalation ladder** —
+4. **The phase submachine and the escalation ladder** —
    `core/src/state/phase-machine.ts` for what happens inside an executing state,
    and `core/src/workflow/` for the recipes, the correction allowance, and the
    escalation from a failed gate to a counted state transition.
-4. `awsf.config.yaml` — the only committed tuning surface: adapters, routing,
+5. `awsf.config.yaml` — the only committed tuning surface: adapters, routing,
    the per-agent model/prompt/harness/tools dial, workflows, gates, risk,
    policy, observability. `core/src/config/schema.ts` is what validates it.
-5. **The state-root layout** — `core/src/persistence/platform-paths.ts` resolves
+6. **The state-root layout** — `core/src/persistence/platform-paths.ts` resolves
    where durable state lives per platform and names every file inside an attempt
    directory. `private/` is one of them and is never opened; see the skill's
    hard rules.
-6. `specs/awsf-plan.html` — the plan, its status markers, and its Amendments,
+7. `specs/awsf-plan.html` — the plan, its status markers, and its Amendments,
    which are where measured traps and past decisions are recorded.
 
 ## Preflight
