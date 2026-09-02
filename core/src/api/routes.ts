@@ -1,6 +1,9 @@
+import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { queryBacklog } from "../backlog.ts";
-import { TicketStore } from "../persistence/ticket-store.ts";
+import { queryPlanBacklog } from "../backlog.ts";
+import { PlanTicketReader } from "../persistence/plan-tickets.ts";
+import { loadCatalog } from "../registry/catalog.ts";
+import { resolvePlanSources, type ResolvedPlanSource } from "../registry/plan-source.ts";
 import { readLandingSummary } from "../persistence/landing-summary.ts";
 import { locateRunReport } from "../observability/run-report.ts";
 import { attemptDir } from "../persistence/platform-paths.ts";
@@ -54,6 +57,7 @@ import type {
   SettingsResponse,
   UsageTotals,
   TicketsResponse,
+  TicketSourceResponse,
 } from "../../../dashboard/shared/types.ts";
 import { ApiRequestError, jsonResponse, safely, type ApiHandler, type ApiResponse, type HandlerRequest } from "./responses.ts";
 import { decodePathSegments, validateAuthority } from "./security.ts";
@@ -287,8 +291,8 @@ function allowedNextActions(state: string): string[] {
 export interface ApiRouterOptions {
   readonly dbPath: string;
   readonly config: AwsfConfig;
-  /** Repository ticket files; the dashboard never receives their paths or bodies. */
-  readonly ticketDirectory?: string;
+  /** Resolved catalog plans; the list response never receives paths or bodies. */
+  readonly planSources?: readonly ResolvedPlanSource[];
   /** Defaults to the directory containing the projection database. */
   readonly stateRoot?: string;
   readonly open?: typeof openDatabase;
@@ -297,6 +301,17 @@ export interface ApiRouterOptions {
 export interface ApiRouter {
   dispatch(request: HandlerRequest): Promise<ApiResponse>;
   close(): void;
+}
+
+/** Resolves dashboard ticket stores through the repository's declared catalog. */
+export function resolveTicketPlanSources(repository = process.cwd()): readonly ResolvedPlanSource[] {
+  const catalogPath = resolve(repository, "awsf.project.yaml");
+  try {
+    return resolvePlanSources(catalogPath, loadCatalog(readFileSync(catalogPath, "utf8")));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return Object.freeze([]);
+    throw error;
+  }
 }
 
 function routeParams(routePath: string, segments: readonly string[]): Record<string, string> | null {
@@ -315,6 +330,7 @@ function routeParams(routePath: string, segments: readonly string[]): Record<str
 export function createApiRouter(options: ApiRouterOptions): ApiRouter {
   const opener = options.open ?? openDatabase;
   const readDb = opener(options.dbPath, { readonly: true });
+  const ticketReader = new PlanTicketReader(options.planSources ?? resolveTicketPlanSources());
   let archiveDb: DatabaseSync | null = null;
 
   const handlers: Readonly<Record<ApiRouteName, ApiHandler>> = {
@@ -446,9 +462,28 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
       return jsonResponse(response);
     }),
     settings: safely(() => jsonResponse({ settings: buildEffectiveConfig(options.config) } satisfies SettingsResponse)),
-    tickets: safely(async () => {
-      const backlog = await queryBacklog(
-        new TicketStore(options.ticketDirectory ?? resolve(process.cwd(), "specs", "tickets")),
+    tickets: safely(async (request) => {
+      const params = searchParams(request, ["plan", "ticket"]);
+      const plan = params.get("plan");
+      const ticket = params.get("ticket");
+      if ((plan === null) !== (ticket === null)) {
+        throw new ApiRequestError(400, "invalid-query", "plan and ticket must be supplied together");
+      }
+      if (plan !== null && ticket !== null) {
+        if (!/^[TW]\d\d$/u.test(ticket)) {
+          throw new ApiRequestError(400, "invalid-query", "ticket must be a zero-padded Tnn or Wnn id");
+        }
+        const source = await ticketReader.source(plan, ticket);
+        if (source === null) throw new ApiRequestError(404, "ticket-not-found", "ticket not found");
+        const body = { uid: `${plan}/${ticket}`, plan, ticket, source } satisfies TicketSourceResponse;
+        // Repository ticket text is intentionally verbatim. Running it through
+        // publicApiValue would rewrite credential-shaped examples in the file.
+        const response = jsonResponse(null);
+        return { ...response, body };
+      }
+
+      const backlog = await queryPlanBacklog(
+        ticketReader,
         backlogSessionCosts(readDb).map((row) => ({ taskId: row.task_id, estimatedCostUsd: row.estimated_cost_usd, costAuthority: row.cost_authority })),
       );
       return jsonResponse(backlog satisfies TicketsResponse);

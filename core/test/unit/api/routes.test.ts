@@ -1,12 +1,15 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdir, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { basename, dirname, join } from "node:path";
 import { createApiRouter } from "../../../src/api/routes.ts";
 import { processesForSession } from "../../../src/observability/queries.ts";
 import { openDatabase, type OpenDatabaseOptions } from "../../../src/observability/sqlite.ts";
 import { writeLandingSummary } from "../../../src/persistence/landing-summary.ts";
-import type { SessionsResponse, SessionDetailResponse, PhaseDetailResponse, EventsResponse, TicketsResponse } from "../../../../dashboard/shared/types.ts";
+import { loadCatalog } from "../../../src/registry/catalog.ts";
+import { resolvePlanSources } from "../../../src/registry/plan-source.ts";
+import type { SessionsResponse, SessionDetailResponse, PhaseDetailResponse, EventsResponse, TicketsResponse, TicketSourceResponse } from "../../../../dashboard/shared/types.ts";
+import { repoRoot } from "../meta/_walk.ts";
 import { apiFixture } from "./_fixture.ts";
 
 const headers = { host: "127.0.0.1:4600" };
@@ -15,17 +18,70 @@ function request(url: string, method = "GET") {
   return { method, url, headers };
 }
 
-test("tickets serves the shared backlog query with its ready set and an honest partial projection", async () => {
+test("tickets serves plan-qualified groups without putting source in the polled list", async () => {
   const fixture = apiFixture();
-  const router = createApiRouter({ dbPath: fixture.path, config: fixture.config, ticketDirectory: fixture.ticketDirectory });
+  const router = createApiRouter({ dbPath: fixture.path, config: fixture.config, planSources: fixture.planSources });
   try {
     const response = await router.dispatch(request("/api/v1/tickets"));
     assert.equal(response.status, 200);
     const backlog = response.body as TicketsResponse;
-    assert.deepEqual(backlog.ready.map((ticket) => ticket.id), ["T02"]);
-    assert.deepEqual(backlog.counts.state, { todo: 1, wip: 0, done: 1, failed: 0 });
+    assert.deepEqual(backlog.ready.map((ticket) => ticket.uid), ["fixture-plan/T02"]);
+    assert.deepEqual(backlog.counts.state, { todo: 1, wip: 1, done: 1, failed: 0 });
+    assert.deepEqual(backlog.plans.map((plan) => ({ id: plan.id, kind: plan.kind, parent: plan.parentSpine, counts: plan.counts })), [
+      { id: "fixture-plan", kind: "spine", parent: null, counts: { todo: 1, wip: 0, done: 1, failed: 0 } },
+      { id: "fixture-w01-deep", kind: "deep", parent: "fixture-plan", counts: { todo: 0, wip: 1, done: 0, failed: 0 } },
+    ]);
+    assert.deepEqual(backlog.tickets.filter((ticket) => ticket.id === "T01").map((ticket) => ticket.uid), [
+      "fixture-plan/T01",
+      "fixture-w01-deep/T01",
+    ]);
+    assert.ok(backlog.tickets.every((ticket) => !Object.hasOwn(ticket, "source")));
+    assert.equal(JSON.stringify(response.body).includes("source-only-marker"), false);
+    assert.equal(JSON.stringify(response.body).includes("\"source\""), false);
     assert.equal(backlog.projectedCost.partial, true);
     assert.equal(backlog.projectedCost.usd, null);
+  } finally { router.close(); fixture.close(); }
+});
+
+test("ticket overlay source is byte-exact and duplicate bare ids are separately addressable", async () => {
+  const fixture = apiFixture();
+  const router = createApiRouter({ dbPath: fixture.path, config: fixture.config, planSources: fixture.planSources });
+  try {
+    for (const plan of fixture.planSources) {
+      const response = await router.dispatch(request(`/api/v1/tickets?plan=${basename(plan.planPath, ".html")}&ticket=T01`));
+      assert.equal(response.status, 200);
+      const body = response.body as TicketSourceResponse;
+      assert.equal(body.source, await readFile(join(plan.ticketsPath, "T01.md"), "utf8"));
+      assert.equal(body.uid, `${basename(plan.planPath, ".html")}/T01`);
+    }
+    assert.equal((await router.dispatch(request("/api/v1/tickets?plan=fixture-plan"))).status, 400);
+    assert.equal((await router.dispatch(request("/api/v1/tickets?plan=fixture-plan&ticket=T1"))).status, 400);
+    assert.equal((await router.dispatch(request("/api/v1/tickets?plan=unknown&ticket=T01"))).status, 404);
+  } finally { router.close(); fixture.close(); }
+});
+
+test("tickets endpoint returns every resolved repository ticket including the W-numbered spine", async () => {
+  const fixture = apiFixture();
+  const catalogPath = join(repoRoot(), "awsf.project.yaml");
+  const sources = resolvePlanSources(catalogPath, loadCatalog(await readFile(catalogPath, "utf8")));
+  const expected = (await Promise.all(sources.map(async (source) => {
+    const plan = basename(source.planPath, ".html");
+    return (await readdir(source.ticketsPath))
+      .filter((name) => /^[TW]\d\d\.md$/u.test(name))
+      .map((name) => `${plan}/${name.slice(0, -3)}`);
+  }))).flat().sort();
+  const router = createApiRouter({ dbPath: fixture.path, config: fixture.config, planSources: sources });
+  try {
+    const response = await router.dispatch(request("/api/v1/tickets"));
+    assert.equal(response.status, 200);
+    const backlog = response.body as TicketsResponse;
+    assert.equal(expected.length, 225);
+    assert.deepEqual(backlog.tickets.map((ticket) => ticket.uid).toSorted(), expected);
+    assert.deepEqual(
+      backlog.tickets.filter((ticket) => ticket.plan === "awsf-v2-plan").map((ticket) => ticket.id),
+      ["W01", "W02", "W03", "W04", "W05", "W06", "W07", "W08", "W09", "W10", "W11", "W12", "W13", "W14", "W15"],
+    );
+    assert.ok(backlog.tickets.every((ticket) => !Object.hasOwn(ticket, "source")));
   } finally { router.close(); fixture.close(); }
 });
 

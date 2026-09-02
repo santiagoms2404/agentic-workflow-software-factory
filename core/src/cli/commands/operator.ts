@@ -2,7 +2,7 @@ import { access, readdir } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { createServer, type Server } from "node:http";
 import type { AwsfConfig } from "../../config/schema.ts";
-import { createApiRouter, type ApiRouter } from "../../api/routes.ts";
+import { createApiRouter, resolveTicketPlanSources, type ApiRouter } from "../../api/routes.ts";
 import { sendResponse } from "../../api/responses.ts";
 import { SECURITY_HEADERS, validateAuthority } from "../../api/security.ts";
 import { ceilingFor } from "../../state/tiers.ts";
@@ -93,7 +93,7 @@ export async function dashCommand(options: DashOptions): Promise<"not-built" | "
     prepareDatabaseForReadonly(options.dbPath);
   }
   const router: ApiRouter | null = options.dbPath !== undefined && options.config !== undefined
-    ? createApiRouter({ dbPath: options.dbPath, config: options.config, ticketDirectory: join(options.cwd, "specs", "tickets") }) : null;
+    ? createApiRouter({ dbPath: options.dbPath, config: options.config, planSources: resolveTicketPlanSources(options.cwd) }) : null;
   const contentType = (path: string): string => {
     if (path.endsWith(".html")) return "text/html; charset=utf-8";
     if (path.endsWith(".js")) return "text/javascript; charset=utf-8";

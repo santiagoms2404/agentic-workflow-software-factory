@@ -291,31 +291,49 @@ export interface ArchiveResponse {
   archived: true;
 }
 
+export type TicketState = "todo" | "wip" | "done" | "failed";
+export type PlanKind = "spine" | "deep";
+
 export interface BacklogTicket {
-  id: string;
-  title: string;
-  milestone: string;
-  tier: 0 | 1 | 2;
-  state: "todo" | "wip" | "done" | "failed";
-  depends_on: string[];
-  workflow: string;
-  outcome: string;
-  context: string[];
-  acceptance: string[];
-  non_goals: string[];
-  ready: boolean;
+  /** Plan-qualified stable key; bare ticket ids repeat across plans. */
+  readonly uid: string;
+  readonly plan: string;
+  readonly id: string;
+  readonly title: string;
+  readonly milestone: string;
+  readonly state: TicketState;
+  readonly depends_on: readonly string[];
+  readonly ready: boolean;
+  readonly tier?: 0 | 1 | 2;
+  readonly workflow?: string;
+}
+
+export interface BacklogPlan {
+  readonly id: string;
+  readonly name: string;
+  readonly kind: PlanKind;
+  readonly parentSpine: string | null;
+  readonly parentSpineName: string | null;
+  readonly counts: Readonly<Record<TicketState, number>>;
+  readonly ticketCount: number;
 }
 
 export interface TicketsResponse {
-  // Readonly because the backlog projection this mirrors is readonly, and the
-  // tickets route is a read route: nothing on either side of the wire may
-  // rewrite the board it was handed.
-  tickets: readonly BacklogTicket[];
-  ready: readonly BacklogTicket[];
-  counts: {
-    state: Record<BacklogTicket["state"], number>;
-    milestone: Record<string, number>;
-    tier: Record<"T0" | "T1" | "T2", number>;
+  readonly plans: readonly BacklogPlan[];
+  readonly tickets: readonly BacklogTicket[];
+  readonly ready: readonly BacklogTicket[];
+  readonly counts: {
+    readonly state: Readonly<Record<TicketState, number>>;
+    readonly milestone: Readonly<Record<string, number>>;
+    readonly tier: Readonly<Record<"T0" | "T1" | "T2", number>>;
   };
-  projectedCost: { usd: number | null; authority: CostAuthority; partial: boolean };
+  readonly projectedCost: { readonly usd: number | null; readonly authority: CostAuthority; readonly partial: boolean };
+}
+
+export interface TicketSourceResponse {
+  readonly uid: string;
+  readonly plan: string;
+  readonly ticket: string;
+  /** Complete UTF-8 markdown file, including frontmatter fences. */
+  readonly source: string;
 }

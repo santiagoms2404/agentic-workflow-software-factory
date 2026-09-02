@@ -17,7 +17,7 @@ const settings = ref<unknown>({});
 const adapters = ref<AdaptersResponse>({ adapters: [] });
 const settingsRoute = ref(false);
 const backlogRoute = ref(false);
-const backlog = ref<TicketsResponse>({ tickets: [], ready: [], counts: { state: { todo: 0, wip: 0, done: 0, failed: 0 }, milestone: {}, tier: { T0: 0, T1: 0, T2: 0 } }, projectedCost: { usd: null, authority: "unavailable", partial: true } });
+const backlog = ref<TicketsResponse>({ plans: [], tickets: [], ready: [], counts: { state: { todo: 0, wip: 0, done: 0, failed: 0 }, milestone: {}, tier: { T0: 0, T1: 0, T2: 0 } }, projectedCost: { usd: null, authority: "unavailable", partial: true } });
 
 function readRoute(): void {
   settingsRoute.value = location.hash === "#/settings";
