@@ -321,6 +321,26 @@ const GROUP_SCRIPT = [
   "setInterval(() => {}, 1000);",
 ].join("");
 
+/**
+ * Wait, bounded, for the kernel to agree with a report.
+ *
+ * `terminateTree` returning is the signal having been sent and the ladder
+ * having run; it is not the kernel having finished. A process that has exited
+ * but not yet been reaped is still observable, so an instantaneous re-read sees
+ * a corpse and calls it a survivor. Under a full-suite run on a loaded machine
+ * that is exactly what happened. The claim is unchanged — a process still
+ * observable after this deadline is a real survivor — only the moment it is
+ * asked at is.
+ */
+async function settles(deadlineMs: number, predicate: () => boolean): Promise<boolean> {
+  const until = Date.now() + deadlineMs;
+  for (;;) {
+    if (predicate()) return true;
+    if (Date.now() >= until) return false;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+}
+
 function hostCanSupervise(): boolean {
   try {
     createHostPort({ command: runSystemCommand }).census();
@@ -368,8 +388,14 @@ test(
       assert.deepEqual(report.survivors, [], "survivors are enumerated after the ladder, not assumed");
       assert.equal(report.terminated, true);
 
-      // Asked again, of the machine rather than of the report.
-      assert.equal(controller.observeIdentity(grandchild), null, "the grandchild was reaped");
+      // Asked again, of the machine rather than of the report — and bounded,
+      // because the report is the ladder having run, not the kernel having
+      // finished reaping.
+      assert.equal(
+        await settles(5_000, () => controller.observeIdentity(grandchild) === null),
+        true,
+        "the grandchild was reaped",
+      );
       assert.deepEqual([...controller.groupMembers(identity)], []);
     } finally {
       for (const pid of [child.pid ?? 0, grandchild]) {

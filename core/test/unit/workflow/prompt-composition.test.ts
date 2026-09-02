@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
 import type { AgentDefinition } from "../../../src/config/schema.ts";
+import { ARTIFACT_KINDS } from "../../../src/contracts/envelope-base.ts";
 import { loadConfig } from "../../../src/config/load.ts";
 import { readProductionPromptPair } from "../../../src/cli/commands/production-run.ts";
 import { readReviewPromptPair } from "../../../src/cli/commands/review-phase.ts";
@@ -29,7 +30,7 @@ import {
 
 const EXPECTED = {
   planner: {
-    system: "You are the planning worker. Produce a bounded, ordered plan grounded in repository evidence and explicit verification.\n\nUse `openQuestions` only for genuine unresolved questions that block implementation. Return `openQuestions: []` when none exist. Put non-blocking rationale, judgment calls, and decisions you made instead of asking in `notesForNextPhase`.\n\nUse `artifacts` only for files or resources that already exist and that the plan depends on as input or evidence. Put files the builder will create in whichever step file list the injected output contract provides: `implementationSteps[].files` or `steps[].files`. Never put planned outputs in `artifacts`.\n",
+    system: "You are the planning worker. Produce a bounded, ordered plan grounded in repository evidence and explicit verification.\n\nUse `openQuestions` only for genuine unresolved questions that block implementation. Return `openQuestions: []` when none exist. Put non-blocking rationale, judgment calls, and decisions you made instead of asking in `notesForNextPhase`.\n\nUse `artifacts` only for files or resources that already exist and that the plan depends on as input or evidence. Put files the builder will create in whichever step file list the injected output contract provides: `implementationSteps[].files` or `steps[].files`. Never put planned outputs in `artifacts`. An artifact's `kind` describes **what the file is**, never why the plan cites it: the contract admits exactly `source`, `test`, `plan`, `documentation` and `report`, and it has no value meaning \"referenced\", \"evidence\" or \"input\" — a source file you read as evidence is still `source`, and a spec you read is `documentation`.\n",
     user: "Turn the owner's request or prior handoff into implementable steps. Separate goals from non-goals, name affected files, and make acceptance evidence explicit.\n\nBefore returning, check the envelope field contract:\n- `openQuestions` contains only unresolved questions that block implementation and is `[]` when none exist. Non-blocking rationale belongs in `notesForNextPhase`.\n- `artifacts` contains only pre-existing inputs or evidence. Planned outputs belong in the output contract's step file list (`implementationSteps[].files` or `steps[].files`).\n- When the contract includes `steps[].serves`, use only exact identifiers from the prior envelope's `identifierSet`. Review finding ids are context, not design identifiers, unless that set contains them.\n\nPrevious phase envelope:\n{previous_envelope}\n\nReturn only an envelope satisfying this host-generated contract:\n{output_schema}\n",
   },
   builder: {
@@ -315,4 +316,32 @@ test("the centralized bundle rejects credentials and prior redactions on both pr
     }
     write(root, "prompts/shared/headless-role.md", COMMON_SHARED_BYTES);
   }
+});
+
+// ---------------------------------------------------------------------------
+// The planner prompt names every artifact kind the contract admits.
+//
+// A real drive died here. The planner returned 16 of 18 artifacts correctly and
+// used `kind: "reference"` on two, which the enum does not carry. The enum was
+// NOT missing from its context — `{output_schema}` injects the full contract,
+// `kind` included — so this was never an information gap. It was a semantic
+// one: the surrounding prose called artifacts "resources that already exist and
+// that the plan depends on as input or evidence", which is the definition of
+// the word `reference`, and the model followed the prose over the schema.
+//
+// So the fix was to resolve the conflict — `kind` describes what the file IS,
+// not why the plan cites it — and this fence keeps the enumeration from falling
+// behind the contract. Adding a sixth kind without teaching the prompt fails
+// here rather than one provider call into a run.
+// ---------------------------------------------------------------------------
+
+test("the planner prompt enumerates the artifact kinds, and disowns the word that broke a drive", () => {
+  const prompt = readFileSync(resolve("prompts/planner/system.md"), "utf8");
+  for (const kind of ARTIFACT_KINDS) {
+    assert.match(prompt, new RegExp(`\`${kind}\``, "u"), `the planner prompt never names kind \`${kind}\``);
+  }
+  // The specific word the prose used to invite. Naming it as absent is what
+  // stops the next planner reaching for it.
+  assert.match(prompt, /no value meaning/iu);
+  assert.match(prompt, /referenced/iu);
 });
