@@ -154,7 +154,7 @@ export async function startCommand(options: StartCommandOptions): Promise<Attemp
         `${String(minimumCallsFor(recipe) + correctionsFundableFor(recipe, ceiling))}, ` +
         `so corrections fundable = ${String(correctionsFundableFor(recipe, ceiling))}. ` +
         `The first envelope defect would be terminal on its first occurrence. ` +
-        `Run \`awsf raise ${current.taskId} ${String(headroom.callsNeeded)} --reason "<why>"\` and start again; ` +
+        `Run \`awsf raise ${current.taskId} --calls ${String(headroom.callsNeeded)} --reason "<why>"\` and start again; ` +
         `the attempt stays DRAFT and no call has been spent.`,
     );
   }

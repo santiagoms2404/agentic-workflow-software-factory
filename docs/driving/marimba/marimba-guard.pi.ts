@@ -2,7 +2,7 @@
  * marimba guard, pi port. The same two fences as `delegation-guard.sh`, bound
  * to pi's tool surface instead of a `PreToolUse` shell hook.
  *
- * This file is the BINDING only. Both fences live in `marimba-guard-rules.ts`,
+ * This file is the BINDING only. Both fences live in `marimba-guard-rules.mts`,
  * which imports nothing and which the suite asserts still agrees with the shell
  * guard's own `for` loops. Read that file for what is denied and why; read this
  * one for how pi is wired to it.
@@ -52,7 +52,7 @@ import {
   OWNER_ACTS,
   delegationViolation,
   ownerActViolation,
-} from "./marimba-guard-rules.ts";
+} from "./marimba-guard-rules.mts";
 
 function ownerActReason(verb: string): string {
   return [

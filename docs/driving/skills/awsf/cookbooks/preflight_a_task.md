@@ -122,7 +122,7 @@ a route outright rather than letting you discover it mid-run.
 The raise is an **owner act**. Prepare it, state why, and let the owner run it:
 
 ```bash
-awsf raise TASK <calls> --reason "<why this run needs the headroom>"
+awsf raise TASK --calls <n> --reason "<why this run needs the headroom>"
 ```
 
 It must happen **after `awsf new` and before `awsf start`** — the attempt has to

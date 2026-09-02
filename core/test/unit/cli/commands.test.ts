@@ -341,7 +341,7 @@ test("a recipe whose declared correction round no call can pay for is refused at
     await assert.rejects(
       startCommand({ attemptDir: created.attemptDir, worktreeRoot, configPath,
         preflight: () => ({ adapter: true, sandbox: true, observability: true }) }),
-      /declares a correction round on 1 cold phase\(s\) \(scout\).*corrections fundable = 0.*awsf raise unfundable-correction 1 --reason/su,
+      /declares a correction round on 1 cold phase\(s\) \(scout\).*corrections fundable = 0.*awsf raise unfundable-correction --calls 1 --reason/su,
     );
 
     // The refusal has to leave `raise` legal. A BLOCKED attempt is terminal and

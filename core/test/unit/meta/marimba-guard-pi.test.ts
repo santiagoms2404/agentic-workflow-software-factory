@@ -4,7 +4,7 @@
 // `marimba-guard.test.ts` drives the shell hook by spawning it with real
 // payloads, which is the only way to test a shell script honestly. That cannot
 // be done for a pi extension without running pi, so the fences were lifted into
-// `marimba-guard-rules.ts` — a module that imports nothing — and this file does
+// `marimba-guard-rules.mts` — a module that imports nothing — and this file does
 // two things the spawn-based test cannot:
 //
 //   1. Asserts the SHELL script's own `for` loops still name exactly the rules
@@ -30,7 +30,7 @@ import {
   delegationViolation,
   normalizeCommand,
   ownerActViolation,
-} from "../../../../docs/driving/marimba/marimba-guard-rules.ts";
+} from "../../../../docs/driving/marimba/marimba-guard-rules.mts";
 
 const MARIMBA_DIR = join(drivingDir(), "marimba");
 const SHELL_GUARD = readFileSync(join(MARIMBA_DIR, "delegation-guard.sh"), "utf8");
@@ -65,7 +65,7 @@ test("the pi binding delegates to the shared rules rather than restating them", 
   // The failure this prevents: someone pastes the lists into the extension to
   // drop a relative import, and the anti-drift tests above go on passing while
   // the extension enforces something else entirely.
-  assert.match(PI_GUARD, /from "\.\/marimba-guard-rules\.ts"/u);
+  assert.match(PI_GUARD, /from "\.\/marimba-guard-rules\.mts"/u);
   for (const stem of DELEGATION_STEMS) {
     assert.doesNotMatch(PI_GUARD, new RegExp(`"${stem}"`, "u"), `${stem} is restated in the pi binding`);
   }

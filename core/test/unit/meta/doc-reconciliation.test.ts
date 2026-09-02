@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { CLI_BOOLEAN_FLAGS, CLI_COMMANDS } from "../../../src/cli/main.ts";
-import { repoRoot, relRepo } from "./_walk.ts";
+import { repoRoot, relRepo, walkFiles } from "./_walk.ts";
 import {
   AWSF_CLI,
   DRIVING_REL,
@@ -294,4 +294,69 @@ test("the denial fence bites on the three sections that carried this defect, and
   // A denial of a genuinely absent command stays legal — the rule is about
   // truth, not about forbidding the vocabulary.
   assert.deepEqual(denialOffences("`awsf frobnicate` does not exist today.", flags), []);
+});
+
+// ---------------------------------------------------------------------------
+// `awsf raise` takes its call count as a FLAG, and every written invocation
+// must say so.
+//
+// `main.ts` reads `parsed.flags["calls"]` and defaults it to 1. A positional
+// spelling — `awsf raise TASK 3 --reason "..."` — therefore does not fail. It
+// succeeds and grants ONE call, silently, which is worse: the owner reads
+// "ceiling raised" and starts a run with a third of the headroom they asked
+// for. `raise.ts`, `review.ts` and `rework.ts` had the flag form from the
+// start; a later change wrote the positional form into the `awsf start`
+// refusal, a cookbook and the walkthrough at once, so this is a fence rather
+// than a fixed typo.
+// ---------------------------------------------------------------------------
+
+/**
+ * A written `awsf raise` that supplies a COUNT, with that count not behind
+ * `--calls`.
+ *
+ * Keyed on the count rather than on the invocation, so prose that merely names
+ * the command — `awsf raise requires --reason ...` in `raise.ts` — is not a
+ * false positive, while both broken spellings are caught: a bare number
+ * (`awsf raise TASK 3 --reason`) and a placeholder (`awsf raise TASK <calls>
+ * --reason`). A task id containing digits is not a bare number and does not
+ * trip it.
+ */
+export function positionalRaiseCounts(text: string): readonly string[] {
+  const found: string[] = [];
+  for (const match of text.matchAll(/awsf raise\b([^`\n]*?)--reason/gu)) {
+    const between = match[1] ?? "";
+    if (between.includes("--calls")) continue;
+    if (!/(?:^|\s)(?:\d+|<[^>]+>)(?=\s|$)/u.test(between)) continue;
+    found.push(match[0]);
+  }
+  return found;
+}
+
+test("every written `awsf raise` passes its call count as --calls", () => {
+  const offenders: string[] = [];
+  const files = [
+    ...walkFiles(join(ROOT, "core", "src"), [".ts"]),
+    ...walkFiles(join(ROOT, "docs"), [".md", ".html"]),
+    join(ROOT, "README.md"),
+  ];
+  for (const file of files) {
+    for (const invocation of positionalRaiseCounts(readFileSync(file, "utf8"))) {
+      offenders.push(`${relRepo(file)}: ${invocation}`);
+    }
+  }
+  assert.deepEqual(offenders, []);
+});
+
+test("the raise-spelling fence bites on both broken spellings and spares prose", () => {
+  // The two forms that silently grant one call instead of the count written.
+  assert.equal(positionalRaiseCounts('`awsf raise my-task 3 --reason "<why>"`').length, 1);
+  assert.equal(positionalRaiseCounts('awsf raise TASK <calls> --reason "<why>"').length, 1);
+  // The legal form, in both a literal and an interpolated spelling.
+  assert.deepEqual(positionalRaiseCounts('`awsf raise my-task --calls 3 --reason "<why>"`'), []);
+  assert.deepEqual(positionalRaiseCounts("`awsf raise ${id} --calls ${n} --reason \"x\"`"), []);
+  // Prose naming the command, which is what made the first cut of this fence
+  // report `raise.ts` and is why it keys on the count.
+  assert.deepEqual(positionalRaiseCounts("awsf raise requires --reason naming why"), []);
+  // A task id that merely contains digits is not a count.
+  assert.deepEqual(positionalRaiseCounts("`awsf raise T01-fixture --calls 2 --reason \"x\"`"), []);
 });

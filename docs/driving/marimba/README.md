@@ -11,7 +11,7 @@ performed by the two scripts in this directory.
 | `delegation-guard.sh` | The `PreToolUse` hook. Two fences: a delegation-shaped tool name, and a shell command invoking one of the six acts the lifecycle reserves for the owner. |
 | `session-banner.sh` | The `SessionStart` hook. Prints what it was able to confirm about the guard's presence, and names what it could not. |
 | `settings.example.json` | The settings marimba is launched with, as a template. Two absolute paths are left as placeholders. |
-| `marimba-guard-rules.ts` | Both fences as pure rules, importing nothing. The one place either harness's lists are written. |
+| `marimba-guard-rules.mts` | Both fences as pure rules, importing nothing. The one place either harness's lists are written. |
 | `marimba-guard.pi.ts` | The pi port of the guard: the same two fences bound to `tool_call` and `session_start`. |
 | `aliases.example.sh` | Launch aliases per harness, model and effort, as a template. One absolute path is left as a placeholder. |
 | `README.md` | This file. |
@@ -101,7 +101,7 @@ step. Treat such a session as read-only.
 ### The second harness: pi
 
 `marimba-guard.pi.ts` is the port. Both harnesses read their rules from
-`marimba-guard-rules.ts`, which imports nothing, and the suite asserts the shell
+`marimba-guard-rules.mts`, which imports nothing, and the suite asserts the shell
 script's own `for` loops still name exactly what that module exports — so
 editing one harness's list without the other fails a test rather than silently
 producing two different boundaries.

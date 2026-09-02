@@ -63,7 +63,7 @@ export const DRIVING_DOC_EXTS = [".md"];
  * Invariants 4 and 9 say "nowhere" and "anywhere else", so their sweeps read
  * wider than the markdown the document-level fences parse.
  */
-export const DRIVING_TEXT_EXTS = [".md", ".txt", ".json", ".yaml", ".yml", ".sh", ".ts"];
+export const DRIVING_TEXT_EXTS = [".md", ".txt", ".json", ".yaml", ".yml", ".sh", ".ts", ".mts"];
 
 export function drivingDocs(): string[] {
   return walkFiles(drivingDir(), DRIVING_DOC_EXTS);
