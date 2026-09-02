@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { commitAsHost, HOST_AUTHOR } from "../../../src/git/commit.ts";
-import { listWorktrees, createWorktree } from "../../../src/git/worktrees.ts";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { AttemptWorktreeExists, listWorktrees, createWorktree } from "../../../src/git/worktrees.ts";
 import type { GitRunner } from "../../../src/git/changes.ts";
 
 function scripted(replies: Record<string, string | string[]>): { runner: GitRunner; calls: string[] } {
@@ -47,4 +50,51 @@ test("host commits set both author and committer identity deterministically", ()
     "rev-parse HEAD",
   ]);
   assert.equal(HOST_AUTHOR, "Santiago Marin <santiagomarinsuarez@me.com>");
+});
+
+function caught(run: () => unknown): AttemptWorktreeExists {
+  try {
+    run();
+  } catch (error) {
+    assert.ok(error instanceof AttemptWorktreeExists, `expected AttemptWorktreeExists, got ${String(error)}`);
+    return error;
+  }
+  throw new Error("expected createWorktree to refuse an existing tree");
+}
+
+test("an interrupted start's leftover tree is diagnosed, not repeated back as a git error", () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-orphan-worktree-"));
+  try {
+    const attemptId = "orphaned-attempt";
+    const path = join(root, attemptId);
+    mkdirSync(path, { recursive: true });
+
+    // Git tracks it: the exact state an interrupted `awsf start` leaves, where
+    // the tree is registered while the attempt record still reads DRAFT.
+    const tracked = scripted({
+      "rev-parse abc": "012345\n",
+      "worktree list --porcelain": `worktree /repo\nHEAD aaa\n\nworktree ${path}\nHEAD 012345\n\n`,
+    });
+    const registered = caught(() => createWorktree({ repository: "/repo", root, attemptId, baseSha: "abc" }, tracked.runner));
+    assert.equal(registered.registered, true);
+    assert.equal(registered.path, path);
+    assert.match(registered.message, /already exists at .*orphaned-attempt.* and Git still tracks it/u);
+    assert.match(registered.message, /no phase ran and no provider call was spent/u);
+    assert.match(registered.message, /gotchas\.md carries the exact recovery/u);
+    // It must never reach `worktree add`, whose own message names a path and
+    // nothing else.
+    assert.equal(tracked.calls.includes(`worktree add --detach ${path} 012345`), false);
+
+    // A bare directory Git knows nothing about is the other half, and the
+    // recovery differs, so the error says which it is.
+    const untracked = scripted({
+      "rev-parse abc": "012345\n",
+      "worktree list --porcelain": "worktree /repo\nHEAD aaa\n\n",
+    });
+    const bare = caught(() => createWorktree({ repository: "/repo", root, attemptId, baseSha: "abc" }, untracked.runner));
+    assert.equal(bare.registered, false);
+    assert.match(bare.message, /as an untracked directory/u);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

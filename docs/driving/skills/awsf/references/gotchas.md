@@ -185,6 +185,37 @@ went wrong", and read the queued state as "never started". Only the earned
 success state is a claim about the work. Do not dress up a partial run as a
 success — and do not report a partial run as a disaster either.
 
+### 11. An interrupted `awsf start` leaves a tree the retry cannot create
+
+**Symptom.** `awsf start` is interrupted — a timeout, a Ctrl-C, a killed
+session — while it is seeding. The next `awsf start` refuses with
+`AttemptWorktreeExists`, saying the attempt's execution tree already exists.
+`awsf status` still reads `DRAFT` with `0` calls spent.
+
+**Cause.** `awsf start` creates the execution tree, seeds it, and only then
+persists `PREPARED`. Interrupted between the first step and the last, Git has
+the tree while the attempt record does not, and the retry has nowhere to put a
+second one. Nothing ran and nothing was spent — the attempt is intact, only its
+tree is in the way.
+
+**Guard.** The state is safe. Do not cancel the attempt and do not retry it —
+both spend something to fix a problem that has cost nothing. AWSF clears no tree
+itself, by design: `AGENTS.md` invariant 8 keeps every force and auto-clearing
+path out of `core/src`, and that absence is the point rather than an omission.
+Clear it with Git yourself and start again. The error states which of the two
+cases you are in — Git tracks the tree, or it is an untracked leftover
+directory — because the recovery differs. Use `git worktree` for the first and
+an ordinary directory deletion for the second, then:
+
+```bash
+just awsf start TASK
+```
+
+Seeding copies the configured `runtime.seed_paths`; on this repository that is
+`node_modules`, which is large. On a slow or network-backed filesystem the first
+`awsf start` can take many minutes, and a caller imposing its own timeout is the
+most common way to land here. Give `start` room rather than interrupting it.
+
 ---
 
 ## Historical

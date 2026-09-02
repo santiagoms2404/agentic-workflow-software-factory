@@ -1,5 +1,5 @@
 // Managed execution trees live under the machine-local Q8 root, never in state or the canonical checkout.
-import { promises as fs } from "node:fs";
+import { existsSync, promises as fs } from "node:fs";
 import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
 import { matchesPathGlob, normalizeRepositoryPath } from "../policy/path-policy.ts";
 import { runGit, systemGitRunner, type GitRunner } from "./changes.ts";
@@ -215,11 +215,55 @@ function attemptPath(root: string, attemptId: string): string {
   return path;
 }
 
+/**
+ * An attempt's execution tree is already on disk.
+ *
+ * The state an interrupted `awsf start` leaves behind: Git has the tree, the
+ * attempt record is still `DRAFT`, and nothing has run. Before this existed the
+ * retry surfaced git's own `fatal: '<path>' already exists` through
+ * `GitCommandFailed`, which names neither what happened nor what to do, and the
+ * operator had to work out that the tree was registered while the attempt was
+ * not.
+ *
+ * AWSF clears nothing itself — `AGENTS.md` invariant 8 keeps every force and
+ * auto-clearing path out of `core/src`, and that is deliberate rather than
+ * missing. So this reports precisely, and the operator recovery lives in
+ * `docs/driving/skills/awsf/references/gotchas.md`.
+ */
+export class AttemptWorktreeExists extends Error {
+  readonly path: string;
+  /** True when Git tracks the tree, which decides which recovery applies. */
+  readonly registered: boolean;
+
+  constructor(path: string, registered: boolean) {
+    super(
+      `this attempt's execution tree already exists at ${JSON.stringify(path)}` +
+        `${registered ? " and Git still tracks it" : " as an untracked directory"}. ` +
+        "An interrupted `awsf start` leaves it behind while the attempt record stays DRAFT, " +
+        "so no phase ran and no provider call was spent. " +
+        "AWSF exposes no path that clears a tree, by design (AGENTS.md invariant 8): " +
+        "clear it yourself with Git, then run `awsf start` again. " +
+        "docs/driving/skills/awsf/references/gotchas.md carries the exact recovery.",
+    );
+    this.name = "AttemptWorktreeExists";
+    this.path = path;
+    this.registered = registered;
+  }
+}
+
 /** Create exactly the attempt's detached execution tree. No removal operation is exposed. */
 export function createWorktree(request: WorktreeRequest, runner = systemGitRunner(request.repository)): ManagedWorktree {
   if (!isAbsolute(request.root)) throw new Error("worktree root must be an absolute machine-local path");
   const path = attemptPath(request.root, request.attemptId);
   const head = runGit(runner, ["rev-parse", request.baseSha]).trim();
+  // Diagnose before asking Git, so the failure names the condition rather than
+  // repeating git's message about a path.
+  if (existsSync(path)) {
+    const tracked = runGit(runner, ["worktree", "list", "--porcelain"])
+      .split(/\r?\n/)
+      .some((line) => line.startsWith("worktree ") && resolve(line.slice("worktree ".length)) === resolve(path));
+    throw new AttemptWorktreeExists(path, tracked);
+  }
   runGit(runner, ["worktree", "add", "--detach", path, head]);
   return Object.freeze({ attemptId: request.attemptId, path, head });
 }

@@ -71,9 +71,30 @@ refactors" is decoration; "do not touch the adapter descriptors — they are pin
 byte-for-byte by a test" is a fence. The good version usually names a file and a
 reason.
 
+## Resolving before cutting
+
+The four lines are not finished when they read well. They are finished when
+every fact in them has been opened in the repository — which is
+`preflight_a_task.md` §3, and it belongs before the cut rather than after,
+because resolving usually *adds* a line or two that cutting must then leave
+alone.
+
+The distinction that matters here: **a symptom is what the owner can see, and a
+blocking fact is what the agent needs.** "The backlog does not show the spine
+plan's tickets" is a symptom, and a planner handed only that will spend its one
+pass rediscovering why. "The store filter is `/^T\d\d\.md$/` while the spine
+plan's tickets are named `WNN.md`" is the fact, it costs you one grep, and it
+turns a discovery into an instruction.
+
+Owners write symptoms, because a symptom is what they experienced. Converting
+each one into the fact underneath it is the single highest-value edit you make
+to a request, and it is the edit that is invisible in the result — a run that
+went well because the request was resolved looks exactly like a run that went
+well by luck.
+
 ## Cutting
 
-Once the four lines exist, cut them.
+Once the four lines exist and their facts are resolved, cut them.
 
 - Delete every sentence that would not change what an agent does. Background,
   history and reassurance are context the model pays for and does not use.
@@ -82,6 +103,9 @@ Once the four lines exist, cut them.
   twice invites a model to negotiate with one of the two copies.
 - Keep every constraint that is only true here. Repository-specific rules are
   exactly what a phase cannot infer.
+- **Never cut a resolved fact to make the request shorter.** A file path, a
+  line, an exact expression or a named helper is the cheapest thing in the
+  request and the most expensive thing to rediscover.
 
 ## What you never do
 
