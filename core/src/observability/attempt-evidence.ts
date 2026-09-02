@@ -10,12 +10,26 @@ import type { TaskState } from "../state/task-machine.ts";
 export type SandboxMechanism = SandboxGrant["mechanism"];
 
 /**
- * Which side of the inversion an agent call sat on. Optional because journals
- * written before tier-2 execution existed carry no such field, and a rebuild of
- * one must not invent a purpose it never recorded — the projector reads an
- * absent value as `worker`, which is the only kind of call those journals hold.
+ * Which side of the inversion an agent call sat on.
+ *
+ * `build` is the candidate-producing phase — structurally, the agent phase
+ * whose schema is `BUILD_OUTPUT_SCHEMA_ID`, which is the one the review provider
+ * is computed against. It is the only call whose provider proves the inversion.
+ *
+ * `support` is any other non-review agent: a planner, a documenter, a scout. It
+ * is a worker in every ordinary sense, and it is deliberately NOT the fact the
+ * worker columns record. `simple-sdlc` runs three of them, and while they all
+ * claimed one purpose the projector's last write won — a run whose builder was
+ * on one provider and reviewer on the other projected both columns as the
+ * documenter's, so a correctly inverted run read as uninverted on the dashboard.
+ *
+ * `worker` is the pre-distinction spelling and is READ, never written. Journals
+ * recorded before this split carry it, or carry nothing at all, and a rebuild of
+ * one must not invent a purpose it never recorded: both are projected exactly
+ * the way they always were.
  */
-export type AgentPurpose = "worker" | "review";
+export type AgentPurpose = "build" | "support" | "review";
+export type RecordedAgentPurpose = AgentPurpose | "worker";
 
 export interface PhaseEvidenceRecord {
   readonly phaseId: string;
@@ -57,8 +71,8 @@ export type AttemptEvidence =
   | { readonly type: "process"; readonly phaseId: string; readonly adapterId: string; readonly role: string; readonly record: BarrierRecord; readonly status: "REGISTERED" | "RUNNING" | "EXITED" | "FAILED" | "CANCELLED"; readonly registeredAt: string; readonly releasedAt: string | null; readonly endedAt: string | null; readonly exitCode: number | null; readonly exitSignal: string | null }
   | { readonly type: "envelope"; readonly phaseId: string; readonly envelope: StoredEnvelope<EnvelopeBase> }
   | { readonly type: "gate"; readonly id: string; readonly phaseId: string; readonly round: number; readonly gateId: GateId; readonly kind: "pure" | "filesystem" | "git" | "subprocess" | "journey"; readonly candidateSha: string | null; readonly passed: boolean; readonly exitCode: number | null; readonly checks: readonly GateCheck[]; readonly violations: readonly string[]; readonly outputPath: string | null; readonly startedAt: string; readonly endedAt: string }
-  | { readonly type: "agent-start"; readonly phaseId: string; readonly agent: string; readonly adapterId: string; readonly provider: string; readonly color: string | null; readonly requestedModel: string; readonly sandboxBadge: SandboxBadge; readonly sandboxMechanism: SandboxMechanism; readonly purpose?: AgentPurpose; readonly at: string }
-  | { readonly type: "agent"; readonly phaseId: string; readonly agent: string; readonly adapterId: string; readonly provider: string; readonly color: string | null; readonly requestedModel: string; readonly resolvedModel: string | null; readonly modelProvenance: ModelResolutionProvenance | null; readonly contextWindow: number | null; readonly usageAuthority: "provider" | "partial" | "none"; readonly usage: TokenUsage; readonly contextTokens: number | null; readonly costUsd: number | null; readonly costAuthority: "provider" | "catalog-estimate" | "unavailable"; readonly purpose?: AgentPurpose; readonly at: string }
+  | { readonly type: "agent-start"; readonly phaseId: string; readonly agent: string; readonly adapterId: string; readonly provider: string; readonly color: string | null; readonly requestedModel: string; readonly sandboxBadge: SandboxBadge; readonly sandboxMechanism: SandboxMechanism; readonly purpose?: RecordedAgentPurpose; readonly at: string }
+  | { readonly type: "agent"; readonly phaseId: string; readonly agent: string; readonly adapterId: string; readonly provider: string; readonly color: string | null; readonly requestedModel: string; readonly resolvedModel: string | null; readonly modelProvenance: ModelResolutionProvenance | null; readonly contextWindow: number | null; readonly usageAuthority: "provider" | "partial" | "none"; readonly usage: TokenUsage; readonly contextTokens: number | null; readonly costUsd: number | null; readonly costAuthority: "provider" | "catalog-estimate" | "unavailable"; readonly purpose?: RecordedAgentPurpose; readonly at: string }
   /**
    * An owner raise of one task's call ceiling. Session-level: it belongs to no
    * phase, moves no lifecycle edge, and carries the owner's written reason —

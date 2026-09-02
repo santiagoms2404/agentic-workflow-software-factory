@@ -8,7 +8,7 @@ import type { JournalRecord } from "../persistence/journal.ts";
 import type { NormalizedEvent } from "../contracts/normalized-events.ts";
 import { isPersistableKind } from "../contracts/normalized-events.ts";
 import type { DatabaseSync } from "./sqlite.ts";
-import type { AttemptEvidence } from "./attempt-evidence.ts";
+import type { AttemptEvidence, RecordedAgentPurpose } from "./attempt-evidence.ts";
 import {
   scrubCredentialString,
   scrubCredentials,
@@ -90,6 +90,29 @@ export interface AttemptStatusProjection extends SessionInit {
  * summary. Like provider-event projection, failure never throws into the
  * lifecycle command that already durably journaled its transition.
  */
+/**
+ * Which agent records may write the columns that prove the review inversion.
+ *
+ * `build` is the candidate-producing phase and always writes: there is exactly
+ * one per workflow, so it cannot race itself.
+ *
+ * `support` — a planner, a documenter, a scout — writes only into an empty
+ * column. That keeps a worker on record for a read-only recipe that has no
+ * build phase at all, while making it impossible for the documenter that runs
+ * *after* the builder to overwrite the builder's provider. That overwrite is
+ * the defect this clause exists for: `simple-sdlc` ran its builder on one
+ * provider and its reviewer on the other, and projected both columns as
+ * `anthropic`, so the dashboard showed a correctly inverted run as uninverted.
+ *
+ * An absent purpose, and the legacy `worker` spelling, always write. Journals
+ * predating this split recorded one worker call and meant the columns to come
+ * from it; a rebuild must project them the way it always did rather than invent
+ * a distinction the journal never carried.
+ */
+function workerColumnClause(purpose: RecordedAgentPurpose | undefined): string {
+  return purpose === "support" ? " AND worker_provider IS NULL" : "";
+}
+
 export function projectAttemptStatus(
   db: DatabaseSync,
   status: AttemptStatusProjection,
@@ -322,16 +345,17 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
         .run(sessionId, scrubCredentialString(evidence.agent), scrubCredentialString(evidence.adapterId),
           scrubCredentialString(evidence.provider), evidence.color, scrubCredentialString(evidence.requestedModel),
           evidence.sandboxBadge, evidence.sandboxMechanism, evidence.at, evidence.at);
-      // The worker columns belong to the worker. A review call reaching them
-      // would overwrite the very fact the inversion is proved from, leaving a
-      // session whose worker and reviewer both read as the reviewer.
-      if ((evidence.purpose ?? "worker") === "worker") {
-        db.prepare(`UPDATE sessions SET worker_provider=?, worker_model_requested=?, worker_model_resolved=NULL
-          WHERE session_id=?`).run(scrubCredentialString(evidence.provider),
-            scrubCredentialString(evidence.requestedModel), sessionId);
-      } else {
+      // The worker columns belong to the phase the review is inverted against.
+      // A review call reaching them would overwrite the very fact the inversion
+      // is proved from; so would a second and a third *worker*, which is what
+      // `simple-sdlc` actually does — see `workerColumnClause`.
+      if (evidence.purpose === "review") {
         db.prepare(`UPDATE sessions SET review_provider=? WHERE session_id=?`)
           .run(scrubCredentialString(evidence.provider), sessionId);
+      } else {
+        db.prepare(`UPDATE sessions SET worker_provider=?, worker_model_requested=?, worker_model_resolved=NULL
+          WHERE session_id=?${workerColumnClause(evidence.purpose)}`).run(scrubCredentialString(evidence.provider),
+            scrubCredentialString(evidence.requestedModel), sessionId);
       }
       return;
     case "agent": {
@@ -383,11 +407,12 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
           add(current.reasoning_tokens, usage.reasoningTokens), add(current.total_tokens, total),
           usage.reasoningRelation, usageAuthority, add(current.estimated_cost_usd, evidence.costUsd),
           evidence.costAuthority, mixedCost ? 1 : 0, sessionId);
-      if ((evidence.purpose ?? "worker") === "worker") {
-        db.prepare(`UPDATE sessions SET worker_provider=?, worker_model_requested=?, worker_model_resolved=?
-          WHERE session_id=?`).run(evidence.provider, evidence.requestedModel, evidence.resolvedModel, sessionId);
-      } else {
+      if (evidence.purpose === "review") {
         db.prepare(`UPDATE sessions SET review_provider=? WHERE session_id=?`).run(evidence.provider, sessionId);
+      } else {
+        db.prepare(`UPDATE sessions SET worker_provider=?, worker_model_requested=?, worker_model_resolved=?
+          WHERE session_id=?${workerColumnClause(evidence.purpose)}`)
+          .run(evidence.provider, evidence.requestedModel, evidence.resolvedModel, sessionId);
       }
       return;
     }

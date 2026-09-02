@@ -539,12 +539,22 @@ test("process-backed production build crosses the real barrier, parser, audit, a
       },
     });
 
+    // The run above is deliberately NOT awaited: this test has to reach the API
+    // while a real process is still live, so it races a genuine subprocess.
+    // The deadline therefore bounds STARTUP — worktree, spawn, first write — and
+    // not the live window itself, and the loop exits the moment the probe lands,
+    // so a generous bound costs a healthy run nothing. Five seconds was tight
+    // enough that a full-suite run on a network-backed filesystem missed it and
+    // reported a passing factory as a broken one.
     const probePath = join(world.created.attemptDir, "private", "builder", "provider-probe.json");
-    const deadline = Date.now() + 5_000;
+    const deadline = Date.now() + 30_000;
     while (!existsSync(probePath) && Date.now() < deadline) {
       await new Promise((resolveDelay) => setTimeout(resolveDelay, 25));
     }
-    assert.equal(existsSync(probePath), true, "process-backed fixture must enter its live window");
+    assert.equal(
+      existsSync(probePath), true,
+      "process-backed fixture never entered its live window within 30s of launch",
+    );
     const liveRouter = createApiRouter({ dbPath: join(world.stateRoot, "awsf.db"), config: world.config });
     try {
       const response = await liveRouter.dispatch({ method: "GET", url: `/api/v1/sessions/${world.created.status.sessionId}`, headers: { host: "127.0.0.1:4600" } });

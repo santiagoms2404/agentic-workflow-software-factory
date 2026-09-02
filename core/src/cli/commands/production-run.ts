@@ -18,7 +18,7 @@ import { registeredAdapter } from "../../adapters/registry.ts";
 import { writeSystemPromptFile } from "../../adapters/system-prompt-file.ts";
 import { toConfigSnapshotJson } from "../../config/effective-config.ts";
 import type { AwsfConfig, AgentDefinition, AdapterEntry } from "../../config/schema.ts";
-import type { BuildOutput } from "../../contracts/build-output.ts";
+import { BUILD_OUTPUT_SCHEMA_ID, type BuildOutput } from "../../contracts/build-output.ts";
 import type { EnvelopeBase } from "../../contracts/envelope-base.ts";
 import type { IntakeOutput } from "../../contracts/intake-output.ts";
 import { DOCUMENT_OUTPUT_SCHEMA_ID, type DocumentOutput } from "../../contracts/document-output.ts";
@@ -104,7 +104,7 @@ import {
   type CorrectionAllowanceState,
   type OpenConversation,
 } from "../../workflow/phase-launch-authorization.ts";
-import type { AttemptEvidence, PhaseEvidenceRecord } from "../../observability/attempt-evidence.ts";
+import type { AgentPurpose, AttemptEvidence, PhaseEvidenceRecord } from "../../observability/attempt-evidence.ts";
 import { writeRunReport } from "../../observability/run-report.ts";
 import { readAttemptEvidence } from "./review-record.ts";
 import { PermissionBreach } from "../../policy/path-policy.ts";
@@ -1463,7 +1463,14 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
     attempt = 1,
   ): Promise<{ envelope: EnvelopeBase; candidateSha: string | null }> => {
     const route = routes.get(phase.id)!;
-    const purpose = reviewContext === null ? "worker" : "review";
+    // Three things run as non-review agents on `simple-sdlc` and only one of
+    // them is the side the review is inverted against. The build producer is
+    // structural — the agent phase carrying the build-output schema, which is
+    // the same rule `reviewBuildPhaseId` applies — so it is read off the phase
+    // rather than off a role name.
+    const purpose: AgentPurpose = reviewContext !== null
+      ? "review"
+      : phase.schemaId === BUILD_OUTPUT_SCHEMA_ID ? "build" : "support";
     // A cold correction is a paid provider call. Preserve enough headroom for
     // every later agent phase before exposing one here, so fixing an envelope
     // can never consume the mandatory review's call or strand the workflow at

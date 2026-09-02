@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { JournalRecord } from "../../../src/persistence/journal.ts";
 import type { NormalizedEvent } from "../../../src/contracts/normalized-events.ts";
+import type { RecordedAgentPurpose } from "../../../src/observability/attempt-evidence.ts";
 import { openDatabase } from "../../../src/observability/sqlite.ts";
 import { createSession, projectAttemptStatus, projectEvent, type AttemptStatusProjection, type ProjectionContext, type SessionInit } from "../../../src/observability/projector.ts";
 
@@ -338,4 +339,84 @@ test("projecting against an unknown session id fails without touching sqlite sta
   const outcome = projectEvent(db, { sessionId: "does-not-exist", runId: "run1", phaseId: null }, rec);
   assert.equal(outcome.ok, false);
   assert.equal(outcome.notice?.code, "sqlite-projection-failed");
+});
+
+// ---------------------------------------------------------------------------
+// The worker columns must name the phase the review was inverted against.
+//
+// `simple-sdlc` runs three non-review agents — planner, builder, documenter —
+// and while they all claimed one purpose the projector's last write won. A run
+// whose builder was on codex and reviewer on anthropic projected
+// worker_provider=anthropic beside review_provider=anthropic, so a correctly
+// inverted run read as uninverted on the dashboard that reads this row.
+// ---------------------------------------------------------------------------
+
+function agentStart(
+  agent: string,
+  provider: string,
+  purpose: RecordedAgentPurpose | undefined,
+  revision = 1,
+) {
+  return { ...attempt({
+    type: "agent-start",
+    phaseId: `phase-${agent}`,
+    agent,
+    adapterId: provider === "anthropic" ? "claude" : "codex",
+    provider,
+    color: null,
+    requestedModel: `${provider}:model`,
+    sandboxBadge: "tool-policy",
+    sandboxMechanism: "adapter-tool-policy",
+    ...(purpose === undefined ? {} : { purpose }),
+    at: SESSION.startedAt,
+  }), stateRevision: revision };
+}
+
+function providers(db: ReturnType<typeof seededDb>) {
+  const row = db.prepare("SELECT worker_provider, review_provider FROM sessions").get() as object;
+  return { ...row } as { worker_provider: string | null; review_provider: string | null };
+}
+
+test("a documenter running after the builder cannot overwrite the inverted worker", () => {
+  const db = freshDb();
+  let seq = 0;
+  // The exact simple-sdlc order and providers, measured from a real drive.
+  for (const [agent, provider, purpose] of [
+    ["planner", "anthropic", "support"],
+    ["builder", "openai-codex", "build"],
+    ["documenter", "anthropic", "support"],
+    ["reviewer", "anthropic", "review"],
+  ] as const) {
+    seq += 1;
+    const out = projectAttemptStatus(db, agentStart(agent, provider, purpose, seq), seq);
+    assert.equal(out.ok, true, `${agent}: ${JSON.stringify(out)}`);
+  }
+  assert.deepEqual(providers(db), { worker_provider: "openai-codex", review_provider: "anthropic" });
+});
+
+test("a recipe with no build phase still records its first agent as the worker", () => {
+  const db = freshDb();
+  // `scout` and `plan` carry no build-output phase at all. Leaving the column
+  // empty for them would blank a display that has always been populated.
+  assert.equal(projectAttemptStatus(db, agentStart("scout", "anthropic", "support"), 1).ok, true);
+  assert.equal(providers(db).worker_provider, "anthropic");
+
+  // design-to-plan: the first agent claims it, later support agents do not.
+  const two = freshDb();
+  assert.equal(projectAttemptStatus(two, agentStart("designer", "anthropic", "support"), 1).ok, true);
+  assert.equal(projectAttemptStatus(two, agentStart("architecture-reviewer", "openai-codex", "support", 2), 2).ok, true);
+  assert.equal(providers(two).worker_provider, "anthropic");
+});
+
+test("a journal that predates the split projects exactly as it always did", () => {
+  // Absent purpose, and the legacy `worker` spelling, both still write. A
+  // rebuild must not invent a distinction the journal never recorded.
+  const absent = freshDb();
+  assert.equal(projectAttemptStatus(absent, agentStart("builder", "openai-codex", undefined), 1).ok, true);
+  assert.equal(providers(absent).worker_provider, "openai-codex");
+
+  const legacy = freshDb();
+  assert.equal(projectAttemptStatus(legacy, agentStart("builder", "openai-codex", "worker"), 1).ok, true);
+  assert.equal(projectAttemptStatus(legacy, agentStart("documenter", "anthropic", "worker", 2), 2).ok, true);
+  assert.equal(providers(legacy).worker_provider, "anthropic", "legacy last-write-wins is preserved verbatim");
 });

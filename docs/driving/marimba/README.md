@@ -61,6 +61,46 @@ it does not run them.
 Re-run step 2 after moving the checkout. Nothing else needs reinstalling,
 because nothing else was installed.
 
+## Choosing marimba's own harness, model and effort
+
+marimba spends none of the factory's ceiling — it is the driving session, not a
+phase — so its model is not a budget decision the way an agent's is. It is a
+decision about which mistakes get caught. Two steps carry nearly all the risk:
+
+- **Preflight §3, resolving a request against the repository.** Noticing that a
+  filter cannot match the filenames a request assumes takes reading unfamiliar
+  code and holding two facts against each other. A miss here is not a marimba
+  error the owner sees; it is a whole run spent building the wrong thing.
+- **Reading a blocked attempt.** The finding is the *disagreement* between what
+  a phase claimed and what a gate measured, and locating it is diagnosis rather
+  than retrieval.
+
+Everything else marimba does — reporting a handle, watching a run, explaining an
+owner act — is retrieval and formatting. So: put the strongest model available
+on a preflight or a blocked-attempt read, and use a cheaper one freely for the
+rest. Naming specific models here would go stale, and the choice is the owner's
+at launch rather than anything this repository configures.
+
+### A harness swap is a boundary change, not a preference
+
+**The two fences are hooks of one specific harness.** `settings.example.json`
+declares them as `PreToolUse` and `SessionStart` entries, and the deny list that
+accompanies them is that harness's own. marimba runs with permission prompts
+turned off, so those hooks are not one safeguard among several — they are the
+entire boundary.
+
+A marimba launched under a *different* harness therefore carries **neither
+fence** unless an equivalent per-invocation hook has been wired up and proven
+there. Nothing about the model changes that, and a stronger model does not
+substitute for it: fence 2 exists precisely because a capable session asked to
+drive will otherwise reach for an owner act when one looks like the obvious next
+step.
+
+Until an equivalent guard exists and is proven against the same payload matrix,
+treat a marimba on another harness as **read-only**: status, watching, reading
+evidence, drafting a request. Not launching, and never an owner act. That is a
+real piece of work and deserves its own task rather than an assumption.
+
 ## What the banner tells you, and what it does not
 
 It confirms three things: that marimba's settings file loaded (it is registered
