@@ -1085,6 +1085,62 @@ stateDiagram-v2
     <h2>Amendments</h2>
     <p class="sub">Running history of changes made after this plan was first authored. Append-only; populated by Update Plan, by the review workflow, and by the sessions that author each deep plan. Later entries will record each deep plan as it is authored and approved, and each invariant amendment as it lands.</p>
 
+    <details open>
+      <summary>2026-09-03 — a candidate workstream recorded, not adopted: unattended batch execution (&ldquo;away mode&rdquo;)</summary>
+
+      <p><strong>This entry adopts nothing and moves no status marker.</strong> It records an owner intent in enough detail that a later session can author a deep plan from it without re-deriving the ground, and it separates three things that are easy to confuse: what the owner asked for, what the codebase already provides, and what would actually have to be built. Every measurement below was taken on 2026-09-03 against this repository; nothing is carried from prose.</p>
+
+      <h3>The intent, in the owner's terms</h3>
+      <p>The dashboard backlog now renders tickets grouped by spine and deep plan, with selectable plan cards. The owner wants that selection to extend to <strong>tickets</strong>: choose several, send them to a queue, and let a driving session work the queue unattended — overnight, or while he is out — so that a finite subscription across two providers is spent while nobody is watching. On return he expects each ticket's work to exist on a branch of its own for review, with the exact commit opened in a browser tab for the ones whose change has something to look at, so he can accept, reject, rework or iterate. <strong>Approval stays his</strong>; approved work merges to the production branch. He named it away mode, and named it as a candidate for its own deep plan rather than something to start.</p>
+
+      <h3>What already exists, so a deep plan does not rebuild it</h3>
+      <ul>
+        <li><strong>The selection surface.</strong> <code>dashboard/src/routes/backlog.vue</code> already holds plan selection above the poll and seeds it once behind a non-reactive flag. Extending selection from plans to tickets is an increment on landed, reviewed work rather than a new mechanism.</li>
+        <li><strong>The route is already declared per ticket.</strong> <code>TicketSchema</code> carries <code>workflow</code> and <code>tier</code>, so a queued ticket already says which recipe it wants and at what risk. A batch runner reads them; it does not choose them.</li>
+        <li><strong>The per-project preview hook exists and has no reader.</strong> <code>PROJECT_DELIVERY_POSTURES</code> at <code>core/src/registry/catalog-schema.ts:7</code> declares <code>service</code>, <code>mobile</code>, <code>docs</code> and <code>none</code>, surfaced as an optional per-repository <code>delivery</code> field at <code>:59</code> and carried through the registry and the project command. <strong>This is the answer to &ldquo;which tickets need a visual review, and in what form&rdquo;</strong>, and it is already in the schema. A mobile project wants an emulator, not a web page; writing a browser step into the judgment layer would bake this repository's shape into every project the factory is pointed at, which <code>specs/awsf-v2-intent.md</code> forbids in spirit.</li>
+        <li><strong>Autonomy already reaches the owner.</strong> An attempt runs to <code>AWAITING_OWNER</code> with no human in the loop. Only the landing edge needs a person, so away mode is not asking the lifecycle to do anything it cannot already do.</li>
+      </ul>
+
+      <h3>What is genuinely missing — the deep plan's actual work</h3>
+      <ol>
+        <li><strong>A sealed attempt's candidate lands on no ref.</strong> This is the single most necessary piece and it is small. Every candidate this factory has produced is a dangling commit, reachable only through a worktree and one reflog entry; three were preserved by hand-tagging during one session, and one was very nearly lost. <strong>A batch of eight unattended runs produces eight commits git is entitled to collect</strong> before the owner wakes up. The host should write a ref at seal time. Nothing else in away mode is safe until this is.</li>
+        <li><strong>The queue itself</strong> — written from the dashboard, drained by a session. See the boundary below for why those must be two different actors.</li>
+        <li><strong>Visual-review classification.</strong> Derive it from the candidate's own diff against the project's declared <code>delivery</code> posture, not from a new ticket field. A derived answer cannot go stale the way a hand-set flag does, and it needs no schema change.</li>
+        <li><strong>Seeding cost, which is the practical blocker nobody has hit yet.</strong> <code>awsf start</code> copies the configured <code>runtime.seed_paths</code> into each attempt's tree; on this repository that is <code>node_modules</code> at <strong>139&nbsp;MB</strong>, and on a network-backed filesystem a single <code>start</code> takes many minutes. Eight sequential tickets is <em>hours of copying before the first provider call</em>. Away mode is not pleasant until seeding is shared or cached, and a deep plan that ignores this will produce a feature nobody uses overnight.</li>
+        <li><strong>Batch budgeting.</strong> Ceilings and spend are scoped to a task. Eight tickets are eight independent ceilings and no total, so a batch can exhaust a subscription without any single attempt exceeding anything. Away mode needs a notion of budget the lifecycle does not currently have.</li>
+      </ol>
+
+      <h3>Boundaries a deep plan must not move</h3>
+      <p>Each of these is load-bearing, and away mode is compatible with all of them — the owner's own framing already respects the first.</p>
+      <ul>
+        <li><strong>Landing stays human and at a TTY.</strong> L20 is the only path into <code>LANDED</code> and it is <code>actors: ["human"], interactive: true</code>. Away mode runs <em>up to</em> the owner and stops.</li>
+        <li><strong>The dashboard cannot start work.</strong> Invariant 3 keeps <code>node:child_process</code> out of every file but the transport broker, so the API server cannot spawn a process, and a browser click is not a terminal. The shape that works is therefore <strong>the dashboard records intent and a human-started session drains it</strong> — which is also the shape that keeps a person at the start of every batch.</li>
+        <li><strong>No push path</strong> (invariant 8) and <strong>no skill in the execution path</strong>. A merge to a production branch is a local act the owner authorises.</li>
+      </ul>
+
+      <h3>Three findings from live drives that bear directly on this</h3>
+      <ul>
+        <li><strong>Unattended recovery cannot lean on rework.</strong> Every phase the rework path creates is <code>maxCorrections: 0</code>, and that path <em>rejects</em> provider output matching a credential pattern where a normal run scrubs it. Rework is the wrong instrument for an unattended queue; a batch that blocks should surface, not retry itself into a corner.</li>
+        <li><strong>Gates never render a page.</strong> Every check runs against source or a diff, which is exactly why a stale asset bundle once made a correct landing read as a total regression. An away-mode reviewer facing eight candidates needs each one <em>built fresh</em> before it is shown — the failure mode multiplies with the batch.</li>
+        <li><strong>The suite is not the acceptance bar.</strong> Across this series, defects that mattered were found by driving and by looking at a screen, not by 1800 green tests. Batching multiplies exposure to exactly that gap, so away mode's review step is not a convenience — it is where the batch's correctness is actually established.</li>
+      </ul>
+
+      <h3>Open questions a deep plan must decide</h3>
+      <p>Offered without recommended defaults, in the manner this plan's Questionables use, so that authoring the deep plan is a decision rather than a formality.</p>
+      <ul>
+        <li>Where does the queue live — the state root, a dashboard-written record, or the projection — and what makes it durable across a session that dies mid-batch?</li>
+        <li>What drains it: a long-running session, or a CLI act the owner starts and can stop? What happens to the batch when that process ends?</li>
+        <li>Is the budget one ceiling per ticket, or a batch ceiling that ticket ceilings draw from? Refusal at zero cost, as at <code>start</code>, or a stop mid-batch?</li>
+        <li>When ticket 3 of 8 blocks, does the batch stop, skip, or continue — and which of those is safe when the failure might be environmental rather than about that ticket?</li>
+        <li>One branch per ticket, or one accumulating branch? Per-ticket keeps review independent; accumulating makes eight approvals one merge.</li>
+        <li>How does an owner review eight candidates without eight full sessions — sequential preview, or a digest that earns his attention only where it is needed?</li>
+        <li>Does approval merge one ticket or the batch, and what happens to the rest when one is rejected?</li>
+      </ul>
+
+      <h3>Where it would sit</h3>
+      <p>Not W13 or W14 — those are deploy and monitor, declared and out of scope for v2 — and not an extension of any workstream now open. It is a new one, and it depends on the project registry (for <code>delivery</code>) and on the ref-at-seal-time fix above, which is small enough to land on its own merit before any of this is planned. <strong>Nothing here is adopted:</strong> every workstream marker is unchanged, and this entry is a contender recorded with its ground measured, so that the session which authors the deep plan starts from evidence rather than from a paraphrase.</p>
+    </details>
+
     <details>
       <summary>2026-08-21 — owner review applied: four Questionables decided, one held open</summary>
       <p>An exported <code>plan-sota-review v1</code> block carried <strong>three verdicts</strong> (Q1, Q2, Q5), <strong>no proposed statuses</strong>, and <strong>one annotation</strong> directing that Q4 be decided to the recommendation the reviewing session had set out, with its reasoning. Applied in full. <strong>No status marker moved</strong> — every workstream is still <code>[]</code>, and a Questionable verdict is not a marker.</p>
