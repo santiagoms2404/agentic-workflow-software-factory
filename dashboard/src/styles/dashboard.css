@@ -338,6 +338,20 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible, summary:focus-v
 .degraded, .error-bar { margin: 14px 28px; padding: 12px 16px; border: 1px solid color-mix(in srgb, var(--red) 55%, transparent); border-radius: 10px; background: color-mix(in srgb, var(--red) 10%, transparent); color: var(--error-text); }
 
 .run-count { max-width: 1680px; margin: 0 auto; padding: 20px 28px 0; color: var(--dim); }
+.session-filters { max-width: 1680px; margin: 0 auto; padding: 16px 28px 0; display: grid; gap: 12px; }
+.session-filter-row { min-width: 0; display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 14px; align-items: start; padding: 13px; border: 1px solid var(--border-soft); border-radius: 11px; background: var(--surface); }
+.session-filter-heading { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.session-filter-heading h2 { margin: 0; color: var(--dim); font: 700 14px var(--mono); text-transform: uppercase; }
+.session-filter-control, .session-filter-option { border: 1px solid var(--border-soft); border-radius: 8px; background: var(--panel-3); color: var(--dim); font: 13px var(--mono); cursor: pointer; }
+.session-filter-control { min-height: 32px; padding: 6px 9px; }
+.session-filter-control:hover, .session-filter-option:hover { border-color: var(--faint); color: var(--text); }
+.session-filter-control.selected, .session-filter-option.selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 24%, var(--panel-3)); color: var(--text); }
+.session-filter-control.partial { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--panel-3)); color: var(--text); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 48%, transparent); }
+.session-filter-select-all { color: var(--text); font-weight: 700; }
+.session-filter-options { min-width: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.session-filter-option { min-height: 42px; display: inline-flex; align-items: center; gap: 10px; padding: 7px 10px; text-align: left; }
+.session-filter-count { padding-left: 9px; border-left: 1px solid var(--border-soft); color: var(--faint); font-size: 11px; white-space: nowrap; }
+.session-filter-option.selected .session-filter-count { color: var(--text); }
 .sessions-grid { max-width: 1680px; margin: 0 auto; padding: 16px 28px 30px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
 .card-wrap { position: relative; min-width: 0; height: 452px; height: var(--session-card-height); }
 .session-card {
@@ -670,6 +684,9 @@ pre { max-height: 42vh; margin: 8px 0 0; padding: 12px 14px; overflow: auto; bor
 }
 @media (max-width: 720px) {
   .sessions-grid { grid-template-columns: 1fr; padding: 12px; }
+  .session-filters { padding: 12px 12px 0; }
+  .session-filter-row { grid-template-columns: 1fr; }
+  .session-filter-heading { flex-direction: row; align-items: center; justify-content: space-between; }
   .top-nav { padding: 12px; }
   .brand { max-width: 150px; }
   .settings-link { display: none; }

@@ -32,16 +32,19 @@ test("bearer, JWT, private-key, URL-auth, and vendor token shapes are recognized
   const boundary = "-".repeat(5);
   const privateKeyLabel = ["PRIVATE", "KEY"].join(" ");
   const beginMarker = [boundary, "BE", "GIN ", privateKeyLabel, boundary].join("");
+  const bearerCredential = "opaque".repeat(6);
+  const bearer = shapedBearer();
+  const jwtSegments = [`ey${"a".repeat(12)}`, "b".repeat(12), "c".repeat(12)];
+  const jwt = jwtSegments.join(".");
   const urlCredential = `https://${"owner"}:${"passphrase"}@example.invalid/path`;
-  const candidates = [
-    shapedBearer(),
-    `ey${"a".repeat(12)}.${"b".repeat(12)}.${"c".repeat(12)}`,
-    beginMarker,
-    urlCredential,
-    `sk-${"x".repeat(20)}`,
-  ];
+  const vendorCredential = "x".repeat(20);
+  const vendorToken = [["s", "k"].join(""), vendorCredential].join("-");
+  const candidates = [bearer, jwt, beginMarker, urlCredential, vendorToken];
   assert.ok(candidates.every(containsCredential));
   assert.ok(candidates.every((value) => scrubCredentialString(value) !== value));
+  assert.equal(scrubCredentialString(bearer).includes(bearerCredential), false);
+  assert.equal(jwtSegments.some((segment) => scrubCredentialString(jwt).includes(segment)), false);
+  assert.equal(scrubCredentialString(vendorToken).includes(vendorCredential), false);
   assert.equal(scrubCredentialString(urlCredential), `${REDACTED_VALUE}example.invalid/path`);
   assert.equal(scrubCredentialString(urlCredential).includes("passphrase"), false);
 });

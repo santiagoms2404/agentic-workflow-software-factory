@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import type { AdaptersResponse, HealthResponse, SessionDetailResponse, SessionsResponse, SettingsResponse, TicketsResponse } from "../shared/types.ts";
 import AppShell from "./components/AppShell.vue";
 import SessionsGrid from "./components/SessionsGrid.vue";
@@ -7,9 +7,13 @@ import SessionRoute from "./components/SessionRoute.vue";
 import SettingsRoute from "./components/SettingsRoute.vue";
 import BacklogRoute from "./routes/backlog.vue";
 import { usePolling, type PollMode } from "./composables/usePolling.ts";
+import { LIFECYCLE_STATES } from "./session-filters.ts";
 
 const health = ref<HealthResponse | null>(null);
 const sessions = ref<SessionsResponse>({ sessions: [] });
+const configuredWorkflows = ref<readonly string[]>([]);
+const selectedWorkflows = ref<readonly string[]>([]);
+const selectedLifecycleStates = ref<readonly string[]>([]);
 const detail = ref<SessionDetailResponse | null>(null);
 const selectedId = ref<string | null>(null);
 const selectedPhaseId = ref<string | null>(null);
@@ -18,6 +22,48 @@ const adapters = ref<AdaptersResponse>({ adapters: [] });
 const settingsRoute = ref(false);
 const backlogRoute = ref(false);
 const backlog = ref<TicketsResponse>({ plans: [], tickets: [], ready: [], counts: { state: { todo: 0, wip: 0, done: 0, failed: 0 }, milestone: {}, tier: { T0: 0, T1: 0, T2: 0 } }, projectedCost: { usd: null, authority: "unavailable", partial: true } });
+
+let hasSeededWorkflowSelection = false;
+let hasSeededLifecycleSelection = false;
+watch(configuredWorkflows, (workflows) => {
+  if (hasSeededWorkflowSelection) return;
+  selectedWorkflows.value = [...workflows];
+  hasSeededWorkflowSelection = true;
+});
+watch(
+  () => sessions.value.sessions,
+  () => {
+    if (hasSeededLifecycleSelection) return;
+    selectedLifecycleStates.value = [...LIFECYCLE_STATES];
+    hasSeededLifecycleSelection = true;
+  },
+);
+
+function readEnabledWorkflows(value: unknown): readonly string[] {
+  if (typeof value !== "object" || value === null || !("workflows" in value)) return [];
+  const workflows = value.workflows;
+  if (typeof workflows !== "object" || workflows === null || !("enabled" in workflows)) return [];
+  const enabled = workflows.enabled;
+  if (!Array.isArray(enabled)) return [];
+  const workflowIds: string[] = [];
+  for (const workflow of enabled) {
+    if (typeof workflow !== "string") return [];
+    workflowIds.push(workflow);
+  }
+  return workflowIds;
+}
+
+let settingsRequest: Promise<void> | null = null;
+function loadSettingsOnce(): Promise<void> {
+  settingsRequest ??= (async () => {
+    const response = await fetch("/api/v1/settings");
+    if (!response.ok) throw new Error("Settings unavailable");
+    const payload: SettingsResponse = await response.json();
+    settings.value = payload.settings;
+    configuredWorkflows.value = readEnabledWorkflows(payload.settings);
+  })();
+  return settingsRequest;
+}
 
 function readRoute(): void {
   settingsRoute.value = location.hash === "#/settings";
@@ -36,18 +82,21 @@ const mode = computed<PollMode>(() => health.value?.activeSessions ? "live" : se
 
 async function load(): Promise<void> {
   const dataRequest = settingsRoute.value
-    ? Promise.all([fetch("/api/v1/settings"), fetch("/api/v1/adapters")])
+    ? fetch("/api/v1/adapters")
     : backlogRoute.value ? fetch("/api/v1/tickets")
     : selectedId.value
       ? fetch(`/api/v1/sessions/${encodeURIComponent(selectedId.value)}`)
       : fetch("/api/v1/sessions");
-  const [nextHealth, nextData] = await Promise.all([fetch("/api/v1/health"), dataRequest]);
+  const [nextHealth, nextData] = await Promise.all([
+    fetch("/api/v1/health"),
+    dataRequest,
+    loadSettingsOnce(),
+  ]);
   if (!nextHealth.ok) throw new Error("Dashboard data unavailable");
   health.value = await nextHealth.json() as HealthResponse;
   if (settingsRoute.value) {
-    const [settingsResponse, adaptersResponse] = nextData as [Response, Response];
-    if (!settingsResponse.ok || !adaptersResponse.ok) throw new Error("Settings unavailable");
-    settings.value = (await settingsResponse.json() as SettingsResponse).settings;
+    const adaptersResponse = nextData as Response;
+    if (!adaptersResponse.ok) throw new Error("Settings unavailable");
     adapters.value = await adaptersResponse.json() as AdaptersResponse;
     detail.value = null;
   } else if (backlogRoute.value) {
@@ -81,6 +130,12 @@ const { lastPollAt, pollMs } = usePolling(load, () => mode.value);
     <SettingsRoute v-if="settingsRoute" :settings="settings" :adapters="adapters.adapters" :health="health" />
     <BacklogRoute v-else-if="backlogRoute" :backlog="backlog" />
     <SessionRoute v-else-if="detail" :session="detail" :selected-phase-id="selectedPhaseId" />
-    <SessionsGrid v-else :sessions="sessions.sessions" />
+    <SessionsGrid
+      v-else
+      v-model:selected-workflows="selectedWorkflows"
+      v-model:selected-states="selectedLifecycleStates"
+      :sessions="sessions.sessions"
+      :workflows="configuredWorkflows"
+    />
   </AppShell>
 </template>
