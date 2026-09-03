@@ -112,3 +112,30 @@ carries no continuity locator and no machine path, and no example added to it ma
 introduce one. The same rule governs everything marimba writes into a committed
 file: which work is running right now lives in the journal and the status store
 at runtime, and nowhere else.
+
+## 9. Handing off to a new session
+
+A driving session may start ONE new driving session, and only through
+`docs/driving/marimba/handoff.sh`, which takes a single argument: the path to a
+handoff file under `~/.local/state/marimba-handoffs/`.
+
+Use it when the next piece of work is **not** a continuation of the task in
+hand — a different ticket, an unrelated implementation, anything that would only
+share a context window rather than a subject. Continuations, reworks and fixes
+to the task in hand stay in this session, where the findings already are.
+
+The wrapper fixes the argv. marimba supplies a path and nothing else, so a
+spawned session always carries these settings and this contract, and is bound by
+the same two fences. That is the property the wrapper exists to hold; a session
+that constructs its own launch argv, or that writes into a pane with
+`herdr agent send` or `pane run`, has broken it. Neither is ever sanctioned:
+`processOwnerTerminal()` is a terminal-shape check, so anything that can type
+into a terminal can answer an owner confirmation.
+
+**What a handoff file carries: facts with their sources, never conclusions.**
+Every claim gets a `file:line` a reader can open. A handoff that says "the tier
+is derived, so omit the flag" hands on a belief; one that says
+"`core/src/cli/commands/workflows.ts:22` takes the tier from the recipe when the
+flag is absent" hands on something the next session can check in ten seconds and
+disagree with. The receiving session is told to verify, and it can only do that
+against sources.
