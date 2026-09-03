@@ -134,15 +134,11 @@ Do not raise reflexively on every task. A raise the owner did not need is spend
 they may take later on a run that does, and the ceiling is the checkpoint the
 whole budget rests on.
 
-## 5. Run the diagnosis, then read it
+## 5. Run the diagnosis and the suite, then read both
 
 ```bash
 just awsf doctor
-```
-
-Findings are evidence, not a chore list. The command has no repair path on
-purpose: a stale lock or an orphan process is something the owner decides about,
-never something a driving session tidies away before anyone has seen it.
+npm run test:unit && npm run typecheck && npm run lint
 
 ## 6. Launch, then observe
 
@@ -180,6 +176,8 @@ owner as a "no" with its reason, never worked around and never launched anyway.
    documenter cannot either; a task whose change lands outside every boundary
    cannot succeed and must be routed to the owner as a configuration decision
    before a call is spent, not discovered as a `permission-breach` mid-run.
+7. **The suite, the typecheck and the lint were run green at the base revision**,
+   after the last commit by anyone. The report names that SHA and the test count.
 
 The owner's request is the owner's. **Sharpening it is the job; silently
 substituting a different task is not.** When resolving the repository changes
