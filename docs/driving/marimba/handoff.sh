@@ -17,16 +17,32 @@ esac
 [ -r "$SETTINGS" ] || die "refused; marimba settings not readable at $SETTINGS"
 [ -r "$REPO/$CONTRACT" ] || die "refused; contract not readable at $CONTRACT"
 
-# The prompt NAMES the handoff rather than embedding it. Embedding would put the
-# handoff's words into marimba's own command string, where fence 2 refuses any
-# text quoting an owner act - the documented over-denial in CONTRACT.md section 3.
+# Variant is a NAME checked against a fixed table, never argv. marimba may pick
+# which entry runs; it may never compose one. That is what stops a driving
+# session launching a successor with the guard omitted.
+variant="${2:-cc-opus-high}"
+case "$variant" in
+  cc-opus-xhigh)    set -- claude --model opus   --effort xhigh ;;
+  cc-opus-high)     set -- claude --model opus   --effort high ;;
+  cc-sonnet-high)   set -- claude --model sonnet --effort high ;;
+  cc-sonnet-medium) set -- claude --model sonnet --effort medium ;;
+  pi-sol-xhigh)     set -- pi --model gpt-5.6-sol   --thinking xhigh ;;
+  pi-sol-high)      set -- pi --model gpt-5.6-sol   --thinking high ;;
+  pi-terra-high)    set -- pi --model gpt-5.6-terra --thinking high ;;
+  pi-luna-high)     set -- pi --model gpt-5.6-luna  --thinking high ;;
+  *) die "refused; unknown variant '$variant'. The variant is a name from this script's own table, never a command line." ;;
+esac
+# Each harness gets its own guard and its own contract flag. Neither is optional.
+case "$1" in
+  claude) set -- "$@" --dangerously-skip-permissions \
+                      --settings "$SETTINGS" \
+                      --append-system-prompt-file "$REPO/$CONTRACT" ;;
+  pi)     set -- "$@" -e "$REPO/docs/driving/marimba/marimba-guard.pi.ts" \
+                      --exclude-tools task,agent,subagent,spawn,dispatch \
+                      --append-system-prompt "$(cat "$REPO/$CONTRACT")" \
+                      --provider openai-codex ;;
+esac
+
 exec herdr agent start "marimba-$(date +%H%M%S)" \
-  --cwd "$REPO" \
-  --split right \
-  -- claude \
-     --model opus \
-     --effort high \
-     --dangerously-skip-permissions \
-     --settings "$SETTINGS" \
-     --append-system-prompt-file "$CONTRACT" \
-     "Read /prime-awsf and follow it fully before anything else. Do not print a status board. Then read the handoff at $file and follow it. Treat every fact in it as a claim to verify against the repository, not as settled truth."
+  --cwd "$REPO" --split right \
+  -- "$@" "Read /prime-awsf and follow it fully before anything else. Do not print a status board. Then read the handoff at $file and follow it. Treat every fact in it as a claim to verify against the repository, not as settled truth."
