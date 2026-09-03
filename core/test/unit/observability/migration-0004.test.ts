@@ -123,8 +123,16 @@ test("migration 0004 preserves sessions, child constraints, and is a no-op on it
 
     runMigrations(db);
 
-    assert.equal(scalar(db, "PRAGMA user_version", "user_version"), 4);
-    assert.deepEqual(rows(db), sessionsBefore, "every session row and column survived the rebuild");
+    assert.equal(scalar(db, "PRAGMA user_version", "user_version"), 5);
+    // Compare only the columns that existed before this run. 0004's rebuild must
+    // lose nothing, but a LATER migration adding a column is not a loss - and a
+    // bare deepEqual would call it one, failing this test on every column added.
+    const preserved = Object.keys(sessionsBefore[0] ?? {});
+    assert.deepEqual(
+      rows(db).map((row) => Object.fromEntries(preserved.map((key) => [key, row[key]]))),
+      sessionsBefore,
+      "every session row and column survived the rebuild",
+    );
     assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
     assert.equal(scalar(db, "PRAGMA foreign_keys", "foreign_keys"), 1, "the runner restored enforcement");
 
@@ -162,7 +170,7 @@ test("migration 0004 preserves sessions, child constraints, and is a no-op on it
 
     runMigrations(db);
 
-    assert.equal(scalar(db, "PRAGMA user_version", "user_version"), 4);
+    assert.equal(scalar(db, "PRAGMA user_version", "user_version"), 5);
     assert.equal(scalar(db, "PRAGMA schema_version", "schema_version"), schemaVersion);
     assert.equal(scalar(db, "SELECT total_changes() AS total_changes", "total_changes"), totalChanges);
     assert.deepEqual(
