@@ -11,6 +11,7 @@ import {
   buildPromptBlock,
   ticketSourceView,
 } from "../../../dashboard/src/backlog-view.ts";
+import { togglePlan } from "../../../dashboard/src/backlog-selection.ts";
 import { repoRoot } from "./meta/_walk.ts";
 
 function source(path: string): string {
@@ -101,12 +102,42 @@ test("plan headings toggle persistent per-plan collapsed bars without changing s
   assert.match(route, /:collapsed="collapsedPlans"/u);
   assert.match(route, /@toggle-plan="toggleCollapsedPlan"/u);
 
-  assert.match(board, /<button[^>]*class="backlog-plan-toggle"[^>]*:aria-expanded="!isCollapsed\(group\.plan\.id\)"[^>]*@click="emit\('toggle-plan', group\.plan\.id\)"/su);
+  assert.match(board, /<button[^>]*class="backlog-plan-toggle"[^>]*:aria-expanded="!isPlanCollapsed\(group\.plan\.id\)"[^>]*@click="emit\('toggle-plan', group\.plan\.id\)"/su);
   assert.match(board, /<span v-else class="collapsed-plan-counts"[^>]*>[^]*v-for="state in states"[^]*group\.plan\.counts\[state\]/u);
   assert.match(board, /const states:[^=]*= \["todo", "wip", "done", "failed"\];/u);
-  assert.match(board, /<div v-if="!isCollapsed\(group\.plan\.id\)" class="backlog-board">/u);
+  assert.match(board, /<div v-if="!isPlanCollapsed\(group\.plan\.id\)" class="backlog-board">/u);
   assert.doesNotMatch(board, /update:selected/u);
   assert.match(css, /\.backlog-plan-group\.collapsed \.backlog-plan-heading\s*\{[^}]*min-height:\s*38px[^}]*\}/su);
+});
+
+test("backlog columns default collapsed and toggle with plan-qualified keys", () => {
+  const route = source("dashboard/src/routes/backlog.vue");
+  const board = source("dashboard/src/components/BacklogBoard.vue");
+  const css = source("dashboard/src/styles/dashboard.css");
+
+  assert.match(route, /const expandedColumns = ref<readonly string\[\]>\(\[\]\);/u);
+  assert.match(route, /expandedColumns\.value = togglePlan\(expandedColumns\.value, columnId\);/u);
+  assert.equal(route.match(/expandedColumns\.value\s*=/gu)?.length, 1);
+  assert.match(route, /:expanded-columns="expandedColumns"/u);
+  assert.match(route, /@toggle-column="toggleExpandedColumn"/u);
+  const selectionWatch = route.slice(route.indexOf("watch("), route.indexOf("const groups"));
+  assert.doesNotMatch(selectionWatch, /expandedColumns/u);
+
+  assert.match(board, /expandedColumns: readonly string\[\];/u);
+  assert.match(board, /return `\$\{planId\}:\$\{state\}`;/u);
+  assert.match(board, /:key="columnId\(group\.plan\.id, state\)"/u);
+  assert.match(board, /:class="\{ collapsed: !isColumnExpanded\(group\.plan\.id, state\) \}"/u);
+  assert.match(board, /<button[^>]*class="backlog-column-toggle"[^>]*:aria-expanded="isColumnExpanded\(group\.plan\.id, state\)"[^>]*@click="emit\('toggle-column', columnId\(group\.plan\.id, state\)\)"/su);
+  assert.match(board, /<template v-if="isColumnExpanded\(group\.plan\.id, state\)">[^]*<TicketCard/u);
+
+  const oneExpanded = togglePlan([], "plan-a:todo");
+  assert.deepEqual(oneExpanded, ["plan-a:todo"]);
+  assert.equal(oneExpanded.includes("plan-b:todo"), false);
+  assert.deepEqual(togglePlan(oneExpanded, "plan-a:todo"), []);
+
+  assert.match(css, /\.backlog-board\s*\{[^}]*grid-template-columns:\s*repeat\(4, minmax\(220px, 1fr\)\)[^}]*align-items:\s*start/su);
+  assert.match(css, /\.backlog-column\.collapsed\s*\{[^}]*min-height:\s*0[^}]*\}/su);
+  assert.match(css, /\.backlog-column\.collapsed h3\s*\{[^}]*margin-bottom:\s*0[^}]*\}/su);
 });
 
 test("plan-card and waterfall Chrome scrollbars share one effective dashboard style", () => {

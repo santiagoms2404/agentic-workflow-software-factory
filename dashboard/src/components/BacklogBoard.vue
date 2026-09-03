@@ -6,15 +6,25 @@ import TicketCard from "./TicketCard.vue";
 const props = defineProps<{
   groups: readonly BacklogGroup[];
   collapsed: readonly string[];
+  expandedColumns: readonly string[];
 }>();
 const emit = defineEmits<{
   open: [ticket: BacklogTicket];
   "toggle-plan": [planId: string];
+  "toggle-column": [columnId: string];
 }>();
 const states: readonly TicketState[] = ["todo", "wip", "done", "failed"];
 
-function isCollapsed(planId: string): boolean {
+function isPlanCollapsed(planId: string): boolean {
   return props.collapsed.includes(planId);
+}
+
+function columnId(planId: string, state: TicketState): string {
+  return `${planId}:${state}`;
+}
+
+function isColumnExpanded(planId: string, state: TicketState): boolean {
+  return props.expandedColumns.includes(columnId(planId, state));
 }
 </script>
 
@@ -24,20 +34,20 @@ function isCollapsed(planId: string): boolean {
       v-for="group in props.groups"
       :key="group.plan.id"
       class="backlog-plan-group"
-      :class="{ collapsed: isCollapsed(group.plan.id) }"
+      :class="{ collapsed: isPlanCollapsed(group.plan.id) }"
     >
       <header class="backlog-plan-heading">
         <h2>
           <button
             type="button"
             class="backlog-plan-toggle"
-            :aria-expanded="!isCollapsed(group.plan.id)"
+            :aria-expanded="!isPlanCollapsed(group.plan.id)"
             @click="emit('toggle-plan', group.plan.id)"
           >
             {{ group.plan.name }}
           </button>
         </h2>
-        <template v-if="!isCollapsed(group.plan.id)">
+        <template v-if="!isPlanCollapsed(group.plan.id)">
           <span class="plan-label">{{ group.plan.kind }}</span>
           <span v-if="group.plan.kind === 'deep'" class="parent-spine-label">parent: {{ group.plan.parentSpineName ?? group.plan.parentSpine }}</span>
         </template>
@@ -45,15 +55,31 @@ function isCollapsed(planId: string): boolean {
           <span v-for="state in states" :key="state"><b>{{ group.plan.counts[state] }}</b> {{ state }}</span>
         </span>
       </header>
-      <div v-if="!isCollapsed(group.plan.id)" class="backlog-board">
-        <section v-for="state in states" :key="state" class="backlog-column">
-          <h3>{{ state }} <span>{{ group.plan.counts[state] }}</span></h3>
-          <TicketCard
-            v-for="ticket in group.tickets.filter((candidate) => candidate.state === state)"
-            :key="ticket.uid"
-            :ticket="ticket"
-            @open="emit('open', $event)"
-          />
+      <div v-if="!isPlanCollapsed(group.plan.id)" class="backlog-board">
+        <section
+          v-for="state in states"
+          :key="columnId(group.plan.id, state)"
+          class="backlog-column"
+          :class="{ collapsed: !isColumnExpanded(group.plan.id, state) }"
+        >
+          <h3>
+            <button
+              type="button"
+              class="backlog-column-toggle"
+              :aria-expanded="isColumnExpanded(group.plan.id, state)"
+              @click="emit('toggle-column', columnId(group.plan.id, state))"
+            >
+              {{ state }} <span>{{ group.plan.counts[state] }}</span>
+            </button>
+          </h3>
+          <template v-if="isColumnExpanded(group.plan.id, state)">
+            <TicketCard
+              v-for="ticket in group.tickets.filter((candidate) => candidate.state === state)"
+              :key="ticket.uid"
+              :ticket="ticket"
+              @open="emit('open', $event)"
+            />
+          </template>
         </section>
       </div>
     </article>

@@ -130,6 +130,7 @@ test("re-redacts a credential split across contiguous text.delta rows", () => {
   const secondChunk = "efghijkl";
   assert.equal(containsCredential(firstChunk), false);
   assert.equal(containsCredential(secondChunk), false);
+  const credentialText = firstChunk.slice("credential: ".length) + secondChunk;
   assert.equal(containsCredential(firstChunk + secondChunk), true);
 
   const rows = foldTextDeltaRuns([
@@ -138,5 +139,7 @@ test("re-redacts a credential split across contiguous text.delta rows", () => {
   ]);
 
   assert.equal(rows.length, 1);
-  assert.equal(folded(rows[0]!).reassembledText, REDACTED_VALUE);
+  const reassembledText = folded(rows[0]!).reassembledText;
+  assert.equal(reassembledText, `credential: ${REDACTED_VALUE}`);
+  assert.equal(reassembledText.includes(credentialText), false);
 });

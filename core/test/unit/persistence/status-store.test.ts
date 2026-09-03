@@ -33,7 +33,9 @@ test("status is scrubbed before it can feed a later API response", async () => {
     const path = join(dir, "status.json");
     const shaped = `AK${"IA"}${"A".repeat(16)}`;
     await writeStatus(path, { state: "BLOCKED", detail: `provider echoed ${shaped}` });
-    assert.deepEqual(await readStatus(path), { state: "BLOCKED", detail: "[REDACTED]" });
+    const status = await readStatus<{ state: string; detail: string }>(path);
+    assert.deepEqual(status, { state: "BLOCKED", detail: "provider echoed [REDACTED]" });
+    assert.equal(status.detail.includes(shaped), false);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

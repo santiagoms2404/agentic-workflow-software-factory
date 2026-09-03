@@ -82,7 +82,8 @@ test("credential-shaped values are scrubbed before the canonical journal write",
     const shaped = `AK${"IA"}${"A".repeat(16)}`;
     const record = await journal.append({ detail: `provider said ${shaped}` });
     await journal.close();
-    assert.equal(record.event.detail, "[REDACTED]");
+    assert.equal(record.event.detail, "provider said [REDACTED]");
+    assert.equal(record.event.detail.includes(shaped), false);
     assert.equal(readFileSync(path, "utf8").includes(shaped), false);
   } finally {
     rmSync(dir, { recursive: true, force: true });

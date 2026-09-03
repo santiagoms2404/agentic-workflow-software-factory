@@ -10,6 +10,7 @@ import TicketSourceOverlay from "../components/TicketSourceOverlay.vue";
 const props = defineProps<{ backlog: TicketsResponse }>();
 const selectedPlans = ref<readonly string[]>([]);
 const collapsedPlans = ref<readonly string[]>([]);
+const expandedColumns = ref<readonly string[]>([]);
 let hasSeededSelection = false;
 const planFilter = ref<PlanFilter>("both");
 const activeTicket = ref<BacklogTicket | null>(null);
@@ -59,6 +60,10 @@ function toggleCollapsedPlan(planId: string): void {
   collapsedPlans.value = togglePlan(collapsedPlans.value, planId);
 }
 
+function toggleExpandedColumn(columnId: string): void {
+  expandedColumns.value = togglePlan(expandedColumns.value, columnId);
+}
+
 function openTicket(ticket: BacklogTicket): void {
   activeTicket.value = ticket;
   void loadSource(ticket);
@@ -77,7 +82,9 @@ function closeTicket(): void {
     <BacklogBoard
       :groups="groups"
       :collapsed="collapsedPlans"
+      :expanded-columns="expandedColumns"
       @toggle-plan="toggleCollapsedPlan"
+      @toggle-column="toggleExpandedColumn"
       @open="openTicket"
     />
     <TicketSourceOverlay

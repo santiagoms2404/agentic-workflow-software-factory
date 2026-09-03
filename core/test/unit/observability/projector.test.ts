@@ -197,7 +197,8 @@ test("credential-shaped request and event values are scrubbed before SQLite", ()
     config_snapshot_json: string;
   };
   const event = db.prepare("SELECT payload_json FROM events").get() as { payload_json: string };
-  assert.equal(session.request_text, "[REDACTED]");
+  assert.equal(session.request_text, "inspect [REDACTED]");
+  assert.equal(session.request_text.includes(shaped), false);
   assert.equal(session.config_snapshot_json.includes(shaped), false);
   assert.equal(event.payload_json.includes(shaped), false);
   assert.equal(event.payload_json.includes("[REDACTED]"), true);
