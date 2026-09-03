@@ -21,7 +21,7 @@ runtime:
   max_event_count: 100000
   # Local provisioning only: copied from canonical after worktree creation.
   # Every entry is repository-relative, Git-ignored, and snapshot-safe.
-  seed_paths: [node_modules]
+  seed_paths: [node_modules, docs/design]
 
 adapters:
   claude:      { kind: claude-code, executable: claude }
