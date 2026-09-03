@@ -1,12 +1,22 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { test } from "node:test";
+import { queryPlanBacklog } from "../../src/backlog.ts";
+import { PlanTicketReader } from "../../src/persistence/plan-tickets.ts";
+import { loadCatalog } from "../../src/registry/catalog.ts";
+import { resolvePlanSources } from "../../src/registry/plan-source.ts";
 import type { BacklogPlan, BacklogTicket, TicketState } from "../../../dashboard/shared/types.ts";
 import {
   selectAllState,
   toggleAllPlans,
+  togglePlan,
   visibleGroups,
   visiblePlans,
+  type PlanFilter,
 } from "../../../dashboard/src/backlog-selection.ts";
+import { countBlockedTickets } from "../../../dashboard/src/backlog-view.ts";
+import { repoRoot } from "./meta/_walk.ts";
 
 const counts = (todo: number): Readonly<Record<TicketState, number>> => ({ todo, wip: 0, done: 0, failed: 0 });
 const plans: readonly BacklogPlan[] = [
@@ -25,13 +35,44 @@ const tickets: readonly BacklogTicket[] = plans.map((plan) => ({
   ready: true,
 }));
 
-test("no selection renders no tickets and two selected plans remain separate groups", () => {
-  assert.deepEqual(visibleGroups(plans, tickets, [], "both"), []);
-  const groups = visibleGroups(plans, tickets, ["deep-a", "spine"], "both");
-  assert.deepEqual(groups.map((group) => group.plan.id), ["spine", "deep-a"]);
-  assert.deepEqual(groups.map((group) => group.tickets.map((ticket) => ticket.uid)), [
-    ["spine/T01"],
-    ["deep-a/T01"],
+async function repositoryBacklog() {
+  const catalogPath = join(repoRoot(), "awsf.project.yaml");
+  const sources = resolvePlanSources(catalogPath, loadCatalog(readFileSync(catalogPath, "utf8")));
+  return queryPlanBacklog(new PlanTicketReader(sources), []);
+}
+
+test("no selection renders every plan permitted by the filter and current-corpus metrics", async () => {
+  const backlog = await repositoryBacklog();
+  for (const filter of ["both", "spine", "deep"] satisfies readonly PlanFilter[]) {
+    assert.deepEqual(
+      visibleGroups(backlog.plans, backlog.tickets, [], filter).map((group) => group.plan.id),
+      visiblePlans(backlog.plans, filter).map((plan) => plan.id),
+    );
+  }
+
+  const groups = visibleGroups(backlog.plans, backlog.tickets, [], "both");
+  const metricTickets = groups.flatMap((group) => group.tickets);
+  assert.equal(metricTickets.filter((ticket) => ticket.ready).length, 4);
+  assert.equal(countBlockedTickets(metricTickets), 5);
+
+  const selected = backlog.plans.slice(0, 2).map((plan) => plan.id);
+  assert.equal(selected.length, 2);
+  assert.deepEqual(
+    visibleGroups(backlog.plans, backlog.tickets, selected, "both").map((group) => group.plan.id),
+    selected,
+  );
+});
+
+test("deselecting the last selected card restores the show-everything state", () => {
+  const selected = togglePlan([], "deep-a");
+  assert.deepEqual(visibleGroups(plans, tickets, selected, "both").map((group) => group.plan.id), ["deep-a"]);
+
+  const deselected = togglePlan(selected, "deep-a");
+  assert.deepEqual(deselected, []);
+  assert.deepEqual(visibleGroups(plans, tickets, deselected, "both").map((group) => group.plan.id), [
+    "spine",
+    "deep-a",
+    "deep-b",
   ]);
 });
 

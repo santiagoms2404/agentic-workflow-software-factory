@@ -39,6 +39,16 @@ test("bearer, JWT, private-key, URL-auth, and vendor token shapes are recognized
   assert.ok(candidates.every((value) => scrubCredentialString(value) === REDACTED_VALUE));
 });
 
+test("vendor-key matching requires a word boundary without weakening real key detection", () => {
+  const ordinaryIdentifier = [["ta", "sk"].join(""), "owner", "rework"].join("-");
+  assert.equal(containsCredential(ordinaryIdentifier), false);
+  assert.equal(scrubCredentialString(ordinaryIdentifier), ordinaryIdentifier);
+
+  const key = `${["s", "k"].join("")}-${"x".repeat(20)}`;
+  const contexts = [key, ` ${key}`, `"${key}`, `context\n${key}`];
+  assert.ok(contexts.every(containsCredential));
+});
+
 test("JSON text remains valid JSON and keeps safe siblings", () => {
   const scrubbed = JSON.parse(scrubJsonText(JSON.stringify({ safe: 1, auth_token: shapedAccessId() }))) as Record<string, unknown>;
   assert.deepEqual(scrubbed, { safe: 1, auth_token: REDACTED_VALUE });

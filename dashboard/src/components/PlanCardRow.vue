@@ -30,33 +30,54 @@ const allState = computed(() => selectAllState(props.plans, props.selected, prop
 function setFilter(filter: PlanFilter): void {
   emit("update:filter", filter);
 }
+
+function moveFilter(event: KeyboardEvent, filter: PlanFilter): void {
+  const direction = event.key === "ArrowLeft" || event.key === "ArrowUp"
+    ? -1
+    : event.key === "ArrowRight" || event.key === "ArrowDown"
+      ? 1
+      : 0;
+  if (direction === 0) return;
+  event.preventDefault();
+  const current = filters.findIndex((option) => option.value === filter);
+  const next = (current + direction + filters.length) % filters.length;
+  const nextFilter = filters[next];
+  if (nextFilter === undefined) return;
+  setFilter(nextFilter.value);
+  const controls = (event.currentTarget as HTMLElement).closest('[role="radiogroup"]');
+  controls?.querySelectorAll<HTMLButtonElement>('[role="radio"]')[next]?.focus();
+}
 </script>
 
 <template>
   <section class="plan-picker" aria-label="Backlog plans">
     <div class="plan-controls">
-      <label class="select-all-control">
-        <input
-          type="checkbox"
-          :checked="allState === 'all'"
-          :indeterminate="allState === 'some'"
-          @change="emit('update:selected', toggleAllPlans(plans, selected, filter))"
-        >
+      <button
+        type="button"
+        class="plan-control-button select-all-control"
+        :class="{ selected: allState === 'all', partial: allState === 'some' }"
+        :aria-pressed="allState === 'some' ? 'mixed' : allState === 'all'"
+        @click="emit('update:selected', toggleAllPlans(plans, selected, filter))"
+      >
         select all visible
-      </label>
-      <fieldset>
-        <legend>plan type</legend>
-        <label v-for="option in filters" :key="option.value">
-          <input
-            type="radio"
-            name="backlog-plan-filter"
-            :value="option.value"
-            :checked="filter === option.value"
-            @change="setFilter(option.value)"
-          >
+      </button>
+      <div class="plan-type-controls" role="radiogroup" aria-label="Plan type">
+        <span class="plan-control-label" aria-hidden="true">plan type</span>
+        <button
+          v-for="option in filters"
+          :key="option.value"
+          type="button"
+          class="plan-control-button"
+          :class="{ selected: filter === option.value }"
+          role="radio"
+          :aria-checked="filter === option.value"
+          :tabindex="filter === option.value ? 0 : -1"
+          @click="setFilter(option.value)"
+          @keydown="moveFilter($event, option.value)"
+        >
           {{ option.label }}
-        </label>
-      </fieldset>
+        </button>
+      </div>
     </div>
     <div class="plan-card-row">
       <button

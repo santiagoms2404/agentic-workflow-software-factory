@@ -15,7 +15,7 @@ export function visiblePlans(
   return filter === "both" ? plans : plans.filter((plan) => plan.kind === filter);
 }
 
-/** No selection deliberately means that no ticket group is rendered. */
+/** An empty explicit selection shows every plan admitted by the active filter. */
 export function visibleGroups(
   plans: readonly BacklogPlan[],
   tickets: readonly BacklogTicket[],
@@ -24,7 +24,7 @@ export function visibleGroups(
 ): readonly BacklogGroup[] {
   const selectedIds = new Set(selected);
   return visiblePlans(plans, filter)
-    .filter((plan) => selectedIds.has(plan.id))
+    .filter((plan) => selectedIds.size === 0 || selectedIds.has(plan.id))
     .map((plan) => ({
       plan,
       tickets: tickets.filter((ticket) => ticket.plan === plan.id),

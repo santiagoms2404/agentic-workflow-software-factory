@@ -2,7 +2,7 @@ export const REDACTED_VALUE = "[REDACTED]";
 
 /** One shared credential vocabulary for persistence, projection, API, and rendered folds. */
 export const CREDENTIAL_PATTERNS: readonly RegExp[] = Object.freeze([
-  /sk-[A-Za-z0-9_-]{8,}/,
+  /\bsk-[A-Za-z0-9_-]{8,}/,
   /AKIA[0-9A-Z]{16}/,
   /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
   /gh[opusr]_[A-Za-z0-9]{16,}/,

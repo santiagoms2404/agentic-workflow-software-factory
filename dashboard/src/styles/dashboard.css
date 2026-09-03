@@ -450,7 +450,18 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible, summary:focus-v
 .timeline-access { display: flex; align-items: center; gap: 7px; color: var(--dim); font-family: var(--mono); }
 .timeline-access button { width: 34px; height: 30px; border: 1px solid var(--border); border-radius: 7px; background: var(--panel-3); color: var(--text); cursor: pointer; }
 .scroll-cue { display: none; color: var(--cyan); }
-.waterfall-scroll { width: 100%; overflow-x: auto; overflow-y: hidden; overscroll-behavior-inline: contain; scrollbar-gutter: stable; scrollbar-color: var(--faint) var(--panel-3); }
+.waterfall-scroll { width: 100%; overflow-x: auto; overflow-y: hidden; overscroll-behavior-inline: contain; scrollbar-gutter: stable; }
+.waterfall-scroll::-webkit-scrollbar,
+.plan-card-row::-webkit-scrollbar { height: 11px; }
+.waterfall-scroll::-webkit-scrollbar-track,
+.plan-card-row::-webkit-scrollbar-track { border-radius: 999px; background: var(--panel-3); }
+.waterfall-scroll::-webkit-scrollbar-thumb,
+.plan-card-row::-webkit-scrollbar-thumb { border: 2px solid var(--panel-3); border-radius: 999px; background: var(--faint); }
+.waterfall-scroll::-webkit-scrollbar-thumb:hover,
+.plan-card-row::-webkit-scrollbar-thumb:hover { background: var(--dim); }
+@supports not selector(::-webkit-scrollbar) {
+  .waterfall-scroll, .plan-card-row { scrollbar-color: var(--faint) var(--panel-3); }
+}
 .waterfall { min-width: 1080px; }
 .waterfall-row { display: grid; grid-template-columns: 280px 1fr; }
 .axis-row { background: var(--panel-2); border-bottom: 1px solid var(--border); }
@@ -570,16 +581,16 @@ pre { max-height: 42vh; margin: 8px 0 0; padding: 12px 14px; overflow: auto; bor
 .backlog-metrics dd { margin: 4px 0 0; font: 700 18px var(--mono); }
 .backlog-metrics small { color: var(--amber); }
 .plan-picker { margin-bottom: 22px; }
-.plan-controls { display: flex; align-items: center; gap: 20px; margin-bottom: 10px; color: var(--dim); font: 13px var(--mono); }
-.plan-controls fieldset { display: flex; align-items: center; gap: 13px; margin: 0; padding: 0; border: 0; }
-.plan-controls legend { float: left; margin-right: 4px; color: var(--faint); }
-.plan-controls label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+.plan-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 20px; margin-bottom: 10px; color: var(--dim); font: 13px var(--mono); }
+.plan-type-controls { display: flex; align-items: center; gap: 8px; }
+.plan-control-label { margin-right: 4px; color: var(--faint); }
+.plan-control-button { min-height: 34px; padding: 7px 11px; border: 1px solid var(--border-soft); border-radius: 8px; background: var(--surface); color: var(--dim); font: inherit; cursor: pointer; }
+.plan-type-controls .plan-control-button { min-width: 58px; }
+.plan-control-button:hover { border-color: var(--faint); }
+.plan-control-button.selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 24%, var(--panel-3)); color: var(--text); }
+.plan-control-button.partial { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--panel-3)); color: var(--text); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 48%, transparent); }
 .select-all-control { color: var(--text); font-weight: 700; }
-.plan-card-row { width: 100%; display: flex; flex-wrap: nowrap; gap: 12px; padding: 2px 2px 12px; overflow-x: auto; overflow-y: hidden; overscroll-behavior-inline: contain; scrollbar-gutter: stable; scrollbar-color: var(--faint) var(--panel-3); }
-.plan-card-row::-webkit-scrollbar { height: 11px; }
-.plan-card-row::-webkit-scrollbar-track { border-radius: 999px; background: var(--panel-3); }
-.plan-card-row::-webkit-scrollbar-thumb { border: 2px solid var(--panel-3); border-radius: 999px; background: var(--faint); }
-.plan-card-row::-webkit-scrollbar-thumb:hover { background: var(--dim); }
+.plan-card-row { width: 100%; display: flex; flex-wrap: nowrap; gap: 12px; padding: 2px 2px 12px; overflow-x: auto; overflow-y: hidden; overscroll-behavior-inline: contain; scrollbar-gutter: stable; }
 .plan-card { flex: 0 0 292px; min-height: 136px; padding: 13px; border: 1px solid var(--border-soft); border-radius: 11px; background: var(--surface); color: var(--text); text-align: left; cursor: pointer; }
 .plan-card:hover { border-color: var(--faint); }
 .plan-card.selected { border-color: var(--accent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 48%, transparent); }
