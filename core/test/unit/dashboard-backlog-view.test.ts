@@ -63,13 +63,50 @@ test("plan controls use accessible dashboard toggle buttons", () => {
   const picker = source("dashboard/src/components/PlanCardRow.vue");
   const css = source("dashboard/src/styles/dashboard.css");
   assert.doesNotMatch(picker, /type="(?:checkbox|radio)"|<fieldset|<legend/u);
-  assert.match(picker, /class="plan-control-button select-all-control"[\s\S]*:aria-pressed=/u);
+  assert.match(picker, /class="plan-control-button select-all-control"[^>]*:aria-pressed=/u);
   assert.match(picker, /role="radiogroup"[^>]*aria-label="Plan type"/u);
   assert.match(picker, /role="radio"[\s\S]*:aria-checked=/u);
   assert.match(picker, /@keydown="moveFilter\(\$event, option\.value\)"/u);
   assert.match(css, /\.plan-control-button\s*\{[^}]*background:\s*var\(--surface\)/su);
   assert.match(css, /\.plan-control-button:hover\s*\{[^}]*border-color:\s*var\(--faint\)/su);
   assert.match(css, /\.plan-control-button\.selected\s*\{[^}]*background:\s*color-mix\([^}]*var\(--accent\)[^}]*var\(--panel-3\)/su);
+});
+
+test("backlog selection seeds once from the first non-empty response", () => {
+  const route = source("dashboard/src/routes/backlog.vue");
+  assert.match(route, /let hasSeededSelection = false;/u);
+  assert.match(
+    route,
+    /if \(hasSeededSelection \|\| plans\.length === 0\) return;[^]*selectedPlans\.value = plans\.map\(\(plan\) => plan\.id\);[^]*hasSeededSelection = true;/u,
+  );
+  assert.equal(route.match(/selectedPlans\.value = plans\.map/gu)?.length, 1);
+});
+
+test("backlog metrics render ready, blocked, done, and projected cost in four columns", () => {
+  const metrics = source("dashboard/src/components/BacklogMetricsRow.vue");
+  const css = source("dashboard/src/styles/dashboard.css");
+  assert.match(metrics, /<dt>ready<\/dt>[^]*<dt>blocked<\/dt>[^]*<dt>done<\/dt>[^]*<dt>projected cost<\/dt>/u);
+  assert.match(metrics, /ticket\.state === "done"/u);
+  assert.match(css, /\.backlog-metrics\s*\{[^}]*grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)/su);
+});
+
+test("plan headings toggle persistent per-plan collapsed bars without changing selection", () => {
+  const route = source("dashboard/src/routes/backlog.vue");
+  const board = source("dashboard/src/components/BacklogBoard.vue");
+  const css = source("dashboard/src/styles/dashboard.css");
+
+  assert.match(route, /const collapsedPlans = ref<readonly string\[\]>\(\[\]\);/u);
+  assert.match(route, /collapsedPlans\.value = togglePlan\(collapsedPlans\.value, planId\);/u);
+  assert.equal(route.match(/collapsedPlans\.value\s*=/gu)?.length, 1);
+  assert.match(route, /:collapsed="collapsedPlans"/u);
+  assert.match(route, /@toggle-plan="toggleCollapsedPlan"/u);
+
+  assert.match(board, /<button[^>]*class="backlog-plan-toggle"[^>]*:aria-expanded="!isCollapsed\(group\.plan\.id\)"[^>]*@click="emit\('toggle-plan', group\.plan\.id\)"/su);
+  assert.match(board, /<span v-else class="collapsed-plan-counts"[^>]*>[^]*v-for="state in states"[^]*group\.plan\.counts\[state\]/u);
+  assert.match(board, /const states:[^=]*= \["todo", "wip", "done", "failed"\];/u);
+  assert.match(board, /<div v-if="!isCollapsed\(group\.plan\.id\)" class="backlog-board">/u);
+  assert.doesNotMatch(board, /update:selected/u);
+  assert.match(css, /\.backlog-plan-group\.collapsed \.backlog-plan-heading\s*\{[^}]*min-height:\s*38px[^}]*\}/su);
 });
 
 test("plan-card and waterfall Chrome scrollbars share one effective dashboard style", () => {

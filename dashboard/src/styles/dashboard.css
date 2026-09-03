@@ -574,7 +574,7 @@ pre { max-height: 42vh; margin: 8px 0 0; padding: 12px 14px; overflow: auto; bor
 
 .backlog-route { max-width: 1680px; margin: 0 auto; padding: 24px 28px 32px; }
 .backlog-route h1 { margin: 2px 0 18px; font-size: 28px; }
-.backlog-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0 0 18px; }
+.backlog-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0 0 18px; }
 .backlog-metrics > div, .backlog-column { border: 1px solid var(--border-soft); border-radius: 12px; background: var(--surface); }
 .backlog-metrics > div { padding: 14px 16px; }
 .backlog-metrics dt, .ticket-card small { color: var(--faint); }
@@ -605,6 +605,11 @@ pre { max-height: 42vh; margin: 8px 0 0; padding: 12px 14px; overflow: auto; bor
 .backlog-plan-group { min-width: 0; }
 .backlog-plan-heading { display: flex; align-items: center; gap: 9px; margin-bottom: 10px; }
 .backlog-plan-heading h2 { margin: 0; font-size: 20px; }
+.backlog-plan-toggle { padding: 0; border: 0; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.backlog-plan-toggle:hover { color: var(--cyan); }
+.backlog-plan-group.collapsed .backlog-plan-heading { min-height: 38px; margin-bottom: 0; padding: 5px 11px; border: 1px solid var(--border-soft); border-radius: 8px; background: var(--surface); }
+.collapsed-plan-counts { display: grid; grid-template-columns: repeat(4, auto); gap: 16px; margin-left: auto; color: var(--faint); font: 11px var(--mono); white-space: nowrap; }
+.collapsed-plan-counts b { color: var(--text); font-size: 13px; }
 .backlog-board { display: grid; grid-template-columns: repeat(4, minmax(220px, 1fr)); gap: 14px; align-items: start; }
 .backlog-column { min-height: 160px; padding: 12px; }
 .backlog-column h3 { display: flex; justify-content: space-between; margin: 0 0 11px; font-size: 15px; text-transform: uppercase; color: var(--dim); }

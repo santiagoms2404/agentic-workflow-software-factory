@@ -12,6 +12,7 @@ const props = defineProps<{
 const tickets = computed(() => props.groups.flatMap((group) => group.tickets));
 const ready = computed(() => tickets.value.filter((ticket) => ticket.ready).length);
 const blocked = computed(() => countBlockedTickets(tickets.value));
+const done = computed(() => tickets.value.filter((ticket) => ticket.state === "done").length);
 const unavailableCost = computed(() => projectedCostText(props.projectedCost));
 </script>
 
@@ -19,6 +20,7 @@ const unavailableCost = computed(() => projectedCostText(props.projectedCost));
   <dl class="backlog-metrics">
     <div><dt>ready</dt><dd>{{ ready }}</dd></div>
     <div><dt>blocked</dt><dd>{{ blocked }}</dd></div>
+    <div><dt>done</dt><dd>{{ done }}</dd></div>
     <div>
       <dt>projected cost</dt>
       <dd v-if="unavailableCost">{{ unavailableCost }}</dd>

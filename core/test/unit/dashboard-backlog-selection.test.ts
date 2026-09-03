@@ -41,39 +41,53 @@ async function repositoryBacklog() {
   return queryPlanBacklog(new PlanTicketReader(sources), []);
 }
 
-test("no selection renders every plan permitted by the filter and current-corpus metrics", async () => {
+test("no selection renders no groups for every filter; full selection drives current-corpus metrics", async () => {
   const backlog = await repositoryBacklog();
   for (const filter of ["both", "spine", "deep"] satisfies readonly PlanFilter[]) {
-    assert.deepEqual(
-      visibleGroups(backlog.plans, backlog.tickets, [], filter).map((group) => group.plan.id),
-      visiblePlans(backlog.plans, filter).map((plan) => plan.id),
-    );
+    assert.deepEqual(visibleGroups(backlog.plans, backlog.tickets, [], filter), []);
   }
 
-  const groups = visibleGroups(backlog.plans, backlog.tickets, [], "both");
+  const fullSelection = backlog.plans.map((plan) => plan.id);
+  const groups = visibleGroups(backlog.plans, backlog.tickets, fullSelection, "both");
   const metricTickets = groups.flatMap((group) => group.tickets);
   assert.equal(metricTickets.filter((ticket) => ticket.ready).length, 4);
   assert.equal(countBlockedTickets(metricTickets), 5);
 
-  const selected = backlog.plans.slice(0, 2).map((plan) => plan.id);
-  assert.equal(selected.length, 2);
   assert.deepEqual(
-    visibleGroups(backlog.plans, backlog.tickets, selected, "both").map((group) => group.plan.id),
-    selected,
+    groups.map((group) => group.plan.id),
+    fullSelection,
   );
 });
 
-test("deselecting the last selected card restores the show-everything state", () => {
+test("selecting one card renders exactly its group and deselecting it empties the board", () => {
   const selected = togglePlan([], "deep-a");
   assert.deepEqual(visibleGroups(plans, tickets, selected, "both").map((group) => group.plan.id), ["deep-a"]);
 
   const deselected = togglePlan(selected, "deep-a");
   assert.deepEqual(deselected, []);
-  assert.deepEqual(visibleGroups(plans, tickets, deselected, "both").map((group) => group.plan.id), [
-    "spine",
-    "deep-a",
-    "deep-b",
-  ]);
+  assert.deepEqual(visibleGroups(plans, tickets, deselected, "both"), []);
+});
+
+test("visible groups and select-all state agree for every filter and plan selection", () => {
+  const filters = ["both", "spine", "deep"] satisfies readonly PlanFilter[];
+  const planIds = plans.map((plan) => plan.id);
+  const selections = Array.from(
+    { length: 2 ** planIds.length },
+    (_, mask) => planIds.filter((_, index) => (mask & (1 << index)) !== 0),
+  );
+
+  for (const filter of filters) {
+    const visibleIds = visiblePlans(plans, filter).map((plan) => plan.id);
+    for (const selected of selections) {
+      const intersection = visibleIds.filter((id) => selected.includes(id));
+      const groupIds = visibleGroups(plans, tickets, selected, filter).map((group) => group.plan.id);
+      const state = selectAllState(plans, selected, filter);
+
+      assert.deepEqual(groupIds, intersection, `${filter}: ${selected.join(",")}`);
+      assert.equal(state === "all", intersection.length > 0 && intersection.length === visibleIds.length);
+      assert.equal(state === "none", intersection.length === 0);
+    }
+  }
 });
 
 test("switching from selected deep plans to the spine filter removes every deep ticket group", () => {

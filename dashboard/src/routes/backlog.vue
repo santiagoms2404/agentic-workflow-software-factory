@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import type { BacklogTicket, TicketSourceResponse, TicketsResponse } from "../../shared/types.ts";
-import { visibleGroups as selectVisibleGroups, type PlanFilter } from "../backlog-selection.ts";
+import { togglePlan, visibleGroups as selectVisibleGroups, type PlanFilter } from "../backlog-selection.ts";
 import BacklogBoard from "../components/BacklogBoard.vue";
 import BacklogMetricsRow from "../components/BacklogMetricsRow.vue";
 import PlanCardRow from "../components/PlanCardRow.vue";
@@ -9,11 +9,23 @@ import TicketSourceOverlay from "../components/TicketSourceOverlay.vue";
 
 const props = defineProps<{ backlog: TicketsResponse }>();
 const selectedPlans = ref<readonly string[]>([]);
+const collapsedPlans = ref<readonly string[]>([]);
+let hasSeededSelection = false;
 const planFilter = ref<PlanFilter>("both");
 const activeTicket = ref<BacklogTicket | null>(null);
 const ticketSources = ref<Readonly<Record<string, string>>>({});
 const loadingSources = ref<readonly string[]>([]);
 const sourceErrors = ref<Readonly<Record<string, string>>>({});
+
+watch(
+  () => props.backlog.plans,
+  (plans) => {
+    if (hasSeededSelection || plans.length === 0) return;
+    selectedPlans.value = plans.map((plan) => plan.id);
+    hasSeededSelection = true;
+  },
+  { immediate: true },
+);
 
 const groups = computed(() => selectVisibleGroups(
   props.backlog.plans,
@@ -43,6 +55,10 @@ async function loadSource(ticket: BacklogTicket): Promise<void> {
   }
 }
 
+function toggleCollapsedPlan(planId: string): void {
+  collapsedPlans.value = togglePlan(collapsedPlans.value, planId);
+}
+
 function openTicket(ticket: BacklogTicket): void {
   activeTicket.value = ticket;
   void loadSource(ticket);
@@ -58,7 +74,12 @@ function closeTicket(): void {
     <header><p class="eyebrow">read-only work queue</p><h1>Backlog</h1></header>
     <BacklogMetricsRow :groups="groups" :projected-cost="backlog.projectedCost" />
     <PlanCardRow v-model:selected="selectedPlans" v-model:filter="planFilter" :plans="backlog.plans" />
-    <BacklogBoard :groups="groups" @open="openTicket" />
+    <BacklogBoard
+      :groups="groups"
+      :collapsed="collapsedPlans"
+      @toggle-plan="toggleCollapsedPlan"
+      @open="openTicket"
+    />
     <TicketSourceOverlay
       v-if="activeTicket"
       :ticket="activeTicket"
