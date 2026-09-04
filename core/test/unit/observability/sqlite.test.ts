@@ -44,6 +44,35 @@ test("openDatabase applies migrations and lands on user_version 6", () => {
   }
 });
 
+test("a semicolon in a migration comment or quoted string does not cut a statement", () => {
+  const dir = tempDir();
+  try {
+    const migrations = join(dir, "migrations");
+    mkdirSync(migrations);
+    writeFileSync(join(migrations, "0001-comment-semicolon.sql"), `-- This header contains a semicolon; the schema statements below must still execute.
+CREATE TABLE migration_fixture (id INTEGER PRIMARY KEY, value TEXT NOT NULL);
+INSERT INTO migration_fixture (value) VALUES ('left;right');
+ALTER TABLE migration_fixture ADD COLUMN applied INTEGER NOT NULL DEFAULT 1;
+PRAGMA user_version = 1;
+`);
+
+    const db = openDatabase(join(dir, "awsf.db"), { migrationsDir: migrations });
+    try {
+      const columns = db.prepare("PRAGMA table_info(migration_fixture)").all() as { name: string }[];
+      assert.deepEqual(columns.map((column) => column.name), ["id", "value", "applied"]);
+      assert.deepEqual({ ...db.prepare("SELECT value, applied FROM migration_fixture").get() as object }, {
+        value: "left;right",
+        applied: 1,
+      });
+      assert.equal((db.prepare("PRAGMA user_version").get() as { user_version: number }).user_version, 1);
+    } finally {
+      db.close();
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("re-opening an already-migrated database does not re-apply or throw", () => {
   const dir = tempDir();
   try {

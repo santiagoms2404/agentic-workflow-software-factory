@@ -257,6 +257,28 @@ function insertEnvelope(
   );
 }
 
+function phaseProjectionPosition(
+  db: DatabaseSync,
+  sessionId: string,
+  phaseId: string,
+  requestedOrdinal: number,
+): { ordinal: number; relocated: boolean } {
+  const existing = db.prepare("SELECT ordinal FROM phases WHERE phase_id = ?").get(phaseId) as
+    | { ordinal: number }
+    | undefined;
+  if (existing !== undefined) return { ordinal: existing.ordinal, relocated: false };
+
+  const occupied = db.prepare(
+    "SELECT ordinal FROM phases WHERE session_id = ? AND ordinal >= ? ORDER BY ordinal",
+  ).all(sessionId, requestedOrdinal) as unknown as { ordinal: number }[];
+  let ordinal = requestedOrdinal;
+  for (const row of occupied) {
+    if (row.ordinal === ordinal) ordinal += 1;
+    else if (row.ordinal > ordinal) break;
+  }
+  return { ordinal, relocated: ordinal !== requestedOrdinal };
+}
+
 function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: number, evidence: AttemptEvidence): void {
   switch (evidence.type) {
     case "transition":
@@ -269,6 +291,10 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
       return;
     case "phase": {
       const phase = evidence.phase;
+      // A phase-id match is the ordinary status-update path: retain its stored
+      // position. Only a NEW identity asking for an occupied position moves,
+      // and it takes the first free ordinal after the one it requested.
+      const position = phaseProjectionPosition(db, sessionId, phase.phaseId, phase.ordinal);
       db.prepare(`INSERT INTO phases
         (phase_id, session_id, ordinal, phase_key, name, kind, owner, description, status,
          correction_count, max_corrections, error_code, error_message, started_at, ended_at, created_at)
@@ -276,9 +302,31 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
         ON CONFLICT(phase_id) DO UPDATE SET status=excluded.status,
           correction_count=excluded.correction_count, error_code=excluded.error_code,
           error_message=excluded.error_message, started_at=excluded.started_at, ended_at=excluded.ended_at`)
-        .run(phase.phaseId, sessionId, phase.ordinal, phase.key, phase.name, phase.kind, phase.owner,
+        .run(phase.phaseId, sessionId, position.ordinal, phase.key, phase.name, phase.kind, phase.owner,
           phase.description, phase.status, phase.correctionCount, phase.maxCorrections, phase.errorCode,
           phase.errorMessage, phase.startedAt, phase.endedAt, phase.createdAt);
+      if (position.relocated) {
+        // Keep the phase row's identity and content intact. A deterministic
+        // notice in the existing events projection exposes both positions
+        // without changing the protected schema.
+        db.prepare(`INSERT INTO events
+          (event_id, session_id, phase_id, first_source_seq, last_source_seq, type, name,
+           payload_json, started_at)
+          VALUES (?, ?, ?, ?, ?, 'notice', 'phase ordinal relocated', ?, ?)`).run(
+          `projection:${sessionId}:phase-ordinal-relocated:${sourceSeq}`,
+          sessionId,
+          phase.phaseId,
+          sourceSeq,
+          sourceSeq,
+          stringifyRedacted({
+            code: "phase-ordinal-relocated",
+            phaseId: phase.phaseId,
+            requestedOrdinal: phase.ordinal,
+            assignedOrdinal: position.ordinal,
+          }),
+          phase.createdAt,
+        );
+      }
       return;
     }
     case "normalized-event":

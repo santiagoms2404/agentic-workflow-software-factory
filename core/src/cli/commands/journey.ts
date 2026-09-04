@@ -11,6 +11,7 @@ import { runGit, systemGitRunner } from "../../git/changes.ts";
 import { buildReviewWorkflow } from "../../workflow/recipes/build-review.ts";
 import { simpleSdlcWorkflow } from "../../workflow/recipes/simple-sdlc.ts";
 import type { OwnerTerminal } from "../tty.ts";
+import { readAttemptEvidence } from "./review-record.ts";
 import {
   nextRevision,
   persistAttempt,
@@ -23,8 +24,8 @@ import {
  * The journey is a phase of the attempt in the evidence model's sense — it has
  * an ordinal, a status, and a window — and its kind is `engineer` for the same
  * reason the `request` phase is: both are content a human supplied rather than a
- * provider. It sits one past the compiled workflow, which is also how owner
- * rework numbers the phase it appends.
+ * provider. The known phase counts guard which workflows may append it; its
+ * ordinal follows every phase the attempt journal has already recorded.
  */
 const WORKFLOW_PHASE_COUNTS = new Map<string, number>([
   [buildReviewWorkflow.id, buildReviewWorkflow.phases.length],
@@ -121,8 +122,14 @@ export async function journeyCommand(options: JourneyCommandOptions): Promise<Jo
   if (!confirmed) return { status, confirmed: false };
 
   const at = (options.now ?? ((): string => new Date().toISOString()))();
-  const ordinal = (WORKFLOW_PHASE_COUNTS.get(status.workflow) ?? 0) + 1;
-  if (ordinal === 1) throw new JourneyNotApplicable(`workflow ${JSON.stringify(status.workflow)} has no known phase count to append a journey to`);
+  if (!WORKFLOW_PHASE_COUNTS.has(status.workflow)) {
+    throw new JourneyNotApplicable(`workflow ${JSON.stringify(status.workflow)} has no known phase count to append a journey to`);
+  }
+  const recordedEvidence = await readAttemptEvidence(options.attemptDir);
+  const ordinal = recordedEvidence.reduce(
+    (highest, evidence) => evidence.type === "phase" ? Math.max(highest, evidence.phase.ordinal) : highest,
+    0,
+  ) + 1;
   const phaseId = `${status.sessionId}:owner-journey`;
 
   // The phase row is written first because the gate references it: a gate result

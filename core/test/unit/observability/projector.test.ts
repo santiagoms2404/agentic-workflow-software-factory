@@ -1,8 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import type { JournalRecord } from "../../../src/persistence/journal.ts";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { Journal, type JournalRecord } from "../../../src/persistence/journal.ts";
 import type { NormalizedEvent } from "../../../src/contracts/normalized-events.ts";
-import type { RecordedAgentPurpose } from "../../../src/observability/attempt-evidence.ts";
+import type { PhaseEvidenceRecord, RecordedAgentPurpose } from "../../../src/observability/attempt-evidence.ts";
+import { rebuildDatabase } from "../../../src/observability/rebuild.ts";
 import { openDatabase } from "../../../src/observability/sqlite.ts";
 import { createSession, projectAttemptStatus, projectEvent, type AttemptStatusProjection, type ProjectionContext, type SessionInit } from "../../../src/observability/projector.ts";
 
@@ -54,6 +58,27 @@ function attempt(evidence: NonNullable<AttemptStatusProjection["evidence"]>): At
     endedAt: null,
     stateRevision: 1,
     evidence,
+  };
+}
+
+function phaseRecord(overrides: Partial<PhaseEvidenceRecord> = {}): PhaseEvidenceRecord {
+  return {
+    phaseId: "phase-1",
+    ordinal: 1,
+    key: "builder",
+    name: "builder",
+    kind: "agent",
+    owner: "builder",
+    description: "fixture phase",
+    status: "SUCCEEDED",
+    correctionCount: 0,
+    maxCorrections: 1,
+    errorCode: null,
+    errorMessage: null,
+    startedAt: SESSION.startedAt,
+    endedAt: SESSION.startedAt,
+    createdAt: SESSION.startedAt,
+    ...overrides,
   };
 }
 
@@ -146,6 +171,142 @@ test("compiled system prompt projection retains full text and composition digest
   assert.equal(row.type, "compiled_prompt");
   assert.equal(row.name, "system");
   assert.deepEqual(JSON.parse(row.payload_json), { text, lineCount: 4, ...composition });
+});
+
+test("colliding ordinals retain both phases and expose the relocation without changing phase content", () => {
+  const db = freshDb();
+  try {
+    const first = phaseRecord();
+    const second = phaseRecord({
+      phaseId: "phase-2",
+      key: "tests",
+      name: "host tests",
+      kind: "code",
+      owner: "host",
+      description: "measure the candidate",
+      status: "FAILED",
+      correctionCount: 2,
+      maxCorrections: 3,
+      errorCode: "E_TEST",
+      errorMessage: "fixture failure",
+      startedAt: "2026-08-06T00:01:00.000Z",
+      endedAt: "2026-08-06T00:02:00.000Z",
+      createdAt: "2026-08-06T00:01:00.000Z",
+    });
+
+    assert.equal(projectAttemptStatus(db, attempt({ type: "phase", phase: first }), 1).ok, true);
+    assert.equal(projectAttemptStatus(db, {
+      ...attempt({ type: "phase", phase: second }),
+      stateRevision: 2,
+    }, 2).ok, true);
+
+    const rows = db.prepare(`SELECT phase_id, session_id, ordinal, phase_key, name, kind, owner,
+      description, status, correction_count, max_corrections, error_code, error_message,
+      started_at, ended_at, created_at FROM phases ORDER BY ordinal`).all() as Record<string, unknown>[];
+    assert.deepEqual(rows.map((row) => ({ ...row })), [
+      {
+        phase_id: first.phaseId, session_id: SESSION.sessionId, ordinal: 1, phase_key: first.key,
+        name: first.name, kind: first.kind, owner: first.owner, description: first.description,
+        status: first.status, correction_count: first.correctionCount, max_corrections: first.maxCorrections,
+        error_code: first.errorCode, error_message: first.errorMessage, started_at: first.startedAt,
+        ended_at: first.endedAt, created_at: first.createdAt,
+      },
+      {
+        phase_id: second.phaseId, session_id: SESSION.sessionId, ordinal: 2, phase_key: second.key,
+        name: second.name, kind: second.kind, owner: second.owner, description: second.description,
+        status: second.status, correction_count: second.correctionCount, max_corrections: second.maxCorrections,
+        error_code: second.errorCode, error_message: second.errorMessage, started_at: second.startedAt,
+        ended_at: second.endedAt, created_at: second.createdAt,
+      },
+    ]);
+
+    const notice = db.prepare(
+      "SELECT phase_id, type, name, payload_json FROM events WHERE type = 'notice'",
+    ).get() as { phase_id: string; type: string; name: string; payload_json: string };
+    assert.deepEqual({ phase_id: notice.phase_id, type: notice.type, name: notice.name }, {
+      phase_id: second.phaseId,
+      type: "notice",
+      name: "phase ordinal relocated",
+    });
+    assert.deepEqual(JSON.parse(notice.payload_json), {
+      code: "phase-ordinal-relocated",
+      phaseId: second.phaseId,
+      requestedOrdinal: 1,
+      assignedOrdinal: 2,
+    });
+  } finally {
+    db.close();
+  }
+});
+
+test("re-projecting the same phase is idempotent and does not relocate it", () => {
+  const db = freshDb();
+  try {
+    const evidence = { type: "phase", phase: phaseRecord() } as const;
+    const projection = attempt(evidence);
+    const first = projectAttemptStatus(db, projection, 1);
+    const identical = projectAttemptStatus(db, projection, 1);
+    const laterStatusUpdate = projectAttemptStatus(db, { ...projection, stateRevision: 2 }, 2);
+
+    assert.equal(first.applied, true);
+    assert.equal(identical.applied, false);
+    assert.equal(laterStatusUpdate.ok, true, JSON.stringify(laterStatusUpdate));
+    assert.deepEqual({ ...db.prepare("SELECT phase_id, ordinal FROM phases").get() as object }, {
+      phase_id: "phase-1",
+      ordinal: 1,
+    });
+    assert.equal((db.prepare("SELECT COUNT(*) AS count FROM phases").get() as { count: number }).count, 1);
+    assert.equal((db.prepare("SELECT COUNT(*) AS count FROM events").get() as { count: number }).count, 0);
+  } finally {
+    db.close();
+  }
+});
+
+test("a rebuild completes over a journal containing an ordinal collision", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "awsf-phase-collision-rebuild-"));
+  const journalPath = join(dir, "journal.jsonl");
+  const targetPath = join(dir, "awsf.db");
+  const journal = new Journal<AttemptStatusProjection>(journalPath);
+  try {
+    await journal.append(attempt({ type: "phase", phase: phaseRecord() }));
+    await journal.append({
+      ...attempt({
+        type: "phase",
+        phase: phaseRecord({ phaseId: "phase-2", key: "tests", name: "tests", kind: "code", owner: "host" }),
+      }),
+      stateRevision: 2,
+    });
+    await journal.close();
+
+    const report = await rebuildDatabase({
+      targetPath,
+      stamp: () => "collision",
+      sources: [{
+        session: { ...SESSION, journalPath },
+        journalPath,
+        attemptStatus: (record) => record.event as AttemptStatusProjection,
+      }],
+    });
+    assert.equal(report.ok, true, report.ok ? undefined : report.reason);
+
+    const db = openDatabase(targetPath, { readonly: true });
+    try {
+      const phases = db.prepare("SELECT phase_id, ordinal FROM phases ORDER BY ordinal").all() as object[];
+      assert.deepEqual(phases.map((row) => ({ ...row })), [
+        { phase_id: "phase-1", ordinal: 1 },
+        { phase_id: "phase-2", ordinal: 2 },
+      ]);
+      const health = db.prepare("SELECT observability_degraded FROM sessions").get() as {
+        observability_degraded: number;
+      };
+      assert.equal(health.observability_degraded, 0);
+    } finally {
+      db.close();
+    }
+  } finally {
+    await journal.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("agent launch evidence creates a route-attributed null-usage row with exact broker grant", () => {

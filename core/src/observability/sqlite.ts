@@ -127,10 +127,65 @@ const TRANSACTION_UNSAFE_PRAGMA = /^PRAGMA\s+(journal_mode|synchronous|foreign_k
 const FOREIGN_KEYS_PRAGMA = /^PRAGMA\s+foreign_keys\s*=/i;
 
 function splitStatements(sql: string): string[] {
-  return sql
-    .split(";")
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
+  const statements: string[] = [];
+  let start = 0;
+  let quote: "'" | "\"" | "`" | null = null;
+  let inBracketIdentifier = false;
+  let inLineComment = false;
+  let inBlockComment = false;
+
+  const append = (end: number): void => {
+    const statement = sql.slice(start, end).trim();
+    if (statement.length > 0) statements.push(statement);
+  };
+
+  for (let index = 0; index < sql.length; index += 1) {
+    const char = sql[index];
+    const next = sql[index + 1];
+
+    if (inLineComment) {
+      if (char === "\n" || char === "\r") inLineComment = false;
+      continue;
+    }
+    if (inBlockComment) {
+      if (char === "*" && next === "/") {
+        inBlockComment = false;
+        index += 1;
+      }
+      continue;
+    }
+    if (quote !== null) {
+      if (char === quote) {
+        if (next === quote) index += 1;
+        else quote = null;
+      }
+      continue;
+    }
+    if (inBracketIdentifier) {
+      if (char === "]") {
+        if (next === "]") index += 1;
+        else inBracketIdentifier = false;
+      }
+      continue;
+    }
+
+    if (char === "-" && next === "-") {
+      inLineComment = true;
+      index += 1;
+    } else if (char === "/" && next === "*") {
+      inBlockComment = true;
+      index += 1;
+    } else if (char === "'" || char === "\"" || char === "`") {
+      quote = char;
+    } else if (char === "[") {
+      inBracketIdentifier = true;
+    } else if (char === ";") {
+      append(index);
+      start = index + 1;
+    }
+  }
+  append(sql.length);
+  return statements;
 }
 
 export function runMigrations(db: DatabaseSync, migrationsDir: string = DEFAULT_MIGRATIONS_DIR): void {
