@@ -3,4 +3,3 @@ dist/
 *.log
 *.tsbuildinfo
 .DS_Store
-docs/design/
