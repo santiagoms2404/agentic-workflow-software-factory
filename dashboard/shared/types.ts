@@ -102,6 +102,7 @@ export interface SessionCard {
   sessionId: string;
   project: string;
   taskId: string;
+  continuesTask: string | null;
   attempt: number;
   workflowId: string;
   riskTier: 0 | 1 | 2;

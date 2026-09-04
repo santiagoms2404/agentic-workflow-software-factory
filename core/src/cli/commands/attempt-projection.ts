@@ -22,6 +22,7 @@ export function toAttemptStatusProjection(
     sessionId: status.sessionId,
     projectSlug: status.project,
     taskId: status.taskId,
+    continuesTask: status.continuesTask,
     attempt: status.attempt,
     workflowId: status.workflow,
     riskTier: status.tier,

@@ -46,6 +46,7 @@ export function apiFixture(): {
     sessionId: "session-1",
     projectSlug: "test-project",
     taskId: "T23",
+    continuesTask: null,
     attempt: 1,
     workflowId: "plan-build-test",
     riskTier: 1,

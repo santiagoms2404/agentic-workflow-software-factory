@@ -73,6 +73,8 @@ export interface AttemptStatus {
   readonly sessionId: string;
   readonly project: string;
   readonly taskId: string;
+  /** Owner-declared task relationship recorded only when this task is created. */
+  readonly continuesTask: string | null;
   readonly attempt: number;
   readonly repository: string;
   readonly worktree: string | null;
@@ -141,8 +143,9 @@ type LegacyBudget = Omit<BudgetState, "ownerReentries" | "allowance"> & {
 };
 
 /** And what one written before the ceiling was a dial holds. */
-type LegacyStatus = Omit<AttemptStatus, "ceilingGrants"> & {
+type LegacyStatus = Omit<AttemptStatus, "ceilingGrants" | "continuesTask"> & {
   ceilingGrants?: readonly CeilingGrant[];
+  continuesTask?: string | null;
 };
 
 /**
@@ -182,9 +185,10 @@ export function withLegacyDefaults(status: AttemptStatus): AttemptStatus {
   const budget = status.budget as LegacyBudget;
   const legacy = status as LegacyStatus;
   const budgetIsCurrent = budget.ownerReentries !== undefined && budget.allowance.ownerReentries !== undefined;
-  if (budgetIsCurrent && legacy.ceilingGrants !== undefined) return status;
+  if (budgetIsCurrent && legacy.ceilingGrants !== undefined && legacy.continuesTask !== undefined) return status;
   return {
     ...status,
+    continuesTask: legacy.continuesTask ?? null,
     ...(budgetIsCurrent ? {} : {
       budget: {
         ...budget,

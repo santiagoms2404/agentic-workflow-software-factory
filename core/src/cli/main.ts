@@ -353,6 +353,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         stateRoot,
         project,
         taskId,
+        ...(parsed.flags.continues === undefined ? {} : { continuesTask: parsed.flags.continues }),
         repository: cwd,
         request,
         workflow,

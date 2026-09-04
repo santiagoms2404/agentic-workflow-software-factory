@@ -6,8 +6,9 @@ import {
   stateFilterEntries,
   workflowFilterEntries,
 } from "../session-filters.ts";
-import SessionCard from "./SessionCard.vue";
+import { groupSessionStacks } from "../session-stacks.ts";
 import SessionFilterRow from "./SessionFilterRow.vue";
+import SessionStack from "./SessionStack.vue";
 
 const props = defineProps<{
   sessions: readonly Session[];
@@ -25,6 +26,7 @@ const visibleSessions = computed(() => filterSessions(
   props.selectedWorkflows,
   props.selectedStates,
 ));
+const visibleStacks = computed(() => groupSessionStacks(visibleSessions.value));
 const workflowEntries = computed(() => workflowFilterEntries(
   props.workflows,
   props.sessions,
@@ -53,7 +55,7 @@ const stateEntries = computed(() => stateFilterEntries(props.sessions, props.sel
       />
     </div>
     <div v-if="visibleSessions.length" class="sessions-grid">
-      <SessionCard v-for="session in visibleSessions" :key="session.sessionId" :session="session" />
+      <SessionStack v-for="stack in visibleStacks" :key="stack.key" :sessions="stack.sessions" />
     </div>
     <p v-else-if="sessions.length" class="empty-note run-count">No runs match the current filters.</p>
     <p v-else class="empty-note run-count">No sessions yet. Start an AWSF attempt in the terminal to see it here.</p>

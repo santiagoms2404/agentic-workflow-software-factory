@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import type { ActivityPoint, AgentSummary, PhaseSummary, SessionCard as Session } from "../../shared/types.ts";
-import { axisTicks, costAuthorityLabel, formatCost, formatDate, formatDuration, formatTokens, formatUsage, stateLabel, stateTone } from "../display.ts";
+import { axisTicks, costAuthorityLabel, formatCalls, formatCost, formatDate, formatDuration, formatTokens, formatUsage, shortSessionId, stateLabel, stateTone } from "../display.ts";
 import LaneIcon from "./LaneIcon.vue";
 
 const props = defineProps<{ session: Session }>();
@@ -85,7 +85,7 @@ async function archiveSession(): Promise<void> {
 <template>
   <div v-if="!archived" class="card-wrap">
   <a class="session-card" :class="stateTone(session.state)" :href="`#/sessions/${session.sessionId}`">
-    <span class="card-id">{{ session.sessionId.slice(0, 8) }}</span>
+    <span class="card-id">{{ shortSessionId(session.sessionId) }}</span>
     <span class="card-workflow" :title="session.workflowId">{{ session.workflowId }}</span>
     <span class="card-request" :title="session.request">{{ session.request }}</span>
 
@@ -130,7 +130,7 @@ async function archiveSession(): Promise<void> {
       <div title="Cost and authority"><dt>cost</dt><dd>{{ formatCost(session.usage.costAuthority, session.usage.estimatedCostUsd) }} <small>{{ costAuthorityLabel(session.usage.costAuthority) }}</small></dd></div>
       <div title="Wall-clock runtime"><dt>runtime</dt><dd>{{ formatDuration(session.startedAt, runtimeEnd) }}</dd></div>
       <div title="Provider-reported token total"><dt>usage</dt><dd>{{ formatUsage(session.usage) }} <small>{{ session.usage.usageAuthority }}<template v-if="session.usage.cacheReadTokens !== null"> · cache {{ formatTokens(session.usage.cacheReadTokens) }}</template></small></dd></div>
-      <div title="Calls spent against the host ceiling"><dt>calls</dt><dd>{{ session.callsSpent }}/{{ session.callCeiling }}</dd></div>
+      <div title="Calls spent against the host ceiling"><dt>calls</dt><dd>{{ formatCalls(session.callsSpent, session.callCeiling) }}</dd></div>
       <div v-if="session.usage.costPartial" class="partial-metric"><dt>authority</dt><dd>partial total</dd></div>
     </dl>
   </a>
@@ -138,7 +138,7 @@ async function archiveSession(): Promise<void> {
     type="button"
     class="archive-control"
     :disabled="archiving"
-    :aria-label="`Archive session ${session.sessionId.slice(0, 8)} from this review list`"
+    :aria-label="`Archive session ${shortSessionId(session.sessionId)} from this review list`"
     title="Archive from dashboard list; lifecycle, Git, and configuration are unchanged"
     @click="archiveSession"
   >{{ archiving ? "…" : "archive" }}</button>

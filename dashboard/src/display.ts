@@ -22,6 +22,14 @@ export function formatUsage(usage: UsageTotals): string {
   return formatTokens(usage.totalTokens);
 }
 
+export function shortSessionId(sessionId: string): string {
+  return sessionId.slice(0, 8);
+}
+
+export function formatCalls(spent: number, ceiling: number): string {
+  return `${spent}/${ceiling}`;
+}
+
 export function formatUsageBreakdown(usage: Pick<UsageTotals,
   "inputTokens" | "outputTokens" | "cacheReadTokens" | "cacheWriteTokens" | "reasoningTokens"
 >): string {

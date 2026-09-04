@@ -14,6 +14,7 @@ const SESSION: SessionInit = {
   sessionId: "s1",
   projectSlug: "proj",
   taskId: "T1",
+  continuesTask: null,
   attempt: 1,
   workflowId: "wf",
   riskTier: 0,
@@ -181,6 +182,7 @@ test("credential-shaped request and event values are scrubbed before SQLite", ()
   const shaped = `AK${"IA"}${"A".repeat(16)}`;
   createSession(db, {
     ...SESSION,
+    continuesTask: `prior-${shaped}`,
     requestText: `inspect ${shaped}`,
     configSnapshotJson: JSON.stringify({ safe: true, auth_token: shaped }),
   });
@@ -192,11 +194,13 @@ test("credential-shaped request and event values are scrubbed before SQLite", ()
     kind: "text.delta",
     text: `provider echoed ${shaped}`,
   }));
-  const session = db.prepare("SELECT request_text, config_snapshot_json FROM sessions WHERE session_id = 's1'").get() as {
+  const session = db.prepare("SELECT continues_task, request_text, config_snapshot_json FROM sessions WHERE session_id = 's1'").get() as {
+    continues_task: string;
     request_text: string;
     config_snapshot_json: string;
   };
   const event = db.prepare("SELECT payload_json FROM events").get() as { payload_json: string };
+  assert.equal(session.continues_task, "prior-[REDACTED]");
   assert.equal(session.request_text, "inspect [REDACTED]");
   assert.equal(session.request_text.includes(shaped), false);
   assert.equal(session.config_snapshot_json.includes(shaped), false);

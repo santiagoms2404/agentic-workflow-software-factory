@@ -5,7 +5,7 @@
   --mono: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   --radius: 16px;
   --desktop-font-size: 17px;
-  --session-card-height: 494px;
+  --session-card-height: 650px;
 
   /* Forest dark is the no-script fallback; runtime initialization resolves the stored/System choice. */
   --bg: #051F20;
@@ -345,15 +345,46 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible, summary:focus-v
 .session-filter-control, .session-filter-option { border: 1px solid var(--border-soft); border-radius: 8px; background: var(--panel-3); color: var(--dim); font: 13px var(--mono); cursor: pointer; }
 .session-filter-control { min-height: 32px; padding: 6px 9px; }
 .session-filter-control:hover, .session-filter-option:hover { border-color: var(--faint); color: var(--text); }
-.session-filter-control.selected, .session-filter-option.selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 24%, var(--panel-3)); color: var(--text); }
-.session-filter-control.partial { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--panel-3)); color: var(--text); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 48%, transparent); }
+.session-filter-control.selected, .session-filter-option.selected { border-color: color-mix(in srgb, var(--faint) 72%, var(--text)); color: var(--text); }
+.session-filter-control.partial { border-color: color-mix(in srgb, var(--faint) 72%, var(--border)); color: var(--text); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border) 70%, transparent); }
 .session-filter-select-all { color: var(--text); font-weight: 700; }
 .session-filter-options { min-width: 0; display: flex; flex-wrap: wrap; gap: 8px; }
 .session-filter-option { min-height: 42px; display: inline-flex; align-items: center; gap: 10px; padding: 7px 10px; text-align: left; }
 .session-filter-count { padding-left: 9px; border-left: 1px solid var(--border-soft); color: var(--faint); font-size: 11px; white-space: nowrap; }
 .session-filter-option.selected .session-filter-count { color: var(--text); }
 .sessions-grid { max-width: 1680px; margin: 0 auto; padding: 16px 28px 30px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
-.card-wrap { position: relative; min-width: 0; height: 452px; height: var(--session-card-height); }
+.session-stack, .card-wrap { position: relative; min-width: 0; height: var(--session-card-height); }
+.session-stack { display: flex; flex-direction: column; }
+.session-stack-deck { flex: none; display: flex; flex-direction: column; gap: 6px; padding: 0 6px 8px; }
+.session-stack-peek {
+  min-width: 0;
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: 72px minmax(74px, 1fr) max-content max-content max-content;
+  align-items: center;
+  gap: 8px;
+  margin-inline: var(--session-stack-inset);
+  padding: 9px 10px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--border) 78%, var(--faint));
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--panel-2) 74%, var(--faint));
+  box-shadow: 0 7px 18px color-mix(in srgb, var(--border) 24%, transparent);
+  color: var(--text);
+  font: 12px var(--mono);
+  text-align: left;
+  cursor: pointer;
+  transition: transform 160ms ease, border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+}
+.session-stack-peek:hover, .session-stack-peek:focus-visible { transform: translateY(-2px); border-color: var(--faint); background: color-mix(in srgb, var(--panel-2) 62%, var(--faint)); box-shadow: 0 9px 22px color-mix(in srgb, var(--border) 34%, transparent); }
+.session-stack-peek > span { min-width: 0; white-space: nowrap; }
+.session-stack-peek-id { color: var(--purple); font-weight: 700; }
+.session-stack-peek-workflow { overflow: hidden; color: var(--cyan); text-overflow: ellipsis; }
+.session-stack-peek-state { color: var(--dim); }
+.session-stack-peek small { color: var(--dim); font: inherit; }
+.session-stack-peek-calls, .session-stack-peek-usage { text-align: right; }
+.session-stack-front { position: relative; z-index: 1; flex: 1; min-height: 0; }
+.session-stack-front > .card-wrap { height: 100%; }
 .session-card {
   height: 100%;
   min-width: 0;
@@ -601,13 +632,13 @@ pre { max-height: 42vh; margin: 8px 0 0; padding: 12px 14px; overflow: auto; bor
 .plan-control-button { min-height: 34px; padding: 7px 11px; border: 1px solid var(--border-soft); border-radius: 8px; background: var(--surface); color: var(--dim); font: inherit; cursor: pointer; }
 .plan-type-controls .plan-control-button { min-width: 58px; }
 .plan-control-button:hover { border-color: var(--faint); }
-.plan-control-button.selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 24%, var(--panel-3)); color: var(--text); }
-.plan-control-button.partial { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--panel-3)); color: var(--text); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 48%, transparent); }
+.plan-control-button.selected { border-color: color-mix(in srgb, var(--faint) 72%, var(--text)); color: var(--text); }
+.plan-control-button.partial { border-color: color-mix(in srgb, var(--faint) 72%, var(--border)); color: var(--text); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border) 70%, transparent); }
 .select-all-control { color: var(--text); font-weight: 700; }
 .plan-card-row { width: 100%; display: flex; flex-wrap: nowrap; gap: 12px; padding: 2px 2px 12px; overflow-x: auto; overflow-y: hidden; overscroll-behavior-inline: contain; scrollbar-gutter: stable; }
 .plan-card { flex: 0 0 292px; min-height: 136px; padding: 13px; border: 1px solid var(--border-soft); border-radius: 11px; background: var(--surface); color: var(--text); text-align: left; cursor: pointer; }
 .plan-card:hover { border-color: var(--faint); }
-.plan-card.selected { border-color: var(--accent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 48%, transparent); }
+.plan-card.selected { border-color: color-mix(in srgb, var(--faint) 72%, var(--text)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border) 70%, transparent); }
 .plan-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
 .plan-card-heading strong { line-height: 1.3; }
 .plan-label, .parent-spine-label { display: inline-flex; width: fit-content; padding: 2px 7px; border: 1px solid var(--border-soft); border-radius: 999px; color: var(--dim); font: 11px var(--mono); }
@@ -693,7 +724,9 @@ pre { max-height: 42vh; margin: 8px 0 0; padding: 12px 14px; overflow: auto; bor
   .live-indicator { margin-left: auto; }
   .state-ribbon-wrap, .agent-roster, .waterfall-section, .owner-gate-card, .inline-phase-detail, .settings-route section { margin-left: 12px; margin-right: 12px; }
   .run-strip { padding: 12px; }
-  .card-wrap { height: 420px; }
+  .session-stack-peek { min-height: 72px; grid-template-columns: auto minmax(0, 1fr) auto; row-gap: 4px; }
+  .session-stack-peek-calls { grid-column: 2; text-align: left; }
+  .session-stack-peek-usage { grid-column: 3; }
   .archive-control { opacity: 1; }
   .waterfall-heading { align-items: flex-start; }
   .timeline-access { justify-content: flex-end; flex-wrap: wrap; }

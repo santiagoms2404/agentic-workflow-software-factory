@@ -173,6 +173,7 @@ function card(db: DatabaseSync, row: SessionRow): SessionCard {
     sessionId: row.session_id,
     project: row.project_slug,
     taskId: row.task_id,
+    continuesTask: row.continues_task,
     attempt: row.attempt,
     workflowId: row.workflow_id,
     riskTier: row.risk_tier,

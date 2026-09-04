@@ -70,7 +70,9 @@ test("plan controls use accessible dashboard toggle buttons", () => {
   assert.match(picker, /@keydown="moveFilter\(\$event, option\.value\)"/u);
   assert.match(css, /\.plan-control-button\s*\{[^}]*background:\s*var\(--surface\)/su);
   assert.match(css, /\.plan-control-button:hover\s*\{[^}]*border-color:\s*var\(--faint\)/su);
-  assert.match(css, /\.plan-control-button\.selected\s*\{[^}]*background:\s*color-mix\([^}]*var\(--accent\)[^}]*var\(--panel-3\)/su);
+  const selected = css.match(/\.plan-control-button\.selected\s*\{[^}]*\}/su)?.[0] ?? "";
+  assert.match(selected, /border-color:\s*color-mix\([^}]*var\(--faint\)[^}]*var\(--text\)/su);
+  assert.doesNotMatch(selected, /background\s*:|--accent/su);
 });
 
 test("backlog selection seeds once from the first non-empty response", () => {

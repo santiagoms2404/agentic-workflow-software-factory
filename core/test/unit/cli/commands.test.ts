@@ -10,7 +10,7 @@ import { loadConfig } from "../../../src/config/load.ts";
 import { cancelCommand } from "../../../src/cli/commands/cancel.ts";
 import { AlreadyInState } from "../../../src/state/errors.ts";
 import { SealedAttempt } from "../../../src/persistence/attempt-lock.ts";
-import { locateAttempt, nextRevision, persistAttempt, readAttempt } from "../../../src/cli/commands/attempt.ts";
+import { locateAttempt, nextRevision, persistAttempt, readAttempt, taskRoot } from "../../../src/cli/commands/attempt.ts";
 import { newCommand } from "../../../src/cli/commands/new.ts";
 import { raiseCommand } from "../../../src/cli/commands/raise.ts";
 import { retryCommand } from "../../../src/cli/commands/retry.ts";
@@ -186,6 +186,90 @@ test("status evidence names failed checks, the last envelope, and retained proce
   assert.match(lines, /changedFiles/);
   assert.match(lines, /exit=2/);
   assert.match(lines, /command=\["pi","--mode","json"\]/);
+});
+
+test("awsf new --continues records an existing task in the same project", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-cli-continues-"));
+  try {
+    const repo = repository(root);
+    const stateRoot = join(root, "state");
+    await newCommand({
+      stateRoot,
+      project: "agentic-workflow-software-factory",
+      taskId: "prior-task",
+      repository: repo,
+      request: "retain the findings",
+      workflow: "build",
+      tier: 1,
+    });
+    const errors: string[] = [];
+    const exitCode = await main({
+      argv: [
+        "new", "follow-up", "continue the prior findings", "--continues", "prior-task",
+        "--state-root", stateRoot, "--config", resolve("awsf.config.yaml"),
+      ],
+      cwd: repo,
+      writeOut: () => {},
+      writeError: (line) => errors.push(line),
+    });
+    assert.equal(exitCode, 0, errors.join("\n"));
+    const created = await readAttempt(join(taskRoot(stateRoot, "agentic-workflow-software-factory", "follow-up"), "1"));
+    assert.equal(created.continuesTask, "prior-task");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("new refuses a missing continuation before writing the new task", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-cli-continues-missing-"));
+  try {
+    let projections = 0;
+    const stateRoot = join(root, "state");
+    await assert.rejects(
+      newCommand({
+        stateRoot,
+        project: "project",
+        taskId: "follow-up",
+        continuesTask: "missing-task",
+        repository: root,
+        request: "must not be recorded",
+        workflow: "build",
+        tier: 1,
+        projectRecord: () => { projections += 1; },
+      }),
+      /project\/follow-up cannot continue missing task project\/missing-task/u,
+    );
+    assert.equal(projections, 0);
+    assert.equal(existsSync(taskRoot(stateRoot, "project", "follow-up")), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("new refuses a self continuation before writing the task", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-cli-continues-self-"));
+  try {
+    let projections = 0;
+    const stateRoot = join(root, "state");
+    await assert.rejects(
+      newCommand({
+        stateRoot,
+        project: "project",
+        taskId: "same-task",
+        continuesTask: "same-task",
+        repository: root,
+        request: "must not be recorded",
+        workflow: "build",
+        tier: 1,
+        projectRecord: () => { projections += 1; },
+      }),
+      /project\/same-task cannot continue itself/u,
+    );
+    assert.equal(projections, 0);
+    assert.equal(existsSync(taskRoot(stateRoot, "project", "same-task")), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("new, start, status, cancel, and retry preserve the lifecycle and task-lifetime budget", async () => {

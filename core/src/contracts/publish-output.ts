@@ -77,6 +77,7 @@ export const PublishedAttemptStatusSchema = Type.Object(
     sessionId: Type.String({ minLength: 1 }),
     project: Type.String({ minLength: 1 }),
     taskId: Type.String({ minLength: 1 }),
+    continuesTask: NullableStringSchema,
     attempt: Type.Integer({ minimum: 1 }),
     repository: Type.String({ minLength: 1 }),
     worktree: NullableStringSchema,

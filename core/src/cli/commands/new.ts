@@ -16,6 +16,7 @@ export interface NewCommandOptions {
   readonly stateRoot: string;
   readonly project: string;
   readonly taskId: string;
+  readonly continuesTask?: string;
   readonly repository: string;
   readonly request: string;
   readonly workflow: string;
@@ -36,6 +37,17 @@ export interface NewCommandOptions {
 /** Mint the task's first attempt at DRAFT. Later attempts belong only to retry. */
 export async function newCommand(options: NewCommandOptions): Promise<{ attemptDir: string; status: AttemptStatus }> {
   const root = taskRoot(options.stateRoot, options.project, options.taskId);
+  if (options.continuesTask === options.taskId) {
+    throw new Error(`${options.project}/${options.taskId} cannot continue itself`);
+  }
+  if (options.continuesTask !== undefined) {
+    const continuedRoot = taskRoot(options.stateRoot, options.project, options.continuesTask);
+    if (await latestAttemptNumber(continuedRoot) === null) {
+      throw new Error(
+        `${options.project}/${options.taskId} cannot continue missing task ${options.project}/${options.continuesTask}`,
+      );
+    }
+  }
   const existing = await latestAttemptNumber(root);
   if (existing !== null) {
     throw new Error(`${options.project}/${options.taskId} already has attempt ${existing}; use \`awsf retry\` after it is terminal`);
@@ -55,6 +67,7 @@ export async function newCommand(options: NewCommandOptions): Promise<{ attemptD
     sessionId: (options.sessionId ?? randomUUID)(),
     project: options.project,
     taskId: options.taskId,
+    continuesTask: options.continuesTask ?? null,
     attempt,
     repository: resolve(options.repository),
     worktree: null,

@@ -291,10 +291,9 @@ test("the bounded fixture window is RUNNING in WAL and rebuild preserves its fin
  * assumption is self-consistent.
  */
 function stripOwnerReentries(attemptDir: string): void {
-  // `ceiling` and `ceilingGrants` join the strip list because the ceiling
-  // became an owner-set number after the counter did: a genuine pre-upgrade
-  // attempt is missing all three, and the shim must answer for all three.
-  const stripped = new Set(["ownerReentries", "ceiling", "ceilingGrants"]);
+  // Later required status fields join the strip list too: a genuine
+  // pre-upgrade attempt is missing them, and the shim must answer honestly.
+  const stripped = new Set(["ownerReentries", "ceiling", "ceilingGrants", "continuesTask"]);
   const drop = (value: unknown): unknown => {
     if (Array.isArray(value)) return value.map(drop);
     if (value === null || typeof value !== "object") return value;
@@ -342,6 +341,7 @@ test("db rebuild replays a journal written before the owner re-entry counter exi
     assert.equal("ownerReentries" in raw.event.next.budget, false, "the journal must be missing the field");
     assert.equal("ceiling" in raw.event.next.budget, false, "and the ceiling the dial added after it");
     assert.equal("ceilingGrants" in raw.event.next, false, "and the grant ledger");
+    assert.equal("continuesTask" in raw.event.next, false, "and the later continuation edge");
 
     const report = await rebuildCommand(stateRoot);
     assert.equal(report.ok, true, report.ok ? undefined : report.reason);
@@ -358,6 +358,7 @@ test("db rebuild replays a journal written before the owner re-entry counter exi
       // Same rule for the ceiling: the tier default is the number that attempt
       // actually ran under, so the rebuild replays it rather than inventing one.
       assert.equal(session?.call_ceiling, 3);
+      assert.equal(session?.continues_task, null, "an unrecorded legacy edge remains unknown");
     } finally { rebuilt.close(); }
 
     // The reader half of the same shim, on the same stripped bytes.
@@ -365,6 +366,33 @@ test("db rebuild replays a journal written before the owner re-entry counter exi
     assert.equal(read.budget.ownerReentries, 0);
     assert.equal(read.budget.ceiling, undefined, "an absent ceiling stays absent rather than claiming one was recorded");
     assert.deepEqual(read.ceilingGrants, []);
+    assert.equal(read.continuesTask, null);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("db rebuild preserves a task continuation from the journal", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-rebuild-continuation-"));
+  try {
+    const stateRoot = join(root, "state");
+    await newCommand({
+      stateRoot, project: "project", taskId: "prior-task", repository: root,
+      request: "record the first task", workflow: "build", tier: 1,
+      sessionId: () => "prior-session", now: () => "2026-08-08T00:00:00.000Z",
+    });
+    await newCommand({
+      stateRoot, project: "project", taskId: "continued-task", continuesTask: "prior-task", repository: root,
+      request: "reuse the findings", workflow: "build", tier: 1,
+      sessionId: () => "continued-session", now: () => "2026-08-08T01:00:00.000Z",
+    });
+
+    const report = await rebuildCommand(stateRoot);
+    assert.equal(report.ok, true, report.ok ? undefined : report.reason);
+    assert.equal(report.sessions, 2);
+    const rebuilt = openDatabase(join(stateRoot, "awsf.db"), { readonly: true });
+    try {
+      assert.equal(getSession(rebuilt, "prior-session")?.continues_task, null);
+      assert.equal(getSession(rebuilt, "continued-session")?.continues_task, "prior-task");
+    } finally { rebuilt.close(); }
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 

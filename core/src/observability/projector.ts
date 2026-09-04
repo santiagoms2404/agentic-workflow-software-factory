@@ -49,6 +49,7 @@ export interface SessionInit {
   sessionId: string;
   projectSlug: string;
   taskId: string;
+  continuesTask: string | null;
   attempt: number;
   workflowId: string;
   riskTier: 0 | 1 | 2;
@@ -190,13 +191,14 @@ export function projectAttemptStatus(
 export function createSession(db: DatabaseSync, init: SessionInit): void {
   db.prepare(
     `INSERT OR IGNORE INTO sessions
-       (session_id, project_slug, task_id, attempt, workflow_id, risk_tier, is_protected,
+       (session_id, project_slug, task_id, continues_task, attempt, workflow_id, risk_tier, is_protected,
         lifecycle_state, request_text, call_ceiling, started_at, updated_at, config_snapshot_json, journal_path)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'DRAFT', ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', ?, ?, ?, ?, ?, ?)`,
   ).run(
     init.sessionId,
     scrubCredentialString(init.projectSlug),
     scrubCredentialString(init.taskId),
+    init.continuesTask === null ? null : scrubCredentialString(init.continuesTask),
     init.attempt,
     scrubCredentialString(init.workflowId),
     init.riskTier,

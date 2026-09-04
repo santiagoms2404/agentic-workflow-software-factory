@@ -345,6 +345,7 @@ export function validPublishOutput(): PublishOutput {
     sessionId: "publish-session",
     project: "project",
     taskId: "T01",
+    continuesTask: null,
     attempt: 1,
     repository: "/tmp/project",
     worktree: "/tmp/worktree",

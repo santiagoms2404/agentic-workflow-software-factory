@@ -539,6 +539,7 @@ const SESSION: SessionInit = {
   sessionId: "quota-projection-session",
   projectSlug: "fixture",
   taskId: "T17",
+  continuesTask: null,
   attempt: 1,
   workflowId: "intake",
   riskTier: 0,

@@ -4,6 +4,7 @@ import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { createApiRouter } from "../../../src/api/routes.ts";
 import { processesForSession } from "../../../src/observability/queries.ts";
+import { createSession } from "../../../src/observability/projector.ts";
 import { openDatabase, type OpenDatabaseOptions } from "../../../src/observability/sqlite.ts";
 import { writeLandingSummary } from "../../../src/persistence/landing-summary.ts";
 import { loadCatalog } from "../../../src/registry/catalog.ts";
@@ -118,6 +119,33 @@ test("sessions embeds ordered phases and agents in one response", async () => {
     router.close();
     fixture.close();
   }
+});
+
+test("sessions expose declared continuations and honest nulls", async () => {
+  const fixture = apiFixture();
+  createSession(fixture.writer, {
+    sessionId: "session-2",
+    projectSlug: "test-project",
+    taskId: "T24",
+    continuesTask: "T23",
+    attempt: 1,
+    workflowId: "build",
+    riskTier: 1,
+    isProtected: false,
+    requestText: "Continue the prior task",
+    callCeiling: 3,
+    configSnapshotJson: "{}",
+    journalPath: "state://continued-journal.jsonl",
+    startedAt: "2026-08-08T13:00:00.000Z",
+  });
+  const router = createApiRouter({ dbPath: fixture.path, config: fixture.config });
+  try {
+    const response = await router.dispatch(request("/api/v1/sessions"));
+    assert.equal(response.status, 200);
+    const sessions = (response.body as SessionsResponse).sessions;
+    assert.equal(sessions.find((session) => session.sessionId === "session-2")?.continuesTask, "T23");
+    assert.equal(sessions.find((session) => session.sessionId === "session-1")?.continuesTask, null);
+  } finally { router.close(); fixture.close(); }
 });
 
 test("legacy null sandbox columns stay null at the API boundary", async () => {

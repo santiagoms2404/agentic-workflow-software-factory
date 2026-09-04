@@ -89,6 +89,7 @@ function awaiting(fixture: BareFixture, base: string, candidate: string): Attemp
     sessionId: "publish-journey-session",
     project: PROJECT,
     taskId: TASK,
+    continuesTask: null,
     attempt: 1,
     repository: fixture.work,
     worktree: join(fixture.root, "candidate-worktree"),

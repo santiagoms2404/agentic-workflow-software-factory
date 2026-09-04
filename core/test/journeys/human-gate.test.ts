@@ -45,6 +45,7 @@ function awaiting(repository: string, candidate: string): AttemptStatus {
     sessionId: "owner-gate-session",
     project: PROJECT,
     taskId: TASK,
+    continuesTask: null,
     attempt: 1,
     repository,
     worktree: join(repository, "candidate-worktree"),

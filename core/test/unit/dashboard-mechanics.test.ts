@@ -62,7 +62,8 @@ test("motion, live growth, focus, responsive containment, and typed event labels
   assert.match(css, /radial-gradient\(1100px 700px/);
   assert.match(css, /@keyframes live-pulse/);
   assert.match(css, /@keyframes running-glow/);
-  assert.match(css, /\.card-wrap[^}]*height:\s*452px/s);
+  assert.match(css, /--session-card-height:\s*650px/s);
+  assert.match(css, /\.session-stack, \.card-wrap[^}]*height:\s*var\(--session-card-height\)/s);
   assert.match(css, /\.session-card[^}]*overflow:\s*hidden/s);
   assert.match(css, /\.session-card[^{]*\{[^}]*transition:/s);
   assert.match(css, /\.phase-block[^{]*\{[^}]*transition: width 500ms linear/);
