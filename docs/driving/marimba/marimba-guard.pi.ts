@@ -76,10 +76,10 @@ function delegationReason(toolName: string): string {
 
 export default function (pi: ExtensionAPI): void {
   pi.on("session_start", async (_event, ctx) => {
-    // The only thing that distinguishes "guarded" from "loaded nothing and said
-    // nothing". It never fails the session: a session-start hook that throws is
-    // a new way to break a session in exchange for nothing.
+    // The status is consumed by the optional marimba-aware Pi footer. The
+    // notification remains the human-visible proof that this extension loaded.
     try {
+      ctx.ui.setStatus("marimba-guard", "active");
       ctx.ui.notify(
         `marimba guard active — ${String(OWNER_ACTS.length)} owner acts and ` +
           `${String(DELEGATION_STEMS.length)} delegation stems denied at the tool surface. ` +
