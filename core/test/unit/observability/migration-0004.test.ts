@@ -123,7 +123,7 @@ test("migration 0004 preserves sessions, child constraints, and is a no-op on it
 
     runMigrations(db);
 
-    assert.equal(scalar(db, "PRAGMA user_version", "user_version"), 5);
+    assert.equal(scalar(db, "PRAGMA user_version", "user_version"), 6);
     // Compare only the columns that existed before this run. 0004's rebuild must
     // lose nothing, but a LATER migration adding a column is not a loss - and a
     // bare deepEqual would call it one, failing this test on every column added.
@@ -170,7 +170,7 @@ test("migration 0004 preserves sessions, child constraints, and is a no-op on it
 
     runMigrations(db);
 
-    assert.equal(scalar(db, "PRAGMA user_version", "user_version"), 5);
+    assert.equal(scalar(db, "PRAGMA user_version", "user_version"), 6);
     assert.equal(scalar(db, "PRAGMA schema_version", "schema_version"), schemaVersion);
     assert.equal(scalar(db, "SELECT total_changes() AS total_changes", "total_changes"), totalChanges);
     assert.deepEqual(

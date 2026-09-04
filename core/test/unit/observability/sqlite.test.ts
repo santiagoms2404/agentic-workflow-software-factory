@@ -25,13 +25,13 @@ test("startup feature probe passes: WAL, STRICT tables, json_valid", () => {
   assert.doesNotThrow(() => probeFeatures());
 });
 
-test("openDatabase applies migrations and lands on user_version 5", () => {
+test("openDatabase applies migrations and lands on user_version 6", () => {
   const dir = tempDir();
   try {
     const db = openDatabase(join(dir, "awsf.db"));
     try {
       const row = db.prepare("PRAGMA user_version").get() as { user_version: number };
-      assert.equal(row.user_version, 5);
+      assert.equal(row.user_version, 6);
       const tables = (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as { name: string }[])
         .map((t) => t.name)
         .sort();
@@ -51,7 +51,7 @@ test("re-opening an already-migrated database does not re-apply or throw", () =>
     openDatabase(dbPath).close();
     const db2 = openDatabase(dbPath);
     try {
-      assert.equal((db2.prepare("PRAGMA user_version").get() as { user_version: number }).user_version, 5);
+      assert.equal((db2.prepare("PRAGMA user_version").get() as { user_version: number }).user_version, 6);
     } finally {
       db2.close();
     }
@@ -82,7 +82,7 @@ test("refusal direction 2: a database older than the binary is migrated forward,
     // migrations this binary ships — and must be brought forward, not refused.
     const db = openDatabase(dbPath);
     try {
-      assert.equal((db.prepare("PRAGMA user_version").get() as { user_version: number }).user_version, 5);
+      assert.equal((db.prepare("PRAGMA user_version").get() as { user_version: number }).user_version, 6);
     } finally {
       db.close();
     }
@@ -117,7 +117,7 @@ test("migration 0002 preserves legacy agent rows as explicit null sandbox eviden
         sandbox_badge: string | null; sandbox_mechanism: string | null;
       };
       assert.deepEqual({ ...row }, { sandbox_badge: null, sandbox_mechanism: null });
-      assert.equal((migrated.prepare("PRAGMA user_version").get() as { user_version: number }).user_version, 5);
+      assert.equal((migrated.prepare("PRAGMA user_version").get() as { user_version: number }).user_version, 6);
     } finally { migrated.close(); }
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
@@ -150,7 +150,7 @@ test("migration 0003 gives a legacy session zero owner re-entries, which is the 
         "SELECT corrections_auto, corrections_owner, owner_reentries FROM sessions WHERE session_id='legacy'",
       ).get() as { corrections_auto: number; corrections_owner: number; owner_reentries: number };
       assert.deepEqual({ ...row }, { corrections_auto: 1, corrections_owner: 1, owner_reentries: 0 });
-      assert.equal((migrated.prepare("PRAGMA user_version").get() as { user_version: number }).user_version, 5);
+      assert.equal((migrated.prepare("PRAGMA user_version").get() as { user_version: number }).user_version, 6);
     } finally { migrated.close(); }
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
