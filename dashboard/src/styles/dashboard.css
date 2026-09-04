@@ -439,19 +439,19 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible, summary:focus-v
   --session-stack-tone-text: color-mix(in srgb, var(--bg) 96%, var(--panel));
 }
 :root[data-mode="dark"] .session-stack-tone-2 {
-  --session-stack-tone: color-mix(in srgb, var(--border) 29%, var(--dim));
+  --session-stack-tone: color-mix(in srgb, var(--border) 30%, var(--dim));
   --session-stack-tone-text: color-mix(in srgb, var(--bg) 96%, var(--panel));
 }
 :root[data-mode="dark"] .session-stack-tone-3 {
-  --session-stack-tone: color-mix(in srgb, var(--border) 20%, var(--dim));
+  --session-stack-tone: color-mix(in srgb, var(--panel-2) 15%, var(--dim));
   --session-stack-tone-text: color-mix(in srgb, var(--bg) 96%, var(--panel));
 }
 :root[data-mode="dark"] .session-stack-tone-4 {
-  --session-stack-tone: color-mix(in srgb, var(--border) 11%, var(--dim));
+  --session-stack-tone: color-mix(in srgb, var(--panel) 8%, var(--dim));
   --session-stack-tone-text: color-mix(in srgb, var(--bg) 96%, var(--panel));
 }
 :root[data-mode="dark"] .session-stack-tone-5 {
-  --session-stack-tone: color-mix(in srgb, var(--border) 2%, var(--dim));
+  --session-stack-tone: color-mix(in srgb, var(--bg) 2%, var(--dim));
   --session-stack-tone-text: color-mix(in srgb, var(--bg) 96%, var(--panel));
 }
 :root[data-mode="light"] .session-stack-tone-1 {
@@ -459,15 +459,15 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible, summary:focus-v
   --session-stack-tone-text: color-mix(in srgb, var(--text) 96%, var(--dim));
 }
 :root[data-mode="light"] .session-stack-tone-2 {
-  --session-stack-tone: color-mix(in srgb, var(--border) 89%, var(--dim));
+  --session-stack-tone: color-mix(in srgb, var(--panel) 50%, var(--dim));
   --session-stack-tone-text: color-mix(in srgb, var(--text) 96%, var(--dim));
 }
 :root[data-mode="light"] .session-stack-tone-3 {
-  --session-stack-tone: color-mix(in srgb, var(--border) 80%, var(--dim));
+  --session-stack-tone: color-mix(in srgb, var(--bg) 49%, var(--dim));
   --session-stack-tone-text: color-mix(in srgb, var(--text) 96%, var(--dim));
 }
 :root[data-mode="light"] .session-stack-tone-4 {
-  --session-stack-tone: color-mix(in srgb, var(--border) 71%, var(--dim));
+  --session-stack-tone: color-mix(in srgb, var(--panel) 41%, var(--dim));
   --session-stack-tone-text: color-mix(in srgb, var(--text) 96%, var(--dim));
 }
 :root[data-mode="light"] .session-stack-tone-5 {

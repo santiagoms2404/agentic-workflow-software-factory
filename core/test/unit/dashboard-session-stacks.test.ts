@@ -157,6 +157,13 @@ test("four-run stacks assign consecutive tones around the untoned default withou
   assert.equal(promotedTones.get(middle.sessionId), "session-stack-tone-2", "the remaining peek follows without a gap");
 });
 
+test("depths beyond the finite ramp hold its last tone", () => {
+  const lastTone = `session-stack-tone-${SESSION_STACK_TONE_COUNT}`;
+  assert.equal(sessionStackToneClass(SESSION_STACK_TONE_COUNT), lastTone);
+  assert.equal(sessionStackToneClass(SESSION_STACK_TONE_COUNT + 1), lastTone);
+  assert.equal(sessionStackToneClass(SESSION_STACK_TONE_COUNT + 20), lastTone);
+});
+
 test("a promoted peek carries its named positional tone to the front", () => {
   const ordered = [run("oldest", "task", 1), run("middle", "task", 2), run("default", "task", 3)];
   const selected = ordered[0]!;
@@ -253,6 +260,7 @@ test("the mode-specific tone ramps recede in opposite directions without blendin
       : luminance(left) - luminance(right))[0]!;
     const backgrounds: string[] = [];
     const backgroundColors: Rgb[] = [];
+    const rampTokens = new Set<string>();
     let previousLuminance = luminance(surfaceExtreme);
 
     for (let step = 1; step <= SESSION_STACK_TONE_COUNT; step += 1) {
@@ -263,6 +271,7 @@ test("the mode-specific tone ramps recede in opposite directions without blendin
       const foregroundColor = resolveDefaultColor(foreground, palette);
       const backgroundTokens = [...background.matchAll(/var\((--[a-z0-9-]+)\)/giu)].map((match) => match[1]);
       const currentLuminance = luminance(backgroundColor);
+      for (const token of backgroundTokens) if (token !== undefined) rampTokens.add(token);
       backgrounds.push(background);
       backgroundColors.push(backgroundColor);
 
@@ -283,6 +292,7 @@ test("the mode-specific tone ramps recede in opposite directions without blendin
       assert.ok(distance > 10, `${mode} adjacent tones ${index} and ${index + 1} must remain visibly distinct`);
     }
     assert.equal(new Set(backgrounds).size, SESSION_STACK_TONE_COUNT);
+    assert.ok(rampTokens.size > 2, `${mode} ramp must draw from more than two distinct palette tokens`);
     slopes.push(luminance(backgroundColors.at(-1)!) - luminance(backgroundColors[0]!));
   }
 
