@@ -2,8 +2,11 @@ import type { LifecycleState, SessionCard } from "../shared/types.ts";
 
 export type StackableSession = Pick<
   SessionCard,
-  "sessionId" | "taskId" | "continuesTask" | "attempt" | "startedAt" | "state"
+  "sessionId" | "project" | "taskId" | "continuesTask" | "attempt" | "startedAt" | "state"
 >;
+
+export const MAX_SESSION_STACK_BANDS = 3;
+export const SESSION_STACK_TONE_COUNT = 5;
 
 export interface SessionStack<Session extends StackableSession = StackableSession> {
   readonly key: string;
@@ -11,6 +14,7 @@ export interface SessionStack<Session extends StackableSession = StackableSessio
 }
 
 function related(left: StackableSession, right: StackableSession): boolean {
+  if (left.project !== right.project) return false;
   return (left.taskId === right.taskId && left.attempt !== right.attempt)
     || left.continuesTask === right.taskId
     || right.continuesTask === left.taskId;
@@ -84,6 +88,29 @@ export function orderSessionStack<Session extends StackableSession>(
     ...sessions.filter((session) => session.sessionId !== front.sessionId).sort(chronological),
     front,
   ];
+}
+
+export interface SessionPeekWindow<Session extends StackableSession = StackableSession> {
+  readonly visible: readonly Session[];
+  readonly hiddenCount: number;
+}
+
+/** Keep the front card tall enough by replacing surplus rear peeks with one band. */
+export function sessionPeekWindow<Session extends StackableSession>(
+  ordered: readonly Session[],
+): SessionPeekWindow<Session> {
+  const peeks = ordered.slice(0, -1);
+  if (peeks.length <= MAX_SESSION_STACK_BANDS) return { visible: peeks, hiddenCount: 0 };
+  const visibleCount = MAX_SESSION_STACK_BANDS - 1;
+  return {
+    visible: peeks.slice(-visibleCount),
+    hiddenCount: peeks.length - visibleCount,
+  };
+}
+
+/** A five-step ramp repeats without assigning one tone to adjacent bands. */
+export function sessionStackToneClass(logicalIndex: number): string {
+  return `session-stack-tone-${(logicalIndex % SESSION_STACK_TONE_COUNT) + 1}`;
 }
 
 /**

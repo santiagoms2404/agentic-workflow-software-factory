@@ -354,36 +354,98 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible, summary:focus-v
 .session-filter-option.selected .session-filter-count { color: var(--text); }
 .sessions-grid { max-width: 1680px; margin: 0 auto; padding: 16px 28px 30px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
 .session-stack, .card-wrap { position: relative; min-width: 0; height: var(--session-card-height); }
-.session-stack { display: flex; flex-direction: column; }
-.session-stack-deck { flex: none; display: flex; flex-direction: column; gap: 6px; padding: 0 6px 8px; }
+.session-stack {
+  --session-stack-band-height: 52px;
+  --session-stack-card-tail: 18px;
+  display: flex;
+  flex-direction: column;
+}
+.session-stack-deck { position: relative; z-index: 0; flex: none; display: flex; flex-direction: column; gap: 0; padding: 0; }
 .session-stack-peek {
+  width: 100%;
   min-width: 0;
-  min-height: 58px;
+  height: calc(var(--session-stack-band-height) + var(--session-stack-card-tail));
+  min-height: calc(var(--session-stack-band-height) + var(--session-stack-card-tail));
+  flex: none;
   display: grid;
-  grid-template-columns: 72px minmax(74px, 1fr) max-content max-content max-content;
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  align-content: center;
   align-items: center;
-  gap: 8px;
-  margin-inline: var(--session-stack-inset);
-  padding: 9px 10px;
-  overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--border) 78%, var(--faint));
-  border-radius: 11px;
-  background: color-mix(in srgb, var(--panel-2) 74%, var(--faint));
-  box-shadow: 0 7px 18px color-mix(in srgb, var(--border) 24%, transparent);
-  color: var(--text);
-  font: 12px var(--mono);
+  column-gap: 8px;
+  row-gap: 3px;
+  margin: 0 0 calc(-1 * var(--session-stack-card-tail));
+  padding: 5px 12px calc(5px + var(--session-stack-card-tail));
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  background: var(--session-stack-tone);
+  box-shadow: 0 12px 34px var(--shadow-color);
+  color: var(--session-stack-tone-text);
+  font: 12px/1.25 var(--mono);
   text-align: left;
   cursor: pointer;
-  transition: transform 160ms ease, border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+  appearance: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
 }
-.session-stack-peek:hover, .session-stack-peek:focus-visible { transform: translateY(-2px); border-color: var(--faint); background: color-mix(in srgb, var(--panel-2) 62%, var(--faint)); box-shadow: 0 9px 22px color-mix(in srgb, var(--border) 34%, transparent); }
-.session-stack-peek > span { min-width: 0; white-space: nowrap; }
-.session-stack-peek-id { color: var(--purple); font-weight: 700; }
-.session-stack-peek-workflow { overflow: hidden; color: var(--cyan); text-overflow: ellipsis; }
-.session-stack-peek-state { color: var(--dim); }
-.session-stack-peek small { color: var(--dim); font: inherit; }
-.session-stack-peek-calls, .session-stack-peek-usage { text-align: right; }
-.session-stack-front { position: relative; z-index: 1; flex: 1; min-height: 0; }
+.session-stack-peek:hover, .session-stack-peek:focus-visible { outline-color: color-mix(in srgb, var(--session-stack-tone-text) 72%, var(--border)); border-color: color-mix(in srgb, var(--session-stack-tone-text) 58%, var(--border)); box-shadow: 0 14px 36px var(--shadow-color); }
+.session-stack-peek > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.session-stack-peek-id { grid-column: 1; grid-row: 1; font-weight: 700; }
+.session-stack-peek-workflow { grid-column: 2; grid-row: 1; }
+.session-stack-peek-state { grid-column: 3; grid-row: 1; text-align: right; }
+.session-stack-peek small { color: inherit; font: inherit; opacity: .78; }
+.session-stack-peek-calls { grid-column: 1; grid-row: 2; }
+.session-stack-peek-usage { grid-column: 2 / 4; grid-row: 2; text-align: right; }
+.session-stack-overflow {
+  width: 100%;
+  min-width: 0;
+  height: calc(var(--session-stack-band-height) + var(--session-stack-card-tail));
+  min-height: calc(var(--session-stack-band-height) + var(--session-stack-card-tail));
+  flex: none;
+  display: flex;
+  align-items: center;
+  margin: 0 0 calc(-1 * var(--session-stack-card-tail));
+  padding: 5px 12px calc(5px + var(--session-stack-card-tail));
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  background: var(--session-stack-tone);
+  box-shadow: 0 12px 34px var(--shadow-color);
+  color: var(--session-stack-tone-text);
+  font: 700 12px/1.25 var(--mono);
+}
+.session-stack-current-control, .session-stack-hidden-control {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+.session-stack-tone-1 {
+  --session-stack-tone: color-mix(in srgb, var(--bg) 82%, var(--panel));
+  --session-stack-tone-text: color-mix(in srgb, var(--text) 92%, var(--dim));
+}
+.session-stack-tone-2 {
+  --session-stack-tone: color-mix(in srgb, var(--panel) 76%, var(--panel-2));
+  --session-stack-tone-text: color-mix(in srgb, var(--text) 90%, var(--dim));
+}
+.session-stack-tone-3 {
+  --session-stack-tone: color-mix(in srgb, var(--panel-2) 74%, var(--border));
+  --session-stack-tone-text: color-mix(in srgb, var(--text) 88%, var(--dim));
+}
+.session-stack-tone-4 {
+  --session-stack-tone: color-mix(in srgb, var(--border) 66%, var(--dim));
+  --session-stack-tone-text: color-mix(in srgb, var(--bg) 90%, var(--panel));
+}
+.session-stack-tone-5 {
+  --session-stack-tone: color-mix(in srgb, var(--dim) 84%, var(--border));
+  --session-stack-tone-text: color-mix(in srgb, var(--bg) 88%, var(--panel));
+}
+:root[data-mode="light"] .session-stack-tone-4 { --session-stack-tone-text: color-mix(in srgb, var(--text) 90%, var(--dim)); }
+.session-stack-front { position: relative; z-index: 1; flex: 1; min-height: calc(var(--session-card-height) - var(--session-stack-band-height) - var(--session-stack-band-height) - var(--session-stack-band-height)); }
 .session-stack-front > .card-wrap { height: 100%; }
 .session-card {
   height: 100%;
@@ -724,9 +786,8 @@ pre { max-height: 42vh; margin: 8px 0 0; padding: 12px 14px; overflow: auto; bor
   .live-indicator { margin-left: auto; }
   .state-ribbon-wrap, .agent-roster, .waterfall-section, .owner-gate-card, .inline-phase-detail, .settings-route section { margin-left: 12px; margin-right: 12px; }
   .run-strip { padding: 12px; }
-  .session-stack-peek { min-height: 72px; grid-template-columns: auto minmax(0, 1fr) auto; row-gap: 4px; }
-  .session-stack-peek-calls { grid-column: 2; text-align: left; }
-  .session-stack-peek-usage { grid-column: 3; }
+  .session-stack { --session-stack-band-height: 66px; }
+  .session-stack-peek, .session-stack-overflow { font-size: 10px; }
   .archive-control { opacity: 1; }
   .waterfall-heading { align-items: flex-start; }
   .timeline-access { justify-content: flex-end; flex-wrap: wrap; }
