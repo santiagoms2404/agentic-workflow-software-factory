@@ -1455,6 +1455,38 @@ NEW leaks body: true</code></pre>
     <h3>The pre-landing preview rule held</h3>
     <p>The owner's standing instruction — build the candidate, put it on screen, and only then hand over <code>journey</code> and <code>land</code> — was followed on both runs of this session, and the second landing was reviewed on screen before it was authorised rather than after. One detail worth recording: the owner's own damage-control guard denies reads under the built-asset directory, so the served bundle could not be grepped for the feature markers. It was <em>built moments before serving</em> instead, which is current by construction rather than by inspection — a weaker guarantee, and the reason the grep check remains the right tool when a bundle's provenance is unknown.</p>
   </details>
+
+  <details>
+    <summary>2026-09-04 — a journey after a rework wedges the attempt: two defects that lock landing behind a projection that cannot be rebuilt</summary>
+
+    <p>A third session carried the same feature further and hit a <strong>deadlock with no exit inside the lifecycle</strong>. Both defects are verified in source below; the wedge is the pair of them meeting, and neither alone would have blocked anything.</p>
+
+    <h3>The journey phase takes an ordinal the rework already used</h3>
+    <p><code>journey.ts:124</code> computes its ordinal as <code>(WORKFLOW_PHASE_COUNTS.get(status.workflow) ?? 0) + 1</code> — for <code>build-review</code>, <code>5 + 1 = 6</code>. An owner rework on the same attempt numbers its own phases from <code>rework.ts:693</code> as <code>recipe.phases.length + (reworkNumber - 1) * 4 + 1</code> — also <code>6</code>, and it consumes <code>6</code> through <code>9</code>. The recorded phases collide exactly:</p>
+    <pre><code>1 request          6 owner-rework-1        &lt;- collision
+2 builder          7 owner-rework-1-tests
+3 tests            8 review-context-rw1
+4 review-context   9 reviewer-rw1
+5 reviewer         6 owner-journey         &lt;- collision, at source_seq 2306</code></pre>
+    <p>The defect is written down in the code that carries it. <code>journey.ts</code>&rsquo;s own comment says the journey <em>&ldquo;sits one past the compiled workflow, which is also how owner rework numbers the phase it appends&rdquo;</em> — that sentence <strong>is</strong> the bug: both use the same rule, so on any T2 workflow a journey recorded after a rework collides. The fix is to derive the ordinal from the highest ordinal already recorded on the attempt rather than from the recipe&rsquo;s length.</p>
+
+    <h3>The projector treats that collision as fatal rather than degraded</h3>
+    <p><code>projector.ts:274</code> inserts a phase with <code>ON CONFLICT(phase_id) DO UPDATE</code>. The <code>phases</code> table carries a <em>second</em> unique constraint — <code>UNIQUE (session_id, ordinal)</code>, migration <code>0001</code> line 76 — which that clause does not cover. Two rows with different <code>phase_id</code> and the same ordinal therefore throw rather than merge.</p>
+    <p><code>projectEvent</code> catches it, flags <code>observability_degraded</code>, and never kills the run — which is why the attempt completed its rework, passed <strong>34 gates</strong>, took a full opposite-provider review and produced a valid candidate while the projection was already broken. That design held. What it does not do is survive a replay.</p>
+
+    <h3>The wedge: three refusals that are each individually correct</h3>
+    <ol>
+      <li>Landing refuses with <code>DegradedObservabilityHold</code> — <em>&ldquo;completing here would complete invisibly&rdquo;</em>. Correct: it will not seal an attempt the dashboard cannot show.</li>
+      <li><code>awsf db rebuild</code> refuses — <code>UNIQUE constraint failed: phases.session_id, phases.ordinal</code> at the same <code>source_seq</code>, candidate database retained rather than swapped in. Correct: a half-built projection is worse than a stale one.</li>
+      <li>Repairing either defect requires a commit, and the landing path requires both a <strong>clean tree</strong> (<code>git/land.ts:57</code>) and an exact fast-forward. A commit on the canonical branch moves it past the candidate and the fast-forward is gone; an uncommitted fix leaves the tree dirty. <strong>There is no ordering in which a fix lands and the candidate still lands.</strong></li>
+    </ol>
+    <p>Fixing <code>journey.ts</code> would not have helped either: the colliding record is already in the journal, so a rebuild replays it and fails identically. Only making the projection tolerate the existing record clears it, and that is a code change, which returns to refusal 3.</p>
+
+    <h3>What was done, and what it cost</h3>
+    <p>The owner fast-forwarded the canonical branch to the candidate <strong>by hand</strong> — the identical operation the lifecycle performs, verified first as an exact ancestor relationship and then re-gated: <strong>1617 of 1617, lint and typecheck clean</strong>. No new commit exists; the candidate&rsquo;s own commit is canonical. The attempt stays at <code>AWAITING_OWNER</code> as a reproduction, with the journey attestation permanently in its journal.</p>
+    <p>This is the <strong>third</strong> attempt in this series to be sealed or stranded by a property of the owner-act paths rather than by the work, after the credential rejection and the correction-headroom gap recorded above. Two of the three were recovered by taking the candidate by hand. That route is not a workaround to normalise — it is evidence that <strong>the rework and journey paths carry defects the recipe paths do not</strong>, and that an owner reaching for them after a review is reaching for the least-exercised code in the lifecycle.</p>
+    <p>One diagnostic habit earned its place again: the collision was reconstructed entirely from <code>journal.jsonl</code> by replaying phase records and comparing ordinals. The journal was intact throughout, which is what made the hand landing safe to reason about rather than merely convenient.</p>
+  </details>
 </section>
 
 </main>
