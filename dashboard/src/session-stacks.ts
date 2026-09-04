@@ -108,13 +108,25 @@ export function sessionPeekWindow<Session extends StackableSession>(
   };
 }
 
-/** A run's identity chooses its tone, independently of its current deck position. */
-export function sessionStackToneClass(sessionId: string): string {
-  let bucket = 0;
-  for (const character of sessionId) {
-    bucket = (bucket * 31 + character.charCodeAt(0)) % SESSION_STACK_TONE_COUNT;
+/**
+ * Tone depth is one-based behind the front card. The front is deliberately
+ * untoned, while depths beyond the finite ramp retain its lightest endpoint.
+ */
+export function sessionStackToneClass(depthFromFront: number): string | undefined {
+  if (!Number.isInteger(depthFromFront) || depthFromFront < 1) return undefined;
+  return `session-stack-tone-${Math.min(depthFromFront, SESSION_STACK_TONE_COUNT)}`;
+}
+
+/** Assign the nearest peek tone one, then walk the ramp toward the rear. */
+export function sessionStackTones<Session extends StackableSession>(
+  ordered: readonly Session[],
+): ReadonlyMap<string, string> {
+  const tones = new Map<string, string>();
+  for (let index = 0; index < ordered.length - 1; index += 1) {
+    const tone = sessionStackToneClass(ordered.length - 1 - index);
+    if (tone !== undefined) tones.set(ordered[index]!.sessionId, tone);
   }
-  return `session-stack-tone-${bucket + 1}`;
+  return tones;
 }
 
 /** Expand every peek inside the deck's bounded scrolling viewport. */
@@ -141,6 +153,22 @@ export function promoteSession<Session extends StackableSession>(
     previousFront,
     selected,
   ];
+}
+
+export interface SessionPromotion<Session extends StackableSession = StackableSession> {
+  readonly ordered: readonly Session[];
+  readonly frontToneClass: string | undefined;
+}
+
+/** Promote a peek and carry the positional tone visible at selection time. */
+export function promoteSessionWithTone<Session extends StackableSession>(
+  ordered: readonly Session[],
+  sessionId: string,
+): SessionPromotion<Session> {
+  return {
+    ordered: promoteSession(ordered, sessionId),
+    frontToneClass: sessionStackTones(ordered).get(sessionId),
+  };
 }
 
 /** Removing the front reveals the run directly behind it without a blank slot. */

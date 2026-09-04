@@ -4,10 +4,11 @@ import type { SessionCard as Session } from "../../shared/types.ts";
 import { formatCalls, formatTokens, formatUsage, shortSessionId, stateLabel } from "../display.ts";
 import {
   orderSessionStack,
-  promoteSession,
+  promoteSessionWithTone,
   removeSessionFromStack,
   sessionPeekWindow,
   sessionStackToneClass,
+  sessionStackTones,
   sessionVisiblePeeks,
 } from "../session-stacks.ts";
 import SessionCard from "./SessionCard.vue";
@@ -15,6 +16,7 @@ import SessionCard from "./SessionCard.vue";
 const props = defineProps<{ sessions: readonly Session[] }>();
 const element = ref<HTMLElement | null>(null);
 const promotedIds = ref<readonly string[] | null>(null);
+const promotedFront = ref<{ readonly sessionId: string; readonly toneClass: string } | null>(null);
 const archivedIds = ref<ReadonlySet<string>>(new Set());
 const expanded = ref(false);
 
@@ -33,17 +35,14 @@ const front = computed(() => ordered.value[ordered.value.length - 1]);
 const peekWindow = computed(() => sessionPeekWindow(ordered.value));
 const visiblePeeks = computed(() => sessionVisiblePeeks(ordered.value, expanded.value));
 const visiblePeekIds = computed(() => new Set(visiblePeeks.value.map((session) => session.sessionId)));
-const toneById = computed(() => new Map(activeSessions.value.map((session) => [
-  session.sessionId,
-  sessionStackToneClass(session.sessionId),
-])));
-const frontTone = computed(() => front.value === undefined ? "" : sessionStackToneClass(front.value.sessionId));
-const overflowTone = computed(() => {
-  const firstHidden = ordered.value[0];
-  return peekWindow.value.hiddenCount === 0 || firstHidden === undefined
-    ? undefined
-    : toneById.value.get(firstHidden.sessionId);
+const toneById = computed(() => sessionStackTones(ordered.value));
+const frontTone = computed(() => {
+  const promoted = promotedFront.value;
+  return promoted !== null && promoted.sessionId === front.value?.sessionId ? promoted.toneClass : undefined;
 });
+const overflowTone = computed(() => peekWindow.value.hiddenCount === 0
+  ? undefined
+  : sessionStackToneClass(visiblePeeks.value.length + 1));
 
 function isFront(session: Session): boolean {
   return session.sessionId === front.value?.sessionId;
@@ -61,7 +60,11 @@ function controlClasses(session: Session): readonly string[] {
 
 async function promote(sessionId: string, event: MouseEvent): Promise<void> {
   const keyboardActivated = event.detail === 0;
-  promotedIds.value = promoteSession(ordered.value, sessionId).map((session) => session.sessionId);
+  const promotion = promoteSessionWithTone(ordered.value, sessionId);
+  promotedIds.value = promotion.ordered.map((session) => session.sessionId);
+  promotedFront.value = promotion.frontToneClass === undefined
+    ? null
+    : { sessionId, toneClass: promotion.frontToneClass };
   if (!keyboardActivated) return;
   await nextTick();
   element.value?.querySelector<HTMLElement>(".session-stack-front .session-card")?.focus({ preventScroll: true });
@@ -74,6 +77,7 @@ function toggleExpanded(): void {
 function archiveFront(sessionId: string): void {
   if (sessionId !== front.value?.sessionId) return;
   promotedIds.value = removeSessionFromStack(ordered.value, sessionId).map((session) => session.sessionId);
+  promotedFront.value = null;
   archivedIds.value = new Set([...archivedIds.value, sessionId]);
 }
 
@@ -81,6 +85,7 @@ function restoreDefault(event: MouseEvent): void {
   const stack = element.value;
   if (stack !== null && event.composedPath().includes(stack)) return;
   promotedIds.value = null;
+  promotedFront.value = null;
 }
 
 onMounted(() => document.addEventListener("click", restoreDefault));
@@ -89,7 +94,7 @@ onUnmounted(() => document.removeEventListener("click", restoreDefault));
 
 <template>
   <SessionCard v-if="activeSessions.length === 1 && standalone" :session="standalone" />
-  <div v-else ref="element" class="session-stack" role="group" aria-label="Related runs">
+  <div v-else-if="activeSessions.length > 1" ref="element" class="session-stack" role="group" aria-label="Related runs">
     <div class="session-stack-deck" :class="{ expanded }">
       <button
         v-if="peekWindow.hiddenCount"

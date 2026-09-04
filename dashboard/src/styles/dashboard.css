@@ -431,26 +431,30 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible, summary:focus-v
   clip-path: inset(50%);
 }
 .session-stack-tone-1 {
-  --session-stack-tone: color-mix(in srgb, var(--dim) 84%, var(--border));
-  --session-stack-tone-text: color-mix(in srgb, var(--bg) 88%, var(--panel));
+  --session-stack-tone: color-mix(in srgb, var(--border) 38%, var(--dim));
+  --session-stack-tone-text: color-mix(in srgb, var(--bg) 96%, var(--panel));
 }
 .session-stack-tone-2 {
-  --session-stack-tone: color-mix(in srgb, var(--border) 66%, var(--dim));
-  --session-stack-tone-text: color-mix(in srgb, var(--bg) 90%, var(--panel));
+  --session-stack-tone: color-mix(in srgb, var(--border) 29%, var(--dim));
+  --session-stack-tone-text: color-mix(in srgb, var(--bg) 96%, var(--panel));
 }
 .session-stack-tone-3 {
-  --session-stack-tone: color-mix(in srgb, var(--panel-2) 74%, var(--border));
-  --session-stack-tone-text: color-mix(in srgb, var(--text) 88%, var(--dim));
+  --session-stack-tone: color-mix(in srgb, var(--border) 20%, var(--dim));
+  --session-stack-tone-text: color-mix(in srgb, var(--bg) 96%, var(--panel));
 }
 .session-stack-tone-4 {
-  --session-stack-tone: color-mix(in srgb, var(--panel-2) 76%, var(--panel));
-  --session-stack-tone-text: color-mix(in srgb, var(--text) 90%, var(--dim));
+  --session-stack-tone: color-mix(in srgb, var(--border) 11%, var(--dim));
+  --session-stack-tone-text: color-mix(in srgb, var(--bg) 96%, var(--panel));
 }
 .session-stack-tone-5 {
-  --session-stack-tone: color-mix(in srgb, var(--panel) 50%, var(--panel-2));
-  --session-stack-tone-text: color-mix(in srgb, var(--text) 92%, var(--dim));
+  --session-stack-tone: color-mix(in srgb, var(--border) 2%, var(--dim));
+  --session-stack-tone-text: color-mix(in srgb, var(--bg) 96%, var(--panel));
 }
-:root[data-mode="light"] .session-stack-tone-2 { --session-stack-tone-text: color-mix(in srgb, var(--text) 90%, var(--dim)); }
+:root[data-mode="light"] .session-stack-tone-1,
+:root[data-mode="light"] .session-stack-tone-2,
+:root[data-mode="light"] .session-stack-tone-3,
+:root[data-mode="light"] .session-stack-tone-4,
+:root[data-mode="light"] .session-stack-tone-5 { --session-stack-tone-text: color-mix(in srgb, var(--text) 96%, var(--dim)); }
 .session-stack-front { position: relative; z-index: 1; flex: 1; min-height: calc(var(--session-card-height) - var(--session-stack-band-height) - var(--session-stack-band-height) - var(--session-stack-band-height)); }
 .session-stack-front > .card-wrap { height: 100%; }
 .session-card {
@@ -467,8 +471,12 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible, summary:focus-v
   box-shadow: 0 12px 34px var(--shadow-color);
   transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease, background-color 150ms ease, color 150ms ease;
 }
-.session-stack-front .session-card { background: var(--session-stack-tone); color: var(--session-stack-tone-text); }
-.session-stack-front .session-card :where(.card-id, .card-workflow, .card-request, .mini-tick, .mini-more, .mini-empty, .started-date, .card-metrics-grid dt, .card-metrics-grid small) { color: inherit; }
+.session-stack-front .session-card-toned .session-card { background: var(--session-stack-tone); color: var(--session-stack-tone-text); }
+.session-stack-front .session-card-toned .session-card :where(*) { color: inherit; }
+.session-stack-front .session-card-toned .state-chip { border-color: color-mix(in srgb, var(--session-stack-tone-text) 58%, transparent); background: transparent; color: var(--session-stack-tone-text); font-weight: 700; }
+.session-stack-front .session-card-toned .mini-agent { opacity: 1; font-weight: 750; }
+.session-stack-front .session-card-toned .mini-agent .lane-icon { stroke-width: 2.1; }
+.session-stack-front .session-card-toned .activity-dot { opacity: 1; box-shadow: none; }
 .session-card:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--violet) 48%, transparent); box-shadow: 0 12px 36px color-mix(in srgb, var(--violet) 12%, transparent); }
 .session-card.running { border-color: color-mix(in srgb, var(--blue) 58%, transparent); box-shadow: 0 0 22px color-mix(in srgb, var(--blue) 12%, transparent); }
 .session-card.error { border-color: color-mix(in srgb, var(--red) 55%, transparent); }

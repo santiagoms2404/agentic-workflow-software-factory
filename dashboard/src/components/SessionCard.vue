@@ -4,7 +4,7 @@ import type { ActivityPoint, AgentSummary, PhaseSummary, SessionCard as Session 
 import { axisTicks, costAuthorityLabel, formatCalls, formatCost, formatDate, formatDuration, formatTokens, formatUsage, shortSessionId, stateLabel, stateTone } from "../display.ts";
 import LaneIcon from "./LaneIcon.vue";
 
-const props = defineProps<{ session: Session; toneClass?: string }>();
+const props = defineProps<{ session: Session; toneClass?: string | undefined }>();
 const emit = defineEmits<{ archived: [sessionId: string] }>();
 const archived = ref(false);
 const archiving = ref(false);
@@ -54,11 +54,16 @@ function pointLeft(point: ActivityPoint): string {
   const at = Date.parse(point.startedAt);
   return `${Math.max(0, Math.min(100, ((at - start.value) / span.value) * 100))}%`;
 }
+function displayLaneColor(color: string): string {
+  if (!props.toneClass) return color;
+  return `color-mix(in srgb, ${color} 48%, var(--session-stack-tone-text))`;
+}
 function pointColor(point: ActivityPoint, lane: CardLane): string {
-  if (point.status === "FAILED" || point.status === "error" || point.type === "run.failed") return "var(--red)";
-  if (point.type === "tool_call") return "var(--cyan)";
-  if (point.type === "phase_end" || point.type === "run.completed") return "var(--green)";
-  return lane.color;
+  let color = lane.color;
+  if (point.status === "FAILED" || point.status === "error" || point.type === "run.failed") color = "var(--red)";
+  else if (point.type === "tool_call") color = "var(--cyan)";
+  else if (point.type === "phase_end" || point.type === "run.completed") color = "var(--green)";
+  return displayLaneColor(color);
 }
 function phaseGlyph(phase: PhaseSummary): string {
   if (phase.status === "SUCCEEDED") return "●";
@@ -85,7 +90,7 @@ async function archiveSession(): Promise<void> {
 </script>
 
 <template>
-  <div v-if="!archived" class="card-wrap" :class="toneClass">
+  <div v-if="!archived" class="card-wrap" :class="[toneClass, { 'session-card-toned': toneClass }]">
   <a class="session-card" :class="stateTone(session.state)" :href="`#/sessions/${session.sessionId}`">
     <span class="card-id">{{ shortSessionId(session.sessionId) }}</span>
     <span class="card-workflow" :title="session.workflowId">{{ session.workflowId }}</span>
@@ -99,7 +104,7 @@ async function archiveSession(): Promise<void> {
         </span>
       </div>
       <div v-for="lane in visibleLanes" :key="lane.key" class="mini-row">
-        <span class="mini-agent" :style="{ color: lane.color }" :title="lane.label"><LaneIcon :lane-key="lane.key" :agent="lane.agent" /><span>{{ lane.label }}</span></span>
+        <span class="mini-agent" :style="{ color: displayLaneColor(lane.color) }" :title="lane.label"><LaneIcon :lane-key="lane.key" :agent="lane.agent" /><span>{{ lane.label }}</span></span>
         <span class="mini-track">
           <i
             v-for="point in lane.points"
