@@ -6,9 +6,11 @@ import {
   MAX_SESSION_STACK_BANDS,
   orderSessionStack,
   promoteSession,
+  removeSessionFromStack,
   SESSION_STACK_TONE_COUNT,
   sessionPeekWindow,
   sessionStackToneClass,
+  sessionVisiblePeeks,
   type StackableSession,
 } from "../../../dashboard/src/session-stacks.ts";
 
@@ -117,6 +119,21 @@ test("promoting a peek puts the former front directly behind it", () => {
   assert.equal(secondPromotion.at(-2), oldest);
 });
 
+test("every run keeps its identity-derived tone when the deck is reordered", () => {
+  const ordered = [run("oldest", "task", 1), run("middle", "task", 2), run("front", "task", 3)];
+  const promoted = promoteSession(ordered, ordered[0]!.sessionId);
+  const tones = (sessions: readonly Run[]) => Object.fromEntries(
+    sessions.map((session) => [session.sessionId, sessionStackToneClass(session.sessionId)]).toSorted(),
+  );
+
+  assert.deepEqual(tones(promoted), tones(ordered), "promotion changes no id-to-tone assignment");
+  assert.equal(
+    sessionStackToneClass(promoted.at(-1)!.sessionId),
+    sessionStackToneClass(ordered[0]!.sessionId),
+    "the promoted run carries its peek tone to the front",
+  );
+});
+
 const css = readFileSync(new URL("../../../dashboard/src/styles/dashboard.css", import.meta.url), "utf8");
 const component = readFileSync(new URL("../../../dashboard/src/components/SessionStack.vue", import.meta.url), "utf8");
 const cardComponent = readFileSync(new URL("../../../dashboard/src/components/SessionCard.vue", import.meta.url), "utf8");
@@ -128,6 +145,36 @@ function rule(selector: string): string {
   return body;
 }
 
+type Rgb = readonly [number, number, number];
+
+function declaration(body: string, name: string): string {
+  const value = body.match(new RegExp(`${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}:\\s*([^;]+)`))?.[1]?.trim();
+  assert.ok(value, `missing ${name}`);
+  return value;
+}
+
+function resolveDefaultColor(expression: string, defaults: string): Rgb {
+  if (/^#[0-9a-f]{6}$/iu.test(expression)) {
+    return [1, 3, 5].map((offset) => Number.parseInt(expression.slice(offset, offset + 2), 16)) as unknown as Rgb;
+  }
+  const variable = expression.match(/^var\((--[a-z0-9-]+)\)$/iu)?.[1];
+  if (variable !== undefined) return resolveDefaultColor(declaration(defaults, variable), defaults);
+  const mix = expression.match(/^color-mix\(in srgb, var\((--[a-z0-9-]+)\) (\d+)%, var\((--[a-z0-9-]+)\)\)$/iu);
+  assert.ok(mix, `unsupported color expression ${expression}`);
+  const left = resolveDefaultColor(`var(${mix[1]})`, defaults);
+  const right = resolveDefaultColor(`var(${mix[3]})`, defaults);
+  const weight = Number(mix[2]) / 100;
+  return left.map((channel, index) => channel * weight + right[index]! * (1 - weight)) as unknown as Rgb;
+}
+
+function luminance(rgb: Rgb): number {
+  const linear = rgb.map((channel) => {
+    const value = channel / 255;
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * linear[0]! + 0.7152 * linear[1]! + 0.0722 * linear[2]!;
+}
+
 test("card and stack wrappers use one shared fixed grid height", () => {
   const body = rule(".session-stack, .card-wrap");
   assert.match(body, /height:\s*var\(--session-card-height\)/u);
@@ -135,7 +182,7 @@ test("card and stack wrappers use one shared fixed grid height", () => {
   assert.doesNotMatch(css, /\.card-wrap\s*\{[^}]*height:\s*420px/su);
 });
 
-test("peek cards are full-width overlapping cards with palette-derived adaptive tones", () => {
+test("stack tones are lighter than the default surface and retain adaptive foregrounds", () => {
   const peek = rule(".session-stack-peek");
   assert.match(peek, /width:\s*100%/u);
   assert.match(peek, /margin:\s*0 0 calc\(-1 \* var\(--session-stack-card-tail\)\)/u);
@@ -146,25 +193,39 @@ test("peek cards are full-width overlapping cards with palette-derived adaptive 
   assert.doesNotMatch(peek, /overflow:\s*hidden|margin-inline|--accent|#[0-9a-f]{3,8}|\brgba?\(/iu);
   assert.match(rule(".session-stack-deck"), /gap:\s*0/u);
 
+  const defaults = rule(":root");
+  const surface = declaration(defaults, "--surface");
+  const surfaceStops = [...surface.matchAll(/color-mix\(in srgb, var\(--[a-z0-9-]+\) \d+%, var\(--[a-z0-9-]+\)\)/giu)];
+  assert.equal(surfaceStops.length, 2);
+  const surfaceLuminance = Math.max(...surfaceStops.map((match) => luminance(resolveDefaultColor(match[0], defaults))));
+  const backgrounds: string[] = [];
+
   for (let step = 1; step <= SESSION_STACK_TONE_COUNT; step += 1) {
     const tone = rule(`.session-stack-tone-${step}`);
-    const background = tone.match(/--session-stack-tone:\s*([^;]+)/u)?.[1] ?? "";
+    const background = declaration(tone, "--session-stack-tone");
+    const foreground = declaration(tone, "--session-stack-tone-text");
+    backgrounds.push(background);
     assert.match(background, /^color-mix\(/u, `tone ${step} background`);
+    assert.doesNotMatch(background, /^color-mix\([^;]*var\(--bg\)/u, `tone ${step} must not start from the darkest palette token`);
     assert.doesNotMatch(background, /--text|--accent|#[0-9a-f]{3,8}|\brgba?\(/iu, `tone ${step} background`);
-    assert.match(tone, /--session-stack-tone-text:\s*color-mix\(/u, `tone ${step} foreground`);
+    assert.match(foreground, /^color-mix\(/u, `tone ${step} foreground`);
     assert.doesNotMatch(tone, /--accent|#[0-9a-f]{3,8}|\brgba?\(/iu, `tone ${step}`);
+    assert.ok(luminance(resolveDefaultColor(background, defaults)) > surfaceLuminance, `tone ${step} must be lighter than the brightest surface stop`);
   }
 
-  const sequence = Array.from({ length: SESSION_STACK_TONE_COUNT * 2 }, (_item, index) => sessionStackToneClass(index));
-  for (let index = 1; index < sequence.length; index += 1) assert.notEqual(sequence[index], sequence[index - 1]);
+  assert.equal(new Set(backgrounds).size, SESSION_STACK_TONE_COUNT, "every tone is visibly distinct from the surface and the other tones");
+  assert.match(declaration(rule(".session-stack-tone-1"), "--session-stack-tone-text"), /var\(--bg\)/u);
+  assert.match(declaration(rule(".session-stack-tone-2"), "--session-stack-tone-text"), /var\(--bg\)/u);
 });
 
 test("the front is the complete SessionCard below normal-flow legible peeks", () => {
   const deckAt = component.indexOf("class=\"session-stack-deck\"");
   const frontAt = component.indexOf("class=\"session-stack-front\"");
   assert.ok(deckAt >= 0 && frontAt > deckAt, "the deck is rendered above the front card");
-  assert.match(component, /<SessionCard v-if="sessions\.length === 1 && standalone" :session="standalone" \/>/u);
-  assert.match(component, /class="session-stack-front"[\s\S]*<SessionCard :key="front\.sessionId" :session="front" \/>/u);
+  assert.match(component, /<SessionCard v-if="activeSessions\.length === 1 && standalone" :session="standalone" \/>/u);
+  assert.doesNotMatch(component.match(/<SessionCard v-if="activeSessions\.length === 1[^>]+>/u)?.[0] ?? "", /tone-class/u, "a one-run stack stays untoned");
+  assert.match(component, /class="session-stack-front"[\s\S]*<SessionCard[\s\S]*:key="front\.sessionId"[\s\S]*:tone-class="frontTone"/u);
+  assert.match(rule(".session-stack-front .session-card"), /background:\s*var\(--session-stack-tone\);\s*color:\s*var\(--session-stack-tone-text\)/u);
   assert.doesNotMatch(rule(".session-stack-deck"), /position:\s*absolute/u);
   assert.doesNotMatch(rule(".session-stack-front"), /position:\s*absolute/u);
 
@@ -185,19 +246,39 @@ test("the front is the complete SessionCard below normal-flow legible peeks", ()
   assert.match(component, /:aria-expanded="isFront\(session\)"/u);
 });
 
-test("a stack of five caps its deck and leaves the full front metrics component rendered", () => {
+test("a stack of five exposes every run through a keyboard-operable bounded deck", () => {
   const ordered = orderSessionStack(Array.from({ length: 5 }, (_item, index) => run(
     `run-${index + 1}`,
     "deep-task",
     index + 1,
   )));
   const window = sessionPeekWindow(ordered);
+  const expandedPeeks = sessionVisiblePeeks(ordered, true);
   assert.equal(window.visible.length + (window.hiddenCount > 0 ? 1 : 0), MAX_SESSION_STACK_BANDS);
   assert.equal(window.hiddenCount, 2);
   assert.equal(ordered.at(-1)?.label, "run-5");
-  assert.match(component, /\+\{\{ peekWindow\.hiddenCount \}\} further runs/u);
+  assert.deepEqual(
+    new Set([...expandedPeeks, ordered.at(-1)!].map((session) => session.sessionId)),
+    new Set(ordered.map((session) => session.sessionId)),
+    "the expanded controls plus the full front card identify every run",
+  );
+  assert.match(component, /<button[\s\S]*class="session-stack-overflow"[\s\S]*:aria-expanded="expanded"[\s\S]*@click="toggleExpanded"/u);
+  assert.match(component, /sessionVisiblePeeks\(ordered\.value, expanded\.value\)/u);
+  assert.match(component, /:tabindex="isFront\(session\) \|\| isHiddenPeek\(session\) \? -1 : 0"/u);
+  assert.match(rule(".session-stack-deck"), /max-height:\s*calc\([^;]*--session-stack-band-height[^;]*--session-stack-band-height[^;]*--session-stack-band-height/u);
+  assert.match(rule(".session-stack-deck.expanded"), /overflow-y:\s*auto/u);
   assert.match(cardComponent, /<dl class="card-metrics-grid">[\s\S]*cost[\s\S]*runtime[\s\S]*usage[\s\S]*calls[\s\S]*<\/dl>/u);
   assert.match(rule(".session-stack-front"), /min-height:\s*calc\(var\(--session-card-height\)/u);
+});
+
+test("archiving a stacked front removes it and promotes the run directly behind it", () => {
+  const ordered = [run("oldest", "task", 1), run("next", "task", 2), run("front", "task", 3)];
+  const remaining = removeSessionFromStack(ordered, ordered.at(-1)!.sessionId);
+  assert.deepEqual(remaining.map((session) => session.label), ["oldest", "next"]);
+  assert.equal(remaining.at(-1)?.label, "next");
+  assert.match(component, /function archiveFront\(sessionId: string\)[\s\S]*removeSessionFromStack\(ordered\.value, sessionId\)/u);
+  assert.match(component, /@archived="archiveFront"/u);
+  assert.match(cardComponent, /emit\("archived", props\.session\.sessionId\)/u);
 });
 
 test("a promotion survives its own click, restores outside, and preserves keyboard focus", () => {

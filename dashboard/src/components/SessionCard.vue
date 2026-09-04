@@ -4,7 +4,8 @@ import type { ActivityPoint, AgentSummary, PhaseSummary, SessionCard as Session 
 import { axisTicks, costAuthorityLabel, formatCalls, formatCost, formatDate, formatDuration, formatTokens, formatUsage, shortSessionId, stateLabel, stateTone } from "../display.ts";
 import LaneIcon from "./LaneIcon.vue";
 
-const props = defineProps<{ session: Session }>();
+const props = defineProps<{ session: Session; toneClass?: string }>();
+const emit = defineEmits<{ archived: [sessionId: string] }>();
 const archived = ref(false);
 const archiving = ref(false);
 const archiveError = ref<string | null>(null);
@@ -74,6 +75,7 @@ async function archiveSession(): Promise<void> {
     const response = await fetch(`/api/v1/sessions/${encodeURIComponent(props.session.sessionId)}/archive`, { method: "POST" });
     if (!response.ok) throw new Error("Archive action unavailable");
     archived.value = true;
+    emit("archived", props.session.sessionId);
   } catch (reason) {
     archiveError.value = reason instanceof Error ? reason.message : "Archive action unavailable";
   } finally {
@@ -83,7 +85,7 @@ async function archiveSession(): Promise<void> {
 </script>
 
 <template>
-  <div v-if="!archived" class="card-wrap">
+  <div v-if="!archived" class="card-wrap" :class="toneClass">
   <a class="session-card" :class="stateTone(session.state)" :href="`#/sessions/${session.sessionId}`">
     <span class="card-id">{{ shortSessionId(session.sessionId) }}</span>
     <span class="card-workflow" :title="session.workflowId">{{ session.workflowId }}</span>

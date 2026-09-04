@@ -230,6 +230,7 @@ test("colliding ordinals retain both phases and expose the relocation without ch
     });
     assert.deepEqual(JSON.parse(notice.payload_json), {
       code: "phase-ordinal-relocated",
+      message: "Requested phase ordinal 1 was occupied; assigned ordinal 2 instead.",
       phaseId: second.phaseId,
       requestedOrdinal: 1,
       assignedOrdinal: 2,

@@ -117,6 +117,13 @@ const T2_SUPPORTED = new Map<string, WorkflowRecipe>([
 const OWNER = HOST_AUTHOR;
 const MAX_EVIDENCE = 4_000;
 
+export function nextReworkPhaseOrdinal(evidence: readonly AttemptEvidence[]): number {
+  return evidence.reduce(
+    (highest, record) => record.type === "phase" ? Math.max(highest, record.phase.ordinal) : highest,
+    0,
+  ) + 1;
+}
+
 const HOST = globalThis as unknown as {
   process: { env: Readonly<Record<string, string>> };
   AbortController: new () => { signal: Parameters<TransportBroker["startProcess"]>[2]; abort(reason?: unknown): void };
@@ -684,13 +691,9 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
   const phaseId = `${status.sessionId}:${phaseKey}`;
   const runId = `${phaseId}:run`;
   const createdAt = infra.now();
-  // The T1 formula is unchanged. A T2 rework writes FOUR phase records per
-  // generation — builder, host measurement, review context, reviewer — so each
-  // one follows the recipe's own phases without ever reusing a predecessor's
-  // ordinal, which `phases UNIQUE (session_id, ordinal)` would refuse.
-  const builderOrdinal = recipe === null
-    ? (status.workflow === "build" ? 3 : 4) + reworkNumber
-    : recipe.phases.length + (reworkNumber - 1) * 4 + 1;
+  // Every appended rework phase starts above the journal's highest recorded
+  // phase. The host measurement and review phases follow this one in order.
+  const builderOrdinal = nextReworkPhaseOrdinal(governingEvidence);
   let phase: PhaseEvidenceRecord = {
     phaseId, ordinal: builderOrdinal, key: phaseKey, name: "builder rework",
     kind: "agent", owner: route.agent.name,

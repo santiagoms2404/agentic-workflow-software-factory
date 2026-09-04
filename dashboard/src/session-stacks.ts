@@ -108,9 +108,21 @@ export function sessionPeekWindow<Session extends StackableSession>(
   };
 }
 
-/** A five-step ramp repeats without assigning one tone to adjacent bands. */
-export function sessionStackToneClass(logicalIndex: number): string {
-  return `session-stack-tone-${(logicalIndex % SESSION_STACK_TONE_COUNT) + 1}`;
+/** A run's identity chooses its tone, independently of its current deck position. */
+export function sessionStackToneClass(sessionId: string): string {
+  let bucket = 0;
+  for (const character of sessionId) {
+    bucket = (bucket * 31 + character.charCodeAt(0)) % SESSION_STACK_TONE_COUNT;
+  }
+  return `session-stack-tone-${bucket + 1}`;
+}
+
+/** Expand every peek inside the deck's bounded scrolling viewport. */
+export function sessionVisiblePeeks<Session extends StackableSession>(
+  ordered: readonly Session[],
+  expanded: boolean,
+): readonly Session[] {
+  return expanded ? ordered.slice(0, -1) : sessionPeekWindow(ordered).visible;
 }
 
 /**
@@ -129,4 +141,12 @@ export function promoteSession<Session extends StackableSession>(
     previousFront,
     selected,
   ];
+}
+
+/** Removing the front reveals the run directly behind it without a blank slot. */
+export function removeSessionFromStack<Session extends StackableSession>(
+  ordered: readonly Session[],
+  sessionId: string,
+): readonly Session[] {
+  return ordered.filter((session) => session.sessionId !== sessionId);
 }

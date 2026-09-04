@@ -320,6 +320,7 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
           sourceSeq,
           stringifyRedacted({
             code: "phase-ordinal-relocated",
+            message: `Requested phase ordinal ${phase.ordinal} was occupied; assigned ordinal ${position.ordinal} instead.`,
             phaseId: phase.phaseId,
             requestedOrdinal: phase.ordinal,
             assignedOrdinal: position.ordinal,
