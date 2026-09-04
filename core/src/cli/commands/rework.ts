@@ -626,6 +626,10 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
   validateAttempt(status, options.config);
   const secondInspection = inspectCandidate(status);
   if (secondInspection.candidate !== firstInspection.candidate) throw new ReworkCandidateMismatch("candidate changed after confirmation");
+  // Evidence can advance while the owner is considering the prompt. Derive the
+  // ordinal from the journal state this confirmed launch actually proceeds on.
+  const launchEvidence = await readAttemptEvidence(options.attemptDir);
+  const builderOrdinal = nextReworkPhaseOrdinal(launchEvidence);
   const available = await route.adapter.isAvailable();
   if (available.status !== "available") throw new ProductionRouteUnavailable(route.adapterId, available.detail ?? available.code ?? "route became unavailable");
   const repeatedModel = credentialSafeValue(
@@ -691,9 +695,8 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
   const phaseId = `${status.sessionId}:${phaseKey}`;
   const runId = `${phaseId}:run`;
   const createdAt = infra.now();
-  // Every appended rework phase starts above the journal's highest recorded
-  // phase. The host measurement and review phases follow this one in order.
-  const builderOrdinal = nextReworkPhaseOrdinal(governingEvidence);
+  // The host measurement and review phases follow the post-confirmation
+  // builder ordinal in order.
   let phase: PhaseEvidenceRecord = {
     phaseId, ordinal: builderOrdinal, key: phaseKey, name: "builder rework",
     kind: "agent", owner: route.agent.name,

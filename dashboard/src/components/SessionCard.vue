@@ -56,7 +56,7 @@ function pointLeft(point: ActivityPoint): string {
 }
 function displayLaneColor(color: string): string {
   if (!props.toneClass) return color;
-  return `color-mix(in srgb, ${color} 48%, var(--session-stack-tone-text))`;
+  return `color-mix(in srgb, ${color} 44%, var(--session-stack-lane-anchor))`;
 }
 function pointColor(point: ActivityPoint, lane: CardLane): string {
   let color = lane.color;

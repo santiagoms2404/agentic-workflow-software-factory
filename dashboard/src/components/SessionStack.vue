@@ -7,7 +7,6 @@ import {
   promoteSessionWithTone,
   removeSessionFromStack,
   sessionPeekWindow,
-  sessionStackToneClass,
   sessionStackTones,
   sessionVisiblePeeks,
 } from "../session-stacks.ts";
@@ -40,9 +39,13 @@ const frontTone = computed(() => {
   const promoted = promotedFront.value;
   return promoted !== null && promoted.sessionId === front.value?.sessionId ? promoted.toneClass : undefined;
 });
-const overflowTone = computed(() => peekWindow.value.hiddenCount === 0
-  ? undefined
-  : sessionStackToneClass(visiblePeeks.value.length + 1));
+const overflowTone = computed(() => {
+  for (let index = peekWindow.value.hiddenCount - 1; index >= 0; index -= 1) {
+    const tone = toneById.value.get(ordered.value[index]!.sessionId);
+    if (tone !== undefined) return tone;
+  }
+  return undefined;
+});
 
 function isFront(session: Session): boolean {
   return session.sessionId === front.value?.sessionId;
@@ -54,8 +57,9 @@ function isHiddenPeek(session: Session): boolean {
 
 function controlClasses(session: Session): readonly string[] {
   if (isFront(session)) return ["session-stack-current-control"];
+  if (isHiddenPeek(session)) return ["session-stack-hidden-control"];
   const tone = toneById.value.get(session.sessionId);
-  return tone === undefined || isHiddenPeek(session) ? ["session-stack-hidden-control"] : ["session-stack-peek", tone];
+  return tone === undefined ? ["session-stack-peek"] : ["session-stack-peek", tone];
 }
 
 async function promote(sessionId: string, event: MouseEvent): Promise<void> {

@@ -121,34 +121,56 @@ test("promoting a peek puts the former front directly behind it", () => {
   assert.equal(secondPromotion.at(-2), oldest);
 });
 
-test("the default front is untoned and peeks take sequential tones from front to back", () => {
-  const ordered = [
-    run("farthest", "task", 1),
-    run("middle", "task", 2),
-    run("nearest", "task", 3),
-    run("front", "task", 4),
-  ];
-  const tones = sessionStackTones(ordered);
+test("the comparator-selected default run stays untoned at rest and after a promotion", () => {
+  const newest = run("newest", "task", 1, null, "2026-09-03T00:00:00.000Z");
+  const published = run("published", "task", 2, null, "2026-09-02T00:00:00.000Z", "PUBLISHED");
+  const defaultRun = run("landed", "task", 3, null, "2026-09-01T00:00:00.000Z", "LANDED");
+  const ordered = orderSessionStack([newest, defaultRun, published]);
 
-  assert.equal(tones.get(ordered.at(-1)!.sessionId), undefined, "the resting front has no tone foreground or background");
+  assert.equal(ordered.at(-1), defaultRun, "the settled-first comparator chooses the default run");
+  assert.equal(sessionStackTones(ordered).get(defaultRun.sessionId), undefined, "the default front is ordinary and untoned");
+
+  const promotion = promoteSessionWithTone(ordered, published.sessionId);
+  assert.equal(promotion.ordered.at(-2), defaultRun, "promotion displaces the default into the deck");
+  assert.equal(sessionStackTones(promotion.ordered).get(defaultRun.sessionId), undefined, "the displaced default remains untoned");
+});
+
+test("four-run stacks assign consecutive tones around the untoned default without a gap", () => {
+  const farthest = run("farthest", "task", 1);
+  const middle = run("middle", "task", 2);
+  const nearest = run("nearest", "task", 3);
+  const defaultRun = run("default", "task", 4, null, undefined, "LANDED");
+  const ordered = orderSessionStack([nearest, defaultRun, farthest, middle]);
+  const restingTones = sessionStackTones(ordered);
+
+  assert.deepEqual(ordered.map((session) => session.label), ["farthest", "middle", "nearest", "default"]);
   assert.equal(sessionStackToneClass(0), undefined, "depth zero is the ordinary, untoned card");
-  assert.equal(tones.get(ordered.at(-2)!.sessionId), "session-stack-tone-1", "the nearest peek takes the first tone");
-  assert.equal(tones.get(ordered.at(-3)!.sessionId), "session-stack-tone-2");
-  assert.equal(tones.get(ordered.at(-4)!.sessionId), "session-stack-tone-3");
+  assert.equal(restingTones.get(nearest.sessionId), "session-stack-tone-1");
+  assert.equal(restingTones.get(middle.sessionId), "session-stack-tone-2");
+  assert.equal(restingTones.get(farthest.sessionId), "session-stack-tone-3");
+  assert.equal(restingTones.get(defaultRun.sessionId), undefined);
+
+  const promoted = promoteSessionWithTone(ordered, farthest.sessionId);
+  const promotedTones = sessionStackTones(promoted.ordered);
+  assert.equal(promotedTones.get(defaultRun.sessionId), undefined);
+  assert.equal(promotedTones.get(nearest.sessionId), "session-stack-tone-1", "the run beyond the skipped default takes tone one");
+  assert.equal(promotedTones.get(middle.sessionId), "session-stack-tone-2", "the remaining peek follows without a gap");
 });
 
 test("a promoted peek carries its named positional tone to the front", () => {
-  const ordered = [run("oldest", "task", 1), run("middle", "task", 2), run("front", "task", 3)];
+  const ordered = [run("oldest", "task", 1), run("middle", "task", 2), run("default", "task", 3)];
   const selected = ordered[0]!;
+  const defaultRun = ordered.at(-1)!;
   const toneBefore = sessionStackTones(ordered).get(selected.sessionId);
   const promotion = promoteSessionWithTone(ordered, selected.sessionId);
-  const positionalToneAfter = sessionStackTones(promotion.ordered).get(selected.sessionId);
+  const positionalTonesAfter = sessionStackTones(promotion.ordered);
 
   assert.equal(toneBefore, "session-stack-tone-2", "the selected run starts as the second peek");
-  assert.equal(positionalToneAfter, undefined, "a front card has no new positional tone");
+  assert.equal(positionalTonesAfter.get(selected.sessionId), undefined, "a front card has no new positional tone");
   assert.equal(promotion.frontToneClass, "session-stack-tone-2", "the promoted front carries tone 2 from its peek");
   assert.equal(promotion.ordered.at(-1), selected);
-  assert.equal(sessionStackTones(promotion.ordered).get(ordered.at(-1)!.sessionId), "session-stack-tone-1", "the remaining deck re-sequences behind it");
+  assert.equal(positionalTonesAfter.get(defaultRun.sessionId), undefined, "the displaced default does not take the nearest tone");
+  assert.equal(positionalTonesAfter.get(ordered[1]!.sessionId), "session-stack-tone-1", "the remaining non-default peek takes the nearest tone");
 });
 
 const css = readFileSync(new URL("../../../dashboard/src/styles/dashboard.css", import.meta.url), "utf8");
@@ -205,54 +227,66 @@ test("card and stack wrappers use one shared fixed grid height", () => {
   assert.doesNotMatch(css, /\.card-wrap\s*\{[^}]*height:\s*420px/su);
 });
 
-test("the ordered tone ramp stays distinct from the surface and gets lighter toward the rear", () => {
+test("the mode-specific tone ramps recede in opposite directions without blending into the surface", () => {
   const peek = rule(".session-stack-peek");
   assert.match(peek, /width:\s*100%/u);
   assert.match(peek, /margin:\s*0 0 calc\(-1 \* var\(--session-stack-card-tail\)\)/u);
   assert.match(peek, /border:\s*1px solid var\(--border-soft\)/u);
   assert.match(peek, /border-radius:\s*var\(--radius\)/u);
-  assert.match(peek, /background:\s*var\(--session-stack-tone\)/u);
-  assert.match(peek, /color:\s*var\(--session-stack-tone-text\)/u);
+  assert.match(peek, /background:\s*var\(--session-stack-tone, var\(--surface\)\)/u, "an untoned default peek uses the ordinary surface");
+  assert.match(peek, /color:\s*var\(--session-stack-tone-text, var\(--text\)\)/u);
   assert.doesNotMatch(peek, /overflow:\s*hidden|margin-inline|--accent|#[0-9a-f]{3,8}|\brgba?\(/iu);
   assert.match(rule(".session-stack-deck"), /gap:\s*0/u);
 
   const defaults = rule(":root");
   const surface = declaration(defaults, "--surface");
   const surfaceStops = [...surface.matchAll(/color-mix\(in srgb, var\(--[a-z0-9-]+\) \d+%, var\(--[a-z0-9-]+\)\)/giu)];
-  assert.equal(surfaceStops.length, 2);
-  const surfaceColors = surfaceStops.map((match) => resolveDefaultColor(match[0], defaults));
-  const brightestSurface = surfaceColors.toSorted((left, right) => luminance(right) - luminance(left))[0]!;
   const surfaceTokens = new Set([...surface.matchAll(/var\((--[a-z0-9-]+)\)/giu)].map((match) => match[1]));
-  const backgrounds: string[] = [];
-  const backgroundColors: Rgb[] = [];
-  let previousLuminance = luminance(brightestSurface);
+  const slopes: number[] = [];
+  assert.equal(surfaceStops.length, 2);
 
-  for (let step = 1; step <= SESSION_STACK_TONE_COUNT; step += 1) {
-    const tone = rule(`.session-stack-tone-${step}`);
-    const background = declaration(tone, "--session-stack-tone");
-    const foreground = declaration(tone, "--session-stack-tone-text");
-    const backgroundColor = resolveDefaultColor(background, defaults);
-    const foregroundColor = resolveDefaultColor(foreground, defaults);
-    const backgroundTokens = [...background.matchAll(/var\((--[a-z0-9-]+)\)/giu)].map((match) => match[1]);
-    backgrounds.push(background);
-    backgroundColors.push(backgroundColor);
+  for (const mode of ["dark", "light"] as const) {
+    const palette = `${rule(`:root[data-theme="forest"][data-mode="${mode}"]`)}\n${defaults}`;
+    const surfaceColors = surfaceStops.map((match) => resolveDefaultColor(match[0], palette));
+    const surfaceExtreme = surfaceColors.toSorted((left, right) => mode === "dark"
+      ? luminance(right) - luminance(left)
+      : luminance(left) - luminance(right))[0]!;
+    const backgrounds: string[] = [];
+    const backgroundColors: Rgb[] = [];
+    let previousLuminance = luminance(surfaceExtreme);
 
-    assert.match(background, /^color-mix\(/u, `tone ${step} background`);
-    assert.ok(backgroundTokens.some((token) => !surfaceTokens.has(token)), `tone ${step} must not mix only tokens used to build --surface`);
-    assert.doesNotMatch(background, /--text|--accent|#[0-9a-f]{3,8}|\brgba?\(/iu, `tone ${step} background`);
-    assert.match(foreground, /^color-mix\(/u, `tone ${step} foreground`);
-    assert.doesNotMatch(tone, /--accent|#[0-9a-f]{3,8}|\brgba?\(/iu, `tone ${step}`);
-    assert.ok(luminance(backgroundColor) > previousLuminance, `tone ${step} must be lighter than the surface or tone in front of it`);
-    assert.ok(contrastRatio(backgroundColor, brightestSurface) > 1.25, `tone ${step} must be visibly distinct from the untoned surface`);
-    assert.ok(contrastRatio(backgroundColor, foregroundColor) >= 4.5, `tone ${step} foreground must remain readable`);
-    previousLuminance = luminance(backgroundColor);
+    for (let step = 1; step <= SESSION_STACK_TONE_COUNT; step += 1) {
+      const tone = rule(`:root[data-mode="${mode}"] .session-stack-tone-${step}`);
+      const background = declaration(tone, "--session-stack-tone");
+      const foreground = declaration(tone, "--session-stack-tone-text");
+      const backgroundColor = resolveDefaultColor(background, palette);
+      const foregroundColor = resolveDefaultColor(foreground, palette);
+      const backgroundTokens = [...background.matchAll(/var\((--[a-z0-9-]+)\)/giu)].map((match) => match[1]);
+      const currentLuminance = luminance(backgroundColor);
+      backgrounds.push(background);
+      backgroundColors.push(backgroundColor);
+
+      assert.match(background, /^color-mix\(/u, `${mode} tone ${step} background`);
+      assert.ok(backgroundTokens.some((token) => !surfaceTokens.has(token)), `${mode} tone ${step} must not mix only tokens used to build --surface`);
+      assert.doesNotMatch(background, /--text|--accent|#[0-9a-f]{3,8}|\brgba?\(/iu, `${mode} tone ${step} background`);
+      assert.match(foreground, /^color-mix\(/u, `${mode} tone ${step} foreground`);
+      assert.doesNotMatch(tone, /--accent|#[0-9a-f]{3,8}|\brgba?\(/iu, `${mode} tone ${step}`);
+      assert.ok(mode === "dark" ? currentLuminance > previousLuminance : currentLuminance < previousLuminance,
+        `${mode} tone ${step} must recede ${mode === "dark" ? "lighter" : "darker"} than the card in front`);
+      assert.ok(contrastRatio(backgroundColor, surfaceExtreme) > 1.25, `${mode} tone ${step} must remain distinct from the untoned surface`);
+      assert.ok(contrastRatio(backgroundColor, foregroundColor) >= 4.5, `${mode} tone ${step} foreground must remain readable`);
+      previousLuminance = currentLuminance;
+    }
+
+    for (let index = 1; index < backgroundColors.length; index += 1) {
+      const distance = Math.hypot(...backgroundColors[index]!.map((channel, channelIndex) => channel - backgroundColors[index - 1]![channelIndex]!));
+      assert.ok(distance > 10, `${mode} adjacent tones ${index} and ${index + 1} must remain visibly distinct`);
+    }
+    assert.equal(new Set(backgrounds).size, SESSION_STACK_TONE_COUNT);
+    slopes.push(luminance(backgroundColors.at(-1)!) - luminance(backgroundColors[0]!));
   }
 
-  for (let index = 1; index < backgroundColors.length; index += 1) {
-    const distance = Math.hypot(...backgroundColors[index]!.map((channel, channelIndex) => channel - backgroundColors[index - 1]![channelIndex]!));
-    assert.ok(distance > 10, `adjacent tones ${index} and ${index + 1} must remain visibly distinct`);
-  }
-  assert.equal(new Set(backgrounds).size, SESSION_STACK_TONE_COUNT);
+  assert.ok(slopes[0]! > 0 && slopes[1]! < 0, "dark and light ramps must run in opposite directions");
 });
 
 test("the front is the complete SessionCard below normal-flow legible peeks", () => {
@@ -284,9 +318,13 @@ test("the front is the complete SessionCard below normal-flow legible peeks", ()
     assert.match(component, new RegExp(`${helper}\\(`));
   }
   assert.match(component, /:aria-expanded="isFront\(session\)"/u);
+  assert.match(component, /if \(isHiddenPeek\(session\)\) return \["session-stack-hidden-control"\];[\s\S]*tone === undefined \? \["session-stack-peek"\]/u,
+    "a visible untoned default remains an ordinary clickable peek after displacement");
+  assert.match(component, /toneById\.value\.get\(ordered\.value\[index\]!\.sessionId\)/u,
+    "the overflow band follows the compressed no-gap tone assignment");
 });
 
-test("toned cards cover all content while retaining darker distinct lane colors", () => {
+test("toned cards darken inline lane labels and activity dots without collapsing their colors", () => {
   assert.match(cardComponent, /class="card-wrap" :class="\[toneClass, \{ 'session-card-toned': toneClass \}\]"/u);
   assert.match(rule(".session-stack-front .session-card-toned .session-card :where(*)"), /color:\s*inherit/u, "tone foreground covers all card descendants, not an enumerated subset");
 
@@ -295,30 +333,51 @@ test("toned cards cover all content while retaining darker distinct lane colors"
   assert.match(stateChip, /color:\s*var\(--session-stack-tone-text\)/u);
   assert.match(stateChip, /font-weight:\s*700/u);
 
-  const laneMix = cardComponent.match(/return `color-mix\(in srgb, \$\{color\} (\d+)%, var\(--session-stack-tone-text\)\)`/u);
-  assert.ok(laneMix, "toned inline lane colors must be mixed toward the readable dark tone foreground");
+  const laneMix = cardComponent.match(/return `color-mix\(in srgb, \$\{color\} (\d+)%, var\(--session-stack-lane-anchor\)\)`/u);
+  assert.ok(laneMix, "toned inline lane colors must mix toward the mode's dark palette anchor");
+  assert.doesNotMatch(cardComponent, /\$\{color\} \d+%, var\(--session-stack-tone-text\)/u, "lane colors do not mix toward the card foreground");
   const sourceWeight = Number(laneMix[1]) / 100;
-  assert.ok(sourceWeight < 0.5, "toned lane colors must carry more dark endpoint than bright source color");
-  assert.match(cardComponent, /:style="\{ color: displayLaneColor\(lane\.color\) \}"/u, "lane labels and currentColor icons use the adapted color");
+  assert.ok(sourceWeight >= 0.4 && sourceWeight < 0.48, "the mix must be darker than the prior treatment without erasing each identifying hue");
+  assert.match(cardComponent, /:style="\{ color: displayLaneColor\(lane\.color\) \}"/u, "lane labels and currentColor icons compute the adapted inline color");
+  assert.match(cardComponent, /:style="\{ left: pointLeft\(point\), background: pointColor\(point, lane\) \}"/u, "activity dots compute their adapted inline background");
   assert.match(cardComponent, /return displayLaneColor\(color\);/u, "activity dots use the same adapted color path");
   assert.match(laneIconComponent, /stroke="currentColor"/u);
   assert.match(rule(".session-stack-front .session-card-toned .mini-agent"), /opacity:\s*1;\s*font-weight:\s*750/u);
   assert.match(rule(".session-stack-front .session-card-toned .activity-dot"), /opacity:\s*1;\s*box-shadow:\s*none/u);
 
   const defaults = rule(":root");
-  const darkEndpoint = resolveDefaultColor(declaration(rule(".session-stack-tone-1"), "--session-stack-tone-text"), defaults);
-  const laneSources = new Map<string, Rgb>([
-    ["engineer", resolveDefaultColor("var(--amber)", defaults)],
-    ["planner", resolveDefaultColor("#A78BFA", defaults)],
-    ["builder", resolveDefaultColor("#22D3EE", defaults)],
-    ["code / git", resolveDefaultColor("var(--green)", defaults)],
-  ]);
-  const adapted = [...laneSources].map(([name, source]) => {
-    const color = source.map((channel, index) => channel * sourceWeight + darkEndpoint[index]! * (1 - sourceWeight)) as unknown as Rgb;
-    assert.ok(luminance(color) < luminance(source), `${name} must be darker on a toned card`);
-    return color.map((channel) => Math.round(channel)).join(",");
-  });
-  assert.equal(new Set(adapted).size, laneSources.size, "agent colors remain distinct after darkening");
+  const palettes = ["forest", "lavender-slate", "earthy-obsidian", "navy-sky", "warm-rust", "sunset"] as const;
+  for (const paletteId of palettes) {
+    for (const mode of ["dark", "light"] as const) {
+      const palette = `${rule(`:root[data-theme="${paletteId}"][data-mode="${mode}"]`)}\n${defaults}`;
+      const anchorRule = mode === "dark" ? rule(":root[data-mode=\"dark\"]") : rule(":root[data-mode=\"light\"]");
+      const anchor = resolveDefaultColor(declaration(anchorRule, "--session-stack-lane-anchor"), palette);
+      const toneLuminances = Array.from({ length: SESSION_STACK_TONE_COUNT }, (_item, index) => {
+        const tone = rule(`:root[data-mode="${mode}"] .session-stack-tone-${index + 1}`);
+        return luminance(resolveDefaultColor(declaration(tone, "--session-stack-tone"), palette));
+      });
+      const laneSources = new Map<string, Rgb>([
+        ["engineer", resolveDefaultColor("var(--amber)", palette)],
+        ["planner", resolveDefaultColor("#A78BFA", palette)],
+        ["builder", resolveDefaultColor("#22D3EE", palette)],
+        ["documenter", resolveDefaultColor("#C084FC", palette)],
+        ["code / git", resolveDefaultColor("var(--green)", palette)],
+      ]);
+      const adapted = [...laneSources].map(([name, source]) => {
+        const color = source.map((channel, index) => channel * sourceWeight + anchor[index]! * (1 - sourceWeight)) as unknown as Rgb;
+        assert.ok(luminance(color) < luminance(source), `${paletteId} ${mode} ${name} must be darker than its source color`);
+        assert.ok(toneLuminances.every((toneLuminance) => luminance(color) < toneLuminance),
+          `${paletteId} ${mode} ${name} must stay dark against every stack tone`);
+        return { name, color };
+      });
+      for (let left = 0; left < adapted.length; left += 1) {
+        for (let right = left + 1; right < adapted.length; right += 1) {
+          const distance = Math.hypot(...adapted[left]!.color.map((channel, index) => channel - adapted[right]!.color[index]!));
+          assert.ok(distance > 11, `${paletteId} ${mode} ${adapted[left]!.name} and ${adapted[right]!.name} remain distinguishable`);
+        }
+      }
+    }
+  }
 });
 
 test("a stack of five exposes every run through a keyboard-operable bounded deck", () => {

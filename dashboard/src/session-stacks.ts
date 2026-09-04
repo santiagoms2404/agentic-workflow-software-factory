@@ -117,14 +117,22 @@ export function sessionStackToneClass(depthFromFront: number): string | undefine
   return `session-stack-tone-${Math.min(depthFromFront, SESSION_STACK_TONE_COUNT)}`;
 }
 
-/** Assign the nearest peek tone one, then walk the ramp toward the rear. */
+/**
+ * Leave the comparator-selected default run untoned wherever it sits. Assign
+ * every other peek consecutive tones, nearest to front first, without a gap.
+ */
 export function sessionStackTones<Session extends StackableSession>(
   ordered: readonly Session[],
 ): ReadonlyMap<string, string> {
   const tones = new Map<string, string>();
-  for (let index = 0; index < ordered.length - 1; index += 1) {
-    const tone = sessionStackToneClass(ordered.length - 1 - index);
-    if (tone !== undefined) tones.set(ordered[index]!.sessionId, tone);
+  const defaultSession = [...ordered].sort(compareSessionFronts)[0];
+  let depthFromFront = 1;
+  for (let index = ordered.length - 2; index >= 0; index -= 1) {
+    const session = ordered[index]!;
+    if (session.sessionId === defaultSession?.sessionId) continue;
+    const tone = sessionStackToneClass(depthFromFront);
+    if (tone !== undefined) tones.set(session.sessionId, tone);
+    depthFromFront += 1;
   }
   return tones;
 }

@@ -42,8 +42,19 @@ test("a second rework starts above recipe, first-rework, and later journey phase
   assert.ok(secondReworkOrdinals.every((ordinal) => recordedOrdinals.every((recorded) => ordinal > recorded)));
 });
 
-test("the rework command uses journal evidence instead of a phase-count formula", () => {
+test("a phase recorded while confirmation is open is included in the rework ordinal", () => {
+  const evidenceBeforePrompt = [phase("builder", 9), phase("reviewer", 10)];
+  const journeyRecordedBeforeConfirmation = phase("owner-journey", 11);
+  assert.equal(nextReworkPhaseOrdinal(evidenceBeforePrompt), 11, "the stale pre-prompt derivation would collide with the journey");
+  assert.equal(nextReworkPhaseOrdinal([...evidenceBeforePrompt, journeyRecordedBeforeConfirmation]), 12,
+    "the post-confirmation derivation advances beyond the phase recorded during the prompt");
+
   const source = readFileSync(new URL("../../../src/cli/commands/rework.ts", import.meta.url), "utf8");
-  assert.match(source, /const builderOrdinal = nextReworkPhaseOrdinal\(governingEvidence\)/u);
+  const confirmation = source.indexOf("if (!confirmed)");
+  const launchEvidence = source.indexOf("const launchEvidence = await readAttemptEvidence(options.attemptDir)");
+  const derivation = source.indexOf("const builderOrdinal = nextReworkPhaseOrdinal(launchEvidence)");
+  assert.ok(confirmation >= 0 && launchEvidence > confirmation && derivation > launchEvidence,
+    "the launch ordinal must be derived from evidence re-read after confirmation");
+  assert.doesNotMatch(source, /const builderOrdinal = nextReworkPhaseOrdinal\(governingEvidence\)/u);
   assert.doesNotMatch(source, /recipe\.phases\.length\s*\+/u);
 });
