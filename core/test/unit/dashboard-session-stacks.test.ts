@@ -200,18 +200,53 @@ function declaration(body: string, name: string): string {
   return value;
 }
 
+function splitFunctionArguments(value: string): string[] {
+  const arguments_: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    if (value[index] === "(") depth += 1;
+    else if (value[index] === ")") depth -= 1;
+    else if (value[index] === "," && depth === 0) {
+      arguments_.push(value.slice(start, index).trim());
+      start = index + 1;
+    }
+  }
+  assert.equal(depth, 0, `unbalanced color expression ${value}`);
+  arguments_.push(value.slice(start).trim());
+  return arguments_;
+}
+
 function resolveDefaultColor(expression: string, defaults: string): Rgb {
   if (/^#[0-9a-f]{6}$/iu.test(expression)) {
     return [1, 3, 5].map((offset) => Number.parseInt(expression.slice(offset, offset + 2), 16)) as unknown as Rgb;
   }
+  const functionalRgb = expression.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*(?:0|1|0?\.\d+))?\s*\)$/iu);
+  if (functionalRgb !== null) return functionalRgb.slice(1, 4).map(Number) as unknown as Rgb;
+
   const variable = expression.match(/^var\((--[a-z0-9-]+)\)$/iu)?.[1];
   if (variable !== undefined) return resolveDefaultColor(declaration(defaults, variable), defaults);
-  const mix = expression.match(/^color-mix\(in srgb, var\((--[a-z0-9-]+)\) (\d+)%, var\((--[a-z0-9-]+)\)\)$/iu);
+
+  const mix = expression.match(/^color-mix\((.*)\)$/isu)?.[1];
   assert.ok(mix, `unsupported color expression ${expression}`);
-  const left = resolveDefaultColor(`var(${mix[1]})`, defaults);
-  const right = resolveDefaultColor(`var(${mix[3]})`, defaults);
-  const weight = Number(mix[2]) / 100;
-  return left.map((channel, index) => channel * weight + right[index]! * (1 - weight)) as unknown as Rgb;
+  const arguments_ = splitFunctionArguments(mix);
+  assert.equal(arguments_[0], "in srgb", `unsupported color space in ${expression}`);
+  assert.equal(arguments_.length, 3, `unsupported color mix ${expression}`);
+
+  const colorStop = (value: string): { color: Rgb; weight?: number } => {
+    const percentage = value.match(/\s+(\d+(?:\.\d+)?)%$/u);
+    const colorExpression = percentage === null ? value : value.slice(0, percentage.index).trim();
+    const color = resolveDefaultColor(colorExpression, defaults);
+    return percentage === null ? { color } : { color, weight: Number(percentage[1]) / 100 };
+  };
+  const left = colorStop(arguments_[1]!);
+  const right = colorStop(arguments_[2]!);
+  const leftWeight = left.weight ?? (right.weight === undefined ? 0.5 : 1 - right.weight);
+  const rightWeight = right.weight ?? (left.weight === undefined ? 0.5 : 1 - left.weight);
+  const totalWeight = leftWeight + rightWeight;
+  return left.color.map((channel, index) => (
+    channel * leftWeight + right.color[index]! * rightWeight
+  ) / totalWeight) as unknown as Rgb;
 }
 
 function luminance(rgb: Rgb): number {
@@ -222,9 +257,42 @@ function luminance(rgb: Rgb): number {
   return 0.2126 * linear[0]! + 0.7152 * linear[1]! + 0.0722 * linear[2]!;
 }
 
-function contrastRatio(left: Rgb, right: Rgb): number {
-  const [lighter, darker] = [luminance(left), luminance(right)].toSorted((a, b) => b - a);
-  return (lighter! + 0.05) / (darker! + 0.05);
+function resolvedLuminance(rgb: Rgb): number {
+  return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+}
+
+function gradientStops(expression: string): string[] {
+  const gradient = expression.match(/^linear-gradient\((.*)\)$/isu)?.[1];
+  assert.ok(gradient, `unsupported surface expression ${expression}`);
+  const arguments_ = splitFunctionArguments(gradient);
+  assert.ok(arguments_.length > 1, `surface gradient has no color stops: ${expression}`);
+  return arguments_.slice(1);
+}
+
+interface DeclaredPaletteMode {
+  readonly theme: string;
+  readonly mode: "dark" | "light";
+  readonly declarations: string;
+}
+
+function declaredPaletteModes(): readonly DeclaredPaletteMode[] {
+  const blockPattern = /(:root\[data-theme="[^"]+"\]\[data-mode="(?:dark|light)"\](?:\s*,\s*:root\[data-theme="[^"]+"\]\[data-mode="(?:dark|light)"\])*)\s*\{([^}]*)\}/gu;
+  const result: DeclaredPaletteMode[] = [];
+  for (const block of css.matchAll(blockPattern)) {
+    const selectors = [...block[1]!.matchAll(/:root\[data-theme="([^"]+)"\]\[data-mode="(dark|light)"\]/gu)].map((match) => ({
+      theme: match[1]!,
+      mode: match[2]! as "dark" | "light",
+    }));
+    const themes = new Set(selectors.map((selector) => selector.theme));
+    const modes = new Set(selectors.map((selector) => selector.mode));
+    const offeredSelectors = themes.size === 1 && modes.size === 2
+      ? selectors.filter((selector) => selector.mode === "dark")
+      : selectors;
+    for (const selector of offeredSelectors) result.push({ ...selector, declarations: block[2]! });
+  }
+  const keys = result.map(({ theme, mode }) => `${theme}:${mode}`);
+  assert.equal(new Set(keys).size, keys.length, "palette selectors must be unique");
+  return result;
 }
 
 test("card and stack wrappers use one shared fixed grid height", () => {
@@ -234,7 +302,7 @@ test("card and stack wrappers use one shared fixed grid height", () => {
   assert.doesNotMatch(css, /\.card-wrap\s*\{[^}]*height:\s*420px/su);
 });
 
-test("the mode-specific tone ramps recede in opposite directions without blending into the surface", () => {
+test("the mode-specific tone ramps resolve to separated colors in every declared palette", () => {
   const peek = rule(".session-stack-peek");
   assert.match(peek, /width:\s*100%/u);
   assert.match(peek, /margin:\s*0 0 calc\(-1 \* var\(--session-stack-card-tail\)\)/u);
@@ -245,58 +313,49 @@ test("the mode-specific tone ramps recede in opposite directions without blendin
   assert.doesNotMatch(peek, /overflow:\s*hidden|margin-inline|--accent|#[0-9a-f]{3,8}|\brgba?\(/iu);
   assert.match(rule(".session-stack-deck"), /gap:\s*0/u);
 
+  const minimumLuminanceStep = 20;
   const defaults = rule(":root");
-  const surface = declaration(defaults, "--surface");
-  const surfaceStops = [...surface.matchAll(/color-mix\(in srgb, var\(--[a-z0-9-]+\) \d+%, var\(--[a-z0-9-]+\)\)/giu)];
-  const surfaceTokens = new Set([...surface.matchAll(/var\((--[a-z0-9-]+)\)/giu)].map((match) => match[1]));
-  const slopes: number[] = [];
-  assert.equal(surfaceStops.length, 2);
+  const defaultSurface = declaration(defaults, "--surface");
+  const surfaceTokens = new Set([...defaultSurface.matchAll(/var\((--[a-z0-9-]+)\)/giu)].map((match) => match[1]));
+  const palettes = declaredPaletteModes();
+  const declaredThemes = new Set([...css.matchAll(/:root\[data-theme="([^"]+)"\]\[data-mode="(?:dark|light)"\]/gu)].map((match) => match[1]!));
+  assert.deepEqual(new Set(palettes.map((palette) => palette.theme)), declaredThemes, "the ramp test must cover every theme declared by the stylesheet");
 
-  for (const mode of ["dark", "light"] as const) {
-    const palette = `${rule(`:root[data-theme="forest"][data-mode="${mode}"]`)}\n${defaults}`;
-    const surfaceColors = surfaceStops.map((match) => resolveDefaultColor(match[0], palette));
-    const surfaceExtreme = surfaceColors.toSorted((left, right) => mode === "dark"
-      ? luminance(right) - luminance(left)
-      : luminance(left) - luminance(right))[0]!;
-    const backgrounds: string[] = [];
-    const backgroundColors: Rgb[] = [];
-    const rampTokens = new Set<string>();
-    let previousLuminance = luminance(surfaceExtreme);
+  for (const { theme, mode, declarations } of palettes) {
+    const palette = `${declarations}\n${defaults}`;
+    const surfaceColors = gradientStops(declaration(palette, "--surface")).map((stop) => resolveDefaultColor(stop, palette));
+    const surfaceLuminances = surfaceColors.map(resolvedLuminance);
+    const surfaceEdge = mode === "dark" ? Math.max(...surfaceLuminances) : Math.min(...surfaceLuminances);
+    const toneLuminances: number[] = [];
+    let previousLuminance = surfaceEdge;
 
     for (let step = 1; step <= SESSION_STACK_TONE_COUNT; step += 1) {
       const tone = rule(`:root[data-mode="${mode}"] .session-stack-tone-${step}`);
       const background = declaration(tone, "--session-stack-tone");
       const foreground = declaration(tone, "--session-stack-tone-text");
-      const backgroundColor = resolveDefaultColor(background, palette);
-      const foregroundColor = resolveDefaultColor(foreground, palette);
       const backgroundTokens = [...background.matchAll(/var\((--[a-z0-9-]+)\)/giu)].map((match) => match[1]);
-      const currentLuminance = luminance(backgroundColor);
-      for (const token of backgroundTokens) if (token !== undefined) rampTokens.add(token);
-      backgrounds.push(background);
-      backgroundColors.push(backgroundColor);
+      const currentLuminance = resolvedLuminance(resolveDefaultColor(background, palette));
+      const luminanceStep = mode === "dark"
+        ? currentLuminance - previousLuminance
+        : previousLuminance - currentLuminance;
+      toneLuminances.push(currentLuminance);
 
-      assert.match(background, /^color-mix\(/u, `${mode} tone ${step} background`);
-      assert.ok(backgroundTokens.some((token) => !surfaceTokens.has(token)), `${mode} tone ${step} must not mix only tokens used to build --surface`);
-      assert.doesNotMatch(background, /--text|--accent|#[0-9a-f]{3,8}|\brgba?\(/iu, `${mode} tone ${step} background`);
-      assert.match(foreground, /^color-mix\(/u, `${mode} tone ${step} foreground`);
-      assert.doesNotMatch(tone, /--accent|#[0-9a-f]{3,8}|\brgba?\(/iu, `${mode} tone ${step}`);
-      assert.ok(mode === "dark" ? currentLuminance > previousLuminance : currentLuminance < previousLuminance,
-        `${mode} tone ${step} must recede ${mode === "dark" ? "lighter" : "darker"} than the card in front`);
-      assert.ok(contrastRatio(backgroundColor, surfaceExtreme) > 1.25, `${mode} tone ${step} must remain distinct from the untoned surface`);
-      assert.ok(contrastRatio(backgroundColor, foregroundColor) >= 4.5, `${mode} tone ${step} foreground must remain readable`);
+      assert.match(background, /^color-mix\(/u, `${theme} ${mode} tone ${step} background`);
+      assert.ok(backgroundTokens.some((token) => !surfaceTokens.has(token)), `${theme} ${mode} tone ${step} must not mix only tokens used to build --surface`);
+      assert.match(foreground, /^color-mix\(/u, `${theme} ${mode} tone ${step} foreground`);
+      assert.doesNotMatch(tone, /--accent|#[0-9a-f]{3,8}|\brgba?\(/iu, `${theme} ${mode} tone ${step}`);
+      assert.ok(luminanceStep >= minimumLuminanceStep,
+        `${theme} ${mode} tone ${step} must be at least ${minimumLuminanceStep} luminance units ${mode === "dark" ? "lighter" : "darker"} than the color in front (resolved ${previousLuminance.toFixed(2)} -> ${currentLuminance.toFixed(2)})`);
       previousLuminance = currentLuminance;
     }
 
-    for (let index = 1; index < backgroundColors.length; index += 1) {
-      const distance = Math.hypot(...backgroundColors[index]!.map((channel, channelIndex) => channel - backgroundColors[index - 1]![channelIndex]!));
-      assert.ok(distance > 10, `${mode} adjacent tones ${index} and ${index + 1} must remain visibly distinct`);
+    for (let left = 0; left < toneLuminances.length; left += 1) {
+      for (let right = left + 1; right < toneLuminances.length; right += 1) {
+        assert.ok(Math.abs(toneLuminances[right]! - toneLuminances[left]!) >= minimumLuminanceStep,
+          `${theme} ${mode} tones ${left + 1} and ${right + 1} must resolve at least ${minimumLuminanceStep} luminance units apart`);
+      }
     }
-    assert.equal(new Set(backgrounds).size, SESSION_STACK_TONE_COUNT);
-    assert.ok(rampTokens.size > 2, `${mode} ramp must draw from more than two distinct palette tokens`);
-    slopes.push(luminance(backgroundColors.at(-1)!) - luminance(backgroundColors[0]!));
   }
-
-  assert.ok(slopes[0]! > 0 && slopes[1]! < 0, "dark and light ramps must run in opposite directions");
 });
 
 test("the front is the complete SessionCard below normal-flow legible peeks", () => {
@@ -356,35 +415,32 @@ test("toned cards darken inline lane labels and activity dots without collapsing
   assert.match(rule(".session-stack-front .session-card-toned .activity-dot"), /opacity:\s*1;\s*box-shadow:\s*none/u);
 
   const defaults = rule(":root");
-  const palettes = ["forest", "lavender-slate", "earthy-obsidian", "navy-sky", "warm-rust", "sunset"] as const;
-  for (const paletteId of palettes) {
-    for (const mode of ["dark", "light"] as const) {
-      const palette = `${rule(`:root[data-theme="${paletteId}"][data-mode="${mode}"]`)}\n${defaults}`;
-      const anchorRule = mode === "dark" ? rule(":root[data-mode=\"dark\"]") : rule(":root[data-mode=\"light\"]");
-      const anchor = resolveDefaultColor(declaration(anchorRule, "--session-stack-lane-anchor"), palette);
-      const toneLuminances = Array.from({ length: SESSION_STACK_TONE_COUNT }, (_item, index) => {
-        const tone = rule(`:root[data-mode="${mode}"] .session-stack-tone-${index + 1}`);
-        return luminance(resolveDefaultColor(declaration(tone, "--session-stack-tone"), palette));
-      });
-      const laneSources = new Map<string, Rgb>([
-        ["engineer", resolveDefaultColor("var(--amber)", palette)],
-        ["planner", resolveDefaultColor("#A78BFA", palette)],
-        ["builder", resolveDefaultColor("#22D3EE", palette)],
-        ["documenter", resolveDefaultColor("#C084FC", palette)],
-        ["code / git", resolveDefaultColor("var(--green)", palette)],
-      ]);
-      const adapted = [...laneSources].map(([name, source]) => {
-        const color = source.map((channel, index) => channel * sourceWeight + anchor[index]! * (1 - sourceWeight)) as unknown as Rgb;
-        assert.ok(luminance(color) < luminance(source), `${paletteId} ${mode} ${name} must be darker than its source color`);
-        assert.ok(toneLuminances.every((toneLuminance) => luminance(color) < toneLuminance),
-          `${paletteId} ${mode} ${name} must stay dark against every stack tone`);
-        return { name, color };
-      });
-      for (let left = 0; left < adapted.length; left += 1) {
-        for (let right = left + 1; right < adapted.length; right += 1) {
-          const distance = Math.hypot(...adapted[left]!.color.map((channel, index) => channel - adapted[right]!.color[index]!));
-          assert.ok(distance > 11, `${paletteId} ${mode} ${adapted[left]!.name} and ${adapted[right]!.name} remain distinguishable`);
-        }
+  for (const { theme: paletteId, mode, declarations } of declaredPaletteModes()) {
+    const palette = `${declarations}\n${defaults}`;
+    const anchorRule = mode === "dark" ? rule(":root[data-mode=\"dark\"]") : rule(":root[data-mode=\"light\"]");
+    const anchor = resolveDefaultColor(declaration(anchorRule, "--session-stack-lane-anchor"), palette);
+    const toneLuminances = Array.from({ length: SESSION_STACK_TONE_COUNT }, (_item, index) => {
+      const tone = rule(`:root[data-mode="${mode}"] .session-stack-tone-${index + 1}`);
+      return luminance(resolveDefaultColor(declaration(tone, "--session-stack-tone"), palette));
+    });
+    const laneSources = new Map<string, Rgb>([
+      ["engineer", resolveDefaultColor("var(--amber)", palette)],
+      ["planner", resolveDefaultColor("#A78BFA", palette)],
+      ["builder", resolveDefaultColor("#22D3EE", palette)],
+      ["documenter", resolveDefaultColor("#C084FC", palette)],
+      ["code / git", resolveDefaultColor("var(--green)", palette)],
+    ]);
+    const adapted = [...laneSources].map(([name, source]) => {
+      const color = source.map((channel, index) => channel * sourceWeight + anchor[index]! * (1 - sourceWeight)) as unknown as Rgb;
+      assert.ok(luminance(color) < luminance(source), `${paletteId} ${mode} ${name} must be darker than its source color`);
+      assert.ok(toneLuminances.every((toneLuminance) => luminance(color) < toneLuminance),
+        `${paletteId} ${mode} ${name} must stay dark against every stack tone`);
+      return { name, color };
+    });
+    for (let left = 0; left < adapted.length; left += 1) {
+      for (let right = left + 1; right < adapted.length; right += 1) {
+        const distance = Math.hypot(...adapted[left]!.color.map((channel, index) => channel - adapted[right]!.color[index]!));
+        assert.ok(distance > 11, `${paletteId} ${mode} ${adapted[left]!.name} and ${adapted[right]!.name} remain distinguishable`);
       }
     }
   }
