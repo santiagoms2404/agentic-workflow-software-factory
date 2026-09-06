@@ -79,6 +79,10 @@ _marimba_pi() {
      --provider openai-codex "$@"
 }
 
+alias marimba-pi-astra-xhigh="_marimba_pi --model gpt-6-astra   --thinking xhigh"
+alias marimba-pi-astra-high="_marimba_pi --model gpt-6-astra   --thinking high"
+alias marimba-pi-astra-medium="_marimba_pi --model gpt-6-astra   --thinking medium"
+alias marimba-pi-astra-low="_marimba_pi --model gpt-6-astra   --thinking low"
 alias marimba-pi-sol-xhigh="_marimba_pi --model gpt-5.6-sol   --thinking xhigh"
 alias marimba-pi-sol-high="_marimba_pi --model gpt-5.6-sol   --thinking high"
 alias marimba-pi-sol-medium="_marimba_pi --model gpt-5.6-sol   --thinking medium"
