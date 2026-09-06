@@ -41,7 +41,7 @@ import { selectWorkflow, workflowsCommand } from "./commands/workflows.ts";
 /** The complete owner-facing command table; documentation reconciles against it. */
 export const CLI_COMMANDS = Object.freeze([
   "init", "project", "new", "start", "run", "status", "watch", "rework", "review", "raise", "journey", "land", "publish", "cancel", "retry",
-  "doctor", "gc", "dash", "db rebuild", "ticket", "backlog", "quota", "stage", "workflows",
+  "doctor", "gc", "dash", "db rebuild", "ticket", "backlog", "quota", "stage", "workflows", "group",
 ]);
 
 const USAGE = `usage: awsf init [path] --project <slug>\n       awsf <${CLI_COMMANDS.join("|")}> [task] [options]`;
@@ -162,6 +162,15 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
     const stateRoot = parsed.flags["state-root"] === undefined
       ? resolveStateRoot(env)
       : resolve(parsed.flags["state-root"]);
+    if (command === "group") {
+      // Loaded only on the planning route. Ordinary attempts never read a group or packet.
+      const { groupCommand } = await import("./commands/group.ts");
+      const text = await groupCommand({ args: argv.slice(1), stateRoot, cwd,
+        ...(options.terminal === undefined ? {} : { terminal: options.terminal }) });
+      if (options.writeOut) options.writeOut(text);
+      else process.stdout.write(text);
+      return 0;
+    }
     if (command === "doctor") {
       const report = await doctorCommand(stateRoot);
       for (const line of report.lines) out(line);
