@@ -76,19 +76,23 @@ function delegationReason(toolName: string): string {
 
 export default function (pi: ExtensionAPI): void {
   pi.on("session_start", async (_event, ctx) => {
-    // The status is consumed by the optional marimba-aware Pi footer. The
-    // notification remains the human-visible proof that this extension loaded.
+    const announcement =
+      `marimba guard active — ${String(OWNER_ACTS.length)} owner acts and ` +
+      `${String(DELEGATION_STEMS.length)} delegation stems denied at the tool surface. ` +
+      "It is a denial, not a sandbox.";
+    // Startup notifications can be hidden by another extension's notification.
+    // A dedicated widget keeps the guard visible without relying on timing or
+    // a custom footer displaying extension statuses. Each surface is optional
+    // and independent; tool_call below enforces the fences even without a UI.
+    try {
+      ctx.ui.setWidget("marimba-guard", [announcement]);
+    } catch { /* Some harnesses have no widget surface. */ }
     try {
       ctx.ui.setStatus("marimba-guard", "active");
-      ctx.ui.notify(
-        `marimba guard active — ${String(OWNER_ACTS.length)} owner acts and ` +
-          `${String(DELEGATION_STEMS.length)} delegation stems denied at the tool surface. ` +
-          "It is a denial, not a sandbox.",
-      );
-    } catch {
-      // A harness without a notify surface is still guarded; only the
-      // announcement is lost, and `tool_call` below is what enforces.
-    }
+    } catch { /* A custom footer may not support extension statuses. */ }
+    try {
+      ctx.ui.notify(announcement);
+    } catch { /* The widget remains visible when notifications are unavailable. */ }
   });
 
   pi.on("tool_call", async (event, _ctx) => {

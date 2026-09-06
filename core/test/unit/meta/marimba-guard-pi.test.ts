@@ -20,7 +20,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { stripTypeScriptTypes } from "node:module";
 import { test } from "node:test";
+import { runInNewContext } from "node:vm";
 
 import { drivingDir } from "./_driving.ts";
 import {
@@ -42,6 +44,54 @@ function shellList(variable: string): readonly string[] {
   assert.ok(match, `delegation-guard.sh has no \`for ${variable} in ...\` list`);
   return (match[1] ?? "").trim().split(/\s+/u);
 }
+
+// Exercise the actual binding without making the optional installed Pi SDK a
+// repository dependency. Only its tool-name type predicate is substituted. The
+// policy functions below are the same shared functions used in production.
+type Handler = (event: Record<string, unknown>, context: { ui: Record<string, unknown> }) => Promise<{ block: boolean; reason?: string } | void>;
+function bindingHandlers(): Map<string, Handler> {
+  const source = stripTypeScriptTypes(PI_GUARD)
+    .replace(/import \{ isToolCallEventType \} from "@mariozechner\/pi-coding-agent";/u, "")
+    .replace(/import\s*\{[^}]*\}\s*from "\.\/marimba-guard-rules\.mts";/u, "")
+    .replace("export default function", "function registerGuard");
+  const register = runInNewContext(`${source}\nregisterGuard`, {
+    isToolCallEventType: (name: string, event: { toolName: string }) => event.toolName === name,
+    OWNER_ACTS, DELEGATION_STEMS, ownerActViolation, delegationViolation,
+  }) as (api: { on: (name: string, handler: Handler) => void }) => void;
+  const handlers = new Map<string, Handler>();
+  register({ on: (name, handler) => handlers.set(name, handler) });
+  return handlers;
+}
+
+for (const unavailable of ["none", "setStatus", "notify", "setWidget", "all"]) {
+  test(`guard startup keeps independent display paths when ${unavailable} is unavailable`, async () => {
+    const calls: { name: string; args: unknown[] }[] = [];
+    const ui = Object.fromEntries(["setStatus", "notify", "setWidget"].map((name) => [name, (...args: unknown[]) => {
+      if (unavailable === name || unavailable === "all") throw new Error("UI surface unavailable");
+      calls.push({ name, args });
+    }]));
+    const handlers = bindingHandlers();
+    await handlers.get("session_start")!({}, { ui });
+    if (unavailable !== "all") {
+      for (const name of ["setStatus", "notify", "setWidget"].filter((value) => value !== unavailable)) {
+        assert.ok(calls.some((call) => call.name === name), `${name} must not depend on another display path`);
+      }
+      const widget = calls.find((call) => call.name === "setWidget");
+      if (widget) {
+        assert.equal(widget.args[0], "marimba-guard");
+        assert.match((widget.args[1] as string[])[0]!, /marimba guard active/u);
+      }
+    }
+    const denied = await handlers.get("tool_call")!({ toolName: "bash", input: { command: "awsf land example" } }, { ui });
+    assert.equal(denied?.block, true, "display failures must not disable the owner-act fence");
+  });
+}
+
+test("the actual guard binding denies delegation and admits read-only planning", async () => {
+  const handler = bindingHandlers().get("tool_call")!;
+  assert.equal((await handler({ toolName: "Workflow_Dispatch", input: {} }, { ui: {} }))?.block, true);
+  assert.equal((await handler({ toolName: "bash", input: { command: "npm run awsf --silent -- group checklist" } }, { ui: {} }))?.block, false);
+});
 
 // ---------------------------------------------------------------------------
 // 1. The two harnesses carry one rule set.
