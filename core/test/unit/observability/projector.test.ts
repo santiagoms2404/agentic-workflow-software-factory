@@ -9,6 +9,7 @@ import type { PhaseEvidenceRecord, RecordedAgentPurpose } from "../../../src/obs
 import { rebuildDatabase } from "../../../src/observability/rebuild.ts";
 import { openDatabase } from "../../../src/observability/sqlite.ts";
 import { createSession, projectAttemptStatus, projectEvent, type AttemptStatusProjection, type ProjectionContext, type SessionInit } from "../../../src/observability/projector.ts";
+import { routesForSession } from "../../../src/observability/queries.ts";
 
 function freshDb() {
   return openDatabase(":memory:");
@@ -337,6 +338,62 @@ test("agent launch evidence creates a route-attributed null-usage row with exact
     sandbox_badge: "tool-policy",
     sandbox_mechanism: "adapter-tool-policy",
   });
+});
+
+test("route projection retains requested and effective facts, then adds observed evidence", () => {
+  const db = freshDb();
+  try {
+    const route = {
+      phaseId: "builder",
+      requested: {
+        phaseId: "builder", adapterId: "codex", provider: "openai-codex",
+        model: "codex:gpt-5.6-sol", effort: "xhigh",
+        sources: { adapter: "phase-override", provider: "phase-override", model: "phase-override", effort: "phase-override" },
+        evaluation: null,
+      },
+      effective: {
+        adapterId: "codex", adapterKind: "pi-codex", provider: "openai-codex",
+        model: "gpt-5.6-sol", effort: "xhigh",
+      },
+      observed: null,
+      review: { mode: "not-review", degraded: false, detail: null },
+    } as const;
+    assert.equal(projectAttemptStatus(db, attempt({ type: "phase", phase: phaseRecord() }), 1).ok, true);
+    const started = {
+      type: "agent-start", phaseId: "phase-1", agent: "builder", adapterId: "codex",
+      provider: "openai-codex", color: "#22D3EE", requestedModel: "codex:gpt-5.6-sol",
+      sandboxBadge: "tool-policy", sandboxMechanism: "adapter-tool-policy", route, at: SESSION.startedAt,
+    } as NonNullable<AttemptStatusProjection["evidence"]>;
+    assert.equal(projectAttemptStatus(db, { ...attempt(started), stateRevision: 2 }, 2).ok, true);
+    assert.equal(routesForSession(db, "s1")[0]?.route.observed, null);
+
+    const completed = {
+      type: "agent", phaseId: "phase-1", agent: "builder", adapterId: "codex",
+      provider: "openai-codex", color: "#22D3EE", requestedModel: "codex:gpt-5.6-sol",
+      resolvedModel: "gpt-5.6-sol-2026-09-01", modelProvenance: "stream-authoritative",
+      contextWindow: null, usageAuthority: "provider",
+      usage: {
+        inputTokens: 2, outputTokens: 3, cacheReadTokens: 0, cacheWriteTokens: 0,
+        reasoningTokens: 1, reasoningRelation: "included-in-output",
+      },
+      contextTokens: 5, costUsd: null, costAuthority: "unavailable", purpose: "build", at: SESSION.startedAt,
+    } as const;
+    assert.equal(projectAttemptStatus(db, {
+      ...attempt(completed), stateRevision: 3, callsReserved: 0, callsSpent: 1,
+    }, 3).ok, true);
+    const projected = routesForSession(db, "s1")[0]!.route;
+    assert.equal(projected.requested.model, "codex:gpt-5.6-sol");
+    assert.equal(projected.effective.model, "gpt-5.6-sol");
+    assert.deepEqual(projected.observed, {
+      adapterKind: "pi-codex",
+      provider: "openai-codex",
+      requestedModel: "gpt-5.6-sol",
+      resolvedModel: "gpt-5.6-sol-2026-09-01",
+      modelProvenance: "stream-authoritative",
+    });
+  } finally {
+    db.close();
+  }
 });
 
 test("credential-shaped request and event values are scrubbed before SQLite", () => {

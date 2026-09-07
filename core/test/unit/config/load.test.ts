@@ -18,6 +18,7 @@ import {
   ConfigInvalidNoFallbackError,
   ConfigInvalidPersistThinkingError,
   ConfigInvalidSeedPathError,
+  ConfigInvalidPhaseRouteError,
 } from "../../../src/config/load.ts";
 import { MAX_CALL_CEILING } from "../../../src/state/tiers.ts";
 import { repoRoot } from "../meta/_walk.ts";
@@ -210,6 +211,55 @@ test("rejects routing.no_fallback: false", () => {
   const doc = deepClone(validConfig());
   doc.routing.no_fallback = false;
   assert.throws(() => loadConfig(toYaml(doc)), ConfigInvalidNoFallbackError);
+});
+
+test("phase route adapter/provider selection is explicit as a pair", () => {
+  for (const route of [{ adapter: "claude" }, { provider: "anthropic" }]) {
+    const doc = deepClone(validConfig());
+    doc.routing.phase_routes = { builder: route };
+    assert.throws(() => loadConfig(toYaml(doc)), ConfigInvalidPhaseRouteError);
+  }
+
+  const doc = deepClone(validConfig());
+  doc.routing.phase_routes = {
+    builder: { adapter: "claude", provider: "anthropic", model: "claude:opus", effort: "max" },
+  };
+  assert.deepEqual(loadConfig(toYaml(doc)).routing.phase_routes?.builder, doc.routing.phase_routes.builder);
+});
+
+test("an unknown phase route is refused instead of silently ignored", () => {
+  const config = deepClone(validConfig());
+  config.routing.phase_routes = { buidler: { model: "claude:opus" } };
+  assert.throws(() => loadConfig(toYaml(config)), ConfigInvalidPhaseRouteError);
+});
+
+test("same-provider degraded review requires the explicit review-mode literal", () => {
+  const config = deepClone(validConfig());
+  config.routing.review = "same-provider-degraded";
+  assert.equal(loadConfig(toYaml(config)).routing.review, "same-provider-degraded");
+
+  const malformed = deepClone(validConfig()) as unknown as Record<string, unknown>;
+  (malformed.routing as Record<string, unknown>).review = "same-provider";
+  assert.throws(() => loadConfig(toYaml(malformed)), ConfigSchemaError);
+});
+
+test("evaluation metadata must be evidence for a phase selection, never a global score", () => {
+  const config = deepClone(validConfig());
+  config.routing.phase_routes = {
+    builder: {
+      evaluation: {
+        summary: "unattached",
+        sources: [{
+          kind: "official-documentation",
+          title: "source",
+          publisher: "publisher",
+          url: "https://example.invalid/source",
+          checked_at: "2026-09-04",
+        }],
+      },
+    },
+  };
+  assert.throws(() => loadConfig(toYaml(config)), ConfigInvalidPhaseRouteError);
 });
 
 test("rejects traversal, ambiguous separators, and overlapping runtime seed paths", () => {

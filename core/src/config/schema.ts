@@ -44,6 +44,32 @@ const IdentifierString = Type.String({ minLength: 1, pattern: "^[a-zA-Z0-9][a-zA
 const NonEmptyString = Type.String({ minLength: 1 });
 const RiskTier = Type.Union([Type.Literal("T0"), Type.Literal("T1"), Type.Literal("T2")]);
 
+/** Owner-selectable reasoning intent; each adapter must represent it or refuse preflight. */
+export const ROUTE_EFFORT_LEVELS = ["none", "low", "medium", "high", "xhigh", "max"] as const;
+export const REVIEW_ROUTE_MODES = ["invert-provider", "same-provider-degraded"] as const;
+
+export const RouteEvaluationSourceSchema = Type.Object({
+  kind: Type.Union([Type.Literal("official-documentation"), Type.Literal("observed-run")]),
+  title: NonEmptyString,
+  publisher: NonEmptyString,
+  url: Type.String({ minLength: 1, pattern: "^https://" }),
+  checked_at: NonEmptyString,
+}, { additionalProperties: false });
+
+/** Evidence stays attached to one phase route; there is deliberately no score field. */
+export const RouteEvaluationSchema = Type.Object({
+  summary: NonEmptyString,
+  sources: Type.Array(RouteEvaluationSourceSchema, { minItems: 1 }),
+}, { additionalProperties: false });
+
+export const PhaseRouteSelectionSchema = Type.Object({
+  model: Type.Optional(NonEmptyString),
+  effort: Type.Optional(Type.Union(ROUTE_EFFORT_LEVELS.map((level) => Type.Literal(level)))),
+  adapter: Type.Optional(IdentifierString),
+  provider: Type.Optional(NonEmptyString),
+  evaluation: Type.Optional(RouteEvaluationSchema),
+}, { additionalProperties: false });
+
 export const ProjectSlugSchema = Type.String({ minLength: 1, pattern: "^[a-z0-9][a-z0-9-]*$" });
 
 const ProjectSchema = Type.Object(
@@ -106,8 +132,14 @@ const QuotaStopSchema = Type.Object(
 const RoutingSchema = Type.Object(
   {
     default_worker: IdentifierString, // must reference a declared adapters key
-    review: Type.Literal("invert-provider"),
+    // Opposite-provider review remains the default and the shipped value.
+    // Same-provider review has one deliberately alarming spelling and is never
+    // selected from availability, quota, or a transport failure.
+    review: Type.Union(REVIEW_ROUTE_MODES.map((mode) => Type.Literal(mode))),
     no_fallback: Type.Boolean(), // load.ts rejects any value other than `true`
+    // Per-PHASE overrides change only route controls. Prompt, tools, writes and
+    // continuity continue to come from the phase's configured role.
+    phase_routes: Type.Optional(Type.Record(IdentifierString, PhaseRouteSelectionSchema)),
     // Omission disables the stop and preserves pre-W07 behavior.
     quota_stop: Type.Optional(QuotaStopSchema),
   },
@@ -122,13 +154,7 @@ const AgentDefinitionSchema = Type.Object(
   {
     name: IdentifierString,
     model: NonEmptyString,
-    thinking: Type.Union([
-      Type.Literal("none"),
-      Type.Literal("low"),
-      Type.Literal("medium"),
-      Type.Literal("high"),
-      Type.Literal("xhigh"),
-    ]),
+    thinking: Type.Union(ROUTE_EFFORT_LEVELS.map((level) => Type.Literal(level))),
     color: Type.String({ pattern: "^#[0-9A-Fa-f]{6}$" }),
     purpose: NonEmptyString,
     prompt: Type.Object(
