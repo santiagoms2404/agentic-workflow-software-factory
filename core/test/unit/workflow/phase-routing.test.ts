@@ -67,6 +67,33 @@ test("a phase route changes only model, effort, and an explicit adapter/provider
   });
 });
 
+test("an adapter provider label is not enforced without an explicit phase provider override", () => {
+  const config = validConfig();
+  config.adapters.codex!.provider = "stale-quota-label";
+
+  const selected = requestedPhaseRoute(config, "builder", config.agents[0]!);
+  assert.equal(selected.requested.provider, null);
+  assert.equal(selected.requested.sources.provider, "unspecified");
+  assert.doesNotThrow(() => effectivePhaseRoute(selected.requested, "codex", {
+    ...INFO,
+    adapter: "codex",
+    provider: "openai-codex",
+    requestedModel: "gpt-5.6-sol",
+  }));
+});
+
+test("retained role policy compares equivalent values rather than object identity", () => {
+  const role = validConfig().agents[0]!;
+  const equivalent = structuredClone(role);
+  assert.notStrictEqual(equivalent.prompt, role.prompt);
+  assert.notStrictEqual(equivalent.tools, role.tools);
+  assert.notStrictEqual(equivalent.writes, role.writes);
+  assert.equal(retainedRolePolicy(role, equivalent), true);
+
+  equivalent.tools.allow = [...equivalent.tools.allow, "undeclared-tool"];
+  assert.equal(retainedRolePolicy(role, equivalent), false);
+});
+
 test("explicit provider disagreement is refused during route preflight", () => {
   const config = validConfig();
   config.routing.phase_routes = {

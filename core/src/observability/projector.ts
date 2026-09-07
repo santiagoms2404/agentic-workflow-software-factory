@@ -400,7 +400,7 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
       // Route provenance is stored in the existing generic event surface. No
       // schema migration is needed, and every process attempt keeps its own
       // requested/effective record rather than being collapsed by agent name.
-      const route = (evidence as typeof evidence & { readonly route?: RouteSelectionProvenance }).route;
+      const route = evidence.route;
       if (route !== undefined) {
         db.prepare(`INSERT OR IGNORE INTO events
           (event_id, session_id, phase_id, first_source_seq, last_source_seq, type, name,

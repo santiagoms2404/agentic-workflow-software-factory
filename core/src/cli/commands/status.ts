@@ -53,16 +53,12 @@ export function formatStatus(status: AttemptStatus): readonly string[] {
   ]);
 }
 
-type RoutedAgentStart = Extract<AttemptEvidence, { type: "agent-start" }> & {
-  readonly route?: RouteSelectionProvenance;
-};
-
 /** Compact provenance without turning a requested selector into an observed identity. */
 export function formatRouteProvenance(evidence: readonly AttemptEvidence[]): readonly string[] {
   const routes = new Map<string, RouteSelectionProvenance>();
   for (const record of evidence) {
     if (record.type === "agent-start") {
-      const route = (record as RoutedAgentStart).route;
+      const route = record.route;
       if (route !== undefined) routes.set(record.phaseId, route);
       continue;
     }

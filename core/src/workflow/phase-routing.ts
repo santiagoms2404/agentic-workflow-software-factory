@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from "node:util";
 import type { ModelInfo } from "../adapters/interface.ts";
 import type { AgentDefinition, AwsfConfig } from "../config/schema.ts";
 import type {
@@ -18,7 +19,7 @@ export class InvalidPhaseRouteSelection extends Error {
 }
 
 export interface RequestedPhaseRoute {
-  /** A route-adjusted copy. Non-route role policy remains byte-for-byte/reference-identical. */
+  /** A route-adjusted copy. Non-route role policy remains equal by value. */
   readonly agent: AgentDefinition;
   readonly requested: RequestedRouteProvenance;
 }
@@ -42,7 +43,10 @@ export function requestedPhaseRoute(
   }
   const model = override?.model ?? role.model;
   const effort = override?.effort ?? role.thinking;
-  const provider = override?.provider ?? adapterEntry.provider ?? null;
+  // `adapters[].provider` predates phase routing and was not a launch assertion.
+  // Only the phase-level provider selector opts a route into provider enforcement;
+  // otherwise the adapter's preflight answer preserves legacy no-override behaviour.
+  const provider = override?.provider ?? null;
   const adjusted: AgentDefinition = {
     ...role,
     model,
@@ -59,9 +63,7 @@ export function requestedPhaseRoute(
       effort,
       sources: Object.freeze({
         adapter: override?.adapter === undefined ? "agent-default" : "phase-override",
-        provider: override?.provider !== undefined
-          ? "phase-override"
-          : adapterEntry.provider === undefined ? "unspecified" : "agent-default",
+        provider: override?.provider === undefined ? "unspecified" : "phase-override",
         model: override?.model === undefined ? "agent-default" : "phase-override",
         effort: override?.effort === undefined ? "agent-default" : "phase-override",
       }),
@@ -123,15 +125,27 @@ export function routeSelectionProvenance(input: {
   });
 }
 
-/** Object identity makes accidental role-policy changes easy to detect in tests. */
+/** Route selection must retain every non-route role policy by value. */
 export function retainedRolePolicy(
   original: AgentDefinition,
   routed: AgentDefinition,
 ): boolean {
-  return routed.prompt === original.prompt &&
-    routed.tools === original.tools &&
-    routed.writes === original.writes &&
-    routed.harness.continuity === original.harness.continuity &&
-    routed.purpose === original.purpose &&
-    routed.color === original.color;
+  return isDeepStrictEqual(
+    {
+      prompt: routed.prompt,
+      tools: routed.tools,
+      writes: routed.writes,
+      continuity: routed.harness.continuity,
+      purpose: routed.purpose,
+      color: routed.color,
+    },
+    {
+      prompt: original.prompt,
+      tools: original.tools,
+      writes: original.writes,
+      continuity: original.harness.continuity,
+      purpose: original.purpose,
+      color: original.color,
+    },
+  );
 }
