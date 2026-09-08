@@ -37,7 +37,8 @@ case "$1" in
   claude) set -- "$@" --dangerously-skip-permissions \
                       --settings "$SETTINGS" \
                       --append-system-prompt-file "$REPO/$CONTRACT" ;;
-  pi)     set -- "$@" -e "$REPO/docs/driving/marimba/marimba-guard.pi.ts" \
+  pi)     export PI_MARIMBA=1
+          set -- "$@" -e "$REPO/docs/driving/marimba/marimba-guard.pi.ts" \
                       --exclude-tools task,agent,subagent,spawn,dispatch \
                       --append-system-prompt "$(cat "$REPO/$CONTRACT")" \
                       --provider openai-codex ;;

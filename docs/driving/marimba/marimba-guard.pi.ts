@@ -93,17 +93,23 @@ export default function (pi: ExtensionAPI): void {
       "It is a denial, not a sandbox.";
     // Startup notifications can be hidden by another extension's notification.
     // A dedicated widget keeps the guard visible without relying on timing or
-    // a custom footer displaying extension statuses. Each surface is optional
-    // and independent; tool_call below enforces the fences even without a UI.
-    try {
-      ctx.ui.setWidget("marimba-guard", [announcement]);
-    } catch { /* Some harnesses have no widget surface. */ }
+    // a custom footer displaying extension statuses. The local launcher may
+    // suppress both verbose surfaces while retaining the machine-readable
+    // active status. tool_call below enforces the fences even without a UI.
+    const quietUi = typeof process !== "undefined" && process.env.PI_MARIMBA === "1";
+    if (!quietUi) {
+      try {
+        ctx.ui.setWidget("marimba-guard", [announcement]);
+      } catch { /* Some harnesses have no widget surface. */ }
+    }
     try {
       ctx.ui.setStatus("marimba-guard", "active");
     } catch { /* A custom footer may not support extension statuses. */ }
-    try {
-      ctx.ui.notify(announcement);
-    } catch { /* The widget remains visible when notifications are unavailable. */ }
+    if (!quietUi) {
+      try {
+        ctx.ui.notify(announcement);
+      } catch { /* The widget remains visible when notifications are unavailable. */ }
+    }
   });
 
   pi.on("tool_call", async (event, _ctx) => {

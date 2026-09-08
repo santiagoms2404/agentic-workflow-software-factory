@@ -68,12 +68,13 @@ alias marimba='marimba-cc-opus-high'
 # models through github-copilot; those are deliberately absent, because the
 # harness/model pairing is the thing these names promise.
 #
-# Confirm the banner names the guard at session start. A marimba session that
-# does not announce it is not guarded, whatever the alias was called.
+# Pi aliases suppress the verbose startup widget/notification. The persistent
+# `marimba-guard: active` status remains the named loaded-guard signal; a Pi
+# session lacking that status is not guarded, whatever the alias was called.
 
 _marimba_pi() {
   cd "$MARIMBA_CHECKOUT" || return 1
-  pi -e "$MARIMBA_PI_GUARD" \
+  PI_MARIMBA=1 pi -e "$MARIMBA_PI_GUARD" \
      --exclude-tools task,agent,subagent,spawn,dispatch \
      --append-system-prompt "$(cat "$MARIMBA_CONTRACT")" \
      --provider openai-codex "$@"

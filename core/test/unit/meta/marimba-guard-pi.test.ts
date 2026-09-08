@@ -51,7 +51,7 @@ function shellList(variable: string): readonly string[] {
 // repository dependency. Only its tool-name type predicate is substituted. The
 // policy functions below are the same shared functions used in production.
 type Handler = (event: Record<string, unknown>, context: { ui: Record<string, unknown> }) => Promise<{ block: boolean; reason?: string } | void>;
-function bindingHandlers(): Map<string, Handler> {
+function bindingHandlers(environment: Readonly<Record<string, string>> = {}): Map<string, Handler> {
   const source = stripTypeScriptTypes(PI_GUARD)
     .replace(/import \{ isToolCallEventType \} from "@mariozechner\/pi-coding-agent";/u, "")
     .replace(/import\s*\{[^}]*\}\s*from "\.\/marimba-guard-rules\.mts";/u, "")
@@ -60,6 +60,7 @@ function bindingHandlers(): Map<string, Handler> {
     isToolCallEventType: (name: string, event: { toolName: string }) => event.toolName === name,
     OWNER_ACTS, DELEGATION_STEMS, ownerActViolation, delegationViolation,
     TIMEOUT_GUARDED_LIFECYCLE_COMMANDS, lifecycleTimeoutViolation,
+    process: { env: environment },
   }) as (api: { on: (name: string, handler: Handler) => void }) => void;
   const handlers = new Map<string, Handler>();
   register({ on: (name, handler) => handlers.set(name, handler) });
@@ -97,6 +98,19 @@ test("Pi lifecycle timeout floor covers metadata, npm, whitespace, and wrappers"
   assert.equal(lifecycleTimeoutViolation("  awsf   rework T01", 1), "rework");
   assert.equal(lifecycleTimeoutViolation("timeout 60s awsf review T01", undefined), "review");
   assert.equal(lifecycleTimeoutViolation("awsf run T01", undefined), null);
+});
+
+test("quiet Pi startup keeps the named status and both fences", async () => {
+  const calls: { name: string; args: unknown[] }[] = [];
+  const ui = Object.fromEntries(["setStatus", "notify", "setWidget"].map((name) => [name, (...args: unknown[]) => {
+    calls.push({ name, args });
+  }]));
+  const handlers = bindingHandlers({ PI_MARIMBA: "1" });
+  await handlers.get("session_start")!({}, { ui });
+  assert.deepEqual(calls.map((call) => call.name), ["setStatus"]);
+  assert.deepEqual(calls[0]?.args, ["marimba-guard", "active"]);
+  const denied = await handlers.get("tool_call")!({ toolName: "bash", input: { command: "awsf land T01" } }, { ui });
+  assert.equal(denied?.block, true);
 });
 
 test("the actual guard binding denies delegation and admits read-only planning", async () => {

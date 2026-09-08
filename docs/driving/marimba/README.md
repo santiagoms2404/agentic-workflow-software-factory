@@ -120,11 +120,11 @@ the one placeholder.
 **The `-e` is not optional, and this port's one weakness is that forgetting it
 is silent.** The shell guard fails *closed* when its interpreter cannot run — a
 machine defect denies everything and says why. An extension that is simply not
-loaded denies nothing and says nothing. So the guard announces itself at
-`session_start`: **a marimba session whose banner does not name the guard is not
-guarded, whatever the alias was called.** That is a weaker signal than failing
-closed, it is the honest cost of the port, and it is why the banner matters more
-here than on the reference harness.
+loaded denies nothing and says nothing. The Pi aliases set `PI_MARIMBA=1` to
+suppress the verbose startup widget and notification, but the named
+`marimba-guard: active` status remains mandatory: a Pi session lacking that
+status is not guarded, whatever the alias was called. That is a weaker signal
+than failing closed, and the honest cost of this port.
 
 Two differences beyond that, both stated in the extension's own header: there is
 no external interpreter, so neither of the shell guard's two parser-failure
