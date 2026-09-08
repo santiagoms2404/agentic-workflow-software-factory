@@ -29,7 +29,9 @@ import {
   ALLOWED_WHOLE_NAMES,
   DELEGATION_STEMS,
   OWNER_ACTS,
+  TIMEOUT_GUARDED_LIFECYCLE_COMMANDS,
   delegationViolation,
+  lifecycleTimeoutViolation,
   normalizeCommand,
   ownerActViolation,
 } from "../../../../docs/driving/marimba/marimba-guard-rules.mts";
@@ -57,6 +59,7 @@ function bindingHandlers(): Map<string, Handler> {
   const register = runInNewContext(`${source}\nregisterGuard`, {
     isToolCallEventType: (name: string, event: { toolName: string }) => event.toolName === name,
     OWNER_ACTS, DELEGATION_STEMS, ownerActViolation, delegationViolation,
+    TIMEOUT_GUARDED_LIFECYCLE_COMMANDS, lifecycleTimeoutViolation,
   }) as (api: { on: (name: string, handler: Handler) => void }) => void;
   const handlers = new Map<string, Handler>();
   register({ on: (name, handler) => handlers.set(name, handler) });
@@ -87,10 +90,21 @@ for (const unavailable of ["none", "setStatus", "notify", "setWidget", "all"]) {
   });
 }
 
+test("Pi lifecycle timeout floor covers metadata, npm, whitespace, and wrappers", () => {
+  assert.deepEqual([...TIMEOUT_GUARDED_LIFECYCLE_COMMANDS], ["run", "rework", "review"]);
+  assert.equal(lifecycleTimeoutViolation("awsf run T01", 1), "run");
+  assert.equal(lifecycleTimeoutViolation("npm run awsf --silent -- run T01", 1), "run");
+  assert.equal(lifecycleTimeoutViolation("  awsf   rework T01", 1), "rework");
+  assert.equal(lifecycleTimeoutViolation("timeout 60s awsf review T01", undefined), "review");
+  assert.equal(lifecycleTimeoutViolation("awsf run T01", undefined), null);
+});
+
 test("the actual guard binding denies delegation and admits read-only planning", async () => {
   const handler = bindingHandlers().get("tool_call")!;
   assert.equal((await handler({ toolName: "Workflow_Dispatch", input: {} }, { ui: {} }))?.block, true);
   assert.equal((await handler({ toolName: "bash", input: { command: "npm run awsf --silent -- group checklist" } }, { ui: {} }))?.block, false);
+  assert.equal((await handler({ toolName: "bash", input: { command: "awsf run T01", timeout: 1 } }, { ui: {} }))?.block, true);
+  assert.equal((await handler({ toolName: "bash", input: { command: "awsf run T01" } }, { ui: {} }))?.block, false);
 });
 
 // ---------------------------------------------------------------------------

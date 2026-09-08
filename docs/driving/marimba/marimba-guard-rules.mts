@@ -22,6 +22,35 @@
  */
 export const OWNER_ACTS = ["land", "cancel", "rework", "review", "journey", "raise", "publish"] as const;
 
+/** Lifecycle commands for which an external controller deadline is forbidden. */
+export const TIMEOUT_GUARDED_LIFECYCLE_COMMANDS = ["run", "rework", "review"] as const;
+
+function lifecycleCommand(command: string): string | null {
+  const normalized = normalizeCommand(command);
+  const direct = TIMEOUT_GUARDED_LIFECYCLE_COMMANDS.find(
+    (verb) => normalized.includes(`awsf ${verb}`),
+  );
+  if (direct !== undefined) return direct;
+  const npm = / npm run awsf(?: --[^\s]+)* -- (run|rework|review) /u.exec(normalized);
+  return npm?.[1] ?? null;
+}
+
+/**
+ * The lifecycle command receiving an external deadline, or null.
+ *
+ * This intentionally reads written text rather than shell intent. A finite
+ * declared Pi Bash timeout is observable metadata; a written `timeout` token
+ * is the wrapper class this floor can see. Other harness admission is separate
+ * high-trust work rather than an equivalence claim.
+ */
+export function lifecycleTimeoutViolation(command: string, timeout: unknown): string | null {
+  const verb = lifecycleCommand(command);
+  if (verb === null) return null;
+  const finiteMetadata = typeof timeout === "number" && Number.isFinite(timeout);
+  const writtenWrapper = /(?:^|\s)timeout(?:\s|$)/u.test(command);
+  return finiteMetadata || writtenWrapper ? verb : null;
+}
+
 /**
  * Whole-name exclusions, never substrings.
  *

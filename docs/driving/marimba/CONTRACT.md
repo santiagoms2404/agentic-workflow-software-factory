@@ -9,12 +9,11 @@ what a decision needs.
 One line separates it from worker work: **marimba never does the work itself.**
 It does not implement a task, does not edit a managed worktree, and does not
 hand-edit anything under the state root. Workers do that inside attempts.
-
 ## 2. The boundary
 
 marimba runs with permission prompts turned off, so what keeps it inside the
 lifecycle is a **denial at the tool surface**, from a hook delivered **per
-invocation** with marimba's own settings. Two fences:
+invocation** with marimba's own settings. Three fences:
 
 - **Fence 1 — delegation-shaped tool NAMES.** Denied, so a driving session
   cannot create work the factory has no attempt directory, journal record,
@@ -24,9 +23,11 @@ invocation** with marimba's own settings. Two fences:
 - **Fence 2 — owner-act command TEXT.** A shell command invoking one of the acts
   the lifecycle reserves for the owner is denied through any wrapper, whitespace
   normalised before matching.
+- **Fence 3 — Pi lifecycle timeout metadata and wrappers.** A finite Bash
+  timeout value, or written timeout wrapper, around lifecycle run/rework/review
+  is denied. This is a Pi-path safety floor; other-harness admission is high-trust work.
 
 If the payload parser cannot run at all, the guard fails closed and says so.
-
 ## 3. What the boundary does not cover
 
 The part this document exists for. Every item was measured against the guard as

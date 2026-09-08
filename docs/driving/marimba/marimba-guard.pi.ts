@@ -1,6 +1,6 @@
 /**
- * marimba guard, pi port. The same two fences as `delegation-guard.sh`, bound
- * to pi's tool surface instead of a `PreToolUse` shell hook.
+ * marimba guard, pi port. The shared two fences plus the Pi-observable
+ * lifecycle-timeout floor, bound to pi's tool surface.
  *
  * This file is the BINDING only. Both fences live in `marimba-guard-rules.mts`,
  * which imports nothing and which the suite asserts still agrees with the shell
@@ -51,8 +51,19 @@ import {
   DELEGATION_STEMS,
   OWNER_ACTS,
   delegationViolation,
+  lifecycleTimeoutViolation,
   ownerActViolation,
 } from "./marimba-guard-rules.mts";
+
+function lifecycleTimeoutReason(verb: string): string {
+  return [
+    `Denied: AWSF lifecycle ${verb} has an external timeout.`,
+    "",
+    "Do not set a Bash timeout or wrap this lifecycle controller in timeout.",
+    "AWSF owns silence handling and process grace. This Pi-path floor does not",
+    "claim equivalence for another harness; unsupported admission is refused.",
+  ].join("\n");
+}
 
 function ownerActReason(verb: string): string {
   return [
@@ -100,6 +111,8 @@ export default function (pi: ExtensionAPI): void {
     // consequential of the two, and a shell tool is never delegation-shaped, so
     // the order costs nothing. Same order as the shell guard.
     if (isToolCallEventType("bash", event)) {
+      const timeoutVerb = lifecycleTimeoutViolation(event.input.command, event.input.timeout);
+      if (timeoutVerb !== null) return { block: true, reason: lifecycleTimeoutReason(timeoutVerb) };
       const verb = ownerActViolation(event.input.command);
       if (verb !== null) return { block: true, reason: ownerActReason(verb) };
     }
