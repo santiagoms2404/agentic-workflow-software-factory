@@ -14,6 +14,7 @@ export * from "./review-context.ts";
 export * from "./design-context.ts";
 export * from "./design-output.ts";
 export * from "./architecture-review-output.ts";
+export * from "./candidate-adoption.ts";
 export * from "./plan-context.ts";
 export * from "./design-plan-output.ts";
 export * from "./document-output.ts";

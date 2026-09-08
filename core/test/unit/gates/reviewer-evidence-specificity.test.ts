@@ -234,6 +234,25 @@ test("a bounded diff passes with no findings when its partial file is named as a
   assert.equal(review.findings.length, 0, "a limitation is not turned into a finding");
 });
 
+test("every affected omitted test file is named rather than collapsed into a generic limitation", () => {
+  const tests = ["core/test/unit/adoption.test.ts", "core/test/journeys/adoption.test.ts"];
+  const omitted = context({
+    changedFiles: [PATH, ...tests],
+    diffTruncated: true,
+    diffOmittedChars: 240,
+    diffOmittedFiles: tests,
+  });
+  const generic = output({
+    verdict: "accept",
+    findings: [],
+    limitations: ["The bounded diff omitted tests that I could not inspect."],
+  });
+  assert.deepEqual(failedItems(generic, omitted), ["bounded or omitted evidence has a specific limitation"]);
+
+  const named = { ...generic, limitations: tests.map((path) => `The bounded diff omitted ${path}, so I could not verify its changed assertions.`) };
+  assert.equal(report(named, omitted).passed, true);
+});
+
 test("an entirely omitted file must be named, while other limitations cannot stand in for it", () => {
   const omitted = context({
     changedFiles: [PATH, OMITTED],

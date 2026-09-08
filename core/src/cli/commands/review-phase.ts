@@ -49,6 +49,7 @@ import type {
 import { AdapterError } from "../../adapters/interface.ts";
 import { assertPrivateSystemPrompt } from "../../adapters/system-prompt-file.ts";
 import type { AdapterEntry, AgentDefinition, AwsfConfig } from "../../config/schema.ts";
+import { BUILD_OUTPUT_SCHEMA_ID } from "../../contracts/build-output.ts";
 import type { EnvelopeBase } from "../../contracts/envelope-base.ts";
 import {
   UNREPORTED_TOKEN_USAGE,
@@ -401,7 +402,7 @@ export function lastTestOutputFrom(evidence: readonly AttemptEvidence[], candida
 /** The recipe's review phase, and the agent phase the inversion is taken against. */
 export function reviewPhasesOf(recipe: WorkflowRecipe): { readonly review: string; readonly worker: string } {
   const review = recipe.phases.find((phase) => phase.kind === "agent" && phase.schemaId === REVIEW_OUTPUT_SCHEMA_ID);
-  const worker = recipe.phases.find((phase) => phase.kind === "agent" && phase.schemaId !== REVIEW_OUTPUT_SCHEMA_ID);
+  const worker = recipe.phases.find((phase) => phase.kind === "agent" && phase.schemaId === BUILD_OUTPUT_SCHEMA_ID);
   if (review === undefined || worker === undefined) {
     throw new ProductionWorkflowUnsupported(recipe.id, "a review needs both a review phase and a worker phase to invert against");
   }

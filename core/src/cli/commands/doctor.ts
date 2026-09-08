@@ -6,10 +6,12 @@ import { join } from "node:path";
 import { discoverAttempts } from "../../observability/rebuild.ts";
 import { openDatabase, closeDatabase } from "../../observability/sqlite.ts";
 import { listSessions } from "../../observability/queries.ts";
+import { diagnoseRecovery, formatRecoveryDiagnostic } from "../../observability/recovery-diagnostics.ts";
 import { readLockHolder } from "../../persistence/attempt-lock.ts";
 import { lockFilePath } from "../../persistence/platform-paths.ts";
 import { LEGAL_EDGES, TASK_STATES } from "../../state/task-machine.ts";
 import { readAttempt } from "./attempt.ts";
+import { readAttemptEvidence } from "./review-record.ts";
 
 export interface DoctorReport {
   readonly healthy: boolean;
@@ -40,6 +42,8 @@ export async function doctorCommand(stateRoot: string): Promise<DoctorReport> {
     }
     try {
       const status = await readAttempt(attemptDir);
+      const diagnostic = diagnoseRecovery(status, await readAttemptEvidence(attemptDir), pidIsLive);
+      for (const line of formatRecoveryDiagnostic(diagnostic)) lines.push(`${label}: ${line}`);
       if (status.process !== null) {
         const live = pidIsLive(status.process.pid);
         lines.push(`pid: ${label}: ${status.process.pid} is ${live ? "live" : "absent"}`);
@@ -48,6 +52,12 @@ export async function doctorCommand(stateRoot: string): Promise<DoctorReport> {
         } else if (!live) {
           findings.push(`missing pid ${status.process.pid}: active ${label} has no live recorded process`);
         }
+      }
+      if (diagnostic.controller === "missing-pid-controller-orphan" && diagnostic.finding !== null) {
+        findings.push(`${diagnostic.finding}: ${label}`);
+      }
+      if (diagnostic.controller === "cancelled-live-survivor" && status.process === null && diagnostic.pid !== null) {
+        findings.push(`orphan pid ${diagnostic.pid}: terminal ${label} retains a live process`);
       }
     } catch (error) {
       findings.push(`unreadable attempt: ${label}: ${error instanceof Error ? error.message : String(error)}`);
@@ -72,7 +82,7 @@ export async function doctorCommand(stateRoot: string): Promise<DoctorReport> {
 
   lines.push(`matrix: ${LEGAL_EDGES.length} legal edges across ${TASK_STATES.length} states`);
   lines.push(`attempts: ${attempts.length}; database: ${await exists(dbPath) ? "present" : "not built"}`);
-  if (findings.length === 0) lines.push("healthy: no orphan PID, stale lock, degraded session, or projection finding");
+  if (findings.length === 0) lines.push("healthy: no controller orphan, live terminal PID, stale lock, degraded session, or projection finding");
   else lines.push(...findings.map((finding) => `finding: ${finding}`));
   return { healthy: findings.length === 0, lines: Object.freeze(lines) };
 }

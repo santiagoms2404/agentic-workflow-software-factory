@@ -12,6 +12,7 @@ import { resolvePlanSources } from "../registry/plan-source.ts";
 import { resolveStateRoot } from "../persistence/platform-paths.ts";
 import { callCeilingsOf } from "../state/tiers.ts";
 import { processOwnerTerminal, type OwnerTerminal } from "./tty.ts";
+import { adoptCommand } from "./commands/adopt.ts";
 import { backlogCommand } from "./commands/backlog.ts";
 import { cancelCommand } from "./commands/cancel.ts";
 import { doctorCommand } from "./commands/doctor.ts";
@@ -138,6 +139,10 @@ async function ticketStoreForList(repository: string, requestedPlan: string | un
   return !existsSync(store.directory) && planStem === catalog.plans.default
     ? ticketStoreFor(repository)
     : store;
+}
+
+function adoptionTerminal(provided: OwnerTerminal | undefined): OwnerTerminal {
+  return provided ?? processOwnerTerminal();
 }
 
 export interface CliMainOptions {
@@ -550,6 +555,28 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         return result.status.lifecycleState === "CANCELLED" ? 0 : 1;
       }
       case "retry": {
+        const targetTaskId = parsed.flags["adopt-as"];
+        if (targetTaskId !== undefined) {
+          const adopted = await adoptCommand({
+            sourceAttemptDir: located.attemptDir,
+            stateRoot,
+            targetTaskId,
+            worktreeRoot: resolve(parsed.flags["worktree-root"] ?? env.AWSF_WORKTREE_ROOT ?? defaultWorktreeRoot(stateRoot)),
+            terminal: adoptionTerminal(options.terminal),
+            config,
+            configPath,
+            projectRecord: projection.project,
+            assertAdvancement: projection.assertAdvancement,
+            assertLaunchProjection: projection.assertLaunchPermitted,
+          });
+          if (!adopted.confirmed || adopted.status === null) {
+            out("Adoption declined; no target was created and the source is unchanged.");
+            return 1;
+          }
+          out(`Created ${project}/${targetTaskId} continuing ${taskId} at exact candidate ${adopted.status.candidateSha}.`);
+          out(`${adopted.status.lifecycleState}: ${adopted.status.nextAction}`);
+          return adopted.status.lifecycleState === "AWAITING_OWNER" ? 0 : 1;
+        }
         const result = await retryCommand({
           attemptDir: located.attemptDir,
           stateRoot,

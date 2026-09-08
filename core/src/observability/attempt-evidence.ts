@@ -1,5 +1,6 @@
 import type { EnvelopeBase } from "../contracts/envelope-base.ts";
 import type { ModelResolutionProvenance, NormalizedEvent, TokenUsage } from "../contracts/normalized-events.ts";
+import type { CandidateAdoptionEvidence } from "../contracts/candidate-adoption.ts";
 import type { ReviewVerdict } from "../contracts/review-output.ts";
 import type { StoredEnvelope } from "../contracts/stored-envelope.ts";
 import type { BarrierRecord } from "../execution/launcher-barrier.ts";
@@ -51,6 +52,7 @@ export interface PhaseEvidenceRecord {
 
 /** Canonical production evidence carried by one attempt-journal record. */
 export type AttemptEvidence =
+  | { readonly type: "candidate-adoption"; readonly adoption: CandidateAdoptionEvidence }
   | { readonly type: "transition"; readonly id: string; readonly seq: number; readonly from: TaskState; readonly to: TaskState; readonly actor: "host" | "owner" | "human"; readonly edgeId: string; readonly reasonSource: string; readonly reasonCode: string | null; readonly reasonDetail: string | null; readonly spawnSite: boolean; readonly at: string }
   | { readonly type: "phase"; readonly phase: PhaseEvidenceRecord }
   | { readonly type: "normalized-event"; readonly phaseId: string; readonly event: NormalizedEvent }

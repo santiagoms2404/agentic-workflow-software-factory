@@ -1,5 +1,6 @@
 import { ceilingFor } from "../../state/tiers.ts";
 import type { AttemptEvidence } from "../../observability/attempt-evidence.ts";
+import { diagnoseRecovery, formatRecoveryDiagnostic } from "../../observability/recovery-diagnostics.ts";
 import { locateRunReport, runReportRevision } from "../../observability/run-report.ts";
 import { readAttemptEvidence } from "./review-record.ts";
 import { readAttempt, type AttemptStatus } from "./attempt.ts";
@@ -92,6 +93,10 @@ export function formatStatusEvidence(evidence: readonly AttemptEvidence[]): read
   return Object.freeze(lines);
 }
 
+function pidIsLive(pid: number): boolean {
+  try { process.kill(pid, 0); return true; } catch { return false; }
+}
+
 export async function statusCommand(
   attemptDir: string,
   options: { readonly evidence?: boolean } = {},
@@ -112,6 +117,9 @@ export async function statusCommand(
       : "";
     lines.push(`Run report: ${report.absolutePath} — human-readable projection of the retained attempt evidence${stale}`);
   }
-  if (options.evidence === true) lines.push(...formatStatusEvidence(records));
+  if (options.evidence === true) {
+    lines.push(...formatRecoveryDiagnostic(diagnoseRecovery(status, records, pidIsLive)));
+    lines.push(...formatStatusEvidence(records));
+  }
   return Object.freeze(lines);
 }

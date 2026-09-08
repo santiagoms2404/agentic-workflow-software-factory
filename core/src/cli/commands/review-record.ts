@@ -225,8 +225,16 @@ export function recordedRoutes(
       requestedModel: record.requestedModel,
       systemPrompt: systemPrompts.get(record.phaseId) ?? null,
     };
-    if (reviewPhaseIds.has(record.phaseId)) review = route;
-    else worker = route;
+    if (reviewPhaseIds.has(record.phaseId) || record.purpose === "review") {
+      review = route;
+    } else if (record.purpose === "build") {
+      worker = route;
+    } else if (record.purpose !== "support" && worker === null) {
+      // Legacy journals did not distinguish build from support. Preserve their
+      // one recorded worker route without allowing a modern planner or
+      // documenter to overwrite the candidate-producing provider.
+      worker = route;
+    }
   }
   return { worker, review };
 }
