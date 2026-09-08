@@ -7,7 +7,7 @@ import { stringUnion } from "./typebox.ts";
  *
  * This is host evidence, not an agent envelope. The target journal records the
  * exact Git objects and source revision it inspected; it never copies a source
- * envelope, gate row, approval, provider session, or attempt-private file.
+ * request, envelope, gate row, approval, provider session, or attempt-private file.
  */
 export const CandidateAdoptionEvidenceSchema = Type.Object({
   sourceProject: Type.String({ minLength: 1 }),

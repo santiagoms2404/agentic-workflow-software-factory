@@ -101,7 +101,7 @@ export function validReviewOutput(): ReviewOutput {
         evidence: "trimmed.lastIndexOf('}')",
       },
     ],
-    limitations: ["Did not execute the test suite."],
+    limitations: [{ detail: "Did not execute the test suite.", affectedFiles: [] }],
   };
 }
 
@@ -137,6 +137,7 @@ export function validReviewContext(): ReviewContext {
     diffTruncated: false,
     diffOmittedChars: 0,
     diffOmittedFiles: [],
+    limitationRequiredFiles: [],
     diffSha256: "c".repeat(64),
     diffRef: `raw/review-context-${SHA_A}.diff`,
     testOutput: validTestOutput(),

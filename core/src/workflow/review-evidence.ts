@@ -148,6 +148,11 @@ export async function composeReviewEvidence(request: ReviewEvidenceRequest): Pro
   const changedFiles = candidatePathsBetween(request.worktree, request.baseSha, request.candidateSha);
   const observed = candidateDiff(request.worktree, request.baseSha, request.candidateSha, changedFiles);
   const bounded = boundReviewDiff(observed.sections, REVIEW_CONTEXT_DIFF_MAX_CHARS);
+  const limitationRequiredFiles = new Set(bounded.omittedFiles);
+  for (const match of bounded.diff.matchAll(/^\*\*\* awsf: \d+ of \d+ hunk\(s\) omitted from (.+)$/gmu)) {
+    const path = match[1]?.trim();
+    if (path !== undefined && path.length > 0) limitationRequiredFiles.add(path);
+  }
   const onDisk = await request.retainFullDiff(request.diffRef, observed.whole);
   const context: ReviewContext = {
     schema: REVIEW_CONTEXT_SCHEMA_ID,
@@ -170,6 +175,7 @@ export async function composeReviewEvidence(request: ReviewEvidenceRequest): Pro
     diffTruncated: bounded.truncated,
     diffOmittedChars: bounded.omittedChars,
     diffOmittedFiles: [...bounded.omittedFiles],
+    limitationRequiredFiles: [...limitationRequiredFiles].sort(),
     diffSha256: sha256(observed.whole),
     diffRef: request.diffRef,
     testOutput: request.testOutput,

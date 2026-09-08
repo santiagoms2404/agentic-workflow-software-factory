@@ -6,7 +6,7 @@ export type RecoveryControllerState =
   | "live-process"
   | "missing-pid-controller-orphan"
   | "cancelled-stale-records"
-  | "cancelled-live-survivor";
+  | "terminal-live-survivor";
 
 export interface RecoveryDiagnostic {
   readonly controller: RecoveryControllerState;
@@ -21,6 +21,7 @@ export interface RecoveryDiagnostic {
 const SEALED_SOURCE_STATES = new Set(["BLOCKED", "CANCELLED", "PUBLISHED"]);
 const ACTIVE_PROCESS_STATES = new Set(["REGISTERED", "RUNNING"]);
 const ACTIVE_PHASE_STATES = new Set(["RUNNING", "VALIDATING", "CORRECTING"]);
+const PROVIDER_CONTROLLER_STATES = new Set(["RUNNING", "REVIEWING"]);
 
 function latestPhases(evidence: readonly AttemptEvidence[]): readonly PhaseEvidenceRecord[] {
   const phases = new Map<string, PhaseEvidenceRecord>();
@@ -58,32 +59,39 @@ export function diagnoseRecovery(
   const activePhases = phases.filter((phase) => ACTIVE_PHASE_STATES.has(phase.status));
   const activeProcesses = processes.filter((record) => ACTIVE_PROCESS_STATES.has(record.status));
   const liveProcess = activeProcesses.find((record) => pidIsLive(record.record.identity.pid)) ?? null;
+  const liveStatusProcess = status.process !== null && pidIsLive(status.process.pid)
+    ? { record: { identity: status.process, runId: "status" } }
+    : null;
   const candidateSha = completedCandidate(status, evidence);
 
-  if (status.lifecycleState === "CANCELLED" && (activePhases.length > 0 || activeProcesses.length > 0 || status.process !== null)) {
-    const survivor = liveProcess ?? (status.process !== null && pidIsLive(status.process.pid)
-      ? { record: { identity: status.process, runId: "status" } }
-      : null);
-    const controller: RecoveryControllerState = survivor === null
-      ? "cancelled-stale-records"
-      : "cancelled-live-survivor";
+  const currentLiveProcess = liveProcess ?? liveStatusProcess;
+  if (SEALED_SOURCE_STATES.has(status.lifecycleState) && currentLiveProcess !== null) {
     return Object.freeze({
-      controller,
+      controller: "terminal-live-survivor",
       candidateSha,
-      pid: survivor?.record.identity.pid ?? null,
+      pid: currentLiveProcess.record.identity.pid,
       staleRunningPhases: Object.freeze(activePhases.map((phase) => phase.phaseId)),
       staleRunningProcesses: Object.freeze(activeProcesses.map((record) => record.record.runId)),
-      finding: survivor === null
-        ? null
-        : `cancelled lifecycle retains a live process pid ${String(survivor.record.identity.pid)}`,
+      finding: `${status.lifecycleState} lifecycle retains a live process pid ${String(currentLiveProcess.record.identity.pid)}`,
     });
   }
 
-  if (liveProcess !== null) {
+  if (status.lifecycleState === "CANCELLED" && (activePhases.length > 0 || activeProcesses.length > 0 || status.process !== null)) {
+    return Object.freeze({
+      controller: "cancelled-stale-records",
+      candidateSha,
+      pid: null,
+      staleRunningPhases: Object.freeze(activePhases.map((phase) => phase.phaseId)),
+      staleRunningProcesses: Object.freeze(activeProcesses.map((record) => record.record.runId)),
+      finding: null,
+    });
+  }
+
+  if (currentLiveProcess !== null) {
     return Object.freeze({
       controller: "live-process",
       candidateSha,
-      pid: liveProcess.record.identity.pid,
+      pid: currentLiveProcess.record.identity.pid,
       staleRunningPhases: Object.freeze([]),
       staleRunningProcesses: Object.freeze([]),
       finding: null,
@@ -91,7 +99,7 @@ export function diagnoseRecovery(
   }
 
   const runningAgent = activePhases.some((phase) => phase.kind === "agent");
-  if (status.lifecycleState === "RUNNING" && runningAgent) {
+  if (PROVIDER_CONTROLLER_STATES.has(status.lifecycleState) && runningAgent) {
     const recordedPid = status.process?.pid ?? activeProcesses.at(-1)?.record.identity.pid ?? null;
     return Object.freeze({
       controller: "missing-pid-controller-orphan",
@@ -130,8 +138,8 @@ export function formatRecoveryDiagnostic(diagnostic: RecoveryDiagnostic): readon
           `${String(diagnostic.staleRunningProcesses.length)} retained RUNNING process record(s) are stale evidence, not a live process`,
       );
       break;
-    case "cancelled-live-survivor":
-      lines.push(`recovery: CANCELLED lifecycle has live survivor pid ${String(diagnostic.pid)}; retained RUNNING records are not treated as proof of exit`);
+    case "terminal-live-survivor":
+      lines.push(`recovery: ${diagnostic.finding}; retained RUNNING records are not treated as proof of exit`);
       break;
     case "inactive":
       lines.push("recovery: no live controller or recoverable in-flight process");

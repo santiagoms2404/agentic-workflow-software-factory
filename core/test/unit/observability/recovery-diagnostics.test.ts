@@ -49,10 +49,10 @@ function status(patch: Partial<AttemptStatus> = {}): AttemptStatus {
   };
 }
 
-function phase(state = "RUNNING"): AttemptEvidence {
+function phase(state = "RUNNING", key = "builder"): AttemptEvidence {
   const value: PhaseEvidenceRecord = {
-    phaseId: "diagnostic-session:builder", ordinal: 1, key: "builder", name: "builder",
-    kind: "agent", owner: "builder", description: "build", status: state,
+    phaseId: `diagnostic-session:${key}`, ordinal: 1, key, name: key,
+    kind: "agent", owner: key, description: `run ${key}`, status: state,
     correctionCount: 0, maxCorrections: 1, errorCode: null, errorMessage: null,
     startedAt: "2026-09-01T00:00:00.000Z", endedAt: null, createdAt: "2026-09-01T00:00:00.000Z",
   };
@@ -86,6 +86,18 @@ test("a RUNNING provider phase with no recorded PID is diagnosed as a controller
   assert.match(formatRecoveryDiagnostic(report).join("\n"), /no process PID is recorded/);
 });
 
+test("a REVIEWING attempt with an active reviewer phase and no PID is a controller orphan", () => {
+  const report = diagnoseRecovery(
+    status({ lifecycleState: "REVIEWING", phase: { name: "reviewer", state: "VALIDATING", round: 0, maximumRounds: 1 } }),
+    [phase("VALIDATING", "reviewer")],
+    () => false,
+  );
+  assert.equal(report.controller, "missing-pid-controller-orphan");
+  assert.deepEqual(report.staleRunningPhases, ["diagnostic-session:reviewer"]);
+  assert.equal(report.candidateSha, null);
+  assert.match(formatRecoveryDiagnostic(report).join("\n"), /controller orphan/u);
+});
+
 test("a cancelled lifecycle makes retained RUNNING phase/process rows stale when their PID is absent", () => {
   const report = diagnoseRecovery(
     status({ lifecycleState: "CANCELLED", phase: null, process: null }),
@@ -105,9 +117,21 @@ test("a cancelled lifecycle with a live retained PID is a survivor rather than s
     [phase(), runningProcess(4102)],
     (pid) => pid === 4102,
   );
-  assert.equal(report.controller, "cancelled-live-survivor");
+  assert.equal(report.controller, "terminal-live-survivor");
   assert.equal(report.pid, 4102);
   assert.match(report.finding ?? "", /live process pid 4102/);
+});
+
+test("a BLOCKED lifecycle still reports a live status PID as a surviving process", () => {
+  const identity = { pid: 4103, pgid: 4103, startIdentity: "fixture:4103", startIdentitySource: "fixture" } as const;
+  const report = diagnoseRecovery(
+    status({ lifecycleState: "BLOCKED", phase: null, process: identity }),
+    [],
+    (pid) => pid === 4103,
+  );
+  assert.equal(report.controller, "terminal-live-survivor");
+  assert.equal(report.pid, 4103);
+  assert.match(report.finding ?? "", /BLOCKED lifecycle retains a live process/u);
 });
 
 test("only a sealed candidate with L7 completion evidence is reported", () => {

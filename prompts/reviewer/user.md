@@ -12,7 +12,7 @@ How to work through it:
 
 Two things about the evidence you must respect:
 
-- The diff may be bounded. Any file listed as omitted, and any file whose marker line says hunks were dropped, is one whose complete change you did not see. Open it and judge it from the file itself where you can. Your limitations must name every omitted or partial file individually. In particular, name every affected test file; do not collapse several test paths into a generic "tests were omitted" limitation.
+- The diff may be bounded. `limitationRequiredFiles` is the host-composed complete set of files that were omitted or had hunks dropped. Open each and judge it from the file itself where you can. Return structured limitations: put the explanation in `detail`, and copy every path in `limitationRequiredFiles` into an `affectedFiles` array. Use an empty `affectedFiles` array only for a limitation unrelated to a particular changed file.
 - The command output references are host provenance. They are paths in the host's own attempt directory, not in your working tree, and you cannot open them. The inline output is what you have.
 
 Host evidence:

@@ -122,7 +122,7 @@ function supersededReview(candidateSha: string): ReviewOutput {
       consequence: "a reader of the landed source sees a malformed declaration the gates reported clean",
       evidence: "read from the supplied diff",
     }],
-    limitations: ["scripted original review"],
+    limitations: [{ detail: "scripted original review", affectedFiles: [] }],
   };
 }
 
@@ -413,7 +413,7 @@ class ScriptedReviewer implements HarnessAdapter {
       schema: "awsf.review-output/v1", producerStatus: "success", summary: "audited the reworked candidate on disk",
       artifacts: [], notesForNextPhase: "owner decides",
       verdict: findings.length === 0 ? "accept" : "concern", reviewedSha: reviewed,
-      findings, limitations: ["scripted rework review"],
+      findings, limitations: [{ detail: "scripted rework review", affectedFiles: [] }],
     };
     const runId = registration.runId;
     yield { kind: "run.started", seq: 1, runId, hostAt: AT, providerAt: null, adapter: this.id, requestedModel: request.model };

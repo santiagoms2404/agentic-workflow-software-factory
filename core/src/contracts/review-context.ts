@@ -69,8 +69,14 @@ export const ReviewContextSchema = phaseEnvelope(
     diff: Type.String({ maxLength: REVIEW_CONTEXT_DIFF_MAX_CHARS }),
     diffTruncated: Type.Boolean(),
     diffOmittedChars: Type.Integer({ minimum: 0 }),
-    /** Files no hunk of which survived bounding. The reviewer's `limitations` must name these. */
+    /** Files no hunk of which survived bounding. */
     diffOmittedFiles: Type.Array(WorktreeRelativePath),
+    /**
+     * Every file affected by bounded evidence: wholly omitted files and files
+     * with omitted hunks. Reviewers copy these exact paths into structured
+     * limitations, so coverage never depends on parsing prose.
+     */
+    limitationRequiredFiles: Type.Array(WorktreeRelativePath, { uniqueItems: true }),
     /** Digest of the FULL diff, so a bounded copy can still be proved to be of that diff. */
     diffSha256: Type.String({ pattern: SHA256_PATTERN }),
     /**

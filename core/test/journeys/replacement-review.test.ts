@@ -115,7 +115,7 @@ function unevidencedReview(candidateSha: string): ReviewOutput {
     schema: "awsf.review-output/v1", producerStatus: "success",
     summary: "accepted without inspecting the candidate", artifacts: [],
     notesForNextPhase: "owner decides", verdict: "accept", reviewedSha: candidateSha, findings: [],
-    limitations: ["No diff, patch, or changed-file list was supplied to this phase; I inspected no source file"],
+    limitations: [{ detail: "No diff, patch, or changed-file list was supplied to this phase; I inspected no source file", affectedFiles: [] }],
   };
 }
 
@@ -391,7 +391,7 @@ class ScriptedReviewAdapter implements HarnessAdapter {
       notesForNextPhase: "owner decides",
       verdict: findings.length === 0 ? "accept" : "concern",
       reviewedSha: this.#behaviour === "stale-sha" ? "b".repeat(40) : this.#candidate,
-      findings, limitations: ["scripted replacement review"],
+      findings, limitations: [{ detail: "scripted replacement review", affectedFiles: [] }],
     };
     const runId = registration.runId;
     yield { kind: "run.started", seq: 1, runId, hostAt: AT, providerAt: null, adapter: this.id, requestedModel: request.model };

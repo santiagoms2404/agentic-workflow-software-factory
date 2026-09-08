@@ -258,7 +258,10 @@ export function renderRunReport(
     "",
     review === null
       ? "No review envelope completed."
-      : `Verdict: ${review.verdict}\n\n${sectionList(findings, "No findings were reported.")}\n\nLimitations:\n${sectionList(review.limitations, "- None declared.")}`,
+      : `Verdict: ${review.verdict}\n\n${sectionList(findings, "No findings were reported.")}\n\nLimitations:\n${sectionList(review.limitations.map((limitation) =>
+          typeof limitation === "string"
+            ? limitation
+            : `${limitation.detail}${limitation.affectedFiles.length === 0 ? "" : ` (affected files: ${limitation.affectedFiles.join(", ")})`}`), "- None declared.")}`,
     "",
     "## Final lifecycle",
     "",

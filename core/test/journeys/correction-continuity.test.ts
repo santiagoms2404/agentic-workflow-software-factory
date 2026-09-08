@@ -109,7 +109,7 @@ function review(reviewedSha: string): ReviewOutput {
   return {
     schema: "awsf.review-output/v1", producerStatus: "success", summary: "audited the exact candidate",
     artifacts: [], notesForNextPhase: "owner decides", verdict: "accept",
-    reviewedSha, findings: [], limitations: ["scripted fixture review"],
+    reviewedSha, findings: [], limitations: [{ detail: "scripted fixture review", affectedFiles: [] }],
   };
 }
 

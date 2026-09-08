@@ -56,7 +56,7 @@ export async function doctorCommand(stateRoot: string): Promise<DoctorReport> {
       if (diagnostic.controller === "missing-pid-controller-orphan" && diagnostic.finding !== null) {
         findings.push(`${diagnostic.finding}: ${label}`);
       }
-      if (diagnostic.controller === "cancelled-live-survivor" && status.process === null && diagnostic.pid !== null) {
+      if (diagnostic.controller === "terminal-live-survivor" && status.process === null && diagnostic.pid !== null) {
         findings.push(`orphan pid ${diagnostic.pid}: terminal ${label} retains a live process`);
       }
     } catch (error) {

@@ -4,7 +4,8 @@
 // managed worktree materialized directly from the recorded commit object. No
 // source envelope, gate row, approval, provider locator, or attempt-private
 // byte is copied. The target runs current gates, buys a cold opposite-provider
-// review, then requires a fresh owner journey and landing authorization.
+// review, then requires a fresh owner journey and landing authorization. The
+// target carries freshly entered owner intent rather than the source request.
 
 import { randomUUID } from "node:crypto";
 import { existsSync, promises as fs } from "node:fs";
@@ -92,6 +93,8 @@ export interface AdoptCommandOptions {
   readonly sourceAttemptDir: string;
   readonly stateRoot: string;
   readonly targetTaskId: string;
+  /** Fresh owner intent for the target. Source request bytes never transfer. */
+  readonly request: string;
   readonly worktreeRoot: string;
   readonly terminal: OwnerTerminal;
   readonly config: AwsfConfig;
@@ -176,7 +179,7 @@ export async function inspectSealedCandidate(
     throw new CandidateAdoptionRejected("source attempt retains an unsettled call reservation");
   }
   const diagnostic = diagnoseRecovery(source, evidence, pidIsLive);
-  if (diagnostic.controller === "cancelled-live-survivor") {
+  if (diagnostic.controller === "terminal-live-survivor" || diagnostic.controller === "live-process") {
     throw new CandidateAdoptionRejected(`source attempt still has live survivor pid ${String(diagnostic.pid)}`);
   }
   if (diagnostic.candidateSha === null || source.baseSha === null) {
@@ -205,9 +208,14 @@ export async function inspectSealedCandidate(
   if (git(["merge-base", "--is-ancestor", baseSha, candidateSha]).status !== 0 || baseSha === candidateSha) {
     throw new CandidateAdoptionRejected("candidate is not a non-empty descendant of its recorded base");
   }
-  const identities = runGit(git, ["show", "-s", "--format=%an <%ae>|%cn <%ce>", candidateSha]).trim();
-  if (identities !== `${HOST_AUTHOR}|${HOST_AUTHOR}`) {
-    throw new CandidateAdoptionRejected(`candidate was not created under the owner identity: ${identities}`);
+  const identities = runGit(git, ["log", "--format=%an <%ae>|%cn <%ce>", `${baseSha}..${candidateSha}`])
+    .split("\n")
+    .filter((identity) => identity.length > 0);
+  const foreignIdentity = identities.find((identity) => identity !== `${HOST_AUTHOR}|${HOST_AUTHOR}`);
+  if (identities.length === 0 || foreignIdentity !== undefined) {
+    throw new CandidateAdoptionRejected(
+      `candidate range was not created entirely under the owner identity: ${foreignIdentity ?? "no candidate commit"}`,
+    );
   }
   const paths = candidatePathsBetween(source.repository, baseSha, candidateSha);
   if (paths.length === 0) throw new CandidateAdoptionRejected("candidate changes no tracked path");
@@ -240,6 +248,23 @@ function assertCandidatePinned(candidate: SealedCandidate, worktree: string, whe
       `candidate moved ${when}: canonical/worktree are ${canonicalHead}/${targetHead}, expected ${candidate.baseSha}/${candidate.candidateSha}`,
     );
   }
+}
+
+function candidateWriteGlobs(recipe: WorkflowRecipe, reviewPhaseId: string, config: AwsfConfig): readonly string[] {
+  const globs = new Set<string>();
+  const owners = new Set(
+    recipe.phases
+      .filter((phase) => phase.kind === "agent" && phase.id !== reviewPhaseId)
+      .map((phase) => phase.owner),
+  );
+  for (const owner of owners) {
+    const agent = config.agents.find((candidate) => candidate.name === owner);
+    if (agent === undefined) {
+      throw new CandidateAdoptionRejected(`current config has no ${owner} route whose write boundary can be revalidated`);
+    }
+    for (const glob of agent.writes) globs.add(glob);
+  }
+  return Object.freeze([...globs]);
 }
 
 function adoptionBudget(config: AwsfConfig): AttemptStatus["budget"] {
@@ -299,7 +324,7 @@ async function createTarget(
     worktree: worktree.path,
     workflow: candidate.recipe.id,
     tier: 2,
-    request: candidate.source.request,
+    request: options.request.trim(),
     configSnapshotJson: toConfigSnapshotJson(options.config),
     lifecycleState: "GATING",
     baseSha: candidate.baseSha,
@@ -356,6 +381,9 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
   if (!options.terminal.interactive) {
     throw new CandidateAdoptionRejected("adoption requires an interactive owner terminal");
   }
+  if (options.request.trim().length === 0) {
+    throw new CandidateAdoptionRejected("the distinct target requires fresh owner intent; source request bytes do not transfer");
+  }
   const infra: AdoptionCommandInfrastructure = { ...DEFAULT_INFRASTRUCTURE, ...options.infrastructure };
   const candidate = await inspectSealedCandidate(options.sourceAttemptDir, options.config, infra.pidIsLive);
   if (options.targetTaskId === candidate.source.taskId) {
@@ -386,7 +414,7 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
   options.terminal.write(`Summary: ${candidate.summary}`);
   options.terminal.write(`Distinct target: ${candidate.source.project}/${options.targetTaskId}, continuing ${candidate.source.taskId}`);
   options.terminal.write(`Fresh route: ${route.adapterId} / ${route.model.provider}, opposite source builder provider ${candidate.workerProvider}`);
-  options.terminal.write("No source attempt bytes, calls, gates, reviews, journeys, protected approvals, landing approval, or provider session transfer.");
+  options.terminal.write("No source request, attempt bytes, calls, gates, reviews, journeys, protected approvals, landing approval, or provider session transfer.");
   options.terminal.write("The target gets a new managed worktree at the exact commit, reruns current configured gates, and requires a fresh review, journey, and landing confirmation.");
   const confirmed = await options.terminal.confirm(`Adopt exact candidate ${candidate.candidateSha} into new task ${options.targetTaskId}?`);
   if (!confirmed) return { source: candidate.source, status: null, attemptDir: null, confirmed: false };
@@ -528,39 +556,51 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
     const changed = candidatePathsBetween(status.worktree!, candidate.baseSha, candidate.candidateSha);
     const protectedReport = noProtectedPaths(changed, options.config.policy.protected_paths);
     await persistGate(phaseId, protectedReport);
-    const workerId = phases.worker;
-    const workerOwner = candidate.recipe.phases.find((item) => item.id === workerId)!.owner;
-    const worker = options.config.agents.find((agent) => agent.name === workerOwner);
-    if (worker === undefined) throw new CandidateAdoptionRejected(`current config has no ${workerOwner} route whose write boundary can be revalidated`);
-    const writesReport = writesWithinGlobs(changed, worker.writes);
+    // L7 proves the source recipe's producer phases passed their own per-phase
+    // write gates. Revalidate the cumulative immutable candidate against the
+    // union of every current non-review writer in that recipe. Charging the
+    // whole diff only to the builder rejects valid simple-sdlc documenter paths.
+    const writesReport = writesWithinGlobs(
+      changed,
+      candidateWriteGlobs(candidate.recipe, phases.review, options.config),
+    );
     await persistGate(phaseId, writesReport);
 
     const commands: TestOutput["commands"] = [];
     const failures: string[] = [];
     const sections: string[] = [];
-    for (const [gateId, configured] of Object.entries(options.config.gates)) {
-      assertCandidatePinned(candidate, status.worktree!, `before ${gateId}`);
-      const started = Date.now();
-      const [executable, ...argv] = configured.argv;
-      const result = infra.runCommand(executable!, argv, {
-        timeoutMs: configured.timeout_seconds * 1_000,
-        cwd: status.worktree!,
-        maxBuffer: options.config.runtime.max_output_bytes,
-      });
-      const output = credentialSafeGateOutput(
-        `${result.stdout}${result.stderr}${result.error === null ? "" : `\n${result.error}`}`,
-      );
-      const relative = join("raw", `command-adoption-tests-${gateId}-0.txt`);
-      const absolute = join(attemptDir, relative);
-      await mkdir(dirname(absolute), { recursive: true });
-      await writeFile(absolute, output, { mode: 0o600 });
-      await chmod(absolute, 0o600);
-      const exitCode = result.status ?? -1;
-      commands.push({ gateId, argv: [...configured.argv], exitCode, durationMs: Date.now() - started, outputRef: relative });
-      sections.push(`### ${gateId} (exit ${String(exitCode)})\n${bounded(output, TEST_OUTPUT_TAIL_MAX_CHARS)}`);
-      if (exitCode !== 0) failures.push(`${gateId} exited ${String(exitCode)}`);
-      try { assertCandidatePinned(candidate, status.worktree!, `after ${gateId}`); }
-      catch (error) { failures.push(`${gateId} moved or dirtied the candidate: ${safeFailure(error).message}`); }
+    const structuralReports = [hygiene, protectedReport, writesReport];
+    if (structuralReports.every((report) => report.passed)) {
+      for (const [gateId, configured] of Object.entries(options.config.gates)) {
+        assertCandidatePinned(candidate, status.worktree!, `before ${gateId}`);
+        const started = Date.now();
+        const [executable, ...argv] = configured.argv;
+        const result = infra.runCommand(executable!, argv, {
+          timeoutMs: configured.timeout_seconds * 1_000,
+          cwd: status.worktree!,
+          maxBuffer: options.config.runtime.max_output_bytes,
+        });
+        const output = credentialSafeGateOutput(
+          `${result.stdout}${result.stderr}${result.error === null ? "" : `\n${result.error}`}`,
+        );
+        const relative = join("raw", `command-adoption-tests-${gateId}-0.txt`);
+        const absolute = join(attemptDir, relative);
+        await mkdir(dirname(absolute), { recursive: true });
+        await writeFile(absolute, output, { mode: 0o600 });
+        await chmod(absolute, 0o600);
+        const exitCode = result.status ?? -1;
+        commands.push({ gateId, argv: [...configured.argv], exitCode, durationMs: Date.now() - started, outputRef: relative });
+        sections.push(`### ${gateId} (exit ${String(exitCode)})\n${bounded(output, TEST_OUTPUT_TAIL_MAX_CHARS)}`);
+        if (exitCode !== 0) failures.push(`${gateId} exited ${String(exitCode)}`);
+        try {
+          assertCandidatePinned(candidate, status.worktree!, `after ${gateId}`);
+        } catch (error) {
+          failures.push(`${gateId} moved or dirtied the candidate: ${safeFailure(error).message}`);
+          break;
+        }
+      }
+    } else {
+      failures.push(...structuralReports.filter((report) => !report.passed).map((report) => `${report.gateId} failed`));
     }
     const testOutput: TestOutput = {
       schema: "awsf.test-output/v1",

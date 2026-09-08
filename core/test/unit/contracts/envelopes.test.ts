@@ -269,6 +269,20 @@ test("TestOutput.outputTail is bounded at 4000 characters, verbatim", () => {
   assert.equal(Value.Check(schema, over), false);
 });
 
+test("review limitations carry affected paths structurally rather than in prose", () => {
+  const schema = ENVELOPE_SCHEMAS["awsf.review-output/v1"];
+  const base = VALID_ENVELOPES["awsf.review-output/v1"]();
+  assert.equal(Value.Check(schema, {
+    ...base,
+    limitations: [{ detail: "The complete hunk was unavailable.", affectedFiles: ["core/test/unit/example.test.ts"] }],
+  }), true);
+  assert.equal(Value.Check(schema, { ...base, limitations: ["core/test/unit/example.test.ts was omitted"] }), false);
+  assert.equal(Value.Check(schema, {
+    ...base,
+    limitations: [{ detail: "The complete hunk was unavailable.", affectedFiles: ["../outside"] }],
+  }), false);
+});
+
 test("ReviewFinding.severity is the four-value ordered set, and line may be null but not absent", () => {
   assert.deepEqual([...REVIEW_SEVERITIES], ["low", "medium", "high", "critical"]);
   assert.deepEqual([...REVIEW_VERDICTS], ["accept", "concern"]);

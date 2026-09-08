@@ -21,7 +21,11 @@ import type { ReviewOutput } from "../../src/contracts/review-output.ts";
 import { TEST_OUTPUT_TAIL_MAX_CHARS } from "../../src/contracts/test-output.ts";
 import type { BrokerOptions } from "../../src/execution/transport-broker.ts";
 import { runGit, systemGitRunner } from "../../src/git/changes.ts";
-import { adoptCommand } from "../../src/cli/commands/adopt.ts";
+import {
+  CandidateAdoptionRejected,
+  adoptCommand,
+  inspectSealedCandidate,
+} from "../../src/cli/commands/adopt.ts";
 import { nextRevision, persistAttempt, readAttempt, type AttemptStatus } from "../../src/cli/commands/attempt.ts";
 import { journeyCommand } from "../../src/cli/commands/journey.ts";
 import { landCommand } from "../../src/cli/commands/land.ts";
@@ -102,7 +106,7 @@ class SuccessfulReviewAdapter extends MetadataOnlyAdapter {
       verdict: "accept",
       reviewedSha: this.#candidate,
       findings: [],
-      limitations: ["scripted adoption review"],
+      limitations: [{ detail: "scripted adoption review", affectedFiles: [] }],
     };
     const runId = registration.runId;
     yield { kind: "run.started", seq: 1, runId, hostAt: AT, providerAt: null, adapter: this.id, requestedModel: request.model };
@@ -142,7 +146,15 @@ function terminal(lines: string[]): OwnerTerminal {
   return { interactive: true, write: (line) => { lines.push(line); }, confirm: async () => true };
 }
 
-async function sourceFixture(root: string): Promise<{
+async function sourceFixture(
+  root: string,
+  options: {
+    readonly workflow?: "build-review" | "simple-sdlc";
+    readonly documentation?: boolean;
+    readonly foreignIntermediateCommit?: boolean;
+    readonly liveProcess?: Exclude<AttemptStatus["process"], null>;
+  } = {},
+): Promise<{
   readonly stateRoot: string;
   readonly sourceDir: string;
   readonly repository: string;
@@ -158,7 +170,17 @@ async function sourceFixture(root: string): Promise<{
   const base = git(repository, "rev-parse", "HEAD");
   mkdirSync(join(repository, "core", "src"), { recursive: true });
   writeFileSync(join(repository, "core", "src", "feature.ts"), "export const adopted = true;\n");
-  git(repository, "add", "core/src/feature.ts");
+  const candidatePaths = ["core/src/feature.ts"];
+  if (options.documentation === true) {
+    writeFileSync(join(repository, "README.md"), "base\ndocumented candidate\n");
+    candidatePaths.push("README.md");
+  }
+  git(repository, "add", ...candidatePaths);
+  if (options.foreignIntermediateCommit === true) {
+    git(repository, "-c", "user.name=Foreign Writer", "-c", "user.email=foreign@example.com", "commit", "-m", "feat: foreign intermediate");
+    writeFileSync(join(repository, "README.md"), "base\nowner tip\n");
+    git(repository, "add", "README.md");
+  }
   git(repository, "-c", "user.name=Santiago Marin", "-c", "user.email=santiagomarinsuarez@me.com", "commit", "-m", "feat: generic blocked candidate");
   const candidate = git(repository, "rev-parse", "HEAD");
   git(repository, "reset", "--hard", base);
@@ -167,7 +189,7 @@ async function sourceFixture(root: string): Promise<{
   const initial: AttemptStatus = {
     schema: "awsf/attempt-status/v1", sessionId: "source-session", project: PROJECT,
     taskId: "generic-source", continuesTask: null, attempt: 1, repository, worktree: null,
-    workflow: "build-review", tier: 2, request: "adopt the generic candidate without rebuilding it",
+    workflow: options.workflow ?? "build-review", tier: 2, request: "adopt the generic candidate without rebuilding it",
     configSnapshotJson: "{}", lifecycleState: "GATING", baseSha: base, candidateSha: candidate,
     phase: null,
     budget: {
@@ -190,6 +212,32 @@ async function sourceFixture(root: string): Promise<{
       contextTokens: null, costUsd: null, costAuthority: "unavailable", purpose: "build", at: AT,
     },
   });
+  if (options.liveProcess !== undefined) {
+    source = await persistAttempt(sourceDir, source.revision, {
+      kind: "attempt.updated",
+      next: nextRevision(source, { process: options.liveProcess }),
+      evidence: {
+        type: "process",
+        phaseId: "source-session:builder",
+        adapterId: "codex",
+        role: "builder",
+        record: {
+          identity: options.liveProcess,
+          runId: "surviving-builder",
+          edge: "L4",
+          reservationId: "spent-reservation",
+          command: ["fixture"],
+          cwd: repository,
+        },
+        status: "RUNNING",
+        registeredAt: AT,
+        releasedAt: AT,
+        endedAt: null,
+        exitCode: null,
+        exitSignal: null,
+      },
+    });
+  }
   source = await persistAttempt(sourceDir, source.revision, {
     kind: "attempt.transitioned",
     next: nextRevision(source, {
@@ -232,6 +280,7 @@ test("a generic blocked candidate enters only a distinct continuation, fails fre
       sourceAttemptDir: fixture.sourceDir,
       stateRoot: fixture.stateRoot,
       targetTaskId: "generic-continuation",
+      request: "finish the generic candidate under fresh owner intent",
       worktreeRoot: join(root, "worktrees"),
       terminal: terminal(lines),
       config,
@@ -258,12 +307,14 @@ test("a generic blocked candidate enters only a distinct continuation, fails fre
     assert.equal([...adapters.values()].reduce((sum, adapter) => sum + adapter.launches, 0), 0);
     assert.deepEqual(readFileSync(journalFilePath(fixture.sourceDir)), before.journal);
     assert.deepEqual(readFileSync(statusFilePath(fixture.sourceDir)), before.status);
-    assert.match(lines.join("\n"), /No source attempt bytes, calls, gates, reviews, journeys, protected approvals, landing approval, or provider session transfer/);
+    assert.match(lines.join("\n"), /No source request, attempt bytes, calls, gates, reviews, journeys, protected approvals, landing approval, or provider session transfer/);
+    assert.equal(result.status?.request, "finish the generic candidate under fresh owner intent");
 
     const targetEvidence = readFileSync(journalFilePath(result.attemptDir!), "utf8");
     assert.match(targetEvidence, /"type":"candidate-adoption"/);
     assert.match(targetEvidence, /"sourceEvidenceCopied":false/);
     assert.match(targetEvidence, /"sourceApprovalsCopied":false/);
+    assert.equal(targetEvidence.includes(fixture.source.request), false, "source request bytes do not transfer");
     assert.equal(targetEvidence.includes("generic gate failed"), true);
     const testEnvelope = JSON.parse(
       readFileSync(join(result.attemptDir!, "envelopes", "adoption-tests-0.json"), "utf8"),
@@ -271,6 +322,159 @@ test("a generic blocked candidate enters only a distinct continuation, fails fre
     assert.equal(testEnvelope.payload.outputTail.length, TEST_OUTPUT_TAIL_MAX_CHARS);
     assert.equal(testEnvelope.payload.outputTail.endsWith("…"), true, "the ellipsis is inside the schema ceiling");
     assert.equal((await readAttempt(result.attemptDir!)).lifecycleState, "BLOCKED");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a simple-sdlc candidate is revalidated against every recipe writer's current globs", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-adoption-multi-writer-"));
+  try {
+    const fixture = await sourceFixture(root, { workflow: "simple-sdlc", documentation: true });
+    const loaded = loadConfig(readFileSync(resolve("awsf.config.yaml"), "utf8"));
+    const config: AwsfConfig = {
+      ...loaded,
+      runtime: { ...loaded.runtime, seed_paths: [] },
+      gates: { test: { argv: ["fixture-test"], timeout_seconds: 1 } },
+    };
+    const result = await adoptCommand({
+      sourceAttemptDir: fixture.sourceDir,
+      stateRoot: fixture.stateRoot,
+      targetTaskId: "multi-writer-continuation",
+      request: "adopt the implementation and its documentation",
+      worktreeRoot: join(root, "worktrees"),
+      terminal: terminal([]),
+      config,
+      configPath: resolve("awsf.config.yaml"),
+      infrastructure: {
+        adapterFor: (_entry, id) => new MetadataOnlyAdapter(id, id === "claude" ? "anthropic" : "openai-codex"),
+        now: () => AT,
+        sessionId: () => "multi-writer-target-session",
+        pidIsLive: () => false,
+        runCommand: () => ({ status: 1, stdout: "stop after structural gates\n", stderr: "", error: null }),
+      },
+    });
+
+    assert.equal(result.status?.lifecycleState, "BLOCKED", "the configured fixture gate still stops the journey");
+    const journal = readFileSync(journalFilePath(result.attemptDir!), "utf8");
+    assert.match(journal, /"gateId":"writes_within_globs"[^\n]*"passed":true/u);
+    assert.match(journal, /"item":"README\.md","ok":true/u);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("every commit in the adopted range must carry the owner author and committer identity", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-adoption-identity-range-"));
+  try {
+    const fixture = await sourceFixture(root, { foreignIntermediateCommit: true });
+    const config = loadConfig(readFileSync(resolve("awsf.config.yaml"), "utf8"));
+    await assert.rejects(
+      inspectSealedCandidate(fixture.sourceDir, config, () => false),
+      (error: unknown) => error instanceof CandidateAdoptionRejected && /Foreign Writer <foreign@example\.com>/u.test(error.message),
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a BLOCKED source with a live surviving PID is refused before target creation", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-adoption-live-source-"));
+  try {
+    const identity = { pid: 4911, pgid: 4911, startIdentity: "fixture:4911", startIdentitySource: "fixture" } as const;
+    const fixture = await sourceFixture(root, { liveProcess: identity });
+    const config = loadConfig(readFileSync(resolve("awsf.config.yaml"), "utf8"));
+    await assert.rejects(
+      inspectSealedCandidate(fixture.sourceDir, config, (pid) => pid === identity.pid),
+      (error: unknown) => error instanceof CandidateAdoptionRejected && /live survivor pid 4911/u.test(error.message),
+    );
+    assert.equal(existsSync(join(fixture.stateRoot, "projects", PROJECT, "tasks", "live-source-target")), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("configured commands do not execute when a fresh structural policy gate fails", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-adoption-structural-failure-"));
+  try {
+    const fixture = await sourceFixture(root);
+    const loaded = loadConfig(readFileSync(resolve("awsf.config.yaml"), "utf8"));
+    const config: AwsfConfig = {
+      ...loaded,
+      runtime: { ...loaded.runtime, seed_paths: [] },
+      policy: { ...loaded.policy, protected_paths: [...loaded.policy.protected_paths, "core/src/**"] },
+      gates: { test: { argv: ["fixture-test"], timeout_seconds: 1 } },
+    };
+    let commandCalls = 0;
+    const result = await adoptCommand({
+      sourceAttemptDir: fixture.sourceDir,
+      stateRoot: fixture.stateRoot,
+      targetTaskId: "structurally-refused-continuation",
+      request: "refuse protected candidate execution",
+      worktreeRoot: join(root, "worktrees"),
+      terminal: terminal([]),
+      config,
+      configPath: resolve("awsf.config.yaml"),
+      infrastructure: {
+        adapterFor: (_entry, id) => new MetadataOnlyAdapter(id, id === "claude" ? "anthropic" : "openai-codex"),
+        now: () => AT,
+        sessionId: () => "structurally-refused-target-session",
+        pidIsLive: () => false,
+        runCommand: () => {
+          commandCalls += 1;
+          return { status: 0, stdout: "must not run\n", stderr: "", error: null };
+        },
+      },
+    });
+
+    assert.equal(result.status?.lifecycleState, "BLOCKED");
+    assert.equal(commandCalls, 0);
+    assert.match(result.status?.blocker?.detail ?? "", /no_protected_paths failed/u);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a gate that dirties the immutable candidate prevents every later configured command", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-adoption-mutating-gate-"));
+  try {
+    const fixture = await sourceFixture(root);
+    const loaded = loadConfig(readFileSync(resolve("awsf.config.yaml"), "utf8"));
+    const config: AwsfConfig = {
+      ...loaded,
+      runtime: { ...loaded.runtime, seed_paths: [] },
+      gates: {
+        first: { argv: ["fixture-first"], timeout_seconds: 1 },
+        second: { argv: ["fixture-second"], timeout_seconds: 1 },
+      },
+    };
+    const calls: string[] = [];
+    const result = await adoptCommand({
+      sourceAttemptDir: fixture.sourceDir,
+      stateRoot: fixture.stateRoot,
+      targetTaskId: "mutating-gate-continuation",
+      request: "refuse mutation by a configured gate",
+      worktreeRoot: join(root, "worktrees"),
+      terminal: terminal([]),
+      config,
+      configPath: resolve("awsf.config.yaml"),
+      infrastructure: {
+        adapterFor: (_entry, id) => new MetadataOnlyAdapter(id, id === "claude" ? "anthropic" : "openai-codex"),
+        now: () => AT,
+        sessionId: () => "mutating-gate-target-session",
+        pidIsLive: () => false,
+        runCommand: (executable, _argv, command) => {
+          calls.push(executable);
+          writeFileSync(join(command.cwd, "core", "src", "gate-mutation.ts"), "export const mutation = true;\n");
+          return { status: 0, stdout: "mutated\n", stderr: "", error: null };
+        },
+      },
+    });
+
+    assert.equal(result.status?.lifecycleState, "BLOCKED");
+    assert.deepEqual(calls, ["fixture-first"]);
+    assert.match(result.status?.blocker?.detail ?? "", /first moved or dirtied the candidate/u);
+    assert.equal(existsSync(join(result.attemptDir!, "raw", "command-adoption-tests-second-0.txt")), false);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -292,6 +496,7 @@ test("credential-shaped fresh gate output is rejected before retention, journali
       sourceAttemptDir: fixture.sourceDir,
       stateRoot: fixture.stateRoot,
       targetTaskId: "credential-continuation",
+      request: "adopt only credential-safe candidate evidence",
       worktreeRoot: join(root, "worktrees"),
       terminal: terminal([]),
       config,
@@ -348,6 +553,7 @@ test("a gates-pass adoption buys a fresh opposite-provider review, then requires
       sourceAttemptDir: fixture.sourceDir,
       stateRoot: fixture.stateRoot,
       targetTaskId: "successful-continuation",
+      request: "complete fresh assurance for the adopted candidate",
       worktreeRoot: join(root, "worktrees"),
       terminal: terminal([]),
       config,

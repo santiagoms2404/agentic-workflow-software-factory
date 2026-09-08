@@ -561,6 +561,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
             sourceAttemptDir: located.attemptDir,
             stateRoot,
             targetTaskId,
+            request: parsed.flags.request ?? "",
             worktreeRoot: resolve(parsed.flags["worktree-root"] ?? env.AWSF_WORKTREE_ROOT ?? defaultWorktreeRoot(stateRoot)),
             terminal: adoptionTerminal(options.terminal),
             config,

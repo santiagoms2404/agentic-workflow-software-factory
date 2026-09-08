@@ -13,6 +13,7 @@ import { validReviewContext, validReviewOutput } from "../contracts/fixtures.ts"
 const SHA = "a".repeat(40);
 const PATH = "core/src/contracts/index.ts";
 const OMITTED = "core/src/contracts/registry.ts";
+const OMITTED_PROMPT_TEST = "core/test/unit/workflow/prompt-composition.test.ts";
 
 function finding(patch: Partial<ReviewFinding> = {}): ReviewFinding {
   return {
@@ -162,6 +163,7 @@ test("a tersely agreeable accept fails only when bounded evidence requires a lim
     diff: `${validReviewContext().diff}\n*** awsf: 1 of 2 hunk(s) omitted from ${PATH}\n`,
     diffTruncated: true,
     diffOmittedChars: 80,
+    limitationRequiredFiles: [PATH],
   });
   const terse = output({
     summary: "Looks good.",
@@ -224,11 +226,15 @@ test("a bounded diff passes with no findings when its partial file is named as a
     diff: `${validReviewContext().diff}\n*** awsf: 1 of 2 hunk(s) omitted from ${PATH}\n`,
     diffTruncated: true,
     diffOmittedChars: 80,
+    limitationRequiredFiles: [PATH],
   });
   const review = output({
     verdict: "accept",
     findings: [],
-    limitations: [`The bounded diff omits one hunk from ${PATH}, so I could not verify its removed branch.`],
+    limitations: [{
+      detail: "The bounded diff omits one hunk, so I could not verify its removed branch.",
+      affectedFiles: [PATH],
+    }],
   });
   assert.equal(report(review, bounded).passed, true);
   assert.equal(review.findings.length, 0, "a limitation is not turned into a finding");
@@ -241,16 +247,55 @@ test("every affected omitted test file is named rather than collapsed into a gen
     diffTruncated: true,
     diffOmittedChars: 240,
     diffOmittedFiles: tests,
+    limitationRequiredFiles: tests,
   });
   const generic = output({
     verdict: "accept",
     findings: [],
-    limitations: ["The bounded diff omitted tests that I could not inspect."],
+    limitations: [{ detail: "The bounded diff omitted tests that I could not inspect.", affectedFiles: [] }],
   });
   assert.deepEqual(failedItems(generic, omitted), ["bounded or omitted evidence has a specific limitation"]);
 
-  const named = { ...generic, limitations: tests.map((path) => `The bounded diff omitted ${path}, so I could not verify its changed assertions.`) };
+  const named = {
+    ...generic,
+    limitations: [{ detail: "The complete changes were withheld from review.", affectedFiles: tests }],
+  };
   assert.equal(report(named, omitted).passed, true);
+});
+
+test("a contradictory host limitation list cannot hide a path proved omitted elsewhere", () => {
+  const omitted = context({
+    changedFiles: [PATH, OMITTED],
+    diffTruncated: true,
+    diffOmittedChars: 80,
+    diffOmittedFiles: [OMITTED],
+    limitationRequiredFiles: [],
+  });
+  const review = output({
+    verdict: "accept",
+    findings: [],
+    limitations: [{ detail: "No file-specific limitation was reported.", affectedFiles: [] }],
+  });
+  assert.deepEqual(failedItems(review, omitted), ["bounded or omitted evidence has a specific limitation"]);
+});
+
+test("the omitted prompt-composition test is covered structurally regardless of limitation wording", () => {
+  const omitted = context({
+    changedFiles: [PATH, OMITTED_PROMPT_TEST],
+    diffTruncated: true,
+    diffOmittedChars: 80,
+    diffOmittedFiles: [OMITTED_PROMPT_TEST],
+    limitationRequiredFiles: [OMITTED_PROMPT_TEST],
+  });
+  const review = output({
+    verdict: "accept",
+    findings: [],
+    limitations: [{
+      detail: "I opened the file, but its complete hunk was withheld from me.",
+      affectedFiles: [OMITTED_PROMPT_TEST],
+    }],
+  });
+  assert.equal(report(review, omitted).passed, true);
 });
 
 test("an entirely omitted file must be named, while other limitations cannot stand in for it", () => {
@@ -259,14 +304,18 @@ test("an entirely omitted file must be named, while other limitations cannot sta
     diffTruncated: true,
     diffOmittedChars: 120,
     diffOmittedFiles: [OMITTED],
+    limitationRequiredFiles: [OMITTED],
   });
   const named = output({
     verdict: "accept",
     findings: [],
-    limitations: [`The bounded diff omitted ${OMITTED}, so I could not inspect its removed lines.`],
+    limitations: [{ detail: "I did not see this file's complete change.", affectedFiles: [OMITTED] }],
   });
-  assert.equal(report(named, omitted).passed, true);
+  assert.equal(report(named, omitted).passed, true, "wording does not control structured path coverage");
 
-  const unnamed = { ...named, limitations: ["The bounded diff omitted another surface that I could not inspect."] };
+  const unnamed = {
+    ...named,
+    limitations: [{ detail: "The bounded diff omitted another surface that I could not inspect.", affectedFiles: [] }],
+  };
   assert.deepEqual(failedItems(unnamed, omitted), ["bounded or omitted evidence has a specific limitation"]);
 });

@@ -59,7 +59,7 @@ function review(reviewedSha: string, findings: ReviewOutput["findings"] = []): R
   return {
     schema: "awsf.review-output/v1", producerStatus: "success", summary: "audited the exact candidate",
     artifacts: [], notesForNextPhase: "owner decides", verdict: findings.length === 0 ? "accept" : "concern",
-    reviewedSha, findings, limitations: ["scripted fixture review"],
+    reviewedSha, findings, limitations: [{ detail: "scripted fixture review", affectedFiles: [] }],
   };
 }
 

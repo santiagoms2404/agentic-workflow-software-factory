@@ -67,7 +67,11 @@ export function reviewFindingSpecificity(
 }
 
 function omittedEvidencePaths(context: ReviewContext): readonly string[] {
-  const paths = new Set(context.diffOmittedFiles);
+  // Derive every redundant source independently. A malformed retained context
+  // may disagree with the host-composed field and must fail closed rather than
+  // hide a path that diffOmittedFiles or an inline marker still proves omitted.
+  const paths = new Set(context.limitationRequiredFiles ?? []);
+  for (const path of context.diffOmittedFiles) paths.add(path);
   const marker = /^\*\*\* awsf: \d+ of \d+ hunk\(s\) omitted from (.+)$/gm;
   for (const match of context.diff.matchAll(marker)) {
     const path = match[1]?.trim();
@@ -75,8 +79,6 @@ function omittedEvidencePaths(context: ReviewContext): readonly string[] {
   }
   return Object.freeze([...paths].sort());
 }
-
-const EVIDENCE_LIMITATION = /\b(?:bound(?:ed|ing)?|could not (?:check|inspect|see|verify)|diff|hunk|omitt\w*|not (?:shown|supplied|visible)|truncat\w*|unable to (?:check|inspect|see|verify))\b/i;
 
 function hasRequiredEvidenceLimitation(output: ReviewOutput, context: ReviewContext): {
   readonly required: boolean;
@@ -86,9 +88,9 @@ function hasRequiredEvidenceLimitation(output: ReviewOutput, context: ReviewCont
   const paths = omittedEvidencePaths(context);
   const required = context.diffTruncated || context.diffOmittedChars > 0 || paths.length > 0;
   if (!required) return { required, ok: true, paths };
-  const relevant = output.limitations.filter((limitation) => EVIDENCE_LIMITATION.test(limitation));
-  const named = paths.every((path) => relevant.some((limitation) => limitation.includes(path)));
-  return { required, ok: relevant.length > 0 && named, paths };
+  const affected = new Set(output.limitations.flatMap((limitation) => limitation.affectedFiles));
+  const named = paths.every((path) => affected.has(path));
+  return { required, ok: output.limitations.length > 0 && named, paths };
 }
 
 /**

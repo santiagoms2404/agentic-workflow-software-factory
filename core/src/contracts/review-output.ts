@@ -20,6 +20,16 @@ export function severityRank(severity: ReviewSeverity): number {
   return REVIEW_SEVERITIES.indexOf(severity);
 }
 
+export const ReviewLimitationSchema = Type.Object(
+  {
+    detail: Type.String({ minLength: 1 }),
+    /** Exact affected repository paths. Empty means the limitation is not file-specific. */
+    affectedFiles: Type.Array(WorktreeRelativePath, { uniqueItems: true }),
+  },
+  { additionalProperties: false },
+);
+export type ReviewLimitation = Static<typeof ReviewLimitationSchema>;
+
 export const ReviewFindingSchema = Type.Object(
   {
     id: Type.String({ minLength: 1 }),
@@ -55,7 +65,7 @@ export const ReviewOutputSchema = phaseEnvelope(
     // not a review of this change.
     reviewedSha: Type.String({ pattern: SHA_PATTERN }),
     findings: Type.Array(ReviewFindingSchema),
-    limitations: Type.Array(Type.String({ minLength: 1 })),
+    limitations: Type.Array(ReviewLimitationSchema),
   },
   "Output of a review phase, always run on the opposite provider from the builder.",
 );

@@ -116,7 +116,7 @@ function review(worktree: string): ReviewOutput {
     verdict: "accept",
     reviewedSha: git(worktree, "rev-parse", "HEAD"),
     findings: [],
-    limitations: ["Scripted offline review."],
+    limitations: [{ detail: "Scripted offline review.", affectedFiles: [] }],
   };
 }
 

@@ -55,7 +55,7 @@ function reviewContext(): ReviewContext {
     testStrategy: ["host gates"], baseSha: "b".repeat(40), candidateSha,
     changedFiles: ["src/change.ts"], insertions: 1, deletions: 0,
     stat: "src/change.ts | 1 +", diff: "@@ -1,0 +1,1 @@\n+change\n", diffTruncated: false,
-    diffOmittedChars: 0, diffOmittedFiles: [], diffSha256: "c".repeat(64),
+    diffOmittedChars: 0, diffOmittedFiles: [], limitationRequiredFiles: [], diffSha256: "c".repeat(64),
     diffRef: "raw/review.diff", testOutput: previousTestOutput(),
   };
 }
