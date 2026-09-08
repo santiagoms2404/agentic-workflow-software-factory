@@ -16,7 +16,7 @@ import { toConfigSnapshotJson } from "../../config/effective-config.ts";
 import type { EnvelopeBase } from "../../contracts/envelope-base.ts";
 import type { CandidateAdoptionEvidence } from "../../contracts/candidate-adoption.ts";
 import { parseEnvelope } from "../../contracts/parse-envelope.ts";
-import type { TestOutput } from "../../contracts/test-output.ts";
+import { TEST_OUTPUT_TAIL_MAX_CHARS, type TestOutput } from "../../contracts/test-output.ts";
 import { wrapEnvelope } from "../../contracts/stored-envelope.ts";
 import { CallBudget } from "../../execution/call-budget.ts";
 import type { BarrierRecord, TerminationReport } from "../../execution/launcher-barrier.ts";
@@ -28,6 +28,7 @@ import { GateReport, type GateId } from "../../gates/interface.ts";
 import { assertClean, runGit, systemGitRunner, type GitResult } from "../../git/changes.ts";
 import { HOST_AUTHOR } from "../../git/commit.ts";
 import { createWorktree, seedWorktreePaths } from "../../git/worktrees.ts";
+import { scrubCredentialString } from "../../policy/redaction.ts";
 import type { AttemptEvidence, PhaseEvidenceRecord } from "../../observability/attempt-evidence.ts";
 import { diagnoseRecovery } from "../../observability/recovery-diagnostics.ts";
 import { writeRunReport } from "../../observability/run-report.ts";
@@ -138,7 +139,18 @@ function gateKind(gateId: GateId): "pure" | "filesystem" | "git" | "subprocess" 
 }
 
 function bounded(value: string, maximum = 2_000): string {
-  return value.length <= maximum ? value : `${value.slice(0, maximum)}…`;
+  if (value.length <= maximum) return value;
+  if (maximum <= 0) return "";
+  return `${value.slice(0, maximum - 1)}…`;
+}
+
+function credentialSafeGateOutput(value: string): string {
+  if (scrubCredentialString(value) !== value) {
+    throw new CandidateAdoptionRejected(
+      "configured gate output contains credential-shaped data and cannot be retained or reviewed",
+    );
+  }
+  return value;
 }
 
 function safeFailure(error: unknown): Error {
@@ -535,7 +547,9 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
         cwd: status.worktree!,
         maxBuffer: options.config.runtime.max_output_bytes,
       });
-      const output = `${result.stdout}${result.stderr}${result.error === null ? "" : `\n${result.error}`}`;
+      const output = credentialSafeGateOutput(
+        `${result.stdout}${result.stderr}${result.error === null ? "" : `\n${result.error}`}`,
+      );
       const relative = join("raw", `command-adoption-tests-${gateId}-0.txt`);
       const absolute = join(attemptDir, relative);
       await mkdir(dirname(absolute), { recursive: true });
@@ -543,7 +557,7 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
       await chmod(absolute, 0o600);
       const exitCode = result.status ?? -1;
       commands.push({ gateId, argv: [...configured.argv], exitCode, durationMs: Date.now() - started, outputRef: relative });
-      sections.push(`### ${gateId} (exit ${String(exitCode)})\n${bounded(output, 4_000)}`);
+      sections.push(`### ${gateId} (exit ${String(exitCode)})\n${bounded(output, TEST_OUTPUT_TAIL_MAX_CHARS)}`);
       if (exitCode !== 0) failures.push(`${gateId} exited ${String(exitCode)}`);
       try { assertCandidatePinned(candidate, status.worktree!, `after ${gateId}`); }
       catch (error) { failures.push(`${gateId} moved or dirtied the candidate: ${safeFailure(error).message}`); }
@@ -558,7 +572,7 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
       candidateSha: candidate.candidateSha,
       commands,
       failures,
-      outputTail: bounded(sections.join("\n\n"), 12_000),
+      outputTail: bounded(sections.join("\n\n"), TEST_OUTPUT_TAIL_MAX_CHARS),
     };
     const aggregate = new GateReport("commands_pass");
     for (const [gateId, configured] of Object.entries(options.config.gates)) {
