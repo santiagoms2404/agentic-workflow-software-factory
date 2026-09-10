@@ -64,6 +64,37 @@ test("a contract failure that succeeds on the retry returns the retry's answer",
   assert.equal(result, "second");
 });
 
+test("degraded same-provider review is reachable only through its explicit mode and never substitutes", async () => {
+  const providers: string[] = [];
+  const result = await runMandatoryReview<string>({
+    workerProvider: "openai-codex",
+    mode: "same-provider-degraded",
+    execute: async (provider) => {
+      providers.push(provider);
+      return "reviewed";
+    },
+    isTransportFailure: () => false,
+  });
+  assert.equal(result, "reviewed");
+  assert.deepEqual(providers, ["openai-codex"]);
+
+  await assert.rejects(
+    runMandatoryReview({
+      workerProvider: "openai-codex",
+      mode: "same-provider-degraded",
+      execute: () => Promise.reject(new Error("transport")),
+      isTransportFailure: () => true,
+    }),
+    (error: Error) => {
+      assert.ok(error instanceof MandatoryReviewUnavailable);
+      assert.equal(error.reviewMode, "same-provider-degraded");
+      assert.equal(error.substituteAttempted, false);
+      assert.match(error.message, /explicit degraded same-provider/);
+      return true;
+    },
+  );
+});
+
 test("a transport failure still exhausts into MandatoryReviewUnavailable", async () => {
   await assert.rejects(
     runMandatoryReview(options({

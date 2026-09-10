@@ -24,6 +24,7 @@ export * from "./init-output.ts";
 export * from "./project-register-output.ts";
 export * from "./publish-output.ts";
 export * from "./normalized-events.ts";
+export * from "./route-selection.ts";
 export * from "./stored-envelope.ts";
 export * from "./registry.ts";
 export * from "./json-schema.ts";

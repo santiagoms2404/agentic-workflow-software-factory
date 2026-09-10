@@ -9,6 +9,7 @@ import type { NormalizedEvent } from "../contracts/normalized-events.ts";
 import { isPersistableKind } from "../contracts/normalized-events.ts";
 import type { DatabaseSync } from "./sqlite.ts";
 import type { AttemptEvidence, RecordedAgentPurpose } from "./attempt-evidence.ts";
+import type { RouteSelectionProvenance } from "../contracts/route-selection.ts";
 import {
   scrubCredentialString,
   scrubCredentials,
@@ -388,7 +389,7 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
           evidence.outputPath === null ? null : scrubCredentialString(evidence.outputPath),
           evidence.startedAt, evidence.endedAt);
       return;
-    case "agent-start":
+    case "agent-start": {
       db.prepare(`INSERT INTO agent_sessions
         (session_id, agent, adapter_id, provider, color, requested_model, resolved_model,
          model_provenance, call_count, sandbox_badge, sandbox_mechanism, created_at, last_used_at)
@@ -403,6 +404,25 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
         .run(sessionId, scrubCredentialString(evidence.agent), scrubCredentialString(evidence.adapterId),
           scrubCredentialString(evidence.provider), evidence.color, scrubCredentialString(evidence.requestedModel),
           evidence.sandboxBadge, evidence.sandboxMechanism, evidence.at, evidence.at);
+      // Route provenance is stored in the existing generic event surface. No
+      // schema migration is needed, and every process attempt keeps its own
+      // requested/effective record rather than being collapsed by agent name.
+      const route = evidence.route;
+      if (route !== undefined) {
+        db.prepare(`INSERT OR IGNORE INTO events
+          (event_id, session_id, phase_id, first_source_seq, last_source_seq, type, name,
+           payload_json, started_at)
+          VALUES (?, ?, ?, ?, ?, 'route_resolution', ?, ?, ?)`).run(
+          `${sessionId}:route:${sourceSeq}`,
+          sessionId,
+          evidence.phaseId,
+          sourceSeq,
+          sourceSeq,
+          route.phaseId,
+          stringifyRedacted(route),
+          evidence.at,
+        );
+      }
       // The worker columns belong to the phase the review is inverted against.
       // A review call reaching them would overwrite the very fact the inversion
       // is proved from; so would a second and a third *worker*, which is what
@@ -416,6 +436,7 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
             scrubCredentialString(evidence.requestedModel), sessionId);
       }
       return;
+    }
     case "agent": {
       const usage = evidence.usage;
       const total = totalTokens(usage);
@@ -465,6 +486,30 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
           add(current.reasoning_tokens, usage.reasoningTokens), add(current.total_tokens, total),
           usage.reasoningRelation, usageAuthority, add(current.estimated_cost_usd, evidence.costUsd),
           evidence.costAuthority, mixedCost ? 1 : 0, sessionId);
+      const pendingRoute = db.prepare(`SELECT event_id, payload_json FROM events
+          WHERE session_id=? AND phase_id=? AND type='route_resolution'
+            AND json_extract(payload_json, '$.observed') IS NULL
+          ORDER BY event_row DESC LIMIT 1`).get(sessionId, evidence.phaseId) as
+        | { event_id: string; payload_json: string }
+        | undefined;
+      if (pendingRoute !== undefined) {
+        const route = JSON.parse(pendingRoute.payload_json) as RouteSelectionProvenance;
+        db.prepare("UPDATE events SET payload_json=?, last_source_seq=?, ended_at=? WHERE event_id=?").run(
+          stringifyRedacted({
+            ...route,
+            observed: {
+              adapterKind: route.effective.adapterKind,
+              provider: evidence.provider,
+              requestedModel: route.effective.model,
+              resolvedModel: evidence.resolvedModel,
+              modelProvenance: evidence.modelProvenance,
+            },
+          }),
+          sourceSeq,
+          evidence.at,
+          pendingRoute.event_id,
+        );
+      }
       if (evidence.purpose === "review") {
         db.prepare(`UPDATE sessions SET review_provider=? WHERE session_id=?`).run(evidence.provider, sessionId);
       } else {

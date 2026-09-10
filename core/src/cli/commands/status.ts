@@ -1,5 +1,6 @@
 import { ceilingFor } from "../../state/tiers.ts";
 import type { AttemptEvidence } from "../../observability/attempt-evidence.ts";
+import type { RouteSelectionProvenance } from "../../contracts/route-selection.ts";
 import { diagnoseRecovery, formatRecoveryDiagnostic } from "../../observability/recovery-diagnostics.ts";
 import { locateRunReport, runReportRevision } from "../../observability/run-report.ts";
 import { readAttemptEvidence } from "./review-record.ts";
@@ -51,6 +52,48 @@ export function formatStatus(status: AttemptStatus): readonly string[] {
     `Owner re-entries: ${status.budget.ownerReentries}/${status.budget.allowance.ownerReentries} this attempt — request owner rework or a replacement review only while this remains`,
     `Next action: ${status.nextAction} — this is the only recommended state-changing command`,
   ]);
+}
+
+/** Compact provenance without turning a requested selector into an observed identity. */
+export function formatRouteProvenance(evidence: readonly AttemptEvidence[]): readonly string[] {
+  const routes = new Map<string, RouteSelectionProvenance>();
+  for (const record of evidence) {
+    if (record.type === "agent-start") {
+      const route = record.route;
+      if (route !== undefined) routes.set(record.phaseId, route);
+      continue;
+    }
+    if (record.type !== "agent") continue;
+    const route = routes.get(record.phaseId);
+    if (route === undefined) continue;
+    routes.set(record.phaseId, {
+      ...route,
+      observed: {
+        adapterKind: route.effective.adapterKind,
+        provider: record.provider,
+        requestedModel: route.effective.model,
+        resolvedModel: record.resolvedModel,
+        modelProvenance: record.modelProvenance,
+      },
+    });
+  }
+  const lines: string[] = [];
+  for (const route of routes.values()) {
+    const requestedProvider = route.requested.provider ?? "unspecified";
+    const observed = route.observed === null
+      ? "pending provider evidence"
+      : `${route.observed.adapterKind}/${route.observed.provider}/${route.observed.requestedModel}` +
+        ` -> ${route.observed.resolvedModel ?? "unresolved"} (${route.observed.modelProvenance ?? "unknown"})`;
+    lines.push(
+      `Route ${route.phaseId}: requested ${route.requested.adapterId}/${requestedProvider}/${route.requested.model}` +
+        ` effort=${route.requested.effort}; effective ${route.effective.adapterId}/${route.effective.provider}/${route.effective.model}` +
+        ` effort=${route.effective.effort}; observed ${observed}`,
+    );
+    if (route.review.degraded) {
+      lines.push(`Review independence: DEGRADED — ${route.review.detail}`);
+    }
+  }
+  return Object.freeze(lines);
 }
 
 function boundedJson(value: unknown, maximum = 12_000): string {
@@ -106,7 +149,7 @@ export async function statusCommand(
     readAttemptEvidence(attemptDir),
     locateRunReport(attemptDir),
   ]);
-  const lines = [...formatStatus(status)];
+  const lines = [...formatStatus(status), ...formatRouteProvenance(records)];
   if (report !== null) {
     // Every command that moves the candidate, the verdict or the lifecycle
     // re-renders this. The stamp is the belt-and-braces: a writer that forgets

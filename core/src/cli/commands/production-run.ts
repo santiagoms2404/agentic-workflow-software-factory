@@ -18,6 +18,7 @@ import { registeredAdapter } from "../../adapters/registry.ts";
 import { writeSystemPromptFile } from "../../adapters/system-prompt-file.ts";
 import { toConfigSnapshotJson } from "../../config/effective-config.ts";
 import type { AwsfConfig, AgentDefinition, AdapterEntry } from "../../config/schema.ts";
+import type { RouteSelectionProvenance } from "../../contracts/route-selection.ts";
 import { BUILD_OUTPUT_SCHEMA_ID, type BuildOutput } from "../../contracts/build-output.ts";
 import type { EnvelopeBase } from "../../contracts/envelope-base.ts";
 import type { IntakeOutput } from "../../contracts/intake-output.ts";
@@ -115,6 +116,12 @@ import { compileWorkflow, type WorkflowRecipe } from "../../workflow/compiler.ts
 import { composePromptBundle, type PromptBundle } from "../../workflow/prompt-composition.ts";
 import type { CompiledAgentPhase } from "../../workflow/phase.ts";
 import { outputOwnershipCheck } from "../../workflow/output-ownership.ts";
+import {
+  effectivePhaseRoute,
+  requestedPhaseRoute,
+  retainedRolePolicy,
+  routeSelectionProvenance,
+} from "../../workflow/phase-routing.ts";
 import type { AgentTurn, CorrectionCandidateEvidence, CorrectionCommandFailure, CorrectionSession } from "../../workflow/corrections.ts";
 import {
   EnvelopeValidationFailure,
@@ -160,6 +167,30 @@ const READ_ONLY_RESULT_SCHEMA_BY_WORKFLOW: ReadonlyMap<string, "awsf.scout-outpu
 /** A review phase is one that produces a review envelope; the id is not the evidence. */
 function isReviewPhase(phase: { readonly kind: string; readonly schemaId?: string }): boolean {
   return phase.kind === "agent" && phase.schemaId === REVIEW_OUTPUT_SCHEMA_ID;
+}
+
+function assertObservedRoute(event: NormalizedEvent, route: Route): void {
+  if (event.kind === "run.started" && (
+    event.adapter !== route.provenance.effective.adapterKind ||
+    event.requestedModel !== route.provenance.effective.model
+  )) {
+    throw new ProductionRouteUnavailable(
+      route.adapterId,
+      `observed run route ${event.adapter}/${event.requestedModel} differs from effective route ` +
+        `${route.provenance.effective.adapterKind}/${route.provenance.effective.model}`,
+    );
+  }
+  if (event.kind === "model.resolved" && (
+    event.adapter !== route.provenance.effective.adapterKind ||
+    event.provider !== route.provenance.effective.provider ||
+    event.requestedModel !== route.provenance.effective.model
+  )) {
+    throw new ProductionRouteUnavailable(
+      route.adapterId,
+      `observed model route ${event.adapter}/${event.provider}/${event.requestedModel} differs from effective route ` +
+        `${route.provenance.effective.adapterKind}/${route.provenance.effective.provider}/${route.provenance.effective.model}`,
+    );
+  }
 }
 
 export class ProductionWorkflowUnsupported extends Error {
@@ -255,6 +286,7 @@ interface Route extends PromptBundle {
   readonly adapterId: string;
   readonly adapter: HarnessAdapter;
   readonly model: ModelInfo;
+  readonly provenance: RouteSelectionProvenance;
   /** Config and adapter transport BOTH said yes at preflight. */
   readonly continuity: boolean;
 }
@@ -959,16 +991,22 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
   const compiled = compileWorkflow(configuredRecipe, status.tier, status.budget.callsSpent, status.budget.ceiling);
   const routes = new Map<string, Route>();
   let inversion: {
+    readonly mode: AwsfConfig["routing"]["review"];
     readonly workerProvider: string;
     readonly reviewProvider: string;
-    readonly pair: readonly [string, string];
+    readonly pair?: readonly [string, string];
     readonly reviewPhaseId: string;
   } | null = null;
   try {
     await validatePreparedRepository(status);
     for (const phase of compiled.phases) {
       if (phase.kind !== "agent") continue;
-      const agent = agents.get(phase.owner)!;
+      const role = agents.get(phase.owner)!;
+      const selection = requestedPhaseRoute(options.config, phase.id, role);
+      const agent = selection.agent;
+      if (!retainedRolePolicy(role, agent)) {
+        throw new ProductionRouteUnavailable(agent.harness.adapter, "phase routing changed prompt, tool, write, purpose, colour, or continuity policy");
+      }
       const entry = options.config.adapters[agent.harness.adapter];
       if (entry === undefined || entry.enabled === false) throw new ProductionRouteUnavailable(agent.harness.adapter, "route is disabled or undeclared");
       const adapter = infra.adapterFor(entry, agent.harness.adapter, options.config);
@@ -976,6 +1014,12 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
       const available = await adapter.isAvailable();
       if (available.status !== "available") throw new ProductionRouteUnavailable(agent.harness.adapter, available.detail ?? available.code ?? "blocked");
       const model = await adapter.getModelInfo(agent.model);
+      const effective = effectivePhaseRoute(selection.requested, adapter.id, model);
+      const provenance = routeSelectionProvenance({
+        requested: selection.requested,
+        effective,
+        ...(isReviewPhase(phase) ? { reviewMode: options.config.routing.review } : {}),
+      });
       const configuredContinuity = agent.harness.continuity;
       // ONE-WAY, and the direction is the safety argument. Config that asks for
       // more than the adapter can do is a mismatch and fails closed: it would
@@ -1033,6 +1077,7 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
         adapterId: agent.harness.adapter,
         adapter,
         model,
+        provenance,
         continuity: continuous,
         ...routePrompts.get(phase.id)!,
       });
@@ -1053,16 +1098,31 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
         throw new InvalidReviewInversion("the compiled review workflow has no build-producing agent phase");
       }
       const workerProvider = routes.get(buildPhaseId)!.model.provider;
-      const pair = providerPairFrom([...routes.values()].map((route) => route.model.provider));
-      const required = oppositeProvider(workerProvider, pair);
       const configured = routes.get(reviewPhase.id)!.model.provider;
-      if (configured !== required) {
-        throw new InvalidReviewInversion(
-          `worker runs on ${JSON.stringify(workerProvider)}, so the review must run on ${JSON.stringify(required)}; ` +
-            `the configured reviewer route resolves to ${JSON.stringify(configured)}`,
-        );
+      if (options.config.routing.review === "same-provider-degraded") {
+        if (configured !== workerProvider) {
+          throw new InvalidReviewInversion(
+            `explicit same-provider-degraded mode requires reviewer and builder on ${JSON.stringify(workerProvider)}; ` +
+              `the configured reviewer route resolves to ${JSON.stringify(configured)}`,
+          );
+        }
+        inversion = {
+          mode: "same-provider-degraded",
+          workerProvider,
+          reviewProvider: configured,
+          reviewPhaseId: reviewPhase.id,
+        };
+      } else {
+        const pair = providerPairFrom([...routes.values()].map((route) => route.model.provider));
+        const required = oppositeProvider(workerProvider, pair);
+        if (configured !== required) {
+          throw new InvalidReviewInversion(
+            `worker runs on ${JSON.stringify(workerProvider)}, so the review must run on ${JSON.stringify(required)}; ` +
+              `the configured reviewer route resolves to ${JSON.stringify(configured)}`,
+          );
+        }
+        inversion = { mode: "invert-provider", workerProvider, reviewProvider: required, pair, reviewPhaseId: reviewPhase.id };
       }
-      inversion = { workerProvider, reviewProvider: required, pair, reviewPhaseId: reviewPhase.id };
     }
   } catch (error) {
     const now = infra.now();
@@ -1141,7 +1201,12 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
   for (const [index, phase] of compiled.phases.entries()) {
     const record: PhaseEvidenceRecord = {
       phaseId: dbPhaseId(status.sessionId, phase.id), ordinal: index + 1, key: phase.id, name: phase.id,
-      kind: phase.kind, owner: phase.owner, description: phase.description, status: "QUEUED",
+      kind: phase.kind,
+      owner: phase.owner,
+      description: isReviewPhase(phase) && options.config.routing.review === "same-provider-degraded"
+        ? `${phase.description}; EXPLICIT DEGRADED SAME-PROVIDER MODE (reduced review independence)`
+        : phase.description,
+      status: "QUEUED",
       correctionCount: 0, maxCorrections: phase.maxCorrections, errorCode: null, errorMessage: null,
       startedAt: null, endedAt: null, createdAt,
     };
@@ -1708,8 +1773,9 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
             await persist("attempt.updated", { lastActivityAt: launchAt, lastActivity: `${phase.id}: route and sandbox grant recorded before GO` }, {
               type: "agent-start", phaseId: phaseDb, agent: route.agent.name, adapterId: route.adapterId,
               provider: route.model.provider, color: route.agent.color, requestedModel: route.agent.model,
-              sandboxBadge: grant.badge, sandboxMechanism: grant.mechanism, purpose, at: launchAt,
-            });
+              sandboxBadge: grant.badge, sandboxMechanism: grant.mechanism, purpose,
+              route: route.provenance, at: launchAt,
+            } as AttemptEvidence);
             const transport = await broker.startProcess(registered, grant.spec, signal);
             turnLaunch.transport = transport;
             return transport;
@@ -1732,6 +1798,7 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
         try {
           for await (const event of route.adapter.execute(request, sandboxingBroker, registration, controller.signal, observed)) {
             arm();
+            assertObservedRoute(event, route);
             events.push(event);
             if (event.kind === "text.delta") output += event.text;
             if (event.kind === "model.resolved") resolved = { model: event.resolvedModel, provenance: event.provenance };
@@ -2373,9 +2440,12 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
       from: "GATING", to: "REVIEWING", actor: "host", reason: { source: "gate" }, interactive: false,
       evidence: { gatesPass: true, candidateSha: reviewed }, spawn: { cost: 1 },
     });
-    await persistTransition("GATING", "REVIEWING", l11.result.edge, "gate", null, `held one call for the ${inversion!.reviewProvider} review`, true, {
+    const heldReviewDescription = inversion!.mode === "same-provider-degraded"
+      ? `EXPLICIT DEGRADED same-provider ${inversion!.reviewProvider} review`
+      : `mandatory opposite-provider ${inversion!.reviewProvider} review`;
+    await persistTransition("GATING", "REVIEWING", l11.result.edge, "gate", null, `held one call for the ${heldReviewDescription}`, true, {
       candidateSha: reviewed, budget: budget.snapshot(),
-      lastActivity: `L11 held one call for the mandatory ${inversion!.reviewProvider} review of ${reviewed}`,
+      lastActivity: `L11 held one call for the ${heldReviewDescription} of ${reviewed}`,
     });
 
     // `previous` is the composed review context, because the evidence phase is
@@ -2394,7 +2464,8 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
     // genuinely spent.
     const reviewResult = await runMandatoryReview({
       workerProvider: inversion!.workerProvider,
-      providers: inversion!.pair,
+      mode: inversion!.mode,
+      ...(inversion!.pair === undefined ? {} : { providers: inversion!.pair }),
       isTransportFailure: (error) => {
         const transport = isReviewTransportFailure(error);
         if (transport) reviewTransportRetries += 1;
@@ -2426,11 +2497,14 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
     // The review is present because it ran; the journey has not happened yet and
     // is never assumed. It is the owner's own step against this candidate, and
     // `awsf journey` is the only thing that records it.
-    await persistTransition("REVIEWING", "AWAITING_OWNER", l15.edge, "gate", null, `${inversion!.reviewProvider} review returned ${reviewOutput.verdict}`, false, {
+    const reviewDescription = inversion!.mode === "same-provider-degraded"
+      ? `DEGRADED same-provider review on ${inversion!.reviewProvider}`
+      : `opposite-provider review on ${inversion!.reviewProvider}`;
+    await persistTransition("REVIEWING", "AWAITING_OWNER", l15.edge, "gate", null, `${reviewDescription} returned ${reviewOutput.verdict}`, false, {
       candidateSha: reviewed, budget: budget.snapshot(), gatesPass: true,
       requiredReviewPresent: true, journeyApproved: false, protectedApprovalsValid: true, blocker: null,
       phase: null,
-      lastActivity: `opposite-provider review on ${inversion!.reviewProvider} returned ${reviewOutput.verdict} with ${reviewOutput.findings.length} finding(s)`,
+      lastActivity: `${reviewDescription} returned ${reviewOutput.verdict} with ${reviewOutput.findings.length} finding(s)`,
       nextAction: `run \`awsf journey ${status.taskId}\` at a TTY, then \`awsf land ${status.taskId}\``,
     });
     return status;

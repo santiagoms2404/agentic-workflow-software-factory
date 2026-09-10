@@ -50,7 +50,7 @@ import {
 } from "../../src/cli/commands/rework.ts";
 import { startCommand } from "../../src/cli/commands/start.ts";
 import type { BrokerOptions } from "../../src/execution/transport-broker.ts";
-import { agentsForSession, gatesForSession, getSession, transitionsForSession } from "../../src/observability/queries.ts";
+import { agentsForSession, gatesForSession, getSession, routesForSession, transitionsForSession } from "../../src/observability/queries.ts";
 import { openDatabase } from "../../src/observability/sqlite.ts";
 import type { AttemptEvidence } from "../../src/observability/attempt-evidence.ts";
 import { locateRunReport, runReportRevision, writeRunReport } from "../../src/observability/run-report.ts";
@@ -152,6 +152,7 @@ async function world(options: {
   tier?: 1 | 2;
   callsSpent?: number;
   commandExit?: number;
+  configure?: (config: AwsfConfig) => AwsfConfig;
 } = {}): Promise<World> {
   const root = mkdtempSync(join(tmpdir(), "awsf-rework-t2-"));
   const canonical = join(root, "canonical");
@@ -162,7 +163,7 @@ async function world(options: {
   ownerCommit(canonical, "test: seed tier-2 owner rework");
 
   const text = configText(options.commandExit ?? 0);
-  const config = loadConfig(text);
+  const config = (options.configure ?? ((value: AwsfConfig) => value))(loadConfig(text));
   const configPath = join(root, "awsf.config.yaml");
   writeFileSync(configPath, text);
   for (const agent of config.agents) {
@@ -196,6 +197,11 @@ async function world(options: {
   const candidateA = ownerCommit(prepared.worktree!, "feat: add generated source");
 
   const sessionId = prepared.sessionId;
+  const reviewerRole = config.agents.find((agent) => agent.name === "reviewer")!;
+  const reviewerOverride = config.routing.phase_routes?.reviewer;
+  const recordedReviewAdapter = reviewerOverride?.adapter ?? reviewerRole.harness.adapter;
+  const recordedReviewProvider = reviewerOverride?.provider ?? (recordedReviewAdapter === "codex" ? "openai-codex" : "anthropic");
+  const recordedReviewModel = reviewerOverride?.model ?? reviewerRole.model;
   const fixture: World = {
     root, stateRoot, canonical, attemptDir: created.attemptDir, config, configPath, projection,
     candidateA, sessionId, status: prepared,
@@ -252,8 +258,8 @@ async function world(options: {
     contextTokens: 30, costUsd: null, costAuthority: "unavailable", purpose: "worker", at: AT,
   });
   await append(fixture, {
-    type: "agent", phaseId: phaseId("reviewer"), agent: "reviewer", adapterId: "claude", provider: "anthropic",
-    color: null, requestedModel: "claude:opus", resolvedModel: "claude:opus", modelProvenance: "route-attributed",
+    type: "agent", phaseId: phaseId("reviewer"), agent: "reviewer", adapterId: recordedReviewAdapter, provider: recordedReviewProvider,
+    color: null, requestedModel: recordedReviewModel, resolvedModel: recordedReviewModel, modelProvenance: "route-attributed",
     contextWindow: null, usageAuthority: "provider", usage: { inputTokens: 5, outputTokens: 5, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0, reasoningRelation: "included-in-output" },
     contextTokens: 10, costUsd: null, costAuthority: "unavailable", purpose: "review", at: AT,
   });
@@ -268,7 +274,7 @@ async function world(options: {
     violations: [], outputPath: null, startedAt: AT, endedAt: AT,
   });
   await append(fixture, {
-    type: "review", phaseId: phaseId("reviewer"), adapterId: "claude", provider: "anthropic",
+    type: "review", phaseId: phaseId("reviewer"), adapterId: recordedReviewAdapter, provider: recordedReviewProvider,
     verdict: "concern", reviewedSha: candidateA, findingCount: 1, at: AT,
   }, {
     lifecycleState: "AWAITING_OWNER", candidateSha: candidateA,
@@ -317,9 +323,21 @@ class ScriptedBuilder implements HarnessAdapter {
   readonly id = "codex";
   readonly launches: string[];
   readonly prompts: string[];
-  constructor(launches: string[], prompts: string[]) {
+  readonly #reviewerPrompts: string[];
+  readonly #reviewBehaviour: ReviewBehaviour;
+  readonly #superseded: string;
+  constructor(
+    launches: string[],
+    prompts: string[],
+    reviewerPrompts: string[] = prompts,
+    reviewBehaviour: ReviewBehaviour = "accept",
+    superseded = "",
+  ) {
     this.launches = launches;
     this.prompts = prompts;
+    this.#reviewerPrompts = reviewerPrompts;
+    this.#reviewBehaviour = reviewBehaviour;
+    this.#superseded = superseded;
   }
   async isAvailable(): Promise<Availability> { return { status: "available" }; }
   async getModelInfo(model: string): Promise<ModelInfo> {
@@ -344,6 +362,36 @@ class ScriptedBuilder implements HarnessAdapter {
   ): AsyncIterable<NormalizedEvent> {
     await broker.startProcess(registration, this.buildSpec(request), signal);
     this.launches.push(this.id);
+    const isReview = request.prompt.includes('"const": "awsf.review-output/v1"');
+    if (isReview) {
+      this.#reviewerPrompts.push(request.prompt);
+      if (this.#reviewBehaviour === "transport-failure") {
+        throw new AdapterError(this.id, "E_BACKEND_FAILURE", "scripted transport failure");
+      }
+      const reviewed = this.#reviewBehaviour === "stale-sha" ? this.#superseded : git(request.cwd, "rev-parse", "HEAD");
+      const findings: ReviewOutput["findings"] = this.#reviewBehaviour === "concern"
+        ? [{
+            id: "f2", severity: "medium", file: SOURCE, line: 1,
+            title: "generated flag remains unconditional",
+            detail: "Callers would still receive the generated path when the feature is disabled.",
+            consequence: "a caller with the feature disabled receives the generated path anyway",
+            evidence: "`generated` remains assigned `true` without a feature-condition branch.",
+          }]
+        : [];
+      const payload: ReviewOutput = {
+        schema: "awsf.review-output/v1", producerStatus: "success", summary: "audited the reworked candidate on disk",
+        artifacts: [], notesForNextPhase: "owner decides",
+        verdict: findings.length === 0 ? "accept" : "concern", reviewedSha: reviewed,
+        findings, limitations: [{ detail: "scripted same-provider rework review", affectedFiles: [] }],
+      };
+      const runId = registration.runId;
+      yield { kind: "run.started", seq: 1, runId, hostAt: AT, providerAt: null, adapter: this.id, requestedModel: request.model };
+      yield { kind: "model.resolved", seq: 2, runId, hostAt: AT, providerAt: null, adapter: this.id, provider: "openai-codex", requestedModel: request.model, resolvedModel: `${request.model}-resolved`, provenance: "route-attributed" };
+      yield { kind: "text.delta", seq: 3, runId, hostAt: AT, providerAt: null, text: JSON.stringify(payload) };
+      yield { kind: "usage", seq: 4, runId, hostAt: AT, providerAt: null, usage: { inputTokens: 40, outputTokens: 10, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0, reasoningRelation: "included-in-output" } };
+      yield { kind: "run.completed", seq: 5, runId, hostAt: AT, providerAt: null, exitCode: 0 };
+      return;
+    }
     this.prompts.push(request.prompt);
     writeFileSync(join(request.cwd, SOURCE), "export const generated = true;\n");
     const payload: BuildOutput = {
@@ -463,7 +511,7 @@ function scripted(fixture: World, behaviour: ReviewBehaviour = "accept"): Script
     infrastructure: {
       adapterFor: (_entry, id) => id === "claude"
         ? new ScriptedReviewer(behaviour, fixture.candidateA, launches, reviewerPrompts)
-        : new ScriptedBuilder(launches, builderPrompts),
+        : new ScriptedBuilder(launches, builderPrompts, reviewerPrompts, behaviour, fixture.candidateA),
       createBroker: fakeBroker,
       sandboxProbe: () => false,
     },
@@ -603,6 +651,47 @@ test("a T2 rework spends builder plus review and returns to AWAITING_OWNER with 
     );
 
     assert.ok(lines.some((line) => line.includes("mandatory opposite-provider review")));
+  } finally { await cleanup(fixture); }
+});
+
+test("an explicitly degraded owner rework review stays on the builder provider and records reduced independence", async () => {
+  const fixture = await world({ configure: (config) => ({
+    ...config,
+    routing: {
+      ...config.routing,
+      review: "same-provider-degraded",
+      phase_routes: {
+        ...config.routing.phase_routes,
+        reviewer: {
+          adapter: "codex",
+          provider: "openai-codex",
+          model: "codex:gpt-5.6-sol",
+          effort: "high",
+        },
+      },
+    },
+  }) });
+  const script = scripted(fixture);
+  const lines: string[] = [];
+  try {
+    const result = await rework(fixture, script, { lines });
+    assert.equal(result.status.lifecycleState, "AWAITING_OWNER", result.status.blocker?.detail);
+    assert.deepEqual(script.launches, ["codex", "codex"], "builder and review stay on the explicitly selected provider");
+    assert.equal(script.builderPrompts.length, 1);
+    assert.equal(script.reviewerPrompts.length, 1);
+    assert.match(lines.join("\n"), /EXPLICIT DEGRADED same-provider review \(reduced independence\)/);
+
+    const db = openDatabase(join(fixture.stateRoot, "awsf.db"), { readonly: true });
+    try {
+      const session = getSession(db, result.status.sessionId);
+      assert.equal(session?.worker_provider, "openai-codex");
+      assert.equal(session?.review_provider, "openai-codex");
+      const review = routesForSession(db, result.status.sessionId)
+        .find((row) => row.phaseId.endsWith(":reviewer-rw1"));
+      assert.equal(review?.route.review.mode, "same-provider-degraded");
+      assert.equal(review?.route.review.degraded, true);
+      assert.equal(review?.route.observed?.provider, "openai-codex");
+    } finally { db.close(); }
   } finally { await cleanup(fixture); }
 });
 
