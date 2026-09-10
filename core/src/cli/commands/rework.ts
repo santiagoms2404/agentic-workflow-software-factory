@@ -416,7 +416,7 @@ async function resolveRoute(
   if (role === undefined || role.writes.length === 0) throw new ProductionRouteUnavailable("builder", "supported owner rework requires the configured writable builder phase");
   const selection = requestedPhaseRoute(config, "builder", role);
   const agent = selection.agent;
-  if (!retainedRolePolicy(role, agent)) throw new ReworkRouteMismatch("phase routing changed the builder's role policy");
+  if (!retainedRolePolicy(selection.policy, agent)) throw new ReworkRouteMismatch("phase routing changed the builder's role policy");
   const entry = config.adapters[agent.harness.adapter];
   if (entry === undefined || entry.enabled === false) throw new ProductionRouteUnavailable(agent.harness.adapter, "route is disabled or undeclared");
   const adapter = infra.adapterFor(entry, agent.harness.adapter, config);
@@ -618,6 +618,10 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
       reviewPhaseId: phases.review,
       workerProvider: route.model.provider,
       priorReview: governingRoutes.review,
+      // Selection only. The review does not launch here, so a reviewer that is
+      // momentarily unavailable must not refuse the rework the owner has not
+      // even confirmed yet; the pre-review resolution asks for availability.
+      requireAvailable: false,
     });
   }
   const remainingCalls = ceilingFor(status.tier, status.budget.ceiling) - status.budget.callsSpent - status.budget.callsReserved;
@@ -858,7 +862,7 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
         provider: route.model.provider, color: route.agent.color, requestedModel: route.agent.model,
         sandboxBadge: launchGrant.badge, sandboxMechanism: launchGrant.mechanism,
         route: route.provenance, at: launchAt,
-      } as AttemptEvidence);
+      });
       activeTransport.current = await broker.startProcess(registration, finalSpec, signal);
       return activeTransport.current;
     },

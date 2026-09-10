@@ -1004,7 +1004,7 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
       const role = agents.get(phase.owner)!;
       const selection = requestedPhaseRoute(options.config, phase.id, role);
       const agent = selection.agent;
-      if (!retainedRolePolicy(role, agent)) {
+      if (!retainedRolePolicy(selection.policy, agent)) {
         throw new ProductionRouteUnavailable(agent.harness.adapter, "phase routing changed prompt, tool, write, purpose, colour, or continuity policy");
       }
       const entry = options.config.adapters[agent.harness.adapter];
@@ -1775,7 +1775,7 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
               provider: route.model.provider, color: route.agent.color, requestedModel: route.agent.model,
               sandboxBadge: grant.badge, sandboxMechanism: grant.mechanism, purpose,
               route: route.provenance, at: launchAt,
-            } as AttemptEvidence);
+            });
             const transport = await broker.startProcess(registered, grant.spec, signal);
             turnLaunch.transport = transport;
             return transport;

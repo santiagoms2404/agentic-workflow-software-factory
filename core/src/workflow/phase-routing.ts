@@ -22,6 +22,29 @@ export interface RequestedPhaseRoute {
   /** A route-adjusted copy. Non-route role policy remains equal by value. */
   readonly agent: AgentDefinition;
   readonly requested: RequestedRouteProvenance;
+  /**
+   * The role's non-route policy, deep-copied BEFORE this function built the
+   * adjusted agent. `retainedRolePolicy` compares against this copy and never
+   * against the role the copy was taken from: a spread shares its nested
+   * objects, so comparing the adjusted agent to its own source cannot observe
+   * a mutation applied through either reference.
+   */
+  readonly policy: RolePolicy;
+}
+
+/**
+ * Every part of a role phase routing must not touch: the whole definition
+ * minus the three routable fields. Stated as a complement rather than a list,
+ * so a field added to `AgentDefinition` is covered without editing the guard.
+ */
+export type RolePolicy = Omit<AgentDefinition, "model" | "thinking" | "harness"> & {
+  readonly harness: Omit<AgentDefinition["harness"], "adapter">;
+};
+
+export function rolePolicyOf(agent: AgentDefinition): RolePolicy {
+  const { model: _model, thinking: _thinking, harness, ...retained } = agent;
+  const { adapter: _adapter, ...harnessRetained } = harness;
+  return { ...retained, harness: harnessRetained };
 }
 
 /**
@@ -47,6 +70,7 @@ export function requestedPhaseRoute(
   // Only the phase-level provider selector opts a route into provider enforcement;
   // otherwise the adapter's preflight answer preserves legacy no-override behaviour.
   const provider = override?.provider ?? null;
+  const policy = structuredClone(rolePolicyOf(role));
   const adjusted: AgentDefinition = {
     ...role,
     model,
@@ -55,6 +79,7 @@ export function requestedPhaseRoute(
   };
   return Object.freeze({
     agent: Object.freeze(adjusted),
+    policy: Object.freeze(policy),
     requested: Object.freeze({
       phaseId,
       adapterId,
@@ -125,27 +150,17 @@ export function routeSelectionProvenance(input: {
   });
 }
 
-/** Route selection must retain every non-route role policy by value. */
+/**
+ * Route selection must retain every non-route role policy by value.
+ *
+ * `before` is the snapshot `requestedPhaseRoute` took of the role ahead of
+ * routing, never the role object itself. Passing the role would make this a
+ * comparison of an object with a spread of itself, which no mutation reachable
+ * from either reference can fail.
+ */
 export function retainedRolePolicy(
-  original: AgentDefinition,
+  before: RolePolicy,
   routed: AgentDefinition,
 ): boolean {
-  return isDeepStrictEqual(
-    {
-      prompt: routed.prompt,
-      tools: routed.tools,
-      writes: routed.writes,
-      continuity: routed.harness.continuity,
-      purpose: routed.purpose,
-      color: routed.color,
-    },
-    {
-      prompt: original.prompt,
-      tools: original.tools,
-      writes: original.writes,
-      continuity: original.harness.continuity,
-      purpose: original.purpose,
-      color: original.color,
-    },
-  );
+  return isDeepStrictEqual(before, rolePolicyOf(routed));
 }

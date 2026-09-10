@@ -446,6 +446,16 @@ export interface ResolveReviewRouteOptions {
   readonly workerProvider: string | undefined;
   /** The route a review already on record ran on, when there is one. */
   readonly priorReview?: RecordedRoute | null;
+  /**
+   * Whether the reviewer route must be available right now. A caller that is
+   * about to launch the review says yes. A caller validating the SELECTION
+   * ahead of an unrelated spend says no: availability at that moment predicts
+   * nothing about availability when the review actually launches minutes
+   * later, and refusing on it forfeits work for an outage the review is
+   * entitled to retry through. Same reasoning the worker route below already
+   * gets. Defaults to yes.
+   */
+  readonly requireAvailable?: boolean;
 }
 
 /**
@@ -464,7 +474,7 @@ export async function resolveReviewRoute(options: ResolveReviewRouteOptions): Pr
   if (role === undefined) throw new ProductionRouteUnavailable(reviewAgentName, "no explicit agent definition exists");
   const selection = requestedPhaseRoute(config, reviewPhaseId, role);
   const agent = selection.agent;
-  if (!retainedRolePolicy(role, agent)) throw new ReviewRouteMismatch("phase routing changed the reviewer's role policy");
+  if (!retainedRolePolicy(selection.policy, agent)) throw new ReviewRouteMismatch("phase routing changed the reviewer's role policy");
   if (agent.writes.length !== 0) throw new ReviewRouteMismatch("a reviewer that can write is not a reviewer; `writes` must stay empty");
   // A resumable reviewer is argued with rather than briefed: a prior verdict
   // sits in its context and the new turn asks it to revise. A review bought
@@ -477,8 +487,10 @@ export async function resolveReviewRoute(options: ResolveReviewRouteOptions): Pr
   if (entry === undefined || entry.enabled === false) throw new ProductionRouteUnavailable(agent.harness.adapter, "route is disabled or undeclared");
   const adapter = infra.adapterFor(entry, agent.harness.adapter, config);
   if (adapter === null) throw new ProductionRouteUnavailable(agent.harness.adapter, "adapter kind has no production binding");
-  const available = await adapter.isAvailable();
-  if (available.status !== "available") throw new ProductionRouteUnavailable(agent.harness.adapter, available.detail ?? available.code ?? "blocked");
+  if (options.requireAvailable !== false) {
+    const available = await adapter.isAvailable();
+    if (available.status !== "available") throw new ProductionRouteUnavailable(agent.harness.adapter, available.detail ?? available.code ?? "blocked");
+  }
   const model = credentialSafeValue(await adapter.getModelInfo(agent.model), "configured reviewer route");
   const effective = effectivePhaseRoute(selection.requested, adapter.id, model);
   const provenance = routeSelectionProvenance({
@@ -916,7 +928,7 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
             provider: route.model.provider, color: route.agent.color, requestedModel: route.agent.model,
             sandboxBadge: launchGrant.badge, sandboxMechanism: launchGrant.mechanism, purpose: "review",
             route: route.provenance, at: launchAt,
-          } as AttemptEvidence);
+          });
           // The LAST host instruction before GO. The permission session is open
           // and the grant is built; this is the narrowest the window between
           // the host's final read and the child's first instruction can be made

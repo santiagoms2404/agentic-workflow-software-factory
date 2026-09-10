@@ -50,7 +50,7 @@ test("a phase route changes only model, effort, and an explicit adapter/provider
   assert.equal(selected.agent.model, "claude:opus");
   assert.equal(selected.agent.thinking, "max");
   assert.equal(selected.agent.harness.adapter, "claude");
-  assert.equal(retainedRolePolicy(role, selected.agent), true);
+  assert.equal(retainedRolePolicy(selected.policy, selected.agent), true);
   assert.strictEqual(selected.agent.prompt, role.prompt);
   assert.strictEqual(selected.agent.tools, role.tools);
   assert.strictEqual(selected.agent.writes, role.writes);
@@ -82,16 +82,42 @@ test("an adapter provider label is not enforced without an explicit phase provid
   }));
 });
 
-test("retained role policy compares equivalent values rather than object identity", () => {
-  const role = validConfig().agents[0]!;
-  const equivalent = structuredClone(role);
-  assert.notStrictEqual(equivalent.prompt, role.prompt);
-  assert.notStrictEqual(equivalent.tools, role.tools);
-  assert.notStrictEqual(equivalent.writes, role.writes);
-  assert.equal(retainedRolePolicy(role, equivalent), true);
+test("the guard compares a pre-routing snapshot, so a shared nested object cannot hide a change", () => {
+  const config = validConfig();
+  const role = config.agents[0]!;
+  const selected = requestedPhaseRoute(config, "builder", role);
 
-  equivalent.tools.allow = [...equivalent.tools.allow, "undeclared-tool"];
-  assert.equal(retainedRolePolicy(role, equivalent), false);
+  // The routed agent is a spread of the role, so it SHARES these objects. Only
+  // the snapshot is independent, and only that independence lets the guard see
+  // a mutation reachable from both of the objects it would otherwise compare.
+  assert.strictEqual(selected.agent.tools, role.tools);
+  assert.notStrictEqual(selected.policy.tools, role.tools);
+  assert.equal(retainedRolePolicy(selected.policy, selected.agent), true);
+
+  role.tools.allow = [...role.tools.allow, "undeclared-tool"];
+  assert.equal(retainedRolePolicy(selected.policy, selected.agent), false);
+});
+
+test("the guard covers every non-route field, including ones an enumerated list omitted", () => {
+  const config = validConfig();
+  const selected = requestedPhaseRoute(config, "builder", config.agents[0]!);
+
+  // `name` was never one of the six fields the guard used to compare; stating
+  // the retained policy as the complement of the routable fields covers it,
+  // and covers whatever `AgentDefinition` gains next, without a new line here.
+  assert.equal(retainedRolePolicy(selected.policy, { ...selected.agent, name: "builder-shadow" }), false);
+  assert.equal(retainedRolePolicy(selected.policy, { ...selected.agent, purpose: "something else" }), false);
+
+  // The three routable fields are exactly what the guard must NOT object to.
+  assert.equal(
+    retainedRolePolicy(selected.policy, {
+      ...selected.agent,
+      model: "claude:opus",
+      thinking: "low",
+      harness: { ...selected.agent.harness, adapter: "stub" },
+    }),
+    true,
+  );
 });
 
 test("explicit provider disagreement is refused during route preflight", () => {
