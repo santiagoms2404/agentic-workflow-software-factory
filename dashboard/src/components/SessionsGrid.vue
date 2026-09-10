@@ -36,28 +36,34 @@ const stateEntries = computed(() => stateFilterEntries(props.sessions, props.sel
 </script>
 
 <template>
-  <section aria-labelledby="sessions-title">
-    <h1 id="sessions-title" class="run-count">{{ visibleSessions.length }} of {{ sessions.length }} runs</h1>
-    <div class="session-filters" aria-label="Session filters">
-      <SessionFilterRow
-        filter-id="workflow-filter"
-        label="Workflow"
-        :entries="workflowEntries"
-        :selected="selectedWorkflows"
-        @update:selected="emit('update:selectedWorkflows', $event)"
-      />
-      <SessionFilterRow
-        filter-id="state-filter"
-        label="Lifecycle state"
-        :entries="stateEntries"
-        :selected="selectedStates"
-        @update:selected="emit('update:selectedStates', $event)"
-      />
+  <section class="sessions-shell" aria-labelledby="sessions-title">
+    <div class="run-count-tile">
+      <p class="eyebrow">runs</p>
+      <h1 id="sessions-title" class="run-count-headline">
+        <strong>{{ visibleSessions.length }}</strong>
+      </h1>
+      <span>of {{ sessions.length }} total</span>
     </div>
+    <SessionFilterRow
+      class="session-filter-row workflow-rail"
+      filter-id="workflow-filter"
+      label="Workflow"
+      :entries="workflowEntries"
+      :selected="selectedWorkflows"
+      @update:selected="emit('update:selectedWorkflows', $event)"
+    />
+    <SessionFilterRow
+      class="session-filter-row lifecycle-ladder"
+      filter-id="state-filter"
+      label="Lifecycle state"
+      :entries="stateEntries"
+      :selected="selectedStates"
+      @update:selected="emit('update:selectedStates', $event)"
+    />
     <div v-if="visibleSessions.length" class="sessions-grid">
       <SessionStack v-for="stack in visibleStacks" :key="stack.key" :sessions="stack.sessions" />
     </div>
-    <p v-else-if="sessions.length" class="empty-note run-count">No runs match the current filters.</p>
-    <p v-else class="empty-note run-count">No sessions yet. Start an AWSF attempt in the terminal to see it here.</p>
+    <p v-else-if="sessions.length" class="empty-note">No runs match the current filters.</p>
+    <p v-else class="empty-note">No sessions yet. Start an AWSF attempt in the terminal to see it here.</p>
   </section>
 </template>

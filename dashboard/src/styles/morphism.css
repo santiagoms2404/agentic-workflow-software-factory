@@ -1,0 +1,364 @@
+/* ===========================================================================
+   NEUMORPHIC SHELL
+
+   Loaded after dashboard.css so it can restate the treatments it replaces.
+   Menus and columns are recessed wells; the buttons and cards on them are
+   raised pills. Layout moves the run count and lifecycle states to a left rail,
+   and the workflow and plan menus to a strip along the top.
+   =========================================================================== */
+
+/* --- Wells: the surfaces menus and columns sit in ------------------------- */
+.neu-well,
+.session-filter-row,
+.plan-picker,
+.backlog-column,
+.run-count-tile,
+.backlog-head,
+.state-ribbon-wrap,
+.agent-roster,
+.waterfall-section,
+.owner-gate-card,
+.inline-phase-detail,
+.settings-route section {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--neu-radius-card);
+  background: var(--neu-well);
+  box-shadow: none;
+}
+
+/* --- Raised controls ------------------------------------------------------ */
+.session-filter-option,
+.session-filter-control,
+.plan-control-button,
+.archive-control,
+.detail-close,
+.timeline-access button,
+.ticket-source-close,
+.build-prompt-control button,
+.palette-trigger {
+  border: 0;
+  border-radius: var(--neu-radius);
+  background: var(--neu-surface);
+  box-shadow: var(--neu-raised);
+  transition: box-shadow 170ms ease, color 170ms ease, transform 170ms ease;
+}
+.plan-card {
+  border: 0;
+  border-radius: var(--neu-radius-card);
+  background: var(--neu-surface);
+  box-shadow: var(--neu-raised);
+  transition: box-shadow 170ms ease, color 170ms ease, transform 170ms ease;
+}
+.session-filter-option:hover,
+.session-filter-control:hover,
+.plan-control-button:hover,
+.plan-card:hover,
+.archive-control:hover,
+.detail-close:hover,
+.timeline-access button:hover,
+.ticket-source-close:hover,
+.build-prompt-control button:hover,
+.palette-trigger:hover {
+  border: 0;
+  color: var(--text);
+  box-shadow: var(--neu-hover);
+  transform: translateY(-1px);
+}
+/* Toggle state is raised-vs-sunk, never an inner shadow: an inset pair on a
+   pill this size reads as a gradient in the fill, which is exactly what we do
+   not want. Unselected sits flush with the well; selected stands proud of it.
+   Both fills stay one flat colour. */
+.session-filter-option,
+.plan-control-button,
+.plan-card {
+  background: var(--neu-well);
+  color: var(--dim);
+  box-shadow: none;
+}
+.session-filter-option.selected,
+.session-filter-control.selected,
+.plan-control-button.selected,
+.plan-card.selected,
+.palette-trigger[aria-expanded="true"] {
+  border: 0;
+  background: var(--neu-surface);
+  color: var(--text);
+  box-shadow: var(--neu-raised);
+  transform: none;
+}
+.session-filter-control.partial,
+.plan-control-button.partial {
+  border: 0;
+  background: var(--neu-surface);
+  color: var(--text);
+  box-shadow: var(--neu-raised-soft);
+}
+.session-filter-option.selected:hover,
+.plan-control-button.selected:hover,
+.plan-card.selected:hover { box-shadow: var(--neu-hover); transform: translateY(-1px); }
+.session-filter-select-all.selected,
+.select-all-control.selected { color: var(--select-all); }
+
+/* Bigger targets than the bordered chips they replace. */
+.session-filter-option { min-height: 48px; padding: 10px 17px; gap: 12px; font-size: 14px; }
+.session-filter-count { padding-left: 12px; border-left: 1px solid var(--border-soft); font-size: 12px; }
+.session-filter-option.selected .session-filter-count { color: var(--count); }
+.session-filter-control { min-height: 42px; padding: 10px 17px; }
+.session-filter-heading h2 { font-size: 13px; letter-spacing: .06em; }
+.plan-control-button { min-height: 40px; padding: 9px 16px; }
+
+/* --- Cards ---------------------------------------------------------------- */
+/* Stack tones stay owned by the component: the peek cards keep their own
+   lighter fills and only take the extrusion from here. */
+.session-card { border: 0; border-radius: var(--neu-radius-card); box-shadow: var(--neu-raised); }
+.session-card:hover { border: 0; transform: translateY(-3px); box-shadow: var(--neu-hover); }
+.session-stack-peek { border: 0; box-shadow: var(--neu-raised-soft); }
+.session-stack-peek:hover, .session-stack-peek:focus-visible { border: 0; box-shadow: var(--neu-hover); }
+.ticket-card { border: 0; border-radius: 12px; background: var(--neu-surface); box-shadow: var(--neu-raised-soft); }
+
+/* --- Sessions: rail layout ------------------------------------------------ */
+.sessions-shell {
+  max-width: 1780px;
+  margin: 0 auto;
+  padding: 20px 28px 34px;
+  display: grid;
+  grid-template-columns: 288px minmax(0, 1fr);
+  grid-template-areas:
+    "count workflows"
+    "ladder board";
+  gap: 16px 18px;
+  align-items: start;
+}
+.run-count-tile {
+  grid-area: count;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 17px 20px;
+}
+.run-count-tile p, .run-count-tile h1 { margin: 0; }
+.run-count-tile strong { color: var(--text); font: 700 32px var(--mono); line-height: 1.15; }
+.run-count-tile span { color: var(--dim); font: 13px var(--mono); }
+
+/* The label pins to the top-left corner on its own row, which frees the
+   select-all button to centre against the block of chips beside it. */
+.workflow-rail {
+  grid-area: workflows;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(150px, auto) minmax(0, 1fr);
+  grid-template-areas:
+    "label   label"
+    "control options";
+  gap: 8px 20px;
+  align-items: center;
+  padding: 14px 18px;
+}
+/* Unwrap the heading so its label and button can take separate grid areas. */
+.workflow-rail .session-filter-heading { display: contents; }
+.workflow-rail .session-filter-heading h2 { grid-area: label; justify-self: start; }
+.workflow-rail .session-filter-select-all { grid-area: control; align-self: center; justify-self: stretch; }
+/* Every workflow stays visible: the strip wraps rather than scrolling. */
+.workflow-rail .session-filter-options {
+  grid-area: options;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 4px 0;
+}
+.workflow-rail .session-filter-option { flex: none; }
+
+.lifecycle-ladder {
+  grid-area: ladder;
+  position: sticky;
+  top: 82px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 17px;
+}
+.lifecycle-ladder .session-filter-heading { flex-direction: column; align-items: stretch; gap: 10px; }
+.lifecycle-ladder .session-filter-options { flex-direction: column; flex-wrap: nowrap; gap: 10px; }
+.lifecycle-ladder .session-filter-option { width: 100%; min-height: 50px; justify-content: space-between; }
+
+.sessions-shell .sessions-grid {
+  grid-area: board;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 18px;
+}
+.sessions-shell .empty-note { grid-area: board; max-width: none; margin: 0; padding: 30px; }
+
+/* --- Backlog: rail layout ------------------------------------------------- */
+.backlog-shell {
+  display: grid;
+  grid-template-columns: 288px minmax(0, 1fr);
+  grid-template-areas:
+    "rail plans"
+    "rail board";
+  gap: 16px 18px;
+  align-items: start;
+}
+/* Head and metrics share one column so the counts sit directly under the
+   title instead of waiting for the plan strip's row to end. */
+.backlog-rail {
+  grid-area: rail;
+  position: sticky;
+  top: 82px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.backlog-head { padding: 17px 20px; }
+.backlog-head p { margin: 0; }
+.backlog-head h1 { margin: 3px 0 0; font-size: 26px; }
+.backlog-shell .plan-picker { grid-area: plans; min-width: 0; margin: 0; padding: 14px 18px; }
+.backlog-shell .plan-controls { margin-bottom: 12px; }
+.backlog-rail .backlog-metrics { grid-template-columns: minmax(0, 1fr); gap: 12px; margin: 0; }
+.backlog-metrics > div {
+  padding: 14px 18px;
+  border: 0;
+  border-radius: var(--neu-radius-card);
+  background: var(--neu-surface);
+  box-shadow: var(--neu-raised);
+}
+.backlog-shell .backlog-groups { grid-area: board; min-width: 0; }
+/* Always the four ticket states, so fixed tracks beat auto-fill's empty column. */
+.backlog-shell .backlog-board { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.backlog-column { padding: 14px; }
+
+/* A collapsed plan is one long horizontal bar, not a bordered strip. */
+.backlog-plan-group.collapsed .backlog-plan-heading {
+  min-height: 58px;
+  padding: 10px 22px;
+  border: 0;
+  border-radius: var(--neu-radius);
+  background: var(--neu-surface);
+  box-shadow: var(--neu-raised);
+  transition: box-shadow 170ms ease;
+}
+.backlog-plan-group.collapsed .backlog-plan-heading:hover { box-shadow: var(--neu-hover); }
+.backlog-plan-group.collapsed .collapsed-plan-counts { gap: 22px; }
+
+/* ===========================================================================
+   SESSION SCREEN
+   The waterfall is a recessed ground; phases, gates and lane labels are the
+   things standing on it. Depth carries meaning here: run = raised,
+   queued = not yet extruded, failed gate = pressed in.
+   =========================================================================== */
+
+/* S7 · The track stays a quiet ground — axis, gridlines and ticks are hairline
+   so the blocks are the only things with relief. */
+.axis-row { background: transparent; border-bottom: 1px solid var(--border-soft); }
+.lane-row { border-bottom: 1px solid var(--border-soft); }
+.waterfall-heading { border-bottom: 1px solid var(--border-soft); }
+
+/* S1 · Phase blocks are raised cards. The lane colour moves out of the fill and
+   into an edge bar and the title, so the fill stays one flat colour. */
+.phase-block {
+  border: 0;
+  border-radius: 12px;
+  background: var(--neu-surface);
+  box-shadow: var(--neu-raised);
+}
+/* Flush against the edge and clipped by the card's own radius, so the spine
+   costs no content width — these blocks are already tight on room. */
+.phase-block::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--lane-color);
+}
+.phase-block-top strong { color: var(--lane-color); }
+.phase-block:hover { box-shadow: var(--neu-hover); }
+
+/* S2 · A phase that has not run is not yet extruded. */
+.phase-block.queued {
+  border: 0;
+  background: var(--neu-well);
+  box-shadow: var(--neu-pressed-soft);
+  color: var(--dim);
+}
+.phase-block.queued::before { background: color-mix(in srgb, var(--lane-color) 38%, transparent); }
+.phase-block.queued .phase-block-top strong { color: var(--dim); }
+
+/* S3 · Gates: a pass stands proud, a failure presses in. */
+.commit-pill, .gate-pill {
+  padding: 4px 11px;
+  border: 0;
+  background: var(--neu-surface);
+  box-shadow: var(--neu-raised-soft);
+}
+.gate-pill.fail { background: var(--neu-well); box-shadow: var(--neu-pressed-soft); }
+
+/* S4 · Lifecycle ribbon, in the same grammar as the lifecycle ladder:
+   reached states stand proud, unreached sit flush, current takes the accent. */
+.state-ribbon { gap: 7px; }
+.state-ribbon li > span:first-child {
+  padding: 7px 14px;
+  border: 0;
+  background: var(--neu-well);
+  box-shadow: none;
+}
+.state-ribbon li.earned > span:first-child {
+  background: var(--neu-surface);
+  box-shadow: var(--neu-raised-soft);
+}
+.state-ribbon li.current > span:first-child {
+  background: var(--neu-surface);
+  box-shadow: var(--neu-raised), inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+/* S5 · Each lane label is a card in a recessed gutter. */
+.lane-row .waterfall-label {
+  margin: 9px 0 9px 9px;
+  padding: 12px 14px;
+  border-right: 0;
+  border-radius: var(--neu-radius-card);
+  background: var(--neu-surface);
+  box-shadow: var(--neu-raised-soft);
+}
+.agent-card {
+  border: 0;
+  border-radius: var(--neu-radius-card);
+  background: var(--neu-surface);
+  box-shadow: var(--neu-raised-soft);
+}
+
+/* S6 · Run-strip chips take the same pill treatment as the filter menus.
+   Restated per state class so the semantic colour survives as text only. */
+.run-strip { border-bottom: 1px solid var(--border-soft); background: transparent; }
+.state-chip, .stat-chip, .sandbox-badge, .model-badge small, .phase-status,
+.state-chip.ok, .state-chip.running, .state-chip.warn, .state-chip.error,
+.phase-status.succeeded, .phase-status.running, .phase-status.validating,
+.phase-status.correcting, .phase-status.failed, .phase-status.cancelled {
+  padding: 5px 13px;
+  border: 0;
+  background: var(--neu-surface);
+  box-shadow: var(--neu-raised-soft);
+}
+
+/* --- Scrollbars on the new rails ------------------------------------------ */
+.workflow-rail .session-filter-options::-webkit-scrollbar { height: 9px; }
+.workflow-rail .session-filter-options::-webkit-scrollbar-track { border-radius: 999px; background: var(--neu-well); }
+.workflow-rail .session-filter-options::-webkit-scrollbar-thumb { border-radius: 999px; background: color-mix(in srgb, var(--dim) 44%, transparent); }
+.workflow-rail .session-filter-options::-webkit-scrollbar-thumb:hover { background: var(--dim); }
+
+@media (max-width: 1180px) {
+  .sessions-shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "count" "workflows" "ladder" "board";
+  }
+  .backlog-shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "rail" "plans" "board";
+  }
+  .lifecycle-ladder, .backlog-rail { position: static; }
+  .lifecycle-ladder .session-filter-options { flex-direction: row; flex-wrap: wrap; }
+  .lifecycle-ladder .session-filter-option { width: auto; }
+  .backlog-rail .backlog-metrics { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+}

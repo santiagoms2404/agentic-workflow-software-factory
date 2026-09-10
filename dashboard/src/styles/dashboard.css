@@ -1,6 +1,13 @@
 /* Visual grammar adapted from the MIT-licensed Super Simple Software Factory visualizer; AWSF data and control semantics remain journal-backed and local. */
 :root {
-  --accent: #F26A1B;
+  /* Accent and count follow the active palette instead of one fixed orange.
+     Both are drawn from the semantically free hues: green, red, blue and amber
+     already mean pass, fail, running and warn, so only purple/cyan/violet are
+     available to carry selection and counts without overloading a status
+     colour. Substitution resolves against the palette's own --purple/--cyan. */
+  --accent: var(--purple);
+  --count: var(--cyan);
+  --select-all: var(--violet);
   --sans: "Segoe UI", "Helvetica Neue", system-ui, sans-serif;
   --mono: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   --radius: 16px;
@@ -82,6 +89,10 @@
   --purple: #A8C7B5;
   --cyan: #62C2AA;
   --violet: #8AAFA4;
+  /* Monochrome green: purple, cyan and violet all collapse toward the pass
+     colour, so accent and select-all are lifted into the violet family. */
+  --accent: #ADB9EE;
+  --select-all: #C9A6DD;
 }
 :root[data-theme="forest"][data-mode="light"] {
   --bg: #DAF1DE;
@@ -97,6 +108,8 @@
   --purple: #5B4768;
   --cyan: #176E66;
   --violet: #4F6574;
+  --accent: #454A87;
+  --select-all: #6B4A86;
 }
 
 :root[data-theme="lavender-slate"][data-mode="dark"] {
@@ -144,6 +157,9 @@
   --purple: #A8BE9A;
   --cyan: #71B7A0;
   --violet: #99A7C8;
+  /* Monochrome green, same lift as Forest. */
+  --accent: #A8B2DC;
+  --select-all: #C2A6D2;
 }
 :root[data-theme="earthy-obsidian"][data-mode="light"] {
   --bg: #DDE2DD;
@@ -159,6 +175,8 @@
   --purple: #586B47;
   --cyan: #326D5F;
   --violet: #526080;
+  --accent: #414A78;
+  --select-all: #654682;
 }
 
 :root[data-theme="navy-sky"][data-mode="dark"] {
@@ -256,6 +274,51 @@
 
 :root[data-mode="dark"] { --session-stack-lane-anchor: color-mix(in srgb, var(--bg) 96%, var(--panel)); }
 :root[data-mode="light"] { --session-stack-lane-anchor: color-mix(in srgb, var(--text) 96%, var(--dim)); }
+
+/* ---------------------------------------------------------------------------
+   Neumorphic layer.
+
+   Flat surfaces extruded only by a twin shadow pair — light from the top-left,
+   dark from the bottom-right. Nothing inside a control is a gradient: the
+   modelling lives entirely in the shadows, so the fill stays one solid colour.
+   Containers are wells (recessed); the controls on them are pills (raised).
+   Every value derives from the active palette, so all seven themes and both
+   modes inherit the treatment.
+   --------------------------------------------------------------------------- */
+:root {
+  --neu-surface: color-mix(in srgb, var(--panel-2) 94%, var(--text));
+  --neu-well: color-mix(in srgb, var(--panel) 90%, var(--bg));
+  --neu-light: color-mix(in srgb, var(--text) 16%, transparent);
+  --neu-dark: color-mix(in srgb, #000 58%, transparent);
+  --neu-radius: 999px;
+  --neu-radius-card: 18px;
+
+  /* Tight offsets with a wide blur: modelled, but no shadow bleeding onto the
+     neighbour below — that bleed is what reads as a gradient in a stacked menu. */
+  --neu-raised:
+    -3px -3px 9px var(--neu-light),
+    4px 4px 11px var(--neu-dark);
+  --neu-raised-soft:
+    -2px -2px 6px var(--neu-light),
+    3px 3px 8px var(--neu-dark);
+  --neu-hover:
+    -4px -4px 12px var(--neu-light),
+    5px 5px 15px var(--neu-dark);
+  --neu-pressed:
+    inset -2px -2px 6px var(--neu-light),
+    inset 3px 3px 7px var(--neu-dark);
+  --neu-pressed-soft:
+    inset -1px -1px 4px var(--neu-light),
+    inset 2px 2px 5px var(--neu-dark);
+}
+
+/* Light palettes need the shadow pair rebalanced or the extrusion inverts. */
+:root[data-mode="light"] {
+  --neu-surface: color-mix(in srgb, var(--panel) 92%, var(--bg));
+  --neu-well: color-mix(in srgb, var(--bg) 92%, var(--border));
+  --neu-light: #ffffff;
+  --neu-dark: color-mix(in srgb, var(--border) 62%, transparent);
+}
 
 * { box-sizing: border-box; }
 html, body, #app { min-height: 100%; margin: 0; }

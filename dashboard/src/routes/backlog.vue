@@ -75,9 +75,11 @@ function closeTicket(): void {
 </script>
 
 <template>
-  <main class="backlog-route">
-    <header><p class="eyebrow">read-only work queue</p><h1>Backlog</h1></header>
-    <BacklogMetricsRow :groups="groups" :projected-cost="backlog.projectedCost" />
+  <main class="backlog-route backlog-shell">
+    <div class="backlog-rail">
+      <header class="backlog-head"><p class="eyebrow">read-only work queue</p><h1>Backlog</h1></header>
+      <BacklogMetricsRow :groups="groups" :projected-cost="backlog.projectedCost" />
+    </div>
     <PlanCardRow v-model:selected="selectedPlans" v-model:filter="planFilter" :plans="backlog.plans" />
     <BacklogBoard
       :groups="groups"
