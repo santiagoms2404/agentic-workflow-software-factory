@@ -894,10 +894,12 @@ pre { max-height: 42vh; margin: 8px 0 0; padding: 12px 14px; overflow: auto; bor
 .tree-detail-text { margin: 0; color: var(--text); font-size: 14px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 /* --- The decision tree above a group of related runs ---------------------- */
-/* Three voices, three treatments. The owner's own words are the only thing set
-   in the body face at full contrast; the assistant's reading and the machine
-   facts are monospace and dimmed; an accepted decision takes the accent on its
-   left edge, which is the only place a colour is spent. */
+/* Three voices, three treatments — carried by depth and by type, never by a
+   coloured edge. The owner's own words are the only thing set in the body face
+   at full contrast; the assistant's reading and the machine facts are
+   monospace and dimmed; a decision that was taken stands proud of the canvas
+   and one that was not sits flush with it, which is the same raised-versus-
+   flush grammar the filters and the graph nodes already use. */
 .session-group-note, .session-group-unrecorded { color: var(--dim); font: 12px var(--mono); }
 /* Two lines, then an ellipsis: the full ask is on its own screen, and a
    predictable entry height is what lets the list promise "the latest two". */
@@ -918,23 +920,74 @@ pre { max-height: 42vh; margin: 8px 0 0; padding: 12px 14px; overflow: auto; bor
 .decision-tree-counts { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0; color: var(--dim); font: 12px var(--mono); }
 .decision-tree-counts b { color: var(--text); }
 .decision-branch h4 { margin: 0 0 9px; color: var(--dim); font: 12px var(--mono); letter-spacing: .07em; text-transform: uppercase; }
-.decision-list { display: flex; flex-direction: column; gap: 11px; margin: 0; padding: 0; list-style: none; }
-.decision-node h5 { margin: 3px 0 8px; font-size: 15px; }
+.decision-list { display: flex; flex-direction: column; gap: 16px; margin: 0; padding: 0; list-style: none; }
+/* Title first and largest: it is the only thing a reader scans twenty of. */
+.decision-node h5 { margin: 4px 0 0; font-size: 17px; font-weight: 600; line-height: 1.35; }
 .decision-voice { margin: 0; color: var(--dim); font: 11px var(--mono); }
-.decision-gloss { margin: 7px 0 0; color: var(--dim); font: 12px var(--mono); line-height: 1.5; }
-.owner-words { margin: 8px 0 0; color: var(--text); font: 13px/1.55 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
-.decision-node.voice-owner-decision { border-left: 3px solid var(--accent); }
-.decision-node.voice-not-taken { border-left: 3px dashed var(--faint); }
-.decision-fields { display: grid; grid-template-columns: minmax(140px, auto) minmax(0, 1fr); gap: 5px 16px; margin: 0; }
-.decision-fields dt { color: var(--faint); font: 11px var(--mono); }
-.decision-fields dd { margin: 0; color: var(--text); font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
-.decision-changes, .decision-alternatives ul, .decision-superseded ul { margin: 9px 0 0; padding-left: 18px; color: var(--dim); font-size: 12px; line-height: 1.55; }
-.decision-alternatives { margin-top: 10px; }
-.decision-alternatives .decision-voice { color: var(--faint); }
-.decision-tasks { margin: 9px 0 0; color: var(--dim); font: 11px var(--mono); }
-.decision-tasks code, .decision-changes code, .session-group-meta code { color: var(--purple); }
-.decision-change-unit { margin-left: 6px; }
+/* The label sits above the reading rather than beside it: inline, the two ran
+   together into "read it asKeep the owner's words separate". */
+.decision-gloss { display: flex; flex-direction: column; gap: 4px; max-width: 92ch; margin: 7px 0 0; color: var(--dim); font: 12px var(--mono); line-height: 1.55; }
+.owner-words { max-width: 92ch; margin: 8px 0 0; color: var(--text); font: 13px/1.55 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+/* The decision itself, lifted out of the field list: it was the fourth of five
+   rows of identical weight, and it is the line the reader came for. */
+.decision-reason {
+  max-width: 88ch;
+  margin: 0;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+/* Labelled rows, not a two-column grid. The chip is a rail the eye tracks down
+   the card, which is the job the accent border was doing badly, and the value
+   keeps the full width instead of starting at a 140px tab stop. */
+.decision-fields { display: flex; flex-direction: column; gap: 9px; margin: 0; }
+.decision-field { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+.decision-fields dt {
+  /* One width for all four, so the chips make a straight rail rather than a
+     ragged edge the eye has to re-find on every row. */
+  flex: 0 0 112px;
+  padding: 3px 11px;
+  border-radius: var(--neu-radius);
+  background: var(--neu-surface);
+  box-shadow: var(--neu-raised-soft);
+  color: var(--dim);
+  font: 10px var(--mono);
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  text-align: center;
+}
+/* A measure, not the width of the canvas: the card is over a thousand pixels
+   wide and a line that long is the reason this view was hard to follow. */
+.decision-fields dd { flex: 1 1 320px; max-width: 88ch; margin: 0; color: var(--text); font-size: 13.5px; line-height: 1.6; overflow-wrap: anywhere; }
+/* What a decision wrote, and what it dropped: a recessed group of rows, the
+   shape a list of things takes everywhere else in this shell. */
+.decision-rows { display: flex; flex-direction: column; gap: 7px; }
+.decision-rows .decision-voice { color: var(--faint); }
+.decision-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 9px;
+  margin: 0;
+  padding: 9px 14px;
+  border-radius: 13px;
+  background: var(--neu-well);
+  box-shadow: var(--neu-pressed-soft);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.decision-row.dropped { color: var(--dim); }
+.decision-row { max-width: 96ch; }
+.decision-row span { flex: 1 1 260px; }
+.decision-tasks { margin: 0; color: var(--dim); font: 11px var(--mono); }
+.decision-tasks code, .decision-row code, .session-group-meta code { color: var(--purple); }
+.decision-row code { flex: 0 0 auto; font-size: 11px; }
+.decision-change-unit { margin-left: 0; }
 .decision-tasks code + code { margin-left: 8px; }
+.decision-superseded { display: flex; flex-direction: column; gap: 7px; }
 .decision-superseded summary { color: var(--dim); font: 11px var(--mono); cursor: pointer; }
 .decision-superseded summary:hover { color: var(--text); }
 .backlog-groups { display: grid; gap: 24px; }

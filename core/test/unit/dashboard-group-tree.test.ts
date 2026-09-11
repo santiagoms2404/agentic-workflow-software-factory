@@ -87,6 +87,7 @@ test("a task with no recorded decision traces to nothing rather than to a guess"
 test("the three voices are distinguished in the markup, and the owner's words take their own treatment", () => {
   const tree = source("dashboard/src/components/GroupDecisionTree.vue");
   const css = source("dashboard/src/styles/dashboard.css");
+  const shell = source("dashboard/src/styles/morphism.css");
   // The authority field already carries this, so the component labels rather
   // than re-derives; each of the three has a class the stylesheet answers.
   assert.equal(VOICE_LABEL["owner-input"], "the owner asked");
@@ -95,10 +96,22 @@ test("the three voices are distinguished in the markup, and the owner's words ta
     assert.match(tree, new RegExp(voice, "u"), voice);
   }
   assert.match(tree, /<pre class="owner-words">\{\{ ask\.text \}\}<\/pre>/u, "the ask is the owner's exact bytes");
-  assert.match(css, /\.decision-node\.voice-owner-decision \{[^}]*border-left:[^}]*var\(--accent\)/su);
-  assert.match(css, /\.decision-node\.voice-not-taken \{[^}]*dashed/su);
-  // Every treatment is a token, so all seven palettes inherit it.
-  assert.doesNotMatch(css.split("--- The decision tree")[1] ?? "", /#[0-9a-fA-F]{3,8}\b/u, "no hardcoded colour in the tree styles");
+  // Depth carries the verdict, never a coloured edge: a decision that was taken
+  // stands on the canvas and one that was not sits flush with it, which is the
+  // raised-versus-flush grammar the filters and the graph nodes already use.
+  assert.match(shell, /\.decision-node \{[^}]*box-shadow:\s*var\(--neu-raised\)/su);
+  assert.match(shell, /\.decision-node\.voice-not-taken \{[^}]*background:\s*var\(--neu-well\)[^}]*box-shadow:\s*none/su);
+  // Every treatment is a token, so all seven palettes inherit it — and no rule,
+  // rail or ring anywhere in the reading, because a coloured edge on a card is
+  // a second design language on a shell built from light and shadow.
+  // Bounded at both ends: the block runs from its own heading to where the
+  // backlog styles begin, so the assertions below cannot quietly start
+  // policing somebody else's rules.
+  const reading = css.split("--- The decision tree")[1]?.split(".backlog-groups")[0] ?? "";
+  assert.ok(reading.length > 0 && reading.includes(".decision-node"));
+  assert.doesNotMatch(reading, /#[0-9a-fA-F]{3,8}\b/u, "no hardcoded colour in the tree styles");
+  assert.doesNotMatch(reading, /border-left|border-right|border-top|border-bottom/u, "no edge carries meaning here");
+  assert.doesNotMatch(reading, /--accent/u);
 });
 
 test("the spine reads before the asks: the tree is of decisions, not of messages", () => {

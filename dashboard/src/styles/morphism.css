@@ -265,18 +265,35 @@
   cursor: pointer;
   font: inherit;
 }
+/* --- The reading: one card per decision ----------------------------------- */
+/* A card the length of a page needs internal structure or it reads as one
+   slab. The gap does it: voice, title, the decision itself, then the labelled
+   fields, then what it wrote and what it dropped — each a band the eye can
+   stop at. Depth carries the verdict, so no edge has to: a decision that was
+   taken stands on the canvas, one that was not sits flush with it. */
 .decision-node {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  padding: 18px 20px;
   border-radius: var(--neu-radius-card);
   background: var(--neu-surface);
-  box-shadow: var(--neu-raised-soft);
-  padding: 13px 15px;
+  box-shadow: var(--neu-raised);
 }
-.owner-words {
-  border-radius: 12px;
+.decision-node.voice-not-taken { background: var(--neu-well); box-shadow: none; }
+.decision-node.voice-owner-input, .decision-node.voice-unit { box-shadow: var(--neu-raised-soft); }
+/* The owner's own words and the reason they gave are the two things quoted
+   rather than described, so both take the recessed treatment that means "this
+   is a record, not our reading of it". */
+.owner-words, .decision-reason {
+  border-radius: 13px;
   background: var(--neu-well);
   box-shadow: var(--neu-pressed-soft);
-  padding: 11px 13px;
+  padding: 12px 15px;
 }
+.decision-node.voice-not-taken .owner-words,
+.decision-node.voice-not-taken .decision-reason,
+.decision-node.voice-not-taken .decision-row { box-shadow: none; background: var(--neu-surface); }
 
 /* The plan half: the same menu and card row, in half the width. */
 .session-plan-picker {

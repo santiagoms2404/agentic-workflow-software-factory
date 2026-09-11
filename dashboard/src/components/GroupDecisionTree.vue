@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import type { GroupTree, TreeProposal } from "../../shared/types.ts";
+import { formatDate } from "../display.ts";
 import { narrativeFields, notTakenReason, VOICE_LABEL } from "../group-tree.ts";
 
 const props = defineProps<{ tree: GroupTree }>();
@@ -36,32 +37,48 @@ function askLine(inputId: string | null): string {
       <p v-if="!tree.spine.length" class="absent">No decision has been applied in this group.</p>
       <ol class="decision-list">
         <li v-for="decision in tree.spine" :key="decision.id" class="decision-node voice-owner-decision">
-          <p class="decision-voice">{{ VOICE_LABEL["owner-decision"] }} · {{ decision.decidedAt }}</p>
+          <p class="decision-voice">{{ VOICE_LABEL["owner-decision"] }} · {{ formatDate(decision.decidedAt ?? "") }}</p>
           <h5>{{ decision.narrative.title }}</h5>
+          <!-- The decision itself, lifted out of the field list and set in a
+               recessed well: it is the one line the reader came for, and it was
+               the fourth of five rows of identical weight before. -->
+          <p class="decision-reason" :class="{ absent: !decision.ownerReason }">
+            {{ decision.ownerReason || "no reason recorded with this decision" }}
+          </p>
+          <!-- Each field is a labelled row rather than a two-column grid: the
+               chip gives the eye a rail to track down, which is the job the
+               accent border used to do badly. -->
           <dl class="decision-fields">
-            <dt>from the ask</dt>
-            <dd :class="{ absent: decision.ask === null }">{{ askLine(decision.ask) }}</dd>
-            <dt>the owner's reason</dt>
-            <dd :class="{ absent: !decision.ownerReason }">{{ decision.ownerReason || "not recorded" }}</dd>
-            <dt>the assistant's explanation</dt>
-            <dd :class="{ absent: !fields(decision).explanation.recorded }">{{ fields(decision).explanation.text }}</dd>
-            <dt>what changed</dt>
-            <dd :class="{ absent: !fields(decision).changes.recorded }">{{ fields(decision).changes.text }}</dd>
-            <dt>friction</dt>
-            <dd :class="{ absent: !fields(decision).friction.recorded }">{{ fields(decision).friction.text }}</dd>
+            <div class="decision-field">
+              <dt>from the ask</dt>
+              <dd :class="{ absent: decision.ask === null }">{{ askLine(decision.ask) }}</dd>
+            </div>
+            <div class="decision-field">
+              <dt>read as</dt>
+              <dd :class="{ absent: !fields(decision).explanation.recorded }">{{ fields(decision).explanation.text }}</dd>
+            </div>
+            <div class="decision-field">
+              <dt>changed</dt>
+              <dd :class="{ absent: !fields(decision).changes.recorded }">{{ fields(decision).changes.text }}</dd>
+            </div>
+            <div class="decision-field">
+              <dt>friction</dt>
+              <dd :class="{ absent: !fields(decision).friction.recorded }">{{ fields(decision).friction.text }}</dd>
+            </div>
           </dl>
-          <ul v-if="decision.changes.length" class="decision-changes">
-            <li v-for="(change, index) in decision.changes" :key="index">
+          <div v-if="decision.changes.length" class="decision-rows">
+            <p class="decision-voice">what this wrote ({{ decision.changes.length }})</p>
+            <p v-for="(change, index) in decision.changes" :key="index" class="decision-row">
               <code>{{ change.kind }}</code>
               <code v-if="change.unit" class="decision-change-unit">{{ change.unit }}</code>
-              — {{ change.detail }}
-            </li>
-          </ul>
-          <div v-if="decision.alternatives.length" class="decision-alternatives">
+              <span>{{ change.detail }}</span>
+            </p>
+          </div>
+          <div v-if="decision.alternatives.length" class="decision-rows">
             <p class="decision-voice">considered and dropped ({{ decision.alternatives.length }})</p>
-            <ul>
-              <li v-for="(alternative, index) in decision.alternatives" :key="index">{{ alternative }}</li>
-            </ul>
+            <p v-for="(alternative, index) in decision.alternatives" :key="index" class="decision-row dropped">
+              <span>{{ alternative }}</span>
+            </p>
           </div>
           <p v-if="decision.tasks.length" class="decision-tasks">
             tasks: <code v-for="task in decision.tasks" :key="task">{{ task }}</code>
@@ -74,23 +91,32 @@ function askLine(inputId: string | null): string {
       <h4>Proposed and not taken</h4>
       <ol class="decision-list">
         <li v-for="proposal in tree.notTaken" :key="proposal.id" class="decision-node voice-not-taken">
-          <p class="decision-voice">{{ VOICE_LABEL["assistant-proposal"] }} · {{ proposal.proposedAt }} · {{ notTakenReason(proposal) }}</p>
+          <p class="decision-voice">{{ VOICE_LABEL["assistant-proposal"] }} · {{ formatDate(proposal.proposedAt) }}</p>
           <h5>{{ proposal.narrative.title }}</h5>
+          <p class="decision-reason absent">{{ notTakenReason(proposal) }}</p>
           <dl class="decision-fields">
-            <dt>from the ask</dt>
-            <dd :class="{ absent: proposal.ask === null }">{{ askLine(proposal.ask) }}</dd>
-            <dt>the assistant's explanation</dt>
-            <dd :class="{ absent: !fields(proposal).explanation.recorded }">{{ fields(proposal).explanation.text }}</dd>
-            <dt>its reason</dt>
-            <dd :class="{ absent: !fields(proposal).reason.recorded }">{{ fields(proposal).reason.text }}</dd>
-            <dt>friction</dt>
-            <dd :class="{ absent: !fields(proposal).friction.recorded }">{{ fields(proposal).friction.text }}</dd>
+            <div class="decision-field">
+              <dt>from the ask</dt>
+              <dd :class="{ absent: proposal.ask === null }">{{ askLine(proposal.ask) }}</dd>
+            </div>
+            <div class="decision-field">
+              <dt>read as</dt>
+              <dd :class="{ absent: !fields(proposal).explanation.recorded }">{{ fields(proposal).explanation.text }}</dd>
+            </div>
+            <div class="decision-field">
+              <dt>its reason</dt>
+              <dd :class="{ absent: !fields(proposal).reason.recorded }">{{ fields(proposal).reason.text }}</dd>
+            </div>
+            <div class="decision-field">
+              <dt>friction</dt>
+              <dd :class="{ absent: !fields(proposal).friction.recorded }">{{ fields(proposal).friction.text }}</dd>
+            </div>
           </dl>
-          <div v-if="proposal.alternatives.length" class="decision-alternatives">
+          <div v-if="proposal.alternatives.length" class="decision-rows">
             <p class="decision-voice">considered and dropped ({{ proposal.alternatives.length }})</p>
-            <ul>
-              <li v-for="(alternative, index) in proposal.alternatives" :key="index">{{ alternative }}</li>
-            </ul>
+            <p v-for="(alternative, index) in proposal.alternatives" :key="index" class="decision-row dropped">
+              <span>{{ alternative }}</span>
+            </p>
           </div>
         </li>
       </ol>
@@ -100,7 +126,7 @@ function askLine(inputId: string | null): string {
       <h4>What was asked</h4>
       <ol class="decision-list">
         <li v-for="ask in tree.asks" :key="ask.stageId" class="decision-node voice-owner-input">
-          <p class="decision-voice">{{ VOICE_LABEL["owner-input"] }} · {{ ask.at }} · {{ ask.provenance }}</p>
+          <p class="decision-voice">{{ VOICE_LABEL["owner-input"] }} · {{ formatDate(ask.at) }} · {{ ask.provenance }}</p>
           <pre class="owner-words">{{ ask.text }}</pre>
           <p class="decision-gloss">
             <span class="decision-voice">the assistant read it as</span>
@@ -124,11 +150,10 @@ function askLine(inputId: string | null): string {
           <p v-if="unit.current.reason" class="decision-gloss">{{ unit.current.reason }}</p>
           <details v-if="unit.superseded.length" class="decision-superseded">
             <summary>{{ unit.superseded.length }} superseded revision(s)</summary>
-            <ul>
-              <li v-for="revision in unit.superseded" :key="revision.revision">
-                revision {{ revision.revision }} · {{ revision.disposition }} — {{ revision.title }}
-              </li>
-            </ul>
+            <p v-for="revision in unit.superseded" :key="revision.revision" class="decision-row dropped">
+              <code>r{{ revision.revision }}</code>
+              <span>{{ revision.disposition }} — {{ revision.title }}</span>
+            </p>
           </details>
         </li>
       </ul>
