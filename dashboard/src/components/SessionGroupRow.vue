@@ -60,30 +60,36 @@ async function toggle(group: string): Promise<void> {
       <span class="session-group-note">the ask these runs came out of</span>
     </div>
 
-    <div v-for="summary in visible" :key="summary.group" class="session-group-entry">
+    <div v-for="heading in visible" :key="heading.summary.group" class="session-group-entry">
       <button
         type="button"
         class="session-group-toggle"
-        :class="{ selected: expanded.includes(summary.group) }"
-        :aria-expanded="expanded.includes(summary.group)"
-        :aria-controls="`group-tree-${summary.group}`"
-        @click="toggle(summary.group)"
+        :class="{ selected: expanded.includes(heading.summary.group) }"
+        :aria-expanded="expanded.includes(heading.summary.group)"
+        :aria-controls="`group-tree-${heading.summary.group}`"
+        @click="toggle(heading.summary.group)"
       >
-        <span class="session-group-title" :class="{ absent: summary.title === null }">
-          {{ summary.title ?? "no ask recorded in this group" }}
+        <span class="session-group-title" :class="{ absent: heading.summary.title === null }">
+          {{ heading.summary.title ?? "no ask recorded in this group" }}
         </span>
         <span class="session-group-meta">
-          <code>{{ summary.group }}</code>
-          <span>{{ summary.counts.applied }} decided</span>
-          <span>{{ summary.counts.notTaken }} not taken</span>
-          <span>{{ summary.counts.alternatives }} alternatives</span>
-          <span v-if="summary.closed">closed</span>
+          <code>{{ heading.summary.group }}</code>
+          <!-- Said plainly rather than omitted: a group whose runs predate
+               `--group` has none on this board and never will, and a heading
+               that hid that would read as a session that produced nothing. -->
+          <span :class="{ absent: heading.runs === 0 }">
+            {{ heading.runs === 0 ? "no runs on this board" : `${heading.runs} run(s) here` }}
+          </span>
+          <span>{{ heading.summary.counts.applied }} decided</span>
+          <span>{{ heading.summary.counts.notTaken }} not taken</span>
+          <span>{{ heading.summary.counts.alternatives }} alternatives</span>
+          <span v-if="heading.summary.closed">closed</span>
         </span>
       </button>
-      <div :id="`group-tree-${summary.group}`" class="session-group-panel" :hidden="!expanded.includes(summary.group)">
-        <p v-if="loading.includes(summary.group)" class="absent">Reading the group journal…</p>
-        <p v-else-if="errors[summary.group]" class="absent">{{ errors[summary.group] }}</p>
-        <GroupDecisionTree v-else-if="trees[summary.group]" :tree="trees[summary.group]!" />
+      <div :id="`group-tree-${heading.summary.group}`" class="session-group-panel" :hidden="!expanded.includes(heading.summary.group)">
+        <p v-if="loading.includes(heading.summary.group)" class="absent">Reading the group journal…</p>
+        <p v-else-if="errors[heading.summary.group]" class="absent">{{ errors[heading.summary.group] }}</p>
+        <GroupDecisionTree v-else-if="trees[heading.summary.group]" :tree="trees[heading.summary.group]!" />
       </div>
     </div>
 

@@ -22,10 +22,26 @@ const summaries: readonly GroupSummary[] = [
   { group: "drive-b", project: "p", revision: 1, closed: true, title: null, at: null, counts },
 ];
 
-test("only the groups the visible runs belong to get a title above the board", () => {
-  assert.deepEqual(groupsForRuns(summaries, ["drive-a", null, "drive-a"]).map((s) => s.group), ["drive-a"]);
-  assert.deepEqual(groupsForRuns(summaries, ["drive-a", "drive-b"]).map((s) => s.group), ["drive-a", "drive-b"]);
-  assert.deepEqual(groupsForRuns(summaries, [null, null]), []);
+test("every recorded driving session gets a title, and the ones with runs here sort first", () => {
+  // The strict join this replaced showed nothing at all on a real projection:
+  // no run created before `--group` carries one, and legacy rows are never
+  // backfilled, so the whole recorded history was unreachable from the screen.
+  assert.deepEqual(
+    groupsForRuns(summaries, ["drive-a", null, "drive-a"]).map((heading) => [heading.summary.group, heading.runs]),
+    [["drive-a", 2], ["drive-b", 0]],
+  );
+  assert.deepEqual(
+    groupsForRuns(summaries, ["drive-b"]).map((heading) => [heading.summary.group, heading.runs]),
+    [["drive-b", 1], ["drive-a", 0]],
+    "a group with runs on this board reads before one without",
+  );
+  // A board where nothing names a group still lists both, each saying zero.
+  assert.deepEqual(
+    groupsForRuns(summaries, [null, null]).map((heading) => [heading.summary.group, heading.runs]),
+    [["drive-a", 0], ["drive-b", 0]],
+  );
+  // And a group nobody recorded is still not invented from a run's id.
+  assert.deepEqual(groupsForRuns([], ["drive-ghost"]), []);
 });
 
 test("a group a run names with no planning journal is reported, not hidden", () => {
@@ -92,6 +108,14 @@ test("the spine reads before the asks: the tree is of decisions, not of messages
   const asked = tree.indexOf('aria-label="What was asked"');
   assert.ok(decided > 0 && notTaken > 0 && asked > 0);
   assert.ok(decided < notTaken && notTaken < asked, "decisions, then what was dropped, then the asks behind them");
+});
+
+test("a group with no runs on this board says so rather than looking like a session that produced nothing", () => {
+  const row = source("dashboard/src/components/SessionGroupRow.vue");
+  assert.match(row, /no runs on this board/u);
+  assert.match(row, /run\(s\) here/u);
+  // The zero case takes the same absence treatment every unwritten field does.
+  assert.match(row, /:class="\{ absent: heading\.runs === 0 \}"/u);
 });
 
 test("expanding preserves scroll and focus, and never unmounts the run workspace", () => {

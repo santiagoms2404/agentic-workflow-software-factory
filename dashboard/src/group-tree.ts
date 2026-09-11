@@ -61,13 +61,38 @@ export function notTakenReason(proposal: TreeProposal): string {
     : "never applied; a later stage overtook it, so it can no longer be taken without being re-proposed";
 }
 
-/** The groups a set of runs belongs to, in the order the group list gives. */
+export interface GroupHeading {
+  readonly summary: GroupSummary;
+  /** How many runs currently on the board belong to this group. */
+  readonly runs: number;
+}
+
+/**
+ * Every recorded driving session, each carrying how many runs on the board
+ * belong to it.
+ *
+ * The first cut showed ONLY the groups the visible runs named, because the
+ * heading is meant to sit above a group of related runs and a title with no
+ * runs under it is a floating heading. Measured against the real projection
+ * that rule hid everything: no run predating `--group` carries one, legacy rows
+ * are never backfilled, and so 19 recorded decisions and 56 recorded
+ * alternatives were reachable only by typing an API URL. A history the screen
+ * refuses to show is worth less than a heading that admits it has no runs
+ * under it today.
+ *
+ * Groups with runs sort first, so the original reading — this ask produced
+ * these runs — still comes first when it applies.
+ */
 export function groupsForRuns(
   summaries: readonly GroupSummary[],
   runGroupIds: readonly (string | null)[],
-): readonly GroupSummary[] {
-  const present = new Set(runGroupIds.filter((id): id is string => id !== null));
-  return summaries.filter((summary) => present.has(summary.group));
+): readonly GroupHeading[] {
+  const counts = new Map<string, number>();
+  for (const id of runGroupIds) {
+    if (id !== null) counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  const headings = summaries.map((summary) => ({ summary, runs: counts.get(summary.group) ?? 0 }));
+  return [...headings.filter((heading) => heading.runs > 0), ...headings.filter((heading) => heading.runs === 0)];
 }
 
 /**
