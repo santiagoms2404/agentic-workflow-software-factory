@@ -141,6 +141,133 @@ export interface SessionPlan {
   readonly parentSpineName: string | null;
 }
 
+/* -------------------------------------------------------------------------
+   The decision tree above a group of related runs.
+
+   Declared here and produced by `core/src/planning/views.ts`; the route asserts
+   the projection satisfies these shapes, so a drift is a typecheck failure
+   rather than a field that quietly stops arriving. Every string is reported
+   exactly as recorded, empty included: a missing narrative is displayed as
+   missing and nothing is reconstructed as fact.
+   ------------------------------------------------------------------------- */
+
+export interface TreeReference {
+  readonly path: string;
+  readonly sha256: string;
+  readonly locator: string;
+  readonly kind: "text" | "attachment";
+}
+
+export interface TreeNarrative {
+  readonly title: string;
+  readonly explanation: string;
+  readonly changes: string;
+  readonly reason: string;
+  readonly friction: string;
+  readonly tasks: readonly string[];
+  readonly references: readonly TreeReference[];
+}
+
+/** One owner input and the stage that captured it. The owner's own words. */
+export interface TreeAsk {
+  readonly stageId: string;
+  readonly at: string;
+  readonly inputId: string;
+  readonly text: string;
+  readonly provenance: string;
+  readonly sha256: string;
+  /** The assistant's explanation of the ask, which is not the ask itself. */
+  readonly narrative: TreeNarrative;
+}
+
+export interface TreeChange {
+  readonly kind: string;
+  readonly unit: string | null;
+  readonly detail: string;
+}
+
+export interface TreeProposal {
+  readonly id: string;
+  readonly base: number;
+  readonly proposedStageId: string;
+  readonly proposedAt: string;
+  readonly narrative: TreeNarrative;
+  /** Options written down and deliberately not taken. */
+  readonly alternatives: readonly string[];
+  readonly changes: readonly TreeChange[];
+  readonly status: "applied" | "not-taken";
+  readonly appliable: boolean;
+  readonly decisionStageId: string | null;
+  readonly decidedAt: string | null;
+  readonly ownerReason: string | null;
+  readonly ask: string | null;
+  readonly tasks: readonly string[];
+}
+
+export interface TreeUnitRevision {
+  readonly revision: number;
+  readonly title: string;
+  readonly disposition: "active" | "deferred" | "split";
+  readonly reason: string;
+  readonly revisit: string;
+}
+
+export interface TreeUnit {
+  readonly id: string;
+  readonly taskId: string;
+  readonly current: TreeUnitRevision;
+  readonly superseded: readonly TreeUnitRevision[];
+}
+
+export interface TreeCounts {
+  readonly stages: number;
+  readonly inputs: number;
+  readonly proposals: number;
+  readonly applied: number;
+  readonly notTaken: number;
+  readonly alternatives: number;
+  readonly unitRecords: number;
+  readonly units: number;
+}
+
+export interface GroupTree {
+  readonly schema: "awsf/decision-tree/v1";
+  readonly group: string;
+  readonly project: string;
+  readonly revision: number;
+  readonly head: string;
+  readonly closed: boolean;
+  readonly title: {
+    readonly text: string;
+    readonly full: string;
+    readonly inputId: string;
+    readonly stageId: string;
+    readonly at: string;
+  } | null;
+  readonly asks: readonly TreeAsk[];
+  readonly spine: readonly TreeProposal[];
+  readonly notTaken: readonly TreeProposal[];
+  readonly units: readonly TreeUnit[];
+  readonly byTask: Readonly<Record<string, { readonly proposals: readonly string[]; readonly asks: readonly string[] }>>;
+  readonly counts: TreeCounts;
+}
+
+export interface GroupSummary {
+  readonly group: string;
+  readonly project: string;
+  readonly revision: number;
+  readonly closed: boolean;
+  readonly title: string | null;
+  readonly at: string | null;
+  readonly counts: TreeCounts;
+}
+
+export interface GroupsResponse {
+  readonly groups: readonly GroupSummary[];
+  /** Groups whose journal could not be replayed, named rather than dropped. */
+  readonly unreadable: readonly string[];
+}
+
 export interface SessionsResponse {
   sessions: SessionCard[];
   /** The catalog's registered plans, so a run can be shown as spine or deep. */

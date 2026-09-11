@@ -9,8 +9,19 @@ import { delegationViolation, ownerActViolation, OWNER_ACTS } from "../../../../
 
 const root = repoRoot();
 
+/**
+ * The two files permitted a planning import, and nothing else.
+ *
+ * `group.ts` is the CLI's planning route and may reach the whole store. The API
+ * read layer is the D9 allowance: the fence exists so "gates, lifecycle and
+ * accounting cannot acquire a planning import", and a read-only dashboard route
+ * is none of those. It is widened by exactly one path, and the test below holds
+ * that path to reading only.
+ */
+const API_READ_PATH = "core/src/api/planning-route.ts";
+
 test("only the dedicated CLI planning route reaches planning modules", () => {
-  const allowed = new Set([join(root, "core/src/cli/commands/group.ts")]);
+  const allowed = new Set([join(root, "core/src/cli/commands/group.ts"), join(root, API_READ_PATH)]);
   const violations: string[] = [];
   for (const path of walkFiles(join(root, "core/src"), [".ts"])) {
     if (path.startsWith(join(root, "core/src/planning") + "/") || allowed.has(path)) continue;
@@ -29,6 +40,49 @@ test("only the dedicated CLI planning route reaches planning modules", () => {
   const main = readFileSync(join(root, "core/src/cli/main.ts"), "utf8");
   assert.match(main, /if \(command === "group"\) \{[\s\S]*?await import\("\.\/commands\/group\.ts"\)/u);
   assert.equal(main.split('./commands/group.ts').length - 1, 1);
+});
+
+test("the API read layer reaches only the read-only view module, and no mutating function through it", () => {
+  const source = readFileSync(join(root, API_READ_PATH), "utf8");
+  const ast = ts.createSourceFile(API_READ_PATH, source, ts.ScriptTarget.Latest, true);
+
+  // ONE planning module, and it is the read-only one. `store.ts` is where
+  // `capture`, `propose` and `apply` live, so naming views.ts is the whole
+  // point of the allowance rather than an incidental detail of it.
+  const planningImports: string[] = [];
+  const visitImports = (node: ts.Node): void => {
+    if (ts.isStringLiteralLike(node)) {
+      const resolved = resolve(dirname(join(root, API_READ_PATH)), node.text);
+      if (resolved.startsWith(join(root, "core/src/planning") + "/")) planningImports.push(resolved);
+    }
+    ts.forEachChild(node, visitImports);
+  };
+  visitImports(ast);
+  assert.deepEqual(planningImports, [join(root, "core/src/planning/views.ts")]);
+
+  // No mutating identity is reachable through the path: not a write API, not
+  // the journal or lock that would let it write one itself, and not the event
+  // or operation types that only a writer needs.
+  const forbidden = new Set([
+    "capture", "propose", "apply", "reduceEvent", "applyChanges", "previewGroup",
+    "Journal", "AttemptLock", "writeFile", "appendFile", "mkdir", "rename", "unlink", "rm",
+    "Event", "Operation", "Proposal", "WriteOptions",
+  ]);
+  const offenders: string[] = [];
+  const visitIdentifiers = (node: ts.Node): void => {
+    if (ts.isIdentifier(node) && forbidden.has(node.text)) offenders.push(node.text);
+    ts.forEachChild(node, visitIdentifiers);
+  };
+  visitIdentifiers(ast);
+  assert.deepEqual(offenders, [], "the API read layer must reach no planning write surface");
+
+  // And the module it does import exports no writer either, so the allowance
+  // cannot be widened later by re-exporting one from views.ts.
+  const views = readFileSync(join(root, "core/src/planning/views.ts"), "utf8");
+  for (const name of ["capture", "propose", "apply", "reduceEvent"]) {
+    assert.doesNotMatch(views, new RegExp(String.raw`export\s+(?:async\s+)?function\s+${name}\b`, "u"), name);
+    assert.doesNotMatch(views, new RegExp(String.raw`export\s*\{[^}]*\b${name}\b`, "u"), name);
+  }
 });
 
 test("planning never calls lifecycle or accounting mutation APIs", () => {

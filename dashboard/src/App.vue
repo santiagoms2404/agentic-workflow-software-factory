@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
-import type { AdaptersResponse, HealthResponse, SessionDetailResponse, SessionsResponse, SettingsResponse, TicketsResponse } from "../shared/types.ts";
+import type { AdaptersResponse, GroupsResponse, HealthResponse, SessionDetailResponse, SessionsResponse, SettingsResponse, TicketsResponse } from "../shared/types.ts";
 import AppShell from "./components/AppShell.vue";
 import SessionsGrid from "./components/SessionsGrid.vue";
 import SessionRoute from "./components/SessionRoute.vue";
@@ -16,6 +16,7 @@ const configuredWorkflows = ref<readonly string[]>([]);
 const selectedWorkflows = ref<readonly string[]>([]);
 const selectedLifecycleStates = ref<readonly string[]>([]);
 const selectedPlanKinds = ref<readonly string[]>([]);
+const groups = ref<GroupsResponse>({ groups: [], unreadable: [] });
 const detail = ref<SessionDetailResponse | null>(null);
 const selectedId = ref<string | null>(null);
 const selectedPhaseId = ref<string | null>(null);
@@ -66,6 +67,22 @@ function readEnabledWorkflows(value: unknown): readonly string[] {
   return workflowIds;
 }
 
+// The group list is titles and counts, not trees: one read at startup, and the
+// tree itself is fetched only when a reader opens one. Polling a 70-stage
+// journal every few seconds to render a heading would be an odd trade.
+let groupsRequest: Promise<void> | null = null;
+function loadGroupsOnce(): Promise<void> {
+  groupsRequest ??= (async () => {
+    const response = await fetch("/api/v1/groups");
+    if (!response.ok) return;
+    groups.value = await response.json() as GroupsResponse;
+  })().catch(() => {
+    // A project with no planning state is the ordinary case, not an error the
+    // sessions view should refuse to render over.
+  });
+  return groupsRequest;
+}
+
 let settingsRequest: Promise<void> | null = null;
 function loadSettingsOnce(): Promise<void> {
   settingsRequest ??= (async () => {
@@ -109,6 +126,7 @@ async function load(): Promise<void> {
     fetch("/api/v1/health"),
     dataRequest,
     loadSettingsOnce(),
+    loadGroupsOnce(),
   ]);
   if (!nextHealth.ok) throw new Error("Dashboard data unavailable");
   health.value = await nextHealth.json() as HealthResponse;
@@ -155,6 +173,7 @@ const { lastPollAt, pollMs } = usePolling(load, () => mode.value);
       v-model:selected-plan-kinds="selectedPlanKinds"
       :sessions="sessions.sessions"
       :plans="sessions.plans"
+      :groups="groups.groups"
       :workflows="configuredWorkflows"
     />
   </AppShell>

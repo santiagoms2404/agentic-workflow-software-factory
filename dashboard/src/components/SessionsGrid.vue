@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import type { SessionCard as Session, SessionPlan } from "../../shared/types.ts";
+import type { GroupSummary, SessionCard as Session, SessionPlan } from "../../shared/types.ts";
 import {
   filterSessions,
   planKindFilterEntries,
@@ -10,12 +10,14 @@ import {
 import { planKindLabel, withPlanKind } from "../session-plans.ts";
 import { groupSessionStacks } from "../session-stacks.ts";
 import SessionFilterRow from "./SessionFilterRow.vue";
+import SessionGroupRow from "./SessionGroupRow.vue";
 import SessionPlanRow from "./SessionPlanRow.vue";
 import SessionStack from "./SessionStack.vue";
 
 const props = defineProps<{
   sessions: readonly Session[];
   plans: readonly SessionPlan[];
+  groups: readonly GroupSummary[];
   workflows: readonly string[];
   selectedWorkflows: readonly string[];
   selectedStates: readonly string[];
@@ -80,6 +82,7 @@ const planKindEntries = computed(() => planKindFilterEntries(
       :selected="selectedStates"
       @update:selected="emit('update:selectedStates', $event)"
     />
+    <SessionGroupRow :summaries="groups" :run-group-ids="visibleSessions.map((session) => session.groupId)" />
     <SessionPlanRow
       :sessions="visibleSessions"
       :plans="plans"

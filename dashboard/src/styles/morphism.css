@@ -12,6 +12,7 @@
 .session-filter-row,
 .plan-picker,
 .session-plan-picker,
+.session-group-picker,
 .backlog-column,
 .run-count-tile,
 .backlog-head,
@@ -31,6 +32,7 @@
 .session-filter-option,
 .session-filter-control,
 .plan-control-button,
+.session-group-toggle,
 .archive-control,
 .detail-close,
 .timeline-access button,
@@ -54,6 +56,7 @@
 .session-filter-control:hover,
 .plan-control-button:hover,
 .plan-card:hover,
+.session-group-toggle:hover,
 .archive-control:hover,
 .detail-close:hover,
 .timeline-access button:hover,
@@ -71,7 +74,8 @@
    Both fills stay one flat colour. */
 .session-filter-option,
 .plan-control-button,
-.plan-card {
+.plan-card,
+.session-group-toggle {
   background: var(--neu-well);
   color: var(--dim);
   box-shadow: none;
@@ -86,6 +90,7 @@
 .session-filter-control.selected,
 .plan-control-button.selected,
 .plan-card.selected,
+.session-group-toggle.selected,
 .palette-trigger[aria-expanded="true"] {
   border: 0;
   background: var(--neu-surface);
@@ -103,6 +108,9 @@
 .session-filter-option.selected:hover,
 .plan-control-button.selected:hover,
 .plan-card.selected:hover { box-shadow: var(--neu-hover); transform: translateY(-1px); }
+/* An opened title stays put: it is the lid of the panel below it, and a lid
+   that lifts on hover detaches from what it opened. */
+.session-group-toggle.selected:hover { box-shadow: var(--neu-raised); transform: none; }
 .session-filter-select-all.selected,
 .select-all-control.selected { color: var(--select-all); }
 
@@ -132,6 +140,7 @@
   grid-template-columns: 288px minmax(0, 1fr);
   grid-template-areas:
     "count workflows"
+    "ladder groups"
     "ladder plans"
     "ladder board";
   gap: 16px 18px;
@@ -197,6 +206,52 @@
   gap: 18px;
 }
 .sessions-shell .empty-note { grid-area: board; max-width: none; margin: 0; padding: 30px; }
+
+/* The driving-session titles sit above the plan strip: the ask a set of runs
+   came out of is the outermost thing on this screen, so it reads first. The
+   panel each one opens is a well inside a well — recessed against the strip it
+   sits in, so an opened tree reads as contained rather than as a new column. */
+.session-group-picker {
+  grid-area: groups;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 18px;
+}
+.session-group-entry { display: flex; flex-direction: column; gap: 10px; }
+.session-group-toggle {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 52px;
+  padding: 12px 18px;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+.session-group-panel {
+  border-radius: var(--neu-radius-card);
+  background: var(--neu-well);
+  box-shadow: var(--neu-pressed-soft);
+  padding: 16px 18px;
+  max-height: 620px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.decision-node {
+  border-radius: var(--neu-radius-card);
+  background: var(--neu-surface);
+  box-shadow: var(--neu-raised-soft);
+  padding: 13px 15px;
+}
+.owner-words {
+  border-radius: 12px;
+  background: var(--neu-well);
+  box-shadow: var(--neu-pressed-soft);
+  padding: 11px 13px;
+}
 
 /* The plan strip sits where the backlog's does: along the top of the board
    column, in the same well, with the same card row scrolling inside it. */
@@ -377,7 +432,7 @@
 @media (max-width: 1180px) {
   .sessions-shell {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "count" "workflows" "ladder" "plans" "board";
+    grid-template-areas: "count" "workflows" "ladder" "groups" "plans" "board";
   }
   .backlog-shell {
     grid-template-columns: minmax(0, 1fr);
