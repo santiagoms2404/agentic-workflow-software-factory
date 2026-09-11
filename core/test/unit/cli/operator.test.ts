@@ -180,7 +180,10 @@ test("dash initializes an absent disposable projection before listening", async 
     if (address === null || address === undefined || typeof address === "string") throw new Error("missing dashboard address");
     const response = await httpGet(address.port, "/api/v1/sessions");
     assert.equal(response.status, 200);
-    assert.deepEqual(JSON.parse(response.body), { sessions: [] });
+    // A fresh projection in a directory that registers no plans: both lists are
+    // empty, and `plans` is present rather than absent, so the sessions view
+    // reads "no registered plan" instead of undefined.
+    assert.deepEqual(JSON.parse(response.body), { sessions: [], plans: [] });
   } finally {
     if (server?.listening) await new Promise<void>((done) => server?.close(() => done()));
     rmSync(root, { recursive: true, force: true });

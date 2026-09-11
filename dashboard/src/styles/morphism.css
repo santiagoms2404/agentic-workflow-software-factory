@@ -11,6 +11,7 @@
 .neu-well,
 .session-filter-row,
 .plan-picker,
+.session-plan-picker,
 .backlog-column,
 .run-count-tile,
 .backlog-head,
@@ -75,6 +76,12 @@
   color: var(--dim);
   box-shadow: none;
 }
+/* A sessions plan card navigates rather than toggling, so it stays raised. The
+   raised/flush pair above is the grammar for selection, and borrowing it for a
+   link would promise a state this card does not have. Stated after that pair
+   because it is a `.plan-card` and would otherwise be flattened by it. */
+.session-plan-card { background: var(--neu-surface); color: var(--text); box-shadow: var(--neu-raised); }
+.session-plan-card:hover { box-shadow: var(--neu-hover); transform: translateY(-1px); }
 .session-filter-option.selected,
 .session-filter-control.selected,
 .plan-control-button.selected,
@@ -125,6 +132,7 @@
   grid-template-columns: 288px minmax(0, 1fr);
   grid-template-areas:
     "count workflows"
+    "ladder plans"
     "ladder board";
   gap: 16px 18px;
   align-items: start;
@@ -189,6 +197,24 @@
   gap: 18px;
 }
 .sessions-shell .empty-note { grid-area: board; max-width: none; margin: 0; padding: 30px; }
+
+/* The plan strip sits where the backlog's does: along the top of the board
+   column, in the same well, with the same card row scrolling inside it. */
+.session-plan-picker {
+  grid-area: plans;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 18px;
+}
+.session-plan-picker .session-filter-options { flex-wrap: wrap; gap: 12px; }
+.session-plan-picker .session-filter-option { flex: none; }
+.session-plan-picker .plan-card-row { padding-bottom: 4px; }
+/* One height for every card whatever its name wraps to, with the metrics
+   pinned to the bottom so the numbers line up across the row. */
+.session-plan-card { flex: 0 0 268px; min-height: 132px; display: flex; flex-direction: column; }
+.session-plan-metrics { grid-template-columns: repeat(2, auto); margin-top: auto; }
 
 /* --- Backlog: rail layout ------------------------------------------------- */
 .backlog-shell {
@@ -351,7 +377,7 @@
 @media (max-width: 1180px) {
   .sessions-shell {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "count" "workflows" "ladder" "board";
+    grid-template-areas: "count" "workflows" "ladder" "plans" "board";
   }
   .backlog-shell {
     grid-template-columns: minmax(0, 1fr);

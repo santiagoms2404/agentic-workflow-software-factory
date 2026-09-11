@@ -326,6 +326,9 @@ async function createTarget(
     taskId: options.targetTaskId,
     continuesTask: candidate.source.taskId,
     groupId: options.groupId ?? null,
+    // The target continues the source's work, so it inherits the source's plan
+    // for the same reason a retry does. The group does not: see `groupId` above.
+    planRef: candidate.source.planRef,
     attempt: 1,
     repository: candidate.source.repository,
     worktree: worktree.path,

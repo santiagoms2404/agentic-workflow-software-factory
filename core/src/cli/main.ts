@@ -23,6 +23,7 @@ import { initCommand } from "./commands/init.ts";
 import { listProjects, registerProject, showProject, verifyRegisteredProject } from "./commands/project.ts";
 import { landCommand } from "./commands/land.ts";
 import { newCommand } from "./commands/new.ts";
+import { PlanRefUnknown, resolvePlanRef } from "./commands/plan-ref.ts";
 import { relateCommand } from "./commands/relate.ts";
 import { publishCommand } from "./commands/publish.ts";
 import { raiseCommand } from "./commands/raise.ts";
@@ -280,10 +281,23 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       // prior T0 task would either collide or make a second refinement inherit
       // its already-spent one-call ceiling.
       const taskId = `ticket-${action}-${id}-${randomUUID()}`;
+      // The intake task's plan is the one its ticket store was resolved through,
+      // so it is stated rather than guessed here too. An intake run against a
+      // repository with no catalog stays unlinked.
+      let intakePlanRef: string | undefined;
+      try {
+        intakePlanRef = await resolvePlanRef({
+          repository: cwd, stateRoot, project,
+          stem: parsed.flags.plan ?? loadCatalog(await readFile(resolve(cwd, "awsf.project.yaml"), "utf8")).plans.default ?? "",
+        });
+      } catch {
+        intakePlanRef = undefined;
+      }
       const projection = createDashboardProjection(stateRoot, err);
       try {
         const created = await newCommand({
           stateRoot, project, taskId, repository: cwd, request, workflow: "intake", tier: 0,
+          ...(intakePlanRef === undefined ? {} : { planRef: intakePlanRef }),
           configSnapshotJson: toConfigSnapshotJson(config),
           callCeilings: callCeilingsOf(config.risk.call_ceiling),
           allowance: config.risk.correction_allowance,
@@ -386,12 +400,18 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       );
       const { workflow, tier } = selection;
       const routeOverrides = parseRouteFlags(parsed.routes);
+      const planRef = parsed.flags.plan === undefined
+        ? undefined
+        : await resolvePlanRef({ repository: cwd, stateRoot, project, stem: parsed.flags.plan });
       const result = await newCommand({
         stateRoot,
         project,
         taskId,
         ...(parsed.flags.continues === undefined ? {} : { continuesTask: parsed.flags.continues }),
         ...(parsed.flags.group === undefined ? {} : { groupId: parsed.flags.group }),
+        // Resolved against the catalog BEFORE the attempt exists, so a task is
+        // never created carrying a plan label that points at nothing.
+        ...(planRef === undefined ? {} : { planRef }),
         repository: cwd,
         request,
         workflow,
@@ -404,6 +424,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       });
       out(`Created ${project}/${taskId} attempt ${result.status.attempt} in DRAFT.`);
       if (result.status.groupId !== null) out(`Group: ${result.status.groupId} — this run is recorded as part of that driving session.`);
+      if (result.status.planRef !== null) out(`Plan: ${result.status.planRef} — this run is recorded against that registered plan.`);
       for (const [phaseId, selected] of Object.entries(routeOverrides)) {
         out(`Route: ${formatRouteOverride(phaseId, selected)}`);
       }
@@ -671,6 +692,9 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         out(result.status.groupId === null
           ? "Group: none — a retry inherits no group; pass --group to record the driving session minting this attempt."
           : `Group: ${result.status.groupId} — recorded from this invocation, not carried from the prior attempt.`);
+        if (result.status.planRef !== null) {
+          out(`Plan: ${result.status.planRef} — carried from attempt ${result.status.attempt - 1}; a retry is more work on the same plan.`);
+        }
         out(result.status.nextAction);
         return 0;
       }
@@ -681,6 +705,11 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       projection.close();
     }
   } catch (error) {
+    if (error instanceof PlanRefUnknown && error.candidates.length > 0) {
+      err(`${error.name}: ${error.message}`);
+      err(`plan candidates: ${error.candidates.join(", ")}`);
+      return 1;
+    }
     err(error instanceof Error ? `${error.name}: ${error.message}` : String(error));
     return 1;
   }

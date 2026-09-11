@@ -78,11 +78,15 @@ test("plan controls use accessible dashboard toggle buttons", () => {
 test("backlog selection seeds once from the first non-empty response", () => {
   const route = source("dashboard/src/routes/backlog.vue");
   assert.match(route, /let hasSeededSelection = false;/u);
+  // The rule itself moved into `initialPlanSelection` when the sessions view
+  // gained plan cards that navigate here carrying a plan; the route keeps the
+  // seed-once guard and delegates the choice. `dashboard-session-plans.test.ts`
+  // holds the behaviour, and this keeps the guard from being lost with it.
   assert.match(
     route,
-    /if \(hasSeededSelection \|\| plans\.length === 0\) return;[^]*selectedPlans\.value = plans\.map\(\(plan\) => plan\.id\);[^]*hasSeededSelection = true;/u,
+    /if \(hasSeededSelection \|\| plans\.length === 0\) return;[^]*selectedPlans\.value = initialPlanSelection\(plans, requested\);[^]*hasSeededSelection = true;/u,
   );
-  assert.equal(route.match(/selectedPlans\.value = plans\.map/gu)?.length, 1);
+  assert.equal(route.match(/selectedPlans\.value = initialPlanSelection/gu)?.length, 1);
 });
 
 test("backlog metrics render ready, blocked, done, and projected cost in four columns", () => {

@@ -1,38 +1,58 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import type { SessionCard as Session } from "../../shared/types.ts";
+import type { SessionCard as Session, SessionPlan } from "../../shared/types.ts";
 import {
   filterSessions,
+  planKindFilterEntries,
   stateFilterEntries,
   workflowFilterEntries,
 } from "../session-filters.ts";
+import { planKindLabel, withPlanKind } from "../session-plans.ts";
 import { groupSessionStacks } from "../session-stacks.ts";
 import SessionFilterRow from "./SessionFilterRow.vue";
+import SessionPlanRow from "./SessionPlanRow.vue";
 import SessionStack from "./SessionStack.vue";
 
 const props = defineProps<{
   sessions: readonly Session[];
+  plans: readonly SessionPlan[];
   workflows: readonly string[];
   selectedWorkflows: readonly string[];
   selectedStates: readonly string[];
+  selectedPlanKinds: readonly string[];
 }>();
 const emit = defineEmits<{
   "update:selectedWorkflows": [selected: readonly string[]];
   "update:selectedStates": [selected: readonly string[]];
+  "update:selectedPlanKinds": [selected: readonly string[]];
 }>();
 
+// Bucketed once, here, so the plan cards, the plan-type counts and the rows on
+// the board can never disagree about which plan a run belongs to.
+const plannedSessions = computed(() => withPlanKind(props.sessions, props.plans));
 const visibleSessions = computed(() => filterSessions(
-  props.sessions,
+  plannedSessions.value,
   props.selectedWorkflows,
   props.selectedStates,
+  props.selectedPlanKinds,
 ));
 const visibleStacks = computed(() => groupSessionStacks(visibleSessions.value));
 const workflowEntries = computed(() => workflowFilterEntries(
   props.workflows,
-  props.sessions,
+  plannedSessions.value,
   props.selectedStates,
+  props.selectedPlanKinds,
 ));
-const stateEntries = computed(() => stateFilterEntries(props.sessions, props.selectedWorkflows));
+const stateEntries = computed(() => stateFilterEntries(
+  plannedSessions.value,
+  props.selectedWorkflows,
+  props.selectedPlanKinds,
+));
+const planKindEntries = computed(() => planKindFilterEntries(
+  plannedSessions.value,
+  props.selectedWorkflows,
+  props.selectedStates,
+).map((entry) => ({ ...entry, label: planKindLabel(entry.value as "spine" | "deep" | "unlinked") })));
 </script>
 
 <template>
@@ -59,6 +79,13 @@ const stateEntries = computed(() => stateFilterEntries(props.sessions, props.sel
       :entries="stateEntries"
       :selected="selectedStates"
       @update:selected="emit('update:selectedStates', $event)"
+    />
+    <SessionPlanRow
+      :sessions="visibleSessions"
+      :plans="plans"
+      :entries="planKindEntries"
+      :selected="selectedPlanKinds"
+      @update:selected="emit('update:selectedPlanKinds', $event)"
     />
     <div v-if="visibleSessions.length" class="sessions-grid">
       <SessionStack v-for="stack in visibleStacks" :key="stack.key" :sessions="stack.sessions" />

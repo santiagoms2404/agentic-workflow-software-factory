@@ -21,6 +21,7 @@ const SESSION: SessionInit = {
   taskId: "T1",
   continuesTask: null,
   groupId: null,
+  planRef: null,
   attempt: 1,
   workflowId: "wf",
   riskTier: 0,

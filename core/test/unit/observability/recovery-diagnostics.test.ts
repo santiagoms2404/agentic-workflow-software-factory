@@ -16,6 +16,7 @@ function status(patch: Partial<AttemptStatus> = {}): AttemptStatus {
     taskId: "source-task",
     continuesTask: null,
     groupId: null,
+    planRef: null,
     routeOverrides: {},
     reviewDegradation: null,
     attempt: 1,

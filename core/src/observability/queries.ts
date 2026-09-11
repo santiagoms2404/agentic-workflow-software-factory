@@ -11,6 +11,7 @@ export interface SessionRow {
   task_id: string;
   continues_task: string | null;
   group_id: string | null;
+  plan_ref: string | null;
   attempt: number;
   workflow_id: string;
   risk_tier: 0 | 1 | 2;
@@ -52,7 +53,7 @@ export interface SessionRow {
 }
 
 const SESSION_PUBLIC_COLUMNS = `
-  session_id, project_slug, task_id, continues_task, group_id, attempt, workflow_id, risk_tier, is_protected,
+  session_id, project_slug, task_id, continues_task, group_id, plan_ref, attempt, workflow_id, risk_tier, is_protected,
   lifecycle_state, request_text, base_sha, head_sha, candidate_sha,
   worker_provider, worker_model_requested, worker_model_resolved, review_provider, review_verdict,
   call_ceiling, calls_reserved, calls_spent, corrections_auto, corrections_owner, owner_reentries,

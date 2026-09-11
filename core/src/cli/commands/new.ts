@@ -6,6 +6,7 @@ import { assertCeiling, ceilingFor, type CallCeilings, type Tier } from "../../s
 import type { PhaseRouteOverrides } from "../../workflow/route-flags.ts";
 import {
   assertGroupId,
+  assertPlanRef,
   latestAttemptNumber,
   nextActionFor,
   persistAttempt,
@@ -24,6 +25,12 @@ export interface NewCommandOptions {
    * existed for it, which is the honest record and never a guess.
    */
   readonly groupId?: string;
+  /**
+   * The registered plan this task belongs to, already resolved against the
+   * catalog by the caller. Absent means NULL: no plan was named, and none is
+   * inferred from the task id's shape or from the request's words.
+   */
+  readonly planRef?: string;
   readonly repository: string;
   readonly request: string;
   readonly workflow: string;
@@ -52,6 +59,7 @@ export interface NewCommandOptions {
 export async function newCommand(options: NewCommandOptions): Promise<{ attemptDir: string; status: AttemptStatus }> {
   const root = taskRoot(options.stateRoot, options.project, options.taskId);
   if (options.groupId !== undefined) assertGroupId(options.groupId);
+  if (options.planRef !== undefined) assertPlanRef(options.planRef);
   if (options.continuesTask === options.taskId) {
     throw new Error(`${options.project}/${options.taskId} cannot continue itself`);
   }
@@ -84,6 +92,7 @@ export async function newCommand(options: NewCommandOptions): Promise<{ attemptD
     taskId: options.taskId,
     continuesTask: options.continuesTask ?? null,
     groupId: options.groupId ?? null,
+    planRef: options.planRef ?? null,
     attempt,
     repository: resolve(options.repository),
     worktree: null,

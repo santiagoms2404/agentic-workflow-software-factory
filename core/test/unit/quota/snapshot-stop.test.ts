@@ -541,6 +541,7 @@ const SESSION: SessionInit = {
   taskId: "T17",
   continuesTask: null,
   groupId: null,
+  planRef: null,
   attempt: 1,
   workflowId: "intake",
   riskTier: 0,

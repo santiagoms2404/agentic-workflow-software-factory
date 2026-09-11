@@ -95,6 +95,7 @@ export const PublishedAttemptStatusSchema = Type.Object(
     // one. A live attempt always carries it, because `withLegacyDefaults` fills
     // it with null on the way out of the status store.
     groupId: Type.Optional(NullableStringSchema),
+    planRef: Type.Optional(NullableStringSchema),
     attempt: Type.Integer({ minimum: 1 }),
     repository: Type.String({ minLength: 1 }),
     worktree: NullableStringSchema,

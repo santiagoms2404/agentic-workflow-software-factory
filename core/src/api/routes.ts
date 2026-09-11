@@ -4,6 +4,7 @@ import { queryPlanBacklog } from "../backlog.ts";
 import { PlanTicketReader } from "../persistence/plan-tickets.ts";
 import { loadCatalog } from "../registry/catalog.ts";
 import { resolvePlanSources, type ResolvedPlanSource } from "../registry/plan-source.ts";
+import { classifyPlans } from "../registry/plan-kind.ts";
 import { readLandingSummary } from "../persistence/landing-summary.ts";
 import { locateRunReport } from "../observability/run-report.ts";
 import { attemptDir } from "../persistence/platform-paths.ts";
@@ -53,6 +54,7 @@ import type {
   ProcessSummary,
   SessionCard,
   SessionDetailResponse,
+  SessionPlan,
   SessionsResponse,
   SettingsResponse,
   UsageTotals,
@@ -175,6 +177,7 @@ function card(db: DatabaseSync, row: SessionRow): SessionCard {
     taskId: row.task_id,
     continuesTask: row.continues_task,
     groupId: row.group_id,
+    planRef: row.plan_ref,
     attempt: row.attempt,
     workflowId: row.workflow_id,
     riskTier: row.risk_tier,
@@ -332,7 +335,14 @@ function routeParams(routePath: string, segments: readonly string[]): Record<str
 export function createApiRouter(options: ApiRouterOptions): ApiRouter {
   const opener = options.open ?? openDatabase;
   const readDb = opener(options.dbPath, { readonly: true });
-  const ticketReader = new PlanTicketReader(options.planSources ?? resolveTicketPlanSources());
+  const planSources = options.planSources ?? resolveTicketPlanSources();
+  const ticketReader = new PlanTicketReader(planSources);
+  // Structural classification only: `classifyPlans` reads no plan HTML, so the
+  // sessions list stays a database read plus one already-resolved catalog.
+  const sessionPlans: readonly SessionPlan[] = classifyPlans(planSources).map((plan) => ({
+    id: plan.id, name: plan.name, kind: plan.kind,
+    parentSpine: plan.parentSpine, parentSpineName: plan.parentSpineName,
+  }));
   let archiveDb: DatabaseSync | null = null;
 
   const handlers: Readonly<Record<ApiRouteName, ApiHandler>> = {
@@ -361,7 +371,10 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
         ...(state === undefined ? {} : { state }),
         archived: archivedRaw === "true",
       });
-      return jsonResponse({ sessions: rows.map((row) => card(readDb, row)) } satisfies SessionsResponse);
+      return jsonResponse({
+        sessions: rows.map((row) => card(readDb, row)),
+        plans: [...sessionPlans],
+      } satisfies SessionsResponse);
     }),
     session: safely(async (_request, params) => {
       const row = requireSession(readDb, params.id ?? "");

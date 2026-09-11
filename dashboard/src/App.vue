@@ -8,12 +8,14 @@ import SettingsRoute from "./components/SettingsRoute.vue";
 import BacklogRoute from "./routes/backlog.vue";
 import { usePolling, type PollMode } from "./composables/usePolling.ts";
 import { LIFECYCLE_STATES } from "./session-filters.ts";
+import { PLAN_KINDS } from "./session-plans.ts";
 
 const health = ref<HealthResponse | null>(null);
-const sessions = ref<SessionsResponse>({ sessions: [] });
+const sessions = ref<SessionsResponse>({ sessions: [], plans: [] });
 const configuredWorkflows = ref<readonly string[]>([]);
 const selectedWorkflows = ref<readonly string[]>([]);
 const selectedLifecycleStates = ref<readonly string[]>([]);
+const selectedPlanKinds = ref<readonly string[]>([]);
 const detail = ref<SessionDetailResponse | null>(null);
 const selectedId = ref<string | null>(null);
 const selectedPhaseId = ref<string | null>(null);
@@ -21,10 +23,13 @@ const settings = ref<unknown>({});
 const adapters = ref<AdaptersResponse>({ adapters: [] });
 const settingsRoute = ref(false);
 const backlogRoute = ref(false);
+/** The plan a sessions-view card asked the backlog to open with. */
+const backlogPlan = ref<string | null>(null);
 const backlog = ref<TicketsResponse>({ plans: [], tickets: [], ready: [], counts: { state: { todo: 0, wip: 0, done: 0, failed: 0 }, milestone: {}, tier: { T0: 0, T1: 0, T2: 0 } }, projectedCost: { usd: null, authority: "unavailable", partial: true } });
 
 let hasSeededWorkflowSelection = false;
 let hasSeededLifecycleSelection = false;
+let hasSeededPlanKindSelection = false;
 watch(configuredWorkflows, (workflows) => {
   if (hasSeededWorkflowSelection) return;
   selectedWorkflows.value = [...workflows];
@@ -36,6 +41,14 @@ watch(
     if (hasSeededLifecycleSelection) return;
     selectedLifecycleStates.value = [...LIFECYCLE_STATES];
     hasSeededLifecycleSelection = true;
+  },
+);
+watch(
+  () => sessions.value.sessions,
+  () => {
+    if (hasSeededPlanKindSelection) return;
+    selectedPlanKinds.value = [...PLAN_KINDS];
+    hasSeededPlanKindSelection = true;
   },
 );
 
@@ -67,7 +80,12 @@ function loadSettingsOnce(): Promise<void> {
 
 function readRoute(): void {
   settingsRoute.value = location.hash === "#/settings";
-  backlogRoute.value = location.hash === "#/backlog";
+  // `#/backlog/<plan>` is how a sessions-view plan card hands the backlog its
+  // plan context: the same identity both views already group by, in the URL, so
+  // the context survives a reload and a back button rather than only a click.
+  const backlogWithPlan = /^#\/backlog\/([^/]+)$/.exec(location.hash);
+  backlogRoute.value = location.hash === "#/backlog" || backlogWithPlan !== null;
+  backlogPlan.value = backlogWithPlan?.[1] ? decodeURIComponent(backlogWithPlan[1]) : null;
   const phase = location.hash.match(/^#\/sessions\/([^/]+)\/phases\/([^/]+)$/);
   const session = location.hash.match(/^#\/sessions\/([^/]+)$/);
   selectedId.value = decodeURIComponent(phase?.[1] ?? session?.[1] ?? "") || null;
@@ -128,13 +146,15 @@ const { lastPollAt, pollMs } = usePolling(load, () => mode.value);
     :backlog="backlogRoute"
   >
     <SettingsRoute v-if="settingsRoute" :settings="settings" :adapters="adapters.adapters" :health="health" />
-    <BacklogRoute v-else-if="backlogRoute" :backlog="backlog" />
+    <BacklogRoute v-else-if="backlogRoute" :backlog="backlog" :plan="backlogPlan" />
     <SessionRoute v-else-if="detail" :session="detail" :selected-phase-id="selectedPhaseId" />
     <SessionsGrid
       v-else
       v-model:selected-workflows="selectedWorkflows"
       v-model:selected-states="selectedLifecycleStates"
+      v-model:selected-plan-kinds="selectedPlanKinds"
       :sessions="sessions.sessions"
+      :plans="sessions.plans"
       :workflows="configuredWorkflows"
     />
   </AppShell>

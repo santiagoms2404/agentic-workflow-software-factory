@@ -53,6 +53,8 @@ export interface SessionInit {
   continuesTask: string | null;
   /** The driving session this run came out of, or NULL when none was recorded. */
   groupId: string | null;
+  /** The registered plan this run belongs to, or NULL when none was named. */
+  planRef: string | null;
   attempt: number;
   workflowId: string;
   riskTier: 0 | 1 | 2;
@@ -194,9 +196,9 @@ export function projectAttemptStatus(
 export function createSession(db: DatabaseSync, init: SessionInit): void {
   db.prepare(
     `INSERT OR IGNORE INTO sessions
-       (session_id, project_slug, task_id, continues_task, group_id, attempt, workflow_id, risk_tier, is_protected,
+       (session_id, project_slug, task_id, continues_task, group_id, plan_ref, attempt, workflow_id, risk_tier, is_protected,
         lifecycle_state, request_text, call_ceiling, started_at, updated_at, config_snapshot_json, journal_path)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', ?, ?, ?, ?, ?, ?)`,
   ).run(
     init.sessionId,
     scrubCredentialString(init.projectSlug),
@@ -205,6 +207,7 @@ export function createSession(db: DatabaseSync, init: SessionInit): void {
     // Written once, at session creation, because that is when it is decided.
     // Nothing later moves a run between groups.
     init.groupId === null ? null : scrubCredentialString(init.groupId),
+    init.planRef === null ? null : scrubCredentialString(init.planRef),
     init.attempt,
     scrubCredentialString(init.workflowId),
     init.riskTier,

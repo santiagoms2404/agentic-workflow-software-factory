@@ -105,6 +105,8 @@ export interface SessionCard {
   continuesTask: string | null;
   /** The driving session this run came out of; null when none was recorded. */
   groupId: string | null;
+  /** The registered plan this run belongs to; null when none was named. */
+  planRef: string | null;
   attempt: number;
   workflowId: string;
   riskTier: 0 | 1 | 2;
@@ -126,8 +128,23 @@ export interface SessionCard {
   activity: ActivityPoint[];
 }
 
+/**
+ * A registered plan's identity, without the ticket counts the backlog carries.
+ * The sessions view counts RUNS, and it counts them from the rows it is already
+ * holding, so a card's number and the filter that produced it cannot disagree.
+ */
+export interface SessionPlan {
+  readonly id: string;
+  readonly name: string;
+  readonly kind: PlanKind;
+  readonly parentSpine: string | null;
+  readonly parentSpineName: string | null;
+}
+
 export interface SessionsResponse {
   sessions: SessionCard[];
+  /** The catalog's registered plans, so a run can be shown as spine or deep. */
+  plans: SessionPlan[];
 }
 
 export interface TransitionSummary {

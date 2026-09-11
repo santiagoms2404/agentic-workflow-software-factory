@@ -91,6 +91,7 @@ function awaiting(fixture: BareFixture, base: string, candidate: string): Attemp
     taskId: TASK,
     continuesTask: null,
   groupId: null,
+  planRef: null,
     attempt: 1,
     repository: fixture.work,
     worktree: join(fixture.root, "candidate-worktree"),

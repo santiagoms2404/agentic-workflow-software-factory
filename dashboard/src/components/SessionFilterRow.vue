@@ -46,7 +46,7 @@ const allState = computed(() => selectAllState(entryValues.value, props.selected
         :aria-pressed="selected.includes(entry.value)"
         @click="emit('update:selected', toggleFilterValue(selected, entry.value))"
       >
-        <span>{{ entry.value }}</span>
+        <span>{{ entry.label ?? entry.value }}</span>
         <span class="session-filter-count">{{ entry.count }} runs</span>
       </button>
     </div>

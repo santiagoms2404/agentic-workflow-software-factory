@@ -129,6 +129,7 @@ test("sessions expose declared continuations, group membership, and honest nulls
     taskId: "T24",
     continuesTask: "T23",
     groupId: "drive-a",
+    planRef: "fixture-w01-deep",
     attempt: 1,
     workflowId: "build",
     riskTier: 1,
@@ -139,7 +140,7 @@ test("sessions expose declared continuations, group membership, and honest nulls
     journalPath: "state://continued-journal.jsonl",
     startedAt: "2026-08-08T13:00:00.000Z",
   });
-  const router = createApiRouter({ dbPath: fixture.path, config: fixture.config });
+  const router = createApiRouter({ dbPath: fixture.path, config: fixture.config, planSources: fixture.planSources });
   try {
     const response = await router.dispatch(request("/api/v1/sessions"));
     assert.equal(response.status, 200);
@@ -150,6 +151,16 @@ test("sessions expose declared continuations, group membership, and honest nulls
     // run created without one stays NULL rather than borrowing its neighbour's.
     assert.equal(sessions.find((session) => session.sessionId === "session-2")?.groupId, "drive-a");
     assert.equal(sessions.find((session) => session.sessionId === "session-1")?.groupId, null);
+    // And the plan, through the same public column list, with the catalog's
+    // registered plans beside the rows so a card can say spine or deep without
+    // a second request or a name-matching guess.
+    const body = response.body as SessionsResponse;
+    assert.equal(sessions.find((session) => session.sessionId === "session-2")?.planRef, "fixture-w01-deep");
+    assert.equal(sessions.find((session) => session.sessionId === "session-1")?.planRef, "fixture-plan");
+    assert.deepEqual(body.plans.map((plan) => `${plan.id}|${plan.kind}|${String(plan.parentSpine)}`), [
+      "fixture-plan|spine|null",
+      "fixture-w01-deep|deep|fixture-plan",
+    ]);
   } finally { router.close(); fixture.close(); }
 });
 

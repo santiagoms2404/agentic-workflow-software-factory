@@ -806,6 +806,11 @@ pre { max-height: 42vh; margin: 8px 0 0; padding: 12px 14px; overflow: auto; bor
 .plan-state-metrics { display: grid; grid-template-columns: repeat(4, auto); gap: 8px; margin-top: 14px; color: var(--faint); font: 10px var(--mono); }
 .plan-state-metrics span { display: flex; flex-direction: column; gap: 2px; }
 .plan-state-metrics b { color: var(--text); font-size: 14px; }
+.session-plan-picker .session-filter-heading { margin-bottom: 2px; }
+.session-plan-card { text-decoration: none; }
+.session-plan-open { margin-top: 9px; color: var(--dim); font: 11px var(--mono); }
+.session-plan-card:hover .session-plan-open { color: var(--text); }
+.session-plan-empty { margin: 2px 0 0; color: var(--dim); font: 13px var(--mono); }
 .backlog-groups { display: grid; gap: 24px; }
 .backlog-plan-group { min-width: 0; }
 .backlog-plan-heading { display: flex; align-items: center; gap: 9px; margin-bottom: 10px; }

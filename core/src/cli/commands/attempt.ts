@@ -85,6 +85,17 @@ export interface AttemptStatus {
    * able to cross two groups instead of collapsing into one.
    */
   readonly groupId: string | null;
+  /**
+   * The registered plan this task belongs to, named at creation and never
+   * inferred. `sessions.plan_ref` has existed since migration 0005 with nothing
+   * writing it, because the only automatic link available — a task id equal to a
+   * ticket uid — matches zero real runs. So this is stated by the driver and
+   * validated against the catalog, or it is NULL.
+   *
+   * Unlike `groupId`, a retry CARRIES this: attempt 2 is more work on the same
+   * plan, while the group names the session that minted the attempt.
+   */
+  readonly planRef: string | null;
   readonly attempt: number;
   readonly repository: string;
   readonly worktree: string | null;
@@ -186,6 +197,14 @@ export function assertGroupId(value: string): string {
   return value;
 }
 
+/** The plan stem, in the same grammar. Whether it is REGISTERED is `plan-ref.ts`. */
+export function assertPlanRef(value: string): string {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/u.test(value)) {
+    throw new Error(`--plan ${JSON.stringify(value)} is not a path-safe identifier of 1-100 characters`);
+  }
+  return value;
+}
+
 function validateComponent(label: string, value: string): void {
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value)) {
     throw new Error(`${label} must be one path-safe identifier`);
@@ -199,10 +218,11 @@ type LegacyBudget = Omit<BudgetState, "ownerReentries" | "allowance"> & {
 };
 
 /** And what one written before the ceiling was a dial holds. */
-type LegacyStatus = Omit<AttemptStatus, "ceilingGrants" | "continuesTask" | "groupId" | "routeOverrides" | "reviewDegradation"> & {
+type LegacyStatus = Omit<AttemptStatus, "ceilingGrants" | "continuesTask" | "groupId" | "planRef" | "routeOverrides" | "reviewDegradation"> & {
   ceilingGrants?: readonly CeilingGrant[];
   continuesTask?: string | null;
   groupId?: string | null;
+  planRef?: string | null;
   routeOverrides?: PhaseRouteOverrides;
   reviewDegradation?: ReviewDegradation | null;
 };
@@ -246,7 +266,8 @@ export function withLegacyDefaults(status: AttemptStatus): AttemptStatus {
   const budgetIsCurrent = budget.ownerReentries !== undefined && budget.allowance.ownerReentries !== undefined;
   if (
     budgetIsCurrent && legacy.ceilingGrants !== undefined && legacy.continuesTask !== undefined &&
-    legacy.groupId !== undefined && legacy.routeOverrides !== undefined && legacy.reviewDegradation !== undefined
+    legacy.groupId !== undefined && legacy.planRef !== undefined &&
+    legacy.routeOverrides !== undefined && legacy.reviewDegradation !== undefined
   ) return status;
   return {
     ...status,
@@ -254,6 +275,9 @@ export function withLegacyDefaults(status: AttemptStatus): AttemptStatus {
     // A run that predates groups belongs to none, and NULL is what that says.
     // Nothing infers one from when it ran or what ran beside it.
     groupId: legacy.groupId ?? null,
+    // A run that predates plan linkage named no plan. Reading one out of its
+    // task id now would be the guess migration 0005 refused in the first place.
+    planRef: legacy.planRef ?? null,
     // An attempt written before per-attempt routing existed chose neither, and
     // reading it as "no override, no grant" is what it meant.
     routeOverrides: legacy.routeOverrides ?? {},

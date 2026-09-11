@@ -47,6 +47,7 @@ function awaiting(repository: string, candidate: string): AttemptStatus {
     taskId: TASK,
     continuesTask: null,
   groupId: null,
+  planRef: null,
     attempt: 1,
     repository,
     worktree: join(repository, "candidate-worktree"),

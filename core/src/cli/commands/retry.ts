@@ -94,6 +94,11 @@ export async function retryCommand(options: RetryCommandOptions): Promise<{ atte
     // it ride the spread would collapse every continuation chain into a single
     // group and leave the cross-group edge with nothing to connect.
     groupId: options.groupId ?? null,
+    // CARRIED, and named here rather than left to the spread so the contrast
+    // with `groupId` above is visible in one place. A plan says what this work
+    // is; attempt 2 is the same work, so it is the same plan. A group says which
+    // driving session minted the attempt, and this one was minted now.
+    planRef: prior.planRef,
     model: null,
     lastActivityAt: now,
     lastActivity: `retry minted attempt ${attempt}; carried ${prior.budget.callsSpent} spent call(s) from attempt ${prior.attempt}`,

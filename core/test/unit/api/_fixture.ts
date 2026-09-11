@@ -48,6 +48,7 @@ export function apiFixture(): {
     taskId: "T23",
     continuesTask: null,
     groupId: null,
+    planRef: "fixture-plan",
     attempt: 1,
     workflowId: "plan-build-test",
     riskTier: 1,
