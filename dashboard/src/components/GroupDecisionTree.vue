@@ -66,19 +66,24 @@ function askLine(inputId: string | null): string {
               <dd :class="{ absent: !fields(decision).friction.recorded }">{{ fields(decision).friction.text }}</dd>
             </div>
           </dl>
-          <div v-if="decision.changes.length" class="decision-rows">
-            <p class="decision-voice">what this wrote ({{ decision.changes.length }})</p>
-            <p v-for="(change, index) in decision.changes" :key="index" class="decision-row">
-              <code>{{ change.kind }}</code>
-              <code v-if="change.unit" class="decision-change-unit">{{ change.unit }}</code>
-              <span>{{ change.detail }}</span>
-            </p>
-          </div>
-          <div v-if="decision.alternatives.length" class="decision-rows">
-            <p class="decision-voice">considered and dropped ({{ decision.alternatives.length }})</p>
-            <p v-for="(alternative, index) in decision.alternatives" :key="index" class="decision-row dropped">
-              <span>{{ alternative }}</span>
-            </p>
+          <!-- What it wrote and what it dropped are the same kind of list and
+               read as a pair, so they sit side by side and use the width the
+               card already has rather than stacking down it. -->
+          <div v-if="decision.changes.length || decision.alternatives.length" class="decision-groups">
+            <div v-if="decision.changes.length" class="decision-rows">
+              <p class="decision-voice">what this wrote ({{ decision.changes.length }})</p>
+              <p v-for="(change, index) in decision.changes" :key="index" class="decision-row">
+                <code>{{ change.kind }}</code>
+                <code v-if="change.unit" class="decision-change-unit">{{ change.unit }}</code>
+                <span>{{ change.detail }}</span>
+              </p>
+            </div>
+            <div v-if="decision.alternatives.length" class="decision-rows">
+              <p class="decision-voice">considered and dropped ({{ decision.alternatives.length }})</p>
+              <p v-for="(alternative, index) in decision.alternatives" :key="index" class="decision-row dropped">
+                <span>{{ alternative }}</span>
+              </p>
+            </div>
           </div>
           <p v-if="decision.tasks.length" class="decision-tasks">
             tasks: <code v-for="task in decision.tasks" :key="task">{{ task }}</code>
@@ -112,11 +117,13 @@ function askLine(inputId: string | null): string {
               <dd :class="{ absent: !fields(proposal).friction.recorded }">{{ fields(proposal).friction.text }}</dd>
             </div>
           </dl>
-          <div v-if="proposal.alternatives.length" class="decision-rows">
-            <p class="decision-voice">considered and dropped ({{ proposal.alternatives.length }})</p>
-            <p v-for="(alternative, index) in proposal.alternatives" :key="index" class="decision-row dropped">
-              <span>{{ alternative }}</span>
-            </p>
+          <div v-if="proposal.alternatives.length" class="decision-groups">
+            <div class="decision-rows">
+              <p class="decision-voice">considered and dropped ({{ proposal.alternatives.length }})</p>
+              <p v-for="(alternative, index) in proposal.alternatives" :key="index" class="decision-row dropped">
+                <span>{{ alternative }}</span>
+              </p>
+            </div>
           </div>
         </li>
       </ol>
@@ -127,20 +134,25 @@ function askLine(inputId: string | null): string {
       <ol class="decision-list">
         <li v-for="ask in tree.asks" :key="ask.stageId" class="decision-node voice-owner-input">
           <p class="decision-voice">{{ VOICE_LABEL["owner-input"] }} · {{ formatDate(ask.at) }} · {{ ask.provenance }}</p>
-          <pre class="owner-words">{{ ask.text }}</pre>
-          <p class="decision-gloss">
-            <span class="decision-voice">the assistant read it as</span>
-            <span :class="{ absent: !narrativeFields(ask.narrative).explanation.recorded }">
-              {{ narrativeFields(ask.narrative).explanation.text }}
-            </span>
-          </p>
+          <!-- The owner's exact bytes beside our reading of them, never under
+               it: the point of this section is that the two are different, and
+               a column each says so while using the width. -->
+          <div class="ask-split">
+            <pre class="owner-words">{{ ask.text }}</pre>
+            <p class="decision-gloss">
+              <span class="decision-voice">the assistant read it as</span>
+              <span :class="{ absent: !narrativeFields(ask.narrative).explanation.recorded }">
+                {{ narrativeFields(ask.narrative).explanation.text }}
+              </span>
+            </p>
+          </div>
         </li>
       </ol>
     </section>
 
     <section v-if="tree.units.length" class="decision-branch" aria-label="Units and their superseded revisions">
       <h4>Units</h4>
-      <ul class="decision-list">
+      <ul class="decision-list unit-grid">
         <li v-for="unit in tree.units" :key="unit.id" class="decision-node voice-unit">
           <h5>{{ unit.current.title }}</h5>
           <p class="decision-voice">

@@ -921,70 +921,80 @@ pre { max-height: 42vh; margin: 8px 0 0; padding: 12px 14px; overflow: auto; bor
 .decision-tree-counts b { color: var(--text); }
 .decision-branch h4 { margin: 0 0 9px; color: var(--dim); font: 12px var(--mono); letter-spacing: .07em; text-transform: uppercase; }
 .decision-list { display: flex; flex-direction: column; gap: 16px; margin: 0; padding: 0; list-style: none; }
+/* Units are short records, so they tile rather than run down a column. */
+.decision-list.unit-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); align-items: start; }
 /* Title first and largest: it is the only thing a reader scans twenty of. */
-.decision-node h5 { margin: 4px 0 0; font-size: 17px; font-weight: 600; line-height: 1.35; }
-.decision-voice { margin: 0; color: var(--dim); font: 11px var(--mono); }
+.decision-node h5 { margin: 4px 0 0; font-size: 19px; font-weight: 600; line-height: 1.35; }
+.decision-voice { margin: 0; color: var(--dim); font: 11.5px var(--mono); }
+/* The owner's exact bytes beside our reading of them, never under it: the point
+   of this section is that the two are different, and a column each says so
+   while using width that was going to waste. */
+/* The quote gets the wider column because it is a quote and can be any length;
+   our reading of it is a sentence. `start` keeps the short box its own height
+   instead of stretching it into a mostly empty panel beside a long ask. */
+.ask-split { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: 14px; align-items: start; }
 /* The label sits above the reading rather than beside it: inline, the two ran
    together into "read it asKeep the owner's words separate". */
-.decision-gloss { display: flex; flex-direction: column; gap: 4px; max-width: 92ch; margin: 7px 0 0; color: var(--dim); font: 12px var(--mono); line-height: 1.55; }
-.owner-words { max-width: 92ch; margin: 8px 0 0; color: var(--text); font: 13px/1.55 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.decision-gloss { display: flex; flex-direction: column; gap: 5px; margin: 0; color: var(--dim); font-size: 13.5px; line-height: 1.6; }
+.owner-words { margin: 0; color: var(--text); font: 14px/1.6 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
 /* The decision itself, lifted out of the field list: it was the fourth of five
-   rows of identical weight, and it is the line the reader came for. */
+   rows of identical weight, and it is the line the reader came for. It takes
+   no measure because it is one sentence — a single line does not suffer from
+   the width a paragraph does. */
 .decision-reason {
-  max-width: 88ch;
   margin: 0;
   color: var(--text);
-  font-size: 14px;
-  line-height: 1.6;
+  font-size: 16px;
+  line-height: 1.55;
   overflow-wrap: anywhere;
 }
-/* Labelled rows, not a two-column grid. The chip is a rail the eye tracks down
-   the card, which is the job the accent border was doing badly, and the value
-   keeps the full width instead of starting at a 140px tab stop. */
-.decision-fields { display: flex; flex-direction: column; gap: 9px; margin: 0; }
-.decision-field { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+/* Four text boxes on a grid, not four rows down a page. Each is a recessed
+   card with its label on top, so the card uses the width it has and the reader
+   still gets a half-width measure instead of a thousand-pixel line. */
+/* Two, fixed — never auto-fit. Four boxes across three columns is three and a
+   hole, which is the blank space this layout exists to remove. Two columns
+   means four boxes are always a filled 2x2, and the cells line up as a table
+   rather than as a ragged wrap. */
+.decision-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+.decision-field { display: flex; flex-direction: column; gap: 8px; padding: 13px 16px; border-radius: 14px; }
 .decision-fields dt {
-  /* One width for all four, so the chips make a straight rail rather than a
-     ragged edge the eye has to re-find on every row. */
-  flex: 0 0 112px;
-  padding: 3px 11px;
+  align-self: flex-start;
+  padding: 3px 12px;
   border-radius: var(--neu-radius);
-  background: var(--neu-surface);
-  box-shadow: var(--neu-raised-soft);
   color: var(--dim);
   font: 10px var(--mono);
-  letter-spacing: .07em;
+  letter-spacing: .08em;
   text-transform: uppercase;
-  text-align: center;
 }
-/* A measure, not the width of the canvas: the card is over a thousand pixels
-   wide and a line that long is the reason this view was hard to follow. */
-.decision-fields dd { flex: 1 1 320px; max-width: 88ch; margin: 0; color: var(--text); font-size: 13.5px; line-height: 1.6; overflow-wrap: anywhere; }
-/* What a decision wrote, and what it dropped: a recessed group of rows, the
-   shape a list of things takes everywhere else in this shell. */
-.decision-rows { display: flex; flex-direction: column; gap: 7px; }
-.decision-rows .decision-voice { color: var(--faint); }
+.decision-fields dd { margin: 0; color: var(--text); font-size: 14.5px; line-height: 1.6; overflow-wrap: anywhere; }
+/* What a decision wrote and what it dropped are the same kind of list, so they
+   read as a pair side by side rather than stacking down the card. */
+.decision-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.decision-rows { display: flex; flex-direction: column; gap: 8px; padding: 13px 14px; border-radius: 14px; }
+.decision-rows .decision-voice { padding-left: 4px; color: var(--faint); }
 .decision-row {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 4px 9px;
   margin: 0;
-  padding: 9px 14px;
-  border-radius: 13px;
-  background: var(--neu-well);
-  box-shadow: var(--neu-pressed-soft);
+  padding: 10px 15px;
+  border-radius: 12px;
   color: var(--text);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.55;
   overflow-wrap: anywhere;
 }
 .decision-row.dropped { color: var(--dim); }
-.decision-row { max-width: 96ch; }
-.decision-row span { flex: 1 1 260px; }
-.decision-tasks { margin: 0; color: var(--dim); font: 11px var(--mono); }
+.decision-row span { flex: 1 1 200px; }
+.decision-tasks { margin: 0; color: var(--dim); font: 12px var(--mono); }
 .decision-tasks code, .decision-row code, .session-group-meta code { color: var(--purple); }
-.decision-row code { flex: 0 0 auto; font-size: 11px; }
+.decision-row code { flex: 0 0 auto; font-size: 12px; }
 .decision-change-unit { margin-left: 0; }
 .decision-tasks code + code { margin-left: 8px; }
 .decision-superseded { display: flex; flex-direction: column; gap: 7px; }

@@ -282,18 +282,28 @@
 }
 .decision-node.voice-not-taken { background: var(--neu-well); box-shadow: none; }
 .decision-node.voice-owner-input, .decision-node.voice-unit { box-shadow: var(--neu-raised-soft); }
-/* The owner's own words and the reason they gave are the two things quoted
-   rather than described, so both take the recessed treatment that means "this
-   is a record, not our reading of it". */
-.owner-words, .decision-reason {
-  border-radius: 13px;
+/* Three depths inside the card, which is what lets it hold this much and still
+   be read: the card is raised, every box on it is a recessed well, and the rows
+   inside those wells are raised pills again. The same panel-and-rows shape the
+   rest of the shell uses for a list of things. */
+.owner-words, .decision-reason, .decision-field, .decision-rows, .decision-gloss {
+  border-radius: 14px;
   background: var(--neu-well);
   box-shadow: var(--neu-pressed-soft);
-  padding: 12px 15px;
+  padding: 13px 16px;
 }
+.decision-row {
+  background: var(--neu-surface);
+  box-shadow: var(--neu-raised-soft);
+}
+/* A proposal nobody took is a flush card, so the wells on it would disappear
+   into the canvas. Its boxes stand instead — the same information, inverted,
+   and still no edge anywhere. */
 .decision-node.voice-not-taken .owner-words,
 .decision-node.voice-not-taken .decision-reason,
-.decision-node.voice-not-taken .decision-row { box-shadow: none; background: var(--neu-surface); }
+.decision-node.voice-not-taken .decision-field,
+.decision-node.voice-not-taken .decision-rows { box-shadow: var(--neu-raised-soft); background: var(--neu-surface); }
+.decision-node.voice-not-taken .decision-row { box-shadow: none; background: var(--neu-well); }
 
 /* The plan half: the same menu and card row, in half the width. */
 .session-plan-picker {
@@ -578,7 +588,9 @@
 .gate-pill.fail { background: var(--neu-well); box-shadow: var(--neu-pressed-soft); }
 
 /* S4 · Lifecycle ribbon, in the same grammar as the lifecycle ladder:
-   reached states stand proud, unreached sit flush, current takes the accent. */
+   unreached sits flush, reached stands proud, and the state you are standing
+   in stands proudest. Three depths, no ring — a coloured edge on a pill is the
+   one thing this shell does not say in light and shadow. */
 .state-ribbon { gap: 7px; }
 .state-ribbon li > span:first-child {
   padding: 7px 14px;
@@ -592,7 +604,8 @@
 }
 .state-ribbon li.current > span:first-child {
   background: var(--neu-surface);
-  box-shadow: var(--neu-raised), inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 70%, transparent);
+  box-shadow: var(--neu-hover);
+  color: var(--text);
 }
 
 /* S5 · Each lane label is a card in a recessed gutter. */
@@ -762,4 +775,9 @@ pre::-webkit-scrollbar-corner { background: var(--neu-scroll-track); }
   .board-section { grid-column: span 1; }
   .board-cluster { grid-template-columns: minmax(0, 1fr); }
   .board-cluster > .board-group { grid-column: span 1; }
+  /* One column in the reading too: two text boxes side by side below this
+     width give each of them a measure nobody can read. */
+  .decision-fields, .decision-groups, .ask-split, .decision-list.unit-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
