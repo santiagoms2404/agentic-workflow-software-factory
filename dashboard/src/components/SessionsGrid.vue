@@ -82,14 +82,20 @@ const planKindEntries = computed(() => planKindFilterEntries(
       :selected="selectedStates"
       @update:selected="emit('update:selectedStates', $event)"
     />
-    <SessionGroupRow :summaries="groups" :run-group-ids="visibleSessions.map((session) => session.groupId)" />
-    <SessionPlanRow
-      :sessions="visibleSessions"
-      :plans="plans"
-      :entries="planKindEntries"
-      :selected="selectedPlanKinds"
-      @update:selected="emit('update:selectedPlanKinds', $event)"
-    />
+    <!-- One card, split in half: the ask these runs came out of on the left,
+         the plan they belong to on the right. Two menus that each answered
+         "which of these runs" cost two full-width wells and pushed the board
+         off the first screen. -->
+    <section class="session-context">
+      <SessionGroupRow :summaries="groups" :run-group-ids="visibleSessions.map((session) => session.groupId)" />
+      <SessionPlanRow
+        :sessions="visibleSessions"
+        :plans="plans"
+        :entries="planKindEntries"
+        :selected="selectedPlanKinds"
+        @update:selected="emit('update:selectedPlanKinds', $event)"
+      />
+    </section>
     <div v-if="visibleSessions.length" class="sessions-grid">
       <SessionStack v-for="stack in visibleStacks" :key="stack.key" :sessions="stack.sessions" />
     </div>

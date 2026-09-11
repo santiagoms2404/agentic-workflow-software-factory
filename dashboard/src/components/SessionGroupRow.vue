@@ -23,7 +23,12 @@ const unrecorded = computed(() => unrecordedGroupIds(props.summaries, props.runG
     <!-- A title and a way in, not the tree itself. The tree has its own screen:
          a 72-stage group needs the width, and rendering it here made it share a
          viewport with the runs it produced. The run workspace below is never
-         displaced, because nothing on this strip expands. -->
+         displaced, because nothing on this strip expands.
+
+         The list scrolls past two rather than growing: this half shares one
+         card with the plan menu, and a session that adds a group should not
+         push the board further down the page every time. -->
+    <div class="session-group-entries">
     <a
       v-for="heading in visible"
       :key="heading.summary.group"
@@ -40,11 +45,11 @@ const unrecorded = computed(() => unrecordedGroupIds(props.summaries, props.runG
         </span>
         <span>{{ heading.summary.counts.applied }} decided</span>
         <span>{{ heading.summary.counts.notTaken }} not taken</span>
-        <span>{{ heading.summary.counts.alternatives }} alternatives</span>
         <span v-if="heading.summary.closed">closed</span>
         <span class="session-group-open">open the tree</span>
       </span>
     </a>
+    </div>
 
     <p v-if="unrecorded.length" class="session-group-unrecorded absent">
       No planning journal exists for {{ unrecorded.join(", ") }} — the driving session minted the id and recorded no ask under it.

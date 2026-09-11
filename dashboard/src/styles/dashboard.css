@@ -292,6 +292,11 @@
   --neu-dark: color-mix(in srgb, #000 58%, transparent);
   --neu-radius: 999px;
   --neu-radius-card: 18px;
+  /* A scrollbar is a control on a well: recessed track, raised thumb, both
+     mixed from the active palette so all seven inherit the treatment. */
+  --neu-scroll-track: var(--neu-well);
+  --neu-scroll-thumb: color-mix(in srgb, var(--text) 26%, var(--neu-surface));
+  --neu-scroll-thumb-hover: color-mix(in srgb, var(--text) 46%, var(--neu-surface));
 
   /* Tight offsets with a wide blur: modelled, but no shadow bleeding onto the
      neighbour below — that bleed is what reads as a gradient in a stacked menu. */
@@ -318,6 +323,10 @@
   --neu-well: color-mix(in srgb, var(--bg) 92%, var(--border));
   --neu-light: #ffffff;
   --neu-dark: color-mix(in srgb, var(--border) 62%, transparent);
+  /* A light palette's text is dark, so the same mix would read as a bar of ink.
+     Less of it, and the thumb stays a surface rather than becoming a stripe. */
+  --neu-scroll-thumb: color-mix(in srgb, var(--text) 17%, var(--neu-surface));
+  --neu-scroll-thumb-hover: color-mix(in srgb, var(--text) 32%, var(--neu-surface));
 }
 
 * { box-sizing: border-box; }
@@ -656,17 +665,6 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible, summary:focus-v
 .timeline-access button { width: 34px; height: 30px; border: 1px solid var(--border); border-radius: 7px; background: var(--panel-3); color: var(--text); cursor: pointer; }
 .scroll-cue { display: none; color: var(--cyan); }
 .waterfall-scroll { width: 100%; overflow-x: auto; overflow-y: hidden; overscroll-behavior-inline: contain; scrollbar-gutter: stable; }
-.waterfall-scroll::-webkit-scrollbar,
-.plan-card-row::-webkit-scrollbar { height: 11px; }
-.waterfall-scroll::-webkit-scrollbar-track,
-.plan-card-row::-webkit-scrollbar-track { border-radius: 999px; background: var(--panel-3); }
-.waterfall-scroll::-webkit-scrollbar-thumb,
-.plan-card-row::-webkit-scrollbar-thumb { border: 2px solid var(--panel-3); border-radius: 999px; background: var(--faint); }
-.waterfall-scroll::-webkit-scrollbar-thumb:hover,
-.plan-card-row::-webkit-scrollbar-thumb:hover { background: var(--dim); }
-@supports not selector(::-webkit-scrollbar) {
-  .waterfall-scroll, .plan-card-row { scrollbar-color: var(--faint) var(--panel-3); }
-}
 .waterfall { min-width: 1080px; }
 .waterfall-row { display: grid; grid-template-columns: 280px 1fr; }
 .axis-row { background: var(--panel-2); border-bottom: 1px solid var(--border); }
@@ -817,12 +815,12 @@ pre { max-height: 42vh; margin: 8px 0 0; padding: 12px 14px; overflow: auto; bor
 
 /* --- Driving sessions screen ---------------------------------------------- */
 .groups-head p { margin: 0; }
-.groups-head h1 { margin: 3px 0 0; font-size: 26px; }
-.groups-list-title { color: var(--text); font-size: 14px; line-height: 1.35; }
-.groups-list-meta { display: flex; flex-wrap: wrap; gap: 3px 12px; color: var(--dim); font: 11px var(--mono); }
+.groups-head h1 { margin: 3px 0 0; font-size: 28px; }
+.groups-list-title { color: var(--text); font-size: 15px; line-height: 1.4; }
+.groups-list-meta { display: flex; flex-wrap: wrap; gap: 3px 12px; color: var(--dim); font: 12px var(--mono); }
 .groups-list-meta code { color: var(--purple); }
 .groups-canvas-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
-.groups-canvas-head h2 { margin: 3px 0 0; font-size: 19px; line-height: 1.35; }
+.groups-canvas-head h2 { margin: 3px 0 0; font-size: 21px; line-height: 1.4; }
 .groups-view-toggle { display: flex; gap: 8px; }
 .tree-graph-scroll { overflow: auto; overscroll-behavior: contain; max-height: calc(100vh - 250px); }
 .tree-graph { position: relative; }
@@ -830,14 +828,23 @@ pre { max-height: 42vh; margin: 8px 0 0; padding: 12px 14px; overflow: auto; bor
 .tree-edge { fill: none; stroke-width: 1.5; }
 .tree-edge.edge-spine { stroke: var(--accent); }
 .tree-edge.edge-branch { stroke: color-mix(in srgb, var(--faint) 70%, transparent); stroke-dasharray: 4 4; }
-.tree-node { display: flex; flex-direction: column; gap: 3px; padding: 7px 11px; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
-.tree-node-label { font-size: 12px; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tree-node-kind { color: var(--faint); font: 10px var(--mono); }
+.tree-node { display: flex; flex-direction: column; gap: 4px; padding: 9px 13px; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.tree-node-label { font-size: 14px; line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-node-kind { margin: 0; color: var(--faint); font: 11px var(--mono); }
 .tree-node.node-decision .tree-node-label { color: var(--text); font-weight: 600; }
 .tree-node.node-ask .tree-node-label { color: var(--cyan); }
 .tree-node.node-not-taken .tree-node-label, .tree-node.node-superseded .tree-node-label { color: var(--dim); }
-.tree-node-detail { color: var(--text); font-size: 12px; line-height: 1.5; }
-.tree-detail-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* The expanded card: the backlog ticket's shape — head, title, scrolling body —
+   at half the size and anchored where the compact node is, so opening one does
+   not make the reader find their place in the tree again. */
+.tree-node-panel { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; }
+.tree-node-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.tree-node-panel-title { margin: 0; font-size: 16px; line-height: 1.4; }
+.tree-node-panel-body { max-height: 38vh; overflow-y: auto; overscroll-behavior: contain; }
+.tree-node-close { padding: 2px 9px; border: 0; border-radius: var(--neu-radius); background: transparent; color: var(--dim); font: 16px var(--mono); line-height: 1.2; cursor: pointer; }
+.tree-node-close:hover { color: var(--text); }
+.tree-detail-text { margin: 0; color: var(--text); font-size: 14px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 /* --- The decision tree above a group of related runs ---------------------- */
 /* Three voices, three treatments. The owner's own words are the only thing set
@@ -845,7 +852,18 @@ pre { max-height: 42vh; margin: 8px 0 0; padding: 12px 14px; overflow: auto; bor
    facts are monospace and dimmed; an accepted decision takes the accent on its
    left edge, which is the only place a colour is spent. */
 .session-group-note, .session-group-unrecorded { color: var(--dim); font: 12px var(--mono); }
-.session-group-title { color: var(--text); font-size: 15px; line-height: 1.35; }
+/* Two lines, then an ellipsis: the full ask is on its own screen, and a
+   predictable entry height is what lets the list promise "the latest two". */
+.session-group-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.35;
+}
 .session-group-toggle.selected .session-group-title { color: var(--text); }
 .session-group-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; color: var(--dim); font: 11px var(--mono); }
 .absent { color: var(--faint); font-style: italic; }
@@ -907,7 +925,7 @@ pre { max-height: 42vh; margin: 8px 0 0; padding: 12px 14px; overflow: auto; bor
 .build-prompt-control code { color: var(--purple); }
 .build-prompt-control button { padding: 5px 9px; }
 .build-prompt-control [role="status"] { margin-left: auto; color: var(--dim); }
-.ticket-source-scroll { min-height: 160px; overflow-y: auto; overscroll-behavior: contain; padding: 18px; scrollbar-color: var(--faint) var(--panel-3); }
+.ticket-source-scroll { min-height: 160px; overflow-y: auto; overscroll-behavior: contain; padding: 18px; }
 .ticket-source { width: 100%; max-height: none; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .ticket-source-status { color: var(--faint); }
 .ticket-source-error { color: var(--red); }

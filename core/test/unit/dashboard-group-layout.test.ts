@@ -123,6 +123,38 @@ test("an empty group lays out to nothing rather than to a phantom node", () => {
   assert.equal(layout.columns, 1);
 });
 
+test("every stylesheet's braces balance, so no media query leaks to every width", () => {
+  // A real defect this caught: one stray `}` closed `.sessions-shell` early,
+  // which made the ORIGINAL closing brace end the `max-width: 1180px` query —
+  // so the stacked narrow layout applied at 1600px and the driving-sessions
+  // screen lost its two columns. Nothing else fails when this happens; the
+  // stylesheet stays valid and simply means something else.
+  for (const sheet of ["dashboard/src/styles/dashboard.css", "dashboard/src/styles/morphism.css"]) {
+    const css = readFileSync(new URL(`../../../${sheet}`, import.meta.url), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//gu, "");
+    let depth = 0;
+    for (const character of css) {
+      if (character === "{") depth += 1;
+      if (character === "}") depth -= 1;
+      assert.ok(depth >= 0, `${sheet} closes a block that was never opened`);
+    }
+    assert.equal(depth, 0, `${sheet} leaves ${depth} block(s) open`);
+  }
+});
+
+test("an expanded node opens where its compact node is, clamped to the drawing", () => {
+  const graph = readFileSync(new URL("../../../dashboard/src/components/GroupTreeGraph.vue", import.meta.url), "utf8");
+  // Anchored, not centred: the reader clicked a node in a tree, and a dialog
+  // that appears somewhere else makes them find their place again.
+  assert.match(graph, /const left = Math\.max\(0, Math\.min\(x\(node\), Math\.max\(0, width\.value - PANEL_WIDTH\)\)\)/u);
+  assert.match(graph, /top: `\$\{y\(node\)\}px`/u);
+  // The backlog ticket's shape at half the size: head, title, scrolling body.
+  assert.match(graph, /class="tree-node-panel-head"/u);
+  assert.match(graph, /class="tree-node-panel-title"/u);
+  assert.match(graph, /class="tree-node-panel-body"/u);
+  assert.match(graph, /class="tree-node-close"[^>]*@click="opened = null"/u);
+});
+
 test("the drawing and the nodes read one geometry, and every node opens", () => {
   const graph = readFileSync(new URL("../../../dashboard/src/components/GroupTreeGraph.vue", import.meta.url), "utf8");
   // Columns and rows come from the layout, not from two independent guesses in

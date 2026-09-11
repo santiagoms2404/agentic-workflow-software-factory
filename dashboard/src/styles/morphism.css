@@ -11,8 +11,7 @@
 .neu-well,
 .session-filter-row,
 .plan-picker,
-.session-plan-picker,
-.session-group-picker,
+.session-context,
 .groups-list,
 .groups-canvas,
 .groups-head,
@@ -147,8 +146,7 @@
   grid-template-columns: 288px minmax(0, 1fr);
   grid-template-areas:
     "count workflows"
-    "ladder groups"
-    "ladder plans"
+    "ladder context"
     "ladder board";
   gap: 16px 18px;
   align-items: start;
@@ -214,19 +212,36 @@
 }
 .sessions-shell .empty-note { grid-area: board; max-width: none; margin: 0; padding: 30px; }
 
-/* The driving-session titles sit above the plan strip: the ask a set of runs
-   came out of is the outermost thing on this screen, so it reads first. The
-   panel each one opens is a well inside a well — recessed against the strip it
-   sits in, so an opened tree reads as contained rather than as a new column. */
-.session-group-picker {
-  grid-area: groups;
+/* One card above the board, split in half: which driving session these runs
+   came out of, and which plan they belong to. Both answer "which of these
+   runs", so they share a well and a hairline rather than taking two. */
+.session-context {
+  grid-area: context;
   min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+}
+.session-context > * { min-width: 0; padding: 14px 18px; }
+.session-context > * + * { border-left: 1px solid var(--border-soft); }
+.session-group-picker {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 14px 18px;
 }
-.session-group-entry { display: flex; flex-direction: column; gap: 10px; }
+/* Exactly two rows tall, then it scrolls. Every entry is the same height —
+   the title is clamped below — so "two" is a promise rather than an estimate,
+   and a session that adds a group never pushes the board down the page. */
+.session-group-entries {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 198px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.session-group-entries .session-group-toggle { flex: 0 0 auto; min-height: 94px; }
 .session-group-toggle {
   width: 100%;
   display: flex;
@@ -237,15 +252,6 @@
   text-align: left;
   cursor: pointer;
   font: inherit;
-}
-.session-group-panel {
-  border-radius: var(--neu-radius-card);
-  background: var(--neu-well);
-  box-shadow: var(--neu-pressed-soft);
-  padding: 16px 18px;
-  max-height: 620px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
 }
 .decision-node {
   border-radius: var(--neu-radius-card);
@@ -260,15 +266,11 @@
   padding: 11px 13px;
 }
 
-/* The plan strip sits where the backlog's does: along the top of the board
-   column, in the same well, with the same card row scrolling inside it. */
+/* The plan half: the same menu and card row, in half the width. */
 .session-plan-picker {
-  grid-area: plans;
-  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 14px 18px;
 }
 .session-plan-picker .session-filter-options { flex-wrap: wrap; gap: 12px; }
 .session-plan-picker .session-filter-option { flex: none; }
@@ -320,14 +322,14 @@
    which is the same raised-versus-flush grammar the filters use. */
 .tree-node.node-not-taken, .tree-node.node-superseded { background: var(--neu-well); box-shadow: none; }
 .tree-node.node-not-taken:hover, .tree-node.node-superseded:hover { box-shadow: var(--neu-raised-soft); }
-.tree-node-detail {
+.tree-node-panel {
   position: absolute;
   z-index: 3;
-  border-radius: 12px;
+  border-radius: var(--neu-radius-card);
   background: var(--neu-surface);
-  box-shadow: var(--neu-raised);
-  padding: 11px 13px;
+  box-shadow: var(--neu-hover);
 }
+.tree-node-panel-body { border-radius: 12px; }
 
 /* --- Backlog: rail layout ------------------------------------------------- */
 .backlog-shell {
@@ -481,17 +483,105 @@
   box-shadow: var(--neu-raised-soft);
 }
 
-/* --- Scrollbars on the new rails ------------------------------------------ */
-.workflow-rail .session-filter-options::-webkit-scrollbar { height: 9px; }
-.workflow-rail .session-filter-options::-webkit-scrollbar-track { border-radius: 999px; background: var(--neu-well); }
-.workflow-rail .session-filter-options::-webkit-scrollbar-thumb { border-radius: 999px; background: color-mix(in srgb, var(--dim) 44%, transparent); }
-.workflow-rail .session-filter-options::-webkit-scrollbar-thumb:hover { background: var(--dim); }
+/* ===========================================================================
+   SCROLLBARS
+
+   One treatment for every scrolling surface in the app. A scrollbar is a
+   control on a well like any other, so it takes the same grammar: the track is
+   the recessed ground, the thumb is a raised pill standing on it, and both are
+   derived from the active palette rather than left to the browser's grey.
+
+   Stated once against a selector list rather than per surface: three ad-hoc
+   sets had already drifted apart — two different heights, two different track
+   colours, and one surface that styled only Firefox.
+   =========================================================================== */
+html,
+.workflow-rail .session-filter-options,
+.session-group-entries,
+.groups-list,
+.tree-graph-scroll,
+.tree-node-panel-body,
+.plan-card-row,
+.waterfall-scroll,
+.session-stack-deck.expanded,
+.state-ribbon,
+.ticket-source-scroll,
+pre {
+  /* Firefox and anything without the pseudo-elements below. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--neu-scroll-thumb) var(--neu-scroll-track);
+}
+html::-webkit-scrollbar,
+.workflow-rail .session-filter-options::-webkit-scrollbar,
+.session-group-entries::-webkit-scrollbar,
+.groups-list::-webkit-scrollbar,
+.tree-graph-scroll::-webkit-scrollbar,
+.tree-node-panel-body::-webkit-scrollbar,
+.plan-card-row::-webkit-scrollbar,
+.waterfall-scroll::-webkit-scrollbar,
+.session-stack-deck.expanded::-webkit-scrollbar,
+.state-ribbon::-webkit-scrollbar,
+.ticket-source-scroll::-webkit-scrollbar,
+pre::-webkit-scrollbar { width: 10px; height: 10px; }
+html::-webkit-scrollbar-track,
+.workflow-rail .session-filter-options::-webkit-scrollbar-track,
+.session-group-entries::-webkit-scrollbar-track,
+.groups-list::-webkit-scrollbar-track,
+.tree-graph-scroll::-webkit-scrollbar-track,
+.tree-node-panel-body::-webkit-scrollbar-track,
+.plan-card-row::-webkit-scrollbar-track,
+.waterfall-scroll::-webkit-scrollbar-track,
+.session-stack-deck.expanded::-webkit-scrollbar-track,
+.state-ribbon::-webkit-scrollbar-track,
+.ticket-source-scroll::-webkit-scrollbar-track,
+pre::-webkit-scrollbar-track { border-radius: var(--neu-radius); background: var(--neu-scroll-track); }
+html::-webkit-scrollbar-thumb,
+.workflow-rail .session-filter-options::-webkit-scrollbar-thumb,
+.session-group-entries::-webkit-scrollbar-thumb,
+.groups-list::-webkit-scrollbar-thumb,
+.tree-graph-scroll::-webkit-scrollbar-thumb,
+.tree-node-panel-body::-webkit-scrollbar-thumb,
+.plan-card-row::-webkit-scrollbar-thumb,
+.waterfall-scroll::-webkit-scrollbar-thumb,
+.session-stack-deck.expanded::-webkit-scrollbar-thumb,
+.state-ribbon::-webkit-scrollbar-thumb,
+.ticket-source-scroll::-webkit-scrollbar-thumb,
+pre::-webkit-scrollbar-thumb {
+  /* The border is the gap: it lets the track show through around the pill so
+     the thumb reads as standing on the well rather than filling it. */
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: var(--neu-radius);
+  background-color: var(--neu-scroll-thumb);
+  transition: background-color 170ms ease;
+}
+html::-webkit-scrollbar-thumb:hover,
+.workflow-rail .session-filter-options::-webkit-scrollbar-thumb:hover,
+.session-group-entries::-webkit-scrollbar-thumb:hover,
+.groups-list::-webkit-scrollbar-thumb:hover,
+.tree-graph-scroll::-webkit-scrollbar-thumb:hover,
+.tree-node-panel-body::-webkit-scrollbar-thumb:hover,
+.plan-card-row::-webkit-scrollbar-thumb:hover,
+.waterfall-scroll::-webkit-scrollbar-thumb:hover,
+.session-stack-deck.expanded::-webkit-scrollbar-thumb:hover,
+.state-ribbon::-webkit-scrollbar-thumb:hover,
+.ticket-source-scroll::-webkit-scrollbar-thumb:hover,
+pre::-webkit-scrollbar-thumb:hover { background-color: var(--neu-scroll-thumb-hover); }
+.workflow-rail .session-filter-options::-webkit-scrollbar-corner,
+.tree-graph-scroll::-webkit-scrollbar-corner,
+pre::-webkit-scrollbar-corner { background: var(--neu-scroll-track); }
 
 @media (max-width: 1180px) {
   .sessions-shell {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "count" "workflows" "ladder" "groups" "plans" "board";
+    grid-template-areas: "count" "workflows" "ladder" "context" "board";
   }
+  /* Half a card each is too narrow to read below this width; they stack and the
+     hairline moves to the top edge of the second. */
+  .session-context {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .session-context > * + * { border-left: 0; border-top: 1px solid var(--border-soft); }
   .backlog-shell {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas: "rail" "plans" "board";
