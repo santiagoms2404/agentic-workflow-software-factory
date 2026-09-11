@@ -1,8 +1,9 @@
 # Owner acts
 
 Eight commands are the owner's and not yours: `journey`, `land`, `cancel`,
-`rework`, `review`, `degrade-review`, `raise`, `publish`. This document is about **which one the evidence
-supports** and **what to hand the owner before they decide**. It is not a table
+`rework`, `review`, `degrade-review`, `raise`, `publish`. This document is about
+**which one the evidence supports** and **what to hand the owner before they
+decide**. It is not a table
 of what each one costs, and the reason is at the bottom.
 
 ## The rule
@@ -71,19 +72,32 @@ when you cannot name the defect, and it is **refused outright above the middle
 tier** for a structural reason worth understanding rather than memorising — see
 `gotchas.md`.
 
-**`raise`** and **`degrade-review`** are the two of the eight that buy nothing and move no
-state. It
-grants one named task more calls while its attempt is live, so a run that halted
-at its ceiling can continue instead of being cancelled and re-rolled. Two things
-about it are worth understanding rather than memorising. It is a **command and
-not a configuration edit**, because an attempt is compared against the
-configuration snapshot it recorded before `rework` and `review` — editing
-`awsf.config.yaml` mid-attempt would lock the owner out of exactly the acts the
-raise was for. And it is **bounded and task-scoped**: there is no unbounded
-grant, and a grant made for one task widens nothing else. Preparing it means
-telling the owner what halted, what the next act needs, and what the raise would
-cost them — never performing it, and never proposing it as a way around a
-refusal that was about evidence rather than about budget.
+**`raise`** is one of the two that buy nothing and move no state. It grants one
+named task more calls while its attempt is live, so a run that halted at its
+ceiling can continue instead of being cancelled and re-rolled. Two things about
+it are worth understanding rather than memorising. It is a **command and not a
+configuration edit**, because an attempt is compared against the configuration
+snapshot it recorded before `rework` and `review` — editing `awsf.config.yaml`
+mid-attempt would lock the owner out of exactly the acts the raise was for. And
+it is **bounded and task-scoped**: there is no unbounded grant, and a grant made
+for one task widens nothing else. Preparing it means telling the owner what
+halted, what the next act needs, and what the raise would cost them — never
+performing it, and never proposing it as a way around a refusal that was about
+evidence rather than about budget.
+
+**`degrade-review`** is the other. It lets one attempt buy its review from the
+provider that wrote the candidate, which the factory otherwise refuses: two
+models from one provider are still one provider, and a provider checking its own
+output finds less than an independent one. It is a command and not a
+configuration edit for the same reason `raise` is, and it is **attempt-scoped and
+unrepeatable** — one grant per attempt, and a retry asks the owner again rather
+than inheriting it. Prepare it when the owner is provider-constrained and says
+so; state what it costs in the same breath, because the candidate it produces is
+weaker evidence than a cross-provider run. Never propose it as a way around a
+quota wall on your own initiative, and never describe the host as able to select
+it: a quota error, a transport failure and an unavailable adapter each leave the
+review independent, by construction. `select_a_route.md` has the rest of the
+routing picture.
 
 **`review`** buys one replacement review, and only when the recorded review is
 genuinely unevidenced. Eligibility is determined by the host from the recorded
