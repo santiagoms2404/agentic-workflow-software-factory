@@ -13,6 +13,9 @@
 .plan-picker,
 .session-plan-picker,
 .session-group-picker,
+.groups-list,
+.groups-canvas,
+.groups-head,
 .backlog-column,
 .run-count-tile,
 .backlog-head,
@@ -33,6 +36,8 @@
 .session-filter-control,
 .plan-control-button,
 .session-group-toggle,
+.groups-list-item,
+.tree-node,
 .archive-control,
 .detail-close,
 .timeline-access button,
@@ -75,7 +80,8 @@
 .session-filter-option,
 .plan-control-button,
 .plan-card,
-.session-group-toggle {
+.session-group-toggle,
+.groups-list-item {
   background: var(--neu-well);
   color: var(--dim);
   box-shadow: none;
@@ -91,6 +97,7 @@
 .plan-control-button.selected,
 .plan-card.selected,
 .session-group-toggle.selected,
+.groups-list-item.selected,
 .palette-trigger[aria-expanded="true"] {
   border: 0;
   background: var(--neu-surface);
@@ -271,6 +278,57 @@
 .session-plan-card { flex: 0 0 268px; min-height: 132px; display: flex; flex-direction: column; }
 .session-plan-metrics { grid-template-columns: repeat(2, auto); margin-top: auto; }
 
+/* --- Driving sessions: the decision tree's own screen ---------------------- */
+/* Same rail-and-board grammar the sessions and backlog screens use: a recessed
+   list on the left, a recessed canvas on the right, and every node on that
+   canvas a raised pill standing on it. */
+.groups-shell {
+  max-width: 1780px;
+  margin: 0 auto;
+  padding: 20px 28px 34px;
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  grid-template-areas: "rail canvas";
+  gap: 16px 18px;
+  align-items: start;
+}
+.groups-rail { grid-area: rail; position: sticky; top: 82px; display: flex; flex-direction: column; gap: 14px; }
+.groups-head { padding: 17px 20px; }
+.groups-list { display: flex; flex-direction: column; gap: 10px; padding: 14px; max-height: calc(100vh - 240px); overflow-y: auto; }
+.groups-list-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 15px;
+  border: 0;
+  border-radius: var(--neu-radius-card);
+  text-decoration: none;
+  transition: box-shadow 170ms ease, color 170ms ease, transform 170ms ease;
+}
+.groups-canvas { grid-area: canvas; min-width: 0; padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; }
+.tree-node {
+  position: absolute;
+  border: 0;
+  border-radius: 12px;
+  background: var(--neu-surface);
+  box-shadow: var(--neu-raised-soft);
+  transition: box-shadow 170ms ease, color 170ms ease, transform 170ms ease;
+}
+.tree-node:hover { box-shadow: var(--neu-hover); transform: translateY(-1px); }
+.tree-node.opened { box-shadow: var(--neu-raised); }
+/* A node nobody took sits flush with the canvas rather than standing on it,
+   which is the same raised-versus-flush grammar the filters use. */
+.tree-node.node-not-taken, .tree-node.node-superseded { background: var(--neu-well); box-shadow: none; }
+.tree-node.node-not-taken:hover, .tree-node.node-superseded:hover { box-shadow: var(--neu-raised-soft); }
+.tree-node-detail {
+  position: absolute;
+  z-index: 3;
+  border-radius: 12px;
+  background: var(--neu-surface);
+  box-shadow: var(--neu-raised);
+  padding: 11px 13px;
+}
+
 /* --- Backlog: rail layout ------------------------------------------------- */
 .backlog-shell {
   display: grid;
@@ -438,6 +496,12 @@
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas: "rail" "plans" "board";
   }
+  .groups-shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "rail" "canvas";
+  }
+  .groups-rail { position: static; }
+  .groups-list { max-height: 260px; }
   .lifecycle-ladder, .backlog-rail { position: static; }
   .lifecycle-ladder .session-filter-options { flex-direction: row; flex-wrap: wrap; }
   .lifecycle-ladder .session-filter-option { width: auto; }

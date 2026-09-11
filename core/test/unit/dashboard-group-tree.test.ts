@@ -118,16 +118,27 @@ test("a group with no runs on this board says so rather than looking like a sess
   assert.match(row, /:class="\{ absent: heading\.runs === 0 \}"/u);
 });
 
-test("expanding preserves scroll and focus, and never unmounts the run workspace", () => {
+test("the sessions strip is a title and a way in, and never displaces the run workspace", () => {
   const row = source("dashboard/src/components/SessionGroupRow.vue");
   const grid = source("dashboard/src/components/SessionsGrid.vue");
-  // The offset is captured before the DOM updates and restored after it, so a
-  // collapse under a scrolled viewport does not throw the reader to the top.
-  assert.match(row, /const offset = window\.scrollY;[\s\S]*?await nextTick\(\);[\s\S]*?window\.scrollTo\(\{ top: offset/u);
-  // `hidden` rather than v-if: the panel and its fetched tree stay mounted, and
-  // the toggle keeps focus because it is never replaced.
-  assert.match(row, /class="session-group-panel" :hidden="!expanded\.includes/u);
-  assert.doesNotMatch(row, /v-if="expanded\.includes/u);
-  // And the board is a sibling of the group row, so neither toggle touches it.
+  // The tree moved to its own screen: a 72-stage group needs the width, and
+  // nothing on this strip expands, so the board below cannot be pushed down.
+  assert.match(row, /:href="`#\/groups\/\$\{encodeURIComponent\(heading\.summary\.group\)\}`"/u);
+  assert.doesNotMatch(row, /session-group-panel|GroupDecisionTree|fetch\(/u);
+  // And the board is a sibling of the group row, so neither touches the other.
   assert.match(grid, /<SessionGroupRow[\s\S]*?<SessionPlanRow[\s\S]*?class="sessions-grid"/u);
+});
+
+test("the decision tree has its own route, reachable from the nav and by URL", () => {
+  const app = source("dashboard/src/App.vue");
+  const nav = source("dashboard/src/components/TopNav.vue");
+  const route = source("dashboard/src/routes/groups.vue");
+  assert.match(app, /#\\\/groups\\\/\(\[\^\/\]\+\)\$/u, "`#/groups/<id>` selects one group");
+  assert.match(app, /groupsRoute\.value = location\.hash === "#\/groups"/u);
+  assert.match(nav, /href="#\/groups"/u);
+  // Both readings of the same journal, and the graph is the default: the
+  // drawing answers what came from what, the reading answers what it said.
+  assert.match(route, /const view = ref<"graph" \| "reading">\("graph"\)/u);
+  assert.match(route, /<GroupTreeGraph v-show="view === 'graph'"/u);
+  assert.match(route, /<GroupDecisionTree v-show="view === 'reading'"/u);
 });

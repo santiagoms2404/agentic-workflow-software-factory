@@ -456,10 +456,10 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       }
       const related = await relateCommand({
         stateRoot, project, taskId, continues, reason,
-        projectRecord: projection.project,
+        projectRelation: projection.projectRelation,
       });
       out(`${project}/${taskId} continues ${project}/${related.continuesTask}; the declaration and your reason are journalled.`);
-      out(related.status.nextAction);
+      out(`Recorded on the task, not on an attempt, so it applies to all ${related.attempts} attempt(s) and reopened none of them.`);
       return 0;
     }
 

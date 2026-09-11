@@ -26,6 +26,10 @@ From the AWSF checkout, load command help when syntax is needed:
 npm run awsf --silent -- group help
 ```
 
+- A group's FIRST capture is the original ask, and nothing else. The dashboard
+  takes a group's title from that input's first line, so a group opened with a
+  correction or a scheduling aside is titled with one for the life of the group.
+  Capture the ask first, then the follow-ups.
 - Capture each original or follow-up with `group capture`. Read its complete exact
   text once through `group inspect --input-id ID`, including attachment provenance,
   then verify its bytes through `group input`. Never replace English/Spanish

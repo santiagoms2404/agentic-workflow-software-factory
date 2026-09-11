@@ -8,6 +8,7 @@ defineProps<{
   phaseName: string | null;
   settings: boolean;
   backlog: boolean;
+  groups: boolean;
 }>();
 
 const paletteRoot = ref<HTMLElement | null>(null);
@@ -89,6 +90,9 @@ onUnmounted(() => {
       <template v-if="backlog">
         <span class="sep">›</span><span class="current">backlog</span>
       </template>
+      <template v-if="groups">
+        <span class="sep">›</span><span class="current">driving sessions</span>
+      </template>
     </nav>
     <div ref="paletteRoot" class="palette-control">
       <button
@@ -157,7 +161,8 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
-    <a v-if="!settings && !backlog" class="settings-link" href="#/settings">Settings</a>
+    <a v-if="!settings && !backlog && !groups" class="settings-link" href="#/settings">Settings</a>
+    <a v-if="!groups" class="settings-link" href="#/groups">Sessions log</a>
     <a v-if="!backlog" class="settings-link" href="#/backlog">Backlog</a>
     <slot />
   </header>

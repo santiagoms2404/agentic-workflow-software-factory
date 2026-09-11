@@ -11,6 +11,7 @@ import {
 } from "../../../dashboard/src/session-plans.ts";
 import { initialPlanSelection } from "../../../dashboard/src/backlog-selection.ts";
 import type { BacklogPlan } from "../../../dashboard/shared/types.ts";
+import { readFileSync } from "node:fs";
 
 const plans: readonly SessionPlan[] = [
   { id: "fixture-plan", name: "fixture-plan", kind: "spine", parentSpine: null, parentSpineName: null },
@@ -72,6 +73,15 @@ test("a plan card counts the runs it was given and no plan without runs gets a c
   assert.deepEqual(cards.map((card) => card.plan.id), ["fixture-plan"]);
   assert.equal(cards[0]?.runs, 2);
   assert.deepEqual(cards[0]?.cost, { usd: 3, authority: "provider", partial: false });
+});
+
+test("a run keeps its plan name on the card even when the catalog no longer lists it", () => {
+  // The filter buckets such a run as "no registered plan", which is true of the
+  // catalog. Without the card, the plan the run actually recorded would be
+  // invisible everywhere, which is the part that would have been a lie.
+  const card = readFileSync(new URL("../../../dashboard/src/components/SessionCard.vue", import.meta.url), "utf8");
+  assert.match(card, /v-if="session\.planRef" class="card-plan"/u);
+  assert.equal(planKindOf("retired-plan", plans), "unlinked", "the bucket and the card disagree on purpose");
 });
 
 test("navigating from a plan card opens the backlog holding that plan alone", () => {

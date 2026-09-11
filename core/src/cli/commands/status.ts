@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import { ceilingFor } from "../../state/tiers.ts";
 import type { AttemptEvidence } from "../../observability/attempt-evidence.ts";
 import type { RouteSelectionProvenance } from "../../contracts/route-selection.ts";
@@ -6,6 +7,7 @@ import { formatRouteOverride } from "../../workflow/route-flags.ts";
 import { locateRunReport, runReportRevision } from "../../observability/run-report.ts";
 import { readAttemptEvidence } from "./review-record.ts";
 import { readAttempt, type AttemptStatus } from "./attempt.ts";
+import { declaredContinuation, type TaskRelation } from "../../persistence/task-relations.ts";
 
 function phaseLine(status: AttemptStatus): string {
   if (status.phase === null) return "Phase: none — no phase is active; follow Next action";
@@ -66,6 +68,28 @@ export function formatStatus(status: AttemptStatus): readonly string[] {
  * Its own function rather than a tenth entry in `formatStatus`, because that
  * one returns a fixed set of meters and this is conditional.
  */
+export function formatRelation(status: AttemptStatus, relation: TaskRelation | null): readonly string[] {
+  // The declaration `awsf relate` made wins over the one `awsf new --continues`
+  // recorded: it is the later and more specific statement. Both are printed
+  // when they disagree, because a reader chasing an edge deserves to see that
+  // it was corrected rather than to wonder which act produced it.
+  const lines: string[] = [];
+  if (relation !== null) {
+    lines.push(
+      `Continues: ${relation.continuesTask} — declared on the task with \`awsf relate\` at ${relation.at}; ` +
+        `reason on record: ${relation.reason}`,
+    );
+    if (status.continuesTask !== null && status.continuesTask !== relation.continuesTask) {
+      lines.push(`Continues (at creation): ${status.continuesTask} — superseded by the declaration above, not erased`);
+    }
+    return Object.freeze(lines);
+  }
+  if (status.continuesTask !== null) {
+    lines.push(`Continues: ${status.continuesTask} — recorded when this task was created`);
+  }
+  return Object.freeze(lines);
+}
+
 export function formatGroup(status: AttemptStatus): readonly string[] {
   if (status.groupId === null) return Object.freeze([]);
   return Object.freeze([
@@ -187,12 +211,17 @@ export async function statusCommand(
   attemptDir: string,
   options: { readonly evidence?: boolean } = {},
 ): Promise<readonly string[]> {
-  const [status, records, report] = await Promise.all([
+  const [status, records, report, relation] = await Promise.all([
     readAttempt(attemptDir),
     readAttemptEvidence(attemptDir),
     locateRunReport(attemptDir),
+    // `attemptDir` is `<task>/<attempt>`, so the task root is its parent.
+    declaredContinuation(join(attemptDir, "..")),
   ]);
-  const lines = [...formatStatus(status), ...formatGroup(status), ...formatAttemptSelection(status), ...formatRouteProvenance(records)];
+  const lines = [
+    ...formatStatus(status), ...formatRelation(status, relation), ...formatGroup(status),
+    ...formatAttemptSelection(status), ...formatRouteProvenance(records),
+  ];
   if (report !== null) {
     // Every command that moves the candidate, the verdict or the lifecycle
     // re-renders this. The stamp is the belt-and-braces: a writer that forgets

@@ -193,6 +193,38 @@ export function projectAttemptStatus(
   }
 }
 
+/**
+ * Projects one `awsf relate` declaration onto every session of that task.
+ *
+ * Task-scoped, so every attempt of the task carries the edge: the declaration
+ * is about the task, and a projection that set it on the newest attempt alone
+ * would make the same task answer "what do you continue" two different ways
+ * depending on which run you opened.
+ *
+ * Separate from `projectAttemptStatus` because it has no attempt journal behind
+ * it. `relate` writes no attempt record — that is the whole point of the
+ * task-scoped store — so there is no `source_seq` to advance and no cursor to
+ * move. The notice row carries the reason, which the column cannot.
+ */
+export function projectTaskRelation(
+  db: DatabaseSync,
+  relation: { project: string; taskId: string; continuesTask: string; reason: string; at: string },
+): void {
+  const taskId = scrubCredentialString(relation.taskId);
+  const project = scrubCredentialString(relation.project);
+  db.prepare("UPDATE sessions SET continues_task = ? WHERE project_slug = ? AND task_id = ?")
+    .run(scrubCredentialString(relation.continuesTask), project, taskId);
+  const sessions = db.prepare("SELECT session_id FROM sessions WHERE project_slug = ? AND task_id = ?")
+    .all(project, taskId) as unknown as Array<{ session_id: string }>;
+  for (const row of sessions) {
+    db.prepare(`INSERT OR IGNORE INTO events
+      (event_id, session_id, phase_id, first_source_seq, last_source_seq, type, name,
+       payload_json, started_at) VALUES (?, ?, NULL, 1, 1, 'task_relation', 'task continuation declared', ?, ?)`)
+      .run(`${row.session_id}:task-relation:${relation.at}`, row.session_id,
+        stringifyRedacted({ taskId, continuesTask: relation.continuesTask, reason: relation.reason }), relation.at);
+  }
+}
+
 export function createSession(db: DatabaseSync, init: SessionInit): void {
   db.prepare(
     `INSERT OR IGNORE INTO sessions
@@ -558,21 +590,6 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
         evidence.phaseId, sessionId, evidence.at, evidence.at, evidence.at, sessionId,
       );
       insertEnvelope(db, sessionId, evidence.phaseId, evidence.envelope);
-      return;
-    case "task-relation":
-      // `awsf relate` is task-scoped and carries the driver's written reason, so
-      // the edge alone would lose why it was declared. The column answers "what
-      // does this continue"; this row answers "who said so, when, and why".
-      db.prepare(`UPDATE sessions SET continues_task=? WHERE session_id=?`)
-        .run(scrubCredentialString(evidence.continuesTask), sessionId);
-      db.prepare(`INSERT OR IGNORE INTO events
-        (event_id, session_id, phase_id, first_source_seq, last_source_seq, type, name,
-         payload_json, started_at) VALUES (?, ?, NULL, ?, ?, 'task_relation', 'task continuation declared', ?, ?)`)
-        .run(`${sessionId}:task-relation:${sourceSeq}`, sessionId, sourceSeq, sourceSeq,
-          stringifyRedacted({
-            taskId: evidence.taskId, continuesTask: evidence.continuesTask,
-            reason: evidence.reason, attempt: evidence.attempt,
-          }), evidence.at);
       return;
     case "review":
       // The verdict is the reviewer's own finding, recorded beside the provider

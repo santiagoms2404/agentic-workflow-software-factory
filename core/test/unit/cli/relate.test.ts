@@ -17,8 +17,13 @@ import {
   type AttemptProjector,
   type AttemptStatus,
 } from "../../../src/cli/commands/attempt.ts";
+import { retryCommand } from "../../../src/cli/commands/retry.ts";
+import { SealedAttempt } from "../../../src/persistence/attempt-lock.ts";
 import { newCommand } from "../../../src/cli/commands/new.ts";
-import { relateCommand, resolveContinues } from "../../../src/cli/commands/relate.ts";
+import { declaredContinuation, relateCommand, resolveContinues } from "../../../src/cli/commands/relate.ts";
+import { readTaskRelations } from "../../../src/persistence/task-relations.ts";
+import { rebuildCommand } from "../../../src/cli/commands/operator.ts";
+import { taskRoot } from "../../../src/cli/commands/attempt.ts";
 import { getSession } from "../../../src/observability/queries.ts";
 import { openDatabase } from "../../../src/observability/sqlite.ts";
 import { OWNER_ACTS } from "../../../../docs/driving/marimba/marimba-guard-rules.mts";
@@ -46,12 +51,12 @@ async function task(
   });
 }
 
-test("relate records the declaration, the reason, and the projected edge", async () => {
+test("relate records the declaration on the TASK, leaving every attempt's bytes untouched", async () => {
   const box = sandbox("records");
   const projection = createDashboardProjection(box.stateRoot);
   try {
     await task(box.stateRoot, box.root, "prior-task", { sessionId: "prior-session", projectRecord: projection.project });
-    await task(box.stateRoot, box.root, "later-task", { sessionId: "later-session", projectRecord: projection.project });
+    const created = await task(box.stateRoot, box.root, "later-task", { sessionId: "later-session", projectRecord: projection.project });
     const located = await locateAttempt(box.stateRoot, PROJECT, "later-task");
     const before = await readAttempt(located.attemptDir);
     assert.equal(before.continuesTask, null);
@@ -59,20 +64,27 @@ test("relate records the declaration, the reason, and the projected edge", async
     const result = await relateCommand({
       stateRoot: box.stateRoot, project: PROJECT, taskId: "later-task",
       continues: "prior-task", reason: "prior-task blocked on the seam this one fixes",
-      projectRecord: projection.project, now: () => "2026-09-10T10:00:00.000Z",
+      projectRelation: projection.projectRelation, now: () => "2026-09-10T10:00:00.000Z",
     });
     assert.equal(result.continuesTask, "prior-task");
-    assert.equal(result.status.continuesTask, "prior-task");
-    assert.match(result.status.lastActivity, /continues prior-task: prior-task blocked on the seam this one fixes/u);
-    // A record, not a state change: the lifecycle is where it was and the
-    // recommendation still points at the same next command.
-    assert.equal(result.status.lifecycleState, before.lifecycleState);
-    assert.equal(result.status.nextAction, before.nextAction);
+    assert.equal(result.attempts, 1);
+    assert.equal(result.relation.reason, "prior-task blocked on the seam this one fixes");
+    assert.equal(result.relation.at, "2026-09-10T10:00:00.000Z");
+
+    // The attempt is untouched: same revision, same lifecycle, same bytes. The
+    // declaration is about the task, so it is not an attempt event.
+    const after = await readAttempt(created.attemptDir);
+    assert.equal(after.revision, before.revision, "no attempt revision was spent on a task-scoped fact");
+    assert.equal(after.continuesTask, null);
+    // And it is on the task, readable without opening any attempt.
+    const relations = await readTaskRelations(taskRoot(box.stateRoot, PROJECT, "later-task"));
+    assert.deepEqual(relations.map((relation) => relation.continuesTask), ["prior-task"]);
+    assert.equal(await declaredContinuation(box.stateRoot, PROJECT, "later-task"), "prior-task");
     projection.close();
 
     const db = openDatabase(join(box.stateRoot, "awsf.db"), { readonly: true });
     try {
-      assert.equal(getSession(db, result.status.sessionId)?.continues_task, "prior-task");
+      assert.equal(getSession(db, "later-session")?.continues_task, "prior-task");
       const row = db.prepare("SELECT name, payload_json FROM events WHERE type = 'task_relation'").get() as
         | { name: string; payload_json: string } | undefined;
       assert.equal(row?.name, "task continuation declared");
@@ -151,23 +163,98 @@ test("relate refuses to overwrite an existing declaration and names the one it f
     );
     const located = await locateAttempt(box.stateRoot, PROJECT, "declared");
     assert.equal((await readAttempt(located.attemptDir)).continuesTask, "first-prior", "the refused write changed nothing");
+    assert.deepEqual(await readTaskRelations(taskRoot(box.stateRoot, PROJECT, "declared")), []);
+
+    // The same refusal applies to a declaration `relate` itself made, not only
+    // to one `awsf new --continues` recorded.
+    await task(box.stateRoot, box.root, "twice");
+    await relateCommand({ stateRoot: box.stateRoot, project: PROJECT, taskId: "twice", continues: "first-prior", reason: "the first declaration" });
+    await assert.rejects(
+      relateCommand({ stateRoot: box.stateRoot, project: PROJECT, taskId: "twice", continues: "second-prior", reason: "the second" }),
+      /already continues .*\/first-prior/u,
+    );
   } finally { box.close(); }
 });
 
-test("relate refuses a sealed attempt rather than reopening it to carry the edge", async () => {
+test("a task whose every attempt is sealed can still be related, without reopening one", async () => {
+  // The defect the task-scoped store exists for. Measured on the owner's real
+  // projection, 22 of 44 runs were BLOCKED; an attempt-scoped declaration made
+  // the relationship unrecordable for half the history, and a blocked task is
+  // exactly the one a later task continues.
   const box = sandbox("sealed");
+  const projection = createDashboardProjection(box.stateRoot);
   try {
-    await task(box.stateRoot, box.root, "prior-task");
-    const created = await task(box.stateRoot, box.root, "cancelled-task");
+    await task(box.stateRoot, box.root, "prior-task", { sessionId: "sealed-prior", projectRecord: projection.project });
+    const created = await task(box.stateRoot, box.root, "blocked-task", { sessionId: "sealed-later", projectRecord: projection.project });
+    const sealed = await persistAttempt(created.attemptDir, created.status.revision, {
+      kind: "attempt.updated",
+      next: nextRevision(created.status, { lifecycleState: "BLOCKED", lastActivity: "blocked by the test harness" }),
+    }, projection.project);
+
+    const result = await relateCommand({
+      stateRoot: box.stateRoot, project: PROJECT, taskId: "blocked-task",
+      continues: "prior-task", reason: "the seam that blocked this one is what prior-task fixed",
+      projectRelation: projection.projectRelation,
+    });
+    assert.equal(result.continuesTask, "prior-task");
+
+    // The sealed attempt is byte-for-byte where it was: same revision, still
+    // BLOCKED, and still refusing an attempt write.
+    const after = await readAttempt(created.attemptDir);
+    assert.equal(after.revision, sealed.revision);
+    assert.equal(after.lifecycleState, "BLOCKED");
+    await assert.rejects(
+      persistAttempt(created.attemptDir, after.revision, {
+        kind: "attempt.updated",
+        next: nextRevision(after, { lastActivity: "illegal post-seal write" }),
+      }),
+      SealedAttempt,
+      "the seal is intact; relate went around it, not through it",
+    );
+  } finally { projection.close(); box.close(); }
+});
+
+test("a relation applies to every attempt of the task and survives a rebuild", async () => {
+  const box = sandbox("rebuild");
+  const projection = createDashboardProjection(box.stateRoot);
+  try {
+    await task(box.stateRoot, box.root, "prior-task", { sessionId: "r-prior", projectRecord: projection.project });
+    const created = await task(box.stateRoot, box.root, "retried-task", { sessionId: "r-1", projectRecord: projection.project });
     await persistAttempt(created.attemptDir, created.status.revision, {
       kind: "attempt.updated",
-      next: nextRevision(created.status, { lifecycleState: "CANCELLED", lastActivity: "cancelled by the test harness" }),
+      next: nextRevision(created.status, { lifecycleState: "BLOCKED", lastActivity: "blocked by the test harness" }),
+    }, projection.project);
+    await retryCommand({
+      attemptDir: created.attemptDir, stateRoot: box.stateRoot,
+      configSnapshotJson: "{}", allowance: { auto: 1, owner: 1 },
+      sessionId: () => "r-2", projectRecord: projection.project,
     });
-    await assert.rejects(
-      relateCommand({ stateRoot: box.stateRoot, project: PROJECT, taskId: "cancelled-task", continues: "prior-task", reason: "late edge" }),
-      /attempt 1 is CANCELLED, whose bytes are sealed/u,
-    );
-  } finally { box.close(); }
+
+    const result = await relateCommand({
+      stateRoot: box.stateRoot, project: PROJECT, taskId: "retried-task",
+      continues: "prior-task", reason: "both attempts continue the same prior work",
+      projectRelation: projection.projectRelation,
+    });
+    assert.equal(result.attempts, 2);
+    projection.close();
+
+    const before = openDatabase(join(box.stateRoot, "awsf.db"), { readonly: true });
+    try {
+      // Both attempts of the task carry the edge: it is a fact about the task.
+      assert.equal(getSession(before, "r-1")?.continues_task, "prior-task");
+      assert.equal(getSession(before, "r-2")?.continues_task, "prior-task");
+    } finally { before.close(); }
+
+    // "Delete the database and lose nothing" has to hold for a declaration that
+    // was never written into an attempt journal.
+    const report = await rebuildCommand(box.stateRoot);
+    assert.equal(report.ok, true);
+    const rebuilt = openDatabase(join(box.stateRoot, "awsf.db"), { readonly: true });
+    try {
+      assert.equal(getSession(rebuilt, "r-1")?.continues_task, "prior-task");
+      assert.equal(getSession(rebuilt, "r-2")?.continues_task, "prior-task");
+    } finally { rebuilt.close(); }
+  } finally { projection.close(); box.close(); }
 });
 
 test("relate requires a written reason and refuses a credential-shaped one", async () => {

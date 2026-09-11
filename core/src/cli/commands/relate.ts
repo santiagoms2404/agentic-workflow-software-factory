@@ -9,30 +9,31 @@
 // terminal — a driving session that may create a continuation may also declare
 // one.
 //
-// It is TASK-SCOPED. A continuation is a fact about two tasks, not about two
-// attempts, so the value is written where a task's current facts live: its
-// latest attempt. That attempt must still be writable. A sealed or landed
-// attempt's bytes are never touched to record something learned after it ended
-// — the refusal below says so by name rather than letting the write protocol
-// report a lock-level failure.
+// It is TASK-SCOPED, and it is stored that way. The first cut wrote it onto the
+// task's newest attempt, because that is where a task's current facts live;
+// real data showed the cost. An attempt in BLOCKED, CANCELLED or PUBLISHED is
+// sealed, so `relate` refused — and on the owner's real projection twenty-two
+// of forty-four runs were BLOCKED. Half the history could never record "this
+// task continued that one" after the fact, which is exactly when the
+// relationship is usually learned.
+//
+// So the declaration goes in `relations.jsonl` beside the task's attempt
+// directories. No sealed attempt is reopened, no attempt needs to be writable,
+// and `awsf new --continues` keeps writing the attempt field as it always has —
+// a different act with a different record. `declaredContinuation` below is the
+// read rule: the task-scoped declaration wins where one exists.
 //
 // It refuses rather than overwrites. A declaration already on the record was
 // made deliberately; replacing it silently would make the edge unauditable, and
 // correcting one is a separate explicit act that does not exist yet.
 
+import { latestAttemptNumber, locateAttempt, readAttempt, taskRoot } from "./attempt.ts";
 import {
-  latestAttemptNumber,
-  locateAttempt,
-  nextActionFor,
-  nextRevision,
-  persistAttempt,
-  readAttempt,
-  taskRoot,
-  type AttemptProjector,
-  type AttemptStatus,
-} from "./attempt.ts";
+  appendTaskRelation,
+  declaredContinuation as declaredRelation,
+  type TaskRelation,
+} from "../../persistence/task-relations.ts";
 import { REDACTED_VALUE, scrubCredentialString } from "../../policy/redaction.ts";
-import { SEALED_STATES, type TaskState } from "../../state/task-machine.ts";
 
 const MAX_REASON = 2_000;
 /** A chain longer than this is a defect in the data, not a relationship. */
@@ -99,16 +100,6 @@ export class RelateAlreadyDeclared extends Error {
   }
 }
 
-export class RelateAttemptSealed extends Error {
-  constructor(project: string, taskId: string, attempt: number, state: TaskState) {
-    super(
-      `${project}/${taskId} attempt ${attempt} is ${state}, whose bytes are sealed; ` +
-        "a relation is declared on a writable attempt, and no sealed attempt is reopened to carry one",
-    );
-    this.name = "RelateAttemptSealed";
-  }
-}
-
 export interface RelateCommandOptions {
   readonly stateRoot: string;
   readonly project: string;
@@ -116,13 +107,16 @@ export interface RelateCommandOptions {
   /** The prior task. A bare id, or `<project>/<id>` naming this same project. */
   readonly continues: string;
   readonly reason: string;
-  readonly projectRecord?: AttemptProjector;
+  /** Projects the declaration onto every already-recorded session of the task. */
+  readonly projectRelation?: (relation: TaskRelation) => void;
   readonly now?: () => string;
 }
 
 export interface RelateCommandResult {
-  readonly status: AttemptStatus;
+  readonly relation: TaskRelation;
   readonly continuesTask: string;
+  /** Attempts of this task the declaration now applies to. */
+  readonly attempts: number;
 }
 
 /** The driver's written record of why this edge exists. */
@@ -153,15 +147,31 @@ export function resolveContinues(project: string, taskId: string, named: string)
   return named;
 }
 
+/**
+ * What a task continues, by either act.
+ *
+ * The task-scoped declaration wins where one exists, because it is the later
+ * and more specific statement: `awsf new --continues` says what was known when
+ * the task was created, and `awsf relate` says what was learned afterwards.
+ */
+export async function declaredContinuation(
+  stateRoot: string,
+  project: string,
+  taskId: string,
+): Promise<string | null> {
+  const relation = await declaredRelation(taskRoot(stateRoot, project, taskId));
+  if (relation !== null) return relation.continuesTask;
+  const located = await locateAttempt(stateRoot, project, taskId);
+  return (await readAttempt(located.attemptDir)).continuesTask;
+}
+
 /** Continuation declarations already on record, walked from `start` outward. */
 async function declaredChain(stateRoot: string, project: string, start: string): Promise<string[]> {
   const chain: string[] = [];
   let cursor: string | null = start;
   while (cursor !== null && chain.length < MAX_CHAIN) {
     chain.push(cursor);
-    const located = await locateAttempt(stateRoot, project, cursor);
-    const status: AttemptStatus = await readAttempt(located.attemptDir);
-    cursor = status.continuesTask;
+    cursor = await declaredContinuation(stateRoot, project, cursor);
     if (cursor !== null && chain.includes(cursor)) break;
   }
   return chain;
@@ -174,33 +184,28 @@ export async function relateCommand(options: RelateCommandOptions): Promise<Rela
   if (prior === taskId) throw new RelateSelfReference(project, taskId);
 
   // Both tasks are read before anything is written, so every refusal names what
-  // it actually found on disk rather than what the flags claimed.
-  const located = await locateAttempt(options.stateRoot, project, taskId);
+  // it actually found on disk rather than what the flags claimed. The task must
+  // exist — `locateAttempt` refuses otherwise — but its attempts may be sealed,
+  // which is no longer a refusal.
+  const root = taskRoot(options.stateRoot, project, taskId);
+  const attempts = await latestAttemptNumber(root);
+  if (attempts === null) throw new Error(`no attempt exists for ${project}/${taskId}; run \`awsf new ${taskId} ...\``);
   if (await latestAttemptNumber(taskRoot(options.stateRoot, project, prior)) === null) {
     throw new RelateMissingPredecessor(project, taskId, prior);
   }
   const chain = await declaredChain(options.stateRoot, project, prior);
   if (chain.includes(taskId)) throw new RelateCycle(project, taskId, chain);
 
-  const status = await readAttempt(located.attemptDir);
-  if (status.continuesTask !== null) throw new RelateAlreadyDeclared(project, taskId, status.continuesTask);
-  if ((SEALED_STATES as readonly TaskState[]).includes(status.lifecycleState) || status.lifecycleState === "LANDED") {
-    throw new RelateAttemptSealed(project, taskId, status.attempt, status.lifecycleState);
-  }
+  const existing = await declaredContinuation(options.stateRoot, project, taskId);
+  if (existing !== null) throw new RelateAlreadyDeclared(project, taskId, existing);
 
   const at = (options.now ?? ((): string => new Date().toISOString()))();
-  const next = nextRevision(status, {
-    continuesTask: prior,
-    lastActivityAt: at,
-    lastActivity: `declared that ${taskId} continues ${prior}: ${reason}`,
-    // The lifecycle did not move, so neither does the recommendation. Declaring
-    // a relationship is a record, never a state change.
-    nextAction: nextActionFor(status.lifecycleState, taskId),
-  });
-  const persisted = await persistAttempt(located.attemptDir, status.revision, {
-    kind: "attempt.updated",
-    next,
-    evidence: { type: "task-relation", taskId, continuesTask: prior, reason, attempt: status.attempt, at },
-  }, options.projectRecord);
-  return { status: persisted, continuesTask: prior };
+  const relation: TaskRelation = {
+    schema: "awsf/task-relation/v1", project, taskId, continuesTask: prior, reason, at,
+  };
+  // Durable first, projected second: the declaration is the journal's, and a
+  // projection that cannot be written degrades the screen, never the record.
+  await appendTaskRelation(root, relation);
+  options.projectRelation?.(relation);
+  return { relation, continuesTask: prior, attempts };
 }
