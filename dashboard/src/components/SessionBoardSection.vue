@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import type { GroupSummary, SessionCard as Session } from "../../shared/types.ts";
-import type { BoardMember, BoardSection } from "../session-clusters.ts";
+import { COLLAPSED_STACK_LIMIT, memberSpan, sectionSpan, type BoardMember, type BoardSection } from "../session-clusters.ts";
 import { groupTitle } from "../session-groups.ts";
 import SessionStack from "./SessionStack.vue";
 
@@ -13,13 +13,51 @@ const props = defineProps<{
 
 /**
  * Three levels, and each one appears only when it holds more than the level
- * below already shows: the cluster well exists only for two or more connected
- * sessions, the group card only for a run that recorded one, and the deck only
- * for two or more related runs. A run with no driving session takes no
+ * below already shows: the cluster panel exists only for two or more connected
+ * sessions, the session card only for a run that recorded one, and the deck
+ * only for two or more related runs. A run with no driving session takes no
  * container at all, which is why the board is unchanged on a projection where
  * no run carries a group.
  */
 const clustered = computed(() => props.section.kind === "cluster");
+
+/**
+ * The sum of the session cards inside it, capped at the collapse limit, so the
+ * card is exactly as wide as its contents. Sessions sit beside each other
+ * rather than stacking, which is what closes the hole a narrower session used
+ * to leave inside a card nothing else could be placed in.
+ */
+const span = computed(() => sectionSpan(props.section));
+
+/** Sessions the reader has opened past the collapse limit. */
+const opened = ref<readonly string[]>([]);
+
+function isOpened(member: BoardMember<Session>): boolean {
+  return opened.value.includes(member.key);
+}
+
+function toggle(member: BoardMember<Session>): void {
+  opened.value = isOpened(member)
+    ? opened.value.filter((key) => key !== member.key)
+    : [...opened.value, member.key];
+}
+
+function visibleStacks(member: BoardMember<Session>): BoardMember<Session>["stacks"] {
+  return isOpened(member) ? member.stacks : member.stacks.slice(0, COLLAPSED_STACK_LIMIT);
+}
+
+/**
+ * One column per deck the session card shows, so a run card inside a session is
+ * the same width as one outside it — and a session with one deck is one card
+ * wide rather than a lone card stretched across the cluster.
+ */
+function columns(member: BoardMember<Session>): number {
+  return memberSpan(member);
+}
+
+function hiddenStacks(member: BoardMember<Session>): number {
+  return member.stacks.length - visibleStacks(member).length;
+}
 
 function memberTitle(member: BoardMember<Session>): string {
   if (member.groupIds.length === 0) return "no driving session";
@@ -47,6 +85,7 @@ function memberRuns(member: BoardMember<Session>): number {
     v-else
     class="board-section"
     :class="clustered ? 'board-cluster neu-well' : 'board-group-standalone'"
+    :style="{ '--board-span': span }"
     :aria-label="clustered ? 'Connected driving sessions' : 'Driving session'"
   >
     <header v-if="clustered" class="board-cluster-head">
@@ -69,13 +108,18 @@ function memberRuns(member: BoardMember<Session>): number {
       :key="member.key"
       class="board-group"
       :class="{ spanning: member.groupIds.length > 1, empty: member.stacks.length === 0 }"
+      :style="{ '--member-span': columns(member) }"
     >
+      <!-- The control that opens the tree sits INSIDE the card, in its own
+           top-right corner. A control parked beside the card is one the reader
+           has to scroll sideways to reach, and the card is what it belongs to.
+           The ELI summary under the title is a separate stream: the place it
+           sits is left empty rather than filled with a generated sentence. -->
       <header class="board-group-head">
         <h3 class="board-group-title" :class="{ absent: member.groupIds.some((group) => (summaries.get(group)?.title ?? null) === null) }">
           {{ memberTitle(member) }}
         </h3>
         <p class="board-group-meta">
-          <span v-if="member.groupIds.length > 1" class="board-group-span">spans</span>
           <code v-for="group in member.groupIds" :key="group">{{ group }}</code>
           <span :class="{ absent: memberRuns(member) === 0 }">
             {{ memberRuns(member) === 0 ? "no runs on this board" : `${memberRuns(member)} run(s) here` }}
@@ -88,19 +132,42 @@ function memberRuns(member: BoardMember<Session>): number {
           </span>
         </p>
         <a
+          v-if="member.groupIds.length === 1"
+          class="board-group-open"
+          :href="`#/groups/${encodeURIComponent(member.groupIds[0]!)}`"
+          :aria-label="`Open the decision tree for ${member.groupIds[0]}`"
+          title="Open the decision tree"
+        ><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.7 10.3 10.3 5.7M6.3 5.7h4v4" /></svg></a>
+      </header>
+
+      <!-- A deck spanning two sessions has two trees to open, so they are named
+           rather than folded into one unlabelled corner button. -->
+      <p v-if="member.groupIds.length > 1" class="board-group-trees">
+        <a
           v-for="group in member.groupIds"
           :key="`open-${group}`"
-          class="session-filter-control board-group-open"
+          class="session-filter-control board-group-tree-link"
           :href="`#/groups/${encodeURIComponent(group)}`"
-        >{{ member.groupIds.length > 1 ? `tree · ${group}` : "open the tree" }}</a>
-      </header>
-      <!-- The scoped ELI summary under the title is a separate stream and is
-           not built here. The place it sits is left empty rather than filled
-           with a sentence nothing generated. -->
-      <div v-if="member.stacks.length" class="board-group-grid">
-        <SessionStack v-for="stack in member.stacks" :key="stack.key" :sessions="stack.sessions" />
+        >tree · {{ group }}</a>
+      </p>
+
+      <div v-if="member.stacks.length" class="board-group-grid" :style="{ '--member-columns': columns(member) }">
+        <SessionStack v-for="stack in visibleStacks(member)" :key="stack.key" :sessions="stack.sessions" />
       </div>
       <p v-else class="board-group-empty absent">No runs in this driving session match the current filters.</p>
+
+      <!-- Past the limit the card keeps its width and grows a control, instead
+           of taking the whole board row and leaving the space beside it empty. -->
+      <button
+        v-if="member.stacks.length > COLLAPSED_STACK_LIMIT"
+        type="button"
+        class="board-group-expand"
+        :aria-expanded="isOpened(member)"
+        @click="toggle(member)"
+      >
+        <span class="board-group-expand-count">{{ member.stacks.length }} decks in this driving session</span>
+        <span class="board-group-expand-action">{{ isOpened(member) ? "show fewer" : `show all · +${hiddenStacks(member)}` }}</span>
+      </button>
     </article>
   </section>
 </template>

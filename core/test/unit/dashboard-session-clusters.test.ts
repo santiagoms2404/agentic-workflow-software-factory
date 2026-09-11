@@ -4,7 +4,10 @@ import { test } from "node:test";
 import {
   boardSections,
   clusterKeys,
+  COLLAPSED_STACK_LIMIT,
   groupConnections,
+  memberSpan,
+  sectionSpan,
   type GroupableSession,
 } from "../../../dashboard/src/session-clusters.ts";
 
@@ -144,16 +147,40 @@ test("ordering is deterministic: newest visible run first, then the section key"
   assert.deepEqual(boardSections([...runs].reverse(), [...runs].reverse()).map((section) => section.key), ["a", "b"]);
 });
 
+test("a card is as wide as its contents, with no hole left inside it", () => {
+  const stacksOf = (counts: readonly number[]) => counts.map((runs, index) => ({
+    key: `m${index}`, groupIds: ["g"], unsessioned: 0, rank: "",
+    stacks: Array.from({ length: runs }, (_unused, stack) => ({ key: `s${index}-${stack}`, sessions: [] })),
+  }));
+  // One deck is one card wide, so it can share a row with a two-card session
+  // rather than taking the row and leaving the space beside it empty.
+  assert.equal(memberSpan({ stacks: stacksOf([1])[0]!.stacks }), 1);
+  assert.equal(sectionSpan({ members: stacksOf([1]) }), 1);
+  assert.equal(sectionSpan({ members: stacksOf([2]) }), 2);
+  // A cluster is the SUM of its sessions, not the widest of them: they sit
+  // beside each other, so a one-deck session next to a two-deck one makes a
+  // three-column card with nothing empty in it. Taking the widest left the
+  // narrower session's row half empty inside a card nothing could be placed in.
+  assert.equal(sectionSpan({ members: stacksOf([1, 2]) }), 3);
+  assert.equal(sectionSpan({ members: stacksOf([1, 1]) }), 2);
+  // And it never eats more of the row than one session would.
+  assert.equal(sectionSpan({ members: stacksOf([2, 2, 2]) }), COLLAPSED_STACK_LIMIT);
+  assert.equal(sectionSpan({ members: stacksOf([9]) }), COLLAPSED_STACK_LIMIT);
+  // A session whose runs are all filtered out still occupies a card.
+  assert.equal(sectionSpan({ members: stacksOf([0]) }), 1);
+  assert.equal(memberSpan({ stacks: [] }), 1);
+});
+
 test("the three levels are three depths in the shell's own grammar, and the nesting is refused when it stops fitting", () => {
   const board = source("dashboard/src/components/SessionBoardSection.vue");
   const shell = source("dashboard/src/styles/morphism.css");
 
   // A deck with no driving session takes no container at all.
   assert.match(board, /v-if="section\.kind === 'run'"/u);
-  // Cluster = recessed well; session = card standing on it; runs = raised
-  // cards on that. The same raised-soft / raised pair the deck already uses.
+  // Cluster = recessed panel; session = card standing on it; runs = cards on
+  // that. Depth and room separate them — never a line.
   assert.match(board, /'board-cluster neu-well' : 'board-group-standalone'/u);
-  assert.match(shell, /\.board-group \{[^}]*box-shadow:\s*var\(--neu-raised-soft\)/su);
+  assert.match(shell, /\.board-group \{[^}]*box-shadow:\s*var\(--neu-raised\)/su);
   assert.match(shell, /\.board-group\.empty \{[^}]*background:\s*var\(--neu-well\)[^}]*box-shadow:\s*none/su);
   // Every treatment is a token: a hardcoded colour or shadow works in exactly
   // one of the palettes and silently breaks the rest.
@@ -161,23 +188,74 @@ test("the three levels are three depths in the shell's own grammar, and the nest
   assert.ok(section.length > 0);
   assert.doesNotMatch(section, /#[0-9a-fA-F]{3,8}\b/u);
   assert.doesNotMatch(section, /box-shadow:\s*-?\d/u);
+  // And no accent rule anywhere on these containers. The shell is light and
+  // shadow; a coloured rail or ring on a card is a second design language.
+  assert.doesNotMatch(section, /--accent/u);
+  assert.doesNotMatch(section, /border-left|border-right|border-top|border-bottom/u);
   // Below the width where a run card stops sharing a row, two nested boxes cost
   // about seventy pixels of a four-hundred-pixel screen, so they are refused
   // rather than shrunk.
   const narrow = shell.split("@media (max-width: 720px)")[1] ?? "";
   assert.match(narrow, /\.board-cluster, \.board-group \{[^}]*box-shadow:\s*none/su);
   assert.match(narrow, /\.board-group-grid \{ grid-template-columns: minmax\(0, 1fr\); \}/u);
+  assert.match(narrow, /\.board-section \{ grid-column: span 1; \}/u);
 });
 
-test("the section spans the board row and the deck keeps the grid it already had", () => {
+test("a section takes the columns it needs, and its inner tracks are counted rather than fitted", () => {
   const shell = source("dashboard/src/styles/morphism.css");
+  const board = source("dashboard/src/components/SessionBoardSection.vue");
   const grid = source("dashboard/src/components/SessionsGrid.vue");
-  assert.match(shell, /\.board-section \{ grid-column: 1 \/ -1;/u);
-  // Same track rule inside a session as outside it, so the cards line up with
-  // the ungrouped ones above and below rather than stretching to the band.
-  assert.match(shell, /\.board-group-grid \{[^}]*repeat\(auto-fill, minmax\(360px, 1fr\)\)/su);
+  assert.match(shell, /\.board-section \{ grid-column: span var\(--board-span, 1\);/u);
+  assert.match(board, /'--board-span': span/u);
+  // An auto-fill floor inside a card that is already sized overflows it as soon
+  // as the board column is narrower than the floor, so the tracks are counted.
+  assert.match(shell, /\.board-group-grid \{[^}]*repeat\(var\(--member-columns, 1\), minmax\(0, 1fr\)\)/su);
+  assert.match(board, /'--member-columns': columns\(member\)/u);
+  assert.match(board, /'--member-span': columns\(member\)/u);
+  // One column per deck the session shows, so a run card inside a session is
+  // the same width as one outside it.
+  assert.match(board, /return memberSpan\(member\);/u);
+  // Sessions sit beside each other inside the cluster, each as wide as its own
+  // decks, so the card's outline follows its contents and leaves no hole.
+  assert.match(shell, /\.board-cluster \{[^}]*repeat\(var\(--board-span, 1\), minmax\(0, 1fr\)\)/su);
+  assert.match(shell, /\.board-cluster > \.board-group \{ grid-column: span var\(--member-span, 1\); \}/u);
   assert.match(shell, /\.sessions-shell \.sessions-grid \{[^}]*repeat\(auto-fill, minmax\(360px, 1fr\)\)/su);
+  // Sections are different widths, so a narrow one followed by a wide one would
+  // leave columns of nothing. Dense backfills that gap; the order the sections
+  // are handed over in, and the order a reader and the keyboard meet them in,
+  // is unchanged.
+  assert.match(shell, /\.sessions-shell \.sessions-grid \{[^}]*grid-auto-flow: row dense;/su);
   // The board is still a sibling of the context card: neither displaces the other.
   assert.match(grid, /<SessionGroupRow[\s\S]*?<SessionPlanRow[\s\S]*?class="sessions-grid"/u);
   assert.match(grid, /boardSections\(annotatedSessions\.value, visibleSessions\.value\)/u);
+});
+
+test("past three decks a session grows a control instead of eating the row", () => {
+  const board = source("dashboard/src/components/SessionBoardSection.vue");
+  assert.match(board, /isOpened\(member\) \? member\.stacks : member\.stacks\.slice\(0, COLLAPSED_STACK_LIMIT\)/u);
+  assert.match(board, /v-if="member\.stacks\.length > COLLAPSED_STACK_LIMIT"/u);
+  assert.match(board, /class="board-group-expand"[\s\S]*?:aria-expanded="isOpened\(member\)"/u);
+  // The count of what is behind it is on the control, so the reader knows what
+  // opening it costs before they open it.
+  assert.match(board, /hiddenStacks\(member\)/u);
+});
+
+test("the control that opens a tree is inside the card it belongs to", () => {
+  const board = source("dashboard/src/components/SessionBoardSection.vue");
+  const strip = source("dashboard/src/components/SessionGroupRow.vue");
+  const shell = source("dashboard/src/styles/morphism.css");
+  const base = source("dashboard/src/styles/dashboard.css");
+  // Absolutely positioned over the card's own top-right corner, with the
+  // heading reserving the room, so a narrow card and a wide one put it in the
+  // same place and neither has to be scrolled sideways to reach it.
+  assert.match(shell, /\.board-group-head \{ position: relative;[^}]*padding-right: 44px; \}/u);
+  assert.match(shell, /\.board-group-open \{[^}]*position: absolute;[^}]*right: 0;/su);
+  assert.match(base, /\.session-group-open \{[^}]*position: absolute;/su);
+  assert.match(base, /\.session-group-entry \{ position: relative;/u);
+  // A box that scrolls in one axis computes `auto` in the other, which is how
+  // the list grew a sideways scrollbar for a control sitting outside it.
+  assert.match(shell, /\.session-group-entries \{[^}]*overflow-x: hidden;/su);
+  // Both controls keep an accessible name, because the label is now an icon.
+  assert.match(board, /:aria-label="`Open the decision tree for \$\{member\.groupIds\[0\]\}`"/u);
+  assert.match(strip, /:aria-label="`Open the decision tree for \$\{entry\.summary\.group\}`"/u);
 });

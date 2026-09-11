@@ -208,6 +208,13 @@
   margin: 0;
   padding: 0;
   grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  /* Sections are different widths now, so a one-card session followed by a
+     three-card one would leave two columns of nothing. Dense lets a later
+     narrow section take that space instead. The board's ORDER is unchanged —
+     `boardSections` still hands them over newest first and the DOM keeps that
+     order for a reader and for the keyboard; dense only backfills a gap that
+     would otherwise stay empty. */
+  grid-auto-flow: row dense;
   gap: 18px;
 }
 .sessions-shell .empty-note { grid-area: board; max-width: none; margin: 0; padding: 30px; }
@@ -238,10 +245,15 @@
   gap: 10px;
   max-height: 198px;
   overflow-y: auto;
+  /* Stated, not inherited: a box that scrolls in one axis computes `auto` in
+     the other, which is how this list grew a sideways scrollbar for a control
+     that was sitting outside it. Nothing here may exceed the strip's width. */
+  overflow-x: hidden;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
 }
-.session-group-entries .session-group-toggle { flex: 0 0 auto; min-height: 94px; }
+.session-group-entries .session-group-entry { flex: 0 0 auto; }
+.session-group-entries .session-group-toggle { flex: 1 1 auto; min-height: 94px; }
 .session-group-toggle {
   width: 100%;
   display: flex;
@@ -282,65 +294,114 @@
 
 /* --- The board: connected driving sessions and their shared container ------ */
 /* Three levels, three depths, in the grammar the rest of the shell already
-   uses: the cluster is a recessed well, a driving session inside it is a card
-   standing on that well, and the run cards on it stand prouder still. The same
-   raised-soft / raised pair the stack's peeks and front card already use, so a
-   reader meets one vocabulary rather than three nested boxes.
+   uses: the cluster is a recessed panel, a driving session inside it is a card
+   standing on that panel, and the run cards on it stand on the card. Light and
+   shadow do all of it — there is no rule, rail or ring anywhere in this block,
+   because a coloured or hairline edge on a card is a second design language
+   sitting on top of the one the shell is built from.
 
-   A section spans the whole board row. A deck with no driving session takes no
-   container at all and stays a single cell, which is why a projection where no
-   run carries a group renders exactly the board it rendered before. */
-.board-section { grid-column: 1 / -1; min-width: 0; }
-/* The well alone is too quiet to be a container here: it is one shadow pair
-   away from the cards standing on it, and in a light palette it is one step
-   away from the page. An accent rail down its full height draws the boundary
-   the reader actually needs — which cards are inside this connection — and it
-   is the same place the shell already spends accent: the ribbon's current
-   state, and the tree's accepted decision. */
+   A deck with no driving session takes no container at all and stays a single
+   cell, which is why a projection where no run carries a group renders exactly
+   the board it rendered before. */
+/* As wide as the widest card inside it and no wider, so a one-run session sits
+   beside a two-run one instead of each taking the row and leaving the space
+   beside it empty. The span is capped at the collapse limit: past three decks
+   a session keeps its width and grows a control. */
+.board-section { grid-column: span var(--board-span, 1); min-width: 0; }
+/* The container is drawn by depth and room, not by a line: a recessed panel
+   with generous padding, and the session cards standing on it at full
+   extrusion. An accent rail read as a second design language on a shell whose
+   whole grammar is light and shadow, so the separation is spent on elevation
+   and space instead. */
+/* Sessions sit beside each other inside the cluster, each as wide as its own
+   decks, so the card's outline follows its contents. Stacking them made the
+   card as wide as its widest session and left the narrower one's row half
+   empty — a hole inside a card that nothing else on the board could be placed
+   in. Now the space goes back to the row and the next section takes it. */
 .board-cluster {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 18px 20px;
-  border-left: 3px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  display: grid;
+  grid-template-columns: repeat(var(--board-span, 1), minmax(0, 1fr));
+  align-items: start;
+  gap: 18px;
+  padding: 20px 22px;
 }
-/* Depth alone is too quiet to separate three levels in a dark palette: the
-   well and the card standing on it differ by one shadow pair, which reads as
-   one box at a glance. A hairline under the cluster's own heading gives the
-   container a visible top edge without spending a second design language. */
-.board-cluster-head {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--border-soft);
-}
+.board-cluster > .board-cluster-head { grid-column: 1 / -1; }
+.board-cluster > .board-group { grid-column: span var(--member-span, 1); }
+.board-cluster-head { display: flex; flex-direction: column; gap: 4px; padding-bottom: 2px; }
 .board-group {
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 14px 16px;
+  padding: 15px 17px;
   border-radius: var(--neu-radius-card);
   background: var(--neu-surface);
-  box-shadow: var(--neu-raised-soft);
+  box-shadow: var(--neu-raised);
 }
 /* A deck whose runs span two sessions IS the connection, so it is drawn at
-   cluster level rather than cut in half to fit one side, and it takes the
-   accent ring the lifecycle ribbon uses for the state you are standing in. */
-.board-group.spanning {
-  box-shadow: var(--neu-raised-soft), inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 70%, transparent);
-}
+   cluster level rather than cut in half to fit one side, and it stands one step
+   further off the panel than the sessions it joins. */
+.board-group.spanning { box-shadow: var(--neu-hover); }
 /* A session whose every run is filtered out holds nothing, so it sits flush
    with the well instead of standing on it. */
 .board-group.empty { background: var(--neu-well); box-shadow: none; }
-.board-group-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 14px; }
-.board-group-head .board-group-title { flex: 1 1 auto; min-width: 0; }
-.board-group-open { flex: 0 0 auto; min-height: 32px; padding: 6px 14px; font-size: 12px; }
+/* The corner control is inside the card's padding box, so a narrow card and a
+   wide one put it in the same place and neither has to be scrolled to reach
+   it. The heading reserves the room rather than running under it. */
+.board-group-head { position: relative; display: flex; flex-direction: column; gap: 5px; padding-right: 44px; }
+.board-group-open {
+  position: absolute;
+  top: -2px;
+  right: 0;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--neu-radius);
+  background: var(--neu-surface);
+  box-shadow: var(--neu-raised-soft);
+  color: var(--dim);
+  transition: box-shadow 170ms ease, color 170ms ease, transform 170ms ease;
+}
+.board-group-open:hover { color: var(--text); box-shadow: var(--neu-hover); transform: translateY(-1px); }
+.board-group-open svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.board-group-trees { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; }
+.board-group-tree-link { min-height: 30px; padding: 5px 13px; font-size: 12px; text-decoration: none; }
+/* The card is already as wide as the number of decks it shows, so the tracks
+   are counted rather than fitted: an auto-fill floor inside a sized card
+   overflows it the moment the board column is narrower than the floor. */
 .board-group-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  grid-template-columns: repeat(var(--member-columns, 1), minmax(0, 1fr));
   gap: 18px;
+}
+/* One wide bar at the foot of the card, in the shell's own pill grammar: what
+   is behind it on the left, the control on the right. */
+.board-group-expand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  min-height: 44px;
+  padding: 9px 10px 9px 18px;
+  border: 0;
+  border-radius: var(--neu-radius);
+  background: var(--neu-well);
+  box-shadow: var(--neu-pressed-soft);
+  color: var(--dim);
+  font: inherit;
+  cursor: pointer;
+  transition: box-shadow 170ms ease, color 170ms ease;
+}
+.board-group-expand:hover { color: var(--text); }
+.board-group-expand-action {
+  padding: 7px 16px;
+  border-radius: var(--neu-radius);
+  background: var(--neu-surface);
+  box-shadow: var(--neu-raised-soft);
+  color: var(--text);
 }
 
 /* --- Driving sessions: the decision tree's own screen ---------------------- */
@@ -677,5 +738,11 @@ pre::-webkit-scrollbar-corner { background: var(--neu-scroll-track); }
   .board-cluster { gap: 18px; }
   .board-group.spanning, .board-group.empty { background: transparent; box-shadow: none; }
   .board-group-head { padding-top: 12px; border-top: 1px solid var(--border-soft); }
+  .board-group-open { top: 10px; }
   .board-group-grid { grid-template-columns: minmax(0, 1fr); }
+  /* One column of cards, so every section and every session inside it is one
+     column wide whatever it holds. */
+  .board-section { grid-column: span 1; }
+  .board-cluster { grid-template-columns: minmax(0, 1fr); }
+  .board-cluster > .board-group { grid-column: span 1; }
 }

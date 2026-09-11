@@ -65,11 +65,17 @@ const allState = computed(() => selectAllState(entryValues.value, props.selected
             </template>
           </span>
         </button>
+        <!-- Inside the pill, over its own top-right corner. Beside it, the row
+             was wider than the strip and reaching the control meant scrolling
+             the list sideways. A button cannot nest a link, so the two stay
+             siblings and the link is placed over the corner it belongs to. -->
         <a
           v-if="entry.summary"
-          class="session-group-open session-filter-control"
+          class="session-group-open"
           :href="`#/groups/${encodeURIComponent(entry.summary.group)}`"
-        >open the tree</a>
+          :aria-label="`Open the decision tree for ${entry.summary.group}`"
+          title="Open the decision tree"
+        ><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.7 10.3 10.3 5.7M6.3 5.7h4v4" /></svg></a>
       </div>
     </div>
 

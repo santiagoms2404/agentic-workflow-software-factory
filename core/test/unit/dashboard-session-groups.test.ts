@@ -119,7 +119,10 @@ test("selecting a driving session and opening its tree are two controls", () => 
   // for the tree's own screen. Both are keyboard-reachable on their own.
   assert.match(strip, /<button[^>]*class="session-group-toggle"[\s\S]*?:aria-pressed="selected\.includes\(entry\.value\)"/u);
   assert.match(strip, /toggleFilterValue\(selected, entry\.value\)/u);
-  assert.match(strip, /<a[^>]*class="session-group-open session-filter-control"[\s\S]*?:href="`#\/groups\/\$\{encodeURIComponent\(entry\.summary\.group\)\}`"/u);
+  // The link sits INSIDE the pill, over its own top-right corner: beside it,
+  // the row was wider than the strip and reaching it meant scrolling sideways.
+  assert.match(strip, /<a[^>]*class="session-group-open"[\s\S]*?:href="`#\/groups\/\$\{encodeURIComponent\(entry\.summary\.group\)\}`"/u);
+  assert.match(strip, /:aria-label="`Open the decision tree for \$\{entry\.summary\.group\}`"/u, "an icon control still has a name");
   // And the strip still never expands, so the run workspace below is never
   // displaced by anything on it.
   assert.doesNotMatch(strip, /session-group-panel|GroupDecisionTree|fetch\(/u);

@@ -118,6 +118,43 @@ export interface BoardMember<Session extends GroupableSession = GroupableSession
   readonly rank: string;
 }
 
+/**
+ * How many run cards a session card shows before it has to be opened.
+ *
+ * A container that grows with its contents takes the whole board row for four
+ * runs and leaves the row beside it empty. Three is what a session card can
+ * hold and still sit beside another one, so past three the card keeps its width
+ * and grows a control instead.
+ */
+export const COLLAPSED_STACK_LIMIT = 3;
+
+/**
+ * How many board columns one session card occupies: one per deck it shows, and
+ * never more than the collapse limit. A session with nine decks is three cards
+ * wide and the other six are behind its expand control.
+ */
+export function memberSpan(member: Pick<BoardMember, "stacks">): number {
+  return Math.min(Math.max(member.stacks.length, 1), COLLAPSED_STACK_LIMIT);
+}
+
+/**
+ * How many board columns a section occupies.
+ *
+ * The SUM of its session cards, not the widest of them. Sessions inside a
+ * cluster sit beside each other rather than stacking, so a two-deck session and
+ * a one-deck session make a three-column card with no hole in it — the first
+ * cut took the widest, which left the narrower session's row half empty inside
+ * a card nothing else could be placed in.
+ *
+ * Capped at the collapse limit, so a cluster never eats more of the row than a
+ * single session would, and expanding a session grows the card downward rather
+ * than changing the width of the board under the reader.
+ */
+export function sectionSpan(section: Pick<BoardSection, "members">): number {
+  const total = section.members.reduce((columns, member) => columns + memberSpan(member), 0);
+  return Math.min(Math.max(total, 1), COLLAPSED_STACK_LIMIT);
+}
+
 export interface BoardSection<Session extends GroupableSession = GroupableSession> {
   readonly key: string;
   /**
