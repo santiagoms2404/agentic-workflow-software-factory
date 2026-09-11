@@ -8,7 +8,8 @@ import SettingsRoute from "./components/SettingsRoute.vue";
 import BacklogRoute from "./routes/backlog.vue";
 import GroupsRoute from "./routes/groups.vue";
 import { usePolling, type PollMode } from "./composables/usePolling.ts";
-import { LIFECYCLE_STATES } from "./session-filters.ts";
+import { admitNewFilterValues, LIFECYCLE_STATES } from "./session-filters.ts";
+import { groupFilterValues } from "./session-groups.ts";
 import { PLAN_KINDS } from "./session-plans.ts";
 
 const health = ref<HealthResponse | null>(null);
@@ -17,6 +18,7 @@ const configuredWorkflows = ref<readonly string[]>([]);
 const selectedWorkflows = ref<readonly string[]>([]);
 const selectedLifecycleStates = ref<readonly string[]>([]);
 const selectedPlanKinds = ref<readonly string[]>([]);
+const selectedGroups = ref<readonly string[]>([]);
 const groups = ref<GroupsResponse>({ groups: [], unreadable: [] });
 const detail = ref<SessionDetailResponse | null>(null);
 const selectedId = ref<string | null>(null);
@@ -55,6 +57,22 @@ watch(
     selectedPlanKinds.value = [...PLAN_KINDS];
     hasSeededPlanKindSelection = true;
   },
+);
+/**
+ * The other three menus draw on a fixed vocabulary, so seeding them once is
+ * enough. Driving sessions are not fixed: a group can be recorded while the
+ * board is open, and a selection seeded once would silently exclude the runs
+ * that name it. So a value nobody has seen before is admitted as selected, and
+ * one the reader switched off stays off across every poll.
+ */
+let knownGroupValues: readonly string[] = [];
+watch(
+  () => groupFilterValues(sessions.value.sessions, groups.value.groups),
+  (values) => {
+    selectedGroups.value = admitNewFilterValues(knownGroupValues, values, selectedGroups.value);
+    knownGroupValues = values;
+  },
+  { immediate: true },
 );
 
 function readEnabledWorkflows(value: unknown): readonly string[] {
@@ -183,6 +201,7 @@ const { lastPollAt, pollMs } = usePolling(load, () => mode.value);
       v-model:selected-workflows="selectedWorkflows"
       v-model:selected-states="selectedLifecycleStates"
       v-model:selected-plan-kinds="selectedPlanKinds"
+      v-model:selected-groups="selectedGroups"
       :sessions="sessions.sessions"
       :plans="sessions.plans"
       :groups="groups.groups"

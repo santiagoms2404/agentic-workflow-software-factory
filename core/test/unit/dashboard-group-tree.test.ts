@@ -115,7 +115,8 @@ test("a group with no runs on this board says so rather than looking like a sess
   assert.match(row, /no runs on this board/u);
   assert.match(row, /run\(s\) here/u);
   // The zero case takes the same absence treatment every unwritten field does.
-  assert.match(row, /:class="\{ absent: heading\.runs === 0 \}"/u);
+  // The strip became the fourth filter, so the count is the menu entry's.
+  assert.match(row, /:class="\{ absent: entry\.count === 0 \}"/u);
 });
 
 test("the sessions strip is a title and a way in, and never displaces the run workspace", () => {
@@ -123,7 +124,7 @@ test("the sessions strip is a title and a way in, and never displaces the run wo
   const grid = source("dashboard/src/components/SessionsGrid.vue");
   // The tree moved to its own screen: a 72-stage group needs the width, and
   // nothing on this strip expands, so the board below cannot be pushed down.
-  assert.match(row, /:href="`#\/groups\/\$\{encodeURIComponent\(heading\.summary\.group\)\}`"/u);
+  assert.match(row, /:href="`#\/groups\/\$\{encodeURIComponent\(entry\.summary\.group\)\}`"/u);
   assert.doesNotMatch(row, /session-group-panel|GroupDecisionTree|fetch\(/u);
   // And the board is a sibling of the group row, so neither touches the other.
   assert.match(grid, /<SessionGroupRow[\s\S]*?<SessionPlanRow[\s\S]*?class="sessions-grid"/u);

@@ -811,7 +811,39 @@ pre { max-height: 42vh; margin: 8px 0 0; padding: 12px 14px; overflow: auto; bor
 .session-plan-empty { margin: 2px 0 0; color: var(--dim); font: 13px var(--mono); }
 .card-plan { color: var(--dim); font: 11px var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .session-group-toggle { text-decoration: none; }
-.session-group-open { color: var(--cyan); }
+.session-group-open { flex: 0 0 auto; min-height: 30px; padding: 5px 13px; color: var(--cyan); font-size: 12px; text-decoration: none; }
+.session-group-open:hover { color: var(--text); }
+/* Selecting a session and opening its tree are two acts, so the pill and the
+   link sit side by side rather than one inside the other. */
+.session-group-entry { display: flex; align-items: stretch; gap: 8px; }
+.session-group-entry .session-group-toggle { flex: 1 1 auto; min-width: 0; }
+.session-group-entry .session-group-open { align-self: center; }
+
+/* --- The board: cluster, driving session, deck --------------------------- */
+/* Typography carries the level as much as the depth does: the cluster label is
+   the smallest thing on the card and the session title the largest, so the
+   reader reads inwards rather than counting boxes. */
+.board-connection-note { margin: 0; color: var(--dim); font: 12px var(--mono); }
+.board-connection-hidden { margin: 0; font: 12px var(--mono); }
+/* Two lines, then an ellipsis, exactly as the menu entry clamps it: a
+   two-hundred-character ask is a paragraph, and a heading that becomes one
+   pushes the runs it names off the screen. The full ask is on the tree. */
+.board-group-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  margin: 0;
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.board-group-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 0; color: var(--dim); font: 11px var(--mono); }
+.board-group-meta code { color: var(--purple); }
+.board-group-span { color: var(--accent); }
+.board-group-empty { margin: 0; font: 13px var(--mono); }
 
 /* --- Driving sessions screen ---------------------------------------------- */
 .groups-head p { margin: 0; }

@@ -13,7 +13,15 @@ export interface SessionStack<Session extends StackableSession = StackableSessio
   readonly sessions: readonly Session[];
 }
 
-function related(left: StackableSession, right: StackableSession): boolean {
+/**
+ * The two recorded relationships, and nothing else: the same task under a
+ * different attempt, and one task declaring it continues another. Exported
+ * because the group clusters are derived from exactly these edges — a
+ * group-to-group connection is one of these pairs whose two runs name
+ * different driving sessions, so deriving it twice is how the deck and the
+ * connection string would start to disagree.
+ */
+export function relatedSessions(left: StackableSession, right: StackableSession): boolean {
   if (left.project !== right.project) return false;
   return (left.taskId === right.taskId && left.attempt !== right.attempt)
     || left.continuesTask === right.taskId
@@ -47,7 +55,7 @@ export function groupSessionStacks<Session extends StackableSession>(
 
   for (let left = 0; left < sessions.length; left += 1) {
     for (let right = left + 1; right < sessions.length; right += 1) {
-      if (related(sessions[left]!, sessions[right]!)) join(left, right);
+      if (relatedSessions(sessions[left]!, sessions[right]!)) join(left, right);
     }
   }
 

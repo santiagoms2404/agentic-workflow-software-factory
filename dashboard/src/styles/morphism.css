@@ -280,6 +280,69 @@
 .session-plan-card { flex: 0 0 268px; min-height: 132px; display: flex; flex-direction: column; }
 .session-plan-metrics { grid-template-columns: repeat(2, auto); margin-top: auto; }
 
+/* --- The board: connected driving sessions and their shared container ------ */
+/* Three levels, three depths, in the grammar the rest of the shell already
+   uses: the cluster is a recessed well, a driving session inside it is a card
+   standing on that well, and the run cards on it stand prouder still. The same
+   raised-soft / raised pair the stack's peeks and front card already use, so a
+   reader meets one vocabulary rather than three nested boxes.
+
+   A section spans the whole board row. A deck with no driving session takes no
+   container at all and stays a single cell, which is why a projection where no
+   run carries a group renders exactly the board it rendered before. */
+.board-section { grid-column: 1 / -1; min-width: 0; }
+/* The well alone is too quiet to be a container here: it is one shadow pair
+   away from the cards standing on it, and in a light palette it is one step
+   away from the page. An accent rail down its full height draws the boundary
+   the reader actually needs — which cards are inside this connection — and it
+   is the same place the shell already spends accent: the ribbon's current
+   state, and the tree's accepted decision. */
+.board-cluster {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px 20px;
+  border-left: 3px solid color-mix(in srgb, var(--accent) 60%, transparent);
+}
+/* Depth alone is too quiet to separate three levels in a dark palette: the
+   well and the card standing on it differ by one shadow pair, which reads as
+   one box at a glance. A hairline under the cluster's own heading gives the
+   container a visible top edge without spending a second design language. */
+.board-cluster-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.board-group {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: var(--neu-radius-card);
+  background: var(--neu-surface);
+  box-shadow: var(--neu-raised-soft);
+}
+/* A deck whose runs span two sessions IS the connection, so it is drawn at
+   cluster level rather than cut in half to fit one side, and it takes the
+   accent ring the lifecycle ribbon uses for the state you are standing in. */
+.board-group.spanning {
+  box-shadow: var(--neu-raised-soft), inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+/* A session whose every run is filtered out holds nothing, so it sits flush
+   with the well instead of standing on it. */
+.board-group.empty { background: var(--neu-well); box-shadow: none; }
+.board-group-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 14px; }
+.board-group-head .board-group-title { flex: 1 1 auto; min-width: 0; }
+.board-group-open { flex: 0 0 auto; min-height: 32px; padding: 6px 14px; font-size: 12px; }
+.board-group-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 18px;
+}
+
 /* --- Driving sessions: the decision tree's own screen ---------------------- */
 /* Same rail-and-board grammar the sessions and backlog screens use: a recessed
    list on the left, a recessed canvas on the right, and every node on that
@@ -596,4 +659,23 @@ pre::-webkit-scrollbar-corner { background: var(--neu-scroll-track); }
   .lifecycle-ladder .session-filter-options { flex-direction: row; flex-wrap: wrap; }
   .lifecycle-ladder .session-filter-option { width: auto; }
   .backlog-rail .backlog-metrics { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+}
+
+/* Below the width at which a run card stops sharing a row, two nested boxes
+   cost about seventy pixels of a four-hundred-pixel screen for chrome nobody
+   can read. The nesting is refused rather than shrunk: the cluster and the
+   session become labelled bands separated by a hairline, and the cards below
+   them keep the full width. */
+@media (max-width: 720px) {
+  .board-cluster, .board-group {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  .board-cluster { gap: 18px; }
+  .board-group.spanning, .board-group.empty { background: transparent; box-shadow: none; }
+  .board-group-head { padding-top: 12px; border-top: 1px solid var(--border-soft); }
+  .board-group-grid { grid-template-columns: minmax(0, 1fr); }
 }
