@@ -75,6 +75,12 @@ export async function retryCommand(options: RetryCommandOptions): Promise<{ atte
       allowance: correctionAllowance(options.allowance),
       ceiling,
     },
+    // The routes the owner chose for this task carry forward; the permission to
+    // review without independence does NOT. A grant is attempt-scoped for the
+    // same reason `ownerReentries` resets above: a new attempt is what makes
+    // the owner decide again, and a degradation that survived silently would be
+    // a durable mode nobody wrote down.
+    reviewDegradation: null,
     model: null,
     lastActivityAt: now,
     lastActivity: `retry minted attempt ${attempt}; carried ${prior.budget.callsSpent} spent call(s) from attempt ${prior.attempt}`,

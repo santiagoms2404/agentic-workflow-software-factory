@@ -25,6 +25,10 @@ import { landCommand } from "./commands/land.ts";
 import { newCommand } from "./commands/new.ts";
 import { publishCommand } from "./commands/publish.ts";
 import { raiseCommand } from "./commands/raise.ts";
+import { degradeReviewCommand } from "./commands/degrade-review.ts";
+import { routesListCommand } from "./commands/routes.ts";
+import { formatRouteOverride, parseRouteFlags, predictSameProviderReview } from "../workflow/route-flags.ts";
+import { workflowRecipe } from "../workflow/catalog.ts";
 import { quotaCommand } from "./commands/quota.ts";
 import { stageCommand } from "./commands/stage.ts";
 import { locateAttempt } from "./commands/attempt.ts";
@@ -41,8 +45,8 @@ import { selectWorkflow, workflowsCommand } from "./commands/workflows.ts";
 
 /** The complete owner-facing command table; documentation reconciles against it. */
 export const CLI_COMMANDS = Object.freeze([
-  "init", "project", "new", "start", "run", "status", "watch", "rework", "review", "raise", "journey", "land", "publish", "cancel", "retry",
-  "doctor", "gc", "dash", "db rebuild", "ticket", "backlog", "quota", "stage", "workflows", "group",
+  "init", "project", "new", "start", "run", "status", "watch", "rework", "review", "raise", "degrade-review", "journey", "land", "publish", "cancel", "retry",
+  "doctor", "gc", "dash", "routes", "db rebuild", "ticket", "backlog", "quota", "stage", "workflows", "group",
 ]);
 
 const USAGE = `usage: awsf init [path] --project <slug>\n       awsf <${CLI_COMMANDS.join("|")}> [task] [options]`;
@@ -54,12 +58,15 @@ interface ParsedArgs {
   readonly positionals: readonly string[];
   readonly flags: Readonly<Record<string, string>>;
   readonly repositories: readonly string[];
+  /** Repeatable: one `--route` per phase, in the order they were written. */
+  readonly routes: readonly string[];
 }
 
 function parseArgs(args: readonly string[]): ParsedArgs {
   const positionals: string[] = [];
   const flags: Record<string, string> = {};
   const repositories: string[] = [];
+  const routes: string[] = [];
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index] ?? "";
     if (!arg.startsWith("--")) {
@@ -71,6 +78,7 @@ function parseArgs(args: readonly string[]): ParsedArgs {
       const key = arg.slice(2, equals);
       const value = arg.slice(equals + 1);
       if (key === "repository") repositories.push(value);
+      else if (key === "route") routes.push(value);
       else flags[key] = value;
       continue;
     }
@@ -91,10 +99,11 @@ function parseArgs(args: readonly string[]): ParsedArgs {
     }
     if (value === undefined || value.startsWith("--")) throw new Error(`--${key} requires a value`);
     if (key === "repository") repositories.push(value);
+    else if (key === "route") routes.push(value);
     else flags[key] = value;
     index += 1;
   }
-  return { positionals, flags, repositories };
+  return { positionals, flags, repositories, routes };
 }
 
 function commandEnvironment(env: NodeJS.ProcessEnv): Readonly<Record<string, string>> {
@@ -318,6 +327,18 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       return 0;
     }
 
+    if (command === "routes") {
+      // Read-only vocabulary. It starts no process, runs no phase and reserves
+      // no call, so a driving session may consult it as often as it needs to.
+      if (parsed.positionals[0] !== "list" || parsed.positionals.length !== 1) {
+        throw new Error("usage: awsf routes list [--config PATH]");
+      }
+      const configPath = resolve(parsed.flags.config ?? `${cwd}/awsf.config.yaml`);
+      const config = loadConfig(await readFile(configPath, "utf8"));
+      for (const line of await routesListCommand({ config })) out(line);
+      return 0;
+    }
+
     if (command === "project") {
       const action = parsed.positionals[0];
       if (action === "register" && parsed.positionals.length === 1) {
@@ -363,6 +384,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         parsed.flags.tier,
       );
       const { workflow, tier } = selection;
+      const routeOverrides = parseRouteFlags(parsed.routes);
       const result = await newCommand({
         stateRoot,
         project,
@@ -373,11 +395,27 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         workflow,
         tier,
         configSnapshotJson: toConfigSnapshotJson(config),
+        routeOverrides,
         callCeilings: callCeilingsOf(config.risk.call_ceiling),
         allowance: config.risk.correction_allowance,
         projectRecord: projection.project,
       });
       out(`Created ${project}/${taskId} attempt ${result.status.attempt} in DRAFT.`);
+      for (const [phaseId, selected] of Object.entries(routeOverrides)) {
+        out(`Route: ${formatRouteOverride(phaseId, selected)}`);
+      }
+      // The attempt is created either way. Refusing here would leave nothing
+      // for `awsf degrade-review` to act on, so the notice names the act and
+      // the run is what refuses until the owner has taken it.
+      const recipe = workflowRecipe(workflow);
+      const collapsed = recipe === null ? null : predictSameProviderReview(config, routeOverrides, recipe);
+      if (collapsed !== null && config.routing.review !== "same-provider-degraded") {
+        out(
+          `Review independence: ${collapsed.reviewPhaseId} and ${collapsed.workerPhaseId} both resolve to ` +
+            `${collapsed.provider}, so this attempt buys a review from the provider that wrote the candidate.`,
+        );
+        out(`The run refuses that until the owner allows it: awsf degrade-review ${taskId} --reason "<why>"`);
+      }
       out(result.status.nextAction);
       return 0;
     }
@@ -489,6 +527,25 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
           return 1;
         }
         out(`Ceiling raised to ${result.ceiling} call(s) for ${taskId}; the grant and your reason are journalled.`);
+        out(result.status.nextAction);
+        return 0;
+      }
+      case "degrade-review": {
+        const reason = parsed.flags["reason"] ?? "";
+        if (reason.trim().length === 0) {
+          throw new Error('usage: awsf degrade-review <task> --reason "<why this attempt is worth a less independent review>"');
+        }
+        const result = await degradeReviewCommand({
+          attemptDir: located.attemptDir,
+          reason,
+          terminal: options.terminal ?? processOwnerTerminal(),
+          projectRecord: projection.project,
+        });
+        if (!result.confirmed) {
+          out(`Degradation declined; ${taskId} still requires an opposite-provider review and nothing was recorded.`);
+          return 1;
+        }
+        out(`${taskId} may now buy a same-provider review; the grant and your reason are journalled.`);
         out(result.status.nextAction);
         return 0;
       }

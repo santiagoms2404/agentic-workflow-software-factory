@@ -262,7 +262,7 @@ function sessionArgs(continuity: ModelRequest["continuity"]): readonly string[] 
   return ["--session-id", providerSessionId, "--session-dir", storeDir];
 }
 
-function thinkingFor(level: string): PiThinking {
+export function thinkingFor(level: string): PiThinking {
   const resolved = THINKING_ALIASES[level] ?? level;
   if (!(PI_THINKING_LEVELS as readonly string[]).includes(resolved)) {
     throw new AdapterError(

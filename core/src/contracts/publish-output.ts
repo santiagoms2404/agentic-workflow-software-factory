@@ -3,6 +3,7 @@ import { PUBLISH_OUTCOMES } from "../publish/argv.ts";
 import { phaseEnvelope } from "./envelope-base.ts";
 import { SHA_PATTERN } from "./test-output.ts";
 import { stringUnion } from "./typebox.ts";
+import { PhaseRouteSelectionSchema } from "../config/schema.ts";
 
 export const PUBLISH_OUTPUT_SCHEMA_ID = "awsf.publish-output/v1";
 export const PUBLISH_OUTPUT_KIND = "host command result — the terminal lines the command wrote, plus its PublishCommandResult";
@@ -35,6 +36,16 @@ const CeilingGrantSchema = Type.Object(
   {
     calls: Type.Integer({ minimum: 1 }),
     ceiling: Type.Integer({ minimum: 1 }),
+    reason: Type.String({ minLength: 1 }),
+    attempt: Type.Integer({ minimum: 1 }),
+    at: Type.String({ minLength: 1 }),
+  },
+  { additionalProperties: false },
+);
+
+/** The owner's per-attempt permission for a same-provider review, if granted. */
+const ReviewDegradationSchema = Type.Object(
+  {
     reason: Type.String({ minLength: 1 }),
     attempt: Type.Integer({ minimum: 1 }),
     at: Type.String({ minLength: 1 }),
@@ -91,6 +102,16 @@ export const PublishedAttemptStatusSchema = Type.Object(
     phase: Type.Union([PhaseMeterSchema, Type.Null()]),
     budget: BudgetSchema,
     ceilingGrants: Type.Array(CeilingGrantSchema),
+    // Published because they are part of what produced the candidate: a reader
+    // must be able to see which routes this attempt ran, and whether its review
+    // was independent, without the state root it was built in.
+    //
+    // Optional because a record published before per-attempt routing existed
+    // carries neither, and an absent field is the honest reading of an attempt
+    // that could not have had one. Rewriting a retained capture to satisfy a
+    // newer schema would make the evidence agree by editing it.
+    routeOverrides: Type.Optional(Type.Record(Type.String({ minLength: 1 }), PhaseRouteSelectionSchema)),
+    reviewDegradation: Type.Optional(Type.Union([ReviewDegradationSchema, Type.Null()])),
     model: Type.Union([
       Type.Object(
         {

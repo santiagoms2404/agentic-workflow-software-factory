@@ -22,6 +22,7 @@ import type { ModelResolutionProvenance } from "../../contracts/normalized-event
 import type { ProcessIdentity } from "../../execution/launcher-barrier.ts";
 import type { AttemptEvidence } from "../../observability/attempt-evidence.ts";
 import type { Tier } from "../../state/tiers.ts";
+import type { PhaseRouteOverrides } from "../../workflow/route-flags.ts";
 
 export interface PhaseMeter {
   readonly name: string;
@@ -91,6 +92,20 @@ export interface AttemptStatus {
   readonly budget: BudgetState;
   /** Every `awsf raise` this task has been given, oldest first. */
   readonly ceilingGrants: readonly CeilingGrant[];
+  /**
+   * The `--route` selections this attempt was created with, keyed by phase.
+   *
+   * Attempt state rather than configuration, so `configSnapshotJson` still
+   * equals the file on disk and `awsf rework`/`awsf review` stay available to
+   * an attempt whose routing was chosen at the terminal.
+   */
+  readonly routeOverrides: PhaseRouteOverrides;
+  /**
+   * The owner's grant permitting a same-provider review on this attempt, or
+   * null. Never set by the host, and never inferred from a quota or transport
+   * failure — see `degrade-review.ts`.
+   */
+  readonly reviewDegradation: ReviewDegradation | null;
   readonly model: AttemptModel | null;
   readonly lastActivityAt: string;
   readonly lastActivity: string;
@@ -104,6 +119,22 @@ export interface AttemptStatus {
   readonly blocker: AttemptBlocker | null;
   readonly revision: number;
   readonly lastSourceSeq: number;
+}
+
+/**
+ * The owner's written permission for one attempt's review to run on the same
+ * provider as its builder.
+ *
+ * It is a grant, not a mode: the durable `routing.review` still says what the
+ * project does, and this says what the owner allowed once, with a reason on
+ * the record beside it.
+ */
+export interface ReviewDegradation {
+  /** The owner's written reason. Recorded here and in the journal; never sent to a provider. */
+  readonly reason: string;
+  /** The attempt the owner granted it from. */
+  readonly attempt: number;
+  readonly at: string;
 }
 
 export interface AttemptEvent {
@@ -143,9 +174,11 @@ type LegacyBudget = Omit<BudgetState, "ownerReentries" | "allowance"> & {
 };
 
 /** And what one written before the ceiling was a dial holds. */
-type LegacyStatus = Omit<AttemptStatus, "ceilingGrants" | "continuesTask"> & {
+type LegacyStatus = Omit<AttemptStatus, "ceilingGrants" | "continuesTask" | "routeOverrides" | "reviewDegradation"> & {
   ceilingGrants?: readonly CeilingGrant[];
   continuesTask?: string | null;
+  routeOverrides?: PhaseRouteOverrides;
+  reviewDegradation?: ReviewDegradation | null;
 };
 
 /**
@@ -185,10 +218,17 @@ export function withLegacyDefaults(status: AttemptStatus): AttemptStatus {
   const budget = status.budget as LegacyBudget;
   const legacy = status as LegacyStatus;
   const budgetIsCurrent = budget.ownerReentries !== undefined && budget.allowance.ownerReentries !== undefined;
-  if (budgetIsCurrent && legacy.ceilingGrants !== undefined && legacy.continuesTask !== undefined) return status;
+  if (
+    budgetIsCurrent && legacy.ceilingGrants !== undefined && legacy.continuesTask !== undefined &&
+    legacy.routeOverrides !== undefined && legacy.reviewDegradation !== undefined
+  ) return status;
   return {
     ...status,
     continuesTask: legacy.continuesTask ?? null,
+    // An attempt written before per-attempt routing existed chose neither, and
+    // reading it as "no override, no grant" is what it meant.
+    routeOverrides: legacy.routeOverrides ?? {},
+    reviewDegradation: legacy.reviewDegradation ?? null,
     ...(budgetIsCurrent ? {} : {
       budget: {
         ...budget,

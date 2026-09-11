@@ -112,6 +112,8 @@ function awaiting(fixture: BareFixture, base: string, candidate: string): Attemp
       ceiling: 5,
     },
     ceilingGrants: [],
+    routeOverrides: {},
+    reviewDegradation: null,
     model: { resolved: "stub/review", provenance: "stream-authoritative" },
     lastActivityAt: AT,
     lastActivity: "gates and opposite-provider review passed",

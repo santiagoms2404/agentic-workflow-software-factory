@@ -648,6 +648,7 @@ npm run awsf -- land TASK</pre>
     <li><code>watch</code></li>
     <li><code>rework</code></li>
     <li><code>review</code></li>
+    <li><code>degrade-review</code></li>
     <li><code>raise</code></li>
     <li><code>journey</code></li>
     <li><code>land</code></li>
@@ -657,6 +658,7 @@ npm run awsf -- land TASK</pre>
     <li><code>doctor</code></li>
     <li><code>gc</code></li>
     <li><code>dash</code></li>
+    <li><code>routes</code></li>
     <li><code>db rebuild</code></li>
     <li><code>ticket</code></li>
     <li><code>backlog</code></li>
@@ -670,7 +672,7 @@ npm run awsf -- land TASK</pre>
   <p><code>awsf status TASK</code>, <code>npm run awsf -- status TASK</code> and <code>just awsf status TASK</code> are the same command reached three ways. The <code>just</code> targets are thin wrappers over the repository&rsquo;s npm scripts, so they are a convenience and never a second source of truth. On the drive this guide was written from, <code>just</code> was not installed on the machine at all; marimba used the npm form and got the same healthy result. <strong>A missing wrapper is a missing convenience, not a missing command.</strong></p>
 
   <h3>Most of these are not on your route</h3>
-  <p>The six legs use seven of them: <code>new</code>, <code>start</code> and <code>run</code> to give the factory a job, <code>status</code>, <code>dash</code> and <code>watch</code> to see what it is doing, and <code>doctor</code> to check the machine before you start. Seven more are the owner acts below, which a driving session is denied. The rest set a project up, read the backlog, or maintain the durable records.</p>
+  <p>The six legs use seven of them: <code>new</code>, <code>start</code> and <code>run</code> to give the factory a job, <code>status</code>, <code>dash</code> and <code>watch</code> to see what it is doing, and <code>doctor</code> to check the machine before you start. Eight more are the owner acts below, which a driving session is denied. The rest set a project up, read the backlog, or maintain the durable records.</p>
 </section>
 
 <section id="reference-lifecycle-states">
@@ -770,6 +772,7 @@ npm run awsf -- land TASK</pre>
     <li><code>cancel</code></li>
     <li><code>rework</code></li>
     <li><code>review</code></li>
+    <li><code>degrade-review</code></li>
     <li><code>journey</code></li>
     <li><code>raise</code></li>
     <li><code>publish</code></li>

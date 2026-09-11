@@ -12,7 +12,16 @@ export type ReviewRouteMode = (typeof REVIEW_ROUTE_MODES)[number];
 export type RouteEvaluation = Static<typeof RouteEvaluationSchema>;
 export type PhaseRouteSelection = Static<typeof PhaseRouteSelectionSchema>;
 
-export type RouteValueSource = "agent-default" | "phase-override";
+/**
+ * Where one route value came from.
+ *
+ * `phase-override` is `routing.phase_routes` in the durable config;
+ * `attempt-override` is a `--route` the owner attached to this one attempt,
+ * which outranks it. The two are kept apart because they answer different
+ * questions later: one is what the project routes, the other is what this run
+ * was asked to do differently.
+ */
+export type RouteValueSource = "agent-default" | "phase-override" | "attempt-override";
 
 export interface RequestedRouteProvenance {
   readonly phaseId: string;

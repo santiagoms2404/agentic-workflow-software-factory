@@ -247,7 +247,7 @@ function sessionArgs(continuity: ModelRequest["continuity"]): readonly string[] 
   return continuity.turn === "open" ? ["--session-id", id] : ["--resume", id];
 }
 
-function effortFor(effort: string): ClaudeEffort {
+export function effortFor(effort: string): ClaudeEffort {
   const level = EFFORT_ALIASES[effort] ?? effort;
   if (!(CLAUDE_EFFORT_LEVELS as readonly string[]).includes(level)) {
     throw new AdapterError(

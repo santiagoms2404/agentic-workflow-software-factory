@@ -83,6 +83,13 @@ export type AttemptEvidence =
    * that quietly changed.
    */
   | { readonly type: "ceiling-grant"; readonly calls: number; readonly from: number; readonly to: number; readonly reason: string; readonly attempt: number; readonly at: string }
+  /**
+   * An owner grant permitting this attempt's review to run on the builder's
+   * provider. Session-level like a ceiling grant, and evidence for the same
+   * reason: it carries the owner's written justification for a review with
+   * less independence than the default, and nothing else can produce it.
+   */
+  | { readonly type: "review-degradation"; readonly reason: string; readonly attempt: number; readonly at: string }
   | { readonly type: "quota-snapshot"; readonly attribution: "none"; readonly scope: "account-window"; readonly completedPhaseKey: string; readonly nextPhaseKey: string; readonly effectivePercentRemaining: number | null; readonly minutesToReset: number | null; readonly reasonCode: string | null; readonly resolvedVersion: string | null }
   | {
       readonly type: "publish";

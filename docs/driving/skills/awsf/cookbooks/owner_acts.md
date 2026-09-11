@@ -1,7 +1,7 @@
 # Owner acts
 
-Seven commands are the owner's and not yours: `journey`, `land`, `cancel`,
-`rework`, `review`, `raise`, `publish`. This document is about **which one the evidence
+Eight commands are the owner's and not yours: `journey`, `land`, `cancel`,
+`rework`, `review`, `degrade-review`, `raise`, `publish`. This document is about **which one the evidence
 supports** and **what to hand the owner before they decide**. It is not a table
 of what each one costs, and the reason is at the bottom.
 
@@ -71,7 +71,8 @@ when you cannot name the defect, and it is **refused outright above the middle
 tier** for a structural reason worth understanding rather than memorising — see
 `gotchas.md`.
 
-**`raise`** is the only one of the seven that buys nothing and moves no state. It
+**`raise`** and **`degrade-review`** are the two of the eight that buy nothing and move no
+state. It
 grants one named task more calls while its attempt is live, so a run that halted
 at its ceiling can continue instead of being cancelled and re-rolled. Two things
 about it are worth understanding rather than memorising. It is a **command and

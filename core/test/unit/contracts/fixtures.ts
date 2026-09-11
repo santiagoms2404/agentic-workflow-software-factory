@@ -369,6 +369,8 @@ export function validPublishOutput(): PublishOutput {
       ceiling: 3,
     },
     ceilingGrants: [],
+    routeOverrides: {},
+    reviewDegradation: null,
     model: { resolved: "stub-model-1", provenance: "stream-authoritative" as const },
     lastActivityAt: "2026-01-01T00:00:00.000Z",
     lastActivity: `L27 published ${SHA_B} to origin/published: created`,

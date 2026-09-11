@@ -414,7 +414,7 @@ async function resolveRoute(
 ): Promise<Route> {
   const role = config.agents.find((candidate) => candidate.name === "builder");
   if (role === undefined || role.writes.length === 0) throw new ProductionRouteUnavailable("builder", "supported owner rework requires the configured writable builder phase");
-  const selection = requestedPhaseRoute(config, "builder", role);
+  const selection = requestedPhaseRoute(config, "builder", role, status.routeOverrides);
   const agent = selection.agent;
   if (!retainedRolePolicy(selection.policy, agent)) throw new ReworkRouteMismatch("phase routing changed the builder's role policy");
   const entry = config.adapters[agent.harness.adapter];
@@ -618,6 +618,8 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
       reviewPhaseId: phases.review,
       workerProvider: route.model.provider,
       priorReview: governingRoutes.review,
+      routeOverrides: status.routeOverrides,
+      degraded: status.reviewDegradation !== null,
       // Selection only. The review does not launch here, so a reviewer that is
       // momentarily unavailable must not refuse the rework the owner has not
       // even confirmed yet; the pre-review resolution asks for availability.
@@ -1105,6 +1107,8 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
         reviewPhaseId: phases.review,
         workerProvider: recorded.worker?.provider,
         priorReview: recorded.review,
+        routeOverrides: status.routeOverrides,
+        degraded: status.reviewDegradation !== null,
       });
       const intent = planIntentFrom(evidenceRecords) ?? requestOutput(status, options.config);
       prepared = await prepareReview({

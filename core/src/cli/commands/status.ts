@@ -2,6 +2,7 @@ import { ceilingFor } from "../../state/tiers.ts";
 import type { AttemptEvidence } from "../../observability/attempt-evidence.ts";
 import type { RouteSelectionProvenance } from "../../contracts/route-selection.ts";
 import { diagnoseRecovery, formatRecoveryDiagnostic } from "../../observability/recovery-diagnostics.ts";
+import { formatRouteOverride } from "../../workflow/route-flags.ts";
 import { locateRunReport, runReportRevision } from "../../observability/run-report.ts";
 import { readAttemptEvidence } from "./review-record.ts";
 import { readAttempt, type AttemptStatus } from "./attempt.ts";
@@ -140,6 +141,29 @@ function pidIsLive(pid: number): boolean {
   try { process.kill(pid, 0); return true; } catch { return false; }
 }
 
+/**
+ * What the OWNER chose for this attempt, as distinct from what ran.
+ *
+ * `formatRouteProvenance` below reports the routes the journal observed. These
+ * two lines report the selection that produced them, and they are printed even
+ * before a phase has run — which is the point: an attempt that needs a
+ * `degrade-review` should say so while there is still time to take it.
+ */
+export function formatAttemptSelection(status: AttemptStatus): readonly string[] {
+  const lines: string[] = [];
+  for (const [phaseId, selected] of Object.entries(status.routeOverrides)) {
+    lines.push(`Route override: ${formatRouteOverride(phaseId, selected)}`);
+  }
+  if (status.reviewDegradation !== null) {
+    lines.push(
+      `Review independence: GIVEN UP by owner grant at ${status.reviewDegradation.at} — ` +
+        `this attempt may buy its review from the provider that wrote the candidate. ` +
+        `Reason on record: ${status.reviewDegradation.reason}`,
+    );
+  }
+  return Object.freeze(lines);
+}
+
 export async function statusCommand(
   attemptDir: string,
   options: { readonly evidence?: boolean } = {},
@@ -149,7 +173,7 @@ export async function statusCommand(
     readAttemptEvidence(attemptDir),
     locateRunReport(attemptDir),
   ]);
-  const lines = [...formatStatus(status), ...formatRouteProvenance(records)];
+  const lines = [...formatStatus(status), ...formatAttemptSelection(status), ...formatRouteProvenance(records)];
   if (report !== null) {
     // Every command that moves the candidate, the verdict or the lifecycle
     // re-renders this. The stamp is the belt-and-braces: a writer that forgets

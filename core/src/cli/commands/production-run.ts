@@ -990,6 +990,11 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
   // Compilation, route shape, prompts, and minimum-call admission all finish before any process.
   const compiled = compileWorkflow(configuredRecipe, status.tier, status.budget.callsSpent, status.budget.ceiling);
   const routes = new Map<string, Route>();
+  // The project's durable mode, relaxed only by this attempt's own owner grant.
+  // Read once so the inversion check, the provenance and the phase description
+  // can never disagree about which review this run bought.
+  const reviewMode: AwsfConfig["routing"]["review"] =
+    status.reviewDegradation === null ? options.config.routing.review : "same-provider-degraded";
   let inversion: {
     readonly mode: AwsfConfig["routing"]["review"];
     readonly workerProvider: string;
@@ -1002,7 +1007,7 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
     for (const phase of compiled.phases) {
       if (phase.kind !== "agent") continue;
       const role = agents.get(phase.owner)!;
-      const selection = requestedPhaseRoute(options.config, phase.id, role);
+      const selection = requestedPhaseRoute(options.config, phase.id, role, status.routeOverrides);
       const agent = selection.agent;
       if (!retainedRolePolicy(selection.policy, agent)) {
         throw new ProductionRouteUnavailable(agent.harness.adapter, "phase routing changed prompt, tool, write, purpose, colour, or continuity policy");
@@ -1018,7 +1023,7 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
       const provenance = routeSelectionProvenance({
         requested: selection.requested,
         effective,
-        ...(isReviewPhase(phase) ? { reviewMode: options.config.routing.review } : {}),
+        ...(isReviewPhase(phase) ? { reviewMode } : {}),
       });
       const configuredContinuity = agent.harness.continuity;
       // ONE-WAY, and the direction is the safety argument. Config that asks for
@@ -1099,7 +1104,7 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
       }
       const workerProvider = routes.get(buildPhaseId)!.model.provider;
       const configured = routes.get(reviewPhase.id)!.model.provider;
-      if (options.config.routing.review === "same-provider-degraded") {
+      if (reviewMode === "same-provider-degraded") {
         if (configured !== workerProvider) {
           throw new InvalidReviewInversion(
             `explicit same-provider-degraded mode requires reviewer and builder on ${JSON.stringify(workerProvider)}; ` +
@@ -1203,7 +1208,7 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
       phaseId: dbPhaseId(status.sessionId, phase.id), ordinal: index + 1, key: phase.id, name: phase.id,
       kind: phase.kind,
       owner: phase.owner,
-      description: isReviewPhase(phase) && options.config.routing.review === "same-provider-degraded"
+      description: isReviewPhase(phase) && reviewMode === "same-provider-degraded"
         ? `${phase.description}; EXPLICIT DEGRADED SAME-PROVIDER MODE (reduced review independence)`
         : phase.description,
       status: "QUEUED",

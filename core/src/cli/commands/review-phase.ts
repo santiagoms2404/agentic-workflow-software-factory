@@ -51,6 +51,7 @@ import { assertPrivateSystemPrompt } from "../../adapters/system-prompt-file.ts"
 import type { AdapterEntry, AgentDefinition, AwsfConfig } from "../../config/schema.ts";
 import { BUILD_OUTPUT_SCHEMA_ID } from "../../contracts/build-output.ts";
 import type { RouteSelectionProvenance } from "../../contracts/route-selection.ts";
+import type { PhaseRouteOverrides } from "../../workflow/route-flags.ts";
 import type { EnvelopeBase } from "../../contracts/envelope-base.ts";
 import {
   UNREPORTED_TOKEN_USAGE,
@@ -456,6 +457,14 @@ export interface ResolveReviewRouteOptions {
    * gets. Defaults to yes.
    */
   readonly requireAvailable?: boolean;
+  /** The attempt's own `--route` selections, which outrank `routing.phase_routes`. */
+  readonly routeOverrides?: PhaseRouteOverrides;
+  /**
+   * The owner's `awsf degrade-review` grant for THIS attempt. It can only ever
+   * relax the inversion, never tighten it, and it is read from attempt state —
+   * the host has no path to set it from a quota or transport failure.
+   */
+  readonly degraded?: boolean;
 }
 
 /**
@@ -472,7 +481,7 @@ export async function resolveReviewRoute(options: ResolveReviewRouteOptions): Pr
   const reviewAgentName = recipe.phases.find((phase) => phase.id === reviewPhaseId)!.owner;
   const role = config.agents.find((candidate) => candidate.name === reviewAgentName);
   if (role === undefined) throw new ProductionRouteUnavailable(reviewAgentName, "no explicit agent definition exists");
-  const selection = requestedPhaseRoute(config, reviewPhaseId, role);
+  const selection = requestedPhaseRoute(config, reviewPhaseId, role, options.routeOverrides);
   const agent = selection.agent;
   if (!retainedRolePolicy(selection.policy, agent)) throw new ReviewRouteMismatch("phase routing changed the reviewer's role policy");
   if (agent.writes.length !== 0) throw new ReviewRouteMismatch("a reviewer that can write is not a reviewer; `writes` must stay empty");
@@ -493,10 +502,11 @@ export async function resolveReviewRoute(options: ResolveReviewRouteOptions): Pr
   }
   const model = credentialSafeValue(await adapter.getModelInfo(agent.model), "configured reviewer route");
   const effective = effectivePhaseRoute(selection.requested, adapter.id, model);
+  const reviewMode = options.degraded === true ? "same-provider-degraded" : config.routing.review;
   const provenance = routeSelectionProvenance({
     requested: selection.requested,
     effective,
-    reviewMode: config.routing.review,
+    reviewMode,
   });
 
   // The pair is a property of the configured route surface. It is read from
@@ -507,7 +517,7 @@ export async function resolveReviewRoute(options: ResolveReviewRouteOptions): Pr
     if (phase.kind !== "agent" || phase.id === reviewPhaseId) continue;
     const otherRole = config.agents.find((candidate) => candidate.name === phase.owner);
     if (otherRole === undefined) throw new ProductionRouteUnavailable(phase.owner, "no explicit agent definition exists");
-    const other = requestedPhaseRoute(config, phase.id, otherRole);
+    const other = requestedPhaseRoute(config, phase.id, otherRole, options.routeOverrides);
     const otherEntry = config.adapters[other.agent.harness.adapter];
     if (otherEntry === undefined || otherEntry.enabled === false) throw new ProductionRouteUnavailable(other.agent.harness.adapter, "route is disabled or undeclared");
     const otherAdapter = infra.adapterFor(otherEntry, other.agent.harness.adapter, config);
@@ -522,7 +532,7 @@ export async function resolveReviewRoute(options: ResolveReviewRouteOptions): Pr
   if (workerProvider === undefined) {
     throw new ReviewRecordMissing("no recorded worker call names the provider the inversion must exclude");
   }
-  if (config.routing.review === "same-provider-degraded") {
+  if (reviewMode === "same-provider-degraded") {
     if (model.provider !== workerProvider) {
       throw new InvalidReviewInversion(
         `explicit same-provider-degraded mode requires reviewer and worker on ${JSON.stringify(workerProvider)}; ` +

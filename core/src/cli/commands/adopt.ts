@@ -332,6 +332,11 @@ async function createTarget(
     phase: null,
     budget,
     ceilingGrants: [],
+    // A continuation runs the routes its source was given: adopting a sealed
+    // candidate re-reviews that exact tree, and re-reviewing it on a route the
+    // owner did not choose would be a different experiment.
+    routeOverrides: candidate.source.routeOverrides,
+    reviewDegradation: null,
     model: null,
     lastActivityAt: now,
     lastActivity: `created immutable continuation from sealed ${candidate.source.taskId} attempt ${String(candidate.source.attempt)} candidate ${candidate.candidateSha}`,
@@ -402,6 +407,9 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
     recipe: candidate.recipe,
     reviewPhaseId: phases.review,
     workerProvider: candidate.workerProvider,
+    // The continuation inherits the source's routes and none of its grants: a
+    // degradation is scoped to the attempt whose owner granted it.
+    routeOverrides: candidate.source.routeOverrides,
   });
   const budgetShape = adoptionBudget(options.config);
   const remaining = ceilingFor(2, budgetShape.ceiling) - budgetShape.callsSpent;

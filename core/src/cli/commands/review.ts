@@ -463,6 +463,7 @@ async function runReviewCommand(options: ReviewCommandOptions): Promise<ReviewCo
   const route: ReviewRoute = await resolveReviewRoute({
     config: options.config, configPath: options.configPath, infra, recipe,
     reviewPhaseId: phases.review, workerProvider: recorded.worker?.provider, priorReview: recorded.review,
+    routeOverrides: status.routeOverrides, degraded: status.reviewDegradation !== null,
   });
 
   const evidence = {
