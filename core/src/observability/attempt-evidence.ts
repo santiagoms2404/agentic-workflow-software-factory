@@ -103,4 +103,13 @@ export type AttemptEvidence =
       readonly phaseId?: string;
       readonly envelope?: StoredEnvelope<EnvelopeBase>;
     }
+  /**
+   * One `awsf relate` declaration: this task continues that one, with the
+   * driver's written reason beside it. Session-level like a ceiling grant — it
+   * belongs to no phase and moves no lifecycle edge — and evidence in its own
+   * right because the `continues_task` column can say what was declared but
+   * never why, or that a declaration was made at all rather than set at `awsf
+   * new`.
+   */
+  | { readonly type: "task-relation"; readonly taskId: string; readonly continuesTask: string; readonly reason: string; readonly attempt: number; readonly at: string }
   | { readonly type: "review"; readonly phaseId: string; readonly adapterId: string; readonly provider: string; readonly verdict: ReviewVerdict; readonly reviewedSha: string; readonly findingCount: number; readonly at: string };

@@ -121,13 +121,14 @@ test("sessions embeds ordered phases and agents in one response", async () => {
   }
 });
 
-test("sessions expose declared continuations and honest nulls", async () => {
+test("sessions expose declared continuations, group membership, and honest nulls", async () => {
   const fixture = apiFixture();
   createSession(fixture.writer, {
     sessionId: "session-2",
     projectSlug: "test-project",
     taskId: "T24",
     continuesTask: "T23",
+    groupId: "drive-a",
     attempt: 1,
     workflowId: "build",
     riskTier: 1,
@@ -145,6 +146,10 @@ test("sessions expose declared continuations and honest nulls", async () => {
     const sessions = (response.body as SessionsResponse).sessions;
     assert.equal(sessions.find((session) => session.sessionId === "session-2")?.continuesTask, "T23");
     assert.equal(sessions.find((session) => session.sessionId === "session-1")?.continuesTask, null);
+    // The group reaches the read surface through the public column list, and a
+    // run created without one stays NULL rather than borrowing its neighbour's.
+    assert.equal(sessions.find((session) => session.sessionId === "session-2")?.groupId, "drive-a");
+    assert.equal(sessions.find((session) => session.sessionId === "session-1")?.groupId, null);
   } finally { router.close(); fixture.close(); }
 });
 

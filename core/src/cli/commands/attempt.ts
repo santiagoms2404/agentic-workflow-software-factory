@@ -76,6 +76,15 @@ export interface AttemptStatus {
   readonly taskId: string;
   /** Owner-declared task relationship recorded only when this task is created. */
   readonly continuesTask: string | null;
+  /**
+   * The driving session this attempt came out of, minted by that session and
+   * passed in at `awsf new` / `awsf retry`. Never inferred from timing or
+   * adjacency, and never inherited: an attempt created by a different session
+   * did not come out of the first one, so `retry` records what it was given and
+   * NULL when it was given nothing. That is what makes a continuation chain
+   * able to cross two groups instead of collapsing into one.
+   */
+  readonly groupId: string | null;
   readonly attempt: number;
   readonly repository: string;
   readonly worktree: string | null;
@@ -161,6 +170,22 @@ export function isTerminalStatus(status: AttemptStatus): boolean {
   return (TERMINAL_STATES as readonly string[]).includes(status.lifecycleState);
 }
 
+/**
+ * The driving-session group id, validated as a path-safe identifier.
+ *
+ * Deliberately the same grammar and bound the planning store applies to a group
+ * id, restated rather than imported: `planning-isolation.test.ts` permits only
+ * `cli/commands/group.ts` to reach into `core/src/planning/`, and an execution
+ * module importing it to save six characters would be the first crack in that
+ * fence. Two one-way records of the same fact, neither side importing the other.
+ */
+export function assertGroupId(value: string): string {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/u.test(value)) {
+    throw new Error(`--group ${JSON.stringify(value)} is not a path-safe identifier of 1-100 characters`);
+  }
+  return value;
+}
+
 function validateComponent(label: string, value: string): void {
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value)) {
     throw new Error(`${label} must be one path-safe identifier`);
@@ -174,9 +199,10 @@ type LegacyBudget = Omit<BudgetState, "ownerReentries" | "allowance"> & {
 };
 
 /** And what one written before the ceiling was a dial holds. */
-type LegacyStatus = Omit<AttemptStatus, "ceilingGrants" | "continuesTask" | "routeOverrides" | "reviewDegradation"> & {
+type LegacyStatus = Omit<AttemptStatus, "ceilingGrants" | "continuesTask" | "groupId" | "routeOverrides" | "reviewDegradation"> & {
   ceilingGrants?: readonly CeilingGrant[];
   continuesTask?: string | null;
+  groupId?: string | null;
   routeOverrides?: PhaseRouteOverrides;
   reviewDegradation?: ReviewDegradation | null;
 };
@@ -220,11 +246,14 @@ export function withLegacyDefaults(status: AttemptStatus): AttemptStatus {
   const budgetIsCurrent = budget.ownerReentries !== undefined && budget.allowance.ownerReentries !== undefined;
   if (
     budgetIsCurrent && legacy.ceilingGrants !== undefined && legacy.continuesTask !== undefined &&
-    legacy.routeOverrides !== undefined && legacy.reviewDegradation !== undefined
+    legacy.groupId !== undefined && legacy.routeOverrides !== undefined && legacy.reviewDegradation !== undefined
   ) return status;
   return {
     ...status,
     continuesTask: legacy.continuesTask ?? null,
+    // A run that predates groups belongs to none, and NULL is what that says.
+    // Nothing infers one from when it ran or what ran beside it.
+    groupId: legacy.groupId ?? null,
     // An attempt written before per-attempt routing existed chose neither, and
     // reading it as "no override, no grant" is what it meant.
     routeOverrides: legacy.routeOverrides ?? {},

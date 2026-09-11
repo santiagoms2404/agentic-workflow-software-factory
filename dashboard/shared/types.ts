@@ -103,6 +103,8 @@ export interface SessionCard {
   project: string;
   taskId: string;
   continuesTask: string | null;
+  /** The driving session this run came out of; null when none was recorded. */
+  groupId: string | null;
   attempt: number;
   workflowId: string;
   riskTier: 0 | 1 | 2;

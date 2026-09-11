@@ -55,6 +55,25 @@ export function formatStatus(status: AttemptStatus): readonly string[] {
   ]);
 }
 
+/**
+ * The driving session this attempt came out of, when one was recorded.
+ *
+ * Silent otherwise, and deliberately so: every run that predates groups, and
+ * every run created without `--group`, belongs to none. A line reading "Group:
+ * none" on all of them would be noise, and any line that guessed one from
+ * timing or adjacency would be a fabrication.
+ *
+ * Its own function rather than a tenth entry in `formatStatus`, because that
+ * one returns a fixed set of meters and this is conditional.
+ */
+export function formatGroup(status: AttemptStatus): readonly string[] {
+  if (status.groupId === null) return Object.freeze([]);
+  return Object.freeze([
+    `Group: ${status.groupId} — the driving session this attempt was created in; ` +
+      `read its decisions with \`awsf group orient --project ${status.project} --group ${status.groupId}\``,
+  ]);
+}
+
 /** Compact provenance without turning a requested selector into an observed identity. */
 export function formatRouteProvenance(evidence: readonly AttemptEvidence[]): readonly string[] {
   const routes = new Map<string, RouteSelectionProvenance>();
@@ -173,7 +192,7 @@ export async function statusCommand(
     readAttemptEvidence(attemptDir),
     locateRunReport(attemptDir),
   ]);
-  const lines = [...formatStatus(status), ...formatAttemptSelection(status), ...formatRouteProvenance(records)];
+  const lines = [...formatStatus(status), ...formatGroup(status), ...formatAttemptSelection(status), ...formatRouteProvenance(records)];
   if (report !== null) {
     // Every command that moves the candidate, the verdict or the lifecycle
     // re-renders this. The stamp is the belt-and-braces: a writer that forgets

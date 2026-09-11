@@ -38,6 +38,7 @@ export async function rebuildCommand(stateRoot: string): Promise<RebuildReport> 
         projectSlug: status.project,
         taskId: status.taskId,
         continuesTask: status.continuesTask,
+        groupId: status.groupId,
         attempt: status.attempt,
         workflowId: status.workflow,
         riskTier: status.tier,

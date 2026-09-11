@@ -78,6 +78,7 @@ export function sessionInitFor(dir: string): SessionInit {
     projectSlug: project,
     taskId: task,
     continuesTask: null,
+    groupId: null,
     attempt,
     workflowId: "plan-build-test",
     riskTier: 1,

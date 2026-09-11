@@ -22,6 +22,7 @@ function session(workflowId: string, lifecycleState = "AWAITING_OWNER"): Session
     project_slug: PROJECT.slug,
     task_id: `task-${workflowId}`,
     continues_task: null,
+    group_id: null,
     attempt: 1,
     workflow_id: workflowId,
     risk_tier: 1,

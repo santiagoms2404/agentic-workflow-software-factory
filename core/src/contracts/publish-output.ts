@@ -89,6 +89,12 @@ export const PublishedAttemptStatusSchema = Type.Object(
     project: Type.String({ minLength: 1 }),
     taskId: Type.String({ minLength: 1 }),
     continuesTask: NullableStringSchema,
+    // Optional for the same reason `routeOverrides` below is: a record
+    // published before driving-session groups existed carries none, and an
+    // absent field is the honest reading of an attempt that could not have had
+    // one. A live attempt always carries it, because `withLegacyDefaults` fills
+    // it with null on the way out of the status store.
+    groupId: Type.Optional(NullableStringSchema),
     attempt: Type.Integer({ minimum: 1 }),
     repository: Type.String({ minLength: 1 }),
     worktree: NullableStringSchema,

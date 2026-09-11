@@ -95,6 +95,12 @@ export interface AdoptCommandOptions {
   readonly targetTaskId: string;
   /** Fresh owner intent for the target. Source request bytes never transfer. */
   readonly request: string;
+  /**
+   * The driving session minting the TARGET. Not taken from the source: an
+   * adopted task is a new task, created now, by whoever is adopting. Absent
+   * records NULL.
+   */
+  readonly groupId?: string;
   readonly worktreeRoot: string;
   readonly terminal: OwnerTerminal;
   readonly config: AwsfConfig;
@@ -319,6 +325,7 @@ async function createTarget(
     project: candidate.source.project,
     taskId: options.targetTaskId,
     continuesTask: candidate.source.taskId,
+    groupId: options.groupId ?? null,
     attempt: 1,
     repository: candidate.source.repository,
     worktree: worktree.path,

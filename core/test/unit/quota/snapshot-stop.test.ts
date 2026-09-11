@@ -540,6 +540,7 @@ const SESSION: SessionInit = {
   projectSlug: "fixture",
   taskId: "T17",
   continuesTask: null,
+  groupId: null,
   attempt: 1,
   workflowId: "intake",
   riskTier: 0,

@@ -23,6 +23,7 @@ import { initCommand } from "./commands/init.ts";
 import { listProjects, registerProject, showProject, verifyRegisteredProject } from "./commands/project.ts";
 import { landCommand } from "./commands/land.ts";
 import { newCommand } from "./commands/new.ts";
+import { relateCommand } from "./commands/relate.ts";
 import { publishCommand } from "./commands/publish.ts";
 import { raiseCommand } from "./commands/raise.ts";
 import { degradeReviewCommand } from "./commands/degrade-review.ts";
@@ -46,7 +47,7 @@ import { selectWorkflow, workflowsCommand } from "./commands/workflows.ts";
 /** The complete owner-facing command table; documentation reconciles against it. */
 export const CLI_COMMANDS = Object.freeze([
   "init", "project", "new", "start", "run", "status", "watch", "rework", "review", "raise", "degrade-review", "journey", "land", "publish", "cancel", "retry",
-  "doctor", "gc", "dash", "routes", "db rebuild", "ticket", "backlog", "quota", "stage", "workflows", "group",
+  "relate", "doctor", "gc", "dash", "routes", "db rebuild", "ticket", "backlog", "quota", "stage", "workflows", "group",
 ]);
 
 const USAGE = `usage: awsf init [path] --project <slug>\n       awsf <${CLI_COMMANDS.join("|")}> [task] [options]`;
@@ -390,6 +391,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         project,
         taskId,
         ...(parsed.flags.continues === undefined ? {} : { continuesTask: parsed.flags.continues }),
+        ...(parsed.flags.group === undefined ? {} : { groupId: parsed.flags.group }),
         repository: cwd,
         request,
         workflow,
@@ -401,6 +403,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         projectRecord: projection.project,
       });
       out(`Created ${project}/${taskId} attempt ${result.status.attempt} in DRAFT.`);
+      if (result.status.groupId !== null) out(`Group: ${result.status.groupId} — this run is recorded as part of that driving session.`);
       for (const [phaseId, selected] of Object.entries(routeOverrides)) {
         out(`Route: ${formatRouteOverride(phaseId, selected)}`);
       }
@@ -417,6 +420,25 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         out(`The run refuses that until the owner allows it: awsf degrade-review ${taskId} --reason "<why>"`);
       }
       out(result.status.nextAction);
+      return 0;
+    }
+
+    if (command === "relate") {
+      // Deliberately NOT a `case` arm taking an owner terminal. `awsf relate`
+      // declares a relationship a driving session may already declare at
+      // `awsf new --continues`, so giving it a terminal would invent a seventh
+      // owner act out of an authority the session already holds.
+      const continues = parsed.flags.continues ?? "";
+      const reason = parsed.flags["reason"] ?? "";
+      if (continues.trim().length === 0 || reason.trim().length === 0) {
+        throw new Error('usage: awsf relate <task> --continues <prior task> --reason "<why this continues it>"');
+      }
+      const related = await relateCommand({
+        stateRoot, project, taskId, continues, reason,
+        projectRecord: projection.project,
+      });
+      out(`${project}/${taskId} continues ${project}/${related.continuesTask}; the declaration and your reason are journalled.`);
+      out(related.status.nextAction);
       return 0;
     }
 
@@ -619,6 +641,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
             stateRoot,
             targetTaskId,
             request: parsed.flags.request ?? "",
+            ...(parsed.flags.group === undefined ? {} : { groupId: parsed.flags.group }),
             worktreeRoot: resolve(parsed.flags["worktree-root"] ?? env.AWSF_WORKTREE_ROOT ?? defaultWorktreeRoot(stateRoot)),
             terminal: adoptionTerminal(options.terminal),
             config,
@@ -641,9 +664,13 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
           configSnapshotJson: toConfigSnapshotJson(config),
           callCeilings: callCeilingsOf(config.risk.call_ceiling),
           allowance: config.risk.correction_allowance,
+          ...(parsed.flags.group === undefined ? {} : { groupId: parsed.flags.group }),
           projectRecord: projection.project,
         });
         out(`Created attempt ${result.status.attempt} in DRAFT with ${result.status.budget.callsSpent} spent call(s) carried.`);
+        out(result.status.groupId === null
+          ? "Group: none — a retry inherits no group; pass --group to record the driving session minting this attempt."
+          : `Group: ${result.status.groupId} — recorded from this invocation, not carried from the prior attempt.`);
         out(result.status.nextAction);
         return 0;
       }

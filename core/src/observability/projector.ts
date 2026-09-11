@@ -51,6 +51,8 @@ export interface SessionInit {
   projectSlug: string;
   taskId: string;
   continuesTask: string | null;
+  /** The driving session this run came out of, or NULL when none was recorded. */
+  groupId: string | null;
   attempt: number;
   workflowId: string;
   riskTier: 0 | 1 | 2;
@@ -192,14 +194,17 @@ export function projectAttemptStatus(
 export function createSession(db: DatabaseSync, init: SessionInit): void {
   db.prepare(
     `INSERT OR IGNORE INTO sessions
-       (session_id, project_slug, task_id, continues_task, attempt, workflow_id, risk_tier, is_protected,
+       (session_id, project_slug, task_id, continues_task, group_id, attempt, workflow_id, risk_tier, is_protected,
         lifecycle_state, request_text, call_ceiling, started_at, updated_at, config_snapshot_json, journal_path)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', ?, ?, ?, ?, ?, ?)`,
   ).run(
     init.sessionId,
     scrubCredentialString(init.projectSlug),
     scrubCredentialString(init.taskId),
     init.continuesTask === null ? null : scrubCredentialString(init.continuesTask),
+    // Written once, at session creation, because that is when it is decided.
+    // Nothing later moves a run between groups.
+    init.groupId === null ? null : scrubCredentialString(init.groupId),
     init.attempt,
     scrubCredentialString(init.workflowId),
     init.riskTier,
@@ -550,6 +555,21 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
         evidence.phaseId, sessionId, evidence.at, evidence.at, evidence.at, sessionId,
       );
       insertEnvelope(db, sessionId, evidence.phaseId, evidence.envelope);
+      return;
+    case "task-relation":
+      // `awsf relate` is task-scoped and carries the driver's written reason, so
+      // the edge alone would lose why it was declared. The column answers "what
+      // does this continue"; this row answers "who said so, when, and why".
+      db.prepare(`UPDATE sessions SET continues_task=? WHERE session_id=?`)
+        .run(scrubCredentialString(evidence.continuesTask), sessionId);
+      db.prepare(`INSERT OR IGNORE INTO events
+        (event_id, session_id, phase_id, first_source_seq, last_source_seq, type, name,
+         payload_json, started_at) VALUES (?, ?, NULL, ?, ?, 'task_relation', 'task continuation declared', ?, ?)`)
+        .run(`${sessionId}:task-relation:${sourceSeq}`, sessionId, sourceSeq, sourceSeq,
+          stringifyRedacted({
+            taskId: evidence.taskId, continuesTask: evidence.continuesTask,
+            reason: evidence.reason, attempt: evidence.attempt,
+          }), evidence.at);
       return;
     case "review":
       // The verdict is the reviewer's own finding, recorded beside the provider

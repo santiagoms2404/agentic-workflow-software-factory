@@ -174,6 +174,7 @@ function card(db: DatabaseSync, row: SessionRow): SessionCard {
     project: row.project_slug,
     taskId: row.task_id,
     continuesTask: row.continues_task,
+    groupId: row.group_id,
     attempt: row.attempt,
     workflowId: row.workflow_id,
     riskTier: row.risk_tier,

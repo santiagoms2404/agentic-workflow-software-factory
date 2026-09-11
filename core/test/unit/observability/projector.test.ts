@@ -20,6 +20,7 @@ const SESSION: SessionInit = {
   projectSlug: "proj",
   taskId: "T1",
   continuesTask: null,
+  groupId: null,
   attempt: 1,
   workflowId: "wf",
   riskTier: 0,

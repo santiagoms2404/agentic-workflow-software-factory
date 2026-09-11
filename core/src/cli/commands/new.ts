@@ -5,6 +5,7 @@ import { correctionAllowance } from "../../state/task-machine.ts";
 import { assertCeiling, ceilingFor, type CallCeilings, type Tier } from "../../state/tiers.ts";
 import type { PhaseRouteOverrides } from "../../workflow/route-flags.ts";
 import {
+  assertGroupId,
   latestAttemptNumber,
   nextActionFor,
   persistAttempt,
@@ -18,6 +19,11 @@ export interface NewCommandOptions {
   readonly project: string;
   readonly taskId: string;
   readonly continuesTask?: string;
+  /**
+   * The driving session that minted this task. Absent means NULL: no group
+   * existed for it, which is the honest record and never a guess.
+   */
+  readonly groupId?: string;
   readonly repository: string;
   readonly request: string;
   readonly workflow: string;
@@ -45,6 +51,7 @@ export interface NewCommandOptions {
 /** Mint the task's first attempt at DRAFT. Later attempts belong only to retry. */
 export async function newCommand(options: NewCommandOptions): Promise<{ attemptDir: string; status: AttemptStatus }> {
   const root = taskRoot(options.stateRoot, options.project, options.taskId);
+  if (options.groupId !== undefined) assertGroupId(options.groupId);
   if (options.continuesTask === options.taskId) {
     throw new Error(`${options.project}/${options.taskId} cannot continue itself`);
   }
@@ -76,6 +83,7 @@ export async function newCommand(options: NewCommandOptions): Promise<{ attemptD
     project: options.project,
     taskId: options.taskId,
     continuesTask: options.continuesTask ?? null,
+    groupId: options.groupId ?? null,
     attempt,
     repository: resolve(options.repository),
     worktree: null,

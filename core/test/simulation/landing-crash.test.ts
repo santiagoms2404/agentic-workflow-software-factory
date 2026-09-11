@@ -37,6 +37,7 @@ async function fixture(root: string): Promise<{ attemptDir: string; repository: 
     project: "crash-project",
     taskId: "T21",
     continuesTask: null,
+    groupId: null,
     attempt: 1,
     repository,
     worktree: join(root, "candidate-worktree"),

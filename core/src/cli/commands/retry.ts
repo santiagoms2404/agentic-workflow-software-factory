@@ -6,6 +6,7 @@ import { ReservationOutstanding } from "../../execution/call-budget.ts";
 import { correctionAllowance } from "../../state/task-machine.ts";
 import { assertCeiling, ceilingFor, type CallCeilings } from "../../state/tiers.ts";
 import {
+  assertGroupId,
   isTerminalStatus,
   latestAttemptNumber,
   nextActionFor,
@@ -25,6 +26,11 @@ export interface RetryCommandOptions {
   readonly allowance: { readonly auto: number; readonly owner: number; readonly ownerReentries?: number };
   /** The currently configured `risk.call_ceiling`, re-read like the allowance is. */
   readonly callCeilings?: CallCeilings;
+  /**
+   * The driving session minting THIS attempt. Absent records NULL; it is never
+   * taken from the prior attempt. See the `groupId` line below for why.
+   */
+  readonly groupId?: string;
   readonly now?: () => string;
   readonly sessionId?: () => string;
   readonly projectRecord?: AttemptProjector;
@@ -33,6 +39,7 @@ export interface RetryCommandOptions {
 /** Retry is not a state transition: it mints attempt n+1 and carries spend. */
 export async function retryCommand(options: RetryCommandOptions): Promise<{ attemptDir: string; status: AttemptStatus }> {
   const prior = await readAttempt(options.attemptDir);
+  if (options.groupId !== undefined) assertGroupId(options.groupId);
   if (!isTerminalStatus(prior)) throw new Error(`attempt ${prior.attempt} is ${prior.lifecycleState}, not terminal`);
   if (prior.budget.callsReserved > 0) {
     throw new ReservationOutstanding(`retry ${prior.taskId}`, [`${prior.budget.callsReserved} unaccounted call(s)`]);
@@ -81,6 +88,12 @@ export async function retryCommand(options: RetryCommandOptions): Promise<{ atte
     // the owner decide again, and a degradation that survived silently would be
     // a durable mode nobody wrote down.
     reviewDegradation: null,
+    // NOT inherited from the spread above. A group says "these came out of the
+    // same driving session", and this attempt came out of whichever session is
+    // running `awsf retry` now — which may be a different one, or none. Letting
+    // it ride the spread would collapse every continuation chain into a single
+    // group and leave the cross-group edge with nothing to connect.
+    groupId: options.groupId ?? null,
     model: null,
     lastActivityAt: now,
     lastActivity: `retry minted attempt ${attempt}; carried ${prior.budget.callsSpent} spent call(s) from attempt ${prior.attempt}`,
