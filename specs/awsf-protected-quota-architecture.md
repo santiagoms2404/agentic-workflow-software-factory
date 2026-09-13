@@ -1,0 +1,423 @@
+# Unified protected quota pause and re-entry architecture
+
+## Authority and scope
+
+This is the Task 8B2 design, not a protected-write grant. Owner acceptance of this document, acceptance of a planning amendment, and authorization to execute a task are separate acts. No factory task state is represented here.
+
+The design unifies exact protected-file grants, between-phase quota re-entry, and proof-gated reconnection of interrupted worker and review turns. The owner-directed D10 extension supersedes the earlier blanket interrupted-turn refusal. Every crash cut must yield a proved continuation, reconstruction of an already completed result, or a named safe refusal that preserves retained work and economic liability. Provider-session reuse alone is insufficient. D11 defines optional owner instructions shared by resume, rescue, rework and seeded continuation.
+
+This document specifies implementation and its feasibility tests. It neither implements the foundation nor claims a provider has passed them. Task 8C remains independent: committed-candidate seeding earns fresh assurance, without a quota anchor, grant transfer, provider resume or protected-policy change.
+
+## Evidence basis
+
+Source baseline: `82682588b7ee9fb1456317b495fafa1eddf4b914`. The following immutable journal locators were verified by SHA-256. They remain external evidence, not repository artifacts.
+
+| Input | Journal locator under the project's runtime `tasks/` directory | SHA-256 |
+|---|---|---|
+| Initial requirements, rejected design and F findings | `task-8b-protected-quota-foundation/2/journal.jsonl`, design event 370, review event 3516 | `37bc0bdbb70000a26658be83d396b2148178961fc57652eabd99cfcdb2c6872a` |
+| Corrected requirements, rejected design and R findings | `task-8b-protected-quota-foundation-continuation/1/journal.jsonl`, design event 363, review event 2819 | `053acee83be3c28621ae708bf395ea00e196284db389c89b043ddd15c3f81c9b` |
+| Unified request | `task-8b2-unified-protected-quota-architecture/1/journal.jsonl`, event 1 | `e703388b24a8a15073fd3eb700781e38ecb8539a1020805fd3df57dff18ff6fd` |
+| Seeded-continuation request | `task-8c-seeded-continuation/1/journal.jsonl`, event 1 | `c1f9545855e52f5be3153bf0f6534c64aa90156301fb808f3d485ee7aceca734` |
+
+The runtime root is resolved by project identity. Group references remain hashed locators and never become copies of attempt assurance. Neither rejected design is authority. Every original finding below is accepted as a defect in those designs and explicitly dispositioned. The owner's subsequent instruction in this conversation adds D10/D11, includes mid-review reconnection and requires per-adapter live proof. It is a design amendment, not a fabricated group-journal approval.
+
+Additional source evidence for the extension is tabulated in D10. The independent review of the preceding boundary-only revision identified N-1 (inherited/per-phase diff attribution) and N-2 (seeded PREPARED validation). D9 now specifies both remedies. That preceding review does not establish acceptance of this enlarged design.
+
+## D1. State and eligibility
+
+Between phases, use a durable `quota-pause` anchor inside the existing RUNNING sojourn. The next agent phase has **never launched**, so there is no provider conversation to resume. For an interrupted active turn, use D10's distinct `turn-interruption` anchor. Neither mode creates a duplicate ordered pair, revives a terminal phase, or invents an ordinal. A shared recovery entry classifier selects the mode from durable evidence, never from a caller-supplied resume flag.
+
+A resumable boundary requires all of these facts:
+
+- The preceding compiled phase has a journal-proven accepted completion. Its final envelope and successful validation are durable.
+- The next compiled phase is an ordinary non-review agent phase with its original one-based ordinal and latest state QUEUED. Earlier phases form an unbroken accepted prefix. No later phase has launched.
+- The first task-edge L4 launch already happened. Review L11 and owner-rework launches are excluded. A boundary before a code phase can retain existing L26 behavior, but cannot masquerade as an agent-phase resume.
+- No active phase, controller lease, process tree, pending launch intent, or unsettled reservation exists. A PID's absence alone is insufficient to prove that registered work never ran.
+- The current worktree is a clean, detached, registered managed worktree of this repository, at its last host-recorded commit or original start commit. Canonical HEAD remains at the recorded integration base.
+- Exactly one route-specific, known quota figure is below its configured threshold.
+
+Persist anchor and status in one `persistAttempt` event. Status remains RUNNING with no active phase/process and a structured pause summary. `status`, watch, dashboard and recovery diagnostics distinguish `quota-paused` from active execution and from a controller orphan. A generic `run` refuses an anchored or unresolved launch operation. A second host cannot run the same attempt concurrently.
+
+An unsupported boundary may take L26 only after the same no-process/no-pending-launch/no-reservation proof. If this proof fails, no pause or blanket refund occurs. A live controller retains control. A dead controller becomes a named recovery refusal unless D10 proves exclusive takeover and a recoverable original turn.
+
+**Interrupted worker and review turns branch before terminal phase settlement.** If D10 proves eligibility, atomically record interruption evidence while the phase remains RUNNING and the lifecycle remains RUNNING for a worker or REVIEWING for a review. No RUNNING-to-RUNNING lifecycle/phase edge is taken. The transport segment may have failed, but the logical phase has not yet failed. `rescue` requires owner confirmation, D3 readmission when quota caused the interruption, and D10's actual-launch verification. It continues that original logical turn and its original reservation. The latest status exposes `reconnect-eligible`, `proof-unavailable` or `recovery-ambiguous` without inventing a new lifecycle enum.
+
+When the proof fails, retain all partial work, streams and liability. With proved process-tree quiescence, settle FAILED and take the existing L8 worker or L17 review BLOCKED outcome using the existing failure vocabulary. With unknown/live survivors, refuse further execution and keep the unresolved operation until safe settlement is possible. A previously FAILED/SUCCEEDED phase or sealed attempt is never revived. Cancellation initiated by the owner is not a reconnectable interruption. A provider's terminal response that merely reports quota failure cannot be resumed as the same turn unless its protocol independently proves that the logical turn remains resumable.
+
+Recovery classification must run before `production-run.ts:settleExitedReview` and before `workflow/engine.ts` abnormal-exit settlement. The current `settleExitedReview` path can block an exited review on absent process/reservation fields. It must first recognize an unresolved D10 logical turn and refuse generic `run`, preserving the rescue opportunity. Existing configured silence-timeout termination is also an interruption candidate, distinguished from explicit owner cancellation. It qualifies only with the same D10 proofs and safe process settlement, never by timeout alone. No new external lifecycle timeout or automatic retry is added.
+
+Post-GO route/session/capability mismatch remains a terminal failure, never a reconnect opportunity to evade identity checking. It takes the applicable L8/L17 outcome after settlement, retains spend, invalidates assurance and never claims an owner-awaiting success. Mid-review is in scope only before a completed review exists, on the exact original inverse-provider route, candidate, evidence and round. Completed adverse or malformed verdicts use existing review/rework rules, not rescue.
+
+Optional `ownerAmendment` is captured and delivered under D11 on boundary resume and rescue. No amendment means the existing prompt and economic behavior are preserved for that entry path. Pause/recovery affordances are derived from journal evidence in existing session event rows and status JSON. The SQLite lifecycle enum remains unchanged.
+
+Sources: `production-run.ts:takePhaseBoundarySnapshot`, `state/task-machine.ts:LEGAL_EDGES`, `state/guards.ts:L26`, `state/phase-machine.ts:settleAbnormalExit`, `review-phase.ts:reviewFailureBlocker`, `observability/recovery-diagnostics.ts:diagnoseRecovery`.
+
+## D2. Durable anchor and accepted workflow reconstruction
+
+Add strict TypeBox host contracts, not provider envelopes. The anchor contains:
+
+```
+anchorId, sessionId, expectedRevision, workflowId, compiledRecipeDigest,
+configDigest, requestDigest, promptBundleDigests,
+phaseKey, phaseOrdinal, completedPrefix[],
+repositoryIdentity, worktreeIdentity, integrationBaseSha, worktreeHeadSha,
+route { adapterId, provider, requestedModel, resolvedModel, provenance,
+        executableIdentity, adapterVersion, effort },
+quota { routeId, provider, scope, figureKind, measuredValue, threshold,
+        observedAt, readoutDigest },
+continuity { kind: "unstarted-phase", providerResume: false },
+protectedGrantIds[], ownerAmendment: OwnerAmendment | null, createdAt
+```
+
+Each completed-prefix entry identifies its phase key/ordinal, terminal success record, **accepted correction round**, stored-envelope id/schema/payload digest and successful gate-record ids. Write an explicit phase-acceptance evidence record when the engine accepts an envelope. Round zero is never assumed to be accepted. For host code phases, preserve their accepted host envelope through the same contract. An old attempt lacking these records refuses resumable pause/re-entry, rather than guessing from filenames.
+
+Reconstruction reduces the ordered accepted prefix through one shared host context reducer used by initial execution and re-entry. It restores `previous`, intent, design context, design output, architecture-review output, design-plan output, last test output, candidate SHA, accepted gate measurements and the latest phase-record map. The reducer includes request/design-context host phases, not only agent phases. Every stored envelope must be valid, schema-correct, digest-matching and associated with the recorded accepted round. Missing, duplicated, stale, out-of-order or changed context refuses before reservation. Existing envelopes remain immutable. No completed agent phase is executed again or reopened.
+
+Compile the **whole** workflow structurally to preserve phase identity and ordinal. Separate structural compilation from economic admission. Both current admission sites must use `remainingMinimumCalls(compiled, acceptedPrefix)` during resume. Count only unstarted paid agent phases, mandatory review and required cold correction headroom according to existing policy. Include already spent calls and outstanding held work exactly once. Ordinary cold start retains full-workflow admission. Example: one of three design agents spent with ceiling three admits the remaining two if no additional mandatory correction headroom is configured. It must not compute one plus three.
+
+For D10, the accepted prefix ends **before** the interrupted phase. Restore that phase separately from its original round, unaccepted output cursor, tool ledger and private continuity checkpoint. Never promote its partial output into an accepted-prefix envelope. The already admitted logical turn is counted once through its original reservation, not again as an unstarted agent phase. Remaining later phases retain normal admission and correction-headroom requirements.
+
+D11 amendments are separate digest-bound inputs. Reconstruction still validates the original `requestDigest`, `promptBundleDigests` and `compiledRecipeDigest` unchanged, then validates the amendment chain, application frontier and composed-turn digest. It cannot rewrite old intent/context or infer an amendment from a provider transcript.
+
+Sources: `workflow/compiler.ts:compileWorkflow`, `workflow/engine.ts:runAgentPhase`, `production-run.ts` envelope writer, `persistPhase`, `designContext`, `candidateMeasurements`, `workflow/catalog.ts` headroom functions. A compiler recipe digest is over structural ids, ordinals, gates and original composed prompt digests, not just the workflow name.
+
+## D3. Exact readmission and inert refusal
+
+The pure decision accepts a **selected route row**, not an unscoped `QuotaProbeResult`:
+
+```
+admitReadmission(anchorRoute, currentRouteRow, threshold, freshnessEvidence)
+  -> admitted known figure | named refusal
+```
+
+Use `quota/readout.ts` to bind provider and scope to exactly one configured `ProjectQuotaRoute`. Require the same figure semantics, finite non-negative known minutes, unchanged threshold, matching provider/scope and a fresh observation. Unknown, unavailable, stale, ambiguous, different-route and below-threshold figures all refuse. Equality to threshold admits. A reset timestamp or another provider's healthy row grants nothing. No automatic route fallback or owner override of an unavailable figure exists.
+
+A proposed impure preflight wrapper invokes `probeQuota` with in-memory `journalFailure` and raw-retention collectors. It writes no attempt file, projection, journal event or worktree byte. Bound retained data in memory and credential-scrub display. On decline or any pre-authorization refusal, discard the collected data. Failure codes can be displayed without durable mutation. After confirmation, repeat the probe, route, config, workflow, grant and worktree checks. Only an accepted authorization event retains successful preflight evidence. This changes callers, not the mandatory failure-callback contract of `probeQuota`. Probe cache/network observation outside the attempt is not claimed to be side-effect-free.
+
+Sources: `quota/probe.ts:probeQuota`, `knownMinuteFigure`, `isBelowQuotaStopThreshold`, `quota/readout.ts`, `cli/commands/rework.ts` post-confirmation checks.
+
+## D4. One ledger and one launch operation
+
+`resume` performs read-only preflight and confirmation, then passes a structured **ResumeAdmission** to the production host. It passes no standalone Reservation and constructs no second CallBudget. Admission carries the anchor id/revision, accepted-prefix digest, owner reason, both readings, route/worktree pins, optional `ownerAmendment` (D11) and exact preflight capability (D6). D10's `RescueAdmission` uses the same binding conventions but references the already admitted logical turn and its original reservation.
+
+The production host owns one CallBudget for authorization, broker verification, spend, settlement and persistence. **Boundary resume** restores settled counters from verified journal evidence, refuses unrelated unresolved reservations, admits the remaining workflow, creates one new reservation and immediately persists the activation described in D5 before constructing a child. The original phase advances QUEUED to RUNNING at its compiled ordinal. It is an ordinary paid `agent-phase` launch checked by `createCompiledPhaseLaunchVerifier`. No CORRECTING edge is introduced. Owner re-entry and correction tranches are unchanged.
+
+**D10 rescue** creates no new call reservation. Its ledger-owned `authorizeReconnect` consumes a verified reference to the original logical-turn authorization and original reservation. If that reservation is already spent, it returns that existing debit and never calls `spendOnGo` again. If it is held with proved not-yet-sent provider work, the original liability is spent once at the send boundary. Registered-but-ambiguous work is conservatively settled according to the table below, never refunded to pay for a replacement call. A released reservation, unrelated spent reservation, completed logical turn or inconsistent balance refuses. Restoring only a numeric `callsSpent` counter is insufficient: the journal must prove the reservation-to-turn binding. Reconnection may consume provider tokens and quota, which remain observable, but consumes no second AWSF call. A CLI invocation that actually starts a new logical turn cannot be relabelled as rescue to obtain that price.
+
+Reservation identifiers must be unique across host invocations, using a journal-derived durable invocation/operation prefix plus the ledger-local sequence. The prefix is recorded before use and reproduced on replay, never derived afresh from wall-clock time or PID. Today `r1` restarts on reconstruction, so an unqualified id cannot serve as a durable cross-invocation key. Broker, process, authorization and settlement evidence carry the same operation-qualified id.
+
+Add ledger-owned recovery settlement as an explicit new API, not calls to `releaseOnRegistrationFailure` on a reconstructed empty map. It consumes a validated unresolved reservation record and a classified launch history, producing a new settlement and budget snapshot. Under the attempt lock, record settlement and next status atomically and deduplicate by operation/reservation id. Replaying a settlement returns its recorded outcome without incrementing spend again.
+
+| Durable launch knowledge | Settlement |
+|---|---|
+| Reservation never exposed to a child and no launch intent committed | Release by its live owning ledger, or verified recovery settlement for the exact unlaunched record. |
+| Launch intent committed, but child registration absent after a crash | Ambiguous. Keep the liability. Do not relaunch or refund based on absent PID. |
+| REGISTERED but not durably spent | Never automatically refund registered work. Recovery requires controller/process-tree quiescence and conservatively converts the held liability to spend once. |
+| Spent/onSpent durable, with or without GO/exit evidence | Preserve spend unchanged. Settle process observation only. D10 may reuse the original debit only with original-turn proof. |
+| Live process, unknown identity, survivor or contradictory history | Refuse recovery and re-entry. Retain liability and evidence. |
+
+A never-launched live-host registration failure may still use the existing barrier's destroy-before-refund protocol. Crash recovery is intentionally more conservative. A launch intent with unidentifiable survivors cannot be settled or re-entered until an owner supplies an external quiescence finding through a separate recovery act. This architecture promises safe refusal, not automatic recovery of every crash.
+
+Sources: `execution/call-budget.ts:CallBudgetOptions`, `reserve`, `outstanding`, `settle`, `launcher-barrier.ts` registered/spent/release ordering, `transport-broker.ts` reservation lookup.
+
+## D5. Cross-record atomicity and crash states
+
+A single attempt journal event can carry a new **composite evidence member** `quota-activation`, containing authorization, reservation identity, phase-start record, consumed anchor id and optional owner-amendment evidence. Its `next` status clears the pause anchor, sets the active phase and carries an unresolved launch operation. D10's parallel `turn-reconnect-activation` atomically binds the interruption anchor, original turn/reservation, checkpoint digest, amendment and reconnect generation, leaving the existing phase identity/round and lifecycle unchanged. Extend evidence readers/projector replay to expand these nested facts with deterministic sub-ids. All derive from one source sequence. No SQLite migration or independent sidecar authority is required.
+
+Use the existing journal-first/status-second write protocol under an operation-scoped attempt lock. The lock covers re-read, validation and authorization, rather than only isolated writes. Reconcile a journal tail newer than status before evaluating revision or eligibility. Projection failure prevents GO. An additional controller lease spans execution and all callback writes, so a second command cannot pass the same no-controller precondition between journal writes. Never reclaim a live or unknown holder.
+
+The original operation progresses append-only through `authorized`, `launch-intent`, `registered`, `spent`, `settled`. Anchor consumption and active phase creation are one event. `launch-intent` is durable before calling the transport that may spawn. Process records and budget updates retain that operation id. Interruption and reconnect generations append child operations rather than rewinding this progression: `interrupted`, `reconnect-authorized`, `reconnect-launch-intent`, `reconnect-registered`, `reattached`, `segment-settled`. Their shared logical turn reaches `turn-completed` at most once. They cite the original spend instead of appending a second spend. Terminal phase and operation settlement are recorded before any new boundary anchor. No event is overwritten to make a crash appear successful.
+
+The controller lease spans inspection, confirmation revalidation, activation, reconnection, stream persistence, tool-result reconciliation and settlement. A claimant verifies the exact old holder, process-tree identities and provider-side exclusive continuation/fencing evidence. A local lease alone does not prove that a remote turn stopped. Journal replay reconstructs records only. Execution always requires an explicit authorized path after replay.
+
+| Crash point | Next invocation |
+|---|---|
+| Before activation event append | Anchor remains. Preflight and new owner confirmation can retry. No call charged. |
+| After append, before status/projector completion | Replay the event and projection. It yields active phase plus unresolved authorization, never inactive-without-anchor. No launch during replay. |
+| Authorized, before launch-intent | Recovery may release the unlaunched liability, fail the phase via existing abnormal-exit rules, and block through L8. It does not reset RUNNING to QUEUED. |
+| Launch-intent through registration | Refuse until D10 proves the original request identity, provider acceptance frontier and exclusive takeover. If never sent is proved, use the original held reservation. Otherwise retain liability and follow D4. Absence of a PID is never that proof. |
+| Spent before GO, or GO before first provider identity | Preserve the charge. Continue only if the private checkpoint/provider lookup proves the original request and acceptance frontier. If unavailable, refuse and settle through L8/L17 only after quiescence. |
+| Mid-stream text or incomplete tool arguments | D10 resumes from the verified original cursor, keeping the raw prefix and uncommitted tree. Missing cursor/turn identity refuses, preserving both. |
+| Tool request durable, before execution | Reconcile the original tool-call id. Dispatch only with proof it has not executed, or use the supported executor's idempotency key. Otherwise refuse. |
+| Tool effect occurred, before durable result or provider acknowledgement | Recover the exact result through a transactional/idempotent executor or an authoritative query. Never re-execute on a missing result. Unknown effect refuses without resetting the tree. |
+| Result durable, acknowledgement unknown | Re-submit that same result only through a proved idempotent result-delivery contract. No tool body reruns. Unknown acknowledgement semantics refuses. |
+| Mid-review before accepted verdict | D10 reconnects the same pending review turn at REVIEWING, with the original inverse route, candidate and evidence. No new L11/L25, review round, candidate change or verdict shopping. Failed proof retains work/evidence and reaches L17 only after safe settlement. |
+| Provider terminal durable, envelope or gates not yet accepted | Recover the exact complete response without contacting the model, then run pending host validation once using its durable ids. A malformed/adverse terminal is not an interrupted turn. Missing complete-response proof refuses. |
+| Host commit intent durable, commit/binding or phase acceptance incomplete | Inspect exact Git objects and the recorded commit intent. Reconcile only a unique expected host commit and D7 binding. Ambiguity refuses. No replayed commit, reset or discarded partial work. |
+| Accepted phase completion before boundary anchor | Reconstruct the accepted prefix once. An absent pause anchor is not invented by resume. A recovery act may settle/block. No accepted envelope is overwritten or rerun. |
+| Reconnect activation appended, status or projection incomplete | Replay the activation/amendment as one event. Expose an unresolved reconnect operation, never an inactive phase without an anchor. No launch during replay. |
+| Reconnect launch/registration/reattachment interrupted again | Apply the same turn/cursor/tool proof to the next append-only segment. Fence the previous claimant, retain the original debit and refuse ambiguous survivors. Never start an additional logical turn. |
+| Reconnect settlement durable, command retried | Return the recorded operation result without another process, amendment delivery, tool invocation, envelope, phase transition or spend. |
+
+This is full crash-cut **classification**, not a guarantee that every provider can resume every cut. Each cut deterministically yields proved continuation, completed-result reconstruction or safe refusal. There may be multiple registered transport segments but at most one logical turn and one call debit. Cancellation/retry remain available only after their existing settlement requirements are satisfied. No refusal deletes, resets, auto-commits or silently abandons the retained dirty worktree.
+
+Sources: `persistence/attempt-lock.ts:runWriteProtocol`, `persistence/journal.ts`, `cli/commands/attempt.ts:persistAttempt`, `observability/projector.ts`, `observability/recovery-diagnostics.ts`.
+
+## D6. Capability evidence reaches the actual launch
+
+ResumeAdmission and RescueAdmission explicitly contain a `TurnPreflight` value. It binds adapter/executable version and resolution provenance, model/effort, original bundle digest, optional owner-amendment digest, **actual composed prompt** and system-prompt digests, normalized process descriptor (executable, argv, cwd and approved environment digest), permission profile/tools/write globs/protected configuration digest, exact grant identity, sandbox badge and mechanism. D11 uses the same value for rework and the first seeded target turn. Without an amendment, the original prompt bytes remain unchanged.
+
+Any runtime path or host-generated identifier is allocated as a value before preflight, included in admission and reused. No private file is materialized in the attempt before authorization if the entry path promises inert refusal. Pure descriptor construction and in-memory prompt bytes supply preflight, with materialized bytes checked again after activation. Secret values are never journalled, logged or included in error diffs.
+
+The host constructs permissions and the sandbox grant from this admission, recomputes the descriptor immediately before the barrier's irreversible spend/GO boundary, and compares every security-relevant field. It also rechecks repository/worktree identity, anchor generation and controller ownership there. A mismatch before activation is inert. A mismatch after activation settles the phase and operation through D4/D5 and the applicable L8 worker or L17 review outcome, with no claim of an unchanged journal. A mismatch after spend preserves spend.
+
+Public evidence records proof kind `unstarted-phase` for boundary resume or `verified-interrupted-turn` under D10, route, capability/checkpoint/amendment digests and the compared badge/mechanism. Private provider session, response, thread, tool-call ids and cursors stay behind host handles. Existing same-session correction remains a separate intra-phase capability.
+
+Interrupted-turn continuation is supported **under D10**, only for exact adapter/model/protocol combinations that pass its harness and the current operation's proof. Syntax-only `assertResumable`, an untested version/model, missing durable tool state or unidentifiable survivors still refuse. The actual reconnect descriptor must match the authorized rescue preflight. Across transport segments, only the explicitly authorized reconnect command/cursor, new host segment id and D11 additive instruction may differ. No model, effort, cwd, tool, sandbox, grant or original prompt drift is allowed. D10 checks the original turn identity plus the amended composed-input digest and provider acknowledgement. A same-conversation reply to an ordinary new prompt does not satisfy this check.
+
+Sources: `adapters/interface.ts:isContinuityCapable`, `adapters/claude-code.ts:assertResumable`, `execution/continuity-store.ts`, `review-phase.ts:turnPreflight` comparison, `production-run.ts` permission and sandbox composition.
+
+## D7. Exact protected grants, from write to landing
+
+The configured protected list remains a **deny-list**, unchanged globally. A verified grant supplies a distinct exact-file exception set. Extend the pure path-policy evaluator and its PermissionSession consumer to accept a verified host grant capability. Extend `noProtectedPaths` using a named options field or separate function, preserving its existing third `caseSensitive` argument. Both use one shared pure predicate:
+
+```
+protectedViolation(path) = matchesConfiguredProtection(path)
+                          && !verifiedExactFiles.has(canonicalPath(path))
+```
+
+Write-glob checks, forbidden operations, credential fences, sandbox restrictions and non-protected path rules remain independent. Clearing a protected-path violation never clears a write-glob violation. Every changed entry is checked, including old and new rename paths, deletions, symlink/type changes and newly created files. The default absent capability is byte-equivalent to today's deny-all behavior.
+
+A write authorization is immutable and bound to project, repository identity, task/session/attempt, config/request/recipe digest, integration base, **pre-write HEAD**, phase key/ordinal and one execution generation, exact file list, owner reason and authorization id. It binds no unborn candidate. It authorizes file-content creation/modification only. Deletion, migration execution, release, credential access and external mutations are not grantable through this command. Existing global operation prohibitions stay in force.
+
+`awsf grant <task> --phase <key> --path <exact-file> --reason <text>` is a proposed interactive-only command. Repeat `--path` explicitly. Refuse directories, globs, duplicates, case aliases, dot segments, absolute paths, symlink files or parent escapes. For new files, validate the nearest existing parent, then revalidate at enforcement. Require PREPARED before an unstarted protected phase, or an eligible quota pause before that phase. Display the full immutable binding and exact files, confirm, re-read under lock, then append grant evidence and status. No YAML editing and no sidecar grant file.
+
+The grant becomes consumed for launch when authorization and phase activation are committed. A failed or abandoned execution cannot reuse it. Successful post-write permission enforcement followed by a host commit produces a separate immutable **candidate-binding** event, binding grant id, execution generation, pre-write HEAD, exact produced commit and actual protected delta. The write authorization itself never changes. A candidate replacement or correction turn requiring protected writes requires a fresh owner grant for that generation. Automatic protected corrections are refused unless independently authorized, not silently covered by an earlier grant.
+
+Later phases may preserve earlier protected commits. Final cumulative gates rederive the complete base-to-candidate protected delta and require each protected change to be covered by the target's own verified candidate-binding chain. Any changed final protected blob must equal the latest specifically bound blob on that path, with uninterrupted ancestry from the authorized pre-write HEAD. A final target-bound candidate authorization is an independent owner confirmation over the final SHA and complete grant/binding chain. Landing revalidates it and all current gates/review/journey evidence. A Boolean on status alone is never sufficient. Changing the final SHA invalidates final authorization, even if previous intermediate bindings remain historical evidence.
+
+Read-only adoption refuses protected candidates until it implements fresh target-bound authorization for that exact cumulative diff. Task 8C also refuses protected inherited deltas. Neither path may import a source grant or set `protectedApprovalsValid` from source evidence. Retry receives no write grant. Quota resume can retain an **unconsumed** grant only if its exact task, phase, generation, config and pre-write HEAD still match.
+
+Sources: `policy/path-policy.ts:evaluatePathPolicy`, `policy/sandbox-broker.ts:PermissionSession.enforce`, `workflow/engine.ts` enforcement before commit, `gates/git-diff.ts:noProtectedPaths`, `cli/commands/land.ts`, `cli/commands/raise.ts` issuance pattern.
+
+## D8. Bootstrap and protected implementation boundary
+
+There is no self-authorizing bootstrap. An implementation candidate cannot use its own new verifier to bless the protected writes that created it. The first foundation patch must be built in a separately owner-authorized external repository session against an exact file list, independently reviewed, tested and locally committed by the owner-approved landing process. The existing factory keeps refusing these writes until that verifier is canonical. This authorization must be obtained separately from architecture acceptance. Task 8B2 does not perform those writes.
+
+The first protected surface is `core/src/policy/path-policy.ts` and `core/src/policy/sandbox-broker.ts`. No lifecycle/state or transport-broker modification is required by this boundary-only design. Unprotected supporting changes include contracts, persistence, ledger recovery, workflow admission/context reconstruction, CLI issuance/resume, gates, projections and tests. If implementation discovers a need to change another protected file, stop for an exact-list amendment. Global protected-path configuration and operation prohibitions are never relaxed.
+
+After bootstrap, subsequent protected work uses the shipped TTY grant path within the factory. This preserves the goal of reducing external fallback without pretending that a verifier can bootstrap its own authority.
+
+## D9. Task 8C interface
+
+A seeded continuation accepts only a terminal BLOCKED/CANCELLED source with an exact, host-completed L7 candidate and no live survivors or unsettled calls. It creates a new target task at DRAFT with zero spent/reserved calls, current configuration, explicit owner-supplied request/findings and immutable seed provenance. The target follows a normal T2 build/review workflow from its first phase. It does not resume any source phase.
+
+Keep **integrationBaseSha** (canonical/source base) separate from **seedCandidateSha** (initial managed worktree HEAD). The target's ordinary `baseSha` remains the integration base so final hygiene, protected-path checks, review diff, journey and fast-forward landing cover the complete inherited-plus-new change. Update `cli/commands/start.ts:startCommand` to materialize the detached worktree from the validated seed, and `production-run.ts:validatePreparedRepository` to compare initial HEAD to that seed while separately requiring canonical HEAD at the integration base. Its current unconditional `HEAD === baseSha` check cannot admit a seed.
+
+Separate attribution from cumulative assurance in `production-run.ts:phaseGates`. Builder `changedFiles`, `diff_matches_claims` and per-phase write permissions describe only target-authored changes from the seed (or the phase's own pre-write checkpoint). Inherited paths are a separate host-measured context field, never falsely attributed to the target builder. Before provider execution, validate the inherited delta against current protected policy, risk tier and the union of non-review writer scopes in the **target** recipe, following `adopt.ts:candidateWriteGlobs`. At final gating, validate the entire integration-base-to-final diff for protection, risk, hygiene and configured commands. Validate target-authored edits against each actual writer's own scope. An inherited path outside permitted target recipe scope refuses rather than borrowing a source grant. Do not replace the full review diff with the target-only diff.
+
+The worker begins at the seed but earns its own host commit. The target reviewer gets target intent, explicit inherited/target attribution and the full base-to-final-candidate diff, not source review authority. Add an explicit seeded-target canonical-base pin to landing preflight and its pre-mutation recheck. Current `git/land.ts:inspectLanding` checks ancestry, not equality to the recorded base, so an existing generic stale-base refusal must not be assumed. LANDING recovery separately permits canonical HEAD already equal to the approved final candidate.
+
+Selection is exact SHA plus source task/attempt. Reject abbreviated SHAs, branch labels, arbitrary paths, dirty/partial directories, absent L7, candidate/base mismatch, source mutation after confirmation, unknown/live process state and assurance-transfer fields. Read source journal as authority and compare status to its derived final revision. Provenance records source revision and journal digest. Source worktree bytes are never copied or needed. Current owner-configured ignored provisioning paths may still come from the canonical repository through existing safe `seedWorktreePaths`, never from the source tree.
+
+Seed evidence and optional D11 `ownerAmendment` persist with target creation, bound to the seed authorization and the new target's first intended builder turn. A crash cannot leave an ordinary unseeded target that silently starts on main. The base request remains explicit fresh owner intent. Supplemental follow-up findings use the shared amendment shape instead of a special seed-only prompt string. Startup revalidates evidence before creating the worktree. Existing worktree collision refusal remains fail-closed, with no adoption, cleanup or Git movement. Retry explicitly drops seed and amendment delivery authority and performs a normal fresh build. A new seeding act always creates a distinct task.
+
+## D10. Interrupted-turn continuity
+
+### D10.1. What exists and what must be proved
+
+The owner elects to implement genuine interrupted-turn reconnection. A same-session correction flag is not evidence that a CLI can reconnect an unfinished turn. Feasibility is established by the live harness below, separately for each exact adapter/model/protocol capability. Until that evidence exists, the capability is unavailable, not assumed impossible or advertised as supported.
+
+| Source at the declared baseline | Observed contract | Consequence |
+|---|---|---|
+| `core/src/adapters/interface.ts:451-475` | `assertResumable` and `assertSameSession` describe conversation correction. The runtime predicate does not check `assertSameSession`. | Add a separate complete interrupted-turn method set and check every method. Also close the correction predicate's missing-method check. Neither Boolean declaration establishes live feasibility. |
+| `core/src/adapters/claude-code.ts:237-249,408-431,437-463` | Correction uses `--resume`, sends `request.prompt` on stdin, and checks UUID syntax plus null store path. | Q1: the shipped adapter supports reopening a conversation for another turn. It provides no proof of resuming the original in-flight turn, durable cursor or tool-effect state. The CLI's actual capability remains a harness question. |
+| `core/src/adapters/pi-codex.ts:245-263,534-585,599-634` | `--session-id`/`--session-dir` select a local session. Preflight checks one file, cwd and a prior assistant message. Missing-session creation is a documented hazard. | Q2: the shipped GPT route is pi on `openai-codex`. Its local session id is not proof of an OpenAI response/thread id. No durable provider response id, `previous_response_id`, reconnect cursor or unfinished tool state is exposed by this AWSF contract. Inspect the exact installed transport before choosing a stronger backend. |
+| `core/src/adapters/pi-codex-stream.ts:339-358,392-449` and `claude-code-stream.ts:271-358` | Normalization omits partial tool arguments and does not retain a durable private replay mapping. | Normalized telemetry cannot be the reconnect execution ledger. Preserve original provider ids, arguments, result bytes and ordering privately at the execution boundary. |
+| `core/src/adapters/stream/event-sequencer.ts:253-320,434-445,586-587` | Tool ids are mapped in memory and transport cancellation closes open telemetry tools as cancelled. | A cancelled telemetry row does not prove a tool had no effect. Reconnect must distinguish physical segment termination from logical tool/turn settlement. |
+| `core/src/execution/continuity-store.ts:48-59,200-241` | Records session identity and completed sends, not an active turn or replay cursor. `#flush` uses `writeFile` and `chmod`, without the durable append/atomic-replacement protocol required here. | Add versioned private per-turn checkpoints. Do not treat `turns >= 1`, a torn/missing mirror or that method's atomicity comment as an interrupted-turn proof. |
+| `core/src/execution/transport-broker.ts:359-411,453-519` and `launcher-barrier.ts:505-526` | Ordinary launches require a held reservation. Correction launches use a different verified path. Spend precedes GO. | Reconnection needs its own verified registration and accounting branch, not a forged ordinary launch or a free correction. |
+| `core/src/cli/commands/production-run.ts:1504-1515,1704-1794`, `review-phase.ts:857-905` | Permission/sandbox comparison and process creation are composed at host launch. Conversation identity is checked after streaming. | Add pre-launch original-turn proof at these real launch sites and verify identity/cursor before accepting resumed output or allowing a tool. Post-hoc identity comparison remains mandatory. |
+
+**Q6 resolved by the owner:** “Luna” means model `gpt-5.6-luna` on provider `openai-codex`. Pin that exact pair for the GPT proof, with `ModelRequest.effort = "low"`, emitted as `--provider openai-codex --model gpt-5.6-luna --thinking low` by the pi adapter (`pi-codex.ts:122-144,599-609`). Do not substitute `gpt-5.6-sol`, the current builder model or another provider. The cheap Claude proof uses Sonnet with effort `low`, emitted as `--effort low` (`claude-code.ts:83-98,449`). Resolve Sonnet to an exact available model/version at preflight and display it for approval. These are effort controls, not promises of a particular token budget or deterministic model text. Owner model selection does not establish installed availability or reconnect capability. Unsupported model/effort combinations refuse without fallback. No live test starts while its exact resolved selection or owner-approved spend cap is unresolved.
+
+### D10.2. Store, identity and exclusive continuation
+
+**Explicit persistence consent applies to every role, including workers.** `awsf.config.yaml` §agents configures the normal builder, planner, reviewer and other production roles with `harness.continuity: none`. `production-run.ts:1579-1587` consequently opens no ContinuityStore reference, and `claude-code.ts:237-238` / `pi-codex.ts:245-246` emit `--no-session-persistence` / `--no-session`. A harness pass alone cannot enable rescue for such a role. Its refusal is `continuity-not-enabled`, with retained partial work. An attempt originally launched ephemerally cannot acquire the missing provider checkpoint retroactively.
+
+Before the original turn, the owner must explicitly enable the new `agents[].harness.interrupted_turn: true` capability for that role and consent to its provider transcript/private-state retention. Add the Boolean to `core/src/config/schema.ts` with absent/false meaning disabled, and carry it through effective configuration, route resolution and original-turn descriptor construction. This opt-in is separate from the existing same-session **correction** allowance: it must not enable review corrections or extra sends. Split persistence eligibility from correction eligibility at `production-run.ts:1579-1597`, where `route.continuity` currently controls both the private conversation reference and the correctable-conversation map. Rescue-only persistence must populate the former without granting the latter. A reviewed configuration/descriptor contract amendment must define the resulting persistence argv, store location and sandbox boundary and obtain separate exact-file authorization for protected `awsf.config.yaml` when it is the configured source. Do not silently reinterpret existing `continuity: none`. With interrupted-turn opt-in absent, its ephemeral behavior remains unchanged. With opt-in present, the deliberately changed persistence descriptor becomes the original-turn baseline against which rescue is later compared, and must pass new descriptor tests and owner review before use. Changing config after an interruption invalidates rescue instead of repairing eligibility. The isolated harness supplies its own explicit opt-in configuration and never edits production config.
+
+“Same turn” means the same host logical-turn id and admission, same provider conversation id, same provider turn/request identity or authoritative execution-checkpoint lineage, same original input and phase/round, and the same accepted tool/output frontier. All must agree with a durable continuity-store record and current provider/CLI evidence. A conversation id alone, or `previous_response_id` used to create a new response, is insufficient.
+
+A backend may reconnect an existing provider response or continue an unfinished tool loop through an authoritative execution checkpoint. The latter is admitted only if the backend proves that it is the original user-request turn, preserves all completed tool calls/results, and introduces no replacement user request or regenerated accepted prefix. The proof must state which mode it provides. Restarting `--resume <session>` with a new “continue” prompt is not evidence of either mode.
+
+Add strict contracts in `core/src/contracts/interrupted-turn.ts` and private storage in `core/src/execution/continuity-store.ts`. The immutable checkpoint references:
+
+```
+logicalTurnId, originOperationId, originReservationId,
+phaseKey, phaseOrdinal, correctionRound, originalLaunchKind,
+continuityHandle, privateProviderIdentityRef, checkpointGeneration,
+originalRequestDigest, originalPromptBundleDigests, compiledRecipeDigest,
+originalTurnInputDigest, effectiveInputDigest, ownerAmendmentDigest,
+routeAndExecutableDigest, toolsAndSandboxDigest, protectedGrantGeneration,
+preWriteHeadSha, worktreeContentDigest, indexDigest,
+providerAcceptanceFrontier, outputCursor, toolLedgerHead,
+providerAcknowledgementFrontier, completed: false
+```
+
+Provider conversation/turn/thread/response ids, resume tokens, raw arguments/results and opaque cursors live only in access-restricted private records (directories 0700, files 0600). Public journal/status/projection entries carry host handles and digests, never raw provider locators. Validate schemas, containment, ownership and modes. A source-attempt private checkpoint is never transferable to 8C or retry.
+
+Before a logical turn can execute, durably record its authorization, original reservation binding, input digest, tool policy and private identity/checkpoint reference. Fsync private checkpoint bytes before journalling their digest/reference, then atomically replace status under the operation lock. Checkpoints are immutable generations. A disposable latest-checkpoint mirror must use a synced temporary file, atomic rename and directory durability where supported, not an in-place authoritative rewrite. Orphan private bytes grant nothing. A referenced missing/torn checkpoint refuses. A newer mirror cannot outrank the journal.
+
+At rescue, prove the old local controller and all tool descendants cannot execute further, and that the provider accepts at most one continuation claimant. Use an authoritative provider status/fencing or idempotent reconnect contract for the original turn. A host lease does not cancel remote execution. Unknown remote status or unidentifiable local survivors retains liability and refuses. If an already-running remote turn offers read-only stream reattachment with a proved cursor, reconnect only as its single consumer, without resending the request or dispatching duplicate tools.
+
+Recovery covers dirty **registered same-attempt** worktrees. Validate physical root, common Git directory, detached pre-write HEAD, index and content-addressed tracked/untracked partial changes, including relevant ignored mutable files. Bind the persisted pre-turn permission baseline and durable tool ledger to the current partial tree. Never open permissions against the dirty recovery tree as a new clean baseline, which would exempt earlier unauthorized writes from enforcement. If a host crash prevented a final tree snapshot, derive expected effects only from authoritative tool completion evidence and current byte hashes. Unexplained mutations or uncertain effects refuse while preserving the actual tree. Do not reset, stash, checkout, auto-commit or copy partial output into another task to manufacture eligibility.
+
+D7/D8 remain unchanged. A recoverably interrupted phase has not been marked failed or abandoned and keeps its original execution generation. Rescue cites that generation's already-consumed grant without re-consuming, widening or issuing it. A generation already failed, abandoned or superseded cannot be revived. Existing grant scope and pre-write baseline cover all partial and continued writes. A new correction/generation still requires its own authorization.
+
+### D10.3. Tool and output reconciliation
+
+**Q3:** exactly-once side effects cannot be inferred from a transcript. Require a durable execution-boundary ledger keyed by original logical turn plus provider tool-call id, with argument digest, dispatch intent, execution/idempotency key, effect outcome, exact result digest and provider acknowledgement. Record intent before dispatch, and result before acknowledging it to the provider. This must be enforced where the CLI actually executes the tool, not by an AWSF observer receiving an event after the tool has run.
+
+| Tool knowledge at the cut | Allowed action |
+|---|---|
+| Partial arguments only, no authorized dispatch | Resume argument streaming from the proved cursor. Do not execute incomplete/reconstructed arguments. |
+| Complete request, authoritatively never dispatched | Dispatch the original call once after reconnect verification. |
+| Execution committed and exact result retained | Supply the retained result through proved idempotent delivery. Never run the tool body again. |
+| Effect/result uncertain but executor supports transactional outcome lookup or a durable idempotency key | Resolve that exact operation and recover its result. Do not create a new key. |
+| Side effect may have happened, with no reliable lookup/idempotency contract | Refuse. Retain dirty files and liability. Missing result, cancelled telemetry and absent PID are not proof of nonexecution. |
+| Same tool id with changed arguments/result, or incompatible acknowledgement frontier | Refuse as continuity corruption. |
+
+A native CLI without an enforceable tool-execution/result hook cannot claim tool-bearing rescue merely because a no-tools conversation test passed. An instrumentation wrapper used only by the proof harness is insufficient: the production path must expose and enforce the same tool ledger, without disabling the tool-policy or clean-room fences. Arbitrary shell/network side effects are never made idempotent by labelling them safe. Test both a transactional fixture executor and an intentionally ambiguous non-idempotent executor.
+
+**Q4:** retain all physical stream bytes append-only by transport segment. Never concatenate a second CLI's full replay into the prior partial JSON. A logical-output reducer uses stable original message/event ids and cursor offsets to deduplicate an identical replay prefix, verify its digest, and append only new suffix bytes. Persist the normalized provider-to-host tool-id mapping and logical sequencing frontier so reconnect does not mint duplicate logical calls. A mismatched prefix, gap, changed completed tool result or unsupported cursor refuses. Regenerated text cannot silently replace an already retained prefix. A provider offering only text regeneration fails that cut's reconnect contract.
+
+Each physical segment gets its own termination evidence. A synthetic segment cancellation does not settle the logical tool as effect-free or the logical turn as completed. Run-level raw streams remain independently auditable. Accept a phase envelope only once, after an authoritative complete-turn result, identity/frontier validation and ordinary gates. If the result was already complete at the crash, reconstruct it locally without another model invocation. Host commit and D7 candidate-binding recovery use the exact commit intent and object identity before deciding whether any commit work remains.
+
+### D10.4. Adapter contract and actual broker authorization
+
+Add `InterruptedTurnCapableAdapter`, separate from `ContinuityCapableAdapter`, with a complete runtime predicate and a versioned proof capability. Proposed method responsibilities are:
+
+| Method | Required result |
+|---|---|
+| `inspectInterruptedTurn(privateRef, binding)` | Read-only authoritative original-turn identity, acceptance/completion state, output/tool frontiers, exclusive-takeover capability and supported amendment-delivery mode. Return a typed refusal for unknown facts. No syntax-only success. |
+| `verifyCheckpoint(checkpoint, inspection)` | Verify private-store generation/digests, original route/input, tool ledger, dirty-worktree binding and original reservation. Produces a host-owned verified value, not a caller-provided Boolean. |
+| `buildReconnectSpec(verified, admission)` | Pure descriptor for the exact authorized reconnect/cursor/amendment, with unchanged tools, model/effort, sandbox and grant. Never spawn. |
+| `reconcileTool(verified, toolRecord)` | Query or deliver the exact recorded result under a proved idempotency contract. Cannot blindly execute an uncertain tool. |
+| `verifyReattachment(verified, observed)` | Check original turn/conversation, actual resolved model evidence, cursor, tool frontier and amendment acknowledgement before new output is accepted or side-effecting tools are enabled. |
+| `verifyTurnCompletion(verified, terminal)` | Prove this same logical turn completed once with coherent final output/tool frontier. No surrogate new-turn completion. |
+
+Host code, rather than adapters, performs private checkpoint I/O and subprocess execution through the existing broker. Adapter inspection can describe required read-only protocol requests, but cannot independently spawn or send a replacement model request. The installed method set, capability proof and operation-specific evidence must all agree. A capability declaration without any method, or a method that returns only UUID/session-file existence, refuses.
+
+Add a distinct `turn-reconnect` registration to `core/src/adapters/interface.ts:BrokerProcessRegistration`, naming original authorization/reservation, turn handle, interruption anchor, reconnect generation, checkpoint/admission/amendment digests and exact phase/round. A new verifier in `core/src/workflow/turn-reconnect-authorization.ts` checks durable lifecycle RUNNING **or REVIEWING as appropriate**, the original task-edge/agent/correction authorization, compiled identity, route inversion for review, exclusive lease and per-operation proof. The ordinary phase verifier's RUNNING-only rule must not be reused to accidentally reject review or accept the wrong authorization class.
+
+`core/src/execution/transport-broker.ts:startProcess` and `launcher-barrier.ts` must explicitly admit that verified class and invoke D4's ledger-owned reconnect accounting. For an already spent original call, the barrier still registers the new physical process before GO but records reattachment against the existing debit instead of calling `spendOnGo` again. Existing correction allowance is neither charged nor refreshed. An interrupted cold correction retains its own original call reservation. An interrupted same-session correction retains its originally charged correction round/tranche and parent call. Reconnecting cannot create a new round or replenish headroom.
+
+The protected `core/src/execution/transport-broker.ts` change is an **additional D10 bootstrap requirement**, beyond D8's boundary-only surface. It needs a separately approved exact-file authorization before implementation. D8's grant/bootstrap rules are not relaxed. State-machine changes are not presumed necessary: distinguish transport interruption from terminal phase failure in `workflow/engine.ts`, `production-run.ts` and `review-phase.ts` before invoking existing settlement. If those changes require a protected state-contract amendment, stop and obtain its exact authorization rather than quietly widening D8.
+
+For Claude, add an authoritative session/turn/store inspection and tool-execution/result contract or a reviewed transport that exposes them. Do not move credentials merely to manufacture a readable session store. Existing `assertResumable` remains insufficient for this feature. For pi/GPT, prove whether its installed session manager and provider transport persist the needed response/request frontier and tool state. A session header plus assistant count does not qualify. Any replacement integration must preserve explicit `openai-codex` routing, clean-room configuration, subscription authentication boundaries, descriptor checks and the dependency allowlist. No unapproved SDK dependency or automatic provider fallback is introduced.
+
+**Q5:** mid-review turns are included in the proof matrix and rescue verifier. They require the original review context/diff digest, immutable candidate, inverse provider, original review generation/round and no previously completed verdict. The all-role explicit persistence consent in D10.2 applies to reviews too. Existing review `continuity: none` must not silently become persistence permission or same-session correction authority. Missing capability/configuration uses current L17 refusal. A low-effort harness pass does not authorize a high-effort production reviewer by analogy.
+
+### D10.5. Live proof harness and release capability
+
+Implement `core/test/live/interrupted-turn-proof.ts` with narrowly scoped fixtures under `core/test/live/support/`. This is an owner-invoked **required implementation test**, outside the default `npm test` globs and all CI hooks. Deterministic replay/fault cases additionally live under `core/test/unit/`, `core/test/contract/`, `core/test/simulation/` and `core/test/journeys/`. Those tests never claim to replace live feasibility proof.
+
+The harness directly exercises the production adapter, permission composition, reconnect verifier, ledger and transport broker against isolated temporary repositories and test-only attempt stores. It does not drive the factory's CLI/workflow orchestration or read/write existing project attempts. Subprocess creation still goes only through `core/src/execution/transport-broker.ts`. Retain raw evidence and test journals outside the repository. No runtime receipt/manifest/checkpoint is committed.
+
+**Selection and budget:** require explicit adapter, exact model id, low effort, role/mode and an owner-approved maximum number of original turns. Sonnet-low and `openai-codex/gpt-5.6-luna` at low effort are independent runs. Display resolved executable/version, adapter source digest, provider/model, effort, tool profile, sandbox mechanism and the call cap before consent. Read quota first. No model substitution, automatic retry-until-green, billing-mode change or modification of production config. Each test fixture's original turn costs a call. Its same-turn reconnections never increment that fixture's call count, while observed token usage remains recorded. A missed cut or exhausted test budget yields an incomplete result, not a pass.
+
+**Fixture:** seed a clean disposable repository, then ask the real model to read a unique fixture token, make one bounded source edit without committing, use an instrumented local tool that records a uniquely keyed effect and exact result, and emit a schema-valid completion containing the tool's returned checksum. Keep a canonical baseline and an independent tool-dispatch/effect counter. A review fixture receives an exact immutable diff/context and a read-only tool sequence with a distinguishable terminal result. The amendment variant adds a fresh owner-only challenge that must be reflected after its acknowledged delivery frontier. Do not rely on model prose to prove which tools executed.
+
+**Cuts:** instrument actual production protocol/durability boundaries, not elapsed-time guesses. Sweep D5's entire table, including before provider acceptance, after identity and first partial text, during tool arguments, before dispatch, after effect but before result durability, after result durability but before provider acknowledgement, after acknowledgement, during continued text, mid-review, after terminal result but before envelope/gates, during commit/binding persistence, after reconnect activation/registration, during amendment acknowledgement and after settled operation replay. Exercise host death while the provider survives, provider death while the host survives, both dying, and an ambiguous survivor. Controlled signals target only positively identified fixture process trees. Never kill by executable name or install an external production lifecycle timeout. A test watchdog can report incomplete and cleanly stop identified test children, but is not evidence that a turn was quiescent at the selected cut.
+
+**Assertions:** record and verify private original conversation/turn identities, original reservation and unchanged call spend, route/executable/model/effort/tool/grant/descriptor binding, exact retained worktree/index bytes at reconnect, stable output prefix/cursor, one logical execution per completed tool id, identical recovered tool result, no duplicate effect, one terminal logical completion and one accepted envelope. Compare the independent dispatch/effect counter to the provider transcript and host ledger. Replay every settled recovery and prove it starts no child and changes neither spend nor result. Mutate each identity/digest/grant/prompt/lease independently and require fail-closed refusal. Missing-store and unknown-session tests must never produce a fresh conversation bearing the old label.
+
+“Deterministic completion” means the fixed fixture's observable invariants, tool checksum and complete validated envelope, not byte-identical model prose across fresh requests. Require repeated successful actual reconnections at the declared supported cuts (at least three independent fixtures per supported cut and mode), including a worker cut after a completed tool with dirty output and a mid-review cut for any review-capable claim. No-tools-only success cannot enable tool-bearing rescue. A matrix consisting entirely of refusals cannot enable an adapter. Safe-refusal cells must preserve partial bytes, reservations and evidence and must never re-execute an ambiguous side effect.
+
+The result identifies each cell as `proved-resume`, `proved-completed-result-recovery`, `proved-safe-refusal`, `failed` or `not-exercised`, with evidence locators/digests. A route is enabled only for the exact adapter/protocol version, provider/model, effort, role, tool-executor class, sandbox mechanism and amendment mode whose required cells passed. Deterministic fixture descriptions/expected classifications can be committed, but measured runtime results remain external journals. A new model, version, tool executor or stronger capability claim requires new evidence and explicit enablement. A Sonnet-low or GPT-low pass establishes only that tested capability, not the production default high-effort routes. Missing or unverifiable proof disables rescue while retaining ordinary cold workflows and safe refusals.
+
+Implementation order is feasibility-first: specify the private protocol/checkpoint and instrument real tool boundaries, build the live harness, prove the exact cheap routes, then integrate only demonstrated capabilities into host rescue and owner-facing commands. Required protected/bootstrap authorization precedes any protected implementation. Do not ship a generic resume flag and hope the harness later justifies it.
+
+## D11. Shared owner amendment
+
+Resume, rescue, rework and 8C accept an optional **supplemental instruction**, represented by one strict `OwnerAmendment` host contract in `core/src/contracts/owner-amendment.ts`. The existing task request, compiled bundles and rework defect remain unchanged. Absence is represented by null/omission and leaves their prompt bytes and behavior exactly as before. An explicitly provided blank or oversized instruction refuses instead of becoming a silent mutation.
+
+```
+OwnerAmendment {
+  schema: "awsf.owner-amendment/v1",
+  id, actor: "owner", text, textDigest, digest, confirmedAt,
+  binding: {
+    project, taskId, attempt, sessionId,
+    entry: "resume" | "rescue" | "rework" | "seed",
+    authorizationId, anchorId, operationId,
+    phaseKey, phaseOrdinal, logicalTurnId, correctionRound,
+    originalRequestDigest, originalPromptBundleDigest,
+    priorAmendmentDigest, deliveryFrontier
+  }
+}
+```
+
+The TypeBox schema uses a discriminated binding: absent anchor/turn values are explicit nulls only for modes in which they do not yet exist. Seed binds a predetermined new target session and first delivery phase/ordinal, then links its logical turn at activation. It never binds delivery to the source task. `textDigest` hashes exact UTF-8 instruction bytes. `digest` hashes canonical serialization of the whole immutable content/binding excluding the digest itself. Reject credential-shaped content using the same pre-persistence discipline as `rework.ts:credentialSafeText`. Do not normalize a confirmed instruction into different text, accept policy/route/budget overrides as structured fields, or let provider text impersonate the owner actor.
+
+**Capture and authorization:** stage optional text in memory, display its exact text, recipient phase/turn, existing cost and authority limits with the entry's usual confirmation, then re-read bindings under the operation lock. Decline/refusal before authorization records nothing. Accepted text is a distinct `owner-amendment` journal fact with its own id/digest, carried inside the same composite activation/seed-creation event as the authorization that binds it. This preserves D5 atomicity instead of introducing an amendment-written/activation-missing gap. Project it with a deterministic sub-id and retain full credential-safe text in the journal. An accepted amendment never overwrites a prior amendment, original compiled prompt or task request.
+
+**Composition and delivery:** a shared host composer takes the original turn input plus the explicit `ownerAmendment` field and returns `{ originalInputDigest, ownerAmendmentDigest, composedText, composedDigest }`. Render a clearly delimited owner-supplement block after the ordinary turn input, encoded unambiguously so instruction text cannot forge host headers. Do not raise its authority above system/policy controls. Persist an immutable per-activation composed-input record and compare its digest to the actual adapter request (`ProcessSpec.stdin` for text-based launches). Original `compiled-prompt` records remain immutable and retain their original names/digests. Any attempt to omit, substitute or deliver an amendment twice is a binding failure.
+
+| Entry path | Required delivery |
+|---|---|
+| Boundary resume, D1/D4 | `ResumeAdmission.ownerAmendment` reaches the next unstarted phase's activation, TurnPreflight and real prompt. No new route, tranche, reservation cost or headroom is introduced by the supplement. |
+| Mid-turn rescue, D10 | `RescueAdmission.ownerAmendment` is bound to the same logical turn and exact safe input frontier. The backend must expose idempotent in-turn steering/input delivery with an acknowledgement keyed to amendment id/digest. D10's identity check covers the original turn plus the amended effective-input digest. |
+| Owner rework | Carry `ownerAmendment` through the confirmation, L19 activation and `reworkPrompt` composition in `core/src/cli/commands/rework.ts:428-449,620-647`. The mandatory defect stays separate. Descriptor comparison at `:814` covers the actual amended prompt. Keep the rework phase's `maxCorrections: 0` (`:704`), its usual call admission, owner re-entry charge and T2 review headroom. |
+| 8C seeded continuation | Keep fresh target request as the base intent, with supplemental owner findings in `seed.ownerAmendment`. Bind it to target creation/authorization and deliver it to the target's first intended builder turn. The target review context includes the accepted amendment as target intent, with full cumulative candidate evidence. No source request, review, grant, budget or continuity authority is imported. |
+
+A rescue supplement changes future input, so equality to the **unamended** prompt is not the correct invariant. Validate original bundle/request/recipe digests unchanged, then validate the separately authorized amendment, delivery frontier and effective composed-input digest. Compare the real reconnect descriptor against the post-confirmation TurnPreflight containing that amended input. Previously completed tools, acknowledged results and retained output are never invalidated or replayed because the owner added text. Later recovery must reconstruct the whole immutable amendment chain and each acknowledgement, not resend every historical supplement.
+
+If the backend can only accept a new user turn, or cannot prove idempotent steering acknowledgement, **rescue with an amendment refuses** and retains the staged instruction for display to the owner without silently launching unamended. The owner can separately choose an unamended rescue if that capability is proved, or existing rework/seed paths when eligible. The host does not queue a secret later model call or count a new user turn as the old reservation. This is a per-adapter feasibility requirement, including the crash after amendment delivery but before acknowledgement. Original-input reattachment and amended reattachment are separately tested capability modes.
+
+For mid-review, an amendment is visible owner input on the same unfinished review, with original review policies, candidate and evidence unchanged. It is never a replacement review or a permission to discard findings. The final review context and owner landing display disclose the supplement. A completed verdict cannot be reopened to inject it. If in-turn review steering cannot be proved, amended review rescue refuses even when unamended review rescue is supported.
+
+An amendment grants no protected access, extra tools, model/provider change, process permission, economic admission, correction allowance, extra review round, journey attestation or landing authority. Scope-changing instructions may therefore be refused by existing policy/gates. Rework still gets exactly its authorized turn, with no hidden correction loop. For each entry, record delivery/acknowledgement and prove the instruction reached the **actual** adapter input. Being present only on a confirmation screen or in a journal is insufficient.
+
+## Finding dispositions and required tests
+
+Original F/R defects are dispositioned by the rules below. New obligations cover the owner-directed D10/D11 extension and the independent review's N findings. These are required implementation proofs, not claims that the foundation is built or its live harness has passed.
+
+| Finding | Disposition and concrete proof obligation |
+|---|---|
+| F-1 | D7 keeps deny-list plus separate exact exceptions. Differential tests prove no-grant equivalence, granted file pass and every ungranted protected file fail in both permission enforcement and gates. |
+| F-2 | D7 uses immutable pre-write authorization and separate produced-candidate binding. D8 requires separately authorized external bootstrap. Test issuance before a candidate exists, one-shot consumption, changed-generation refusal and absence of any self-approval path. |
+| F-3 | D1/D10 include original-turn mid-review rescue at REVIEWING without a fake L15/L26 edge or another L11/L25. Prove exact inverse route, candidate/evidence/round and original debit. Missing proof uses existing L17 after safe settlement. |
+| F-4 | D4 adds ledger-owned recovery with operation ids. Test unknown-id release refusal, registered conservative spend, spent preservation, quiescence refusal and replay without duplicate charges. |
+| F-5 | D1/D6 post-GO mismatch goes FAILED/L8 or L17 BLOCKED. Test legal error vocabulary, no accepted envelope, no spend refund and subsequent resume refusal. |
+| F-6 | D4 checks the actual QUEUED ordinary agent launch and its held reservation/ordinal. D10 checks a separate actual reconnect registration against the original active turn and held/spent original reservation as appropriate. Neither uses an unrelated CORRECTING edge. Test wrong-ledger, released/unrelated reservation, changed phase/round and forged reconnect capability rejection. |
+| F-7 | D1/D2 preserve original QUEUED records and compiled ordinals. Test no new phase id, duplicate ordinal or replayed completion. |
+| F-8 | D5 composite activation atomically consumes anchor and starts phase. Sweep before/after append, status, projection, launch-intent, registration, spend, GO and completion. Assert deterministic recovery and no duplicate launch/envelope. |
+| F-9 | D2/D6/D10 record the appropriate `unstarted-phase` or `verified-interrupted-turn` proof, private checkpoint reference and capability digest in durable activation evidence. Replay preserves proof and original reservation binding, while public schemas reject provider/session/turn/tool locators. |
+| F-10 | D6 now supports interrupted-turn continuation under D10. Require a live harness pass for the exact adapter/model/mode plus complete runtime methods and authoritative current turn/store/cursor/tool proof at the actual launch. Syntax-only checks, missing or mismatched proof, untested versions and unidentifiable survivors refuse. Conversation correction support alone never qualifies. |
+| F-11 | D3 buffers probe failure callbacks. Snapshot entire attempt directory, revision and worktree for all unavailable outcomes and decline. Assert byte identity and zero reservation. |
+| R-1 | D7 consumes the same verified grant before commit in PermissionSession and in gates. End-to-end test an exactly granted protected edit reaching a host commit, with neighboring protected edit refused before commit. |
+| R-2 | D4 puts reservation and broker on one ledger. Test object ownership plus broker-held lookup, including resume admission crossing the command/host boundary. |
+| R-3 | D5 has no anchor-cleared/phase-absent gap. Crash immediately after activation append and assert active unresolved operation after replay, never inactive. |
+| R-4 | D2 replaces both full-workflow economic admission sites for resume. Test later-phase design-to-plan at exact remaining ceiling and unchanged rejection of insufficient cold-correction headroom. |
+| R-5 | D2 selects accepted rounds by explicit acceptance evidence and restores design context. Test rejected round zero, accepted round one, architecture-review context and missing/tampered prefix refusal. |
+| R-6 | D6 carries TurnPreflight through ResumeAdmission into host and broker. Mutate descriptor, badge, mechanism, tool set, grant, executable version and worktree pin between confirmation and GO. Assert refusal at the correct charged/uncharged boundary. |
+| R-7 | D1/D4 prohibit blanket reservation release on all pause branches. Test active/registered/spent/pending-intent cases and assert neither resumable anchor nor refund. |
+| R-8 | D3 takes one selected route row. Test multiple providers/scopes, mismatched route, stale/unknown row, equality and below-threshold values. |
+| R-9 | D1/D6 validate physical top level, Git common directory, registered managed path, detached HEAD and canonical base before confirmation and launch. Boundary resume requires clean input. D10 requires the exact retained dirty tree/index and original permission baseline. Test manual HEAD move, symlink alias, foreign repository, unexplained mutation, substituted partial tree and between-check races. |
+| N-1 | D9 separates inherited and target-authored diff attribution. Test an unchanged inherited file absent from builder `changedFiles` but present in full review evidence, target-only diff claims, target recipe scope refusal and full cumulative protected/risk/hygiene gates. Source write grants never transfer. |
+| N-2 | D9 explicitly changes start and PREPARED validation to check seed HEAD and integration base separately. Test successful seeded start/run, each mismatched SHA, tampered provenance and canonical movement before landing. |
+| F-12 | D5/D10 sweep every original and reconnect crash cut with deterministic resume/result-recovery/refusal classification. Test host-only/provider-only/both death, mid-review and all-refusal nonqualification. Record exact live model/version/mode proof separately from offline tests. |
+| F-13 | D10 reconciles tool effects without replay. Prove the independent executor's dispatch/effect counters stay one for every completed call, exact result recovery after result/ack loss, and safe refusal for uncertain non-idempotent effects. Telemetry cancellation cannot authorize another execution. |
+| F-14 | D10 preserves original provider conversation and logical-turn/request lineage, private checkpoint and cursor across multiple reconnects. Reject a newly created session bearing the old id, a new user turn in the same conversation, changed route/model, missing store and unsupported adapter. For every role, test `continuity-not-enabled` without original-turn interrupted-turn opt-in and refusal of retroactive enablement. |
+| F-15 | D6/D10 prove actual descriptor, original input, tools, sandbox, worktree and grant generation at reconnect. Mutate each field before GO and before first continued tool. Assert refusal and no effects from an unverified reattachment. Test unchanged ephemeral argv by default and independently reviewed persistence argv under explicit opt-in, without enabling correction/headroom. |
+| F-16 | D4/D10 reconnect on the original reservation with at most one call debit, including crash between spend and GO. Test held-to-spent once, already-spent reuse without `spendOnGo`, released/unrelated-id rejection and unchanged correction round/tranche. |
+| F-17 | D5/D10 settled-operation replay returns the recorded outcome with no new launch, tool/result delivery, output append, commit, envelope or spend. Repeat after projector/status recovery and interruption during another reconnect. |
+| F-18 | D10 preserves exact dirty-worktree/index bytes and output prefix on success or refusal. Prove no reset/stash/automatic checkpoint commit, no partial JSON concatenation, no duplicated replay prefix and no invented completion from a truncated stream. |
+| R-10 | D11 amendment id/text/digest/binding survives journal-first crash recovery and replay. Test atomic activation/seed creation with its amendment, tampering, stale anchor/generation, changed text after confirmation and idempotent acknowledgement recovery. |
+| R-11 | D11 proves actual delivery on resume, rescue, rework and seed: capture adapter input and provider acknowledgement where required, check a fixture owner-only challenge after delivery, and compare the real composed-text digest against TurnPreflight. A journal-only supplement must fail. |
+| R-12 | D2/D11 preserve original request/bundle/recipe digests while validating additive amendment/acknowledgement chains. Test byte-identical no-amendment composition and behavior, no inherited source amendment delivery, and no replay of already acknowledged supplements. |
+| R-13 | D11 reprompt never changes grant, tools, model/route, admission, call ceiling, correction headroom, review count, journey or landing authority. Assert rework `maxCorrections === 0` and identical economic decisions with/without an amendment. Unsupported same-turn steering refuses explicitly rather than starting a new call or silently omitting the instruction. |
+| B-1 | D10.2 requires persistence consent and a reviewed original descriptor for every worker/support/review role. A live harness pass cannot override role configuration. Prove default ephemeral behavior, explicit role-scoped opt-in, immutable original config/descriptor binding and no retrofit of missing checkpoints. |
+
+## Validation and release conditions
+
+The enlarged architecture must receive a fresh independent source-backed review addressing F-1 through F-18, R-1 through R-13, N-1/N-2 and B-1 with no blocking finding before downstream implementation planning is accepted. The preceding boundary-only review is not approval of D10/D11. Owner architecture acceptance and every exact protected bootstrap/write authorization remain separate requirements. This document performs none of those writes.
+
+Implement and validate the shared contracts, private checkpoint/tool ledger and live proof harness before enabling a production reconnect path. `core/test/live/interrupted-turn-proof.ts` is a mandatory per-adapter release test invoked explicitly by the owner, never a default CI gate. It must prove genuine same-turn recovery, tool-effect idempotency, identity/cursor preservation, original-reservation accounting, dirty-worktree retention and owner-amendment delivery for each claimed worker/review mode. Safe-refusal tests must pass too. Mock transcripts, syntax checks, a completed-session reopening demo and an all-refusal matrix cannot satisfy live feasibility.
+
+No adapter, model/effort, tool executor or amendment mode may claim reconnection until its required live cells pass and their external evidence is verified. Untested or failed capabilities remain disabled with named safe refusals. Q6 pins the GPT proof to `openai-codex/gpt-5.6-luna` at low effort. Verify that exact pair's availability, resolve the exact Sonnet selector and confirm each run's owner-approved test budget before paid probes. No fallback model is chosen to complete the matrix. Low-effort proof does not silently enable high-effort production routes.
+
+Run `npm run test:unit`, `npm run test:contract`, `npm run test:sim`, `npm run test:journeys`, `npm run typecheck` and `npm run lint` for implementation, including the new F/R/N obligations and existing invariant fences. Required checks include journal/status/projector crash cuts, lease/exclusive-takeover races, no double debit, per-tool effect/result ambiguity, immutable prompt/amendment reconstruction, protected-policy parity, seeded full-diff assurance and fresh T2 review/journey/landing evidence. The live harness is additional evidence, not a replacement for these gates.
+
+No factory workflow is used to execute this external design/build work. Live feasibility tests use isolated fixture stores and direct tested adapter/broker components only, with no access to retained factory attempts and no production lifecycle timeout. Runtime evidence stays outside the repository. Design completion, successful harness execution, production enablement and owner acceptance must be reported separately.
