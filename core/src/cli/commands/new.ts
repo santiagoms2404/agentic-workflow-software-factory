@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
+import { assertCandidateSeed, type CandidateSeed } from "../../contracts/candidate-seed.ts";
+import { sha256 } from "../../contracts/owner-amendment.ts";
 import { attemptDir as attemptDirectory } from "../../persistence/platform-paths.ts";
 import { correctionAllowance } from "../../state/task-machine.ts";
 import { assertCeiling, ceilingFor, type CallCeilings, type Tier } from "../../state/tiers.ts";
@@ -17,6 +19,8 @@ export interface NewCommandOptions {
   readonly project: string;
   readonly taskId: string;
   readonly continuesTask?: string;
+  /** Host-authorized seed, persisted atomically with the first target event. */
+  readonly seed?: CandidateSeed;
   readonly repository: string;
   readonly request: string;
   readonly workflow: string;
@@ -76,8 +80,9 @@ export async function newCommand(options: NewCommandOptions): Promise<{ attemptD
     request: options.request,
     configSnapshotJson: options.configSnapshotJson ?? "{}",
     lifecycleState: "DRAFT",
-    baseSha: null,
+    baseSha: options.seed?.integrationBaseSha ?? null,
     candidateSha: null,
+    ...(options.seed === undefined ? {} : { seed: options.seed }),
     phase: null,
     budget: {
       attempt,
@@ -104,8 +109,17 @@ export async function newCommand(options: NewCommandOptions): Promise<{ attemptD
     revision: 1,
     lastSourceSeq: 1,
   };
+  if (options.seed !== undefined) {
+    const seed = options.seed;
+    assertCandidateSeed(seed);
+    if (seed.target.taskId !== status.taskId || seed.target.project !== status.project || seed.target.sessionId !== status.sessionId ||
+        seed.target.attempt !== 1 || seed.workflow !== status.workflow || status.tier !== 2 || status.continuesTask !== seed.source.taskId ||
+        seed.configDigest !== sha256(status.configSnapshotJson) || seed.requestDigest !== sha256(status.request)) throw new Error("seed does not bind this new target");
+  }
   return {
     attemptDir: dir,
-    status: await persistAttempt(dir, null, { kind: "attempt.created", next: status }, options.projectRecord),
+    status: await persistAttempt(dir, null, { kind: "attempt.created", next: status,
+      ...(options.seed === undefined ? {} : { evidence: { type: "candidate-seed" as const, seed: options.seed } }),
+    }, options.projectRecord),
   };
 }

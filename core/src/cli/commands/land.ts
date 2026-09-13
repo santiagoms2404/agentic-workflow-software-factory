@@ -27,6 +27,7 @@ import {
 } from "./attempt.ts";
 import { readAttemptEvidence, recordedReviews, supersededReviewLines } from "./review-record.ts";
 import { writeRunReport } from "../../observability/run-report.ts";
+import { verifiedTargetSeed } from "../../workflow/candidate-seed.ts";
 
 export interface LandCommandOptions {
   readonly attemptDir: string;
@@ -186,9 +187,11 @@ async function finish(
   }
   options.assertAdvancement?.(status.sessionId, "LANDED");
   try {
+    const seed = await verifiedTargetSeed(options.attemptDir, status);
+    const pin = seed === null ? undefined : { integrationBaseSha: seed.integrationBaseSha };
     const outcome = recover
-      ? recoverLanding(status.repository, candidate)
-      : completeLanding(status.repository, candidate);
+      ? recoverLanding(status.repository, candidate, undefined, pin)
+      : completeLanding(status.repository, candidate, undefined, pin);
     const decision = decideCompletion(status, outcome);
     const now = (options.now ?? ((): string => new Date().toISOString()))();
     const next = nextRevision(status, {
@@ -249,7 +252,13 @@ export async function landCommand(options: LandCommandOptions): Promise<LandComm
     throw new Error("unreachable landing authorization");
   }
 
-  const inspection = inspectLanding(current.repository, current.candidateSha);
+  const seed = await verifiedTargetSeed(options.attemptDir, current);
+  const inspection = inspectLanding(current.repository, current.candidateSha, undefined,
+    seed === null ? undefined : { integrationBaseSha: seed.integrationBaseSha });
+  if (seed !== null) {
+    options.terminal.write(`Seeded candidate ${seed.seedCandidateSha}. Integration base pinned to ${seed.integrationBaseSha}. Fresh target assurance only.`);
+    if (seed.ownerAmendment !== null) options.terminal.write(`Owner supplement: ${JSON.stringify(seed.ownerAmendment.text)}`);
+  }
   // Write while the attempt is still AWAITING_OWNER so the polling dashboard
   // can render the same record beside the terminal confirmation.
   await recordSummary(options, current, inspection);

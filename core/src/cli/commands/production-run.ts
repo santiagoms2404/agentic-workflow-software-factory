@@ -17,6 +17,8 @@ import { AdapterError, isContinuityCapable } from "../../adapters/interface.ts";
 import { registeredAdapter } from "../../adapters/registry.ts";
 import { writeSystemPromptFile } from "../../adapters/system-prompt-file.ts";
 import { toConfigSnapshotJson } from "../../config/effective-config.ts";
+import { composeOwnerAmendment } from "../../contracts/owner-amendment.ts";
+import { seedContext, verifiedTargetSeed, validateSeedStartup } from "../../workflow/candidate-seed.ts";
 import type { AwsfConfig, AgentDefinition, AdapterEntry } from "../../config/schema.ts";
 import { BUILD_OUTPUT_SCHEMA_ID, type BuildOutput } from "../../contracts/build-output.ts";
 import type { EnvelopeBase } from "../../contracts/envelope-base.ts";
@@ -604,10 +606,14 @@ function phaseGates(
   compiledPrompt: string,
   tier: Tier,
   buildsCandidate: boolean,
+  attributionBaseSha: string | null = null,
 ): readonly GateDefinition[] {
-  const observe = review === null && phaseId !== "documenter"
-    ? (): readonly string[] => changesSinceBase(worktree, baseSha)
-    : observePhase;
+  const observe = attributionBaseSha !== null && review === null
+    ? (): readonly string[] => changesSinceBase(worktree, attributionBaseSha)
+    : review === null && phaseId !== "documenter"
+      ? (): readonly string[] => changesSinceBase(worktree, baseSha)
+      : observePhase;
+  const assurance = attributionBaseSha === null ? observe : (): readonly string[] => changesSinceBase(worktree, baseSha);
   const read = artifactReader(worktree);
   const common: GateDefinition[] = [
     {
@@ -633,7 +639,7 @@ function phaseGates(
     },
     { id: "artifacts_exist", run: ({ envelope }) => artifactsExist(envelope.artifacts, read) },
     { id: "json_parses", run: ({ envelope }) => jsonParses(envelope.artifacts, read) },
-    { id: "no_protected_paths", run: () => noProtectedPaths(observe(), config.policy.protected_paths) },
+    { id: "no_protected_paths", run: () => noProtectedPaths(assurance(), config.policy.protected_paths) },
   ];
   if (phaseId === "planner") {
     common.push(
@@ -669,7 +675,7 @@ function phaseGates(
       // the case the declaration cannot catch.
       {
         id: "risk_tier_sufficient",
-        run: () => riskTierSufficient(observe(), tier, config.risk, "the candidate changes"),
+        run: () => riskTierSufficient(assurance(), tier, config.risk, "the candidate changes"),
       },
     );
   }
@@ -912,8 +918,12 @@ async function validatePreparedRepository(status: AttemptStatus): Promise<void> 
     throw new ProductionRepositoryMismatch(`managed worktree belongs to ${JSON.stringify(worktreeCommon)}, expected ${JSON.stringify(canonicalCommon)}`);
   }
   const head = runGit(worktreeGit, ["rev-parse", "HEAD"]).trim();
-  if (head !== status.baseSha) {
-    throw new ProductionRepositoryMismatch(`PREPARED HEAD is ${head}, expected recorded base ${status.baseSha}`);
+  const expectedHead = status.seed?.seedCandidateSha ?? status.baseSha;
+  if (head !== expectedHead) {
+    throw new ProductionRepositoryMismatch(`PREPARED HEAD is ${head}, expected recorded initial HEAD ${expectedHead}`);
+  }
+  if (status.seed != null && runGit(canonicalGit, ["rev-parse", "HEAD"]).trim() !== status.baseSha) {
+    throw new ProductionRepositoryMismatch("seeded target canonical HEAD differs from its integration base");
   }
 }
 
@@ -941,6 +951,8 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
     throw new ProductionConfigSnapshotMismatch();
   }
 
+  const seed = await verifiedTargetSeed(options.attemptDir, status);
+  if (seed !== null) await validateSeedStartup(seed, status, options.config, options.configPath, options.attemptDir);
   const agents = new Map(options.config.agents.map((agent) => [agent.name, agent]));
   const routePrompts = new Map<string, PromptBundle>();
   for (const phase of recipe.phases) {
@@ -1323,6 +1335,13 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
    */
   const measureCandidate = async (phaseId: string, candidateSha: string, round: number): Promise<CandidateMeasurement> => {
     const gitRunner = systemGitRunner(status.worktree!);
+    if (seed !== null) {
+      const paths = candidatePathsBetween(status.worktree!, seed.integrationBaseSha, candidateSha);
+      for (const report of [noProtectedPaths(paths, options.config.policy.protected_paths), riskTierSufficient(paths, status.tier, options.config.risk, "complete seeded candidate changes")]) {
+        await persistGate(phaseId, report, candidateSha, round);
+        if (!report.passed) throw new Error(`complete seeded candidate failed ${report.gateId}`);
+      }
+    }
     const observedBase = runGit(gitRunner, ["rev-parse", status.baseSha!]).trim();
     const headBeforeHygiene = runGit(gitRunner, ["rev-parse", "HEAD"]).trim();
     const cleanBeforeHygiene = runGit(gitRunner, ["status", "--porcelain"]).trim().length === 0;
@@ -1518,6 +1537,7 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
     // CUMULATIVE view — writes globs, protected paths, the declared diff — is a
     // separate check, taken from the attempt base by `phaseGates`.
     let permission = openPermission();
+    const attributionBaseSha = seed === null ? null : runGit(systemGitRunner(status.worktree!), ["rev-parse", "HEAD"]).trim();
     const openHostGit = (): HostPhaseGit<EnvelopeBase> => createHostPhaseGit<EnvelopeBase>({
       repository: status.worktree!,
       commitMessage: (envelope) => phase.id === "builder"
@@ -1531,11 +1551,16 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
       designContext,
       status.request,
     );
-    const renderedPrompt = phase.id === "documenter"
+    const rolePrompt = phase.id === "documenter"
       ? `${baseRenderedPrompt}\n\nExact repository write boundary: ${route.agent.writes.length === 0 ? "none" : route.agent.writes.join(", ")}\n` +
         "The logical run-report boundary is reports/<lowercase-kebab-name>.md. Return its path and Markdown in runReport; the host writes it outside the repository and beside the sealed attempt.\n"
       : baseRenderedPrompt;
-    for (const [name, text] of [["system", route.systemPrompt], ["user", renderedPrompt]] as const) {
+    const originalPrompt = rolePrompt + seedContext(status);
+    const amendment = phase.id === seed?.builderPhaseKey ? seed.ownerAmendment : null;
+    const composedInput = composeOwnerAmendment(originalPrompt, amendment);
+    const renderedPrompt = composedInput.composedText;
+    for (const [name, text] of [["system", route.systemPrompt], ["user", originalPrompt],
+      ...(amendment === null ? [] : [["user+owner-amendment", renderedPrompt]])] as const) {
       await persist("attempt.updated", {}, {
         type: "compiled-prompt", phaseId: phaseDb, name, text,
         ...(name === "system" ? route.evidence : {}),
@@ -1563,6 +1588,7 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
           renderedPrompt,
           status.tier,
           recipe.phases.some((candidate) => candidate.kind === "agent" && candidate.owner === "builder"),
+          attributionBaseSha,
         ),
       ],
     };
@@ -1633,6 +1659,7 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
       : null;
 
     let turnIndex = 0;
+    let amendmentInputBound = false;
     /** What the FIRST turn's stream said. Every later turn is compared to it. */
     let firstObserved: ObservedProviderSession | null = null;
     const session: CorrectionSession = {
@@ -1703,6 +1730,18 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
         };
         const sandboxingBroker: TransportBroker = {
           startProcess: async (registered, spec, signal) => {
+            if (amendment !== null && turn === 0) {
+              if (amendmentInputBound) throw new Error("owner amendment input was already bound to this turn");
+              if (prompt !== renderedPrompt || spec.stdin !== renderedPrompt || sha256(spec.stdin) !== composedInput.composedDigest) {
+                throw new Error("owner amendment differs from the actual adapter input");
+              }
+              await persist("attempt.updated", {}, {
+                type: "owner-amendment-delivery", amendmentId: amendment.id, amendmentDigest: amendment.digest,
+                phaseId: phaseDb, logicalTurnId: turnRunId, originalInputDigest: composedInput.originalInputDigest,
+                composedDigest: composedInput.composedDigest, at: infra.now(),
+              });
+              amendmentInputBound = true;
+            }
             const grant = permission.sandbox(spec);
             const launchAt = infra.now();
             await persist("attempt.updated", { lastActivityAt: launchAt, lastActivity: `${phase.id}: route and sandbox grant recorded before GO` }, {
@@ -2098,7 +2137,7 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
       candidateSha,
       intent: {
         // The owner's own words, never a phase's restatement of them.
-        request: status.request,
+        request: composeOwnerAmendment(status.request, seed?.ownerAmendment ?? null).composedText + seedContext(status),
         goals: intent?.goals ?? [],
         nonGoals: intent?.nonGoals ?? [],
         acceptanceCriteria: (intent?.implementationSteps ?? []).flatMap((step) => step.acceptanceCriteria),

@@ -29,6 +29,7 @@ import { quotaCommand } from "./commands/quota.ts";
 import { stageCommand } from "./commands/stage.ts";
 import { locateAttempt } from "./commands/attempt.ts";
 import { retryCommand } from "./commands/retry.ts";
+import { seedCommand } from "./commands/seed.ts";
 import { reviewCommand } from "./commands/review.ts";
 import { reworkCommand } from "./commands/rework.ts";
 import { runStubCommand } from "./commands/run.ts";
@@ -41,7 +42,7 @@ import { selectWorkflow, workflowsCommand } from "./commands/workflows.ts";
 
 /** The complete owner-facing command table; documentation reconciles against it. */
 export const CLI_COMMANDS = Object.freeze([
-  "init", "project", "new", "start", "run", "status", "watch", "rework", "review", "raise", "journey", "land", "publish", "cancel", "retry",
+  "init", "project", "new", "seed", "start", "run", "status", "watch", "rework", "review", "raise", "journey", "land", "publish", "cancel", "retry",
   "doctor", "gc", "dash", "db rebuild", "ticket", "backlog", "quota", "stage", "workflows", "group",
 ]);
 
@@ -354,6 +355,23 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
     const projection = createDashboardProjection(stateRoot, err);
 
     try {
+    if (command === "seed") {
+      const allowed = new Set(["from", "source-attempt", "sha", "request", "instruction", "workflow", "config", "project", "state-root"]);
+      if (parsed.positionals.length !== 1 || parsed.repositories.length !== 0 || Object.keys(parsed.flags).some((key) => !allowed.has(key) || argv.filter((arg) => arg === `--${key}`).length > 1) ||
+          parsed.flags.from === undefined || parsed.flags["source-attempt"] === undefined || parsed.flags.sha === undefined || parsed.flags.request === undefined) {
+        throw new Error('usage: awsf seed <new-task> --from <source-task> --source-attempt <n> --sha <full-SHA> --request "<fresh intent>" [--workflow <T2-workflow>] [--instruction "<supplement>"]');
+      }
+      const result = await seedCommand({ stateRoot, project, repository: cwd, targetTaskId: taskId,
+        sourceTaskId: parsed.flags.from, sourceAttempt: Number(parsed.flags["source-attempt"]), candidateSha: parsed.flags.sha,
+        request: parsed.flags.request, workflow: parsed.flags.workflow ?? "build-review",
+        ...(parsed.flags.instruction === undefined ? {} : { instruction: parsed.flags.instruction }),
+        config, configPath, terminal: options.terminal ?? processOwnerTerminal(), projectRecord: projection.project,
+      });
+      if (!result.confirmed) { out("Seed declined. No target created and no call spent."); return 1; }
+      out(`Created ${project}/${taskId} in DRAFT, seeded from exact candidate ${result.status.seed!.seedCandidateSha}.`);
+      out(result.status.nextAction);
+      return 0;
+    }
     if (command === "new") {
       const request = parsed.positionals.slice(1).join(" ").trim();
       if (request.length === 0) throw new Error("awsf new requires a request after the task id");

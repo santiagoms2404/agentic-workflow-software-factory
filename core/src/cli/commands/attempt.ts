@@ -22,6 +22,7 @@ import type { ModelResolutionProvenance } from "../../contracts/normalized-event
 import type { ProcessIdentity } from "../../execution/launcher-barrier.ts";
 import type { AttemptEvidence } from "../../observability/attempt-evidence.ts";
 import type { Tier } from "../../state/tiers.ts";
+import type { CandidateSeed } from "../../contracts/candidate-seed.ts";
 
 export interface PhaseMeter {
   readonly name: string;
@@ -86,6 +87,8 @@ export interface AttemptStatus {
   readonly lifecycleState: TaskState;
   readonly baseSha: string | null;
   readonly candidateSha: string | null;
+  /** Immutable target-bound provenance, absent on ordinary and historical attempts. */
+  readonly seed?: CandidateSeed | null;
   readonly phase: PhaseMeter | null;
   /** `budget.ceiling` is this task's effective ceiling, grants included. */
   readonly budget: BudgetState;

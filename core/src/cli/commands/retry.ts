@@ -62,6 +62,7 @@ export async function retryCommand(options: RetryCommandOptions): Promise<{ atte
     worktree: null,
     baseSha: null,
     candidateSha: null,
+    ...(prior.seed === undefined ? {} : { seed: null }),
     phase: null,
     budget: {
       ...prior.budget,

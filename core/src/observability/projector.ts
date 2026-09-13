@@ -281,6 +281,28 @@ function phaseProjectionPosition(
 
 function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: number, evidence: AttemptEvidence): void {
   switch (evidence.type) {
+    case "candidate-seed":
+      db.prepare(`INSERT OR IGNORE INTO events
+        (event_id, session_id, phase_id, first_source_seq, last_source_seq, type, name,
+         payload_json, started_at) VALUES (?, ?, NULL, ?, ?, 'notice', 'candidate seeded', ?, ?)`)
+        .run(`${sessionId}:candidate-seed`, sessionId, sourceSeq, sourceSeq,
+          stringifyRedacted(evidence.seed), evidence.seed.confirmedAt);
+      if (evidence.seed.ownerAmendment !== null) {
+        const amendment = evidence.seed.ownerAmendment;
+        db.prepare(`INSERT OR IGNORE INTO events
+          (event_id, session_id, phase_id, first_source_seq, last_source_seq, type, name,
+           payload_json, started_at) VALUES (?, ?, NULL, ?, ?, 'notice', 'owner amendment', ?, ?)`)
+          .run(`${sessionId}:owner-amendment:${amendment.id}`, sessionId, sourceSeq, sourceSeq,
+            stringifyRedacted(amendment), amendment.confirmedAt);
+      }
+      return;
+    case "owner-amendment-delivery":
+      db.prepare(`INSERT OR IGNORE INTO events
+        (event_id, session_id, phase_id, first_source_seq, last_source_seq, type, name,
+         payload_json, started_at) VALUES (?, ?, ?, ?, ?, 'notice', 'owner amendment delivered', ?, ?)`)
+        .run(`${sessionId}:owner-amendment-delivery:${evidence.amendmentId}`, sessionId, evidence.phaseId, sourceSeq, sourceSeq,
+          stringifyRedacted(evidence), evidence.at);
+      return;
     case "candidate-adoption":
       db.prepare(`INSERT OR IGNORE INTO events
         (event_id, session_id, phase_id, first_source_seq, last_source_seq, type, name,

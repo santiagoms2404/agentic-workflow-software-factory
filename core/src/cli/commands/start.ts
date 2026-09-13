@@ -9,6 +9,7 @@ import { callCeilingsOf } from "../../state/tiers.ts";
 import { correctionsFundableFor, minimumCallsFor, workflowRecipe } from "../../workflow/catalog.ts";
 import { composePromptBundle } from "../../workflow/prompt-composition.ts";
 import { correctionHeadroom } from "./workflows.ts";
+import { verifiedTargetSeed, validateSeedStartup } from "../../workflow/candidate-seed.ts";
 import {
   nextActionFor,
   nextRevision,
@@ -183,12 +184,14 @@ export async function startCommand(options: StartCommandOptions): Promise<Attemp
     }
   }
 
-  const baseSha = runGit(systemGitRunner(current.repository), ["rev-parse", "HEAD"]).trim();
+  const seed = await verifiedTargetSeed(options.attemptDir, current);
+  if (seed !== null) await validateSeedStartup(seed, current, config, configPath, options.attemptDir);
+  const baseSha = seed?.integrationBaseSha ?? runGit(systemGitRunner(current.repository), ["rev-parse", "HEAD"]).trim();
   const managed = createWorktree({
     repository: current.repository,
     root: resolve(options.worktreeRoot),
     attemptId: current.sessionId,
-    baseSha,
+    baseSha: seed?.seedCandidateSha ?? baseSha,
   });
   try {
     await seedWorktreePaths({

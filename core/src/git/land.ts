@@ -80,9 +80,13 @@ export function inspectLanding(
   repository: string,
   candidateSha: string,
   runner = systemGitRunner(repository),
+  seedPin?: { readonly integrationBaseSha: string; readonly recovering?: boolean },
 ): LandingInspection {
   try {
     const headSha = head(runner);
+    if (seedPin !== undefined && headSha !== seedPin.integrationBaseSha && !(seedPin.recovering === true && headSha === candidateSha)) {
+      throw new LandingBlocked("git-failure", `seed-base-changed: seeded target requires canonical HEAD ${seedPin.integrationBaseSha}, found ${headSha}`);
+    }
     // Resolves annotated names and rejects an absent object before it is shown.
     const exactCandidate = runGit(runner, ["rev-parse", `${candidateSha}^{commit}`]).trim();
     if (exactCandidate !== candidateSha) {
@@ -138,10 +142,11 @@ export function completeLanding(
   repository: string,
   candidateSha: string,
   runner = systemGitRunner(repository),
+  seedPin?: { readonly integrationBaseSha: string; readonly recovering?: boolean },
 ): LandingOutcome {
   let inspection: LandingInspection;
   try {
-    inspection = inspectLanding(repository, candidateSha, runner);
+    inspection = inspectLanding(repository, candidateSha, runner, seedPin);
     assertPreflight(inspection);
     if (inspection.headSha !== candidateSha) {
       runGit(runner, ["merge", "--ff-only", "--no-edit", candidateSha]);
@@ -162,9 +167,10 @@ export function recoverLanding(
   repository: string,
   candidateSha: string,
   runner = systemGitRunner(repository),
+  seedPin?: { readonly integrationBaseSha: string },
 ): LandingOutcome {
   try {
-    return completeLanding(repository, candidateSha, runner);
+    return completeLanding(repository, candidateSha, runner, seedPin === undefined ? undefined : { ...seedPin, recovering: true });
   } catch (error) {
     if (error instanceof LandingBlocked) {
       if (error.code === "non-fast-forward" || error.code === "dirty-canonical-tree") throw error;
