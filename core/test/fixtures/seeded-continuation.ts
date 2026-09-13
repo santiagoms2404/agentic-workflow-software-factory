@@ -44,7 +44,8 @@ export async function seedFixture(options: { inherited?: string; sealed?: "BLOCK
   git(sourceTree, "add", inherited);
   git(sourceTree, "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "feat: inherited fixture change");
   const candidateSha = git(sourceTree, "rev-parse", "HEAD");
-  const config = loadConfig(readFileSync(resolve("awsf.config.yaml"), "utf8"));
+  // Seed assurance is exercised with scripted, ephemeral adapters.
+  const config = loadConfig(readFileSync(resolve("awsf.config.yaml"), "utf8").replaceAll("interrupted_turn: true", "interrupted_turn: false"));
   config.runtime.seed_paths = [];
   config.gates = { test: { argv: ["node", "-e", "process.exit(0)"], timeout_seconds: 10 } };
   config.risk.call_ceiling.T2 = 12;

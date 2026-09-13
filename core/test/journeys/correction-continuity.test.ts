@@ -512,7 +512,9 @@ for (const direction of ["codex-builds", "claude-builds"] as const) {
       // The reviewer's turn is last, and it names the FINAL candidate.
       const last = journal.turns.at(-1)!;
       assert.equal(last.phase, "reviewer");
-      assert.equal(last.turnKind, undefined, "a reviewer is never resumed as a substitute for a builder");
+      assert.equal(last.turnKind, "open", "retention opens a fresh review rather than resuming the builder");
+      assert.notEqual(last.providerSessionId, journal.turns[0]?.providerSessionId);
+      assert.equal(last.registrationKind, "task-edge", "retention grants no correction launch");
 
       const db = openDatabase(join(world.stateRoot, "awsf.db"), { readonly: true });
       try {
@@ -773,11 +775,11 @@ test("a blocked correction names the conversation by handle in the blocker a hum
 // A route that declines the capability keeps the pre-continuity behaviour.
 // ---------------------------------------------------------------------------
 
-test("with continuity declined, a red command blocks on L8 exactly as it did before", async () => {
+test("with correction and retention declined, a red command blocks on L8 with ephemeral argv", async () => {
   const world = await fixture("codex-builds", (config) => ({
     ...config,
     agents: config.agents.map((agent) => agent.name === "builder"
-      ? { ...agent, harness: { ...agent.harness, continuity: "none" as const } }
+      ? { ...agent, harness: { ...agent.harness, continuity: "none" as const, interrupted_turn: false } }
       : agent),
   }));
   try {

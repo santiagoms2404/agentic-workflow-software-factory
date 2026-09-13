@@ -65,6 +65,8 @@ import { REVIEW_OUTPUT_SCHEMA_ID, type ReviewOutput } from "../../contracts/revi
 import { wrapEnvelope, type StoredEnvelope } from "../../contracts/stored-envelope.ts";
 import type { TestOutput } from "../../contracts/test-output.ts";
 import { CallBudget, type Reservation } from "../../execution/call-budget.ts";
+import { ContinuityStore } from "../../execution/continuity-store.ts";
+import { buildPhaseRequest, openRetainedColdTurn, phasePersistenceEvidence, redactPhaseProcess } from "../../execution/phase-request.ts";
 import type { BarrierRecord } from "../../execution/launcher-barrier.ts";
 import type { BrokerOptions } from "../../execution/transport-broker.ts";
 import { artifactsExist, jsonParses, type ArtifactObservation } from "../../gates/artifacts.ts";
@@ -718,18 +720,22 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
    * attempt gets its own preflight of its own descriptor and the guarantee is
    * preserved rather than widened.
    */
-  const preflightFor = (prompt: string): { request: ModelRequest; grant: SandboxGrant; spec: ProcessSpec } => {
-    const request: ModelRequest = {
-      model: route.agent.model, prompt, systemPromptPath, cwd: subject.worktree,
-      env: HOST.process.env, effort: route.agent.thinking,
-      profile: route.agent.tools.profile, tools: route.agent.tools.allow,
-    };
+  const continuity = new ContinuityStore({ path: join(runtimeDir, "continuity.json") });
+  let nextColdTurn = 0;
+  type ReviewTurnPreflight = { request: ModelRequest; grant: SandboxGrant; spec: ProcessSpec; continuityHandle: string | null };
+  const preflightFor = async (prompt: string): Promise<ReviewTurnPreflight> => {
+    const retained = await openRetainedColdTurn({ agent: route.agent, adapter: route.adapter,
+      store: continuity, phaseKey, round: nextColdTurn++, runtimeDir });
+    const request = buildPhaseRequest({ agent: route.agent, prompt, systemPromptPath, cwd: subject.worktree,
+      env: HOST.process.env,
+      ...(retained === null ? {} : { continuity: { ref: retained.ref, turn: "open" as const } }),
+    });
     const grant = openPermission().sandbox(route.adapter.buildSpec(request));
-    return { request, grant, spec: preflightDescriptor(route, request, grant.spec) };
+    return { request, grant, spec: preflightDescriptor(route, request, grant.spec), continuityHandle: retained?.handle ?? null };
   };
   // The actual final descriptor, including the materialized private path,
   // validated before the caller's spawn edge can become durable.
-  const preflight = preflightFor(renderedPrompt);
+  const preflight = await preflightFor(renderedPrompt);
 
   const run = async (runOptions: RunReviewOptions): Promise<ReviewOutput> => {
     const { budget, state, persist } = runOptions;
@@ -824,7 +830,7 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
     const broker = infra.createBroker({
       ledger: budget,
       register: async (record) => {
-        state.processRecord = record;
+        state.processRecord = redactPhaseProcess(record, continuity);
         state.processSettled = false;
         const registeredAt = infra.now();
         await persist("attempt.updated", {
@@ -832,7 +838,7 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
           lastActivity: `process ${record.runId} registered before GO`,
         }, {
           type: "process", phaseId: phaseDb, adapterId: route.adapterId, role: route.agent.name,
-          record, status: "REGISTERED", registeredAt, releasedAt: null, endedAt: null, exitCode: null, exitSignal: null,
+          record: redactPhaseProcess(record, continuity), status: "REGISTERED", registeredAt, releasedAt: null, endedAt: null, exitCode: null, exitSignal: null,
         });
         runOptions.assertLaunchProjection?.(subject.sessionId);
       },
@@ -844,7 +850,7 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
           lastActivity: `${runOptions.registration.edge} call ${record.reservationId} spent immediately before GO`,
         }, {
           type: "process", phaseId: phaseDb, adapterId: route.adapterId, role: route.agent.name,
-          record, status: "RUNNING", registeredAt: state.releasedAt, releasedAt: state.releasedAt,
+          record: redactPhaseProcess(record, continuity), status: "RUNNING", registeredAt: state.releasedAt, releasedAt: state.releasedAt,
           endedAt: null, exitCode: null, exitSignal: null,
         });
       },
@@ -854,7 +860,7 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
       held: Reservation,
       attempt: 1 | 2,
       turnPrompt: string,
-      turnPreflight: { request: ModelRequest; grant: SandboxGrant; spec: ProcessSpec },
+      turnPreflight: ReviewTurnPreflight,
     ): Promise<ReviewOutput> => {
       // The envelope's own correction round, so a retry neither collides with
       // the immutable file on disk nor is dropped by the projection's
@@ -885,6 +891,7 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
             type: "agent-start", phaseId: phaseDb, agent: route.agent.name, adapterId: route.adapterId,
             provider: route.model.provider, color: route.agent.color, requestedModel: route.agent.model,
             sandboxBadge: launchGrant.badge, sandboxMechanism: launchGrant.mechanism, purpose: "review", at: launchAt,
+            persistence: phasePersistenceEvidence(route.agent, route.adapter, turnPreflight.continuityHandle, finalSpec, route.systemPrompt),
           });
           // The LAST host instruction before GO. The permission session is open
           // and the grant is built; this is the narrowest the window between
@@ -1068,7 +1075,7 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
         const turnPrompt = attempt === 1 || contractViolations.length === 0
           ? renderedPrompt
           : contractRetryPrompt(renderedPrompt, contractPreviousResponse, contractViolations);
-        const turnPreflight = turnPrompt === renderedPrompt ? preflight : preflightFor(turnPrompt);
+        const turnPreflight = attempt === 1 ? preflight : await preflightFor(turnPrompt);
         return runTurn(held, attempt, turnPrompt, turnPreflight);
       },
     });

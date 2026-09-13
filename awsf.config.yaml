@@ -42,7 +42,7 @@ agents:
     color: "#A78BFA"
     purpose: Produce an implementable plan with explicit acceptance criteria.
     prompt: { system: prompts/planner/system.md, user: prompts/planner/user.md }
-    harness: { adapter: claude, continuity: none }
+    harness: { adapter: claude, continuity: none, interrupted_turn: true }
     tools: { profile: readonly, allow: [read, grep, find, ls] }
     writes: []
 
@@ -52,7 +52,7 @@ agents:
     color: "#22D3EE"
     purpose: Implement the validated plan in the assigned worktree.
     prompt: { system: prompts/builder/system.md, user: prompts/builder/user.md }
-    harness: { adapter: codex, continuity: none }
+    harness: { adapter: codex, continuity: none, interrupted_turn: true }
     tools: { profile: managed-worker, allow: [read, grep, find, ls, edit, write, exec] }
     writes: ["core/src/**", "core/test/**", "dashboard/**", "prompts/**"]
 
@@ -62,7 +62,7 @@ agents:
     color: "#F43F5E"
     purpose: Find concrete defects the deterministic gates do not cover.
     prompt: { system: prompts/reviewer/system.md, user: prompts/reviewer/user.md }
-    harness: { adapter: claude, continuity: none }
+    harness: { adapter: claude, continuity: none, interrupted_turn: true }
     # Judge the code on disk, not the builder's summary of it. `readonly` is
     # read/grep/find/ls and nothing else — it carries no exec, so the reviewer
     # still cannot run `git diff` and the host-composed diff is retained
@@ -76,7 +76,7 @@ agents:
     color: "#C084FC"
     purpose: Update docs to match a landed change; never touch source.
     prompt: { system: prompts/documenter/system.md, user: prompts/documenter/user.md }
-    harness: { adapter: claude, continuity: none }
+    harness: { adapter: claude, continuity: none, interrupted_turn: true }
     tools: { profile: managed-worker, allow: [read, grep, find, ls, edit, write] }
     writes: ["README.md", "docs/**"]
 
@@ -86,7 +86,7 @@ agents:
     color: "#FBBF24"
     purpose: Read the repo and report what exists, without proposing changes.
     prompt: { system: prompts/scout/system.md, user: prompts/scout/user.md }
-    harness: { adapter: claude, continuity: none }
+    harness: { adapter: claude, continuity: none, interrupted_turn: true }
     tools: { profile: readonly, allow: [read, grep, find, ls] }
     writes: []
 
@@ -96,7 +96,7 @@ agents:
     color: "#F59E0B"
     purpose: Refine vague work into a validated ticket with observable acceptance criteria.
     prompt: { system: prompts/intake/system.md, user: prompts/intake/user.md }
-    harness: { adapter: claude, continuity: same-session }
+    harness: { adapter: claude, continuity: same-session, interrupted_turn: true }
     tools: { profile: managed-worker, allow: [read, grep, find, ls, edit, write] }
     writes: ["specs/tickets/**"]
 
@@ -106,7 +106,7 @@ agents:
     color: "#5EEAD4"
     purpose: State the architecture, its invariants, and its acceptance criteria as identified claims.
     prompt: { system: prompts/designer/system.md, user: prompts/designer/user.md }
-    harness: { adapter: claude, continuity: none }
+    harness: { adapter: claude, continuity: none, interrupted_turn: true }
     tools: { profile: readonly, allow: [read, grep, find, ls] }
     writes: []
 
@@ -118,7 +118,7 @@ agents:
     color: "#FB7185"
     purpose: Judge a design against its own stated invariants and name what it did not check.
     prompt: { system: prompts/architecture-reviewer/system.md, user: prompts/architecture-reviewer/user.md }
-    harness: { adapter: codex, continuity: none }
+    harness: { adapter: codex, continuity: none, interrupted_turn: true }
     tools: { profile: readonly, allow: [read, grep, find, ls] }
     writes: []
 

@@ -24,11 +24,16 @@
 // Nothing here spawns. It reads and writes exactly one host-private file.
 
 import { randomUUID } from "node:crypto";
-import { promises as fs } from "node:fs";
-import { dirname } from "node:path";
+import { constants, promises as fs } from "node:fs";
+import { dirname, isAbsolute, join, parse, resolve } from "node:path";
 import type { ContinuityRef } from "../adapters/interface.ts";
+import { canonicalJson, sha256 } from "../contracts/owner-amendment.ts";
+import {
+  InterruptedTurnRefused, assertTurnCheckpoint, continuityDigest,
+  type InterruptedTurnCheckpoint, type TurnCheckpointReference,
+} from "../contracts/interrupted-turn.ts";
 
-const { chmod, mkdir, readFile, writeFile } = fs;
+const { readFile } = fs;
 
 export const CONTINUITY_SCHEMA = "awsf.continuity/v1";
 
@@ -100,10 +105,9 @@ export interface ContinuityStoreOptions {
 /**
  * Host-private, in-memory with a durable mirror.
  *
- * Writes are whole-file and atomic through `writeFile` + `chmod`, because the
- * file is small, single-writer, and read only by a host that already holds the
- * attempt lock. The mode is re-applied after every write rather than trusted to
- * survive a umask.
+ * Writes sync a private temporary file, atomically replace the mirror, then
+ * sync its directory. The host must still hold the operation lock. The mirror
+ * records conversations only and cannot authorize an interrupted-turn rescue.
  */
 export class ContinuityStore {
   readonly #path: string;
@@ -152,7 +156,8 @@ export class ContinuityStore {
    * never reaches the journal" would be false the moment the feature worked.
    */
   locators(): readonly string[] {
-    return Object.freeze([...this.#records.values()].map((record) => record.providerSessionId));
+    return Object.freeze([...this.#records.values()].flatMap((record) =>
+      record.storeDir === null ? [record.providerSessionId] : [record.providerSessionId, record.storeDir]));
   }
 
   ref(handle: string): ContinuityRef {
@@ -235,8 +240,179 @@ export class ContinuityStore {
       schema: CONTINUITY_SCHEMA,
       records: Object.fromEntries(this.#records),
     };
-    await mkdir(dirname(this.#path), { recursive: true, mode: CONTINUITY_DIR_MODE });
-    await writeFile(this.#path, JSON.stringify(file), { mode: CONTINUITY_FILE_MODE });
-    await chmod(this.#path, CONTINUITY_FILE_MODE);
+    await writePrivateAtomic(this.#path, JSON.stringify(file));
+  }
+}
+
+const MAX_CHECKPOINT_BYTES = 16 * 1024 * 1024;
+
+function privateFailure(): never {
+  throw new InterruptedTurnRefused("checkpoint-invalid", "private checkpoint storage is missing, unsafe, or inconsistent");
+}
+
+function ownerUid(): number {
+  if (typeof process.getuid !== "function") {
+    throw new InterruptedTurnRefused("proof-unavailable", "private checkpoint ownership verification is unavailable on this platform");
+  }
+  return process.getuid();
+}
+
+async function syncDirectory(path: string): Promise<void> {
+  const handle = await fs.open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+  try { await handle.sync(); } finally { await handle.close(); }
+}
+
+/** Reject aliases before creating any missing private directory. */
+async function privateDirectory(path: string, create: boolean): Promise<void> {
+  if (!isAbsolute(path) || resolve(path) !== path) return privateFailure();
+  const uid = ownerUid();
+  const root = parse(path).root;
+  let current = root;
+  for (const component of path.slice(root.length).split(/[\\/]/).filter(Boolean)) {
+    const parent = current;
+    current = join(current, component);
+    let stat;
+    try { stat = await fs.lstat(current); }
+    catch (error) {
+      if (!create || (error as NodeJS.ErrnoException).code !== "ENOENT") return privateFailure();
+      try { await fs.mkdir(current, { mode: CONTINUITY_DIR_MODE }); }
+      catch (creation) { if ((creation as NodeJS.ErrnoException).code !== "EEXIST") return privateFailure(); }
+      stat = await fs.lstat(current);
+      await syncDirectory(parent);
+    }
+    if (!stat.isDirectory() || stat.isSymbolicLink()) return privateFailure();
+  }
+  const stat = await fs.lstat(path);
+  if (stat.uid !== uid || (stat.mode & 0o777) !== CONTINUITY_DIR_MODE) return privateFailure();
+}
+
+async function privateBytes(path: string): Promise<string> {
+  const handle = await fs.open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+  try {
+    const stat = await handle.stat();
+    if (!stat.isFile() || stat.nlink !== 1 || stat.uid !== ownerUid() || (stat.mode & 0o777) !== CONTINUITY_FILE_MODE || stat.size > MAX_CHECKPOINT_BYTES) return privateFailure();
+    return await handle.readFile("utf8");
+  } finally { await handle.close(); }
+}
+
+async function writePrivateExclusive(path: string, text: string): Promise<void> {
+  if (Buffer.byteLength(text, "utf8") > MAX_CHECKPOINT_BYTES) return privateFailure();
+  const handle = await fs.open(path, "wx", CONTINUITY_FILE_MODE);
+  try {
+    await handle.chmod(CONTINUITY_FILE_MODE);
+    await handle.writeFile(text, "utf8");
+    await handle.sync();
+  } finally { await handle.close(); }
+  await syncDirectory(dirname(path));
+}
+
+async function writePrivateAtomic(path: string, text: string): Promise<void> {
+  const directory = dirname(path);
+  await privateDirectory(directory, true);
+  try {
+    const stat = await fs.lstat(path);
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || stat.uid !== ownerUid() || (stat.mode & 0o777) !== CONTINUITY_FILE_MODE) return privateFailure();
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  const temporary = join(directory, `.continuity-${randomUUID()}.tmp`);
+  await writePrivateExclusive(temporary, text);
+  await fs.rename(temporary, path);
+  await syncDirectory(directory);
+}
+
+function originalBinding(checkpoint: InterruptedTurnCheckpoint): string {
+  const { effectiveInputDigest: _effective, ownerAmendmentDigest: _amendment, ...original } = checkpoint.binding;
+  return continuityDigest(original);
+}
+
+/**
+ * Immutable generations. The caller fsyncs these bytes BEFORE appending their
+ * reference to the attempt journal under its operation lock. Neither orphan
+ * bytes nor latest.json grant authority. Reads require the journal's exact ref.
+ */
+export class InterruptedTurnStore {
+  readonly #root: string;
+
+  constructor(root: string) {
+    if (!isAbsolute(root) || resolve(root) !== root) privateFailure();
+    this.#root = root;
+  }
+
+  #directory(logicalTurnId: string): string {
+    return join(this.#root, sha256(logicalTurnId));
+  }
+
+  async read(reference: TurnCheckpointReference): Promise<InterruptedTurnCheckpoint> {
+    try {
+      if (reference.schema !== "awsf.turn-checkpoint-ref/v1" || !Number.isSafeInteger(reference.generation) || reference.generation < 1 ||
+          !/^[a-f0-9]{64}$/.test(reference.digest) || !/^[a-f0-9]{64}$/.test(reference.bindingDigest) || typeof reference.logicalTurnId !== "string") return privateFailure();
+      const directory = this.#directory(reference.logicalTurnId);
+      await privateDirectory(this.#root, false);
+      await privateDirectory(directory, false);
+      const text = await privateBytes(join(directory, `${reference.generation}.json`));
+      const checkpoint: unknown = JSON.parse(text);
+      assertTurnCheckpoint(checkpoint);
+      if (sha256(text) !== reference.digest || continuityDigest(checkpoint.binding) !== reference.bindingDigest ||
+          checkpoint.binding.logicalTurnId !== reference.logicalTurnId || checkpoint.generation !== reference.generation) return privateFailure();
+      return checkpoint;
+    } catch (error) {
+      if (error instanceof InterruptedTurnRefused) throw error;
+      return privateFailure();
+    }
+  }
+
+  async write(input: InterruptedTurnCheckpoint, previous: TurnCheckpointReference | null): Promise<TurnCheckpointReference> {
+    const checkpoint = structuredClone(input);
+    assertTurnCheckpoint(checkpoint);
+    if (previous === null) {
+      if (checkpoint.generation !== 1 || checkpoint.priorDigest !== null) return privateFailure();
+    } else {
+      const prior = await this.read(previous);
+      if (prior.completed) throw new InterruptedTurnRefused("turn-already-completed", "a completed logical turn cannot acquire another checkpoint");
+      if (checkpoint.generation !== prior.generation + 1 || checkpoint.priorDigest !== previous.digest ||
+          originalBinding(checkpoint) !== originalBinding(prior) || checkpoint.continuityHandle !== prior.continuityHandle ||
+          !checkpoint.output.text.startsWith(prior.output.text) || checkpoint.output.nextSequence < prior.output.nextSequence) return privateFailure();
+      for (const field of ["conversationId", "requestId", "checkpointLineage"] as const) {
+        if (prior.providerIdentity[field] !== null && checkpoint.providerIdentity[field] !== prior.providerIdentity[field]) return privateFailure();
+      }
+      const acceptanceOrder = ["not-sent", "unknown", "accepted", "completed"];
+      if (acceptanceOrder.indexOf(checkpoint.providerIdentity.acceptance) < acceptanceOrder.indexOf(prior.providerIdentity.acceptance)) return privateFailure();
+      for (const tool of prior.tools) {
+        const next = checkpoint.tools.find((entry) => entry.providerToolCallId === tool.providerToolCallId);
+        if (next === undefined || next.executionKey !== tool.executionKey || next.name !== tool.name) return privateFailure();
+        if (tool.state !== "arguments-partial" && next.argumentsDigest !== tool.argumentsDigest) return privateFailure();
+        if (tool.state === "arguments-partial" && !next.argumentsJson.startsWith(tool.argumentsJson)) return privateFailure();
+        const order = ["arguments-partial", "ready", "dispatch-intent", "result-durable", "acknowledged"];
+        if (order.indexOf(next.state) < order.indexOf(tool.state)) return privateFailure();
+        if (tool.resultDigest !== null && next.resultDigest !== tool.resultDigest) return privateFailure();
+      }
+      for (const mapping of prior.output.toolIdMap) {
+        if (!checkpoint.output.toolIdMap.some((entry) => entry.providerId === mapping.providerId && entry.hostId === mapping.hostId)) return privateFailure();
+      }
+    }
+    const text = canonicalJson(checkpoint);
+    const reference: TurnCheckpointReference = Object.freeze({ schema: "awsf.turn-checkpoint-ref/v1",
+      logicalTurnId: checkpoint.binding.logicalTurnId, generation: checkpoint.generation,
+      digest: sha256(text), bindingDigest: continuityDigest(checkpoint.binding) });
+    try {
+      const directory = this.#directory(checkpoint.binding.logicalTurnId);
+      await privateDirectory(this.#root, true);
+      await privateDirectory(directory, true);
+      const path = join(directory, `${checkpoint.generation}.json`);
+      try { await writePrivateExclusive(path, text); }
+      catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+        // Idempotent byte-identical persistence only. Never rewrite a generation
+        // and never let an old retry move a newer disposable mirror backwards.
+        await this.read(reference);
+        return reference;
+      }
+      await writePrivateAtomic(join(directory, "latest.json"), canonicalJson(reference));
+      return reference;
+    } catch (error) {
+      if (error instanceof InterruptedTurnRefused) throw error;
+      return privateFailure();
+    }
   }
 }

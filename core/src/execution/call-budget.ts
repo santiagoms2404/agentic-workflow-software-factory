@@ -28,6 +28,8 @@
 // the same ids.
 
 import { CallCeilingExceeded } from "../state/errors.ts";
+import { assertTurnBinding, continuityDigest, InterruptedTurnRefused, type TurnBinding } from "../contracts/interrupted-turn.ts";
+import { isVerifiedReconnectAuthorization, type VerifiedReconnectAuthorization } from "../workflow/turn-reconnect-authorization.ts";
 import {
   phaseTransition,
   type PhaseTransitionInput,
@@ -206,6 +208,8 @@ export interface CallBudgetOptions {
   /** For the refusal message; the ledger itself is per task. */
   taskId: string;
   tier: Tier;
+  /** Durable invocation namespace recorded by the host before reserving a recoverable turn. */
+  reservationNamespace?: string;
   /**
    * `risk.correction_allowance` — the `auto`/`owner` pair is per phase,
    * defaulting to the config's `{auto: 1, owner: 1}`. `ownerReentries` is per
@@ -250,6 +254,13 @@ export class CallBudget {
   #held = new Map<string, MutableReservation>();
   #settled: MutableReservation[] = [];
   #nextId = 1;
+  readonly #reservationNamespace: string | null;
+  readonly #restorableSpend: number;
+  #restoredSpend = 0;
+  readonly #turnBindings = new Map<string, TurnBinding>();
+  readonly #completedTurns = new Set<string>();
+  readonly #reconnectLaunches = new Map<string, string>();
+  readonly #reattachments = new Map<string, { digest: string; reservation: Reservation }>();
 
   constructor(options: CallBudgetOptions) {
     this.taskId = options.taskId;
@@ -261,6 +272,11 @@ export class CallBudget {
     const carried = options.carried ?? {};
     this.#attempt = carried.attempt ?? 1;
     this.#callsSpent = carried.callsSpent ?? 0;
+    this.#restorableSpend = this.#callsSpent;
+    this.#reservationNamespace = options.reservationNamespace ?? null;
+    if (this.#reservationNamespace !== null && !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,191}$/.test(this.#reservationNamespace)) {
+      throw new Error("invalid durable reservation namespace");
+    }
     this.#correctionsAuto = carried.correctionsAuto ?? 0;
     this.#correctionsOwner = carried.correctionsOwner ?? 0;
     this.#ownerReentries = carried.ownerReentries ?? 0;
@@ -352,8 +368,11 @@ export class CallBudget {
         committed,
       });
     }
+    let id: string;
+    do { id = `${this.#reservationNamespace === null ? "" : `${this.#reservationNamespace}:`}r${this.#nextId++}`; }
+    while (this.reservation(id) !== undefined);
     const reservation: MutableReservation = {
-      id: `r${this.#nextId++}`,
+      id,
       cost,
       kind: request.kind ?? (cost > 1 ? "composite" : "single"),
       edge: request.edge ?? null,
@@ -415,6 +434,112 @@ export class CallBudget {
     if (held !== undefined) return held;
     const settled = this.#settled.find((r) => r.id === id);
     throw new ReservationNotHeld(id, settled === undefined ? "unknown" : settled.state);
+  }
+
+  /** Reconstruct only journal-verified liabilities. Spent counters already include these debits. */
+  restoreReservation(record: Reservation): Reservation {
+    const existing = this.reservation(record.id);
+    if (existing !== undefined) {
+      if (continuityDigest(existing) !== continuityDigest(record)) throw new InterruptedTurnRefused("recovery-ambiguous", "reservation recovery disagrees with this ledger");
+      return existing;
+    }
+    if (record.attempt !== this.#attempt || !record.id.includes(":") || record.kind !== "single" || record.cost !== 1 ||
+        !["held", "spent", "released"].includes(record.state) || record.spent !== (record.state === "spent" ? 1 : 0)) {
+      throw new InterruptedTurnRefused("recovery-ambiguous", "reservation recovery lacks an exact operation-qualified liability");
+    }
+    if (record.state === "spent" && this.#restoredSpend + record.spent > this.#restorableSpend) {
+      throw new InterruptedTurnRefused("recovery-ambiguous", "restored debit exceeds journal-carried spend");
+    }
+    if (record.state === "held" && this.committed + record.cost > this.ceiling) {
+      throw new InterruptedTurnRefused("recovery-ambiguous", "restored held liability exceeds the admitted ceiling");
+    }
+    if (record.state === "held") this.#held.set(record.id, { ...record });
+    else {
+      this.#settled.push({ ...record });
+      this.#restoredSpend += record.spent;
+    }
+    return this.reservation(record.id)!;
+  }
+
+  /** Bind once before original dispatch, or restore from exact original authorization evidence. */
+  bindOriginalTurn(binding: TurnBinding): void {
+    assertTurnBinding(binding);
+    const reservation = this.reservation(binding.originReservationId);
+    if (reservation === undefined || reservation.cost !== 1 || !binding.originReservationId.includes(":") ||
+        (reservation.state !== "held" && reservation.state !== "spent")) throw new InterruptedTurnRefused("recovery-ambiguous", "original turn has no usable ledger liability");
+    const prior = this.#turnBindings.get(binding.logicalTurnId);
+    if (prior !== undefined && continuityDigest(prior) !== continuityDigest(binding)) throw new InterruptedTurnRefused("binding-mismatch", "original turn authorization changed");
+    for (const other of this.#turnBindings.values()) {
+      if (other.originReservationId === binding.originReservationId && other.logicalTurnId !== binding.logicalTurnId &&
+          !(binding.originalLaunchKind === "phase-correction" && binding.correctionRound > other.correctionRound &&
+            binding.taskSessionId === other.taskSessionId && binding.phaseKey === other.phaseKey && binding.phaseOrdinal === other.phaseOrdinal)) {
+        throw new InterruptedTurnRefused("binding-mismatch", "one original reservation cannot authorize unrelated turns");
+      }
+    }
+    this.#turnBindings.set(binding.logicalTurnId, structuredClone(binding));
+  }
+
+  assertReconnectEligible(proof: VerifiedReconnectAuthorization): Reservation {
+    if (!isVerifiedReconnectAuthorization(proof, this)) throw new InterruptedTurnRefused("proof-unavailable", "reconnect authorization was not issued for this ledger");
+    const original = this.#turnBindings.get(proof.binding.logicalTurnId);
+    if (original === undefined || continuityDigest(original) !== continuityDigest(proof.binding)) throw new InterruptedTurnRefused("binding-mismatch", "reconnect belongs to another ledger or original authorization");
+    if (this.#completedTurns.has(original.logicalTurnId)) throw new InterruptedTurnRefused("turn-already-completed", "logical turn already completed");
+    const reservation = this.reservation(original.originReservationId);
+    if (reservation === undefined || (reservation.state !== "spent" && !(reservation.state === "held" && proof.providerNeverAccepted))) {
+      throw new InterruptedTurnRefused("recovery-ambiguous", "original liability cannot be reused");
+    }
+    if (reservation.state !== proof.originalReservationState && this.#reattachments.get(proof.registration.reconnectOperationId)?.digest !== continuityDigest(proof)) {
+      throw new InterruptedTurnRefused("binding-mismatch", "ledger liability state differs from durable reconnect admission");
+    }
+    return reservation;
+  }
+
+  /** Consume one physical launch intent synchronously, including across brokers sharing this ledger. */
+  claimReconnectLaunch(proof: VerifiedReconnectAuthorization): void {
+    this.assertReconnectEligible(proof);
+    if (proof.stage !== "before-spawn" || this.#reconnectLaunches.has(proof.registration.reconnectOperationId)) {
+      throw new InterruptedTurnRefused("recovery-ambiguous", "reconnect launch intent was already claimed or is at the wrong frontier");
+    }
+    this.#reconnectLaunches.set(proof.registration.reconnectOperationId, continuityDigest(proof.registration));
+  }
+
+  /** Invoked after reconnect registration and before GO. Never creates another reservation. */
+  authorizeReconnect(proof: VerifiedReconnectAuthorization): Reservation {
+    const original = this.assertReconnectEligible(proof);
+    if (proof.stage !== "before-go" || this.#reconnectLaunches.get(proof.registration.reconnectOperationId) !== continuityDigest(proof.registration)) {
+      throw new InterruptedTurnRefused("recovery-ambiguous", "reconnect has no matching claimed physical launch");
+    }
+    const key = proof.registration.reconnectOperationId;
+    const digest = continuityDigest(proof);
+    const settled = this.#reattachments.get(key);
+    if (settled !== undefined) {
+      if (settled.digest !== digest) throw new InterruptedTurnRefused("binding-mismatch", "reconnect operation was already accounted with different evidence");
+      return { ...settled.reservation };
+    }
+    // Held, authoritatively never sent: convert the ORIGINAL liability once.
+    // Already spent: return that debit without calling spendOnGo or settle.
+    const reservation = original.state === "held" ? this.settle(original.id, original.cost) : original;
+    this.#reattachments.set(key, { digest, reservation });
+    return { ...reservation };
+  }
+
+  /** Crash settlement never refunds registered or launch-intent-ambiguous work. */
+  settleRecoveredLiability(id: string, knowledge: "never-launched" | "launch-intent" | "registered" | "spent", quiescent: boolean): Reservation {
+    const reservation = this.reservation(id);
+    if (reservation === undefined) throw new InterruptedTurnRefused("recovery-ambiguous", "recovery names an unknown reservation");
+    if (!quiescent || knowledge === "launch-intent") throw new InterruptedTurnRefused("recovery-ambiguous", "launch history or survivor state remains ambiguous");
+    if (reservation.state === "spent") return reservation;
+    if (reservation.state === "released") {
+      if (knowledge !== "never-launched") throw new InterruptedTurnRefused("binding-mismatch", "registered work was recorded as released");
+      return reservation;
+    }
+    if (reservation.state !== "held") throw new InterruptedTurnRefused("recovery-ambiguous", "partial composite recovery is unsupported");
+    return this.settle(id, knowledge === "never-launched" ? 0 : reservation.cost);
+  }
+
+  markTurnCompleted(logicalTurnId: string): void {
+    if (!this.#turnBindings.has(logicalTurnId)) throw new InterruptedTurnRefused("binding-mismatch", "completion names an unknown original turn");
+    this.#completedTurns.add(logicalTurnId);
   }
 
   // -- Driving the machines ------------------------------------------------

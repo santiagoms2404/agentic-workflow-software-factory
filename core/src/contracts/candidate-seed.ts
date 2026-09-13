@@ -1,6 +1,6 @@
 import { Type, type Static } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
-import { OwnerAmendmentSchema, assertOwnerAmendment } from "./owner-amendment.ts";
+import { SeedOwnerAmendmentSchema, assertOwnerAmendment } from "./owner-amendment.ts";
 
 const id = Type.String({ minLength: 1 });
 const sha = Type.String({ pattern: "^[a-f0-9]{40}$" });
@@ -17,7 +17,7 @@ export const CandidateSeedSchema = Type.Object({
   integrationBaseSha: sha, seedCandidateSha: sha,
   configDigest: digest, requestDigest: digest, workflow: id,
   builderPhaseKey: id, builderPhaseOrdinal: Type.Integer({ minimum: 1 }), builderPromptBundleDigest: digest,
-  ownerAmendment: Type.Union([OwnerAmendmentSchema, Type.Null()]),
+  ownerAmendment: Type.Union([SeedOwnerAmendmentSchema, Type.Null()]),
 }, { additionalProperties: false });
 export type CandidateSeed = Static<typeof CandidateSeedSchema>;
 
@@ -29,7 +29,7 @@ export function assertCandidateSeed(value: unknown): asserts value is CandidateS
   if (value.ownerAmendment !== null) {
     assertOwnerAmendment(value.ownerAmendment);
     const binding = value.ownerAmendment.binding;
-    if (binding.project !== value.target.project || binding.taskId !== value.target.taskId || binding.attempt !== 1 ||
+    if (binding.entry !== "seed" || binding.project !== value.target.project || binding.taskId !== value.target.taskId || binding.attempt !== 1 ||
         binding.sessionId !== value.target.sessionId || binding.authorizationId !== value.authorizationId ||
         binding.operationId !== value.authorizationId || binding.phaseKey !== value.builderPhaseKey ||
         binding.phaseOrdinal !== value.builderPhaseOrdinal || binding.originalRequestDigest !== value.requestDigest ||

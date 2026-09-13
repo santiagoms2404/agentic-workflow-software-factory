@@ -82,7 +82,9 @@ function terminal(answer: boolean, interactive = true, lines: string[] = []): Ow
 }
 
 function configText(commandExit = 0): string {
+  // This scripted rework fixture has no retained provider sessions.
   return readFileSync(resolve("awsf.config.yaml"), "utf8")
+    .replaceAll("interrupted_turn: true", "interrupted_turn: false")
     .replace("  seed_paths: [node_modules]", "  seed_paths: []")
     .replace("test: { argv: [npm, run, test:unit], timeout_seconds: 600 }", `test: { argv: [node, -e, process.exit(${commandExit})], timeout_seconds: 10 }`)
     .replace("  typecheck: { argv: [npm, run, typecheck], timeout_seconds: 300 }\n", "")

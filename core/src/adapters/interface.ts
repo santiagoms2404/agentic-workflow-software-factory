@@ -354,10 +354,35 @@ export interface AgentPhaseLaunchVerifier {
   verify(registration: AgentPhaseProcessRegistration): AgentPhaseLaunchEvidence;
 }
 
+export interface TurnReconnectProcessRegistration {
+  readonly kind: "turn-reconnect";
+  readonly runId: string;
+  readonly taskSessionId: string;
+  readonly workflowId: string;
+  readonly phaseId: string;
+  readonly phaseOrdinal: number;
+  readonly correctionRound: number;
+  readonly adapterId: string;
+  readonly role: string;
+  readonly logicalTurnId: string;
+  readonly continuityHandle: string;
+  readonly originOperationId: string;
+  readonly originAuthorizationId: string;
+  readonly originReservationId: string;
+  readonly interruptionAnchorId: string;
+  readonly reconnectOperationId: string;
+  readonly reconnectGeneration: number;
+  readonly checkpointDigest: string;
+  readonly admissionDigest: string;
+  readonly ownerAmendmentDigest: string | null;
+  readonly leaseId: string;
+}
+
 export type BrokerProcessRegistration =
   | ProcessRegistration
   | AgentPhaseProcessRegistration
-  | PhaseCorrectionProcessRegistration;
+  | PhaseCorrectionProcessRegistration
+  | TurnReconnectProcessRegistration;
 
 /**
  * The reservation a launch is accounted against, whichever class it is.
@@ -370,7 +395,7 @@ export type BrokerProcessRegistration =
  * function is for the callers that legitimately need either.
  */
 export function reservationIdOf(registration: BrokerProcessRegistration): string {
-  return registration.kind === "phase-correction"
+  return registration.kind === "phase-correction" || registration.kind === "turn-reconnect"
     ? registration.originReservationId
     : registration.reservationId;
 }
@@ -472,6 +497,7 @@ export function isContinuityCapable(adapter: HarnessAdapter): adapter is Continu
   return (
     candidate.supportsSameSessionCorrection === true &&
     typeof candidate.continuityStoreDir === "function" &&
-    typeof candidate.assertResumable === "function"
+    typeof candidate.assertResumable === "function" &&
+    typeof candidate.assertSameSession === "function"
   );
 }

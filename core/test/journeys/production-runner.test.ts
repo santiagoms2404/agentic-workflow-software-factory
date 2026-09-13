@@ -256,7 +256,8 @@ const CAPTURED_PROVIDER = resolve("core/test/fixtures/providers/codex/production
 const SYSTEM_PROMPT_SENTINEL = "SYSTEM_PROMPT_CONTENT_MUST_NOT_RIDE_ARGV";
 
 function configTextWithCommand(exitCode = 0): string {
-  return readFileSync(resolve("awsf.config.yaml"), "utf8").replace(
+  // Scripted adapters exercise ephemeral routes unless a test explicitly opts in.
+  return readFileSync(resolve("awsf.config.yaml"), "utf8").replaceAll("interrupted_turn: true", "interrupted_turn: false").replace(
     "  seed_paths: [node_modules]",
     "  seed_paths: []",
   ).replace(
@@ -314,6 +315,28 @@ async function fixture(
   await startCommand({ attemptDir: created.attemptDir, worktreeRoot: join(root, "worktrees"), configPath, preflight: () => ({ adapter: true, sandbox: true, observability: true }), projectRecord: projection.project });
   return { root, canonical, stateRoot, config, configPath, projection, created };
 }
+
+test("requested retention on an incomplete adapter blocks before any reservation or provider launch", async () => {
+  const world = await fixture("build", 0, config => ({ ...config, agents: config.agents.map(agent => agent.name === "builder"
+    ? { ...agent, harness: { ...agent.harness, interrupted_turn: true } } : agent) }));
+  try {
+    const prepared = await readAttempt(world.created.attemptDir);
+    const status = await runProductionCommand({ attemptDir: world.created.attemptDir, stateRoot: world.stateRoot,
+      config: world.config, configPath: world.configPath, projectRecord: world.projection.project,
+      assertAdvancement: world.projection.assertAdvancement, assertLaunchProjection: world.projection.assertLaunchPermitted,
+      infrastructure: {
+        adapterFor: (_entry, id) => new ScriptedAdapter(id, prepared.worktree!, () => assert.fail("provider must not launch")),
+        createBroker: () => assert.fail("unsupported retention must refuse before broker construction"),
+        sandboxProbe: () => false,
+      } });
+    assert.equal(status.lifecycleState, "BLOCKED");
+    assert.match(status.blocker?.detail ?? "", /original-turn persistence.*no complete continuity transport/);
+    assert.equal(status.budget.callsSpent, 0);
+    assert.equal(status.budget.callsReserved, 0);
+    assert.equal(status.candidateSha, null);
+    assert.equal(git(prepared.worktree!, "status", "--porcelain"), "");
+  } finally { world.projection.close(); rmSync(world.root, { recursive: true, force: true }); }
+});
 
 for (const workflow of ["scout", "plan"] as const) {
   test(`production ${workflow} retains a read-only result and reaches the owner without a candidate commit`, async () => {

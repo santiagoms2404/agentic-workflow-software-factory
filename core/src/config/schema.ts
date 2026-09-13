@@ -139,6 +139,7 @@ const AgentDefinitionSchema = Type.Object(
       {
         adapter: IdentifierString, // must reference a declared adapters key
         continuity: Type.Union([Type.Literal("same-session"), Type.Literal("none")]),
+        interrupted_turn: Type.Optional(Type.Boolean()),
       },
       { additionalProperties: false },
     ),

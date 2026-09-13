@@ -80,6 +80,7 @@ import {
 } from "../../workflow/review-routing.ts";
 import { assertClean, captureChangeSet, changedPaths, changesSinceBase, runGit, systemGitRunner } from "../../git/changes.ts";
 import { ContinuityStore, continuityHandle } from "../../execution/continuity-store.ts";
+import { buildPhaseRequest, openRetainedColdTurn, phasePersistenceMode, phasePersistenceEvidence, redactPhaseProcess } from "../../execution/phase-request.ts";
 import { loadCatalog } from "../../registry/catalog.ts";
 import { readPlacement } from "../../registry/placement.ts";
 import { renderPlanDocument } from "../../registry/plan-render.ts";
@@ -556,6 +557,32 @@ export function renderProductionAgentPrompt(
   return `${withRequest}\n\nHost repository-context envelope:\n${JSON.stringify(designContext, null, 2)}\n`;
 }
 
+/** Shared with external role proofs so role-specific host instructions cannot drift. */
+export function renderProductionRolePrompt(
+  phase: Pick<CompiledAgentPhase, "id" | "schemaId" | "renderPrompt">,
+  previous: EnvelopeBase | null, designContext: DesignContext | null,
+  recordedRequest: string, agent: AgentDefinition,
+): string {
+  const rendered = renderProductionAgentPrompt(phase, previous, designContext, recordedRequest);
+  return phase.id === "documenter"
+    ? `${rendered}\n\nExact repository write boundary: ${agent.writes.length === 0 ? "none" : agent.writes.join(", ")}\n` +
+      "The logical run-report boundary is reports/<lowercase-kebab-name>.md. Return its path and Markdown in runReport; the host writes it outside the repository and beside the sealed attempt.\n"
+    : rendered;
+}
+
+/** Original launches preserve the distinction between lifecycle edges and interior phases. */
+export function productionPhaseRegistration(input: {
+  readonly phaseId: string; readonly phaseOrdinal: number; readonly adapterId: string; readonly role: string;
+  readonly reservationId: string; readonly runId: string; readonly taskSessionId: string; readonly workflowId: string;
+  readonly first: boolean; readonly review: boolean;
+}): ProcessRegistration | AgentPhaseProcessRegistration {
+  const common = { runId: input.runId, reservationId: input.reservationId, adapterId: input.adapterId, role: input.role };
+  if (input.first) return { ...common, sessionId: input.taskSessionId, from: "PREPARED", to: "RUNNING", edge: "L4" } satisfies ProcessRegistration;
+  if (input.review) return { ...common, sessionId: input.taskSessionId, from: "GATING", to: "REVIEWING", edge: "L11" } satisfies ProcessRegistration;
+  return { ...common, kind: "agent-phase", taskSessionId: input.taskSessionId, workflowId: input.workflowId,
+    phaseId: input.phaseId, phaseOrdinal: input.phaseOrdinal } satisfies AgentPhaseProcessRegistration;
+}
+
 function artifactReader(worktree: string): (path: string) => ArtifactObservation {
   return (path) => {
     const root = resolve(worktree);
@@ -1016,6 +1043,10 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
           "the adapter reports same-session correction but implements no correction transport",
         );
       }
+      if (phasePersistenceMode(agent, adapter) === "unavailable") {
+        throw new ProductionRouteUnavailable(agent.harness.adapter,
+          "original-turn persistence was requested but the adapter implements no complete continuity transport");
+      }
       // Pure descriptor construction validates model/thinking/profile/tools before lifecycle mutation.
       // The continuity flags are exercised here too, on a throwaway reference,
       // so an unusable session id or a missing store directory is a refusal
@@ -1030,10 +1061,10 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
         tools: agent.tools.allow,
       };
       adapter.buildSpec(preflightRequest);
-      if (continuous) {
+      if (continuous || phasePersistenceMode(agent, adapter) === "interrupted-turn-retention") {
         const capable = adapter as ContinuityCapableAdapter;
         const storeDir = capable.continuityStoreDir(join(options.attemptDir, "private", phase.id));
-        for (const turn of ["open", "resume"] as const) {
+        for (const turn of continuous ? ["open", "resume"] as const : ["open"] as const) {
           adapter.buildSpec({
             ...preflightRequest,
             continuity: { ref: { providerSessionId: PREFLIGHT_SESSION_ID, storeDir }, turn },
@@ -1229,16 +1260,11 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
    * projection, and the dashboard — the exact opposite of what
    * `private/continuity.json` at mode 0600 is for.
    *
-   * Exact-match replacement rather than a pattern: the host MINTED these
+   * Known-literal replacement rather than a pattern: the host MINTED these
    * strings, so it can name them precisely instead of guessing at what a session
    * id looks like on a route it has not met yet.
    */
-  const REDACTED_LOCATOR = "[continuity-ref]";
-  const redactLocators = (record: BarrierRecord): BarrierRecord => {
-    const locators = new Set(continuity.locators());
-    if (locators.size === 0) return record;
-    return { ...record, command: record.command.map((argument) => locators.has(argument) ? REDACTED_LOCATOR : argument) };
-  };
+  const redactLocators = (record: BarrierRecord): BarrierRecord => redactPhaseProcess(record, continuity);
 
   const broker = infra.createBroker({
     ledger: budget,
@@ -1432,13 +1458,9 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
    * RUNNING.
    */
   const registrationFor = (phase: CompiledAgentPhase, ordinal: number, route: Route, reservation: Reservation, runId: string, first: boolean, review: boolean): BrokerProcessRegistration => {
-    if (first) {
-      return { runId, sessionId: status.sessionId, from: "PREPARED", to: "RUNNING", edge: "L4", reservationId: reservation.id, adapterId: route.adapterId, role: route.agent.name } satisfies ProcessRegistration;
-    }
-    if (review) {
-      return { runId, sessionId: status.sessionId, from: "GATING", to: "REVIEWING", edge: "L11", reservationId: reservation.id, adapterId: route.adapterId, role: route.agent.name } satisfies ProcessRegistration;
-    }
-    return { kind: "agent-phase", runId, taskSessionId: status.sessionId, workflowId: compiled.id, phaseId: phase.id, phaseOrdinal: ordinal, reservationId: reservation.id, adapterId: route.adapterId, role: route.agent.name } satisfies AgentPhaseProcessRegistration;
+    return productionPhaseRegistration({ phaseId: phase.id, phaseOrdinal: ordinal, adapterId: route.adapterId,
+      role: route.agent.name, reservationId: reservation.id, runId, taskSessionId: status.sessionId,
+      workflowId: compiled.id, first, review });
   };
 
   /**
@@ -1545,16 +1567,7 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
         : `chore: record ${phase.id} output`,
     });
     let hostGit = openHostGit();
-    const baseRenderedPrompt = renderProductionAgentPrompt(
-      phase,
-      previous,
-      designContext,
-      status.request,
-    );
-    const rolePrompt = phase.id === "documenter"
-      ? `${baseRenderedPrompt}\n\nExact repository write boundary: ${route.agent.writes.length === 0 ? "none" : route.agent.writes.join(", ")}\n` +
-        "The logical run-report boundary is reports/<lowercase-kebab-name>.md. Return its path and Markdown in runReport; the host writes it outside the repository and beside the sealed attempt.\n"
-      : baseRenderedPrompt;
+    const rolePrompt = renderProductionRolePrompt(phase, previous, designContext, status.request, route.agent);
     const originalPrompt = rolePrompt + seedContext(status);
     const amendment = phase.id === seed?.builderPhaseKey ? seed.ownerAmendment : null;
     const composedInput = composeOwnerAmendment(originalPrompt, amendment);
@@ -1600,8 +1613,8 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
     const handle = continuityHandle(phase.id);
     // The conversation is opened before the first turn so the locator exists,
     // is private, and is durable before any process can be told about it. A
-    // route configured `continuity: none` opens nothing and keeps the ephemeral
-    // argv it always had.
+    // route configured `continuity: none` gets no correction conversation.
+    // Explicit interrupted-turn retention opens a separate cold-turn record below.
     const conversationRef = route.continuity
       ? (await continuity.open({
           phaseId: phase.id,
@@ -1718,6 +1731,8 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
             reviewContext !== null,
           );
         }
+        const retainedColdTurn = await openRetainedColdTurn({ agent: route.agent, adapter: route.adapter,
+          store: continuity, phaseKey: phase.id, round: turn, runtimeDir });
         const controller = new HOST.AbortController();
         let idle: unknown | null = null;
         const arm = (): void => {
@@ -1748,20 +1763,19 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
               type: "agent-start", phaseId: phaseDb, agent: route.agent.name, adapterId: route.adapterId,
               provider: route.model.provider, color: route.agent.color, requestedModel: route.agent.model,
               sandboxBadge: grant.badge, sandboxMechanism: grant.mechanism, purpose, at: launchAt,
+              persistence: phasePersistenceEvidence(route.agent, route.adapter,
+                retainedColdTurn?.handle ?? (conversationRef === null ? null : handle), grant.spec, route.systemPrompt),
             });
             const transport = await broker.startProcess(registered, grant.spec, signal);
             turnLaunch.transport = transport;
             return transport;
           },
         };
-        const request: ModelRequest = {
-          model: route.agent.model, prompt, systemPromptPath, cwd: status.worktree!,
-          env: HOST.process.env, effort: route.agent.thinking,
-          profile: route.agent.tools.profile, tools: route.agent.tools.allow,
-          ...(conversationRef === null ? {} : {
-            continuity: { ref: conversationRef, turn: turn === 0 ? "open" as const : "resume" as const },
-          }),
-        };
+        const request = buildPhaseRequest({ agent: route.agent, prompt, systemPromptPath, cwd: status.worktree!,
+          env: HOST.process.env,
+          ...(retainedColdTurn !== null ? { continuity: { ref: retainedColdTurn.ref, turn: "open" as const } }
+            : conversationRef === null ? {} : { continuity: { ref: conversationRef, turn: turn === 0 ? "open" as const : "resume" as const } }),
+        });
         const events: NormalizedEvent[] = [];
         let output = "";
         let resolved: { model: string; provenance: ModelResolutionProvenance } | null = null;

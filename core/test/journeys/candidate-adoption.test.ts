@@ -548,6 +548,8 @@ test("a gates-pass adoption buys a fresh opposite-provider review, then requires
       runtime: { ...loaded.runtime, seed_paths: [] },
       gates: { test: { argv: ["fixture-test"], timeout_seconds: 1 } },
     };
+    // The fixture's metadata-only adapter cannot promise transcript retention.
+    config.agents = config.agents.map(agent => ({ ...agent, harness: { ...agent.harness, interrupted_turn: false } }));
     const adapters = new Map<string, SuccessfulReviewAdapter>();
     const adopted = await adoptCommand({
       sourceAttemptDir: fixture.sourceDir,

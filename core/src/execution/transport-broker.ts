@@ -59,9 +59,11 @@ import type {
   TransportBroker,
 } from "../adapters/interface.ts";
 import type { Reservation } from "./call-budget.ts";
+import { isVerifiedReconnectAuthorization, type TurnReconnectLaunchVerifier, type VerifiedReconnectAuthorization } from "../workflow/turn-reconnect-authorization.ts";
+import { continuityDigest } from "../contracts/interrupted-turn.ts";
 
 function reservationIdOf(registration: BrokerProcessRegistration): string {
-  return registration.kind === "phase-correction"
+  return registration.kind === "phase-correction" || registration.kind === "turn-reconnect"
     ? registration.originReservationId
     : registration.reservationId;
 }
@@ -268,6 +270,9 @@ export function runSystemCommand(
 export interface BrokerReservationLedger extends ReservationLedger {
   /** Required by agent-phase preflight: the reservation must still be held before a child exists. */
   reservation(id: string): Reservation | undefined;
+  assertReconnectEligible?(proof: VerifiedReconnectAuthorization): Reservation;
+  claimReconnectLaunch?(proof: VerifiedReconnectAuthorization): void;
+  authorizeReconnect?(proof: VerifiedReconnectAuthorization): Reservation;
 }
 
 export interface BrokerOptions {
@@ -289,6 +294,9 @@ export interface BrokerOptions {
    * available by default.
    */
   correctionLaunchVerifier?: PhaseCorrectionLaunchVerifier;
+  /** Missing verifier/accounting callback disables the reconnect class. */
+  reconnectLaunchVerifier?: TurnReconnectLaunchVerifier;
+  onReattached?: (record: BarrierRecord, reservation: Reservation, proof: VerifiedReconnectAuthorization) => Promise<void>;
   /**
    * Durable evidence for a launch that charged nothing. Distinct from `onSpent`
    * because the two say opposite things about the money, and one hook doing
@@ -362,13 +370,20 @@ export class ProcessTransportBroker implements TransportBroker {
     signal: AbortSignal,
     hooks: StartHooks = {},
   ): Promise<ProcessTransport> {
+    if (registration.kind === "turn-reconnect") {
+      // Preserve the exact verified descriptor through asynchronous registration.
+      registration = Object.freeze({ ...registration });
+      spec = Object.freeze({ ...spec, argv: Object.freeze([...spec.argv]), env: Object.freeze({ ...spec.env }) });
+    }
     const phaseEvidence = registration.kind === "agent-phase"
       ? this.#assertAgentPhaseLaunch(registration)
       : null;
     const correctionEvidence = registration.kind === "phase-correction"
       ? this.#assertPhaseCorrectionLaunch(registration)
       : null;
-    const edge = phaseEvidence === null && correctionEvidence === null
+    const reconnectEvidence = registration.kind === "turn-reconnect"
+      ? this.#assertReconnectLaunch(registration, spec, "before-spawn") : null;
+    const edge = phaseEvidence === null && correctionEvidence === null && reconnectEvidence === null
       ? assertSpawnSite(registration as ProcessRegistration)
       : null;
     // A correction carries the ALREADY-SPENT reservation its phase's first turn
@@ -378,7 +393,11 @@ export class ProcessTransportBroker implements TransportBroker {
     const reservationId = reservationIdOf(registration);
     assertSpecSafe(registration, spec, reservationId);
     const executable = resolveExecutable(spec.executable, spec.env);
-    const evidence = phaseEvidence ?? correctionEvidence;
+    const evidence = phaseEvidence ?? correctionEvidence ?? (reconnectEvidence === null ? null : {
+      taskSessionId: reconnectEvidence.registration.taskSessionId, workflowId: reconnectEvidence.registration.workflowId,
+      phaseId: reconnectEvidence.registration.phaseId, phaseOrdinal: reconnectEvidence.registration.phaseOrdinal,
+      adapterId: reconnectEvidence.registration.adapterId, role: reconnectEvidence.registration.role,
+    });
 
     const record: Omit<BarrierRecord, "identity"> = {
       runId: registration.runId,
@@ -396,9 +415,12 @@ export class ProcessTransportBroker implements TransportBroker {
       reservationId,
       command: [executable, ...spec.argv],
       cwd: spec.cwd,
+      ...(reconnectEvidence === null ? {} : { reconnect: reconnectEvidence.registration }),
     };
 
+    if (reconnectEvidence !== null) this.#options.ledger.claimReconnectLaunch!(reconnectEvidence);
     const held: { child: ChildProcess | null } = { child: null };
+    let reattachedProof: VerifiedReconnectAuthorization | null = null;
     const outcome = await runLauncherBarrier({
       start: async () => {
         const started = this.#spawnGated(executable, spec, registration.runId);
@@ -407,6 +429,25 @@ export class ProcessTransportBroker implements TransportBroker {
       },
       record,
       ...(correctionEvidence === null ? {} : { settlement: "correction" as const }),
+      ...(reconnectEvidence === null ? {} : {
+        settlement: "reconnect" as const,
+        reattach: (_record: BarrierRecord): Reservation => {
+          if (registration.kind !== "turn-reconnect") throw new SpawnRegistrationInvalid(registration.runId, "reconnect registration changed");
+          reattachedProof = this.#assertReconnectLaunch(registration, spec, "before-go");
+          const debit = this.#options.ledger.authorizeReconnect!(reattachedProof);
+          if (debit.id !== registration.originReservationId || debit.state !== "spent" || debit.cost !== 1 || debit.spent !== 1) {
+            throw new SpawnRegistrationInvalid(registration.runId, "reconnect accounting did not return the original debit");
+          }
+          return debit;
+        },
+        onReattached: async (durableRecord: BarrierRecord, debit: Reservation): Promise<void> => {
+          await this.#options.onReattached!(durableRecord, debit, reattachedProof!);
+        },
+        beforeReconnectGo: (): void => {
+          if (registration.kind !== "turn-reconnect") throw new SpawnRegistrationInvalid(registration.runId, "reconnect registration changed");
+          this.#assertReconnectLaunch(registration, spec, "before-release");
+        },
+      }),
       register: this.#options.register,
       ...(this.#options.onSpent === undefined ? {} : { onSpent: this.#options.onSpent }),
       ...(correctionEvidence === null || this.#options.onCorrection === undefined ? {} : {
@@ -419,6 +460,28 @@ export class ProcessTransportBroker implements TransportBroker {
     // Non-null by construction: the barrier only returns after `start` resolved.
     if (held.child === null) throw new SpawnRegistrationInvalid(registration.runId, "the barrier released a launch that never started");
     return this.#transportFor(held.child, registration.runId, outcome.identity, spec);
+  }
+
+  #assertReconnectLaunch(
+    registration: Extract<BrokerProcessRegistration, { kind: "turn-reconnect" }>, spec: ProcessSpec,
+    stage: "before-spawn" | "before-go" | "before-release",
+  ): VerifiedReconnectAuthorization {
+    const verifier = this.#options.reconnectLaunchVerifier;
+    const ledger = this.#options.ledger;
+    if (verifier === undefined || this.#options.onReattached === undefined ||
+        typeof ledger.assertReconnectEligible !== "function" || typeof ledger.claimReconnectLaunch !== "function" || typeof ledger.authorizeReconnect !== "function") {
+      throw new SpawnRegistrationInvalid(registration.runId, "reconnect verifier, ledger, or durable evidence callback is unavailable");
+    }
+    const proof = verifier.verify(registration, spec, stage);
+    if (!isVerifiedReconnectAuthorization(proof, ledger) || proof.stage !== stage ||
+        continuityDigest(proof.registration) !== continuityDigest(registration) || proof.descriptorDigest !== continuityDigest(spec)) {
+      throw new SpawnRegistrationInvalid(registration.runId, "reconnect verifier returned evidence for another launch or descriptor");
+    }
+    const original = ledger.assertReconnectEligible(proof);
+    if (original.id !== registration.originReservationId || original.cost !== 1 || (original.state !== "held" && original.state !== "spent")) {
+      throw new SpawnRegistrationInvalid(registration.runId, "reconnect does not name this ledger's original liability");
+    }
+    return proof;
   }
 
   /** Distinct validator for launches that are not task transitions. Runs before spawn(). */

@@ -304,6 +304,8 @@ export type BarrierStep = (typeof BARRIER_STEPS)[number];
 
 /** What the durable record must contain about a process that has not run yet. */
 export interface BarrierRecord {
+  /** Public host identities/digests only. No provider locator or replay token. */
+  reconnect?: import("../adapters/interface.ts").TurnReconnectProcessRegistration;
   identity: ProcessIdentity;
   runId: string;
   /** Task-edge launches carry L4/L10/L11/L16/L19/L25; agent-phase launches carry null. */
@@ -349,7 +351,7 @@ export interface ReservationLedger {
  * unchanged and keeps "this launch is free" an explicit decision a caller had
  * to make, rather than something that falls out of forgetting to pass a ledger.
  */
-export type BarrierSettlement = "reservation" | "correction";
+export type BarrierSettlement = "reservation" | "correction" | "reconnect";
 
 export interface LauncherBarrierOptions {
   /** Creates the gated child. The broker's job; the barrier only sequences it. */
@@ -368,6 +370,11 @@ export interface LauncherBarrierOptions {
   onSpent?: (record: BarrierRecord, reservation: Reservation) => Promise<void>;
   /** Durable call-neutral evidence for a correction, likewise before the release token. */
   onCorrection?: (record: BarrierRecord) => Promise<void>;
+  /** Ledger-owned original-debit reuse, reverified after durable registration. */
+  reattach?: (record: BarrierRecord) => Reservation;
+  onReattached?: (record: BarrierRecord, reservation: Reservation) => Promise<void>;
+  /** Synchronous final lease/descriptor check, after all persistence awaits and immediately before GO. */
+  beforeReconnectGo?: () => void;
   ledger: ReservationLedger;
   signal?: AbortSignal;
   onStep?: (step: BarrierStep) => Promise<void> | void;
@@ -400,13 +407,15 @@ export class RegistrationFailed extends Error {
     cancellation: TerminationReport | null;
     reservation: Reservation | null;
     refundError?: unknown;
+    reconnect?: boolean;
   }) {
     const detail = options.cause instanceof Error ? options.cause.message : String(options.cause);
     // What the message may claim depends entirely on where it failed. Only the
     // steps before the token can promise the provider never ran; saying it
     // everywhere would make the one case that matters the one case that lies.
-    const outcome =
-      options.step === "spent"
+    const outcome = options.reconnect === true
+      ? "without releasing the original-turn liability"
+      : options.step === "spent"
         ? "and whether the release token reached the child is not knowable, so the call is billed"
         : options.step === "released"
           ? "AFTER the release token — a provider may be running under the registered pid"
@@ -443,6 +452,9 @@ export class RegistrationFailed extends Error {
 export async function runLauncherBarrier(options: LauncherBarrierOptions): Promise<BarrierOutcome> {
   const { start, record, register, onSpent, onCorrection, ledger, signal, onStep } = options;
   const settlement: BarrierSettlement = options.settlement ?? "reservation";
+  if (settlement === "reconnect" && (options.reattach === undefined || options.onReattached === undefined || options.beforeReconnectGo === undefined)) {
+    throw new Error("reconnect requires ledger-owned accounting and durable reattachment evidence");
+  }
   // A correction charges nothing, so there is nothing to give back either. The
   // refund path is skipped rather than allowed to run and fail: releasing the
   // origin reservation would hand back the call the phase's FIRST turn genuinely
@@ -475,6 +487,7 @@ export async function runLauncherBarrier(options: LauncherBarrierOptions): Promi
       cancellation: null,
       reservation: refund.reservation,
       refundError: refund.error,
+      ...(settlement === "reconnect" ? { reconnect: true } : {}),
     });
   }
 
@@ -502,13 +515,19 @@ export async function runLauncherBarrier(options: LauncherBarrierOptions): Promi
     await step("registered");
 
     abortCheck();
-    const reservation = refundable ? ledger.spendOnGo(record.reservationId) : null;
+    const durableRecord = { ...record, identity };
+    const reservation = refundable ? ledger.spendOnGo(record.reservationId)
+      : settlement === "reconnect" ? options.reattach!(durableRecord) : null;
     spent = true;
     at = "spent";
-    const durableRecord = { ...record, identity };
-    if (reservation !== null) await onSpent?.(durableRecord, reservation);
+    if (settlement === "reconnect") await options.onReattached!(durableRecord, reservation!);
+    else if (reservation !== null) await onSpent?.(durableRecord, reservation);
     else await onCorrection?.(durableRecord);
     await step("spent");
+    if (settlement === "reconnect") {
+      abortCheck();
+      options.beforeReconnectGo!();
+    }
 
     await launch.release();
     at = "released";
@@ -535,6 +554,7 @@ export async function runLauncherBarrier(options: LauncherBarrierOptions): Promi
       cancellation,
       reservation: refund.reservation,
       refundError: refund.error ?? cancelError,
+      ...(settlement === "reconnect" ? { reconnect: true } : {}),
     });
   }
 }

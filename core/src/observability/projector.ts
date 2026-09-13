@@ -411,6 +411,13 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
           evidence.startedAt, evidence.endedAt);
       return;
     case "agent-start":
+      if (evidence.persistence !== undefined) {
+        db.prepare(`INSERT OR IGNORE INTO events
+          (event_id, session_id, phase_id, first_source_seq, last_source_seq, type, name,
+           payload_json, started_at) VALUES (?, ?, ?, ?, ?, 'notice', 'turn persistence', ?, ?)`)
+          .run(`${sessionId}:turn-persistence:${sourceSeq}`, sessionId, evidence.phaseId, sourceSeq, sourceSeq,
+            stringifyRedacted(evidence.persistence), evidence.at);
+      }
       db.prepare(`INSERT INTO agent_sessions
         (session_id, agent, adapter_id, provider, color, requested_model, resolved_model,
          model_provenance, call_count, sandbox_badge, sandbox_mechanism, created_at, last_used_at)
