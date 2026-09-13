@@ -57,6 +57,9 @@ async function landed(stateRoot: string, repository: string, taskId: string, sha
     kind: "attempt.transitioned",
     next: nextRevision(created.status, {
       lifecycleState: "LANDED",
+      activeOperation: "completed-operation",
+      recovery: null,
+      seed: null,
       candidateSha: sha,
       landingApproval: { candidateSha: sha, summary: "Publish this revision.", approvedAt: AT },
       lastActivityAt: AT,
@@ -170,6 +173,9 @@ test("publication journals a scrubbed round-trippable record and projects PUBLIS
       };
       assert.deepEqual(payload.terminalLines, terminalLines);
       assert.deepEqual(payload.result.status, result.status);
+      assert.equal(payload.result.status.activeOperation, "completed-operation");
+      assert.equal(payload.result.status.recovery, null);
+      assert.equal(payload.result.status.seed, null);
       assert.equal(payload.finalStatusBytes, readFileSync(join(created.attemptDir, "status.json"), "utf8"));
     } finally {
       db.close();

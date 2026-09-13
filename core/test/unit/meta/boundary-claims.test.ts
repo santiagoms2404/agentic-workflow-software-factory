@@ -281,6 +281,13 @@ test(`the owner acts are derived from ${MAIN_TS_REL}, not copied into this test`
   assert.ok(!OWNER_ACTS.includes("retry"), "retry constructs no owner terminal and must not be derived as an act");
 });
 
+test("the executable driving guard denies every CLI-derived owner act", () => {
+  const guard = readFileSync(join(ROOT, "docs/driving/marimba/delegation-guard.sh"), "utf8");
+  const match = /^\s*for verb in ([^;\n]+); do$/m.exec(guard);
+  assert.ok(match, "the owner-act denial list must remain explicit");
+  assert.deepEqual(match[1]!.trim().split(/\s+/).sort(), [...OWNER_ACTS].sort());
+});
+
 test(`every ${DRIVING_REL} document enumerating owner acts enumerates exactly the derived set`, () => {
   const files = drivingDocs().map((file) => ({ label: relRepo(file), text: readFileSync(file, "utf8") }));
   assert.deepEqual(enumerationOffenders(files), []);

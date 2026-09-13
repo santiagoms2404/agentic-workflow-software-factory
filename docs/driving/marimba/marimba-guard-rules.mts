@@ -20,10 +20,10 @@
  * with shell access can allocate a PTY and answer the confirmation. This list is
  * what makes the boundary real while a driving session runs with prompts off.
  */
-export const OWNER_ACTS = ["land", "cancel", "rework", "review", "journey", "raise", "publish"] as const;
+export const OWNER_ACTS = ["land", "cancel", "rework", "review", "journey", "raise", "publish", "resume"] as const;
 
 /** Lifecycle commands for which an external controller deadline is forbidden. */
-export const TIMEOUT_GUARDED_LIFECYCLE_COMMANDS = ["run", "rework", "review"] as const;
+export const TIMEOUT_GUARDED_LIFECYCLE_COMMANDS = ["run", "rework", "review", "resume"] as const;
 
 function lifecycleCommand(command: string): string | null {
   const normalized = normalizeCommand(command);
@@ -31,7 +31,7 @@ function lifecycleCommand(command: string): string | null {
     (verb) => normalized.includes(`awsf ${verb}`),
   );
   if (direct !== undefined) return direct;
-  const npm = / npm run awsf(?: --[^\s]+)* -- (run|rework|review) /u.exec(normalized);
+  const npm = / npm run awsf(?: --[^\s]+)* -- (run|rework|review|resume) /u.exec(normalized);
   return npm?.[1] ?? null;
 }
 

@@ -1,4 +1,10 @@
 import { existsSync, readFileSync, statSync, promises as fs } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { fileURLToPath } from "node:url";
+import { recoveryDigest, recoveryBudgetDigest, type AcceptedPhase, type BoundaryQuota, type PhaseRecovery } from "../../contracts/phase-recovery.ts";
+import { inspectPhaseRecovery, verifyRecoveryWorktree, reconcileRecoveryStatus, reducePhaseContext } from "../../workflow/phase-recovery.ts";
+import { withExecutionLease, assertNoExecutionController } from "../../execution/operation-lease.ts";
+import type { OwnerTerminal } from "../tty.ts";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import type {
   AgentPhaseProcessRegistration,
@@ -17,8 +23,8 @@ import { AdapterError, isContinuityCapable } from "../../adapters/interface.ts";
 import { registeredAdapter } from "../../adapters/registry.ts";
 import { writeSystemPromptFile } from "../../adapters/system-prompt-file.ts";
 import { toConfigSnapshotJson } from "../../config/effective-config.ts";
-import { composeOwnerAmendment } from "../../contracts/owner-amendment.ts";
-import { seedContext, verifiedTargetSeed, validateSeedStartup } from "../../workflow/candidate-seed.ts";
+import { composeOwnerAmendment, ownerText } from "../../contracts/owner-amendment.ts";
+import { seedContext, assertSeedTarget, verifiedTargetSeed, validateSeedStartup } from "../../workflow/candidate-seed.ts";
 import type { AwsfConfig, AgentDefinition, AdapterEntry } from "../../config/schema.ts";
 import { BUILD_OUTPUT_SCHEMA_ID, type BuildOutput } from "../../contracts/build-output.ts";
 import type { EnvelopeBase } from "../../contracts/envelope-base.ts";
@@ -114,7 +120,7 @@ import { PermissionBreach } from "../../policy/path-policy.ts";
 import { openPermissionSession, type PermissionSession, type SandboxProbe } from "../../policy/sandbox-broker.ts";
 import { transition, type EdgeId, type TaskState } from "../../state/task-machine.ts";
 import { createCompiledPhaseLaunchVerifier } from "../../workflow/phase-launch-authorization.ts";
-import { compileWorkflow, type WorkflowRecipe } from "../../workflow/compiler.ts";
+import { compileWorkflow, compileWorkflowStructure, type WorkflowRecipe } from "../../workflow/compiler.ts";
 import { composePromptBundle, type PromptBundle } from "../../workflow/prompt-composition.ts";
 import type { CompiledAgentPhase } from "../../workflow/phase.ts";
 import { outputOwnershipCheck } from "../../workflow/output-ownership.ts";
@@ -954,12 +960,38 @@ async function validatePreparedRepository(status: AttemptStatus): Promise<void> 
   }
 }
 
-async function executeProductionCommand(options: ProductionRunOptions): Promise<AttemptStatus> {
+type RecoveryInspection = Awaited<ReturnType<typeof inspectPhaseRecovery>>;
+
+async function productionRecoveryBinding(options: ProductionRunOptions, status: AttemptStatus): Promise<string> {
+  const recipe = SUPPORTED.get(status.workflow);
+  if (recipe === undefined) throw new Error("recovery recipe unavailable");
+  const prompts = await Promise.all(recipe.phases.filter(phase => phase.kind === "agent").map(async phase => {
+    const agent = options.config.agents.find(agent => agent.name === phase.owner);
+    if (agent === undefined) throw new Error("recovery route missing");
+    const bundle = await readProductionPromptPair(options.configPath, agent);
+    return { phase: phase.id, system: bundle.systemPrompt, user: bundle.userPrompt };
+  }));
+  const sourceRoot = fileURLToPath(new URL("../../", import.meta.url));
+  const entries = await fs.readdir(sourceRoot, { recursive: true, withFileTypes: true });
+  const sources = (await Promise.all(entries.filter(entry => entry.isFile() && entry.name.endsWith(".ts")).map(async entry => {
+    const path = join(entry.parentPath, entry.name);
+    return [relative(sourceRoot, path), sha256(await readFile(path, "utf8"))] as const;
+  }))).sort(([a], [b]) => a.localeCompare(b));
+  return recoveryDigest({ request: status.request, seed: status.seed ?? null, config: options.config, prompts, sources,
+    phases: recipe.phases.map(phase => ({ id: phase.id, kind: phase.kind, owner: phase.owner, schema: phase.schemaId,
+      maxCorrections: phase.maxCorrections, gates: phase.gates.map(gate => gate.id) })) });
+}
+
+async function executeProductionCommand(options: ProductionRunOptions, operationId: string,
+  recovery?: { inspected: RecoveryInspection; reason: string; quotaReadings: BoundaryQuota[] }, preflightOnly = false): Promise<AttemptStatus> {
   const infra: ProductionInfrastructure = { ...DEFAULT_INFRASTRUCTURE, ...options.infrastructure };
-  let status = await readAttempt(options.attemptDir);
-  const recoveredReview = await settleExitedReview(options, status, infra.now());
-  if (recoveredReview !== null) return recoveredReview;
-  if (status.lifecycleState !== "PREPARED") throw new Error(`production run requires PREPARED, got ${status.lifecycleState}`);
+  let status = recovery?.inspected.status ?? await readAttempt(options.attemptDir);
+  if (recovery === undefined) {
+    if (status.recovery != null) throw new Error("saved phase completion or quota anchor exists; use awsf resume");
+    const recoveredReview = await settleExitedReview(options, status, infra.now());
+    if (recoveredReview !== null) return recoveredReview;
+    if (status.lifecycleState !== "PREPARED") throw new Error(`production run requires PREPARED, got ${status.lifecycleState}`);
+  }
   const recipe = SUPPORTED.get(status.workflow);
   // The attempt's tier and the recipe's tier must agree, and the tier is then
   // carried rather than assumed: a workflow that buys a review and a journey is
@@ -978,8 +1010,8 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
     throw new ProductionConfigSnapshotMismatch();
   }
 
-  const seed = await verifiedTargetSeed(options.attemptDir, status);
-  if (seed !== null) await validateSeedStartup(seed, status, options.config, options.configPath, options.attemptDir);
+  const seed = recovery === undefined ? await verifiedTargetSeed(options.attemptDir, status) : assertSeedTarget(status);
+  if (seed !== null && recovery === undefined) await validateSeedStartup(seed, status, options.config, options.configPath, options.attemptDir);
   const agents = new Map(options.config.agents.map((agent) => [agent.name, agent]));
   const routePrompts = new Map<string, PromptBundle>();
   for (const phase of recipe.phases) {
@@ -995,7 +1027,11 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
       : phase),
   };
   // Compilation, route shape, prompts, and minimum-call admission all finish before any process.
-  const compiled = compileWorkflow(configuredRecipe, status.tier, status.budget.callsSpent, status.budget.ceiling);
+  const compiled = recovery === undefined
+    ? compileWorkflow(configuredRecipe, status.tier, status.budget.callsSpent, status.budget.ceiling)
+    : compileWorkflowStructure(configuredRecipe);
+  const bindingDigest = await productionRecoveryBinding(options, status);
+  if (recovery !== undefined && bindingDigest !== recovery.inspected.checkpoint.bindingDigest) throw new Error("recovery configuration, request, recipe, prompts or runtime source changed");
   const routes = new Map<string, Route>();
   let inversion: {
     readonly workerProvider: string;
@@ -1004,9 +1040,10 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
     readonly reviewPhaseId: string;
   } | null = null;
   try {
-    await validatePreparedRepository(status);
-    for (const phase of compiled.phases) {
-      if (phase.kind !== "agent") continue;
+    if (recovery === undefined) await validatePreparedRepository(status);
+    else await verifyRecoveryWorktree(status, recovery.inspected.checkpoint);
+    for (const [phaseIndex, phase] of compiled.phases.entries()) {
+      if (phase.kind !== "agent" || phaseIndex < (recovery?.inspected.checkpoint.prefix.length ?? 0)) continue;
       const agent = agents.get(phase.owner)!;
       const entry = options.config.adapters[agent.harness.adapter];
       if (entry === undefined || entry.enabled === false) throw new ProductionRouteUnavailable(agent.harness.adapter, "route is disabled or undeclared");
@@ -1095,10 +1132,18 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
       if (buildPhaseId === null) {
         throw new InvalidReviewInversion("the compiled review workflow has no build-producing agent phase");
       }
-      const workerProvider = routes.get(buildPhaseId)!.model.provider;
-      const pair = providerPairFrom([...routes.values()].map((route) => route.model.provider));
+      const providerFor = (phaseId: string): string => {
+        const fresh = routes.get(phaseId)?.model.provider;
+        if (fresh !== undefined) return fresh;
+        const evidence = recovery?.inspected.records.map(record => record.event.evidence).findLast(evidence =>
+          evidence?.type === "agent-start" && evidence.phaseId === dbPhaseId(status.sessionId, phaseId));
+        if (evidence?.type !== "agent-start") throw new InvalidReviewInversion("accepted phase has no recorded original provider");
+        return evidence.provider;
+      };
+      const workerProvider = providerFor(buildPhaseId);
+      const pair = providerPairFrom(compiled.phases.filter(phase => phase.kind === "agent").map(phase => providerFor(phase.id)));
       const required = oppositeProvider(workerProvider, pair);
-      const configured = routes.get(reviewPhase.id)!.model.provider;
+      const configured = providerFor(reviewPhase.id);
       if (configured !== required) {
         throw new InvalidReviewInversion(
           `worker runs on ${JSON.stringify(workerProvider)}, so the review must run on ${JSON.stringify(required)}; ` +
@@ -1108,6 +1153,7 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
       inversion = { workerProvider, reviewProvider: required, pair, reviewPhaseId: reviewPhase.id };
     }
   } catch (error) {
+    if (recovery !== undefined) throw error;
     const now = infra.now();
     const reason = closestBlocker(error);
     const decision = transition({
@@ -1123,6 +1169,7 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
     return status;
   }
 
+  if (preflightOnly) return status;
   const budget = new CallBudget({
     taskId: status.taskId,
     tier: status.tier,
@@ -1130,9 +1177,16 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
     // The attempt's own ceiling, including any owner grant. The ledger must
     // measure against exactly what the machine decided against.
     ...(status.budget.ceiling === undefined ? {} : { ceiling: status.budget.ceiling }),
-    carried: { attempt: status.attempt, callsSpent: status.budget.callsSpent },
+    reservationNamespace: operationId,
+    carried: { attempt: status.attempt, callsSpent: status.budget.callsSpent,
+      correctionsAuto: status.budget.correctionsAuto, correctionsOwner: status.budget.correctionsOwner,
+      ownerReentries: status.budget.ownerReentries },
   });
-  budget.admitWorkflow(compiled);
+  const prefix: AcceptedPhase[] = [...(recovery?.inspected.checkpoint.prefix ?? [])];
+  const remainingCalls = compiled.phases.slice(prefix.length).filter(phase => phase.kind === "agent").length;
+  budget.admitWorkflow(recovery === undefined ? compiled : { id: compiled.id, minimumCalls: remainingCalls });
+  const acceptedEnvelopes = new Map<string, EnvelopeBase>(recovery?.inspected.envelopes);
+  const storedEnvelopes = new Map<string, StoredEnvelope<EnvelopeBase>>();
   const createdAt = infra.now();
   const phaseRecords = new Map<string, PhaseEvidenceRecord>();
   const launches = new Map<string, LaunchRecord>();
@@ -1174,6 +1228,7 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
       errorMessage: error?.message ?? null,
     };
     phaseRecords.set(phaseId, record);
+    if (state === "SUCCEEDED" && record.kind !== "agent") { await acceptPhase(phaseId, null); return; }
     await persist("attempt.updated", {
       phase: { name: record.name, state, round: record.correctionCount, maximumRounds: record.maxCorrections },
       lastActivityAt: at,
@@ -1182,6 +1237,12 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
   };
 
   for (const [index, phase] of compiled.phases.entries()) {
+    if (recovery !== undefined) {
+      const retained = recovery.inspected.phases.get(phase.id);
+      if (retained === undefined || retained.ordinal !== index + 1) throw new Error("recovery phase record missing or reordered");
+      phaseRecords.set(phase.id, retained);
+      continue;
+    }
     const record: PhaseEvidenceRecord = {
       phaseId: dbPhaseId(status.sessionId, phase.id), ordinal: index + 1, key: phase.id, name: phase.id,
       kind: phase.kind, owner: phase.owner, description: phase.description, status: "QUEUED",
@@ -1192,14 +1253,17 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
     await persist("attempt.updated", {}, { type: "phase", phase: record });
   }
 
+  let firstReservation: Reservation | null = null;
+  if (recovery === undefined) {
   const l4 = budget.authorize({
     from: "PREPARED", to: "RUNNING", actor: "host", reason: { source: "process" }, interactive: false,
     evidence: { workflowCompiled: true }, spawn: { cost: 1 },
   });
-  const firstReservation = l4.reservation!;
+  firstReservation = l4.reservation!;
   await persistTransition("PREPARED", "RUNNING", l4.result.edge, "process", null, "compiled workflow and held first call", true, {
-    budget: budget.snapshot(), blocker: null, lastActivity: "L4 durable; first provider call held",
+    activeOperation: operationId, budget: budget.snapshot(), blocker: null, lastActivity: "L4 durable; first provider call held",
   });
+  }
 
   // The private conversation ledger. Loaded rather than created blind so a
   // resumed host does not mint a second locator for a phase that already has
@@ -1266,7 +1330,7 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
    */
   const redactLocators = (record: BarrierRecord): BarrierRecord => redactPhaseProcess(record, continuity);
 
-  const broker = infra.createBroker({
+  const brokerOptions = {
     ledger: budget,
     phaseLaunchVerifier: verifier,
     correctionLaunchVerifier: correctionVerifier,
@@ -1303,7 +1367,8 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
         endedAt: null, exitCode: null, exitSignal: null,
       });
     },
-  } as BrokerOptions);
+  } as BrokerOptions;
+  let broker: TransportBroker | null = null;
 
   const persistEnvelope = async (phaseId: string, runId: string, envelope: StoredEnvelope<EnvelopeBase>, rawOutput: string): Promise<void> => {
     const rawRelative = join("raw", `${runId}.txt`);
@@ -1317,6 +1382,7 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
     if (existsSync(envelopePath)) throw new Error(`immutable envelope already exists: ${envelopePath}`);
     await writeFile(envelopePath, JSON.stringify(stored), { mode: 0o600 });
     await persist("attempt.updated", {}, { type: "envelope", phaseId: dbPhaseId(status.sessionId, phaseId), envelope: stored });
+    storedEnvelopes.set(phaseId, stored);
   };
 
   const persistGate = async (phaseId: string, report: GateReport, candidateSha: string | null, round = 0, exitCode: number | null = null, outputPath: string | null = null): Promise<void> => {
@@ -1766,7 +1832,7 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
               persistence: phasePersistenceEvidence(route.agent, route.adapter,
                 retainedColdTurn?.handle ?? (conversationRef === null ? null : handle), grant.spec, route.systemPrompt),
             });
-            const transport = await broker.startProcess(registered, grant.spec, signal);
+            const transport = await (broker ??= infra.createBroker(brokerOptions)).startProcess(registered, grant.spec, signal);
             turnLaunch.transport = transport;
             return transport;
           },
@@ -1800,6 +1866,10 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
           throw error;
         } finally {
           if (idle !== null) HOST.clearTimeout(idle);
+        }
+        if (terminal?.kind === "run.completed" && terminal.exitCode === 0 && turnLaunch.transport !== undefined) {
+          const stopped = await turnLaunch.transport.cancel("completed provider turn cleanup");
+          if (!stopped.terminated || stopped.survivors.length > 0 || stopped.skipped !== null) throw new Error("completed provider turn has unresolved descendants");
         }
         const endedAt = infra.now();
         const exitCode = terminal?.kind === "run.completed" ? terminal.exitCode : null;
@@ -1886,6 +1956,24 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
         persistence: { persist: (envelope, raw) => persistEnvelope(phase.id, runIdFor(envelope.correctionRound), envelope, raw) },
         agentSessionId: status.sessionId,
         onPhaseState,
+        onAccepted: async result => {
+          await phaseQueue;
+          const gatedSha = reviewContext === null ? result.candidateSha : reviewContext.candidateSha;
+          for (const report of result.gateReports) await persistGate(phase.id, report, gatedSha, result.correctionRounds);
+          if (phase.id === "builder") {
+            const report = headAdvanced({ baseSha: status.baseSha!, headSha: result.candidateSha, hostCommitExists: result.candidateSha !== null });
+            await persistGate(phase.id, report, result.candidateSha);
+            if (!report.passed) throw new PhaseGateFailure(phase.id, [report]);
+          }
+          if (reviewContext !== null) {
+            const review = result.envelope.payload! as ReviewOutput;
+            await persist("attempt.updated", { lastActivityAt: infra.now(), lastActivity: `${phase.id}: ${route.model.provider} returned ${review.verdict}` }, {
+              type: "review", phaseId: phaseDb, adapterId: route.adapterId, provider: route.model.provider,
+              verdict: review.verdict, reviewedSha: review.reviewedSha, findingCount: review.findings.length, at: infra.now(),
+            });
+          }
+          await acceptPhase(phase.id, result.candidateSha);
+        },
         onGateReport: async (report, round) => {
           if (!report.passed) {
             await persistGate(phase.id, report, reviewContext?.candidateSha ?? null, round);
@@ -1931,23 +2019,6 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
         ...(verifyCandidate === null ? {} : { verifyCandidate }),
       });
       await phaseQueue;
-      const gatedSha = reviewContext === null ? result.candidateSha : reviewContext.candidateSha;
-      for (const report of result.gateReports) {
-        await persistGate(phase.id, report, gatedSha, result.correctionRounds);
-      }
-      if (phase.id === "builder") {
-        const report = headAdvanced({ baseSha: status.baseSha!, headSha: result.candidateSha, hostCommitExists: result.candidateSha !== null });
-        await persistGate(phase.id, report, result.candidateSha);
-        if (!report.passed) throw new PhaseGateFailure(phase.id, [report]);
-      }
-      if (reviewContext !== null) {
-        const review = result.envelope.payload! as ReviewOutput;
-        await persist("attempt.updated", { lastActivityAt: infra.now(), lastActivity: `${phase.id}: ${route.model.provider} returned ${review.verdict}` }, {
-          type: "review", phaseId: phaseDb, adapterId: route.adapterId, provider: route.model.provider,
-          verdict: review.verdict, reviewedSha: review.reviewedSha, findingCount: review.findings.length,
-          at: infra.now(),
-        });
-      }
       return { envelope: result.envelope.payload!, candidateSha: result.candidateSha };
     } catch (error) {
       await phaseQueue;
@@ -1990,7 +2061,9 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
   let planContext: PlanContext | null = null;
   let designPlanOutput: DesignPlanOutput | null = null;
   let candidateSha: string | null = null;
-  let agentOrdinal = 0;
+  let agentOrdinal = compiled.phases.slice(0, prefix.length).filter(phase => phase.kind === "agent" && !isReviewPhase(phase)).length;
+  const restartIndex = prefix.length;
+  let activationPending = recovery !== undefined;
   let reviewPhase: { readonly phase: CompiledAgentPhase; readonly ordinal: number } | null = null;
   let reviewTransportRetries = 0;
   /**
@@ -2006,6 +2079,52 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
   let lastTestOutput: TestOutput | null = null;
   let reviewEvidence: ReviewContext | null = null;
   let reviewExpectation: ReviewEvidenceExpectation | null = null;
+
+  const applyAcceptedContext = (): void => {
+    const context = reducePhaseContext(acceptedEnvelopes, seededRequest);
+    previous = context.previous;
+    intent = context.schemas.get("awsf.plan-output/v1") as PlanOutput | undefined ?? seededRequest;
+    designContext = context.schemas.get(DESIGN_CONTEXT_SCHEMA_ID) as DesignContext | undefined ?? null;
+    designOutput = context.schemas.get(DESIGN_OUTPUT_SCHEMA_ID) as DesignOutput | undefined ?? null;
+    architectureReviewOutput = context.schemas.get(ARCHITECTURE_REVIEW_OUTPUT_SCHEMA_ID) as ArchitectureReviewOutput | undefined ?? null;
+    planContext = context.schemas.get(PLAN_CONTEXT_SCHEMA_ID) as PlanContext | undefined ?? null;
+    designPlanOutput = context.schemas.get(DESIGN_PLAN_OUTPUT_SCHEMA_ID) as DesignPlanOutput | undefined ?? null;
+    lastTestOutput = context.schemas.get("awsf.test-output/v1") as TestOutput | undefined ?? null;
+    reviewEvidence = context.schemas.get(REVIEW_CONTEXT_SCHEMA_ID) as ReviewContext | undefined ?? null;
+    candidateSha = prefix.at(-1)?.candidateSha ?? null;
+  };
+  if (recovery !== undefined) applyAcceptedContext();
+
+  const checkpointAt = async (kind: PhaseRecovery["kind"], quota: BoundaryQuota | null): Promise<PhaseRecovery | null> => {
+    if (prefix.length === 0 || status.process !== null || budget.outstanding().length > 0) return null;
+    const git = systemGitRunner(status.worktree!);
+    assertClean(status.worktree!, "after", git);
+    const checkpoint: PhaseRecovery = { schema: "awsf.phase-recovery/v1", id: randomUUID(), sessionId: status.sessionId,
+      kind, workflowId: compiled.id, bindingDigest, prefix: [...prefix],
+      repository: await realpath(status.repository), worktree: await realpath(status.worktree!),
+      commonGitDir: await realpath(runGit(git, ["rev-parse", "--path-format=absolute", "--git-common-dir"]).trim()),
+      integrationBaseSha: status.baseSha!, worktreeHeadSha: runGit(git, ["rev-parse", "HEAD"]).trim(),
+      budgetDigest: recoveryBudgetDigest(budget.snapshot()), quota, createdAt: infra.now() };
+    return checkpoint;
+  };
+  const acceptPhase = async (phaseId: string, producedSha: string | null): Promise<void> => {
+    const stored = storedEnvelopes.get(phaseId);
+    const phase = phaseRecords.get(phaseId)!;
+    if (!stored?.valid || stored.payload === null || phase.ordinal !== prefix.length + 1) throw new Error("cannot accept an invalid or out-of-order phase result");
+    if (producedSha !== null) candidateSha = producedSha;
+    const accepted: AcceptedPhase = { phaseKey: phaseId, ordinal: phase.ordinal, envelopeId: stored.envelopeId,
+      envelopeDigest: recoveryDigest(stored), round: stored.correctionRound, candidateSha };
+    prefix.push(accepted);
+    acceptedEnvelopes.set(phaseId, stored.payload);
+    const record = { ...phase, status: "SUCCEEDED", correctionCount: stored.correctionRound, endedAt: infra.now() };
+    phaseRecords.set(phaseId, record);
+    const checkpoint = await checkpointAt("completed-phase", null);
+    await persist("attempt.updated", { recovery: checkpoint, candidateSha, budget: budget.snapshot(),
+      phase: { name: phaseId, state: "SUCCEEDED", round: stored.correctionRound, maximumRounds: phase.maxCorrections },
+      lastActivity: `${phaseId}: accepted result and recovery checkpoint durable`, lastActivityAt: infra.now() },
+      { type: "phase-accepted", phase: record, accepted });
+    applyAcceptedContext();
+  };
 
   const quotaRoutesByAdapter = new Map(
     mapConfiguredQuotaRoutes(options.config).map((route) => [route.adapterId, route]),
@@ -2038,6 +2157,7 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
     let minutesToReset: number | null = null;
     let reasonCode: string | null = quotaRoute?.reason ?? "boundary-has-no-quota-route";
     let resolvedVersion: string | null = null;
+    let selectedQuota: BoundaryQuota | null = null;
 
     if (quotaRoute !== null && quotaRoute.providers.length > 0) {
       const threshold = quotaStopFor(quotaRoute.adapterId);
@@ -2076,6 +2196,10 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
       minutesToReset = row.minutesToReset;
       reasonCode = row.reasonCode ?? reportedFailure;
       resolvedVersion = probeResult.resolvedVersion;
+      if (row.provider !== null && row.scope !== null && row.minutesToReset !== null && threshold !== null && row.verdict === "below") {
+        selectedQuota = { adapterId: row.adapterId, provider: row.provider, scope: row.scope,
+          minutes: row.minutesToReset, threshold: threshold.minutes, observedAt: boundaryAt, readoutDigest: recoveryDigest(row) };
+      }
     }
 
     await persist("attempt.updated", {}, {
@@ -2102,11 +2226,21 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
     }
 
     const detail = `quota stop for route ${JSON.stringify(nextRoute.adapterId)}: configured threshold ${String(threshold.minutes)} minutes, observed ${String(figure.minutesToReset)} minutes to reset`;
+    if (!isReviewPhase(next) && agentOrdinal > 0 && selectedQuota !== null && prefix.length === compiled.phases.indexOf(next)) {
+      const checkpoint = await checkpointAt("quota-pause", selectedQuota);
+      if (checkpoint === null) throw new Error("quota boundary has unsettled execution; no pause or refund permitted");
+      await verifyRecoveryWorktree(status, checkpoint);
+      await persist("attempt.updated", { recovery: checkpoint, phase: null, process: null, budget: budget.snapshot(),
+        lastActivity: detail, lastActivityAt: infra.now(), nextAction: `quota-paused before ${next.id}; run awsf resume ${status.taskId} --reason "quota recovered"` },
+        { type: "quota-pause", checkpoint });
+      return true;
+    }
     options.assertAdvancement?.(status.sessionId, "AWAITING_OWNER");
     // L4 may have held the first call before an initial host-only phase. The
     // boundary stop prevents registration, so that never-launched call returns
     // to the ledger before the attempt waits on its owner.
     for (const reservation of budget.outstanding()) {
+      if (agentOrdinal !== 0 || reservation.id !== firstReservation?.id) throw new Error("quota boundary has an unresolved reservation");
       budget.releaseOnRegistrationFailure(reservation.id);
     }
     const l26 = budget.authorize({
@@ -2180,8 +2314,20 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
   };
 
   try {
+    if (recovery !== undefined && (remainingCalls === 0 || compiled.phases[restartIndex]?.kind !== "agent" || isReviewPhase(compiled.phases[restartIndex]!))) {
+      await persist("attempt.updated", { activeOperation: operationId }, { type: "resume-activation", operationId, quotaReadings: recovery.quotaReadings,
+        checkpointId: recovery.inspected.checkpoint.id, reason: recovery.reason, reservationId: null, phase: null });
+      activationPending = false;
+    }
+    if (recovery !== undefined && reviewEvidence !== null && !acceptedEnvelopes.has(compiled.phases.find(isReviewPhase)?.id ?? "")) {
+      const retained = reviewEvidence;
+      const rebuilt = await composeReviewEvidence("recovery-review-evidence");
+      if (recoveryDigest(rebuilt) !== recoveryDigest(retained)) throw new Error("stored review context changed during recovery");
+    }
     for (const [index, phase] of compiled.phases.entries()) {
-      if (index > 0) {
+      if (isReviewPhase(phase)) reviewPhase = { phase: phase as CompiledAgentPhase, ordinal: index + 1 };
+      if (index < restartIndex) continue;
+      if (index > 0 && !(recovery !== undefined && index === restartIndex && recovery.inspected.checkpoint.kind === "quota-pause")) {
         const completed = compiled.phases[index - 1]!;
         if (phaseRecords.get(completed.id)?.status === "SUCCEEDED") {
           const stopped = await takePhaseBoundarySnapshot(completed, phase);
@@ -2206,13 +2352,21 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
           continue;
         }
         agentOrdinal += 1;
-        const reservation = agentOrdinal === 1
+        const reservation = agentOrdinal === 1 && firstReservation !== null
           ? firstReservation
           : budget.reserve({ cost: 1, subject: `${compiled.id}:${phase.id}` });
-        if (agentOrdinal > 1) {
+        if (activationPending) {
+          const started = { ...phaseRecords.get(phase.id)!, status: "RUNNING", startedAt: infra.now() };
+          await persist("attempt.updated", { recovery: null, activeOperation: operationId, budget: budget.snapshot(),
+            phase: { name: phase.id, state: "RUNNING", round: 0, maximumRounds: phase.maxCorrections } },
+            { type: "resume-activation", operationId, quotaReadings: recovery!.quotaReadings, checkpointId: recovery!.inspected.checkpoint.id,
+              reason: recovery!.reason, reservationId: reservation.id, phase: started });
+          phaseRecords.set(phase.id, started);
+          activationPending = false;
+        } else if (agentOrdinal > 1) {
           await persist("attempt.updated", { budget: budget.snapshot(), lastActivityAt: infra.now(), lastActivity: `held one call for ${phase.id}` });
         }
-        const result = await runAgent(phase, index + 1, previous, reservation, agentOrdinal === 1, null);
+        const result = await runAgent(phase, index + 1, previous, reservation, recovery === undefined && agentOrdinal === 1, null);
         previous = result.envelope;
         if (phase.schemaId === "awsf.plan-output/v1") intent = result.envelope as PlanOutput;
         if (phase.schemaId === DESIGN_OUTPUT_SCHEMA_ID) designOutput = result.envelope as DesignOutput;
@@ -2373,6 +2527,7 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
     const l7Evidence = readOnlyResult === null
       ? { requiredPhasesTerminalSuccess: true, hostCommitCreated: true, baseSha: status.baseSha!, candidateSha: candidateSha! }
       : { requiredPhasesTerminalSuccess: true, hostCommitCreated: false, baseSha: status.baseSha!, readOnlyResult };
+    if (status.lifecycleState === "RUNNING") {
     const l7 = transition({
       from: "RUNNING", to: "GATING", actor: "host", tier: status.tier, reason: { source: "git" }, interactive: false,
       budget: budget.snapshot(), evidence: l7Evidence,
@@ -2386,6 +2541,7 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
         ? "L7 entered host gating on the exact candidate"
         : `L7 retained the read-only ${readOnlyResult.schema} result with no candidate tree`,
     });
+    }
     options.assertAdvancement?.(status.sessionId, "AWAITING_OWNER");
     // Below T2 the gates are the whole story and L12 carries the task to the
     // owner. At T2 the contract routes through REVIEWING instead: L12 refuses a
@@ -2422,6 +2578,12 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
     const reviewed = candidateSha;
     if (reviewed === null) throw new Error("a review-bearing workflow completed without a candidate");
     const reviewRoute = routes.get(reviewPhase.phase.id)!;
+    const recoveredReviewOutput = acceptedEnvelopes.get(reviewPhase.phase.id) as ReviewOutput | undefined;
+    let reviewOutput: ReviewOutput;
+    if (recoveredReviewOutput !== undefined) {
+      if (status.lifecycleState !== "REVIEWING" || recoveredReviewOutput.reviewedSha !== reviewed) throw new Error("completed review binding changed");
+      reviewOutput = recoveredReviewOutput;
+    } else {
     const l11 = budget.authorize({
       from: "GATING", to: "REVIEWING", actor: "host", reason: { source: "gate" }, interactive: false,
       evidence: { gatesPass: true, candidateSha: reviewed }, spawn: { cost: 1 },
@@ -2466,7 +2628,8 @@ async function executeProductionCommand(options: ProductionRunOptions): Promise<
         return runAgent(reviewPhase!.phase, reviewPhase!.ordinal, previous, held, false, reviewSubject, attempt);
       },
     });
-    const reviewOutput = reviewResult.envelope as ReviewOutput;
+    reviewOutput = reviewResult.envelope as ReviewOutput;
+    }
 
     const l15 = transition({
       from: "REVIEWING", to: "AWAITING_OWNER", actor: "host", tier: status.tier, reason: { source: "gate" }, interactive: false,
@@ -2549,6 +2712,96 @@ async function persistReadableRunReport(
 
 /** Production runner for every shipped workflow. The fixture-only run command remains separate. */
 export async function runProductionCommand(options: ProductionRunOptions): Promise<AttemptStatus> {
-  const status = await executeProductionCommand(options);
-  return persistReadableRunReport(options, status);
+  return withExecutionLease(options.attemptDir, async () => {
+    const status = await readAttempt(options.attemptDir);
+    if (status.recovery != null) throw new Error("saved phase result or quota anchor exists; use awsf resume");
+  }, async operationId => persistReadableRunReport(options, await executeProductionCommand(options, operationId)));
+}
+
+async function preflightRecovery(options: ProductionRunOptions): Promise<RecoveryInspection> {
+  await assertNoExecutionController(options.attemptDir);
+  const inspected = await inspectPhaseRecovery(options.attemptDir);
+  const { status, checkpoint } = inspected;
+  if (!["RUNNING", "GATING", "REVIEWING"].includes(status.lifecycleState)) throw new Error("resume requires an unfinished, unsealed workflow");
+  if (toConfigSnapshotJson(options.config) !== status.configSnapshotJson ||
+      await productionRecoveryBinding(options, status) !== checkpoint.bindingDigest) throw new Error("resume refused: configuration, request, recipe or prompts changed");
+  const recipe = SUPPORTED.get(status.workflow)!;
+  for (const entry of checkpoint.prefix) {
+    const phase = recipe.phases[entry.ordinal - 1];
+    if (phase?.id !== entry.phaseKey || inspected.envelopes.get(entry.phaseKey)?.schema !== phase.schemaId) throw new Error("resume accepted prefix does not match the compiled recipe");
+  }
+  if (checkpoint.kind === "quota-pause") {
+    const next = recipe.phases[checkpoint.prefix.length];
+    if (status.lifecycleState !== "RUNNING" || next?.kind !== "agent" || isReviewPhase(next)) throw new Error("quota anchor does not name an unstarted ordinary agent phase");
+  }
+  await verifyRecoveryWorktree(status, checkpoint);
+  const remaining = recipe.phases.slice(checkpoint.prefix.length).filter(phase => phase.kind === "agent");
+  const coldHeadroom = options.config.risk.correction_allowance.auto > 0 && remaining.some(phase =>
+    phase.maxCorrections > 0 && options.config.agents.find(agent => agent.name === phase.owner)?.harness.continuity === "none") ? 1 : 0;
+  const ledger = new CallBudget({ taskId: status.taskId, tier: status.tier, allowance: status.budget.allowance,
+    ...(status.budget.ceiling === undefined ? {} : { ceiling: status.budget.ceiling }),
+    carried: { attempt: status.attempt, callsSpent: status.budget.callsSpent } });
+  ledger.admitWorkflow({ id: recipe.id, minimumCalls: remaining.length + coldHeadroom });
+  await executeProductionCommand(options, "read-only-recovery-preflight", { inspected, reason: "preflight", quotaReadings: [] }, true);
+  return inspected;
+}
+
+async function readRecoveryQuota(options: ProductionRunOptions, inspected: RecoveryInspection): Promise<BoundaryQuota | null> {
+  const phase = SUPPORTED.get(inspected.status.workflow)!.phases.slice(inspected.checkpoint.prefix.length).find(phase => phase.kind === "agent");
+  if (phase === undefined) return null;
+  const agent = options.config.agents.find(agent => agent.name === phase.owner)!;
+  const threshold = options.config.routing.quota_stop?.by_adapter?.[agent.harness.adapter] ?? options.config.routing.quota_stop?.default;
+  if (threshold === undefined) return null;
+  const route = mapConfiguredQuotaRoutes(options.config).find(route => route.adapterId === agent.harness.adapter);
+  if (route === undefined) throw new Error("resume quota route is unavailable");
+  const infra = { ...DEFAULT_INFRASTRUCTURE, ...options.infrastructure };
+  const observedAt = infra.now();
+  const probe = await probeQuota({ runCommand: infra.runCommand, resolveExecutable: infra.resolveExecutable,
+    routes: configuredQuotaProbeRoutes([route]), purpose: "phase-boundary", now: observedAt,
+    timeouts: { interactivePreflightMs: DEFAULT_QUOTA_PROBE_TIMEOUTS.interactivePreflightMs, phaseBoundaryMs: threshold.probe_timeout_ms },
+    options: { cwd: inspected.status.worktree!, env: HOST.process.env, maxBuffer: options.config.runtime.max_output_bytes },
+    journalFailure: () => {}, retainFailureBytes: async () => "discarded-before-authorization" });
+  const rows = buildQuotaReadout({ routes: [route], probeResult: probe, defaultThreshold: threshold }).rows;
+  const row = rows[0];
+  if (rows.length !== 1 || row === undefined || row.verdict !== "above" || row.provider === null || row.scope === null || row.minutesToReset === null) {
+    throw new Error("resume refused: selected quota is unknown, stale, ambiguous or below its threshold");
+  }
+  const old = inspected.checkpoint.quota;
+  if (old !== null && (old.adapterId !== row.adapterId || old.provider !== row.provider || old.scope !== row.scope || old.threshold !== threshold.minutes)) {
+    throw new Error("resume quota route, scope or threshold changed");
+  }
+  return { adapterId: row.adapterId, provider: row.provider, scope: row.scope, minutes: row.minutesToReset,
+    threshold: threshold.minutes, observedAt, readoutDigest: recoveryDigest(row) };
+}
+
+/** Owner entry for an unstarted boundary or an already host-validated, durable phase result. No native reconnect. */
+export async function resumeProductionCommand(options: ProductionRunOptions & { reason: string; terminal: OwnerTerminal }): Promise<{ confirmed: boolean; status: AttemptStatus }> {
+  ownerText(options.reason);
+  if (!options.terminal.interactive) throw new Error("resume requires owner confirmation at a TTY");
+  const current = await readAttempt(options.attemptDir);
+  const recipe = SUPPORTED.get(current.workflow);
+  if (current.lifecycleState === "AWAITING_OWNER" && current.recovery?.prefix.length === recipe?.phases.length) {
+    const proved = await inspectPhaseRecovery(options.attemptDir);
+    if (proved.status.revision !== current.revision) throw new Error("completed status is stale");
+    return { confirmed: true, status: proved.status };
+  }
+  const first = await preflightRecovery(options);
+  const firstQuota = await readRecoveryQuota(options, first);
+  const quotaReadings: BoundaryQuota[] = firstQuota === null ? [] : [firstQuota];
+  const remaining = recipe!.phases.slice(first.checkpoint.prefix.length).filter(phase => phase.kind === "agent").length;
+  options.terminal.write(`Resume ${current.taskId} attempt ${current.attempt}: preserve ${first.checkpoint.prefix.length} accepted phases; ${remaining} unstarted provider call(s), plus existing correction allowance. No completed model turn will be repeated. Reason: ${options.reason}`);
+  if (!await options.terminal.confirm("Continue this exact saved workflow?")) return { confirmed: false, status: first.status };
+  let validated = first;
+  return withExecutionLease(options.attemptDir, async () => {
+    validated = await preflightRecovery(options);
+    if (recoveryDigest(validated.status) !== recoveryDigest(first.status)) throw new Error("resume anchor changed during confirmation");
+    const secondQuota = await readRecoveryQuota(options, validated);
+    if (secondQuota !== null) quotaReadings.push(secondQuota);
+  }, async operationId => {
+    await reconcileRecoveryStatus(options.attemptDir, validated);
+    // Replay the missed projection before any new authorization or provider GO.
+    for (const record of validated.records.slice(validated.disk.revision)) await options.projectRecord?.(record, record.event.next);
+    const status = await executeProductionCommand(options, operationId, { inspected: validated, reason: options.reason, quotaReadings });
+    return { confirmed: true, status: await persistReadableRunReport(options, status) };
+  });
 }

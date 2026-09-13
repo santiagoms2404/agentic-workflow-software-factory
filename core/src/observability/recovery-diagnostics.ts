@@ -25,7 +25,11 @@ const PROVIDER_CONTROLLER_STATES = new Set(["RUNNING", "REVIEWING"]);
 
 function latestPhases(evidence: readonly AttemptEvidence[]): readonly PhaseEvidenceRecord[] {
   const phases = new Map<string, PhaseEvidenceRecord>();
-  for (const record of evidence) if (record.type === "phase") phases.set(record.phase.phaseId, record.phase);
+  for (const record of evidence) {
+    if ((record.type === "phase" || record.type === "phase-accepted" || record.type === "resume-activation") && record.phase !== null) {
+      phases.set(record.phase.phaseId, record.phase);
+    }
+  }
   return Object.freeze([...phases.values()]);
 }
 

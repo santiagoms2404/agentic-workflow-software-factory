@@ -78,6 +78,18 @@ function runningProcess(pid: number): AttemptEvidence {
   };
 }
 
+test("atomic phase acceptance supersedes a validating notification after a host crash", () => {
+  const completed = phase("SUCCEEDED");
+  assert.equal(completed.type, "phase");
+  if (completed.type !== "phase") throw new Error("fixture phase missing");
+  const accepted: AttemptEvidence = { type: "phase-accepted", phase: completed.phase, accepted: {
+    phaseKey: "builder", ordinal: 1, envelopeId: "accepted-builder", envelopeDigest: "d".repeat(64), round: 0, candidateSha: SHA,
+  } };
+  const report = diagnoseRecovery(status(), [phase("VALIDATING"), accepted], () => false);
+  assert.equal(report.controller, "inactive");
+  assert.deepEqual(report.staleRunningPhases, []);
+});
+
 test("a RUNNING provider phase with no recorded PID is diagnosed as a controller orphan, never as a candidate", () => {
   const report = diagnoseRecovery(status({ candidateSha: SHA }), [phase()], () => false);
   assert.equal(report.controller, "missing-pid-controller-orphan");

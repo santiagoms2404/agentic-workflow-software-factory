@@ -1,7 +1,7 @@
 # Owner acts
 
-Seven commands are the owner's and not yours: `journey`, `land`, `cancel`,
-`rework`, `review`, `raise`, `publish`. This document is about **which one the evidence
+Eight commands are the owner's and not yours: `journey`, `land`, `cancel`,
+`rework`, `review`, `raise`, `publish`, `resume`. This document is about **which one the evidence
 supports** and **what to hand the owner before they decide**. It is not a table
 of what each one costs, and the reason is at the bottom.
 
@@ -11,7 +11,7 @@ Prepare and explain. Never perform, and never recommend performing one without
 the evidence its edge requires.
 
 This is not merely a convention you could talk yourself out of — the lifecycle
-refuses a non-interactive invocation. Every one of the seven requires an
+refuses a non-interactive invocation. Every one of the eight requires an
 interactive owner terminal, and a piped or redirected standard input is
 refused by the normative machine *before* any process can receive a signal and
 before any call is reserved. That refusal is a terminal-shape check, not the
@@ -71,7 +71,7 @@ when you cannot name the defect, and it is **refused outright above the middle
 tier** for a structural reason worth understanding rather than memorising — see
 `gotchas.md`.
 
-**`raise`** is the only one of the seven that buys nothing and moves no state. It
+**`raise`** grants budget without launching work or moving lifecycle state. It
 grants one named task more calls while its attempt is live, so a run that halted
 at its ceiling can continue instead of being cancelled and re-rolled. Two things
 about it are worth understanding rather than memorising. It is a **command and
@@ -91,6 +91,14 @@ no matter how much you disliked its verdict. The command requires a written
 reason, and the reason is a record rather than a key: it does not unlock
 anything.
 
+**`resume`** continues an unstarted phase from a journal-backed quota pause, or
+finishes a phase result that the host already validated and durably accepted.
+It preserves the original request, accepted phases, candidate and debit. It does
+not reopen a genuinely interrupted model turn. Missing checkpoints, unsettled
+execution, changed bindings and unknown quota refuse. Read the evidence and
+prepare the owner command with a reason. Restart a driving session after updating
+its guard so its loaded rules include this act.
+
 ## What to hand the owner
 
 The same shape every time, and it is short:
@@ -98,7 +106,7 @@ The same shape every time, and it is short:
 - the handle — task, attempt, lifecycle state, calls spent against the ceiling;
 - what the evidence says, with the phase's claim and the host's measurement kept
   distinct;
-- which of the seven the evidence supports, which it does not, and why;
+- which of the eight the evidence supports, which it does not, and why;
 - what remains — calls, correction rounds, and the attempt-scoped owner re-entry
   allowance, which is what several of these draw on and which does not refresh
   within an attempt.

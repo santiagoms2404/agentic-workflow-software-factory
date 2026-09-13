@@ -92,7 +92,10 @@ for (const unavailable of ["none", "setStatus", "notify", "setWidget", "all"]) {
 }
 
 test("Pi lifecycle timeout floor covers metadata, npm, whitespace, and wrappers", () => {
-  assert.deepEqual([...TIMEOUT_GUARDED_LIFECYCLE_COMMANDS], ["run", "rework", "review"]);
+  assert.deepEqual([...TIMEOUT_GUARDED_LIFECYCLE_COMMANDS], ["run", "rework", "review", "resume"]);
+  assert.equal(lifecycleTimeoutViolation("awsf resume T01", 1), "resume");
+  assert.equal(lifecycleTimeoutViolation("npm run awsf --silent -- resume T01", 1), "resume");
+  assert.equal(lifecycleTimeoutViolation("timeout 60s awsf resume T01", undefined), "resume");
   assert.equal(lifecycleTimeoutViolation("awsf run T01", 1), "run");
   assert.equal(lifecycleTimeoutViolation("npm run awsf --silent -- run T01", 1), "run");
   assert.equal(lifecycleTimeoutViolation("  awsf   rework T01", 1), "rework");

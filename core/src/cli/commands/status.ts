@@ -107,6 +107,9 @@ export async function statusCommand(
     locateRunReport(attemptDir),
   ]);
   const lines = [...formatStatus(status)];
+  if (status.recovery != null && status.process === null && status.budget.callsReserved === 0) {
+    lines.push(`Recovery: ${status.recovery.kind === "quota-pause" ? "quota-paused" : "saved accepted phase result"}; ${status.recovery.prefix.length} completed phase(s). Native interrupted-turn reconnect is not implied.`);
+  }
   if (report !== null) {
     // Every command that moves the candidate, the verdict or the lifecycle
     // re-renders this. The stamp is the belt-and-braces: a writer that forgets

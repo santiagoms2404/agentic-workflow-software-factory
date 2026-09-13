@@ -119,6 +119,8 @@ export interface RunAgentPhaseOptions<T extends EnvelopeBase> {
   readonly rawOutputPath?: (correctionRound: number) => string;
   /** Durable/event observer; receives QUEUED first and FAILED on every abnormal exit. */
   readonly onPhaseState?: (state: PhaseState) => void;
+  /** Durable host-validated completion, before the terminal phase notification. */
+  readonly onAccepted?: (result: Pick<AgentPhaseResult<T>, "envelope" | "candidateSha" | "gateReports" | "correctionRounds">) => Promise<void>;
   /** Receives each report at the round that produced it, including superseded failures. */
   readonly onGateReport?: (report: GateReport, correctionRound: number) => Promise<void> | void;
   /** Called after the phase budget authorizes a correction and before its transport launches. */
@@ -479,6 +481,7 @@ export async function runAgentPhase<T extends EnvelopeBase>(
 
     // Non-null by construction: the loop only leaves through a break that runs
     // strictly after both.
+    await options.onAccepted?.({ envelope: accepted, candidateSha, gateReports: lastReports, correctionRounds: correctionRound });
     execution.succeed();
     const phaseUsage = usage.snapshot();
     await options.persistence.persistAgentSession?.({

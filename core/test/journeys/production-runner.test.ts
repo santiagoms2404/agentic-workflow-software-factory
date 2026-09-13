@@ -26,16 +26,17 @@ import type {
   TransportBroker,
 } from "../../src/adapters/interface.ts";
 import { isTaskEdgeRegistration, reservationIdOf } from "../../src/adapters/interface.ts";
-import { ProcessTransportBroker, type BrokerOptions } from "../../src/execution/transport-broker.ts";
+import { ProcessTransportBroker, runSystemCommand, type BrokerOptions } from "../../src/execution/transport-broker.ts";
 import { createDashboardProjection } from "../../src/cli/commands/dashboard-projection.ts";
 import { newCommand } from "../../src/cli/commands/new.ts";
+import { main as cliMain } from "../../src/cli/main.ts";
 import { raiseCommand } from "../../src/cli/commands/raise.ts";
 import { correctionHeadroom } from "../../src/cli/commands/workflows.ts";
 import { WORKFLOW_RECIPES, workflowRecipe } from "../../src/workflow/catalog.ts";
 import { writePlacement } from "../../src/registry/placement.ts";
 import { startCommand } from "../../src/cli/commands/start.ts";
 import { statusCommand } from "../../src/cli/commands/status.ts";
-import { runProductionCommand, ProductionConfigSnapshotMismatch, ProductionWorkflowUnsupported } from "../../src/cli/commands/production-run.ts";
+import { runProductionCommand, resumeProductionCommand, ProductionConfigSnapshotMismatch, ProductionWorkflowUnsupported } from "../../src/cli/commands/production-run.ts";
 import { nextRevision, persistAttempt, readAttempt } from "../../src/cli/commands/attempt.ts";
 import type { AttemptEvidence } from "../../src/observability/attempt-evidence.ts";
 import { agentsForSession, gatesForSession, getSession, phasesForSession, pollEvents, processesForSession } from "../../src/observability/queries.ts";
@@ -44,6 +45,129 @@ import { TicketStore } from "../../src/persistence/ticket-store.ts";
 
 function git(repository: string, ...argv: string[]): string {
   return execFileSync("git", ["-C", repository, ...argv], { encoding: "utf8" }).trim();
+}
+
+for (const scenario of ["success", "planner-open-question-once"] as const) {
+test(`O1 ${scenario}: quota anchor survives refusal and resumes exactly one unstarted builder under a controller lease`, async () => {
+  const world = await fixture("plan-build-test", 0, config => ({ ...config,
+    routing: { ...config.routing, quota_stop: { default: { minutes: 30, probe_timeout_ms: 1000 } } } }));
+  try {
+    const prepared = await readAttempt(world.created.attemptDir);
+    let mode: "low" | "healthy" | "unknown" = "low";
+    let launched = 0;
+    const completedCalls = scenario === "success" ? 1 : 2;
+    let probes = 0;
+    const options = { attemptDir: world.created.attemptDir, stateRoot: world.stateRoot, config: world.config, configPath: world.configPath,
+      infrastructure: { adapterFor: (_entry: AdapterEntry, id: string) => new ScriptedAdapter(id, prepared.worktree!, () => { launched++; }, scenario),
+        createBroker: fakeBroker, sandboxProbe: () => false, now: () => "2026-08-24T20:26:39.429Z",
+        resolveExecutable: () => "/fixture/quota-axi",
+        runCommand: ((executable, argv, opts) => {
+          if (executable !== "/fixture/quota-axi") return runSystemCommand(executable, argv, opts);
+          if (argv[0] === "--version") return { status: 0, stdout: "quota-axi 0.1.29", stderr: "", error: null };
+          probes++;
+          const data = JSON.parse(readFileSync(resolve("core/test/fixtures/quota-axi/nominal.json"), "utf8"));
+          if (mode === "low") data.providers[1].windows[0].resetsAt = "2026-08-24T20:27:39.429Z";
+          if (mode === "unknown") data.providers[1].state = { status: "stale", stale: true };
+          return { status: 0, stdout: JSON.stringify(data), stderr: "", error: null };
+        }) satisfies typeof runSystemCommand },
+    };
+    const paused = await runProductionCommand(options);
+    assert.equal(paused.lifecycleState, "RUNNING", paused.blocker?.detail);
+    assert.equal(paused.recovery?.kind, "quota-pause");
+    assert.deepEqual(paused.recovery?.prefix.map(entry => entry.phaseKey), ["request", "planner"]);
+    assert.equal(paused.budget.callsSpent, completedCalls);
+    assert.equal(paused.budget.callsReserved, 0);
+    assert.equal(paused.recovery?.prefix.at(-1)?.round, completedCalls - 1);
+    assert.equal(launched, completedCalls);
+    const terminal = { interactive: true, write: () => {}, confirm: async () => true };
+    if (completedCalls === 2) await assert.rejects(resumeProductionCommand({ ...options, reason: "quota recovered", terminal }), /already committed/);
+    await raiseCommand({ attemptDir: options.attemptDir, calls: 1, reason: "fund remaining phase headroom", terminal });
+    const original = readFileSync(join(options.attemptDir, "journal.jsonl"), "utf8");
+    await assert.rejects(runProductionCommand(options), /use awsf resume/);
+    await assert.rejects(resumeProductionCommand({ ...options, reason: "quota recovered", terminal }), /quota.*below/);
+    mode = "unknown";
+    await assert.rejects(resumeProductionCommand({ ...options, reason: "quota recovered", terminal }), /quota.*unknown/);
+    mode = "healthy";
+    await assert.rejects(resumeProductionCommand({ ...options, reason: "quota recovered", terminal: { ...terminal, interactive: false } }), /TTY/);
+    await assert.rejects(resumeProductionCommand({ ...options, reason: "quota recovered", terminal: {
+      ...terminal, confirm: async () => { mode = "low"; return true; } } }), /quota.*below/);
+    mode = "healthy";
+    const declined = await resumeProductionCommand({ ...options, reason: "quota recovered", terminal: { ...terminal, confirm: async () => false } });
+    assert.equal(declined.confirmed, false);
+    assert.equal(readFileSync(join(options.attemptDir, "journal.jsonl"), "utf8"), original);
+    writeFileSync(join(prepared.worktree!, "unapproved.txt"), "retain this\n");
+    await assert.rejects(resumeProductionCommand({ ...options, reason: "quota recovered", terminal }), /not clean/);
+    assert.equal(readFileSync(join(prepared.worktree!, "unapproved.txt"), "utf8"), "retain this\n");
+    rmSync(join(prepared.worktree!, "unapproved.txt"));
+    const changed = structuredClone(world.config);
+    changed.agents[0]!.thinking = "low";
+    await assert.rejects(resumeProductionCommand({ ...options, config: changed, reason: "quota recovered", terminal }), /configuration/);
+    const before = probes;
+    const contenders = await Promise.allSettled([1, 2].map(() => resumeProductionCommand({ ...options, reason: "quota recovered", terminal })));
+    assert.equal(contenders.filter(result => result.status === "fulfilled").length, 1, JSON.stringify(contenders));
+    const resumed = await readAttempt(options.attemptDir);
+    assert.equal(resumed.lifecycleState, "AWAITING_OWNER", resumed.blocker?.detail);
+    assert.equal(resumed.budget.callsSpent, completedCalls + 1);
+    assert.equal(resumed.budget.callsReserved, 0);
+    assert.equal(resumed.recovery?.prefix.find(entry => entry.phaseKey === "planner")?.round, completedCalls - 1);
+    assert.equal(launched, completedCalls + 1);
+    assert.ok(probes - before >= 2);
+    const history = readFileSync(join(options.attemptDir, "journal.jsonl"), "utf8");
+    const replay = await resumeProductionCommand({ ...options, reason: "quota recovered", terminal });
+    assert.equal(replay.status.revision, resumed.revision);
+    assert.equal(readFileSync(join(options.attemptDir, "journal.jsonl"), "utf8"), history);
+    assert.equal(launched, completedCalls + 1);
+  } finally { world.projection.close(); rmSync(world.root, { recursive: true, force: true }); }
+});
+}
+
+for (const workflow of ["plan", "build", "build-review"] as const) {
+  test(`O2 ${workflow} replays a durable accepted result after a journal/status crash without another model call`, async () => {
+    const world = await fixture(workflow, 0, config => config, workflow === "plan" ? 0 : workflow === "build-review" ? 2 : 1);
+    try {
+      const prepared = await readAttempt(world.created.attemptDir);
+      let launched = 0;
+      const options = { attemptDir: world.created.attemptDir, stateRoot: world.stateRoot, config: world.config, configPath: world.configPath,
+        infrastructure: { adapterFor: (_entry: AdapterEntry, id: string) => new ScriptedAdapter(id, prepared.worktree!, () => { launched++; }),
+          createBroker: fakeBroker, sandboxProbe: () => false } };
+      const completed = await runProductionCommand(options);
+      assert.equal(completed.lifecycleState, "AWAITING_OWNER", completed.blocker?.detail);
+      const expectedCalls = launched;
+      const journalPath = join(options.attemptDir, "journal.jsonl");
+      const records = readFileSync(journalPath, "utf8").trim().split("\n").map(line => JSON.parse(line));
+      const phase = workflow === "build" ? "builder" : workflow === "plan" ? "planner" : "reviewer";
+      const cut = records.findLastIndex(record => record.event.evidence?.type === "phase-accepted" && record.event.evidence.phase.key === phase);
+      assert.ok(cut > 0);
+      // Only this isolated fixture is cut. The durable journal contains completion,
+      // while status retains the immediately preceding revision, as after fsync/rename loss.
+      for (const later of workflowRecipe(workflow)!.phases.slice(records[cut].event.next.recovery.prefix.length)) {
+        for (let round = 0; round <= later.maxCorrections; round++) rmSync(join(options.attemptDir, "envelopes", `${later.id}-${round}.json`), { force: true });
+      }
+      writeFileSync(journalPath, records.slice(0, cut + 1).map(record => JSON.stringify(record)).join("\n") + "\n");
+      writeFileSync(join(options.attemptDir, "status.json"), JSON.stringify(records[cut - 1].event.next));
+      const sha = git(prepared.worktree!, "rev-parse", "HEAD");
+      const result = await resumeProductionCommand({ ...options,
+        infrastructure: { ...options.infrastructure, adapterFor: () => assert.fail("completed result must not reopen an adapter"), createBroker: () => assert.fail("completed result must not construct a provider broker") },
+        reason: "finish durable result", terminal: {
+        interactive: true, write: () => {}, confirm: async () => true } });
+      assert.equal(result.status.lifecycleState, "AWAITING_OWNER", result.status.blocker?.detail);
+      assert.equal(result.status.budget.callsSpent, completed.budget.callsSpent);
+      assert.equal(result.status.budget.callsReserved, 0);
+      assert.equal(launched, expectedCalls);
+      assert.equal(git(prepared.worktree!, "rev-parse", "HEAD"), sha);
+      assert.equal(git(prepared.worktree!, "status", "--porcelain"), "");
+      if (workflow === "build-review") assert.equal(result.status.requiredReviewPresent, true);
+      const stableJournal = readFileSync(journalPath, "utf8");
+      const lines: string[] = [];
+      const cli = { argv: ["resume", result.status.taskId, "--reason", "check recovered result", "--config", world.configPath, "--state-root", world.stateRoot],
+        cwd: world.canonical, writeOut: (line: string) => lines.push(line), writeError: (line: string) => lines.push(line),
+        terminal: { interactive: true, write: () => {}, confirm: async () => assert.fail("already complete must not reconfirm") } };
+      assert.equal(await cliMain(cli), 0, lines.join("\n"));
+      assert.equal(await cliMain({ ...cli, argv: [...cli.argv, "--stub"] }), 1);
+      assert.equal(readFileSync(journalPath, "utf8"), stableJournal);
+      assert.equal(launched, expectedCalls);
+    } finally { world.projection.close(); rmSync(world.root, { recursive: true, force: true }); }
+  });
 }
 
 function plan(): PlanOutput {

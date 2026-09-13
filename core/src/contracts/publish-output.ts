@@ -1,6 +1,8 @@
 import { Type, type Static } from "@sinclair/typebox";
 import { PUBLISH_OUTCOMES } from "../publish/argv.ts";
 import { phaseEnvelope } from "./envelope-base.ts";
+import { CandidateSeedSchema } from "./candidate-seed.ts";
+import { PhaseRecoverySchema } from "./phase-recovery.ts";
 import { SHA_PATTERN } from "./test-output.ts";
 import { stringUnion } from "./typebox.ts";
 
@@ -78,6 +80,9 @@ export const PublishedAttemptStatusSchema = Type.Object(
     project: Type.String({ minLength: 1 }),
     taskId: Type.String({ minLength: 1 }),
     continuesTask: NullableStringSchema,
+    seed: Type.Optional(Type.Union([CandidateSeedSchema, Type.Null()])),
+    recovery: Type.Optional(Type.Union([PhaseRecoverySchema, Type.Null()])),
+    activeOperation: Type.Optional(NullableStringSchema),
     attempt: Type.Integer({ minimum: 1 }),
     repository: Type.String({ minLength: 1 }),
     worktree: NullableStringSchema,

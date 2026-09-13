@@ -33,7 +33,7 @@ import { seedCommand } from "./commands/seed.ts";
 import { reviewCommand } from "./commands/review.ts";
 import { reworkCommand } from "./commands/rework.ts";
 import { runStubCommand } from "./commands/run.ts";
-import { runProductionCommand } from "./commands/production-run.ts";
+import { runProductionCommand, resumeProductionCommand } from "./commands/production-run.ts";
 import { defaultWorktreeRoot, startCommand } from "./commands/start.ts";
 import { statusCommand } from "./commands/status.ts";
 import { intakeRequest, listTickets, showTicket, ticketStoreFor, ticketStoreForPlan } from "./commands/ticket.ts";
@@ -42,7 +42,7 @@ import { selectWorkflow, workflowsCommand } from "./commands/workflows.ts";
 
 /** The complete owner-facing command table; documentation reconciles against it. */
 export const CLI_COMMANDS = Object.freeze([
-  "init", "project", "new", "seed", "start", "run", "status", "watch", "rework", "review", "raise", "journey", "land", "publish", "cancel", "retry",
+  "init", "project", "new", "seed", "start", "run", "resume", "status", "watch", "rework", "review", "raise", "journey", "land", "publish", "cancel", "retry",
   "doctor", "gc", "dash", "db rebuild", "ticket", "backlog", "quota", "stage", "workflows", "group",
 ]);
 
@@ -439,6 +439,16 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         const reportLine = (await statusCommand(located.attemptDir)).find((line) => line.startsWith("Run report:"));
         if (reportLine !== undefined) out(reportLine);
         return status.lifecycleState === "AWAITING_OWNER" ? 0 : 1;
+      }
+      case "resume": {
+        if (parsed.flags.stub !== undefined) throw new Error("resume does not support stub execution");
+        if (parsed.flags.instruction !== undefined) throw new Error("resume supplemental instructions are not implemented; the original input will not be changed");
+        const result = await resumeProductionCommand({ attemptDir: located.attemptDir, stateRoot, config, configPath,
+          reason: parsed.flags.reason ?? "", terminal: options.terminal ?? processOwnerTerminal(),
+          projectRecord: projection.project, assertAdvancement: projection.assertAdvancement,
+          assertLaunchProjection: projection.assertLaunchPermitted });
+        out(`${result.status.lifecycleState}: ${result.status.nextAction}`);
+        return result.confirmed && result.status.lifecycleState === "AWAITING_OWNER" ? 0 : 1;
       }
       case "status":
         for (const line of await statusCommand(located.attemptDir, { evidence: parsed.flags.evidence === "true" })) out(line);

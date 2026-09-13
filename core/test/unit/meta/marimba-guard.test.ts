@@ -113,8 +113,8 @@ writeFileSync(join(STUB_BIN, "python3"), "#!/bin/sh\nexit 127\n");
 chmodSync(join(STUB_BIN, "python3"), 0o755);
 after(() => rmSync(STUB_BIN, { recursive: true, force: true }));
 
-/** The seven acts that construct an owner terminal, in the guard's own order. */
-const OWNER_ACTS = ["land", "cancel", "rework", "review", "journey", "raise", "publish"] as const;
+/** The owner acts that construct a terminal, in the guard's own order. */
+const OWNER_ACTS = ["land", "cancel", "rework", "review", "journey", "raise", "publish", "resume"] as const;
 
 const GUARD_ROWS: readonly GuardRow[] = [
   // --- fence 2: owner acts in Bash command text ---------------------------
@@ -145,7 +145,7 @@ const GUARD_ROWS: readonly GuardRow[] = [
   ...OWNER_ACTS.map(
     (act): GuardRow => ({
       id: `bash · awsf ${act}`,
-      why: "one of the seven acts the lifecycle reserves for the owner; all seven are rows so none can be dropped from the guard unnoticed",
+      why: "an act reserved for the owner; each has a row so none can be dropped from the guard unnoticed",
       payload: bash(`awsf ${act} T01`),
       expect: "deny",
       mentions: [new RegExp(`\\b${act}\\b`)],

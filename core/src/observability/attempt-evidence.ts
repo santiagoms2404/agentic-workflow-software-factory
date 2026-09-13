@@ -54,6 +54,9 @@ export interface PhaseEvidenceRecord {
 
 /** Canonical production evidence carried by one attempt-journal record. */
 export type AttemptEvidence =
+  | { readonly type: "phase-accepted"; readonly phase: PhaseEvidenceRecord; readonly accepted: import("../contracts/phase-recovery.ts").AcceptedPhase }
+  | { readonly type: "quota-pause"; readonly checkpoint: import("../contracts/phase-recovery.ts").PhaseRecovery }
+  | { readonly type: "resume-activation"; readonly quotaReadings?: readonly import("../contracts/phase-recovery.ts").BoundaryQuota[]; readonly operationId: string; readonly checkpointId: string; readonly reason: string; readonly reservationId: string | null; readonly phase: PhaseEvidenceRecord | null }
   | { readonly type: "candidate-seed"; readonly seed: CandidateSeed }
   | { readonly type: "owner-amendment-delivery"; readonly amendmentId: string; readonly amendmentDigest: string; readonly phaseId: string; readonly logicalTurnId: string; readonly originalInputDigest: string; readonly composedDigest: string; readonly at: string }
   | { readonly type: "candidate-adoption"; readonly adoption: CandidateAdoptionEvidence }

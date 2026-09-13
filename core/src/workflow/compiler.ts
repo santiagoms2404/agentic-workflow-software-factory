@@ -157,6 +157,13 @@ export function compileWorkflow(
   /** The attempt's own ceiling, so a raise the owner already granted is honoured here too. */
   resolvedCeiling?: ResolvedCeiling,
 ): CompiledWorkflow {
+  const compiled = compileWorkflowStructure(workflow);
+  admitWorkflow(compiled, tier, committedCalls, resolvedCeiling);
+  return compiled;
+}
+
+/** Recovery preserves the whole recipe while admitting only its unstarted calls. */
+export function compileWorkflowStructure(workflow: WorkflowDefinition): CompiledWorkflow {
   const ids = new Set<string>();
   for (const phase of workflow.phases) {
     if (ids.has(phase.id)) throw new InvalidPhaseDefinition(phase.id, "phase ids must be unique");
@@ -164,7 +171,6 @@ export function compileWorkflow(
   }
   const minimumCalls = workflow.phases.filter((phase) => phase.kind === "agent").length;
   const buildPhaseId = reviewBuildPhaseId(workflow.phases);
-  admitWorkflow({ id: workflow.id, minimumCalls }, tier, committedCalls, resolvedCeiling);
   return Object.freeze({
     id: workflow.id,
     minimumCalls,

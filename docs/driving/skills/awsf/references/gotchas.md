@@ -79,6 +79,7 @@ fault. `core/src/cli/main.ts` is the whole story, and it is short:
 | Command | Exits non-zero when |
 |---|---|
 | `awsf run` | the attempt came to rest anywhere other than awaiting the owner — including a perfectly ordinary block |
+| `awsf resume` | the owner declined, or the workflow came to rest before the owner handoff, including another quota pause |
 | `awsf rework` · `awsf review` | the owner **declined** at the confirmation prompt, which is a decision and not a failure |
 | `awsf land` · `awsf cancel` | the attempt did not reach the state that act targets, decline included |
 | `awsf doctor` | any finding at all was reported |
@@ -132,10 +133,10 @@ formality.
 
 ### 8. Piped standard input refuses every owner act
 
-**Symptom.** `awsf land`, `cancel`, `journey`, `rework`, `review`, `raise` or `publish` refuses when
+**Symptom.** `awsf land`, `cancel`, `journey`, `rework`, `review`, `raise`, `publish` or `resume` refuses when
 run from a script, a pipe, or any non-terminal context.
 
-**Cause.** All seven — `land`, `cancel`, `journey`, `rework`, `review`, `raise`, `publish` —
+**Cause.** All eight — `land`, `cancel`, `journey`, `rework`, `review`, `raise`, `publish`, `resume` —
 require an interactive owner terminal, and the refusal comes from the
 normative machine *before* any process can receive a signal and before any
 call is reserved. The check is a terminal-shape test (`process.stdin.isTTY`),

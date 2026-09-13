@@ -190,7 +190,7 @@ export function renderRunReport(
 
   const phases = new Map<string, Extract<AttemptEvidence, { type: "phase" }>["phase"]>();
   for (const record of evidence) {
-    if (record.type === "phase") phases.set(record.phase.key, record.phase);
+    if ((record.type === "phase" || record.type === "phase-accepted" || record.type === "resume-activation") && record.phase !== null) phases.set(record.phase.key, record.phase);
   }
   const phaseLines = [...phases.values()]
     .sort((left, right) => left.ordinal - right.ordinal)

@@ -13,7 +13,7 @@
 #    against a fixed list, so a tool name that does not exist yet is denied on
 #    arrival rather than missed.
 #
-# 2. OWNER ACTS. Denies a shell command that invokes one of the six acts the
+# 2. OWNER ACTS. Denies a shell command that invokes one of the eight acts the
 #    lifecycle reserves for the owner. This exists because the lifecycle's own
 #    barrier is weaker than it reads: `processOwnerTerminal()` checks
 #    `process.stdin.isTTY`, which is a terminal-SHAPE check, and a same-user
@@ -115,7 +115,7 @@ EOF
 # Checked first: an owner act reached through Bash is the more consequential of
 # the two, and Bash is never delegation-shaped, so the order costs nothing.
 if [ -n "${cmd:-}" ]; then
-  for verb in land cancel rework review journey raise publish; do
+  for verb in land cancel rework review journey raise publish resume; do
     case " $cmd " in
       *"awsf $verb"*)
         deny "\`awsf $verb\` is an owner act and is denied in a driving session." \

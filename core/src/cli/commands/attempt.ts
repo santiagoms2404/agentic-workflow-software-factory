@@ -70,6 +70,8 @@ export interface CeilingGrant {
 }
 
 export interface AttemptStatus {
+  readonly recovery?: import("../../contracts/phase-recovery.ts").PhaseRecovery | null;
+  readonly activeOperation?: string | null;
   readonly schema: "awsf/attempt-status/v1";
   readonly sessionId: string;
   readonly project: string;
