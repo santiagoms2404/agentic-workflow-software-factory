@@ -93,7 +93,17 @@ function toggleKind(kind: CanvasNodeKind): void {
   const next = has ? props.route.kinds.filter((candidate) => candidate !== kind) : [...props.route.kinds, kind];
   // Every kind off is every kind on: a map showing nothing reads as broken
   // rather than as filtered, and there would be no control left to undo it.
-  go({ kinds: next.length === 0 ? CANVAS_KINDS : CANVAS_KINDS.filter((candidate) => next.includes(candidate)) });
+  //
+  // And the camera goes with it. Removing a kind re-settles every remaining
+  // node from the deterministic start, so the frame that held the old
+  // arrangement holds nothing in the new one — a reader who had panned
+  // anywhere was left looking at empty space with their runs off-screen.
+  // Dropping the camera refits to what is left. Selection deliberately does
+  // not do this: it changes what is LIT, never what is on the map or where.
+  go({
+    kinds: next.length === 0 ? CANVAS_KINDS : CANVAS_KINDS.filter((candidate) => next.includes(candidate)),
+    camera: null,
+  });
 }
 
 /* --- The opened run: its deck, in execution order ------------------------- */

@@ -173,6 +173,15 @@ test("selection dims and the filter removes, and the two are not drawn alike", (
   // reader arrived with — twice, in two different spellings.
   assert.doesNotMatch(route, /recorded\(graph\.value\.unplaced\)/u);
   assert.match(source("dashboard/src/canvas-view.ts"), /edges: graph\.edges\.filter\(\(edge\) => live\.has\(edge\.from\) && live\.has\(edge\.to\)\)/u);
+  // Removing a kind re-settles every remaining node from the deterministic
+  // start, so the frame that held the old arrangement holds nothing in the new
+  // one: a reader who had panned anywhere was left looking at empty space with
+  // their runs off-screen. The filter drops the camera and the map refits.
+  assert.match(route, /go\(\{\s*kinds: next\.length === 0 \? CANVAS_KINDS : CANVAS_KINDS\.filter\(\(candidate\) => next\.includes\(candidate\)\),\s*camera: null,\s*\}\);/u);
+  // Selection does not, and must not: it changes what is lit, never what is on
+  // the map or where. Two controls that both re-framed would be one control.
+  assert.doesNotMatch(route, /update:selected="go\(\{ selected: \$event, camera/u);
+  assert.match(route, /@update:selected="go\(\{ selected: \$event \}\)"/u);
 });
 
 test("the map is drawn in light and shadow, with colour spent only where it is information", () => {
