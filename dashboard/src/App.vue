@@ -9,7 +9,7 @@ import BacklogRoute from "./routes/backlog.vue";
 import CanvasScreen from "./routes/canvas.vue";
 import GroupsRoute from "./routes/groups.vue";
 import { usePolling, type PollMode } from "./composables/usePolling.ts";
-import { parseCanvasRoute, type CanvasRoute } from "./canvas-view.ts";
+import { isCanvasRoute, parseCanvasRoute, type CanvasRoute } from "./canvas-view.ts";
 import { admitNewFilterValues, LIFECYCLE_STATES } from "./session-filters.ts";
 import { groupFilterValues } from "./session-groups.ts";
 import { PLAN_KINDS } from "./session-plans.ts";
@@ -32,7 +32,7 @@ const backlogRoute = ref(false);
 const groupsRoute = ref(false);
 const canvasRoute = ref(false);
 /** Selection, camera and filters, all of them in the URL so Back restores them. */
-const canvasState = ref<CanvasRoute>({ kinds: ["run", "session", "plan"], selected: null, camera: null });
+const canvasState = ref<CanvasRoute>({ kinds: ["run", "session", "plan"], selected: null, camera: null, opened: null });
 /** The plan a sessions-view card asked the backlog to open with. */
 const backlogPlan = ref<string | null>(null);
 /** The driving session whose tree the groups screen is showing. */
@@ -134,7 +134,7 @@ function readRoute(): void {
   // sharing the sessions view with the runs it produced gave it neither.
   // `#/canvas?kinds=…&sel=…&cam=…`: the canvas keeps its whole state here,
   // because Back has to restore the camera and the selection with it.
-  canvasRoute.value = location.hash === "#/canvas" || location.hash.startsWith("#/canvas?");
+  canvasRoute.value = isCanvasRoute(location.hash);
   if (canvasRoute.value) canvasState.value = parseCanvasRoute(location.hash);
   const groupWithId = /^#\/groups\/([^/]+)$/.exec(location.hash);
   groupsRoute.value = location.hash === "#/groups" || groupWithId !== null;

@@ -37,6 +37,15 @@ export interface CanvasRoute {
   readonly selected: string | null;
   /** Absent means "fit the graph", which is what a first visit wants. */
   readonly camera: Camera | null;
+  /**
+   * The node whose own view is open, as a path segment: `#/canvas/run:abc`.
+   *
+   * A path rather than another query key, because opening a node is a place
+   * you went and the browser's own Back should leave it. The camera, the
+   * selection and the filters ride along in the query, so leaving the node
+   * returns to the map exactly as it was rather than to a fresh one.
+   */
+  readonly opened: string | null;
 }
 
 const ALL_KINDS: readonly CanvasNodeKind[] = CANVAS_KINDS;
@@ -56,15 +65,25 @@ function readCamera(value: string | null): Camera | null {
   return { x: parts[0]!, y: parts[1]!, zoom: clampZoom(parts[2]!) };
 }
 
-/** `#/canvas?kinds=run,plan&sel=run:abc&cam=12,-40,1.2` */
+export const CANVAS_PATH = "#/canvas";
+
+/** Whether a hash belongs to the canvas at all, opened node or not. */
+export function isCanvasRoute(hash: string): boolean {
+  return hash === CANVAS_PATH || hash.startsWith(`${CANVAS_PATH}?`) || hash.startsWith(`${CANVAS_PATH}/`);
+}
+
+/** `#/canvas/run:abc?kinds=run,plan&sel=run:abc&cam=12,-40,1.2` */
 export function parseCanvasRoute(hash: string): CanvasRoute {
-  const query = hash.includes("?") ? hash.slice(hash.indexOf("?") + 1) : "";
-  const params = new URLSearchParams(query);
+  const split = hash.includes("?") ? hash.indexOf("?") : hash.length;
+  const path = hash.slice(0, split);
+  const params = new URLSearchParams(hash.slice(split + 1));
   const selected = params.get("sel");
+  const segment = path.startsWith(`${CANVAS_PATH}/`) ? decodeURIComponent(path.slice(CANVAS_PATH.length + 1)) : "";
   return {
     kinds: readKinds(params.get("kinds")),
     selected: selected !== null && selected.length > 0 ? selected : null,
     camera: readCamera(params.get("cam")),
+    opened: segment.length > 0 ? segment : null,
   };
 }
 
@@ -73,6 +92,7 @@ export function parseCanvasRoute(hash: string): CanvasRoute {
  * clean URL and a reader can tell at a glance whether anything is filtered.
  */
 export function canvasRouteHash(route: CanvasRoute): string {
+  const path = route.opened === null ? CANVAS_PATH : `${CANVAS_PATH}/${route.opened}`;
   const parts: string[] = [];
   if (route.kinds.length !== ALL_KINDS.length) parts.push(`kinds=${route.kinds.join(",")}`);
   // Written by hand rather than with `URLSearchParams`, which percent-encodes
@@ -85,7 +105,7 @@ export function canvasRouteHash(route: CanvasRoute): string {
     const { x, y, zoom } = route.camera;
     parts.push(`cam=${Math.round(x)},${Math.round(y)},${zoom.toFixed(2)}`);
   }
-  return parts.length === 0 ? "#/canvas" : `#/canvas?${parts.join("&")}`;
+  return parts.length === 0 ? path : `${path}?${parts.join("&")}`;
 }
 
 /**
@@ -166,16 +186,21 @@ export function kindCounts(graph: CanvasGraph): ReadonlyMap<CanvasNodeKind, numb
 }
 
 /**
- * Where opening a node lands today.
+ * Where opening a node goes.
  *
- * The node-scoped views — the pipeline wheel, the session slides, the plan
- * board — are the next slices of this task. Until they exist, opening a dot
- * goes to the screen that already shows that thing, so nothing on this canvas
- * is a control that does nothing. Each of these is replaced in turn.
+ * A run opens its own view on the canvas — the pipeline wheel — and carries the
+ * map's state with it, so leaving returns to the map exactly as it was. The
+ * session and plan views are the next two slices; until they exist those dots
+ * go to the screen that already shows that thing, so nothing here is a control
+ * that does nothing. Each is replaced by its own view in turn.
  */
-export function openHref(node: { readonly kind: CanvasNodeKind; readonly ref: string | null; readonly sessionIds: readonly string[] }): string | null {
+export function openHref(
+  node: { readonly kind: CanvasNodeKind; readonly id?: string; readonly ref: string | null; readonly sessionIds: readonly string[] },
+  route?: CanvasRoute,
+): string | null {
   if (node.kind === "session" && node.ref !== null) return `#/groups/${encodeURIComponent(node.ref)}`;
   if (node.kind === "plan" && node.ref !== null) return `#/backlog/${encodeURIComponent(node.ref)}`;
-  const newest = node.sessionIds.at(-1);
-  return newest === undefined ? null : `#/sessions/${encodeURIComponent(newest)}`;
+  if (node.sessionIds.length === 0) return null;
+  if (node.id !== undefined && route !== undefined) return canvasRouteHash({ ...route, opened: node.id });
+  return `#/sessions/${encodeURIComponent(node.sessionIds.at(-1)!)}`;
 }

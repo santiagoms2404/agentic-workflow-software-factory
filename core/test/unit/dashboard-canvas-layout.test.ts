@@ -72,6 +72,25 @@ test("a deck is one node, and its runs are ordered the way they ran", () => {
   assert.equal(graph.edges.filter((edge) => edge.from.startsWith("run:") && edge.to.startsWith("run:")).length, 0);
 });
 
+test("a continuation never sorts ahead of the run it continues", () => {
+  // Two runs seeded in the same second: the clock decides nothing and the
+  // record decides everything. Sorting on time alone put the continuation
+  // first, which made the wheel report the pair as unrelated, because the
+  // relation only reads forwards.
+  const instant = "2026-09-13T20:23:13.000Z";
+  const graph = buildCanvasGraph(
+    [
+      run("g5", "untitled-drive-task", 1, null, instant, { continuesTask: "legacy-stack-tones" }),
+      run("g8", "legacy-stack-tones", 1, null, instant),
+    ],
+    [],
+    [],
+  );
+  const deck = graph.nodes.find((node) => node.kind === "run");
+  assert.deepEqual(deck?.sessionIds, ["g8", "g5"], "what was continued comes first");
+  assert.equal(deck?.label, "legacy-stack-tones → untitled-drive-task");
+});
+
 test("the node id does not move when the rows arrive in a different order", () => {
   // A node id that followed arrival order would break every stored position and
   // every URL naming a selection, on a page that polls.

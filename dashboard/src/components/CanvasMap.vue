@@ -10,6 +10,7 @@ import {
   screenPoint,
   zoomAbout,
   type Camera,
+  type CanvasRoute,
 } from "../canvas-view.ts";
 
 const props = defineProps<{
@@ -18,6 +19,8 @@ const props = defineProps<{
   selected: string | null;
   /** Positions the reader has dragged, kept in their browser and nowhere else. */
   pinned: ReadonlyMap<string, Point>;
+  /** Carried so an "open" link keeps the camera and the filters with it. */
+  route: CanvasRoute;
 }>();
 const emit = defineEmits<{
   "update:camera": [camera: Camera];
@@ -268,7 +271,7 @@ defineExpose({ fit });
     >
       <span class="canvas-label-name">{{ node.label }}</span>
       <span class="canvas-label-meta">{{ node.kind }} · {{ node.weight }} run(s)</span>
-      <a v-if="node.id === selected && openHref(node)" class="canvas-label-open" :href="openHref(node) ?? '#'">open ↗</a>
+      <a v-if="node.id === selected && openHref(node, route)" class="canvas-label-open" :href="openHref(node, route) ?? '#'">open ↗</a>
     </p>
 
     <p v-if="!graph.nodes.length" class="canvas-empty absent">

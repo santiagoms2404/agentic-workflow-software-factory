@@ -59,7 +59,13 @@ test("the whole canvas state survives a reload and a back button, because it is 
   assert.deepEqual(parseCanvasRoute("#/canvas?kinds=run%2Cplan&sel=run%3As1&cam=120%2C-40%2C1.25"), route);
   // Only what differs from the default is written, so an untouched canvas has a
   // clean URL and a reader can tell at a glance that nothing is filtered.
-  assert.equal(canvasRouteHash({ kinds: CANVAS_KINDS, selected: null, camera: null }), "#/canvas");
+  assert.equal(canvasRouteHash({ kinds: CANVAS_KINDS, selected: null, camera: null, opened: null }), "#/canvas");
+  // Opening a node is a place you went, so it is a path segment and the
+  // browser's own Back leaves it — with the map's state riding in the query.
+  const inside = parseCanvasRoute("#/canvas/run:s1?kinds=run&cam=0,0,1.00");
+  assert.equal(inside.opened, "run:s1");
+  assert.equal(canvasRouteHash(inside), "#/canvas/run:s1?kinds=run&cam=0,0,1.00");
+  assert.equal(parseCanvasRoute("#/canvas?sel=run:s1").opened, null);
 });
 
 test("an unreadable or empty URL means every kind, never an empty map", () => {

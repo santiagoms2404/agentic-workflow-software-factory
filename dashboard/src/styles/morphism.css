@@ -538,6 +538,97 @@
   .canvas-dot, .canvas-dot.selected { transition: none; transform: none; }
 }
 
+/* --- The wheel: one component, three payloads ------------------------------ */
+/* A sequence with one item facing the reader and its neighbours turned away.
+   The turn is a transform, not a second design language: every card on it is
+   the same raised card the rest of the shell uses, seen at an angle. */
+.canvas-opened { display: flex; flex-direction: column; gap: 16px; padding: 18px 20px; }
+.canvas-opened-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 16px; }
+.wheel { display: flex; flex-direction: column; gap: 14px; outline: none; }
+/* Clipped: a card turned away at the end of the chain must not escape the
+   panel it belongs to. */
+.wheel-stage { position: relative; height: 540px; overflow: hidden; }
+.wheel-seat {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 46%;
+  min-width: 320px;
+  height: 100%;
+  transform-origin: center center;
+  transition: transform 220ms ease, opacity 220ms ease;
+}
+.wheel-seat:not(.middle) { cursor: pointer; }
+.wheel-card {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 20px;
+  border-radius: var(--neu-radius-card);
+  background: var(--neu-surface);
+  box-shadow: var(--neu-raised-soft);
+  overflow: hidden;
+}
+.wheel-card.middle { box-shadow: var(--neu-raised); }
+/* The ask keeps its height rather than being squeezed to a sliver by the
+   phases and metrics below it; the card is a fixed height and flex would
+   shrink the one part that cannot be read at two lines. */
+.wheel-card-request { flex: 0 0 auto; }
+.wheel-card-request, .wheel-card-pipeline, .wheel-card-metrics, .wheel-card-summary {
+  border-radius: 13px;
+  background: var(--neu-well);
+  box-shadow: var(--neu-pressed-soft);
+  padding: 12px 15px;
+}
+.wheel-phase {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 13px;
+  border-radius: var(--neu-radius);
+  background: var(--neu-surface);
+  box-shadow: var(--neu-raised-soft);
+}
+/* A phase that has not run is not yet extruded — the same grammar the
+   waterfall's queued blocks already use. */
+.wheel-phase.queued { background: var(--neu-well); box-shadow: none; }
+.wheel-card-open { align-self: flex-start; min-height: 32px; padding: 6px 14px; text-decoration: none; }
+.wheel-between { display: flex; justify-content: center; }
+/* The spine: a recessed rail with the markers standing on it. */
+.wheel-spine { display: flex; align-items: center; gap: 14px; padding: 10px 14px; }
+.wheel-step {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: var(--neu-radius);
+  background: var(--neu-surface);
+  box-shadow: var(--neu-raised-soft);
+  color: var(--dim);
+  cursor: pointer;
+  transition: box-shadow 170ms ease, color 170ms ease;
+}
+.wheel-step:hover:not(:disabled) { color: var(--text); box-shadow: var(--neu-hover); }
+/* The ends stop rather than wrapping, and the control says so. */
+.wheel-step:disabled { box-shadow: none; opacity: .4; cursor: default; }
+.wheel-markers { flex: 1 1 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.wheel-marker {
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--neu-surface);
+  box-shadow: var(--neu-raised-soft);
+  cursor: pointer;
+  transition: box-shadow 170ms ease, transform 170ms ease;
+}
+.wheel-marker.current { transform: scale(1.35); box-shadow: var(--neu-hover); }
+@media (prefers-reduced-motion: reduce) {
+  .wheel-seat, .wheel-marker { transition: none; }
+}
+
 /* --- Backlog: rail layout ------------------------------------------------- */
 .backlog-shell {
   display: grid;
@@ -834,7 +925,7 @@ pre::-webkit-scrollbar-corner { background: var(--neu-scroll-track); }
   /* Pan and zoom over thirty-odd dots on a phone is a second set of gestures to
      design and keep, for a screen that fits four of them. The map steps aside
      and names the screen that shows the same runs. */
-  .canvas-board, .canvas-filter, .canvas-selected, .canvas-parked { display: none; }
+  .canvas-board, .canvas-filter, .canvas-selected, .canvas-parked, .canvas-opened { display: none; }
   .canvas-too-narrow { display: block; }
   .board-group-grid { grid-template-columns: minmax(0, 1fr); }
   /* One column of cards, so every section and every session inside it is one

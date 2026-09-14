@@ -99,9 +99,39 @@ export function planNodeId(plan: string): string {
   return `plan:${plan}`;
 }
 
-/** Oldest first: a deck opens as a pipeline, and a pipeline runs forwards. */
-function byExecution(left: CanvasSession, right: CanvasSession): number {
-  return left.startedAt.localeCompare(right.startedAt) || left.sessionId.localeCompare(right.sessionId);
+/**
+ * A deck in the order it ran, which is not quite the order it started.
+ *
+ * Oldest first is right until two runs start in the same second, and then the
+ * timestamp decides nothing while the record does: a task that CONTINUES
+ * another ran after it, whatever the clock says. So the chain is ordered by
+ * how far down a continuation chain a task sits first, and by time only within
+ * that. Sorting on time alone put a continuation ahead of the run it continued,
+ * which made the wheel claim the two were unrelated — the relation reads
+ * forwards, and a backwards pair matches nothing.
+ */
+function orderedDeck(runs: readonly CanvasSession[]): readonly CanvasSession[] {
+  const tasks = new Map<string, CanvasSession>();
+  for (const run of runs) if (!tasks.has(run.taskId)) tasks.set(run.taskId, run);
+  const depth = new Map<string, number>();
+  const depthOf = (task: string, seen: Set<string>): number => {
+    const known = depth.get(task);
+    if (known !== undefined) return known;
+    // `relate` refuses a cycle, so one cannot be recorded; guarding anyway,
+    // because a projection is read from disk and this must not spin.
+    if (seen.has(task)) return 0;
+    seen.add(task);
+    const prior = tasks.get(task)?.continuesTask ?? null;
+    const value = prior !== null && tasks.has(prior) ? depthOf(prior, seen) + 1 : 0;
+    depth.set(task, value);
+    return value;
+  };
+  for (const task of tasks.keys()) depthOf(task, new Set());
+  return [...runs].sort((left, right) =>
+    (depth.get(left.taskId) ?? 0) - (depth.get(right.taskId) ?? 0)
+    || left.startedAt.localeCompare(right.startedAt)
+    || left.attempt - right.attempt
+    || left.sessionId.localeCompare(right.sessionId));
 }
 
 /**
@@ -126,7 +156,7 @@ export function buildCanvasGraph(
   const planWeight = new Map<string, number>();
 
   for (const stack of groupSessionStacks(sessions)) {
-    const ordered = [...stack.sessions].sort(byExecution);
+    const ordered = orderedDeck(stack.sessions);
     const id = runNodeId(ordered.map((session) => session.sessionId));
     const groups = [...new Set(ordered.map((session) => session.groupId).filter((group): group is string => group !== null))].sort();
     const named = [...new Set(ordered.map((session) => session.planRef).filter((plan): plan is string => plan !== null))].sort();

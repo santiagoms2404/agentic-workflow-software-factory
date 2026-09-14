@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import type { GroupSummary, SessionCard, SessionPlan } from "../../shared/types.ts";
+import type { EventsResponse, GroupSummary, SessionCard, SessionPlan } from "../../shared/types.ts";
 import { buildCanvasGraph, type CanvasNodeKind } from "../canvas-graph.ts";
 import type { Point } from "../canvas-layout.ts";
 import {
@@ -13,7 +13,11 @@ import {
   type Camera,
   type CanvasRoute,
 } from "../canvas-view.ts";
+import { clampIndex, relationBetween, relationReason } from "../canvas-wheel.ts";
+import { stateTone } from "../display.ts";
 import CanvasMap from "../components/CanvasMap.vue";
+import CanvasRunCard from "../components/CanvasRunCard.vue";
+import CanvasWheel from "../components/CanvasWheel.vue";
 
 const props = defineProps<{
   sessions: readonly SessionCard[];
@@ -69,6 +73,49 @@ function toggleKind(kind: CanvasNodeKind): void {
   // rather than as filtered, and there would be no control left to undo it.
   go({ kinds: next.length === 0 ? CANVAS_KINDS : CANVAS_KINDS.filter((candidate) => next.includes(candidate)) });
 }
+
+/* --- The opened run: its deck, in execution order ------------------------- */
+
+const opened = computed(() =>
+  props.route.opened === null
+    ? null
+    : graph.value.nodes.find((node) => node.id === props.route.opened) ?? null);
+
+const byId = computed(() => new Map(props.sessions.map((session) => [session.sessionId, session])));
+/** The deck's runs, oldest first, which is the order they ran in. */
+const chain = computed<readonly SessionCard[]>(() =>
+  (opened.value?.sessionIds ?? []).map((id) => byId.value.get(id)).filter((run): run is SessionCard => run !== undefined));
+
+const at = ref(0);
+watch(() => props.route.opened, () => { at.value = 0; reason.value = null; });
+watch(chain, (next) => { at.value = clampIndex(at.value, next.length); });
+
+const middle = computed(() => chain.value[clampIndex(at.value, chain.value.length)]);
+const previous = computed(() => chain.value[clampIndex(at.value, chain.value.length) - 1]);
+const relation = computed(() => relationBetween(previous.value, middle.value));
+
+/**
+ * The written reason behind a continuation.
+ *
+ * `awsf relate` demands one and the projector keeps it on an event row rather
+ * than on the `continues_task` column, which cannot hold it. This is the only
+ * place in the dashboard that reads it back — the driver wrote down why one
+ * task followed another and until now nothing showed it to them again. Fetched
+ * for the middle run only, and only when the pair is actually a continuation.
+ */
+const reason = ref<string | null>(null);
+watch([middle, relation], async ([run, link]) => {
+  reason.value = null;
+  if (run === undefined || link === null || link.kind !== "continuation") return;
+  try {
+    const response = await fetch(`/api/v1/sessions/${encodeURIComponent(run.sessionId)}/events`);
+    if (!response.ok) return;
+    const payload = await response.json() as EventsResponse;
+    reason.value = relationReason(payload.events);
+  } catch {
+    // A reason that cannot be fetched is shown as unavailable, never invented.
+  }
+});
 
 const selectedNode = computed(() =>
   shown.value.nodes.find((node) => node.id === props.route.selected)
@@ -145,7 +192,7 @@ watch(shown, (next) => {
              writes it; until then the place it sits says so rather than being
              filled with a sentence nothing generated. -->
         <p class="canvas-selected-summary absent">no summary written yet</p>
-        <a v-if="openHref(selectedNode)" class="session-filter-control canvas-open" :href="openHref(selectedNode) ?? '#'">
+        <a v-if="openHref(selectedNode, route)" class="session-filter-control canvas-open" :href="openHref(selectedNode, route) ?? '#'">
           open this
         </a>
       </section>
@@ -175,13 +222,51 @@ watch(shown, (next) => {
       </section>
     </div>
 
+    <!-- A run opens its own view: the deck as a pipeline, the run you came for
+         in the middle. The map's state rides in the query, so leaving returns
+         to it exactly as it was. -->
+    <section v-if="opened && chain.length" class="canvas-opened canvas-board neu-well">
+      <header class="canvas-opened-head">
+        <a class="session-filter-control" :href="canvasRouteHash({ ...route, opened: null })">← the map</a>
+        <p class="canvas-opened-title">{{ opened.label }}</p>
+        <p class="canvas-opened-meta">{{ chain.length }} run(s) in this chain, oldest first</p>
+      </header>
+      <CanvasWheel
+        v-model:index="at"
+        :keys="chain.map((run) => run.sessionId)"
+        :tones="chain.map((run) => stateTone(run.state))"
+        label="run"
+      >
+        <template #item="{ index, middle: isMiddle }">
+          <CanvasRunCard :session="chain[index]!" :middle="isMiddle" />
+        </template>
+        <template #between>
+          <p v-if="relation" class="canvas-relation">
+            <span class="canvas-relation-kind">{{ relation.text }}</span>
+            <!-- `awsf relate` demands a reason and `awsf new --continues` takes
+                 none, so an absent one is a fact about how the link was made
+                 rather than something the dashboard lost. -->
+            <span v-if="relation.kind === 'continuation'" :class="{ absent: reason === null }">
+              {{ reason ?? "no reason was recorded — this link was declared at `awsf new --continues`, which takes none" }}
+            </span>
+          </p>
+          <p v-else-if="at === 0" class="canvas-relation">
+            <span class="canvas-relation-kind">the first run in this chain</span>
+          </p>
+          <p v-else class="canvas-relation absent">the record does not say how these two are related</p>
+        </template>
+      </CanvasWheel>
+    </section>
+
     <CanvasMap
+      v-else
       ref="map"
       class="canvas-board"
       :graph="shown"
       :camera="route.camera"
       :selected="route.selected"
       :pinned="pinned"
+      :route="route"
       @update:camera="go({ camera: $event })"
       @update:selected="go({ selected: $event })"
       @update:pinned="writePins($event)"
