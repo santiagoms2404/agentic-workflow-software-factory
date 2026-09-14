@@ -2,6 +2,8 @@ import { readFile, realpath } from "node:fs/promises";
 import { resolve } from "node:path";
 import { parseEnvelope } from "../contracts/parse-envelope.ts";
 import { assertPhaseRecovery, recoveryDigest, recoveryBudgetDigest, type PhaseRecovery } from "../contracts/phase-recovery.ts";
+import type { StoredEnvelope } from "../contracts/stored-envelope.ts";
+import { savedResultTreeDigest } from "./saved-phase-result.ts";
 import type { EnvelopeBase } from "../contracts/envelope-base.ts";
 import type { AttemptEvent, AttemptStatus } from "../cli/commands/attempt.ts";
 import { deriveAttemptStatus, readAttempt } from "../cli/commands/attempt.ts";
@@ -41,6 +43,18 @@ export async function inspectPhaseRecovery(attemptDir: string) {
   if (status.process !== null || status.budget.callsReserved !== 0 || recoveryBudgetDigest(status.budget) !== checkpoint.budgetDigest) {
     throw new Error("recovery refused: active or unsettled execution; no refund or relaunch is authorized");
   }
+  const pending = checkpoint.pending;
+  let pendingEnvelope: StoredEnvelope<EnvelopeBase> | null = null;
+  if (pending !== undefined) {
+    const proof = scan.records.findLast(record => record.event.evidence?.type === "phase-result-ready");
+    if (proof?.event.evidence?.type !== "phase-result-ready" || recoveryDigest(proof.event.evidence.checkpoint) !== recoveryDigest(checkpoint) ||
+        pending.reservation.attempt !== status.attempt ||
+        scan.records.some(record => record.event.evidence?.type === "phase-validation-started" && record.event.evidence.checkpointId === checkpoint.id)) throw new Error("saved reply validation has started or its completion proof changed");
+    const exit = scan.records.map(record => record.event.evidence).findLast(evidence => evidence?.type === "process" && evidence.record.runId === pending.runId);
+    if (exit?.type !== "process" || exit.status !== "EXITED" || exit.exitCode !== 0 || exit.endedAt === null || exit.phaseId !== `${status.sessionId}:${pending.phaseKey}`) throw new Error("saved reply has no completed original process");
+    const debit = scan.records.some(record => record.event.evidence?.type === "process" && record.event.evidence.record.reservationId === pending.reservation.id && record.event.evidence.status === "RUNNING");
+    if (!debit) throw new Error("saved reply original debit is unproved");
+  }
   const phases = new Map<string, PhaseEvidenceRecord>();
   const envelopes = new Map<string, EnvelopeBase>();
   const accepted = new Map<string, string>();
@@ -48,11 +62,19 @@ export async function inspectPhaseRecovery(attemptDir: string) {
     if (record.event.next.sessionId !== status.sessionId || record.event.next.revision !== record.source_seq) throw new Error("recovery journal identity or sequence mismatch");
     const evidence = record.event.evidence;
     if ((evidence?.type === "phase" || evidence?.type === "resume-activation") && evidence.phase !== null) phases.set(evidence.phase.key, evidence.phase);
+    if (evidence?.type === "phase-result-ready") phases.set(evidence.phase.key, evidence.phase);
     if (evidence?.type === "phase-accepted") {
       phases.set(evidence.phase.key, evidence.phase);
       accepted.set(evidence.phase.key, recoveryDigest(evidence.accepted));
     }
     if (evidence?.type === "envelope") {
+      if (pending?.envelopeId === evidence.envelope.envelopeId) {
+        if (pendingEnvelope !== null || recoveryDigest(evidence.envelope) !== pending.envelopeDigest ||
+            evidence.envelope.phaseId !== pending.phaseKey || evidence.envelope.sessionId !== status.sessionId ||
+            evidence.envelope.correctionRound !== pending.round || !evidence.envelope.valid || evidence.envelope.payload === null ||
+            !parseEnvelope(JSON.stringify(evidence.envelope.payload), evidence.envelope.schemaId).valid) throw new Error("saved reply envelope changed or is invalid");
+        pendingEnvelope = evidence.envelope;
+      }
       const match = checkpoint.prefix.find(entry => entry.envelopeId === evidence.envelope.envelopeId);
       if (match === undefined) continue;
       if (envelopes.has(match.phaseKey) || !evidence.envelope.valid || evidence.envelope.payload === null ||
@@ -69,17 +91,22 @@ export async function inspectPhaseRecovery(attemptDir: string) {
     }
   }
   for (const phase of phases.values()) {
+    if (phase.key === pending?.phaseKey && phase.ordinal === pending.ordinal && phase.status === "VALIDATING") continue;
     if (phase.ordinal > checkpoint.prefix.length && phase.status !== "QUEUED") throw new Error("recovery refused: a later phase has already started");
   }
-  const instructions = acceptedResumeInstructions(scan.records, status, checkpoint.prefix);
-  return { status, checkpoint, phases, envelopes, instructions, records: scan.records, disk };
+  if (pending !== undefined && pendingEnvelope === null) throw new Error("saved reply envelope is missing");
+  const allInstructions = acceptedResumeInstructions(scan.records, status, checkpoint.prefix, pending);
+  const pendingInstruction = allInstructions.find(instruction => instruction.amendment.binding.phaseKey === pending?.phaseKey) ?? null;
+  const instructions = allInstructions.filter(instruction => instruction !== pendingInstruction);
+  return { status, checkpoint, phases, envelopes, instructions, pendingInstruction, pendingEnvelope, records: scan.records, disk };
 }
 
 export async function verifyRecoveryWorktree(status: AttemptStatus, checkpoint: PhaseRecovery): Promise<void> {
   if (status.worktree === null || status.baseSha === null) throw new Error("recovery has no worktree");
   const git = readOnlyGit(status.worktree);
   const canonical = readOnlyGit(status.repository);
-  assertClean(status.worktree, "before", git);
+  if (checkpoint.pending === undefined) assertClean(status.worktree, "before", git);
+  else if (await savedResultTreeDigest(status.worktree, git) !== checkpoint.pending.worktreeDigest) throw new Error("saved reply worktree or index bytes changed");
   if (runGit(git, ["rev-parse", "--abbrev-ref", "HEAD"]).trim() !== "HEAD" ||
       runGit(git, ["rev-parse", "HEAD"]).trim() !== checkpoint.worktreeHeadSha ||
       runGit(canonical, ["rev-parse", "HEAD"]).trim() !== checkpoint.integrationBaseSha ||

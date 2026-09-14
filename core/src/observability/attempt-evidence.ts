@@ -54,6 +54,8 @@ export interface PhaseEvidenceRecord {
 
 /** Canonical production evidence carried by one attempt-journal record. */
 export type AttemptEvidence =
+  | { readonly type: "phase-result-ready"; readonly phase: PhaseEvidenceRecord; readonly checkpoint: import("../contracts/phase-recovery.ts").PhaseRecovery }
+  | { readonly type: "phase-validation-started"; readonly phaseId: string; readonly checkpointId: string }
   | { readonly type: "phase-accepted"; readonly phase: PhaseEvidenceRecord; readonly accepted: import("../contracts/phase-recovery.ts").AcceptedPhase }
   | { readonly type: "quota-pause"; readonly checkpoint: import("../contracts/phase-recovery.ts").PhaseRecovery }
   | { readonly type: "resume-instruction-delivery"; readonly phaseId: string; readonly delivery: import("../contracts/owner-amendment.ts").OwnerAmendmentDelivery; readonly at: string }

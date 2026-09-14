@@ -108,7 +108,7 @@ export async function statusCommand(
   ]);
   const lines = [...formatStatus(status)];
   if (status.recovery != null && status.process === null && status.budget.callsReserved === 0) {
-    lines.push(`Recovery: ${status.recovery.kind === "quota-pause" ? "quota-paused" : "saved accepted phase result"}; ${status.recovery.prefix.length} completed phase(s). Native interrupted-turn reconnect is not implied.`);
+    lines.push(`Recovery: ${status.recovery.kind === "quota-pause" ? "quota-paused" : status.recovery.kind === "result-ready" ? "saved reply awaiting host validation" : "saved accepted phase result"}; ${status.recovery.prefix.length} completed phase(s). Native interrupted-turn reconnect is not implied.`);
   }
   if (report !== null) {
     // Every command that moves the candidate, the verdict or the lifecycle

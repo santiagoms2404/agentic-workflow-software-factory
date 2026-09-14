@@ -25,6 +25,8 @@ import { writeSystemPromptFile } from "../../adapters/system-prompt-file.ts";
 import { toConfigSnapshotJson } from "../../config/effective-config.ts";
 import { composeOwnerAmendment, composeOwnerAmendmentChain, createOwnerAmendment, ownerAmendmentDeliveryAction, ownerText, type OwnerAmendmentDelivery } from "../../contracts/owner-amendment.ts";
 import { assertResumeInstruction, type ResumeInstruction } from "../../contracts/resume-instruction.ts";
+import { savedResultPermissions, savedResultTreeDigest, ResultSnapshotUnavailable } from "../../workflow/saved-phase-result.ts";
+import type { SavedPhaseResult } from "../../contracts/saved-phase-result.ts";
 import { composeResumeInstruction, resumeInstructionContext } from "../../workflow/resume-instruction.ts";
 import { seedContext, assertSeedTarget, verifiedTargetSeed, validateSeedStartup } from "../../workflow/candidate-seed.ts";
 import type { AwsfConfig, AgentDefinition, AdapterEntry } from "../../config/schema.ts";
@@ -126,7 +128,7 @@ import { compileWorkflow, compileWorkflowStructure, type WorkflowRecipe } from "
 import { composePromptBundle, type PromptBundle } from "../../workflow/prompt-composition.ts";
 import type { CompiledAgentPhase } from "../../workflow/phase.ts";
 import { outputOwnershipCheck } from "../../workflow/output-ownership.ts";
-import type { AgentTurn, CorrectionCandidateEvidence, CorrectionCommandFailure, CorrectionSession } from "../../workflow/corrections.ts";
+import { UsageAccumulator, type AgentTurn, type CorrectionCandidateEvidence, type CorrectionCommandFailure, type CorrectionSession } from "../../workflow/corrections.ts";
 import {
   EnvelopeValidationFailure,
   PhaseGateFailure,
@@ -1049,6 +1051,16 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       const agent = agents.get(phase.owner)!;
       const entry = options.config.adapters[agent.harness.adapter];
       if (entry === undefined || entry.enabled === false) throw new ProductionRouteUnavailable(agent.harness.adapter, "route is disabled or undeclared");
+      const saved = recovery?.inspected.checkpoint.pending;
+      if (saved?.phaseKey === phase.id) {
+        if (saved.model.adapter !== agent.harness.adapter || saved.model.requestedModel !== agent.model) throw new Error("saved reply route changed");
+        const unavailable = () => { throw new Error("saved reply validation cannot reopen a model adapter"); };
+        const adapter: HarnessAdapter = { id: saved.model.adapter, isAvailable: unavailable, getModelInfo: unavailable,
+          buildSpec: unavailable, parse: unavailable, execute: unavailable };
+        routes.set(phase.id, { agent, adapterId: agent.harness.adapter, adapter, model: saved.model,
+          continuity: agent.harness.continuity === "same-session", ...routePrompts.get(phase.id)! });
+        continue;
+      }
       const adapter = infra.adapterFor(entry, agent.harness.adapter, options.config);
       if (adapter === null) throw new ProductionRouteUnavailable(agent.harness.adapter, "adapter kind has no production binding");
       const available = await adapter.isAvailable();
@@ -1185,14 +1197,17 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       ownerReentries: status.budget.ownerReentries },
   });
   const prefix: AcceptedPhase[] = [...(recovery?.inspected.checkpoint.prefix ?? [])];
-  const remainingCalls = compiled.phases.slice(prefix.length).filter(phase => phase.kind === "agent").length;
+  const savedResult = recovery?.inspected.checkpoint.pending;
+  const remainingCalls = compiled.phases.slice(prefix.length).filter(phase => phase.kind === "agent" && phase.id !== savedResult?.phaseKey).length;
   budget.admitWorkflow(recovery === undefined ? compiled : { id: compiled.id, minimumCalls: remainingCalls });
   const instructions = [...(recovery?.inspected.instructions ?? [])];
-  const submittedInstructions = new Set<string>();
+  const submittedInstructions = new Set<string>(recovery?.inspected.pendingInstruction === null || recovery?.inspected.pendingInstruction === undefined ? [] : [recovery.inspected.pendingInstruction.amendment.digest]);
   const brokerDelegatedReservations = new Set<string>();
-  const instructionFor = (phaseKey: string): ResumeInstruction | null => recovery?.instruction?.amendment.binding.phaseKey === phaseKey ? recovery.instruction : null;
+  const instructionFor = (phaseKey: string): ResumeInstruction | null => recovery?.inspected.pendingInstruction?.amendment.binding.phaseKey === phaseKey
+    ? recovery.inspected.pendingInstruction : recovery?.instruction?.amendment.binding.phaseKey === phaseKey ? recovery.instruction : null;
   const acceptedEnvelopes = new Map<string, EnvelopeBase>(recovery?.inspected.envelopes);
   const storedEnvelopes = new Map<string, StoredEnvelope<EnvelopeBase>>();
+  if (savedResult !== undefined && recovery?.inspected.pendingEnvelope != null) storedEnvelopes.set(savedResult.phaseKey, recovery.inspected.pendingEnvelope);
   const createdAt = infra.now();
   const phaseRecords = new Map<string, PhaseEvidenceRecord>();
   const launches = new Map<string, LaunchRecord>();
@@ -1576,6 +1591,12 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     attempt = 1,
   ): Promise<{ envelope: EnvelopeBase; candidateSha: string | null }> => {
     const route = routes.get(phase.id)!;
+    const restored = savedResult?.phaseKey === phase.id ? savedResult : null;
+    const originalUsage = new UsageAccumulator();
+    if (restored !== null) for (const row of recovery!.inspected.records) {
+      const evidence = row.event.evidence;
+      if (evidence?.type === "agent" && evidence.phaseId === dbPhaseId(status.sessionId, phase.id)) originalUsage.add({ usage: evidence.usage, costUsd: evidence.costUsd });
+    }
     // Three things run as non-review agents on `simple-sdlc` and only one of
     // them is the side the review is inverted against. The build producer is
     // structural — the agent phase carrying the build-output schema, which is
@@ -1613,7 +1634,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     const runIdFor = (turn: number): string => turn === 0 ? runId : `${runId}:c${String(turn)}`;
     const runtimeDir = join(options.attemptDir, "private", phase.id);
     await mkdir(runtimeDir, { recursive: true, mode: 0o700 });
-    const systemPromptPath = await infra.writeSystemPrompt(route.systemPrompt, runtimeDir);
+    const systemPromptPath = restored === null ? await infra.writeSystemPrompt(route.systemPrompt, runtimeDir) : "";
     const openPermission = (): PermissionSession => openPermissionSession({
       canonicalRepository: status.repository,
       worktree: status.worktree!,
@@ -1630,10 +1651,11 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     // the candidate it is correcting rather than from the seeded worktree. The
     // CUMULATIVE view — writes globs, protected paths, the declared diff — is a
     // separate check, taken from the attempt base by `phaseGates`.
-    let permission = openPermission();
+    let permission: Pick<PermissionSession, "before" | "enforce" | "sandbox" | "sandboxBadge" | "profile"> = restored === null ? openPermission()
+      : savedResultPermissions(restored, route.agent, status.worktree!, options.config.policy.protected_paths);
     const attributionBaseSha = seed === null ? null : runGit(systemGitRunner(status.worktree!), ["rev-parse", "HEAD"]).trim();
     const openHostGit = (): HostPhaseGit<EnvelopeBase> => createHostPhaseGit<EnvelopeBase>({
-      repository: status.worktree!,
+      repository: status.worktree!, ...(restored === null ? {} : { before: restored.before }),
       commitMessage: (envelope) => phase.id === "builder"
         ? (envelope as BuildOutput).proposedCommitMessage
         : `chore: record ${phase.id} output`,
@@ -1645,13 +1667,13 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     const instruction = instructionFor(phase.id);
     if (instruction !== null) {
       assertResumeInstruction(instruction);
-      if (attempt !== 1 || instruction.amendment.binding.operationId !== operationId || instruction.amendment.binding.phaseOrdinal !== ordinal ||
+      if (attempt !== 1 || (restored === null && instruction.amendment.binding.operationId !== operationId) || instruction.amendment.binding.phaseOrdinal !== ordinal ||
           instruction.amendment.binding.originalPromptBundleDigest !== recoveryDigest(routePrompts.get(phase.id)!)) throw new Error("resume instruction launch binding changed");
     }
     const composedInput = instruction === null ? composeOwnerAmendment(originalPrompt, amendment) : composeResumeInstruction(originalPrompt, amendment, instruction);
     const renderedPrompt = composedInput.composedText;
-    for (const [name, text] of [["system", route.systemPrompt], ["user", originalPrompt],
-      ...(amendment === null && instruction === null ? [] : [["user+owner-amendment", renderedPrompt]])] as const) {
+    for (const [name, text] of (restored === null ? [["system", route.systemPrompt], ["user", originalPrompt],
+      ...(amendment === null && instruction === null ? [] : [["user+owner-amendment", renderedPrompt]])] : []) as [string, string][]) {
       await persist("attempt.updated", {}, {
         type: "compiled-prompt", phaseId: phaseDb, name, text,
         ...(name === "system" ? route.evidence : {}),
@@ -1693,7 +1715,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     // is private, and is durable before any process can be told about it. A
     // route configured `continuity: none` gets no correction conversation.
     // Explicit interrupted-turn retention opens a separate cold-turn record below.
-    const conversationRef = route.continuity
+    const conversationRef = route.continuity && restored === null
       ? (await continuity.open({
           phaseId: phase.id,
           adapter: route.adapter.id,
@@ -1703,7 +1725,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
         }), continuity.ref(handle))
       : null;
     if (conversationRef?.storeDir != null) await mkdir(conversationRef.storeDir, { recursive: true, mode: 0o700 });
-    if (route.continuity) {
+    if (route.continuity && restored === null) {
       conversations.set(phase.id, {
         handle,
         adapterId: route.adapterId,
@@ -1765,6 +1787,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
         sessionId: route.continuity ? handle : `none:${runId}`,
       },
       send: async (prompt): Promise<AgentTurn> => {
+        if (restored !== null) throw new Error("saved reply validation cannot call a model");
         const turn = turnIndex;
         turnIndex += 1;
         await phaseQueue;
@@ -1992,6 +2015,31 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
           commit: (envelope, paths) => hostGit.commit(envelope, paths),
         },
         persistence: { persist: (envelope, raw) => persistEnvelope(phase.id, runIdFor(envelope.correctionRound), envelope, raw) },
+        ...(restored === null ? {} : { initialEnvelope: recovery!.inspected.pendingEnvelope!, initialUsage: originalUsage.snapshot() }),
+        onResultStored: async envelope => {
+          await phaseQueue;
+          if (!envelope.valid || envelope.payload === null) return;
+          const original = budget.reservation(reservation.id)!;
+          if (original.state !== "spent" || original.kind !== "single" || original.cost !== 1 || (original.edge !== null && original.edge !== "L4" && original.edge !== "L11")) throw new Error("completed reply has no original debit");
+          let treeDigest: string;
+          try { treeDigest = await savedResultTreeDigest(status.worktree!, systemGitRunner(status.worktree!)); }
+          catch (error) { if (error instanceof ResultSnapshotUnavailable) return; throw error; }
+          const stored = storedEnvelopes.get(phase.id)!;
+          const pending: SavedPhaseResult = { phaseKey: phase.id, runId: runIdFor(envelope.correctionRound), ordinal,
+            envelopeId: stored.envelopeId, envelopeDigest: recoveryDigest(stored), round: envelope.correctionRound,
+            ...(instruction === null ? {} : { ownerAmendmentDigest: instruction.amendment.digest }),
+            worktreeDigest: treeDigest, before: permission.before, sandboxBadge: permission.sandboxBadge,
+            reservation: { ...original, edge: original.edge, cost: 1, kind: "single", state: "spent", spent: 1 }, model: route.model };
+          const checkpoint = await checkpointAt("result-ready", null, pending);
+          if (checkpoint === null) throw new Error("completed reply has unsettled execution");
+          await persist("attempt.updated", { recovery: checkpoint, budget: budget.snapshot() },
+            { type: "phase-result-ready", phase: phaseRecords.get(phase.id)!, checkpoint });
+        },
+        onValidationStart: async () => {
+          if (status.recovery?.pending?.phaseKey !== phase.id) return;
+          const checkpointId = status.recovery.id;
+          await persist("attempt.updated", { recovery: null }, { type: "phase-validation-started", phaseId: phaseDb, checkpointId });
+        },
         agentSessionId: status.sessionId,
         onPhaseState,
         onAccepted: async result => {
@@ -2033,6 +2081,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
          * task ceiling after every later required phase has retained headroom.
          */
         authorizeCorrection: ({ cause, correctionRound, reports }) => {
+          if (restored !== null) return { actor: null, reason: "saved reply validation cannot authorize another model call" };
           const snapshot = budget.snapshot();
           if (snapshot.correctionsAuto >= snapshot.allowance.auto) {
             return { actor: null, reason: `automatic correction allowance is spent (${String(snapshot.correctionsAuto)}/${String(snapshot.allowance.auto)})` };
@@ -2133,12 +2182,12 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
   };
   if (recovery !== undefined) applyAcceptedContext();
 
-  const checkpointAt = async (kind: PhaseRecovery["kind"], quota: BoundaryQuota | null): Promise<PhaseRecovery | null> => {
-    if (prefix.length === 0 || status.process !== null || budget.outstanding().length > 0) return null;
+  const checkpointAt = async (kind: PhaseRecovery["kind"], quota: BoundaryQuota | null, pending?: SavedPhaseResult): Promise<PhaseRecovery | null> => {
+    if ((prefix.length === 0 && pending === undefined) || status.process !== null || budget.outstanding().length > 0) return null;
     const git = systemGitRunner(status.worktree!);
-    assertClean(status.worktree!, "after", git);
+    if (pending === undefined) assertClean(status.worktree!, "after", git);
     const checkpoint: PhaseRecovery = { schema: "awsf.phase-recovery/v1", id: randomUUID(), sessionId: status.sessionId,
-      kind, workflowId: compiled.id, bindingDigest, prefix: [...prefix],
+      kind, ...(pending === undefined ? {} : { pending }), workflowId: compiled.id, bindingDigest, prefix: [...prefix],
       repository: await realpath(status.repository), worktree: await realpath(status.worktree!),
       commonGitDir: await realpath(runGit(git, ["rev-parse", "--path-format=absolute", "--git-common-dir"]).trim()),
       integrationBaseSha: status.baseSha!, worktreeHeadSha: runGit(git, ["rev-parse", "HEAD"]).trim(),
@@ -2356,7 +2405,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
   };
 
   try {
-    if (recovery !== undefined && (remainingCalls === 0 || compiled.phases[restartIndex]?.kind !== "agent" || isReviewPhase(compiled.phases[restartIndex]!))) {
+    if (recovery !== undefined && (savedResult !== undefined || remainingCalls === 0 || compiled.phases[restartIndex]?.kind !== "agent" || isReviewPhase(compiled.phases[restartIndex]!))) {
       await persist("attempt.updated", { activeOperation: operationId }, { type: "resume-activation", operationId, quotaReadings: recovery.quotaReadings,
         ...(recovery.instruction == null ? {} : { ownerInstruction: recovery.instruction }),
         checkpointId: recovery.inspected.checkpoint.id, reason: recovery.reason, reservationId: null, phase: null });
@@ -2370,7 +2419,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     for (const [index, phase] of compiled.phases.entries()) {
       if (isReviewPhase(phase)) reviewPhase = { phase: phase as CompiledAgentPhase, ordinal: index + 1 };
       if (index < restartIndex) continue;
-      if (index > 0 && !(recovery !== undefined && index === restartIndex && recovery.inspected.checkpoint.kind === "quota-pause")) {
+      if (index > 0 && !(recovery !== undefined && index === restartIndex && (recovery.inspected.checkpoint.kind === "quota-pause" || savedResult !== undefined))) {
         const completed = compiled.phases[index - 1]!;
         if (phaseRecords.get(completed.id)?.status === "SUCCEEDED") {
           const stopped = await takePhaseBoundarySnapshot(completed, phase);
@@ -2395,7 +2444,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
           continue;
         }
         agentOrdinal += 1;
-        const reservation = agentOrdinal === 1 && firstReservation !== null
+        const reservation = savedResult?.phaseKey === phase.id ? budget.restoreReservation(savedResult.reservation) : agentOrdinal === 1 && firstReservation !== null
           ? firstReservation
           : budget.reserve({ cost: 1, subject: `${compiled.id}:${phase.id}` });
         if (activationPending) {
@@ -2407,7 +2456,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
               reason: recovery!.reason, reservationId: reservation.id, phase: started });
           phaseRecords.set(phase.id, started);
           activationPending = false;
-        } else if (agentOrdinal > 1) {
+        } else if (agentOrdinal > 1 && savedResult?.phaseKey !== phase.id) {
           await persist("attempt.updated", { budget: budget.snapshot(), lastActivityAt: infra.now(), lastActivity: `held one call for ${phase.id}` });
         }
         const result = await runAgent(phase, index + 1, previous, reservation, recovery === undefined && agentOrdinal === 1, null);
@@ -2627,6 +2676,11 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     if (recoveredReviewOutput !== undefined) {
       if (status.lifecycleState !== "REVIEWING" || recoveredReviewOutput.reviewedSha !== reviewed) throw new Error("completed review binding changed");
       reviewOutput = recoveredReviewOutput;
+    } else if (savedResult?.phaseKey === reviewPhase.phase.id) {
+      if (status.lifecycleState !== "REVIEWING") throw new Error("saved review has lost its original lifecycle binding");
+      const result = await runAgent(reviewPhase.phase, reviewPhase.ordinal, previous, budget.restoreReservation(savedResult.reservation), false,
+        { candidateSha: reviewed, candidatePaths: candidatePathsBetween(status.worktree!, status.baseSha!, reviewed), evidence: reviewEvidence, expectation: reviewExpectation });
+      reviewOutput = result.envelope as ReviewOutput;
     } else {
     const l11 = budget.authorize({
       from: "GATING", to: "REVIEWING", actor: "host", reason: { source: "gate" }, interactive: false,
@@ -2783,7 +2837,11 @@ async function preflightRecovery(options: ProductionRunOptions): Promise<Recover
     if (status.lifecycleState !== "RUNNING" || next?.kind !== "agent" || isReviewPhase(next)) throw new Error("quota anchor does not name an unstarted ordinary agent phase");
   }
   await verifyRecoveryWorktree(status, checkpoint);
-  const remaining = recipe.phases.slice(checkpoint.prefix.length).filter(phase => phase.kind === "agent");
+  if (checkpoint.pending !== undefined) {
+    const phase = recipe.phases[checkpoint.prefix.length];
+    if (phase?.id !== checkpoint.pending.phaseKey || phase.schemaId !== inspected.pendingEnvelope?.schemaId) throw new Error("saved reply does not match the compiled phase");
+  }
+  const remaining = recipe.phases.slice(checkpoint.prefix.length).filter(phase => phase.kind === "agent" && phase.id !== checkpoint.pending?.phaseKey);
   const coldHeadroom = options.config.risk.correction_allowance.auto > 0 && remaining.some(phase =>
     phase.maxCorrections > 0 && options.config.agents.find(agent => agent.name === phase.owner)?.harness.continuity === "none") ? 1 : 0;
   const ledger = new CallBudget({ taskId: status.taskId, tier: status.tier, allowance: status.budget.allowance,
@@ -2795,7 +2853,7 @@ async function preflightRecovery(options: ProductionRunOptions): Promise<Recover
 }
 
 async function readRecoveryQuota(options: ProductionRunOptions, inspected: RecoveryInspection): Promise<BoundaryQuota | null> {
-  const phase = SUPPORTED.get(inspected.status.workflow)!.phases.slice(inspected.checkpoint.prefix.length).find(phase => phase.kind === "agent");
+  const phase = SUPPORTED.get(inspected.status.workflow)!.phases.slice(inspected.checkpoint.prefix.length).find(phase => phase.kind === "agent" && phase.id !== inspected.checkpoint.pending?.phaseKey);
   if (phase === undefined) return null;
   const agent = options.config.agents.find(agent => agent.name === phase.owner)!;
   const threshold = options.config.routing.quota_stop?.by_adapter?.[agent.harness.adapter] ?? options.config.routing.quota_stop?.default;
@@ -2823,6 +2881,7 @@ async function readRecoveryQuota(options: ProductionRunOptions, inspected: Recov
 }
 
 async function prepareResumeInstruction(options: ProductionRunOptions, inspected: RecoveryInspection) {
+  if (inspected.checkpoint.pending !== undefined) throw new Error("a saved reply cannot receive a new instruction before validation");
   const recipe = SUPPORTED.get(inspected.status.workflow)!;
   const ordinal = inspected.checkpoint.prefix.length + 1;
   const definition = recipe.phases[ordinal - 1];
@@ -2856,7 +2915,8 @@ export async function resumeProductionCommand(options: ProductionRunOptions & { 
   const instructionPlan = instructionText === null ? null : await prepareResumeInstruction(options, first);
   const firstQuota = await readRecoveryQuota(options, first);
   const quotaReadings: BoundaryQuota[] = firstQuota === null ? [] : [firstQuota];
-  const remaining = recipe!.phases.slice(first.checkpoint.prefix.length).filter(phase => phase.kind === "agent").length;
+  const remaining = recipe!.phases.slice(first.checkpoint.prefix.length).filter(phase => phase.kind === "agent" && phase.id !== first.checkpoint.pending?.phaseKey).length;
+  if (first.checkpoint.pending !== undefined) options.terminal.write(`Validate saved ${first.checkpoint.pending.phaseKey} reply, round ${first.checkpoint.pending.round}, without repeating its model call. Host gates still must pass.`);
   options.terminal.write(`Resume ${current.taskId} attempt ${current.attempt}: preserve ${first.checkpoint.prefix.length} accepted phases; ${remaining} unstarted provider call(s), plus existing correction allowance. No completed model turn will be repeated. Reason: ${reason}`);
   if (instructionPlan !== null) options.terminal.write(`Supplement recipient: ${instructionPlan.phaseKey}, phase ${instructionPlan.ordinal}. Exact instruction (JSON string): ${JSON.stringify(instructionText)}\nThe original request stays unchanged. This grants no extra calls, tools, write access or review authority.`);
   if (!await options.terminal.confirm("Continue this exact saved workflow?")) return { confirmed: false, status: first.status };

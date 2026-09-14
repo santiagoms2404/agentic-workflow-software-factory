@@ -52,8 +52,9 @@ export function createHostPhaseGit<T extends EnvelopeBase>(options: {
   repository: string;
   commitMessage: (envelope: T) => string;
   git?: GitRunner;
+  before?: import("../git/changes.ts").ChangeSetFingerprint;
 }): HostPhaseGit<T> {
-  const before = captureChangeSet(options.repository, options.git);
+  const before = options.before ?? captureChangeSet(options.repository, options.git);
   let observed: readonly string[] | null = null;
   return {
     captureDiff(): readonly string[] {
@@ -117,6 +118,11 @@ export interface RunAgentPhaseOptions<T extends EnvelopeBase> {
   readonly agentSessionId: string;
   readonly now?: () => string;
   readonly rawOutputPath?: (correctionRound: number) => string;
+  /** Host-owned saved reply. Validation may proceed, but this supplies no authority for another model call. */
+  readonly initialEnvelope?: StoredEnvelope<T>;
+  readonly initialUsage?: PhaseUsage;
+  readonly onResultStored?: (envelope: StoredEnvelope<T>) => Promise<void>;
+  readonly onValidationStart?: () => Promise<void>;
   /** Durable/event observer; receives QUEUED first and FAILED on every abnormal exit. */
   readonly onPhaseState?: (state: PhaseState) => void;
   /** Durable host-validated completion, before the terminal phase notification. */
@@ -313,15 +319,18 @@ async function runGates<T extends EnvelopeBase>(
 export async function runAgentPhase<T extends EnvelopeBase>(
   options: RunAgentPhaseOptions<T>,
 ): Promise<AgentPhaseResult<T>> {
+  if (options.initialEnvelope !== undefined && options.initialUsage === undefined) throw new Error("saved reply lost its original usage accounting");
   const execution = new PhaseExecution(options.phase.id, options.onPhaseState);
   const usage = new UsageAccumulator();
   const envelopes: StoredEnvelope<T>[] = [];
   const expectedSession = phaseSession(options.session.identity);
-  let correctionRound = 0;
+  let correctionRound = options.initialEnvelope?.correctionRound ?? 0;
   let parseFixes = 0;
   let gateRound = 0;
   let lastReports: readonly GateReport[] = [];
-  options.budget.beginPhase();
+  if (options.initialEnvelope === undefined) options.budget.beginPhase();
+  else if (options.initialEnvelope.phaseId !== options.phase.id || options.initialEnvelope.sessionId !== options.agentSessionId ||
+      options.initialEnvelope.schemaId !== options.phase.schemaId) throw new Error("saved envelope belongs to another phase");
 
   const correct = async (
     cause: "schema-violation" | "gate-violation",
@@ -330,6 +339,7 @@ export async function runAgentPhase<T extends EnvelopeBase>(
     reports: readonly GateReport[],
     candidate?: CorrectionCandidateEvidence,
   ): Promise<AgentTurn> => {
+    if (options.initialEnvelope !== undefined) throw new Error("saved reply failed validation; another model call requires separate authorization");
     const nextRound = correctionRound + 1;
     const decision: CorrectionDecision = options.authorizeCorrection === undefined
       ? "host"
@@ -400,8 +410,15 @@ export async function runAgentPhase<T extends EnvelopeBase>(
 
   try {
     execution.running();
-    let turn = await send(options as RunAgentPhaseOptions<EnvelopeBase>, options.phase.renderPrompt(options.previousEnvelope), 0);
-    usage.add(turn);
+    let turn: AgentTurn;
+    if (options.initialEnvelope === undefined) {
+      turn = await send(options as RunAgentPhaseOptions<EnvelopeBase>, options.phase.renderPrompt(options.previousEnvelope), 0);
+      usage.add(turn);
+    } else {
+      turn = { identity: options.session.identity, rawOutput: JSON.stringify(options.initialEnvelope.payload),
+        usage: { inputTokens: null, outputTokens: null, cacheReadTokens: null, cacheWriteTokens: null, reasoningTokens: null, reasoningRelation: "unknown" }, costUsd: null };
+    }
+    let saved = options.initialEnvelope;
     execution.validating();
 
     let accepted: StoredEnvelope<T> | null = null;
@@ -410,8 +427,12 @@ export async function runAgentPhase<T extends EnvelopeBase>(
     let candidateSha: string | null = null;
     let verification: CandidateVerification | null = null;
     while (accepted === null) {
-      const envelope = await store(options, turn, correctionRound);
+      const recovering = saved !== undefined;
+      const envelope = saved ?? await store(options, turn, correctionRound);
+      saved = undefined;
       envelopes.push(envelope);
+      if (!recovering) await options.onResultStored?.(envelope);
+      await options.onValidationStart?.();
       if (!envelope.valid || envelope.payload === null) {
         if (parseFixes >= MAX_PARSE_FIX_ATTEMPTS) {
           throw new EnvelopeValidationFailure(options.phase.id, envelopes, {
@@ -483,7 +504,8 @@ export async function runAgentPhase<T extends EnvelopeBase>(
     // strictly after both.
     await options.onAccepted?.({ envelope: accepted, candidateSha, gateReports: lastReports, correctionRounds: correctionRound });
     execution.succeed();
-    const phaseUsage = usage.snapshot();
+    const phaseUsage = options.initialEnvelope === undefined ? usage.snapshot() : options.initialUsage;
+    if (phaseUsage === undefined) throw new Error("saved reply lost its original usage accounting");
     await options.persistence.persistAgentSession?.({
       phaseId: options.phase.id,
       identity: expectedSession,

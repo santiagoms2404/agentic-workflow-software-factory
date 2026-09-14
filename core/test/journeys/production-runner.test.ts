@@ -37,7 +37,7 @@ import { writePlacement } from "../../src/registry/placement.ts";
 import { startCommand } from "../../src/cli/commands/start.ts";
 import { statusCommand } from "../../src/cli/commands/status.ts";
 import { runProductionCommand, resumeProductionCommand, ProductionConfigSnapshotMismatch, ProductionWorkflowUnsupported } from "../../src/cli/commands/production-run.ts";
-import { nextRevision, persistAttempt, readAttempt } from "../../src/cli/commands/attempt.ts";
+import { nextRevision, persistAttempt, readAttempt, type AttemptProjector } from "../../src/cli/commands/attempt.ts";
 import type { AttemptEvidence } from "../../src/observability/attempt-evidence.ts";
 import { agentsForSession, gatesForSession, getSession, phasesForSession, pollEvents, processesForSession } from "../../src/observability/queries.ts";
 import { openDatabase } from "../../src/observability/sqlite.ts";
@@ -352,6 +352,78 @@ for (const fault of ["none", "broker-uncertain", "after-submission"] as const) {
       }
       assert.equal(readFileSync(journalPath, "utf8"), stable);
       assert.equal(delegated, 1);
+    } finally { world.projection.close(); rmSync(world.root, { recursive: true, force: true }); }
+  });
+}
+
+for (const sample of [
+  { workflow: "scout", phase: "scout", tier: 0, scenario: "success" },
+  { workflow: "plan", phase: "planner", tier: 0, scenario: "success" },
+  { workflow: "build", phase: "builder", tier: 1, scenario: "success" },
+  { workflow: "build-review", phase: "reviewer", tier: 2, scenario: "success" },
+  { workflow: "build", phase: "builder", tier: 1, scenario: "gate" },
+] as const) {
+  test(`F2 saved reply validation ${sample.workflow}/${sample.scenario} does not repeat the model call`, async () => {
+    const world = await fixture(sample.workflow, 0, config => config, sample.tier);
+    try {
+      const prepared = await readAttempt(world.created.attemptDir);
+      const indices = new Map<string, Buffer>();
+      let launches = 0;
+      const options = { attemptDir: world.created.attemptDir, stateRoot: world.stateRoot, config: world.config, configPath: world.configPath,
+        projectRecord: (async (record, status) => {
+          const evidence = record.event.evidence;
+          if (evidence?.type === "phase-result-ready" && evidence.checkpoint.pending?.phaseKey === sample.phase) {
+            indices.set(evidence.checkpoint.id, readFileSync(git(status.worktree!, "rev-parse", "--path-format=absolute", "--git-path", "index")));
+          }
+        }) satisfies AttemptProjector,
+        infrastructure: { adapterFor: (_entry: AdapterEntry, id: string) => new ScriptedAdapter(id, prepared.worktree!, () => { launches++; }, sample.scenario),
+          createBroker: fakeBroker, sandboxProbe: () => false } };
+      await runProductionCommand(options);
+      const expectedLaunches = launches;
+      const journalPath = join(options.attemptDir, "journal.jsonl");
+      const records = readFileSync(journalPath, "utf8").trim().split("\n").map(line => JSON.parse(line));
+      const cut = records.findLastIndex(record => record.event.evidence?.type === "phase-result-ready" && record.event.evidence.checkpoint.pending.phaseKey === sample.phase);
+      assert.ok(cut >= 0, "a complete reply must have its own pre-validation checkpoint");
+      const anchor = records[cut].event.next;
+      for (const later of workflowRecipe(sample.workflow)!.phases.slice(anchor.recovery.prefix.length + 1)) {
+        for (let round = 0; round <= later.maxCorrections; round++) rmSync(join(options.attemptDir, "envelopes", `${later.id}-${round}.json`), { force: true });
+      }
+      // Only this disposable fixture is rewound. Keep model-produced bytes and restore the exact pre-validation index.
+      git(prepared.worktree!, "reset", "--mixed", anchor.recovery.worktreeHeadSha);
+      writeFileSync(git(prepared.worktree!, "rev-parse", "--path-format=absolute", "--git-path", "index"), indices.get(anchor.recovery.id)!);
+      writeFileSync(journalPath, records.slice(0, cut + 1).map(record => JSON.stringify(record)).join("\n") + "\n");
+      writeFileSync(join(options.attemptDir, "status.json"), JSON.stringify(records[cut - 1].event.next));
+      const resume = { ...options, reason: "validate the saved reply", terminal: { interactive: true, write: () => {}, confirm: async () => true },
+        infrastructure: { ...options.infrastructure, adapterFor: () => assert.fail("saved reply must not reopen an adapter"),
+          createBroker: () => assert.fail("saved reply must not construct a provider broker"), writeSystemPrompt: async () => assert.fail("saved reply needs no prompt materialization") } };
+      const before = readFileSync(journalPath);
+      const extra = join(prepared.worktree!, "changed-after-reply.txt");
+      writeFileSync(extra, "must be preserved on refusal\n");
+      await assert.rejects(resumeProductionCommand(resume), /worktree or index bytes changed/);
+      assert.equal(readFileSync(extra, "utf8"), "must be preserved on refusal\n");
+      rmSync(extra);
+      await assert.rejects(resumeProductionCommand({ ...resume, instruction: "cannot amend an already completed reply" }), /saved reply cannot receive/);
+      assert.deepEqual(readFileSync(journalPath), before);
+      const result = await resumeProductionCommand(resume);
+      assert.equal(result.status.lifecycleState, sample.scenario === "gate" ? "BLOCKED" : "AWAITING_OWNER", result.status.blocker?.detail);
+      assert.equal(result.status.budget.callsSpent, anchor.budget.callsSpent);
+      assert.equal(result.status.budget.callsReserved, 0);
+      assert.equal(launches, expectedLaunches);
+      if (sample.scenario === "success") {
+        const stable = readFileSync(journalPath);
+        assert.equal((await resumeProductionCommand(resume)).status.revision, result.status.revision);
+        assert.deepEqual(readFileSync(journalPath), stable);
+      }
+      const recovered = readFileSync(journalPath, "utf8").trim().split("\n").map(line => JSON.parse(line));
+      const started = recovered.findLastIndex(record => record.event.evidence?.type === "phase-validation-started");
+      assert.ok(started > cut);
+      // No proof exists that an already-started host validation had no effects. Do not replay it automatically.
+      writeFileSync(journalPath, recovered.slice(0, started + 1).map(record => JSON.stringify(record)).join("\n") + "\n");
+      writeFileSync(join(options.attemptDir, "status.json"), JSON.stringify(recovered[started].event.next));
+      const uncertain = readFileSync(journalPath);
+      await assert.rejects(resumeProductionCommand(resume), /no durable accepted-phase checkpoint/);
+      assert.deepEqual(readFileSync(journalPath), uncertain);
+      assert.equal(launches, expectedLaunches);
     } finally { world.projection.close(); rmSync(world.root, { recursive: true, force: true }); }
   });
 }

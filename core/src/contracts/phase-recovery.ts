@@ -1,5 +1,6 @@
 import { Type, type Static } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
+import { SavedPhaseResultSchema } from "./saved-phase-result.ts";
 import { sha256, canonicalJson } from "./owner-amendment.ts";
 const id = Type.String({ minLength: 1 });
 const hash = Type.String({ pattern: "^[a-f0-9]{64}$" });
@@ -16,8 +17,9 @@ export const BoundaryQuotaSchema = Type.Object({
 export type BoundaryQuota = Static<typeof BoundaryQuotaSchema>;
 export const PhaseRecoverySchema = Type.Object({
   schema: Type.Literal("awsf.phase-recovery/v1"), id, sessionId: id,
-  kind: Type.Union([Type.Literal("completed-phase"), Type.Literal("quota-pause")]),
-  workflowId: id, bindingDigest: hash, prefix: Type.Array(AcceptedPhaseSchema, { minItems: 1 }),
+  kind: Type.Union([Type.Literal("completed-phase"), Type.Literal("quota-pause"), Type.Literal("result-ready")]),
+  pending: Type.Optional(SavedPhaseResultSchema),
+  workflowId: id, bindingDigest: hash, prefix: Type.Array(AcceptedPhaseSchema),
   repository: id, worktree: id, commonGitDir: id, integrationBaseSha: sha, worktreeHeadSha: sha,
   budgetDigest: hash, quota: Type.Union([BoundaryQuotaSchema, Type.Null()]), createdAt: id,
 }, { additionalProperties: false });
@@ -27,6 +29,8 @@ export const recoveryDigest = (value: unknown): string => sha256(canonicalJson(v
 export const recoveryBudgetDigest = (value: object): string => recoveryDigest(Object.fromEntries(Object.entries(value).filter(([key]) => key !== "ceiling")));
 export function assertPhaseRecovery(value: unknown): asserts value is PhaseRecovery {
   if (!Value.Check(PhaseRecoverySchema, value)) throw new Error("recovery checkpoint is invalid");
+  if ((value.kind === "result-ready") !== (value.pending !== undefined) || (value.prefix.length === 0 && value.pending === undefined) ||
+      (value.pending !== undefined && value.pending.ordinal !== value.prefix.length + 1)) throw new Error("saved result frontier is inconsistent");
   if ((value.kind === "quota-pause") !== (value.quota !== null)) throw new Error("recovery quota binding is inconsistent");
   if (value.prefix.some((entry, index) => entry.ordinal !== index + 1) || new Set(value.prefix.map(entry => entry.phaseKey)).size !== value.prefix.length) {
     throw new Error("accepted phase prefix is not contiguous");

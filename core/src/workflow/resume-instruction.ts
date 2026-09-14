@@ -1,6 +1,7 @@
 import { assertResumeInstruction, type ResumeInstruction } from "../contracts/resume-instruction.ts";
 import { assertOwnerAmendment, assertOwnerAmendmentDelivery, composeOwnerAmendmentChain, sha256, type OwnerAmendment } from "../contracts/owner-amendment.ts";
 import type { AttemptEvent, AttemptStatus } from "../cli/commands/attempt.ts";
+import type { SavedPhaseResult } from "../contracts/saved-phase-result.ts";
 import type { AcceptedPhase } from "../contracts/phase-recovery.ts";
 import type { JournalRecord } from "../persistence/journal.ts";
 import type { AttemptEvidence } from "../observability/attempt-evidence.ts";
@@ -37,7 +38,7 @@ export function resumeInstructionContext(instructions: readonly ResumeInstructio
 
 /** An unresolved delivery cannot be converted into an unamended retry or a second submission. */
 export function acceptedResumeInstructions(records: readonly JournalRecord<AttemptEvent>[], status: AttemptStatus,
-  prefix: readonly AcceptedPhase[]): ResumeInstruction[] {
+  prefix: readonly AcceptedPhase[], pending?: SavedPhaseResult): ResumeInstruction[] {
   const instructions: ResumeInstruction[] = [];
   const ids = new Set<string>();
   const phases = new Set<string>();
@@ -56,7 +57,8 @@ export function acceptedResumeInstructions(records: readonly JournalRecord<Attem
         binding.sessionId !== status.sessionId || binding.originalRequestDigest !== sha256(status.request)) {
       throw new Error("resume instruction activation or anchor binding changed");
     }
-    const accepted = prefix.find(entry => entry.phaseKey === binding.phaseKey);
+    const isPending = pending?.phaseKey === binding.phaseKey;
+    const accepted = isPending ? pending : prefix.find(entry => entry.phaseKey === binding.phaseKey);
     if (accepted?.ownerAmendmentDigest !== amendment.digest || accepted.ordinal !== binding.phaseOrdinal) {
       throw new Error("resume instruction delivery is unfinished or ambiguous; no resubmission is authorized");
     }
@@ -72,7 +74,9 @@ export function acceptedResumeInstructions(records: readonly JournalRecord<Attem
       assertOwnerAmendmentDelivery(evidence.delivery, amendment, target);
       if (evidence.delivery.state !== (index === 0 ? "intent" : "submitted")) throw new Error("resume instruction delivery state changed");
     }
-    const completion = records.find(row => row.event.evidence?.type === "phase-accepted" && row.event.evidence.accepted.ownerAmendmentDigest === amendment.digest);
+    const completion = records.find(row => isPending
+      ? row.event.evidence?.type === "phase-result-ready" && row.event.evidence.checkpoint.pending?.ownerAmendmentDigest === amendment.digest
+      : row.event.evidence?.type === "phase-accepted" && row.event.evidence.accepted.ownerAmendmentDigest === amendment.digest);
     if (completion === undefined || completion.source_seq <= intent[1]!.source_seq) throw new Error("resume instruction result was not accepted after submission");
     const prompts = records.filter(row => row.source_seq > record.source_seq && row.source_seq < intent[0]!.source_seq)
       .map(row => row.event.evidence).filter((evidence): evidence is Extract<AttemptEvidence, { type: "compiled-prompt" }> => evidence?.type === "compiled-prompt" && evidence.phaseId === phaseId);
@@ -90,7 +94,7 @@ export function acceptedResumeInstructions(records: readonly JournalRecord<Attem
     const evidence = record.event.evidence;
     if (evidence?.type === "resume-instruction-delivery" && !ids.has(evidence.delivery.amendmentId)) throw new Error("resume instruction delivery lost its authorization");
   }
-  for (const entry of prefix) {
+  for (const entry of [...prefix, ...(pending === undefined ? [] : [pending])]) {
     if (entry.ownerAmendmentDigest !== undefined && !instructions.some(instruction => instruction.amendment.digest === entry.ownerAmendmentDigest)) {
       throw new Error("accepted phase lost its owner instruction authorization");
     }

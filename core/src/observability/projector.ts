@@ -282,6 +282,7 @@ function phaseProjectionPosition(
 function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: number, evidence: AttemptEvidence): void {
   switch (evidence.type) {
     case "phase-accepted":
+    case "phase-result-ready":
     case "resume-activation":
     case "quota-pause": {
       if (evidence.type !== "quota-pause" && evidence.phase !== null) applyAttemptEvidence(db, sessionId, sourceSeq, { type: "phase", phase: evidence.phase });
@@ -298,6 +299,8 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
       }
       return;
     }
+    case "phase-validation-started":
+      return;
     case "resume-instruction-delivery":
     case "rework-instruction-delivery":
       db.prepare(`INSERT OR IGNORE INTO events
