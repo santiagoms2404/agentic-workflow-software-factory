@@ -442,9 +442,9 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       }
       case "resume": {
         if (parsed.flags.stub !== undefined) throw new Error("resume does not support stub execution");
-        if (parsed.flags.instruction !== undefined) throw new Error("resume supplemental instructions are not implemented; the original input will not be changed");
         const result = await resumeProductionCommand({ attemptDir: located.attemptDir, stateRoot, config, configPath,
-          reason: parsed.flags.reason ?? "", terminal: options.terminal ?? processOwnerTerminal(),
+          reason: parsed.flags.reason ?? "", ...(parsed.flags.instruction === undefined ? {} : { instruction: parsed.flags.instruction }),
+          terminal: options.terminal ?? processOwnerTerminal(),
           projectRecord: projection.project, assertAdvancement: projection.assertAdvancement,
           assertLaunchProjection: projection.assertLaunchPermitted });
         out(`${result.status.lifecycleState}: ${result.status.nextAction}`);

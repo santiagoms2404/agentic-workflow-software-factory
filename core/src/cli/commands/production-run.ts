@@ -23,7 +23,9 @@ import { AdapterError, isContinuityCapable } from "../../adapters/interface.ts";
 import { registeredAdapter } from "../../adapters/registry.ts";
 import { writeSystemPromptFile } from "../../adapters/system-prompt-file.ts";
 import { toConfigSnapshotJson } from "../../config/effective-config.ts";
-import { composeOwnerAmendment, ownerText } from "../../contracts/owner-amendment.ts";
+import { composeOwnerAmendment, composeOwnerAmendmentChain, createOwnerAmendment, ownerAmendmentDeliveryAction, ownerText, type OwnerAmendmentDelivery } from "../../contracts/owner-amendment.ts";
+import { assertResumeInstruction, type ResumeInstruction } from "../../contracts/resume-instruction.ts";
+import { composeResumeInstruction, resumeInstructionContext } from "../../workflow/resume-instruction.ts";
 import { seedContext, assertSeedTarget, verifiedTargetSeed, validateSeedStartup } from "../../workflow/candidate-seed.ts";
 import type { AwsfConfig, AgentDefinition, AdapterEntry } from "../../config/schema.ts";
 import { BUILD_OUTPUT_SCHEMA_ID, type BuildOutput } from "../../contracts/build-output.ts";
@@ -983,7 +985,7 @@ async function productionRecoveryBinding(options: ProductionRunOptions, status: 
 }
 
 async function executeProductionCommand(options: ProductionRunOptions, operationId: string,
-  recovery?: { inspected: RecoveryInspection; reason: string; quotaReadings: BoundaryQuota[] }, preflightOnly = false): Promise<AttemptStatus> {
+  recovery?: { inspected: RecoveryInspection; reason: string; quotaReadings: BoundaryQuota[]; instruction?: ResumeInstruction | null }, preflightOnly = false): Promise<AttemptStatus> {
   const infra: ProductionInfrastructure = { ...DEFAULT_INFRASTRUCTURE, ...options.infrastructure };
   let status = recovery?.inspected.status ?? await readAttempt(options.attemptDir);
   if (recovery === undefined) {
@@ -1185,6 +1187,10 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
   const prefix: AcceptedPhase[] = [...(recovery?.inspected.checkpoint.prefix ?? [])];
   const remainingCalls = compiled.phases.slice(prefix.length).filter(phase => phase.kind === "agent").length;
   budget.admitWorkflow(recovery === undefined ? compiled : { id: compiled.id, minimumCalls: remainingCalls });
+  const instructions = [...(recovery?.inspected.instructions ?? [])];
+  const submittedInstructions = new Set<string>();
+  const brokerDelegatedReservations = new Set<string>();
+  const instructionFor = (phaseKey: string): ResumeInstruction | null => recovery?.instruction?.amendment.binding.phaseKey === phaseKey ? recovery.instruction : null;
   const acceptedEnvelopes = new Map<string, EnvelopeBase>(recovery?.inspected.envelopes);
   const storedEnvelopes = new Map<string, StoredEnvelope<EnvelopeBase>>();
   const createdAt = infra.now();
@@ -1634,12 +1640,18 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     });
     let hostGit = openHostGit();
     const rolePrompt = renderProductionRolePrompt(phase, previous, designContext, status.request, route.agent);
-    const originalPrompt = rolePrompt + seedContext(status);
+    const originalPrompt = rolePrompt + seedContext(status) + resumeInstructionContext(instructions);
     const amendment = phase.id === seed?.builderPhaseKey ? seed.ownerAmendment : null;
-    const composedInput = composeOwnerAmendment(originalPrompt, amendment);
+    const instruction = instructionFor(phase.id);
+    if (instruction !== null) {
+      assertResumeInstruction(instruction);
+      if (attempt !== 1 || instruction.amendment.binding.operationId !== operationId || instruction.amendment.binding.phaseOrdinal !== ordinal ||
+          instruction.amendment.binding.originalPromptBundleDigest !== recoveryDigest(routePrompts.get(phase.id)!)) throw new Error("resume instruction launch binding changed");
+    }
+    const composedInput = instruction === null ? composeOwnerAmendment(originalPrompt, amendment) : composeResumeInstruction(originalPrompt, amendment, instruction);
     const renderedPrompt = composedInput.composedText;
     for (const [name, text] of [["system", route.systemPrompt], ["user", originalPrompt],
-      ...(amendment === null ? [] : [["user+owner-amendment", renderedPrompt]])] as const) {
+      ...(amendment === null && instruction === null ? [] : [["user+owner-amendment", renderedPrompt]])] as const) {
       await persist("attempt.updated", {}, {
         type: "compiled-prompt", phaseId: phaseDb, name, text,
         ...(name === "system" ? route.evidence : {}),
@@ -1739,6 +1751,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
 
     let turnIndex = 0;
     let amendmentInputBound = false;
+    let instructionInputBound = false;
     /** What the FIRST turn's stream said. Every later turn is compared to it. */
     let firstObserved: ObservedProviderSession | null = null;
     const session: CorrectionSession = {
@@ -1811,6 +1824,24 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
         };
         const sandboxingBroker: TransportBroker = {
           startProcess: async (registered, spec, signal) => {
+            let delivery: OwnerAmendmentDelivery | null = null;
+            if (instruction !== null && turn === 0) {
+              if (instructionInputBound || prompt !== renderedPrompt || spec.stdin !== renderedPrompt || sha256(spec.stdin) !== instruction.composedDigest) {
+                if (!instructionInputBound) {
+                  // This callback has not delegated to the provider broker. No process was launched for this held call.
+                  budget.releaseOnRegistrationFailure(reservation.id);
+                  await persist("attempt.updated", { budget: budget.snapshot(), lastActivity: "rejected amended input before provider broker delegation" });
+                }
+                throw new Error("resume instruction differs from actual adapter input or was already submitted");
+              }
+              const target = { operationId, logicalTurnId: turnRunId, originalInputDigest: instruction.originalInputDigest, composedDigest: instruction.composedDigest };
+              if (ownerAmendmentDeliveryAction(instruction.amendment, null, "new-phase-input", target) !== "deliver-initial-input") throw new Error("resume instruction cannot be delivered");
+              delivery = { schema: "awsf.owner-amendment-delivery/v1", amendmentId: instruction.amendment.id,
+                amendmentDigest: instruction.amendment.digest, bindingDigest: recoveryDigest(instruction.amendment.binding),
+                ...target, state: "intent", providerAcknowledgementDigest: null };
+              await persist("attempt.updated", {}, { type: "resume-instruction-delivery", phaseId: phaseDb, delivery, at: infra.now() });
+              instructionInputBound = true;
+            }
             if (amendment !== null && turn === 0) {
               if (amendmentInputBound) throw new Error("owner amendment input was already bound to this turn");
               if (prompt !== renderedPrompt || spec.stdin !== renderedPrompt || sha256(spec.stdin) !== composedInput.composedDigest) {
@@ -1832,8 +1863,15 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
               persistence: phasePersistenceEvidence(route.agent, route.adapter,
                 retainedColdTurn?.handle ?? (conversationRef === null ? null : handle), grant.spec, route.systemPrompt),
             });
+            if (instruction !== null && turn === 0 && grant.spec.stdin !== renderedPrompt) throw new Error("sandbox changed the authorized resume input");
+            brokerDelegatedReservations.add(reservation.id);
             const transport = await (broker ??= infra.createBroker(brokerOptions)).startProcess(registered, grant.spec, signal);
             turnLaunch.transport = transport;
+            if (delivery !== null) {
+              await persist("attempt.updated", {}, { type: "resume-instruction-delivery", phaseId: phaseDb,
+                delivery: { ...delivery, state: "submitted" }, at: infra.now() });
+              submittedInstructions.add(delivery.amendmentDigest);
+            }
             return transport;
           },
         };
@@ -2112,7 +2150,10 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     const phase = phaseRecords.get(phaseId)!;
     if (!stored?.valid || stored.payload === null || phase.ordinal !== prefix.length + 1) throw new Error("cannot accept an invalid or out-of-order phase result");
     if (producedSha !== null) candidateSha = producedSha;
+    const instruction = instructionFor(phaseId);
+    if (instruction !== null && !submittedInstructions.has(instruction.amendment.digest)) throw new Error("resume instruction never reached the actual provider launch");
     const accepted: AcceptedPhase = { phaseKey: phaseId, ordinal: phase.ordinal, envelopeId: stored.envelopeId,
+      ...(instruction === null ? {} : { ownerAmendmentDigest: instruction.amendment.digest }),
       envelopeDigest: recoveryDigest(stored), round: stored.correctionRound, candidateSha };
     prefix.push(accepted);
     acceptedEnvelopes.set(phaseId, stored.payload);
@@ -2123,6 +2164,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       phase: { name: phaseId, state: "SUCCEEDED", round: stored.correctionRound, maximumRounds: phase.maxCorrections },
       lastActivity: `${phaseId}: accepted result and recovery checkpoint durable`, lastActivityAt: infra.now() },
       { type: "phase-accepted", phase: record, accepted });
+    if (instruction !== null) instructions.push(instruction);
     applyAcceptedContext();
   };
 
@@ -2285,7 +2327,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       candidateSha,
       intent: {
         // The owner's own words, never a phase's restatement of them.
-        request: composeOwnerAmendment(status.request, seed?.ownerAmendment ?? null).composedText + seedContext(status),
+        request: composeOwnerAmendment(status.request, seed?.ownerAmendment ?? null).composedText + seedContext(status) + resumeInstructionContext(instructions),
         goals: intent?.goals ?? [],
         nonGoals: intent?.nonGoals ?? [],
         acceptanceCriteria: (intent?.implementationSteps ?? []).flatMap((step) => step.acceptanceCriteria),
@@ -2316,6 +2358,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
   try {
     if (recovery !== undefined && (remainingCalls === 0 || compiled.phases[restartIndex]?.kind !== "agent" || isReviewPhase(compiled.phases[restartIndex]!))) {
       await persist("attempt.updated", { activeOperation: operationId }, { type: "resume-activation", operationId, quotaReadings: recovery.quotaReadings,
+        ...(recovery.instruction == null ? {} : { ownerInstruction: recovery.instruction }),
         checkpointId: recovery.inspected.checkpoint.id, reason: recovery.reason, reservationId: null, phase: null });
       activationPending = false;
     }
@@ -2359,7 +2402,8 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
           const started = { ...phaseRecords.get(phase.id)!, status: "RUNNING", startedAt: infra.now() };
           await persist("attempt.updated", { recovery: null, activeOperation: operationId, budget: budget.snapshot(),
             phase: { name: phase.id, state: "RUNNING", round: 0, maximumRounds: phase.maxCorrections } },
-            { type: "resume-activation", operationId, quotaReadings: recovery!.quotaReadings, checkpointId: recovery!.inspected.checkpoint.id,
+            { type: "resume-activation", operationId, quotaReadings: recovery!.quotaReadings,
+              ...(recovery!.instruction == null ? {} : { ownerInstruction: recovery!.instruction }), checkpointId: recovery!.inspected.checkpoint.id,
               reason: recovery!.reason, reservationId: reservation.id, phase: started });
           phaseRecords.set(phase.id, started);
           activationPending = false;
@@ -2611,7 +2655,8 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       workerProvider: inversion!.workerProvider,
       providers: inversion!.pair,
       isTransportFailure: (error) => {
-        const transport = isReviewTransportFailure(error);
+        // An uncertain amended submission cannot be sent again as a transport retry.
+        const transport = instructionFor(reviewPhase!.phase.id) === null && isReviewTransportFailure(error);
         if (transport) reviewTransportRetries += 1;
         return transport;
       },
@@ -2651,7 +2696,10 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     });
     return status;
   } catch (error) {
-    for (const reservation of budget.outstanding()) budget.releaseOnRegistrationFailure(reservation.id);
+    // Only positive local non-delegation permits a refund. A thrown broker call may have launched a process.
+    for (const reservation of budget.outstanding()) {
+      if (!brokerDelegatedReservations.has(reservation.id)) budget.releaseOnRegistrationFailure(reservation.id);
+    }
     const failedFrom = status.lifecycleState as TaskState;
     if (failedFrom === "GATING") {
       await persist("attempt.updated", {
@@ -2774,34 +2822,69 @@ async function readRecoveryQuota(options: ProductionRunOptions, inspected: Recov
     threshold: threshold.minutes, observedAt, readoutDigest: recoveryDigest(row) };
 }
 
+async function prepareResumeInstruction(options: ProductionRunOptions, inspected: RecoveryInspection) {
+  const recipe = SUPPORTED.get(inspected.status.workflow)!;
+  const ordinal = inspected.checkpoint.prefix.length + 1;
+  const definition = recipe.phases[ordinal - 1];
+  if (definition?.kind !== "agent") throw new Error("resume --instruction requires the next unstarted phase to be a model step; it cannot amend host code or a completed result");
+  const agent = options.config.agents.find(agent => agent.name === definition.owner)!;
+  const bundle = await readProductionPromptPair(options.configPath, agent);
+  const compiled = compileWorkflowStructure({ ...recipe, phases: recipe.phases.map(phase => phase.id === definition.id ? { ...phase, prompt: bundle.userPrompt } : phase) });
+  const phase = compiled.phases[ordinal - 1] as CompiledAgentPhase;
+  const previous = [...inspected.envelopes.values()].at(-1) ?? null;
+  const design = [...inspected.envelopes.values()].find(value => value.schema === DESIGN_CONTEXT_SCHEMA_ID) as DesignContext | undefined;
+  const originalPrompt = renderProductionRolePrompt(phase, previous, design ?? null, inspected.status.request, agent) +
+    seedContext(inspected.status) + resumeInstructionContext(inspected.instructions);
+  const seedAmendment = inspected.status.seed?.builderPhaseKey === phase.id ? inspected.status.seed.ownerAmendment : null;
+  return { phaseKey: phase.id, ordinal, bundleDigest: recoveryDigest(bundle), originalPrompt, seedAmendment };
+}
+
 /** Owner entry for an unstarted boundary or an already host-validated, durable phase result. No native reconnect. */
-export async function resumeProductionCommand(options: ProductionRunOptions & { reason: string; terminal: OwnerTerminal }): Promise<{ confirmed: boolean; status: AttemptStatus }> {
-  ownerText(options.reason);
+export async function resumeProductionCommand(options: ProductionRunOptions & { reason: string; instruction?: string; terminal: OwnerTerminal }): Promise<{ confirmed: boolean; status: AttemptStatus }> {
+  const reason = ownerText(options.reason);
+  const instructionText = options.instruction === undefined ? null : ownerText(options.instruction);
   if (!options.terminal.interactive) throw new Error("resume requires owner confirmation at a TTY");
   const current = await readAttempt(options.attemptDir);
   const recipe = SUPPORTED.get(current.workflow);
   if (current.lifecycleState === "AWAITING_OWNER" && current.recovery?.prefix.length === recipe?.phases.length) {
     const proved = await inspectPhaseRecovery(options.attemptDir);
     if (proved.status.revision !== current.revision) throw new Error("completed status is stale");
+    if (instructionText !== null && proved.instructions.at(-1)?.amendment.text !== instructionText) throw new Error("completed workflow has no unstarted phase for a new instruction");
     return { confirmed: true, status: proved.status };
   }
   const first = await preflightRecovery(options);
+  const instructionPlan = instructionText === null ? null : await prepareResumeInstruction(options, first);
   const firstQuota = await readRecoveryQuota(options, first);
   const quotaReadings: BoundaryQuota[] = firstQuota === null ? [] : [firstQuota];
   const remaining = recipe!.phases.slice(first.checkpoint.prefix.length).filter(phase => phase.kind === "agent").length;
-  options.terminal.write(`Resume ${current.taskId} attempt ${current.attempt}: preserve ${first.checkpoint.prefix.length} accepted phases; ${remaining} unstarted provider call(s), plus existing correction allowance. No completed model turn will be repeated. Reason: ${options.reason}`);
+  options.terminal.write(`Resume ${current.taskId} attempt ${current.attempt}: preserve ${first.checkpoint.prefix.length} accepted phases; ${remaining} unstarted provider call(s), plus existing correction allowance. No completed model turn will be repeated. Reason: ${reason}`);
+  if (instructionPlan !== null) options.terminal.write(`Supplement recipient: ${instructionPlan.phaseKey}, phase ${instructionPlan.ordinal}. Exact instruction (JSON string): ${JSON.stringify(instructionText)}\nThe original request stays unchanged. This grants no extra calls, tools, write access or review authority.`);
   if (!await options.terminal.confirm("Continue this exact saved workflow?")) return { confirmed: false, status: first.status };
   let validated = first;
   return withExecutionLease(options.attemptDir, async () => {
     validated = await preflightRecovery(options);
     if (recoveryDigest(validated.status) !== recoveryDigest(first.status)) throw new Error("resume anchor changed during confirmation");
+    if (instructionPlan !== null && recoveryDigest(await prepareResumeInstruction(options, validated)) !== recoveryDigest(instructionPlan)) throw new Error("resume instruction input changed during confirmation");
     const secondQuota = await readRecoveryQuota(options, validated);
     if (secondQuota !== null) quotaReadings.push(secondQuota);
   }, async operationId => {
+    let instruction: ResumeInstruction | null = null;
+    if (instructionPlan !== null && instructionText !== null) {
+      const binding: ResumeInstruction["amendment"]["binding"] = { entry: "resume", project: validated.status.project,
+        taskId: validated.status.taskId, attempt: validated.status.attempt, sessionId: validated.status.sessionId,
+        authorizationId: randomUUID(), operationId, phaseKey: instructionPlan.phaseKey, phaseOrdinal: instructionPlan.ordinal,
+        anchorId: validated.checkpoint.id, anchorRevision: validated.status.revision, logicalTurnId: null, correctionRound: 0,
+        originalRequestDigest: sha256(validated.status.request), originalPromptBundleDigest: instructionPlan.bundleDigest,
+        priorAmendmentDigest: instructionPlan.seedAmendment?.digest ?? null, deliveryFrontier: "next-phase-input" };
+      const amendment = createOwnerAmendment({ id: randomUUID(), text: instructionText, binding, confirmedAt: (options.infrastructure?.now ?? DEFAULT_INFRASTRUCTURE.now)() });
+      const composed = composeOwnerAmendmentChain(instructionPlan.originalPrompt, [...(instructionPlan.seedAmendment === null ? [] : [instructionPlan.seedAmendment]), amendment]);
+      instruction = Object.freeze({ amendment, originalInputDigest: composed.originalInputDigest, composedDigest: composed.composedDigest });
+      assertResumeInstruction(instruction);
+    }
     await reconcileRecoveryStatus(options.attemptDir, validated);
     // Replay the missed projection before any new authorization or provider GO.
     for (const record of validated.records.slice(validated.disk.revision)) await options.projectRecord?.(record, record.event.next);
-    const status = await executeProductionCommand(options, operationId, { inspected: validated, reason: options.reason, quotaReadings });
+    const status = await executeProductionCommand(options, operationId, { inspected: validated, reason, quotaReadings, instruction });
     return { confirmed: true, status: await persistReadableRunReport(options, status) };
   });
 }

@@ -289,8 +289,22 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
         (event_id, session_id, phase_id, first_source_seq, last_source_seq, type, name, payload_json)
         VALUES (?, ?, NULL, ?, ?, 'notice', ?, ?)`)
         .run(`${sessionId}:recovery:${sourceSeq}:${evidence.type}`, sessionId, sourceSeq, sourceSeq, evidence.type, stringifyRedacted(evidence));
+      if (evidence.type === "resume-activation" && evidence.ownerInstruction != null) {
+        const amendment = evidence.ownerInstruction.amendment;
+        db.prepare(`INSERT OR IGNORE INTO events
+          (event_id, session_id, phase_id, first_source_seq, last_source_seq, type, name, payload_json, started_at)
+          VALUES (?, ?, NULL, ?, ?, 'notice', 'owner amendment', ?, ?)`)
+          .run(`${sessionId}:owner-amendment:${amendment.id}`, sessionId, sourceSeq, sourceSeq, stringifyRedacted(amendment), amendment.confirmedAt);
+      }
       return;
     }
+    case "resume-instruction-delivery":
+      db.prepare(`INSERT OR IGNORE INTO events
+        (event_id, session_id, phase_id, first_source_seq, last_source_seq, type, name, payload_json, started_at)
+        VALUES (?, ?, ?, ?, ?, 'notice', 'resume instruction delivery', ?, ?)`)
+        .run(`${sessionId}:resume-instruction:${evidence.delivery.amendmentId}:${evidence.delivery.state}`, sessionId, evidence.phaseId,
+          sourceSeq, sourceSeq, stringifyRedacted(evidence.delivery), evidence.at);
+      return;
     case "candidate-seed":
       db.prepare(`INSERT OR IGNORE INTO events
         (event_id, session_id, phase_id, first_source_seq, last_source_seq, type, name,

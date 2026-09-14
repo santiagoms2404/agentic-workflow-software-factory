@@ -28,6 +28,7 @@ import {
 import { readAttemptEvidence, recordedReviews, supersededReviewLines } from "./review-record.ts";
 import { writeRunReport } from "../../observability/run-report.ts";
 import { verifiedTargetSeed } from "../../workflow/candidate-seed.ts";
+import { resumeInstructionLines } from "../../workflow/resume-instruction.ts";
 
 export interface LandCommandOptions {
   readonly attemptDir: string;
@@ -259,6 +260,7 @@ export async function landCommand(options: LandCommandOptions): Promise<LandComm
     options.terminal.write(`Seeded candidate ${seed.seedCandidateSha}. Integration base pinned to ${seed.integrationBaseSha}. Fresh target assurance only.`);
     if (seed.ownerAmendment !== null) options.terminal.write(`Owner supplement: ${JSON.stringify(seed.ownerAmendment.text)}`);
   }
+  for (const line of resumeInstructionLines(await readAttemptEvidence(options.attemptDir))) options.terminal.write(line);
   // Write while the attempt is still AWAITING_OWNER so the polling dashboard
   // can render the same record beside the terminal confirmation.
   await recordSummary(options, current, inspection);

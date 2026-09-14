@@ -7,6 +7,7 @@ import type { PlanOutput } from "../contracts/plan-output.ts";
 import type { ReviewOutput } from "../contracts/review-output.ts";
 import type { AttemptStatus } from "../cli/commands/attempt.ts";
 import type { AttemptEvidence } from "./attempt-evidence.ts";
+import { resumeInstructionLines } from "../workflow/resume-instruction.ts";
 
 export interface RunReportLocation {
   readonly absolutePath: string;
@@ -227,6 +228,7 @@ export function renderRunReport(
     "## Request",
     "",
     status.request,
+    ...resumeInstructionLines(evidence).flatMap(line => ["", line]),
     "",
     "## Plan",
     "",

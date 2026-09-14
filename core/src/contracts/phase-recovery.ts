@@ -6,7 +6,7 @@ const hash = Type.String({ pattern: "^[a-f0-9]{64}$" });
 const sha = Type.String({ pattern: "^[a-f0-9]{40}$" });
 export const AcceptedPhaseSchema = Type.Object({
   phaseKey: id, ordinal: Type.Integer({ minimum: 1 }), envelopeId: id,
-  envelopeDigest: hash, round: Type.Integer({ minimum: 0 }), candidateSha: Type.Union([sha, Type.Null()]),
+  envelopeDigest: hash, ownerAmendmentDigest: Type.Optional(hash), round: Type.Integer({ minimum: 0 }), candidateSha: Type.Union([sha, Type.Null()]),
 }, { additionalProperties: false });
 export type AcceptedPhase = Static<typeof AcceptedPhaseSchema>;
 export const BoundaryQuotaSchema = Type.Object({

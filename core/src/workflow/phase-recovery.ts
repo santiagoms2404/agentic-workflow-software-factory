@@ -16,6 +16,7 @@ const readOnlyGit = (repository: string): GitRunner => argv => runSystemCommand(
     GIT_OPTIONAL_LOCKS: "0", GIT_TERMINAL_PROMPT: "0" }, timeoutMs: 30_000,
 });
 import type { PhaseEvidenceRecord } from "../observability/attempt-evidence.ts";
+import { acceptedResumeInstructions } from "./resume-instruction.ts";
 
 /** Reads journal truth without repairing anything during owner preflight. */
 export async function inspectPhaseRecovery(attemptDir: string) {
@@ -70,7 +71,8 @@ export async function inspectPhaseRecovery(attemptDir: string) {
   for (const phase of phases.values()) {
     if (phase.ordinal > checkpoint.prefix.length && phase.status !== "QUEUED") throw new Error("recovery refused: a later phase has already started");
   }
-  return { status, checkpoint, phases, envelopes, records: scan.records, disk };
+  const instructions = acceptedResumeInstructions(scan.records, status, checkpoint.prefix);
+  return { status, checkpoint, phases, envelopes, instructions, records: scan.records, disk };
 }
 
 export async function verifyRecoveryWorktree(status: AttemptStatus, checkpoint: PhaseRecovery): Promise<void> {
