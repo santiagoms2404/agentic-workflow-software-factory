@@ -376,11 +376,9 @@
 /* The corner control is inside the card's padding box, so a narrow card and a
    wide one put it in the same place and neither has to be scrolled to reach
    it. The heading reserves the room rather than running under it. */
-.board-group-head { position: relative; display: flex; flex-direction: column; gap: 5px; padding-right: 44px; }
+.board-group-head { position: relative; display: flex; flex-direction: column; gap: 5px; padding-right: 82px; }
+.board-group-actions { position: absolute; top: -2px; right: 0; display: flex; gap: 6px; }
 .board-group-open {
-  position: absolute;
-  top: -2px;
-  right: 0;
   width: 34px;
   height: 34px;
   display: grid;
@@ -636,6 +634,34 @@
 @media (prefers-reduced-motion: reduce) {
   .wheel-seat, .wheel-marker { transition: none; }
 }
+
+/* --- The plan board -------------------------------------------------------- */
+/* Milestones as recessed columns, tickets as raised pills standing on them —
+   the panel-and-rows shape the rest of the shell already uses for a list. */
+.plan-board { display: flex; flex-direction: column; gap: 16px; }
+.plan-board-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+.plan-milestone { display: flex; flex-direction: column; gap: 9px; padding: 14px 15px; }
+.plan-ticket {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 11px 14px;
+  border-radius: 13px;
+  background: var(--neu-surface);
+  box-shadow: var(--neu-raised-soft);
+}
+/* Done is finished work, so it sits flush rather than standing up asking to be
+   looked at; the ones still to do are the ones with anything to decide. */
+.plan-ticket.ticket-done { background: var(--neu-well); box-shadow: none; }
+.plan-ticket.ready { box-shadow: var(--neu-raised); }
+.plan-runs { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; }
+.plan-runs-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 9px; }
+.plan-run { justify-content: flex-start; gap: 11px; min-height: 40px; text-decoration: none; }
 
 /* --- Backlog: rail layout ------------------------------------------------- */
 .backlog-shell {
@@ -929,7 +955,7 @@ pre::-webkit-scrollbar-corner { background: var(--neu-scroll-track); }
   .board-cluster { gap: 18px; }
   .board-group.spanning, .board-group.empty { background: transparent; box-shadow: none; }
   .board-group-head { padding-top: 12px; border-top: 1px solid var(--border-soft); }
-  .board-group-open { top: 10px; }
+  .board-group-actions { top: 10px; }
   /* Pan and zoom over thirty-odd dots on a phone is a second set of gestures to
      design and keep, for a screen that fits four of them. The map steps aside
      and names the screen that shows the same runs. */

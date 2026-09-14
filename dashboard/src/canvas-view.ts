@@ -198,16 +198,13 @@ export function openHref(
   node: { readonly kind: CanvasNodeKind; readonly id?: string; readonly ref: string | null; readonly sessionIds: readonly string[]; readonly weight?: number },
   route?: CanvasRoute,
 ): string | null {
-  // A run and a driving session each open their own view on the canvas and
-  // carry the map's state with them. A plan still leaves for the backlog; that
-  // is the next slice.
-  const onCanvas = node.id !== undefined && route !== undefined;
-  if (node.kind === "session") {
-    if (onCanvas && (node.weight ?? 0) > 0) return canvasRouteHash({ ...route!, opened: node.id! });
-    return node.ref === null ? null : `#/groups/${encodeURIComponent(node.ref)}`;
-  }
+  // Every kind now opens its own view on the canvas and carries the map's
+  // state with it, so leaving returns to the map exactly as it was. Away from
+  // the canvas — anywhere that has no route to carry — each still points at
+  // the screen that already shows that thing.
+  if (node.id !== undefined && route !== undefined) return canvasRouteHash({ ...route, opened: node.id });
+  if (node.kind === "session") return node.ref === null ? null : `#/groups/${encodeURIComponent(node.ref)}`;
   if (node.kind === "plan") return node.ref === null ? null : `#/backlog/${encodeURIComponent(node.ref)}`;
   if (node.sessionIds.length === 0) return null;
-  if (onCanvas) return canvasRouteHash({ ...route!, opened: node.id! });
   return `#/sessions/${encodeURIComponent(node.sessionIds.at(-1)!)}`;
 }

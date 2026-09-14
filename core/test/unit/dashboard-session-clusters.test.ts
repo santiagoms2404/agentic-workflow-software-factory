@@ -248,8 +248,12 @@ test("the control that opens a tree is inside the card it belongs to", () => {
   // Absolutely positioned over the card's own top-right corner, with the
   // heading reserving the room, so a narrow card and a wide one put it in the
   // same place and neither has to be scrolled sideways to reach it.
-  assert.match(shell, /\.board-group-head \{ position: relative;[^}]*padding-right: 44px; \}/u);
-  assert.match(shell, /\.board-group-open \{[^}]*position: absolute;[^}]*right: 0;/su);
+  assert.match(shell, /\.board-group-head \{ position: relative;[^}]*padding-right: 82px; \}/u);
+  assert.match(shell, /\.board-group-actions \{ position: absolute; top: -2px; right: 0;/u);
+  // Two controls now, because there are two places a session is: on the map,
+  // and in its own decision tree. One control would have to guess which.
+  assert.match(board, /:aria-label="`Show \$\{member\.groupIds\[0\]\} on the canvas`"/u);
+  assert.match(board, /canvasHref\(member\.groupIds\[0\]!\)/u);
   assert.match(base, /\.session-group-open \{[^}]*position: absolute;/su);
   assert.match(base, /\.session-group-entry \{ position: relative;/u);
   // A box that scrolls in one axis computes `auto` in the other, which is how

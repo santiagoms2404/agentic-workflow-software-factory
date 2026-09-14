@@ -858,6 +858,8 @@ pre { max-height: 42vh; margin: 8px 0 0; padding: 12px 14px; overflow: auto; bor
 .board-group-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 0; color: var(--dim); font: 11px var(--mono); }
 .board-group-meta code { color: var(--purple); }
 .board-group-empty { margin: 0; font: 13px var(--mono); }
+.board-cluster-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; }
+.board-cluster-canvas { min-height: 30px; padding: 5px 13px; font-size: 12px; text-decoration: none; }
 .board-group-expand-count, .board-group-expand-action { font: 12px var(--mono); }
 
 /* --- Canvas: the execution map --------------------------------------------- */
@@ -990,6 +992,29 @@ pre { max-height: 42vh; margin: 8px 0 0; padding: 12px 14px; overflow: auto; bor
 .wheel-marker.warn { background: var(--amber); }
 .wheel-marker.error { background: var(--red); }
 .wheel-marker.running { background: var(--cyan); }
+
+/* --- The plan board -------------------------------------------------------- */
+.plan-board-counts { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; margin: 0; color: var(--dim); font: 12px var(--mono); }
+.plan-board-counts b { color: var(--text); }
+.plan-board-source { margin-left: auto; color: var(--cyan); text-decoration: none; }
+.plan-board-source:hover { color: var(--text); }
+.plan-milestone-head { display: flex; flex-direction: column; gap: 4px; }
+.plan-milestone-head h3 { margin: 0; color: var(--text); font-size: 14px; letter-spacing: .05em; text-transform: uppercase; }
+.plan-milestone-counts { display: flex; flex-wrap: wrap; gap: 3px 12px; margin: 0; color: var(--dim); font: 11px var(--mono); }
+.plan-ticket-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 0; font: 11px var(--mono); }
+.plan-ticket-head code { color: var(--purple); }
+.plan-ticket-state { color: var(--dim); }
+.plan-ticket.ticket-failed .plan-ticket-state { color: var(--red); }
+.plan-ticket.ticket-wip .plan-ticket-state { color: var(--amber); }
+.plan-ticket.ticket-done .plan-ticket-state { color: var(--green); }
+.plan-ticket-tier { margin-left: auto; color: var(--faint); }
+.plan-ticket-title { margin: 0; color: var(--text); font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
+.plan-ticket-waiting { margin: 0; color: var(--cyan); font: 11px var(--mono); }
+.plan-ticket-waiting.absent { color: var(--faint); }
+.plan-runs-note { color: var(--dim); font: 11px var(--mono); }
+.plan-run code { color: var(--purple); font-size: 11px; }
+.plan-run-task { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; }
+.plan-run-date { margin-left: auto; color: var(--dim); font: 11px var(--mono); }
 
 /* --- Driving sessions screen ---------------------------------------------- */
 .groups-head p { margin: 0; }

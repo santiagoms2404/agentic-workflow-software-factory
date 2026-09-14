@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import type { EventsResponse, GroupSummary, GroupTree, SessionCard, SessionPlan } from "../../shared/types.ts";
+import type { BacklogTicket, EventsResponse, GroupSummary, GroupTree, SessionCard, SessionPlan, TicketsResponse } from "../../shared/types.ts";
 import { buildCanvasGraph, type CanvasNodeKind } from "../canvas-graph.ts";
 import type { Point } from "../canvas-layout.ts";
 import {
@@ -18,6 +18,7 @@ import { clampIndex, relationBetween, relationReason } from "../canvas-wheel.ts"
 import { stateTone } from "../display.ts";
 import CanvasMap from "../components/CanvasMap.vue";
 import CanvasDecisionSlide from "../components/CanvasDecisionSlide.vue";
+import CanvasPlanBoard from "../components/CanvasPlanBoard.vue";
 import CanvasRunCard from "../components/CanvasRunCard.vue";
 import GroupDecisionTree from "../components/GroupDecisionTree.vue";
 import GroupTreeGraph from "../components/GroupTreeGraph.vue";
@@ -80,10 +81,14 @@ function toggleKind(kind: CanvasNodeKind): void {
 
 /* --- The opened run: its deck, in execution order ------------------------- */
 
-const opened = computed(() =>
-  props.route.opened === null
-    ? null
-    : graph.value.nodes.find((node) => node.id === props.route.opened) ?? null);
+const opened = computed(() => {
+  if (props.route.opened === null) return null;
+  // The parked rail opens too: a plan nothing has run against still has its
+  // tickets, and a session whose runs are elsewhere still has its journal.
+  return graph.value.nodes.find((node) => node.id === props.route.opened)
+    ?? graph.value.unplaced.find((node) => node.id === props.route.opened)
+    ?? null;
+});
 
 const byId = computed(() => new Map(props.sessions.map((session) => [session.sessionId, session])));
 /** The deck's runs, oldest first, which is the order they ran in. */
@@ -162,6 +167,29 @@ watch(() => opened.value?.kind === "session" ? opened.value.ref : null, async (g
 
 watch(slides, (next) => { slideAt.value = clampIndex(slideAt.value, next.length); });
 const slide = computed(() => slides.value[clampIndex(slideAt.value, slides.value.length)]);
+
+/* --- The opened plan: what it asks for, and what came out of it ----------- */
+
+const openedPlan = computed(() =>
+  opened.value?.kind === "plan"
+    ? props.plans.find((plan) => plan.id === opened.value?.ref) ?? null
+    : null);
+const tickets = ref<readonly BacklogTicket[]>([]);
+const ticketsError = ref<string | null>(null);
+
+watch(openedPlan, async (plan) => {
+  ticketsError.value = null;
+  if (plan === null) return;
+  // Fetched when a plan is opened rather than with the board, because the
+  // ticket set is large and nothing else on this screen needs it.
+  try {
+    const response = await fetch("/api/v1/tickets");
+    if (!response.ok) { ticketsError.value = "The ticket set could not be read."; return; }
+    tickets.value = (await response.json() as TicketsResponse).tickets;
+  } catch {
+    ticketsError.value = "The ticket set could not be read.";
+  }
+}, { immediate: true });
 
 const selectedNode = computed(() =>
   shown.value.nodes.find((node) => node.id === props.route.selected)
@@ -356,6 +384,20 @@ watch(shown, (next) => {
         <GroupDecisionTree v-else-if="view === 'reading'" :tree="tree" />
         <GroupTreeGraph v-else :tree="tree" />
       </template>
+    </section>
+
+    <!-- A plan opens the work it asks for, built from the ticket data the
+         dashboard already serves. Rendering the plan's own file would need a
+         route serving local files and a second stylesheet in the shell. -->
+    <section v-else-if="opened && opened.kind === 'plan'" class="canvas-opened canvas-board neu-well">
+      <header class="canvas-opened-head">
+        <a class="session-filter-control" :href="canvasRouteHash({ ...route, opened: null })">← the map</a>
+        <p class="canvas-opened-title">{{ opened.label }}</p>
+        <p class="canvas-opened-meta">{{ openedPlan?.kind ?? "plan" }}<template v-if="openedPlan?.parentSpineName"> · under {{ openedPlan.parentSpineName }}</template></p>
+      </header>
+      <p v-if="ticketsError" class="absent">{{ ticketsError }}</p>
+      <p v-else-if="!openedPlan" class="absent">The catalog no longer registers this plan.</p>
+      <CanvasPlanBoard v-else :plan="openedPlan" :tickets="tickets" :sessions="sessions" />
     </section>
 
     <CanvasMap

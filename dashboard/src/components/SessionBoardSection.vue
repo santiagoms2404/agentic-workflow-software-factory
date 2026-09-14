@@ -2,6 +2,8 @@
 import { computed, ref } from "vue";
 import type { GroupSummary, SessionCard as Session } from "../../shared/types.ts";
 import { COLLAPSED_STACK_LIMIT, memberSpan, sectionSpan, type BoardMember, type BoardSection } from "../session-clusters.ts";
+import { canvasRouteHash, CANVAS_KINDS } from "../canvas-view.ts";
+import { sessionNodeId } from "../canvas-graph.ts";
 import { groupTitle } from "../session-groups.ts";
 import SessionStack from "./SessionStack.vue";
 
@@ -71,6 +73,19 @@ function memberTitle(member: BoardMember<Session>): string {
 function memberRuns(member: BoardMember<Session>): number {
   return member.stacks.reduce((total, stack) => total + stack.sessions.length, 0);
 }
+
+/**
+ * Show this driving session on the map, selected.
+ *
+ * Selected rather than opened: "display in canvas" is a request to see where
+ * this sits among everything else, and opening its own view would hide exactly
+ * that. The map is reached with every kind shown and the camera left to fit,
+ * because arriving with somebody else's filters applied would answer a
+ * question nobody asked.
+ */
+function canvasHref(group: string): string {
+  return canvasRouteHash({ kinds: CANVAS_KINDS, selected: sessionNodeId(group), camera: null, opened: null });
+}
 </script>
 
 <template>
@@ -96,6 +111,14 @@ function memberRuns(member: BoardMember<Session>): number {
       <p class="board-connection-note">
         {{ section.connections.length }} connection string(s) between {{ section.members.length }} session(s),
         read from the runs below and never stored
+      </p>
+      <p class="board-cluster-actions">
+        <a
+          v-for="group in section.members.flatMap((member) => member.groupIds).filter((group, at, all) => all.indexOf(group) === at)"
+          :key="`canvas-${group}`"
+          class="session-filter-control board-cluster-canvas"
+          :href="canvasHref(group)"
+        >on the canvas · {{ group }}</a>
       </p>
       <p v-if="section.hiddenBridges.length" class="board-connection-hidden absent">
         {{ section.hiddenBridges.length }} run(s) carrying a connection here are hidden by the current filters;
@@ -131,13 +154,22 @@ function memberRuns(member: BoardMember<Session>): number {
             {{ member.unsessioned }} of them recorded no driving session
           </span>
         </p>
-        <a
-          v-if="member.groupIds.length === 1"
-          class="board-group-open"
-          :href="`#/groups/${encodeURIComponent(member.groupIds[0]!)}`"
-          :aria-label="`Open the decision tree for ${member.groupIds[0]}`"
-          title="Open the decision tree"
-        ><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.7 10.3 10.3 5.7M6.3 5.7h4v4" /></svg></a>
+        <span v-if="member.groupIds.length === 1" class="board-group-actions">
+          <!-- On the map, and into the tree: two places this session is, and
+               two controls rather than one that has to guess which you meant. -->
+          <a
+            class="board-group-open"
+            :href="canvasHref(member.groupIds[0]!)"
+            :aria-label="`Show ${member.groupIds[0]} on the canvas`"
+            title="Show on the canvas"
+          ><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="4.2" cy="11.8" r="1.9" /><circle cx="11.6" cy="4.4" r="1.9" /><circle cx="11.8" cy="11.6" r="1.5" /><path d="M5.5 10.5 10.3 5.7M5.9 12.1h4.4" /></svg></a>
+          <a
+            class="board-group-open"
+            :href="`#/groups/${encodeURIComponent(member.groupIds[0]!)}`"
+            :aria-label="`Open the decision tree for ${member.groupIds[0]}`"
+            title="Open the decision tree"
+          ><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.7 10.3 10.3 5.7M6.3 5.7h4v4" /></svg></a>
+        </span>
       </header>
 
       <!-- A deck spanning two sessions has two trees to open, so they are named
