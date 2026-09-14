@@ -29,6 +29,32 @@ const emit = defineEmits<{
 }>();
 
 const surface = ref<HTMLElement | null>(null);
+/**
+ * Every drawn dot, by node id.
+ *
+ * Opening a node replaces this whole map with the opened view, so the button
+ * the reader pressed stops existing and the browser drops focus to the top of
+ * the document. Coming back, the screen needs to hand focus to the dot it was
+ * opened from — otherwise a keyboard reader arrives at the start of the page
+ * every time and has to walk the map again to find their place.
+ */
+const dots = new Map<string, HTMLButtonElement>();
+
+function holdDot(id: string, element: unknown): void {
+  if (element === null || element === undefined) dots.delete(id);
+  else dots.set(id, element as HTMLButtonElement);
+}
+
+/**
+ * Put focus back on one dot. False when the map is not drawing it — filtered
+ * out, or parked in the rail beside the map, which the screen answers itself.
+ */
+function focusNode(id: string): boolean {
+  const dot = dots.get(id);
+  if (dot === undefined) return false;
+  dot.focus();
+  return true;
+}
 const viewport = ref({ width: 1100, height: 680 });
 const positions = ref<ReadonlyMap<string, Point>>(new Map());
 const hovered = ref<string | null>(null);
@@ -236,7 +262,7 @@ onMounted(() => {
 });
 onBeforeUnmount(() => observer?.disconnect());
 
-defineExpose({ fit, reset });
+defineExpose({ fit, reset, focusNode });
 </script>
 
 <template>
@@ -275,6 +301,7 @@ defineExpose({ fit, reset });
     <button
       v-for="node in graph.nodes"
       :key="node.id"
+      :ref="(element) => holdDot(node.id, element)"
       type="button"
       class="canvas-dot"
       :class="dotClasses(node)"

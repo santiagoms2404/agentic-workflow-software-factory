@@ -97,6 +97,28 @@ test("the wheel leans at its ends but never far enough to lose the middle card",
   assert.deepEqual(wheelSlots(1, 0).map((slot) => slot.offset), [0]);
 });
 
+test("a chain of one shows its card alone, with no wheel around it", () => {
+  // Twenty-six of the owner's thirty-three dots are a single run, so this is
+  // the common case rather than an edge: a spine carrying one marker, two
+  // arrows that cannot move and a counter reading "1 of 1" puts four controls
+  // on screen that do nothing.
+  const wheel = source("dashboard/src/components/CanvasWheel.vue");
+  assert.match(wheel, /const alone = computed\(\(\) => props\.keys\.length <= 1\);/u);
+  assert.match(wheel, /<nav v-if="!alone" class="wheel-spine/u);
+  assert.match(wheel, /<div v-if="\$slots\.between && !alone"/u);
+  // Nor does it announce arrows it is not drawing.
+  assert.match(wheel, /:aria-label="alone \? label : `\$\{label\}\. Left and right arrows step/u);
+  // The card takes the room the neighbours either side of it would have used,
+  // rather than leaving the stage half empty on both sides.
+  assert.match(source("dashboard/src/styles/morphism.css"), /\.wheel\.alone \.wheel-seat[^{]*\{ width: 72%; \}/u);
+  // And scrolling over a card with nothing to turn to scrolls the page, rather
+  // than being swallowed to turn a sequence of one.
+  assert.doesNotMatch(code("dashboard/src/components/CanvasWheel.vue"), /@wheel\.prevent/u);
+  assert.match(wheel, /function onWheel\(event: WheelEvent\): void \{\n  if \(alone\.value\) return;/u);
+  assert.match(wheel, /function onKeydown\(event: KeyboardEvent\): void \{\n  if \(alone\.value\) return;/u);
+  assert.deepEqual(wheelSlots(1, 0).map((slot) => slot.index), [0], "and the one card it draws is the one there is");
+});
+
 test("a driving session opens on one three-position control, reusing both readings", () => {
   const route = source("dashboard/src/routes/canvas.vue");
   // One control with three positions, not two switches whose four states

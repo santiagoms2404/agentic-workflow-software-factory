@@ -24,18 +24,40 @@ const slots = computed(() => wheelSlots(props.keys.length, props.index));
 const shift = computed(() => wheelShift(props.keys.length, props.index));
 const atStart = computed(() => props.index <= 0);
 const atEnd = computed(() => props.index >= props.keys.length - 1);
+/**
+ * One item is not a sequence.
+ *
+ * Most decks hold a single run — twenty-six of the owner's thirty-three dots —
+ * and drawing a spine with one marker, two arrows that cannot move and a
+ * counter reading "1 of 1" puts four controls on screen that do nothing. A
+ * chain of one shows its card and nothing else, and the card takes the room
+ * the spine was using.
+ */
+const alone = computed(() => props.keys.length <= 1);
 
 function go(delta: number): void {
   emit("update:index", stepIndex(props.index, delta, props.keys.length));
 }
 
 function onKeydown(event: KeyboardEvent): void {
+  if (alone.value) return;
   if (event.key === "ArrowLeft") go(-1);
   else if (event.key === "ArrowRight") go(1);
   else if (event.key === "Home") emit("update:index", 0);
   else if (event.key === "End") emit("update:index", props.keys.length - 1);
   else return;
   event.preventDefault();
+}
+
+/**
+ * Scrolling over a lone card scrolls the page, as it would over any other card.
+ * Swallowing the wheel to turn a sequence with nothing to turn to would trap
+ * the reader halfway down a long panel.
+ */
+function onWheel(event: WheelEvent): void {
+  if (alone.value) return;
+  event.preventDefault();
+  go(event.deltaY > 0 || event.deltaX > 0 ? 1 : -1);
 }
 
 function transform(scale: number, turn: number, offset: number): string {
@@ -46,11 +68,12 @@ function transform(scale: number, turn: number, offset: number): string {
 <template>
   <div
     class="wheel"
+    :class="{ alone }"
     role="group"
-    :aria-label="`${label}. Left and right arrows step, Home and End reach the ends.`"
-    tabindex="0"
+    :aria-label="alone ? label : `${label}. Left and right arrows step, Home and End reach the ends.`"
+    :tabindex="alone ? -1 : 0"
     @keydown="onKeydown"
-    @wheel.prevent="go($event.deltaY > 0 || $event.deltaX > 0 ? 1 : -1)"
+    @wheel="onWheel"
   >
     <div class="wheel-stage">
       <!-- The wheel does not wrap: a chain of attempts has a first and a last,
@@ -71,11 +94,11 @@ function transform(scale: number, turn: number, offset: number): string {
 
     <!-- What sits between the middle card and the one before it: the recorded
          reason these two runs are in the same chain. -->
-    <div v-if="$slots.between" class="wheel-between">
+    <div v-if="$slots.between && !alone" class="wheel-between">
       <slot name="between" />
     </div>
 
-    <nav class="wheel-spine neu-well" :aria-label="`${label} position`">
+    <nav v-if="!alone" class="wheel-spine neu-well" :aria-label="`${label} position`">
       <button
         type="button"
         class="wheel-step"

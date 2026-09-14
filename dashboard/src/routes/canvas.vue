@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import type { BacklogTicket, EventsResponse, GroupSummary, GroupTree, SessionCard, SessionPlan, TicketsResponse } from "../../shared/types.ts";
 import { buildCanvasGraph, type CanvasNodeKind } from "../canvas-graph.ts";
 import type { Point } from "../canvas-layout.ts";
@@ -13,6 +13,7 @@ import {
   type Camera,
   type CanvasRoute,
 } from "../canvas-view.ts";
+import { browserPins, readPins, writePins } from "../canvas-pins.ts";
 import { askLine, decisionSlides, elsewhere } from "../canvas-session.ts";
 import { clampIndex, relationBetween, relationReason } from "../canvas-wheel.ts";
 import { stateTone } from "../display.ts";
@@ -32,39 +33,55 @@ const props = defineProps<{
 }>();
 
 const map = ref<InstanceType<typeof CanvasMap> | null>(null);
+/**
+ * Focus across the open and the return.
+ *
+ * Opening a node swaps the map out for the opened panel, so focus would fall
+ * to the document twice — once on the way in and once on the way back — and a
+ * keyboard reader would start again at the top of the page each time, having
+ * lost the dot they were reading from.
+ *
+ * On the way in it lands on the panel itself rather than on the first link in
+ * it: the panel is what opened, a screen reader announces it, and Tab then
+ * walks forward into the content instead of past it. Nothing has to trap focus
+ * inside, because the map is `v-else` in this chain and simply does not exist
+ * while a node is open. On the way back it returns to the dot that was opened,
+ * or to its entry in the parked rail when the map was never drawing it.
+ */
+const panel = ref<HTMLElement | null>(null);
+const parked = new Map<string, HTMLElement>();
+
+function holdParked(id: string, element: unknown): void {
+  if (element === null || element === undefined) parked.delete(id);
+  else parked.set(id, element as HTMLElement);
+}
+
+watch(() => props.route.opened, async (now, before) => {
+  // Lazily, so arriving with `opened` already in the address moves nothing:
+  // the reader did not navigate, they landed.
+  await nextTick();
+  if (now !== null) { panel.value?.focus(); return; }
+  if (before === null || before === undefined) return;
+  if (map.value?.focusNode(before) !== true) parked.get(before)?.focus();
+});
 const graph = computed(() => buildCanvasGraph(props.sessions, props.groups, props.plans));
 const shown = computed(() => filterGraph(graph.value, props.route.kinds));
 const counts = computed(() => kindCounts(graph.value));
 
 /**
- * Where the reader has dragged a dot.
+ * Where the reader has dragged a dot, read back from this browser on arrival.
  *
- * A preference, so it lives in this browser and never in the projection: a
- * position is not evidence of anything and has no business in a record other
- * people read. Keyed by project so two projects do not fight over one layout.
+ * The reading and the writing live in `canvas-pins.ts` so the round trip a
+ * drop has to survive — dropped, stored, read again on the next load, honoured
+ * by the simulation — is something a test can run rather than something the
+ * component asserts about itself.
  */
-const STORE = "awsf.canvas-layout";
-const pinned = ref<ReadonlyMap<string, Point>>(readPins());
+const store = browserPins();
+const pinned = ref<ReadonlyMap<string, Point>>(readPins(store));
 
-function readPins(): ReadonlyMap<string, Point> {
-  try {
-    const raw = localStorage.getItem(STORE);
-    if (raw === null) return new Map();
-    const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== "object" || parsed === null) return new Map();
-    return new Map(Object.entries(parsed as Record<string, Point>));
-  } catch {
-    // A blocked or cleared store is an ordinary state, not an error the canvas
-    // should refuse to draw over.
-    return new Map();
-  }
-}
-
-function writePins(next: ReadonlyMap<string, Point>): void {
+function keepPins(next: ReadonlyMap<string, Point>): void {
   pinned.value = next;
-  try {
-    localStorage.setItem(STORE, JSON.stringify(Object.fromEntries(next)));
-  } catch { /* the arrangement is a convenience; losing it costs nothing real */ }
+  writePins(store, next);
 }
 
 function go(next: Partial<CanvasRoute>): void {
@@ -288,6 +305,7 @@ watch(shown, (next) => {
           <a
             v-for="node in shown.unplaced"
             :key="node.id"
+            :ref="(element) => holdParked(node.id, element)"
             class="canvas-parked-item session-filter-option"
             :class="`canvas-kind-${node.kind}`"
             :href="openHref(node) ?? '#'"
@@ -302,7 +320,7 @@ watch(shown, (next) => {
     <!-- A run opens its own view: the deck as a pipeline, the run you came for
          in the middle. The map's state rides in the query, so leaving returns
          to it exactly as it was. -->
-    <section v-if="opened && opened.kind === 'run' && chain.length" class="canvas-opened canvas-board neu-well">
+    <section v-if="opened && opened.kind === 'run' && chain.length" ref="panel" tabindex="-1" class="canvas-opened canvas-board neu-well">
       <header class="canvas-opened-head">
         <a class="session-filter-control" :href="canvasRouteHash({ ...route, opened: null })">← the map</a>
         <p class="canvas-opened-title">{{ opened.label }}</p>
@@ -337,7 +355,7 @@ watch(shown, (next) => {
 
     <!-- A driving session opens its journal: the decisions as a sequence, or
          either of the two readings that already exist. -->
-    <section v-else-if="opened && opened.kind === 'session'" class="canvas-opened canvas-board neu-well">
+    <section v-else-if="opened && opened.kind === 'session'" ref="panel" tabindex="-1" class="canvas-opened canvas-board neu-well">
       <header class="canvas-opened-head">
         <a class="session-filter-control" :href="canvasRouteHash({ ...route, opened: null })">← the map</a>
         <p class="canvas-opened-title">{{ opened.label }}</p>
@@ -392,7 +410,7 @@ watch(shown, (next) => {
     <!-- A plan opens the work it asks for, built from the ticket data the
          dashboard already serves. Rendering the plan's own file would need a
          route serving local files and a second stylesheet in the shell. -->
-    <section v-else-if="opened && opened.kind === 'plan'" class="canvas-opened canvas-board neu-well">
+    <section v-else-if="opened && opened.kind === 'plan'" ref="panel" tabindex="-1" class="canvas-opened canvas-board neu-well">
       <header class="canvas-opened-head">
         <a class="session-filter-control" :href="canvasRouteHash({ ...route, opened: null })">← the map</a>
         <p class="canvas-opened-title">{{ opened.label }}</p>
@@ -414,7 +432,7 @@ watch(shown, (next) => {
       :route="route"
       @update:camera="go({ camera: $event })"
       @update:selected="go({ selected: $event })"
-      @update:pinned="writePins($event)"
+      @update:pinned="keepPins($event)"
     />
 
     <!-- Pan and zoom over thirty-odd dots on a phone is a second set of

@@ -541,6 +541,10 @@
    The turn is a transform, not a second design language: every card on it is
    the same raised card the rest of the shell uses, seen at an angle. */
 .canvas-opened { display: flex; flex-direction: column; gap: 16px; padding: 18px 20px; }
+/* The panel takes focus when a node opens, so a keyboard reader lands on what
+   they opened rather than back at the top of the page. A ring around the whole
+   panel is noise when the focus followed a click; keyboard modality keeps it. */
+.canvas-opened:focus:not(:focus-visible) { outline: none; }
 .canvas-opened-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 16px; }
 .wheel { display: flex; flex-direction: column; gap: 14px; outline: none; }
 /* Clipped: a card turned away at the end of the chain must not escape the
@@ -576,6 +580,10 @@
    so its stage is taller. Sized to the content rather than the content cropped
    to a stage built for something else. */
 .wheel-stage:has(.decision-slide) { height: 640px; }
+/* A chain of one draws no spine, so its card takes the width the neighbours
+   either side of it would have occupied. Last of the width rules on purpose:
+   it has the same specificity as the decision-slide one above and must win. */
+.wheel.alone .wheel-seat, .wheel.alone .wheel-seat:has(.decision-slide) { width: 72%; }
 .decision-slide .decision-reason, .decision-slide .decision-field, .decision-slide .decision-rows { border-radius: 13px; }
 /* The ask keeps its height rather than being squeezed to a sliver by the
    phases and metrics below it; the card is a fixed height and flex would

@@ -201,7 +201,9 @@ test("a drop stays where it was dropped, and only a reset undoes it", () => {
   // start, so the moment you released the mouse everything jumped elsewhere.
   assert.doesNotMatch(map, /watch\(\(\) => props\.pinned, relayout\)/u);
   assert.match(map, /function reset\(\): void \{\s*positions\.value = layoutGraph\(props\.graph\)\.positions;\s*emit\("update:pinned", new Map\(\)\);\s*fit\(\);/u);
-  assert.match(map, /defineExpose\(\{ fit, reset \}\)/u);
+  // Exposed so the route's own control can call it; what else rides alongside
+  // it belongs to whatever test put it there.
+  assert.match(map, /defineExpose\(\{[^}]*\breset\b[^}]*\}\)/u);
   assert.match(route, /@click="map\?\.reset\(\)">reset the map</u);
 });
 
