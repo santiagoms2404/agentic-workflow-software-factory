@@ -195,12 +195,19 @@ export function kindCounts(graph: CanvasGraph): ReadonlyMap<CanvasNodeKind, numb
  * that does nothing. Each is replaced by its own view in turn.
  */
 export function openHref(
-  node: { readonly kind: CanvasNodeKind; readonly id?: string; readonly ref: string | null; readonly sessionIds: readonly string[] },
+  node: { readonly kind: CanvasNodeKind; readonly id?: string; readonly ref: string | null; readonly sessionIds: readonly string[]; readonly weight?: number },
   route?: CanvasRoute,
 ): string | null {
-  if (node.kind === "session" && node.ref !== null) return `#/groups/${encodeURIComponent(node.ref)}`;
-  if (node.kind === "plan" && node.ref !== null) return `#/backlog/${encodeURIComponent(node.ref)}`;
+  // A run and a driving session each open their own view on the canvas and
+  // carry the map's state with them. A plan still leaves for the backlog; that
+  // is the next slice.
+  const onCanvas = node.id !== undefined && route !== undefined;
+  if (node.kind === "session") {
+    if (onCanvas && (node.weight ?? 0) > 0) return canvasRouteHash({ ...route!, opened: node.id! });
+    return node.ref === null ? null : `#/groups/${encodeURIComponent(node.ref)}`;
+  }
+  if (node.kind === "plan") return node.ref === null ? null : `#/backlog/${encodeURIComponent(node.ref)}`;
   if (node.sessionIds.length === 0) return null;
-  if (node.id !== undefined && route !== undefined) return canvasRouteHash({ ...route, opened: node.id });
+  if (onCanvas) return canvasRouteHash({ ...route!, opened: node.id! });
   return `#/sessions/${encodeURIComponent(node.sessionIds.at(-1)!)}`;
 }

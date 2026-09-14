@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import type { EventsResponse, GroupSummary, SessionCard, SessionPlan } from "../../shared/types.ts";
+import type { EventsResponse, GroupSummary, GroupTree, SessionCard, SessionPlan } from "../../shared/types.ts";
 import { buildCanvasGraph, type CanvasNodeKind } from "../canvas-graph.ts";
 import type { Point } from "../canvas-layout.ts";
 import {
@@ -13,10 +13,14 @@ import {
   type Camera,
   type CanvasRoute,
 } from "../canvas-view.ts";
+import { askLine, decisionSlides, elsewhere } from "../canvas-session.ts";
 import { clampIndex, relationBetween, relationReason } from "../canvas-wheel.ts";
 import { stateTone } from "../display.ts";
 import CanvasMap from "../components/CanvasMap.vue";
+import CanvasDecisionSlide from "../components/CanvasDecisionSlide.vue";
 import CanvasRunCard from "../components/CanvasRunCard.vue";
+import GroupDecisionTree from "../components/GroupDecisionTree.vue";
+import GroupTreeGraph from "../components/GroupTreeGraph.vue";
 import CanvasWheel from "../components/CanvasWheel.vue";
 
 const props = defineProps<{
@@ -116,6 +120,48 @@ watch([middle, relation], async ([run, link]) => {
     // A reason that cannot be fetched is shown as unavailable, never invented.
   }
 });
+
+/* --- The opened driving session: its journal, three ways ------------------ */
+
+/**
+ * Slides, reading, tree — one control with three positions, not two switches
+ * whose four states include two that describe nothing. It opens on slides when
+ * you arrive from the map, because the map is where you came to follow a
+ * story; the sessions board still opens the tree on its own screen.
+ */
+const view = ref<"slides" | "reading" | "tree">("slides");
+const tree = ref<GroupTree | null>(null);
+const treeError = ref<string | null>(null);
+const slides = computed(() => decisionSlides(tree.value));
+const slideAt = ref(0);
+
+watch(() => opened.value?.kind === "session" ? opened.value.ref : null, async (group) => {
+  tree.value = null;
+  treeError.value = null;
+  view.value = "slides";
+  slideAt.value = 0;
+  if (group === null || group === undefined) return;
+  try {
+    const response = await fetch(`/api/v1/groups?group=${encodeURIComponent(group)}`);
+    if (!response.ok) {
+      treeError.value = response.status === 404
+        ? "No planning journal exists for this driving session."
+        : "The journal could not be read.";
+      return;
+    }
+    const payload = await response.json() as GroupTree;
+    if (payload.group !== group) {
+      treeError.value = "The journal returned did not match this driving session.";
+      return;
+    }
+    tree.value = payload;
+  } catch {
+    treeError.value = "The journal could not be read.";
+  }
+}, { immediate: true });
+
+watch(slides, (next) => { slideAt.value = clampIndex(slideAt.value, next.length); });
+const slide = computed(() => slides.value[clampIndex(slideAt.value, slides.value.length)]);
 
 const selectedNode = computed(() =>
   shown.value.nodes.find((node) => node.id === props.route.selected)
@@ -225,7 +271,7 @@ watch(shown, (next) => {
     <!-- A run opens its own view: the deck as a pipeline, the run you came for
          in the middle. The map's state rides in the query, so leaving returns
          to it exactly as it was. -->
-    <section v-if="opened && chain.length" class="canvas-opened canvas-board neu-well">
+    <section v-if="opened && opened.kind === 'run' && chain.length" class="canvas-opened canvas-board neu-well">
       <header class="canvas-opened-head">
         <a class="session-filter-control" :href="canvasRouteHash({ ...route, opened: null })">← the map</a>
         <p class="canvas-opened-title">{{ opened.label }}</p>
@@ -256,6 +302,60 @@ watch(shown, (next) => {
           <p v-else class="canvas-relation absent">the record does not say how these two are related</p>
         </template>
       </CanvasWheel>
+    </section>
+
+    <!-- A driving session opens its journal: the decisions as a sequence, or
+         either of the two readings that already exist. -->
+    <section v-else-if="opened && opened.kind === 'session'" class="canvas-opened canvas-board neu-well">
+      <header class="canvas-opened-head">
+        <a class="session-filter-control" :href="canvasRouteHash({ ...route, opened: null })">← the map</a>
+        <p class="canvas-opened-title">{{ opened.label }}</p>
+        <div class="canvas-view-switch" role="group" aria-label="View">
+          <button
+            v-for="mode in (['slides', 'reading', 'tree'] as const)"
+            :key="mode"
+            type="button"
+            class="session-filter-control"
+            :class="{ selected: view === mode }"
+            :aria-pressed="view === mode"
+            @click="view = mode"
+          >{{ mode }}</button>
+        </div>
+      </header>
+
+      <p v-if="treeError" class="absent">{{ treeError }}</p>
+      <p v-else-if="!tree" class="absent">Reading the journal…</p>
+      <template v-else>
+        <template v-if="view === 'slides'">
+          <p v-if="!slides.length" class="absent">No decision has been applied in this driving session.</p>
+          <template v-else>
+            <!-- The owner's own words that this decision came out of, pinned
+                 above the wheel and changing as it turns. That is what "how
+                 this ask became these tasks" looks like, one slide at a time. -->
+            <div class="canvas-ask">
+              <p class="decision-voice">the ask this decision came out of</p>
+              <p :class="{ absent: askLine(slide?.ask ?? null) === null }">
+                {{ askLine(slide?.ask ?? null) ?? "no recorded ask precedes this decision" }}
+              </p>
+            </div>
+            <CanvasWheel
+              v-model:index="slideAt"
+              :keys="slides.map((item) => item.key)"
+              label="decision"
+            >
+              <template #item="{ index, middle: isMiddle }">
+                <CanvasDecisionSlide :decision="slides[index]!.decision" :middle="isMiddle" />
+              </template>
+            </CanvasWheel>
+            <p v-if="elsewhere(tree)" class="canvas-elsewhere absent">{{ elsewhere(tree) }}</p>
+          </template>
+        </template>
+        <!-- Both readings are the components that already exist, at the width
+             this canvas gives them. A third rendering of one journal would be
+             a third thing to keep true. -->
+        <GroupDecisionTree v-else-if="view === 'reading'" :tree="tree" />
+        <GroupTreeGraph v-else :tree="tree" />
+      </template>
     </section>
 
     <CanvasMap

@@ -956,6 +956,17 @@ pre { max-height: 42vh; margin: 8px 0 0; padding: 12px 14px; overflow: auto; bor
 .wheel-card-metrics small { color: var(--dim); }
 .wheel-card-summary { margin: 0; font: 12.5px var(--mono); }
 .wheel-count { flex: 0 0 auto; color: var(--dim); font: 11.5px var(--mono); }
+/* The ask this decision came out of, pinned above the wheel and changing as it
+   turns: "how this ask became these tasks", one slide at a time. */
+.canvas-ask { display: flex; flex-direction: column; gap: 5px; padding: 12px 16px; border-radius: 14px; background: var(--neu-well); box-shadow: var(--neu-pressed-soft); }
+.canvas-ask p { margin: 0; max-width: 100ch; color: var(--text); font-size: 14px; line-height: 1.5; }
+.canvas-ask .decision-voice { color: var(--faint); }
+.canvas-elsewhere { margin: 0; font: 12px var(--mono); }
+.canvas-view-switch { display: flex; gap: 8px; margin-left: auto; }
+/* A slide holds less than the reading does, so the reading is where the rest
+   of a long list stays; the card says how much it is not showing. */
+.decision-slide .decision-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.decision-slide .decision-row { font-size: 13px; }
 /* Why the run before this one is before it — and, for a declared continuation,
    the reason the driver wrote down, which nothing else in the dashboard shows. */
 .canvas-relation {

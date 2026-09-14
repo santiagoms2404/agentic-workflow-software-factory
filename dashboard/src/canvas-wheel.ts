@@ -63,10 +63,19 @@ export function wheelSlots(count: number, index: number, window = WHEEL_WINDOW):
  * blank space this dashboard has been asked repeatedly to remove. Measured in
  * slot widths, so the component decides what a slot is worth in pixels.
  */
+export const MAX_SHIFT = 0.5;
+
 export function wheelShift(count: number, index: number, window = WHEEL_WINDOW): number {
   const offsets = wheelSlots(count, index, window).map((slot) => slot.offset);
   if (offsets.length === 0) return 0;
-  return -(Math.min(...offsets) + Math.max(...offsets)) / 2;
+  // `|| 0` normalises a negative zero: the middle of a symmetric window is
+  // `-0`, which is not `0` to anything comparing identities.
+  const centring = -(Math.min(...offsets) + Math.max(...offsets)) / 2 || 0;
+  // Capped at half a slot. Centring the drawn set exactly means sliding by a
+  // whole slot at either end, and a seat wide enough to hold a decision slide
+  // then walks off the edge of the stage. Half is enough to close the gap and
+  // never enough to lose the card the reader came for.
+  return Math.max(-MAX_SHIFT, Math.min(MAX_SHIFT, centring));
 }
 
 export function clampIndex(index: number, count: number): number {

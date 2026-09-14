@@ -571,6 +571,14 @@
   overflow: hidden;
 }
 .wheel-card.middle { box-shadow: var(--neu-raised); }
+/* A decision slide is wider than a run card: it carries two columns of boxes
+   rather than one column of metrics. */
+.wheel-seat:has(.decision-slide) { width: 58%; }
+/* A decision carries two columns of boxes where a run carries one of metrics,
+   so its stage is taller. Sized to the content rather than the content cropped
+   to a stage built for something else. */
+.wheel-stage:has(.decision-slide) { height: 640px; }
+.decision-slide .decision-reason, .decision-slide .decision-field, .decision-slide .decision-rows { border-radius: 13px; }
 /* The ask keeps its height rather than being squeezed to a sliver by the
    phases and metrics below it; the card is a fixed height and flex would
    shrink the one part that cannot be read at two lines. */
