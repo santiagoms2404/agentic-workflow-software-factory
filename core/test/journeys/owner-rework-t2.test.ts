@@ -16,7 +16,7 @@ import { test } from "node:test";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import type {
   Availability,
   BrokerProcessRegistration,
@@ -476,11 +476,13 @@ async function rework(fixture: World, script: Scripted, options: {
   lines?: string[];
   answer?: boolean;
   defect?: string;
+  instruction?: string;
   assertAdvancement?: (sessionId: string, to: string) => void;
 } = {}) {
   return reworkCommand({
     attemptDir: fixture.attemptDir, stateRoot: fixture.stateRoot,
     defect: options.defect ?? DEFECT,
+    ...(options.instruction === undefined ? {} : { instruction: options.instruction }),
     terminal: terminal(options.answer ?? true, true, options.lines ?? []),
     config: fixture.config, configPath: fixture.configPath,
     projectRecord: fixture.projection.project,
@@ -492,7 +494,8 @@ async function rework(fixture: World, script: Scripted, options: {
 
 // ---------------------------------------------------------------------------
 
-test("a T2 rework spends builder plus review and returns to AWAITING_OWNER with a review bound to the new candidate", async () => {
+for (const instruction of [undefined, '  Keep the existing public API.\nReport "unchanged API" in implementationNotes.  ']) {
+test(`a T2 rework ${instruction === undefined ? "without" : "with"} a supplement spends builder plus review and returns to AWAITING_OWNER with a review bound to the new candidate`, async () => {
   const fixture = await world();
   const script = scripted(fixture);
   const lines: string[] = [];
@@ -508,7 +511,21 @@ test("a T2 rework spends builder plus review and returns to AWAITING_OWNER with 
     assert.equal(await runReportRevision(staleReport.absolutePath), before.revision);
     assert.match(readFileSync(staleReport.absolutePath, "utf8"), /duplicate whitespace in a declaration/u);
 
-    const result = await rework(fixture, script, { lines });
+    const result = await rework(fixture, script, { lines, ...(instruction === undefined ? {} : { instruction }) });
+    assert.equal(result.status.request, before.request);
+    if (instruction !== undefined) {
+      assert.ok(lines.some(line => line.includes(JSON.stringify(instruction))));
+      assert.ok(script.builderPrompts[0]!.includes(JSON.stringify(instruction)));
+      const evidence = await readAttemptEvidence(fixture.attemptDir);
+      const activation = evidence.find(value => value.type === "transition" && value.edgeId === "L19");
+      assert.equal(activation?.type, "transition");
+      if (activation?.type !== "transition") throw new Error("missing activation");
+      assert.equal(activation.ownerAmendment?.text, instruction);
+      assert.equal(activation.ownerAmendment?.binding.candidateSha, fixture.candidateA);
+      assert.deepEqual(evidence.filter(value => value.type === "rework-instruction-delivery").map(value => value.delivery.state), ["intent", "submitted"]);
+      const phase = evidence.find(value => value.type === "phase" && value.phase.key === "owner-rework-1");
+      assert.equal(phase?.type === "phase" ? phase.phase.maxCorrections : null, 0);
+    }
     const status = result.status;
     assert.equal(status.lifecycleState, "AWAITING_OWNER", status.blocker?.detail);
     assert.deepEqual(script.launches, ["codex", "claude"], "one builder call and one review call, in that order");
@@ -607,6 +624,53 @@ test("a T2 rework spends builder plus review and returns to AWAITING_OWNER with 
     assert.ok(lines.some((line) => line.includes("mandatory opposite-provider review")));
   } finally { await cleanup(fixture); }
 });
+
+}
+
+for (const instruction of ["", "   ", "x".repeat(16_385), "valid supplemental guidance"]) {
+  test(`rework supplement refusal is inert: ${instruction.length}`, async () => {
+    const fixture = await world();
+    const script = scripted(fixture);
+    try {
+      const before = readFileSync(join(fixture.attemptDir, "journal.jsonl"));
+      if (instruction === "valid supplemental guidance") {
+        assert.equal((await rework(fixture, script, { instruction, answer: false })).confirmed, false);
+      } else await assert.rejects(rework(fixture, script, { instruction }), /owner instruction/);
+      assert.deepEqual(readFileSync(join(fixture.attemptDir, "journal.jsonl")), before);
+      assert.deepEqual(script.launches, []);
+    } finally { fixture.projection.close(); rmSync(fixture.root, { recursive: true, force: true }); }
+  });
+}
+
+for (const mode of ["noninteractive", "changed-prompt", "changed-option"] as const) {
+  test(`rework supplemental input confirmation binding: ${mode}`, async () => {
+    const fixture = await world();
+    const script = scripted(fixture);
+    const text = '  Preserve the exact public API.\n"No expansion."  ';
+    try {
+      const before = readFileSync(join(fixture.attemptDir, "journal.jsonl"));
+      const options = { attemptDir: fixture.attemptDir, stateRoot: fixture.stateRoot, config: fixture.config, configPath: fixture.configPath,
+        defect: DEFECT, instruction: text, infrastructure: script.infrastructure,
+        terminal: { interactive: mode !== "noninteractive", write: () => {}, confirm: async () => {
+          if (mode === "changed-prompt") {
+            const path = join(dirname(fixture.configPath), fixture.config.agents.find(agent => agent.name === "builder")!.prompt.user);
+            writeFileSync(path, readFileSync(path, "utf8") + "\nchanged after confirmation\n");
+          } else options.instruction = "unconfirmed replacement";
+          return true;
+        } } };
+      if (mode === "changed-option") {
+        const result = await reworkCommand(options);
+        assert.equal(result.status.lifecycleState, "AWAITING_OWNER", result.status.blocker?.detail);
+        assert.ok(script.builderPrompts[0]!.includes(JSON.stringify(text)));
+        assert.ok(!script.builderPrompts[0]!.includes("unconfirmed replacement"));
+      } else {
+        await assert.rejects(reworkCommand(options));
+        assert.deepEqual(script.launches, []);
+        assert.deepEqual(readFileSync(join(fixture.attemptDir, "journal.jsonl")), before);
+      }
+    } finally { fixture.projection.close(); rmSync(fixture.root, { recursive: true, force: true }); }
+  });
+}
 
 test("the builder gets the defect and the reviewer gets the candidate; neither the defect nor the superseded verdict reaches the reviewer", async () => {
   const fixture = await world();

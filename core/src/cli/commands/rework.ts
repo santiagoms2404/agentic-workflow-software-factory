@@ -1,4 +1,7 @@
 import { existsSync, readFileSync, statSync, promises as fs } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { canonicalJson, composeOwnerAmendment, createOwnerAmendment, ownerText, sha256, type ReworkOwnerAmendment, type OwnerAmendmentDelivery } from "../../contracts/owner-amendment.ts";
+import { withExecutionLease } from "../../execution/operation-lease.ts";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import type {
   AdapterEntry,
@@ -225,6 +228,7 @@ export interface ReworkCommandOptions {
   /** Masked inside the sandbox namespace; see `policy/sandbox-broker.ts`. */
   readonly stateRoot: string;
   readonly defect: string;
+  readonly instruction?: string;
   readonly terminal: OwnerTerminal;
   readonly config: AwsfConfig;
   readonly configPath: string;
@@ -569,6 +573,7 @@ function blocker(error: unknown): { code: string; detail: string } {
 /** Owner-facing production implementation of the literal L19 spawn edge. */
 async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCommandResult> {
   const defect = assertConcreteReworkDefect(options.defect);
+  const instructionText = options.instruction === undefined ? null : ownerText(options.instruction);
   credentialSafeValue(options.config, "configured owner rework data");
   const infra: ReworkInfrastructure = { ...DEFAULT_INFRASTRUCTURE, ...options.infrastructure };
   let status = await readAttempt(options.attemptDir);
@@ -591,6 +596,11 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
   );
   const governingRoutes = recordedRoutes(governingEvidence, governingReviewPhaseIds);
   const route = await resolveRoute(status, options.config, options.configPath, infra, governingRoutes.worker);
+  const displayedRevision = status.revision;
+  const displayedOrdinal = nextReworkPhaseOrdinal(governingEvidence);
+  const originalBundle = await readReworkPromptPair(options.configPath, route.agent);
+  if (originalBundle.systemPrompt !== route.systemPrompt || originalBundle.userPrompt !== route.userPrompt) throw new ReworkRouteMismatch("prompt changed during preflight");
+  const originalInput = reworkPrompt(status, defect, prior, route);
   const remainingCalls = ceilingFor(status.tier, status.budget.ceiling) - status.budget.callsSpent - status.budget.callsReserved;
   const remainingOwner = status.budget.allowance.ownerReentries - status.budget.ownerReentries;
   // The T2 branch buys a review as well as a builder, so its whole cost is
@@ -617,11 +627,17 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
     options.terminal.write("This T1 rework spends exactly one builder call; any correction would require separate remaining allowance and call headroom.");
   }
   options.terminal.write(`Defect: ${defect}`);
+  if (instructionText !== null) options.terminal.write(`Supplement recipient: owner-rework-${status.budget.ownerReentries + 1}, phase ${displayedOrdinal}. Exact instruction (JSON string): ${JSON.stringify(instructionText)}\nThis is separate from the defect and grants no extra calls, corrections, tools or write access.`);
   const confirmed = await options.terminal.confirm(`Rework exact candidate ${firstInspection.candidate}?`);
   if (!confirmed) return { status, confirmed: false };
 
+  return withExecutionLease(options.attemptDir, async () => {
+    if ((await readAttempt(options.attemptDir)).revision !== displayedRevision) throw new ReworkCandidateMismatch("rework anchor changed after confirmation");
+  }, async operationId => {
   // Close every display-to-launch race before the L19 record becomes durable.
   status = await readAttempt(options.attemptDir);
+  if (status.revision !== displayedRevision || canonicalJson(await priorBuild(options.attemptDir)) !== canonicalJson(prior) ||
+      canonicalJson(await readReworkPromptPair(options.configPath, route.agent)) !== canonicalJson(originalBundle)) throw new ReworkCandidateMismatch("rework input changed after confirmation");
   credentialSafeText(status.request, "persisted original request", true);
   validateAttempt(status, options.config);
   const secondInspection = inspectCandidate(status);
@@ -644,7 +660,20 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
     throw new ReworkRouteMismatch("adapter/provider/model changed after confirmation");
   }
 
-  const prompt = reworkPrompt(status, defect, prior, route);
+  if (builderOrdinal !== displayedOrdinal || reworkPrompt(status, defect, prior, route) !== originalInput) throw new ReworkCandidateMismatch("rework phase input changed after confirmation");
+  const anticipatedKey = `owner-rework-${status.budget.ownerReentries + 1}`;
+  const ownerAmendment: ReworkOwnerAmendment | null = instructionText === null ? null : createOwnerAmendment({
+    id: randomUUID(), text: instructionText, confirmedAt: infra.now(), binding: {
+      entry: "rework", project: status.project, taskId: status.taskId, attempt: status.attempt, sessionId: status.sessionId,
+      authorizationId: randomUUID(), operationId, phaseKey: anticipatedKey, phaseOrdinal: builderOrdinal,
+      anchorId: `${status.sessionId}:candidate:${firstInspection.candidate}`, anchorRevision: displayedRevision,
+      candidateSha: firstInspection.candidate, defectDigest: sha256(defect), ownerReentry: status.budget.ownerReentries + 1,
+      logicalTurnId: `${status.sessionId}:${anticipatedKey}:run`, correctionRound: 0, priorAmendmentDigest: null,
+      originalRequestDigest: sha256(status.request), originalPromptBundleDigest: sha256(canonicalJson(originalBundle)), deliveryFrontier: "rework-input",
+    },
+  });
+  const composedInput = composeOwnerAmendment(originalInput, ownerAmendment);
+  const prompt = composedInput.composedText;
   // Generation-qualified by the OWNER RE-ENTRY counter, which is the one this
   // command is about to charge. Naming it after the per-phase owner counter
   // would collide the moment a second rework ran in the same attempt, because
@@ -692,6 +721,7 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
   const reservation = authorization.reservation!;
   const reworkNumber = budget.snapshot().ownerReentries;
   const phaseKey = `owner-rework-${reworkNumber}`;
+  if (phaseKey !== anticipatedKey) throw new ReworkCandidateMismatch("owner re-entry changed before activation");
   const phaseId = `${status.sessionId}:${phaseKey}`;
   const runId = `${phaseId}:run`;
   const createdAt = infra.now();
@@ -704,6 +734,9 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
     status: "QUEUED", correctionCount: 0, maxCorrections: 0, errorCode: null, errorMessage: null,
     startedAt: null, endedAt: null, createdAt,
   };
+  let instructionIntent = false;
+  let instructionSubmitted = false;
+  let builderDelegated = false;
   let processRecord: BarrierRecord | null = null;
   let processSettled = false;
   let observedProcess: ObservedProcessOutcome | null = null;
@@ -729,12 +762,12 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
   };
   const persistTransition = async (
     from: TaskState, to: TaskState, edgeId: EdgeId, actor: "host" | "human", source: string,
-    code: string | null, detail: string | null, spawnSite: boolean, update: Partial<AttemptStatus>,
+    code: string | null, detail: string | null, spawnSite: boolean, update: Partial<AttemptStatus>, amendment?: ReworkOwnerAmendment,
   ): Promise<void> => {
     const at = infra.now();
     const seq = transitionOrdinal++;
     await persist("attempt.transitioned", { lifecycleState: to, lastActivityAt: at, nextAction: nextActionFor(to, status.taskId), ...update }, {
-      type: "transition", id: `${status.sessionId}:${edgeId}:${seq}`, seq,
+      type: "transition", ...(amendment === undefined ? {} : { ownerAmendment: amendment }), id: `${status.sessionId}:${edgeId}:${seq}`, seq,
       from, to, actor, edgeId, reasonSource: source, reasonCode: code, reasonDetail: detail, spawnSite, at,
     });
   };
@@ -768,7 +801,7 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
     budget: budget.snapshot(), gatesPass: false, requiredReviewPresent: false,
     journeyApproved: false, protectedApprovalsValid: false, blocker: null, phase: null,
     lastActivity: `L19 human rework request accepted; call ${reservation.id} held before launch`,
-  });
+  }, ownerAmendment ?? undefined);
   await persist("attempt.updated", {}, { type: "phase", phase });
   await persist("attempt.updated", {}, {
     type: "compiled-prompt", phaseId, name: "system", text: route.systemPrompt,
@@ -776,9 +809,11 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
     lineCount: route.systemPrompt.split(/\r?\n/).length, at: infra.now(),
   });
   await persist("attempt.updated", {}, {
-    type: "compiled-prompt", phaseId, name: "user", text: prompt,
-    lineCount: prompt.split(/\r?\n/).length, at: infra.now(),
+    type: "compiled-prompt", phaseId, name: "user", text: originalInput,
+    lineCount: originalInput.split(/\r?\n/).length, at: infra.now(),
   });
+  if (ownerAmendment !== null) await persist("attempt.updated", {}, { type: "compiled-prompt", phaseId,
+    name: "user+owner-amendment", text: prompt, lineCount: prompt.split(/\r?\n/).length, at: infra.now() });
 
   const broker = infra.createBroker({
     ledger: budget,
@@ -826,7 +861,22 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
         provider: route.model.provider, color: route.agent.color, requestedModel: route.agent.model,
         sandboxBadge: launchGrant.badge, sandboxMechanism: launchGrant.mechanism, at: launchAt,
       });
+      let delivery: OwnerAmendmentDelivery | null = null;
+      if (ownerAmendment !== null) {
+        if (instructionIntent || finalSpec.stdin !== prompt || registration.runId !== runId) throw new ReworkRouteMismatch("owner instruction input was changed or already submitted");
+        delivery = { schema: "awsf.owner-amendment-delivery/v1", amendmentId: ownerAmendment.id, amendmentDigest: ownerAmendment.digest,
+          bindingDigest: sha256(canonicalJson(ownerAmendment.binding)), operationId, logicalTurnId: runId,
+          originalInputDigest: composedInput.originalInputDigest, composedDigest: composedInput.composedDigest,
+          state: "intent", providerAcknowledgementDigest: null };
+        await persist("attempt.updated", {}, { type: "rework-instruction-delivery", phaseId, delivery, at: infra.now() });
+        instructionIntent = true;
+      }
+      builderDelegated = true;
       activeTransport.current = await broker.startProcess(registration, finalSpec, signal);
+      if (delivery !== null) {
+        await persist("attempt.updated", {}, { type: "rework-instruction-delivery", phaseId, delivery: { ...delivery, state: "submitted" }, at: infra.now() });
+        instructionSubmitted = true;
+      }
       return activeTransport.current;
     },
   };
@@ -890,6 +940,7 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
       usage, contextTokens: contextTokens(usage), costUsd: null, costAuthority: route.model.costAuthority, at: endedAt,
     });
 
+    if (ownerAmendment !== null && !instructionSubmitted) throw new ReworkRouteMismatch("owner instruction never reached the actual launch");
     await persistPhase("VALIDATING");
     const parsed = parseEnvelope(output, "awsf.build-output/v1");
     const envelope = wrapEnvelope({
@@ -1212,7 +1263,9 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
     }
     // A reservation that did not reach GO is released even when L19's projector,
     // queued-phase persistence, or broker construction was the failing boundary.
-    for (const held of budget.outstanding()) budget.releaseOnRegistrationFailure(held.id);
+    for (const held of budget.outstanding()) {
+      if (held.id !== reservation.id || !builderDelegated) budget.releaseOnRegistrationFailure(held.id);
+    }
 
     // persistAttempt may throw after journal+status are already durable (the
     // projector is deliberately the last fallible step). Always recover the
@@ -1309,8 +1362,8 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
         });
       }
       status = await readAttempt(options.attemptDir);
-      if (status.lifecycleState !== "BLOCKED" || status.budget.callsReserved !== 0 || status.process !== null) {
-        throw new Error("owner rework recovery did not reach an unreserved BLOCKED halt");
+      if (status.lifecycleState !== "BLOCKED" || status.budget.callsReserved !== budget.snapshot().callsReserved || status.process !== null) {
+        throw new Error("owner rework recovery did not retain the accounted liability at a BLOCKED halt");
       }
       return { status, confirmed: true };
     }
@@ -1405,6 +1458,7 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
     if (status.lifecycleState === "BLOCKED") return { status, confirmed: true };
     throw failure;
   }
+  });
 }
 
 

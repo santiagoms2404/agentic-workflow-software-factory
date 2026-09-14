@@ -627,7 +627,7 @@ test("L19 reservation is durable before registration and a pre-GO registration r
   } finally { await cleanup(fixture); }
 });
 
-test("every post-L19 setup boundary settles the reservation and reaches a legal process-free halt", async () => {
+test("post-L19 failures refund only before broker delegation and retain uncertain launch liability", async () => {
   const scenarios = [
     { name: "l19-projection", failProjectionAt: 1 },
     { name: "queued-phase-projection", failProjectionAt: 2 },
@@ -664,7 +664,7 @@ test("every post-L19 setup boundary settles the reservation and reaches a legal 
       });
       assert.equal(result.status.lifecycleState, "BLOCKED", scenario.name);
       assert.equal(result.status.budget.callsSpent, 1, scenario.name);
-      assert.equal(result.status.budget.callsReserved, 0, scenario.name);
+      assert.equal(result.status.budget.callsReserved, scenario.name === "broker-setup" ? 1 : 0, scenario.name);
       assert.equal(result.status.budget.ownerReentries, 1, scenario.name);
       assert.equal(result.status.process, null, scenario.name);
       assert.equal(adapter.launches, 0, scenario.name);
@@ -679,7 +679,7 @@ test("every post-L19 setup boundary settles the reservation and reaches a legal 
         .filter((evidence: TransitionEvidence | undefined) => evidence?.type === "transition")
         .map((evidence: TransitionEvidence | undefined) => evidence?.edgeId);
       assert.deepEqual(transitions.slice(-2), ["L19", "L8"], scenario.name);
-      assert.equal(readFileSync(join(fixture.attemptDir, "status.json"), "utf8").includes('"callsReserved":1'), false);
+      assert.equal(readFileSync(join(fixture.attemptDir, "status.json"), "utf8").includes('"callsReserved":1'), scenario.name === "broker-setup");
     } finally { await cleanup(fixture); }
   }
 });

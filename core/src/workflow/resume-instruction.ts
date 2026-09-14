@@ -1,5 +1,5 @@
 import { assertResumeInstruction, type ResumeInstruction } from "../contracts/resume-instruction.ts";
-import { assertOwnerAmendmentDelivery, composeOwnerAmendmentChain, sha256, type OwnerAmendment } from "../contracts/owner-amendment.ts";
+import { assertOwnerAmendment, assertOwnerAmendmentDelivery, composeOwnerAmendmentChain, sha256, type OwnerAmendment } from "../contracts/owner-amendment.ts";
 import type { AttemptEvent, AttemptStatus } from "../cli/commands/attempt.ts";
 import type { AcceptedPhase } from "../contracts/phase-recovery.ts";
 import type { JournalRecord } from "../persistence/journal.ts";
@@ -7,6 +7,11 @@ import type { AttemptEvidence } from "../observability/attempt-evidence.ts";
 
 export function resumeInstructionLines(evidence: readonly AttemptEvidence[]): string[] {
   return evidence.flatMap(record => {
+    if (record.type === "transition" && record.ownerAmendment !== undefined) {
+      assertOwnerAmendment(record.ownerAmendment);
+      if (record.edgeId !== "L19" || record.actor !== "human" || record.ownerAmendment.binding.entry !== "rework") throw new Error("rework supplement lost its owner activation");
+      return [`Owner supplement for ${record.ownerAmendment.binding.phaseKey} (${record.ownerAmendment.digest}): ${JSON.stringify(record.ownerAmendment.text)}`];
+    }
     if (record.type !== "resume-activation" || record.ownerInstruction == null) return [];
     assertResumeInstruction(record.ownerInstruction);
     const amendment = record.ownerInstruction.amendment;

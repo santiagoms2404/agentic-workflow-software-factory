@@ -461,7 +461,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         const result = await reworkCommand({
           attemptDir: located.attemptDir,
           stateRoot,
-          defect,
+          defect, ...(parsed.flags.instruction === undefined ? {} : { instruction: parsed.flags.instruction }),
           terminal: options.terminal ?? processOwnerTerminal(),
           config,
           configPath,

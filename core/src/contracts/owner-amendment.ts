@@ -40,8 +40,17 @@ export const RescueOwnerAmendmentSchema = Type.Object({ ...commonAmendment,
   }, { additionalProperties: false }),
 }, { additionalProperties: false });
 
+export const ReworkOwnerAmendmentSchema = Type.Object({ ...commonAmendment,
+  binding: Type.Object({ ...commonBinding, entry: Type.Literal("rework"), anchorId: id,
+    anchorRevision: Type.Integer({ minimum: 1 }), candidateSha: Type.String({ pattern: "^[a-f0-9]{40}$" }),
+    defectDigest: digestSchema, ownerReentry: Type.Integer({ minimum: 1 }), logicalTurnId: id,
+    correctionRound: Type.Literal(0), priorAmendmentDigest: Type.Null(), deliveryFrontier: Type.Literal("rework-input"),
+  }, { additionalProperties: false }),
+}, { additionalProperties: false });
+export type ReworkOwnerAmendment = Static<typeof ReworkOwnerAmendmentSchema>;
+
 /** These contracts bind owner intent. They do not enable an entry path or native steering. */
-export const OwnerAmendmentSchema = Type.Union([SeedOwnerAmendmentSchema, ResumeOwnerAmendmentSchema, RescueOwnerAmendmentSchema]);
+export const OwnerAmendmentSchema = Type.Union([SeedOwnerAmendmentSchema, ResumeOwnerAmendmentSchema, RescueOwnerAmendmentSchema, ReworkOwnerAmendmentSchema]);
 export type OwnerAmendment = Static<typeof OwnerAmendmentSchema>;
 
 export function sha256(text: string): string {

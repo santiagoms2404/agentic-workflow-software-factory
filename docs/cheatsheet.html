@@ -784,7 +784,7 @@ npm run awsf -- land TASK</pre>
   <ul class="answers">
     <li><b><code>land</code></b>Merges the candidate into the base branch. The approval is made durable before Git moves, because a merge can be replayed and a lost approval cannot be reconstructed.</li>
     <li><b><code>cancel</code></b>Ends the attempt. Nothing is undone in your checkout, because nothing was ever done to it; the record stays readable.</li>
-    <li><b><code>rework</code></b>Sends the candidate back for another round. This one launches a worker, so it is one of the acts that spends.</li>
+    <li><b><code>rework</code></b>Sends the candidate back for another round. This one launches a worker, so it is one of the acts that spends. <code>awsf rework TASK "Concrete defect" [--instruction "Additional guidance"]</code> keeps the mandatory defect separate from the optional, owner-confirmed supplement. The supplement changes neither the one-turn builder limit nor review, budget or write authority.</li>
     <li><b><code>review</code></b>Buys one replacement second opinion on an unchanged candidate. It is available only when the recorded review is defective as evidence, so it cannot be used to shop for a verdict you like better.</li>
     <li><b><code>journey</code></b>Your attestation that you ran the built software yourself and it worked. Nothing inside the factory can answer that question, which is why the answer has to enter through a person &mdash; and why this act cannot pass itself.</li>
     <li><b><code>raise</code></b>Lifts one job&rsquo;s spending ceiling, for that job alone, bounded and recorded. A ceiling is a checkpoint rather than a cap; this is the checkpoint being answered by the person paying.</li>

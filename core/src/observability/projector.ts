@@ -299,11 +299,12 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
       return;
     }
     case "resume-instruction-delivery":
+    case "rework-instruction-delivery":
       db.prepare(`INSERT OR IGNORE INTO events
         (event_id, session_id, phase_id, first_source_seq, last_source_seq, type, name, payload_json, started_at)
-        VALUES (?, ?, ?, ?, ?, 'notice', 'resume instruction delivery', ?, ?)`)
-        .run(`${sessionId}:resume-instruction:${evidence.delivery.amendmentId}:${evidence.delivery.state}`, sessionId, evidence.phaseId,
-          sourceSeq, sourceSeq, stringifyRedacted(evidence.delivery), evidence.at);
+        VALUES (?, ?, ?, ?, ?, 'notice', ?, ?, ?)`)
+        .run(`${sessionId}:${evidence.type === "resume-instruction-delivery" ? "resume-instruction" : "rework-instruction"}:${evidence.delivery.amendmentId}:${evidence.delivery.state}`, sessionId, evidence.phaseId,
+          sourceSeq, sourceSeq, evidence.type === "resume-instruction-delivery" ? "resume instruction delivery" : "rework instruction delivery", stringifyRedacted(evidence.delivery), evidence.at);
       return;
     case "candidate-seed":
       db.prepare(`INSERT OR IGNORE INTO events
@@ -341,6 +342,13 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
         .run(evidence.id, sessionId, evidence.seq, evidence.from, evidence.to, evidence.actor,
           evidence.edgeId, evidence.reasonSource, evidence.reasonCode, evidence.reasonDetail,
           evidence.spawnSite ? 1 : 0, evidence.at);
+      if (evidence.ownerAmendment !== undefined) {
+        const amendment = evidence.ownerAmendment;
+        db.prepare(`INSERT OR IGNORE INTO events
+          (event_id, session_id, phase_id, first_source_seq, last_source_seq, type, name, payload_json, started_at)
+          VALUES (?, ?, NULL, ?, ?, 'notice', 'owner amendment', ?, ?)`)
+          .run(`${sessionId}:owner-amendment:${amendment.id}`, sessionId, sourceSeq, sourceSeq, stringifyRedacted(amendment), amendment.confirmedAt);
+      }
       return;
     case "phase": {
       const phase = evidence.phase;
