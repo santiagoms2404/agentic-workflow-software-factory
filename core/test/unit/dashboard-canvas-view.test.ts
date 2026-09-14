@@ -194,12 +194,35 @@ test("the map is drawn in light and shadow, with colour spent only where it is i
   assert.match(base, /\.canvas-edge\.edge-continuation \{ stroke: var\(--accent\)/u);
 });
 
+test("a drop stays where it was dropped, and only a reset undoes it", () => {
+  const map = source("dashboard/src/components/CanvasMap.vue");
+  const route = source("dashboard/src/routes/canvas.vue");
+  // Recording a drop used to re-settle the whole graph from its deterministic
+  // start, so the moment you released the mouse everything jumped elsewhere.
+  assert.doesNotMatch(map, /watch\(\(\) => props\.pinned, relayout\)/u);
+  assert.match(map, /function reset\(\): void \{\s*positions\.value = layoutGraph\(props\.graph\)\.positions;\s*emit\("update:pinned", new Map\(\)\);\s*fit\(\);/u);
+  assert.match(map, /defineExpose\(\{ fit, reset \}\)/u);
+  assert.match(route, /@click="map\?\.reset\(\)">reset the map</u);
+});
+
+test("selecting is one press and opening is two, and neither eats the other", () => {
+  const map = source("dashboard/src/components/CanvasMap.vue");
+  assert.match(map, /@dblclick\.stop\.prevent="open\(node\)"/u);
+  assert.match(map, /@keydown\.enter\.stop\.prevent="open\(node\)"/u);
+  // `PointerEvent.detail` is not a click count on `pointerup`, so the clock
+  // tells the second press from a first.
+  assert.match(map, /const second = finished\.id === lastRelease\.id && now - lastRelease\.at < 350;/u);
+  // And a press on the label's own link must never reach the surface: clearing
+  // the selection there unmounts the link before its click can land.
+  assert.match(map, /class="canvas-label"[\s\S]*?@pointerdown\.stop[\s\S]*?@pointerup\.stop/u);
+});
+
 test("every action the mouse can reach has a key, and the surface says so", () => {
   const map = source("dashboard/src/components/CanvasMap.vue");
   for (const key of ["Escape", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", '"0"']) {
     assert.ok(map.includes(key), key);
   }
-  assert.match(map, /aria-label="Execution map\. Arrow keys pan/u);
+  assert.match(map, /aria-label="Execution map\. Click a dot to select it and double-click to open it\./u);
   assert.match(map, /tabindex="0"/u);
   // Each dot is a button in the graph's sorted order, so Tab walks the map in
   // the order a reader meets it.

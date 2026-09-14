@@ -46,7 +46,11 @@ function relayout(): void {
 }
 
 watch(shape, relayout, { immediate: true });
-watch(() => props.pinned, relayout);
+// Deliberately NOT watching `pinned`. Recording a drop used to re-settle the
+// whole graph from its deterministic start, so the moment you released the
+// mouse everything jumped somewhere else. Where you drop it is where it stays;
+// the arrangement is only rebuilt when the graph itself changes, or when the
+// reader asks for it.
 
 const camera = computed<Camera>(() => props.camera ?? fitCamera(
   { positions: positions.value, bounds: boundsOf() },
@@ -117,6 +121,14 @@ function edgeClasses(from: string, to: string, kind: string): readonly string[] 
 
 interface Drag { readonly id: string | null; readonly from: Point; readonly camera: Camera; moved: boolean }
 let drag: Drag | null = null;
+/**
+ * The last release, so the second press of a double-click can be told from a
+ * first. `PointerEvent.detail` is not a click count on `pointerup`, so the
+ * clock answers it instead: without this, opening a dot would toggle the
+ * selection twice on the way and rewrite the address a heartbeat before the
+ * open does.
+ */
+let lastRelease = { id: "", at: 0 };
 
 function onPointerDown(event: PointerEvent, id: string | null): void {
   if (event.button !== 0) return;
@@ -142,7 +154,13 @@ function onPointerMove(event: PointerEvent): void {
   positions.value = settle(props.graph, positions.value, { pinned, steps: 3 }).positions;
 }
 
+function open(node: CanvasNode): void {
+  const href = openHref(node, props.route);
+  if (href !== null) location.hash = href;
+}
+
 function onPointerUp(event: PointerEvent): void {
+  void event;
   const finished = drag;
   drag = null;
   if (finished === null) return;
@@ -154,11 +172,13 @@ function onPointerUp(event: PointerEvent): void {
     return;
   }
   if (finished.id !== null) {
-    emit("update:selected", props.selected === finished.id ? null : finished.id);
+    const now = Date.now();
+    const second = finished.id === lastRelease.id && now - lastRelease.at < 350;
+    lastRelease = { id: finished.id, at: now };
+    if (!second) emit("update:selected", props.selected === finished.id ? null : finished.id);
     return;
   }
   if (!finished.moved) emit("update:selected", null);
-  void event;
 }
 
 function onWheel(event: WheelEvent): void {
@@ -176,6 +196,17 @@ function pan(dx: number, dy: number): void {
 
 function fit(): void {
   emit("update:camera", fitCamera({ positions: positions.value, bounds: boundsOf() }, viewport.value));
+}
+
+/**
+ * Back to how it first drew: every pin dropped, the graph settled again from
+ * its deterministic start, the camera fitted to it. The one way to undo an
+ * arrangement, which is what makes keeping the arrangement safe.
+ */
+function reset(): void {
+  positions.value = layoutGraph(props.graph).positions;
+  emit("update:pinned", new Map());
+  fit();
 }
 
 function onKeydown(event: KeyboardEvent): void {
@@ -205,7 +236,7 @@ onMounted(() => {
 });
 onBeforeUnmount(() => observer?.disconnect());
 
-defineExpose({ fit });
+defineExpose({ fit, reset });
 </script>
 
 <template>
@@ -214,7 +245,7 @@ defineExpose({ fit });
     class="canvas-surface neu-well"
     tabindex="0"
     role="application"
-    aria-label="Execution map. Arrow keys pan, plus and minus zoom, 0 fits the graph, Escape clears the selection."
+    aria-label="Execution map. Click a dot to select it and double-click to open it. Arrow keys pan, plus and minus zoom, 0 fits the camera, Enter opens, Escape clears the selection."
     @pointerdown="onPointerDown($event, null)"
     @pointermove="onPointerMove"
     @pointerup="onPointerUp"
@@ -257,7 +288,8 @@ defineExpose({ fit });
       @blur="hovered = null"
       @mouseenter="hovered = node.id"
       @mouseleave="hovered = null"
-      @keydown.enter.stop.prevent="$emit('update:selected', node.id)"
+      @keydown.enter.stop.prevent="open(node)"
+      @dblclick.stop.prevent="open(node)"
     />
 
     <!-- The name appears on hover or focus and never at rest: the map is a
@@ -267,6 +299,8 @@ defineExpose({ fit });
       :key="`label-${node.id}`"
       class="canvas-label"
       :class="{ held: node.id === selected }"
+      @pointerdown.stop
+      @pointerup.stop
       :style="{ left: `${at(node.id).x}px`, top: `${at(node.id).y + nodeRadius(node.weight) * camera.zoom + 8}px` }"
     >
       <span class="canvas-label-name">{{ node.label }}</span>

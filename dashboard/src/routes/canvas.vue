@@ -233,7 +233,10 @@ watch(shown, (next) => {
       <section class="canvas-filter neu-well" aria-labelledby="canvas-filter-title">
         <div class="session-filter-heading">
           <h2 id="canvas-filter-title">Show</h2>
-          <button type="button" class="session-filter-control" @click="map?.fit()">fit the map</button>
+          <!-- The only way back to how it first drew, which is what makes
+               keeping an arrangement safe: drop a dot anywhere and it stays
+               there until this is pressed. -->
+          <button type="button" class="session-filter-control" @click="map?.reset()">reset the map</button>
         </div>
         <!-- A filter REMOVES a kind and takes its lines with it. Selecting a dot
              does not: it dims the others and removes nothing. Two controls that
