@@ -12,6 +12,30 @@ import { inspectSeedSource, readVerifiedAttempt, verifiedTargetSeed } from "../.
 import { assertCandidateSeed } from "../../../src/contracts/candidate-seed.ts";
 import { seedFixture, git } from "../../fixtures/seeded-continuation.ts";
 
+for (const variant of ["accepted", "wrong-phase", "wrong-round", "not-succeeded"] as const) {
+  test(`seed recognizes atomic builder completion: ${variant}`, async () => {
+    const world = await seedFixture();
+    const path = join(world.sourceDir, "journal.jsonl");
+    const records = readFileSync(path, "utf8").trim().split("\n").map(line => JSON.parse(line));
+    const row = records.find(record => record.event.evidence?.type === "phase");
+    const phase = row.event.evidence.phase;
+    row.event.evidence = { type: "phase-accepted", phase, accepted: {
+      phaseKey: variant === "wrong-phase" ? "another-builder" : phase.key, ordinal: phase.ordinal,
+      envelopeId: "accepted-builder", envelopeDigest: "a".repeat(64), round: variant === "wrong-round" ? 1 : phase.correctionCount,
+      candidateSha: world.candidateSha,
+    } };
+    if (variant === "not-succeeded") phase.status = "VALIDATING";
+    writeFileSync(path, records.map(record => JSON.stringify(record)).join("\n") + "\n");
+    const before = readFileSync(path);
+    if (variant === "accepted") {
+      const result = await seedCommand({ ...world.seedOptions, quiescence: () => "quiescent" });
+      assert.equal(result.status?.seed?.seedCandidateSha, world.candidateSha);
+      assert.equal(result.status?.budget.callsSpent, 0);
+    } else await assert.rejects(seedCommand({ ...world.seedOptions, quiescence: () => "quiescent" }), /accepted builder binding/);
+    assert.deepEqual(readFileSync(path), before);
+  });
+}
+
 const absentTarget = (world: Awaited<ReturnType<typeof seedFixture>>) =>
   assert.equal(existsSync(join(world.stateRoot, "projects", world.config.project.slug, "tasks", "target")), false);
 

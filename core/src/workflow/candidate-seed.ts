@@ -70,7 +70,12 @@ export async function inspectSeedSource(dir: string, repository: string, expecte
   for (const record of read.records) {
     const evidence = record.event.evidence;
     if (evidence?.type === "process") processes.set(evidence.record.runId, evidence);
-    if (record.source_seq < l7.source_seq && evidence?.type === "phase" && evidence.phase.owner === "builder") producerPhases.set(evidence.phase.phaseId, evidence.phase.status);
+    if (record.source_seq < l7.source_seq && (evidence?.type === "phase" || evidence?.type === "phase-accepted" || evidence?.type === "resume-activation") && evidence.phase?.owner === "builder") {
+      if (evidence.type === "phase-accepted" && (evidence.accepted.phaseKey !== evidence.phase.key ||
+          evidence.accepted.ordinal !== evidence.phase.ordinal || evidence.phase.status !== "SUCCEEDED" ||
+          evidence.accepted.round !== evidence.phase.correctionCount)) throw new CandidateSeedRejected("accepted builder binding is inconsistent");
+      producerPhases.set(evidence.phase.phaseId, evidence.phase.status);
+    }
   }
   if (![...producerPhases.values()].includes("SUCCEEDED") || [...producerPhases.values()].some((state) => state !== "SUCCEEDED") || processes.size === 0 || source.budget.callsSpent < new Set([...processes.values()].map((entry) => entry.record.reservationId)).size) {
     throw new CandidateSeedRejected("missing completed builder or settled call evidence");
