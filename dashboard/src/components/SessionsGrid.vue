@@ -84,28 +84,37 @@ const groupEntries = computed(() => groupFilterEntries(
 
 <template>
   <section class="sessions-shell" aria-labelledby="sessions-title">
-    <div class="run-count-tile">
-      <p class="eyebrow">runs</p>
-      <h1 id="sessions-title" class="run-count-headline">
-        <strong>{{ visibleSessions.length }}</strong>
-      </h1>
-      <span>of {{ sessions.length }} total</span>
+    <!-- The left rail: how many runs the board is showing, and the ladder that
+         decides which. They travel together and they stay put, so the count
+         always describes what is on screen at the moment you read it. -->
+    <div class="session-rail">
+      <div class="run-count-tile">
+        <p class="eyebrow">runs</p>
+        <h1 id="sessions-title" class="run-count-headline">
+          <strong>{{ visibleSessions.length }}</strong>
+        </h1>
+        <span>of {{ sessions.length }} total</span>
+      </div>
+      <SessionFilterRow
+        class="session-filter-row filter-ladder lifecycle-ladder"
+        filter-id="state-filter"
+        label="Lifecycle state"
+        :entries="stateEntries"
+        :selected="selectedStates"
+        @update:selected="emit('update:selectedStates', $event)"
+      />
     </div>
+    <!-- The right rail, the same ladder at the other edge. Both filters come
+         before the menus that describe the board, so a reader walking this
+         screen with a keyboard meets everything that narrows it down first and
+         then the board itself, rather than crossing back for one stray menu. -->
     <SessionFilterRow
-      class="session-filter-row workflow-rail"
+      class="session-filter-row filter-ladder workflow-rail"
       filter-id="workflow-filter"
       label="Workflow"
       :entries="workflowEntries"
       :selected="selectedWorkflows"
       @update:selected="emit('update:selectedWorkflows', $event)"
-    />
-    <SessionFilterRow
-      class="session-filter-row lifecycle-ladder"
-      filter-id="state-filter"
-      label="Lifecycle state"
-      :entries="stateEntries"
-      :selected="selectedStates"
-      @update:selected="emit('update:selectedStates', $event)"
     />
     <!-- One card, split in half: the ask these runs came out of on the left,
          the plan they belong to on the right. Two menus that each answered

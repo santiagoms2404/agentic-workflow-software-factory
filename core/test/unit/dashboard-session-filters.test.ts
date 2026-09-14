@@ -152,3 +152,37 @@ test("individual and select-all toggles preserve literal menu selection", () => 
   assert.deepEqual(toggleAllFilterValues(["alpha", "beta"], ["outside"]), ["outside", "alpha", "beta"]);
   assert.deepEqual(toggleAllFilterValues(["alpha", "beta"], ["outside", "alpha", "beta"]), ["outside"]);
 });
+
+function source(path: string): string {
+  return readFileSync(new URL(`../../../${path}`, import.meta.url), "utf8");
+}
+
+test("the two filter ladders stand at opposite edges of the board and both stay put", () => {
+  const shell = source("dashboard/src/styles/morphism.css");
+  const grid = source("dashboard/src/components/SessionsGrid.vue");
+  // Three columns, and the menus that FILTER the board at the two edges while
+  // the menus that describe it sit above it and scroll away with it.
+  assert.match(shell, /\.sessions-shell \{[^}]*grid-template-columns: 232px minmax\(0, 1fr\) 264px;/su);
+  assert.match(shell, /\.sessions-shell \{[^}]*grid-template-areas:\s*"rail context workflows"\s*"rail board   workflows";/su);
+  // A filter you have to scroll back up to reach is a filter you stop using,
+  // so both ladders ride down the page; the run count rides with the ladder
+  // that decides it, so it always describes what is on screen.
+  assert.match(shell, /\.session-rail \{[^}]*grid-area: rail;[^}]*position: sticky;\s*top: 82px;/su);
+  assert.match(shell, /\.workflow-rail \{[^}]*grid-area: workflows;[^}]*position: sticky;\s*top: 82px;/su);
+  assert.doesNotMatch(shell, /\.session-context \{[^}]*position: sticky/su);
+  assert.match(grid, /<div class="session-rail">[\s\S]*?class="run-count-tile"[\s\S]*?filter-ladder lifecycle-ladder[\s\S]*?<\/div>/u);
+  // One shape written once: two menus standing at opposite edges of the same
+  // board have to read as the same control, not as two that happen to rhyme.
+  assert.match(shell, /\.filter-ladder \.session-filter-options \{ flex-direction: column; flex-wrap: nowrap;/u);
+  assert.match(shell, /\.filter-ladder \.session-filter-option \{ width: 100%; justify-content: space-between; \}/u);
+  for (const rail of ["filter-ladder lifecycle-ladder", "filter-ladder workflow-rail"]) {
+    assert.ok(grid.includes(`class="session-filter-row ${rail}"`), rail);
+  }
+  // Neither ladder scrolls: every workflow and every state stays visible, so
+  // nothing about what exists is hidden behind a gesture.
+  assert.doesNotMatch(shell, /\.filter-ladder[^{]*\{[^}]*overflow(?:-x|-y)?: (?:auto|scroll)/su);
+  // One column below the breakpoint, where nothing is beside anything and so
+  // nothing has to stay put.
+  assert.match(shell, /grid-template-areas: "rail" "workflows" "context" "board";/u);
+  assert.match(shell, /\.session-rail, \.workflow-rail, \.backlog-rail \{ position: static; \}/u);
+});

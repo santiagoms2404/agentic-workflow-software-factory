@@ -3,8 +3,9 @@
 
    Loaded after dashboard.css so it can restate the treatments it replaces.
    Menus and columns are recessed wells; the buttons and cards on them are
-   raised pills. Layout moves the run count and lifecycle states to a left rail,
-   and the workflow and plan menus to a strip along the top.
+   raised pills. Layout puts the run count and the lifecycle ladder in a left
+   rail and the workflow ladder in a right one, both sticky, with the driving
+   session and plan menus above the board they describe and scrolling with it.
    =========================================================================== */
 
 /* --- Wells: the surfaces menus and columns sit in ------------------------- */
@@ -138,70 +139,69 @@
 .session-stack-peek:hover, .session-stack-peek:focus-visible { border: 0; box-shadow: var(--neu-hover); }
 .ticket-card { border: 0; border-radius: 12px; background: var(--neu-surface); box-shadow: var(--neu-raised-soft); }
 
-/* --- Sessions: rail layout ------------------------------------------------ */
+/* --- Sessions: two rails and a board -------------------------------------- */
+/* A ladder at each edge and the board between them. The shell runs wider and
+   sits closer to the window than it did: the old single left rail left about a
+   hundred pixels of nothing down each side, which is exactly the room the
+   second ladder needed. */
 .sessions-shell {
-  max-width: 1780px;
+  max-width: 1880px;
   margin: 0 auto;
-  padding: 20px 28px 34px;
+  padding: 20px 22px 34px;
   display: grid;
-  grid-template-columns: 288px minmax(0, 1fr);
+  grid-template-columns: 232px minmax(0, 1fr) 264px;
   grid-template-areas:
-    "count workflows"
-    "ladder context"
-    "ladder board";
+    "rail context workflows"
+    "rail board   workflows";
   gap: 16px 18px;
   align-items: start;
 }
+/* The two controls a reader reaches for most, kept where they can reach them.
+   A filter you have to scroll back up to find is a filter you stop using, so
+   both ladders and the count ride down the page with the board. The driving
+   session and plan menus deliberately do not: they describe the board rather
+   than filtering it down a long scroll, and they go with it. */
+.session-rail {
+  grid-area: rail;
+  position: sticky;
+  top: 82px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
 .run-count-tile {
-  grid-area: count;
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 17px 20px;
+  padding: 15px 18px;
 }
 .run-count-tile p, .run-count-tile h1 { margin: 0; }
 .run-count-tile strong { color: var(--text); font: 700 32px var(--mono); line-height: 1.15; }
 .run-count-tile span { color: var(--dim); font: 13px var(--mono); }
 
-/* The label pins to the top-left corner on its own row, which frees the
-   select-all button to centre against the block of chips beside it. */
-.workflow-rail {
-  grid-area: workflows;
+/* Both ladders take one shape: the label and its select-all stacked at the
+   top, then a column of full-width chips with the count pinned to the right
+   edge. Written once, because two menus standing at opposite edges of the same
+   board have to read as the same control or the symmetry reads as an accident.
+   Every entry stays visible — neither ladder scrolls, so nothing about which
+   workflows or which states exist is hidden behind a gesture. */
+.filter-ladder {
   min-width: 0;
-  display: grid;
-  grid-template-columns: minmax(150px, auto) minmax(0, 1fr);
-  grid-template-areas:
-    "label   label"
-    "control options";
-  gap: 8px 20px;
-  align-items: center;
-  padding: 14px 18px;
-}
-/* Unwrap the heading so its label and button can take separate grid areas. */
-.workflow-rail .session-filter-heading { display: contents; }
-.workflow-rail .session-filter-heading h2 { grid-area: label; justify-self: start; }
-.workflow-rail .session-filter-select-all { grid-area: control; align-self: center; justify-self: stretch; }
-/* Every workflow stays visible: the strip wraps rather than scrolling. */
-.workflow-rail .session-filter-options {
-  grid-area: options;
-  flex-wrap: wrap;
-  gap: 12px;
-  padding: 4px 0;
-}
-.workflow-rail .session-filter-option { flex: none; }
-
-.lifecycle-ladder {
-  grid-area: ladder;
-  position: sticky;
-  top: 82px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 16px 17px;
+  gap: 10px;
+  padding: 14px 14px;
 }
-.lifecycle-ladder .session-filter-heading { flex-direction: column; align-items: stretch; gap: 10px; }
-.lifecycle-ladder .session-filter-options { flex-direction: column; flex-wrap: nowrap; gap: 10px; }
-.lifecycle-ladder .session-filter-option { width: 100%; min-height: 50px; justify-content: space-between; }
+.filter-ladder .session-filter-heading { flex-direction: column; align-items: stretch; gap: 8px; }
+.filter-ladder .session-filter-options { flex-direction: column; flex-wrap: nowrap; gap: 8px; }
+.filter-ladder .session-filter-option { width: 100%; justify-content: space-between; }
+
+.workflow-rail {
+  grid-area: workflows;
+  position: sticky;
+  top: 82px;
+}
 
 .sessions-shell .sessions-grid {
   grid-area: board;
@@ -921,7 +921,7 @@ pre::-webkit-scrollbar-corner { background: var(--neu-scroll-track); }
 @media (max-width: 1180px) {
   .sessions-shell {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "count" "workflows" "ladder" "context" "board";
+    grid-template-areas: "rail" "workflows" "context" "board";
   }
   /* Half a card each is too narrow to read below this width; they stack and the
      hairline moves to the top edge of the second. */
@@ -941,9 +941,11 @@ pre::-webkit-scrollbar-corner { background: var(--neu-scroll-track); }
   .groups-list { max-height: 260px; }
   .canvas-shell { grid-template-columns: minmax(0, 1fr); grid-template-areas: "rail" "board"; }
   .canvas-rail { position: static; }
-  .lifecycle-ladder, .backlog-rail { position: static; }
-  .lifecycle-ladder .session-filter-options { flex-direction: row; flex-wrap: wrap; }
-  .lifecycle-ladder .session-filter-option { width: auto; }
+  /* One column: nothing is beside anything, so nothing has to stay put, and
+     a ladder the full width of the page is a row of chips again. */
+  .session-rail, .workflow-rail, .backlog-rail { position: static; }
+  .filter-ladder .session-filter-options { flex-direction: row; flex-wrap: wrap; }
+  .filter-ladder .session-filter-option { width: auto; }
   .backlog-rail .backlog-metrics { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 }
 
