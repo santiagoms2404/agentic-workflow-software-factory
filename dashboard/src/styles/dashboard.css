@@ -860,6 +860,63 @@ pre { max-height: 42vh; margin: 8px 0 0; padding: 12px 14px; overflow: auto; bor
 .board-group-empty { margin: 0; font: 13px var(--mono); }
 .board-group-expand-count, .board-group-expand-action { font: 12px var(--mono); }
 
+/* --- Canvas: the execution map --------------------------------------------- */
+/* Three hues so a reader tells a run from a session from a plan without
+   hovering anything. Colour here is information, not decoration, which is why
+   it is spent on the dots and on nothing else in this view. */
+.canvas-kind-run .canvas-kind-dot, .canvas-dot-run { background: var(--cyan); }
+.canvas-kind-session .canvas-kind-dot, .canvas-dot-session { background: var(--violet); }
+.canvas-kind-plan .canvas-kind-dot, .canvas-dot-plan { background: var(--amber); }
+/* Shape as well as hue, because hue alone cannot carry this in every palette:
+   Forest is monochromatic by design, and its cyan and violet sit a few steps
+   apart. A circle, a squircle and a rounded square separate at a glance on any
+   ground — and a silhouette needs no ring drawn around it to be read. */
+.canvas-kind-dot { width: 12px; height: 12px; flex: 0 0 auto; }
+.canvas-dot-run, .canvas-kind-run .canvas-kind-dot { border-radius: 50%; }
+.canvas-dot-session, .canvas-kind-session .canvas-kind-dot { border-radius: 32%; }
+.canvas-dot-plan, .canvas-kind-plan .canvas-kind-dot { border-radius: 14%; }
+.canvas-head p { margin: 0; }
+.canvas-head h1 { margin: 3px 0 0; font-size: 28px; }
+.canvas-head-note { margin-top: 6px; color: var(--dim); font: 12px var(--mono); }
+.canvas-parked-note { color: var(--dim); font: 11px var(--mono); }
+.canvas-parked-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; }
+.canvas-selected-title { margin: 2px 0 0; font-size: 17px; line-height: 1.35; }
+.canvas-selected-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; color: var(--dim); font: 11px var(--mono); }
+.canvas-selected-meta code { color: var(--purple); }
+.canvas-selected-summary { margin: 0; font: 12.5px var(--mono); }
+.canvas-edge { fill: none; stroke-width: 1.4; stroke: color-mix(in srgb, var(--faint) 62%, transparent); }
+/* A recorded continuation is the owner's connection string, and the only line
+   that is spent a colour; belonging to a session is a hairline, and coming
+   from a plan is dashed. A line nobody recorded would look like none of them. */
+.canvas-edge.edge-continuation { stroke: var(--accent); stroke-width: 2.2; }
+.canvas-edge.edge-plan { stroke-dasharray: 5 5; stroke: color-mix(in srgb, var(--amber) 50%, transparent); }
+.canvas-edge.dimmed { opacity: .2; }
+.canvas-edge.lit { opacity: 1; }
+.canvas-label {
+  position: absolute;
+  z-index: 4;
+  max-width: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  padding: 9px 13px;
+  transform: translateX(-50%);
+  border-radius: 13px;
+  background: var(--neu-surface);
+  box-shadow: var(--neu-raised);
+  pointer-events: none;
+}
+.canvas-label.held { pointer-events: auto; }
+.canvas-label-name { color: var(--text); font-size: 13px; line-height: 1.35; overflow-wrap: anywhere; }
+.canvas-label-meta { color: var(--dim); font: 10.5px var(--mono); }
+.canvas-label-open { color: var(--cyan); font: 11px var(--mono); text-decoration: none; }
+.canvas-label-open:hover { color: var(--text); }
+.canvas-empty { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; font: 13px var(--mono); }
+/* Shown only where the map steps aside, which is the narrow layout. */
+.canvas-too-narrow { display: none; grid-area: board; margin: 0; padding: 18px 20px; font-size: 14px; }
+.canvas-too-narrow a { color: var(--cyan); }
+
 /* --- Driving sessions screen ---------------------------------------------- */
 .groups-head p { margin: 0; }
 .groups-head h1 { margin: 3px 0 0; font-size: 28px; }

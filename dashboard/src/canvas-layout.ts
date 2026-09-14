@@ -30,6 +30,16 @@ const REPULSION = 52_000;
 const SPRING = 0.045;
 const SPRING_LENGTH = 168;
 const CENTRING = 0.0035;
+/**
+ * The pull to the centre is stronger vertically than horizontally, so the graph
+ * settles into a landscape ellipse instead of a circle.
+ *
+ * A circular graph fitted into a landscape viewport is limited by its height
+ * and leaves half the width empty — which is the blank space this dashboard has
+ * been asked twice to remove. Squashing the settled shape to roughly the
+ * proportions of the surface it will be drawn on costs nothing and fills it.
+ */
+const VERTICAL_CENTRING = 2.1;
 /** Nodes stop pushing at this distance, so a settled graph does not vibrate. */
 const MIN_SEPARATION = 62;
 const DAMPING = 0.82;
@@ -133,7 +143,7 @@ export function stepSimulation(graph: CanvasGraph, bodies: Map<string, Body>): v
     const body = bodies.get(id);
     if (body === undefined || body.pinned) continue;
     body.vx = (body.vx - body.x * CENTRING) * DAMPING;
-    body.vy = (body.vy - body.y * CENTRING) * DAMPING;
+    body.vy = (body.vy - body.y * CENTRING * VERTICAL_CENTRING) * DAMPING;
     body.x += body.vx * STEP;
     body.y += body.vy * STEP;
   }

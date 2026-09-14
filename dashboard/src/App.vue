@@ -6,8 +6,10 @@ import SessionsGrid from "./components/SessionsGrid.vue";
 import SessionRoute from "./components/SessionRoute.vue";
 import SettingsRoute from "./components/SettingsRoute.vue";
 import BacklogRoute from "./routes/backlog.vue";
+import CanvasScreen from "./routes/canvas.vue";
 import GroupsRoute from "./routes/groups.vue";
 import { usePolling, type PollMode } from "./composables/usePolling.ts";
+import { parseCanvasRoute, type CanvasRoute } from "./canvas-view.ts";
 import { admitNewFilterValues, LIFECYCLE_STATES } from "./session-filters.ts";
 import { groupFilterValues } from "./session-groups.ts";
 import { PLAN_KINDS } from "./session-plans.ts";
@@ -28,6 +30,9 @@ const adapters = ref<AdaptersResponse>({ adapters: [] });
 const settingsRoute = ref(false);
 const backlogRoute = ref(false);
 const groupsRoute = ref(false);
+const canvasRoute = ref(false);
+/** Selection, camera and filters, all of them in the URL so Back restores them. */
+const canvasState = ref<CanvasRoute>({ kinds: ["run", "session", "plan"], selected: null, camera: null });
 /** The plan a sessions-view card asked the backlog to open with. */
 const backlogPlan = ref<string | null>(null);
 /** The driving session whose tree the groups screen is showing. */
@@ -127,6 +132,10 @@ function readRoute(): void {
   backlogPlan.value = backlogWithPlan?.[1] ? decodeURIComponent(backlogWithPlan[1]) : null;
   // The decision tree has its own screen: a 72-stage group needs the width, and
   // sharing the sessions view with the runs it produced gave it neither.
+  // `#/canvas?kinds=…&sel=…&cam=…`: the canvas keeps its whole state here,
+  // because Back has to restore the camera and the selection with it.
+  canvasRoute.value = location.hash === "#/canvas" || location.hash.startsWith("#/canvas?");
+  if (canvasRoute.value) canvasState.value = parseCanvasRoute(location.hash);
   const groupWithId = /^#\/groups\/([^/]+)$/.exec(location.hash);
   groupsRoute.value = location.hash === "#/groups" || groupWithId !== null;
   selectedGroup.value = groupWithId?.[1] ? decodeURIComponent(groupWithId[1]) : null;
@@ -145,7 +154,7 @@ const mode = computed<PollMode>(() => health.value?.activeSessions ? "live" : se
 async function load(): Promise<void> {
   const dataRequest = settingsRoute.value
     ? fetch("/api/v1/adapters")
-    : groupsRoute.value ? fetch("/api/v1/sessions")
+    : groupsRoute.value || canvasRoute.value ? fetch("/api/v1/sessions")
     : backlogRoute.value ? fetch("/api/v1/tickets")
     : selectedId.value
       ? fetch(`/api/v1/sessions/${encodeURIComponent(selectedId.value)}`)
@@ -191,8 +200,16 @@ const { lastPollAt, pollMs } = usePolling(load, () => mode.value);
     :settings="settingsRoute"
     :backlog="backlogRoute"
     :groups="groupsRoute"
+    :canvas="canvasRoute"
   >
     <SettingsRoute v-if="settingsRoute" :settings="settings" :adapters="adapters.adapters" :health="health" />
+    <CanvasScreen
+      v-else-if="canvasRoute"
+      :sessions="sessions.sessions"
+      :plans="sessions.plans"
+      :groups="groups.groups"
+      :route="canvasState"
+    />
     <GroupsRoute v-else-if="groupsRoute" :groups="groups" :selected="selectedGroup" />
     <BacklogRoute v-else-if="backlogRoute" :backlog="backlog" :plan="backlogPlan" />
     <SessionRoute v-else-if="detail" :session="detail" :selected-phase-id="selectedPhaseId" />

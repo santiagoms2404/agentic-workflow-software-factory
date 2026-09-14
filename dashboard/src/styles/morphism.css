@@ -13,6 +13,7 @@
 .plan-picker,
 .session-context,
 .groups-list,
+.canvas-parked-list,
 .groups-canvas,
 .groups-head,
 .backlog-column,
@@ -482,6 +483,61 @@
 }
 .tree-node-panel-body { border-radius: 12px; }
 
+/* --- Canvas: the execution map --------------------------------------------- */
+/* The same rail-and-board grammar the sessions, backlog and driving-session
+   screens use: a column of recessed panels on the left, one recessed surface on
+   the right, and everything standing on that surface a raised pill. */
+.canvas-shell {
+  max-width: 1780px;
+  margin: 0 auto;
+  padding: 20px 28px 34px;
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  grid-template-areas: "rail board";
+  gap: 16px 18px;
+  align-items: start;
+}
+.canvas-rail { grid-area: rail; position: sticky; top: 82px; display: flex; flex-direction: column; gap: 14px; }
+.canvas-head, .canvas-filter, .canvas-selected, .canvas-parked { padding: 16px 18px; }
+.canvas-filter, .canvas-selected, .canvas-parked { display: flex; flex-direction: column; gap: 11px; }
+.canvas-filter-options { display: flex; flex-direction: column; gap: 10px; }
+.canvas-kind { width: 100%; justify-content: flex-start; gap: 11px; min-height: 44px; }
+.canvas-kind .session-filter-count { margin-left: auto; }
+.canvas-parked-list { display: flex; flex-direction: column; gap: 8px; max-height: 176px; overflow-y: auto; overscroll-behavior: contain; }
+.canvas-parked-item { min-height: 38px; gap: 10px; text-decoration: none; }
+.canvas-open { align-self: flex-start; min-height: 34px; padding: 7px 15px; text-decoration: none; }
+
+.canvas-board { grid-area: board; }
+.canvas-surface {
+  position: relative;
+  height: calc(100vh - 150px);
+  min-height: 460px;
+  overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+}
+.canvas-surface:active { cursor: grabbing; }
+.canvas-edges { position: absolute; inset: 0; pointer-events: none; }
+/* A dot is a raised pill like everything else standing on a well, and the one
+   you are holding stands proudest. Nothing here is drawn with an edge. */
+.canvas-dot {
+  position: absolute;
+  padding: 0;
+  border: 0;
+  box-shadow: var(--neu-raised-soft);
+  cursor: pointer;
+  transition: box-shadow 170ms ease, opacity 170ms ease, transform 170ms ease;
+}
+.canvas-dot:hover { box-shadow: var(--neu-hover); transform: translateY(-1px); }
+.canvas-dot.selected { box-shadow: var(--neu-hover); transform: scale(1.12); }
+/* Selection DIMS. Every dot keeps its place and its lines; nothing leaves. */
+.canvas-dot.dimmed { opacity: .26; box-shadow: none; }
+.canvas-dot.adjacent { opacity: .85; }
+.canvas-cluster { position: absolute; border-radius: 26px; background: var(--neu-well); box-shadow: var(--neu-pressed-soft); pointer-events: none; }
+@media (prefers-reduced-motion: reduce) {
+  .canvas-dot, .canvas-dot.selected { transition: none; transform: none; }
+}
+
 /* --- Backlog: rail layout ------------------------------------------------- */
 .backlog-shell {
   display: grid;
@@ -669,6 +725,7 @@ html::-webkit-scrollbar,
 .workflow-rail .session-filter-options::-webkit-scrollbar,
 .session-group-entries::-webkit-scrollbar,
 .groups-list::-webkit-scrollbar,
+.canvas-parked-list::-webkit-scrollbar,
 .tree-graph-scroll::-webkit-scrollbar,
 .tree-node-panel-body::-webkit-scrollbar,
 .plan-card-row::-webkit-scrollbar,
@@ -681,6 +738,7 @@ html::-webkit-scrollbar-track,
 .workflow-rail .session-filter-options::-webkit-scrollbar-track,
 .session-group-entries::-webkit-scrollbar-track,
 .groups-list::-webkit-scrollbar-track,
+.canvas-parked-list::-webkit-scrollbar-track,
 .tree-graph-scroll::-webkit-scrollbar-track,
 .tree-node-panel-body::-webkit-scrollbar-track,
 .plan-card-row::-webkit-scrollbar-track,
@@ -693,6 +751,7 @@ html::-webkit-scrollbar-thumb,
 .workflow-rail .session-filter-options::-webkit-scrollbar-thumb,
 .session-group-entries::-webkit-scrollbar-thumb,
 .groups-list::-webkit-scrollbar-thumb,
+.canvas-parked-list::-webkit-scrollbar-thumb,
 .tree-graph-scroll::-webkit-scrollbar-thumb,
 .tree-node-panel-body::-webkit-scrollbar-thumb,
 .plan-card-row::-webkit-scrollbar-thumb,
@@ -713,6 +772,7 @@ html::-webkit-scrollbar-thumb:hover,
 .workflow-rail .session-filter-options::-webkit-scrollbar-thumb:hover,
 .session-group-entries::-webkit-scrollbar-thumb:hover,
 .groups-list::-webkit-scrollbar-thumb:hover,
+.canvas-parked-list::-webkit-scrollbar-thumb:hover,
 .tree-graph-scroll::-webkit-scrollbar-thumb:hover,
 .tree-node-panel-body::-webkit-scrollbar-thumb:hover,
 .plan-card-row::-webkit-scrollbar-thumb:hover,
@@ -746,6 +806,8 @@ pre::-webkit-scrollbar-corner { background: var(--neu-scroll-track); }
   }
   .groups-rail { position: static; }
   .groups-list { max-height: 260px; }
+  .canvas-shell { grid-template-columns: minmax(0, 1fr); grid-template-areas: "rail" "board"; }
+  .canvas-rail { position: static; }
   .lifecycle-ladder, .backlog-rail { position: static; }
   .lifecycle-ladder .session-filter-options { flex-direction: row; flex-wrap: wrap; }
   .lifecycle-ladder .session-filter-option { width: auto; }
@@ -769,6 +831,11 @@ pre::-webkit-scrollbar-corner { background: var(--neu-scroll-track); }
   .board-group.spanning, .board-group.empty { background: transparent; box-shadow: none; }
   .board-group-head { padding-top: 12px; border-top: 1px solid var(--border-soft); }
   .board-group-open { top: 10px; }
+  /* Pan and zoom over thirty-odd dots on a phone is a second set of gestures to
+     design and keep, for a screen that fits four of them. The map steps aside
+     and names the screen that shows the same runs. */
+  .canvas-board, .canvas-filter, .canvas-selected, .canvas-parked { display: none; }
+  .canvas-too-narrow { display: block; }
   .board-group-grid { grid-template-columns: minmax(0, 1fr); }
   /* One column of cards, so every section and every session inside it is one
      column wide whatever it holds. */
