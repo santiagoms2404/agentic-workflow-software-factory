@@ -163,7 +163,9 @@ test("the two filter ladders stand at opposite edges of the board and both stay 
   // Three columns, and the menus that FILTER the board at the two edges while
   // the menus that describe it sit above it and scroll away with it.
   assert.match(shell, /\.sessions-shell \{[^}]*grid-template-columns: 232px minmax\(0, 1fr\) 264px;/su);
-  assert.match(shell, /\.sessions-shell \{[^}]*grid-template-areas:\s*"rail context workflows"\s*"rail board   workflows";/su);
+  // Three rows now: the failure surface sits between the menus and the board it
+  // describes, and both rails span all of them.
+  assert.match(shell, /\.sessions-shell \{[^}]*grid-template-areas:\s*"rail context  workflows"\s*"rail failures workflows"\s*"rail board    workflows";/su);
   // A filter you have to scroll back up to reach is a filter you stop using,
   // so both ladders ride down the page; the run count rides with the ladder
   // that decides it, so it always describes what is on screen.
@@ -183,6 +185,6 @@ test("the two filter ladders stand at opposite edges of the board and both stay 
   assert.doesNotMatch(shell, /\.filter-ladder[^{]*\{[^}]*overflow(?:-x|-y)?: (?:auto|scroll)/su);
   // One column below the breakpoint, where nothing is beside anything and so
   // nothing has to stay put.
-  assert.match(shell, /grid-template-areas: "rail" "workflows" "context" "board";/u);
+  assert.match(shell, /grid-template-areas: "rail" "workflows" "context" "failures" "board";/u);
   assert.match(shell, /\.session-rail, \.workflow-rail, \.backlog-rail \{ position: static; \}/u);
 });

@@ -9,6 +9,7 @@ import BacklogRoute from "./routes/backlog.vue";
 import CanvasScreen from "./routes/canvas.vue";
 import GroupsRoute from "./routes/groups.vue";
 import { usePolling, type PollMode } from "./composables/usePolling.ts";
+import { useNotifySound } from "./composables/useNotifySound.ts";
 import { isCanvasRoute, parseCanvasRoute, type CanvasRoute } from "./canvas-view.ts";
 import { admitNewFilterValues, LIFECYCLE_STATES } from "./session-filters.ts";
 import { groupFilterValues } from "./session-groups.ts";
@@ -188,6 +189,15 @@ async function load(): Promise<void> {
   }
 }
 const { lastPollAt, pollMs } = usePolling(load, () => mode.value);
+/**
+ * Two sounds, so silence means nothing is wrong.
+ *
+ * Fed the sessions list, which only changes when a poll returned one — so it
+ * announces transitions it actually observed and nothing else. Off until the
+ * reader turns it on in Settings, because browsers refuse to make sound before
+ * an interaction and because nothing should start making noise on its own.
+ */
+const { enabled: soundEnabled, setEnabled: setSoundEnabled } = useNotifySound(computed(() => sessions.value.sessions));
 </script>
 
 <template>
@@ -202,7 +212,8 @@ const { lastPollAt, pollMs } = usePolling(load, () => mode.value);
     :groups="groupsRoute"
     :canvas="canvasRoute"
   >
-    <SettingsRoute v-if="settingsRoute" :settings="settings" :adapters="adapters.adapters" :health="health" />
+    <SettingsRoute v-if="settingsRoute" :settings="settings" :adapters="adapters.adapters" :health="health"
+      :sound-enabled="soundEnabled" @update:sound-enabled="setSoundEnabled" />
     <CanvasScreen
       v-else-if="canvasRoute"
       :sessions="sessions.sessions"

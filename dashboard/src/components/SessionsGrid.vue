@@ -15,6 +15,7 @@ import SessionBoardSection from "./SessionBoardSection.vue";
 import SessionFilterRow from "./SessionFilterRow.vue";
 import SessionGroupRow from "./SessionGroupRow.vue";
 import SessionPlanRow from "./SessionPlanRow.vue";
+import RunFailures from "./RunFailures.vue";
 
 const props = defineProps<{
   sessions: readonly Session[];
@@ -136,6 +137,12 @@ const groupEntries = computed(() => groupFilterEntries(
         @update:selected="emit('update:selectedPlanKinds', $event)"
       />
     </section>
+    <!-- Above the board and below the menus, because it is about the runs on
+         the board rather than a way of narrowing them. Closed until asked for:
+         most visits here are not about failures. Fed from `sessions`, not from
+         the filtered set — a failure hidden by a filter is still a failure,
+         and this is the one place that says the factory fell over. -->
+    <RunFailures class="run-failures-area" :sessions="sessions" />
     <div v-if="visibleSessions.length" class="sessions-grid">
       <SessionBoardSection
         v-for="section in sections"

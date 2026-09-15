@@ -151,8 +151,9 @@
   display: grid;
   grid-template-columns: 232px minmax(0, 1fr) 264px;
   grid-template-areas:
-    "rail context workflows"
-    "rail board   workflows";
+    "rail context  workflows"
+    "rail failures workflows"
+    "rail board    workflows";
   gap: 16px 18px;
   align-items: start;
 }
@@ -219,6 +220,78 @@
   gap: 18px;
 }
 .sessions-shell .empty-note { grid-area: board; max-width: none; margin: 0; padding: 30px; }
+
+/* --- Why runs stopped ------------------------------------------------------ */
+/* Every phase record has carried `error.code` and `error.message` all along and
+   nothing rendered either. The class chips are the same raised pills every menu
+   on this board uses, so the one control that admits the factory fell over is
+   not a second design language. */
+.run-failures {
+  grid-area: failures;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 18px;
+}
+.run-failures-note, .run-failures-meaning { margin: 0; color: var(--dim); font: 12px var(--mono); }
+/* One line: the title, what it counts, and the classes, with the chips taking
+   the width the heading would otherwise leave empty. */
+.run-failures-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+.run-failures-bar h2 { margin: 0; }
+.run-failures-classes { flex: 1 1 auto; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
+.run-failure-class { gap: 10px; }
+.run-failures-codes { display: flex; flex-wrap: wrap; gap: 8px 14px; margin: 0; }
+.run-failure-code { display: inline-flex; align-items: center; gap: 7px; color: var(--dim); font-size: 12px; }
+/* Exactly three rows tall, then it scrolls: the list is for reading a pattern,
+   and a hundred failures must not push the board off the screen. */
+.run-failures-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 340px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.run-failure {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 11px 13px;
+  border-radius: 13px;
+  background: var(--neu-surface);
+  box-shadow: var(--neu-raised-soft);
+}
+.run-failure p { margin: 0; }
+.run-failure-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.run-failure-phase { color: var(--text); }
+.run-failure-code-name { color: var(--dim); font-size: 12px; }
+.run-failure-when { margin-left: auto; color: var(--faint); font: 11px var(--mono); }
+.run-failure-task { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; font-size: 13px; }
+.run-failure-task a { color: var(--text); text-decoration: none; }
+.run-failure-task a:hover { text-decoration: underline; }
+.run-failure-workflow { color: var(--faint); font: 11px var(--mono); }
+.run-failure-more { align-self: flex-start; min-height: 28px; padding: 4px 11px; font-size: 12px; }
+.run-failure-message {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 11px;
+  background: var(--neu-well);
+  box-shadow: var(--neu-pressed-soft);
+  color: var(--dim);
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+.run-failure-recoverable { font: 11px var(--mono); }
+
+/* --- Sound: two signals, and the switch that is also the browser's gesture -- */
+.settings-sound { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.settings-sound h2 { margin: 0; }
+.settings-sound-note { max-width: 62ch; margin: 0; color: var(--dim); font-size: 13px; line-height: 1.55; }
+.settings-sound-toggle { min-height: 40px; padding: 8px 16px; }
+.settings-sound-signals { display: flex; flex-wrap: wrap; gap: 10px 20px; margin: 0; padding: 0; list-style: none; }
+.settings-sound-signals li { display: inline-flex; align-items: baseline; gap: 9px; color: var(--dim); font-size: 12px; }
 
 /* One card above the board, split in half: which driving session these runs
    came out of, and which plan they belong to. Both answer "which of these
@@ -840,6 +913,8 @@
    =========================================================================== */
 html,
 .workflow-rail .session-filter-options,
+.run-failures-list,
+.run-failure-message,
 .session-group-entries,
 .groups-list,
 .tree-graph-scroll,
@@ -856,6 +931,8 @@ pre {
 }
 html::-webkit-scrollbar,
 .workflow-rail .session-filter-options::-webkit-scrollbar,
+.run-failures-list::-webkit-scrollbar,
+.run-failure-message::-webkit-scrollbar,
 .session-group-entries::-webkit-scrollbar,
 .groups-list::-webkit-scrollbar,
 .canvas-parked-list::-webkit-scrollbar,
@@ -869,6 +946,8 @@ html::-webkit-scrollbar,
 pre::-webkit-scrollbar { width: 10px; height: 10px; }
 html::-webkit-scrollbar-track,
 .workflow-rail .session-filter-options::-webkit-scrollbar-track,
+.run-failures-list::-webkit-scrollbar-track,
+.run-failure-message::-webkit-scrollbar-track,
 .session-group-entries::-webkit-scrollbar-track,
 .groups-list::-webkit-scrollbar-track,
 .canvas-parked-list::-webkit-scrollbar-track,
@@ -882,6 +961,8 @@ html::-webkit-scrollbar-track,
 pre::-webkit-scrollbar-track { border-radius: var(--neu-radius); background: var(--neu-scroll-track); }
 html::-webkit-scrollbar-thumb,
 .workflow-rail .session-filter-options::-webkit-scrollbar-thumb,
+.run-failures-list::-webkit-scrollbar-thumb,
+.run-failure-message::-webkit-scrollbar-thumb,
 .session-group-entries::-webkit-scrollbar-thumb,
 .groups-list::-webkit-scrollbar-thumb,
 .canvas-parked-list::-webkit-scrollbar-thumb,
@@ -903,6 +984,8 @@ pre::-webkit-scrollbar-thumb {
 }
 html::-webkit-scrollbar-thumb:hover,
 .workflow-rail .session-filter-options::-webkit-scrollbar-thumb:hover,
+.run-failures-list::-webkit-scrollbar-thumb:hover,
+.run-failure-message::-webkit-scrollbar-thumb:hover,
 .session-group-entries::-webkit-scrollbar-thumb:hover,
 .groups-list::-webkit-scrollbar-thumb:hover,
 .canvas-parked-list::-webkit-scrollbar-thumb:hover,
@@ -915,13 +998,14 @@ html::-webkit-scrollbar-thumb:hover,
 .ticket-source-scroll::-webkit-scrollbar-thumb:hover,
 pre::-webkit-scrollbar-thumb:hover { background-color: var(--neu-scroll-thumb-hover); }
 .workflow-rail .session-filter-options::-webkit-scrollbar-corner,
+.run-failure-message::-webkit-scrollbar-corner,
 .tree-graph-scroll::-webkit-scrollbar-corner,
 pre::-webkit-scrollbar-corner { background: var(--neu-scroll-track); }
 
 @media (max-width: 1180px) {
   .sessions-shell {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "rail" "workflows" "context" "board";
+    grid-template-areas: "rail" "workflows" "context" "failures" "board";
   }
   /* Half a card each is too narrow to read below this width; they stack and the
      hairline moves to the top edge of the second. */
