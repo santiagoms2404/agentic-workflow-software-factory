@@ -1,5 +1,7 @@
 # AWSF — Agentic Workflow Software Factory
 
+[![CI](https://github.com/santiagoms2404/agentic-workflow-software-factory/actions/workflows/ci.yml/badge.svg)](https://github.com/santiagoms2404/agentic-workflow-software-factory/actions/workflows/ci.yml)
+
 A single-operator software factory for AI coding agents. A host-owned state
 machine governs a task's lifecycle, a typed phase engine governs the work inside
 each executing state, and a human at a terminal is the only path to landed code.
@@ -127,41 +129,40 @@ of the contract: a refusal must name the real defect, or fixing what it named
 would let an illegitimate transition through.
 
 ```mermaid
-stateDiagram-v2
-  direction LR
-  [*] --> DRAFT : awsf new
-  DRAFT --> PREPARED : L1 · host
-  PREPARED --> RUNNING : L4 ✦ · call reserved
-  RUNNING --> GATING : L7 · host commit exists
-  RUNNING --> AWAITING_OWNER : L26 · host
-  GATING --> RUNNING : L10 ✦ · correction
-  GATING --> REVIEWING : L11 ✦ · tier 2 only
-  GATING --> AWAITING_OWNER : L12 · tier 0/1 skips review
-  REVIEWING --> AWAITING_OWNER : L15 · verdict recorded
-  REVIEWING --> RUNNING : L16 ✦ · owner names a defect
-  AWAITING_OWNER --> REVIEWING : L25 ✦ · owner re-buys an unevidenced review
-  AWAITING_OWNER --> RUNNING : L19 ✦ · owner rework
-  AWAITING_OWNER --> LANDING : L20 · human on a TTY only
-  LANDING --> LANDED : L23 · HEAD equals candidate
-  LANDING --> BLOCKED : L24 · non-FF or dirty
-  LANDED --> PUBLISHED : L27 · human on a TTY only
-  PUBLISHED --> [*]
-  BLOCKED --> [*]
-  CANCELLED --> [*]
+flowchart TD
+  DRAFT --> |"L1 · host"| PREPARED
+  PREPARED --> |"L4 ✦ · call reserved"| RUNNING
+  RUNNING --> |"L7 · host commit exists"| GATING
+  RUNNING --> |"L26 · host"| AWAITING_OWNER
+  GATING --> |"L10 ✦ · correction"| RUNNING
+  GATING --> |"L11 ✦ · tier 2 only"| REVIEWING
+  GATING --> |"L12 · tier 0/1 skips review"| AWAITING_OWNER
+  REVIEWING --> |"L15 · verdict recorded"| AWAITING_OWNER
+  REVIEWING --> |"L16 ✦ · owner names a defect"| RUNNING
+  AWAITING_OWNER --> |"L25 ✦ · owner re-buys a review"| REVIEWING
+  AWAITING_OWNER --> |"L19 ✦ · owner rework"| RUNNING
+  AWAITING_OWNER --> |"L20 · human at a TTY"| LANDING
+  LANDING --> |"L23 · HEAD equals candidate"| LANDED
+  LANDING --> |"L24 · non-FF or dirty"| BLOCKED
+  LANDED --> |"L27 · human at a TTY"| PUBLISHED
 
-  note right of BLOCKED
-    Reachable from every active state by explicit
-    host reason code — NEVER by a clock.
-    awsf retry mints attempt n+1 at DRAFT.
-  end note
-  note right of CANCELLED
-    Reachable from every active state by
-    explicit human cancel. Any other route
-    into LANDED throws HumanGateBypass.
-    ✦ = spawn site — legal only on edges
-    into RUNNING or REVIEWING.
-  end note
+  classDef human stroke:#F59E0B,stroke-width:2px
+  classDef terminal stroke:#64748B,stroke-width:2px
+  class AWAITING_OWNER,LANDING,LANDED,PUBLISHED human
+  class BLOCKED terminal
 ```
+
+`awsf new` creates the task at `DRAFT`. Four things the diagram deliberately
+leaves out, because drawing them would mean an edge from every node:
+
+- **`BLOCKED`** is reachable from every active state, by an explicit host reason
+  code and **never by a clock** — a timer is not among the deterministic reason
+  sources. `awsf retry` mints attempt n+1 back at `DRAFT`.
+- **`CANCELLED`** is reachable from every active state by explicit human cancel.
+- **✦ marks a spawn site**, legal only on edges into `RUNNING` or `REVIEWING`.
+- Any other route into `LANDED` throws `HumanGateBypass`.
+
+Amber nodes are the ones only a human can move into or out of.
 
 All 27 legal edges, all 94 rejected pairs and the ordered rejection contract are
 green in the suite. `LANDED` and `PUBLISHED` are reachable only through a human
