@@ -81,20 +81,27 @@ tier ceiling.
 
 ```mermaid
 flowchart LR
-  subgraph SM["STATE MACHINE — governs the task · 11 states · 27 edges · 94 ordered rejections"]
-    PREP["PREPARED"] --> RUN
-    subgraph RUN["RUNNING — the phase engine governs the sojourn"]
-      direction LR
-      p1["plan"] --> p2["build"] --> p3["test"] --> p4["document"]
-      p3 -. "gate fails → correct in the<br/>SAME session · no tier call" .-> p2
-    end
-    RUN --> G["GATING"]
-    G --> OWN["→ owner → land → publish"]
-    G -. "budget exhausted → state transition:<br/>counted · rationed · evidence-gated" .-> RUN
+  PREPARED --> |"L4 · one call reserved"| p1
+
+  subgraph RUNNING["RUNNING — one state, and the phase engine governs the whole sojourn inside it"]
+    p1["plan"] --> p2["build"] --> p3["test"] --> p4["document"]
+    p3 -.-> |"gate fails: re-prompt the SAME session · no tier call"| p2
   end
-  style RUN stroke:#22D3EE
-  style SM stroke:#A78BFA
+
+  p4 --> |"L7 · host commit exists"| GATING
+  GATING --> |"L11 / L12"| OWNER["AWAITING_OWNER → land → publish"]
+  GATING -.-> |"correction budget spent: escalate · counted · rationed"| p1
+
+  classDef cheap stroke:#22D3EE,stroke-width:2px
+  classDef costly stroke:#A78BFA,stroke-width:2px
+  class p1,p2,p3,p4 cheap
+  class PREPARED,GATING,OWNER costly
 ```
+
+Cyan is the cheap loop: a correction inside a phase re-prompts the same provider
+session with its context intact and costs nothing against the task's budget.
+Violet is the expensive one: escalating to a state transition is counted against
+the tier ceiling, reserved before it happens, and has to produce evidence.
 
 ### Six pillars
 
@@ -392,23 +399,48 @@ files.
 
 ## Workflows
 
-Eight recipes, each a fixed phase sequence the host opens; a model never selects
-its own next phase.
+Eight recipes. Each is a fixed phase sequence the host opens — a model never
+selects its own next phase, never skips one, and never adds one. Choosing
+between them is one question: **what evidence do you want to exist when the run
+ends?** Buying more workflow than the change needs spends the ceiling on
+ceremony; buying less means the escalation you turn out to need is refused
+mid-run, after the calls are already gone.
 
-| Workflow | Phases |
-|---|---|
-| `scout` | scout |
-| `intake` | intake |
-| `plan` | planner |
-| `build` | builder → tests |
-| `plan-build-test` | planner → builder → tests |
-| `build-review` | builder → tests → reviewer |
-| `simple-sdlc` | planner → builder → tests → documenter → final tests → reviewer |
-| `design-to-plan` | designer → architecture-reviewer → planner → plan render |
+`awsf workflows` prints this table from the live registry, so it cannot go stale
+the way prose does. The numbers below came from that command.
 
-`awsf workflows` lists what the current configuration enables. On this
-repository's own history the distribution is `build-review` 27, `simple-sdlc` 6,
-`build` 6, `design-to-plan` 5.
+| Workflow | Tier · calls · corrections | What it produces, and when it earns the slot |
+|---|---|---|
+| **`scout`** | T0 · 1 call · 0 corrections | A read-only survey: concrete file and line locations relevant to a question. Reach for it when you do not yet know **where** the work is. It writes nothing, so it is the cheapest way to be wrong. |
+| **`intake`** | T0 · 1 call · 0 corrections | One dependency-aware ticket with testable acceptance criteria, refined out of vague intent. The workflow for "I know I want this but not what *done* means." Its write grant is the ticket and nothing else. |
+| **`plan`** | T0 · 1 call · 0 corrections | An ordered sequence of implementation and verification steps, and no code. Use it when the shape is uncertain and you want to argue with the approach before anyone builds it. |
+| **`build`** | T1 · 1 call · 2 corrections | A candidate commit whose declared diff the host verified, plus the configured quality commands run against it. The workhorse for a bounded change you already know how to describe. Its two fundable corrections make it the most forgiving route to an envelope defect. |
+| **`plan-build-test`** | T1 · 2 calls · 1 correction | The same candidate, preceded by a plan the builder then implements. Worth the second call when the change has an order to it — when doing step three before step two produces something that passes tests and is wrong. |
+| **`design-to-plan`** | T1 · 3 calls · 0 corrections | A committed plan, its build prompts and its ticket set, derived through design → independent architecture review → planning → render. This is how the plans in `specs/` get written. Its architecture review is an ordinary phase, not the task-level T2 review, and its three calls fit T1 exactly — leaving nothing for corrections, which is the price of the route. |
+| **`build-review`** | T2 · 2 calls · 3 corrections | A candidate **plus an audit of it by a different provider than the one that wrote it**, handed host-composed evidence. The default for anything you would not merge on your own say-so. The widest correction budget of any route, because T2's ceiling is set to fund exactly this. |
+| **`simple-sdlc`** | T2 · 4 calls · 1 correction | Plan → build → test → document → **re-run every test** → opposite-provider review. The full ceremony, and the only route where documentation is a phase with its own gates. The second test run is the point: documentation changed the candidate, so the evidence collected before it no longer describes what is being reviewed. |
+
+Three things that are easy to misread:
+
+- **A recipe's phase count is not its price.** Host phases — `request`,
+  `tests`, `review-context`, `plan-render` — reserve no provider call at all.
+  `design-to-plan` has seven phases and costs three calls. Read `minimum calls`,
+  never the length of the list.
+- **`corrections fundable` is `ceiling − minimum calls`,** and a `0` is a real
+  constraint rather than a rounding detail: on a route whose agents start cold,
+  it means the first envelope defect ends the attempt on its first occurrence.
+  `awsf start` refuses such a route up front rather than letting you find out
+  mid-run, and names the `awsf raise` that lifts it while the attempt is still a
+  draft.
+- **The tier and the workflow are coupled, and the coupling is checked early
+  and free.** A recipe whose minimum calls cannot fit the selected tier is
+  refused at compile time, before any process exists. What is *not* checked is
+  the other direction: nothing stops you selecting a tier whose ceiling
+  comfortably fits a workflow that is wrong for the change.
+
+Both dials freeze when the attempt is created, along with a snapshot of the
+effective configuration. Changing your mind means a new attempt, which carries
+the old one's spend forward.
 
 ## Risk tiers and the call ceiling
 
@@ -433,25 +465,60 @@ the journal. It is bounded per act and in total, task-scoped, carried forward by
 
 ## Gates
 
-Twenty postcondition gates. A passing gate records what it checked, not merely
-that it passed.
+Twenty postcondition gates. A gate runs **after** a phase produces output and
+before anything downstream is allowed to treat it as real. A passing gate
+records *what it verified*, item by item, rather than a boolean — which is why a
+green run is readable evidence six weeks later.
 
-| Group | Gates |
+### Output shape — is this even a result?
+
+| Gate | What it checks |
 |---|---|
-| Output shape | `envelope_valid`, `json_parses`, `artifacts_exist`, `files_non_empty` |
-| Claim vs reality | `diff_matches_claims`, `head_advanced`, `candidate_hygiene` |
-| Policy | `no_protected_paths`, `writes_within_globs`, `risk_tier_sufficient` |
-| Review integrity | `verdict_consistent`, `review_evidence_present`, `architecture_verdict_consistent`, `architecture_review_clear` |
-| Evidence of work | `commands_pass`, `journey_passes`, `design_evidence_present` |
-| Plan continuity | `contract_digest`, `spine_declared`, `spine_carried` |
+| `envelope_valid` | The phase's output parses against its declared schema at runtime **and** the producer explicitly reported success. Structural validity alone is not enough: a well-formed envelope that reports its own failure is still a failure. |
+| `artifacts_exist` | Every file path the envelope declares as an artifact is actually present in the worktree. |
+| `files_non_empty` | Those artifacts have content. An agent that declares a file and writes nothing has not done the work. |
+| `json_parses` | Every artifact declared as JSON parses as JSON, read from the bytes on disk rather than from what the model said it wrote. |
 
-`review_evidence_present` is the one worth calling out: a T2 reviewer is handed
-host-composed evidence — the owner's request and acceptance criteria, the exact
-base and candidate SHAs, the Git-observed changed-file list, a bounded
-whole-hunk diff with the digest of the full one, and the complete command
-results. The gate refuses evidence that *could not be* evidence before the call
-is spent, and refuses the phase whose prompt did not carry it, because a review
-that saw nothing is not a review.
+### Claim vs reality — the host measures, then compares
+
+| Gate | What it checks |
+|---|---|
+| `diff_matches_claims` | **Exact set equality** between the files the builder declared it changed and the files Git observes changed. Both directions fail: a change the host found that was never declared, and a declared change that is not there. |
+| `head_advanced` | A host commit exists and HEAD differs from base. A phase that claims work but moved nothing fails here. |
+| `candidate_hygiene` | `git diff --check base..candidate`, clean before and clean after — whitespace damage and conflict markers. Non-configurable on purpose: it is immutable and is not one of the gate identifiers `awsf.config.yaml` can select. |
+
+### Policy — what was allowed to be touched
+
+| Gate | What it checks |
+|---|---|
+| `no_protected_paths` | Each changed path is classified against the protected-path policy. A match fails, and so does a path the classifier cannot parse — an unreadable path is not a safe path. |
+| `writes_within_globs` | Each changed path must match an allowed write glob. Outside the globs fails, and so does an invalid policy. |
+| `risk_tier_sufficient` | The attempt's tier against what `risk.paths` says those paths are worth. **Attached twice on a plan-carrying route:** to the planner against the files the plan declares, so a refusal costs only the plan call; and to the builder against what the candidate actually changed, because "the plan named no risky path and the build wrote one" is exactly the case a declaration alone cannot catch. |
+
+### Review integrity — can this verdict be trusted?
+
+| Gate | What it checks |
+|---|---|
+| `review_evidence_present` | Runs **before the reviewer call is spent**: the owner's request is recorded, the base and candidate SHAs are exact, the review context was composed, and the reviewed SHA is the candidate. It refuses evidence that *could not be* evidence, and separately refuses the phase whose prompt did not carry it. A review that saw nothing is not a review. |
+| `verdict_consistent` | The verdict against the findings. Every finding must carry a **scope** (a line, or the contract's explicit file-wide value — never a fabricated line number), an observed **mechanism**, and a concrete **consequence**, which is a contract field rather than a sentence the host parses out of prose. Findings pointing outside the candidate's changed paths are surfaced, and a blocking severity sitting under an accepting verdict is inconsistent. |
+| `architecture_verdict_consistent` | The same discipline applied to the architecture reviewer on `design-to-plan`. |
+| `architecture_review_clear` | Attached to the **host** plan-context phase rather than to the review phase, and present in no correction path — because asking a reviewer to reconsider an unchanged design rewards a softened finding. Blockers are journalled and stop the attempt at `BLOCKED` through L8; no candidate exists yet, so there is nothing for the owner to re-enter. |
+
+### Evidence of work — did the thing actually run?
+
+| Gate | What it checks |
+|---|---|
+| `commands_pass` | The configured quality commands, run **by the host** against the **host-created** candidate: the configured gate is recorded, the argv is exact, the candidate SHA is exact, the tree is clean before and after, and the exit code is zero. Its bounded failure output is windowed head / first-failure / tail rather than a plain tail slice — pilot 2's builder claimed 240/240 green while the host measured 239 pass and 1 fail, and a tail slice carried the true totals in a fragment that began mid-test. |
+| `journey_passes` | Three separate checks, not one: that the journey **ran**, that it **passed**, and that the revision it ran against is the **exact candidate**. |
+| `design_evidence_present` | Every repository the catalog declares was resolved to machine-local revision evidence exactly once. Missing, duplicated and unexpected repository ids all fail, and so does a target left unresolved. |
+
+### Plan continuity — does the work still match what was agreed?
+
+| Gate | What it checks |
+|---|---|
+| `contract_digest` | Hashes this worktree's declared contract artifacts and compares them to the digests in `awsf.contracts.yaml`. A project that declares none passes, rather than being forced to invent one. |
+| `spine_declared` | The design's answered request against the owner's recorded request, plus the declaration groups — invariants and acceptance criteria — that the plan is required to preserve. |
+| `spine_carried` | That those invariants and acceptance criteria actually survive into the plan, so a commitment cannot be made at design time and quietly dropped at planning time. |
 
 ## Owner acts
 
