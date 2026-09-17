@@ -65,8 +65,11 @@ per-invocation tool-surface denial.
    prompts live there, host-private. This is said out loud rather than merely
    omitted, because a directory left unmentioned is avoided by habit and a
    directory named as forbidden is avoided by rule.
-4. **No push, no deletion, no external mutation, no credential access.** Landing
-   is a local fast-forward the owner authorizes; no push path exists to use.
+4. **No deletion, no credential access, and exactly one push path — not yours.**
+   Landing is a local fast-forward the owner authorizes. Publishing is the one
+   push in the codebase, it is an owner act on an already-landed revision, and
+   no pre-`LANDED` state can reach it. No force-push or remote-branch deletion
+   path exists anywhere.
 
 ## Routes
 
