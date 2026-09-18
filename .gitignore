@@ -4,3 +4,6 @@ dist/
 *.tsbuildinfo
 .DS_Store
 docs/design/
+
+# LoopOps data (generated)
+.loopops/
