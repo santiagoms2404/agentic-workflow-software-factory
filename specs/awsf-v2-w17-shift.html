@@ -1,0 +1,1183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plan: AWSF v2 W17 — shift</title>
+<style>
+:root{
+  --bg:#faf9f7; --panel:#ffffff; --fg:#14181f; --muted:#6b7382;
+  --border:#e4e1db; --border-strong:#cdc8bf;
+  --accent:#b4551b; --accent-soft:#fdf2e6; --accent-ink:#7c3a10;
+  --night:#1b2430; --night-fg:#e6e9ee;
+  --ok:#1d6b48; --warn:#8a5a00; --bad:#a5311e;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+}
+*{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);
+  font-size:15.5px;line-height:1.62;-webkit-font-smoothing:antialiased;}
+main{max-width:980px;margin:0 auto;padding:56px 24px 120px;}
+h1{font-size:33px;line-height:1.2;letter-spacing:-.022em;margin:0 0 6px;font-weight:660;}
+h2{font-size:22px;letter-spacing:-.015em;margin:56px 0 12px;font-weight:640;
+  padding-bottom:8px;border-bottom:2px solid var(--border-strong);}
+h3{font-size:18px;letter-spacing:-.01em;margin:36px 0 8px;font-weight:640;}
+h4{font-size:15.5px;margin:26px 0 6px;font-weight:660;}
+h5{font-size:13px;margin:0 0 6px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--accent-ink);}
+p{margin:0 0 13px;} ul,ol{margin:0 0 13px;padding-left:22px;} li{margin:0 0 6px;}
+a{color:var(--accent-ink);text-decoration:underline;text-underline-offset:2px;text-decoration-thickness:1px;}
+code{font-family:var(--mono);font-size:.875em;background:#f1efeb;border:1px solid var(--border);
+  border-radius:4px;padding:.08em .34em;}
+strong{font-weight:660;}
+em{color:inherit;}
+.sub{color:var(--muted);font-size:14px;}
+.muted{color:var(--muted);}
+header{border-bottom:1px solid var(--border-strong);padding-bottom:22px;margin-bottom:8px;}
+header .tagline{color:var(--muted);font-size:15px;margin:0 0 14px;}
+.meta{margin-top:14px;font-size:13px;}
+.meta summary{cursor:pointer;color:var(--muted);font-weight:600;letter-spacing:.03em;text-transform:uppercase;font-size:11.5px;}
+.meta dl{display:grid;grid-template-columns:130px 1fr;gap:5px 14px;margin:12px 0 0;}
+.meta dt{color:var(--muted);font-family:var(--mono);font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;}
+.meta dd{margin:0;overflow-wrap:anywhere;}
+figure{margin:22px 0;padding:18px 14px;background:var(--panel);border:1px solid var(--border);
+  border-radius:10px;text-align:center;overflow-x:auto;}
+figure svg,figure .mermaid{max-width:100%;height:auto;}
+figure .mermaid{display:flex;justify-content:center;}
+figcaption{margin-top:12px;color:var(--muted);font-size:13px;text-align:left;line-height:1.55;}
+.files ul{list-style:none;padding-left:0;}
+.files li{padding:5px 0;border-bottom:1px solid var(--border);overflow-wrap:anywhere;}
+.tag{display:inline-block;font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.06em;
+  text-transform:uppercase;padding:2px 7px;border-radius:999px;margin-right:7px;vertical-align:1px;}
+.tag.existing{background:#eceff3;color:#44506a;border:1px solid #d6dbe4;}
+.tag.new{background:var(--accent-soft);color:var(--accent-ink);border:1px solid #f0d8bd;}
+.tag.blocked{background:#fbeceb;color:var(--bad);border:1px solid #f0cfca;}
+.phase{background:var(--panel);border:1px solid var(--border);border-left:4px solid var(--accent);
+  border-radius:10px;padding:4px 22px 20px;margin:26px 0;}
+.phase h3{margin-top:22px;}
+.status{font-family:var(--mono);font-weight:700;color:var(--accent);background:transparent;border:0;padding:0 4px 0 0;}
+.checklist{list-style:none;padding-left:0;}
+.checklist li{padding:4px 0 4px 2px;border-bottom:1px dotted var(--border);}
+.loop{margin:16px 0 0;padding:11px 14px;background:var(--accent-soft);border:1px solid #f0d8bd;
+  border-radius:8px;font-size:14px;}
+.card{background:#f7f5f2;border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin:16px 0;font-size:14.5px;}
+.card.rule{border-left:3px solid var(--night);}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:14px;}
+th,td{text-align:left;vertical-align:top;padding:9px 12px;border-bottom:1px solid var(--border);}
+thead th{border-bottom:2px solid var(--border-strong);font-size:12px;letter-spacing:.05em;
+  text-transform:uppercase;color:var(--muted);}
+.taskmeta th{width:210px;color:var(--accent-ink);font-weight:660;background:#faf7f3;}
+.wrap{overflow-x:auto;}
+.gate{font-family:var(--mono);font-size:11px;font-weight:700;background:var(--night);color:var(--night-fg);
+  padding:2px 7px;border-radius:4px;letter-spacing:.04em;}
+.wtag{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  padding:2px 7px;border-radius:999px;vertical-align:2px;}
+.wtag.core{background:var(--accent-soft);color:var(--accent-ink);border:1px solid #f0d8bd;}
+#questionables details,#amendments details{border:1px solid var(--border-strong);border-radius:8px;
+  padding:12px 15px;margin:12px 0;background:var(--panel);}
+#questionables summary,#amendments summary{cursor:pointer;font-weight:640;font-size:14.5px;}
+.qa-answer{margin-top:10px;}
+.deep-plan{font-size:13.5px;margin:0 0 10px;}
+.qdecided{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.06em;background:var(--ok);color:#fff;padding:2px 7px;border-radius:999px;margin-right:8px;vertical-align:1px;}
+p.decided{background:#edf6f1;border-left:3px solid var(--ok);border-radius:0 6px 6px 0;padding:10px 14px;margin:10px 0;font-size:14.5px;}
+pre.mermaid{background:transparent;border:0;padding:0;margin:0;font-family:var(--mono);}
+.mockup-frame{background:var(--night);color:var(--night-fg);border-radius:8px;padding:0;
+  text-align:left;font-family:var(--mono);font-size:12.2px;line-height:1.6;overflow-x:auto;
+  border:1px solid #0d1219;}
+.mockup-frame .bar{background:#141c26;padding:7px 13px;border-bottom:1px solid #0d1219;
+  color:#8d9bad;font-size:11px;letter-spacing:.04em;border-radius:8px 8px 0 0;}
+.mockup-frame .body{padding:14px 16px;white-space:pre;}
+.mockup-frame .k{color:#e0a256;} .mockup-frame .g{color:#69b58a;}
+.mockup-frame .d{color:#7f8b9c;} .mockup-frame .r{color:#d9705f;} .mockup-frame .w{color:#e6e9ee;}
+@media (max-width:640px){
+  main{padding:34px 16px 90px;} h1{font-size:26px;} h2{font-size:19px;}
+  .meta dl{grid-template-columns:1fr;} .phase{padding:4px 14px 16px;} .taskmeta th{width:auto;}
+}
+</style>
+</head>
+<body>
+<main>
+
+  <!-- ===== HEADER + UPDATABLE METADATA ===== -->
+  <header>
+    <h1>Plan: AWSF v2 W17 — <code>shift</code></h1>
+    <p class="tagline">Sequential unattended execution of one milestone's tickets, as <strong>one attempt whose recipe is compiled from the tickets themselves</strong> — not as a runner that launches many.</p>
+    <details class="meta">
+      <summary>Metadata</summary>
+      <dl>
+        <dt>created</dt>      <dd>2026-09-15</dd>
+        <dt>modified</dt>     <dd>2026-09-15, 2026-09-15 (Questionables decided)</dd>
+        <dt>commits</dt>      <dd>not yet landed</dd>
+        <dt>agent name</dt>   <dd>Claude Opus 5</dd>
+        <dt>session id</dt>   <dd>not recorded — AGENTS.md invariant 1 keeps live session state out of every committed file in this repository</dd>
+        <dt>back refs</dt>    <dd>./awsf-v2-plan.html (the v2 spine, § Milestone M17 → W17, and its 2026-09-03 amendment which this plan supersedes), ../AGENTS.md (the twelve invariants), ./awsf-v2-w04-project-registry.html (the <code>delivery</code> posture this plan reads), ./awsf-v2-w07-quota-telemetry.html (the L26 boundary stop a long shift will meet)</dd>
+        <dt>forward refs</dt> <dd>./tickets/awsf-v2-w17-shift/ (the execution surface), ./awsf-v2-w17-shift-build-prompts.md (§ Section B, the prompt source the invariant-12 fence pairs against)</dd>
+      </dl>
+    </details>
+  </header>
+
+  <figure>
+    <pre class="mermaid">
+flowchart LR
+  subgraph SEL["select once"]
+    A["milestone M4<br/>5 ticket files"]
+  end
+  A --> C["shift compiler"]
+  C --> P["one phase list<br/>brief · build · tests<br/>× 5, then one review"]
+  P --> R["ONE attempt<br/>one worktree<br/>one ceiling"]
+  R --> G["ONE owner gate<br/>AWAITING_OWNER"]
+  G --> L["human · L20 · TTY"]
+  style C fill:#fdf2e6,stroke:#b4551b
+  style G fill:#fdf2e6,stroke:#b4551b
+  style L fill:#1b2430,stroke:#1b2430,color:#e6e9ee
+    </pre>
+    <figcaption>A shift is not a batch of runs. Five tickets become <strong>phases of one attempt</strong>, so the lifecycle reaches the owner once, at the end — which is the only shape an unattended run can have, because the edge into <code>LANDED</code> is <code>actors: ["human"], interactive: true</code> and has no tier exemption.</figcaption>
+  </figure>
+
+  <!-- ===== IN PLAIN LANGUAGE ===== -->
+  <section id="plain-language">
+    <h2>In Plain Language</h2>
+    <p>This section explains the whole plan without technical vocabulary. Everything after it says the same things precisely, for the people — and machines — building it.</p>
+
+    <h3>What this is about</h3>
+    <p>The owner has a workshop that builds software for him. He gives it a job, it works, and then it stops and waits for him to look at the result and sign it off. That waiting step is deliberate: nothing the workshop makes ever goes out the door without a person looking at it first. The trouble is that his work comes in lists — a batch of five or six small related jobs that have to be done in order, because each one builds on the last. Today he has to be present for every single one: start it, wait, look, sign, start the next. Five jobs is five evenings.</p>
+
+    <h3>Why now</h3>
+    <p>He pays a fixed monthly amount to two different suppliers for the work the machines do, and that allowance resets on a clock whether he uses it or not. Every night he is asleep, and every afternoon he is out, that allowance drains away unspent. He wants the workshop to work through a list while he is away and have the finished pile waiting when he comes back. What made this worth planning now rather than wishing for is that a previous look at the idea measured the ground carefully and wrote down what it found — and two of the things it found have since changed.</p>
+
+    <h3>What we are building</h3>
+    <p>The obvious way to do this is to queue up five jobs and let something start them one after another. That was tried and it does not work, for a reason built into the workshop's own rules: the sign-off step is a door only a person can open, and there is no key and no timer. So five jobs would stop at the first door and the other four would never start.</p>
+    <p>So this builds the opposite thing. Instead of five jobs, it makes <strong>one</strong> job with five stages inside it. The list of small jobs is read off the paperwork the owner has already written, turned into a running order, and handed to the workshop as a single instruction sheet. The work all happens on one bench, in one place, each stage adding to the last — so when the owner comes back there is one pile with five clearly separated layers in it, and one door to open instead of five. It also means the workshop only has to set the bench up once, which today takes long enough that setting it up five times would eat the whole night.</p>
+    <p>Three things follow from that shape without anyone having to decide them. The work accumulates in one place rather than five, so nothing has to be stitched together afterwards. There is one spending limit for the whole evening rather than five separate ones that add up to something nobody budgeted. And if stage three goes wrong, everything stops there — which is right, because stage four was going to be built on top of stage three, and building on something broken is worse than stopping.</p>
+
+    <h3>How we know it worked</h3>
+    <p>The owner points the workshop at one group of jobs, walks away, and comes back to a single finished pile with each job's work separately visible inside it, a written record of exactly which jobs ran and in what order, and one decision to make instead of five. If something went wrong partway, he finds it stopped at that point with everything before it kept and nothing after it started or paid for — and he can pick it up from there without redoing what already worked. What is deliberately <em>not</em> part of this: the workshop still cannot sign anything off by itself, still cannot send anything outside the building, and a person still has to be the one who starts the evening.</p>
+  </section>
+
+  <!-- ===== PURPOSE / PROBLEM / SOLUTION ===== -->
+  <section id="purpose">
+    <h2>Purpose</h2>
+    <p><code>shift</code> is a <strong>new workflow type</strong>: a recipe whose phase list is <em>compiled from a selected set of plan tickets</em> at attempt-creation time, rather than declared statically in <code>core/src/workflow/recipes/</code>. One shift executes one milestone's tickets in dependency order, unattended, inside one attempt, one worktree and one call ceiling, and reaches the owner exactly once.</p>
+    <p>It supersedes the <strong>&ldquo;away mode&rdquo; candidate</strong> recorded in the 2026-09-03 amendment of <a href="awsf-v2-plan.html">the v2 spine</a>. That entry's measurements are taken as given and are not re-derived here; the sections below say where this plan <em>departs</em> from it and why, and two of the departures are because the ground moved after 2026-09-03.</p>
+  </section>
+
+  <section id="problem">
+    <h2>Problem</h2>
+    <p>The away-mode framing was a queue of independent runs. <strong>That shape cannot be unattended, and the reason is measured in the code rather than argued.</strong> <code>core/src/state/task-machine.ts:115</code> declares <code>L20</code> — the edge from <code>AWAITING_OWNER</code> to <code>LANDING</code> — as <code>actors: ["human"], interactive: true</code>. It is the only route into <code>LANDED</code>, there is no tier exemption anywhere in <code>LEGAL_EDGES</code>, and <code>core/src/state/errors.ts:22</code> records that the absence of a clock from the deterministic reason sources is deliberate: <em>&ldquo;AWAITING_OWNER has no timeout, so no timer can produce L21 no matter what else it satisfies.&rdquo;</em></p>
+    <p>A shift of nine independent attempts therefore halts on ticket 1 and waits for a person. The other eight never start. <strong>Unattended sequencing requires the tickets to be phases of ONE attempt, not nine attempts.</strong></p>
+    <p>Three further costs follow from the many-attempts shape and disappear in the one-attempt shape, each of them measured:</p>
+    <ul>
+      <li><strong>Seeding is paid per attempt.</strong> <code>runtime.seed_paths</code> in <code>awsf.config.yaml:24</code> is <code>[node_modules]</code>, which on this repository is <strong>139&nbsp;MB</strong> (<code>du -sh node_modules</code>). Nine attempts is nine copies before the first provider call. The amendment named this as the practical blocker nobody had hit yet.</li>
+      <li><strong>Budget is per task.</strong> <code>CallBudget</code> is constructed per task and <code>callsSpent</code> is task-lifetime. Nine attempts is nine independent ceilings and no total, so a batch can drain a subscription without any single attempt exceeding anything.</li>
+      <li><strong>The candidate lands on no ref.</strong> <code>createWorktree</code> (<code>core/src/git/worktrees.ts:267</code>) runs <code>git worktree add --detach</code>. Every candidate this factory has produced is a dangling commit. Nine unattended runs produce nine commits git is entitled to collect before the owner wakes up.</li>
+    </ul>
+    <figure>
+      <pre class="mermaid">
+flowchart TD
+  subgraph REJ["rejected — nine attempts"]
+    T1["ticket 1"] --> A1["attempt 1"] --> W1{"AWAITING_OWNER"}
+    W1 -. "L20 needs a human<br/>no timeout, no tier exemption" .-> STOP["halts here<br/>tickets 2..9 never start"]
+  end
+  subgraph ACC["adopted — one attempt"]
+    TT["tickets 1..N"] --> CC["compiled phase list"] --> AA["attempt 1"] --> WW{"AWAITING_OWNER"}
+    WW --> OK["owner opens one gate"]
+  end
+  style STOP fill:#fbeceb,stroke:#a5311e
+  style OK fill:#edf6f1,stroke:#1d6b48
+  style W1 fill:#1b2430,stroke:#1b2430,color:#e6e9ee
+  style WW fill:#1b2430,stroke:#1b2430,color:#e6e9ee
+      </pre>
+      <figcaption>The rejected shape is not merely inconvenient; it is structurally unable to reach ticket 2 without a person. The adopted shape meets the same human gate exactly once, at the end, where the owner was always going to be.</figcaption>
+    </figure>
+  </section>
+
+  <section id="solution">
+    <h2>Solution</h2>
+    <p><strong>A compiled recipe.</strong> <code>compileWorkflow</code> at <code>core/src/workflow/compiler.ts:153</code> already takes a <code>WorkflowDefinition</code> — <code>{ id, phases: readonly PhaseDefinition[] }</code> — and never reads the shipped catalogue to do it. Nothing in the compiler requires a phase list to be written by hand. All eight recipes in <code>core/src/workflow/recipes/</code> are static today; <code>shift</code> is the first that is not.</p>
+    <p><strong>How a ticket becomes phases.</strong> Each selected ticket contributes a fixed group of three:</p>
+    <div class="wrap">
+    <table>
+      <thead><tr><th>Phase</th><th>Kind</th><th>Schema</th><th>Provider calls</th><th>What it is</th></tr></thead>
+      <tbody>
+        <tr><td><code>t&lt;NN&gt;-brief</code></td><td><code>engineer</code></td><td><code>awsf.plan-output/v1</code></td><td><strong>0</strong></td><td>Host-executed. Reads the ticket file and emits the ticket's own <code>## Build prompt</code> block as this segment's intent. The owner already wrote it; no model is needed to interpret it.</td></tr>
+        <tr><td><code>t&lt;NN&gt;-build</code></td><td><code>agent</code></td><td><code>awsf.build-output/v1</code></td><td><strong>1</strong></td><td>Owner <code>builder</code>, <code>maxCorrections: 1</code>. Produces this ticket's own host commit on the accumulating worktree head.</td></tr>
+        <tr><td><code>t&lt;NN&gt;-tests</code></td><td><code>code</code></td><td><code>awsf.test-output/v1</code></td><td><strong>0</strong></td><td>Host runs the configured gate commands against <em>this ticket's</em> candidate SHA, before the next ticket is allowed to start.</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p>Then, once for the whole shift and only at the end: <code>shift-review-context</code> (<code>code</code>) and <code>shift-review</code> (<code>agent</code>, owner <code>reviewer</code>, one call) over the <strong>accumulated</strong> diff. So a shift of <em>N</em> tickets has <strong><code>minimumCalls = N + 1</code></strong>, and the build and review routes are the same two providers inversion already resolves.</p>
+    <p><strong>Three of the amendment's seven open questions are answered by construction, not by preference</strong> — see <a href="#notes">Notes → What the shape decides on its own</a>. A fourth follows from the single owner gate.</p>
+    <figure>
+      <pre class="mermaid">
+flowchart TD
+  M["manifest<br/>plan · milestone · ticket digests"] --> K["compileShift()"]
+  K --> B1["t11-brief · 0 calls"] --> D1["t11-build · 1 call"] --> S1["t11-tests · 0 calls"]
+  S1 --> B2["t12-brief"] --> D2["t12-build · 1 call"] --> S2["t12-tests"]
+  S2 --> DOTS["…"] --> RC["shift-review-context · 0 calls"]
+  RC --> RV["shift-review · 1 call<br/>opposite provider"]
+  RV --> AW{"AWAITING_OWNER"}
+  style K fill:#fdf2e6,stroke:#b4551b
+  style AW fill:#1b2430,stroke:#1b2430,color:#e6e9ee
+      </pre>
+      <figcaption>One phase list, compiled once and recorded so it can be rebuilt byte-identically on recovery. Every ticket's work is already its own host commit on one advancing detached head, which is why per-ticket branches buy nothing.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ===== RELEVANT FILES ===== -->
+  <section id="files" class="files">
+    <h2>Relevant Files</h2>
+
+    <h3>Existing Files</h3>
+    <ul>
+      <li><span class="tag existing">existing</span> <code>core/src/workflow/compiler.ts</code> — <code>compileWorkflow</code> at <code>:153</code> takes any <code>WorkflowDefinition</code>. <code>reviewBuildPhaseId</code> at <code>:135</code> throws <code>InvalidReviewBuildProducerCount</code> unless a review workflow has <strong>exactly one</strong> build-output phase. <strong>This is the one hard structural blocker</strong> a shift meets; T06 amends it.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/workflow/catalog.ts</code> — <code>WORKFLOW_RECIPES</code> and a module-load assertion that <code>WORKFLOW_IDS</code> and the registered recipes agree exactly. Adding <code>"shift"</code> to the id list without a static recipe crashes the CLI at import. T05 splits the vocabulary instead.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/config/workflow-ids.ts</code> — the closed id vocabulary <code>load.ts</code> checks <code>workflows.enabled</code> and <code>project.default_workflow</code> against. <strong>Also edited on <code>task3.5</code></strong> (it gains <code>AGENT_PHASE_IDS</code>), so W17 must not touch it before the merge.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/state/tiers.ts</code> — <code>DEFAULT_CALL_CEILINGS = {0:1, 1:3, 2:5}</code> at <code>:33</code>, <code>MAX_CALL_CEILING = 20</code> at <code>:57</code>, <code>ceilingFor</code> at <code>:86</code>. The bound is deliberately in code, not config. It is what makes per-milestone granularity possible and per-plan granularity impossible.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/execution/call-budget.ts</code> — <code>admitWorkflow</code> refuses a workflow whose <code>minimumCalls</code> cannot fit the tier <em>before</em> any process exists. A shift's batch ceiling is this function applied to <code>N + 1</code>; no new budget notion is needed.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/cli/commands/raise.ts</code> — <code>MAX_GRANT_CALLS = 5</code> per act, and the act <strong>requires an interactive owner terminal</strong>: a piped stdin is refused before anything is written. A running shift can never raise itself.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/state/task-machine.ts</code> — <code>LEGAL_EDGES</code>; <code>L20</code> at <code>:115</code>; <code>CORRECTION_EDGES</code>. Read-only for this workstream.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/persistence/plan-tickets.ts</code> — reads plan tickets. <strong>It parses frontmatter only</strong>: <code>ticketData</code> returns <code>id/title/milestone/state/depends_on/tier?/workflow?</code> and never opens the body. The <code>## Build prompt</code> block has no reader anywhere. T01 adds one.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/backlog.ts</code> — <code>PlanBacklogTicket</code> and the <code>ready</code> computation. The selection surface a shift consumes; unchanged by this workstream.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/cli/commands/production-run.ts</code> — 2950 lines. <code>:1035</code> compiles the configured recipe; <code>:1143</code> resolves the review inversion; <code>:2329</code> takes the attempt to <code>AWAITING_OWNER</code>. <span class="tag blocked">merge-blocked</span> <strong>+547/−98 on <code>main</code> against +96/−17 on <code>task3.5</code></strong> from merge-base <code>8268258</code>; it is one of seventeen conflicted files.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/workflow/phase-recovery.ts</code> — <code>reducePhaseContext</code> at <code>:143</code> keys accepted envelopes by <code>envelope.schema</code> and <strong>last wins</strong>. With N build phases that is the correct sequential semantic, and it must be asserted rather than assumed.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/workflow/review-routing.ts</code> — <code>providerPairFrom</code> refuses anything but exactly two distinct providers. <strong>Also edited on <code>task3.5</code></strong>, which introduces <code>ReviewRouteMode</code> and a <code>"same-provider-degraded"</code> mode. T06 must be authored against the post-merge file.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/cli/commands/adopt.ts</code> — <code>SUPPORTED</code> at <code>:70</code> admits only <code>build-review</code> and <code>simple-sdlc</code> as an adoption <strong>source</strong> (<code>:188</code>). A shift's sealed candidate is refused today. T17 is where that is settled.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/git/worktrees.ts</code> — <code>createWorktree</code> at <code>:267</code> runs <code>git worktree add --detach</code>. The accumulating head a shift needs already exists; the ref that keeps it does not.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/registry/catalog-schema.ts</code> — <code>PROJECT_DELIVERY_POSTURES</code> at <code>:7</code> (<code>service</code>/<code>mobile</code>/<code>docs</code>/<code>none</code>) and the optional per-repository <code>delivery</code> field at <code>:59</code>. Still has no reader; T15 gives it one.</li>
+      <li><span class="tag existing">existing</span> <code>core/test/unit/meta/ticket-plan-sync.test.ts</code> — invariant 12's fence. It requires <code>specs/&lt;stem&gt;-build-prompts.md</code> to exist and each ticket's prompt to be byte-identical to its Section B block. See <a href="#notes">Notes → The prompt-artifact conflict</a>.</li>
+      <li><span class="tag existing">existing</span> <code>awsf.config.yaml</code> — <code>workflows.enabled</code> at <code>:126</code>; <code>runtime.seed_paths: [node_modules]</code> at <code>:24</code>. <strong>Protected: no agent can write it.</strong> Enabling <code>shift</code> is an owner-authored commit — ordering gate <span class="gate">G17</span>.</li>
+      <li><span class="tag existing">existing</span> <code>dashboard/src/run-failures.ts</code> — <span class="tag blocked">merge-blocked</span> classifies every failed phase into <code>refusal</code>/<code>review</code>/<code>quota</code>/<code>harness</code>/<code>unclassified</code>. <strong>Exists only on <code>task3.5</code></strong> (commit <code>2bc217d</code>), not on <code>main</code>.</li>
+    </ul>
+
+    <h3>New Files</h3>
+    <ul>
+      <li><span class="tag new">new</span> <code>core/src/contracts/shift-manifest.ts</code> — <code>ShiftManifestSchema</code> (<code>awsf.shift-manifest/v1</code>): plan stem, milestone, the ordered ticket entries with a byte digest each, and the manifest digest. TypeBox, like every other contract.</li>
+      <li><span class="tag new">new</span> <code>core/src/persistence/plan-ticket-body.ts</code> — the <code>## Build prompt</code> reader, split from <code>plan-tickets.ts</code> so the frontmatter path keeps its current cost and its current cache.</li>
+      <li><span class="tag new">new</span> <code>core/src/workflow/shift/select.ts</code> — plan + milestone → the ordered, filtered ticket list, and the refusal vocabulary for every way that selection can be empty, cyclic or already done.</li>
+      <li><span class="tag new">new</span> <code>core/src/workflow/shift/compile.ts</code> — <code>compileShift(manifest, bodies, config)</code> → <code>WorkflowRecipe</code>. Pure; reads no file, no clock and no provider.</li>
+      <li><span class="tag new">new</span> <code>core/src/workflow/compiled-ids.ts</code> — <code>COMPILED_WORKFLOW_IDS</code>, the second vocabulary, so <code>catalog.ts</code>'s assertion keeps its exact current meaning for shipped recipes.</li>
+      <li><span class="tag new">new</span> <code>core/src/cli/commands/shift.ts</code> — <code>awsf shift plan &lt;stem&gt; --milestone &lt;Mx&gt;</code>: the pre-flight readout (tickets, calls, ceiling, raise acts needed) and the manifest write. <strong>Spawns nothing.</strong></li>
+      <li><span class="tag new">new</span> <code>core/src/git/candidate-ref.ts</code> — the ref written at seal time. <span class="tag blocked">merge-blocked</span> at its call site, not in itself.</li>
+      <li><span class="tag new">new</span> <code>core/test/unit/shift-*.test.ts</code>, <code>core/test/journeys/shift-milestone.test.ts</code> — the unit and journey coverage each milestone's Testing Strategy names.</li>
+      <li><span class="tag new">new</span> <code>specs/awsf-v2-w17-shift-build-prompts.md</code>, <code>specs/tickets/awsf-v2-w17-shift/</code> — this plan's prompt artifacts, paired by the invariant-12 fence.</li>
+    </ul>
+  </section>
+
+  <!-- ===== IDENTIFIER SPINE ===== -->
+  <section id="spine">
+    <h2>Identifier Spine</h2>
+    <p>Per the v2 spine's Q5 decision, identifiers are unique within this plan and a cross-plan reference is qualified by plan stem. Every declaration below is served by at least one task, and each ticket's <code>serves</code> mirrors its task's as a set — the invariant-12 fence compares the two and fails when either is edited alone.</p>
+    <dl>
+      <dt><code class="inv">INV-1</code></dt>
+      <dd><strong>Landing stays human and at a TTY.</strong> No shift phase, gate, record or readout may produce <code>L20</code>, and nothing a shift writes may become an input a timer could turn into <code>L21</code>. A shift runs up to the owner and stops.</dd>
+      <dt><code class="inv">INV-2</code></dt>
+      <dd><strong>The dashboard records intent; a human-started session compiles and drains it.</strong> AGENTS.md invariant 3 keeps <code>node:child_process</code> out of every file but the transport broker, so the API server cannot spawn. No route added by this workstream may be anything but read-only.</dd>
+      <dt><code class="inv">INV-3</code></dt>
+      <dd><strong>No push path and no skill in the execution path.</strong> AGENTS.md invariant 8 is untouched by this workstream, and a merge to a production branch stays a local act the owner authorises by hand.</dd>
+      <dt><code class="inv">INV-4</code></dt>
+      <dd><strong>A shift's compiled recipe is reproducible.</strong> Recovery recompiles the phase list and compares a binding digest, so the recipe must be rebuildable byte-for-byte from the recorded manifest and the ticket files it names. A moved ticket byte refuses the resume rather than silently changing the run.</dd>
+      <dt><code class="inv">INV-5</code></dt>
+      <dd><strong>A shift never widens its own ceiling.</strong> <code>awsf raise</code> stays an interactive owner act with a recorded reason, and no shift code path reaches it. A shift that exhausts its ceiling stops and says where it is.</dd>
+      <dt><code class="ac">AC-1</code></dt>
+      <dd>One selection act names a plan stem and a milestone; the host expands it to the ordered ticket list, refuses every ambiguous expansion by name, and records the selection with a per-file byte digest so a reader can later see exactly which tickets ran.</dd>
+      <dt><code class="ac">AC-2</code></dt>
+      <dd>N tickets compile to a phase list whose <code>minimumCalls</code> is <code>N + 1</code>, admitted or refused against the attempt's ceiling <strong>at zero cost, before any process exists</strong>, with a refusal that names the shortfall in calls and in raise acts.</dd>
+      <dt><code class="ac">AC-3</code></dt>
+      <dd>One attempt, one worktree, one accumulating head. Each ticket's work is its own host commit, recorded against its ticket id, and ticket <em>n</em> builds on ticket <em>n−1</em>'s tree in place.</dd>
+      <dt><code class="ac">AC-4</code></dt>
+      <dd>A failing ticket blocks the attempt at that ticket. Every earlier ticket's phase result is accepted and resumable, and no later ticket's provider call is reserved or spent.</dd>
+      <dt><code class="ac">AC-5</code></dt>
+      <dd>A sealed shift's candidate is reachable by a ref rather than by a reflog entry, and every ticket's own candidate SHA is recorded beside its ticket id.</dd>
+      <dt><code class="ac">AC-6</code></dt>
+      <dd>The shift reaches <code>AWAITING_OWNER</code> exactly once, and the owner readout names each ticket, its commit, its gate result and its review finding, over a candidate that was built fresh rather than read off a stale bundle.</dd>
+    </dl>
+  </section>
+
+  <!-- ===== IMPLEMENTATION PHASES ===== -->
+  <section id="phases">
+    <h2>Implementation Phases</h2>
+    <p><strong>IMPORTANT:</strong> Execute every phase and task step by step, in order, top to bottom.</p>
+    <p>Status markers: <code>[]</code> idle · <code>[wip]</code> in progress · <code>[x]</code> complete · <code>[f]</code> failed. All start as <code>[]</code>; the Build Plan workflow updates them as it works.</p>
+    <p class="sub"><strong>Ordering gate <span class="gate">G17-M</span> — the merge.</strong> M1, M2 and M3 are new files plus two small edits and can be built on <code>main</code> today. <strong>M4 and M5 may not start until <code>main</code> and <code>task3.5</code> are merged</strong>, and M2's two shared-file edits are best taken after it too. The measurement and the reasoning are in <a href="#notes">Notes → The merge, measured</a>.</p>
+
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M1: Selection and the manifest <span class="wtag core">buildable now</span></h3>
+      <p>The shift's input is a selection the owner makes once, and its durable record. Nothing here executes, compiles or spawns; this milestone ends with a manifest on disk and a reader that can turn a ticket file into the bytes a phase will carry. It is deliberately first because <strong>every later milestone depends on the selection being reproducible</strong>, and because it is the whole of the workstream that needs no merge.</p>
+      <figure>
+        <pre class="mermaid">
+flowchart LR
+  P["--plan awsf-v2-w07-quota-telemetry<br/>--milestone M4"] --> R["plan-ticket reader"]
+  R --> F["frontmatter<br/>id · state · depends_on · tier"]
+  R --> B["body<br/>## Build prompt"]
+  F --> O["topological order<br/>state: todo only"]
+  O --> MF["awsf.shift-manifest/v1<br/>ticket ids + byte digests"]
+  B --> MF
+  style MF fill:#fdf2e6,stroke:#b4551b
+        </pre>
+        <figcaption>The selection is an expansion of two flags, not a queue. Digesting each ticket file's bytes is what lets the recipe be rebuilt identically on recovery — and it is also the record that answers &ldquo;which tickets did this run?&rdquo; months later.</figcaption>
+      </figure>
+
+      <h4>1. The shift manifest contract and the plan-ticket body reader</h4>
+      <p class="sub">Serves <code class="serves">AC-1</code> · <code class="serves">INV-4</code></p>
+      <p><code>plan-tickets.ts</code>'s <code>ticketData</code> parses the frontmatter and stops; the <code>## Build prompt</code> block has no reader anywhere in <code>core/src</code>. Add one in a new file so the frontmatter path keeps its current fingerprint cache untouched, and define the manifest the selection writes.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>core/src/contracts/shift-manifest.ts</code> declares <code>ShiftManifestSchema</code> (<code>awsf.shift-manifest/v1</code>) as TypeBox: <code>plan</code>, <code>milestone</code>, <code>tickets: [{ id, path, digest, tier?, workflow? }]</code>, <code>manifestDigest</code>. Registered in <code>contracts/registry.ts</code> like every other schema</li>
+        <li><code class="status">[]</code> <code>core/src/persistence/plan-ticket-body.ts</code> extracts the single <code>## Build prompt\n\n</code> fenced block, refusing a file with zero or more than one — <strong>the same split the invariant-12 fence uses</strong>, so the two can never disagree about where a prompt begins</li>
+        <li><code class="status">[]</code> The digest is over the <strong>whole ticket file's bytes</strong>, not the prompt block, so an appended <code>## Handoff</code> entry is a change the resume notices</li>
+        <li><code class="status">[]</code> <code>plan-tickets.ts</code> is unchanged, and a test asserts its exported shape is byte-identical to before</li>
+      </ul>
+
+      <h4>2. Milestone selection and its refusals</h4>
+      <p class="sub">Serves <code class="serves">AC-1</code></p>
+      <p>Expansion from two flags to an ordered list. Every way it can be wrong gets a named refusal, because a selection that silently produces four tickets when the owner meant five is a batch that spends a night on the wrong work.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>selectShiftTickets(plan, milestone, records)</code> returns the milestone's tickets in <strong>topological order over <code>depends_on</code></strong>, falling back to ticket-id order for independents, so the order is deterministic and reproducible</li>
+        <li><code class="status">[]</code> Only <code>state: todo</code> tickets are selected. A milestone with a <code>wip</code> or <code>failed</code> ticket is <strong>refused by name</strong> rather than skipped — a half-done milestone is a decision the owner makes, not one the expander makes at midnight</li>
+        <li><code class="status">[]</code> A <code>depends_on</code> edge leaving the milestone is refused unless its target is <code>done</code>; a cycle is refused; an empty expansion is refused</li>
+        <li><code class="status">[]</code> The tier is <strong>derived, not declared</strong>: the shift's tier is the maximum of the selected tickets' declared tiers, matching how <code>awsf new</code> already derives tier from the route rather than taking it on trust</li>
+        <li><code class="status">[]</code> No ticket may declare <code>workflow: shift</code>; <code>TICKET_WORKFLOWS</code> is not widened, and a meta-test says so. A ticket names its own route; the shift is the container</li>
+      </ul>
+
+      <h4>3. Testing Strategy</h4>
+      <p class="sub">Serves <code class="serves">AC-1</code> · <code class="serves">INV-4</code></p>
+      <p>Pure functions over fixture ticket directories under <code>core/test/fixtures/</code>. No git, no clock, no provider, no network. The expander and the body reader are both total functions of bytes on disk, and the tests are written that way.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>npx tsx --test core/test/unit/shift-select.test.ts</code> — every refusal fires on its own fixture, and the accepted case returns the exact expected order</li>
+        <li><code class="status">[]</code> <code>npx tsx --test core/test/unit/shift-manifest.test.ts</code> — the manifest round-trips through TypeBox validation, and a one-byte change to any ticket file changes <code>manifestDigest</code></li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — green at the <strong>exact base SHA this milestone started from</strong>, count recorded in the commit body</li>
+        <li><code class="status">[]</code> <code>npm run typecheck</code> and <code>npm run lint</code> — exit 0</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass.
+      </div>
+    </div>
+
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M2: The compiler — tickets into phases <span class="wtag core">core of the workstream</span></h3>
+      <p>The mechanism this whole workstream exists for. <code>compileWorkflow</code> already accepts <code>readonly phases: readonly PhaseDefinition[]</code> and never consults the catalogue, so a compiled phase list is <strong>structurally supported today</strong> — but all eight shipped recipes are static, and two things in the surrounding code assume that. This milestone builds the compiler and settles both.</p>
+      <figure>
+        <pre class="mermaid">
+flowchart TD
+  subgraph TODAY["assumed today"]
+    W["WORKFLOW_IDS"] -. "module-load assertion<br/>ids and recipes must agree" .-> C["WORKFLOW_RECIPES"]
+    RB["reviewBuildPhaseId()"] -. "exactly ONE build-output phase<br/>or InvalidReviewBuildProducerCount" .-> RV["review phase"]
+  end
+  subgraph AFTER["after M2"]
+    W2["WORKFLOW_IDS<br/>shipped, static"] --> C2["WORKFLOW_RECIPES"]
+    CI["COMPILED_WORKFLOW_IDS<br/>shift"] --> CP["compileShift()"]
+    RB2["one distinct build PROVIDER"] --> RV2["review phase"]
+  end
+  style CI fill:#fdf2e6,stroke:#b4551b
+  style RB2 fill:#fdf2e6,stroke:#b4551b
+        </pre>
+        <figcaption>Two assumptions, each narrow and each amended narrowly. The catalogue keeps its exact current meaning for shipped recipes; the inversion rule keeps its exact current purpose, which was always about a well-defined provider pair and only incidentally about a single phase.</figcaption>
+      </figure>
+
+      <h4>4. <code>compileShift</code> — the ticket-phase group and the review tail</h4>
+      <p class="sub">Serves <code class="serves">AC-2</code> · <code class="serves">AC-3</code></p>
+      <p>A pure function from a manifest plus the ticket bodies to a <code>WorkflowRecipe</code>. It reads no file, no clock and no provider — the caller supplies the bytes, which is what makes the recipe reproducible on recovery.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Per ticket, three phases in order: <code>t&lt;NN&gt;-brief</code> (<code>engineer</code>, <code>awsf.plan-output/v1</code>, host), <code>t&lt;NN&gt;-build</code> (<code>agent</code>, owner <code>builder</code>, <code>awsf.build-output/v1</code>, <code>maxCorrections: 1</code>), <code>t&lt;NN&gt;-tests</code> (<code>code</code>, owner <code>host</code>, <code>awsf.test-output/v1</code>)</li>
+        <li><code class="status">[]</code> Then exactly once: <code>shift-review-context</code> (<code>code</code>, <code>awsf.review-context/v1</code>) and <code>shift-review</code> (<code>agent</code>, owner <code>reviewer</code>, <code>awsf.review-output/v1</code>)</li>
+        <li><code class="status">[]</code> <code>minimumCalls === tickets.length + 1</code>, asserted directly rather than inferred — it is the number every budget decision in M3 is made against</li>
+        <li><code class="status">[]</code> Every phase passes <code>assertEarnedDescription</code>: a description that normalises to its own id is refused by <code>compilePhase</code>, so a generated description must carry the ticket's <em>title</em>, not its id</li>
+        <li><code class="status">[]</code> The <code>brief</code> phase emits the ticket's <code>## Build prompt</code> block verbatim as the segment's intent. <strong>No model interprets the ticket</strong> — the owner already wrote the prompt, and paraphrasing it would cost a call to lose fidelity</li>
+        <li><code class="status">[]</code> <code>reducePhaseContext</code>'s last-wins-per-schema behaviour is <strong>asserted, not assumed</strong>: ticket <em>n</em>'s builder receives ticket <em>n−1</em>'s build envelope as <code>{previous_envelope}</code>, and the test says so explicitly</li>
+        <li><code class="status">[]</code> The same manifest and the same ticket bytes compile to a byte-identical recipe, twice, in the same process and in a fresh one</li>
+      </ul>
+
+      <h4>5. The compiled-workflow vocabulary, split from the shipped catalogue</h4>
+      <p class="sub">Serves <code class="serves">AC-2</code> · <code class="serves">INV-4</code></p>
+      <p><code>catalog.ts</code> throws at module load if <code>WORKFLOW_IDS</code> and <code>WORKFLOW_RECIPES</code> disagree. Adding <code>"shift"</code> to the id list without a static recipe therefore crashes the CLI at import — and registering a placeholder recipe would make <code>minimumCallsFor</code> and <code>correctionsFundableFor</code> report a fiction. Split the vocabulary instead.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>COMPILED_WORKFLOW_IDS = ["shift"]</code> in its own module. <code>catalog.ts</code>'s assertion keeps its <strong>exact current text and meaning</strong> for shipped recipes; a second assertion says every compiled id has a compiler and appears in no shipped recipe</li>
+        <li><code class="status">[]</code> <code>config/load.ts</code> admits <code>workflows.enabled</code> and <code>project.default_workflow</code> members from either vocabulary; a compiled id as <code>default_workflow</code> is <strong>refused</strong> — a shift is always an explicit act</li>
+        <li><code class="status">[]</code> <code>selectWorkflow</code>, <code>start.ts:58</code>/<code>:142</code> and <code>candidate-seed.ts:102</code>/<code>:121</code> each resolve a compiled id through the compiler rather than returning <code>null</code> and failing with a message about an unknown recipe</li>
+        <li><code class="status">[]</code> <code>awsf workflows</code> lists compiled ids in their own section, saying a shift's phase count is <em>selection-dependent</em> rather than printing a number that would be wrong</li>
+        <li><code class="status">[]</code> <strong><span class="gate">G17</span>:</strong> <code>awsf.config.yaml</code>'s <code>workflows.enabled</code> gains <code>shift</code> as an <strong>owner-authored commit that lands before this milestone's build</strong>. No agent can write that file — <code>path-policy</code> rejects <code>protected-path</code> independently of the write globs, and inventing an owner-authorized protected-change mechanism is the boundary working, not a bug</li>
+      </ul>
+
+      <h4>6. Review inversion for a workflow with many builders</h4>
+      <p class="sub">Serves <code class="serves">AC-2</code></p>
+      <p><strong>The one hard structural blocker.</strong> <code>reviewBuildPhaseId</code> collects every agent phase carrying <code>awsf.build-output/v1</code> and throws <code>InvalidReviewBuildProducerCount</code> unless there is exactly one. A five-ticket shift has five, so it cannot carry a review phase at all as the code stands. The check is called from <code>compileWorkflowStructure</code>, so it fires on the recovery path too.</p>
+      <p><strong>The amendment, and why it is narrow.</strong> The check exists to make the review's inversion well-defined: <code>production-run.ts:1157</code> reads the worker provider off that one phase and inverts against it. A shift's builders all run on <strong>one route</strong>, so the inversion is well-defined by the providers, not by the phase count. The rule becomes <em>&ldquo;the build producers resolve to exactly one distinct provider&rdquo;</em>, which is strictly what was always being checked, and which still refuses every case the current rule refuses.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>CompiledWorkflow</code> carries <code>reviewBuildPhaseIds: readonly string[]</code> beside the existing single id, and the single id keeps its exact current value for every shipped recipe</li>
+        <li><code class="status">[]</code> A workflow with a review phase and <strong>zero</strong> build producers is still refused, with the same error class and the same message shape</li>
+        <li><code class="status">[]</code> <code>production-run.ts:1143–1167</code> resolves <code>workerProvider</code> from the build producers and <strong>refuses when they do not agree</strong>, with a message naming the disagreeing phases rather than a count</li>
+        <li><code class="status">[]</code> <code>providerPairFrom</code> is unchanged: N builders on one provider and one reviewer on the other still yields exactly two distinct providers</li>
+        <li><code class="status">[]</code> <strong>Authored against the post-merge file.</strong> <code>task3.5</code> adds <code>ReviewRouteMode</code> and a <code>"same-provider-degraded"</code> mode to <code>review-routing.ts</code>; this task must state what a shift does under that mode rather than discover it after the merge</li>
+      </ul>
+
+      <h4>7. Testing Strategy</h4>
+      <p class="sub">Serves <code class="serves">AC-2</code> · <code class="serves">AC-3</code> · <code class="serves">INV-4</code></p>
+      <p>The compiler is pure, so its tests are pure. The two amended invariants get <strong>negative</strong> tests first — a rule that has never been watched refuse is decoration — and the reproducibility property is tested by compiling twice across a process boundary.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>npx tsx --test core/test/unit/shift-compile.test.ts</code> — phase shape, ordering, <code>minimumCalls === N + 1</code>, earned descriptions, and the <code>previous_envelope</code> chain</li>
+        <li><code class="status">[]</code> A compiled workflow with build producers on <strong>two different providers</strong> is refused, naming both phases — the case the amended rule must still catch</li>
+        <li><code class="status">[]</code> A review workflow with <strong>zero</strong> build producers is still refused with <code>InvalidReviewBuildProducerCount</code>, and every shipped recipe still compiles unchanged</li>
+        <li><code class="status">[]</code> Adding a compiled id to <code>WORKFLOW_RECIPES</code> makes the new catalogue assertion go red — <strong>proven by inducing it</strong>, not asserted in prose</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code>, <code>npm run lint</code> — green, counts recorded</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass.
+      </div>
+    </div>
+
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M3: One ceiling for the whole shift <span class="wtag core">buildable now</span></h3>
+      <p>The amendment's fifth missing piece was <em>&ldquo;batch budgeting — away mode needs a notion of budget the lifecycle does not currently have.&rdquo;</em> <strong>The one-attempt shape removes that need entirely.</strong> One shift is one task, one <code>CallBudget</code> and one ceiling; <code>admitWorkflow</code> already refuses a workflow whose <code>minimumCalls</code> cannot fit, before any process exists. This milestone is therefore not new machinery — it is making the existing machinery's arithmetic legible to someone about to leave the house.</p>
+      <figure>
+        <pre class="mermaid">
+flowchart LR
+  N["N tickets"] --> C["minimumCalls = N + 1"]
+  C --> A{"fitsCeiling?"}
+  A -- "yes" --> GO["admitted · zero cost"]
+  A -- "no" --> NO["refused before any process<br/>names the shortfall<br/>and the raise acts needed"]
+  MX["MAX_CALL_CEILING = 20"] -. "hard bound, in code not config" .-> A
+  style NO fill:#fbeceb,stroke:#a5311e
+  style GO fill:#edf6f1,stroke:#1d6b48
+        </pre>
+        <figcaption>A batch ceiling by construction. The refusal is the valuable half: it happens at selection time, at the terminal, with the owner still in the room — not at 2 a.m. three tickets in.</figcaption>
+      </figure>
+      <div class="wrap">
+      <table>
+        <thead><tr><th>Ticket count N</th><th>minimumCalls</th><th>Fits T2 default (5)?</th><th>Raise acts to fund one cold correction</th><th>Measured milestones at this size</th></tr></thead>
+        <tbody>
+          <tr><td>1–3</td><td>2–4</td><td>yes, with headroom</td><td>0</td><td>41 of 60</td></tr>
+          <tr><td>4</td><td>5</td><td>yes, with <strong>zero</strong> headroom</td><td>1 (&rarr;10)</td><td>13 of 60</td></tr>
+          <tr><td>5–6</td><td>6–7</td><td><strong>no</strong></td><td>1 (&rarr;10)</td><td>6 of 60</td></tr>
+          <tr><td>19</td><td>20</td><td>no</td><td>3 (&rarr;20), zero headroom</td><td>none observed</td></tr>
+          <tr><td>31 (a whole deep plan)</td><td>32</td><td>no</td><td><strong>impossible</strong> — past <code>MAX_CALL_CEILING</code></td><td><code>awsf-v2-w05-design-to-plan</code></td></tr>
+        </tbody>
+      </table>
+      </div>
+      <p class="sub">Measured 2026-09-15 over the eleven authored v2 deep-plan ticket sets: <strong>184 tickets in 60 milestones</strong>, mean 3.07, median 3, min 1, max 6. This table is the arithmetic behind the granularity decision: <strong>a milestone always fits, a plan never does.</strong></p>
+
+      <h4>8. Batch admission, refused at zero cost</h4>
+      <p class="sub">Serves <code class="serves">AC-2</code> · <code class="serves">INV-5</code></p>
+      <p><code>admitWorkflow</code> already throws <code>CallCeilingExceeded</code> carrying the tier, the ceiling, the request and what is already committed. What it cannot say is what the owner should <em>do</em>, and that is the whole difference between a refusal and a checkpoint.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>awsf shift plan &lt;stem&gt; --milestone &lt;Mx&gt;</code> prints, <strong>before writing anything</strong>: the ordered ticket ids and titles, <code>minimumCalls = N + 1</code>, the attempt's ceiling, the remaining headroom, and — when it does not fit — the exact number of <code>awsf raise</code> acts and the calls each must grant</li>
+        <li><code class="status">[]</code> The refusal reuses <code>CallCeilingExceeded</code> rather than inventing a class, so the dashboard's failure classifier meets a name it already knows</li>
+        <li><code class="status">[]</code> The readout states the <strong>cold-correction consequence explicitly</strong>: at <code>ceiling === minimumCalls</code>, <code>coldCorrectionHeadroom()</code> is zero at every phase, so each builder's declared <code>maxCorrections: 1</code> buys nothing. A shift run at exactly its minimum has no correction round anywhere in it</li>
+        <li><code class="status">[]</code> Nothing in this command spawns, reserves or writes to the ledger. It reads the catalog, the tickets and the attempt status, and prints</li>
+      </ul>
+
+      <h4>9. Ceiling exhaustion mid-shift is a checkpoint, not a failure</h4>
+      <p class="sub">Serves <code class="serves">INV-5</code></p>
+      <p><code>awsf raise</code> refuses a piped stdin before anything is written, so <strong>a running shift structurally cannot widen itself</strong> — and that is the design working, not a gap. What the shift owes is that arriving at the ceiling is legible and recoverable rather than terminal.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> A shift that reaches its ceiling mid-run stops with the accepted prefix durable, exactly as any other ceiling stop does, and the recovery checkpoint names the ticket it stopped before</li>
+        <li><code class="status">[]</code> The stop message names the <strong>ticket id</strong>, not only the phase id — <code>t14-build</code> means nothing to someone reading it over breakfast</li>
+        <li><code class="status">[]</code> A meta-test asserts <strong>no module under <code>core/src/workflow/shift/</code> imports <code>raise.ts</code></strong>, so the absence is mechanical rather than remembered</li>
+        <li><code class="status">[]</code> After an owner raise, <code>awsf resume</code> continues from the accepted prefix without re-running any completed phase and without re-spending any settled call</li>
+      </ul>
+
+      <h4>10. Testing Strategy</h4>
+      <p class="sub">Serves <code class="serves">AC-2</code> · <code class="serves">INV-5</code></p>
+      <p>Arithmetic first, as pure-function tests over <code>fitsCeiling</code> and <code>admitWorkflow</code> with no ledger and no I/O. Then one fixture-route journey that walks a shift into its ceiling and back out, because the recovery half is where a refusal becomes either a checkpoint or a dead end.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>npx tsx --test core/test/unit/shift-budget.test.ts</code> — the whole table above as cases, including <code>N = 31</code> refused for exceeding <code>MAX_CALL_CEILING</code> rather than for exceeding a tier</li>
+        <li><code class="status">[]</code> <code>npx tsx --test core/test/journeys/shift-ceiling.test.ts</code> — a fixture-adapter shift stops at the ceiling, the prefix is durable, and a resume after a granted raise completes without re-spending</li>
+        <li><code class="status">[]</code> The no-<code>raise</code>-import fence goes red when the import is added, <strong>proven by adding it</strong> and watching it fail</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code>, <code>npm run lint</code> — green, counts recorded</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass.
+      </div>
+    </div>
+
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M4: Failure, durability, and the ref <span class="wtag core">gated on <span class="gate">G17-M</span></span></h3>
+      <p>Two questions a night run must answer before it is trusted with one: what happens when ticket 3 of 6 fails, and where does the work live while everyone is asleep. <strong>This milestone may not start until <code>main</code> and <code>task3.5</code> are merged</strong> — the ref is written at seal time, which is inside <code>production-run.ts</code>, the most heavily diverged file in the pair.</p>
+      <figure>
+        <pre class="mermaid">
+stateDiagram-v2
+  [*] --> t11
+  t11 --> t12: accepted · committed · checkpointed
+  t12 --> t13: accepted · committed · checkpointed
+  t13 --> BLOCKED: gate red
+  BLOCKED --> RESUME: owner fixes the cause
+  RESUME --> t13b: re-runs t13 only
+  t13b --> REVIEW: t14..t16 never reserved a call
+  note right of BLOCKED
+    t11 and t12 work is kept
+    t14..t16 cost nothing
+  end note
+        </pre>
+        <figcaption>Blocking is the right answer because the tickets are dependent by selection: ticket 4's <code>depends_on</code> names ticket 3, and building on a red ticket 3 produces work nobody can review. The cost is latency on the tail, not loss of the head.</figcaption>
+      </figure>
+
+      <h4>11. A failing ticket blocks the attempt, and the prefix resumes</h4>
+      <p class="sub">Serves <code class="serves">AC-4</code></p>
+      <p><strong>Decision: a failing ticket blocks the whole shift at that ticket.</strong> Not skip, not continue. The reason is the selection's own dependency order — M1 selects in topological order over <code>depends_on</code>, so ticket 4 was chosen <em>because</em> it follows ticket 3. Continuing past a red ticket 3 builds ticket 4 on a tree the gates rejected, and the owner arrives to a candidate whose later half cannot be reviewed independently of its broken earlier half.</p>
+      <p><strong>What it costs, stated rather than absorbed.</strong> A shift that blocks at ticket 3 of 6 leaves three tickets unrun and the night unspent. That cost is paid down by resumption, not by skipping: <code>awsf resume</code> already restarts from the accepted prefix, and <code>phase-recovery.ts</code> already validates saved replies without repeating a model call. The tail's calls were never reserved, so nothing was wasted — only deferred.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> A red <code>t&lt;NN&gt;-tests</code> phase blocks the attempt with a reason naming the <strong>ticket id</strong> and the failing gate, and the recovery checkpoint records the accepted prefix</li>
+        <li><code class="status">[]</code> No later ticket's phase reserves a call after the block — asserted against the ledger's <code>history()</code>, not against a log line</li>
+        <li><code class="status">[]</code> <code>awsf resume</code> re-runs only the blocked ticket's phases, and a journey test proves the earlier tickets' commits are still on the worktree head</li>
+        <li><code class="status">[]</code> <strong>Rework is not the recovery instrument, and the code is why.</strong> Every phase the rework path creates is <code>maxCorrections: 0</code>, and that path <em>rejects</em> provider output matching a credential pattern where a normal run scrubs it. A shift that blocks surfaces; it never retries itself into a corner. A meta-test asserts no shift module imports <code>rework.ts</code></li>
+        <li><code class="status">[]</code> An environmental failure — the case where the block might not be about that ticket at all — is <strong>distinguishable in the record</strong>: the blocker carries one of the six deterministic reason sources, and a <code>gate</code> source reads differently from a <code>process</code> one</li>
+      </ul>
+
+      <h4>12. The ref at seal time, and the per-ticket candidate record</h4>
+      <p class="sub">Serves <code class="serves">AC-5</code></p>
+      <p>The amendment called this <em>&ldquo;the single most necessary piece, and it is small — nothing else in away mode is safe until this is.&rdquo;</em> That judgement is affirmed and the scope <strong>shrinks</strong>: the one-attempt shape means a shift of N tickets produces N commits on <strong>one advancing detached head</strong>, so a single ref at the tip keeps all N reachable. Where the amendment expected eight refs for eight runs, this needs one.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> A ref is written at seal time under a namespace that cannot collide with a user branch — <code>refs/awsf/candidates/&lt;project&gt;/&lt;taskId&gt;/&lt;attempt&gt;</code> — pointing at the sealed candidate SHA</li>
+        <li><code class="status">[]</code> The write is a plain non-forcing <code>update-ref</code> with no delete path, and it is <strong>swept by the invariant-8 meta-tests</strong> (<code>no-destructive-paths</code>, <code>no-land-route</code>) rather than exempted from them</li>
+        <li><code class="status">[]</code> Every ticket's own candidate SHA is recorded against its ticket id. <strong>The data already exists</strong> — <code>acceptPhase</code> stores <code>candidateSha</code> on each accepted phase in the recovery prefix — so this is a projection, not a new record</li>
+        <li><code class="status">[]</code> <strong>No per-ticket refs.</strong> Each ticket's commit is an ancestor of the tip, so the tip ref alone makes every one reachable; per-ticket refs would be N times the surface for zero extra reachability</li>
+        <li><code class="status">[]</code> The ref is written for <strong>every</strong> sealed attempt, not only a shift's. A dangling candidate is not a shift-specific hazard, and fixing it only for shifts would leave the general case exactly as it is</li>
+      </ul>
+
+      <h4>13. Testing Strategy</h4>
+      <p class="sub">Serves <code class="serves">AC-4</code> · <code class="serves">AC-5</code></p>
+      <p>Git behaviour is tested against a temporary-directory <code>git init</code> round trip, never against this repository. Failure behaviour is tested through the fixture adapter, so no quota is spent and the red gate is deterministic.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>npx tsx --test core/test/journeys/shift-blocked.test.ts</code> — a six-ticket shift with a red gate on ticket 3: blocks there, prefix durable, tail unreserved, resume completes</li>
+        <li><code class="status">[]</code> <code>npx tsx --test core/test/unit/candidate-ref.test.ts</code> — the ref is created, is not a branch, and re-running the write on the same SHA is idempotent</li>
+        <li><code class="status">[]</code> In a throwaway repository, the sealed candidate <strong>survives an aggressive pruning collection pass</strong> with the ref present and is unreachable without it — the property the ref exists for, proven in both directions</li>
+        <li><code class="status">[]</code> The invariant-8 meta-tests are <strong>green without an added exemption</strong>, and a test asserts no exemption was added</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code>, <code>npm run lint</code> — green, counts recorded</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass.
+      </div>
+    </div>
+
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M5: The single owner gate <span class="wtag core">gated on <span class="gate">G17-M</span></span></h3>
+      <p>Everything above exists so that this is one act instead of N. The shift reaches <code>AWAITING_OWNER</code> once, and what the owner reads there has to carry N tickets' worth of evidence without costing N sessions. <strong>This is where the batch's correctness is actually established</strong> — the amendment's third live-drive finding said the suite is not the acceptance bar, and batching multiplies exposure to exactly that gap.</p>
+      <figure>
+        <pre class="mermaid">
+flowchart LR
+  S["sealed shift<br/>N commits · one ref"] --> B["fresh build<br/>gates never render a page"]
+  B --> D{"project delivery<br/>posture"}
+  D -- "service" --> W["local web preview"]
+  D -- "mobile" --> E["named, not built<br/>an emulator is not a browser"]
+  D -- "docs / none" --> R["diff readout only"]
+  W --> O["owner · one gate"]
+  E --> O
+  R --> O
+  O --> L["L20 · human · TTY"]
+  style B fill:#fdf2e6,stroke:#b4551b
+  style L fill:#1b2430,stroke:#1b2430,color:#e6e9ee
+        </pre>
+        <figcaption>The preview is derived from the project's declared <code>delivery</code> posture, never hard-coded to a browser. Writing a browser step into the judgment layer would bake this repository's shape into every project the factory is pointed at.</figcaption>
+      </figure>
+
+      <h4>14. One <code>AWAITING_OWNER</code>, and the per-ticket readout</h4>
+      <p class="sub">Serves <code class="serves">AC-6</code> · <code class="serves">INV-1</code></p>
+      <p>The shift's own surface, and the only genuinely new thing the owner has to learn. It answers, in one screen, what a night of work produced: which tickets ran, what each one committed, what the gates said about each, and what the one review found across all of them.</p>
+      <figure class="mockup">
+        <div class="mockup-frame">
+          <div class="bar">awsf status w07-m4-shift</div>
+<div class="body"><span class="d">agentic-workflow-software-factory / </span><span class="w">w07-m4-shift</span><span class="d"> · attempt 1 · T2 · </span><span class="k">shift</span>
+<span class="d">state  </span> <span class="k">AWAITING_OWNER</span><span class="d">        calls </span>6<span class="d">/</span>10<span class="d"> spent       sealed </span>4h12m ago
+<span class="d">plan   </span> awsf-v2-w07-quota-telemetry<span class="d">   milestone </span>M4<span class="d">   </span>5 tickets
+
+  <span class="w">T11</span>  Boundary snapshot writer          <span class="d">9f3ac21</span>   <span class="g">gates 3/3</span>
+  <span class="w">T12</span>  Effective-availability readout    <span class="d">c40b7e8</span>   <span class="g">gates 3/3</span>
+  <span class="w">T13</span>  Route-scoped reason codes         <span class="d">1ad5502</span>   <span class="g">gates 3/3</span>
+  <span class="w">T14</span>  L26 stop without a timer          <span class="d">77be9f1</span>   <span class="g">gates 3/3</span>
+  <span class="w">T15</span>  Milestone M4 testing strategy     <span class="d">e2c8d43</span>   <span class="g">gates 3/3</span>
+
+<span class="d">review </span> codex:gpt-5.6 <span class="d">·</span> 2 findings, <span class="g">0 blocking</span>
+<span class="d">ref    </span> refs/awsf/candidates/agentic-workflow-software-factory/w07-m4-shift/1
+<span class="d">preview</span> delivery: service <span class="d">— built fresh 04:51 ·</span> http://127.0.0.1:5173
+
+<span class="d">next   </span> <span class="k">awsf journey</span> w07-m4-shift<span class="d">   then  </span><span class="k">awsf land</span> w07-m4-shift <span class="d">(needs a TTY)</span></div>
+        </div>
+        <figcaption>The proposed <code>AWAITING_OWNER</code> readout for a five-ticket shift. Every row is already recorded — the ticket id comes from the manifest, the SHA from the accepted phase, the gate count from the persisted gate rows. Nothing here is a new measurement; it is the first time they are printed together.</figcaption>
+      </figure>
+      <ul class="checklist">
+        <li><code class="status">[]</code> The readout names, per ticket: id, title, its own candidate SHA, and its gate result — sourced from the manifest and the accepted-phase records, never recomputed</li>
+        <li><code class="status">[]</code> The review's findings are listed once, for the accumulated diff, with the count of blocking findings stated separately from the total</li>
+        <li><code class="status">[]</code> The ref is printed, so the owner can reach the candidate with ordinary git and without a worktree</li>
+        <li><code class="status">[]</code> <strong>INV-1 is asserted, not assumed:</strong> a meta-test confirms no module this workstream adds can produce <code>L20</code> or supply a reason that a timer could turn into <code>L21</code>, and that <code>awsf land</code> still refuses a non-interactive stdin</li>
+        <li><code class="status">[]</code> The readout is a <code>status</code> projection. <strong>It starts nothing</strong>, and a shift with a failed ticket renders the same shape with that ticket's row red and the tail marked not-run</li>
+      </ul>
+
+      <h4>15. The candidate is built fresh, and the preview follows <code>delivery</code></h4>
+      <p class="sub">Serves <code class="serves">AC-6</code> · <code class="serves">INV-2</code> · <code class="serves">INV-3</code></p>
+      <p>Two of the amendment's three live-drive findings land here. <strong>Gates never render a page</strong> — every check runs against source or a diff, which is exactly why a stale asset bundle once made a correct landing read as a total regression. With N tickets in one candidate, that failure mode multiplies. And <strong><code>PROJECT_DELIVERY_POSTURES</code> already declares the answer</strong> to which projects need a visual review and in what form; it has had no reader since it was added.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> The preview step <strong>builds the candidate fresh</strong> before showing it, and records what it built and when. A preview served from an existing bundle is refused rather than shown with a caveat</li>
+        <li><code class="status">[]</code> The form of the preview is derived from the project's declared <code>delivery</code> posture: <code>service</code> serves locally, <code>docs</code> and <code>none</code> render the diff readout alone, and <code>mobile</code> is <strong>named and not built</strong> — an emulator is not a browser and pretending otherwise is how this repository's shape gets baked into every project</li>
+        <li><code class="status">[]</code> Visual-review classification is <strong>derived from the candidate's own diff</strong> against the posture, not from a new ticket field. A derived answer cannot go stale the way a hand-set flag does, and it needs no schema change</li>
+        <li><code class="status">[]</code> <strong>INV-2 and INV-3 asserted:</strong> no route added by this workstream is anything but read-only, no file it adds imports <code>node:child_process</code>, and the <code>no-skill-in-stages</code> and publish fences stay green with no new exemption</li>
+        <li><code class="status">[]</code> Exactly one preview server is alive at a time, and the readout says where it is. A batch review that leaks a server per ticket is the multiplied version of a problem that is already annoying at N = 1</li>
+      </ul>
+
+      <h4>16. Testing Strategy</h4>
+      <p class="sub">Serves <code class="serves">AC-6</code> · <code class="serves">INV-1</code> · <code class="serves">INV-2</code> · <code class="serves">INV-3</code></p>
+      <p>The readout is a pure projection of records, so it is tested as one against a fixture attempt directory — golden-text, no git and no server. The three invariants get meta-tests that are <strong>proven to bite</strong> before they are trusted. The preview's freshness is tested by making the bundle stale and watching the step refuse.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>npx tsx --test core/test/unit/shift-readout.test.ts</code> — golden readout for a clean five-ticket shift and for one blocked at ticket 3</li>
+        <li><code class="status">[]</code> <code>npx tsx --test core/test/unit/meta/</code> — the INV-1, INV-2 and INV-3 fences each go red when deliberately violated, then green again</li>
+        <li><code class="status">[]</code> A stale bundle makes the preview step <strong>refuse</strong> rather than serve, and the test asserts the refusal names staleness rather than a missing file</li>
+        <li><code class="status">[]</code> Each <code>delivery</code> posture selects its own preview form, including <code>mobile</code> selecting the named-not-built path</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code>, <code>npm run lint</code> — green, counts recorded</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass.
+      </div>
+    </div>
+
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M6: Chaining, adoption, and closure <span class="wtag core">gated on <span class="gate">G17-M</span></span></h3>
+      <p>What makes the owner's record work across a whole deep plan, and what to do with a shift that held good work but could not finish. Both are mostly <em>recognition</em> rather than construction: the chaining mechanism already exists and is already rendered, and the recovery instrument already exists and only refuses a shift because of one hard-coded map.</p>
+      <figure>
+        <pre class="mermaid">
+flowchart LR
+  M4["M4 shift<br/>5 tickets"] -->|"--continues"| M5["M5 shift<br/>2 tickets"]
+  M5 -->|"--continues"| M6["M6 shift<br/>4 tickets"]
+  M4 -.-> ST["one session stack<br/>computed at read time"]
+  M5 -.-> ST
+  M6 -.-> ST
+  M4 -->|"blocked at t3"| AD["adopt → build-review<br/>continuation for the tail"]
+  style ST fill:#fdf2e6,stroke:#b4551b
+        </pre>
+        <figcaption>Three milestones become three chained shifts, three connection strings and three owner gates — instead of eleven runs and eleven gates. The stack is derived by <code>groupSessionStacks</code> from <code>continuesTask</code> and same-task-different-attempt, computed at read time and never stored.</figcaption>
+      </figure>
+
+      <h4>17. Milestone chaining, and shift as an adoption source</h4>
+      <p class="sub">Serves <code class="serves">AC-3</code> · <code class="serves">AC-4</code></p>
+      <p><strong>Chaining needs no new mechanism and this task must not build one.</strong> <code>awsf new --continues &lt;taskId&gt;</code> already validates that the continued task exists and records <code>continuesTask</code> on the attempt; <code>groupSessionStacks</code> in <code>dashboard/src/session-stacks.ts</code> already joins sessions over exactly two recorded relationships and compares task ids literally, never parsing a naming convention. The work here is to <em>use</em> it and to prove it holds for a chain of shifts.</p>
+      <p><strong>Adoption is the partner for the case that matters most.</strong> A six-ticket shift that blocks at ticket 5 is exactly the sealed-attempt-holding-good-work case <code>awsf adopt</code> and seeded continuation were built for — and <code>adopt.ts:188</code> refuses it today, because <code>SUPPORTED</code> admits only <code>build-review</code> and <code>simple-sdlc</code> as a source.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> A journey chains three shifts with <code>--continues</code> and asserts <code>groupSessionStacks</code> returns <strong>one stack</strong> containing all three, in chronological order</li>
+        <li><code class="status">[]</code> No naming convention is introduced for shift task ids, and a test asserts the stack still forms when the ids share no prefix</li>
+        <li><code class="status">[]</code> <code>adopt.ts</code> admits a sealed shift as an adoption <strong>source</strong>. The <em>target</em> stays a shipped T2 review workflow — <code>validateInheritedSeed</code> already requires that, and a continuation for an unrun tail is ordinary work that does not need to be a shift</li>
+        <li><code class="status">[]</code> The adoption evidence records <strong>which tickets the source shift completed</strong>, so the continuation's owner intent can name the tail rather than restating the whole milestone</li>
+        <li><code class="status">[]</code> <strong>Declined deliberately:</strong> adopting <em>into</em> a shift. A shift's recipe is compiled from a selection, and a seeded shift would have to reconcile an inherited diff with a manifest — a second reconciliation surface bought for a case that adopting into <code>build-review</code> already serves</li>
+      </ul>
+
+      <h4>18. Testing Strategy, and the workstream's closing duties</h4>
+      <p class="sub">Serves <code class="serves">AC-1</code> · <code class="serves">AC-2</code> · <code class="serves">AC-3</code> · <code class="serves">AC-4</code> · <code class="serves">AC-5</code> · <code class="serves">AC-6</code> · <code class="serves">INV-1</code> · <code class="serves">INV-2</code> · <code class="serves">INV-3</code> · <code class="serves">INV-4</code> · <code class="serves">INV-5</code></p>
+      <p>The end-to-end proof, and the only task that touches the spine. One full offline journey drives a real milestone's tickets through the fixture adapter from selection to <code>AWAITING_OWNER</code>, and every acceptance row above is asserted in one place so a reader can see the whole claim discharged rather than scattered.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>npx tsx --test core/test/journeys/shift-milestone.test.ts</code> — selection through <code>AWAITING_OWNER</code> on the fixture route, with the readout, the ref and the per-ticket record all asserted</li>
+        <li><code class="status">[]</code> <code>npm test</code> — the full suite in one invocation, leaving <code>git status --porcelain</code> clean</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — the invariant-12 fence pairs this plan with <code>specs/tickets/awsf-v2-w17-shift/</code> and all eleven identifier-spine rows are green</li>
+        <li><code class="status">[]</code> <strong>One bounded live drive</strong> — the only quota this workstream spends. One real milestone, unattended, end to end, with the sealed candidate opened and looked at. The suite is not the acceptance bar and this is the row that admits it</li>
+        <li><code class="status">[]</code> Every milestone above reads <code class="status">[x]</code>, and the milestone-closing amendments are recorded in this plan's Amendments section with their landing SHAs</li>
+        <li><code class="status">[]</code> <strong>Only this task</strong> flips <code>specs/awsf-v2-plan.html</code>'s Milestone M17 / W17 marker and <code>specs/tickets/awsf-v2-plan/W17.md</code>'s state, in the same commit, and records the workstream-closing amendment in the spine</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass.
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== GLOBAL VALIDATION ===== -->
+  <section id="validation">
+    <h2>Validation Commands</h2>
+    <p>Every row runs offline and spends no quota, except the one that is explicitly a live drive. Run the suite <strong>at the exact base SHA a milestone starts from</strong> before changing anything: a red baseline blocks a correct build and neither <code>doctor</code> nor <code>lint</code> catches one.</p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> <code>npm run test:unit</code> — green, with the count recorded in each milestone's closing commit body</li>
+      <li><code class="status">[]</code> <code>npm run typecheck</code> — exits 0 across both projects</li>
+      <li><code class="status">[]</code> <code>npm run lint</code> — zero warnings, zero errors</li>
+      <li><code class="status">[]</code> <code>npm test</code> — the full suite in one invocation, leaving <code>git status --porcelain</code> clean</li>
+      <li><code class="status">[]</code> <code>npx tsx --test core/test/unit/meta/ticket-plan-sync.test.ts</code> — this plan pairs with <code>specs/tickets/awsf-v2-w17-shift/</code> and <code>specs/awsf-v2-w17-shift-build-prompts.md</code>; ids contiguous, milestones agreed, states matched, prompts byte-identical, and all eleven identifier-spine rows green</li>
+      <li><code class="status">[]</code> The invariant-8 meta-tests (<code>no-destructive-paths</code>, <code>no-land-route</code>) and the child-process, publish, credential and skill fences are green <strong>with no exemption added by this workstream</strong></li>
+      <li><code class="status">[]</code> <code>awsf shift plan awsf-v2-w07-quota-telemetry --milestone M4</code> refuses at zero cost when the ceiling does not fit, naming the shortfall and the raise acts needed</li>
+      <li><code class="status">[]</code> A sealed shift's candidate is reachable through its ref after an aggressive pruning collection pass in a throwaway repository, and unreachable without it</li>
+      <li><code class="status">[]</code> <strong>One bounded live drive:</strong> a real milestone runs unattended end to end, reaches <code>AWAITING_OWNER</code> once, and the candidate is built fresh and looked at. This is the workstream's acceptance bar; the suite is not</li>
+      <li><code class="status">[]</code> <span class="gate">G17</span> — <code>awsf.config.yaml</code>'s <code>workflows.enabled</code> gained <code>shift</code> as an owner-authored commit <em>before</em> M2's build, recorded in this plan's Amendments</li>
+      <li><code class="status">[]</code> <span class="gate">G17-M</span> — <code>main</code> and <code>task3.5</code> are merged before M4 starts, and the merge's own suite is green at its landing SHA</li>
+    </ul>
+    <div class="loop">
+      🔁 <strong>The plan is not complete until every box is checked and every command passes. If for some reason a step is not possible to complete, mark it with [f] and move on if possible.</strong>
+    </div>
+  </section>
+
+  <!-- ===== QUESTIONABLES ===== -->
+  <section id="questionables">
+    <h2>Questionables</h2>
+    <p><strong>All seven are DECIDED as of 2026-09-15</strong>, at the owner's direction, to this plan's own recommendation. Each keeps its full option set so the road not taken stays readable, and each records the reasoning rather than a bare choice. <strong>Three of the amendment's seven questions are not here</strong>, because the one-attempt shape answers them by construction rather than by preference — see <a href="#notes">Notes</a>. Two of them <em>are</em> here (Q5, Q6), carried across unchanged and now settled. The other five were raised by measuring this repository rather than by reasoning about the idea. <strong>Q6 is decided but not closed</strong>: it carries a named falsifier in T18's live drive.</p>
+    <figure>
+      <pre class="mermaid">
+flowchart TD
+  AM["away-mode amendment<br/>7 open questions"] --> C1["3 answered by the shape<br/>branch · budget · blocking"]
+  AM --> C2["2 carried across<br/>Q5 · Q6"]
+  AM --> C3["1 follows from<br/>ONE owner gate"]
+  NEW["5 raised by measuring<br/>the code"] --> Q["7 Questionables<br/>all DECIDED 2026-09-15"]
+  C2 --> Q
+  Q --> F["Q6 keeps a falsifier:<br/>T18's live drive"]
+  style C1 fill:#edf6f1,stroke:#1d6b48
+  style C3 fill:#edf6f1,stroke:#1d6b48
+  style Q fill:#edf6f1,stroke:#1d6b48
+  style F fill:#fdf2e6,stroke:#b4551b
+      </pre>
+      <figcaption>What the shape settles, what it inherits, and what it newly raises — and where each ended up. A plan that arrived with seven questions and leaves with seven has not done the work. All seven are now decided, and the one that is decided rather than closed says so and names what would reopen it.</figcaption>
+    </figure>
+
+    <details data-review-options="Amend to one build provider|Shift carries no review|One review per ticket">
+      <summary><span class="qdecided">DECIDED</span> Q1 — How should a shift carry a mandatory review, given that <code>reviewBuildPhaseId</code> refuses any workflow with more than one build producer?</summary>
+      <p class="decided"><b>Decided (2026-09-15):</b> <strong>amend <code>reviewBuildPhaseId</code> so a review workflow requires its build producers to resolve to exactly ONE DISTINCT PROVIDER, rather than to exactly one build phase.</strong> The owner directed that this plan’s own recommendation be applied to every Questionable; the reasoning below is the recommending session’s and is recorded in full rather than as a bare choice. See Amendments.</p>
+      <p class="qa-answer"><strong>Why this and not the other two.</strong> It is what <code>production-run.ts:1157</code> was always checking — the worker provider is read off the build phase and inverted against — so the single-phase form was incidental to a rule about providers. It keeps every refusal the current rule makes, including zero producers and builders split across routes. <em>No review</em> would make a T2 shift strictly weaker than a T2 <code>build-review</code>. <em>One review per ticket</em> doubles the cost to <code>2N</code>, which moves the largest measured milestone from 7 calls to 12 and makes three raise acts routine. <strong>M2 task 6 is unblocked and its checklist already encodes this</strong>, including the negative tests that must be watched to fail.</p>
+      <p class="qa-answer"><strong>This is the one hard structural blocker and it must be decided before M2 can be built.</strong> <code>compiler.ts:135</code> throws <code>InvalidReviewBuildProducerCount</code> unless a review workflow has exactly one <code>awsf.build-output/v1</code> agent phase; the check runs inside <code>compileWorkflowStructure</code>, so it fires on the recovery path too. <em>Amend to one build provider</em> is the plan's recommendation: the rule's real purpose is at <code>production-run.ts:1157</code>, where the worker provider is read off that phase and inverted against — and a shift's builders all run on one route, so the inversion is well-defined without a single phase. It keeps every refusal the current rule makes, including zero-producer. <em>No review</em> makes a T2 shift strictly weaker than a T2 <code>build-review</code>, which is a real downgrade for the sake of not touching a compile-time invariant. <em>One review per ticket</em> doubles the call cost to <code>2N</code>, which pushes the measured maximum milestone from 7 calls to 12 and makes three raise acts routine. <strong>Whichever is chosen, it must be authored against the post-merge <code>review-routing.ts</code></strong>, which gains a <code>same-provider-degraded</code> mode on <code>task3.5</code>.</p>
+    </details>
+
+    <details data-review-options="Build prompt verbatim|Host-rendered brief|A planner call per ticket">
+      <summary><span class="qdecided">DECIDED</span> Q2 — Where does a ticket-phase's intent come from: the owner's own <code>## Build prompt</code>, a host-rendered summary of it, or a planner call?</summary>
+      <p class="decided"><b>Decided (2026-09-15):</b> <strong>the ticket’s own <code>## Build prompt</code> block, carried verbatim.</strong> The owner directed that this plan’s own recommendation be applied to every Questionable; the reasoning below is the recommending session’s and is recorded in full rather than as a bare choice. See Amendments.</p>
+      <p class="qa-answer"><strong>Why, and what it costs.</strong> The owner wrote the prompt and it was already reviewed; every ticket here carries a fixed skeleton that is a better brief than a summariser would produce. It costs <strong>zero calls</strong>, which is what keeps <code>minimumCalls</code> at <code>N + 1</code>. <strong>The cost is carried, not waived:</strong> the brief phase must also carry the ticket’s <code>## Handoff</code> section, because that is the correction layer which reads <em>after</em> the prompt, and a phase that omits it will follow a prompt a predecessor already contradicted.</p>
+      <p class="qa-answer">The plan assumes <em>verbatim</em>, and the reason is that the owner already wrote the prompt and it was already reviewed: every ticket in this repository carries a fixed skeleton with <code>READ FIRST</code>, <code>DO</code>, <code>DONE WHEN</code>, <code>COMMIT</code> and <code>MARKERS</code>, which is a better brief than anything a summariser would produce. It also costs <strong>zero calls</strong>, which is what keeps <code>minimumCalls</code> at <code>N + 1</code>. <em>Host-rendered</em> would let the shift inject its own framing — the ticket's position in the sequence, what the previous ticket committed — at the price of a transformation nobody reviewed. <em>A planner call per ticket</em> costs <code>2N + 1</code> and re-derives a plan the plan already contains. <strong>The known cost of verbatim:</strong> a ticket's <code>## Handoff</code> section is a correction layer that reads <em>after</em> the prompt, and the phase must carry both or it will follow a prompt a predecessor already contradicted.</p>
+    </details>
+
+    <details data-review-options="Config dial on T2|Pre-flight raise acts|A shift-scoped ceiling">
+      <summary><span class="qdecided">DECIDED</span> Q3 — How is a shift's ceiling set, given that <code>awsf raise</code> requires an interactive terminal and a running shift can never widen itself?</summary>
+      <p class="decided"><b>Decided (2026-09-15):</b> <strong>pre-flight <code>awsf raise</code> acts on the shift’s own task. A shift-scoped ceiling stays refused.</strong> The owner directed that this plan’s own recommendation be applied to every Questionable; the reasoning below is the recommending session’s and is recorded in full rather than as a bare choice. See Amendments.</p>
+      <p class="qa-answer"><strong>Why the raise and not the dial.</strong> Raising <code>risk.call_ceiling.T2</code> widens <em>every</em> T2 attempt, not only shifts — the quiet global change the task-scoped, reason-carrying <code>awsf raise</code> exists to avoid. <strong>And the friction is smaller than it looks.</strong> Measured across the 60 milestones: <strong>54 of them are four tickets or fewer</strong>, so <code>minimumCalls ≤ 5</code> and they fit T2’s default with <em>no raise at all</em>. Only the six milestones of five or six tickets need one act, and M3 task 8’s pre-flight readout names it exactly. <em>A shift-scoped ceiling</em> remains refused for the reason in Notes: the arithmetic is deliberately one function over one number, and a fourth ceiling source is how a bound stops being one.</p>
+      <p class="qa-answer">Measured: <code>DEFAULT_CALL_CEILINGS[2] = 5</code>, <code>MAX_GRANT_CALLS = 5</code> per act, <code>MAX_CALL_CEILING = 20</code>. A five-ticket shift needs six calls and does not fit T2's default, so <strong>something has to move before the owner leaves the house</strong>. <em>Config dial</em> raises <code>risk.call_ceiling.T2</code> for every T2 attempt, not just shifts — simple, and it quietly widens ordinary runs too. <em>Pre-flight raise acts</em> keeps the widening on one task with a recorded reason, at the cost of one to three interactive acts before every shift. <em>A shift-scoped ceiling</em> is a new tier-like concept and the plan recommends against it: the ceiling arithmetic is deliberately one function over one number, and a fourth ceiling source is exactly the kind of thing that makes a bound stop being a bound.</p>
+    </details>
+
+    <details data-review-options="Nothing further — one shift, one seed|Cache the seed across shifts|Shrink seed_paths">
+      <summary><span class="qdecided">DECIDED</span> Q4 — The amendment called seeding cost the practical blocker. The one-attempt shape dissolves it. Is any residual work worth doing?</summary>
+      <p class="decided"><b>Decided (2026-09-15):</b> <strong>nothing further — one shift, one seed.</strong> The owner directed that this plan’s own recommendation be applied to every Questionable; the reasoning below is the recommending session’s and is recorded in full rather than as a bare choice. See Amendments.</p>
+      <p class="qa-answer"><strong>Why there is no residual.</strong> The blocker is dissolved rather than deferred: one attempt seeds once whatever <em>N</em> is, so the per-ticket cost falls by a factor of <em>N</em> and the amendment’s item 4 stops being a reason not to build this. <em>A cache across shifts</em> would help a chain of three milestones, and it is shared mutable state between attempts, which this factory has avoided everywhere else. <em>Shrinking <code>seed_paths</code></em> is a protected-config change whose consequences reach far outside this workstream.</p>
+      <p class="qa-answer"><strong>The blocker is gone, not solved.</strong> <code>runtime.seed_paths</code> is <code>[node_modules]</code>, measured at <strong>139&nbsp;MB</strong>; eight attempts meant eight copies and, on a network-backed filesystem, hours before the first provider call. One shift is <strong>one <code>awsf start</code> and one copy</strong>, whatever N is — so the cost per ticket falls by a factor of N and the amendment's item 4 stops being a reason not to build this. <em>Nothing further</em> is the plan's assumption. <em>Cache across shifts</em> would help a chain of three milestones, which is three copies rather than eleven — real, but a shared cache is mutable state between attempts and this factory has avoided that everywhere else. <em>Shrink <code>seed_paths</code></em> is a config change to a protected file with consequences far outside this workstream.</p>
+    </details>
+
+    <details data-review-options="State root, beside the attempt|A dashboard-written record|Recomputed from flags each time">
+      <summary><span class="qdecided">DECIDED</span> Q5 <span class="muted">(carried from the amendment, unchanged)</span> — Where does the selection live, and what makes it durable across a session that dies mid-shift?</summary>
+      <p class="decided"><b>Decided (2026-09-15):</b> <strong>the state root, beside the attempt.</strong> The owner directed that this plan’s own recommendation be applied to every Questionable; the reasoning below is the recommending session’s and is recorded in full rather than as a bare choice. See Amendments.</p>
+      <p class="qa-answer"><strong>Why there, and what it closes.</strong> It makes the manifest attempt-private and recoverable with everything else the attempt already recovers, which is exactly what <code>INV-4</code> assumes. <em>A dashboard-written record</em> puts a second writer on a record the runner must trust. <em>Recomputing from flags</em> keeps no record at all and loses the answer to “which tickets did this run?” the moment a ticket file changes. <strong>This closes the half of the amendment’s question that was still open;</strong> its companion half — what drains the selection, and what happens when that process ends — was already answered by the shape, because the drainer is the ordinary production runner and an interrupted shift is where any interrupted attempt is.</p>
+      <p class="qa-answer"><strong>Carried open deliberately.</strong> The shape narrows it but does not decide it: because a shift is one attempt, its durability is <code>phase-recovery.ts</code>'s durability, which already exists and already survives a dead session — so the question is now only where the <em>manifest</em> is written, not how a queue survives. <em>State root beside the attempt</em> makes the manifest attempt-private and recoverable with everything else, and is what <code>INV-4</code> assumes. <em>A dashboard-written record</em> is what the owner's original framing implies and it is compatible with invariant 3 — the dashboard writes intent and a human-started session drains it — but it puts a second writer on a record the runner must trust. <em>Recomputed from flags</em> needs no record at all and loses the answer to &ldquo;which tickets did this run?&rdquo; the moment a ticket file changes. <strong>The amendment's companion question — what drains it, and what happens when that process ends — is answered in part by the shape: the drainer is the ordinary production runner, and when it ends the attempt is where any interrupted attempt is.</strong></p>
+    </details>
+
+    <details data-review-options="One readout plus one fresh preview|A digest that earns attention per ticket|Sequential per-ticket preview">
+      <summary><span class="qdecided">DECIDED</span> Q6 <span class="muted">(carried from the amendment, unchanged)</span> — How does an owner review a multi-ticket candidate without a session per ticket?</summary>
+      <p class="decided"><b>Decided (2026-09-15):</b> <strong>one readout plus one freshly built preview — decided to unblock M5, with a named falsifier.</strong> The owner directed that this plan’s own recommendation be applied to every Questionable; the reasoning below is the recommending session’s and is recorded in full rather than as a bare choice. See Amendments.</p>
+      <p class="decided"><b>This one is decided, not closed.</b> It is the plan’s hardest question and the shape helps least with it. The decision is taken so M5 can be built, and <strong>T18’s bounded live drive is its falsifier</strong>: if driving a real milestone shows the readout is not enough, the finding is recorded here, the <em>digest that earns attention per ticket</em> option is where it goes next, and <code>R5</code> stays on the risk register until then.</p>
+      <p class="qa-answer"><strong>Why start here.</strong> The accumulated diff is structurally one change, and treating it as one is the cheapest thing that could work. <em>A digest that earns attention</em> is the most interesting option and the one to reach for next — it would use the review’s findings and the per-ticket diffs to say <em>which</em> tickets deserve a look, a judgment the factory has never made. <em>Sequential per-ticket preview</em> is the honest expensive answer and it re-creates the N-sessions cost this workstream exists to remove.</p>
+      <p class="qa-answer"><strong>The hardest remaining question, and the one the shape helps least with.</strong> It is also where the batch's correctness is actually established: defects that mattered across this series were found by driving and by looking at a screen, not by 1800 green tests, and N tickets multiply exposure to exactly that gap. <em>One readout plus one fresh preview</em> is what M5 assumes and it is the cheapest thing that could work — it treats the accumulated diff as one change, which it structurally is. <em>A digest that earns attention</em> is the amendment's own suggestion and the most interesting: it would use the review's findings and the per-ticket diffs to say <em>which</em> tickets deserve a look, which is a judgment the factory has never made before. <em>Sequential per-ticket preview</em> is the honest, expensive answer and it re-creates the N-sessions cost this workstream exists to remove.</p>
+    </details>
+
+    <details data-review-options="Ships disabled, owner enables|Ships enabled at T2|No config entry until M6 closes">
+      <summary><span class="qdecided">DECIDED</span> Q7 — Does <code>shift</code> ship enabled, and when does the protected-config amendment land?</summary>
+      <p class="decided"><b>Decided (2026-09-15):</b> <strong>ships disabled; enabling it is a separate, explicit owner act.</strong> The owner directed that this plan’s own recommendation be applied to every Questionable; the reasoning below is the recommending session’s and is recorded in full rather than as a bare choice. See Amendments.</p>
+      <p class="qa-answer"><strong>Why, and why the third option was not real.</strong> It follows W16’s precedent: the route was built, proved offline, and left for an owner act. <em>No config entry until M6 closes</em> was surfaced as probably not real, and it is — M2’s own tests need the id admitted to compile a shift at all, so <span class="gate">G17</span> lands before M2 either way. What the decision settles is that <code>workflows.enabled</code> gains <code>shift</code> and nothing is routed to it.</p>
+      <p class="qa-answer"><code>workflows.enabled</code> lives in <code>awsf.config.yaml</code>, which <code>path-policy</code> protects: no agent can write it, and <code>adopt.ts</code> and the runner both refuse a workflow the effective config does not enable. So enabling <code>shift</code> is an owner-authored commit whichever way this goes — ordering gate <span class="gate">G17</span>. <em>Ships disabled</em> follows W16's precedent, where the route was built, proved offline, and left for a separate explicit owner act. <em>Ships enabled at T2</em> is simpler and removes a step the owner will take anyway. <em>No entry until M6 closes</em> would block M2's own tests, which need the id admitted to compile a shift at all — so this option is probably not real, and saying so is part of the answer.</p>
+    </details>
+  </section>
+
+  <!-- ===== NOTES ===== -->
+  <section id="notes">
+    <h2>Notes</h2>
+
+    <h3>What the shape decides on its own</h3>
+    <p>Three of the amendment's seven open questions are not decided in this plan's Questionables, because the one-attempt shape settles them structurally. A fourth follows from the single owner gate. Each is stated here with the mechanism that settles it, so a reader can check the claim rather than take it.</p>
+    <div class="wrap">
+    <table>
+      <thead><tr><th>Amendment question</th><th>Settled by</th><th>The answer</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><em>One branch per ticket, or one accumulating branch?</em></td>
+          <td><code>createWorktree</code> runs <code>git worktree add --detach</code>; the engine's <code>hostGit.commit</code> writes one commit per phase onto that head</td>
+          <td><strong>One accumulating head, and no branch at all.</strong> Ticket <em>n</em> builds on ticket <em>n−1</em>'s tree in place, and each ticket's work is already its own commit. Per-ticket branches would mean rebasing work that was always sequential, to recover an independence the commits already give.</td>
+        </tr>
+        <tr>
+          <td><em>One ceiling per ticket, or a batch ceiling?</em></td>
+          <td><code>CallBudget</code> is per task; one shift is one task</td>
+          <td><strong>A batch ceiling, by construction.</strong> <code>minimumCalls = N + 1</code> is admitted or refused against one ceiling before any process exists. The amendment's &ldquo;notion of budget the lifecycle does not currently have&rdquo; turns out not to be needed.</td>
+        </tr>
+        <tr>
+          <td><em>When ticket 3 of 8 blocks, does the batch stop, skip, or continue?</em></td>
+          <td>Selection is topological over <code>depends_on</code></td>
+          <td><strong>Stop.</strong> Ticket 4 was chosen because it follows ticket 3; building it on a tree the gates rejected produces work nobody can review independently. Recorded as a decision with its cost in M4 task 11, not as a preference.</td>
+        </tr>
+        <tr>
+          <td><em>Does approval merge one ticket or the batch?</em></td>
+          <td>One <code>AWAITING_OWNER</code>, one <code>L20</code></td>
+          <td><strong>The batch.</strong> There is one candidate and one landing edge. Rejecting one ticket's work is a rework or a new shift over a narrower selection, not a partial landing — and a partial landing has no edge to travel on.</td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h3>Where this plan departs from the 2026-09-03 amendment</h3>
+    <p>The amendment's measurements are taken as given throughout; these are departures of <em>design</em>, plus two places where the ground moved after it was written.</p>
+    <ol>
+      <li><strong>Not a queue, a workflow type.</strong> The amendment framed away mode as a queue written from the dashboard and drained by a session. That framing halts on ticket 1, for the reason in the Problem section. The queue is replaced by a <em>manifest</em>, and the drainer is the ordinary production runner. <strong>The boundary the amendment drew is unmoved</strong> — the dashboard still only records intent, and a human still starts every shift.</li>
+      <li><strong>The seeding blocker is dissolved rather than solved.</strong> The amendment's item 4 was its most practical objection. One attempt means one seed of 139 MB regardless of N, so the objection does not survive the shape change. No work is planned against it.</li>
+      <li><strong>Batch budgeting needs no new concept.</strong> The amendment's item 5 asked for a notion of budget the lifecycle lacks. It has one; it was only ever scoped to a task, and a shift is a task.</li>
+      <li><strong>The ref-at-seal work shrinks.</strong> The amendment expected eight refs for eight runs. One shift produces one tip ref that keeps all N commits reachable, because each is an ancestor of the tip. Its judgement that this is the single most necessary piece is affirmed — and it is now smaller than it looked.</li>
+      <li><strong>Granularity is named, where the amendment left it open.</strong> One shift per <em>milestone</em>, not per plan. <code>MAX_CALL_CEILING = 20</code> makes a whole deep plan structurally impossible — <code>awsf-v2-w05-design-to-plan</code>'s 31 tickets would need 32 calls — while a milestone, measured at a median of 3 and a maximum of 6 across 60 of them, always fits.</li>
+      <li><strong>A structural blocker the amendment did not reach.</strong> It stopped at what would have to be <em>built</em>. Compiling a phase list meets a compile-time invariant that refuses more than one build producer, and a module-load assertion that welds the id vocabulary to the recipe registry. Both are in Q1 and M2 task 5.</li>
+    </ol>
+
+    <h3>The three live-drive findings, and where each lands</h3>
+    <ul>
+      <li><strong>Unattended recovery cannot lean on rework.</strong> Held. Every rework phase is <code>maxCorrections: 0</code> and the path rejects credential-shaped provider output where a normal run scrubs it, so a raise buys no correction margin there. M4 task 11 makes the absence mechanical: <strong>no shift module imports <code>rework.ts</code></strong>, asserted by a meta-test. A blocked shift surfaces.</li>
+      <li><strong>Gates never render a page.</strong> Held, and it is why M5 task 15 <em>refuses</em> a preview served from an existing bundle rather than showing one with a caveat. A stale bundle once made a correct landing read as a total regression at N = 1; at N = 6 it would discredit six tickets at once.</li>
+      <li><strong>The suite is not the acceptance bar.</strong> Held. This workstream's acceptance is <strong>one bounded live drive</strong> of a real milestone, unattended, with the candidate opened and looked at. It is the last row of M6 and the only quota the workstream spends beyond its own builds.</li>
+    </ul>
+
+    <h3>The merge, measured</h3>
+    <p>Both facts the amendment predates are the same fact: they live on <code>task3.5</code>, which has not merged.</p>
+    <div class="wrap">
+    <table>
+      <thead><tr><th>Measurement (2026-09-15)</th><th>Value</th></tr></thead>
+      <tbody>
+        <tr><td>Merge base</td><td><code>8268258</code></td></tr>
+        <tr><td><code>main</code> ahead / <code>task3.5</code> ahead</td><td>8 commits / 27 commits</td></tr>
+        <tr><td><code>production-run.ts</code>: <code>main</code> vs base</td><td><strong>+547 / −98</strong></td></tr>
+        <tr><td><code>production-run.ts</code>: <code>task3.5</code> vs base</td><td><strong>+96 / −17</strong></td></tr>
+        <tr><td>Conflicted files in a trial merge</td><td><strong>17</strong>, including <code>production-run.ts</code>, <code>attempt.ts</code>, <code>new.ts</code>, <code>rework.ts</code>, <code>status.ts</code>, <code>main.ts</code>, <code>projector.ts</code></td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p><strong>Ref-at-seal-time is not safe to build until that merge lands.</strong> It is written where an attempt seals, which is inside the file with the largest divergence in the pair. <strong>The dashboard's failure classifier has the same dependency:</strong> <code>dashboard/src/run-failures.ts</code> exists only on <code>task3.5</code>, in commit <code>2bc217d</code>, and is not on <code>main</code> at all.</p>
+    <p><strong>What can proceed without the merge:</strong> M1 entirely, M3 entirely, and the pure half of M2 — the manifest contract, the ticket-body reader, the selector, and <code>compileShift</code> are all new files under <code>core/src/workflow/shift/</code> and <code>core/src/contracts/</code>, and none of them is touched by either branch. <strong>What should wait even though it is not conflicted today:</strong> M2's two shared-file edits. <code>task3.5</code> already modifies <code>core/src/config/workflow-ids.ts</code> (it adds <code>AGENT_PHASE_IDS</code>) and <code>core/src/workflow/review-routing.ts</code> (it adds <code>ReviewRouteMode</code> and a <code>same-provider-degraded</code> mode). Editing either on <code>main</code> first would add two new conflicts to the seventeen.</p>
+
+    <h3>Decision: the failure classifier reads <code>shift</code>, and <code>shift</code> does not read it</h3>
+    <p>A long unattended run is exactly what <code>run-failures.ts</code> was built for — with N tickets, &ldquo;why did it stop&rdquo; has N possible answers and a bare <code>BLOCKED</code> is useless at breakfast. But the direction matters. The classifier is a dashboard read-model that maps an <code>Error</code> subclass <em>name</em> off a persisted phase record into <code>refusal</code> / <code>review</code> / <code>quota</code> / <code>harness</code> / <code>unclassified</code>, and its own comment says an unrecognised name must fall into <code>unclassified</code> rather than be guessed at.</p>
+    <p><strong>So <code>shift</code> reads nothing from it.</strong> Core does not import from the dashboard, the classification is not a designed vocabulary core could depend on, and a shift that changed its behaviour based on how a browser would label a failure would be reasoning about its own presentation. What the workstream owes instead is one edit <em>on the other side</em>, after the merge: the error classes M1–M4 introduce are added to <code>CLASSIFIED</code> so a shift's refusals land in <code>refusal</code> rather than <code>unclassified</code>. Reusing <code>CallCeilingExceeded</code> instead of minting a new class (M3 task 8) exists partly for this reason.</p>
+
+    <h3>The prompt-artifact conflict, recorded rather than silently resolved</h3>
+    <p>The plan skill's current instruction is that <code>specs/tickets/&lt;stem&gt;/</code> is the only prompt artifact and a <code>&lt;stem&gt;-build-prompts.md</code> must <strong>not</strong> be authored. This repository's own invariant-12 fence disagrees: <code>ticket-plan-sync.test.ts:84</code> asserts <code>specs/&lt;stem&gt;-build-prompts.md</code> exists for every plan source with a ticket set, and <code>:250</code> asserts each ticket's prompt is byte-identical to its <code>### Tnn — </code> block in that file's Section B. <strong>The fence wins here</strong>, because the alternative is shipping a red suite, and because <code>awsf-v2-w16-openrouter-adapter</code> set the same precedent four days ago. Both artifacts are authored, and the ticket directory's <code>README.md</code> records why. Reconciling the two is a change to the fence and belongs to whoever owns it, not to this workstream.</p>
+
+    <h3>Rejected approaches</h3>
+    <ul>
+      <li><strong>A <code>shift</code> command that launches other runs.</strong> Tested and rejected, for the reason measured at <code>task-machine.ts:115</code>. Recorded here so it is not re-litigated: it is not a matter of orchestration quality, it is that <code>L20</code> has one actor and no timer.</li>
+      <li><strong>Registering a placeholder <code>shift</code> recipe in <code>WORKFLOW_RECIPES</code>.</strong> It would satisfy the module-load assertion in one line, and it would make <code>minimumCallsFor</code> and <code>correctionsFundableFor</code> report a number that is wrong for every actual shift. A second vocabulary is more code and no fiction.</li>
+      <li><strong>A planner phase per ticket.</strong> Doubles the call cost to re-derive a plan the ticket already contains. See Q2.</li>
+      <li><strong>Adopting <em>into</em> a shift.</strong> A seeded shift would have to reconcile an inherited diff against a compiled manifest — a second reconciliation surface, bought for a case that adopting into <code>build-review</code> already serves. Declined in M6 task 17.</li>
+      <li><strong>A shift-scoped ceiling concept.</strong> The ceiling arithmetic is deliberately one function over one number, with the bound in code rather than config so that a bound the config could raise is not a bound at all. A fourth ceiling source is how that erodes. See Q3.</li>
+      <li><strong>Per-ticket refs at seal time.</strong> N times the ref surface for zero extra reachability, since every ticket's commit is an ancestor of the tip.</li>
+    </ul>
+
+    <h3>Risks</h3>
+    <div class="wrap">
+    <table>
+      <thead><tr><th>Risk</th><th>Why it is real</th><th>What holds it</th></tr></thead>
+      <tbody>
+        <tr><td><strong>R1 — the merge does not land</strong></td><td>M4 and M5 are both inside <code>production-run.ts</code>'s blast radius, and 17 files conflict. A workstream that waits indefinitely is a workstream that never ships.</td><td>M1, M2's pure half and M3 are buildable today and deliver the compiler, the selection and the budget arithmetic. If the merge stalls, this plan closes with M4–M6 at <code>[f]</code> and the blocking condition named, rather than being abandoned.</td></tr>
+        <tr><td><strong>R2 — the compiled recipe drifts from its manifest</strong></td><td>Recovery recompiles and compares a binding digest. A compiler that is not a pure function of recorded bytes turns every resume into a refusal — or worse, silently runs a different phase list.</td><td><code>INV-4</code>, and M2's reproducibility test compiling twice across a process boundary. The manifest digests whole ticket files, so an appended <code>## Handoff</code> is a change the resume notices.</td></tr>
+        <tr><td><strong>R3 — a shift is run at exactly its minimum ceiling</strong></td><td><code>coldCorrectionHeadroom()</code> is <code>max(0, remaining − futureInitialCalls)</code>, so at <code>ceiling === minimumCalls</code> every declared <code>maxCorrections: 1</code> is worth zero. The recipe would claim a correction round it cannot fund — the exact defect <code>correctionsFundableFor</code> was written to expose in three shipped recipes.</td><td>M3 task 8 states it in the pre-flight readout, in words, before the owner leaves.</td></tr>
+        <tr><td><strong>R4 — the review widens instead of being amended</strong></td><td>Q1's first option touches a compile-time invariant. The tempting shortcut is to relax the check to &ldquo;at least one&rdquo;, which would let a genuinely ambiguous inversion through.</td><td>M2 task 6's checklist requires the two-provider case to be <strong>refused by name</strong> and the zero-producer case to keep its current error class, both proven by tests that were watched to fail.</td></tr>
+        <tr><td><strong>R5 — the owner reviews six tickets the way he reviews one</strong></td><td>Q6 is decided rather than closed, and the failure is silent: a readout that is easy to skim is a readout that gets skimmed. Defects that mattered here were found by looking at a screen.</td><td>The acceptance bar is one live drive with the candidate opened, not a green suite. If that drive shows the readout is not enough, Q6 is where the finding is recorded.</td></tr>
+        <tr><td><strong>R6 — a shift becomes the default way work is done</strong></td><td>It is faster and it spends quota that would otherwise expire. That is the argument for it and also the way an unreviewed batch becomes normal.</td><td>A compiled id is refused as <code>default_workflow</code> (M2 task 5), the config entry is an owner act (<span class="gate">G17</span>), and the landing edge is unchanged.</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h3>Where it sits</h3>
+    <p>Milestone <strong>M17 / W17</strong> in <a href="awsf-v2-plan.html">the v2 spine</a>, after W16 and taking the next free number. It is not W13 or W14 — those are deploy and monitor, declared and out of scope for v2 — and not an extension of any open workstream. It depends on <strong>W04</strong> for the project registry's <code>delivery</code> posture, on the <strong><code>main</code>/<code>task3.5</code> merge</strong> for M4 onward, and on an owner-authored config amendment for <span class="gate">G17</span>. Nothing above it in the spine waits on it.</p>
+
+    <figure>
+      <pre class="mermaid">
+flowchart LR
+  subgraph NOW["buildable on main today"]
+    direction TB
+    M1["M1 · selection and manifest"] --> M2a["M2 · compiler, pure half"]
+    M1 --> M3["M3 · one ceiling"]
+  end
+  M2a --> G{"G17-M<br/>main + task3.5 merged"}
+  M3 --> G
+  subgraph AFTER["gated on the merge"]
+    direction TB
+    M2b["M2 · shared-file edits"] --> M4["M4 · failure, ref"] --> M5["M5 · the owner gate"] --> M6["M6 · chaining, closure"]
+  end
+  G --> M2b
+  style G fill:#fbeceb,stroke:#a5311e
+  style NOW fill:#edf6f1,stroke:#1d6b48
+      </pre>
+      <figcaption>Two-thirds of the workstream is unblocked today. The critical band is everything that touches <code>production-run.ts</code> or a file <code>task3.5</code> already edits — which is also, not by coincidence, everything the owner actually sees.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ===== AMENDMENTS ===== -->
+  <section id="amendments">
+    <h2>Amendments</h2>
+    <p class="sub">Running history of changes made after this plan was first executed. Append-only; populated by the Update Plan and Update References workflows, by the owner review, and by each milestone's closing task. <strong>No milestone has closed, no marker has moved, and no code has been written.</strong></p>
+
+    <details open>
+      <summary>2026-09-15 — all seven Questionables decided to this plan's own recommendation</summary>
+
+      <p><strong>No status marker moved, and no code was written.</strong> The owner directed that this plan's own
+      recommendation be applied to every Questionable rather than leaving them for a later review, so each of the
+      seven now carries a <code>DECIDED</code> block with the decision, the date and the reasoning in full. Every
+      option set is retained so the road not taken stays readable.</p>
+
+      <h3>The seven decisions</h3>
+      <ul>
+        <li><strong>Q1 — review inversion.</strong> Amend <code>reviewBuildPhaseId</code> to require the build
+        producers to resolve to <em>exactly one distinct provider</em>, not to exactly one build phase. This is the
+        only decision that was structurally blocking: M2 task 6 could not be built without it.</li>
+        <li><strong>Q2 — ticket intent.</strong> The ticket's own <code>## Build prompt</code> block, carried
+        verbatim, together with its <code>## Handoff</code> section.</li>
+        <li><strong>Q3 — the ceiling.</strong> Pre-flight <code>awsf raise</code> acts on the shift's own task; the
+        global T2 dial is refused because it widens every T2 attempt, and a shift-scoped ceiling stays refused.
+        <strong>The measured consequence is that a raise is usually unnecessary:</strong> 54 of the 60 milestones are
+        four tickets or fewer and fit T2's default of five with no act at all.</li>
+        <li><strong>Q4 — seeding.</strong> Nothing further. The blocker is dissolved by the one-attempt shape rather
+        than deferred.</li>
+        <li><strong>Q5 — where the selection lives.</strong> The state root, beside the attempt, which is what
+        <code>INV-4</code> already assumes. This closes the half of the away-mode amendment's question that was still
+        open; the other half was already answered by the shape.</li>
+        <li><strong>Q6 — reviewing a multi-ticket candidate.</strong> One readout plus one freshly built preview
+        — <strong>decided to unblock M5, and explicitly not closed.</strong> T18's bounded live drive is named as its
+        falsifier, the digest-that-earns-attention option is named as where the finding would go, and <code>R5</code>
+        stays on the risk register until the drive has run.</li>
+        <li><strong>Q7 — shipping.</strong> Disabled, with enabling as a separate owner act, following W16. The third
+        option was confirmed not real: M2's own tests need the id admitted, so <span class="gate">G17</span> lands
+        before M2 either way.</li>
+      </ul>
+
+      <h3>What changed in the documents</h3>
+      <p>In this plan: seven <code>DECIDED</code> blocks, the Questionables intro, the Questionables diagram and its
+      caption, and risk row <code>R5</code>, which had described Q6 as open. In
+      <code>specs/tickets/awsf-v2-w17-shift/README.md</code>: the Questionables gate section, which had told a session
+      that Q1 must be decided before T06 and Q7 before <span class="gate">G17</span>. In
+      <code>specs/tickets/awsf-v2-plan/W17.md</code> and its Section B block in the spine's build prompts, byte-identically:
+      the <em>owner decisions this workstream needs</em> block became a record of decisions already taken.</p>
+      <p><strong>No ticket's build prompt in this plan's own set needed regenerating.</strong> None of them instructed a
+      session to resolve a Questionable — T06 was already written to the recommendation that Q1 has now adopted, so
+      applying the decision made it consistent rather than requiring an edit.</p>
+    </details>
+
+  </section>
+
+</main>
+
+<!-- ===== PLAN-SOTA REVIEW LAYER v1 — FIXED MACHINERY, COPY VERBATIM ===== -->
+<style>
+  .rv-btn { font: 600 11px/1 system-ui, sans-serif; padding: 3px 9px; border-radius: 999px;
+    border: 1px solid var(--muted, #8884); background: transparent; color: var(--fg, inherit);
+    cursor: pointer; opacity: .55; vertical-align: middle; margin-left: 8px; }
+  .rv-btn:hover { opacity: 1; border-color: var(--accent, #7c6cf0); }
+  .rv-btn.rv-on { opacity: 1; background: var(--accent, #7c6cf0); color: var(--bg, #fff); border-color: transparent; }
+  .rv-note-box { display: block; margin: 8px 0; padding: 8px 12px; border: 1px dashed var(--accent, #7c6cf0);
+    border-radius: 8px; font-size: 13px; min-height: 1.5em; background: color-mix(in srgb, var(--accent, #7c6cf0) 6%, transparent); outline: none; }
+  .rv-note-box:empty::before { content: attr(data-ph); opacity: .5; font-style: italic; }
+  .rv-note-box[hidden] { display: none; }
+  .rv-verdict { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 10px 0 2px; }
+  .rv-verdict-tag { font: 700 10px/1 system-ui, sans-serif; letter-spacing: .08em; opacity: .6; margin-right: 2px; }
+  .rv-status-chip { font: 600 11px/1 ui-monospace, monospace; margin-left: 10px; padding: 3px 9px;
+    border-radius: 999px; border: 1px dotted var(--muted, #8884); background: transparent;
+    color: var(--fg, inherit); cursor: pointer; opacity: .6; }
+  .rv-status-chip:hover { opacity: 1; }
+  .rv-status-chip.rv-on { opacity: 1; border-style: solid; border-color: var(--accent, #7c6cf0); color: var(--accent, #7c6cf0); }
+  #rv-drawer { position: fixed; right: 16px; bottom: 16px; z-index: 9999; font: 13px/1.45 system-ui, sans-serif;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  #rv-pill { font: 700 12px/1 system-ui, sans-serif; padding: 10px 16px; border-radius: 999px; border: none;
+    cursor: pointer; background: var(--accent, #7c6cf0); color: var(--bg, #fff); box-shadow: 0 4px 16px #0004; }
+  #rv-panel { width: min(420px, calc(100vw - 32px)); max-height: 60vh; overflow: auto; padding: 14px;
+    border-radius: 12px; border: 1px solid var(--muted, #8884); background: var(--bg, #fff);
+    color: var(--fg, inherit); box-shadow: 0 8px 32px #0005; }
+  #rv-panel h4 { margin: 0 0 8px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; opacity: .7; }
+  #rv-list { margin: 0 0 10px; padding: 0; list-style: none; font-size: 12px; }
+  #rv-list li { padding: 3px 0; border-bottom: 1px solid #8882; overflow-wrap: anywhere; }
+  #rv-out { width: 100%; min-height: 140px; margin-top: 10px; font: 11px/1.5 ui-monospace, monospace;
+    border: 1px solid var(--muted, #8884); border-radius: 8px; padding: 8px; background: transparent; color: inherit; }
+  #rv-msg { font-size: 11px; opacity: .75; margin-top: 6px; }
+  @media print { #rv-drawer { display: none; } }
+</style>
+<script>
+(function () {
+  'use strict';
+  var FILE = decodeURIComponent(location.pathname.split('/').pop() || 'plan.html');
+  var KEY = 'plan-sota-review:' + FILE;
+  var LEGACY_KEY = 'planf3-review:' + FILE; // pre-rename state; read once, never written
+  var PROPOSE = ['', '[]', '[wip]', '[x]', '[f]'];
+  var state = { a: {}, v: {}, s: {} }, persisted = true;
+  try { state = JSON.parse(localStorage.getItem(KEY) || localStorage.getItem(LEGACY_KEY) || 'null') || state; } catch (e) { persisted = false; }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); persisted = true; }
+    catch (e) { persisted = false; }
+    refresh();
+  }
+  function el(tag, cls, txt) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (txt) n.textContent = txt;
+    if (tag === 'button') { n.type = 'button'; n.setAttribute('data-lavish-action', ''); }
+    return n;
+  }
+  function clean(t) { return String(t || '').replace(/\|/g, '/').replace(/\s*\r?\n\s*/g, ' >> ').trim(); }
+  var registry = []; // {key, label, kind: 'section'|'phase'|'q'}
+
+  function noteBox(key, host, placeholder) {
+    var box = el('div', 'rv-note-box');
+    box.contentEditable = 'true';
+    box.setAttribute('data-ph', placeholder || 'Type your note for the agent…');
+    box.hidden = !(state.a[key]);
+    if (state.a[key]) box.textContent = state.a[key];
+    box.addEventListener('input', function () {
+      var t = box.textContent.trim();
+      if (t) state.a[key] = t; else delete state.a[key];
+      save();
+    });
+    host.appendChild(box);
+    return box;
+  }
+  function annotable(key, label, heading, host, kind) {
+    registry.push({ key: key, label: label, kind: kind });
+    var box = noteBox(key, host);
+    heading.insertAdjacentElement('afterend', box);
+    var btn = el('button', 'rv-btn' + (state.a[key] ? ' rv-on' : ''), '✎ note');
+    btn.addEventListener('click', function () {
+      box.hidden = !box.hidden;
+      if (!box.hidden) box.focus();
+    });
+    heading.appendChild(btn);
+    box.addEventListener('input', function () { btn.classList.toggle('rv-on', !!state.a[key]); });
+  }
+
+  // Sections
+  Array.prototype.forEach.call(document.querySelectorAll('main > section[id]'), function (sec) {
+    var h = sec.querySelector('h2'); if (!h) return;
+    annotable('#' + sec.id, h.textContent.trim(), h, sec, 'section');
+  });
+  // Phases: annotation + proposed-status chip
+  Array.prototype.forEach.call(document.querySelectorAll('#phases .phase'), function (ph, i) {
+    var h = ph.querySelector('h3'); if (!h) return;
+    var key = 'phase-' + (i + 1);
+    var label = h.textContent.replace(/^\s*\[[^\]]*\]\s*/, '').trim();
+    annotable(key, label, h, ph, 'phase');
+    var chip = el('button', 'rv-status-chip' + (state.s[key] ? ' rv-on' : ''));
+    chip.textContent = state.s[key] ? 'propose ' + state.s[key] : 'propose…';
+    chip.title = 'Cycle a PROPOSED status (exported as feedback — the file marker is only changed by the agent)';
+    chip.addEventListener('click', function () {
+      var next = PROPOSE[(PROPOSE.indexOf(state.s[key] || '') + 1) % PROPOSE.length];
+      if (next) state.s[key] = next; else delete state.s[key];
+      chip.textContent = next ? 'propose ' + next : 'propose…';
+      chip.classList.toggle('rv-on', !!next);
+      save();
+    });
+    h.appendChild(chip);
+  });
+  // Questionables: verdict / option buttons + note
+  Array.prototype.forEach.call(document.querySelectorAll('#questionables details'), function (d, i) {
+    var key = 'q-' + (i + 1);
+    var summary = d.querySelector('summary');
+    var label = summary ? summary.textContent.trim().slice(0, 120) : key;
+    registry.push({ key: key, label: label, kind: 'q' });
+    var opts = (d.getAttribute('data-review-options') || '').split('|').map(function (s) { return s.trim(); }).filter(Boolean);
+    if (!opts.length) opts = ['APPROVE', 'REJECT', 'REVISE', 'DEFER'];
+    var row = el('div', 'rv-verdict');
+    row.appendChild(el('span', 'rv-verdict-tag', 'YOUR CALL'));
+    opts.forEach(function (opt) {
+      var b = el('button', 'rv-btn' + ((state.v[key] || {}).c === opt ? ' rv-on' : ''), opt);
+      b.addEventListener('click', function () {
+        if ((state.v[key] || {}).c === opt) { delete state.v[key]; }
+        else { state.v[key] = { c: opt }; }
+        Array.prototype.forEach.call(row.querySelectorAll('.rv-btn'), function (x) {
+          x.classList.toggle('rv-on', x.textContent === ((state.v[key] || {}).c || null));
+        });
+        qbox.hidden = !state.v[key] && !state.a[key];
+        save();
+      });
+      row.appendChild(b);
+    });
+    d.appendChild(row);
+    var qbox = noteBox(key, d, 'Why / what to change instead…');
+    if (state.v[key]) qbox.hidden = false;
+  });
+
+  // Drawer
+  var drawer = el('div'); drawer.id = 'rv-drawer';
+  var panel = el('div'); panel.id = 'rv-panel'; panel.hidden = true;
+  var pill = el('button'); pill.id = 'rv-pill';
+  pill.addEventListener('click', function () { panel.hidden = !panel.hidden; });
+  var list = el('ul'); list.id = 'rv-list';
+  var actions = el('div');
+  var exportBtn = el('button', 'rv-btn rv-on', 'Export Feedback');
+  var clearBtn = el('button', 'rv-btn', 'Clear review');
+  var out = el('textarea'); out.id = 'rv-out'; out.readOnly = true; out.hidden = true;
+  var msg = el('div'); msg.id = 'rv-msg';
+  var head = el('h4', null, 'Review — pending feedback');
+  actions.appendChild(exportBtn); actions.appendChild(clearBtn);
+  panel.appendChild(head); panel.appendChild(list); panel.appendChild(actions);
+  panel.appendChild(out); panel.appendChild(msg);
+  drawer.appendChild(panel); drawer.appendChild(pill);
+  document.body.appendChild(drawer);
+
+  function findLabel(key) {
+    for (var i = 0; i < registry.length; i++) if (registry[i].key === key) return registry[i].label;
+    return key;
+  }
+  function refresh() {
+    var n = Object.keys(state.a).length + Object.keys(state.v).length + Object.keys(state.s).length;
+    pill.textContent = '✎ Review (' + n + ')';
+    list.textContent = '';
+    Object.keys(state.v).forEach(function (k) { list.appendChild(el('li', null, '[verdict] ' + findLabel(k) + ' → ' + state.v[k].c)); });
+    Object.keys(state.s).forEach(function (k) { list.appendChild(el('li', null, '[status] ' + findLabel(k) + ' → propose ' + state.s[k])); });
+    Object.keys(state.a).forEach(function (k) { list.appendChild(el('li', null, '[note] ' + findLabel(k) + ': ' + state.a[k].slice(0, 90))); });
+    if (!n) list.appendChild(el('li', null, 'Nothing yet — click ✎ note on any section, a verdict on a Questionable, or propose… on a phase.'));
+    if (!persisted) msg.textContent = '⚠ localStorage unavailable — review state lives only in this tab.';
+  }
+  function buildExport() {
+    var L = ['plan-sota-review v1', 'plan: ' + FILE, 'title: ' + clean(document.title), 'exported: ' + new Date().toISOString(), ''];
+    var vk = Object.keys(state.v), sk = Object.keys(state.s), ak = Object.keys(state.a);
+    L.push('## verdicts');
+    vk.length ? vk.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | ' + clean(state.v[k].c) + ' | note: ' + (clean(state.a[k]) || '-'));
+    }) : L.push('- (none)');
+    L.push('', '## statuses');
+    sk.length ? sk.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | propose ' + state.s[k]);
+    }) : L.push('- (none)');
+    L.push('', '## annotations');
+    var solo = ak.filter(function (k) { return !state.v[k]; });
+    solo.length ? solo.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | ' + clean(state.a[k]));
+    }) : L.push('- (none)');
+    return L.join('\n');
+  }
+  exportBtn.addEventListener('click', function () {
+    var text = buildExport();
+    out.hidden = false; out.value = text;
+    out.focus(); out.select();
+    function done(m) { msg.textContent = m; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done('Copied — paste it into your next agent session.'); },
+        function () { done('Clipboard blocked — copy from the box below.'); });
+    } else {
+      try { done(document.execCommand('copy') ? 'Copied — paste it into your next agent session.' : 'Clipboard blocked — copy from the box below.'); }
+      catch (e) { done('Clipboard blocked — copy from the box below.'); }
+    }
+    if (window.lavish && typeof window.lavish.queuePrompt === 'function') {
+      window.lavish.queuePrompt(text, { tag: 'plan-sota-review', queueKey: 'plan-sota-review' });
+      msg.textContent += ' Also queued to the agent via Lavish.';
+    }
+  });
+  clearBtn.addEventListener('click', function () {
+    if (!confirm('Clear all review state for this plan?')) return;
+    state = { a: {}, v: {}, s: {} };
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    location.reload();
+  });
+  refresh();
+})();
+</script>
+
+<!-- Mermaid runtime — renders every <pre class="mermaid"> block. Only external reference in the file. -->
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      primaryColor: '#fdf2e6',
+      primaryTextColor: '#14181f',
+      primaryBorderColor: '#b4551b',
+      lineColor: '#6b7382',
+      fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif'
+    }
+  });
+</script>
+</body>
+</html>
