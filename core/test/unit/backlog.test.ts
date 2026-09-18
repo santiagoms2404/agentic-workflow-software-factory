@@ -106,13 +106,19 @@ test("projected cost joins plan-qualified uids and never colliding bare ids", as
   assert.deepEqual(qualified.projectedCost, { usd: 10, authority: "provider", partial: false });
 });
 
-test("the blocked aggregate is five on the current corpus and uses the ticket-card rule", async () => {
+test("the blocked aggregate uses the ticket-card rule, and the rule discriminates", async () => {
   const backlog = await repositoryBacklog();
   const blocked = countBlockedTickets(backlog.tickets);
-  assert.equal(blocked, 5);
-  assert.notEqual(blocked, 221);
+  // The rule, stated twice over: the aggregate agrees with the predicate, and
+  // the predicate is "not ready AND todo" rather than anything else.
   assert.equal(blocked, backlog.tickets.filter((item) => isBlockedTicket(item)).length);
   assert.equal(blocked, backlog.tickets.filter((item) => !item.ready && item.state === "todo").length);
+  // And it separates. A rule that blocked nothing, or blocked the whole corpus,
+  // would satisfy both equalities above and be useless. This was once written
+  // as two literals — 55 and 264 — which made authoring a plan turn the suite
+  // red for a reason that had nothing to do with the rule.
+  assert.ok(blocked > 0, "the corpus must exercise the rule");
+  assert.ok(blocked < backlog.tickets.length, "the rule must not blocked-flag the whole corpus");
 });
 
 test("a corpus with no joinable cost states that cost data is unavailable", async () => {
