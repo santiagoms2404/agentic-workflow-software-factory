@@ -17,7 +17,7 @@ import type {
   ProcessTransport,
   TransportBroker,
 } from "../../adapters/interface.ts";
-import { AdapterError } from "../../adapters/interface.ts";
+import { AdapterError, reservationIdOf } from "../../adapters/interface.ts";
 import { registeredAdapter } from "../../adapters/registry.ts";
 import { assertPrivateSystemPrompt, writeSystemPromptFile } from "../../adapters/system-prompt-file.ts";
 import { toConfigSnapshotJson } from "../../config/effective-config.ts";
@@ -588,7 +588,19 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
   const defect = assertConcreteReworkDefect(options.defect);
   const instructionText = options.instruction === undefined ? null : ownerText(options.instruction);
   credentialSafeValue(options.config, "configured owner rework data");
-  const infra: ReworkInfrastructure = { ...DEFAULT_INFRASTRUCTURE, ...options.infrastructure };
+  const configuredInfra: ReworkInfrastructure = { ...DEFAULT_INFRASTRUCTURE, ...options.infrastructure };
+  const delegatedReservations = new Set<string>();
+  const infra: ReworkInfrastructure = { ...configuredInfra, createBroker: brokerOptions => {
+    const delegate = configuredInfra.createBroker(brokerOptions);
+    return { startProcess: async (registration, spec, signal) => {
+      delegatedReservations.add(reservationIdOf(registration));
+      try { return await delegate.startProcess(registration, spec, signal); }
+      catch (error) {
+        // No returned transport means the caller cannot prove whether a child exists. Do not retry it.
+        throw new ReworkRouteMismatch(`broker launch outcome is uncertain: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    } };
+  } };
   let status = await readAttempt(options.attemptDir);
   credentialSafeText(status.request, "persisted original request", true);
 
@@ -774,7 +786,6 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
   };
   let instructionIntent = false;
   let instructionSubmitted = false;
-  let builderDelegated = false;
   let processRecord: BarrierRecord | null = null;
   let processSettled = false;
   let observedProcess: ObservedProcessOutcome | null = null;
@@ -910,7 +921,6 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
         await persist("attempt.updated", {}, { type: "rework-instruction-delivery", phaseId, delivery, at: infra.now() });
         instructionIntent = true;
       }
-      builderDelegated = true;
       activeTransport.current = await broker.startProcess(registration, finalSpec, signal);
       if (delivery !== null) {
         await persist("attempt.updated", {}, { type: "rework-instruction-delivery", phaseId, delivery: { ...delivery, state: "submitted" }, at: infra.now() });
@@ -1302,10 +1312,9 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
       try { survivorReport = await failedTransport.cancel("owner rework failed closed"); }
       catch { survivorReport = null; }
     }
-    // A reservation that did not reach GO is released even when L19's projector,
-    // queued-phase persistence, or broker construction was the failing boundary.
+    // Only positive non-delegation permits releasing an unused reservation, for either phase.
     for (const held of budget.outstanding()) {
-      if (held.id !== reservation.id || !builderDelegated) budget.releaseOnRegistrationFailure(held.id);
+      if (!delegatedReservations.has(held.id)) budget.releaseOnRegistrationFailure(held.id);
     }
 
     // persistAttempt may throw after journal+status are already durable (the

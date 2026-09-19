@@ -1245,3 +1245,171 @@ STOP WHEN
   The deep plan is authored, every open decision is surfaced, and the owner has it in hand - or
   you have reported that the owner's decision is still open and stopped without authoring.
 ```
+
+### T16 — W16 · The pi/OpenRouter adapter
+
+```
+[CHOOSE YOUR PROVIDER — pick by live quota]
+  MODEL   Opus 5 · EFFORT high
+  CLAUDE  claude:opus · /effort high
+  GPT     codex:gpt-5.6-sol · reasoning high
+  WHY     the deep plan already exists; what remains is a review that has to resist a number
+          that looks like money and a routing rule that quietly admits only two providers.
+
+THE DEEP PLAN FOR THIS WORKSTREAM IS ALREADY AUTHORED.
+specs/awsf-v2-w16-openrouter-adapter.html was written on 2026-09-15, with its build prompts and a
+twelve-ticket set at specs/tickets/awsf-v2-w16-openrouter-adapter/. So this prompt is NOT the
+usual "author a deep plan" meta-prompt. Do not author a second one. Do not rewrite the one that
+exists unless a review says to.
+
+WORKSTREAM: W16 - the pi/OpenRouter adapter. Spine milestone M16. OPTIONAL to v2's completion.
+PREDECESSORS: none. Nothing above this workstream waits on it, and its deep plan was authored
+without waiting on anything.
+
+WHAT REMAINS
+  The owner-review gate, and then execution through that plan's own ticket set - T01 through T12,
+  in order, each in a fresh session. This ticket is the spine's record of the workstream; it is
+  not the thing that builds it.
+
+READ FIRST
+  specs/awsf-v2-plan.html - the W16 block IN FULL, plus "Shared Invariants and Constraints"
+  specs/awsf-v2-w16-openrouter-adapter.html - What Already Exists, then the Questionables IN FULL
+  specs/tickets/awsf-v2-w16-openrouter-adapter/README.md - the gates before T01 may run
+  core/src/adapters/pi-codex.ts - the reviewed shape the new adapter is modelled on
+
+WHAT THE REVIEW MUST NOT LET THROUGH
+  A cost authority claimed on the strength of a provider-shaped number. The Codex route reported
+  an equally convincing figure and was demoted to catalog-estimate because pi computes it locally
+  from a rate card. Four evidence items gate the promotion in that plan and one of them - reading
+  pi's own OpenRouter cost path - is unread. Holding at catalog-estimate with that recorded is
+  written in as a complete outcome, and the review should be willing to take it.
+  Any relaxation of PI_PROVIDER, of PiCodexAdapter's argv, or of ENV_ALLOWLIST. All three are
+  out of scope by construction and the plan says so; a review that lets one in has removed the
+  reason the workstream is a second adapter at all.
+
+THE OWNER DECISIONS THIS WORKSTREAM NEEDED - ALL THREE TAKEN 2026-09-15
+  Q1 - a pi-level retry is ONE call. The ceiling counts host-launched processes.
+  Q2 - any distinct provider may review. Open-weight routes are admissible for reviewer phases.
+  Q3 - the provider string is the unit of inversion, with NO per-recipe cap on OpenRouter phases.
+  Q2 and Q3 went against the plan's recommendations. NEITHER NEEDS CODE: oppositeProvider already
+  asks only that a reviewer be DIFFERENT, and providerPairFrom's exactly-two rule already refuses a
+  recipe whose builder and reviewer both resolve to openrouter - the case Q3's rejected cap was
+  meant to prevent. The deep plan's T11 proves both rather than asserting them.
+  WHAT IS STILL UNTAKEN, and was deliberately not put to the owner: whether the factory should ever
+  invert across THREE providers. That is a change to a rule every workstream shares, not a decision
+  W16 is entitled to make. A three-provider recipe stays refused at preflight.
+
+INVARIANTS THIS WORKSTREAM TOUCHES
+  1, 3, 7, 9, 11 and 12. It adds no push path, no resident process, no skill in the execution
+  path, and no credential anywhere in core/src.
+
+DO NOT
+  Author a second deep plan. Write implementation code from this ticket. Flip W16's marker in
+  specs/awsf-v2-plan.html - the deep plan's own T12 does that, and it is the only thing that may.
+  Enable the route in awsf.config.yaml; that is a separate owner act after the workstream lands.
+
+STOP WHEN
+  The owner has reviewed the deep plan and either approved it - at which point execution moves to
+  specs/tickets/awsf-v2-w16-openrouter-adapter/T01.md - or returned it with an exported
+  plan-sota-review v1 block for a session to apply.
+```
+
+### T17 — W17 · shift, a milestone as one attempt
+
+```
+[CHOOSE YOUR PROVIDER — pick by live quota]
+  MODEL   Opus 5 · EFFORT high
+  CLAUDE  claude:opus · /effort high
+  GPT     codex:gpt-5.6-sol · reasoning high
+  WHY     the deep plan already exists; what remains is a review that has to hold one
+          structural amendment to a compile-time invariant, and refuse the obvious
+          shape the lifecycle cannot support.
+
+THE DEEP PLAN FOR THIS WORKSTREAM IS ALREADY AUTHORED.
+specs/awsf-v2-w17-shift.html was written on 2026-09-15, with its build prompts and an
+eighteen-ticket set at specs/tickets/awsf-v2-w17-shift/. So this prompt is NOT the usual
+"author a deep plan" meta-prompt. Do not author a second one. Do not rewrite the one that
+exists unless a review says to.
+
+WORKSTREAM: W17 - shift: sequential unattended execution of one milestone's tickets.
+Spine milestone M17. It SUPERSEDES the "away mode" candidate recorded in this plan's
+2026-09-03 amendment, which adopted nothing and moved no marker.
+PREDECESSORS: W04 (for the project registry's delivery posture) is [x]. Nothing else above
+this workstream waits on it.
+
+WHAT REMAINS
+  The owner-review gate, and then execution through that plan's own ticket set - T01
+  through T18, in order, each in a fresh session. This ticket is the spine's record of the
+  workstream; it is not the thing that builds it.
+
+READ FIRST
+  specs/awsf-v2-plan.html - the W17 block IN FULL, the 2026-09-03 away-mode amendment IN
+    FULL, and "Shared Invariants and Constraints"
+  specs/awsf-v2-w17-shift.html - Purpose, Problem, Solution, Identifier Spine and the
+    Questionables IN FULL
+  specs/tickets/awsf-v2-w17-shift/README.md - the two gates before its T01 may run
+  core/src/state/task-machine.ts :115 - L20, the reason the obvious shape was rejected
+  core/src/workflow/compiler.ts :120-160 - reviewBuildPhaseId and compileWorkflow
+
+THE MEASUREMENT THIS WORKSTREAM STARTS FROM
+  A shift is a NEW WORKFLOW TYPE, not a command that launches other runs. L20 is
+  actors ["human"], interactive: true, the only route into LANDED, with no tier exemption,
+  and errors.ts:22 records that AWAITING_OWNER has no timeout by design. A shift of nine
+  independent attempts halts on ticket 1 and waits for a person. Unattended sequencing
+  therefore requires the tickets to be PHASES OF ONE ATTEMPT.
+  Granularity is one shift per MILESTONE, not per plan, and that is arithmetic rather than
+  taste: minimumCalls is N + 1, MAX_CALL_CEILING is 20, and the eleven authored v2 deep
+  plans hold 184 tickets in 60 milestones - median 3, maximum 6. A milestone always fits.
+  A whole plan never does: W05's 31 tickets would need 32 calls.
+
+WHAT THE REVIEW MUST NOT LET THROUGH
+  A relaxation of reviewBuildPhaseId to "at least one build producer". The plan amends it
+  to "exactly one distinct build PROVIDER", which is what production-run.ts:1157 was always
+  checking; "at least one" admits a shift whose builders run on different routes, which is
+  the ambiguous inversion the rule exists to refuse.
+  A placeholder shift recipe registered in WORKFLOW_RECIPES to satisfy catalog.ts's
+  module-load assertion. It is one line and it makes minimumCallsFor report a fiction.
+  Any path by which a running shift reaches awsf raise, or by which a clock reaches L21.
+  A batch that retries itself through rework: every rework phase is maxCorrections 0 and
+  that path rejects credential-shaped provider output where a normal run scrubs it.
+
+THE DECISIONS ARE ALREADY TAKEN - ALL SEVEN, 2026-09-15
+  The owner directed that the plan's own recommendation be applied to every Questionable,
+  so none of them is waiting on a review. Each carries a DECIDED block with its reasoning
+  and its full option set. Nothing in this workstream is blocked on a decision.
+  Q1 reviewBuildPhaseId requires ONE DISTINCT BUILD PROVIDER, not one build phase.
+  Q2 a ticket-phase carries the ticket's own ## Build prompt verbatim, plus its ## Handoff.
+  Q3 pre-flight `awsf raise` on the shift's task; the global T2 dial and a shift-scoped
+     ceiling are both refused. Measured: 54 of 60 milestones need no raise at all.
+  Q4 nothing further on seeding - one attempt seeds once, so the blocker is dissolved.
+  Q5 the manifest lives in the state root beside the attempt, which is what INV-4 assumes.
+  Q6 one readout plus one freshly built preview - DECIDED BUT NOT CLOSED. T18's bounded
+     live drive is its falsifier, and R5 stays on the risk register until it has run.
+  Q7 shift ships DISABLED; enabling it is a separate owner act after the workstream lands.
+  What a review should still refuse: relaxing Q1's rule to "at least one build producer",
+  and any quiet redesign of the Q6 readout that skips the live drive.
+
+TWO ORDERING GATES
+  G17   - awsf.config.yaml's workflows.enabled gains `shift` as an OWNER-AUTHORED commit
+          before that plan's T05 builds. No agent can write that file.
+  G17-M - main and task3.5 are merged before that plan's T11 starts. Measured 2026-09-15:
+          production-run.ts is +547/-98 on main against +96/-17 on task3.5 from merge-base
+          8268258, and a trial merge conflicts in 17 files. The ref at seal time and the
+          dashboard's failure classifier both live on the far side of that merge.
+
+INVARIANTS THIS WORKSTREAM TOUCHES
+  1, 2, 3, 8, 9, 11 and 12. It adds no push path, no resident process, no skill in the
+  execution path, and no writable dashboard route. It needs ONE protected-config amendment
+  (workflows.enabled) and NO invariant amendment.
+
+DO NOT
+  Author a second deep plan. Write implementation code from this ticket. Flip W17's marker
+  in specs/awsf-v2-plan.html - that plan's own T18 does that, and it is the only thing that
+  may. Enable the workflow in awsf.config.yaml from this ticket; that is gate G17 and it is
+  the owner's commit.
+
+STOP WHEN
+  The owner has reviewed the deep plan and either approved it - at which point execution
+  moves to specs/tickets/awsf-v2-w17-shift/T01.md - or returned it with an exported
+  plan-sota-review v1 block for a session to apply.
+```

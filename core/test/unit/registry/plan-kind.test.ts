@@ -29,8 +29,11 @@ test("repository plan kinds are structural and every deep plan names the v2 spin
     "awsf-plan",
     "awsf-v2-plan",
   ]);
-  assert.equal(plans.filter((plan) => plan.kind === "deep").length, 10);
-  assert.ok(plans.filter((plan) => plan.kind === "deep").every((plan) => plan.parentSpine === "awsf-v2-plan"));
+  const deep = plans.filter((plan) => plan.kind === "deep");
+  // Not a count. The count was only ever here so the `every` below could not
+  // pass on an empty array, and it turned red every time a plan was authored.
+  assert.ok(deep.length > 0, "the corpus must contain deep plans or the check below is vacuous");
+  assert.ok(deep.every((plan) => plan.parentSpine === "awsf-v2-plan"));
 });
 
 test("an AWSF-rendered generic workstream is deep without prose in its HTML", () => {

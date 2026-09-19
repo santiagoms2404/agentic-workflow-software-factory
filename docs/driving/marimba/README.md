@@ -8,11 +8,11 @@ performed by the two scripts in this directory.
 
 | File | What it is |
 | --- | --- |
-| `delegation-guard.sh` | The `PreToolUse` hook. Two fences: a delegation-shaped tool name, and a shell command invoking one of the six acts the lifecycle reserves for the owner. |
+| `delegation-guard.sh` | The `PreToolUse` hook. Two fences: a delegation-shaped tool name, and a shell command invoking one of the eight acts the lifecycle reserves for the owner. |
 | `session-banner.sh` | The `SessionStart` hook. Prints what it was able to confirm about the guard's presence, and names what it could not. |
 | `settings.example.json` | The settings marimba is launched with, as a template. Two absolute paths are left as placeholders. |
-| `marimba-guard-rules.mts` | Both fences as pure rules, importing nothing. The one place either harness's lists are written. |
-| `marimba-guard.pi.ts` | The pi port of the guard: the same two fences bound to `tool_call` and `session_start`. |
+| `marimba-guard-rules.mts` | All three fences as pure rules, importing nothing. The one place either harness's lists are written. |
+| `marimba-guard.pi.ts` | The pi port of the guard: the same two shared fences, plus the pi-only lifecycle-timeout floor, bound to `tool_call` and `session_start`. |
 | `aliases.example.sh` | Launch aliases per harness, model and effort, as a template. One absolute path is left as a placeholder. |
 | `README.md` | This file. |
 

@@ -1,0 +1,1381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plan: AWSF v2 W10 — the mf adapter and native fusion</title>
+<style>
+:root{
+  --bg:#faf9f7; --panel:#ffffff; --fg:#14181f; --muted:#6b7382;
+  --border:#e4e1db; --border-strong:#cdc8bf;
+  --accent:#5b4fc4; --accent-soft:#f0eefb; --accent-ink:#3d3490;
+  --night:#1b2430; --night-fg:#e6e9ee;
+  --ok:#1d6b48; --warn:#8a5a00; --bad:#a5311e;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+}
+*{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);
+  font-size:15.5px;line-height:1.62;-webkit-font-smoothing:antialiased;}
+main{max-width:980px;margin:0 auto;padding:56px 24px 120px;}
+h1{font-size:33px;line-height:1.2;letter-spacing:-.022em;margin:0 0 6px;font-weight:660;}
+h2{font-size:22px;letter-spacing:-.015em;margin:56px 0 12px;font-weight:640;
+  padding-bottom:8px;border-bottom:2px solid var(--border-strong);}
+h3{font-size:18px;letter-spacing:-.01em;margin:36px 0 8px;font-weight:640;}
+h4{font-size:15.5px;margin:26px 0 6px;font-weight:660;}
+h5{font-size:13px;margin:0 0 6px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--accent-ink);}
+p{margin:0 0 13px;} ul,ol{margin:0 0 13px;padding-left:22px;} li{margin:0 0 6px;}
+a{color:var(--accent-ink);text-decoration:underline;text-underline-offset:2px;text-decoration-thickness:1px;}
+code{font-family:var(--mono);font-size:.875em;background:#f1efeb;border:1px solid var(--border);
+  border-radius:4px;padding:.08em .34em;}
+strong{font-weight:660;}
+.sub{color:var(--muted);font-size:14px;}
+.muted{color:var(--muted);}
+header{border-bottom:1px solid var(--border-strong);padding-bottom:22px;margin-bottom:8px;}
+header .tagline{color:var(--muted);font-size:15px;margin:0 0 14px;}
+.meta{margin-top:14px;font-size:13px;}
+.meta summary{cursor:pointer;color:var(--muted);font-weight:600;letter-spacing:.03em;text-transform:uppercase;font-size:11.5px;}
+.meta dl{display:grid;grid-template-columns:130px 1fr;gap:5px 14px;margin:12px 0 0;}
+.meta dt{color:var(--muted);font-family:var(--mono);font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;}
+.meta dd{margin:0;overflow-wrap:anywhere;}
+figure{margin:22px 0;padding:18px 14px;background:var(--panel);border:1px solid var(--border);
+  border-radius:10px;text-align:center;overflow-x:auto;}
+figure svg,figure .mermaid{max-width:100%;height:auto;}
+figure .mermaid{display:flex;justify-content:center;}
+figcaption{margin-top:12px;color:var(--muted);font-size:13px;text-align:left;line-height:1.55;}
+.files ul{list-style:none;padding-left:0;}
+.files li{padding:5px 0;border-bottom:1px solid var(--border);overflow-wrap:anywhere;}
+.tag{display:inline-block;font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.06em;
+  text-transform:uppercase;padding:2px 7px;border-radius:999px;margin-right:7px;vertical-align:1px;}
+.tag.existing{background:#eceff3;color:#44506a;border:1px solid #d6dbe4;}
+.tag.new{background:var(--accent-soft);color:var(--accent-ink);border:1px solid #d9d3f4;}
+.tag.foreign{background:#fbeceb;color:var(--bad);border:1px solid #f0cfca;}
+.phase{background:var(--panel);border:1px solid var(--border);border-left:4px solid var(--accent);
+  border-radius:10px;padding:4px 22px 20px;margin:26px 0;}
+.phase h3{margin-top:22px;}
+.status{font-family:var(--mono);font-weight:700;color:var(--accent);background:transparent;border:0;padding:0 4px 0 0;}
+.checklist{list-style:none;padding-left:0;}
+.checklist li{padding:4px 0 4px 2px;border-bottom:1px dotted var(--border);}
+.loop{margin:16px 0 0;padding:11px 14px;background:var(--accent-soft);border:1px solid #d9d3f4;
+  border-radius:8px;font-size:14px;}
+.card{background:#f7f5f2;border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin:16px 0;font-size:14.5px;}
+.card.rule{border-left:3px solid var(--night);}
+.card.refused{border-left:3px solid var(--bad);}
+.card.chosen{border-left:3px solid var(--ok);}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:14px;}
+th,td{text-align:left;vertical-align:top;padding:9px 12px;border-bottom:1px solid var(--border);}
+thead th{border-bottom:2px solid var(--border-strong);font-size:12px;letter-spacing:.05em;
+  text-transform:uppercase;color:var(--muted);}
+.taskmeta th{width:210px;color:var(--accent-ink);font-weight:660;background:#f8f7fd;}
+.wrap{overflow-x:auto;}
+.gate{font-family:var(--mono);font-size:11px;font-weight:700;background:var(--night);color:var(--night-fg);
+  padding:2px 7px;border-radius:4px;letter-spacing:.04em;}
+.wtag{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  padding:2px 7px;border-radius:999px;vertical-align:2px;}
+.wtag.opt{background:#fdf0e3;color:#8a5a00;border:1px solid #f0d8bd;}
+#spine dl{display:grid;grid-template-columns:86px 1fr;gap:9px 14px;margin:14px 0 0;}
+#spine dt{margin:0;} #spine dd{margin:0;}
+code.inv,code.ac{font-weight:700;background:var(--accent-soft);border-color:#d9d3f4;color:var(--accent-ink);}
+code.serves{background:#eceff3;border-color:#d6dbe4;color:#44506a;font-size:.8em;}
+#questionables details,#amendments details{border:1px solid var(--border-strong);border-radius:8px;
+  padding:12px 15px;margin:12px 0;background:var(--panel);}
+#questionables summary,#amendments summary{cursor:pointer;font-weight:640;font-size:14.5px;}
+.qa-answer{margin-top:10px;}
+strong.decided{color:var(--ok);}
+strong.open{color:var(--warn);}
+pre.mermaid{background:transparent;border:0;padding:0;margin:0;font-family:var(--mono);}
+@media (max-width:640px){
+  main{padding:34px 16px 90px;} h1{font-size:26px;} h2{font-size:19px;}
+  .meta dl{grid-template-columns:1fr;} .phase{padding:4px 14px 16px;} .taskmeta th{width:auto;}
+  #spine dl{grid-template-columns:1fr;}
+}
+</style>
+</head>
+<body>
+<main>
+
+  <!-- ===== HEADER + UPDATABLE METADATA ===== -->
+  <header>
+    <h1>Plan: AWSF v2 W10 — the <code>mf</code> adapter and native fusion</h1>
+    <p class="tagline">Fusion is a <strong>workflow</strong>, not an adapter. Every model consultation becomes a phase, and a phase already has by construction everything a native composite was going to be built to provide.</p>
+    <details class="meta">
+      <summary>Metadata</summary>
+      <dl>
+        <dt>created</dt>      <dd>2026-09-15</dd>
+        <dt>modified</dt>     <dd>2026-09-15, 2026-09-15 (owner review applied)</dd>
+        <dt>commits</dt>      <dd>not yet landed</dd>
+        <dt>agent name</dt>   <dd>Claude Opus 5</dd>
+        <dt>session id</dt>   <dd>not recorded — AGENTS.md invariant 1 keeps live session state out of every committed file in this repository</dd>
+        <dt>back refs</dt>    <dd>./awsf-v2-plan.html (the v2 spine, § Milestone M10 → W10, and its Shared Invariants), ../AGENTS.md (invariants 1, 3, 9, 10), ../awsf.config.yaml (§ adapters, § routing, § risk, § workflows), ./awsf-v2-w04-project-registry.html (the registry this workstream is the first multi-repo customer of), ./awsf-v2-w16-openrouter-adapter.html (the route that makes an N-model roster economically real, and the owner of the inversion decision), ./awsf-v2-w17-shift.html (the other compiled-recipe customer, and the mechanism this plan shares)</dd>
+        <dt>forward refs</dt> <dd>./tickets/awsf-v2-w10-mf-adapter/ (the execution surface), ./awsf-v2-w10-mf-adapter-build-prompts.md (§ Section B, the prompt source the invariant-12 fence pairs against)</dd>
+      </dl>
+    </details>
+  </header>
+
+  <figure>
+    <pre class="mermaid">
+flowchart TD
+  F["Fusion in AWSF<br/>which thing is it?"]
+  A["(a) NATIVE<br/>AWSF spawns the children"]
+  B["(b) OPAQUE<br/>mf stays the executable"]
+  C["(c) RECIPE<br/>each model is a phase"]
+  F --> A
+  F --> B
+  F --> C
+  A --> AR["refused · needs a 4th registration<br/>class and a partial-spend barrier"]
+  B --> BR["refused · neither mf generation<br/>has a non-interactive entry"]
+  C --> CH["CHOSEN · no new spawn site,<br/>no new ledger shape"]
+  style C stroke:#5b4fc4,stroke-width:3px
+  style CH stroke:#1d6b48,stroke-width:2px
+  style AR stroke:#a5311e,stroke-dasharray:4 3
+  style BR stroke:#a5311e,stroke-dasharray:4 3
+    </pre>
+    <figcaption>The fork, decided. <strong>(c) is chosen</strong> — and the two refusals are refusals on read evidence, not on preference. (a) is refused because the launcher barrier can only spend a reservation whole, so one composite reservation cannot pay for several children. (b) is refused because there is no executable to launch: <code>mf</code> v1 is a shell wrapper that <code>exec</code>s an interactive session, and <code>mf</code> v2 has no <code>bin/</code> at all.</figcaption>
+  </figure>
+
+  <!-- ===== IN PLAIN LANGUAGE ===== -->
+  <section id="plain-language">
+    <h2>In Plain Language</h2>
+    <p>This section explains the whole plan without technical vocabulary. Everything after it says the same things precisely, for the people — and machines — building it.</p>
+
+    <h3>Asking several minds the same question</h3>
+    <p>The owner already does something valuable by hand. When a question is hard, he asks three to five different artificial-intelligence assistants the same question at once, reads all their answers, and then has one of them merge every answer into a single result. He does this with a tool he wrote himself. It works, and he uses it often enough that the factory — the system that manages the owner's software work — was supposed to learn how to do it too.</p>
+    <p>The obstacle is a bookkeeping one, and it is more serious than it sounds. The factory keeps a strict record of every assistant it hires: who was hired, what it was allowed to touch, what it said, and what it cost. It does this by being the only thing in the building allowed to open a door and let a worker in. The owner's hand tool opens its own doors. So if the factory hired the tool, the factory would have a record of hiring one worker, while five walked in behind it. Five workers did the job, five bills came due, and the factory's books would show one of everything. That is the actual problem, and it is not a problem with the arithmetic — the books can already record a partial payment perfectly well. It is that nobody wrote down who the other four were.</p>
+
+    <h3>Why now</h3>
+    <p>Two things changed after the problem was first written down, and they point in opposite directions.</p>
+    <p>The first is good news. The factory recently learned how to send different questions to different assistants within a single job, and to write down exactly which one answered each part. That capability is what makes the whole idea possible in a new way — before it, "ask a second assistant for an opinion" was not a sentence the factory could even say.</p>
+    <p>The second is a correction. That new capability is finished but not yet folded into the main line of work; it sits on a side branch, and merging it is a known, sizeable job that another piece of work is already waiting on. And the factory can currently only reach two assistants, both from the same two companies it already pays a monthly fee to. Asking two assistants and then having one of them merge the two answers is barely different from what the factory already does every day. The version worth building needs cheap access to many more assistants, and a separate piece of work is being planned right now to open exactly that door.</p>
+
+    <h3>What we are building</h3>
+    <p>Nothing new, structurally — and that is the entire point of the plan.</p>
+    <p>The factory already knows how to run a job as a sequence of numbered steps, where each step is one worker doing one thing and handing its result to the next. Every step already gets a signed entry in the ledger, a permission slip saying what it may touch, a recorded answer, and a line on the bill. So instead of building a new machine that hires five workers at once, this plan says: <strong>make each of the five workers its own step.</strong> Ask assistant one. Ask assistant two. Ask assistant three. Then a step the factory itself performs, costing nothing, gathers the three answers into one folder. Then a final worker reads the folder and produces the merged result.</p>
+    <p>Every guarantee the ambitious version was going to be built to provide arrives for free, because a step already has all of them. And one worry answers itself: the steps happen one after another, never at the same time, so two workers can never be editing the same files at once. The owner's own newer hand tool had to solve that problem with a lock. The factory does not need a lock, because it never runs two workers simultaneously in the first place.</p>
+    <p>The cost of this approach is honest and it is named throughout. The factory's steps are written down in advance, by hand, one list per kind of job. A consultation with five assistants needs a list of five steps, and nothing in the factory yet builds a step list on the spot. That is real work. It is also the exact same real work that another current piece of planning needs, so the two should build it once and share it.</p>
+
+    <h3>How we know it worked</h3>
+    <p>Three things, in order, and the first two cost nothing.</p>
+    <p>First: a test, run on this machine with no assistant hired at all, showing that a five-step consultation can be written down, checked against the spending limit, and refused politely if it does not fit — all before a single worker is let in the door. Second: a test proving that a three-assistant consultation produces three separate ledger entries before the first worker is allowed to begin. That is the exact promise the original idea could not keep, and it is checkable for free.</p>
+    <p>Only after those two pass does anyone spend money. The third is one real consultation, deliberately small — two assistants, the two the factory can already reach — with the bill for each one recorded separately.</p>
+    <p>What is deliberately not part of this: the owner's hand tool is not being connected to the factory, not in either of its versions, and this plan explains at length why that turned out to be impossible rather than merely unwise. The owner keeps using his tool by hand, exactly as he does today. And this whole piece of work is optional — if the first free test says the idea does not hold up, the honest ending is to write down what was learned and stop, and that counts as finishing.</p>
+  </section>
+
+  <!-- ===== PURPOSE ===== -->
+  <section id="purpose">
+    <h2>Purpose</h2>
+    <p>The owner drives multi-model fusion by hand, every week, through a tool he wrote. The v2 spine committed to bringing that capability inside AWSF, preferring a native mode where AWSF spawns the constituent models through its own broker. This workstream decides how — and its first duty is to correct the question, because the fork the spine inherited has three arms rather than two, and the third one costs the least.</p>
+    <p><strong>The decisive finding is unchanged and it is still the centre of this plan.</strong> Only the outer process crosses <code>core/src/execution/transport-broker.ts</code>. No constituent provider launch gets a registration, a reservation id, or its own <code>GO</code>. Everything the source record promised about per-role supervision rests on processes AWSF never sees.</p>
+    <p><strong>The overstatement stays corrected, and the correction matters.</strong> Partial settlement is not blocked by the ledger. <code>settle(id, spent)</code> exists at <code>call-budget.ts:419</code> and its own comment describes exactly the halfway composite — two workers reach <code>GO</code>, the fuser's registration fails, so two are spent and one goes back. <code>spendOnGo</code> at <code>:400</code> and <code>releaseOnRegistrationFailure</code> at <code>:409</code> are thin convenience wrappers over it. <strong>The gap is supervision and attribution, not arithmetic.</strong> Stating it the other way suggests a ledger redesign that is not needed, and the workstream would be spent on the wrong thing.</p>
+    <p>What this plan adds to that finding is a second one, of the same kind, which the source record could not have had because it reasoned about the tool from the spine's summary rather than from the tool: <strong>the external tool has no non-interactive entry point in either generation.</strong> That single fact removes the opaque option from the table, and it is why the fork below closes with two refusals and one choice rather than with a preference.</p>
+  </section>
+
+  <!-- ===== PROBLEM ===== -->
+  <section id="problem">
+    <h2>Problem</h2>
+    <p>AWSF's supervision guarantees are all properties of <em>crossing the broker</em>. <code>transport-broker.ts</code> is the only module in the repository that imports <code>node:child_process</code> (AGENTS.md invariant 3, enforced by the child-process fence meta-test), and its <code>startProcess</code> accepts exactly four registration shapes — <code>task-edge</code>, <code>agent-phase</code>, <code>phase-correction</code> and <code>turn-reconnect</code>. Each one names a reservation that is already held, and the launcher barrier converts that reservation to spend immediately before it releases the child with <code>GO</code>.</p>
+    <p>A composite adapter crosses that boundary exactly once, for the outer process. The models it consults do not cross it at all. They are children of a process AWSF launched, which means AWSF has no registration for them, no reservation id, no <code>GO</code>, no permission session, no retained envelope, no route provenance and no cost row. It has one of each of those things for the wrapper.</p>
+
+    <figure>
+      <pre class="mermaid">
+flowchart LR
+  subgraph AWSF["what AWSF sees"]
+    R["1 reservation<br/>cost = N+1"] --> BR["broker · 1 registration"] --> GO["1 GO"]
+  end
+  BR --> P["outer process"]
+  subgraph OUT["what actually ran"]
+    P --> M1["model 1"]
+    P --> M2["model 2"]
+    P --> M3["model 3"]
+    P --> MF["fuser"]
+  end
+  style AWSF stroke:#5b4fc4
+  style OUT stroke:#a5311e,stroke-dasharray:4 3
+      </pre>
+      <figcaption>The whole problem in one picture. The declared cost is honest — <code>reserveComposite</code> books <code>workers + 1</code> before anything launches. What is missing sits entirely on the right: four provider turns with no identity AWSF ever recorded. <strong>Supervision and attribution, not arithmetic.</strong></figcaption>
+    </figure>
+
+    <h3>Three things that are already implemented, and must not be rebuilt</h3>
+    <ul>
+      <li><strong>Reserve the full cost before any launch.</strong> <code>reserveComposite(workerCount)</code> at <code>call-budget.ts:392</code> books <code>compositeCost(workerCount) = workerCount + 1</code> as one reservation, refusing at the ceiling before anything is mutated. <code>core/test/unit/ceilings.test.ts:223-226</code> pins the arithmetic.</li>
+      <li><strong>Partial settlement.</strong> <code>settle(id, spent)</code> at <code>call-budget.ts:419</code> is the primitive both convenience wrappers are made of, and its own comment describes the halfway composite.</li>
+      <li><strong>PATH resolution with a blocked result when the executable is absent.</strong> <code>resolveExecutable</code> in the broker raises <code>ExecutableNotFound</code> carrying the searched path list, before any child exists.</li>
+    </ul>
+
+    <h3>Four refusals the code already makes, which bound every option below</h3>
+    <div class="wrap">
+    <table>
+      <thead><tr><th>Refusal</th><th>Where</th><th>What it forbids</th></tr></thead>
+      <tbody>
+        <tr><td><strong>The barrier spends a reservation whole</strong></td><td><code>launcher-barrier.ts:333</code></td><td>Its <code>ReservationLedger</code> seam has exactly two methods: <code>spendOnGo(id)</code> and <code>releaseOnRegistrationFailure(id)</code>. Neither takes an amount. One composite reservation handed to <code>N+1</code> child registrations spends entirely at the <em>first</em> child's <code>GO</code>, and the second child throws <code>ReservationNotHeld</code> because <code>settle</code> already deleted it from <code>#held</code>. <strong>The arithmetic exists; the plumbing from a launch down to it does not.</strong></td></tr>
+        <tr><td><strong>Only a cost-1 single reservation recovers</strong></td><td><code>call-budget.ts:446</code></td><td><code>restoreReservation</code> refuses any record whose <code>kind</code> is not <code>"single"</code> or whose <code>cost</code> is not <code>1</code>, raising <code>InterruptedTurnRefused("recovery-ambiguous")</code>. A composite reservation cannot be reconstructed after a crash at all, so "a crash mid-composite recovers" is not provable for a composite reservation as the ledger stands.</td></tr>
+        <tr><td><strong>Exactly one build producer under review</strong></td><td><code>compiler.ts:135</code></td><td><code>reviewBuildPhaseId</code> throws <code>InvalidReviewBuildProducerCount</code> unless a workflow carrying a review phase has exactly one agent phase on <code>awsf.build-output/v1</code>. It runs inside <code>compileWorkflowStructure</code>, so it fires on the recovery path too.</td></tr>
+        <tr><td><strong>Inversion needs exactly two providers</strong></td><td><code>review-routing.ts:36</code></td><td><code>providerPairFrom</code> de-duplicates the providers of a compiled recipe's agent phases and throws <code>InvalidReviewInversion</code> unless exactly two remain. <code>production-run.ts:1158</code> passes every <code>kind === "agent"</code> phase. A three-provider recipe is refused at preflight, at zero cost, with a message that names a count rather than a culprit.</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h3>And the finding that closes the opaque option</h3>
+    <p><strong>Neither generation of the tool has a non-interactive entry point.</strong> This was read off disk in both repositories, not inferred from the spine.</p>
+    <ul>
+      <li><strong>v1</strong> — the launcher under <code>fusion-harness</code>'s executable directory is an eleven-line <code>bash</code> wrapper whose last statement <code>exec</code>s <code>node mf.mjs</code>. <code>mf.mjs</code>'s own usage text reads <code>mf [LEFT [RIGHT]] [--] [pi options]</code>: it resolves two model selectors against a catalogue, encodes them into an <code>MF_LAUNCH_CONFIG</code> environment entry, and <code>spawnSync</code>s an interactive session with the extension loaded. Its only non-interactive subcommand is <code>mf models --json</code>, which prints a model catalogue and fuses nothing. There is no <code>mf fuse "&lt;prompt&gt;"</code> that runs one fusion and exits.</li>
+      <li><strong>v2</strong> — there is no executable at all and no launcher directory. The whole tool is a Pi extension loaded with <code>pi -e extensions/fusion-harness/fusion-harness.ts</code>, and every capability is a slash command the owner types into a running TUI: <code>/fh-opinion</code>, <code>/fh-fusion</code>, <code>/fh-debate</code>, <code>/fh-collaborate</code>, <code>/fh-only</code>, <code>/fh-auto-validate</code>. Results land in TUI panels and in a temporary artifact directory.</li>
+    </ul>
+    <p>AWSF's broker takes an executable <em>name</em> and an argv array, resolves the name against <code>PATH</code>, spawns it with a filtered environment and no shell, performs a file-descriptor identity handshake, and requires the adapter to decode a terminal event off the child's stream. An interactive TUI session satisfies none of that. Making the opaque option real therefore begins with <strong>building a headless entry point inside the fusion-harness repository</strong> — a second repository, and the spine's Shared Invariants name upstream contributions to another repository as owner-side work that cannot land from a managed worktree and never becomes a ticket in any deep plan.</p>
+  </section>
+
+  <!-- ===== THE FORK, DECIDED ===== -->
+  <section id="fork">
+    <h2>The fork, decided</h2>
+    <p>The spine states the fork with two arms. This plan states it with three, evaluates all three against the code, and closes it. <strong>(c) is chosen.</strong> The two refusals below are refusals on read evidence; neither rests on preference, and neither rests on (c) having been named last.</p>
+
+    <div class="card refused">
+      <h5>(b) Opaque — refused, and here is the promise being given up</h5>
+      <p><strong>The shrunken promise, written out rather than implied.</strong> Had (b) been taken, AWSF would have promised exactly this and nothing more: <em>one composite reservation of <code>workers + 1</code> calls is held before anything launches; one registration exists, for the wrapper; one <code>GO</code> converts the whole reservation to spend; one envelope comes back, attributed to the wrapper's adapter id and to no constituent model; the run-failure surface shows one phase; the cost row shows one composite; no constituent model has a worktree, a permission session, a route provenance record, a retained turn, or a name in the journal; a crash mid-fusion is unrecoverable because the reservation is not <code>kind: "single"</code>; and the factory says plainly, in the adapter's own source comment, that it supervises nothing inside the process it started.</em> That is a real and honest promise. It is much smaller than the source record implied, and it is the one (b) could keep.</p>
+      <p><strong>Why it is refused anyway.</strong> There is nothing to launch. Neither generation exposes a non-interactive entry, so the first task under (b) is not in this repository at all. And the promise, even if the entry point existed, would be bought against v1 — the generation with <em>one architect and one builder</em>, routed to <code>claude:*</code> and <code>codex:*</code>, which are the two providers AWSF already reaches natively. A two-model opaque composite that supervises nothing is strictly weaker than <code>build-review</code>, which is shipped, supervised and enabled today.</p>
+    </div>
+
+    <div class="card refused">
+      <h5>(a) Native — refused on cost, with the blockers named</h5>
+      <p>(a) is buildable. It is not cheap, and the plan owes the list rather than the verdict. It needs: <strong>a fourth registration class</strong> and its verifier, because a composite child is neither a task edge nor a phase in a compiled workflow and the three existing classes each bind to one of those; <strong>a third barrier settlement mode</strong> carrying a per-child amount down to <code>settle(id, spent)</code>, because the <code>ReservationLedger</code> seam has no method that takes one; <strong>a composite branch in <code>restoreReservation</code></strong>, because a composite reservation cannot be recovered today; <strong>an orchestration layer</strong> that fans out, collects, and fuses; and <strong>a second spawn discipline</strong> living beside the broker's, which is the invariant-3 risk this plan is most wary of.</p>
+      <p>And the payoff for all of it is: a registration, a reservation, a worktree, a permission session and a retained envelope, per child. Which is the definition of a phase.</p>
+    </div>
+
+    <div class="card chosen">
+      <h5>(c) Recipe — chosen</h5>
+      <p>Fusion is a workflow. Each model consultation is a phase. <code>compileWorkflow</code> at <code>compiler.ts:153</code> takes <code>workflow: WorkflowDefinition</code> — <code>{ id, phases: readonly PhaseDefinition[] }</code> — and maps over the array; it never consults the shipped catalogue to do it, so a phase list built at runtime is structurally supported. A phase already carries an <code>agent-phase</code> broker registration with its own <code>phaseId</code> and <code>phaseOrdinal</code>, its own cost-1 reservation reserved at <code>production-run.ts</code>'s phase loop, a permission session from its role's tool profile, a retained envelope, route provenance, a cost row, and an entry on the run-failure surface. <strong>Nothing in the list above needs to be built. It needs to be arranged.</strong></p>
+      <p>Invariant 3 is untouched: (c) creates no spawn site, because a fusion phase launches through the <em>existing</em> <code>agent-phase</code> path that every shipped recipe already uses.</p>
+    </div>
+
+    <h3>What (c) costs, stated before its benefits</h3>
+    <p>This is the honest evaluation of (c) against itself, and four of the six items are real.</p>
+    <div class="wrap">
+    <table>
+      <thead><tr><th>#</th><th>Cost or risk</th><th>Measured / located</th></tr></thead>
+      <tbody>
+        <tr><td>C1</td><td><strong>The enabler is on an unmerged branch, and it is config rather than a flag.</strong> Per-phase route selection is commit <code>b47b2a7</code> on branch <code>task3.5</code>; <code>git merge-base --is-ancestor b47b2a7 HEAD</code> reports it is <strong>not</strong> an ancestor of <code>main</code>. It is also not a <code>--route</code> command-line flag: it is <code>routing.phase_routes</code>, a <code>Record&lt;phaseId, PhaseRouteSelection&gt;</code> in <code>awsf.config.yaml</code>, read by <code>requestedPhaseRoute</code> in <code>workflow/phase-routing.ts</code>. An N-model roster therefore needs N durable config entries in a <strong>protected file</strong>, which is an owner-authored commit.</td><td>Measured 2026-09-15: <code>task3.5</code> is 27 commits ahead of <code>main</code>, <code>main</code> 8 ahead, merge base <code>8268258</code>. Identical to the figures W17 recorded.</td></tr>
+        <tr><td>C2</td><td><strong>Two providers today, not five.</strong> <code>pi-codex.ts</code>'s <code>SAFE_MODEL_SELECTOR</code> deliberately refuses <code>/</code> in a model selector, with a comment explaining that <code>pi --model</code> accepts a <code>provider/id</code> form and a slash would name a second provider from inside a flag already told which provider to use. So AWSF cannot route a phase to <code>google/gemini-3.7-flash</code> or a Fireworks-hosted open-weight model through the existing adapter. Without W16, (c) yields a two-model fusion.</td><td><code>pi-codex.ts:100-119</code>. v2's own five-slot stack names <code>anthropic/claude-fable-5</code>, <code>google/gemini-3.7-flash</code> and three Fireworks selectors — every one of them a slash form.</td></tr>
+        <tr><td>C3</td><td><strong>Three or more providers break review inversion.</strong> <code>providerPairFrom</code> refuses anything but two distinct providers across the compiled recipe's agent phases. <code>task3.5</code> does not relax this; it adds an explicitly-degraded <code>same-provider-degraded</code> mode beside it.</td><td><code>review-routing.ts:36</code>, <code>production-run.ts:1158</code>. W16 § M4 already owns this collision and calls widening it a Questionable rather than a task.</td></tr>
+        <tr><td>C4</td><td><strong>Sequential, not parallel.</strong> The tool runs every slot concurrently with <code>Promise.all</code>. AWSF's phase loop is <code>for (const [index, phase] of compiled.phases.entries())</code> with an awaited <code>runAgent</code>. A five-model fusion under (c) is five consecutive provider turns. Wall-clock is N times worse than the hand tool, and that is a genuine loss, not a rounding error.</td><td><code>cmd-fusion.ts</code> § worker fan-out; <code>production-run.ts</code> § phase loop.</td></tr>
+        <tr><td>C5</td><td><strong>A compiled recipe cannot join the catalogue.</strong> <code>catalog.ts</code> throws <code>"shipped workflow ids and registered recipes disagree"</code> at module load unless <code>WORKFLOW_IDS</code> and <code>WORKFLOW_RECIPES</code> match exactly. A fusion recipe is admitted by compile and digest, never registered.</td><td><code>workflow/catalog.ts</code> § module-load assertion. W17's ticket README names the same trap.</td></tr>
+        <tr><td>C6</td><td><strong>Nothing in the tree generates a phase list yet.</strong> All eight recipes under <code>core/src/workflow/recipes/</code> are static <code>as const</code> objects. Compiled-recipe support is real work, not a free win.</td><td>Directory listing; every file exports a frozen literal.</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h3>And what (c) gets for nothing</h3>
+    <ul>
+      <li><strong>The per-role worktree recommendation is dropped, and the writer lease is not needed either.</strong> v2 replaced N worktrees with a filesystem lock keyed by the canonical checkout path, so exactly one shared-checkout writer exists at a time and every other agent is tool-enforced read-only. Its own header states it plainly: <em>"Collaboration serializes every write-enabled task through one shared-CWD writer token; no worktrees."</em> That is materially cheaper than N worktrees and it is implemented and shipping — and under (c) AWSF needs neither, because <strong>phases never run concurrently.</strong> Single-writer is structural here, not leased. The lease exists in v2 because several children run at once; AWSF's phase loop awaits each turn.</li>
+      <li><strong>"May an opinion propose a diff?" is answered with evidence rather than preference.</strong> No. An opinion phase's role declares <code>writes: []</code> and a <code>readonly</code> tool profile — the exact shape the shipped <code>planner</code> and <code>reviewer</code> roles already use — and <code>evaluatePathPolicy</code> returns <code>outside-write-globs</code> for every path when <code>writes</code> is empty. Its envelope schema is not <code>awsf.build-output/v1</code>, so it cannot produce a build claim the gates would accept. This maps cleanly onto the tiers exactly as the spine expected: opinion and debate phases are T0-shaped by blast radius, and only the fusing phase writes.</li>
+      <li><strong>W17's hard structural blocker does not apply here.</strong> W17's Q1 is <code>reviewBuildPhaseId</code>'s exactly-one-build-producer rule, which a five-ticket shift violates with five build phases. A fusion recipe has exactly one: the fuser. The opinion phases carry an opinion schema. <strong>W10 avoids that blocker by contract choice, not by amendment.</strong></li>
+      <li><strong>The host composer is a pattern, not an invention.</strong> The fuser needs N opinions and <code>renderPrompt(previousEnvelope)</code> hands a phase exactly one. <code>build-review</code> already solves this with <code>review-context</code>, a <code>kind: "code"</code> host phase that composes several phases' outputs into one envelope and adds no agent call and no ceiling movement. <code>design-context</code> and <code>plan-context</code> do the same. An <code>opinion-context</code> phase is the fourth instance of a shipped shape.</li>
+    </ul>
+  </section>
+
+  <!-- ===== SOLUTION ===== -->
+  <section id="solution">
+    <h2>Solution</h2>
+    <p>A fusion is a compiled recipe of <code>N + 2</code> phases: N read-only opinion phases, one host composer that costs nothing, and one fusing phase that writes. Optionally a review phase after it, inheriting whatever the router decides. Each opinion phase holds its own cost-1 reservation, crosses the broker with its own <code>agent-phase</code> registration and ordinal, and returns a retained envelope attributed to the provider that answered.</p>
+
+    <figure>
+      <pre class="mermaid">
+flowchart LR
+  O1["opinion-1<br/>agent · read-only"] --> O2["opinion-2<br/>agent · read-only"] --> O3["opinion-3<br/>agent · read-only"]
+  O3 --> CX["opinion-context<br/>host · 0 calls"]
+  CX --> FU["fuse<br/>agent · the only writer"]
+  FU --> RV["reviewer<br/>optional · inverted"]
+  style CX stroke:#6b7382,stroke-dasharray:4 3
+  style FU stroke:#5b4fc4,stroke-width:3px
+      </pre>
+      <figcaption>A three-model fusion as a compiled recipe. Four provider calls, five phases, one writer. Each agent phase reserves one call before it launches and settles it at its own <code>GO</code>; the host composer reserves nothing. The single-writer property comes from the arrow, not from a lock.</figcaption>
+    </figure>
+
+    <h3>What each fusion phase gets, and where it comes from</h3>
+    <div class="wrap">
+    <table>
+      <thead><tr><th>Guarantee</th><th>Under (a), who builds it</th><th>Under (c), where it already is</th></tr></thead>
+      <tbody>
+        <tr><td>Broker registration</td><td>a new fourth registration class and verifier</td><td><code>AgentPhaseProcessRegistration</code> — <code>runId</code>, <code>taskSessionId</code>, <code>workflowId</code>, <code>phaseId</code>, <code>phaseOrdinal</code>, <code>reservationId</code>, <code>adapterId</code>, <code>role</code></td></tr>
+        <tr><td>Reservation, reserved before launch</td><td>a partial-spend barrier mode</td><td><code>budget.reserve({ cost: 1, subject: "&lt;workflow&gt;:&lt;phase&gt;" })</code>, once per agent phase</td></tr>
+        <tr><td>Crash recovery of that reservation</td><td>a composite branch in <code>restoreReservation</code></td><td>already admitted — <code>kind: "single"</code>, <code>cost: 1</code> is the only shape it accepts, and this is it</td></tr>
+        <tr><td>Permission session</td><td>a per-child policy plumbing path</td><td>the role's <code>tools.profile</code> and <code>writes</code>, resolved per phase by the existing route resolution</td></tr>
+        <tr><td>Retained envelope</td><td>an envelope-per-child retention path</td><td>the phase's own validated envelope, journalled and available to the next phase</td></tr>
+        <tr><td>Route provenance</td><td>per-child identity capture</td><td><code>RouteSelectionProvenance</code> — requested / effective / observed, per phase (on <code>task3.5</code>)</td></tr>
+        <tr><td>Cost attribution</td><td>a per-child cost split</td><td>one cost row per phase, already</td></tr>
+        <tr><td>A place on the failure surface</td><td>a composite failure taxonomy</td><td>the run-failure classifier, per phase</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h3>The tier, the ceiling, and the arithmetic</h3>
+    <p><strong>A fusion recipe is T2.</strong> Not because its blast radius demands it — the opinion phases are read-only and T0-shaped — but because the tier bounds cost and blast radius together, and T0's own source comment defines it as <em>"one call and no second opinion"</em>. An N-way opinion round is precisely a second opinion, so raising T0's ceiling to buy one would delete the sentence that defines the tier for every T0 recipe in the catalogue.</p>
+    <p><strong>No code change to <code>MAX_CALL_CEILING</code> or <code>ceilingFor</code> is required by this workstream, at any N from 2 to 5.</strong> <code>MAX_CALL_CEILING</code> is 20 and caps the configured dial and the owner grant alike; <code>ceilingFor(tier, resolved)</code> already answers from whatever ceiling the caller resolved, including an <code>awsf raise</code> grant. What must allow it is the <em>configured</em> <code>risk.call_ceiling.T2</code>, which ships at 5.</p>
+    <div class="wrap">
+    <table>
+      <thead><tr><th>Roster</th><th>Agent phases</th><th><code>minimumCalls</code></th><th>with a review phase</th><th>Fits shipped T2 = 5?</th><th>Correction rounds fundable at 5</th></tr></thead>
+      <tbody>
+        <tr><td>N = 2</td><td>2 opinions + fuser</td><td>3</td><td>4</td><td>yes, both</td><td>2 without review, 1 with</td></tr>
+        <tr><td>N = 3</td><td>3 opinions + fuser</td><td>4</td><td>5</td><td>yes, both</td><td>1 without review, 0 with</td></tr>
+        <tr><td>N = 4</td><td>4 opinions + fuser</td><td>5</td><td>6</td><td>only without review</td><td>0</td></tr>
+        <tr><td>N = 5</td><td>5 opinions + fuser</td><td>6</td><td>7</td><td>no — needs 6 or 7</td><td>0</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p>Two consequences the plan carries rather than discovers. <strong>At N = 5 the shipped ceiling refuses the recipe at compile time</strong>, at zero cost, which is the correct behaviour — but it means a five-model fusion is not something the factory can start until the owner either configures <code>risk.call_ceiling.T2</code> upward or grants a raise, and <code>awsf raise</code> requires an interactive terminal by design (<code>CeilingRaiseNotInteractive</code>). <strong>And a fusion at N ≥ 3 has no correction margin</strong>, so the first envelope defect is terminal on its phase — the same trap three shipped recipes already sit in.</p>
+
+    <h3>Review independence once several providers have touched the work</h3>
+    <p>The spine's constraint is <code>routing.review: invert-provider</code>, and the question it poses is sharp: may a provider that gave an opinion still review the fused result? This plan's answer has two halves, and only the first is W10's to decide.</p>
+    <p><strong>The half W10 decides: independence is preserved by inverting against the fuser, not against the opinions.</strong> The rule's real purpose is at <code>production-run.ts:1158</code>, where the worker provider is read off the recipe's single build producer and the reviewer is selected by exclusion from it. Under (c) the single build producer is the fusing phase. So the reviewer must run on the provider opposite <em>the fuser</em>. An opinion is an input the fuser consumed and may have discarded; it is not the authorship of the candidate. <strong>A provider that gave an opinion may still review, provided it is not the fuser</strong> — and stating it that way keeps the rule checkable rather than moving it to a stronger guarantee nobody can enforce.</p>
+    <p><strong>The half W10 does not decide: what happens at three or more distinct providers.</strong> <code>providerPairFrom</code> refuses it, W16 § M4 already owns the decision, and this workstream inherits whatever the owner takes there. W10's own duty is narrower and it is a task below: make the refusal <em>name the third provider and the phase it came from</em>, so a fusion roster that cannot carry a review says which slot is the reason.</p>
+  </section>
+
+  <!-- ===== IDENTIFIER SPINE ===== -->
+  <section id="spine">
+    <h2>Identifier Spine</h2>
+    <p>Per the v2 spine's Q5 decision, identifiers are unique within this plan and a cross-plan reference is qualified by plan stem. Every declaration below is served by at least one task, and each ticket's <code>serves</code> mirrors its task's as a set — the invariant-12 fence compares the two and fails when either is edited alone.</p>
+    <dl>
+      <dt><code class="inv">INV-1</code></dt>
+      <dd><strong>No second spawn site.</strong> Every fusion constituent launches through the existing <code>agent-phase</code> registration in <code>core/src/execution/transport-broker.ts</code>. No module this workstream adds imports <code>node:child_process</code>, no new registration class is introduced, and no new barrier settlement mode is introduced. AGENTS.md invariant 3, and a meta-test that names this workstream's own directories.</dd>
+      <dt><code class="inv">INV-2</code></dt>
+      <dd><strong>Exactly one writer per fusion, and it is structural.</strong> Every opinion phase's role declares <code>writes: []</code> and a read-only tool profile, and its envelope schema is not <code>awsf.build-output/v1</code>. Exactly one phase in a fusion recipe may write. The property rests on the phase loop being sequential, not on a lease, a token, or a worktree per role.</dd>
+      <dt><code class="inv">INV-3</code></dt>
+      <dd><strong>One cost-1 reservation per fusion phase.</strong> No code path this workstream adds calls <code>reserveComposite</code> or creates a reservation whose <code>kind</code> is not <code>"single"</code>. That is the only shape <code>restoreReservation</code> admits, and recovery of a fusion mid-flight depends on it.</dd>
+      <dt><code class="inv">INV-4</code></dt>
+      <dd><strong>Review independence is the router's decision, inherited rather than restated.</strong> A fusion recipe adds no inversion rule and no fallback of its own. Inversion runs against the recipe's single build producer — the fusing phase — exactly as <code>production-run.ts</code> already does it, and whatever the owner settles in <code>awsf-v2-w16-openrouter-adapter</code> § M4 about three or more providers is what this workstream obeys.</dd>
+      <dt><code class="inv">INV-5</code></dt>
+      <dd><strong>A compiled fusion recipe is reproducible and never joins the shipped catalogue.</strong> <code>WORKFLOW_IDS</code> and <code>WORKFLOW_RECIPES</code> stay exactly as they are, so <code>catalog.ts</code>'s module-load assertion keeps holding. A fusion recipe is admitted by compile and by a binding digest over its roster, and recovery rebuilds it byte-for-byte from the recorded roster rather than trusting a stored phase list.</dd>
+      <dt><code class="inv">INV-6</code></dt>
+      <dd><strong>A model-proposed delegation never executes without an owner act between the stages.</strong> A collaboration compiles in two stages, as two tasks (Q9). The first produces a delegation plan as a typed envelope, journals it, and commits it as its candidate; the second is a separate task seeded from that candidate. The stop between them is <strong>already enforced by a shipped command</strong> — <code>seed.ts:39</code> refuses a non-interactive terminal — so this workstream asserts the act rather than building it. No code path compiles task phases directly from a provider turn.</dd>
+      <dt><code class="ac">AC-1</code></dt>
+      <dd>An N-model fusion phase list compiles offline for N from 2 through 5, its <code>minimumCalls</code> equals N + 1, and the host composer contributes zero — proven without any provider process existing.</dd>
+      <dt><code class="ac">AC-2</code></dt>
+      <dd>Each fusion phase crosses the broker with its own <code>agent-phase</code> registration carrying a distinct <code>phaseId</code> and <code>phaseOrdinal</code>, and its own route provenance. A three-model fusion produces three registrations before the first <code>GO</code>, offline, against a fake broker.</dd>
+      <dt><code class="ac">AC-3</code></dt>
+      <dd>An opinion phase cannot propose a diff: its envelope schema admits no build output, its role declares <code>writes: []</code>, and a path-policy evaluation over any claimed path returns <code>outside-write-globs</code>.</dd>
+      <dt><code class="ac">AC-4</code></dt>
+      <dd>The host composes N opinion envelopes into one envelope for the fusing phase without a provider call, recording a per-opinion digest and the provider that answered each, so the fused result names its sources.</dd>
+      <dt><code class="ac">AC-5</code></dt>
+      <dd>A fusion recipe whose minimum calls do not fit the attempt's resolved ceiling is refused at compile time, at zero cost, with a message naming the shortfall in calls and what would close it.</dd>
+      <dt><code class="ac">AC-6</code></dt>
+      <dd>A crash between opinion phases resumes from the accepted prefix: each completed opinion's cost-1 reservation is restored, no completed opinion is re-asked, and the recompiled recipe's digest matches the recorded one or the resume is refused.</dd>
+      <dt><code class="ac">AC-7</code></dt>
+      <dd>One bounded live drive produces a fused result on the two providers AWSF already reaches, with each phase's provider, resolved model and cost recorded separately, and the run-failure surface showing per-phase rows rather than one composite row.</dd>
+      <dt><code class="ac">AC-8</code></dt>
+      <dd>A debate of <code>R</code> rounds over <code>N</code> models compiles to <code>R × N</code> opinion phases and <code>R</code> host composers, its <code>minimumCalls</code> is exactly <code>R × N</code>, and a roster that exceeds the resolved ceiling is refused at compile time for nothing.</dd>
+      <dt><code class="ac">AC-9</code></dt>
+      <dd>A debate has no judge, so it carries no writer and no build output: zero phases declare a non-empty <code>writes</code>, <code>reviewBuildPhaseId</code> returns null, and nothing follows the final round's composition.</dd>
+      <dt><code class="ac">AC-10</code></dt>
+      <dd>A delegation plan is a typed envelope journalled before anything reads it <em>and</em> committed as the stage-one candidate, and the second-stage recipe compiles from that committed blob alone — byte-identically across a process boundary, with its binding digest matching. No code path compiles stage two from a provider turn or from a journal row the seeded tree does not carry.</dd>
+      <dt><code class="ac">AC-11</code></dt>
+      <dd>A delegation graph is validated before any task phase exists: acyclic with the cycle named, every dependency declared and resolvable, every task delegated to a declared slot, and never two writers where one has not finished. Every refusal costs no reservation and no process.</dd>
+    </dl>
+  </section>
+
+  <!-- ===== RELEVANT FILES ===== -->
+  <section id="files" class="files">
+    <h2>Relevant Files</h2>
+
+    <h3>Existing Files</h3>
+    <ul>
+      <li><span class="tag existing">existing</span> <code>core/src/execution/transport-broker.ts</code> — the single spawn site, and the reason the source record's promise could not be kept. Its <code>startProcess</code> is where the four registration classes are discriminated; <code>AgentPhaseProcessRegistration</code> is the one every fusion phase uses unchanged.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/execution/launcher-barrier.ts</code> — <code>ReservationLedger</code> at <code>:333</code> is the seam that makes option (a) expensive: two methods, neither of which takes an amount.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/execution/call-budget.ts</code> — <code>settle</code> at <code>:419</code>, <code>reserveComposite</code> at <code>:392</code>, and <code>restoreReservation</code> at <code>:446</code> whose <code>kind: "single"</code> / <code>cost: 1</code> gate decides what can be recovered.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/workflow/compiler.ts</code> — <code>compileWorkflow</code> at <code>:153</code> takes a phase array and never reads the catalogue; <code>reviewBuildPhaseId</code> at <code>:135</code> is the exactly-one-build-producer rule a fusion satisfies trivially.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/workflow/catalog.ts</code> — the module-load assertion that a compiled recipe must never trip.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/workflow/recipes/build-review.ts</code> — the shape this workstream copies: a host <code>review-context</code> phase composing several outputs into one envelope at zero call cost.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/workflow/review-routing.ts</code> — <code>providerPairFrom</code> at <code>:36</code>, the three-provider refusal. Also the file <code>task3.5</code> edits, so anything written here must be authored against the post-merge version.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/cli/commands/production-run.ts</code> — the phase loop that reserves one call per agent phase, the inversion check at <code>:1158</code>, and the host-phase dispatch chain keyed on <code>phase.schemaId</code> that an <code>opinion-context</code> phase joins.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/adapters/pi-codex.ts</code> — <code>SAFE_MODEL_SELECTOR</code> at <code>:119</code> and its rationale. The reason a multi-provider roster needs W16 rather than a relaxed regex here.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/cli/commands/seed.ts</code> and <code>core/src/contracts/candidate-adoption.ts</code> — the only mechanism that crosses a task boundary. It carries <strong>Git objects only</strong>: the evidence schema pins <code>sourceEvidenceCopied: Literal(false)</code> and <code>sourceApprovalsCopied: Literal(false)</code>, and <code>seed.ts:39</code> refuses a non-interactive terminal. Q9 makes both facts structural to M6 — the first decides how a delegation plan travels, the second supplies <code class="inv">INV-6</code> for free.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/policy/path-policy.ts</code> — <code>evaluatePathPolicy</code>'s <code>outside-write-globs</code> reason, which is what makes <code>writes: []</code> a refusal rather than a convention.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/state/tiers.ts</code> — <code>MAX_CALL_CEILING = 20</code>, <code>DEFAULT_CALL_CEILINGS</code>, <code>ceilingFor</code>, and <code>compositeCost</code>, which this workstream reads and does not change.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/config/schema.ts</code> — <code>KNOWN_ADAPTER_KINDS</code> at <code>:23</code>, still declaring <code>composite-fusion</code>; on <code>task3.5</code> also <code>PhaseRouteSelectionSchema</code> and <code>routing.phase_routes</code>.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/adapters/registry.ts</code> — returns <code>null</code> for <code>composite-fusion</code> with the comment calling it v1.1 scope. The evidence for the retirement task.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/quota/routes.ts</code> — eight <code>composite-fusion</code> branches for an adapter that cannot be constructed, which is what the retirement actually removes.</li>
+      <li><span class="tag existing">existing</span> <code>awsf.config.yaml</code> — <code>adapters.fusion: { kind: composite-fusion, enabled: false }</code>, <code>risk.call_ceiling: { T0: 1, T1: 3, T2: 5 }</code>, and <code>workflows.enabled</code>. Protected: no agent can write it.</li>
+      <li><span class="tag existing">existing</span> <code>core/test/unit/meta/ticket-plan-sync.test.ts</code> and <code>core/src/registry/plan-source.ts</code> — the grammar this document is parsed by and the byte-identity fence it is paired against.</li>
+      <li><span class="tag foreign">foreign</span> <code>fusion-harness</code> (v1) and <code>fusion-harness-v2/fusion-harness</code> (v2) — the owner's tool, in another repository. <strong>Read for this plan; never modified by it.</strong> v1's environment-allowlist module is the credited MIT source of <code>core/src/adapters/env.ts</code>; v2's <code>writer-lease.ts</code>, <code>child-runner.ts</code>, <code>collaboration-graph.ts</code>, <code>model-stack.ts</code> and <code>prompt-library.ts</code> are the requirements source for the command surface.</li>
+    </ul>
+
+    <h3>New Files</h3>
+    <ul>
+      <li><span class="tag new">new</span> <code>core/src/contracts/opinion-output.ts</code> — <code>awsf.opinion-output/v1</code>. A read-only consultation's envelope: a position, its reasoning, its stated confidence, what it would need to change its mind, and an explicitly empty artifact list. Deliberately not a build output.</li>
+      <li><span class="tag new">new</span> <code>core/src/contracts/fusion-context.ts</code> — <code>awsf.fusion-context/v1</code>. What the host composer hands the fusing phase: the request, and every opinion with its provider, resolved model, and digest.</li>
+      <li><span class="tag new">new</span> <code>core/src/workflow/fusion/roster.ts</code> — the roster contract and its validation: N slots, each an adapter/provider/model/effort selection plus a slot id, with the refusals for a roster that is too small, too large, or names an undeclared adapter.</li>
+      <li><span class="tag new">new</span> <code>core/src/workflow/fusion/compile.ts</code> — <code>compileFusion(roster, request) → WorkflowDefinition</code>. Pure: reads no file, no clock, no provider, no config beyond what it is handed.</li>
+      <li><span class="tag new">new</span> <code>core/src/contracts/delegation-plan.ts</code> — <code>awsf.delegation-plan/v1</code>. The architect's proposal as a typed envelope: tasks with stable ids, statements of work, delegated slots, declared dependencies, and whether each writes. Journalled before anything reads it, because it is the only input stage two is allowed.</li>
+      <li><span class="tag new">new</span> <code>core/src/workflow/fusion/debate.ts</code> — <code>compileDebate(roster, question)</code>, the round-count generalisation of the fusion generator.</li>
+      <li><span class="tag new">new</span> <code>core/src/workflow/fusion/delegation.ts</code> — the graph validator and <code>compileDelegation(plan, roster)</code>, the second-stage compile. Reads the committed plan out of the seeded tree; it never reaches a journal row or a provider turn.</li>
+      <li><span class="tag new">new</span> <code>prompts/architect/system.md</code>, <code>prompts/architect/user.md</code> — the read-only merge contract that proposes a delegation and implements none of it.</li>
+      <li><span class="tag new">new</span> <code>prompts/opinion/system.md</code>, <code>prompts/opinion/user.md</code> — the read-only consultation contract, carrying the opinion schema.</li>
+      <li><span class="tag new">new</span> <code>prompts/fuser/system.md</code>, <code>prompts/fuser/user.md</code> — the merge contract. Derived from the tool's own fusion prompts, which are the requirements.</li>
+      <li><span class="tag new">new</span> <code>core/test/unit/workflow/fusion-compile.test.ts</code>, <code>core/test/unit/workflow/fusion-registrations.test.ts</code>, <code>core/test/unit/contracts/opinion-output.test.ts</code>, <code>core/test/unit/meta/fusion-spawn-fence.test.ts</code> — the offline proofs.</li>
+      <li><span class="tag new">new</span> <code>specs/awsf-v2-w10-mf-adapter-build-prompts.md</code> and <code>specs/tickets/awsf-v2-w10-mf-adapter/</code> — this plan's prompt source and execution surface. The invariant-12 fence requires both.</li>
+    </ul>
+  </section>
+
+  <!-- ===== IMPLEMENTATION PHASES ===== -->
+  <section id="phases">
+    <h2>Implementation Phases</h2>
+    <p><strong>IMPORTANT:</strong> Execute every phase and task step by step, in order, top to bottom.</p>
+    <p>Status markers: <code>[]</code> idle · <code>[wip]</code> in progress · <code>[x]</code> complete · <code>[f]</code> failed. All start as <code>[]</code>; the Build Plan workflow updates them as it works.</p>
+    <div class="card rule">
+      <h5>This workstream is optional, and milestone 1 is allowed to end it</h5>
+      Nothing in v2 waits on W10. <strong>M1 is a decision milestone and it costs no quota.</strong> If its two offline proofs do not hold, the honest ending is to record the evidence gap in the spine and close the workstream unbuilt — that is a legitimate outcome and it counts as finishing. What this workstream may never do is graduate on a guarantee the broker never saw.
+    </div>
+
+    <!-- ================= M1 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M1: Settle the fork offline, at zero quota</h3>
+      <p>The spine's cheapest unused upgrade, translated to the chosen fork. Two proofs, both offline, that together settle whether (c) is buildable before anything is designed around it — and a third task that records the decision where the next session will find it. <strong>A live capture comes after this milestone, never before:</strong> the fit already failed at the broker, so a capture taken first buys nothing.</p>
+      <figure>
+        <pre class="mermaid">
+flowchart TD
+  P1["proof 1 · compile<br/>N-model phase list, N = 2..5"] --> D{"both green?"}
+  P2["proof 2 · registrations<br/>3 before the first GO"] --> D
+  D -->|yes| GO2["M2 · build"]
+  D -->|no| STOP["close unbuilt<br/>record the gap in the spine"]
+  style STOP stroke:#8a5a00,stroke-dasharray:4 3
+  style GO2 stroke:#1d6b48
+        </pre>
+        <figcaption>M1 is a gate, not a preliminary. Both proofs run under <code>npm run test:unit</code> with no provider process and no quota. The right-hand branch is a real outcome the spine already sanctions.</figcaption>
+      </figure>
+
+      <h4>1. The N-model phase list, and what it compiles to</h4>
+      <p class="sub">Serves <code class="serves">AC-1</code> · <code class="serves">INV-5</code></p>
+      <p>A hand-written fixture — not yet a generator — of a fusion phase list at N = 3, built from the existing <code>PhaseDefinition</code> shape, passed straight to <code>compileWorkflowStructure</code>. This is the proof that a compiled recipe is structurally supported today, and it is the cheapest thing in the workstream that can change what gets built.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> A fixture phase list of N opinion agent phases, one <code>kind: "code"</code> composer, and one fusing agent phase, with unique ids and earned descriptions that pass <code>assertEarnedDescription</code></li>
+        <li><code class="status">[]</code> <code>compileWorkflowStructure</code> returns <code>minimumCalls === N + 1</code> for N = 2, 3, 4 and 5, with the host composer contributing zero</li>
+        <li><code class="status">[]</code> <code>reviewBuildPhaseId</code> returns the fusing phase's id when a review phase is present, and the opinion phases do not count — proving the exactly-one-build-producer rule is satisfied by contract choice rather than by amendment</li>
+        <li><code class="status">[]</code> The fixture is <strong>not</strong> registered in <code>WORKFLOW_RECIPES</code> and a test asserts <code>WORKFLOW_IDS</code> is unchanged, so <code>catalog.ts</code>'s module-load assertion still holds</li>
+      </ul>
+
+      <h4>2. Three registrations before the first GO, and the refutation of the composite path</h4>
+      <p class="sub">Serves <code class="serves">AC-2</code> · <code class="serves">INV-1</code> · <code class="serves">INV-3</code></p>
+      <p>The spine's fake-broker test, and its negative twin. The first proves the chosen fork delivers what the source record promised. The second proves the refused fork cannot, and it costs one test to write.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> A fake broker records every <code>startProcess</code> registration and every barrier step; driving the N = 3 fixture through it yields <strong>three</strong> <code>agent-phase</code> registrations, each with a distinct <code>phaseId</code> and <code>phaseOrdinal</code>, and the first <code>GO</code> arrives after the third registration exists</li>
+        <li><code class="status">[]</code> Each of the three names its own reservation id, and every reservation is <code>kind: "single"</code>, <code>cost: 1</code></li>
+        <li><code class="status">[]</code> The refutation: one <code>reserveComposite(2)</code> reservation handed to three registrations spends entirely at the first <code>GO</code> and the second raises <code>ReservationNotHeld</code> — the test asserts the error and cites <code>launcher-barrier.ts:333</code> in its message, so the reason option (a) was refused is checkable rather than remembered</li>
+        <li><code class="status">[]</code> The second refutation: <code>restoreReservation</code> refuses a composite record with <code>InterruptedTurnRefused("recovery-ambiguous")</code>, proving crash recovery is unavailable for the composite shape</li>
+        <li><code class="status">[]</code> No provider process starts and no quota is consumed by either test</li>
+      </ul>
+
+      <h4>3. Testing Strategy</h4>
+      <p class="sub">Serves <code class="serves">AC-1</code> · <code class="serves">AC-2</code> · <code class="serves">INV-1</code></p>
+      <p>Node's built-in test runner over the fixture and the fake broker, plus one meta-test that makes the spawn fence name this workstream. Everything here runs on the host with no provider and no network. The milestone closes by writing the fork decision into the plan's Amendments where the next session reads it, including the branch a red proof takes.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — green at the exact base SHA before any change, and green again after, with both counts recorded in the commit body</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — the compile proof and the registration proof both pass, and each has been seen to fail by inducing one drift</li>
+        <li><code class="status">[]</code> <code>core/test/unit/meta/fusion-spawn-fence.test.ts</code> asserts no module under <code>core/src/workflow/fusion/</code> imports <code>node:child_process</code>, so INV-1 is mechanical rather than remembered</li>
+        <li><code class="status">[]</code> <code>npm run typecheck</code> and <code>npm run lint</code> — clean</li>
+        <li><code class="status">[]</code> The Amendment records the fork decision with the measured evidence, and names the close-unbuilt branch explicitly</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass. If the proofs themselves refuse, that is a result: close the workstream unbuilt and record the gap.
+      </div>
+    </div>
+
+    <!-- ================= M2 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M2: The opinion contract and the read-only slot</h3>
+      <p>A fusion needs a shape for "a model's answer that is not a diff". Getting this contract right is what makes INV-2 structural instead of a convention, and it is why an opinion phase cannot quietly become a second builder.</p>
+      <figure>
+        <pre class="mermaid">
+flowchart LR
+  OP["opinion phase"] --> S["awsf.opinion-output/v1<br/>no artifact claims"]
+  OP --> W["role: writes = []<br/>tools: readonly"]
+  S --> R1["review-build rule<br/>does not count it"]
+  W --> R2["path policy<br/>outside-write-globs"]
+  style R1 stroke:#1d6b48
+  style R2 stroke:#1d6b48
+        </pre>
+        <figcaption>Two independent refusals, deliberately. The schema stops an opinion from <em>claiming</em> a diff; the role's empty write globs stop it from <em>producing</em> one. Either alone would be a convention; together they are a contract.</figcaption>
+      </figure>
+
+      <h4>4. The opinion envelope contract</h4>
+      <p class="sub">Serves <code class="serves">AC-3</code></p>
+      <p><code>awsf.opinion-output/v1</code>, spread from <code>ENVELOPE_BASE_PROPERTIES</code> like every other envelope so the emitted JSON Schema is one self-contained document the prompt can carry.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>core/src/contracts/opinion-output.ts</code> declares a position, its reasoning, a stated confidence, and what evidence would change it — and constrains <code>artifacts</code> to an empty array, so an opinion cannot claim a file at all</li>
+        <li><code class="status">[]</code> Registered in <code>core/src/contracts/registry.ts</code> so <code>schemaForId</code> resolves it and <code>compilePhase</code>'s outputSchema check passes</li>
+        <li><code class="status">[]</code> A fixture opinion envelope validates; one carrying a single artifact claim is refused by the schema, not by a gate</li>
+        <li><code class="status">[]</code> The schema id is <strong>not</strong> <code>awsf.build-output/v1</code>, and a test asserts <code>reviewBuildPhaseId</code> ignores opinion phases</li>
+      </ul>
+
+      <h4>5. The opinion role, and the write refusal</h4>
+      <p class="sub">Serves <code class="serves">AC-3</code> · <code class="serves">INV-2</code></p>
+      <p>The role shape an opinion slot uses, and the prompts that carry it. Modelled on the shipped <code>planner</code> and <code>reviewer</code> roles, both of which already declare <code>writes: []</code> with a <code>readonly</code> tool profile.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>prompts/opinion/system.md</code> and <code>prompts/opinion/user.md</code> exist, and the user prompt carries <code>{output_schema}</code> and <code>{previous_envelope}</code> exactly as <code>injectOutputSchema</code> and <code>renderPrevious</code> require</li>
+        <li><code class="status">[]</code> <code>prompts/fuser/system.md</code> and <code>prompts/fuser/user.md</code> exist, derived from the tool's own merge contract rather than invented — the fuser is told it is the only writer and that its sources are read-only research</li>
+        <li><code class="status">[]</code> A test drives <code>evaluatePathPolicy</code> with an opinion role's <code>writes: []</code> over a plausible claimed path and asserts the violation reason is <code>outside-write-globs</code></li>
+        <li><code class="status">[]</code> A test asserts a fusion phase list has exactly one phase whose role declares a non-empty <code>writes</code>, for every N from 2 to 5</li>
+      </ul>
+
+      <h4>6. Testing Strategy</h4>
+      <p class="sub">Serves <code class="serves">AC-3</code> · <code class="serves">INV-2</code></p>
+      <p>Schema-level tests against fixtures, plus the two independent write refusals proven separately so neither can be mistaken for the other. Fixtures are committed; no runtime artifact is (AGENTS.md invariant 10).</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — the opinion contract validates its fixture and refuses an artifact claim</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — the path-policy refusal and the one-writer assertion both pass, each seen to fail once by induced drift</li>
+        <li><code class="status">[]</code> No fixture contains a credential-shaped value (AGENTS.md invariant 9, enforced by the credential-pattern meta-test)</li>
+        <li><code class="status">[]</code> <code>npm run typecheck</code> and <code>npm run lint</code> — clean</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — never lower what the row asserts.
+      </div>
+    </div>
+
+    <!-- ================= M3 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M3: The compiled fusion recipe</h3>
+      <p>The generator, the host composer, and the admission path. This is the milestone that turns M1's hand-written fixture into something an owner can actually ask for, and it is where this workstream and <code>shift</code> meet.</p>
+      <div class="card rule">
+        <h5><span class="gate">G10-A</span> — the compiled-recipe admission path is built once, by whichever workstream reaches it first</h5>
+        <p><strong>The question the spine asked: should W10 and W17 share one mechanism or each grow its own? The answer is split, and the split is where the work actually is.</strong></p>
+        <p><strong>The generators do not share.</strong> W17's <code>compileShift(manifest, bodies, config)</code> turns ticket bodies into phases; W10's <code>compileFusion(roster, request)</code> turns a model roster into phases. The inputs have nothing in common, and an abstraction over both would be a taxonomy nothing reads — the same mistake the ticket conventions warn about with invented frontmatter fields.</p>
+        <p><strong>The admission and recovery half does share, and must.</strong> "A compiled recipe that is not in <code>WORKFLOW_RECIPES</code> gets a workflow id, is admitted against a resolved ceiling, is bound by a digest over its source, and is rebuilt byte-for-byte on resume or refused" is one problem, and building it twice gives the repository two answers to it. <strong>Whichever workstream lands it first owns it; the second consumes it.</strong> W17 is core and W10 is optional, so the expected order is W17 first — but this is deliberately not a blocking gate on an optional workstream. If W10's M3 starts before W17 has landed that path, W10 builds the narrow version under <code>core/src/workflow/</code> rather than under <code>fusion/</code>, and W17 consumes it instead. The prompt for task 7 says so in both directions.</p>
+      </div>
+      <figure>
+        <pre class="mermaid">
+flowchart LR
+  RS["roster<br/>N slots + request"] --> CF["compileFusion<br/>pure"]
+  CF --> WD["WorkflowDefinition<br/>N+2 phases"]
+  WD --> CW["compileWorkflow<br/>existing"]
+  CW --> AD["admitWorkflow<br/>ceiling check, zero cost"]
+  RS --> DG["binding digest"]
+  DG --> RC["resume · recompile<br/>and compare"]
+  style CF stroke:#5b4fc4,stroke-width:3px
+  style AD stroke:#1d6b48
+        </pre>
+        <figcaption>The generator is pure and the admission is the shipped one. A roster is digested, and a resume recompiles from the recorded roster and compares — so a roster edited between crash and resume refuses the resume rather than silently running a different consultation.</figcaption>
+      </figure>
+
+      <h4>7. <code>compileFusion</code> — the generator, pure and digest-reproducible</h4>
+      <p class="sub">Serves <code class="serves">AC-1</code> · <code class="serves">INV-5</code></p>
+      <p>Roster in, <code>WorkflowDefinition</code> out. Reads no file, no clock and no provider; every input is handed to it. The roster contract and its refusals land here too, because a roster that names an undeclared adapter must be refused before a phase list exists rather than after.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>core/src/workflow/fusion/roster.ts</code> declares a slot as an adapter id, an optional provider assertion, a model, an effort and a stable slot id, and refuses a roster below 2 slots, above 5, with duplicate slot ids, or naming an adapter the effective config does not declare or has disabled</li>
+        <li><code class="status">[]</code> <code>core/src/workflow/fusion/compile.ts</code> produces <code>N</code> opinion phases with ids derived from slot ids, one <code>opinion-context</code> host phase, and one <code>fuse</code> phase, in that order, with descriptions that pass <code>assertEarnedDescription</code></li>
+        <li><code class="status">[]</code> Compiling the same roster twice across a process boundary produces byte-identical phase lists, and the binding digest over the roster matches</li>
+        <li><code class="status">[]</code> The compiled recipe is admitted by digest and is <strong>never</strong> added to <code>WORKFLOW_RECIPES</code>; a test asserts <code>WORKFLOW_IDS</code> and the registered recipe array are unchanged by this workstream</li>
+        <li><code class="status">[]</code> Nothing under <code>core/src/workflow/fusion/</code> imports the quota module, reaching it transitively included — the transitive quota fence already forbids it for <code>core/src/workflow/</code></li>
+      </ul>
+
+      <h4>8. The <code>opinion-context</code> host composer</h4>
+      <p class="sub">Serves <code class="serves">AC-4</code></p>
+      <p>The fuser has exactly one envelope slot and needs N. <code>build-review</code> already solved this shape with <code>review-context</code>; this is the fourth instance, and it costs no provider call and moves no ceiling.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>core/src/contracts/fusion-context.ts</code> declares <code>awsf.fusion-context/v1</code>: the original request, and every opinion with its slot id, provider, resolved model, and a digest over its envelope bytes</li>
+        <li><code class="status">[]</code> A host composer is bound in <code>production-run.ts</code>'s <code>phase.schemaId</code> dispatch chain, beside the existing <code>REVIEW_CONTEXT_SCHEMA_ID</code>, <code>DESIGN_CONTEXT_SCHEMA_ID</code> and <code>PLAN_CONTEXT_SCHEMA_ID</code> branches</li>
+        <li><code class="status">[]</code> The composer reserves nothing and spends nothing; a test asserts a fusion recipe's <code>minimumCalls</code> is unchanged by its presence</li>
+        <li><code class="status">[]</code> An opinion that failed is carried as a named failure rather than omitted, so the fuser can see that a source was asked and did not answer — and the composer refuses to run with fewer than two successful opinions, matching the tool's own floor</li>
+        <li><code class="status">[]</code> The composed envelope is journalled, so the fused result's sources are reconstructable after the fact without re-reading provider output</li>
+      </ul>
+
+      <h4>9. Ceiling admission, and recovery from the accepted prefix</h4>
+      <p class="sub">Serves <code class="serves">AC-5</code> · <code class="serves">AC-6</code></p>
+      <p>A fusion is the most expensive shape this factory can compile, so the refusal has to be legible and it has to arrive before anything launches. And because it is long, a crash halfway through is the ordinary case rather than the exotic one.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> A roster whose <code>minimumCalls</code> exceeds the attempt's resolved ceiling is refused at compile time with a message naming the shortfall in calls and what would close it — a configured ceiling change or an owner raise — and naming neither as automatic</li>
+        <li><code class="status">[]</code> The refusal costs nothing: a test asserts no reservation is created and no process exists when it fires</li>
+        <li><code class="status">[]</code> A crash between opinion phase 2 and 3 resumes with phases 1 and 2 accepted, their cost-1 reservations restored through <code>restoreReservation</code>, and neither opinion re-asked</li>
+        <li><code class="status">[]</code> A resume whose recorded roster no longer compiles to the same phase list is <strong>refused</strong>, not silently re-planned</li>
+        <li><code class="status">[]</code> No path in this milestone reaches <code>awsf raise</code>; a meta-test asserts no module under <code>core/src/workflow/fusion/</code> imports it, because a run that can widen its own ceiling is not bounded by a checkpoint at all</li>
+      </ul>
+
+      <h4>10. Testing Strategy</h4>
+      <p class="sub">Serves <code class="serves">AC-1</code> · <code class="serves">AC-4</code> · <code class="serves">AC-5</code> · <code class="serves">AC-6</code> · <code class="serves">INV-5</code></p>
+      <p>Property-style compile tests across every N from 2 to 5 and every tier, a reproducibility test that crosses a process boundary, and a journey test driving a whole fusion on the stub route with zero quota — the shape v1's journeys already use.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — a fusion journey on the fixture route runs end to end, N = 3, with <strong>zero quota</strong> and four recorded phase results</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — the ceiling refusal fires at N = 5 against the shipped T2 ceiling of 5 and names the shortfall; it passes at a resolved ceiling of 6</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — the reproducibility test compiles the same roster in two processes and compares bytes</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — the prefix-recovery test resumes a crashed fusion and asserts no completed opinion is re-asked</li>
+        <li><code class="status">[]</code> <code>npm run typecheck</code> and <code>npm run lint</code> — clean, and the full suite is green at the milestone's landing SHA</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass.
+      </div>
+    </div>
+
+    <!-- ================= M4 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M4: Debate — many rounds, no judge</h3>
+      <p>The second of the two commands the owner asked for beyond fusion, and the cheaper one. A debate is structurally a fusion with the fuser removed and the opinion round repeated: <code>R</code> rounds over <code>N</code> models, each round's host composer feeding every model the previous round's positions, and <strong>no judge at the end</strong> — the tool does not have one and this does not invent one. It sits here, before the merge gate, because it needs nothing from M5's routing work.</p>
+      <figure>
+        <pre class="mermaid">
+flowchart LR
+  R1A["r1 · model A"] --> R1B["r1 · model B"] --> C1["compose r1<br/>host · 0 calls"]
+  C1 --> R2A["r2 · model A"] --> R2B["r2 · model B"] --> C2["compose r2<br/>host · 0 calls"]
+  C2 --> OUT["N final positions<br/>no judge, no writer"]
+  style C1 stroke:#6b7382,stroke-dasharray:4 3
+  style C2 stroke:#6b7382,stroke-dasharray:4 3
+  style OUT stroke:#8a5a00
+        </pre>
+        <figcaption>A two-round, two-model debate: four provider calls, two free host compositions, and <strong>no writer anywhere</strong>. A debate that ended in a merged answer would be a fusion; the absence of a judge is the command, not an omission.</figcaption>
+      </figure>
+      <div class="card rule">
+        <h5>What a debate costs, and why the hard bound still never moves</h5>
+        <p><code>minimumCalls</code> is exactly <code>R × N</code> — the composers are host phases and contribute nothing. Against <code>MAX_CALL_CEILING = 20</code>:</p>
+        <div class="wrap">
+        <table>
+          <thead><tr><th>Roster</th><th>2 rounds</th><th>3 rounds</th><th>4 rounds</th><th>Fits shipped T2 = 5?</th></tr></thead>
+          <tbody>
+            <tr><td>N = 2</td><td>4</td><td>6</td><td>8</td><td>2 rounds only</td></tr>
+            <tr><td>N = 3</td><td>6</td><td>9</td><td>12</td><td>no</td></tr>
+            <tr><td>N = 4</td><td>8</td><td>12</td><td>16</td><td>no</td></tr>
+            <tr><td>N = 5</td><td>10</td><td>15</td><td><strong>20</strong></td><td>no</td></tr>
+          </tbody>
+        </table>
+        </div>
+        <p><strong>The largest debate the tool can express — five models over four rounds — is exactly 20 calls, which is <code>MAX_CALL_CEILING</code> to the call.</strong> So this milestone changes no bound either: like fusion, it needs only a configured <code>risk.call_ceiling.T2</code> the owner chose, and every roster above it is refused at compile time for nothing. What the table also shows is that <strong>only a two-model, two-round debate fits the shipped ceiling</strong>, so a debate is in practice a deliberate act with a raised ceiling behind it, and the plan says so rather than letting a session discover it.</p>
+      </div>
+
+      <h4>11. Rounds — generalising the compiler from one pass to <code>R</code></h4>
+      <p class="sub">Serves <code class="serves">AC-8</code> · <code class="serves">INV-5</code></p>
+      <p>One generator, two commands. <code>compileFusion</code> already emits opinion phases, a composer and a terminal phase; a debate is the same emission with the round count lifted out of the constant <code>1</code> and the terminal fusing phase dropped.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> The roster contract gains a round count, defaulting to 1, refused below 1 and above 4 — four is where the largest roster reaches <code>MAX_CALL_CEILING</code> exactly, so a fifth round could never be admitted for any roster and refusing it by name beats refusing it by arithmetic</li>
+        <li><code class="status">[]</code> <code>compileDebate(roster, question)</code> emits <code>R × N</code> opinion phases and <code>R</code> composers, with phase ids carrying both the round and the slot so a reader can tell round 2's model A from round 1's</li>
+        <li><code class="status">[]</code> <code>minimumCalls === R × N</code> for every combination in the table above, asserted; the composers contribute zero</li>
+        <li><code class="status">[]</code> Both generators share the roster contract and the composer, and a test asserts that a debate at <code>R = 1</code> with a fusing phase appended is byte-identical to the fusion recipe for the same roster — one emission, proven, rather than two that look alike</li>
+        <li><code class="status">[]</code> The compiled debate is admitted by digest and never registered in <code>WORKFLOW_RECIPES</code></li>
+      </ul>
+
+      <h4>12. The debate contract, and the proof that nobody writes</h4>
+      <p class="sub">Serves <code class="serves">AC-9</code> · <code class="serves">INV-2</code></p>
+      <p>A debate has no judge, so it has no build output, so it has no writer. That makes it the strictest recipe this factory can compile, and the assertion is worth having explicitly rather than inferring it from the absence of a fusing phase.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Each round's composer produces a typed envelope carrying every position from that round with its slot id, provider and digest — the same shape the fusion composer emits, so one contract serves both</li>
+        <li><code class="status">[]</code> A round-2 model receives the round-1 composition and is told plainly that it is reading positions rather than instructions</li>
+        <li><code class="status">[]</code> A test asserts a compiled debate has <strong>zero</strong> phases declaring a non-empty <code>writes</code>, at every <code>N</code> and every <code>R</code></li>
+        <li><code class="status">[]</code> A test asserts a compiled debate carries no <code>awsf.build-output/v1</code> phase, so <code>reviewBuildPhaseId</code> returns null and a debate can never carry a review phase — which is correct, because there is no candidate to review</li>
+        <li><code class="status">[]</code> The final round's composition is the output; nothing merges it, and a test asserts no phase follows it</li>
+      </ul>
+
+      <h4>13. Testing Strategy</h4>
+      <p class="sub">Serves <code class="serves">AC-8</code> · <code class="serves">AC-9</code></p>
+      <p>Compile assertions across the whole <code>R × N</code> table, a zero-quota journey on the fixture route, and the ceiling refusal proven at the two boundaries that matter: the shipped ceiling, and the hard bound.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — every cell of the round table compiles to the stated <code>minimumCalls</code></li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — a 2-model 2-round debate runs end to end on the stub route with <strong>zero quota</strong>, producing two compositions and four phase results</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — a 5-model 4-round debate compiles at a resolved ceiling of 20 and is refused at 19, naming the shortfall; a fifth round is refused by the roster contract before compiling at all</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — the no-writer and no-build-output assertions pass, each seen to fail once</li>
+        <li><code class="status">[]</code> <code>npm run typecheck</code> and <code>npm run lint</code> — clean, suite green at the milestone's landing SHA</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass.
+      </div>
+    </div>
+
+    <!-- ================= M5 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M5: Routing, and review independence</h3>
+      <p>A fusion is only worth running if its slots are actually different models, and that is a routing question this workstream does not own alone. This milestone wires the roster to the per-phase route surface, decides the half of review independence that belongs here, and makes the refusal that belongs to W16 legible instead of merely correct.</p>
+      <div class="card rule">
+        <h5><span class="gate">G10-B</span> — the <code>task3.5</code> merge blocks this milestone</h5>
+        <p>Per-phase route selection is commit <code>b47b2a7</code> on branch <code>task3.5</code>, and it is not an ancestor of <code>main</code>. Measured 2026-09-15: <code>task3.5</code> is 27 commits ahead of <code>main</code>, <code>main</code> 8 ahead, merge base <code>8268258</code>; a trial merge conflicts in seventeen files, and <code>core/src/cli/commands/production-run.ts</code> — which this milestone edits — is the largest of them. W17 records the same gate as <span class="gate">G17-M</span>. Everything in M1, M2 and M3 is unblocked today; <strong>M4 is not.</strong> Anything written here must be authored against the post-merge <code>review-routing.ts</code>, which gains a <code>same-provider-degraded</code> mode on that branch.</p>
+      </div>
+      <figure>
+        <pre class="mermaid">
+flowchart TD
+  FU["fuse phase<br/>the single build producer"] --> INV["invert against this"]
+  O1["opinion on provider A"] -.-> FU
+  O2["opinion on provider B"] -.-> FU
+  O3["opinion on provider C"] -.-> FU
+  INV --> PP{"distinct providers<br/>across agent phases"}
+  PP -->|exactly 2| OK["reviewer selected by exclusion"]
+  PP -->|3 or more| NO["refused at preflight, zero cost<br/>W16 M4 owns the decision"]
+  style NO stroke:#a5311e
+  style OK stroke:#1d6b48
+        </pre>
+        <figcaption>Independence inverts against the fuser, because the fuser authored the candidate. An opinion is an input the fuser consumed and may have discarded, so a provider that gave an opinion may still review — provided it is not the fuser. At three or more distinct providers the router refuses before anything launches, and that decision is W16's.</figcaption>
+      </figure>
+
+      <h4>14. The roster's per-phase route surface</h4>
+      <p class="sub">Serves <code class="serves">AC-2</code></p>
+      <p>A roster slot names an adapter, a provider assertion, a model and an effort. That is exactly what <code>routing.phase_routes</code> carries per phase id, so the roster's job is to produce route selections the existing resolver consumes — not to add a second routing path beside it.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Each opinion phase resolves its route through the existing <code>requestedPhaseRoute</code> / <code>effectivePhaseRoute</code> pair, and a slot's explicit provider assertion that disagrees with the adapter's reported provider is a refusal, never a fallback</li>
+        <li><code class="status">[]</code> Every fusion phase carries a full <code>RouteSelectionProvenance</code> — requested, effective, and observed after the turn — and a test asserts all N + 1 are distinct records rather than one repeated</li>
+        <li><code class="status">[]</code> Role policy is retained: a routed opinion slot changes only model, effort and the adapter/provider pair, and <code>retainedRolePolicy</code> confirms prompt, tools, writes, continuity, purpose and colour are reference-identical to the configured role</li>
+        <li><code class="status">[]</code> The plan records, in one line a reader cannot miss, that <code>phase_routes</code> is durable config in a <strong>protected file</strong> — so an N-slot roster is an owner-authored commit, not a command-line flag</li>
+      </ul>
+
+      <h4>15. Inversion against the fuser, and a refusal that names the third provider</h4>
+      <p class="sub">Serves <code class="serves">INV-4</code></p>
+      <p>W10 decides one half and inherits the other. The half it decides is which phase inversion keys off. The half it inherits is what happens above two providers — and its only duty there is to make the existing refusal say something useful.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> A test proves the reviewer is selected by exclusion from the <strong>fusing</strong> phase's provider, not from any opinion's, and that a provider which gave an opinion may still review when it is not the fuser</li>
+        <li><code class="status">[]</code> A two-provider fusion at N = 2 carries a review phase and passes inversion end to end on the stub route</li>
+        <li><code class="status">[]</code> A three-provider roster with a review phase is refused at preflight, at zero cost, and the message <strong>names the third provider and the phase it came from</strong> rather than reporting a count</li>
+        <li><code class="status">[]</code> This workstream adds no inversion rule, no substitute and no fallback; a test asserts a fusion recipe reaching <code>runMandatoryReview</code> passes no <code>mode</code> of its own, so the configured route decides</li>
+        <li><code class="status">[]</code> The plan's Questionables record which of W16 § M4's three answers the owner takes, once taken, and nothing here pre-empts it</li>
+      </ul>
+
+      <h4>16. Testing Strategy</h4>
+      <p class="sub">Serves <code class="serves">AC-2</code> · <code class="serves">INV-4</code></p>
+      <p>Route-provenance assertions per phase, and inversion tests at two and three providers with the three-provider case asserted on its message rather than only on its type. All offline: the stub route reports a provider without reaching one.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — N + 1 distinct route-provenance records for an N-slot fusion, requested / effective / observed each populated</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — the two-provider inversion passes and the three-provider refusal names its culprit; the message assertion is exact</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — the quota fence still passes with the new modules in the tree, including its transitive leg</li>
+        <li><code class="status">[]</code> <code>npm run typecheck</code> and <code>npm run lint</code> — clean, against the post-merge tree</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If <span class="gate">G10-B</span> has not landed, stop and say so rather than working around it.
+      </div>
+    </div>
+
+    <!-- ================= M6 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M6: Collaborate — the delegation plan, and the two-stage compile</h3>
+      <p>The last and most expensive of the six, and the one whose earlier refusal this plan now withdraws. <strong>The stated objection was wrong.</strong> It said a delegation graph cannot become an ordered phase array without throwing away the parallelism that is the point — but AWSF's phase loop awaits every turn, so there is no parallelism to throw away. Flattening a validated graph to a topological order costs this factory nothing it could otherwise have had. The tool needs a graph because it runs tasks concurrently as dependencies clear; AWSF would run them one at a time either way.</p>
+      <p><strong>The real obstacle is a different one, and it is solvable.</strong> The graph is not a function of configuration — it is a <em>model's answer</em>. The architect reads every agent's plan and proposes the delegation. So a single-stage compile would make the phase list depend on a provider turn, which breaks reproducibility: <span class="gate">INV-5</span> requires a recipe rebuildable byte-for-byte from recorded bytes, and a provider is not recorded bytes until its envelope is journalled. <strong>Two stages fix it exactly, and Q9 settled them as two tasks.</strong> Stage one is a small recipe that produces the delegation plan as a typed envelope, journals it, and <strong>commits it as its candidate</strong>. Stage two is a separate task, seeded from that candidate, compiling from the committed blob — which <em>is</em> recorded bytes, at a SHA Git already addresses — so the digest holds and a resume rebuilds identically. It is the same manifest-to-recipe shape <code>shift</code> uses, with the manifest written by a model instead of read off tickets. <strong>The plan crosses as a Git object, never as an envelope:</strong> <code>CandidateAdoptionEvidenceSchema</code> pins <code>sourceEvidenceCopied: Literal(false)</code>, and this route keeps that honest rather than amending it.</p>
+      <figure>
+        <pre class="mermaid">
+flowchart TD
+  P1["plan · model A<br/>read-only"] --> AR["architect merge<br/>read-only"]
+  P2["plan · model B<br/>read-only"] --> AR
+  AR --> DP["delegation plan<br/>journalled AND committed"]
+  DP --> VAL["validate · acyclic,<br/>declared, one writer each"]
+  VAL --> OWN{"awsf seed · interactive<br/>already enforced"}
+  OWN --> S2["stage two · separate task<br/>compile from the seeded blob"]
+  S2 --> TK["task phases, topological order"] --> INT["integration turn"]
+  style DP stroke:#5b4fc4,stroke-width:3px
+  style OWN stroke:#8a5a00,stroke-width:2px
+        </pre>
+        <figcaption>Two compiled recipes, in <strong>two tasks</strong>, with an owner act between them. The plan in the middle is committed as stage one's candidate, so stage two compiles from a Git blob rather than from a journal row — which is what keeps it reproducible <em>and</em> what lets it cross a task boundary at all. The owner act is <span class="gate">INV-6</span>, and it costs nothing to build: <code>awsf seed</code> already refuses a non-interactive terminal.</figcaption>
+      </figure>
+
+      <h4>17. The delegation plan contract</h4>
+      <p class="sub">Serves <code class="serves">AC-10</code></p>
+      <p>What the architect emits, and what stage two is allowed to read. Everything stage two needs must be in this envelope, because the envelope is the only thing a resume still has.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>core/src/contracts/delegation-plan.ts</code> declares <code>awsf.delegation-plan/v1</code>: an ordered set of tasks, each with a stable id, a statement of work, the slot it is delegated to, its declared dependencies, and whether it writes</li>
+        <li><code class="status">[]</code> Stage one is a compiled recipe of <code>N</code> read-only planning phases plus one read-only architect merge phase — <code>minimumCalls = N + 1</code>, and no phase in it writes</li>
+        <li><code class="status">[]</code> The architect phase carries the opinion-style read-only role, not a builder role: it proposes the delegation and implements none of it</li>
+        <li><code class="status">[]</code> The emitted plan is journalled as a validated envelope before anything reads it, <strong>and written into the worktree so the host can commit it as stage one's candidate</strong> — the committed blob is what crosses to task two, because <code>seed</code> carries Git objects and explicitly never carries an envelope</li>
+      </ul>
+
+      <h4>18. The validator — acyclic, declared, and one writer per task</h4>
+      <p class="sub">Serves <code class="serves">AC-11</code></p>
+      <p>A model proposed this graph, so every property stage two depends on has to be checked rather than assumed. All of it runs on the host, before any task phase exists, at zero cost.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> The graph is refused unless it is acyclic, and the refusal names the cycle rather than reporting that one exists</li>
+        <li><code class="status">[]</code> Every dependency a task names must be a task id in the same plan; a dangling dependency is refused by name</li>
+        <li><code class="status">[]</code> <strong>At most one writing task at any point in the topological order</strong>, which under AWSF's sequential phase loop means simply: the flattened order never places two writers where one has not finished. A test asserts it at every valid graph shape the fixture set covers</li>
+        <li><code class="status">[]</code> A task delegated to a slot the roster does not declare is refused before compiling</li>
+        <li><code class="status">[]</code> Every refusal costs nothing: no reservation, no process, asserted</li>
+      </ul>
+
+      <h4>19. Stage two, and the owner act between the stages</h4>
+      <p class="sub">Serves <code class="serves">AC-10</code> · <code class="serves">INV-6</code></p>
+      <p>The compile that turns a validated plan into task phases, and the stop that keeps a model from deciding what work happens next and then doing it. <strong>Q9 decided two tasks</strong>, so each stage is admitted against its own ceiling — which is the point, because one task would need <code>(N + 1) + (T + 1)</code> calls against a shipped T2 ceiling of 5.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>compileDelegation(plan, roster)</code> emits one agent phase per task in topological order plus one integration phase — pure, reading <strong>the committed plan out of the seeded tree</strong> and the roster, and nothing else</li>
+        <li><code class="status">[]</code> Compiling twice across a process boundary from the same committed plan produces byte-identical phase lists, and the binding digest matches the blob</li>
+        <li><code class="status">[]</code> Stage one ends at <code>AWAITING_OWNER</code> with the delegation plan rendered for reading; stage two is a <strong>separate task seeded from stage one's candidate</strong>, and the owner act is <code>awsf seed</code>, which <code>seed.ts:39</code> already refuses to run without an interactive terminal. <strong>Assert that refusal; do not rebuild it.</strong></li>
+        <li><code class="status">[]</code> A test asserts no code path compiles stage two directly from a provider turn or from a journal row the seeded tree does not carry — the committed plan is the only input, so the architect's answer cannot execute without having been recorded, committed and seeded by hand</li>
+        <li><code class="status">[]</code> Exactly one task phase declares a non-empty <code>writes</code> at a time, inherited from the validator rather than re-checked differently here</li>
+      </ul>
+
+      <h4>20. Testing Strategy</h4>
+      <p class="sub">Serves <code class="serves">AC-10</code> · <code class="serves">AC-11</code> · <code class="serves">INV-6</code></p>
+      <p>Fixture graphs covering the shapes that matter — a chain, a fan-out, a diamond, a cycle, a dangling dependency, two writers — plus a two-stage journey on the fixture route with zero quota and the owner stop proven to stop.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — every fixture graph either compiles to the expected order or is refused by its own named error</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — a two-stage collaboration runs end to end on the stub route with <strong>zero quota</strong>, stopping at the owner act between the stages</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — the owner stop is proven to stop, not documented as stopping: <code>seed</code> refuses a non-interactive terminal, and stage two has no other route in</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — stage two's two-process reproducibility test passes and has been seen to fail once by perturbing one journalled byte</li>
+        <li><code class="status">[]</code> <code>npm run typecheck</code> and <code>npm run lint</code> — clean, suite green at the milestone's landing SHA</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        This is the milestone most likely to want a resident scheduler or a parallel executor. It needs neither: the phase loop is sequential and the graph is flattened before anything runs.
+      </div>
+    </div>
+
+    <!-- ================= M7 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M7: One bounded live drive, and the close</h3>
+      <p>Everything above is offline. This milestone spends quota exactly once, deliberately small, and then closes the workstream — either by graduating it or by recording what it could not prove. <strong>The live capture happens here and nowhere earlier</strong>, because the fit already failed at the broker and a capture taken before the fork was chosen would have bought nothing.</p>
+      <figure>
+        <pre class="mermaid">
+flowchart LR
+  L["one live fusion<br/>N = 2, existing pair"] --> E{"per-phase cost,<br/>provider, envelope?"}
+  E -->|yes| G["graduate W10<br/>retire composite-fusion"]
+  E -->|no| U["close unbuilt<br/>record the gap"]
+  style G stroke:#1d6b48
+  style U stroke:#8a5a00,stroke-dasharray:4 3
+        </pre>
+        <figcaption>The only quota this workstream spends. Two providers, because two is what AWSF reaches without W16 — and because a two-model fusion is the cheapest thing that can prove per-phase attribution is real.</figcaption>
+      </figure>
+
+      <h4>21. One bounded two-provider live fusion</h4>
+      <p class="sub">Serves <code class="serves">AC-7</code></p>
+      <p>N = 2 on the two routes AWSF already has, at T2, within the shipped ceiling of 5 with a review phase — four calls, one raise act unnecessary. One drive, recorded, not a campaign.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> One live fusion completes: two opinions, the host composition, one fused candidate, one inverted review</li>
+        <li><code class="status">[]</code> Each phase's provider, resolved model and cost appear as separate rows — a reader can see which model said what and what each turn cost</li>
+        <li><code class="status">[]</code> The run-failure surface shows per-phase rows; there is no composite row anywhere, because there is no composite</li>
+        <li><code class="status">[]</code> The captured evidence lands as a committed fixture with a provenance note saying which bytes are captured and which are transformed, and carries no run id, session id, attempt id or credential-shaped value (AGENTS.md invariants 1 and 9)</li>
+        <li><code class="status">[]</code> What the drive cost is recorded in the Amendment — in calls, and in whatever the routes can honestly say about money</li>
+      </ul>
+
+      <h4>22. Retire <code>composite-fusion</code>, or record why it stays</h4>
+      <p class="sub">Serves <code class="serves">INV-5</code></p>
+      <p>A disabled adapter kind naming a module that does not exist, kept alive for an option this plan refused. The evidence for retiring it is already in the tree; the cost is that half of it is a protected file, so it needs an owner commit.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> The evidence is stated plainly: <code>registry.ts</code> returns <code>null</code> for <code>composite-fusion</code> and calls it v1.1 scope, the <code>adapters/fusion.ts</code> its schema comment names does not exist, <code>awsf.config.yaml</code> declares it <code>enabled: false</code>, and under the chosen fork no composite adapter is ever constructed</li>
+        <li><code class="status">[]</code> <code>KNOWN_ADAPTER_KINDS</code> drops <code>composite-fusion</code>, its schema comment loses the <code>adapters/fusion.ts</code> sentence, and <code>registry.ts</code>'s dead case goes with it</li>
+        <li><code class="status">[]</code> <code>core/src/quota/routes.ts</code>'s composite branches and their two reason codes are removed, and the tests that covered them are removed rather than skipped</li>
+        <li><code class="status">[]</code> <span class="gate">G10-C</span>: the <code>adapters.fusion</code> entry leaves <code>awsf.config.yaml</code> as an <strong>owner-authored commit</strong>, before the code change lands — <code>path-policy</code> rejects <code>protected-path</code> independently of the write globs, and inventing an owner-authorized protected-change mechanism to route around it is the boundary working</li>
+        <li><code class="status">[]</code> If the owner keeps the declaration, that is recorded with its reason and this row closes <code>[f]</code> rather than being quietly dropped</li>
+      </ul>
+
+      <h4>23. Testing Strategy, and the workstream close</h4>
+      <p class="sub">Serves <code class="serves">AC-7</code> · <code class="serves">INV-4</code></p>
+      <p>The suite is not the acceptance bar for this milestone — the one live drive is. What the suite must show is that removing the composite declaration broke nothing, and that every claim this plan made is still asserted by a test somebody has seen fail.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — green, with the count recorded, after the retirement and with no skipped test left behind</li>
+        <li><code class="status">[]</code> <code>npm run typecheck</code> and <code>npm run lint</code> — clean</li>
+        <li><code class="status">[]</code> Every AC row above is asserted by a named test, and every INV row by a named test or meta-test; the closing Amendment lists them</li>
+        <li><code class="status">[]</code> The spine's <code>specs/awsf-v2-plan.html</code> § Milestone M10 / W10 marker and checklist flip to <code>[x]</code>, and <code>specs/tickets/awsf-v2-plan/W10.md</code>'s <code>state</code> flips to <code>done</code>, in the same commit — <strong>this is the only task that writes to the spine</strong></li>
+        <li><code class="status">[]</code> Or, if the workstream closed unbuilt, the spine records the evidence gap by name instead and the marker does not move — which the spine already sanctions, and which is not a failure</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        Ending at a recorded evidence gap is a legitimate outcome. Claiming per-role supervision the broker never saw is not.
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== GLOBAL VALIDATION ===== -->
+  <section id="validation">
+    <h2>Validation Commands</h2>
+    <p>Execute these commands to validate the entire plan is complete:</p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> <code>npm run test:unit</code> — the whole suite green at the closing SHA, count recorded, no skips introduced by this workstream</li>
+      <li><code class="status">[]</code> <code>npm run typecheck</code> — clean</li>
+      <li><code class="status">[]</code> <code>npm run lint</code> — clean</li>
+      <li><code class="status">[]</code> <code>node --test core/test/unit/workflow/fusion-compile.test.ts</code> — an N-model phase list compiles for N = 2..5 and <code>minimumCalls</code> is N + 1 (AC-1)</li>
+      <li><code class="status">[]</code> <code>node --test core/test/unit/workflow/fusion-registrations.test.ts</code> — three <code>agent-phase</code> registrations exist before the first <code>GO</code>, and the composite path is refuted (AC-2, INV-1, INV-3)</li>
+      <li><code class="status">[]</code> <code>node --test core/test/unit/contracts/opinion-output.test.ts</code> — an opinion cannot claim an artifact and a <code>writes: []</code> role cannot produce one (AC-3, INV-2)</li>
+      <li><code class="status">[]</code> <code>node --test core/test/unit/workflow/debate-compile.test.ts</code> — every cell of the <code>R × N</code> round table compiles to <code>minimumCalls = R × N</code>, and a debate carries no writer and no build output (AC-8, AC-9)</li>
+      <li><code class="status">[]</code> <code>node --test core/test/unit/workflow/delegation-compile.test.ts</code> — every fixture graph compiles to the expected order or is refused by its own named error, and stage two rebuilds byte-identically from the journalled plan (AC-10, AC-11)</li>
+      <li><code class="status">[]</code> <code>node --test core/test/unit/workflow/delegation-owner-stop.test.ts</code> — stage two refuses to start without the owner act, proven to stop rather than documented as stopping (INV-6)</li>
+      <li><code class="status">[]</code> <code>node --test core/test/unit/meta/fusion-spawn-fence.test.ts</code> — no module this workstream adds imports <code>node:child_process</code> or <code>raise.ts</code> (INV-1)</li>
+      <li><code class="status">[]</code> <code>node --test core/test/unit/meta/ticket-plan-sync.test.ts</code> — this plan, its build-prompts file and its ticket set agree, including the byte-identity leg and the identifier-spine mirror</li>
+      <li><code class="status">[]</code> <code>node --test core/test/unit/meta/quota-fence.test.ts</code> — the transitive fence still holds with the new workflow modules in the tree</li>
+      <li><code class="status">[]</code> One live two-provider fusion completed, with per-phase provider, model and cost recorded (AC-7) — the only row on this list that spends quota</li>
+    </ul>
+    <div class="loop">
+      🔁 <strong>The plan is not complete until every box is checked and every command passes. If for some reason a step is not possible to complete, mark it with [f] and move on if possible.</strong>
+    </div>
+  </section>
+
+  <!-- ===== QUESTIONABLES ===== -->
+  <section id="questionables">
+    <h2>Questionables</h2>
+    <p><strong>Seven of the eight are decided.</strong> The owner reviewed this plan on 2026-09-15 and took the recommended option on Q1 through Q7; each is marked <em>Decided</em> below and is now a constraint rather than a question. <strong>Q8 was then decided the same day, against the recommendation</strong>, and the plan is rebuilt around that answer rather than annotated with it &mdash; two new milestones, M4 and M6. It opened one new question, <strong>Q9</strong>, which was decided the same day. <strong>Nothing is outstanding.</strong> Q9 also corrected a wrong clause in its own recommendation, which is recorded there rather than quietly dropped. The recommendations are kept beneath each decision rather than replaced by it, so a later session can see what the choice was made against.</p>
+    <p>Two of the seven carry consequences worth restating where they bite. <strong>Q2 defers the routing milestone rather than merely gating it</strong>: this workstream builds up to the merge gate and then stops until <code>task3.5</code> lands, so <span class="gate">G10-B</span> is a planned stopping point rather than a risk. <em>The Q8 decision then moved where that stop falls:</em> debate became M4 and needs nothing from the routing work, so the pre-merge run is now <strong>M1 through M4, ending at task 13</strong>, and M5 is the first milestone the merge blocks. <strong>Q7 makes a roster durable config</strong>, so changing which models are consulted is an owner-authored commit to a protected file rather than a flag on a command.</p>
+    <figure>
+      <pre class="mermaid">
+flowchart TD
+  Q2["Q2 · wait for the merge?"] --> M4B["M4 blocked"]
+  Q6["Q6 · who owns compiled admission?"] --> M3B["M3 shape"]
+  Q1["Q1 · which tier?"] --> ALL["every recipe"]
+  Q5["Q5 · review inside or outside?"] --> ALL
+  Q3["Q3 · inherited from W16 M4"] --> M4B
+  Q4["Q4 · retire composite-fusion?"] --> M5B["M5 close"]
+  Q7["Q7 · roster in config or per-run?"] --> M4B
+  Q8["Q8 · which commands?"] --> SCOPE["workstream scope"]
+  style Q2 stroke:#a5311e,stroke-width:2px
+  style Q6 stroke:#a5311e,stroke-width:2px
+      </pre>
+      <figcaption>The two in red are sequencing decisions and they are the ones worth taking first — everything else can be decided while the earlier milestones build.</figcaption>
+    </figure>
+
+    <details data-review-options="T2 always (recommended)|T1 for opinion-only rounds|Raise T0's ceiling to N">
+      <summary>Q1 — What tier is a fusion, when its opinion phases are read-only and only the fuser writes?</summary>
+      <p class="qa-answer"><strong class="decided">Decided 2026-09-15 &mdash; T2 always.</strong> <strong>Recommendation: T2 always.</strong> By blast radius an opinion round is T0-shaped, and the spine expected that mapping. But <code>tiers.ts</code>'s own comment defines T0 as <em>"one call and no second opinion"</em>, and an N-way opinion round is precisely a second opinion — so raising T0's ceiling to buy one deletes the sentence that defines the tier for every T0 recipe in the catalogue. T1 is worse: it implies localized reversible mutation, which an opinion round does not perform, and its ceiling of 3 caps the roster at N = 2. T2 is the only tier whose ceiling arithmetic works from N = 2 to N = 4 without a config change, and a fusion is a T2-<em>cost</em> act whatever its blast radius. The cost of the recommendation: a read-only three-model consultation is priced as if it could rewrite the execution layer.</p>
+    </details>
+
+    <details data-review-options="Wait for the merge, stop after M3 (recommended)|Build M4 on main and absorb the conflicts|Defer W10 entirely until the merge lands">
+      <summary>Q2 — Does W10 stop after M3 and wait for the <code>task3.5</code> merge, or build M4 against <code>main</code>?</summary>
+      <p class="qa-answer"><strong class="decided">Decided 2026-09-15 &mdash; Wait for the merge, stop after M3.</strong> <strong>Recommendation: build M1 through M3, then stop.</strong> M1, M2 and M3 are entirely new files under <code>core/src/workflow/fusion/</code>, <code>core/src/contracts/</code> and <code>prompts/</code>, none of which either branch touches — they are unblocked today and they are where every zero-quota proof lives. M4 edits <code>production-run.ts</code> and <code>review-routing.ts</code>, both already heavily modified on <code>task3.5</code>; <code>production-run.ts</code> is the largest of the seventeen conflicting files. Building M4 first adds new conflicts to a merge another core workstream is already waiting on. The cost of waiting: W10 sits half-built, which for an optional workstream is a tolerable state and for a core one would not be.</p>
+    </details>
+
+    <details data-review-options="Inherit whatever W16 M4 decides (recommended)|Widen providerPairFrom here|Never carry a review inside a fusion recipe">
+      <summary>Q3 — What happens to review inversion when a fusion roster has three or more distinct providers?</summary>
+      <p class="qa-answer"><strong class="decided">Decided 2026-09-15 &mdash; Inherit whatever W16 M4 decides.</strong> <strong>Recommendation: inherit.</strong> <code>providerPairFrom</code> refuses three providers by design, and <code>awsf-v2-w16-openrouter-adapter</code> § M4 already owns the decision and lays out the cases — it names widening the rule a Questionable rather than a task, for the same reason. Two workstreams deciding one rule is how the rule ends up with two answers. W10's own duty is narrower and it is task 12: make the refusal name the third provider and the phase it came from, so a roster that cannot carry a review says which slot is the reason. The cost: until W16 settles it, a fusion above two providers simply cannot carry a review phase, which is exactly what Q5 is about.</p>
+    </details>
+
+    <details data-review-options="Retire it at M5 (recommended)|Keep it declared and disabled|Retire the code, keep the config entry">
+      <summary>Q4 — Is the disabled <code>composite-fusion</code> adapter kind retired, and on what evidence?</summary>
+      <p class="qa-answer"><strong class="decided">Decided 2026-09-15 &mdash; Retire it at M5.</strong> <strong>Recommendation: retire it, at M5 and not before.</strong> The evidence is already in the tree and it is not ambiguous: <code>registry.ts</code> returns <code>null</code> for the kind and calls it v1.1 scope, the <code>adapters/fusion.ts</code> module its schema comment names has never existed, <code>awsf.config.yaml</code> declares it <code>enabled: false</code>, and under the chosen fork no composite adapter is ever constructed. What it currently costs is real: eight branches in <code>core/src/quota/routes.ts</code> and two reason codes serving an adapter that cannot be built. <strong>Why at M5 rather than at M1:</strong> deleting the declaration before fusion exists would be deleting the option, and this workstream is allowed to end at M1. <strong>What makes it non-trivial:</strong> half of it is <code>awsf.config.yaml</code>, a protected file, so it needs an owner-authored commit — <span class="gate">G10-C</span>. If the owner prefers to keep the declaration as an open door, that is a legitimate answer and the row closes <code>[f]</code> with its reason.</p>
+    </details>
+
+    <details data-review-options="Review inside the recipe at N=2, outside above it (recommended)|Always a separate review run|Never review a fused candidate automatically">
+      <summary>Q5 — Does a fusion recipe carry its own review phase, or is review a separate run over the fused candidate?</summary>
+      <p class="qa-answer"><strong class="decided">Decided 2026-09-15 &mdash; Review inside the recipe at N=2, outside above it.</strong> <strong>Recommendation: inside at N = 2, outside above it, and say which in the roster.</strong> At N = 2 the recipe has exactly two distinct providers, inversion is well-defined, and four calls fit the shipped T2 ceiling — so an inline review is free of every obstacle and strictly better than shipping an unreviewed candidate. At N ≥ 3 the recipe cannot carry a review at all until Q3 is settled, and the honest shape is then a fusion run that produces a candidate followed by a separate <code>build-review</code> or <code>awsf review</code> pass over it. The cost of the split: two different answers to "how is a fused candidate reviewed", which is exactly the kind of drift this repository's fences exist to catch — so whichever form is used must be recorded in the roster rather than inferred from N.</p>
+    </details>
+
+    <details data-review-options="Whichever lands first owns it (recommended)|W17 owns it, W10 waits|Each builds its own">
+      <summary>Q6 — Who owns the compiled-recipe admission path, W10 or W17?</summary>
+      <p class="qa-answer"><strong class="decided">Decided 2026-09-15 &mdash; Whichever lands first owns it.</strong> <strong>Recommendation: whichever lands it first owns it; the second consumes it.</strong> The generators genuinely do not share — ticket bodies and a model roster have nothing in common, and an abstraction over both would be a taxonomy nothing reads. The admission half is one problem twice: a compiled recipe that is not in <code>WORKFLOW_RECIPES</code> needs a workflow id, a ceiling admission, a binding digest and a byte-identical rebuild on resume. Building that twice gives the repository two answers to one question. W17 is core and W10 optional, so the expected order is W17 first — but making it a blocking gate would let an optional workstream stall on a core one's schedule, which is backwards. <span class="gate">G10-A</span> states it in both directions. The cost: task 7's prompt has to be written to work either way, which makes it longer than it would otherwise be.</p>
+    </details>
+
+    <details data-review-options="Durable config, owner-committed (recommended)|A per-run argument|Both, with config as the default">
+      <summary>Q7 — Is a fusion roster durable configuration, or an argument to one run?</summary>
+      <p class="qa-answer"><strong class="decided">Decided 2026-09-15 &mdash; Durable config, owner-committed.</strong> <strong>Recommendation: durable config, and this is less of a choice than it looks.</strong> <code>routing.phase_routes</code> is a <code>Record</code> keyed by phase id in <code>awsf.config.yaml</code>, and per-phase model and effort selection already lives there — so a roster expressed any other way would be a second routing surface beside the reviewed one, which is what <code>pi-codex.ts</code>'s pinned-provider comment already refuses on a smaller scale. The consequence is worth stating plainly rather than discovering: <strong>changing a fusion roster is an owner-authored commit to a protected file, not a flag on a command.</strong> That is slower than the hand tool, where the roster is a YAML path passed on the command line, and the owner should decide knowing that. The middle option — config as default, per-run override — is deferred rather than rejected: it is a real convenience, but it needs a rule for what a run may override and what it may not, and inventing that rule inside an optional workstream is how a routing surface grows a second owner.</p>
+    </details>
+
+    <details data-review-options="Opinion and fusion only (recommended)|Add debate|Add collaborate">
+      <summary>Q8 — Which of the tool's six commands does this workstream build?</summary>
+      <p class="qa-answer"><strong class="decided">Decided 2026-09-15 &mdash; all six.</strong> The owner overrode the recommendation below, and the plan is rebuilt around the decision rather than annotated with it. <strong>Read precisely, "all six" is two new milestones.</strong> <code>/fh-only</code> and <code>/fh-auto-validate</code> are shipped capabilities under other names, delivered by recording the mapping rather than by writing them twice — building them again is the duplication this plan's own never-do list warns about. <code>/fh-opinion</code> and <code>/fh-fusion</code> were already in scope. So the decision adds <strong>M4, debate</strong> and <strong>M6, collaborate</strong>, taking the workstream from 16 tasks to 23. <strong>One of the two refusals below was wrong and is withdrawn</strong>, stated in M6 rather than quietly fixed: the objection to collaborate said flattening a delegation graph throws away parallelism, and AWSF's phase loop is sequential, so there is no parallelism to throw away. The real obstacle was reproducibility, and two stages solve it. <strong>The debate objection stands and is now priced rather than refused</strong> — only a two-model two-round debate fits the shipped ceiling, so every larger one is a deliberate act with a raised ceiling behind it. <strong>Superseded recommendation: <code>/fh-opinion</code> and <code>/fh-fusion</code> only.</strong> The coverage table in the Notes gives the reasoning per command. In short: two of the six are already shipped capabilities under different names (<code>/fh-only</code> is a phase route override, <code>/fh-auto-validate</code> is <code>build-review</code> with correction rounds); opinion is a fusion recipe with the fuser removed, so it costs nothing extra; debate is expressible but priced out — three models over three rounds is nine calls against a shipped T2 ceiling of five; and collaborate is a genuine structural mismatch, because <code>compileWorkflow</code> takes an ordered phase <em>array</em> and a delegation DAG is not one. <strong>Superseded: the owner decided all six on 2026-09-15.</strong> Debate is M4 and collaborate is M6; the two already-shipped commands are delivered as a recorded mapping rather than written twice.</p>
+    </details>
+
+    <details data-review-options="Two tasks, two ceilings (recommended)|One task, one ceiling, owner checkpoint inside|Decide per collaboration at selection time">
+      <summary>Q9 — Are a collaboration's two stages one task or two?</summary>
+      <p class="qa-answer"><strong class="decided">Decided 2026-09-15 &mdash; two tasks, two ceilings.</strong>
+      The recommendation is taken, and <strong>one clause of its stated cost was wrong and is corrected here</strong>
+      rather than carried into a task.</p>
+      <p><strong>What was wrong.</strong> The recommendation said the delegation plan has to be addressable across
+      tasks, <em>"which the journal already makes possible"</em>. It does not. The one mechanism that crosses tasks is
+      <code>awsf seed</code> / <code>adopt</code>, and it carries <strong>Git objects only</strong>:
+      <code>CandidateAdoptionEvidenceSchema</code> pins <code>sourceEvidenceCopied: Literal(false)</code> and
+      <code>sourceApprovalsCopied: Literal(false)</code>, and its header states it <em>"never copies a source request,
+      envelope, gate row, approval, provider session, or attempt-private file"</em>
+      (<code>core/src/contracts/candidate-adoption.ts:9</code>). An envelope is precisely what does not cross, and the
+      two literal-false fields exist to keep it that way.</p>
+      <p><strong>What is true instead, and it is a better route.</strong> The delegation plan crosses as a
+      <strong>committed artifact</strong>, not as an envelope. Stage one validates and journals the architect's
+      envelope inside its own task, then the host writes the validated plan into the worktree and commits it as the
+      candidate. <code>seed</code> carries that candidate SHA into task two exactly as designed &mdash; no contract
+      change, no new mechanism, and <code>sourceEvidenceCopied: false</code> stays honest because nothing is copied:
+      task two reads a committed file out of its own seeded tree. Reproducibility gets <em>stronger</em>, not weaker:
+      stage two compiles from a blob at a known SHA, which is more durable than a journal row and already
+      digest-addressable by Git.</p>
+      <p><strong>And the owner act comes for free.</strong> <code>seed.ts:39</code> refuses a non-interactive terminal
+      outright &mdash; <code>CandidateSeedRejected("requires an interactive owner terminal")</code>. That is
+      <code class="inv">INV-6</code> already enforced by a shipped command, so the stop between the stages is
+      <strong>structural rather than new code</strong>, and M6 asserts it rather than building it.</p>
+      <p><strong>What the decision still costs.</strong> Two tasks means two ceilings, which is the point &mdash; with
+      three planners and four delegated tasks, one task would need <code>(3 + 1) + (4 + 1) = 9</code> calls against a
+      shipped T2 ceiling of 5, and a single raise would have to cover both stages before either had run. It also means
+      a stage-one plan the owner declines costs nothing further. The price is that a collaboration is no longer one
+      lineage in the journal, so "which plan did this run execute" is answered by the seeded candidate SHA rather than
+      by a task id &mdash; which M6 task 19 must prove rather than assume.</p>
+      <p><strong>Superseded recommendation text:</strong> two tasks, two ceilings &mdash; with the addressability
+      claim that this decision corrects.</p>
+    </details>
+  </section>
+
+  <!-- ===== NOTES ===== -->
+  <section id="notes">
+    <h2>Notes</h2>
+
+    <h3>The tool's command surface, mapped</h3>
+    <p>The owner already drives fusion this way by hand, so the tool's commands are the requirements for this workstream. Here is every one of them against what AWSF can express under the chosen fork.</p>
+    <div class="wrap">
+    <table>
+      <thead><tr><th>Command</th><th>What it does</th><th>Under (c)</th><th>Verdict</th></tr></thead>
+      <tbody>
+        <tr><td><code>/fh-opinion</code></td><td>Every model answers independently, strict read-only tools.</td><td>A fusion recipe with the fusing phase removed: N opinion phases, <code>minimumCalls = N</code>, no writer at all.</td><td><strong>Built.</strong> It is <code>compileFusion</code> with one flag, and it costs nothing beyond the recipe this plan already builds.</td></tr>
+        <tr><td><code>/fh-fusion</code></td><td>Every slot researches read-only; one fresh temporary FUSION agent is the sole writer; the result is synchronised to every model with exact ACK evidence.</td><td>N opinion phases, one host <code>opinion-context</code> composer, one fusing phase. <strong>The ACK round has no equivalent and needs none:</strong> it exists because the tool keeps a persistent conversation per slot that must be told what was decided, and AWSF's phases are <code>continuity: none</code> — the envelope chain already carries forward what the ACK round exists to deliver. Dropping it also removes N further calls plus retries from the price.</td><td><strong>Built.</strong> This is the workstream.</td></tr>
+        <tr><td><code>/fh-debate</code></td><td>N-way read-only debate, N rounds, no judge.</td><td>Expressible — <code>rounds × N</code> opinion phases with each round's composer feeding the next. Priced out: three models over three rounds is nine calls against a shipped T2 ceiling of five, and five over three is fifteen. Every round also has zero correction margin.</td><td><strong>Built — milestone M4.</strong> The ceiling conversation now happens on purpose: the plan prices every roster and round count, and the largest the tool can express (5 models, 4 rounds) is exactly 20 calls, which is <code>MAX_CALL_CEILING</code> to the call.</td></tr>
+        <tr><td><code>/fh-collaborate</code></td><td>Every agent plans read-only, the architect merges the plans into one validated delegation DAG, tasks execute as dependencies clear, exactly one shared-checkout writer at a time, final integration turn.</td><td><strong>Corrected 2026-09-15.</strong> The earlier reading — that flattening a delegation graph to a topological order throws away the parallelism that is the point — was wrong, because AWSF's phase loop awaits every turn and has no parallelism to lose. The true obstacle is <em>reproducibility</em>: the graph is the architect's answer, so a single-stage compile would make the phase list depend on a provider turn. Two stages solve it — the plan is journalled first, and stage two compiles from recorded bytes. The single-writer property AWSF gets for free is the same property the tool needs a lease for, so the cheap half is already had and the expensive half is the scheduler.</td><td><strong>Built — milestone M6, and the refusal opposite is withdrawn.</strong> Flattening costs nothing here because the phase loop is sequential; the real obstacle was that the graph is a model's answer rather than a function of config, and two stages with a journalled plan between them fix it.</td></tr>
+        <tr><td><code>/fh-only</code></td><td>Address one slot directly.</td><td>A single-phase run with a phase route override. That is what <code>routing.phase_routes</code> already is.</td><td><strong>Already shipped</strong>, under a different name, once the merge lands.</td></tr>
+        <tr><td><code>/fh-auto-validate</code></td><td>Gate-first ARCHITECT plus Main build loop.</td><td><code>build-review</code> and <code>simple-sdlc</code>: a build phase, host gates, an inverted review, and a correction allowance. Gate execution is host-only in both systems — the tool's own permission layer raises <code>E_POLICY_CEILING_UNENFORCEABLE</code> for a gate profile, and AWSF runs gates as <code>kind: "code"</code> phases that reserve nothing.</td><td><strong>Already shipped.</strong></td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h3>The dependency on the OpenRouter route, stated honestly</h3>
+    <p><strong>Fusion does not need W16 to be built. It needs W16 to be worth running above two models — and above two models it cannot be routed at all without it.</strong> That is three claims and they are different.</p>
+    <ul>
+      <li><strong>Not a build dependency.</strong> Every offline proof in M1, M2 and M3 runs on the fixture route, and the live drive in M5 is deliberately N = 2 on the two providers AWSF already reaches. W10 can complete without W16 existing.</li>
+      <li><strong>A hard routing dependency at N ≥ 3.</strong> <code>pi-codex.ts</code>'s <code>SAFE_MODEL_SELECTOR</code> refuses a <code>/</code> in a model selector, deliberately and with a rationale that is still correct. Every model in the tool's own five-slot stack is a slash form. Without a second pi-backed adapter, AWSF has exactly two providers and a fusion roster has exactly two slots.</li>
+      <li><strong>A value dependency, and this is the real one.</strong> A single-turn OpenRouter call through pi cost <strong>$0.0000216</strong>, measured 2026-09-15, and reported a provider-supplied cost rather than a client-side estimate. At that price an opinion slot is free in every sense that matters, which is what turns "ask five models before writing a line" from extravagant into obvious. Frontier-only routing never made cheap opinion and debate slots economically sensible; open-weight models through a key-billed route do. <strong>A two-model fusion on two subscription routes is <code>build-review</code> with extra phases.</strong> The version worth building is the one W16 unlocks.</li>
+    </ul>
+
+    <h3>What this workstream inherited from the tool, and what it owes it</h3>
+    <p><code>core/src/adapters/env.ts</code> is a credited MIT port of v1's environment-allowlist filter. Reading the original shows what else came with that discipline and did not travel: the allowlist is three entries — path, home, temp — with locale and timezone <em>injected after filtering</em> so an ambient value cannot override them, and a value scan on top, because an allowlisted key holding credential-shaped bytes is a redaction failure rather than something to pass through quietly. v1 also encodes its permission ceilings as explicit deny lists rather than relying on a child's defaults, on the stated grounds that a default which widens in a future release would silently widen the ceiling. Both are ideas this repository already agrees with; neither is a task here. The debt worth recording is the attribution, which is already in the file.</p>
+
+    <h3>Risks</h3>
+    <div class="wrap">
+    <table>
+      <thead><tr><th>Risk</th><th>Why it is real</th><th>What holds it</th></tr></thead>
+      <tbody>
+        <tr><td><strong>R1 — the workstream is built and never used</strong></td><td>At N = 2 it is barely distinguishable from <code>build-review</code>, and above N = 2 it is blocked on W16 and on Q3. An optional workstream that graduates into disuse has spent its cost for nothing.</td><td>M1 is a decision milestone and the spine sanctions closing unbuilt. The honest trigger for stopping is W16 not landing, and it should be checked at M3's close rather than discovered at M5.</td></tr>
+        <tr><td><strong>R2 — a second routing surface grows</strong></td><td>A roster is a natural place to put "which model, which effort", which is what <code>phase_routes</code> already is. Two surfaces for one decision drift apart at the first change.</td><td>Task 11 routes every slot through the existing <code>requestedPhaseRoute</code>/<code>effectivePhaseRoute</code> pair, and Q7 records that a roster is config rather than an argument.</td></tr>
+        <tr><td><strong>R3 — the ceiling conversation happens by accident</strong></td><td>N = 5 does not fit the shipped T2 ceiling. The tempting fix is to raise <code>risk.call_ceiling.T2</code> quietly, and that number bounds every T2 recipe in the catalogue, not just this one.</td><td>The refusal is a compile-time refusal naming the shortfall, and <code>awsf raise</code> requires an interactive terminal. Task 9 asserts no module here reaches it.</td></tr>
+        <tr><td><strong>R4 — an opinion phase becomes a second builder</strong></td><td>The shortest path from "a model that has an opinion" to "a model that implements it" is one schema change, and it would be made for a good reason.</td><td>Two independent refusals — the schema admits no artifact claim, and the role's empty write globs make any claimed path an <code>outside-write-globs</code> violation — plus a test asserting exactly one writer per recipe at every N.</td></tr>
+        <tr><td><strong>R5 — the plan's own claims about the tool go stale</strong></td><td>The tool lives in two other repositories the owner actively develops. A headless entry point could appear next month, which would reopen option (b).</td><td>Every claim about the tool in this document names what was read and when. If a headless entry appears, (b) becomes buildable and the refusal above should be revisited as an Amendment rather than silently ignored — but (c) would still be the cheaper answer, because it needs no new supervision at all.</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h3>Three things a later session will be tempted to do, and should not</h3>
+    <ul>
+      <li><strong>Do not describe the gap as ledger arithmetic.</strong> <code>settle(id, spent)</code> exists and handles the halfway composite exactly. The gap is that the launcher barrier's <code>ReservationLedger</code> seam has no method that takes an amount, so no launch can reach <code>settle</code> with one. Saying it the other way suggests a ledger redesign that is not needed.</li>
+      <li><strong>Do not register a fusion recipe in <code>WORKFLOW_RECIPES</code>.</strong> One line satisfies <code>catalog.ts</code>'s module-load assertion, and it makes <code>minimumCallsFor</code> and <code>correctionsFundableFor</code> report a number that is wrong for every roster but one.</li>
+      <li><strong>Do not relax <code>SAFE_MODEL_SELECTOR</code> in <code>pi-codex.ts</code> to reach a second provider.</strong> Its comment explains exactly why the slash is refused: <code>pi --model</code> accepts a <code>provider/id</code> form, so a slash names a second provider from inside a flag already told which provider to use, and <code>--provider</code> loses. A different provider through the same binary is a different adapter — which is W16, and it is being planned in parallel for this reason.</li>
+    </ul>
+  </section>
+
+  <!-- ===== AMENDMENTS ===== -->
+  <section id="amendments">
+    <h2>Amendments</h2>
+    <p class="muted">Append-only. Populated by the Update Plan and Update References workflows as the workstream executes.</p>
+    <details open>
+      <summary>2026-09-15 &mdash; owner review applied: seven Questionables decided, one left open</summary>
+      <p>A <code>plan-sota-review v1</code> block was exported from this plan's own review layer and applied through
+      the Review Plan workflow, Mode B. <strong>Seven verdicts, no proposed statuses, no annotations.</strong> Every
+      verdict took the recommended option, so nothing in the Implementation Phases, the Identifier Spine or the
+      ticket set required revision; the changes below are the decisions being recorded where the next session reads
+      them.</p>
+      <table>
+        <thead><tr><th>Q</th><th>Decision</th><th>Where it now bites</th></tr></thead>
+        <tbody>
+          <tr><td>Q1</td><td>T2 always</td><td>Every fusion recipe. The Solution section's tier argument stands as written; T0's <em>"one call and no second opinion"</em> definition is not weakened for the rest of the catalogue.</td></tr>
+          <tr><td>Q2</td><td>Wait for the merge, stop after M3</td><td><strong>M4 is now deferred by decision rather than blocked by circumstance.</strong> <span class="gate">G10-B</span> is a planned stopping point. T10, M3's closing task, is where the workstream pauses.</td></tr>
+          <tr><td>Q3</td><td>Inherit whatever W16 M4 decides</td><td>T12. This workstream adds no inversion rule; its only duty is making the three-provider refusal name its culprit.</td></tr>
+          <tr><td>Q4</td><td>Retire <code>composite-fusion</code> at M5</td><td>T15, behind <span class="gate">G10-C</span> &mdash; the owner's own commit removing <code>adapters.fusion</code> from the protected config comes first.</td></tr>
+          <tr><td>Q5</td><td>Review inside at N = 2, outside above it</td><td>T12 and the roster contract: which form a run uses is recorded in the roster rather than inferred from N.</td></tr>
+          <tr><td>Q6</td><td>Whichever lands first owns it</td><td>T07 and <span class="gate">G10-A</span>, already written to work in both directions. Combined with Q2, the expected order is now W17 first.</td></tr>
+          <tr><td>Q7</td><td>Durable config, owner-committed</td><td>T11. Changing a roster is an owner-authored commit to a protected file, never a flag. The middle option stays deferred rather than rejected.</td></tr>
+        </tbody>
+      </table>
+      <p><strong>Q8 was left without a verdict and remains open.</strong> It bounds scope rather than shape: the plan
+      builds the two commands it recommends, so confirming it changes nothing and widening it adds a milestone rather
+      than editing one. No task waits on it.</p>
+      <p><strong>Read together, Q2 and Q6 change this workstream's shape more than either does alone.</strong> W10 now
+      stops after M3 and the compiled-recipe admission path is owned by whoever lands it first &mdash; which, with M4
+      deferred behind the merge that W17 also waits on, means W17 is very likely to reach it first and W10 to consume
+      it. T07's prompt already handles that direction, so nothing needs rewriting; what changes is the expectation,
+      and a session reading T07 cold should expect to <em>consume</em> rather than build.</p>
+      <p><strong>Resolved, and not a plan decision:</strong> four hard-coded corpus counts go red the moment these artifacts exist. The owner applied the first set by hand; the Q8 rebuild moved three of them again by seven tickets and this session carried those forward. Final state: <code>plan-kind.test.ts:32</code> at 13 deep plans, <code>api/routes.test.ts:79</code> at 280 tickets, <code>backlog.test.ts:112</code> at 55 blocked, and <code>dashboard-backlog-selection.test.ts</code> at 9 ready and 55 blocked. The baseline was verified green with these artifacts moved aside, so all four are the ordinary cost of a new deep plan rather than a defect in this one. <strong><code>npm run test:unit</code>: 1815/1815, exit 0.</strong></p>
+    </details>
+    <details open>
+      <summary>2026-09-15 &mdash; Q8 answered against the recommendation: all six commands, two new milestones, one refusal withdrawn</summary>
+      <p>The owner answered Q8 directly rather than through a review block: <strong>all six of the tool's commands.</strong>
+      The plan is rebuilt around that answer. <strong>Read precisely, it adds two milestones and seven tasks</strong> &mdash;
+      <code>/fh-only</code> and <code>/fh-auto-validate</code> are shipped capabilities under other names and are
+      delivered as a recorded mapping rather than written a second time, and <code>/fh-opinion</code> and
+      <code>/fh-fusion</code> were already in scope.</p>
+      <div class="wrap">
+      <table>
+        <thead><tr><th>Change</th><th>What it is</th></tr></thead>
+        <tbody>
+          <tr><td><strong>M4 is new &mdash; debate</strong></td><td>Tasks 11&ndash;13. <code>R</code> rounds over <code>N</code> models, a host composer per round, no judge and therefore no writer. It sits <em>before</em> the merge gate because it needs nothing from the routing milestone, which lengthens the useful run before the Q2 stopping point.</td></tr>
+          <tr><td><strong>M6 is new &mdash; collaborate</strong></td><td>Tasks 17&ndash;20. Two compiled recipes with an owner act between them: stage one produces a delegation plan as a journalled envelope, stage two compiles from those recorded bytes.</td></tr>
+          <tr><td><strong>M4 and M5 renumbered</strong></td><td>Routing became M5 (tasks 14&ndash;16); the live drive and close became M7 (tasks 21&ndash;23). The workstream is now 7 milestones and 23 tasks, up from 5 and 16.</td></tr>
+          <tr><td><strong>Five new declarations</strong></td><td><code class="inv">INV-6</code> and <code class="ac">AC-8</code>&ndash;<code class="ac">AC-11</code>, covering the no-writer debate, the ceiling arithmetic, the journalled delegation plan and the graph validator.</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <p><strong>One refusal is withdrawn, and the reason it was wrong is worth keeping.</strong> The plan refused
+      collaborate on the grounds that flattening a delegation graph to an ordered phase array throws away the parallelism
+      that is the point. That is false for this factory: the phase loop awaits every turn, so AWSF has no parallelism to
+      lose and a topological order executes exactly as a graph would. <strong>The true obstacle was reproducibility</strong>
+      &mdash; the graph is the architect's answer, so a single-stage compile would make the phase list depend on a provider
+      turn, which <code class="inv">INV-5</code> forbids. Two stages solve it, because a journalled envelope <em>is</em>
+      recorded bytes. The tool's own writer lease is still not needed: sequencing already gives what the lease buys.</p>
+      <p><strong>The debate objection stands, and is now priced rather than refused.</strong> <code>minimumCalls</code> is
+      exactly <code>R &times; N</code>. Only a two-model two-round debate fits the shipped T2 ceiling of 5, so every larger
+      one is a deliberate act with a raised ceiling behind it. The bound itself still never moves: five models over four
+      rounds is <strong>exactly 20 calls</strong>, which is <code>MAX_CALL_CEILING</code> to the call, so no roster the
+      tool can express could ever require raising it.</p>
+      <p><strong>What this costs, stated plainly:</strong> an optional workstream nothing waits on grew by 44%. M6 is the
+      most expensive milestone in it, and it is the one whose earlier refusal this session got wrong &mdash; so it is also
+      the one carrying the least prior thought. The Q2 decision still holds: M1 through M4 build now, and everything from
+      M5 waits on the <code>task3.5</code> merge.</p>
+      <p><strong>One new question:</strong> <code>Q9</code> &mdash; whether a collaboration's two stages are one task or
+      two, which the ledger makes a real choice because <code>committed</code> is task-lifetime rather than
+      attempt-lifetime. Nothing before M6 waits on it.</p>
+    </details>
+    <details open>
+      <summary>2026-09-15 &mdash; Q9 decided: two tasks, two ceilings &mdash; and one clause of its own recommendation corrected</summary>
+      <p>The owner took the recommendation. <strong>Verifying it before writing it into a task found one wrong clause,
+      corrected here rather than carried forward.</strong></p>
+      <p><strong>The error.</strong> The recommendation said the delegation plan has to be addressable across tasks,
+      <em>"which the journal already makes possible"</em>. It does not. The only mechanism that crosses a task boundary
+      is <code>awsf seed</code> / <code>adopt</code>, and it carries <strong>Git objects only</strong>:
+      <code>CandidateAdoptionEvidenceSchema</code> pins <code>sourceEvidenceCopied: Literal(false)</code> and
+      <code>sourceApprovalsCopied: Literal(false)</code>, and its header states it <em>"never copies a source request,
+      envelope, gate row, approval, provider session, or attempt-private file"</em>. An envelope is exactly what does
+      not cross, and those two literal-false fields exist to keep it that way.</p>
+      <p><strong>The correction, which improves the design rather than damaging it.</strong> The delegation plan travels
+      as a <strong>committed artifact</strong>. Stage one validates and journals the architect's envelope inside its own
+      task, the host writes the validated plan into the worktree and commits it as the candidate, and
+      <code>seed</code> carries that SHA into task two exactly as designed. No contract change, no amendment to an
+      invariant, and <code>sourceEvidenceCopied: false</code> stays honest because nothing is copied &mdash; task two
+      reads a committed file from its own seeded tree. <strong>Reproducibility gets stronger:</strong> stage two
+      compiles from a blob at a known SHA, which is more durable than a journal row and already digest-addressable by
+      Git.</p>
+      <p><strong>And <code class="inv">INV-6</code> costs nothing to build.</strong> <code>seed.ts:39</code> already
+      refuses a non-interactive terminal &mdash; <code>CandidateSeedRejected("requires an interactive owner
+      terminal")</code>. The owner act between the stages is a shipped command, so M6 <em>asserts</em> the stop rather
+      than implementing one. That removes work from the most expensive milestone in the plan.</p>
+      <div class="wrap">
+      <table>
+        <thead><tr><th>Changed</th><th>From</th><th>To</th></tr></thead>
+        <tbody>
+          <tr><td><code class="ac">AC-10</code></td><td>compiles from recorded bytes</td><td>compiles from the <em>committed blob</em> alone, and never from a journal row the seeded tree does not carry</td></tr>
+          <tr><td><code class="inv">INV-6</code></td><td>stops at <code>AWAITING_OWNER</code></td><td>two tasks; the stop is <code>seed</code>'s existing interactive requirement, asserted rather than built</td></tr>
+          <tr><td>Task 17</td><td>journal the plan</td><td>journal it <em>and</em> write it into the worktree for the host to commit as the candidate</td></tr>
+          <tr><td>Task 19</td><td>read the journalled envelope</td><td>read the committed plan out of the seeded tree; assert <code>seed</code>'s refusal, do not rebuild it</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <p><strong>What the decision still costs.</strong> A collaboration is no longer one lineage in the journal, so
+      "which plan did this run execute" is answered by the seeded candidate SHA rather than by a task id. Task 19 must
+      prove that rather than assume it. In exchange each stage is admitted against its own ceiling, which is the point:
+      one task with three planners and four delegated tasks would need <code>(3 + 1) + (4 + 1) = 9</code> calls against a
+      shipped T2 ceiling of 5, with a single raise covering both stages before either had run.</p>
+      <p><strong>Every Questionable is now decided. Nothing is outstanding.</strong></p>
+    </details>
+  </section>
+
+</main>
+
+<!-- ===== PLAN-SOTA REVIEW LAYER v1 — FIXED MACHINERY, COPY VERBATIM ===== -->
+<style>
+  .rv-btn { font: 600 11px/1 system-ui, sans-serif; padding: 3px 9px; border-radius: 999px;
+    border: 1px solid var(--muted, #8884); background: transparent; color: var(--fg, inherit);
+    cursor: pointer; opacity: .55; vertical-align: middle; margin-left: 8px; }
+  .rv-btn:hover { opacity: 1; border-color: var(--accent, #7c6cf0); }
+  .rv-btn.rv-on { opacity: 1; background: var(--accent, #7c6cf0); color: var(--bg, #fff); border-color: transparent; }
+  .rv-note-box { display: block; margin: 8px 0; padding: 8px 12px; border: 1px dashed var(--accent, #7c6cf0);
+    border-radius: 8px; font-size: 13px; min-height: 1.5em; background: color-mix(in srgb, var(--accent, #7c6cf0) 6%, transparent); outline: none; }
+  .rv-note-box:empty::before { content: attr(data-ph); opacity: .5; font-style: italic; }
+  .rv-note-box[hidden] { display: none; }
+  .rv-verdict { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 10px 0 2px; }
+  .rv-verdict-tag { font: 700 10px/1 system-ui, sans-serif; letter-spacing: .08em; opacity: .6; margin-right: 2px; }
+  .rv-status-chip { font: 600 11px/1 ui-monospace, monospace; margin-left: 10px; padding: 3px 9px;
+    border-radius: 999px; border: 1px dotted var(--muted, #8884); background: transparent;
+    color: var(--fg, inherit); cursor: pointer; opacity: .6; }
+  .rv-status-chip:hover { opacity: 1; }
+  .rv-status-chip.rv-on { opacity: 1; border-style: solid; border-color: var(--accent, #7c6cf0); color: var(--accent, #7c6cf0); }
+  #rv-drawer { position: fixed; right: 16px; bottom: 16px; z-index: 9999; font: 13px/1.45 system-ui, sans-serif;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  #rv-pill { font: 700 12px/1 system-ui, sans-serif; padding: 10px 16px; border-radius: 999px; border: none;
+    cursor: pointer; background: var(--accent, #7c6cf0); color: var(--bg, #fff); box-shadow: 0 4px 16px #0004; }
+  #rv-panel { width: min(420px, calc(100vw - 32px)); max-height: 60vh; overflow: auto; padding: 14px;
+    border-radius: 12px; border: 1px solid var(--muted, #8884); background: var(--bg, #fff);
+    color: var(--fg, inherit); box-shadow: 0 8px 32px #0005; }
+  #rv-panel h4 { margin: 0 0 8px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; opacity: .7; }
+  #rv-list { margin: 0 0 10px; padding: 0; list-style: none; font-size: 12px; }
+  #rv-list li { padding: 3px 0; border-bottom: 1px solid #8882; overflow-wrap: anywhere; }
+  #rv-out { width: 100%; min-height: 140px; margin-top: 10px; font: 11px/1.5 ui-monospace, monospace;
+    border: 1px solid var(--muted, #8884); border-radius: 8px; padding: 8px; background: transparent; color: inherit; }
+  #rv-msg { font-size: 11px; opacity: .75; margin-top: 6px; }
+  @media print { #rv-drawer { display: none; } }
+</style>
+<script>
+(function () {
+  'use strict';
+  var FILE = decodeURIComponent(location.pathname.split('/').pop() || 'plan.html');
+  var KEY = 'plan-sota-review:' + FILE;
+  var LEGACY_KEY = 'planf3-review:' + FILE; // pre-rename state; read once, never written
+  var PROPOSE = ['', '[]', '[wip]', '[x]', '[f]'];
+  var state = { a: {}, v: {}, s: {} }, persisted = true;
+  try { state = JSON.parse(localStorage.getItem(KEY) || localStorage.getItem(LEGACY_KEY) || 'null') || state; } catch (e) { persisted = false; }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); persisted = true; }
+    catch (e) { persisted = false; }
+    refresh();
+  }
+  function el(tag, cls, txt) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (txt) n.textContent = txt;
+    if (tag === 'button') { n.type = 'button'; n.setAttribute('data-lavish-action', ''); }
+    return n;
+  }
+  function clean(t) { return String(t || '').replace(/\|/g, '/').replace(/\s*\r?\n\s*/g, ' >> ').trim(); }
+  var registry = []; // {key, label, kind: 'section'|'phase'|'q'}
+
+  function noteBox(key, host, placeholder) {
+    var box = el('div', 'rv-note-box');
+    box.contentEditable = 'true';
+    box.setAttribute('data-ph', placeholder || 'Type your note for the agent…');
+    box.hidden = !(state.a[key]);
+    if (state.a[key]) box.textContent = state.a[key];
+    box.addEventListener('input', function () {
+      var t = box.textContent.trim();
+      if (t) state.a[key] = t; else delete state.a[key];
+      save();
+    });
+    host.appendChild(box);
+    return box;
+  }
+  function annotable(key, label, heading, host, kind) {
+    registry.push({ key: key, label: label, kind: kind });
+    var box = noteBox(key, host);
+    heading.insertAdjacentElement('afterend', box);
+    var btn = el('button', 'rv-btn' + (state.a[key] ? ' rv-on' : ''), '✎ note');
+    btn.addEventListener('click', function () {
+      box.hidden = !box.hidden;
+      if (!box.hidden) box.focus();
+    });
+    heading.appendChild(btn);
+    box.addEventListener('input', function () { btn.classList.toggle('rv-on', !!state.a[key]); });
+  }
+
+  // Sections
+  Array.prototype.forEach.call(document.querySelectorAll('main > section[id]'), function (sec) {
+    var h = sec.querySelector('h2'); if (!h) return;
+    annotable('#' + sec.id, h.textContent.trim(), h, sec, 'section');
+  });
+  // Phases: annotation + proposed-status chip
+  Array.prototype.forEach.call(document.querySelectorAll('#phases .phase'), function (ph, i) {
+    var h = ph.querySelector('h3'); if (!h) return;
+    var key = 'phase-' + (i + 1);
+    var label = h.textContent.replace(/^\s*\[[^\]]*\]\s*/, '').trim();
+    annotable(key, label, h, ph, 'phase');
+    var chip = el('button', 'rv-status-chip' + (state.s[key] ? ' rv-on' : ''));
+    chip.textContent = state.s[key] ? 'propose ' + state.s[key] : 'propose…';
+    chip.title = 'Cycle a PROPOSED status (exported as feedback — the file marker is only changed by the agent)';
+    chip.addEventListener('click', function () {
+      var next = PROPOSE[(PROPOSE.indexOf(state.s[key] || '') + 1) % PROPOSE.length];
+      if (next) state.s[key] = next; else delete state.s[key];
+      chip.textContent = next ? 'propose ' + next : 'propose…';
+      chip.classList.toggle('rv-on', !!next);
+      save();
+    });
+    h.appendChild(chip);
+  });
+  // Questionables: verdict / option buttons + note
+  Array.prototype.forEach.call(document.querySelectorAll('#questionables details'), function (d, i) {
+    var key = 'q-' + (i + 1);
+    var summary = d.querySelector('summary');
+    var label = summary ? summary.textContent.trim().slice(0, 120) : key;
+    registry.push({ key: key, label: label, kind: 'q' });
+    var opts = (d.getAttribute('data-review-options') || '').split('|').map(function (s) { return s.trim(); }).filter(Boolean);
+    if (!opts.length) opts = ['APPROVE', 'REJECT', 'REVISE', 'DEFER'];
+    var row = el('div', 'rv-verdict');
+    row.appendChild(el('span', 'rv-verdict-tag', 'YOUR CALL'));
+    opts.forEach(function (opt) {
+      var b = el('button', 'rv-btn' + ((state.v[key] || {}).c === opt ? ' rv-on' : ''), opt);
+      b.addEventListener('click', function () {
+        if ((state.v[key] || {}).c === opt) { delete state.v[key]; }
+        else { state.v[key] = { c: opt }; }
+        Array.prototype.forEach.call(row.querySelectorAll('.rv-btn'), function (x) {
+          x.classList.toggle('rv-on', x.textContent === ((state.v[key] || {}).c || null));
+        });
+        qbox.hidden = !state.v[key] && !state.a[key];
+        save();
+      });
+      row.appendChild(b);
+    });
+    d.appendChild(row);
+    var qbox = noteBox(key, d, 'Why / what to change instead…');
+    if (state.v[key]) qbox.hidden = false;
+  });
+
+  // Drawer
+  var drawer = el('div'); drawer.id = 'rv-drawer';
+  var panel = el('div'); panel.id = 'rv-panel'; panel.hidden = true;
+  var pill = el('button'); pill.id = 'rv-pill';
+  pill.addEventListener('click', function () { panel.hidden = !panel.hidden; });
+  var list = el('ul'); list.id = 'rv-list';
+  var actions = el('div');
+  var exportBtn = el('button', 'rv-btn rv-on', 'Export Feedback');
+  var clearBtn = el('button', 'rv-btn', 'Clear review');
+  var out = el('textarea'); out.id = 'rv-out'; out.readOnly = true; out.hidden = true;
+  var msg = el('div'); msg.id = 'rv-msg';
+  var head = el('h4', null, 'Review — pending feedback');
+  actions.appendChild(exportBtn); actions.appendChild(clearBtn);
+  panel.appendChild(head); panel.appendChild(list); panel.appendChild(actions);
+  panel.appendChild(out); panel.appendChild(msg);
+  drawer.appendChild(panel); drawer.appendChild(pill);
+  document.body.appendChild(drawer);
+
+  function findLabel(key) {
+    for (var i = 0; i < registry.length; i++) if (registry[i].key === key) return registry[i].label;
+    return key;
+  }
+  function refresh() {
+    var n = Object.keys(state.a).length + Object.keys(state.v).length + Object.keys(state.s).length;
+    pill.textContent = '✎ Review (' + n + ')';
+    list.textContent = '';
+    Object.keys(state.v).forEach(function (k) { list.appendChild(el('li', null, '[verdict] ' + findLabel(k) + ' → ' + state.v[k].c)); });
+    Object.keys(state.s).forEach(function (k) { list.appendChild(el('li', null, '[status] ' + findLabel(k) + ' → propose ' + state.s[k])); });
+    Object.keys(state.a).forEach(function (k) { list.appendChild(el('li', null, '[note] ' + findLabel(k) + ': ' + state.a[k].slice(0, 90))); });
+    if (!n) list.appendChild(el('li', null, 'Nothing yet — click ✎ note on any section, a verdict on a Questionable, or propose… on a phase.'));
+    if (!persisted) msg.textContent = '⚠ localStorage unavailable — review state lives only in this tab.';
+  }
+  function buildExport() {
+    var L = ['plan-sota-review v1', 'plan: ' + FILE, 'title: ' + clean(document.title), 'exported: ' + new Date().toISOString(), ''];
+    var vk = Object.keys(state.v), sk = Object.keys(state.s), ak = Object.keys(state.a);
+    L.push('## verdicts');
+    vk.length ? vk.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | ' + clean(state.v[k].c) + ' | note: ' + (clean(state.a[k]) || '-'));
+    }) : L.push('- (none)');
+    L.push('', '## statuses');
+    sk.length ? sk.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | propose ' + state.s[k]);
+    }) : L.push('- (none)');
+    L.push('', '## annotations');
+    var solo = ak.filter(function (k) { return !state.v[k]; });
+    solo.length ? solo.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | ' + clean(state.a[k]));
+    }) : L.push('- (none)');
+    return L.join('\n');
+  }
+  exportBtn.addEventListener('click', function () {
+    var text = buildExport();
+    out.hidden = false; out.value = text;
+    out.focus(); out.select();
+    function done(m) { msg.textContent = m; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done('Copied — paste it into your next agent session.'); },
+        function () { done('Clipboard blocked — copy from the box below.'); });
+    } else {
+      try { done(document.execCommand('copy') ? 'Copied — paste it into your next agent session.' : 'Clipboard blocked — copy from the box below.'); }
+      catch (e) { done('Clipboard blocked — copy from the box below.'); }
+    }
+    if (window.lavish && typeof window.lavish.queuePrompt === 'function') {
+      window.lavish.queuePrompt(text, { tag: 'plan-sota-review', queueKey: 'plan-sota-review' });
+      msg.textContent += ' Also queued to the agent via Lavish.';
+    }
+  });
+  clearBtn.addEventListener('click', function () {
+    if (!confirm('Clear all review state for this plan?')) return;
+    state = { a: {}, v: {}, s: {} };
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    location.reload();
+  });
+  refresh();
+})();
+</script>
+
+<!-- Mermaid runtime — renders every <pre class="mermaid"> block. Only external reference in the file. -->
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      primaryColor: '#f0eefb',
+      primaryTextColor: '#14181f',
+      primaryBorderColor: '#5b4fc4',
+      lineColor: '#6b7382',
+      fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif'
+    }
+  });
+</script>
+</body>
+</html>

@@ -107,8 +107,9 @@ the sort of thing a session is tempted to clean up before mentioning.
 **Symptom.** Disk usage is unchanged after running it.
 
 **Cause.** It lists cleanup candidates and that is all; no delete operation
-exists in the module (`core/src/cli/commands/operator.ts`), and no push, force or
-auto-delete path exists anywhere in the codebase.
+exists in the module (`core/src/cli/commands/operator.ts`), and no force-push or
+auto-delete path exists anywhere in `core/src`. The one push path in the
+codebase belongs to publishing, which runs only on an already-landed revision.
 
 **Guard.** By design, and enforced by a meta-test. Deleting a candidate is the
 owner's decision, made with an ordinary file manager, and only after the evidence

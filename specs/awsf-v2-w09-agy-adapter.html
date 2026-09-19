@@ -1,0 +1,1164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plan: AWSF v2 W09 — The agy adapter, parser first</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --fg: #e6edf3;
+    --muted: #8b949e;
+    --accent: #f97316;
+    --accent-dim: #7c3d11;
+    --panel: #161b22;
+    --panel-2: #11161d;
+    --border: #30363d;
+    --ok: #3fb950;
+    --warn: #d29922;
+    --bad: #f85149;
+    --info: #58a6ff;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; padding: 0; background: var(--bg); color: var(--fg);
+    font: 15px/1.65 var(--sans); -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 1080px; margin: 0 auto; padding: 48px 24px 160px; }
+  h1 { font-size: 30px; line-height: 1.2; letter-spacing: -0.02em; margin: 0 0 6px; }
+  h2 {
+    font-size: 21px; letter-spacing: -0.01em; margin: 56px 0 14px;
+    padding-bottom: 8px; border-bottom: 1px solid var(--border);
+  }
+  h3 { font-size: 17px; margin: 34px 0 10px; letter-spacing: -0.005em; }
+  h4 { font-size: 15px; margin: 26px 0 6px; color: var(--fg); }
+  p { margin: 10px 0; }
+  a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent-dim); }
+  a:hover { border-bottom-color: var(--accent); }
+  code { font-family: var(--mono); font-size: 0.89em; background: var(--panel); padding: 1px 5px; border-radius: 4px; color: #ffd7b5; }
+  strong { color: #fff; font-weight: 640; }
+  em { color: var(--fg); }
+  .muted { color: var(--muted); }
+  .sub { color: var(--muted); font-size: 13px; margin: 2px 0 8px; }
+
+  header { border-left: 3px solid var(--accent); padding-left: 18px; margin-bottom: 34px; }
+  header .tagline { color: var(--muted); font-size: 15px; margin: 0 0 14px; }
+  .meta { margin-top: 12px; font-size: 13px; }
+  .meta summary { cursor: pointer; color: var(--muted); font-family: var(--mono); font-size: 12px; }
+  .meta dl { display: grid; grid-template-columns: 130px 1fr; gap: 4px 16px; margin: 12px 0 0; }
+  .meta dt { color: var(--muted); font-family: var(--mono); font-size: 12px; }
+  .meta dd { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
+
+  figure { margin: 24px 0; padding: 20px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; text-align: center; }
+  figure svg, figure .mermaid { max-width: 100%; height: auto; }
+  figcaption { margin-top: 14px; font-size: 13px; color: var(--muted); text-align: left; line-height: 1.55; }
+
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13.5px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; }
+  tbody th { text-transform: none; letter-spacing: 0; font-size: 13.5px; color: var(--fg); width: 30%; }
+
+  ul, ol { padding-left: 22px; }
+  li { margin: 5px 0; }
+  .checklist { list-style: none; padding-left: 0; }
+  .checklist li { margin: 7px 0; padding-left: 4px; }
+  .status { font-family: var(--mono); font-size: 12px; color: var(--muted); background: transparent; padding: 0 6px 0 0; }
+  .serves { font-family: var(--mono); font-size: 11px; background: transparent; color: var(--muted); padding: 0; }
+
+  .phase { margin: 44px 0; padding: 22px 24px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 12px; }
+  .phase h3 { margin-top: 0; }
+  .loop { margin-top: 20px; padding: 12px 16px; border-left: 3px solid var(--accent); background: rgba(249,115,22,0.07); border-radius: 0 8px 8px 0; font-size: 13.5px; }
+
+  .tag { font: 600 10px/1 var(--mono); padding: 3px 7px; border-radius: 4px; margin-right: 8px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .tag.existing { background: rgba(88,166,255,0.14); color: var(--info); }
+  .tag.new { background: rgba(63,185,80,0.14); color: var(--ok); }
+  .tag.dir { background: rgba(210,153,34,0.14); color: var(--warn); }
+  .files li { margin: 8px 0; }
+
+  .callout { margin: 20px 0; padding: 14px 18px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel); }
+  .callout.bad { border-color: rgba(248,81,73,0.45); background: rgba(248,81,73,0.06); }
+  .callout.warn { border-color: rgba(210,153,34,0.45); background: rgba(210,153,34,0.06); }
+  .callout.ok { border-color: rgba(63,185,80,0.4); background: rgba(63,185,80,0.05); }
+  .callout .lbl { font: 700 10px/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; display: block; margin-bottom: 8px; color: var(--muted); }
+  .callout.bad .lbl { color: var(--bad); }
+  .callout.warn .lbl { color: var(--warn); }
+  .callout.ok .lbl { color: var(--ok); }
+
+  pre.code { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; overflow-x: auto; font: 12.5px/1.6 var(--mono); color: #c9d1d9; }
+  pre.code .c { color: var(--muted); }
+
+  #spine dl { margin: 18px 0; }
+  #spine dt { margin-top: 16px; font-family: var(--mono); font-size: 12px; }
+  #spine dt .inv, #spine dt .ac { background: rgba(249,115,22,0.14); color: var(--accent); padding: 3px 8px; border-radius: 4px; }
+  #spine dd { margin: 6px 0 0; padding-left: 0; font-size: 14px; }
+
+  #questionables details { margin: 12px 0; padding: 14px 18px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; }
+  #questionables summary { cursor: pointer; font-weight: 600; color: var(--fg); }
+  .qa-answer { margin-top: 12px; font-size: 14px; }
+  #amendments details { margin: 12px 0; padding: 14px 18px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; }
+  #amendments summary { cursor: pointer; color: var(--muted); font-family: var(--mono); font-size: 12.5px; }
+</style>
+</head>
+<body>
+<main>
+
+  <!-- ===== HEADER + UPDATABLE METADATA ===== -->
+  <header>
+    <h1>Plan: AWSF v2 W09 — The <code>agy</code> adapter, parser first</h1>
+    <p class="tagline">A deep plan for one <strong>optional</strong> workstream. It writes a parser against bytes that are already in the tree, leaves the route disabled, and says plainly what the route's containment does not cover.</p>
+    <details class="meta">
+      <summary>Metadata</summary>
+      <dl>
+        <dt>created</dt>      <dd>2026-09-15</dd>
+        <dt>modified</dt>     <dd>2026-09-15</dd>
+        <dt>commits</dt>      <dd>none — authoring this plan writes no code and lands no commit</dd>
+        <dt>agent name</dt>   <dd>marimba</dd>
+        <dt>session id</dt>   <dd>not recorded — AGENTS.md invariant 1 keeps live session state out of every committed file in this repository</dd>
+        <dt>back refs</dt>    <dd>./awsf-v2-plan.html (the v2 spine, § Milestone M9 → W09, and its Shared Invariants), ./fixtures/agy/README.md (the retained capture, 2026-09-15, agy.exe 1.1.15 — this plan's primary evidence), ../AGENTS.md (invariants 1, 3, 9, 10), ../awsf.config.yaml (§ adapters — protected), ./awsf-v2-w06-prompt-composition.html (the centralised composer this route's cwd requirement lands in), ./awsf-v2-w10-mf-adapter.html (the other optional adapter workstream, and the first place the unsupervised-spawn finding appeared), ./awsf-v2-w04-project-registry.html (the machine-local layer an absolute executable path would need)</dd>
+        <dt>forward refs</dt> <dd>./awsf-v2-w09-agy-adapter-build-prompts.md, ./tickets/awsf-v2-w09-agy-adapter/</dd>
+      </dl>
+    </details>
+  </header>
+
+  <figure>
+    <pre class="mermaid">
+flowchart LR
+  CAP["retained bytes<br/>specs/fixtures/agy"] --> P["parser<br/>3 event kinds"]
+  P --> N["12 normalized events"]
+  N --> D["detection<br/>after the fact"]
+  D -. "cannot see" .-> S["invoke_subagent<br/>57-tool surface"]
+  P --> OFF(["route stays DISABLED"])
+  style OFF stroke:#f97316,stroke-width:2px
+  style S stroke:#f85149,stroke-dasharray:4 3
+    </pre>
+    <figcaption>The whole workstream in one line. Bytes that already exist become a tested parser; the parser produces AWSF's normalized events; detection reads those events <em>after</em> the provider has acted. The dashed edge is what this plan is really about — the tool declares four subagent tools, so it can start work on the far side of every mechanism AWSF owns. The route ends this workstream disabled, and enabling it is a separate owner act.</figcaption>
+  </figure>
+
+  <!-- ===== IN PLAIN LANGUAGE ===== -->
+  <section id="plain-language">
+    <h2>In Plain Language</h2>
+    <p>This section explains the whole plan without technical vocabulary. Everything after it says the same things precisely, for the people — and machines — building it.</p>
+
+    <h3>What this is about</h3>
+    <p>This project hires outside helpers to do work. Each helper is a separate program made by a different company, and before this project will send one any real work, it has to know two things: can it <em>read</em> what the helper says while the helper is working, and can it <em>stop</em> the helper from doing something it was not asked to do. There is a third helper on the shortlist that has never been trusted with anything. Nobody had ever kept a written record of what it actually says, so the file that would connect it to this project is a placeholder that refuses every request. Someone has now sat down, run that helper a handful of times, and saved exactly what came out, word for word. Those saved recordings are the reason this plan can be written at all.</p>
+
+    <h3>Why now</h3>
+    <p>Two reasons, and the second one is the important one. The first: the recordings exist, so the reading half of the question can finally be answered from files on a disk instead of from memory, and answering it costs nothing — no further calls to the helper, no further spending. The second: the recordings also answered a question nobody had asked. When this helper starts up it announces the list of things it is able to do, and that list turned out to have fifty-seven entries on it. Four of them let the helper hire helpers of its own. That is the part that changes the decision, because everything this project uses to supervise an outside helper works by watching the one program it started. A helper that quietly starts more programs is doing work in a room nobody is watching.</p>
+
+    <h3>What we are building</h3>
+    <p>Think of it as fitting a window and a lock to a room, and discovering that only the window can be fitted. The window is a reader: a small piece of software that turns the helper's stream of chatter into the same tidy vocabulary every other helper here already speaks, so that anything watching the work sees one consistent picture rather than three dialects. That part is entirely buildable today, it is checked against the saved recordings rather than against anyone's memory, and it never needs the helper to run again. The lock is the other half, and the recordings show there is nothing to fit it to: this helper offers no setting that limits what it is allowed to do. So instead of a lock this plan fits a sign, and makes the sign honest. Wherever the project would otherwise have quietly assumed some limit was in place, it now refuses out loud and says which missing setting it was relying on. The room stays closed at the end of this work. Opening it is a decision only the owner can take, deliberately, in a file no automated helper is allowed to touch.</p>
+
+    <h3>How we know it worked</h3>
+    <p>Someone can run the project's own checks, with no internet connection and without paying anyone, and see three things. Every one of the saved recordings — including the one where the helper failed, and the one where it printed several lines of ordinary English before its final answer — is read correctly and turned into the shared vocabulary without anything being discarded as gibberish. Every place where the project used to imply a limit it does not have now states the limit is missing and refuses rather than proceeding. And the helper is still switched off, provably, through three separate doors, so no accidental edit can turn it on. What is deliberately <em>not</em> here: this helper does not get to do any real work at the end of this plan, not even the safest kind. Anyone can check that by looking — no job in the project's settings names it. And one question is left open on purpose because the answer was never recorded: whether one particular setting on the helper would have provided the missing lock. This plan says exactly what would have to be run to find out, and refuses to guess in the meantime.</p>
+  </section>
+
+  <!-- ===== PURPOSE / PROBLEM / SOLUTION ===== -->
+  <section id="purpose">
+    <h2>Purpose</h2>
+    <p><code>core/src/adapters/antigravity.ts</code> is seventy-eight lines of deliberate refusal. Its header names the only procedure by which it may graduate: run one short <code>agy</code> session with a small read-only prompt, capture stdout and stderr without editing either, read the captured output, then implement fixture-first. <strong>That procedure has now been run.</strong> <code>specs/fixtures/agy/</code> holds five streams, a help dump and a version string, captured 2026-09-15 from <code>agy.exe</code> 1.1.15, unedited but for one scrubbed OAuth URL. This plan is what the header asked for: the fixture-first implementation, written against those bytes and no others.</p>
+    <p>It has a second purpose, and by the end of the evidence review it is the larger one. The spine records this route as <strong>detection-bounded</strong> and lists two absences that would have to close before its permission half could graduate. The capture closes one of them and widens the other. This plan is therefore also the place where the containment picture gets written down accurately, so that the decision to leave the route disabled is made on measurements rather than on a shrug.</p>
+
+    <div class="callout warn">
+      <span class="lbl">Scope, split in two — the spine's own division, kept</span>
+      <p style="margin-top:0"><strong>Parser graduation</strong> is fixture-first work that proceeds now with the route left disabled. <strong>Permission graduation</strong> waits for captured bytes proving either a provider tool-scoping flag or an OS boundary, and when it graduates it graduates <strong>for the documenter role only</strong>. Milestones M1 through M5 deliver the first and deliberately do not attempt the second. If the second never arrives, the ladder still runs on the two verified routes — which the source conditions already permit.</p>
+    </div>
+  </section>
+
+  <section id="problem">
+    <h2>Problem</h2>
+    <p>Three problems, in the order the evidence forces. The first is small and now solved. The second is the one the spine named and the capture answered. The third is the one the capture <em>found</em>, and it is larger than anything the spine recorded.</p>
+
+    <h3>1. The spine's W09 block is wrong in four places, and the capture is why</h3>
+    <p>The block was written before any bytes existed. It is corrected here rather than worked around, because every one of the four corrections changes what gets built.</p>
+
+    <table>
+      <thead><tr><th style="width:34%">The spine says</th><th style="width:33%">The bytes say</th><th>What changes</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>&ldquo;A separate portability run found the executable does not resolve under the configured name on this machine at all.&rdquo;</td>
+          <td>True but misleading. <code>agy</code> is not on <code>PATH</code>; <code>agy.exe</code> is installed under <code>AppData\Local\agy\bin\</code> and reached through a shell alias.</td>
+          <td>It is a <strong>configuration finding, not an absence</strong>. The binary exists and runs. What cannot work is <code>executable: agy</code> for a spawned child: an alias is shell-local, and <code>ENV_ALLOWLIST</code> passes only <code>PATH</code>, <code>HOME</code> and <code>TMPDIR</code>. T12 turns this into a test.</td>
+        </tr>
+        <tr>
+          <td>&ldquo;It requires a Windows-accessible working directory&rdquo; — read by every later reader as <em>a WSL-native worktree cannot work</em>.</td>
+          <td><code>stream5</code> and <code>stream6</code> ran from <code>/home/…</code> with <code>init.cwd</code> reported as <code>\\wsl.localhost\Ubuntu\home\…</code>. The earlier failure from that path was an <strong>authentication</strong> failure, proved by <code>stream4</code> succeeding from <code>D:</code> minutes later on the same token.</td>
+          <td>AWSF's worktrees are on WSL-native ext4 and <strong>the adapter can run in them</strong>. The requirement is real but weaker than recorded: the path must be reachable from Windows, and <code>\\wsl.localhost\</code> is. Correctness is settled; throughput is not (see problem 4 below).</td>
+        </tr>
+        <tr>
+          <td>&ldquo;The stream emits a <strong>four-event</strong> NDJSON protocol&hellip;&rdquo;</td>
+          <td>Three event kinds: <code>init</code>, <code>step_update</code>, <code>result</code>. The fourth thing the spine counted is <code>step_type</code>, which is a field <em>inside</em> <code>step_update</code>, not an event.</td>
+          <td>A parser written to a four-case switch would carry a dead branch and, worse, would imply the taxonomy lives at the wrong level. The real shape is three kinds crossed with four step types and two states.</td>
+        </tr>
+        <tr>
+          <td>&ldquo;&hellip;with <strong>stream-authoritative model identity</strong>.&rdquo;</td>
+          <td><strong>There is no model identity anywhere in the capture.</strong> <code>init</code> carries exactly three keys — <code>cwd</code>, <code>tools</code>, <code>permission_mode</code>. A scan of all five streams for the substring <code>model</code> returns zero matches.</td>
+          <td><code>model.resolved</code> from this route must carry <code>provenance: "route-attributed"</code>. This is the <strong>second</strong> adapter whose &ldquo;stream-authoritative&rdquo; claim collapsed on inspection; <code>core/test/fixtures/providers/codex/PROVENANCE.md</code> records the first, and reaches the same value for the same reason.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>2. The open item the spine called its cheapest unused upgrade — answered, with its limit stated</h3>
+    <p>The spine: <em>&ldquo;Does a tool event arrive before or after the provider has executed that tool? Detection cannot claim timely abort without event-order evidence, and no fixture establishes it.&rdquo;</em> <code>stream2</code> establishes it. <code>run_command</code> appears at <code>step_index: 2</code>, <code>state: "ACTIVE"</code>, carrying its full parameters (<code>CommandLine: "(Get-Location).Path"</code>), and again at <code>state: "DONE"</code> 8.198992 seconds later with its output. <code>view_file</code> does the same with <code>AbsolutePath</code>. <strong>Parameters arrive before the result.</strong></p>
+    <div class="callout bad">
+      <span class="lbl">The limit, stated precisely — this is not prevention</span>
+      <p style="margin-top:0"><code>ACTIVE</code> precedes <strong>completion</strong>. It is <strong>not</strong> proven to precede <strong>initiation</strong>. Nothing in the capture shows whether the CLI emits <code>ACTIVE</code> before it hands the call to the tool or after. So what the ordering buys is <strong>detection with latency</strong> — a host that reads the stream learns the parameters of a call that may already be running. It buys no abort that is provably timely, and the spine's own rule applies with full force: the route is <strong>detection-bounded</strong>, and describing it as prevention is not the owner's to accept.</p>
+    </div>
+
+    <h3>3. The containment picture is worse than recorded, and this is the centre of the plan</h3>
+    <p>The spine says detection &ldquo;says nothing about shell execution, messaging, scheduling or web search, three of which are external-mutation shaped.&rdquo; <code>init</code> declares <strong>57 tools</strong> and the surface is wider than four names:</p>
+    <pre class="code"><span class="c">// init.tools — the mutation-shaped subset, verbatim from stream2 line 1</span>
+run_command  send_command_input  command_status
+write_to_file  replace_file_content  multi_replace_file_content  sed_file
+execute_browser_javascript  open_browser_url  browser_input  browser_press_key  <span class="c">(~20 browser_* total)</span>
+call_mcp_tool  schedule  send_message  manage_inbox  search_web  read_url_content
+generate_image  delete_knowledge
+
+<span class="c">// and the four that decide this workstream:</span>
+define_subagent  invoke_subagent  manage_subagents  browser_subagent</pre>
+    <div class="callout bad">
+      <span class="lbl">The decisive finding — a first-class obstacle, not a footnote</span>
+      <p style="margin-top:0"><strong>The tool spawns its own agents.</strong> AGENTS.md invariant 3 confines <code>node:child_process</code> to <code>core/src/execution/transport-broker.ts</code>, and <code>child-process-fence.test.ts</code> holds it. That fence confines <strong>AWSF's</strong> spawns. <code>invoke_subagent</code> means the <em>tool</em> creates spawn sites on the far side of it: no broker registration, no reservation id, no <code>GO</code>, no cancellation handle, no per-child worktree, no attribution. <strong>This is W10's decisive finding repeating in a second adapter</strong> — there, only the outer process of a composite crossed the broker; here, only the outer process of a turn does.</p>
+      <p>The same class of problem shows in the run's own error channel. <code>stream2</code>'s stderr carries <code>"root agent idle; waiting for 1 background task(s) (bounded by --print-timeout)"</code> — <strong>work outliving the turn</strong>. Read carefully, that line is partly reassuring: the CLI <em>waits</em>. But it waits only until <code>--print-timeout</code>, and what happens to a still-running background task when that timeout fires is unmeasured, as is whether such a task shares the process group AWSF's cancellation kills across the WSL interop boundary.</p>
+      <p class="sub"><strong>Evidence discipline:</strong> that stderr line is quoted in <code>specs/fixtures/agy/README.md</code> and <strong>no stderr file is retained beside the streams</strong>. The claim rests on a quotation, not on bytes in the tree. T01 records that as a named fixture debt; it is the one gap in the capture that a second short session would close for no model spend.</p>
+    </div>
+    <p>And the default is weaker than its name. <code>permission_mode: "request-review"</code> is declared in <code>init</code>, it is the default, and under it <strong>the agent executed a PowerShell command unprompted</strong> — the prompt asked where it was, not for a shell call. Every capture here was taken <em>without</em> <code>--dangerously-skip-permissions</code>, so what is recorded is the guarded behaviour.</p>
+
+    <h3>4. One constraint nobody has measured</h3>
+    <p>A WSL-native worktree means <code>init.cwd</code> is a UNC path. Every file operation the provider performs, and every host gate command it triggers, would cross <code>\\wsl.localhost\</code>. <strong>Correctness is established; throughput is not.</strong> This plan names it as an unmeasured risk with a settlement that costs no quota, and does not assume ext4 performance on the far side of a network-filesystem redirector.</p>
+
+    <figure>
+      <pre class="mermaid">
+flowchart TD
+  H["AWSF host"] -->|"registers + spawns"| A["agy.exe turn"]
+  A -->|"stream: init, step_update, result"| H
+  A -->|"run_command, write_to_file, ..."| W["worktree"]
+  A -->|"invoke_subagent"| SUB["subagent<br/>no registration"]
+  SUB --> W
+  H -->|"fingerprint AFTER return"| W
+  style SUB stroke:#f85149,stroke-width:2px
+  style A stroke:#f97316
+      </pre>
+      <figcaption>Everything AWSF owns sits on the arrows touching the host. The tool's own subagent sits on the arrow that does not. The host's worktree fingerprint is taken after the turn returns, so it sees the <em>net effect</em> of both paths and can attribute neither — and it sees nothing at all about the tools that do not touch the worktree: <code>send_message</code>, <code>schedule</code>, <code>search_web</code>, <code>call_mcp_tool</code>, and twenty browser tools including <code>execute_browser_javascript</code>.</figcaption>
+    </figure>
+  </section>
+
+  <section id="solution">
+    <h2>Solution</h2>
+    <p>Five milestones. The first is a <strong>decision milestone</strong> that can legitimately end the workstream; the next three build the parser, the descriptor and the containment proofs; the fifth proves the route is still off and writes the dossier that a future session would need to reopen permission graduation. <strong>No milestone enables the route, and no milestone spends quota.</strong></p>
+
+    <table>
+      <thead><tr><th style="width:8%">M</th><th style="width:30%">What it delivers</th><th>The property it establishes</th></tr></thead>
+      <tbody>
+        <tr><td><strong>M1</strong></td><td>Retain the bytes under the repository's own provider-fixture convention; pin the obstacle to those bytes; decide.</td><td>The evidence is where the sweeps and the tests reach it, and the 57-tool roster becomes a test that goes red if a future <code>agy</code> changes it.</td></tr>
+        <tr><td><strong>M2</strong></td><td>The parser: three event kinds and every terminal state, to AWSF's twelve normalized events.</td><td><strong>Fixture-complete</strong> against every retained stream, including the one that opens with seven lines of human prose.</td></tr>
+        <tr><td><strong>M3</strong></td><td>The descriptor: argv, environment, effort, profiles, executable — and the refusals that are not approximations.</td><td>An exact-argv test covering the flag that silently eats the prompt, and a ceiling that is refused rather than widened.</td></tr>
+        <tr><td><strong>M4</strong></td><td>What detection covers and what it does not: the badge, the path contract, the broker.</td><td>No mechanism in the tree claims a guarantee this route does not have.</td></tr>
+        <tr><td><strong>M5</strong></td><td>Three doors shut, one dossier written, the workstream closed.</td><td>Enabling the route is a separate, explicit owner act, and what would justify it is written down rather than remembered.</td></tr>
+      </tbody>
+    </table>
+
+    <figure>
+      <pre class="mermaid">
+flowchart LR
+  M1["M1 · evidence<br/>and the decision"] --> M2["M2 · parser"]
+  M1 -.->|"close unbuilt"| STOP(["record the gap<br/>in the spine"])
+  M2 --> M3["M3 · descriptor"]
+  M3 --> M4["M4 · containment"]
+  M4 --> M5["M5 · disabled,<br/>dossiered, closed"]
+  style STOP stroke:#d29922,stroke-dasharray:4 3
+  style M1 stroke:#f97316,stroke-width:2px
+      </pre>
+      <figcaption>M1 is a gate, not a preliminary. It costs no quota and ends with an owner decision that the spine already sanctions: an optional workstream may close unbuilt with its evidence recorded. The capture has made that outcome <em>more</em> defensible than it was, not less — the subagent roster is the reason.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ===== RELEVANT FILES ===== -->
+  <section id="files" class="files">
+    <h2>Relevant Files</h2>
+
+    <h3>Existing Files</h3>
+    <ul>
+      <li><span class="tag existing">existing</span> <code>specs/fixtures/agy/</code> — <strong>the capture.</strong> <code>README.md</code>, <code>help.txt</code>, <code>version.txt</code> (<code>1.1.15</code>), and <code>stream2</code>–<code>stream6</code>. Read the README before the spine's W09 prose: it corrects that prose, and the bytes correct the README's own arithmetic nowhere — every claim in it that this plan re-checked held.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/adapters/antigravity.ts</code> — the 78-line probe. Its header states the graduation procedure; this plan follows it rather than replacing it, and T18 keeps the refusal shape after the parser exists.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/adapters/pi-codex.ts</code>, <code>core/src/adapters/pi-codex-stream.ts</code> — the shape a finished adapter takes: <code>buildSpec</code> / <code>execute</code> / <code>parse</code>, a decoder that owns the CLI vocabulary, a held terminal whose exit code is measured rather than assumed, and a stderr drain started before the first byte is read.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/adapters/interface.ts</code> — <code>ModelInfo</code> (<code>usageAuthority</code>, <code>costAuthority</code>, <code>continuity</code>), <code>ProcessSpec</code> (note <code>stdin</code> and <code>shell: false</code>), <code>AdapterError</code>, and the eleven-code <code>RunErrorCode</code> vocabulary this route must map into.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/contracts/normalized-events.ts</code> — the twelve event kinds, <code>TokenUsageSchema</code>'s five required-and-nullable metrics, <code>NOTICE_CODES</code> (<code>non-json-output</code> is already in the vocabulary), <code>mintToolCallId</code>, and <code>validateEventSequence</code>'s eight violation codes.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/adapters/stream/</code> — <code>LineFramer</code>, <code>EventSequencer</code>, <code>OutputBudget</code>, <code>drainStderr</code>, <code>normalizeUsage</code>, <code>summarize</code>. The agy parser reuses all six; it introduces no second framing or sequencing rule.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/adapters/env.ts</code> — <code>ENV_ALLOWLIST</code> is exactly <code>PATH</code>, <code>HOME</code>, <code>TMPDIR</code>. This is why a shell alias can never resolve for a spawned child.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/policy/sandbox-broker.ts</code> — <code>grantSandbox</code> and <code>PermissionSession</code>. The badge is computed from platform plus a <code>bwrap</code> probe and <strong>never asks the adapter whether it can express a tool policy</strong>. That is T14.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/policy/path-policy.ts</code> — <code>normalizeRepositoryPath</code> refuses backslashes, drive letters and absolute paths <em>by design</em>, with the reason written in its header. Every path in this capture is one of those three spellings. That is T15.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/git/changes.ts</code> — <code>captureChangeSet</code> / <code>changedPaths</code>, the post-return worktree fingerprint that is the only surviving detection layer on this route.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/execution/transport-broker.ts</code> — the single spawn site, and <code>resolveExecutable</code>, whose PATH search is what <code>executable: agy</code> fails.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/config/load.ts</code>, <code>core/src/config/machine-path.ts</code> — <code>ConfigUnverifiedAdapterError</code> at <code>load.ts:180</code> already refuses <code>enabled: true</code> without <code>verified: true</code>; <code>ABSOLUTE_PATH_PATTERN</code> refuses <code>/</code>, <code>C:\</code>, <code>\\</code> and <code>~</code> on every string leaf, keys included.</li>
+      <li><span class="tag existing">existing</span> <code>core/test/fixtures/providers/codex/PROVENANCE.md</code> — the fixture-integrity convention this workstream copies: captured bytes, stated transformations, and a written account of what the capture could <em>not</em> measure.</li>
+      <li><span class="tag existing">existing</span> <code>core/test/unit/meta/no-credentials-in-fixtures.test.ts</code>, <code>core/test/unit/meta/child-process-fence.test.ts</code>, <code>core/test/unit/meta/adapter-fence.test.ts</code>, <code>core/test/unit/meta/ticket-plan-sync.test.ts</code> — the four fences this workstream must keep green, one of which it extends.</li>
+      <li><span class="tag existing">existing</span> <code>awsf.config.yaml</code> — <code>antigravity: { kind: antigravity, executable: agy, enabled: false }</code>, and the <code>documenter</code> role whose <code>tools.allow</code> this route cannot express. <strong>Protected: no agent writes it.</strong></li>
+    </ul>
+
+    <h3>New Files</h3>
+    <ul>
+      <li><span class="tag dir">dir</span> <code>core/test/fixtures/providers/agy/</code> — the retained capture where the sweeps and the suite reach it, plus <code>PROVENANCE.md</code>. Canonical location, per <strong>Q5</strong>.</li>
+      <li><span class="tag new">new</span> <code>core/src/adapters/antigravity-stream.ts</code> — the decoder: <code>agy</code>'s three event kinds to normalized events. The counterpart of <code>pi-codex-stream.ts</code>.</li>
+      <li><span class="tag new">new</span> <code>core/test/unit/adapters/antigravity.test.ts</code> — descriptor, refusals, availability, executable resolution.</li>
+      <li><span class="tag new">new</span> <code>core/test/unit/adapters/stream/antigravity-stream.test.ts</code> — the fixture replay: every event kind and every terminal state in the retained bytes.</li>
+      <li><span class="tag new">new</span> <code>core/test/unit/policy/sandbox-badge-authority.test.ts</code> — the badge may not claim a tool policy the adapter cannot express.</li>
+      <li><span class="tag new">new</span> <code>core/test/unit/meta/agy-roster-pin.test.ts</code> — the containment obstacle, pinned to the captured bytes.</li>
+      <li><span class="tag new">new</span> <code>docs/design/agy-graduation-dossier.md</code> — what captured bytes would reopen permission graduation, for which single role, and the exact probe that would produce them.</li>
+      <li><span class="tag new">new</span> <code>specs/awsf-v2-w09-agy-adapter-build-prompts.md</code> — this plan's Section B prompt source. Required by <code>ticket-plan-sync.test.ts:84</code> for every plan that has a ticket set.</li>
+      <li><span class="tag dir">dir</span> <code>specs/tickets/awsf-v2-w09-agy-adapter/</code> — <code>T01.md</code>–<code>T20.md</code> plus <code>README.md</code>.</li>
+    </ul>
+  </section>
+
+  <!-- ===== IDENTIFIER SPINE ===== -->
+  <section id="spine">
+    <h2>Identifier Spine</h2>
+    <p>Per the v2 spine's Q5 decision, identifiers are unique within this plan and a cross-plan reference is qualified by plan stem. Every declaration below is served by at least one task, and each ticket's <code>serves</code> mirrors its task's as a set — the invariant-12 fence compares the two and fails when either is edited alone.</p>
+    <dl>
+      <dt><code class="inv">INV-1</code></dt>
+      <dd><strong>The route stays disabled, and only the owner enables it.</strong> No task in this workstream edits <code>awsf.config.yaml</code>: it is protected, and <code>path-policy</code> rejects <code>protected-path</code> independently of the write globs. <code>enabled</code> stays <code>false</code>; <code>isAvailable()</code> keeps returning <code>blocked</code>; no agent in the config names this adapter. Three independent doors, each asserted by a test.</dd>
+      <dt><code class="inv">INV-2</code></dt>
+      <dd><strong>Adapters describe and parse; the broker spawns — and this plan writes down where that sentence stops.</strong> No module this workstream adds imports <code>node:child_process</code> or calls global <code>fetch</code>; AGENTS.md invariant 3, held by <code>child-process-fence.test.ts</code> and <code>adapter-fence.test.ts</code>. The plan states in the same breath what the fence does not reach: <code>invoke_subagent</code>, <code>define_subagent</code>, <code>manage_subagents</code> and <code>browser_subagent</code> mean the <em>tool</em> creates spawn sites AWSF cannot confine.</dd>
+      <dt><code class="inv">INV-3</code></dt>
+      <dd><strong>No ceiling is approximated.</strong> A tool profile this adapter cannot express is refused with <code>E_POLICY_CEILING_UNENFORCEABLE</code> before any child starts, never silently widened. <code>agy</code> exposes no allow/deny flag and no system-prompt flag — confirmed in <code>help.txt</code> — so every profile the config can name is refused today, and the refusal message names the absent flag.</dd>
+      <dt><code class="inv">INV-4</code></dt>
+      <dd><strong>Detection is described as detection.</strong> This plan, its build prompts and its tickets call the route <strong>detection-bounded</strong> and never use the bare adjective on its own. Every mechanism called a boundary names what it does not cover, and no sentence claims timely abort: <code>ACTIVE</code> precedes completion, not proven initiation.</dd>
+      <dt><code class="inv">INV-5</code></dt>
+      <dd><strong>Retained bytes are replayed, never regenerated.</strong> Every fixture is captured bytes or a stated transformation of captured bytes, and the transformation is asserted in the suite so it cannot drift into fiction. No task spends quota to reproduce what <code>specs/fixtures/agy/</code> already holds.</dd>
+      <dt><code class="inv">INV-6</code></dt>
+      <dd><strong>Nothing enters the tree that invariants 1 and 9 forbid.</strong> No task id, attempt id or session id anywhere; no credential-shaped value in any fixture; no runtime artifact committed as evidence. The capture's <code>cwd</code> values are the one deliberate exception and they are the evidence itself — T01 records that decision rather than letting a later sweep discover it.</dd>
+      <dt><code class="ac">AC-1</code></dt>
+      <dd>Every event kind and every terminal state in the retained capture decodes to normalized events, and <code>validateEventSequence</code> returns an empty violation list for all five streams.</dd>
+      <dt><code class="ac">AC-2</code></dt>
+      <dd>The failure stream's seven non-JSON lines are tolerated rather than treated as corruption: they produce a capped number of <code>notice</code> events with code <code>non-json-output</code>, and the well-formed <code>result</code> that follows still becomes the run's single terminal.</dd>
+      <dt><code class="ac">AC-3</code></dt>
+      <dd>A tool's parameters are visible in a <code>tool.requested</code> event that precedes its <code>tool.completed</code>, and the plan states the limit in the same place: this is detection with latency, not prevention.</dd>
+      <dt><code class="ac">AC-4</code></dt>
+      <dd><code>buildSpec</code> produces an argv in which every flag uses <code>=</code> form and <code>--print</code> is last, and a test drives the transposed ordering and shows it makes the flag the prompt.</dd>
+      <dt><code class="ac">AC-5</code></dt>
+      <dd>Usage is emitted once, from <code>result</code>, with <code>cacheWriteTokens: null</code> and <code>reasoningRelation: "unknown"</code> — and a test proves the aggregate equals the per-step sum, so the reason a per-step emission would double-count is recorded rather than remembered.</dd>
+      <dt><code class="ac">AC-6</code></dt>
+      <dd><code>model.resolved</code> carries <code>provenance: "route-attributed"</code>, and a test asserts the capture contains no model identity, so the spine's &ldquo;stream-authoritative&rdquo; claim cannot quietly return.</dd>
+      <dt><code class="ac">AC-7</code></dt>
+      <dd>Every tool profile <code>awsf.config.yaml</code> can name is refused by this adapter with <code>E_POLICY_CEILING_UNENFORCEABLE</code>, and the <code>documenter</code> role's own <code>tools.allow</code> is used as the worked example.</dd>
+      <dt><code class="ac">AC-8</code></dt>
+      <dd>The sandbox badge never reads <code>tool-policy</code> for a route whose adapter cannot express a tool policy; it degrades to <code>unavailable</code> / <code>none</code>, and the existing behaviour for the two verified routes is unchanged.</dd>
+      <dt><code class="ac">AC-9</code></dt>
+      <dd>The route is unusable through three independent doors — config, availability, and role assignment — each proven by a test that fails when its door is opened.</dd>
+      <dt><code class="ac">AC-10</code></dt>
+      <dd>A graduation dossier exists naming exactly which captured bytes would reopen permission graduation, for which single role, and the exact command that would produce them — with the <code>--sandbox</code> question recorded as unanswered rather than assumed either way.</dd>
+    </dl>
+  </section>
+
+  <!-- ===== THE EVENT MAPPING ===== -->
+  <section id="mapping">
+    <h2>The Event Mapping, and the Rules Derived From the Bytes</h2>
+    <p>This section is the parser's specification. Every row was read off <code>specs/fixtures/agy/</code>, and every derived rule is repeated verbatim in <code>specs/tickets/awsf-v2-w09-agy-adapter/README.md</code> § Derived-field rules, so a reviewer edits the rule in one place instead of re-deriving it downstream.</p>
+
+    <h3>The vocabulary — three kinds, four step types, two states</h3>
+    <pre class="code">{"event":"init",        "conversation_id":"…", "init":{"cwd":…, "tools":[57], "permission_mode":"request-review"}}
+{"event":"step_update", "step_update":{"conversation_id":…, "step_index":n, "state":"ACTIVE"|"DONE",
+                                       "step_type":"user_input"|"agent_response"|"tool"|"system_message",
+                                       "tool_name"?, "tool_info"?:{name, parameters, output?},
+                                       "text_delta"?, "duration_seconds"?, "usage"?}}
+{"event":"result",      "result":{"conversation_id":…, "status":"SUCCESS"|"ERROR", "response", "error"?,
+                                  "duration_seconds", "num_turns", "usage":{5 fields}}}</pre>
+
+    <table>
+      <thead><tr><th style="width:30%">Provider shape</th><th style="width:26%">Normalized event</th><th>Rule, and where it came from</th></tr></thead>
+      <tbody>
+        <tr><td><em>before the first byte</em></td><td><code>run.started</code></td><td>Host-minted from the request, exactly as on the two verified routes. It cannot wait for <code>init</code>: <code>stream3</code> has no <code>init</code> at all.</td></tr>
+        <tr><td><code>init</code></td><td><code>model.resolved</code> (<code>route-attributed</code>) + a <code>permission_mode</code> assertion</td><td>The capture names no model, so the provenance is the host's route. <code>init.permission_mode</code> is checked against the value the host expects and a mismatch fails the run — an in-stream check that costs nothing and is testable against four streams.</td></tr>
+        <tr><td><code>step_type: "agent_response"</code> with <code>text_delta</code></td><td><code>text.delta</code></td><td>Deltas stream at <code>ACTIVE</code> and the closing <code>DONE</code> <strong>also carries one</strong> (<code>stream2</code> line 16: <code>"\n"</code>). Both are emitted; concatenating all of them reproduces <code>result.response</code> byte for byte, which is the replay assertion.</td></tr>
+        <tr><td><code>step_type: "agent_response"</code> with no <code>text_delta</code></td><td><em>usage only</em></td><td><code>stream2</code> lines 3 and 8 are thinking-only steps: a <code>DONE</code> with <code>usage</code> and no text. <code>text_delta</code> is optional and its absence is not an error.</td></tr>
+        <tr><td><code>step_type: "tool"</code>, <code>state: "ACTIVE"</code></td><td><code>tool.requested</code></td><td><code>toolCallId</code> is host-minted <code>t1, t2, …</code> via <code>mintToolCallId</code>, keyed by a map from <code>step_index</code>. Provider ids never propagate. <code>inputSummary</code> is <code>summarize(tool_info.parameters)</code> through the shared snippet helper and the output budget.</td></tr>
+        <tr><td><code>step_type: "tool"</code>, <code>state: "DONE"</code></td><td><code>tool.completed</code></td><td><strong>Derived:</strong> <code>durationMs = Math.round(duration_seconds * 1000)</code>. The contract requires a non-negative integer; the provider reports a float (<code>8.198992</code>). <code>outcome</code> is <code>"ok"</code> — the capture shows no failing tool call, so any other outcome is unobserved and the parser must not invent a discriminator for it.</td></tr>
+        <tr><td><code>step_type: "user_input"</code>, <code>step_type: "system_message"</code></td><td><em>dropped</em></td><td>Neither carries text, usage or a target in any captured stream. Dropping them is a decision, not an oversight: an unrecognised <em>event</em> gets <code>notice/unknown-provider-event</code>, but a recognised step type with nothing in it gets silence.</td></tr>
+        <tr><td>a line that is not JSON</td><td><code>notice</code> / <code>non-json-output</code></td><td><code>stream3</code>'s first seven lines. The parser tolerates them; it never treats the first as corruption. The count is capped so a CLI that prints a thousand prose lines cannot flood the journal, and the cap itself emits one final notice saying it was reached.</td></tr>
+        <tr><td><code>result.usage</code></td><td><code>usage</code> — <strong>exactly once</strong></td><td><strong>Derived, and measured:</strong> the result's usage is the exact field-by-field sum of the <code>DONE</code> steps' usage. <code>stream2</code>: 13351+2180+2534+3153 = 21218 input; 790+92+394+104 = 1380 output; 0+12126+12120+12119 = 36365 cache-read; totals 22598. <strong>Emitting per step and again at the terminal would double every figure.</strong></td></tr>
+        <tr><td><code>usage.thinking_tokens</code></td><td><code>reasoningTokens</code>, relation <code>unknown</code></td><td>Per-step <code>total_tokens</code> equals <code>input + output</code> exactly, and <code>thinking ≤ output</code> in all four steps — consistent with reasoning being a share of output, and <strong>not proof of it</strong>. The contract has an <code>unknown</code> case; this route takes it. <code>cacheWriteTokens</code> is <code>null</code>, never <code>0</code>: the provider reports no such field.</td></tr>
+        <tr><td><code>result.status: "SUCCESS"</code></td><td><code>run.completed</code></td><td>The terminal is <strong>held</strong> and its <code>exitCode</code> measured from the process, exactly as <code>pi-codex.ts</code> does. A CLI that prints a success terminal and then exits non-zero must not be recorded as clean — and the <code>--print</code> trap below is precisely a way to exit <code>0</code> having done the wrong thing.</td></tr>
+        <tr><td><code>result.status: "ERROR"</code></td><td><code>run.failed</code></td><td><code>errorCode: "E_BACKEND_FAILURE"</code>, message from <code>result.error</code>. <strong>Not</strong> <code>E_QUOTA_EXHAUSTED</code>: no quota refusal has ever been captured on this route and <code>agy</code> is closed-source, so unlike <code>pi</code> there is no vendor source to read the wording out of. That absence is recorded rather than filled with a guess.</td></tr>
+        <tr><td>stream ends with no <code>result</code></td><td><code>run.failed</code> / <code>E_TERMINAL_MISSING</code></td><td>Unobserved in the capture, and reachable in practice: <code>--print-timeout</code> can fire. Any tool still at <code>ACTIVE</code> is settled with <code>outcome: "cancelled"</code> <strong>before</strong> the terminal, because <code>validateEventSequence</code> treats an unsettled tool at any terminal as a violation.</td></tr>
+        <tr><td><code>result.duration_seconds</code>, <code>num_turns</code>, <code>conversation_id</code></td><td><em>not propagated</em></td><td><code>conversation_id</code> is a provider session handle. <code>continuity</code> is <code>"none"</code> on this route — no resume flag was captured working and <code>--continue</code> is unmeasured — so retaining the id would create a handle nothing can use. Invariant 1 also forbids committing one.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout warn">
+      <span class="lbl">Two fields the mapping deliberately leaves empty</span>
+      <p style="margin-top:0"><strong><code>costAuthority: "unavailable"</code>.</strong> The provider reports five token counts and <strong>no cost</strong>. <code>catalog-estimate</code> would need rate-per-million figures for this family, and <code>MODEL_FAMILIES</code> carries <code>contextWindow: null</code> for <code>antigravity</code> precisely because a made-up ceiling is worse than no ceiling. The same principle applies to a made-up price. <strong><code>usageAuthority: "provider"</code></strong> is the one authority this route <em>does</em> earn: the counts come off the stream.</p>
+      <p>The scale is worth recording. One turn that read a 47-byte file spent <strong>22,598 tokens against a 36,365-token cache read</strong>. The system prompt behind 57 tools is large, and a per-call ceiling expressed in calls rather than tokens does not see it.</p>
+    </div>
+  </section>
+
+  <!-- ===== IMPLEMENTATION PHASES ===== -->
+  <section id="phases">
+    <h2>Implementation Phases</h2>
+    <p><strong>IMPORTANT:</strong> Execute every phase and task step by step, in order, top to bottom.</p>
+    <p>Status markers: <code>[]</code> idle · <code>[wip]</code> in progress · <code>[x]</code> complete · <code>[f]</code> failed. All start as <code>[]</code>; the Build Plan workflow updates them as it works.</p>
+    <p class="sub"><strong>Every task in this plan runs offline.</strong> No milestone starts a provider process, reaches the network, or spends quota. Where a task would benefit from a live call, it says what question the call answers that the retained bytes cannot — and the call is still not taken without an owner act.</p>
+
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M1: Retain the bytes, pin the obstacle, and decide</h3>
+      <p>The capture is currently outside every sweep this repository runs and outside the convention every other provider fixture follows. M1 moves it inside both, turns the containment finding into a test that can go red, and then <strong>stops for an owner decision</strong>. It is a gate, not a preliminary: the spine sanctions closing an optional workstream unbuilt with its evidence recorded, and after reading the 57-tool roster that is a live option rather than a formality.</p>
+
+      <figure>
+        <pre class="mermaid">
+flowchart TD
+  A["specs/fixtures/agy<br/>outside every sweep"] --> B["core/test/fixtures/providers/agy<br/>+ PROVENANCE.md"]
+  B --> C["roster pin test<br/>57 tools, 4 subagent"]
+  C --> D{"owner decision"}
+  D -->|"build"| M2["M2 · parser"]
+  D -->|"close"| Z(["record the gap,<br/>keep the bytes"])
+  style D stroke:#f97316,stroke-width:2px
+  style Z stroke:#d29922,stroke-dasharray:4 3
+        </pre>
+        <figcaption>Everything in M1 is a file move, a provenance note, and two tests. It costs no quota and produces the one artifact that survives either branch: the bytes, retained where the repository's own fences can reach them.</figcaption>
+      </figure>
+
+      <h4>1. Retain the capture under the provider-fixture convention</h4>
+      <p class="sub">Serves <code class="serves">AC-1</code> · <code class="serves">INV-5</code> · <code class="serves">INV-6</code></p>
+      <p>Copy the eight files into <code>core/test/fixtures/providers/agy/</code> and write the <code>PROVENANCE.md</code> that the codex and claude captures already model. The provenance is not decoration: the fixture-integrity rule says no task may satisfy itself with fixtures invented from the same unverified assumption it is testing, and this file is how that rule becomes checkable here.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> The eight files land at <code>core/test/fixtures/providers/agy/</code> byte-for-byte, and a test asserts each is byte-identical to its <code>specs/fixtures/agy/</code> original for as long as that directory exists — so two copies cannot drift while <strong>Q5</strong> is open</li>
+        <li><code class="status">[]</code> <code>PROVENANCE.md</code> records: binary, version <code>1.1.15</code>, capture date, host, auth method, and that every capture was taken <strong>without</strong> <code>--dangerously-skip-permissions</code> so the recorded behaviour is the guarded default</li>
+        <li><code class="status">[]</code> It records the one scrub — <code>stream3</code>'s Google OAuth URL carrying a PKCE <code>code_challenge</code> and a <code>state</code> nonce, replaced by <code>&lt;oauth-url-scrubbed&gt;</code>, one substitution — and a test asserts the placeholder is present and no other file was altered</li>
+        <li><code class="status">[]</code> <strong>The fixture-integrity gap is written down rather than papered over:</strong> unlike <code>codex/capture-probe.ts</code>, these bytes were produced by hand-typed argv that no file records, so the argv under test is <em>not</em> the argv that produced them by construction. The provenance states the argv per stream if the owner can supply it, and states it as unrecorded if not</li>
+        <li><code class="status">[]</code> It records the retained capture's two absences: <strong>no stderr file</strong> beside any stream (the &ldquo;background task&rdquo; line is quoted in the README, not retained), and <strong>no <code>stream7</code></strong> — the <code>--sandbox</code> probe the graduation condition needs</li>
+        <li><code class="status">[]</code> It records, under its own heading, that the capture's <code>cwd</code> values carry the owner's home path in three spellings and that this is <strong>deliberate</strong>: the path is the evidence for corrections 1 and 2, and scrubbing it would destroy what streams 4, 5 and 6 exist to show. The codex and claude probes avoided machine paths only because their <code>cwd</code> was a throwaway temporary directory</li>
+      </ul>
+
+      <h4>2. Extend the credential sweep to reach the retained capture, and prove it bites</h4>
+      <p class="sub">Serves <code class="serves">INV-6</code></p>
+      <p><code>no-credentials-in-fixtures.test.ts</code> walks <code>core/test/fixtures</code>, the three root manifests and the driving tree. <code>specs/fixtures/</code> is a directory none of them reaches — it did not exist when they were written. Invariant 9 says &ldquo;in fixtures <strong>or anywhere else</strong>&rdquo;, and a directory of captured provider output is exactly the kind of place a token arrives by accident.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> The sweep reaches <code>specs/fixtures/</code> as well as <code>core/test/fixtures/</code>, over the same extension list</li>
+        <li><code class="status">[]</code> Both directories pass today — recorded as a measurement, with the command that produced it, not as an assumption</li>
+        <li><code class="status">[]</code> A companion test feeds the predicate a synthetic offender held in memory, so the new leg is not vacuous: <code>walkFiles</code> returns <code>[]</code> for a missing directory, and a sweep nobody has watched catch something is decoration</li>
+        <li><code class="status">[]</code> The assembled-token convention is kept: the specimen is concatenated at runtime, never written as one literal, so a repository-wide sweep does not report this fence's own source</li>
+      </ul>
+
+      <h4>3. Pin the containment obstacle to the bytes</h4>
+      <p class="sub">Serves <code class="serves">INV-4</code> · <code class="serves">AC-10</code></p>
+      <p>The reason this route is refused for every role is a property of <code>init.tools</code>. A property that lives only in prose gets re-litigated; a property pinned by a test gets revisited only when it actually changes. This is the single cheapest thing in the workstream that could change a future decision.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> A test reads <code>init.tools</code> out of the retained capture and asserts the roster is exactly <strong>57</strong> entries</li>
+        <li><code class="status">[]</code> It asserts all four subagent tools are present — <code>define_subagent</code>, <code>invoke_subagent</code>, <code>manage_subagents</code>, <code>browser_subagent</code> — and its failure message says, in one sentence, that their presence is why no role may be assigned to this route</li>
+        <li><code class="status">[]</code> It asserts the mutation-shaped subset is present: shell (<code>run_command</code>, <code>send_command_input</code>, <code>command_status</code>), file writes (<code>write_to_file</code>, <code>replace_file_content</code>, <code>multi_replace_file_content</code>, <code>sed_file</code>), and the six external-reach tools (<code>call_mcp_tool</code>, <code>schedule</code>, <code>send_message</code>, <code>manage_inbox</code>, <code>search_web</code>, <code>read_url_content</code>) — four of which are <strong>external-mutation</strong> shaped in the protected-operations vocabulary</li>
+        <li><code class="status">[]</code> It asserts <code>init.permission_mode</code> is <code>"request-review"</code> in every stream that carries an <code>init</code>, and its comment records that under this default the agent executed PowerShell unprompted when merely asked where it was</li>
+        <li><code class="status">[]</code> The test is a meta-test, not an adapter test: it survives a decision to build no parser at all, which is the branch <strong>Q4</strong> may take</li>
+      </ul>
+
+      <h4>4. Testing Strategy, and the M1 decision gate</h4>
+      <p class="sub">Serves <code class="serves">INV-5</code> · <code class="serves">AC-10</code></p>
+      <p>Node's built-in runner over the new fixtures and the two new tests. Nothing here starts a process or touches the network. The milestone closes by writing the decision into this plan's Amendments where the next session reads it — <strong>including the branch a decision to stop takes</strong>.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — green at the exact base SHA <em>before</em> any change, and green again after, with both counts in the commit body</li>
+        <li><code class="status">[]</code> <code>npm run typecheck</code> and <code>npm run lint</code> — zero errors, zero warnings</li>
+        <li><code class="status">[]</code> Each of the two new tests has been <strong>seen to fail</strong> by inducing one drift: delete a tool from a copied roster; plant an assembled token in a scratch fixture</li>
+        <li><code class="status">[]</code> The four corpus-count constants this plan's artifacts move are bumped in the same commit, or their exact deltas are reported to the owner: <code>plan-kind.test.ts</code> (deep plans), <code>routes.test.ts</code> (resolved tickets), <code>backlog.test.ts</code> (blocked), <code>dashboard-backlog-selection.test.ts</code> (ready)</li>
+        <li><code class="status">[]</code> An Amendment records the M1 close and the owner's answer to <strong>Q4</strong>. If the answer is to stop, the same Amendment records the workstream as closed unbuilt with its evidence retained, names the roster as the reason, and <strong>no further milestone starts</strong></li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass. This milestone is also allowed to end the workstream; that outcome is recorded, not worked around.
+      </div>
+    </div>
+
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M2: The parser, fixture-complete</h3>
+      <p>The workstream's name is <em>parser first</em>, and this is it. A decoder that owns <code>agy</code>'s vocabulary and nothing else, feeding the same <code>LineFramer</code> / <code>EventSequencer</code> / <code>OutputBudget</code> the two verified routes already use. It introduces no second framing rule, no second sequencing rule, and no second opinion about the environment allowlist. Every assertion in this milestone replays retained bytes; <strong>no live call is needed to complete it, and none is taken</strong>.</p>
+
+      <figure>
+        <pre class="mermaid">
+sequenceDiagram
+  participant S as agy stdout
+  participant F as LineFramer
+  participant D as AgyStreamDecoder
+  participant Q as EventSequencer
+  S->>F: bytes
+  F->>D: one line
+  D->>Q: text.delta / tool.requested
+  D->>Q: tool.completed
+  D->>Q: usage (once, from result)
+  D-->>Q: terminal held
+  Q-->>D: exit code measured
+        </pre>
+        <figcaption>The same four-stage shape <code>pi-codex.ts</code> uses. The decoder is the only new piece; the held terminal is what lets a CLI that prints success and exits non-zero still be recorded honestly, which matters more here than on the verified routes because the <code>--print</code> trap is a way to exit zero having done the wrong thing.</figcaption>
+      </figure>
+
+      <h4>5. The decoder skeleton, and a stream that opens with prose</h4>
+      <p class="sub">Serves <code class="serves">AC-2</code></p>
+      <p>Start at the hardest case rather than the happy one. <code>stream3</code> has <strong>no <code>init</code> event at all</strong>, seven lines of human prose, and then a well-formed <code>result</code>. A decoder built happy-path-first would have treated line 1 as corruption and never reached the terminal.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>core/src/adapters/antigravity-stream.ts</code> decodes a line to zero or more normalized events through an injected <code>EventSequencer</code>, mirroring <code>PiStreamDecoder</code>'s constructor shape (<code>adapter</code>, <code>provider</code>, <code>requestedModel</code>, <code>now</code>)</li>
+        <li><code class="status">[]</code> A non-JSON line yields one <code>notice</code> with code <code>non-json-output</code> and the line as truncated <code>detail</code>; parsing continues</li>
+        <li><code class="status">[]</code> The notice count is <strong>capped</strong>, and reaching the cap emits one final notice saying so — a CLI that prints a thousand prose lines must not flood the journal, and silence about the cap would be worse than the flood</li>
+        <li><code class="status">[]</code> A JSON line whose <code>event</code> is none of the three yields <code>notice</code> / <code>unknown-provider-event</code>; a <code>step_update</code> whose <code>step_type</code> is unrecognised yields the same</li>
+        <li><code class="status">[]</code> Replaying <code>stream3</code> produces exactly seven <code>non-json-output</code> notices followed by one terminal, and <code>validateEventSequence</code> reports no violation</li>
+        <li><code class="status">[]</code> The decoder never reads the filesystem, never imports <code>node:child_process</code>, and never calls <code>fetch</code> — asserted by the two existing adapter fences</li>
+      </ul>
+
+      <h4>6. Steps to events: text, tools, and the two step types that carry nothing</h4>
+      <p class="sub">Serves <code class="serves">AC-1</code> · <code class="serves">AC-3</code></p>
+      <p>The body of the mapping table in § The Event Mapping. The subtle rows are the ones the capture disproves an assumption about: a <code>DONE</code> agent response can carry a <code>text_delta</code> too, and a <code>DONE</code> agent response can carry none at all.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>agent_response</code> with <code>text_delta</code> yields <code>text.delta</code> at both <code>ACTIVE</code> and <code>DONE</code>; concatenating every delta of a stream reproduces that stream's <code>result.response</code> <strong>byte for byte</strong>, asserted for <code>stream2</code>, <code>4</code>, <code>5</code> and <code>6</code></li>
+        <li><code class="status">[]</code> <code>agent_response</code> without <code>text_delta</code> emits no text event and is not an error</li>
+        <li><code class="status">[]</code> <code>step_type: "tool"</code> at <code>ACTIVE</code> yields <code>tool.requested</code> with a host-minted <code>toolCallId</code> from <code>mintToolCallId</code>, <code>name</code> from <code>tool_name</code>, and <code>inputSummary</code> from <code>tool_info.parameters</code> through the shared <code>summarize</code> helper and the output budget</li>
+        <li><code class="status">[]</code> The same <code>step_index</code> at <code>DONE</code> yields <code>tool.completed</code> carrying the <strong>same</strong> minted id, <code>outcome: "ok"</code>, <code>durationMs = Math.round(duration_seconds * 1000)</code>, and <code>resultSnippet</code> from <code>tool_info.output</code></li>
+        <li><code class="status">[]</code> <code>stream2</code> yields exactly two tool pairs — <code>run_command</code> as <code>t1</code> (8199 ms) and <code>view_file</code> as <code>t2</code> (54 ms) — and the <code>t1</code> request carries <code>CommandLine</code> in its <code>inputSummary</code>, which is <strong>AC-3</strong>'s whole content</li>
+        <li><code class="status">[]</code> The test asserting that ordering carries a comment stating the limit in the same place the property is proven: <code>ACTIVE</code> precedes completion, <strong>not proven initiation</strong>; this is detection with latency and no abort is claimed to be timely</li>
+        <li><code class="status">[]</code> <code>user_input</code> and <code>system_message</code> emit nothing, and a comment records that this is a decision about two step types observed to carry no payload — not a fallthrough</li>
+      </ul>
+
+      <h4>7. Usage and identity: the sum rule, and a route that never names its model</h4>
+      <p class="sub">Serves <code class="serves">AC-5</code> · <code class="serves">AC-6</code></p>
+      <p>Two rules that a reasonable implementer would get wrong in the same direction — by trusting the stream to be more informative than it is.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Exactly one <code>usage</code> event per run, decoded from <code>result.usage</code>; per-step usage is <strong>not</strong> emitted</li>
+        <li><code class="status">[]</code> A test proves <em>why</em>: the per-step <code>DONE</code> usages of <code>stream2</code> sum field-by-field to the result's — 21218 / 1380 / 1197 / 36365 / 22598 — so a per-step emission would double every figure that reaches the ledger and the dashboard</li>
+        <li><code class="status">[]</code> The mapping is <code>input_tokens → inputTokens</code>, <code>output_tokens → outputTokens</code>, <code>cache_read_tokens → cacheReadTokens</code>, <code>thinking_tokens → reasoningTokens</code>, <code>cacheWriteTokens: null</code> — <code>null</code> because the provider reports no such field, never <code>0</code>, which would be authoritative data</li>
+        <li><code class="status">[]</code> <code>reasoningRelation: "unknown"</code>, with a comment recording the arithmetic that makes <code>included-in-output</code> plausible and the absence of any vendor source that would make it provable — <code>agy</code> is closed-source, so the reading <code>pi</code>'s decoder could do is unavailable here</li>
+        <li><code class="status">[]</code> <code>model.resolved</code> carries <code>provenance: "route-attributed"</code> and the requested selector, never a provider-named model</li>
+        <li><code class="status">[]</code> A test asserts <strong>no retained stream contains the substring <code>model</code> at all</strong>, so the spine's &ldquo;stream-authoritative model identity&rdquo; claim cannot quietly return, and its message cites <code>codex/PROVENANCE.md</code> where the same correction was made on the other route</li>
+        <li><code class="status">[]</code> <code>getModelInfo</code> reports <code>usageAuthority: "provider"</code> and <code>costAuthority: "unavailable"</code>, with the no-cost finding in a comment beside it</li>
+      </ul>
+
+      <h4>8. Terminals: success, error, missing, and the open tool at the end</h4>
+      <p class="sub">Serves <code class="serves">AC-1</code> · <code class="serves">AC-2</code></p>
+      <p>Three terminal paths exist in the capture and a fourth is reachable in practice. The fourth is the one <code>validateEventSequence</code> will punish if it is left implicit.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>status: "SUCCESS"</code> yields <code>run.completed</code>, <strong>held</strong> so its <code>exitCode</code> is measured from the process rather than assumed at the moment the terminal line was seen; <code>null</code> stays <code>null</code> when the process does not exit in time</li>
+        <li><code class="status">[]</code> <code>status: "ERROR"</code> yields <code>run.failed</code> with <code>errorCode: "E_BACKEND_FAILURE"</code> and the provider's <code>error</code> string as message; <code>stream3</code> is the fixture and its zeroed usage still produces a usage event, because zero reported is authoritative</li>
+        <li><code class="status">[]</code> A stream that ends with no <code>result</code> yields <code>run.failed</code> / <code>E_TERMINAL_MISSING</code>; the fixture is a <strong>byte prefix</strong> of <code>stream2</code> cut mid-line, and <code>capture.startsWith(prefix)</code> is asserted so the derived file cannot drift into fiction</li>
+        <li><code class="status">[]</code> Any tool still at <code>ACTIVE</code> when a terminal arrives is settled first with <code>outcome: "cancelled"</code>, so <code>tool-unsettled-at-terminal</code> cannot fire; the prefix fixture is cut inside an open <code>run_command</code> so this path is exercised rather than asserted</li>
+        <li><code class="status">[]</code> A comment records what this route has <strong>no</strong> terminal for: quota. No quota refusal has been captured, <code>agy</code> exposes no source to read the wording from, and a quota-shaped failure would arrive as <code>E_BACKEND_FAILURE</code> — stated as a gap, not filled with a representative sentence</li>
+      </ul>
+
+      <h4>9. Testing Strategy: every retained stream replayed</h4>
+      <p class="sub">Serves <code class="serves">AC-1</code> · <code class="serves">AC-2</code> · <code class="serves">AC-3</code> · <code class="serves">AC-5</code> · <code class="serves">AC-6</code></p>
+      <p><strong>Fixture-first, defined operationally:</strong> every event kind and every terminal state present in the retained bytes has a test before any live call is even considered. The replay is table-driven over the five streams so a sixth, when one is ever captured, joins by adding a row.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> All five streams replay end to end and <code>validateEventSequence</code> returns <code>[]</code> for each — contiguous <code>seq</code>, exactly one terminal, it is last, and no tool is left open</li>
+        <li><code class="status">[]</code> A coverage assertion enumerates the decoded kinds and fails if any of the three provider event kinds, four step types, or two terminal statuses is unexercised — so &ldquo;fixture-complete&rdquo; is a test result rather than a claim</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — green at the base SHA and green after, counts in the commit body</li>
+        <li><code class="status">[]</code> <code>npm run typecheck</code>, <code>npm run lint</code> — clean</li>
+        <li><code class="status">[]</code> At least two replay assertions have been seen to fail by inducing one drift each: change a byte in a fixture, and delete the open-tool settlement</li>
+        <li><code class="status">[]</code> An Amendment records the M2 close, including any row that closed <code>[f]</code> and the condition holding it</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass. If a case cannot be covered from the retained bytes, mark it <code>[f]</code> and name the capture that would close it; do not synthesise a fixture for a shape nobody has observed.
+      </div>
+    </div>
+
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M3: The descriptor, and the refusals that are not approximations</h3>
+      <p>The adapter half. <code>buildSpec</code> is small; what makes it worth a milestone is that three of its inputs have no honest expression on this route, and the difference between an adapter that <em>refuses</em> them and one that <em>approximates</em> them is the difference between a disabled route and a quietly dangerous one. The precedent already exists in the tree: <code>pi-codex.ts</code> throws <code>E_POLICY_CEILING_UNENFORCEABLE</code> for the <code>gate-execute</code> profile rather than approximating a ceiling it cannot enforce.</p>
+
+      <figure>
+        <pre class="mermaid">
+flowchart TD
+  R["ModelRequest"] --> E{"effort"}
+  R --> P{"tool profile"}
+  R --> X{"executable"}
+  E -->|"none"| RF1["refuse: no off switch"]
+  E -->|"xhigh"| LOSS["high, declared loss"]
+  P -->|"any"| RF2["refuse: no allow/deny flag"]
+  X -->|"agy"| RF3["refuse: alias is shell-local"]
+  style RF1 stroke:#f85149
+  style RF2 stroke:#f85149
+  style RF3 stroke:#f85149
+  style LOSS stroke:#d29922
+        </pre>
+        <figcaption>Three inputs, three refusals and one declared loss. None of them is a bug to be fixed later: each is a property of the CLI's own flag surface, read out of <code>help.txt</code>, and turning any of them into a silent default is how a route with no containment ends up carrying a role.</figcaption>
+      </figure>
+
+      <h4>10. <code>buildSpec</code>, and the flag that eats the prompt</h4>
+      <p class="sub">Serves <code class="serves">AC-4</code></p>
+      <p><code>--print</code> takes the prompt as its value (<code>--prompt</code> is documented as its alias), and this is Go's <code>flag</code> package, which stops parsing at the first non-flag. So <code>--print --output-format=stream-json &hellip;</code> silently makes <code>--output-format=stream-json</code> the prompt, runs, and <strong>exits <code>0</code></strong> with prose on stdout and nothing on stderr. A harness that treated exit zero as success would record a clean run of a prompt it never sent.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <strong>Every</strong> flag uses <code>=</code> form, the prompt included, so the argv contains <strong>no positional argument at all</strong> and Go's early stop has nothing to trigger on. <code>--print</code> is also placed last, as a second line of defence the descriptor test asserts independently</li>
+        <li><code class="status">[]</code> <code>--output-format=stream-json</code> — without it the CLI emits prose and there is nothing to parse</li>
+        <li><code class="status">[]</code> <code>--print-timeout=</code> is set explicitly from the host's silence budget. <strong>The default is <code>5m0s</code></strong> against <code>runtime.silence_timeout_seconds: 2700</code>; leaving it unset caps every phase on this route at five minutes, and no existing test would notice</li>
+        <li><code class="status">[]</code> <code>--disable-slash-commands</code> is always present. The spine's rule that no workstream may put a skill in the execution path is why <code>pi</code> launches with <code>--no-skills</code>; this flag is <code>agy</code>'s analogue, and a gate must never depend on a document having been read</li>
+        <li><code class="status">[]</code> <code>--model=</code> is passed only when the selector names one, guarded by the same safe-selector regex <code>pi-codex.ts</code> uses; a comment records that <strong>no model name on this route has been verified</strong> — the subcommand that would list them requires an authenticated session</li>
+        <li><code class="status">[]</code> <code>--mode=plan</code> is <strong>not</strong> used as a containment mechanism, and a comment says why: the spine records that plan mode steers rather than enforces, and that a write executed under it</li>
+        <li><code class="status">[]</code> <code>--add-dir</code> is not used, with a comment recording that the only workspace flag the CLI exposes <strong>widens</strong> the workspace and none narrows it</li>
+        <li><code class="status">[]</code> The environment is the shared <code>filterEnv</code> allowlist rather than a second opinion, and <code>shell: false</code> holds, as <code>no-shell-true.test.ts</code> already requires</li>
+      </ul>
+
+      <h4>11. The prompt's ceiling, and the path the capture did not take</h4>
+      <p class="sub">Serves <code class="serves">AC-4</code></p>
+      <p>Every other adapter here puts the prompt on <strong>stdin</strong>; <code>ProcessSpec</code> has a field for exactly that, and <code>pi-codex.ts</code>'s comment calls it the property the harness needs. <code>agy</code>'s captured shape puts it in argv. That is not a style difference: a Windows command line is capped, and a review phase composes a host-built diff into its prompt.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>ProcessSpec</code>'s stdin field is empty on this route, with a comment stating that the prompt travels in argv because that is the only shape the capture exercises</li>
+        <li><code class="status">[]</code> The adapter carries a declared maximum prompt size and refuses above it with <code>E_INVALID_REQUEST</code> <strong>before any child starts</strong>, naming the ceiling and the reason — never truncating, because a truncated prompt produces a confident answer to a question nobody asked</li>
+        <li><code class="status">[]</code> The ceiling's derivation is written beside it: the documented <code>CreateProcess</code> command-line limit of 32,767 characters, less the rest of the argv. The test asserts <em>that a refusal happens</em>, not the exact constant, so tuning the number later does not rewrite the test</li>
+        <li><code class="status">[]</code> A comment records that whether WSL interop imposes exactly that limit is <strong>unverified</strong>, and names the settlement: one offline probe invoking any Windows executable with a growing argv, no <code>agy</code> and no quota involved</li>
+        <li><code class="status">[]</code> The unexplored alternative is recorded rather than implied: <code>--input-format=stream-json</code> reads one NDJSON message per line from stdin and requires <code>--output-format=stream-json</code>. It would remove the ceiling and take the prompt out of the process table. <strong>Its message shape is undocumented in <code>help.txt</code> and unobserved in the capture</strong>, which is why it is <strong>Q6</strong> and not a task</li>
+      </ul>
+
+      <h4>12. Effort, profiles, and the executable that cannot be named</h4>
+      <p class="sub">Serves <code class="serves">AC-7</code> · <code class="serves">INV-3</code></p>
+      <p>The three inputs with no honest expression. Each is refused or declared lossy in code, and each carries the measurement that forced it.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <strong>Effort, declared lossy.</strong> <code>--effort</code> accepts <code>low|medium|high</code> only. <code>awsf.config.yaml</code>'s agent schema declares five levels (<code>none</code>, <code>low</code>, <code>medium</code>, <code>high</code>, <code>xhigh</code>); the <code>pi</code> route accepts seven. The mapping is exported as a frozen table so it is reviewable in one place: <code>low&rarr;low</code>, <code>medium&rarr;medium</code>, <code>high&rarr;high</code>, <code>xhigh&rarr;high</code> — <strong>one declared loss</strong></li>
+        <li><code class="status">[]</code> <code>none</code> is <strong>refused</strong> with <code>E_INVALID_REQUEST</code> rather than silently raised to <code>low</code>. <code>pi-codex.ts</code>'s own comment sets the principle — it maps <code>none</code> to <code>off</code> so that &ldquo;the harness says what it means&rdquo; — and <code>agy</code> has no off switch to mean it with</li>
+        <li><code class="status">[]</code> <strong>Profiles, all refused.</strong> Every profile the config can name — <code>readonly</code>, <code>managed-worker</code>, <code>no-tools</code> — raises <code>E_POLICY_CEILING_UNENFORCEABLE</code>, and the message names the absent flag: <code>help.txt</code> exposes no allow/deny tool flag and no system-prompt flag</li>
+        <li><code class="status">[]</code> The <code>documenter</code> role is the worked example in the test, because it is the <em>only</em> role the spine ever contemplates for this route: its allow list is <code>read, grep, find, ls, edit, write</code> — deliberately excluding <code>exec</code> — and on this route that exclusion has <strong>no expression whatsoever</strong> while <code>run_command</code> sits in a 57-tool roster</li>
+        <li><code class="status">[]</code> <strong>The executable, both refusals proven.</strong> <code>executable: agy</code> reaches <code>resolveExecutable</code>, which searches <code>PATH</code> and raises <code>ExecutableNotFound</code>: the alias is shell-local, and the environment allowlist passes only <code>PATH</code>, <code>HOME</code> and <code>TMPDIR</code></li>
+        <li><code class="status">[]</code> And an absolute path cannot be committed instead: <code>ABSOLUTE_PATH_PATTERN</code> in <code>config/machine-path.ts</code> matches <code>/</code>, <code>C:\</code>, <code>\\</code> and <code>~</code> on <strong>every string leaf</strong>, so that key raises <code>ConfigAbsolutePathError</code>. A test asserts both, and a comment names the two exits — an owner-side <code>PATH</code> install, or the machine-local layer <code>awsf-v2-w04-project-registry</code> introduces</li>
+      </ul>
+
+      <h4>13. Testing Strategy: the exact-argv descriptor test</h4>
+      <p class="sub">Serves <code class="serves">AC-4</code> · <code class="serves">AC-7</code> · <code class="serves">INV-2</code></p>
+      <p>A descriptor test compares a whole frozen argv array, not a substring, because a substring check passes on a transposition. The ordering trap gets its own test that <em>drives</em> the wrong order rather than merely describing it.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>buildSpec</code> is asserted as a complete frozen array for three requests — a bare one, one with an effort, one with a model selector — and the whole descriptor is compared, environment and <code>shell: false</code> included</li>
+        <li><code class="status">[]</code> <strong>The trap has its own test:</strong> it constructs the transposed argv, asserts that <code>--output-format=stream-json</code> lands in the prompt position under Go's parsing rule, and states in its message that the observed consequence is exit <code>0</code> with prose output and empty stderr</li>
+        <li><code class="status">[]</code> Every refusal in task 12 is asserted by <code>code</code> and <code>instanceof</code>, never by message text</li>
+        <li><code class="status">[]</code> The two adapter fences stay green over the new module: no <code>node:child_process</code> import, no global <code>fetch</code></li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code>, <code>npm run lint</code> — green, clean, counts recorded</li>
+        <li><code class="status">[]</code> The descriptor test has been seen to fail by reordering one flag, and the profile refusal by returning a flag array instead of throwing</li>
+        <li><code class="status">[]</code> An Amendment records the M3 close and whether the owner answered <strong>Q6</strong></li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass. A refusal that becomes a default in order to make a test pass is the one change this milestone forbids outright.
+      </div>
+    </div>
+
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M4: What detection covers, and what it does not</h3>
+      <p>The spine's clause (d) — <em>for every mechanism it calls a boundary, what that mechanism does not cover</em> — turned into tests. Three mechanisms in the tree would, on this route, report a guarantee they do not have. One is fixed here; the two that cannot be fixed are recorded in the code that would otherwise imply them.</p>
+
+      <figure>
+        <pre class="mermaid">
+flowchart LR
+  subgraph covered["what detection covers"]
+    W["worktree paths,<br/>after the turn returns"]
+  end
+  subgraph uncovered["what it does not"]
+    T1["shell execution"]
+    T2["messaging, scheduling"]
+    T3["web search, MCP"]
+    T4["20 browser tools"]
+    T5["subagents"]
+  end
+  style covered stroke:#3fb950
+  style uncovered stroke:#f85149
+        </pre>
+        <figcaption>One box on the left, five on the right. The left box is the post-return worktree fingerprint in <code>core/src/git/changes.ts</code>, and it sees the net effect of the turn without attributing it. Four of the right-hand boxes are external-mutation shaped in the protected-operations vocabulary the config already carries.</figcaption>
+      </figure>
+
+      <h4>14. The badge that would have lied</h4>
+      <p class="sub">Serves <code class="serves">AC-8</code></p>
+      <p><code>grantSandbox</code> and <code>PermissionSession</code> compute the sandbox badge from the platform and a <code>bwrap</code> probe, and <strong>never ask the adapter whether it can express a tool policy</strong>. On this development machine <code>bwrap</code> is absent, so the badge degrades to <code>tool-policy</code> with mechanism <code>adapter-tool-policy</code>. For a route whose adapter refuses every profile because it has no flag to express one, that badge names a mechanism that does not exist.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> The badge consults whether the route's adapter can express a tool ceiling, and degrades to <code>unavailable</code> / <code>none</code> when it cannot</li>
+        <li><code class="status">[]</code> The capability is declared by the adapter, not inferred from its id — a hard-coded adapter name in a policy module is the kind of coupling <code>driving-routes.test.ts</code> already exists to punish elsewhere</li>
+        <li><code class="status">[]</code> The two verified routes are <strong>unchanged</strong> in every existing assertion, on both branches of the <code>bwrap</code> probe</li>
+        <li><code class="status">[]</code> A test covers all four combinations of platform-with-<code>bwrap</code> and adapter-can-express, and the agy row reads <code>unavailable</code> in both <code>bwrap</code> states</li>
+        <li><code class="status">[]</code> A comment records the unmeasured case rather than assuming it: if <code>bwrap</code> ever <em>is</em> present, <code>bwrapSpec</code> makes the executable <code>bwrap</code> and runs a Windows executable inside <code>--unshare-all</code>, and <strong>whether WSL interop survives that has never been tested</strong>. The settlement is offline and needs no <code>agy</code>: run any Windows executable under the same flags</li>
+      </ul>
+
+      <h4>15. The cwd contract: a UNC working directory, and a prompt that must state it</h4>
+      <p class="sub">Serves <code class="serves">INV-4</code></p>
+      <p>Two findings meet here. The agent <strong>cannot report its own working directory</strong> — three tool-free runs gave three different wrong answers and all three returned <code>SUCCESS</code> — and the tool parameters that detection would read are spelled in exactly the forms <code>path-policy</code> refuses by design.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> A cwd/path contract table lands in the plan and in the adapter's header, with one row per captured case: a drive path answered correctly <em>with</em> a tool, the same path answered wrongly <em>without</em> one, and two UNC paths answered wrongly without one. <strong><code>init.cwd</code> is the truth</strong>, and the response text never is</li>
+        <li><code class="status">[]</code> The adapter asserts <code>init.cwd</code> against the worktree it asked for and fails the run on a mismatch, after normalising the two spellings of the same directory; this is the only cwd check on this route that rests on something the provider cannot invent</li>
+        <li><code class="status">[]</code> <strong>Prompt composition must state the working directory</strong> — recorded here as a <strong>requirement</strong>, not a nicety, because the agent invents one and still returns <code>SUCCESS</code>. It belongs in the centralised composer <code>awsf-v2-w06-prompt-composition</code> delivered, and this task writes the per-route requirement and its test, never a fourth composition site</li>
+        <li><code class="status">[]</code> <strong>In-stream path detection is proven unavailable, not merely hard.</strong> A test feeds each captured tool parameter to <code>normalizeRepositoryPath</code> and asserts <code>InvalidPolicyPath</code> for all of them: backslashes, a drive letter and a UNC prefix are each refused, and the refusal is correct — the header says converting a backslash or dropping a traversal segment would authorize a different path from the one observed</li>
+        <li><code class="status">[]</code> The consequence is written where it will be read: a UNC-to-repository-relative mapping would have to be adapter-local and fail closed, nobody has written one, and until someone does <strong>the only detection layer on this route is the post-return fingerprint</strong> — which is whole-turn, not per-call, and attributes nothing</li>
+        <li><code class="status">[]</code> The throughput risk is recorded with its settlement, and <strong>not</strong> assumed away: every file operation and every host gate command on a WSL-native worktree crosses the UNC redirector. The measurement is a timed file-heavy loop from the Windows side against a worktree-sized tree, compared with the same work on ext4 — <strong>no <code>agy</code>, no quota</strong>. Whether it gates anything is <strong>Q3</strong></li>
+      </ul>
+
+      <h4>16. Broker registration, and the spawn sites the broker will never see</h4>
+      <p class="sub">Serves <code class="serves">INV-2</code> · <code class="serves">INV-4</code></p>
+      <p>The positive half is ordinary and must still be proven: the adapter describes and the broker spawns, with a registration, a reservation and a cancellation handle. The negative half is this workstream's centre, and it is stated in the same task so neither can be read without the other.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Against a fake broker, <code>execute</code> produces exactly one <code>startProcess</code> registration before any event is yielded, carrying the adapter id, the role and the reservation id it was handed</li>
+        <li><code class="status">[]</code> The adapter never starts anything itself and never starts anything twice: there is no retry in it, so a run that ends <code>E_QUOTA_EXHAUSTED</code> ends — the property that makes &ldquo;quota is never a retry&rdquo; structural on the verified routes, kept here</li>
+        <li><code class="status">[]</code> stderr is drained from before the first stdout byte and never stopped, so a child blocked writing to a full stderr pipe still reaches the part where it writes its result</li>
+        <li><code class="status">[]</code> <strong>The negative, asserted as documentation with a test that cannot rot:</strong> the roster pin from task 3 is referenced from the adapter's header, and a comment states that <code>invoke_subagent</code> means the tool creates spawn sites on the far side of <code>transport-broker.ts</code> — no registration, no reservation, no <code>GO</code>, no cancellation handle, no per-child worktree, no attribution</li>
+        <li><code class="status">[]</code> The same comment records the second half: <code>stream2</code>'s stderr reports <em>&ldquo;root agent idle; waiting for 1 background task(s)&rdquo;</em>, so work can outlive the visible turn. The CLI waits — but only until <code>--print-timeout</code>, and <strong>what becomes of a still-running background task when that timeout fires is unmeasured</strong>, as is whether it shares the process group AWSF's cancellation kills across the interop boundary</li>
+        <li><code class="status">[]</code> The evidence discipline is kept in the comment: that stderr line is <strong>quoted in a README, not retained as bytes</strong>, and closing that gap is one short session that spends no model tokens</li>
+      </ul>
+
+      <h4>17. Testing Strategy</h4>
+      <p class="sub">Serves <code class="serves">AC-8</code> · <code class="serves">INV-2</code> · <code class="serves">INV-4</code></p>
+      <p>Host-side tests and a fake broker. Nothing starts a provider process, nothing reaches the network, and the one benchmark this milestone permits is a filesystem measurement with no provider in it.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> The badge matrix, the path-refusal table and the single-registration proof all pass, and each has been seen to fail by inducing one drift</li>
+        <li><code class="status">[]</code> A prose sweep over this plan, its build prompts and its ticket set asserts the bare adjective never describes this route and that <strong>detection-bounded</strong> is the only form used. One exemption, allowlisted by exact string: the provider's own stderr line <code>bounded by --print-timeout</code>, which is a quotation rather than a description — the spine's checklist row, made checkable</li>
+        <li><code class="status">[]</code> The UNC throughput measurement is recorded with the command that produced it and the numbers it produced, or marked <code>[f]</code> with the reason — per the owner's answer to <strong>Q3</strong></li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code>, <code>npm run lint</code> — green, clean, counts recorded</li>
+        <li><code class="status">[]</code> An Amendment records the M4 close, including anything the milestone discovered that a later reader would otherwise re-derive</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass. No mechanism touched here may end the milestone claiming a guarantee it does not have.
+      </div>
+    </div>
+
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M5: Three doors shut, one dossier written, the workstream closed</h3>
+      <p>The stop condition, made mechanical. The parser exists, the descriptor exists, the containment picture is written down — and the route is still off. This milestone proves it is off through three doors that fail independently, writes the one document a future session would need in order to reopen permission graduation, and closes the workstream.</p>
+
+      <figure>
+        <pre class="mermaid">
+flowchart TD
+  D1["config: enabled false<br/>verified refused"] --> OFF(["route unusable"])
+  D2["isAvailable: blocked"] --> OFF
+  D3["no agent names it"] --> OFF
+  OFF --> DOS["graduation dossier"]
+  DOS -.->|"needs bytes<br/>nobody has"| G(["permission graduation"])
+  style OFF stroke:#3fb950,stroke-width:2px
+  style G stroke:#f85149,stroke-dasharray:4 3
+        </pre>
+        <figcaption>Three doors, because one is a single edit away from being wrong. The dashed arrow is the honest state of graduation at the end of this workstream: it needs captured bytes that do not exist, and the dossier says exactly which.</figcaption>
+      </figure>
+
+      <h4>18. Three doors, all shut</h4>
+      <p class="sub">Serves <code class="serves">AC-9</code> · <code class="serves">INV-1</code></p>
+      <p>The spine's stop condition is that enabling the route is a separate, explicit owner act. That is already half-built: <code>load.ts:180</code> refuses <code>enabled: true</code> without <code>verified: true</code>, and <code>awsf.config.yaml</code> is protected so no agent can write either. This task asserts all three doors and, crucially, keeps the availability refusal <em>after</em> the parser exists.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <strong>Door one, config.</strong> A test asserts the shipped config keeps <code>enabled: false</code>, and that setting <code>enabled: true</code> without <code>verified: true</code> raises <code>ConfigUnverifiedAdapterError</code>. <strong>No task in this workstream edits <code>awsf.config.yaml</code></strong> — it is protected, and inventing an owner-authorized change mechanism to route around that is the boundary working, not an obstacle</li>
+        <li><code class="status">[]</code> <strong>Door two, availability.</strong> <code>isAvailable()</code> still returns <code>blocked</code>. Its <code>code</code> and <code>detail</code> are <strong>rewritten</strong>: the honest reason is no longer &ldquo;no captured stream&rdquo; — there is one now — but that no tool ceiling can be expressed and the roster declares four subagent tools. The test asserts the new detail names the roster</li>
+        <li><code class="status">[]</code> <strong>Door three, roles.</strong> A test asserts no agent in <code>awsf.config.yaml</code> declares this adapter in its harness, and that the default worker is not it</li>
+        <li><code class="status">[]</code> Each door has been <strong>seen to fail independently</strong>, against an in-memory config, by opening exactly one of them</li>
+        <li><code class="status">[]</code> A comment in the adapter records what would have to change for the availability refusal to lift, and that it is not a code change: it is captured bytes, and they are listed in the dossier</li>
+      </ul>
+
+      <h4>19. The graduation dossier</h4>
+      <p class="sub">Serves <code class="serves">AC-10</code> · <code class="serves">INV-4</code></p>
+      <p>One page, in the design tree, answering one question: what captured bytes would reopen permission graduation, and for which role. It exists so that a future session neither re-derives this workstream's reasoning nor reopens the route on weaker evidence than the spine requires.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> It states the spine's condition verbatim: graduation waits for captured bytes proving <strong>either</strong> a provider tool-scoping flag <strong>or</strong> an OS boundary, and it graduates for the <strong>documenter role only</strong></li>
+        <li><code class="status">[]</code> It records that <strong>no allow/deny flag exists</strong> — confirmed in <code>help.txt</code> — so the first branch is closed on read evidence, not on absence of effort</li>
+        <li><code class="status">[]</code> It records the second branch as <strong>unanswered</strong>. <code>--sandbox</code> (&ldquo;Run in a sandbox with terminal restrictions enabled&rdquo;) is the only untested candidate, and <strong>no <code>stream7</code> exists in the capture</strong>. The dossier states plainly that nobody has run it, and does not guess which way it would go</li>
+        <li><code class="status">[]</code> It specifies the probe exactly: the <strong>same</strong> prompt that produced <code>stream2</code>, the <strong>same</strong> argv with <code>--sandbox</code> added, in a throwaway directory, and the question it answers — <em>does <code>--sandbox</code> refuse the <code>run_command</code> that ran freely under <code>request-review</code>?</em> The result lands as <code>stream7-sandbox.jsonl</code> with its stderr beside it</li>
+        <li><code class="status">[]</code> It states what each outcome would mean, so the reading is fixed before the bytes arrive: <strong>refused</strong> makes the OS boundary arguable for <code>documenter</code> and nothing more; <strong>ran anyway</strong> closes graduation and the route stays refused for every role</li>
+        <li><code class="status">[]</code> It states what <strong>neither</strong> outcome settles: <code>--sandbox</code> is described as terminal restrictions, which on its face reaches <code>run_command</code> and says nothing about <code>write_to_file</code>, <code>send_message</code>, <code>schedule</code>, <code>search_web</code>, <code>call_mcp_tool</code>, twenty browser tools, or <code>invoke_subagent</code>. <strong>A green <code>stream7</code> is necessary and nowhere near sufficient</strong></li>
+        <li><code class="status">[]</code> It carries the two smaller fixture debts and their cost: the missing stderr beside <code>stream2</code>, and the unrecorded per-stream argv</li>
+      </ul>
+
+      <h4>20. Testing Strategy, and the workstream close</h4>
+      <p class="sub">Serves <code class="serves">AC-9</code> · <code class="serves">AC-10</code> · <code class="serves">INV-1</code></p>
+      <p>The full suite, the four fences, and the two amendments this workstream owes. This is the only task that writes to the spine.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — green at the base SHA and green after; <code>npm run typecheck</code> and <code>npm run lint</code> clean; all counts in the commit body</li>
+        <li><code class="status">[]</code> The four fences are green: <code>child-process-fence</code>, <code>adapter-fence</code>, <code>no-credentials-in-fixtures</code> with its new leg, and <code>ticket-plan-sync</code></li>
+        <li><code class="status">[]</code> Every marker in <code>specs/awsf-v2-w09-agy-adapter.html</code> reads <code>[x]</code> or <code>[f]</code>, and every <code>[f]</code> names the condition holding it</li>
+        <li><code class="status">[]</code> An Amendment records the M5 close, and a second Amendment in <code>specs/awsf-v2-plan.html</code> records the close of W09 against the spine's six checklist rows claim by claim — <strong>including the four corrections this plan made to the spine's own W09 prose</strong>, so a later reader inherits the corrected version rather than the original</li>
+        <li><code class="status">[]</code> The spine's Milestone M9 / W09 marker and its checklist flip to <code>[x]</code>, and <code>specs/tickets/awsf-v2-plan/W09.md</code>'s <code>state</code> flips to <code>done</code>, in the same commit — or, if <strong>Q4</strong> closed the workstream early, the spine records it as <strong>closed unbuilt with its evidence retained</strong>, which the spine sanctions by name</li>
+        <li><code class="status">[]</code> The spine Amendment states, in one sentence a reader cannot miss, that the route ends this workstream <strong>disabled and assigned to no role</strong>, and that permission graduation is closed for want of bytes rather than pending someone's attention</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass. The one thing this milestone may never do is graduate the route on a guarantee it does not have.
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== GLOBAL VALIDATION ===== -->
+  <section id="validation">
+    <h2>Validation Commands</h2>
+    <p>Execute these commands to validate the entire plan is complete. <strong>Every one runs offline.</strong> None starts a provider process, reaches the network, or spends quota — which is the property that makes this workstream safe to build and safe to abandon.</p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> <code>npm run test:unit</code> — the whole suite green, at the exact base SHA before any change and again after, with both counts recorded</li>
+      <li><code class="status">[]</code> <code>npm run typecheck</code> — zero errors across both workspaces</li>
+      <li><code class="status">[]</code> <code>npm run lint</code> — zero warnings, zero errors</li>
+      <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/adapters/stream/antigravity-stream.test.ts</code> — every retained stream replays, every event kind and terminal state is exercised, and <code>validateEventSequence</code> returns no violation</li>
+      <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/adapters/antigravity.test.ts</code> — the exact-argv descriptor, the <code>--print</code> ordering trap, every refusal by code, and the three shut doors</li>
+      <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/agy-roster-pin.test.ts</code> — 57 tools, four subagent tools, and <code>permission_mode: "request-review"</code> still what the bytes say</li>
+      <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/no-credentials-in-fixtures.test.ts</code> — with its new <code>specs/fixtures/</code> leg, and the companion that proves the leg bites</li>
+      <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/child-process-fence.test.ts core/test/unit/meta/adapter-fence.test.ts</code> — the new modules import no spawn and call no <code>fetch</code></li>
+      <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/ticket-plan-sync.test.ts</code> — this plan, its build prompts and its twenty tickets agree; the identifier spine mirrors both ways</li>
+      <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/registry/plan-kind.test.ts core/test/unit/api/routes.test.ts core/test/unit/backlog.test.ts core/test/unit/dashboard-backlog-selection.test.ts</code> — the four hard-coded corpus counts, bumped for this plan's artifacts in the same commit</li>
+      <li><code class="status">[]</code> <code>grep -rniE '\b(un)?bounded\b' specs/awsf-v2-w09-agy-adapter.html specs/awsf-v2-w09-agy-adapter-build-prompts.md specs/tickets/awsf-v2-w09-agy-adapter/</code> — every hit is the compound <strong>detection-bounded</strong>; the bare adjective never describes this route</li>
+      <li><code class="status">[]</code> The route is still off: <code>enabled: false</code> in <code>awsf.config.yaml</code>, <code>isAvailable()</code> returning <code>blocked</code>, and no agent naming this adapter — three doors, each with a test that has been seen to fail alone</li>
+    </ul>
+    <div class="loop">
+      🔁 <strong>The plan is not complete until every box is checked and every command passes. If for some reason a step is not possible to complete, mark it with [f] and move on if possible.</strong>
+    </div>
+  </section>
+
+  <!-- ===== QUESTIONABLES ===== -->
+  <section id="questionables">
+    <h2>Questionables</h2>
+    <p>Seven. The first four are the ones the spine and the owner's brief explicitly asked to be surfaced; the last three came out of the bytes. Each carries a recommendation, and every recommendation is the plan's default if the owner takes no other answer.</p>
+
+    <figure>
+      <pre class="mermaid">
+flowchart TD
+  Q4{"Q4 · build at all?"} -->|"close now"| Z(["bytes retained,<br/>gap recorded"])
+  Q4 -->|"M1 only"| M1(["evidence + roster pin"])
+  Q4 -->|"build"| Q2{"Q2 · in-stream detection?"}
+  Q2 -->|"no"| PARSE(["parser + refusals"])
+  Q2 -->|"yes"| Q1{"Q1 · any role, ever?"}
+  Q1 -->|"never"| PARSE
+  style Q4 stroke:#f97316,stroke-width:2px
+  style Z stroke:#d29922,stroke-dasharray:4 3
+      </pre>
+      <figcaption>Q4 is the root and the other two hang off it. The plan's recommended path runs down the right-hand side to <em>parser and refusals</em>: build the reading half, build no detection that implies an abort, and assign no role. Every other path is a legitimate answer the spine already sanctions.</figcaption>
+    </figure>
+
+    <details data-review-options="Never, at any evidence level|Documenter only, after an OS boundary|Any read-only role, after an OS boundary">
+      <summary><strong>Q1.</strong> May a route whose tool can spawn its own unsupervised subagents carry <em>any</em> role — even documenter, even with a proven OS boundary?</summary>
+      <p class="qa-answer"><strong>Recommendation: never, at any evidence level, until the subagent surface itself is contained.</strong> The spine's graduation condition was written before anyone had read <code>init.tools</code>, and it asks for evidence of &ldquo;a provider tool-scoping flag or an OS boundary&rdquo;. Both of those are properties of <em>the process AWSF starts</em>. <code>define_subagent</code>, <code>invoke_subagent</code>, <code>manage_subagents</code> and <code>browser_subagent</code> are a mechanism for creating processes AWSF does not start — so an OS boundary around the parent is evidence about the wrong object unless it demonstrably encloses the children too, and nothing in <code>--sandbox</code>'s one-line description says it does.</p>
+      <p class="qa-answer">The counter-argument is real and should be recorded rather than dismissed: the documenter role writes only <code>README.md</code> and <code>docs/**</code>, its work is reviewed before it lands, and the post-return fingerprint would catch a write outside those globs. That argument is sound <em>about writes</em>. It says nothing about <code>send_message</code>, <code>schedule</code>, <code>search_web</code>, <code>call_mcp_tool</code>, <code>read_url_content</code> or <code>execute_browser_javascript</code>, four of which are external-mutation shaped in the config's own protected-operations vocabulary — and a documenter phase has no legitimate use for any of them, which is exactly why the absence of a way to switch them off matters.</p>
+      <p class="qa-answer"><strong>What would change this answer:</strong> captured bytes showing a subagent launch refused under some flag, or showing that subagent execution is confined to the parent's namespace. Neither exists, and neither is cheap — the probe would have to <em>provoke</em> a subagent, which is a different and riskier capture than <code>stream7</code>.</p>
+    </details>
+
+    <details data-review-options="Do not build in-stream detection|Build parameter logging, no abort|Build detection with abort on mutation-shaped calls">
+      <summary><strong>Q2.</strong> Is detection-with-latency worth building at all, against a 57-tool surface?</summary>
+      <p class="qa-answer"><strong>Recommendation: do not build in-stream detection in this workstream.</strong> The event ordering is settled and it is genuinely useful evidence — but three separate facts say the mechanism built on it would not pay for itself here.</p>
+      <p class="qa-answer"><strong>One:</strong> the parameters arrive in Windows and UNC spellings that <code>path-policy</code> refuses by design and for a stated reason, so a detector would need an adapter-local mapping that does not exist and that must fail closed — meaning it refuses on ambiguity, meaning it is noisy exactly where it matters. <strong>Two:</strong> <code>ACTIVE</code> is not proven to precede initiation, so an abort fired on it cannot be described as timely without claiming something the capture does not show. <strong>Three, and decisively:</strong> a detector reads the parent's stream. A subagent's tool calls are not in it. A mechanism that covers the visible path while the invisible path stays open is worse than no mechanism, because the badge it produces gets believed.</p>
+      <p class="qa-answer"><strong>What the workstream keeps instead:</strong> the <code>tool.requested</code> events themselves, with parameters, in the journal, where a human or a later gate can read them. That is evidence and observability, and the plan never calls it containment. <strong>What would change this answer:</strong> Q1 resolving in favour of some role — detection becomes worth building the moment the route could actually run something.</p>
+    </details>
+
+    <details data-review-options="Record it, gate nothing|Gate M4's close|Gate the whole workstream">
+      <summary><strong>Q3.</strong> Should the unmeasured UNC throughput question gate the workstream, or merely be recorded?</summary>
+      <p class="qa-answer"><strong>Recommendation: record it, gate nothing.</strong> Throughput is a property of a route that <em>runs</em>, and at the end of this workstream this route does not run. Gating twenty offline tasks on a filesystem benchmark for a disabled route inverts the cost.</p>
+      <p class="qa-answer">It is recorded with teeth rather than as a footnote: T15 names the measurement, the comparison and the command, and T17 either records the numbers or marks the row <code>[f]</code>. The measurement is cheap — a timed file-heavy loop from the Windows side against a worktree-sized tree, versus the same work on ext4 — and it involves no <code>agy</code> and no quota, so whoever wants the number can have it in an hour without this plan's permission.</p>
+      <p class="qa-answer"><strong>What would change this answer:</strong> Q1 resolving in favour of a role. A route that carries a documenter phase against a worktree with a full <code>node_modules</code> in it would feel this immediately, and finding out then is finding out late. The honest framing: <strong>it gates graduation, not this workstream.</strong></p>
+    </details>
+
+    <details data-review-options="Build M1 through M5|Stop after M1, close unbuilt|Close now, keep the bytes only">
+      <summary><strong>Q4.</strong> Should W09 end unbuilt, with its evidence retained?</summary>
+      <p class="qa-answer"><strong>Recommendation: build M1 through M5, and understand that as building the reading half and closing the permission half — not as a route on its way to service.</strong> The spine permits closing unbuilt, and the capture has made that outcome <em>more</em> defensible rather than less. So the case for building has to be made on what the build produces, and it is narrower than it first looks.</p>
+      <p class="qa-answer"><strong>What building buys, concretely.</strong> The bytes move inside the fences that already exist — today <code>specs/fixtures/</code> is reached by no sweep in the repository. The probe's single blanket refusal becomes typed refusals that name their causes, so &ldquo;we have not looked&rdquo; stops being spelled the same way as &ldquo;we looked and it cannot be contained&rdquo;. The roster becomes a test that goes red if a future <code>agy</code> changes it, which is the only realistic trigger for revisiting the decision. And three mechanisms elsewhere in the tree stop overstating — the badge fix in T14 is a correctness fix that outlives this workstream entirely.</p>
+      <p class="qa-answer"><strong>What it costs, stated fairly.</strong> Roughly five to seven hundred logical lines of decoder and adapter that nothing calls, in a directory with an advisory budget. The <code>loc-budget</code> meta-test warns and never fails, so this is a judgement rather than a gate — but a parser for a route no role may use is genuinely dead code until Q1 changes, and calling it anything else would be dishonest.</p>
+      <p class="qa-answer"><strong>The middle option is real and is not a compromise for its own sake.</strong> Stopping after M1 retains the bytes, pins the obstacle, extends the sweep and closes the workstream — four tasks, no runtime code, and the spine's checklist row &ldquo;scrubbed fixtures for every event and terminal state exist in the tree&rdquo; is satisfied. What it forfeits is the spine's <em>other</em> stop condition, which says the parser is fixture-complete. <strong>An owner who takes this option should say so explicitly in the spine Amendment</strong>, because it closes the workstream against a condition the spine did not write.</p>
+    </details>
+
+    <details data-review-options="Copy, plus a byte-identity test|Move, and delete the specs copy|Keep specs only, teach the tests to read it">
+      <summary><strong>Q5.</strong> Where do the retained bytes live canonically — <code>specs/fixtures/agy/</code> or <code>core/test/fixtures/providers/agy/</code>?</summary>
+      <p class="qa-answer"><strong>Recommendation: copy to <code>core/test/fixtures/providers/agy/</code> and add a byte-identity test, leaving the owner's directory in place.</strong> Two locations that can drift is a real hazard, and a test that asserts they cannot is cheaper than a decision about someone else's files.</p>
+      <p class="qa-answer">The reasons for the second location are not aesthetic. The credential sweep walks <code>core/test/fixtures</code>; every other provider capture lives there with a <code>PROVENANCE.md</code> beside it; and the suite's fixture-integrity rule is expressed in terms of that convention. The reason for keeping the first is simpler: the owner put the bytes there deliberately and this plan's brief names that path as the target. Deleting an owner-placed directory is the owner's call, not a task's — so the plan makes it <strong>Q5</strong> and ships the byte-identity test as the interim answer, which makes the eventual deletion a one-line change either way.</p>
+    </details>
+
+    <details data-review-options="Accept the argv ceiling and refuse above it|Spend one short session on --input-format=stream-json|Refuse any phase whose prompt could exceed it">
+      <summary><strong>Q6.</strong> The prompt travels in argv. Accept the ceiling, or spend one live call to settle the stdin path?</summary>
+      <p class="qa-answer"><strong>Recommendation: accept the ceiling and refuse above it, for now.</strong> This is the one place in the plan where a live call would answer a question the retained bytes genuinely cannot, so it deserves a straight answer rather than a reflex.</p>
+      <p class="qa-answer"><strong>What the call would buy:</strong> <code>--input-format=stream-json</code> reads one NDJSON message per line from stdin and requires <code>--output-format=stream-json</code>. If it works, the prompt leaves argv entirely — no command-line ceiling, and no prompt in the process table where any other process on the machine can read it. That is a real improvement over the captured shape, and the message envelope it expects is documented nowhere in <code>help.txt</code>, so it cannot be derived by reading.</p>
+      <p class="qa-answer"><strong>Why it still waits:</strong> the benefit accrues to a route that runs, and this route does not run. The refusal costs nothing to write and is strictly honest — a prompt too large to send is refused before a child starts, rather than truncated into a confident answer to a question nobody asked. <strong>If the owner is spending a session on <code>agy</code> anyway, this should ride along with the <code>stream7</code> probe in Q7</strong>, because two questions in one authenticated session is the efficient shape and the two captures are independent.</p>
+    </details>
+
+    <details data-review-options="Owner runs the probe before M5|Close graduation now, no probe|Fold it into a later session with Q6">
+      <summary><strong>Q7.</strong> The <code>--sandbox</code> probe was asked for and never arrived. What now?</summary>
+      <p class="qa-answer"><strong>This plan was briefed with a placeholder for the <code>--sandbox</code> result and the placeholder arrived unfilled; there is no <code>stream7</code> in <code>specs/fixtures/agy/</code>. Nothing here guesses which way it went.</strong></p>
+      <p class="qa-answer"><strong>Recommendation: close graduation now, and fold the probe into a later session alongside Q6.</strong> The spine's condition is that permission graduation <em>waits for captured bytes</em>. Absent bytes means it waits — that is the condition operating correctly, not a gap in this plan. Recording graduation as &ldquo;closed for want of evidence&rdquo; is therefore the accurate state, and it is materially different from &ldquo;pending someone's attention&rdquo;: the first is a decision a reader can rely on, the second rots.</p>
+      <p class="qa-answer"><strong>The probe is specified in full anyway, in T19</strong>, with the reading of each outcome fixed <em>before</em> the bytes arrive so that a future session cannot read a favourable result more generously than it deserves. And the ceiling on that reading is stated in the same place: <code>--sandbox</code> is described as &ldquo;terminal restrictions&rdquo;, which on its face reaches <code>run_command</code> and nothing else. Even a clean refusal leaves <code>write_to_file</code>, twenty browser tools, four external-reach tools and all four subagent tools untouched. <strong>A green <code>stream7</code> would be necessary and nowhere near sufficient</strong> — which is also why it does not deserve a session of its own.</p>
+    </details>
+  </section>
+
+  <!-- ===== NOTES ===== -->
+  <section id="notes">
+    <h2>Notes</h2>
+
+    <h3>What this plan deliberately does not do</h3>
+    <ul>
+      <li><strong>It does not enable the route,</strong> and it does not edit <code>awsf.config.yaml</code>. That file is protected; <code>path-policy</code> rejects <code>protected-path</code> independently of the write globs, and inventing an owner-authorized change mechanism to route around it is the boundary working.</li>
+      <li><strong>It does not describe detection as prevention,</strong> anywhere, in any tense. The route is <strong>detection-bounded</strong>; the bare adjective does not describe it, and T17 makes that a grep rather than an intention.</li>
+      <li><strong>It does not claim per-role supervision the broker never saw.</strong> One process crosses the broker. Anything the tool starts beyond it is unregistered, unreserved, uncancellable and unattributed.</li>
+      <li><strong>It does not spend quota re-capturing what is already retained.</strong> Five streams, a help dump and a version string are in the tree. Every assertion in M2 replays them.</li>
+      <li><strong>It does not read either frozen candidate record</strong> — <code>awsf-v2-candidates.md</code> or the GPT version — whose own headers mark claims in them as false.</li>
+      <li><strong>It does not treat <code>invoke_subagent</code> as a footnote.</strong> It is INV-2's second half, T03's test, T16's comment, Q1's whole content, and the reason Q4's recommendation is narrower than &ldquo;build the adapter&rdquo;.</li>
+    </ul>
+
+    <h3>What this workstream inherits, and what it hands on</h3>
+    <table>
+      <thead><tr><th style="width:22%">Workstream</th><th>The relationship, stated precisely</th></tr></thead>
+      <tbody>
+        <tr><th>W06 — prompt composition</th><td><strong>Sequence, not dependency.</strong> W06 is <code>[x]</code>, and its centralised composer is where T15's &ldquo;the prompt must state the working directory&rdquo; requirement lands. W09 writes the per-route requirement and its test and adds no fourth composition site. If W06 had not landed, this requirement would have had nowhere honest to go — which is what the spine's dashed edge was recording.</td></tr>
+        <tr><th>W10 — the <code>mf</code> adapter</th><td><strong>The same finding, twice.</strong> There, only the outer process of a composite crossed the broker and every constituent launch was invisible. Here, only the outer process of a turn crosses it and every subagent is invisible. Two independent workstreams reached it from different directions, which is the strongest form this evidence takes.</td></tr>
+        <tr><th>W04 — project registry</th><td><strong>A graduation dependency the spine does not record.</strong> The route needs a resolvable executable. <code>executable: agy</code> fails <code>PATH</code> resolution and an absolute path fails <code>ConfigAbsolutePathError</code>, so the only two exits are an owner-side <code>PATH</code> install or W04's machine-local layer. This blocks <em>enabling</em>, never building, so it is recorded rather than made a gate.</td></tr>
+        <tr><th>W16 — the pi/OpenRouter adapter</th><td><strong>The contrast worth keeping.</strong> The spine already says W16 shares none of W09's gaps: it rides <code>pi</code>'s verified tool boundary expressed as <code>--tools</code> and <code>--no-tools</code>, which the Codex suite already asserts. That is precisely the flag <code>agy</code> does not have, and naming it is the clearest one-line statement of why these two adapters are not the same kind of work.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Risks</h3>
+    <table>
+      <thead><tr><th style="width:30%">Risk</th><th style="width:34%">Why it is live</th><th>What this plan does about it</th></tr></thead>
+      <tbody>
+        <tr><td><strong>R1 — the parser makes the route feel ready</strong></td><td>A tested decoder reads as progress toward service. The spine's own R1 records that four separate claims in this project were once stronger than their mechanisms.</td><td>Three doors in M5, each independently tested; <code>isAvailable()</code> rewritten to name the roster rather than the old &ldquo;no captured stream&rdquo; reason; and the graduation dossier fixing the reading of a favourable probe before one is taken.</td></tr>
+        <tr><td><strong>R2 — a later session &ldquo;fixes&rdquo; a refusal</strong></td><td>Three refusals in M3 look like unimplemented features. Turning one into a default would make a red test green and a disabled route usable.</td><td>Every refusal is asserted by <code>code</code>, its message names the absent flag, and the ticket set's never-do list states the temptation and its reason once, in the directory <code>README.md</code> every session reads.</td></tr>
+        <tr><td><strong>R3 — the two fixture copies drift</strong></td><td>Until Q5 is answered the bytes exist twice, and a well-meaning scrub of the machine paths in one copy would destroy the evidence for two of this plan's four corrections.</td><td>A byte-identity test between the copies, and a provenance section stating that the <code>cwd</code> values are the evidence and must not be scrubbed.</td></tr>
+        <tr><td><strong>R4 — the roster pin is read as approval</strong></td><td>A test asserting 57 tools could be mistaken for a compatibility check to be updated when the number changes.</td><td>Its failure message says in one sentence that the roster is why no role may be assigned, so an author who bumps the constant has to read why first.</td></tr>
+        <tr><td><strong>R5 — the unfilled probe becomes folklore</strong></td><td>&ldquo;Someone was going to test <code>--sandbox</code>&rdquo; is exactly the kind of half-memory that turns into &ldquo;<code>--sandbox</code> handles it&rdquo; two sessions later.</td><td>Q7 and T19 both record it as <strong>unanswered</strong>, name the missing file, and state what a favourable answer would and would not settle.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>The quota account</h3>
+    <p>Authoring this plan: <strong>zero</strong>. Building every milestone in it: <strong>zero</strong>. The capture it rests on was already spent before this plan existed. The two calls the plan <em>names</em> — the <code>stream7</code> <code>--sandbox</code> probe and the <code>--input-format=stream-json</code> shape — are both owner acts outside the task graph, and the plan's recommendation is that they ride in one session together or not at all. <strong>This is the cheapest workstream in v2, and it stays cheap on every branch, including the branch where it closes unbuilt.</strong></p>
+
+    <figure>
+      <pre class="mermaid">
+stateDiagram-v2
+  [*] --> Probe
+  Probe --> Captured: bytes retained
+  Captured --> Parsed: M2 to M4
+  Parsed --> Disabled: M5
+  Disabled --> Disabled: no role assigned
+  Captured --> Closed: Q4 stops here
+  Disabled --> Graduation: needs stream7<br/>and more
+      </pre>
+      <figcaption>The route's lifecycle as this plan leaves it. <em>Disabled</em> is a terminal state that loops on itself, not a waiting room. The edge to graduation is drawn because the spine defines it, and it is labelled with what it needs rather than with when it might happen.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ===== AMENDMENTS ===== -->
+  <section id="amendments">
+    <h2>Amendments</h2>
+    <p class="sub">Running history of changes made after this plan was first authored. Append-only; populated by the Update Plan workflow, by owner review, and by each milestone's closing task.</p>
+    <details>
+      <summary>2026-09-15 — authored; four corrections to the spine's W09 block, and one requested evidence row that arrived empty</summary>
+      <p>Authored against <code>specs/fixtures/agy/</code>, captured the same day from <code>agy.exe</code> 1.1.15. The plan corrects the spine's W09 prose in four places — the executable finding is configuration rather than absence; a WSL-native working directory works and the earlier failure was authentication; the protocol has <strong>three</strong> event kinds rather than four; and the stream carries <strong>no model identity at all</strong>, so <code>model.resolved</code> is route-attributed. The first two corrections were supplied in the brief; the second two were found while reading the bytes and are this session's own.</p>
+      <p>The brief carried a placeholder for a <code>--sandbox</code> probe result. <strong>It arrived unfilled and no <code>stream7</code> exists in the capture</strong>, so permission graduation is recorded as closed for want of evidence rather than resolved either way, and the probe is specified in T19 with the reading of each outcome fixed in advance. <strong>No spine file was modified by this session</strong>, no marker moved, and no quota was spent.</p>
+    </details>
+  </section>
+
+</main>
+
+<!-- ===== PLAN-SOTA REVIEW LAYER v1 — FIXED MACHINERY, COPY VERBATIM =====
+     Not a placeholder: reproduce this <style> + <script> pair exactly in every plan.
+     Annotations, Questionable verdicts, and proposed phase statuses persist to
+     localStorage (key: plan filename). The browser NEVER writes this file; canonical
+     []/[wip]/[x]/[f] markers stay agent-owned. Export produces a `plan-sota-review v1`
+     block (clipboard + visible box) and, when running under Lavish Editor, queues it
+     once via window.lavish.queuePrompt(). -->
+<style>
+  .rv-btn { font: 600 11px/1 system-ui, sans-serif; padding: 3px 9px; border-radius: 999px;
+    border: 1px solid var(--muted, #8884); background: transparent; color: var(--fg, inherit);
+    cursor: pointer; opacity: .55; vertical-align: middle; margin-left: 8px; }
+  .rv-btn:hover { opacity: 1; border-color: var(--accent, #7c6cf0); }
+  .rv-btn.rv-on { opacity: 1; background: var(--accent, #7c6cf0); color: var(--bg, #fff); border-color: transparent; }
+  .rv-note-box { display: block; margin: 8px 0; padding: 8px 12px; border: 1px dashed var(--accent, #7c6cf0);
+    border-radius: 8px; font-size: 13px; min-height: 1.5em; background: color-mix(in srgb, var(--accent, #7c6cf0) 6%, transparent); outline: none; }
+  .rv-note-box:empty::before { content: attr(data-ph); opacity: .5; font-style: italic; }
+  .rv-note-box[hidden] { display: none; }
+  .rv-verdict { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 10px 0 2px; }
+  .rv-verdict-tag { font: 700 10px/1 system-ui, sans-serif; letter-spacing: .08em; opacity: .6; margin-right: 2px; }
+  .rv-status-chip { font: 600 11px/1 ui-monospace, monospace; margin-left: 10px; padding: 3px 9px;
+    border-radius: 999px; border: 1px dotted var(--muted, #8884); background: transparent;
+    color: var(--fg, inherit); cursor: pointer; opacity: .6; }
+  .rv-status-chip:hover { opacity: 1; }
+  .rv-status-chip.rv-on { opacity: 1; border-style: solid; border-color: var(--accent, #7c6cf0); color: var(--accent, #7c6cf0); }
+  #rv-drawer { position: fixed; right: 16px; bottom: 16px; z-index: 9999; font: 13px/1.45 system-ui, sans-serif;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  #rv-pill { font: 700 12px/1 system-ui, sans-serif; padding: 10px 16px; border-radius: 999px; border: none;
+    cursor: pointer; background: var(--accent, #7c6cf0); color: var(--bg, #fff); box-shadow: 0 4px 16px #0004; }
+  #rv-panel { width: min(420px, calc(100vw - 32px)); max-height: 60vh; overflow: auto; padding: 14px;
+    border-radius: 12px; border: 1px solid var(--muted, #8884); background: var(--bg, #fff);
+    color: var(--fg, inherit); box-shadow: 0 8px 32px #0005; }
+  #rv-panel h4 { margin: 0 0 8px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; opacity: .7; }
+  #rv-list { margin: 0 0 10px; padding: 0; list-style: none; font-size: 12px; }
+  #rv-list li { padding: 3px 0; border-bottom: 1px solid #8882; overflow-wrap: anywhere; }
+  #rv-out { width: 100%; min-height: 140px; margin-top: 10px; font: 11px/1.5 ui-monospace, monospace;
+    border: 1px solid var(--muted, #8884); border-radius: 8px; padding: 8px; background: transparent; color: inherit; }
+  #rv-msg { font-size: 11px; opacity: .75; margin-top: 6px; }
+  @media print { #rv-drawer { display: none; } }
+</style>
+<script>
+(function () {
+  'use strict';
+  var FILE = decodeURIComponent(location.pathname.split('/').pop() || 'plan.html');
+  var KEY = 'plan-sota-review:' + FILE;
+  var LEGACY_KEY = 'planf3-review:' + FILE; // pre-rename state; read once, never written
+  var PROPOSE = ['', '[]', '[wip]', '[x]', '[f]'];
+  var state = { a: {}, v: {}, s: {} }, persisted = true;
+  try { state = JSON.parse(localStorage.getItem(KEY) || localStorage.getItem(LEGACY_KEY) || 'null') || state; } catch (e) { persisted = false; }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); persisted = true; }
+    catch (e) { persisted = false; }
+    refresh();
+  }
+  function el(tag, cls, txt) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (txt) n.textContent = txt;
+    if (tag === 'button') { n.type = 'button'; n.setAttribute('data-lavish-action', ''); }
+    return n;
+  }
+  function clean(t) { return String(t || '').replace(/\|/g, '/').replace(/\s*\r?\n\s*/g, ' >> ').trim(); }
+  var registry = []; // {key, label, kind: 'section'|'phase'|'q'}
+
+  function noteBox(key, host, placeholder) {
+    var box = el('div', 'rv-note-box');
+    box.contentEditable = 'true';
+    box.setAttribute('data-ph', placeholder || 'Type your note for the agent…');
+    box.hidden = !(state.a[key]);
+    if (state.a[key]) box.textContent = state.a[key];
+    box.addEventListener('input', function () {
+      var t = box.textContent.trim();
+      if (t) state.a[key] = t; else delete state.a[key];
+      save();
+    });
+    host.appendChild(box);
+    return box;
+  }
+  function annotable(key, label, heading, host, kind) {
+    registry.push({ key: key, label: label, kind: kind });
+    var box = noteBox(key, host);
+    heading.insertAdjacentElement('afterend', box);
+    var btn = el('button', 'rv-btn' + (state.a[key] ? ' rv-on' : ''), '✎ note');
+    btn.addEventListener('click', function () {
+      box.hidden = !box.hidden;
+      if (!box.hidden) box.focus();
+    });
+    heading.appendChild(btn);
+    box.addEventListener('input', function () { btn.classList.toggle('rv-on', !!state.a[key]); });
+  }
+
+  // Sections
+  Array.prototype.forEach.call(document.querySelectorAll('main > section[id]'), function (sec) {
+    var h = sec.querySelector('h2'); if (!h) return;
+    annotable('#' + sec.id, h.textContent.trim(), h, sec, 'section');
+  });
+  // Phases: annotation + proposed-status chip
+  Array.prototype.forEach.call(document.querySelectorAll('#phases .phase'), function (ph, i) {
+    var h = ph.querySelector('h3'); if (!h) return;
+    var key = 'phase-' + (i + 1);
+    var label = h.textContent.replace(/^\s*\[[^\]]*\]\s*/, '').trim();
+    annotable(key, label, h, ph, 'phase');
+    var chip = el('button', 'rv-status-chip' + (state.s[key] ? ' rv-on' : ''));
+    chip.textContent = state.s[key] ? 'propose ' + state.s[key] : 'propose…';
+    chip.title = 'Cycle a PROPOSED status (exported as feedback — the file marker is only changed by the agent)';
+    chip.addEventListener('click', function () {
+      var next = PROPOSE[(PROPOSE.indexOf(state.s[key] || '') + 1) % PROPOSE.length];
+      if (next) state.s[key] = next; else delete state.s[key];
+      chip.textContent = next ? 'propose ' + next : 'propose…';
+      chip.classList.toggle('rv-on', !!next);
+      save();
+    });
+    h.appendChild(chip);
+  });
+  // Questionables: verdict / option buttons + note
+  Array.prototype.forEach.call(document.querySelectorAll('#questionables details'), function (d, i) {
+    var key = 'q-' + (i + 1);
+    var summary = d.querySelector('summary');
+    var label = summary ? summary.textContent.trim().slice(0, 120) : key;
+    registry.push({ key: key, label: label, kind: 'q' });
+    var opts = (d.getAttribute('data-review-options') || '').split('|').map(function (s) { return s.trim(); }).filter(Boolean);
+    if (!opts.length) opts = ['APPROVE', 'REJECT', 'REVISE', 'DEFER'];
+    var row = el('div', 'rv-verdict');
+    row.appendChild(el('span', 'rv-verdict-tag', 'YOUR CALL'));
+    opts.forEach(function (opt) {
+      var b = el('button', 'rv-btn' + ((state.v[key] || {}).c === opt ? ' rv-on' : ''), opt);
+      b.addEventListener('click', function () {
+        if ((state.v[key] || {}).c === opt) { delete state.v[key]; }
+        else { state.v[key] = { c: opt }; }
+        Array.prototype.forEach.call(row.querySelectorAll('.rv-btn'), function (x) {
+          x.classList.toggle('rv-on', x.textContent === ((state.v[key] || {}).c || null));
+        });
+        qbox.hidden = !state.v[key] && !state.a[key];
+        save();
+      });
+      row.appendChild(b);
+    });
+    d.appendChild(row);
+    var qbox = noteBox(key, d, 'Why / what to change instead…');
+    if (state.v[key]) qbox.hidden = false;
+  });
+
+  // Drawer
+  var drawer = el('div'); drawer.id = 'rv-drawer';
+  var panel = el('div'); panel.id = 'rv-panel'; panel.hidden = true;
+  var pill = el('button'); pill.id = 'rv-pill';
+  pill.addEventListener('click', function () { panel.hidden = !panel.hidden; });
+  var list = el('ul'); list.id = 'rv-list';
+  var actions = el('div');
+  var exportBtn = el('button', 'rv-btn rv-on', 'Export Feedback');
+  var clearBtn = el('button', 'rv-btn', 'Clear review');
+  var out = el('textarea'); out.id = 'rv-out'; out.readOnly = true; out.hidden = true;
+  var msg = el('div'); msg.id = 'rv-msg';
+  var head = el('h4', null, 'Review — pending feedback');
+  actions.appendChild(exportBtn); actions.appendChild(clearBtn);
+  panel.appendChild(head); panel.appendChild(list); panel.appendChild(actions);
+  panel.appendChild(out); panel.appendChild(msg);
+  drawer.appendChild(panel); drawer.appendChild(pill);
+  document.body.appendChild(drawer);
+
+  function findLabel(key) {
+    for (var i = 0; i < registry.length; i++) if (registry[i].key === key) return registry[i].label;
+    return key;
+  }
+  function refresh() {
+    var n = Object.keys(state.a).length + Object.keys(state.v).length + Object.keys(state.s).length;
+    pill.textContent = '✎ Review (' + n + ')';
+    list.textContent = '';
+    Object.keys(state.v).forEach(function (k) { list.appendChild(el('li', null, '[verdict] ' + findLabel(k) + ' → ' + state.v[k].c)); });
+    Object.keys(state.s).forEach(function (k) { list.appendChild(el('li', null, '[status] ' + findLabel(k) + ' → propose ' + state.s[k])); });
+    Object.keys(state.a).forEach(function (k) { list.appendChild(el('li', null, '[note] ' + findLabel(k) + ': ' + state.a[k].slice(0, 90))); });
+    if (!n) list.appendChild(el('li', null, 'Nothing yet — click ✎ note on any section, a verdict on a Questionable, or propose… on a phase.'));
+    if (!persisted) msg.textContent = '⚠ localStorage unavailable — review state lives only in this tab.';
+  }
+  function buildExport() {
+    var L = ['plan-sota-review v1', 'plan: ' + FILE, 'title: ' + clean(document.title), 'exported: ' + new Date().toISOString(), ''];
+    var vk = Object.keys(state.v), sk = Object.keys(state.s), ak = Object.keys(state.a);
+    L.push('## verdicts');
+    vk.length ? vk.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | ' + clean(state.v[k].c) + ' | note: ' + (clean(state.a[k]) || '-'));
+    }) : L.push('- (none)');
+    L.push('', '## statuses');
+    sk.length ? sk.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | propose ' + state.s[k]);
+    }) : L.push('- (none)');
+    L.push('', '## annotations');
+    var solo = ak.filter(function (k) { return !state.v[k]; });
+    solo.length ? solo.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | ' + clean(state.a[k]));
+    }) : L.push('- (none)');
+    return L.join('\n');
+  }
+  exportBtn.addEventListener('click', function () {
+    var text = buildExport();
+    out.hidden = false; out.value = text;
+    out.focus(); out.select();
+    function done(m) { msg.textContent = m; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done('Copied — paste it into your next agent session.'); },
+        function () { done('Clipboard blocked — copy from the box below.'); });
+    } else {
+      try { done(document.execCommand('copy') ? 'Copied — paste it into your next agent session.' : 'Clipboard blocked — copy from the box below.'); }
+      catch (e) { done('Clipboard blocked — copy from the box below.'); }
+    }
+    if (window.lavish && typeof window.lavish.queuePrompt === 'function') {
+      window.lavish.queuePrompt(text, { tag: 'plan-sota-review', queueKey: 'plan-sota-review' });
+      msg.textContent += ' Also queued to the agent via Lavish.';
+    }
+  });
+  clearBtn.addEventListener('click', function () {
+    if (!confirm('Clear all review state for this plan?')) return;
+    state = { a: {}, v: {}, s: {} };
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    location.reload();
+  });
+  refresh();
+})();
+</script>
+
+<!-- Mermaid runtime — renders every <pre class="mermaid"> block. Only external reference in the file. -->
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      primaryColor: '#161b22',
+      primaryTextColor: '#e6edf3',
+      primaryBorderColor: '#f97316',
+      lineColor: '#8b949e',
+      fontFamily: 'ui-monospace, SF Mono, Cascadia Mono, Menlo, Consolas, monospace'
+    }
+  });
+</script>
+</body>
+</html>

@@ -1097,7 +1097,10 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       if (entry === undefined || entry.enabled === false) throw new ProductionRouteUnavailable(agent.harness.adapter, "route is disabled or undeclared");
       const saved = recovery?.inspected.checkpoint.pending;
       if (saved?.phaseKey === phase.id) {
-        if (saved.model.adapter !== agent.harness.adapter || saved.model.requestedModel !== agent.model) throw new Error("saved reply route changed");
+        const originalRoute = recovery!.inspected.records.map(row => row.event.evidence).findLast(evidence =>
+          evidence?.type === "agent-start" && evidence.phaseId === dbPhaseId(status.sessionId, phase.id));
+        if (originalRoute?.type !== "agent-start" || originalRoute.adapterId !== agent.harness.adapter ||
+            saved.model.requestedModel !== agent.model) throw new Error("saved reply route changed");
         const unavailable = () => { throw new Error("saved reply validation cannot reopen a model adapter"); };
         const adapter: HarnessAdapter = { id: saved.model.adapter, isAvailable: unavailable, getModelInfo: unavailable,
           buildSpec: unavailable, parse: unavailable, execute: unavailable };

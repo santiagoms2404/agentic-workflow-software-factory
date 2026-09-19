@@ -37,6 +37,7 @@ import { writePlacement } from "../../src/registry/placement.ts";
 import { startCommand } from "../../src/cli/commands/start.ts";
 import { statusCommand } from "../../src/cli/commands/status.ts";
 import { runProductionCommand, resumeProductionCommand, ProductionConfigSnapshotMismatch, ProductionWorkflowUnsupported } from "../../src/cli/commands/production-run.ts";
+import type { PhaseRouteOverrides } from "../../src/workflow/route-flags.ts";
 import { nextRevision, persistAttempt, readAttempt, type AttemptProjector } from "../../src/cli/commands/attempt.ts";
 import type { AttemptEvidence } from "../../src/observability/attempt-evidence.ts";
 import { agentsForSession, gatesForSession, getSession, phasesForSession, pollEvents, processesForSession } from "../../src/observability/queries.ts";
@@ -49,25 +50,33 @@ function git(repository: string, ...argv: string[]): string {
 
 const RESUME_INSTRUCTION = '  Report this café instruction verbatim in implementationNotes.\n"Keep existing write limits."  ';
 for (const scenario of ["success", "planner-open-question-once"] as const) {
-for (const { instruction, corrupt } of [{ instruction: undefined, corrupt: false }, { instruction: RESUME_INSTRUCTION, corrupt: false }, { instruction: RESUME_INSTRUCTION, corrupt: true }]) {
-test(`O1 ${scenario} ${instruction === undefined ? "original input" : corrupt ? "substituted input refused" : "supplemented input"}: quota anchor survives refusal and resumes exactly one unstarted builder under a controller lease`, async () => {
+for (const { instruction, corrupt, routed } of [{ instruction: undefined, corrupt: false, routed: false }, { instruction: RESUME_INSTRUCTION, corrupt: false, routed: false }, { instruction: RESUME_INSTRUCTION, corrupt: true, routed: false }, { instruction: RESUME_INSTRUCTION, corrupt: false, routed: true }]) {
+test(`O1 ${routed ? "selected-route " : ""}${scenario} ${instruction === undefined ? "original input" : corrupt ? "substituted input refused" : "supplemented input"}: quota anchor survives refusal and resumes exactly one unstarted builder under a controller lease`, async () => {
   const world = await fixture("plan-build-test", 0, config => ({ ...config,
-    routing: { ...config.routing, quota_stop: { default: { minutes: 30, probe_timeout_ms: 1000 } } } }));
+    adapters: { ...config.adapters, ...(routed ? { secondary: config.adapters.codex! } : {}) },
+    routing: { ...config.routing, quota_stop: { default: { minutes: 30, probe_timeout_ms: 1000 } } } }), 1,
+    "write one bounded source", () => {}, routed ? { builder: { adapter: "secondary", provider: "openai-codex", effort: "low" } } : {});
   try {
     const prepared = await readAttempt(world.created.attemptDir);
     let mode: "low" | "healthy" | "unknown" = "low";
     let launched = 0;
     const actualInputs: string[] = [];
+    const readyIndices = new Map<string, Buffer>();
     const completedCalls = scenario === "success" ? 1 : 2;
     let probes = 0;
     const options = { attemptDir: world.created.attemptDir, stateRoot: world.stateRoot, config: world.config, configPath: world.configPath,
       ...(instruction === undefined ? {} : { instruction }),
+      projectRecord: (async (record, current) => {
+        if (record.event.evidence?.type === "phase-result-ready" && record.event.evidence.checkpoint.pending?.phaseKey === "builder") {
+          readyIndices.set(record.event.evidence.checkpoint.id, readFileSync(git(current.worktree!, "rev-parse", "--path-format=absolute", "--git-path", "index")));
+        }
+      }) satisfies AttemptProjector,
       infrastructure: { adapterFor: (_entry: AdapterEntry, id: string) => new class extends ScriptedAdapter {
         override buildSpec(request: ModelRequest): ProcessSpec {
           const spec = super.buildSpec(request);
           return corrupt && request.prompt.includes("Owner supplemental instruction") ? { ...spec, stdin: request.prompt + "\nsubstituted" } : spec;
         }
-      }(id, prepared.worktree!, () => { launched++; }, scenario),
+      }(id === "secondary" ? "codex" : id, prepared.worktree!, request => { launched++; if (routed && !request.model.startsWith("claude:")) assert.equal(request.effort, "low"); }, scenario),
         createBroker: (brokerOptions: BrokerOptions): TransportBroker => {
           const delegate = fakeBroker(brokerOptions);
           return { startProcess: (registration, spec, signal) => { actualInputs.push(spec.stdin ?? ""); return delegate.startProcess(registration, spec, signal); } };
@@ -86,6 +95,7 @@ test(`O1 ${scenario} ${instruction === undefined ? "original input" : corrupt ? 
     const paused = await runProductionCommand(options);
     assert.equal(paused.lifecycleState, "RUNNING", paused.blocker?.detail);
     assert.equal(paused.recovery?.kind, "quota-pause");
+    if (routed) assert.equal(paused.recovery.quota?.adapterId, "secondary");
     assert.deepEqual(paused.recovery?.prefix.map(entry => entry.phaseKey), ["request", "planner"]);
     assert.equal(paused.budget.callsSpent, completedCalls);
     assert.equal(paused.budget.callsReserved, 0);
@@ -96,6 +106,15 @@ test(`O1 ${scenario} ${instruction === undefined ? "original input" : corrupt ? 
     if (completedCalls === 2) await assert.rejects(resumeProductionCommand({ ...options, reason: "quota recovered", terminal }), /already committed/);
     await raiseCommand({ attemptDir: options.attemptDir, calls: 1, reason: "fund remaining phase headroom", terminal });
     const original = readFileSync(join(options.attemptDir, "journal.jsonl"), "utf8");
+    if (routed) {
+      const stable = await readAttempt(options.attemptDir);
+      await persistAttempt(options.attemptDir, stable.revision, { kind: "attempt.updated", next: nextRevision(stable, {
+        routeOverrides: { builder: { ...stable.routeOverrides.builder, effort: "high" } },
+      }) });
+      await assert.rejects(resumeProductionCommand({ ...options, reason: "route changed", terminal }), /configuration.*changed/);
+      writeFileSync(join(options.attemptDir, "journal.jsonl"), original);
+      writeFileSync(join(options.attemptDir, "status.json"), JSON.stringify(stable));
+    }
     await assert.rejects(runProductionCommand(options), /use awsf resume/);
     for (const bad of ["", "   ", "x".repeat(16_385)]) await assert.rejects(resumeProductionCommand({ ...options, instruction: bad, reason: "quota recovered", terminal }), /owner instruction/);
     await assert.rejects(resumeProductionCommand({ ...options, reason: "quota recovered", terminal }), /quota.*below/);
@@ -176,6 +195,24 @@ test(`O1 ${scenario} ${instruction === undefined ? "original input" : corrupt ? 
       assert.equal(await cliMain(cli), 0, lines.join("\n"));
       assert.equal(await cliMain({ ...cli, argv: [...cli.argv, "--instruction", "different instruction"] }), 1);
       assert.equal(readFileSync(join(options.attemptDir, "journal.jsonl"), "utf8"), history);
+      const rows = history.trim().split("\n").map(line => JSON.parse(line));
+      const cut = rows.findLastIndex(row => row.event.evidence?.type === "phase-result-ready" && row.event.evidence.checkpoint.pending?.phaseKey === "builder");
+      assert.ok(cut > 0);
+      const anchor = rows[cut].event.next;
+      git(prepared.worktree!, "reset", "--mixed", anchor.recovery.worktreeHeadSha);
+      writeFileSync(git(prepared.worktree!, "rev-parse", "--path-format=absolute", "--git-path", "index"), readyIndices.get(anchor.recovery.id)!);
+      rmSync(join(options.attemptDir, "envelopes", "tests-0.json"));
+      writeFileSync(join(options.attemptDir, "journal.jsonl"), rows.slice(0, cut + 1).map(row => JSON.stringify(row)).join("\n") + "\n");
+      writeFileSync(join(options.attemptDir, "status.json"), JSON.stringify(rows[cut - 1].event.next));
+      const { instruction: _instruction, ...validationOptions } = options;
+      const validated = await resumeProductionCommand({ ...validationOptions, reason: "validate the already amended reply", terminal,
+        infrastructure: { ...options.infrastructure, adapterFor: () => assert.fail("amended reply must not call its adapter again"),
+          createBroker: () => assert.fail("amended reply must not open a broker again") } });
+      assert.equal(validated.status.lifecycleState, "AWAITING_OWNER", validated.status.blocker?.detail);
+      assert.equal(validated.status.budget.callsSpent, completedCalls + 1);
+      const completed = readFileSync(join(options.attemptDir, "journal.jsonl"), "utf8");
+      assert.equal(completed.split('"type":"resume-instruction-delivery"').length - 1, 2);
+      assert.equal(launched, completedCalls + 1);
     }
   } finally { world.projection.close(); rmSync(world.root, { recursive: true, force: true }); }
 });
@@ -359,6 +396,7 @@ for (const fault of ["none", "broker-uncertain", "after-submission"] as const) {
 for (const sample of [
   { workflow: "scout", phase: "scout", tier: 0, scenario: "success" },
   { workflow: "plan", phase: "planner", tier: 0, scenario: "success" },
+  { workflow: "plan", phase: "planner", tier: 0, scenario: "planner-open-question-once" },
   { workflow: "build", phase: "builder", tier: 1, scenario: "success" },
   { workflow: "build-review", phase: "reviewer", tier: 2, scenario: "success" },
   { workflow: "build", phase: "builder", tier: 1, scenario: "gate" },
@@ -397,6 +435,40 @@ for (const sample of [
         infrastructure: { ...options.infrastructure, adapterFor: () => assert.fail("saved reply must not reopen an adapter"),
           createBroker: () => assert.fail("saved reply must not construct a provider broker"), writeSystemPrompt: async () => assert.fail("saved reply needs no prompt materialization") } };
       const before = readFileSync(journalPath);
+      const originalRecords = before.toString("utf8").trim().split("\n").map(line => JSON.parse(line));
+      for (const mutation of ["envelope", "route", "reservation", "phase", "exit", "liability"] as const) {
+        const altered = structuredClone(originalRecords);
+        const latest = altered.at(-1);
+        if (mutation === "envelope") {
+          const row = altered.find(record => record.event.evidence?.type === "envelope" && record.event.evidence.envelope.envelopeId === anchor.recovery.pending.envelopeId);
+          row.event.evidence.envelope.payload.summary += " tampered";
+        } else if (mutation === "exit") {
+          const row = altered.findLast(record => record.event.evidence?.type === "process" && record.event.evidence.record.runId === anchor.recovery.pending.runId);
+          row.event.evidence.exitCode = null;
+        } else if (mutation === "liability") latest.event.next.budget.callsReserved = 1;
+        else if (mutation === "phase") latest.event.evidence.phase.correctionCount += 1;
+        else {
+          const pending = latest.event.next.recovery.pending;
+          if (mutation === "route") pending.model.provider = "another-provider";
+          else pending.reservation.id = "another:original-call";
+          latest.event.evidence.checkpoint = structuredClone(latest.event.next.recovery);
+        }
+        writeFileSync(journalPath, altered.map(record => JSON.stringify(record)).join("\n") + "\n");
+        const changed = readFileSync(journalPath);
+        await assert.rejects(resumeProductionCommand(resume), /saved reply|unsettled/);
+        assert.deepEqual(readFileSync(journalPath), changed);
+        assert.equal(launches, expectedLaunches);
+      }
+      writeFileSync(journalPath, before);
+      const indexPath = git(prepared.worktree!, "rev-parse", "--path-format=absolute", "--git-path", "index");
+      const indexBytes = readFileSync(indexPath);
+      writeFileSync(indexPath, Buffer.concat([indexBytes, Buffer.from("changed index")]));
+      await assert.rejects(resumeProductionCommand(resume), /worktree or index bytes changed/);
+      assert.deepEqual(readFileSync(journalPath), before);
+      writeFileSync(indexPath, indexBytes);
+      const declined = await resumeProductionCommand({ ...resume, terminal: { ...resume.terminal, confirm: async () => false } });
+      assert.equal(declined.confirmed, false);
+      assert.deepEqual(readFileSync(journalPath), before);
       const extra = join(prepared.worktree!, "changed-after-reply.txt");
       writeFileSync(extra, "must be preserved on refusal\n");
       await assert.rejects(resumeProductionCommand(resume), /worktree or index bytes changed/);
@@ -409,7 +481,7 @@ for (const sample of [
       assert.equal(result.status.budget.callsSpent, anchor.budget.callsSpent);
       assert.equal(result.status.budget.callsReserved, 0);
       assert.equal(launches, expectedLaunches);
-      if (sample.scenario === "success") {
+      if (sample.scenario !== "gate") {
         const stable = readFileSync(journalPath);
         assert.equal((await resumeProductionCommand(resume)).status.revision, result.status.revision);
         assert.deepEqual(readFileSync(journalPath), stable);
@@ -660,6 +732,7 @@ async function fixture(
   tier: 0 | 1 | 2 = 1,
   request = "write one bounded source",
   seed: (canonical: string) => void = () => {},
+  routeOverrides: PhaseRouteOverrides = {},
 ) {
   const root = mkdtempSync(join(tmpdir(), "awsf-production-runner-"));
   const canonical = join(root, "canonical");
@@ -685,7 +758,7 @@ async function fixture(
   mkdirSync(resolve(sharedPrompt, ".."), { recursive: true });
   writeFileSync(sharedPrompt, readFileSync(resolve("prompts/shared/headless-role.md"), "utf8"));
   const projection = createDashboardProjection(stateRoot);
-  const created = await newCommand({ stateRoot, project: config.project.slug, taskId: `fixture-${workflow}`, repository: canonical, request, workflow, tier, configSnapshotJson: JSON.stringify(config), projectRecord: projection.project });
+  const created = await newCommand({ stateRoot, project: config.project.slug, taskId: `fixture-${workflow}`, repository: canonical, request, workflow, tier, routeOverrides, configSnapshotJson: JSON.stringify(config), projectRecord: projection.project });
   // scout, plan and design-to-plan need every call their ceiling allows, so
   // `awsf start` refuses their unfundable correction round. Take the owner's
   // own remedy — which is also what proves the remedy works.

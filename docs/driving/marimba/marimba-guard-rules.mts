@@ -1,5 +1,7 @@
 /**
- * marimba's two fences as pure rules, with no harness in them.
+ * marimba's fences as pure rules, with no harness in them. Fences 1 and 2 are
+ * shared by both harnesses; fence 3, the lifecycle-timeout floor, binds on the
+ * pi path only.
  *
  * `delegation-guard.sh` enforces these for a `PreToolUse` shell hook and
  * `marimba-guard.pi.ts` enforces them for a pi extension. Both are the same

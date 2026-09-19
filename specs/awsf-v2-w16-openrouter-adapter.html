@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plan: AWSF v2 W16 — The pi/OpenRouter adapter</title>
+<style>
+/* AWSF dark theme, carried from the spine so the document set reads as one.
+   The accent moves to the builder cyan because this workstream adds a WORKER
+   ROUTE rather than a planning surface; everything else is the spine's palette
+   unchanged, and the mermaid themeVariables at the foot mirror it hex for hex.
+   The review layer reuses --bg / --fg / --muted / --accent. */
+:root {
+  --bg:#0F1017; --surface:rgba(28,30,43,.85); --surface-solid:#1C1E2B;
+  --border:rgba(255,255,255,.07); --text:#E7E9F0; --muted:#8B90A6;
+
+  --agent-engineer:#F59E0B; --agent-scout:#FBBF24; --agent-planner:#A78BFA;
+  --agent-builder:#22D3EE;  --agent-reviewer:#F43F5E; --agent-documenter:#C084FC;
+  --agent-code:#10B981;
+
+  --ok:#22C55E; --running:#3B82F6; --error:#EF4444; --warn:#F97316;
+
+  --font-ui:"Inter","Outfit",system-ui,sans-serif;
+  --font-mono:"JetBrains Mono","Fira Code",ui-monospace,monospace;
+  --num:tabular-nums;
+
+  --r-card:14px; --r-block:6px; --r-pill:999px;
+  --shadow-card:0 1px 0 rgba(255,255,255,.04) inset, 0 8px 24px rgba(0,0,0,.35);
+
+  --fg:var(--text); --accent:var(--agent-builder);
+  --cool:var(--agent-planner); --good:var(--ok); --danger:var(--error);
+  --border-strong:#2b3040;
+  --maxw:1120px;
+}
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body { margin:0; padding:0; background:var(--bg); color:var(--fg);
+  font-family:var(--font-ui); font-size:15px; line-height:1.65; -webkit-font-smoothing:antialiased; }
+main { max-width:var(--maxw); margin:0 auto; padding:48px 24px 160px; }
+h1,h2,h3,h4 { line-height:1.25; font-weight:650; letter-spacing:-.011em; }
+h1 { font-size:30px; margin:0 0 6px; }
+h2 { font-size:21px; margin:56px 0 14px; padding-bottom:8px; border-bottom:1px solid var(--border-strong); }
+h3 { font-size:17px; margin:34px 0 8px; }
+h4 { font-size:14px; margin:24px 0 6px; color:var(--accent); letter-spacing:.01em; }
+h5 { margin:0 0 6px; font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--muted); font-weight:700; }
+p { margin:0 0 14px; }
+a { color:var(--cool); }
+strong { color:#fff; font-weight:650; }
+em { color:var(--muted); font-style:italic; }
+ul,ol { margin:0 0 14px; padding-left:22px; }
+li { margin:3px 0; }
+hr { border:0; border-top:1px solid var(--border-strong); margin:40px 0; }
+small { color:var(--muted); }
+
+code { font-family:var(--font-mono); font-size:.88em; background:var(--surface-solid);
+  border:1px solid var(--border-strong); border-radius:4px; padding:1px 5px; color:#9FE8F7; }
+pre { background:var(--surface-solid); border:1px solid var(--border-strong);
+  border-left:3px solid var(--accent); border-radius:8px; padding:14px 16px; overflow-x:auto;
+  font-family:var(--font-mono); font-size:12.5px; line-height:1.6; color:#d6dde6; }
+pre code { background:none; border:none; padding:0; color:inherit; font-size:inherit; }
+
+table { width:100%; border-collapse:collapse; margin:14px 0 20px; font-size:13px; display:block; overflow-x:auto; }
+th,td { padding:7px 10px; border:1px solid var(--border-strong); text-align:left; vertical-align:top; }
+th { background:var(--surface-solid); color:var(--accent); font-weight:600; font-size:11.5px;
+  letter-spacing:.05em; text-transform:uppercase; white-space:nowrap; }
+tbody tr:nth-child(even) { background:#ffffff05; }
+td code { font-size:11.5px; }
+.num, td.num { font-variant-numeric:var(--num); text-align:right; }
+
+.meta { margin:14px 0 0; font-size:13px; }
+.meta summary { cursor:pointer; color:var(--muted); font-family:var(--font-mono); font-size:12px; }
+.meta dl { display:grid; grid-template-columns:130px 1fr; gap:4px 14px; margin:12px 0 0; padding:14px;
+  background:var(--surface-solid); border:1px solid var(--border-strong); border-radius:8px; }
+.meta dt { color:var(--accent); font-family:var(--font-mono); font-size:11.5px; }
+.meta dd { margin:0; color:var(--muted); font-family:var(--font-mono); font-size:11.5px; overflow-wrap:anywhere; }
+
+.sub { color:var(--muted); font-size:13.5px; margin-top:0; }
+
+figure { margin:26px 0; text-align:center; }
+figure svg, figure .mermaid { max-width:100%; height:auto; }
+figure .mermaid { background:var(--surface-solid); border:1px solid var(--border-strong);
+  border-radius:10px; padding:20px 12px; overflow-x:auto; text-align:center;
+  color:var(--muted); font-size:12px; }
+figcaption { color:var(--muted); font-size:12px; margin-top:10px; font-style:italic; }
+
+.tag { display:inline-block; font-family:var(--font-mono); font-size:10px; letter-spacing:.06em;
+  text-transform:uppercase; padding:1px 6px; border-radius:3px; margin-right:6px; vertical-align:1px; }
+.tag.existing { background:#262b3a; color:var(--muted); }
+.tag.new { background:#14323c; color:var(--accent); }
+.tag.dir { background:#2c2544; color:var(--cool); }
+
+.files ul { list-style:none; padding:0; }
+.files li { padding:4px 0; border-bottom:1px solid #ffffff08; font-size:13px; }
+
+.phase { border:1px solid var(--border-strong); border-radius:var(--r-card);
+  padding:22px 24px; margin:30px 0; background:#ffffff04; }
+.phase > h3 { margin-top:0; }
+.phase > h3 .status { color:var(--accent); }
+
+.checklist { list-style:none; padding:0; margin:8px 0 16px; }
+.checklist li { padding:4px 0 4px 2px; font-size:13.5px; }
+.checklist li .status { color:var(--accent); margin-right:6px; }
+
+.loop { border:1px dashed var(--accent); border-radius:8px; padding:10px 14px; margin:16px 0 4px;
+  font-size:13px; background:#22d3ee0d; }
+
+.card { border:1px solid var(--border-strong); border-left:3px solid var(--cool); border-radius:8px;
+  padding:12px 16px; margin:14px 0; background:var(--surface-solid); font-size:13px; }
+.card.warn { border-left-color:var(--warn); }
+.card.danger { border-left-color:var(--danger); }
+.card.rule { border-left-color:var(--accent); }
+.card.good { border-left-color:var(--good); }
+
+.taskmeta { width:100%; font-size:12.5px; margin:6px 0 12px; }
+.taskmeta th { width:165px; text-transform:none; letter-spacing:0; font-size:12px; }
+
+/* Identifier spine */
+#spine dl { display:grid; grid-template-columns:86px 1fr; gap:7px 14px; margin:0; }
+#spine dt { font-family:var(--font-mono); font-size:12px; }
+#spine dd { margin:0; font-size:13px; }
+code.inv { color:var(--warn); border-color:#f9731644; background:#f973160d; }
+code.ac { color:var(--good); border-color:#22c55e44; background:#22c55e0d; }
+code.serves { color:var(--accent); border-color:#22d3ee44; background:#22d3ee0d; font-size:11px; }
+p.serves { margin:2px 0 10px; }
+
+#questionables details, #amendments details { border:1px solid var(--border-strong); border-radius:8px;
+  padding:10px 14px; margin:10px 0; background:var(--surface-solid); }
+#questionables summary, #amendments summary { cursor:pointer; font-weight:600; font-size:13.5px; }
+.qa-answer { margin:10px 0 2px; font-size:13px; color:var(--muted); }
+.qopen { color:var(--warn); font-family:var(--font-mono); font-size:10px; letter-spacing:.06em; margin-right:6px; }
+.qdecided { color:var(--good); font-family:var(--font-mono); font-size:10px; letter-spacing:.06em; margin-right:6px; }
+.decided { display:block; margin:0 0 10px; padding:8px 12px; font-size:12.5px;
+  border-left:3px solid var(--good); background:#22c55e0d; border-radius:0 6px 6px 0; color:var(--fg); }
+.decided b { color:var(--good); }
+.recommend { display:block; margin:8px 0; padding:8px 12px; font-size:12.5px;
+  border-left:3px solid var(--cool); background:#a78bfa0c; border-radius:0 6px 6px 0; color:var(--fg); }
+.gate { font-family:var(--font-mono); color:var(--warn); border:1px solid var(--warn);
+  border-radius:3px; padding:0 5px; font-size:11px; }
+
+/* Mockup frame — mirrors the TARGET surface: the AWSF dashboard's own §7 tokens. */
+.mockup { margin:22px 0; }
+.mockup-frame { background:var(--bg); border:1px solid var(--border-strong); border-radius:10px;
+  padding:0; overflow:hidden; text-align:left; box-shadow:0 8px 28px #0006; }
+.mockup-frame .mbar { background:var(--surface-solid); padding:7px 12px; border-bottom:1px solid var(--border-strong);
+  font-family:var(--font-mono); font-size:11px; color:var(--muted); }
+.mockup-frame .mbody { padding:14px 16px; }
+.mk-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--r-card);
+  padding:12px 14px; margin:0 0 12px; font-size:12px; box-shadow:var(--shadow-card); }
+.mk-id { color:var(--agent-planner); font-family:var(--font-mono); font-weight:700; }
+.mk-pill { display:inline-block; font-family:var(--font-mono); font-size:10px; border-radius:var(--r-pill);
+  padding:2px 9px; margin-right:8px; }
+.mk-pill.okp { background:#22c55e1a; color:var(--ok); border:1px solid #22c55e44; }
+.mk-pill.state { background:#22d3ee1a; color:var(--agent-builder); border:1px solid #22d3ee44; }
+.mk-pill.warnp { background:#f973161a; color:var(--warn); border:1px solid #f9731644; }
+.mk-mono { font-family:var(--font-mono); font-size:11px; color:var(--text); }
+.mk-dim { color:var(--muted); } .mk-okc { color:var(--ok); } .mk-warnc { color:var(--warn); }
+.mk-bad { color:var(--error); }
+.mk-row { display:flex; gap:10px; align-items:baseline; font-family:var(--font-mono);
+  font-size:11px; padding:3px 0; border-bottom:1px solid #ffffff08; }
+.mk-row .t { width:66px; color:var(--muted); }
+.mk-row .k { width:112px; color:var(--agent-builder); }
+.mk-label { font-family:var(--font-mono); font-size:10px; letter-spacing:.06em;
+  text-transform:uppercase; color:var(--muted); margin:0 0 6px; }
+
+@media (max-width:720px) {
+  main { padding:28px 14px 140px; }
+  .meta dl { grid-template-columns:1fr; }
+  #spine dl { grid-template-columns:1fr; }
+}
+</style>
+</head>
+<body>
+<main>
+
+  <!-- ===== HEADER + UPDATABLE METADATA ===== -->
+  <header>
+    <h1>Plan: AWSF v2 W16 — The pi/OpenRouter adapter</h1>
+    <p class="sub">Workstream W16 of <a href="awsf-v2-plan.html">the AWSF v2 spine</a> · milestone M16 · <strong>a second adapter that reuses <code>pi</code> as transport</strong>. It opens every phase route to open-weight and API-key-billed models, and it is the first route in this harness entitled to say what a run actually cost — once it has earned that, which is a milestone of this plan rather than an assumption of it.</p>
+    <details class="meta">
+      <summary>Metadata</summary>
+      <dl>
+        <dt>created</dt>      <dd>2026-09-15</dd>
+        <dt>modified</dt>     <dd>2026-09-15, 2026-09-15</dd>
+        <dt>commits</dt>      <dd>none — authoring only; no implementation was written, no provider was called, no worktree was created, and no invariant was changed, none — owner review applied 2026-09-15; three Questionables decided, still uncommitted</dd>
+        <dt>agent name</dt>   <dd>claude-opus-5, claude-opus-5</dd>
+        <dt>session id</dt>   <dd>not recorded — AGENTS.md invariant 1 keeps live session state out of every committed file in this repository</dd>
+        <dt>back refs</dt>    <dd>./awsf-v2-plan.html (spine milestone M16, Shared Invariants, and the R1 overstatement discipline), ../AGENTS.md (invariants 1, 3, 7, 9, 11, 12), ../awsf.config.yaml (§ adapters, § routing, § agents), ../awsf.project.yaml (the plan source this file resolves through), core/src/adapters/pi-codex.ts (the reviewed adapter this one is shaped against and must not relax), core/src/adapters/pi-codex-stream.ts (the proven decoder this route reuses), core/src/adapters/interface.ts (ModelInfo, HarnessAdapter, ContinuityCapableAdapter), core/src/adapters/env.ts (ENV_ALLOWLIST — unchanged by this workstream), core/src/adapters/cost-display.ts and dashboard/src/display.ts (the two formatCost sites), core/src/adapters/catalog.ts (the second selector-refusal site), core/src/adapters/registry.ts and core/src/config/schema.ts (adapter kinds), core/src/workflow/review-routing.ts (providerPairFrom — the inversion collision), core/src/execution/call-budget.ts (the reservation ledger), core/src/contracts/normalized-events.ts (NOTICE_CODES), core/test/fixtures/providers/codex/PROVENANCE.md (the fixture-integrity rule this plan inherits), core/test/unit/meta/ticket-plan-sync.test.ts and core/src/registry/plan-source.ts (the grammar and the byte-identity fence this document is parsed by)</dd>
+        <dt>forward refs</dt> <dd>./awsf-v2-w16-openrouter-adapter-build-prompts.md, ./tickets/awsf-v2-w16-openrouter-adapter/ (T01–T12 plus README.md)</dd>
+      </dl>
+    </details>
+  </header>
+
+  <figure>
+    <pre class="mermaid">
+flowchart LR
+  CFG["awsf.config.yaml<br/>adapters.openrouter"] --> REG["registry<br/>kind: pi-openrouter"]
+  REG --> AD["PiOpenRouterAdapter<br/>pure buildSpec"]
+  AD --> BR["transport-broker<br/>the only spawn site"]
+  BR --> PI["pi --provider openrouter"]
+  PI --> DEC["PiStreamDecoder<br/>+ auto_retry"]
+  DEC --> SEQ["EventSequencer<br/>one terminal"]
+  PIC["PiCodexAdapter<br/>PI_PROVIDER pinned"] -. "not relaxed" .-> PI
+  style AD stroke:#22D3EE,stroke-width:2px
+  style PIC stroke:#F87171,stroke-width:2px,stroke-dasharray:4 3
+  style DEC stroke:#A78BFA,stroke-width:2px
+    </pre>
+    <figcaption>One new adapter, one shared decoder, one unchanged neighbour. The dashed edge is the thing this workstream must never build: a second provider reaching the reviewed Codex adapter through its own pinned route.</figcaption>
+  </figure>
+
+  <!-- ===== IN PLAIN LANGUAGE ===== -->
+  <section id="plain-language">
+    <h2>In Plain Language</h2>
+    <p class="sub">This section explains the whole plan without technical vocabulary. Everything after it says the same things precisely, for the people — and machines — building it.</p>
+
+    <h3>What this is about</h3>
+    <p>Your factory hires its workers from exactly two agencies, and it pays both the same way: a flat monthly fee that buys a certain amount of work and then stops until the month turns over. When a month runs dry, the factory waits. There is no third agency it knows how to call.</p>
+    <p>There is a second thing, and it matters more than it sounds. <strong>Neither agency ever tells the factory what a job actually cost.</strong> One cannot say at all, because a share of a monthly fee is not a price. The other quotes a figure, but the figure is the factory doing its own sums from a price list it keeps in a drawer — which is a guess that looks like a receipt. A while ago somebody noticed that and made the factory label it honestly: it now shows those numbers with a little "about" in front of them.</p>
+
+    <h3>Why now</h3>
+    <p>Because a third agency turned out to already be reachable, and somebody checked rather than assumed. The tool the factory already uses to talk to one of its two agencies can also talk to a marketplace — a middleman that resells access to hundreds of different AI workers, including ones anybody can download and run, and bills by the job on a card instead of by the month.</p>
+    <p>A single test job was sent through it. It cost two thousandths of a cent. Everything the marketplace said back was in a language the factory already understands — every single message type, with no exceptions. And crucially, <strong>the bill it sent back looks like a real bill rather than a guess</strong>. If that holds up, it would be the first job in the factory's history whose cost is a fact instead of an estimate.</p>
+    <p>So this is cheap work sitting on top of a measurement that has already been taken. That is the reason to do it now rather than later.</p>
+
+    <h3>What we are building</h3>
+    <p>Think of it as a second phone line to the same switchboard. The factory already has one line into that switchboard, and that line is locked to one agency on purpose — the lock is there so that nobody can quietly redirect a line that has been inspected and approved to somewhere that has not been. <strong>We are not picking that lock. We are running a second line, with its own inspection.</strong></p>
+    <p>Four things have to happen, in order.</p>
+    <ul>
+      <li><strong>Teach the factory how the new agency spells a worker's name.</strong> Today it refuses any name with a slash in it, and every name at this marketplace has one. That refusal is not a bug — on the old line, a slash would smuggle in a second agency's name. On the new line it is just how names are written. So the new line gets its own spelling rule, and the old line keeps its rule exactly as it was. There is a second, quieter place in the factory that also refuses these names, which nobody had noticed; it gets fixed too.</li>
+      <li><strong>Build the second line, and stop losing count when a worker stumbles.</strong> Sometimes the marketplace is busy and the tool quietly asks again — two or three times — inside what the factory counts as a single conversation. Right now the factory writes those moments down as "something happened here that I do not recognise" and shows you the first fragment of the line. After this, it writes down what actually happened: attempt two of three, waited four seconds, then succeeded. <strong>It still counts as one job</strong>, and there is a good reason: the factory's whole budget system counts the number of times it picks up the phone, not the number of times somebody says hello. Changing that would mean tampering with the one piece of bookkeeping that stops two jobs starting at once and both slipping under the limit.</li>
+      <li><strong>Earn the right to say what a job cost — rather than just claiming it.</strong> This is the part with a trap in it, and the factory has already fallen into it once. The other agency's numbers looked exactly this convincing until somebody from a different background read the tool's own workings and found it was doing the arithmetic itself. <strong>So four things have to be true before the factory is allowed to call this a real price</strong>, and one of them has not been checked yet: read the tool's own workings for this new line and confirm it is passing the marketplace's bill through rather than calculating its own. If that turns out to be false, the honest answer is to keep the "about" label, write down why, and lose nothing else. There is also a small embarrassment to fix first: the factory rounds money to the nearest cent, so two thousandths of a cent currently displays as zero — which would turn a real price into something indistinguishable from free.</li>
+      <li><strong>Wire it up, switched off, and be honest about one thing it breaks.</strong> The new line gets registered but arrives with the switch in the off position; turning it on is your decision, taken separately. And there is a collision: when the factory has a worker build something, it insists the review be done by a <em>different</em> agency, and it works out which one by elimination from a pair. <strong>A pair is not three.</strong> Put all three agencies on one job today and the factory refuses the whole thing before it starts — correctly, but with a message that says "I found three" without saying which three. This plan makes the refusal say who. It does not change the rule, because changing it is your call, not the plan's.</li>
+    </ul>
+
+    <h3>Three things you decided on 2026-09-15</h3>
+    <p>Each was written up with its options and the case for each, with no answer pre-selected. You answered all three. Two of your answers went against what was recommended, and the recommendation is kept next to your decision rather than quietly rewritten to agree — otherwise nobody can see later what the trade-off actually was.</p>
+    <ul>
+      <li><strong>When the tool quietly tries again, has the factory used up one of its allowance or three? — you said one.</strong> That was also the recommendation, and not as a preference: the allowance counts how many times the factory picks up the phone, and a retry is the same call. Nothing about the plan changes. The factory still has to write down that the retry happened, because those failed tries cost real money and real time.</li>
+      <li><strong>Should the cheap new workers be allowed to do the reviewing, or only the building? — you said reviewing is fine.</strong> The recommendation was building only, and the reason is worth keeping in view rather than arguing about again: the reviewer is the single role whose work nothing downstream checks. <strong>Here is the good news about your answer: it costs nothing to carry out.</strong> The factory never asked a reviewer to be strong — only to be a <em>different</em> supplier from the one that built the thing — so nothing had to be unlocked. There is also a real safety net already in place: a reviewer has to fill in a structured form, and the form is checked, so a reviewer that answers badly is more likely to fail the check than to slip a hollow review through.</li>
+      <li><strong>Does the marketplace count as one supplier, when it can supply workers from everywhere? — you said yes, one supplier, and no limit on how many marketplace workers a job may use.</strong> The recommendation agreed on the first half and asked for a limit of one per job; you took the first half alone. <strong>That turns out to be safe, and it was checked rather than assumed.</strong> The thing the limit was meant to prevent — a marketplace worker reviewing another marketplace worker — is already impossible: the factory would see one supplier on both sides, be unable to work out "the other one", and refuse the job. The one real consequence is that more jobs can now end up naming three suppliers at once, which the factory also refuses. So the part of the plan that makes that refusal say <em>who</em> matters more than it did yesterday.</li>
+    </ul>
+
+    <h3>How we will know it worked</h3>
+    <ul>
+      <li>A job runs on a worker from the new marketplace, with the same rules, the same sealed workspace and the same stopping points as any other job.</li>
+      <li>When the tool stumbles and tries again, you can read what happened in plain words, and the job still counts as one.</li>
+      <li><strong>Either</strong> the factory shows a real price, with all four pieces of proof sitting in the repository where anyone can check them, <strong>or</strong> it keeps the honest "about" label and the missing piece is written down. Those are the only two acceptable endings; quietly claiming the first without the proof is the failure this plan is shaped to prevent.</li>
+      <li>The existing line to the other agency is byte for byte what it was, and a test says so rather than a person remembering.</li>
+      <li>Nothing about how the factory handles passwords or keys changed. The key for the new line lives where that tool already keeps its own keys, and the factory never looks at it.</li>
+      <li>The new line ships switched off.</li>
+    </ul>
+
+    <h3>What this deliberately is not</h3>
+    <p>It is not a cheaper way to run everything — routing decisions stay yours. It is not a change to how the factory decides who reviews whom. It is not a new way to watch jobs or to send work outside this machine. And it is not related to the other unfinished piece of work about a third company's assistant, which is stuck waiting for evidence about whether it can be safely contained. <strong>This one has no such gap, which is exactly why it is worth doing now.</strong></p>
+
+    <div class="card good">
+      <h5>The one-paragraph version</h5>
+      Your factory can only hire from two agencies, pays both a flat monthly fee, and has never once been told what a job actually cost. A third source is already reachable through a tool it uses every day, a test job through it cost two thousandths of a cent, and everything that came back was in a language the factory already speaks. This plan builds a second, separately inspected line to that source — leaving the first line untouched — teaches the factory how these workers' names are spelled, makes it say plainly when the tool quietly retried instead of writing down a shrug, and fixes the rounding that would show a real price as zero. Then it does the part that matters most: it refuses to let the factory claim it knows what a job cost until four specific pieces of proof exist, one of which nobody has checked yet. If that proof does not turn up, the honest label stays and nothing else is lost. The line arrives switched off. Three real decisions were put to you with the cases laid out and no answer pre-selected, and on 2026-09-15 you took all three: a quiet retry costs one turn, the cheap new workers may review as well as build, and the marketplace counts as a single supplier with no limit on how many of its workers a job may use. Two of those went against the recommendation, which is kept beside them so the trade-off stays readable. Neither needs a line of code — the factory already only asked a reviewer to be a <em>different</em> supplier, and it already refuses a job whose two sides come from the same one. What your answers do change is that one awkward truth matters more, not less: with three suppliers on a single job, the factory's rule for picking a reviewer stops working, because it picks by elimination from a pair — so the refusal had better say which three.
+    </div>
+  </section>
+
+  <!-- ===== PURPOSE ===== -->
+  <section id="purpose">
+    <h2>Purpose</h2>
+    <p>AWSF has two verified worker routes and both are subscriptions: Claude Pro through the Claude CLI, and ChatGPT Plus through <code>pi</code> on its <code>openai-codex</code> provider. Both are metered by a monthly window the factory cannot top up, neither can report what a run actually cost, and neither can reach a model outside its vendor's own family. <strong>This workstream adds a third route that is none of those things</strong> — key-billed rather than subscription-metered, open-weight as well as frontier, and priced by the provider rather than estimated by the client.</p>
+    <p>It is a <strong>second adapter</strong>, not a widening of the first. <code>PI_PROVIDER</code> is pinned in <code>core/src/adapters/pi-codex.ts</code> with a rationale that is still correct: a different provider through the same binary is a different protocol, a different auth path and a different set of captured bytes, and accepting one from config would let an unreviewed route inherit a reviewed adapter's descriptor tests. Nothing in this plan edits that constant, that comment, or that adapter's argv.</p>
+    <p><strong>What it inherits for free, and this is the whole reason it is cheap:</strong> <code>pi</code>'s tool boundary is already verified on this machine and its stream vocabulary is already decoded. A single-turn probe on 2026-09-15 emitted twenty-one events and <em>every one of them</em> is a branch <code>pi-codex-stream.ts</code> already handles. The adapter is therefore a descriptor and a registration, not a parser.</p>
+  </section>
+
+  <!-- ===== PROBLEM ===== -->
+  <section id="problem">
+    <h2>Problem</h2>
+    <p>Four things stand between the measured probe and a route a phase can run on. Two were named in the request and are real. One was named with a symptom that does not exist yet, and correcting that changes the work rather than cancelling it. One was not named at all and is the hardest.</p>
+
+    <h3>1 — The selector guard refuses every real OpenRouter id, in two places</h3>
+    <p><code>SAFE_MODEL_SELECTOR</code> at <code>core/src/adapters/pi-codex.ts:118</code> is <code>/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/</code>. It refuses <code>deepseek/deepseek-v4-flash-0731</code>, <code>z-ai/glm-5.2</code> and <code>~deepseek/deepseek-v4-flash-latest</code> alike. Both of its narrowings are deliberate and documented in the comment above it, and <strong>both reasons survive onto this route unchanged</strong>: a <code>/</code> would name a second provider from inside a flag that has already been told which provider to use, and a <code>:</code> would set <code>--thinking</code> from the model field and silently outrank the level the agent's config put on the line.</p>
+    <p><strong>The slash reason is the one that changes, and only on this route.</strong> On OpenRouter a <code>/</code> is not a second provider — it is how OpenRouter spells a model, and <code>--provider openrouter</code> is still the only provider on the line. The colon reason does not change at all and the refusal must stay.</p>
+    <p><strong>There is a second refusal site the request did not name.</strong> <code>resolveSelector</code> in <code>core/src/adapters/catalog.ts:31</code> carries the same regex, plus a rule that a selector must contain exactly one colon. It is a <em>declared</em> surface rather than a live gate: grepping <code>core/src</code>, <code>core/test</code> and <code>dashboard/src</code> finds no caller outside <code>core/test/unit/adapters/catalog-registry.test.ts</code>. A plan that widened the adapter and left the catalog alone would ship a route the catalog says is unrepresentable, which is exactly the kind of quiet disagreement invariant 12 exists to stop one level up.</p>
+
+    <h3>2 — <code>pi</code> retries inside a single phase, and the host cannot see what it means</h3>
+    <p>A free-tier run produced three events the decoder has no branch for: <code>auto_retry_start</code> carrying <code>{attempt, maxAttempts, delayMs, errorMessage}</code> and <code>auto_retry_end</code> carrying <code>{success, attempt, finalError}</code>, from an upstream 429.</p>
+    <p><strong>Unhandled does not mean silent, and the difference is the whole of this task.</strong> The decoder's <code>default:</code> branch emits <code>sequencer.notice("unknown-provider-event", …)</code> — so three retries already produce three notices today, carrying the line's first 200 bytes. What is missing is not visibility but <em>meaning</em>: nothing says how many attempts there were, what the delay was, whether the last one succeeded, or that the run is still one call. The honest statement of the gap is that a retry arrives as an unrecognized line rather than as a retry.</p>
+
+    <h3>3 — The surface the symptom was stated against does not exist</h3>
+    <div class="card warn">
+      <h5>Correction to the request, recorded rather than quietly fixed</h5>
+      <p>The request describes a <strong>run-failures surface</strong> showing <em>"one failure where three happened"</em>. There is no such surface in this tree. A sweep for <code>run-failures</code>, <code>runFailures</code>, <code>RunFailure</code> and <code>failuresFor</code> across <code>core/src</code>, <code>dashboard/</code> and <code>specs/</code> returns two unrelated prose matches in v1 build prompts and nothing else. What exists is the event log, whose <code>summarizeNotice</code> (<code>dashboard/src/event-summary.ts:58</code>) renders any notice generically as <code>code: message</code>, the journal, and <code>core/src/observability/run-report.ts</code>.</p>
+      <p><strong>This does not cancel the work; it relocates it.</strong> The projection and the event log are where a retry must become legible, and because <code>summarizeNotice</code> is generic over the code, a new notice code renders with <em>no dashboard change at all</em>. The plan builds against the surfaces that exist, and it does not invent a failure surface to justify a decision it can take on the event log.</p>
+      <p>This is the spine's own R1 discipline pointed back at a request: a symptom stated against a surface nobody has built is an overstatement of the same family as calling a camera a wall, and correcting it is cheaper here than after the code is shaped around it.</p>
+    </div>
+
+    <h3>4 — Inversion admits exactly two providers, and this makes three</h3>
+    <p>This was not in the request and it is the hardest thing in the workstream. <code>providerPairFrom</code> (<code>core/src/workflow/review-routing.ts:36</code>) takes the providers of a compiled recipe's agent phases, de-duplicates them, and <strong>throws <code>InvalidReviewInversion</code> unless exactly two remain</strong>. Both call sites pass a whole recipe's phases: <code>production-run.ts:1158</code> maps every <code>kind === "agent"</code> phase, and <code>review-phase.ts:497</code> builds the same list from the recipe. A tier-2 recipe with a Claude planner, an OpenRouter builder and a Claude reviewer has two providers and works. The same recipe with a Claude planner, a Codex builder and an OpenRouter documenter has three, and is refused before any child starts — at preflight, at zero cost, with a message that names a count rather than a culprit.</p>
+    <figure>
+      <pre class="mermaid">
+flowchart TD
+  R["compiled recipe<br/>agent phases"] --> P["providerPairFrom"]
+  P -->|"exactly 2 distinct"| OK["oppositeProvider<br/>review inverts"]
+  P -->|"3 distinct"| NO["InvalidReviewInversion<br/>refused at preflight"]
+  A["anthropic"] --> P
+  B["openai-codex"] --> P
+  C["openrouter"] --> P
+  style NO stroke:#F87171,stroke-width:2px
+  style C stroke:#22D3EE,stroke-width:2px
+      </pre>
+      <figcaption>The third provider is the whole collision. Inversion is defined by exclusion over a pair, and a pair is not a set of three.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ===== SOLUTION ===== -->
+  <section id="solution">
+    <h2>Solution</h2>
+    <p>A second adapter file, a route-owned selector guard, one new notice code, one rendering fix, and a registration that ships disabled. Nothing else changes, and three things are explicitly left alone: <code>PI_PROVIDER</code>, <code>ENV_ALLOWLIST</code>, and the argv of the Codex route.</p>
+
+    <table>
+      <thead><tr><th>Piece</th><th>Shape</th><th>Why it is shaped that way</th></tr></thead>
+      <tbody>
+        <tr><td><strong>The adapter</strong></td><td><code>core/src/adapters/pi-openrouter.ts</code>, a peer of <code>pi-codex.ts</code> with its own pinned <code>PI_OPENROUTER_PROVIDER = "openrouter"</code>, its own <code>"openrouter:"</code> prefix, and its own selector guard.</td><td>Two adapters over one binary, not one adapter over two providers. A reviewed route's descriptor tests are the thing being protected, and they are protected by the file boundary rather than by a comment.</td></tr>
+        <tr><td><strong>The decoder</strong></td><td><code>PiStreamDecoder</code>, reused as-is, plus two new branches for <code>auto_retry_start</code> / <code>auto_retry_end</code>.</td><td>All twenty-one probe events are already handled. Writing a second decoder to change two branches would fork a 691-line proven file for a 20-line change.</td></tr>
+        <tr><td><strong>The retry</strong></td><td>One new value in <code>NOTICE_CODES</code>: <code>provider-retry</code>. No new event kind, no ledger touch.</td><td>The twelve normalized kinds are a fixed vocabulary every adapter shares. A retry is a fact about one route's transport, which is what a notice is for. And it renders today, because <code>summarizeNotice</code> is generic over the code.</td></tr>
+        <tr><td><strong>The cost</strong></td><td><code>costAuthority</code> stays <code>"catalog-estimate"</code> until M3 produces the named evidence, then is promoted in one commit alongside the sub-cent rendering fix.</td><td>The Codex route was demoted from <code>"provider"</code> for exactly this reason once already. A promotion that arrives before its evidence is the same mistake with a different provider's name on it.</td></tr>
+        <tr><td><strong>The inversion</strong></td><td>The third provider stays refused at preflight. M4 makes the refusal <em>name the providers</em>. <strong>Decided 2026-09-15 (Q3):</strong> the provider string is the unit and there is no per-recipe cap on OpenRouter phases.</td><td>An error that says <em>"found 3"</em> and not <em>which three</em> costs a reader a debugging session — and with an OpenRouter reviewer now admissible (Q2), more recipes can reach three providers, so the legible refusal is what keeps the decision usable.</td></tr>
+        <tr><td><strong>The credential</strong></td><td>No change. The key lives in <code>~/.pi/agent/auth.json</code>, reached through <code>HOME</code>, already on the three-entry allowlist.</td><td>AWSF continues to touch no credential. <code>filterEnv</code> still refuses an allowlisted key whose <em>value</em> is credential-shaped, so <code>HOME</code> is passed as a path and never as a secret.</td></tr>
+      </tbody>
+    </table>
+
+    <figure>
+      <pre class="mermaid">
+flowchart TD
+  M1["M1 · selector admission<br/>two refusal sites"] --> M2["M2 · the adapter<br/>argv + retries"]
+  M2 --> M3["M3 · cost authority<br/>earned, not declared"]
+  M3 --> M4["M4 · registration<br/>inversion + closure"]
+  M2 -. "one bounded live call" .-> CAP["capture<br/>fixtures + PROVENANCE"]
+  CAP --> M3
+  style M3 stroke:#22C55E,stroke-width:2px
+  style CAP stroke:#F97316,stroke-width:2px,stroke-dasharray:4 3
+      </pre>
+      <figcaption>Four milestones, one live call. Everything before the capture is offline and everything after it is a consequence of what the capture showed.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ===== WHAT ALREADY EXISTS ===== -->
+  <section id="exists">
+    <h2>What Already Exists</h2>
+    <p>The spine's rule is that a deep plan states what already exists before what must be built. Every row below was verified against this checkout while authoring, not recalled.</p>
+    <table>
+      <thead><tr><th>#</th><th>Fact</th><th>Where it was checked</th></tr></thead>
+      <tbody>
+        <tr><td><strong>E1</strong></td><td><code>pi</code> <strong>0.84.3</strong> is installed and <code>~/.pi/agent/auth.json</code> exists. The probe's evidence is against this machine.</td><td><code>pi --version</code>; <code>ls ~/.pi/agent/</code></td></tr>
+        <tr><td><strong>E2</strong></td><td>All twenty-one probe event types already decode: <code>session</code>, <code>agent_start</code>, <code>turn_start</code>, <code>message_start</code>, <code>message_update</code>, <code>message_end</code>, <code>turn_end</code>, <code>agent_end</code>, <code>agent_settled</code>. <code>agent_start</code>, <code>turn_start</code> and <code>agent_end</code> are recognized-and-ignored on purpose, and <code>agent_end</code> in particular is <em>not</em> the terminal because it carries <code>willRetry</code>.</td><td><code>pi-codex-stream.ts</code> § <code>decode</code></td></tr>
+        <tr><td><strong>E3</strong></td><td><code>mapUsage</code> maps <code>{input, output, cacheRead, cacheWrite, reasoning}</code> field for field and deliberately drops <code>totalTokens</code> and <code>cost</code>, because <code>normalizeUsage</code> faults on keys the contract has no home for.</td><td><code>pi-codex-stream.ts</code> § <code>mapUsage</code></td></tr>
+        <tr><td><strong>E4</strong></td><td><code>reasoningRelation: "included-in-output"</code> is a reviewed reading, explicitly recorded as unconfirmed because the Codex probe reported <code>reasoning: 0</code> on every turn. <strong>A non-zero reasoning count on this route confirms the mapping's arithmetic is consistent</strong> — see the caveat in Notes on what it does and does not prove.</td><td><code>pi-codex-stream.ts</code> § <code>mapUsage</code>; <code>PROVENANCE.md</code> § what this capture could NOT measure</td></tr>
+        <tr><td><strong>E5</strong></td><td><code>PI_PROVIDER = "openai-codex"</code>, pinned with a written rationale; <code>awsf.config.yaml</code> names the same value on <code>adapters.codex</code> and the adapter ignores it.</td><td><code>pi-codex.ts:88</code>; <code>awsf.config.yaml</code> § adapters</td></tr>
+        <tr><td><strong>E6</strong></td><td><code>ENV_ALLOWLIST = ["PATH", "HOME", "TMPDIR"]</code> plus five injected values applied after filtering. <code>filterEnv</code> throws <code>E_REDACTION</code> when an allowlisted key's value is credential-shaped.</td><td><code>core/src/adapters/env.ts</code></td></tr>
+        <tr><td><strong>E7</strong></td><td>The five clean-room flags are <code>--no-extensions --no-skills --no-prompt-templates --no-themes --no-context-files</code>, and <code>--no-extensions</code> is load-bearing rather than cosmetic.</td><td><code>pi-codex.ts</code> § <code>buildSpec</code></td></tr>
+        <tr><td><strong>E8</strong></td><td><strong>A call in this harness is a host-launched process.</strong> The ledger reserves before launch and spends on <code>GO</code>; <code>reserve()</code> is synchronous by contract and a unit test pins that it is not an <code>AsyncFunction</code>.</td><td><code>core/src/execution/call-budget.ts</code> header</td></tr>
+        <tr><td><strong>E9</strong></td><td><code>NOTICE_CODES</code> is a closed six-value union, and notices are persisted (<code>isPersistableKind</code> excludes only <code>thinking.delta</code>).</td><td><code>core/src/contracts/normalized-events.ts:48</code></td></tr>
+        <tr><td><strong>E10</strong></td><td><strong>Both <code>formatCost</code> sites round a true sub-cent cost to a measured-looking zero.</strong> <code>core/src/adapters/cost-display.ts</code> renders <code>usd.toFixed(2)</code>, so <code>$0.0000216</code> becomes <code>$0.00</code>; <code>dashboard/src/display.ts</code> renders <code>toFixed(usd &lt; 1 ? 4 : 2)</code>, so it becomes <code>$0.0000</code>. Under <code>catalog-estimate</code> the leading <code>≈</code> softens it. Under <code>"provider"</code> it is exactly the indistinguishable-from-free zero that file was written to prevent.</td><td><code>cost-display.ts</code>; <code>dashboard/src/display.ts:3</code></td></tr>
+        <tr><td><strong>E11</strong></td><td><code>providerPairFrom</code> refuses anything but exactly two distinct providers across a recipe's agent phases.</td><td><code>review-routing.ts:36</code>; <code>production-run.ts:1158</code>; <code>review-phase.ts:497</code></td></tr>
+        <tr><td><strong>E12</strong></td><td><code>adapter-fence.test.ts</code> forbids <code>node:child_process</code> <em>and</em> bare <code>fetch(</code> anywhere under <code>core/src/adapters/</code>. A new adapter inherits both sweeps automatically.</td><td><code>core/test/unit/meta/adapter-fence.test.ts</code></td></tr>
+        <tr><td><strong>E13</strong></td><td><code>resolvePlanSources</code> enumerates <em>every</em> <code>.html</code> in <code>specs/</code> and pairs it with <code>&lt;stem&gt;-build-prompts.md</code> and <code>specs/tickets/&lt;stem&gt;/</code>. Where a ticket set exists, the build-prompts file is <strong>asserted to exist</strong> and each ticket's prompt is asserted byte-identical to its Section B block.</td><td><code>core/src/registry/plan-source.ts:265</code>; <code>ticket-plan-sync.test.ts:243</code></td></tr>
+        <tr><td><strong>E14</strong></td><td>No run-failures surface exists anywhere in the tree. See Problem §3.</td><td>repository-wide sweep</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ===== RELEVANT FILES ===== -->
+  <section id="files" class="files">
+    <h2>Relevant Files</h2>
+
+    <h3>Existing Files</h3>
+    <ul>
+      <li><span class="tag existing">existing</span> <code>core/src/adapters/pi-codex.ts</code> — the reviewed shape this adapter is modelled on. <strong>Read in full; edited in no task of this plan.</strong></li>
+      <li><span class="tag existing">existing</span> <code>core/src/adapters/pi-codex-stream.ts</code> — the decoder both routes share. Gains two branches in T05 and nothing else.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/adapters/interface.ts</code> — <code>ModelInfo</code>, <code>HarnessAdapter</code>, <code>ContinuityCapableAdapter</code>, <code>AdapterError</code>'s eleven-code vocabulary.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/adapters/env.ts</code> — <code>ENV_ALLOWLIST</code>. Reused unchanged; widening it is on the never-do list.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/adapters/catalog.ts</code> — <code>resolveSelector</code>, the second refusal site, and <code>MODEL_FAMILIES</code>.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/adapters/registry.ts</code> — <code>RegisteredAdapterKind</code> and <code>adapterFor</code>, the kind-to-implementation map.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/adapters/cost-display.ts</code> — <code>formatCost</code>, and the comment explaining why a measured-looking zero is the worst thing a cost chip can say.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/adapters/system-prompt-file.ts</code> — <code>assertPrivateSystemPrompt</code>, load-bearing on any <code>pi</code> route because <code>--append-system-prompt</code> falls back to literal text.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/config/schema.ts</code> — <code>KNOWN_ADAPTER_KINDS</code>, the five-value union a new kind joins.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/contracts/normalized-events.ts</code> — <code>NOTICE_CODES</code>, the twelve kinds, <code>isPersistableKind</code>.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/workflow/review-routing.ts</code> — <code>providerPairFrom</code> and <code>oppositeProvider</code>; the inversion collision lives here.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/execution/call-budget.ts</code> — the reservation ledger a pi-level retry must not reach.</li>
+      <li><span class="tag existing">existing</span> <code>dashboard/src/display.ts</code>, <code>dashboard/src/event-summary.ts</code> — the second <code>formatCost</code> and the generic notice summary.</li>
+      <li><span class="tag existing">existing</span> <code>core/test/fixtures/providers/codex/PROVENANCE.md</code> — the template for this route's own provenance note, including the rule that fixtures are replayed and never regenerated.</li>
+      <li><span class="tag existing">existing</span> <code>core/test/fixtures/providers/codex/capture-probe.ts</code> — the committed capture script whose argv comes from <code>buildSpec</code> by construction. The model for this route's.</li>
+      <li><span class="tag existing">existing</span> <code>core/test/unit/adapters/pi-codex.test.ts</code> — sixty-odd assertions naming the exact properties a <code>pi</code> adapter owes.</li>
+      <li><span class="tag existing">existing</span> <code>awsf.config.yaml</code> — <code>adapters</code>, <code>routing.review: invert-provider</code>, and the six agent definitions.</li>
+    </ul>
+
+    <h3>New Files</h3>
+    <ul>
+      <li><span class="tag new">new</span> <code>core/src/adapters/pi-openrouter.ts</code> — the second adapter. Pure <code>buildSpec</code>, pinned provider, route-owned selector guard.</li>
+      <li><span class="tag new">new</span> <code>core/test/unit/adapters/pi-openrouter.test.ts</code> — descriptor half and parser half, mirroring the Codex suite's structure.</li>
+      <li><span class="tag dir">dir</span> <code>core/test/fixtures/providers/openrouter/</code> — <code>PROVENANCE.md</code>, <code>capture-probe.ts</code>, the captured stdout, its stderr, and the derived retry and terminal fixtures.</li>
+      <li><span class="tag new">new</span> <code>specs/awsf-v2-w16-openrouter-adapter-build-prompts.md</code> — required by <code>ticket-plan-sync.test.ts</code>; see Notes § "Two prompt surfaces, and why this plan has both".</li>
+      <li><span class="tag dir">dir</span> <code>specs/tickets/awsf-v2-w16-openrouter-adapter/</code> — <code>T01.md</code>–<code>T12.md</code> plus <code>README.md</code>.</li>
+    </ul>
+  </section>
+
+  <!-- ===== IDENTIFIER SPINE ===== -->
+  <section id="spine">
+    <h2>Identifier Spine</h2>
+    <p>Per the spine's Q5 decision, identifiers are unique within this plan and a cross-plan reference is qualified by plan stem. Every declaration below is served by at least one task, and each ticket's <code>serves</code> mirrors its task's as a set — the fence compares the two and fails when either is edited alone.</p>
+    <dl>
+      <dt><code class="inv">INV-1</code></dt>
+      <dd><code>PI_PROVIDER</code>, its comment, and <code>PiCodexAdapter</code>'s argv are byte-unchanged by this workstream, and no OpenRouter route resolves through <code>PiCodexAdapter</code>.</dd>
+      <dt><code class="inv">INV-2</code></dt>
+      <dd><code>ENV_ALLOWLIST</code> is unchanged, and no file under <code>core/src/**</code> reads, names, or copies a provider credential or credential store path.</dd>
+      <dt><code class="inv">INV-3</code></dt>
+      <dd>No <code>pi</code>-level retry creates, releases, or settles a reservation. The ledger's call count remains a count of host-launched processes, and <code>reserve()</code> remains synchronous.</dd>
+      <dt><code class="inv">INV-4</code></dt>
+      <dd>Under <code>costAuthority: "provider"</code>, a positive amount never renders as a string a reader could mistake for zero, on either <code>formatCost</code> site.</dd>
+      <dt><code class="inv">INV-5</code></dt>
+      <dd>A recipe whose agent phases resolve to three or more distinct providers is refused before any child starts, and the refusal names the providers rather than only their count.</dd>
+    </dl>
+    <dl>
+      <dt><code class="ac">AC-1</code></dt>
+      <dd><code>buildSpec</code> is asserted to exact argv, in order, with no child started, carrying <code>--provider openrouter</code>, the five clean-room flags, and the prompt on stdin and nowhere in argv.</dd>
+      <dt><code class="ac">AC-2</code></dt>
+      <dd>Every real OpenRouter id form is admitted on the OpenRouter route — bare, <code>vendor/model</code>, and <code>~vendor/model</code> — every selector carrying <code>:</code> is refused, and the Codex route still refuses all three forms unchanged.</dd>
+      <dt><code class="ac">AC-3</code></dt>
+      <dd><code>auto_retry_start</code> and <code>auto_retry_end</code> decode to <code>provider-retry</code> notices carrying the attempt, the ceiling and the outcome; a retried phase still reports exactly one terminal; and a retried 429 is never classified <code>E_QUOTA_EXHAUSTED</code>.</dd>
+      <dt><code class="ac">AC-4</code></dt>
+      <dd>Scrubbed fixtures exist in the tree for every event type this route emits and for every terminal state, with a <code>PROVENANCE.md</code> that separates captured bytes from stated transformations line by line.</dd>
+      <dt><code class="ac">AC-5</code></dt>
+      <dd>The route is registered through the broker, reachable from <code>awsf.config.yaml</code>, and ships <code>enabled: false</code>; enabling it is a separate owner act.</dd>
+      <dt><code class="ac">AC-6</code></dt>
+      <dd><code>costAuthority: "provider"</code> is claimed only after all four items of the promotion evidence exist in the tree, and the plan names them before the claim is made.</dd>
+    </dl>
+  </section>
+
+  <!-- ===== IMPLEMENTATION PHASES ===== -->
+  <section id="phases">
+    <h2>Implementation Phases</h2>
+    <p><strong>IMPORTANT:</strong> Execute every phase and task step by step, in order, top to bottom.</p>
+    <p>Status markers: <code>[]</code> idle · <code>[wip]</code> in progress · <code>[x]</code> complete · <code>[f]</code> failed. All start as <code>[]</code>; the Build Plan workflow updates them as it works.</p>
+
+    <!-- ================= M1 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M1: Selector admission — both refusal sites</h3>
+      <p>The guard comes first because every later task needs a selector that survives the command line. It is also the task most likely to be done wrongly in a way nothing catches: widening the shared constant would admit OpenRouter ids <em>on the Codex route too</em>, where the slash still means a second provider. The fix is a second, route-owned pattern — not a wider shared one.</p>
+      <figure>
+        <pre class="mermaid">
+flowchart LR
+  S["selector"] --> A{"route?"}
+  A -->|codex| C["SAFE_MODEL_SELECTOR<br/>no / · no :"]
+  A -->|openrouter| O["OPENROUTER_SELECTOR<br/>~ and one / · still no :"]
+  C --> R1["refuses vendor/model"]
+  O --> R2["admits vendor/model<br/>refuses id:thinking"]
+  style O stroke:#22D3EE,stroke-width:2px
+  style C stroke:#A78BFA,stroke-width:2px
+        </pre>
+        <figcaption>Two patterns, one refusal kept in both. The colon refusal is a property of <code>pi --model</code>, not of a provider, so it survives onto the new route unchanged.</figcaption>
+      </figure>
+
+      <h4>1. The route-owned selector guard</h4>
+      <p class="serves"><code class="serves">AC-2</code></p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Read the comment above <code>SAFE_MODEL_SELECTOR</code> at <code>core/src/adapters/pi-codex.ts:118</code> in full before writing anything. Both refusals are deliberate; the reasoning is to be carried forward, not deleted</li>
+        <li><code class="status">[]</code> Declare <code>OPENROUTER_MODEL_SELECTOR</code> in the new adapter file — never in <code>pi-codex.ts</code>, never in a shared module both import</li>
+        <li><code class="status">[]</code> Admit exactly three id shapes: bare (<code>glm-5.2</code>), <code>vendor/model</code>, and a leading <code>~</code> marking OpenRouter's latest alias. One slash at most, and the <code>~</code> only in first position</li>
+        <li><code class="status">[]</code> Keep the total-length bound the Codex guard has, so a selector cannot grow unboundedly on a command line</li>
+        <li><code class="status">[]</code> <strong>Keep the colon refusal, and write down why in this file's own words:</strong> <code>pi --model</code> accepts an <code>id:&lt;thinking&gt;</code> shorthand, so a colon would set the thinking level from the model field and outrank the <code>--thinking</code> this adapter puts on the line from the agent's config</li>
+        <li><code class="status">[]</code> <strong>Write down why the slash refusal does NOT carry over, on this route only:</strong> on OpenRouter a slash is how a model is spelled, and <code>--provider openrouter</code> is still the only provider named on the line</li>
+        <li><code class="status">[]</code> Refuse an unrepresentable selector with <code>E_MODEL_UNRESOLVED</code>, the same code and the same message shape the Codex route uses — a refusal, never a sanitization</li>
+      </ul>
+
+      <h4>2. The second refusal site in the catalog</h4>
+      <p class="serves"><code class="serves">AC-2</code></p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Confirm the finding before acting on it: <code>resolveSelector</code> in <code>core/src/adapters/catalog.ts</code> carries the same regex plus a single-colon rule, and its only caller in the tree is <code>core/test/unit/adapters/catalog-registry.test.ts</code></li>
+        <li><code class="status">[]</code> Move the model-name pattern onto <code>ModelFamily</code>, so each family admits its own shape and widening one cannot widen another</li>
+        <li><code class="status">[]</code> Add the <code>openrouter</code> family: alias <code>openrouter</code>, adapter kind <code>pi-openrouter</code>, provider <code>openrouter</code>, <code>contextWindow: null</code> — a made-up ceiling is worse than no ceiling</li>
+        <li><code class="status">[]</code> Keep the exactly-one-colon rule on the whole selector: <code>openrouter:~deepseek/deepseek-v4-flash-latest</code> has one colon and parses; anything with two still fails</li>
+        <li><code class="status">[]</code> Record in the file's header comment that this surface has no production caller today, so the next reader does not mistake a declaration for a gate</li>
+      </ul>
+
+      <h4>3. Testing Strategy</h4>
+      <p class="serves"><code class="serves">AC-2</code></p>
+      <p>Pure unit tests over two regexes and one parser. No child, no fixture, no network. The half that matters is the <strong>over-fire control</strong>: a widened guard that silently widened its neighbour would pass every positive test in the suite, so the Codex refusals are re-asserted here rather than assumed to still hold.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — the three admitted forms reach a command line on the OpenRouter route: <code>z-ai/glm-5.2</code>, <code>deepseek/deepseek-v4-flash-0731</code>, <code>~deepseek/deepseek-v4-flash-latest</code></li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — <code>deepseek/deepseek-v4:high</code> is refused with <code>E_MODEL_UNRESOLVED</code>, proving the thinking-hijack refusal survived the widening</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — two slashes, a leading slash, a leading hyphen, a trailing <code>~</code>, and an over-length selector are each refused</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — <strong>over-fire control</strong>: all three OpenRouter forms are still refused by <code>selectorFor</code> on the Codex route, and <code>PI_PROVIDER</code> is asserted equal to <code>"openai-codex"</code> in the same test file</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — <code>resolveSelector("codex:z-ai/glm-5.2")</code> returns <code>null</code> while <code>resolveSelector("openrouter:z-ai/glm-5.2")</code> resolves, proving the per-family patterns are actually per-family</li>
+        <li><code class="status">[]</code> <code>npm run typecheck</code> and <code>npm run lint</code> — both exit 0</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass.
+      </div>
+    </div>
+
+    <!-- ================= M2 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M2: The adapter, and retries made legible</h3>
+      <p>The adapter is a descriptor and a registration. Its parser contribution is two decoder branches, because the twenty-one-event probe proved the rest of the vocabulary already decodes. The milestone's real content is the retry decision and the trap underneath it.</p>
+      <figure>
+        <pre class="mermaid">
+sequenceDiagram
+  participant H as host
+  participant B as broker
+  participant P as pi
+  H->>B: reserve 1 call
+  B->>P: spawn (one process)
+  P-->>H: auto_retry_start attempt 1/3
+  P-->>H: auto_retry_end success false
+  P-->>H: auto_retry_start attempt 2/3
+  P-->>H: agent_settled
+  H->>B: spend 1 call on GO
+  Note over H,B: the ledger never saw the retries
+        </pre>
+        <figcaption>One reservation, one process, one terminal — and three notices the trace can now name. The ledger is untouched by construction, not by policy.</figcaption>
+      </figure>
+
+      <h4>4. The second adapter</h4>
+      <p class="serves"><code class="serves">AC-1</code> <code class="serves">INV-1</code> <code class="serves">INV-2</code></p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Create <code>core/src/adapters/pi-openrouter.ts</code> with a header stating plainly that it is a <strong>second adapter reusing <code>pi</code> as transport</strong>, and that it exists because <code>PI_PROVIDER</code> is pinned rather than because the pin is inconvenient</li>
+        <li><code class="status">[]</code> Pin <code>PI_OPENROUTER_PROVIDER = "openrouter"</code> with its own rationale, in this file, in the same shape as the Codex pin. <strong>Do not read a provider from config on either route</strong></li>
+        <li><code class="status">[]</code> <code>PI_OPENROUTER_ADAPTER_ID = "pi-openrouter"</code>; model prefix <code>"openrouter:"</code></li>
+        <li><code class="status">[]</code> <code>buildSpec</code> is PURE — spawns nothing, reads nothing — and carries the five clean-room flags in the reviewed order, with <code>--no-extensions</code>' load-bearing role restated</li>
+        <li><code class="status">[]</code> The prompt rides <strong>stdin</strong> and appears nowhere in argv</li>
+        <li><code class="status">[]</code> <code>--append-system-prompt</code> takes a PATH, and <code>execute</code> calls <code>assertPrivateSystemPrompt</code> before any child starts — the fallback-to-literal-text trap is a property of the CLI, not of the provider, so it applies here identically</li>
+        <li><code class="status">[]</code> Reuse <code>filterEnv</code> unchanged. <strong>Do not widen <code>ENV_ALLOWLIST</code></strong>: the key lives in <code>pi</code>'s own auth store, reached through <code>HOME</code>, which is already on the list</li>
+        <li><code class="status">[]</code> Reuse the tool profiles, the thinking aliases and the session flags from the Codex shape, and state in the header which were copied and which were re-derived</li>
+        <li><code class="status">[]</code> <code>getModelInfo</code> returns <code>costAuthority: "catalog-estimate"</code> at this point, with a comment naming M3 as the milestone that may promote it and AC-6 as the evidence it must produce first</li>
+        <li><code class="status">[]</code> Import no <code>node:child_process</code> and call no bare <code>fetch</code> — both are swept by <code>adapter-fence.test.ts</code> and the sweep is automatic for a new file in this directory</li>
+      </ul>
+
+      <h4>5. Retries become a notice, not an unknown line</h4>
+      <p class="serves"><code class="serves">AC-3</code> <code class="serves">INV-3</code></p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Add <code>provider-retry</code> to <code>NOTICE_CODES</code> in <code>core/src/contracts/normalized-events.ts</code>. <strong>No new event kind</strong> — the twelve are a shared vocabulary and a retry is one route's transport fact</li>
+        <li><code class="status">[]</code> Decode <code>auto_retry_start</code> to a notice naming the attempt, the ceiling and the delay, and <code>auto_retry_end</code> to a notice naming the attempt and whether it succeeded</li>
+        <li><code class="status">[]</code> Pass the provider's <code>errorMessage</code> and <code>finalError</code> through the same summarizer every other payload uses, so a 429 body carrying a request id is bounded and scrubbed like any other provider text</li>
+        <li><code class="status">[]</code> <strong>The trap, and it is the reason this task is not two lines:</strong> a retried 429's text is quota-shaped. It must never reach the terminal classifier. <code>#noteStop</code> reads only assistant messages, so it does not today — keep it that way and pin it with a test, because <code>pi</code> retrying a 429 is exactly the transient throttle <code>QUOTA_SHAPED</code>'s comment already refuses to call exhaustion</li>
+        <li><code class="status">[]</code> Touch no part of <code>core/src/execution/call-budget.ts</code>. A retry is inside one process and one reservation, and making it otherwise would require mutating the ledger from a stream event mid-run — which <code>reserve()</code>'s synchronous contract forbids</li>
+        <li><code class="status">[]</code> Confirm <code>dashboard/src/event-summary.ts</code> needs no change: <code>summarizeNotice</code> is generic over the code. <strong>If it does need one, that is a finding — record it rather than widening this task</strong></li>
+      </ul>
+
+      <h4>6. Testing Strategy</h4>
+      <p class="serves"><code class="serves">AC-1</code> <code class="serves">AC-3</code> <code class="serves">INV-3</code></p>
+      <p>The descriptor half asserts a full launch down to the byte with nothing started. The parser half replays a hand-built retry stream — the live capture is M3's, and this milestone must not wait on it. A hand-built stream is honest here because what is being asserted is the <em>host's</em> handling, exactly as the Codex suite does for its four reviewed-reading shapes.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — exact argv, in order, byte for byte, with no child process started</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — the prompt appears in <code>stdin</code> and in no argv element; a system prompt appears as a path and never as its content</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — the environment is the three-entry allowlist plus the five injected values, and an allowlisted key holding credential-shaped bytes is a hard <code>E_REDACTION</code></li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — three <code>auto_retry</code> lines produce three <code>provider-retry</code> notices and <strong>exactly one</strong> terminal event</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — a retried 429 whose <code>errorMessage</code> is quota-shaped completes normally and does <strong>not</strong> map to <code>E_QUOTA_EXHAUSTED</code></li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — a run that retries and then genuinely exhausts still maps to <code>E_QUOTA_EXHAUSTED</code> with its reset, proving the previous row narrowed nothing</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — <code>validateEventSequence</code> passes on the retried stream: one terminal, every tool settled, host-minted ids</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — <code>adapter-fence</code>, <code>child-process-fence</code>, <code>no-shell-true</code>, <code>dependency-allowlist</code> and <code>junk-drawer</code> all green with the new file present</li>
+        <li><code class="status">[]</code> <code>npm run typecheck</code> and <code>npm run lint</code> — both exit 0</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass.
+      </div>
+    </div>
+
+    <!-- ================= M3 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M3: Cost authority, earned rather than declared</h3>
+      <p>This is the milestone the workstream is actually for, and it is the one most likely to be claimed early. <code>cost-display.ts</code> exists because a subscription route once rendered <code>$0.00</code>; the Codex route was then demoted from <code>"provider"</code> to <code>"catalog-estimate"</code> by a cross-building review that found the figure was arithmetic on a local rate card. <strong>Reading a true-looking number off a stream is the same evidence the first pass had.</strong> The promotion is therefore gated on four specific things, and two of them have not been done yet.</p>
+      <div class="card rule">
+        <h5>What the cost-authority promotion requires as evidence, before it may be claimed</h5>
+        <ol>
+          <li><strong>A captured run in the tree whose <code>cost.total</code> is non-zero</strong>, committed with a <code>PROVENANCE.md</code> that says which bytes are captured and which are transformed. Measured already: <code>2.16e-05</code> on the 2026-09-15 probe. <em>Not yet in the tree.</em></li>
+          <li><strong>A citation in <code>pi</code>'s own source showing this route does not price the run itself.</strong> This is the decisive one and it is currently <em>unread</em>. The Codex route reports a real number too, and that number is <code>calculateCost</code> — rate per million from <code>pi</code>'s local model store, times the token counts. A value that matches OpenRouter's published price is exactly what a correct local rate card also produces. Until the OpenRouter path is read and shown to carry the provider's own figure through, the observation is of the value and not of its derivation.</li>
+          <li><strong>A reconciliation against OpenRouter's own record for the same generation</strong>, to within rounding. If <code>pi</code> is multiplying locally, the two diverge on some model — and a single agreement on a single model proves less than a disagreement would disprove, so the reconciliation is reported with its own limits stated.</li>
+          <li><strong>Sub-cent rendering landed first (task 7).</strong> Promoting before it makes the display strictly worse: <code>catalog-estimate</code> renders <code>≈ $0.00</code>, which reads as an estimate near zero, while <code>provider</code> renders <code>$0.00</code>, which reads as a confirmed nothing.</li>
+        </ol>
+        <p><strong>If item 2 cannot be established, the route keeps <code>catalog-estimate</code> and the plan records why.</strong> That is a legitimate outcome and it costs this workstream nothing else — every other capability it adds is independent of the authority label.</p>
+      </div>
+      <figure>
+        <pre class="mermaid">
+flowchart TD
+  OBS["observed: cost.total 2.16e-05"] --> Q{"who computed it?"}
+  Q -->|"pi, from a local rate card"| EST["stays catalog-estimate<br/>renders ≈ $0.000022"]
+  Q -->|"the provider, carried through"| PRO["promoted to provider<br/>renders $0.000022"]
+  Q -->|"unread"| HOLD["unresolved — no promotion"]
+  style PRO stroke:#22C55E,stroke-width:2px
+  style HOLD stroke:#F97316,stroke-width:2px,stroke-dasharray:4 3
+        </pre>
+        <figcaption>The observation is the same on all three branches. Only the derivation separates them, and only one of the three has been read.</figcaption>
+      </figure>
+
+      <h4>7. Sub-cent rendering, on both sites</h4>
+      <p class="serves"><code class="serves">INV-4</code></p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>core/src/adapters/cost-display.ts</code> — <code>usd.toFixed(2)</code> renders <code>$0.0000216</code> as <code>$0.00</code>. Give it enough significant figures that a positive amount is never a string a reader could mistake for zero</li>
+        <li><code class="status">[]</code> <code>dashboard/src/display.ts</code> — <code>toFixed(usd &lt; 1 ? 4 : 2)</code> renders it as <code>$0.0000</code>. Same fix, same rule</li>
+        <li><code class="status">[]</code> <strong>Extend the existing <code>formatCost</code> assertions rather than perturbing them.</strong> Eighteen assertions pin this function across three files; a change that rewrote their expectations would be a change nobody reviewed</li>
+        <li><code class="status">[]</code> Keep the two existing behaviours exactly: <code>unavailable</code> renders <code>— subscription</code> and ignores any amount handed to it, and <code>catalog-estimate</code> keeps its leading <code>≈</code></li>
+        <li><code class="status">[]</code> Pick one rule and state it in the comment, so the next reader does not re-derive it: a positive amount smaller than the displayed precision must round <em>away from</em> zero, never to it</li>
+      </ul>
+      <figure class="mockup">
+        <p class="mk-label">Proposed — the AWSF dashboard run card and event log, after tasks 5 and 7</p>
+        <div class="mockup-frame">
+          <div class="mbar">awsf · session <span class="mk-dim">a41c9e2f</span> · phase <span class="mk-dim">build</span></div>
+          <div class="mbody">
+            <div class="mk-card">
+              <div><span class="mk-id">openrouter</span> <span class="mk-dim">→ ~deepseek/deepseek-v4-flash-latest</span></div>
+              <div style="margin-top:8px">
+                <span class="mk-pill state">stream-authoritative</span>
+                <span class="mk-pill okp">$0.000022</span>
+                <span class="mk-dim mk-mono">provider · 3.1k in / 812 out / 12 reasoning</span>
+              </div>
+              <div style="margin-top:8px" class="mk-mono mk-dim">before this plan: <span class="mk-bad">$0.00</span> &nbsp;·&nbsp; a confirmed price indistinguishable from free</div>
+            </div>
+            <div class="mk-card">
+              <div class="mk-row"><span class="t">12:04:11</span><span class="k">notice</span><span>provider-retry: attempt 1 of 3 failed, retrying in 2000 ms — upstream 429</span></div>
+              <div class="mk-row"><span class="t">12:04:13</span><span class="k">notice</span><span>provider-retry: attempt 2 of 3 failed, retrying in 4000 ms — upstream 429</span></div>
+              <div class="mk-row"><span class="t">12:04:17</span><span class="k">notice</span><span class="mk-okc">provider-retry: attempt 3 succeeded</span></div>
+              <div class="mk-row"><span class="t">12:04:26</span><span class="k">run.completed</span><span class="mk-dim">exit 0 · one call · one terminal</span></div>
+              <div style="margin-top:8px" class="mk-mono mk-dim">before this plan: three rows reading <span class="mk-warnc">unknown-provider-event</span> and the first 200 bytes of a line</div>
+            </div>
+          </div>
+        </div>
+        <figcaption>No new dashboard component. The cost chip changes precision and the notice rows change from an unrecognized line to a named one, both through code the event log already renders generically.</figcaption>
+      </figure>
+
+      <h4>8. The one bounded live capture</h4>
+      <p class="serves"><code class="serves">AC-4</code> <code class="serves">AC-6</code></p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Write <code>core/test/fixtures/providers/openrouter/capture-probe.ts</code> modelled on the Codex one: <strong>it must call <code>buildSpec()</code> and spawn exactly what that returns</strong>, so the argv under test and the argv that produced the bytes are the same argv by construction</li>
+        <li><code class="status">[]</code> Shape one call to exercise the whole vocabulary at once — a tool request with its execution and result, streamed text, more than one turn so the per-turn usage sum has something to be wrong about, a non-zero reasoning count, and a settled terminal</li>
+        <li><code class="status">[]</code> Run it in a throwaway working directory outside this repository, with three disposable files, so a read-only tool call has something to find and no machine path from this tree can reach the fixture</li>
+        <li><code class="status">[]</code> Commit stdout verbatim, and commit stderr <strong>even when it is empty</strong> — "the provider said nothing on stderr" is a fact about the run that an absent file leaves unstated</li>
+        <li><code class="status">[]</code> Derive the retry fixture from the measured free-tier 429 run, stating the transformation line by line, and assert the transformation in the suite so the file cannot drift into fiction</li>
+        <li><code class="status">[]</code> Derive a cancelled fixture as a byte <strong>prefix</strong> of the capture, cutting mid-line, and assert <code>capture.startsWith(prefix)</code></li>
+        <li><code class="status">[]</code> Write <code>PROVENANCE.md</code> separating captured bytes from stated transformations, naming the CLI version that produced them and the version of any source cited — <strong>and do not write both down as one number</strong>, which is the conflation the cross-building review caught on the Codex route</li>
+        <li><code class="status">[]</code> Record what the capture could <em>not</em> measure, in its own section, rather than letting silence read as coverage</li>
+        <li><code class="status">[]</code> State the replay rule in the file: <strong>these fixtures are replayed, never regenerated.</strong> A second live call is warranted only by a new fact nobody has captured</li>
+        <li><code class="status">[]</code> Scrub before committing: no absolute machine path, no session id, no credential-shaped value — <code>no-credentials-in-fixtures</code> and invariant 1 both sweep this directory</li>
+      </ul>
+
+      <h4>9. Testing Strategy — and the promotion it gates</h4>
+      <p class="serves"><code class="serves">AC-4</code> <code class="serves">AC-6</code> <code class="serves">INV-4</code></p>
+      <p>Replay the captured bytes and assert what the host is allowed to say about them. Then, and only then, take the promotion decision on the evidence the previous task actually produced. <strong>A row that cannot be made green is marked <code>[f]</code> with the blocking condition named, and the route keeps <code>catalog-estimate</code></strong> — which is a complete, shippable outcome for this workstream.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — the captured probe replays into a well-formed run: one terminal, every tool settled, no <code>malformed-usage</code> notice on a healthy stream</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — usage is summed per turn, and a zero the provider reported is data rather than a missing metric</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — the non-zero <code>reasoning</code> count survives into <code>reasoningTokens</code>, and the test's name claims only what it proves</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — <code>formatCost("provider", 0.0000216)</code> is not a string that reads as zero, on both sites</li>
+        <li><code class="status">[]</code> <strong>Evidence row 1</strong> — the non-zero-cost capture is in the tree with its provenance note</li>
+        <li><code class="status">[]</code> <strong>Evidence row 2</strong> — <code>pi</code>'s OpenRouter source path is read and cited, and it shows the provider's own figure carried through rather than computed locally. <em>Mark <code>[f]</code> if it shows the opposite or cannot be read</em></li>
+        <li><code class="status">[]</code> <strong>Evidence row 3</strong> — the capture's cost is reconciled against OpenRouter's own record for that generation, with the limits of a single-model agreement stated</li>
+        <li><code class="status">[]</code> <strong>The promotion</strong> — with rows 1–3 and task 7 all green, change <code>costAuthority</code> to <code>"provider"</code> in one commit, and record in the adapter header that this is the first route in AWSF to hold it and exactly what earned it. Otherwise leave <code>catalog-estimate</code> and record the gap</li>
+        <li><code class="status">[]</code> <code>npm run typecheck</code>, <code>npm run lint</code>, and <code>npm test</code> — all green, working tree clean</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        A row that cannot be made green is <code>[f]</code> with its blocker named — never a lowered assertion.
+      </div>
+    </div>
+
+    <!-- ================= M4 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M4: Registration, inversion, and closure</h3>
+      <p>The route becomes reachable and ships switched off. The inversion collision gets the treatment the owner's 2026-09-15 verdicts direct: <strong>the refusal is made legible and inversion is not widened.</strong> Q3 settled the provider string as the unit with no per-recipe cap, and Q2 made any distinct provider admissible as a reviewer — which needs no code, because <code>oppositeProvider</code> already asks only that the reviewer be <em>different</em>. Task 11 records both and writes code for neither.</p>
+      <figure>
+        <pre class="mermaid">
+stateDiagram-v2
+  [*] --> Declared: adapters.openrouter in config
+  Declared --> Registered: kind pi-openrouter in registry
+  Registered --> Disabled: enabled false ships
+  Disabled --> Enabled: owner act, separate commit
+  Enabled --> Routed: an agent names openrouter:model
+  Routed --> Refused: recipe has 3 providers
+  Refused --> Routed: recipe narrowed to 2
+        </pre>
+        <figcaption>Two gates between a registered route and a running one, and the owner holds the first. The refusal edge is the collision M4 makes legible rather than removes.</figcaption>
+      </figure>
+
+      <h4>10. Registration, disabled</h4>
+      <p class="serves"><code class="serves">AC-5</code> <code class="serves">INV-1</code></p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Add <code>"pi-openrouter"</code> to <code>KNOWN_ADAPTER_KINDS</code> in <code>core/src/config/schema.ts</code> and to <code>RegisteredAdapterKind</code> in <code>core/src/adapters/registry.ts</code></li>
+        <li><code class="status">[]</code> Add the <code>adapterFor</code> case, passing through <code>executable</code> and the runtime limits exactly as the Codex case does</li>
+        <li><code class="status">[]</code> Add <code>openrouter: { kind: pi-openrouter, executable: pi, enabled: false }</code> to <code>awsf.config.yaml</code>, with a comment saying enabling it is an owner act</li>
+        <li><code class="status">[]</code> <strong>Do not add an agent that routes to it.</strong> A configured adapter nothing names is a route; a configured agent is a decision the owner has not taken</li>
+        <li><code class="status">[]</code> Confirm by test that <code>registeredAdapter</code> returns <code>null</code> for the disabled entry, so the shipped configuration cannot start a child on this route by accident</li>
+        <li><code class="status">[]</code> Re-assert <code>INV-1</code> mechanically: a test reads <code>pi-codex.ts</code> and asserts <code>PI_PROVIDER</code> is still <code>"openai-codex"</code> and that the file contains no reference to <code>openrouter</code></li>
+      </ul>
+
+      <h4>11. The inversion refusal, made legible</h4>
+      <p class="serves"><code class="serves">INV-5</code></p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Reproduce the collision first, as a failing test: a compiled recipe whose agent phases resolve to <code>anthropic</code>, <code>openai-codex</code> and <code>openrouter</code> raises <code>InvalidReviewInversion</code> at preflight, at zero cost, before any child starts</li>
+        <li><code class="status">[]</code> Change <code>providerPairFrom</code>'s message so it <strong>names the distinct providers it found</strong>, not only how many. The current message already appends the list when the count is non-zero — verify that against the code and extend it only if the verification says it is needed</li>
+        <li><code class="status">[]</code> Have the refusal say which phase contributed each provider, so a reader can narrow the recipe without reading the compiler</li>
+        <li><code class="status">[]</code> <strong>Do not widen inversion to three providers.</strong> Inversion is exclusion over a pair; a three-way rule is a different mechanism, and Q3's verdict keeps the pair rule rather than replacing it</li>
+        <li><code class="status">[]</code> Record in this plan's Amendments that Q2 and Q3 were applied as decided rather than reopened, and confirm the code already matches both: <strong>Q2 needs no code</strong> — verify by reading that neither <code>providerPairFrom</code> nor either call site carries an allowlist of permitted reviewer providers, and write that verification down</li>
+        <li><code class="status">[]</code> <strong>Do not add a reviewer-provider allowlist.</strong> Q2 admitted any distinct provider; a session that implements it by adding a list of permitted reviewers has read the verdict backwards and built the fence it removed</li>
+        <li><code class="status">[]</code> Prove the both-sides case is closed by the rule that already exists: a recipe with an OpenRouter builder and an OpenRouter reviewer resolves to <strong>one</strong> distinct provider and is refused, so Q3's dropped cap costs nothing here. Assert it rather than reasoning about it</li>
+        <li><code class="status">[]</code> Leave <code>oppositeProvider</code>'s exclusion rule untouched: quota and availability are never inputs to it, and this workstream adds no reason to change that</li>
+      </ul>
+
+      <h4>12. Testing Strategy — and closure</h4>
+      <p class="serves"><code class="serves">AC-5</code> <code class="serves">INV-2</code> <code class="serves">INV-5</code></p>
+      <p>The whole suite, offline, plus the meta-fences this workstream is most likely to have broken. Then the two amendment duties: this plan's own closing record, and the spine's.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — the full unit suite, at or above the baseline count recorded at the start of task 1</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — <code>adapter-fence</code>, <code>child-process-fence</code>, <code>no-shell-true</code>, <code>dependency-allowlist</code>, <code>no-credentials-in-fixtures</code>, <code>state-purity-fence</code>, <code>layer-separation</code> and <code>junk-drawer</code> named individually before the aggregate</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — <code>ticket-plan-sync</code> green: this plan pairs with its build prompts and its ticket set, ids are contiguous, every ticket's prompt is byte-identical to its Section B block, and every identifier-spine row passes</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — a test asserts <code>ENV_ALLOWLIST</code> is still exactly <code>["PATH", "HOME", "TMPDIR"]</code>, and that no file under <code>core/src/**</code> names a credential store path</li>
+        <li><code class="status">[]</code> <code>npm test</code> — unit, contract, simulation and journeys in one invocation, leaving <code>git status --porcelain</code> clean</li>
+        <li><code class="status">[]</code> <code>npm run typecheck</code> and <code>npm run lint</code> — both exit 0</li>
+        <li><code class="status">[]</code> <code>just awsf doctor</code> — healthy</li>
+        <li><code class="status">[]</code> Append the milestone-closing Amendment to this plan: what is now observably true, every task and its final state, the friction, the decisions taken inside the milestones, the landing SHAs, and the suite counts at close</li>
+        <li><code class="status">[]</code> In the same commit, flip the spine's Milestone M16 marker and its checklist to <code>[x]</code>, flip <code>specs/tickets/awsf-v2-plan/</code>'s W16 record if one exists, and append the workstream-closing Amendment to <code>specs/awsf-v2-plan.html</code> — <strong>this is the only task that writes to the spine</strong></li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass.
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== GLOBAL VALIDATION ===== -->
+  <section id="validation">
+    <h2>Validation Commands</h2>
+    <p>Every row runs offline and spends no quota, with one named exception: task 8's single bounded live capture, which is this workstream's entire live budget.</p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> <code>npm run test:unit</code> — the full unit suite, at or above the baseline count recorded before task 1</li>
+      <li><code class="status">[]</code> <code>npm run test:unit</code> — <code>adapter-fence</code>: the new adapter imports no <code>node:child_process</code> and calls no bare <code>fetch</code></li>
+      <li><code class="status">[]</code> <code>npm run test:unit</code> — <code>no-credentials-in-fixtures</code> and the absolute-path sweep are green over <code>core/test/fixtures/providers/openrouter/</code></li>
+      <li><code class="status">[]</code> <code>npm run test:unit</code> — <code>ticket-plan-sync</code>: this plan, its build prompts and its ticket set agree; ids contiguous; prompts byte-identical; every identifier-spine row passes</li>
+      <li><code class="status">[]</code> <code>npm run test:unit</code> — <code>PI_PROVIDER</code> is still <code>"openai-codex"</code> and <code>ENV_ALLOWLIST</code> is still the three entries, both asserted by name</li>
+      <li><code class="status">[]</code> <code>npm run test:unit</code> — a three-provider recipe is refused at preflight with a message naming the providers</li>
+      <li><code class="status">[]</code> <code>npm run typecheck</code> — exits 0 across both projects</li>
+      <li><code class="status">[]</code> <code>npm run lint</code> — clean</li>
+      <li><code class="status">[]</code> <code>npm test</code> — unit, contract, simulation and journeys in one invocation, leaving <code>git status --porcelain</code> clean</li>
+      <li><code class="status">[]</code> <code>just awsf doctor</code> — healthy</li>
+      <li><code class="status">[]</code> The shipped <code>awsf.config.yaml</code> has <code>adapters.openrouter.enabled: false</code> and names no agent on that route</li>
+      <li><code class="status">[]</code> The three Questionables decided on 2026-09-15 are <strong>applied</strong> rather than reopened, and task 11 records how — including the verification that Q2 required no code</li>
+      <li><code class="status">[]</code> No task id, attempt id, session id or machine path appears anywhere in this plan, its build prompts, its ticket set, or its fixtures — invariant 1</li>
+      <li><code class="status">[]</code> <strong>Either</strong> <code>costAuthority: "provider"</code> is claimed and all four promotion-evidence items exist in the tree, <strong>or</strong> the route holds <code>catalog-estimate</code> and the missing item is named in the Amendments. No third outcome is acceptable</li>
+    </ul>
+    <div class="loop">
+      🔁 <strong>The plan is not complete until every box is checked and every command passes. If a step is genuinely impossible as written, mark it <code>[f]</code> with the design correction — never fabricate evidence.</strong>
+    </div>
+  </section>
+
+  <!-- ===== QUESTIONABLES ===== -->
+  <section id="questionables">
+    <h2>Questionables</h2>
+    <p>Three open decisions, surfaced without a pre-selected answer because each one changes what gets built rather than how it is written. <strong>All three were decided by the owner on 2026-09-15</strong>, through an exported <code>plan-sota-review v1</code> block carrying three verdicts, no proposed statuses and no annotations. <strong>No status marker moved</strong> — every milestone is still <code>[]</code>, and a Questionable verdict is not a marker.</p>
+    <p>A decided Questionable is now a <strong>constraint on its task, not an assignment to it</strong>. Each entry below keeps its full option set and its original reasoning, including the recommendation that was made before the verdict, so the road not taken stays readable next to the one that was. <strong>On Q2 and Q3 the owner chose against the recommendation, and the recommendation is kept verbatim rather than rewritten to agree</strong> — a plan that quietly edits its own advice to match the decision destroys the record of what the trade-off actually was.</p>
+    <figure>
+      <pre class="mermaid">
+flowchart LR
+  Q1["Q1 decided<br/>a retry is one call"] --> T5["task 5 · the notice"]
+  Q2["Q2 decided<br/>any distinct provider reviews"] --> T11["task 11 · inversion"]
+  Q3["Q3 decided<br/>provider string is the unit"] --> T11
+  Q2 -.-> NC["no code change<br/>inversion asks for different"]
+  Q3 -.-> PAIR["pair rule unchanged<br/>both-sides openrouter refused"]
+  style Q1 stroke:#22C55E,stroke-width:2px
+  style Q2 stroke:#22C55E,stroke-width:2px
+  style Q3 stroke:#22C55E,stroke-width:2px
+  style PAIR stroke:#A78BFA,stroke-width:2px
+      </pre>
+      <figcaption>All three decided. Two of the three need no code at all — inversion already asks only that the reviewer be <em>different</em>, and the existing pair rule already refuses a recipe whose two sides come from one provider.</figcaption>
+    </figure>
+
+    <details data-review-options="One call — the ceiling counts host-launched processes|Many — each provider attempt spends a call|One call, plus a separate per-phase retry budget">
+      <summary><span class="qdecided">DECIDED</span> Q1 — Does a <code>pi</code>-level retry count against the call ceiling? <em>(task 5)</em></summary>
+      <p class="decided"><b>Decided (2026-09-15):</b> <strong>one call — the ceiling counts host-launched processes.</strong> Owner verdict via the exported <code>plan-sota-review v1</code> block. This matches the recommendation below, so task 5 is unchanged: it adds the notice and touches no part of the ledger.</p>
+      <p class="recommend"><strong>Recommendation, as written before the verdict: one call.</strong> Not on preference — on the ledger's existing shape, which already answers this and would have to be redesigned to answer differently.</p>
+      <p class="qa-answer"><strong>What the ledger already is.</strong> <code>core/src/execution/call-budget.ts</code> reserves before launch and spends on <code>GO</code>. <code>reserve()</code> is synchronous by contract, and a unit test pins that it is not an <code>AsyncFunction</code>, because the check and the commit must happen in one turn of the event loop or two concurrent launches can both slip under the ceiling. <strong>A call is therefore a host-launched process</strong>, and a retry inside one process has no launch, no registration and no reservation to attach to.</p>
+      <p class="qa-answer"><strong>What "many" would have cost.</strong> Charging each attempt means mutating the ledger from a stream event, mid-run, after the reservation has been made — which is exactly the <code>await</code>-between-check-and-commit hole <code>reserve()</code>'s synchronicity exists to close. It also produces a ceiling that can be exceeded by a provider's own backoff policy, which the owner never authorised and cannot see in advance. A T0 task with a ceiling of one would fail on a transient 429 rather than on anything about the work.</p>
+      <p class="qa-answer"><strong>What "one call" does not excuse, and it is now a constraint on task 5.</strong> It is not a licence to leave retries invisible: tokens spent on a failed attempt are real and the wall-clock delay is real. The <code>provider-retry</code> notice is what pays that debt, and it is why task 5 exists at all. <em>The third option — a separate retry budget — stays on the table as a named future upgrade if a run is ever observed retrying enough to matter. It needs a number nobody has measured, so proposing one now would be a guess wearing a threshold's clothes.</em></p>
+    </details>
+
+    <details data-review-options="Yes — any distinct provider may review|Worker phases only — the reviewer stays on a subscription route|Only with a recorded per-recipe owner opt-in">
+      <summary><span class="qdecided">DECIDED</span> Q2 — Are open-weight routes admissible for reviewer phases, given <code>routing.review: invert-provider</code>? <em>(task 11)</em></summary>
+      <p class="decided"><b>Decided (2026-09-15):</b> <strong>yes — any distinct provider may review.</strong> Owner verdict via the exported <code>plan-sota-review v1</code> block. <strong>The owner chose against the recommendation below</strong>, which argued for worker phases only.</p>
+      <div class="card good">
+        <h5>What this decision costs to implement: nothing</h5>
+        <p><strong>It needs no code change, and that is a finding rather than a convenience.</strong> Nothing in <code>core/src/workflow/review-routing.ts</code> asks a reviewer to be strong; <code>oppositeProvider</code> asks only that it be <em>different</em>, and neither call site carries an allowlist of permitted reviewer providers. So an open-weight reviewer was already mechanically admissible, and this verdict settles a policy rather than removing a fence. <strong>Task 11 therefore records the decision and writes no code for it</strong> — and any session that finds itself adding a reviewer-provider allowlist to implement this has misread the verdict backwards.</p>
+      </div>
+      <p class="recommend"><strong>Recommendation, as written before the verdict: worker phases only, for now</strong> — and revisited on measured review quality rather than on principle. <em>Not taken.</em></p>
+      <p class="qa-answer"><strong>What the mechanism actually asks of a reviewer.</strong> Inversion exists so that the code is judged by a model family that did not write it. Nothing in <code>review-routing.ts</code> asks a reviewer to be strong; it asks it to be <em>different</em>. So an open-weight route is mechanically admissible today, and this question was about judgement rather than about the code.</p>
+      <p class="qa-answer"><strong>The argument for "worker only", retained because it names the residual this decision now carries.</strong> The reviewer is the one role whose output the factory cannot check with a gate — a builder's claim is tested by the suite, a reviewer's claim is tested by nothing. This repository has already recorded that the defects which mattered were found by driving and by looking at a screen rather than by a green suite, which is the reviewer's job description. Putting the cheapest model on the one role with no downstream check was argued to be the wrong place to spend a saving first.</p>
+      <p class="qa-answer"><strong>The decision stands and the residual is named rather than re-litigated.</strong> Two things follow, and both belong to whoever routes a recipe rather than to this plan. First, the comparison the recommendation asked for is still the thing that would settle quality empirically: run the same candidates past an open-weight reviewer and a subscription reviewer and compare what each found against what the gates and the owner found. That is now an <em>evaluation</em> this decision makes possible rather than a gate in front of it. Second, the reviewer envelope is typed and its completeness is already gate-checked, so a reviewer that answers badly is more likely to fail the envelope than to pass a hollow review silently — which is the mitigation that already exists, and it is a real one. <em>The third option — a per-recipe opt-in — is no longer needed: with any distinct provider admissible, a recipe declaring an open-weight reviewer is an ordinary recipe.</em></p>
+    </details>
+
+    <details data-review-options="Yes — the provider string is the unit of inversion|No — the upstream model vendor is the unit|Yes, but a recipe may name at most one OpenRouter phase">
+      <summary><span class="qdecided">DECIDED</span> Q3 — Does OpenRouter count as a distinct provider for inversion, when it can serve both sides of a review? <em>(task 11)</em></summary>
+      <p class="decided"><b>Decided (2026-09-15):</b> <strong>yes — the provider string is the unit of inversion</strong>, with <strong>no per-recipe cap on OpenRouter phases</strong>. Owner verdict via the exported <code>plan-sota-review v1</code> block. <strong>The recommendation was the same first option with the third option's constraint attached; the owner took the first option alone</strong>, so the cap is not part of this plan.</p>
+      <div class="card rule">
+        <h5>What the dropped cap does and does not change — checked against the code, not assumed</h5>
+        <p><strong>The case the cap was meant to prevent is already closed by a rule that exists.</strong> A recipe routing the builder to <code>openrouter:z-ai/glm-5.2</code> and the reviewer to <code>openrouter:deepseek/deepseek-v4-flash-0731</code> resolves to <em>one</em> distinct provider, and <code>providerPairFrom</code> refuses anything but exactly two — inversion is undefined over a set of one. So a both-sides-from-one-pool review cannot be assembled, with or without a cap, and no code is needed to hold that.</p>
+        <p><strong>What the dropped cap does change is exposure to the three-provider collision, and it raises the value of task 11.</strong> With <code>openrouter</code> now admissible on the reviewer side as well as the builder side (Q2), more recipes can reach three distinct providers across their agent phases — and every one of those is refused at preflight. The refusal is correct and stays. <strong>Making it name the providers, rather than report a count, stops being a nicety and becomes the thing that keeps this decision usable.</strong></p>
+      </div>
+      <p class="recommend"><strong>Recommendation, as written before the verdict: yes on the provider string, with the third option's constraint attached</strong> — because the alternative asks the host to know something it cannot observe. <em>The first half was taken; the constraint was not.</em></p>
+      <p class="qa-answer"><strong>The uncomfortable case, stated plainly.</strong> A recipe could route the builder to <code>openrouter:z-ai/glm-5.2</code> and the reviewer to <code>openrouter:deepseek/deepseek-v4-flash-0731</code>. Both resolve to provider <code>openrouter</code>, so <code>providerPairFrom</code> sees one distinct provider and refuses — inversion is undefined over a set of one. <strong>That refusal is correct and it is the current behaviour</strong>, so the failure mode people fear here is already closed by construction.</p>
+      <p class="qa-answer"><strong>Why the provider string is the right unit, and this half of the recommendation was taken.</strong> The model identity this route reports is stream-authoritative — <code>message_end</code> carries provider, model and api — which is stronger than the Codex route's route-attributed identity. But "which vendor really served this" is a claim about OpenRouter's own routing, which AWSF cannot observe and OpenRouter is free to change between calls. Making inversion depend on the upstream vendor would make a boundary depend on a fact the host reads from a field it cannot verify, which is the camera-called-a-wall pattern this spine exists to catch. The provider string is what the host launched and can prove.</p>
+      <p class="qa-answer"><strong>The case the cap made, retained so the alternative stays readable.</strong> Capping a recipe at one OpenRouter phase would have kept the pair honest without a new mechanism, making inversion between <code>openrouter</code> and a subscription route the only shape available, so a review always crossed a real auth and billing boundary rather than two selections from one pool. It would also have kept the three-provider collision rare rather than routine. <em>Both effects are now carried by the existing pair rule and by task 11's legible refusal instead.</em> <strong>If the owner ever takes the second option — the upstream vendor as the unit — the work is larger than task 11 and belongs to its own workstream:</strong> it needs a vendor-identity field the contract does not have and a source of truth for it that is not the provider's own self-report.</p>
+    </details>
+  </section>
+
+  <!-- ===== NOTES ===== -->
+  <section id="notes">
+    <h2>Notes</h2>
+
+    <h3>Why this is not an extension of W09</h3>
+    <p>W09 is the <code>agy</code> adapter and it is gated on an evidence gap this workstream does not share. That route is <strong>write-capable</strong>, its containment is <strong>detection-bounded</strong> rather than prevention-bounded — <code>path-policy</code> compares a worktree fingerprint <em>after</em> the provider returns, and <code>sandbox-broker</code> degrades to <code>tool-policy</code> where <code>bwrap</code> is absent, which is the case on this machine — and it waits on two things that do not exist: a capture settling whether a tool event arrives before or after the provider executed that tool, and a containment capture across the WSL/Windows boundary.</p>
+    <p><strong>None of that applies here.</strong> This route rides <code>pi</code>'s tool boundary, which is expressed as <code>--tools</code> and <code>--no-tools</code> flags the adapter already builds and the Codex suite already asserts, on a CLI whose permission surface has been exercised. Its parser is not a gap at all — it is a 691-line file with fixtures, and the probe found nothing it does not handle. The two are separate workstreams because they are separate risks, and folding this into W09 would make a route with no evidence gap wait on one that has two.</p>
+
+    <h3>Two prompt surfaces, and why this plan has both</h3>
+    <div class="card warn">
+      <p>The plan-sota ticket workflow says the ticket directory is the only prompt artifact and that no <code>&lt;stem&gt;-build-prompts.md</code> should be authored. <strong>This repository's own fence disagrees, mechanically.</strong> <code>resolvePlanSources</code> pairs every <code>.html</code> in <code>specs/</code> with <code>&lt;stem&gt;-build-prompts.md</code>, and where a ticket set exists <code>ticket-plan-sync.test.ts</code> asserts the prompts file exists and that each ticket's <code>## Build prompt</code> body is byte-identical to its <code>### Tnn — title</code> block in Section B.</p>
+      <p>A fence that fails the suite beats a convention in a skill file, so this plan ships both, and the <code>## Handoff</code> sections stay empty at authoring time and are appended to by predecessor sessions. <strong>The residual is real and is named rather than hidden:</strong> an appended Handoff does not break byte-identity, because the fence compares only the <code>## Build prompt</code> body, but a session that edits a build prompt must edit both files in the same commit. That is written into this plan's ticket <code>README.md</code> so nobody re-derives it from a red test.</p>
+      <p>Reconciling the two properly — either the fence learns that the prompts file is optional, or the skill learns this repository requires it — is a one-line decision somebody should take, and it belongs to whoever owns invariant 12, not to this workstream.</p>
+    </div>
+
+    <h3>What the non-zero reasoning count does and does not confirm</h3>
+    <p>The probe reported <code>reasoning: 12</code>, and the Codex route's <code>reasoningRelation: "included-in-output"</code> is recorded as an unconfirmed reviewed reading precisely because its own capture reported <code>reasoning: 0</code>. It is worth being exact about what changes.</p>
+    <p><strong>What a non-zero value confirms:</strong> that the field is populated on this route, that it survives <code>mapUsage</code>, and that a run which actually spends reasoning tokens produces a number the harness can carry. That is real, and it is more than the Codex capture has.</p>
+    <p><strong>What it does not confirm:</strong> the <em>relation</em>. "Included in output" is an assertion that <code>reasoning</code> is a breakdown of <code>output</code> rather than a sibling of it. Confirming that needs the arithmetic to be checked against a provider-side total for the same generation, or the source path read — and it is a different provider's API here, so the Codex citation does not transfer. <strong>The safest reading is that this route's relation is <code>unknown</code> until checked</strong>, and declaring <code>included-in-output</code> by analogy would be the same overstatement, arriving from the direction of good news, that the cross-building review caught once already. Task 9 should check it or say it did not.</p>
+
+    <h3>Rejected approaches</h3>
+    <table>
+      <thead><tr><th>Considered</th><th>Rejected because</th></tr></thead>
+      <tbody>
+        <tr><td>Accept <code>provider</code> from config on <code>PiCodexAdapter</code></td><td>Explicitly out of scope, and the pin's own comment says why: an unreviewed route would inherit a reviewed adapter's descriptor tests. The file boundary is the enforcement.</td></tr>
+        <tr><td>Widen <code>SAFE_MODEL_SELECTOR</code> in place</td><td>It would admit <code>vendor/model</code> on the Codex route, where a slash still names a second provider inside a flag that already has one. The widening would pass every positive test and break nothing visibly.</td></tr>
+        <tr><td>Fork <code>pi-codex-stream.ts</code> into a second decoder</td><td>A 691-line proven file forked for a two-branch change. Every run-level invariant lives in <code>EventSequencer</code>, so both routes inherit them from one place; two decoders would be two places to get them subtly wrong.</td></tr>
+        <tr><td>A new <code>retry</code> normalized event kind</td><td>The twelve kinds are a vocabulary every adapter shares and every consumer switches on. A retry is one CLI's transport behaviour, which is what <code>notice</code> is for — and it renders today with no dashboard change.</td></tr>
+        <tr><td>Charge each retry against the call ceiling</td><td><strong>Decided against, 2026-09-15 (Q1):</strong> a retry is one call. It would require mutating the ledger mid-run from a stream event, reopening the concurrency hole <code>reserve()</code>'s synchronicity closes.</td></tr>
+        <tr><td>Cap a recipe at one OpenRouter phase</td><td><strong>Not taken, 2026-09-15 (Q3):</strong> it was the recommendation's second half and the owner declined it. What it would have bought — no both-sides-from-one-pool review — is already held by <code>providerPairFrom</code>'s exactly-two rule, so dropping it costs a fence nothing.</td></tr>
+        <tr><td>Add <code>OPENROUTER_API_KEY</code> to <code>ENV_ALLOWLIST</code></td><td>Unnecessary and harmful. The key lives in <code>pi</code>'s auth store, reached through <code>HOME</code>, already allowlisted. AWSF continues to touch no credential, and widening a three-entry allowlist to carry a secret is the opposite of the reason it is an allowlist.</td></tr>
+        <tr><td>Widen inversion to three providers</td><td><strong>Decided against, 2026-09-15 (Q3):</strong> the pair rule stands and the provider string is the unit. A three-way rule is a different mechanism entirely.</td></tr>
+        <tr><td>Ship the route enabled, with an agent routed to it</td><td>A configured adapter nothing names is a route; a configured agent is a decision. Enabling is a separate owner act, which is the same posture W09 takes for the same reason.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Risks</h3>
+    <ul>
+      <li><strong>The promotion arrives before its evidence.</strong> The most likely failure in this plan, because the number is right there in the stream and it looks like money. Mitigated by making the promotion the last row of task 9 rather than a field set in task 4, and by naming the one unread source citation as the decisive item.</li>
+      <li><strong>The three-provider collision arrives in production rather than in a test.</strong> Mitigated by reproducing it as a failing test first, in task 11, before anything is changed.</li>
+      <li><strong>A widened guard widens its neighbour.</strong> Mitigated by the over-fire control in task 3, which re-asserts the Codex refusals in the same file that admits the new forms.</li>
+      <li><strong>A retried 429 is classified as exhaustion.</strong> This would lose a phase to a condition that clears on its own, and quota is structurally never a retry. Mitigated by a test that pins the current separation rather than by trusting that <code>#noteStop</code> keeps ignoring non-assistant messages.</li>
+      <li><strong>The live capture is spent badly.</strong> One call is the whole budget. Mitigated by shaping it to exercise the entire vocabulary at once, the way the Codex probe was, and by committing the capture script so the shape is reviewable before the call is made.</li>
+    </ul>
+
+    <h3>Cheapest unused upgrade</h3>
+    <p><strong>Read <code>pi</code>'s OpenRouter cost path before task 4 starts.</strong> It costs no quota, it is a source read rather than a capture, and it decides whether M3 ends in a promotion or in a recorded gap. Everything else in this plan is the same work either way, so knowing the answer early changes what task 9 is for rather than what it does.</p>
+    <figure>
+      <pre class="mermaid">
+flowchart LR
+  A["AWSF host"] -->|"env: PATH HOME TMPDIR"| B["pi process"]
+  B -->|"reads"| C["~/.pi/agent/auth.json"]
+  A -. "never reads" .-> C
+  style C stroke:#F97316,stroke-width:2px
+  style A stroke:#22D3EE,stroke-width:2px
+      </pre>
+      <figcaption>The credential path, unchanged by this workstream. <code>HOME</code> is passed as a path and never as a secret, and the dashed edge is what no task here may build.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ===== AMENDMENTS ===== -->
+  <section id="amendments">
+    <h2>Amendments</h2>
+    <details>
+      <summary>2026-09-15 — authored; two premise corrections recorded rather than silently applied</summary>
+      <p><strong>No implementation was written, no provider was called, no worktree was created, and no invariant was changed.</strong> Two things stated in the request were checked against this checkout and did not hold as written, and both are recorded here because a later reader would otherwise take them from the plan as measured.</p>
+      <p><strong>One — the run-failures surface does not exist.</strong> The request describes it showing one failure where three happened. A repository-wide sweep finds nothing by that name. The work relocates to the event log and the projection, which already render a notice generically, and the symptom is restated against a surface that exists.</p>
+      <p><strong>Two — <code>auto_retry</code> events are unhandled but not silent.</strong> The decoder's <code>default:</code> branch emits an <code>unknown-provider-event</code> notice, so three retries already produce three lines. The gap is meaning rather than visibility, which narrows task 5 from "make retries visible" to "make them legible and prove they cost one call".</p>
+      <p><strong>Two findings the request did not contain were added.</strong> <code>resolveSelector</code> in <code>core/src/adapters/catalog.ts</code> is a second selector-refusal site with the same regex and no production caller. And <code>providerPairFrom</code> admits exactly two distinct providers across a recipe's agent phases, so a third provider is refused at preflight — the hardest thing in the workstream and the subject of two of its three Questionables.</p>
+    </details>
+    <details>
+      <summary>2026-09-15 — owner review applied: all three Questionables decided, two against the recommendation</summary>
+      <p>An exported <code>plan-sota-review v1</code> block carried <strong>three verdicts, no proposed statuses and no annotations</strong>. Applied in full. <strong>No status marker moved</strong> — every milestone is still <code>[]</code>, and a Questionable verdict is not a marker.</p>
+      <p><strong>The three decisions.</strong> <em>Q1</em> — a <code>pi</code>-level retry is <strong>one call</strong>; the ceiling counts host-launched processes. This matched the recommendation, and task 5 is unchanged. <em>Q2</em> — <strong>any distinct provider may review</strong>; open-weight routes are admissible for reviewer phases. <em>Q3</em> — <strong>the provider string is the unit of inversion</strong>, with no per-recipe cap on OpenRouter phases.</p>
+      <p><strong>Two verdicts went against the recommendation, and both recommendations are kept verbatim rather than rewritten to agree.</strong> Q2's recommendation argued for worker phases only, on the ground that the reviewer is the one role whose output no gate checks. Q3's recommendation was the same first option <em>plus</em> the third option's one-OpenRouter-phase cap. A plan that quietly edits its own advice to match the decision destroys the record of what the trade-off was, so both are left standing beside the verdicts that overrode them.</p>
+      <p><strong>Neither decision needs code, and that was checked rather than assumed.</strong> For Q2: nothing in <code>core/src/workflow/review-routing.ts</code> asks a reviewer to be strong — <code>oppositeProvider</code> asks only that it be <em>different</em>, and neither call site carries an allowlist of permitted reviewer providers. An open-weight reviewer was already mechanically admissible, so the verdict settles a policy rather than removing a fence. Task 11 gained a row requiring that verification to be written down, and a matching <strong>do-not</strong> row: a session that implements Q2 by <em>adding</em> a reviewer-provider allowlist has read the verdict backwards.</p>
+      <p><strong>For Q3, the dropped cap was checked against the code and costs nothing.</strong> The case it was meant to prevent — an OpenRouter builder reviewed by an OpenRouter reviewer — resolves to <em>one</em> distinct provider, and <code>providerPairFrom</code> refuses anything but exactly two. So a both-sides-from-one-pool review cannot be assembled with or without the cap. Task 11 gained a row requiring that be asserted rather than reasoned about.</p>
+      <p><strong>One consequence the two verdicts create together, recorded as a risk rather than as a complaint.</strong> With <code>openrouter</code> now admissible on the reviewer side as well as the builder side, more recipes can reach three distinct providers across their agent phases — and every one of those is refused at preflight. The refusal is correct and stays. What changes is that making it <em>name the providers</em> rather than report a count stops being a nicety: it is now the thing that keeps these decisions usable in practice, which raises task 11 from tidy-up to load-bearing.</p>
+      <p><strong>What changed in the document.</strong> All three Questionables carry a <code>DECIDED</code> block with the choice, the date and the reasoning, and each keeps its full option set. The Questionables diagram and its intro were rewritten for a plan with no open questions. The Solution table's inversion row, the M4 phase introduction, three rows of task 11's checklist, three rejected-approaches rows, one new Validation row, and the In Plain Language section were each revised, because every one of them described a plan with three open decisions. Section B of the build prompts and tickets T05 and T11 were regenerated for the same reason: each had instructed its session to wait on a verdict that now exists.</p>
+    </details>
+  </section>
+
+</main>
+
+<!-- ===== PLAN-SOTA REVIEW LAYER v1 — FIXED MACHINERY, COPY VERBATIM =====
+     Not a placeholder: reproduce this <style> + <script> pair exactly in every plan.
+     Annotations, Questionable verdicts, and proposed phase statuses persist to
+     localStorage (key: plan filename). The browser NEVER writes this file; canonical
+     []/[wip]/[x]/[f] markers stay agent-owned. Export produces a `plan-sota-review v1`
+     block (clipboard + visible box) and, when running under Lavish Editor, queues it
+     once via window.lavish.queuePrompt(). -->
+<style>
+  .rv-btn { font: 600 11px/1 system-ui, sans-serif; padding: 3px 9px; border-radius: 999px;
+    border: 1px solid var(--muted, #8884); background: transparent; color: var(--fg, inherit);
+    cursor: pointer; opacity: .55; vertical-align: middle; margin-left: 8px; }
+  .rv-btn:hover { opacity: 1; border-color: var(--accent, #7c6cf0); }
+  .rv-btn.rv-on { opacity: 1; background: var(--accent, #7c6cf0); color: var(--bg, #fff); border-color: transparent; }
+  .rv-note-box { display: block; margin: 8px 0; padding: 8px 12px; border: 1px dashed var(--accent, #7c6cf0);
+    border-radius: 8px; font-size: 13px; min-height: 1.5em; background: color-mix(in srgb, var(--accent, #7c6cf0) 6%, transparent); outline: none; }
+  .rv-note-box:empty::before { content: attr(data-ph); opacity: .5; font-style: italic; }
+  .rv-note-box[hidden] { display: none; }
+  .rv-verdict { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 10px 0 2px; }
+  .rv-verdict-tag { font: 700 10px/1 system-ui, sans-serif; letter-spacing: .08em; opacity: .6; margin-right: 2px; }
+  .rv-status-chip { font: 600 11px/1 ui-monospace, monospace; margin-left: 10px; padding: 3px 9px;
+    border-radius: 999px; border: 1px dotted var(--muted, #8884); background: transparent;
+    color: var(--fg, inherit); cursor: pointer; opacity: .6; }
+  .rv-status-chip:hover { opacity: 1; }
+  .rv-status-chip.rv-on { opacity: 1; border-style: solid; border-color: var(--accent, #7c6cf0); color: var(--accent, #7c6cf0); }
+  #rv-drawer { position: fixed; right: 16px; bottom: 16px; z-index: 9999; font: 13px/1.45 system-ui, sans-serif;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  #rv-pill { font: 700 12px/1 system-ui, sans-serif; padding: 10px 16px; border-radius: 999px; border: none;
+    cursor: pointer; background: var(--accent, #7c6cf0); color: var(--bg, #fff); box-shadow: 0 4px 16px #0004; }
+  #rv-panel { width: min(420px, calc(100vw - 32px)); max-height: 60vh; overflow: auto; padding: 14px;
+    border-radius: 12px; border: 1px solid var(--muted, #8884); background: var(--bg, #fff);
+    color: var(--fg, inherit); box-shadow: 0 8px 32px #0005; }
+  #rv-panel h4 { margin: 0 0 8px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; opacity: .7; }
+  #rv-list { margin: 0 0 10px; padding: 0; list-style: none; font-size: 12px; }
+  #rv-list li { padding: 3px 0; border-bottom: 1px solid #8882; overflow-wrap: anywhere; }
+  #rv-out { width: 100%; min-height: 140px; margin-top: 10px; font: 11px/1.5 ui-monospace, monospace;
+    border: 1px solid var(--muted, #8884); border-radius: 8px; padding: 8px; background: transparent; color: inherit; }
+  #rv-msg { font-size: 11px; opacity: .75; margin-top: 6px; }
+  @media print { #rv-drawer { display: none; } }
+</style>
+<script>
+(function () {
+  'use strict';
+  var FILE = decodeURIComponent(location.pathname.split('/').pop() || 'plan.html');
+  var KEY = 'plan-sota-review:' + FILE;
+  var LEGACY_KEY = 'planf3-review:' + FILE; // pre-rename state; read once, never written
+  var PROPOSE = ['', '[]', '[wip]', '[x]', '[f]'];
+  var state = { a: {}, v: {}, s: {} }, persisted = true;
+  try { state = JSON.parse(localStorage.getItem(KEY) || localStorage.getItem(LEGACY_KEY) || 'null') || state; } catch (e) { persisted = false; }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); persisted = true; }
+    catch (e) { persisted = false; }
+    refresh();
+  }
+  function el(tag, cls, txt) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (txt) n.textContent = txt;
+    if (tag === 'button') { n.type = 'button'; n.setAttribute('data-lavish-action', ''); }
+    return n;
+  }
+  function clean(t) { return String(t || '').replace(/\|/g, '/').replace(/\s*\r?\n\s*/g, ' >> ').trim(); }
+  var registry = []; // {key, label, kind: 'section'|'phase'|'q'}
+
+  function noteBox(key, host, placeholder) {
+    var box = el('div', 'rv-note-box');
+    box.contentEditable = 'true';
+    box.setAttribute('data-ph', placeholder || 'Type your note for the agent…');
+    box.hidden = !(state.a[key]);
+    if (state.a[key]) box.textContent = state.a[key];
+    box.addEventListener('input', function () {
+      var t = box.textContent.trim();
+      if (t) state.a[key] = t; else delete state.a[key];
+      save();
+    });
+    host.appendChild(box);
+    return box;
+  }
+  function annotable(key, label, heading, host, kind) {
+    registry.push({ key: key, label: label, kind: kind });
+    var box = noteBox(key, host);
+    heading.insertAdjacentElement('afterend', box);
+    var btn = el('button', 'rv-btn' + (state.a[key] ? ' rv-on' : ''), '✎ note');
+    btn.addEventListener('click', function () {
+      box.hidden = !box.hidden;
+      if (!box.hidden) box.focus();
+    });
+    heading.appendChild(btn);
+    box.addEventListener('input', function () { btn.classList.toggle('rv-on', !!state.a[key]); });
+  }
+
+  // Sections
+  Array.prototype.forEach.call(document.querySelectorAll('main > section[id]'), function (sec) {
+    var h = sec.querySelector('h2'); if (!h) return;
+    annotable('#' + sec.id, h.textContent.trim(), h, sec, 'section');
+  });
+  // Phases: annotation + proposed-status chip
+  Array.prototype.forEach.call(document.querySelectorAll('#phases .phase'), function (ph, i) {
+    var h = ph.querySelector('h3'); if (!h) return;
+    var key = 'phase-' + (i + 1);
+    var label = h.textContent.replace(/^\s*\[[^\]]*\]\s*/, '').trim();
+    annotable(key, label, h, ph, 'phase');
+    var chip = el('button', 'rv-status-chip' + (state.s[key] ? ' rv-on' : ''));
+    chip.textContent = state.s[key] ? 'propose ' + state.s[key] : 'propose…';
+    chip.title = 'Cycle a PROPOSED status (exported as feedback — the file marker is only changed by the agent)';
+    chip.addEventListener('click', function () {
+      var next = PROPOSE[(PROPOSE.indexOf(state.s[key] || '') + 1) % PROPOSE.length];
+      if (next) state.s[key] = next; else delete state.s[key];
+      chip.textContent = next ? 'propose ' + next : 'propose…';
+      chip.classList.toggle('rv-on', !!next);
+      save();
+    });
+    h.appendChild(chip);
+  });
+  // Questionables: verdict / option buttons + note
+  Array.prototype.forEach.call(document.querySelectorAll('#questionables details'), function (d, i) {
+    var key = 'q-' + (i + 1);
+    var summary = d.querySelector('summary');
+    var label = summary ? summary.textContent.trim().slice(0, 120) : key;
+    registry.push({ key: key, label: label, kind: 'q' });
+    var opts = (d.getAttribute('data-review-options') || '').split('|').map(function (s) { return s.trim(); }).filter(Boolean);
+    if (!opts.length) opts = ['APPROVE', 'REJECT', 'REVISE', 'DEFER'];
+    var row = el('div', 'rv-verdict');
+    row.appendChild(el('span', 'rv-verdict-tag', 'YOUR CALL'));
+    opts.forEach(function (opt) {
+      var b = el('button', 'rv-btn' + ((state.v[key] || {}).c === opt ? ' rv-on' : ''), opt);
+      b.addEventListener('click', function () {
+        if ((state.v[key] || {}).c === opt) { delete state.v[key]; }
+        else { state.v[key] = { c: opt }; }
+        Array.prototype.forEach.call(row.querySelectorAll('.rv-btn'), function (x) {
+          x.classList.toggle('rv-on', x.textContent === ((state.v[key] || {}).c || null));
+        });
+        qbox.hidden = !state.v[key] && !state.a[key];
+        save();
+      });
+      row.appendChild(b);
+    });
+    d.appendChild(row);
+    var qbox = noteBox(key, d, 'Why / what to change instead…');
+    if (state.v[key]) qbox.hidden = false;
+  });
+
+  // Drawer
+  var drawer = el('div'); drawer.id = 'rv-drawer';
+  var panel = el('div'); panel.id = 'rv-panel'; panel.hidden = true;
+  var pill = el('button'); pill.id = 'rv-pill';
+  pill.addEventListener('click', function () { panel.hidden = !panel.hidden; });
+  var list = el('ul'); list.id = 'rv-list';
+  var actions = el('div');
+  var exportBtn = el('button', 'rv-btn rv-on', 'Export Feedback');
+  var clearBtn = el('button', 'rv-btn', 'Clear review');
+  var out = el('textarea'); out.id = 'rv-out'; out.readOnly = true; out.hidden = true;
+  var msg = el('div'); msg.id = 'rv-msg';
+  var head = el('h4', null, 'Review — pending feedback');
+  actions.appendChild(exportBtn); actions.appendChild(clearBtn);
+  panel.appendChild(head); panel.appendChild(list); panel.appendChild(actions);
+  panel.appendChild(out); panel.appendChild(msg);
+  drawer.appendChild(panel); drawer.appendChild(pill);
+  document.body.appendChild(drawer);
+
+  function findLabel(key) {
+    for (var i = 0; i < registry.length; i++) if (registry[i].key === key) return registry[i].label;
+    return key;
+  }
+  function refresh() {
+    var n = Object.keys(state.a).length + Object.keys(state.v).length + Object.keys(state.s).length;
+    pill.textContent = '✎ Review (' + n + ')';
+    list.textContent = '';
+    Object.keys(state.v).forEach(function (k) { list.appendChild(el('li', null, '[verdict] ' + findLabel(k) + ' → ' + state.v[k].c)); });
+    Object.keys(state.s).forEach(function (k) { list.appendChild(el('li', null, '[status] ' + findLabel(k) + ' → propose ' + state.s[k])); });
+    Object.keys(state.a).forEach(function (k) { list.appendChild(el('li', null, '[note] ' + findLabel(k) + ': ' + state.a[k].slice(0, 90))); });
+    if (!n) list.appendChild(el('li', null, 'Nothing yet — click ✎ note on any section, a verdict on a Questionable, or propose… on a phase.'));
+    if (!persisted) msg.textContent = '⚠ localStorage unavailable — review state lives only in this tab.';
+  }
+  function buildExport() {
+    var L = ['plan-sota-review v1', 'plan: ' + FILE, 'title: ' + clean(document.title), 'exported: ' + new Date().toISOString(), ''];
+    var vk = Object.keys(state.v), sk = Object.keys(state.s), ak = Object.keys(state.a);
+    L.push('## verdicts');
+    vk.length ? vk.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | ' + clean(state.v[k].c) + ' | note: ' + (clean(state.a[k]) || '-'));
+    }) : L.push('- (none)');
+    L.push('', '## statuses');
+    sk.length ? sk.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | propose ' + state.s[k]);
+    }) : L.push('- (none)');
+    L.push('', '## annotations');
+    var solo = ak.filter(function (k) { return !state.v[k]; });
+    solo.length ? solo.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | ' + clean(state.a[k]));
+    }) : L.push('- (none)');
+    return L.join('\n');
+  }
+  exportBtn.addEventListener('click', function () {
+    var text = buildExport();
+    out.hidden = false; out.value = text;
+    out.focus(); out.select();
+    function done(m) { msg.textContent = m; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done('Copied — paste it into your next agent session.'); },
+        function () { done('Clipboard blocked — copy from the box below.'); });
+    } else {
+      try { done(document.execCommand('copy') ? 'Copied — paste it into your next agent session.' : 'Clipboard blocked — copy from the box below.'); }
+      catch (e) { done('Clipboard blocked — copy from the box below.'); }
+    }
+    if (window.lavish && typeof window.lavish.queuePrompt === 'function') {
+      window.lavish.queuePrompt(text, { tag: 'plan-sota-review', queueKey: 'plan-sota-review' });
+      msg.textContent += ' Also queued to the agent via Lavish.';
+    }
+  });
+  clearBtn.addEventListener('click', function () {
+    if (!confirm('Clear all review state for this plan?')) return;
+    state = { a: {}, v: {}, s: {} };
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    location.reload();
+  });
+  refresh();
+})();
+</script>
+
+<!-- Mermaid runtime — renders every <pre class="mermaid"> block. The only external
+     reference in the file: internet is needed on first open to render diagrams;
+     everything else renders without it. -->
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    // Mirrors the :root palette so the diagrams share the plan's visual identity.
+    themeVariables: {
+      darkMode: true,
+      background: '#0F1017',
+      primaryColor: '#1C1E2B',
+      primaryTextColor: '#E7E9F0',
+      primaryBorderColor: '#2b3040',
+      lineColor: '#8B90A6',
+      secondaryColor: '#262b3a',
+      tertiaryColor: '#171a26',
+      clusterBkg: '#171a26',
+      clusterBorder: '#2b3040',
+      edgeLabelBackground: '#1C1E2B',
+      actorBkg: '#1C1E2B',
+      actorBorder: '#22D3EE',
+      actorTextColor: '#E7E9F0',
+      signalColor: '#8B90A6',
+      signalTextColor: '#8B90A6',
+      noteBkgColor: '#14323c',
+      noteTextColor: '#E7E9F0',
+      noteBorderColor: '#22D3EE',
+      labelBoxBkgColor: '#1C1E2B',
+      labelTextColor: '#E7E9F0',
+      loopTextColor: '#E7E9F0',
+      fontFamily: '"Inter","Outfit",system-ui,sans-serif'
+    }
+  });
+</script>
+</body>
+</html>

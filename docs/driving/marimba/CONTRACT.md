@@ -78,12 +78,12 @@ reports, and takes no owner act.
 
 Four guarantees — earlier documents claimed stronger things that were not true.
 
-1. **No push path exists** anywhere in the codebase.
+1. **One push path exists, unreachable before `LANDED`.** Publishing is a separate
+   owner act on a landed revision; no force-push or branch-deletion path exists.
 2. **Nothing is auto-deleted.** The collection command lists, never removes.
 3. **Writes during a worker phase are confined to a managed worktree** by path
    policy, with protected paths as an independent rejection on top.
-4. **Canonical movement happens only through a local fast-forward the owner
-   authorises.**
+4. **Canonical movement is a local fast-forward the owner authorises.**
 
 One placement fact, because getting it wrong makes guarantee 3 false: the
 managed worktree root is a **sibling** of the state root, not inside it.
@@ -110,7 +110,7 @@ Use it when the next work is **not** a continuation. Continuations, reworks and
 fixes stay in this session, where the findings already are.
 
 The wrapper fixes the argv, so a spawned session always carries these settings,
-this contract and both fences. Composing a launch argv, or writing into a pane
+this contract and every fence its harness supplies. Composing a launch argv, or writing into a pane
 with `herdr agent send` or `pane run`, breaks that and is never sanctioned:
 `processOwnerTerminal()` is a terminal-shape check, so whatever can type into a
 terminal can answer an owner confirmation.

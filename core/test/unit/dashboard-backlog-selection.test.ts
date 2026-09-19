@@ -41,7 +41,7 @@ async function repositoryBacklog() {
   return queryPlanBacklog(new PlanTicketReader(sources), []);
 }
 
-test("no selection renders no groups for every filter; full selection drives current-corpus metrics", async () => {
+test("no selection renders no groups for every filter; full selection reproduces the corpus", async () => {
   const backlog = await repositoryBacklog();
   for (const filter of ["both", "spine", "deep"] satisfies readonly PlanFilter[]) {
     assert.deepEqual(visibleGroups(backlog.plans, backlog.tickets, [], filter), []);
@@ -50,8 +50,14 @@ test("no selection renders no groups for every filter; full selection drives cur
   const fullSelection = backlog.plans.map((plan) => plan.id);
   const groups = visibleGroups(backlog.plans, backlog.tickets, fullSelection, "both");
   const metricTickets = groups.flatMap((group) => group.tickets);
-  assert.equal(metricTickets.filter((ticket) => ticket.ready).length, 4);
-  assert.equal(countBlockedTickets(metricTickets), 5);
+  // Full selection reproduces the corpus. That is the claim; two literals were
+  // standing in for it, and they moved every time a plan was authored.
+  assert.equal(metricTickets.length, backlog.tickets.length);
+  assert.equal(
+    metricTickets.filter((ticket) => ticket.ready).length,
+    backlog.tickets.filter((ticket) => ticket.ready).length,
+  );
+  assert.equal(countBlockedTickets(metricTickets), countBlockedTickets(backlog.tickets));
 
   assert.deepEqual(
     groups.map((group) => group.plan.id),

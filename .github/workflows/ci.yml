@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: lint · typecheck · four test layers
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Check out the full history
+        uses: actions/checkout@v4
+        with:
+          # NOT optional. core/test/unit/meta/no-agent-coauthor.test.ts runs
+          # `git log --all` over every commit to prove no agent is ever named as
+          # author, committer or co-author. A shallow clone would leave that
+          # fence green over one commit — passing while checking nothing.
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          # package.json engines requires >=22.12. The suite runs TypeScript
+          # directly through --experimental-strip-types; there is no build step.
+          node-version: "22"
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # The four layers run as separate steps so a failure names the layer it
+      # broke in. `if: '!cancelled()'` keeps the later layers running after an
+      # earlier one fails, which is what the root `npm test` script does by
+      # OR-ing the four exit codes — one red run reports every layer's state
+      # rather than only the first to break.
+      - name: Test — unit
+        if: ${{ !cancelled() }}
+        run: npm run test:unit
+
+      - name: Test — provider contract
+        if: ${{ !cancelled() }}
+        run: npm run test:contract
+
+      - name: Test — crash simulation
+        if: ${{ !cancelled() }}
+        run: npm run test:sim
+
+      - name: Test — owner journeys
+        if: ${{ !cancelled() }}
+        # Fixture-backed end to end. Spends no provider quota and needs no
+        # API key, which is why the whole suite is runnable in CI at all.
+        run: npm run test:journeys
+
+      - name: Build the dashboard
+        if: ${{ !cancelled() }}
+        run: npm run dash:build

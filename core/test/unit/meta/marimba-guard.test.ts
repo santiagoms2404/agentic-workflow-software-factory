@@ -114,7 +114,7 @@ chmodSync(join(STUB_BIN, "python3"), 0o755);
 after(() => rmSync(STUB_BIN, { recursive: true, force: true }));
 
 /** The owner acts that construct a terminal, in the guard's own order. */
-const OWNER_ACTS = ["land", "cancel", "rework", "review", "journey", "raise", "publish", "resume"] as const;
+const OWNER_ACTS = ["land", "cancel", "rework", "review", "degrade-review", "journey", "raise", "publish", "resume"] as const;
 
 const GUARD_ROWS: readonly GuardRow[] = [
   // --- fence 2: owner acts in Bash command text ---------------------------

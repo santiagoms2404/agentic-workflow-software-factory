@@ -2,7 +2,7 @@
  * marimba guard, pi port. The shared two fences plus the Pi-observable
  * lifecycle-timeout floor, bound to pi's tool surface.
  *
- * This file is the BINDING only. Both fences live in `marimba-guard-rules.mts`,
+ * This file is the BINDING only. Every fence's rules live in `marimba-guard-rules.mts`,
  * which imports nothing and which the suite asserts still agrees with the shell
  * guard's own `for` loops. Read that file for what is denied and why; read this
  * one for how pi is wired to it.

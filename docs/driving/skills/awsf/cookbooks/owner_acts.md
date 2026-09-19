@@ -52,10 +52,11 @@ attestation means telling the owner exactly which revision they need to have
 exercised — not the branch, the revision.
 
 **`land`** is the end of the road and the only place the change leaves the
-managed worktree. It is a local fast-forward the owner authorizes at a terminal;
-no push path exists anywhere in the codebase to offer them. The screen shows the
-candidate, a summary, the fast-forward meter, and — when a review was replaced —
-both verdicts side by side. Prepare it by making sure the gates, the required
+managed worktree. It is a local fast-forward the owner authorizes at a terminal,
+and it reaches no remote: publishing is a separate act, taken later and only on
+what has already landed. The screen shows the candidate, a summary, the
+fast-forward meter, and — when a review was replaced — both verdicts side by
+side. Prepare it by making sure the gates, the required
 review and the attestation are all genuinely present, rather than by asking.
 
 **`publish`** settles that the exact landed revision reached its configured remote branch. It forecloses every later act on that attempt: publication transitions it to `PUBLISHED`, which seals it. Prepare it only when the owner should make this the attempt's final act, with the exact revision, remote name and branch they are about to confirm.
