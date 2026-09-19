@@ -48,12 +48,21 @@ export async function inspectPhaseRecovery(attemptDir: string) {
   if (pending !== undefined) {
     const proof = scan.records.findLast(record => record.event.evidence?.type === "phase-result-ready");
     if (proof?.event.evidence?.type !== "phase-result-ready" || recoveryDigest(proof.event.evidence.checkpoint) !== recoveryDigest(checkpoint) ||
+        proof.event.evidence.phase.key !== pending.phaseKey || proof.event.evidence.phase.ordinal !== pending.ordinal ||
+        proof.event.evidence.phase.status !== "VALIDATING" || proof.event.evidence.phase.correctionCount !== pending.round ||
         pending.reservation.attempt !== status.attempt ||
         scan.records.some(record => record.event.evidence?.type === "phase-validation-started" && record.event.evidence.checkpointId === checkpoint.id)) throw new Error("saved reply validation has started or its completion proof changed");
     const exit = scan.records.map(record => record.event.evidence).findLast(evidence => evidence?.type === "process" && evidence.record.runId === pending.runId);
     if (exit?.type !== "process" || exit.status !== "EXITED" || exit.exitCode !== 0 || exit.endedAt === null || exit.phaseId !== `${status.sessionId}:${pending.phaseKey}`) throw new Error("saved reply has no completed original process");
-    const debit = scan.records.some(record => record.event.evidence?.type === "process" && record.event.evidence.record.reservationId === pending.reservation.id && record.event.evidence.status === "RUNNING");
+    const originRun = pending.runId.replace(/:c\d+$/, "");
+    const debit = scan.records.some(record => record.event.evidence?.type === "process" &&
+      record.event.evidence.phaseId === `${status.sessionId}:${pending.phaseKey}` && record.event.evidence.record.runId === originRun &&
+      record.event.evidence.record.reservationId === pending.reservation.id && record.event.evidence.record.edge === pending.reservation.edge &&
+      record.event.evidence.status === "RUNNING" && record.event.evidence.releasedAt !== null);
     if (!debit) throw new Error("saved reply original debit is unproved");
+    const route = scan.records.map(record => record.event.evidence).findLast(evidence => evidence?.type === "agent-start" && evidence.phaseId === `${status.sessionId}:${pending.phaseKey}`);
+    if (route?.type !== "agent-start" || route.adapterId !== pending.model.adapter || route.provider !== pending.model.provider ||
+        route.requestedModel !== pending.model.requestedModel) throw new Error("saved reply original route is unproved");
   }
   const phases = new Map<string, PhaseEvidenceRecord>();
   const envelopes = new Map<string, EnvelopeBase>();

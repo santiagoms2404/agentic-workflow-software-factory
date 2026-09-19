@@ -58,10 +58,16 @@ test(`O1 ${scenario} ${instruction === undefined ? "original input" : corrupt ? 
     let mode: "low" | "healthy" | "unknown" = "low";
     let launched = 0;
     const actualInputs: string[] = [];
+    const readyIndices = new Map<string, Buffer>();
     const completedCalls = scenario === "success" ? 1 : 2;
     let probes = 0;
     const options = { attemptDir: world.created.attemptDir, stateRoot: world.stateRoot, config: world.config, configPath: world.configPath,
       ...(instruction === undefined ? {} : { instruction }),
+      projectRecord: (async (record, current) => {
+        if (record.event.evidence?.type === "phase-result-ready" && record.event.evidence.checkpoint.pending?.phaseKey === "builder") {
+          readyIndices.set(record.event.evidence.checkpoint.id, readFileSync(git(current.worktree!, "rev-parse", "--path-format=absolute", "--git-path", "index")));
+        }
+      }) satisfies AttemptProjector,
       infrastructure: { adapterFor: (_entry: AdapterEntry, id: string) => new class extends ScriptedAdapter {
         override buildSpec(request: ModelRequest): ProcessSpec {
           const spec = super.buildSpec(request);
@@ -176,6 +182,24 @@ test(`O1 ${scenario} ${instruction === undefined ? "original input" : corrupt ? 
       assert.equal(await cliMain(cli), 0, lines.join("\n"));
       assert.equal(await cliMain({ ...cli, argv: [...cli.argv, "--instruction", "different instruction"] }), 1);
       assert.equal(readFileSync(join(options.attemptDir, "journal.jsonl"), "utf8"), history);
+      const rows = history.trim().split("\n").map(line => JSON.parse(line));
+      const cut = rows.findLastIndex(row => row.event.evidence?.type === "phase-result-ready" && row.event.evidence.checkpoint.pending?.phaseKey === "builder");
+      assert.ok(cut > 0);
+      const anchor = rows[cut].event.next;
+      git(prepared.worktree!, "reset", "--mixed", anchor.recovery.worktreeHeadSha);
+      writeFileSync(git(prepared.worktree!, "rev-parse", "--path-format=absolute", "--git-path", "index"), readyIndices.get(anchor.recovery.id)!);
+      rmSync(join(options.attemptDir, "envelopes", "tests-0.json"));
+      writeFileSync(join(options.attemptDir, "journal.jsonl"), rows.slice(0, cut + 1).map(row => JSON.stringify(row)).join("\n") + "\n");
+      writeFileSync(join(options.attemptDir, "status.json"), JSON.stringify(rows[cut - 1].event.next));
+      const { instruction: _instruction, ...validationOptions } = options;
+      const validated = await resumeProductionCommand({ ...validationOptions, reason: "validate the already amended reply", terminal,
+        infrastructure: { ...options.infrastructure, adapterFor: () => assert.fail("amended reply must not call its adapter again"),
+          createBroker: () => assert.fail("amended reply must not open a broker again") } });
+      assert.equal(validated.status.lifecycleState, "AWAITING_OWNER", validated.status.blocker?.detail);
+      assert.equal(validated.status.budget.callsSpent, completedCalls + 1);
+      const completed = readFileSync(join(options.attemptDir, "journal.jsonl"), "utf8");
+      assert.equal(completed.split('"type":"resume-instruction-delivery"').length - 1, 2);
+      assert.equal(launched, completedCalls + 1);
     }
   } finally { world.projection.close(); rmSync(world.root, { recursive: true, force: true }); }
 });
@@ -359,6 +383,7 @@ for (const fault of ["none", "broker-uncertain", "after-submission"] as const) {
 for (const sample of [
   { workflow: "scout", phase: "scout", tier: 0, scenario: "success" },
   { workflow: "plan", phase: "planner", tier: 0, scenario: "success" },
+  { workflow: "plan", phase: "planner", tier: 0, scenario: "planner-open-question-once" },
   { workflow: "build", phase: "builder", tier: 1, scenario: "success" },
   { workflow: "build-review", phase: "reviewer", tier: 2, scenario: "success" },
   { workflow: "build", phase: "builder", tier: 1, scenario: "gate" },
@@ -397,6 +422,40 @@ for (const sample of [
         infrastructure: { ...options.infrastructure, adapterFor: () => assert.fail("saved reply must not reopen an adapter"),
           createBroker: () => assert.fail("saved reply must not construct a provider broker"), writeSystemPrompt: async () => assert.fail("saved reply needs no prompt materialization") } };
       const before = readFileSync(journalPath);
+      const originalRecords = before.toString("utf8").trim().split("\n").map(line => JSON.parse(line));
+      for (const mutation of ["envelope", "route", "reservation", "phase", "exit", "liability"] as const) {
+        const altered = structuredClone(originalRecords);
+        const latest = altered.at(-1);
+        if (mutation === "envelope") {
+          const row = altered.find(record => record.event.evidence?.type === "envelope" && record.event.evidence.envelope.envelopeId === anchor.recovery.pending.envelopeId);
+          row.event.evidence.envelope.payload.summary += " tampered";
+        } else if (mutation === "exit") {
+          const row = altered.findLast(record => record.event.evidence?.type === "process" && record.event.evidence.record.runId === anchor.recovery.pending.runId);
+          row.event.evidence.exitCode = null;
+        } else if (mutation === "liability") latest.event.next.budget.callsReserved = 1;
+        else if (mutation === "phase") latest.event.evidence.phase.correctionCount += 1;
+        else {
+          const pending = latest.event.next.recovery.pending;
+          if (mutation === "route") pending.model.provider = "another-provider";
+          else pending.reservation.id = "another:original-call";
+          latest.event.evidence.checkpoint = structuredClone(latest.event.next.recovery);
+        }
+        writeFileSync(journalPath, altered.map(record => JSON.stringify(record)).join("\n") + "\n");
+        const changed = readFileSync(journalPath);
+        await assert.rejects(resumeProductionCommand(resume), /saved reply|unsettled/);
+        assert.deepEqual(readFileSync(journalPath), changed);
+        assert.equal(launches, expectedLaunches);
+      }
+      writeFileSync(journalPath, before);
+      const indexPath = git(prepared.worktree!, "rev-parse", "--path-format=absolute", "--git-path", "index");
+      const indexBytes = readFileSync(indexPath);
+      writeFileSync(indexPath, Buffer.concat([indexBytes, Buffer.from("changed index")]));
+      await assert.rejects(resumeProductionCommand(resume), /worktree or index bytes changed/);
+      assert.deepEqual(readFileSync(journalPath), before);
+      writeFileSync(indexPath, indexBytes);
+      const declined = await resumeProductionCommand({ ...resume, terminal: { ...resume.terminal, confirm: async () => false } });
+      assert.equal(declined.confirmed, false);
+      assert.deepEqual(readFileSync(journalPath), before);
       const extra = join(prepared.worktree!, "changed-after-reply.txt");
       writeFileSync(extra, "must be preserved on refusal\n");
       await assert.rejects(resumeProductionCommand(resume), /worktree or index bytes changed/);
@@ -409,7 +468,7 @@ for (const sample of [
       assert.equal(result.status.budget.callsSpent, anchor.budget.callsSpent);
       assert.equal(result.status.budget.callsReserved, 0);
       assert.equal(launches, expectedLaunches);
-      if (sample.scenario === "success") {
+      if (sample.scenario !== "gate") {
         const stable = readFileSync(journalPath);
         assert.equal((await resumeProductionCommand(resume)).status.revision, result.status.revision);
         assert.deepEqual(readFileSync(journalPath), stable);

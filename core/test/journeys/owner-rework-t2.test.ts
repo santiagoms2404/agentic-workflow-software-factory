@@ -755,6 +755,29 @@ test("a review whose transport fails twice blocks on L17 with the reworked candi
   } finally { await cleanup(fixture); }
 });
 
+test("an uncertain rework review launch keeps liability and cannot take a transport retry", async () => {
+  const fixture = await world();
+  const script = scripted(fixture);
+  let reviewDelegations = 0;
+  const create = script.infrastructure.createBroker!;
+  try {
+    const before = await readAttempt(fixture.attemptDir);
+    const result = await rework(fixture, { ...script, infrastructure: { ...script.infrastructure, createBroker: options => {
+      const delegate = create(options);
+      return { startProcess: (registration, spec, signal) => {
+        if (registration.role === "reviewer") { reviewDelegations++; throw new AdapterError("claude", "E_BACKEND_FAILURE", "lost launch acknowledgement"); }
+        return delegate.startProcess(registration, spec, signal);
+      } };
+    } } }, { instruction: "Preserve the public API while fixing the defect." });
+    assert.equal(result.status.lifecycleState, "BLOCKED", result.status.blocker?.detail);
+    assert.equal(result.status.budget.callsSpent, before.budget.callsSpent + 1);
+    assert.equal(result.status.budget.callsReserved, 1);
+    assert.equal(reviewDelegations, 1);
+    assert.deepEqual(script.launches, ["codex"]);
+    assert.notEqual(result.status.candidateSha, fixture.candidateA);
+  } finally { fixture.projection.close(); rmSync(fixture.root, { recursive: true, force: true }); }
+});
+
 test("a concern verdict on the reworked candidate still returns to the owner, who decides", async () => {
   const fixture = await world();
   const script = scripted(fixture, "concern");
