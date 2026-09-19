@@ -95,6 +95,12 @@ export interface AdoptCommandOptions {
   readonly targetTaskId: string;
   /** Fresh owner intent for the target. Source request bytes never transfer. */
   readonly request: string;
+  /**
+   * The driving session minting the TARGET. Not taken from the source: an
+   * adopted task is a new task, created now, by whoever is adopting. Absent
+   * records NULL.
+   */
+  readonly groupId?: string;
   readonly worktreeRoot: string;
   readonly terminal: OwnerTerminal;
   readonly config: AwsfConfig;
@@ -319,6 +325,10 @@ async function createTarget(
     project: candidate.source.project,
     taskId: options.targetTaskId,
     continuesTask: candidate.source.taskId,
+    groupId: options.groupId ?? null,
+    // The target continues the source's work, so it inherits the source's plan
+    // for the same reason a retry does. The group does not: see `groupId` above.
+    planRef: candidate.source.planRef,
     attempt: 1,
     repository: candidate.source.repository,
     worktree: worktree.path,
@@ -332,6 +342,11 @@ async function createTarget(
     phase: null,
     budget,
     ceilingGrants: [],
+    // A continuation runs the routes its source was given: adopting a sealed
+    // candidate re-reviews that exact tree, and re-reviewing it on a route the
+    // owner did not choose would be a different experiment.
+    routeOverrides: candidate.source.routeOverrides,
+    reviewDegradation: null,
     model: null,
     lastActivityAt: now,
     lastActivity: `created immutable continuation from sealed ${candidate.source.taskId} attempt ${String(candidate.source.attempt)} candidate ${candidate.candidateSha}`,
@@ -402,6 +417,9 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
     recipe: candidate.recipe,
     reviewPhaseId: phases.review,
     workerProvider: candidate.workerProvider,
+    // The continuation inherits the source's routes and none of its grants: a
+    // degradation is scoped to the attempt whose owner granted it.
+    routeOverrides: candidate.source.routeOverrides,
   });
   const budgetShape = adoptionBudget(options.config);
   const remaining = ceilingFor(2, budgetShape.ceiling) - budgetShape.callsSpent;

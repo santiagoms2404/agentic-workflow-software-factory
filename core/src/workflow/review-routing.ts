@@ -1,3 +1,5 @@
+import type { ReviewRouteMode } from "../contracts/route-selection.ts";
+
 export class InvalidReviewInversion extends Error {
   constructor(detail: string) {
     super(`review inversion is invalid: ${detail}`);
@@ -8,19 +10,30 @@ export class InvalidReviewInversion extends Error {
 export class MandatoryReviewUnavailable extends Error {
   readonly workerProvider: string;
   readonly reviewProvider: string;
+  readonly reviewMode: ReviewRouteMode;
   readonly attemptedProviders: readonly string[];
   readonly transportRetries = 1;
   readonly substituteAttempted = false;
   readonly cause: unknown;
 
-  constructor(workerProvider: string, reviewProvider: string, attempts: readonly string[], cause: unknown) {
+  constructor(
+    workerProvider: string,
+    reviewProvider: string,
+    attempts: readonly string[],
+    cause: unknown,
+    reviewMode: ReviewRouteMode = "invert-provider",
+  ) {
+    const description = reviewMode === "same-provider-degraded"
+      ? "explicit degraded same-provider review"
+      : "mandatory opposite-provider review";
     super(
-      `mandatory opposite-provider review on ${JSON.stringify(reviewProvider)} remained unavailable ` +
+      `${description} on ${JSON.stringify(reviewProvider)} remained unavailable ` +
         "after one transport retry; no substitute was attempted",
     );
     this.name = "MandatoryReviewUnavailable";
     this.workerProvider = workerProvider;
     this.reviewProvider = reviewProvider;
+    this.reviewMode = reviewMode;
     this.attemptedProviders = Object.freeze([...attempts]);
     this.cause = cause;
   }
@@ -62,7 +75,10 @@ export function oppositeProvider(
 
 export interface MandatoryReviewOptions<T> {
   readonly workerProvider: string;
-  readonly providers: readonly [string, string];
+  /** Required by the default inversion route; not consulted by explicit degraded mode. */
+  readonly providers?: readonly [string, string];
+  /** Omission is the safe default. The degraded mode can only be named explicitly. */
+  readonly mode?: ReviewRouteMode;
   /** Called at most twice, always with the one provider selected by inversion. */
   execute(reviewProvider: string, attempt: 1 | 2): Promise<T>;
   isTransportFailure(error: unknown): boolean;
@@ -94,7 +110,13 @@ export interface MandatoryReviewOptions<T> {
  * and the single held call exists for exactly that.
  */
 export async function runMandatoryReview<T>(options: MandatoryReviewOptions<T>): Promise<T> {
-  const reviewProvider = oppositeProvider(options.workerProvider, options.providers);
+  const mode = options.mode ?? "invert-provider";
+  const reviewProvider = mode === "same-provider-degraded"
+    ? options.workerProvider
+    : oppositeProvider(
+        options.workerProvider,
+        options.providers ?? (() => { throw new InvalidReviewInversion("the default review route has no provider pair"); })(),
+      );
   const attempts: string[] = [];
   for (const attempt of [1, 2] as const) {
     attempts.push(reviewProvider);
@@ -108,6 +130,7 @@ export async function runMandatoryReview<T>(options: MandatoryReviewOptions<T>):
             reviewProvider,
             attempts,
             error,
+            mode,
           );
         }
         continue;

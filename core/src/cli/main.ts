@@ -23,8 +23,14 @@ import { initCommand } from "./commands/init.ts";
 import { listProjects, registerProject, showProject, verifyRegisteredProject } from "./commands/project.ts";
 import { landCommand } from "./commands/land.ts";
 import { newCommand } from "./commands/new.ts";
+import { PlanRefUnknown, resolvePlanRef } from "./commands/plan-ref.ts";
+import { relateCommand } from "./commands/relate.ts";
 import { publishCommand } from "./commands/publish.ts";
 import { raiseCommand } from "./commands/raise.ts";
+import { degradeReviewCommand } from "./commands/degrade-review.ts";
+import { routesListCommand } from "./commands/routes.ts";
+import { formatRouteOverride, parseRouteFlags, predictSameProviderReview } from "../workflow/route-flags.ts";
+import { workflowRecipe } from "../workflow/catalog.ts";
 import { quotaCommand } from "./commands/quota.ts";
 import { stageCommand } from "./commands/stage.ts";
 import { locateAttempt } from "./commands/attempt.ts";
@@ -42,8 +48,8 @@ import { selectWorkflow, workflowsCommand } from "./commands/workflows.ts";
 
 /** The complete owner-facing command table; documentation reconciles against it. */
 export const CLI_COMMANDS = Object.freeze([
-  "init", "project", "new", "seed", "start", "run", "resume", "status", "watch", "rework", "review", "raise", "journey", "land", "publish", "cancel", "retry",
-  "doctor", "gc", "dash", "db rebuild", "ticket", "backlog", "quota", "stage", "workflows", "group",
+  "init", "project", "new", "seed", "start", "run", "resume", "status", "watch", "rework", "review", "raise", "degrade-review", "journey", "land", "publish", "cancel", "retry",
+  "relate", "doctor", "gc", "dash", "routes", "db rebuild", "ticket", "backlog", "quota", "stage", "workflows", "group",
 ]);
 
 const USAGE = `usage: awsf init [path] --project <slug>\n       awsf <${CLI_COMMANDS.join("|")}> [task] [options]`;
@@ -55,12 +61,15 @@ interface ParsedArgs {
   readonly positionals: readonly string[];
   readonly flags: Readonly<Record<string, string>>;
   readonly repositories: readonly string[];
+  /** Repeatable: one `--route` per phase, in the order they were written. */
+  readonly routes: readonly string[];
 }
 
 function parseArgs(args: readonly string[]): ParsedArgs {
   const positionals: string[] = [];
   const flags: Record<string, string> = {};
   const repositories: string[] = [];
+  const routes: string[] = [];
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index] ?? "";
     if (!arg.startsWith("--")) {
@@ -72,6 +81,7 @@ function parseArgs(args: readonly string[]): ParsedArgs {
       const key = arg.slice(2, equals);
       const value = arg.slice(equals + 1);
       if (key === "repository") repositories.push(value);
+      else if (key === "route") routes.push(value);
       else flags[key] = value;
       continue;
     }
@@ -92,10 +102,11 @@ function parseArgs(args: readonly string[]): ParsedArgs {
     }
     if (value === undefined || value.startsWith("--")) throw new Error(`--${key} requires a value`);
     if (key === "repository") repositories.push(value);
+    else if (key === "route") routes.push(value);
     else flags[key] = value;
     index += 1;
   }
-  return { positionals, flags, repositories };
+  return { positionals, flags, repositories, routes };
 }
 
 function commandEnvironment(env: NodeJS.ProcessEnv): Readonly<Record<string, string>> {
@@ -271,10 +282,23 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       // prior T0 task would either collide or make a second refinement inherit
       // its already-spent one-call ceiling.
       const taskId = `ticket-${action}-${id}-${randomUUID()}`;
+      // The intake task's plan is the one its ticket store was resolved through,
+      // so it is stated rather than guessed here too. An intake run against a
+      // repository with no catalog stays unlinked.
+      let intakePlanRef: string | undefined;
+      try {
+        intakePlanRef = await resolvePlanRef({
+          repository: cwd, stateRoot, project,
+          stem: parsed.flags.plan ?? loadCatalog(await readFile(resolve(cwd, "awsf.project.yaml"), "utf8")).plans.default ?? "",
+        });
+      } catch {
+        intakePlanRef = undefined;
+      }
       const projection = createDashboardProjection(stateRoot, err);
       try {
         const created = await newCommand({
           stateRoot, project, taskId, repository: cwd, request, workflow: "intake", tier: 0,
+          ...(intakePlanRef === undefined ? {} : { planRef: intakePlanRef }),
           configSnapshotJson: toConfigSnapshotJson(config),
           callCeilings: callCeilingsOf(config.risk.call_ceiling),
           allowance: config.risk.correction_allowance,
@@ -316,6 +340,18 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       const configPath = resolve(parsed.flags.config ?? `${cwd}/awsf.config.yaml`);
       const config = loadConfig(await readFile(configPath, "utf8"));
       for (const line of workflowsCommand(config)) out(line);
+      return 0;
+    }
+
+    if (command === "routes") {
+      // Read-only vocabulary. It starts no process, runs no phase and reserves
+      // no call, so a driving session may consult it as often as it needs to.
+      if (parsed.positionals[0] !== "list" || parsed.positionals.length !== 1) {
+        throw new Error("usage: awsf routes list [--config PATH]");
+      }
+      const configPath = resolve(parsed.flags.config ?? `${cwd}/awsf.config.yaml`);
+      const config = loadConfig(await readFile(configPath, "utf8"));
+      for (const line of await routesListCommand({ config })) out(line);
       return 0;
     }
 
@@ -381,22 +417,67 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         parsed.flags.tier,
       );
       const { workflow, tier } = selection;
+      const routeOverrides = parseRouteFlags(parsed.routes);
+      const planRef = parsed.flags.plan === undefined
+        ? undefined
+        : await resolvePlanRef({ repository: cwd, stateRoot, project, stem: parsed.flags.plan });
       const result = await newCommand({
         stateRoot,
         project,
         taskId,
         ...(parsed.flags.continues === undefined ? {} : { continuesTask: parsed.flags.continues }),
+        ...(parsed.flags.group === undefined ? {} : { groupId: parsed.flags.group }),
+        // Resolved against the catalog BEFORE the attempt exists, so a task is
+        // never created carrying a plan label that points at nothing.
+        ...(planRef === undefined ? {} : { planRef }),
         repository: cwd,
         request,
         workflow,
         tier,
         configSnapshotJson: toConfigSnapshotJson(config),
+        routeOverrides,
         callCeilings: callCeilingsOf(config.risk.call_ceiling),
         allowance: config.risk.correction_allowance,
         projectRecord: projection.project,
       });
       out(`Created ${project}/${taskId} attempt ${result.status.attempt} in DRAFT.`);
+      if (result.status.groupId !== null) out(`Group: ${result.status.groupId} — this run is recorded as part of that driving session.`);
+      if (result.status.planRef !== null) out(`Plan: ${result.status.planRef} — this run is recorded against that registered plan.`);
+      for (const [phaseId, selected] of Object.entries(routeOverrides)) {
+        out(`Route: ${formatRouteOverride(phaseId, selected)}`);
+      }
+      // The attempt is created either way. Refusing here would leave nothing
+      // for `awsf degrade-review` to act on, so the notice names the act and
+      // the run is what refuses until the owner has taken it.
+      const recipe = workflowRecipe(workflow);
+      const collapsed = recipe === null ? null : predictSameProviderReview(config, routeOverrides, recipe);
+      if (collapsed !== null && config.routing.review !== "same-provider-degraded") {
+        out(
+          `Review independence: ${collapsed.reviewPhaseId} and ${collapsed.workerPhaseId} both resolve to ` +
+            `${collapsed.provider}, so this attempt buys a review from the provider that wrote the candidate.`,
+        );
+        out(`The run refuses that until the owner allows it: awsf degrade-review ${taskId} --reason "<why>"`);
+      }
       out(result.status.nextAction);
+      return 0;
+    }
+
+    if (command === "relate") {
+      // Deliberately NOT a `case` arm taking an owner terminal. `awsf relate`
+      // declares a relationship a driving session may already declare at
+      // `awsf new --continues`, so giving it a terminal would invent a seventh
+      // owner act out of an authority the session already holds.
+      const continues = parsed.flags.continues ?? "";
+      const reason = parsed.flags["reason"] ?? "";
+      if (continues.trim().length === 0 || reason.trim().length === 0) {
+        throw new Error('usage: awsf relate <task> --continues <prior task> --reason "<why this continues it>"');
+      }
+      const related = await relateCommand({
+        stateRoot, project, taskId, continues, reason,
+        projectRelation: projection.projectRelation,
+      });
+      out(`${project}/${taskId} continues ${project}/${related.continuesTask}; the declaration and your reason are journalled.`);
+      out(`Recorded on the task, not on an attempt, so it applies to all ${related.attempts} attempt(s) and reopened none of them.`);
       return 0;
     }
 
@@ -520,6 +601,25 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         out(result.status.nextAction);
         return 0;
       }
+      case "degrade-review": {
+        const reason = parsed.flags["reason"] ?? "";
+        if (reason.trim().length === 0) {
+          throw new Error('usage: awsf degrade-review <task> --reason "<why this attempt is worth a less independent review>"');
+        }
+        const result = await degradeReviewCommand({
+          attemptDir: located.attemptDir,
+          reason,
+          terminal: options.terminal ?? processOwnerTerminal(),
+          projectRecord: projection.project,
+        });
+        if (!result.confirmed) {
+          out(`Degradation declined; ${taskId} still requires an opposite-provider review and nothing was recorded.`);
+          return 1;
+        }
+        out(`${taskId} may now buy a same-provider review; the grant and your reason are journalled.`);
+        out(result.status.nextAction);
+        return 0;
+      }
       case "journey": {
         const journeyId = parsed.flags["journey"] ?? "";
         const observedSha = parsed.flags["sha"] ?? "";
@@ -590,6 +690,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
             stateRoot,
             targetTaskId,
             request: parsed.flags.request ?? "",
+            ...(parsed.flags.group === undefined ? {} : { groupId: parsed.flags.group }),
             worktreeRoot: resolve(parsed.flags["worktree-root"] ?? env.AWSF_WORKTREE_ROOT ?? defaultWorktreeRoot(stateRoot)),
             terminal: adoptionTerminal(options.terminal),
             config,
@@ -612,9 +713,16 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
           configSnapshotJson: toConfigSnapshotJson(config),
           callCeilings: callCeilingsOf(config.risk.call_ceiling),
           allowance: config.risk.correction_allowance,
+          ...(parsed.flags.group === undefined ? {} : { groupId: parsed.flags.group }),
           projectRecord: projection.project,
         });
         out(`Created attempt ${result.status.attempt} in DRAFT with ${result.status.budget.callsSpent} spent call(s) carried.`);
+        out(result.status.groupId === null
+          ? "Group: none — a retry inherits no group; pass --group to record the driving session minting this attempt."
+          : `Group: ${result.status.groupId} — recorded from this invocation, not carried from the prior attempt.`);
+        if (result.status.planRef !== null) {
+          out(`Plan: ${result.status.planRef} — carried from attempt ${result.status.attempt - 1}; a retry is more work on the same plan.`);
+        }
         out(result.status.nextAction);
         return 0;
       }
@@ -625,6 +733,11 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       projection.close();
     }
   } catch (error) {
+    if (error instanceof PlanRefUnknown && error.candidates.length > 0) {
+      err(`${error.name}: ${error.message}`);
+      err(`plan candidates: ${error.candidates.join(", ")}`);
+      return 1;
+    }
     err(error instanceof Error ? `${error.name}: ${error.message}` : String(error));
     return 1;
   }

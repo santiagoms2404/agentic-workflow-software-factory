@@ -115,7 +115,7 @@ EOF
 # Checked first: an owner act reached through Bash is the more consequential of
 # the two, and Bash is never delegation-shaped, so the order costs nothing.
 if [ -n "${cmd:-}" ]; then
-  for verb in land cancel rework review journey raise publish resume; do
+  for verb in land cancel rework review degrade-review journey raise publish resume; do
     case " $cmd " in
       *"awsf $verb"*)
         deny "\`awsf $verb\` is an owner act and is denied in a driving session." \

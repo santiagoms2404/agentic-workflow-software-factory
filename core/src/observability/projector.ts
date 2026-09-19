@@ -9,6 +9,7 @@ import type { NormalizedEvent } from "../contracts/normalized-events.ts";
 import { isPersistableKind } from "../contracts/normalized-events.ts";
 import type { DatabaseSync } from "./sqlite.ts";
 import type { AttemptEvidence, RecordedAgentPurpose } from "./attempt-evidence.ts";
+import type { RouteSelectionProvenance } from "../contracts/route-selection.ts";
 import {
   scrubCredentialString,
   scrubCredentials,
@@ -50,6 +51,10 @@ export interface SessionInit {
   projectSlug: string;
   taskId: string;
   continuesTask: string | null;
+  /** The driving session this run came out of, or NULL when none was recorded. */
+  groupId: string | null;
+  /** The registered plan this run belongs to, or NULL when none was named. */
+  planRef: string | null;
   attempt: number;
   workflowId: string;
   riskTier: 0 | 1 | 2;
@@ -188,17 +193,53 @@ export function projectAttemptStatus(
   }
 }
 
+/**
+ * Projects one `awsf relate` declaration onto every session of that task.
+ *
+ * Task-scoped, so every attempt of the task carries the edge: the declaration
+ * is about the task, and a projection that set it on the newest attempt alone
+ * would make the same task answer "what do you continue" two different ways
+ * depending on which run you opened.
+ *
+ * Separate from `projectAttemptStatus` because it has no attempt journal behind
+ * it. `relate` writes no attempt record — that is the whole point of the
+ * task-scoped store — so there is no `source_seq` to advance and no cursor to
+ * move. The notice row carries the reason, which the column cannot.
+ */
+export function projectTaskRelation(
+  db: DatabaseSync,
+  relation: { project: string; taskId: string; continuesTask: string; reason: string; at: string },
+): void {
+  const taskId = scrubCredentialString(relation.taskId);
+  const project = scrubCredentialString(relation.project);
+  db.prepare("UPDATE sessions SET continues_task = ? WHERE project_slug = ? AND task_id = ?")
+    .run(scrubCredentialString(relation.continuesTask), project, taskId);
+  const sessions = db.prepare("SELECT session_id FROM sessions WHERE project_slug = ? AND task_id = ?")
+    .all(project, taskId) as unknown as Array<{ session_id: string }>;
+  for (const row of sessions) {
+    db.prepare(`INSERT OR IGNORE INTO events
+      (event_id, session_id, phase_id, first_source_seq, last_source_seq, type, name,
+       payload_json, started_at) VALUES (?, ?, NULL, 1, 1, 'task_relation', 'task continuation declared', ?, ?)`)
+      .run(`${row.session_id}:task-relation:${relation.at}`, row.session_id,
+        stringifyRedacted({ taskId, continuesTask: relation.continuesTask, reason: relation.reason }), relation.at);
+  }
+}
+
 export function createSession(db: DatabaseSync, init: SessionInit): void {
   db.prepare(
     `INSERT OR IGNORE INTO sessions
-       (session_id, project_slug, task_id, continues_task, attempt, workflow_id, risk_tier, is_protected,
+       (session_id, project_slug, task_id, continues_task, group_id, plan_ref, attempt, workflow_id, risk_tier, is_protected,
         lifecycle_state, request_text, call_ceiling, started_at, updated_at, config_snapshot_json, journal_path)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', ?, ?, ?, ?, ?, ?)`,
   ).run(
     init.sessionId,
     scrubCredentialString(init.projectSlug),
     scrubCredentialString(init.taskId),
     init.continuesTask === null ? null : scrubCredentialString(init.continuesTask),
+    // Written once, at session creation, because that is when it is decided.
+    // Nothing later moves a run between groups.
+    init.groupId === null ? null : scrubCredentialString(init.groupId),
+    init.planRef === null ? null : scrubCredentialString(init.planRef),
     init.attempt,
     scrubCredentialString(init.workflowId),
     init.riskTier,
@@ -445,7 +486,7 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
           evidence.outputPath === null ? null : scrubCredentialString(evidence.outputPath),
           evidence.startedAt, evidence.endedAt);
       return;
-    case "agent-start":
+    case "agent-start": {
       if (evidence.persistence !== undefined) {
         db.prepare(`INSERT OR IGNORE INTO events
           (event_id, session_id, phase_id, first_source_seq, last_source_seq, type, name,
@@ -467,6 +508,25 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
         .run(sessionId, scrubCredentialString(evidence.agent), scrubCredentialString(evidence.adapterId),
           scrubCredentialString(evidence.provider), evidence.color, scrubCredentialString(evidence.requestedModel),
           evidence.sandboxBadge, evidence.sandboxMechanism, evidence.at, evidence.at);
+      // Route provenance is stored in the existing generic event surface. No
+      // schema migration is needed, and every process attempt keeps its own
+      // requested/effective record rather than being collapsed by agent name.
+      const route = evidence.route;
+      if (route !== undefined) {
+        db.prepare(`INSERT OR IGNORE INTO events
+          (event_id, session_id, phase_id, first_source_seq, last_source_seq, type, name,
+           payload_json, started_at)
+          VALUES (?, ?, ?, ?, ?, 'route_resolution', ?, ?, ?)`).run(
+          `${sessionId}:route:${sourceSeq}`,
+          sessionId,
+          evidence.phaseId,
+          sourceSeq,
+          sourceSeq,
+          route.phaseId,
+          stringifyRedacted(route),
+          evidence.at,
+        );
+      }
       // The worker columns belong to the phase the review is inverted against.
       // A review call reaching them would overwrite the very fact the inversion
       // is proved from; so would a second and a third *worker*, which is what
@@ -480,6 +540,7 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
             scrubCredentialString(evidence.requestedModel), sessionId);
       }
       return;
+    }
     case "agent": {
       const usage = evidence.usage;
       const total = totalTokens(usage);
@@ -529,6 +590,30 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
           add(current.reasoning_tokens, usage.reasoningTokens), add(current.total_tokens, total),
           usage.reasoningRelation, usageAuthority, add(current.estimated_cost_usd, evidence.costUsd),
           evidence.costAuthority, mixedCost ? 1 : 0, sessionId);
+      const pendingRoute = db.prepare(`SELECT event_id, payload_json FROM events
+          WHERE session_id=? AND phase_id=? AND type='route_resolution'
+            AND json_extract(payload_json, '$.observed') IS NULL
+          ORDER BY event_row DESC LIMIT 1`).get(sessionId, evidence.phaseId) as
+        | { event_id: string; payload_json: string }
+        | undefined;
+      if (pendingRoute !== undefined) {
+        const route = JSON.parse(pendingRoute.payload_json) as RouteSelectionProvenance;
+        db.prepare("UPDATE events SET payload_json=?, last_source_seq=?, ended_at=? WHERE event_id=?").run(
+          stringifyRedacted({
+            ...route,
+            observed: {
+              adapterKind: route.effective.adapterKind,
+              provider: evidence.provider,
+              requestedModel: route.effective.model,
+              resolvedModel: evidence.resolvedModel,
+              modelProvenance: evidence.modelProvenance,
+            },
+          }),
+          sourceSeq,
+          evidence.at,
+          pendingRoute.event_id,
+        );
+      }
       if (evidence.purpose === "review") {
         db.prepare(`UPDATE sessions SET review_provider=? WHERE session_id=?`).run(evidence.provider, sessionId);
       } else {

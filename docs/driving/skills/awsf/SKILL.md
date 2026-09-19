@@ -32,7 +32,15 @@ Status, watching, the dashboard, and journal reads are **read-only**:
 just awsf status TASK
 just awsf watch TASK
 just awsf dash
+just awsf routes list
 ```
+
+`routes list` is the route vocabulary: the declared adapters with the provider
+each one reports, the effort levels beside what each adapter actually sends for
+them, every agent phase id a route may name, and the review rule. It starts no
+process and reserves no call, so read it when routing comes up rather than
+carrying a model list in the primed context — a list in context is stale from
+the moment the session opens, and this one is not.
 
 Rebuilding the projection is **not** read-only, and must never be described as
 such. It is **non-destructive and idempotent**: it builds a fresh database
@@ -45,7 +53,7 @@ just awsf db rebuild
 
 ## What only the owner may do
 
-`journey`, `land`, `cancel`, `rework`, `review`, `raise`, `publish` and `resume` are owner acts.
+`journey`, `land`, `cancel`, `rework`, `review`, `degrade-review`, `raise`, `publish` and `resume` are owner acts.
 Prepare them and explain them; never perform one, and never recommend
 performing one without the evidence its edge requires. Landing is authorised
 by the owner at a terminal — the terminal check is a shape test, not the
@@ -79,8 +87,9 @@ one question is how a session arrives with a summary instead of an answer.
 | write the request text, or sharpen one the owner gave you | `cookbooks/how_to_prompt_for_the_owner.md` |
 | decide the workflow and the tier | `cookbooks/choose_the_workflow_and_tier.md` |
 | launch a run, watch it, or work out whether it is stuck | `cookbooks/run_and_observe.md` |
+| the owner names a model, an effort or a provider for a phase | `cookbooks/select_a_route.md` |
 | an attempt is blocked or waiting, and something has to be decided | `cookbooks/read_a_blocked_attempt.md` |
-| the owner is weighing `journey`, `land`, `cancel`, `rework`, `review`, `raise`, `publish` or `resume` | `cookbooks/owner_acts.md` |
+| the owner is weighing `journey`, `land`, `cancel`, `rework`, `review`, `degrade-review`, `raise`, `publish` or `resume` | `cookbooks/owner_acts.md` |
 | where does a journal, envelope, gate row, process record or raw capture live | `references/evidence_map.md` |
 | which source owns a state, an edge, a guard, a ceiling or a recipe | `references/lifecycle.md` |
 | something behaved surprisingly, or a refusal looks like a bug | `references/gotchas.md` |

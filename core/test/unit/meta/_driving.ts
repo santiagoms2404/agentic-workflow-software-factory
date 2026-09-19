@@ -2,8 +2,14 @@ import { join } from "node:path";
 import { repoRoot, walkFiles } from "./_walk.ts";
 
 export const NPM_RUN = /\bnpm run ([a-z][\w:-]*)\b/g;
-/** `db rebuild` is the one two-word command; the alternation cannot match a hyphen. */
-export const AWSF_CLI = /(?:^|\s)awsf (db rebuild|[a-z]+)\b/g;
+/**
+ * `db rebuild` is the one two-word command, so it is matched before the general
+ * form. The general form accepts an interior hyphen because the command table
+ * has one (`degrade-review`); without it, a fence naming that command would
+ * read as the command `degrade`, which does not exist, and the reconciliation
+ * would report a defect in the document rather than in this pattern.
+ */
+export const AWSF_CLI = /(?:^|\s)awsf (db rebuild|[a-z]+(?:-[a-z]+)*)\b/g;
 export const JUST_TARGET = /(?:^|\s)just ([a-z][\w-]*)\b/g;
 
 function normalizeAwsfInvocation(text: string): string {

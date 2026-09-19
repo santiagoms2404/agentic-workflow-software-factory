@@ -11,6 +11,7 @@ import {
   type AwsfConfig,
 } from "./schema.ts";
 import { MAX_CALL_CEILING, MIN_CALL_CEILING } from "../state/tiers.ts";
+import { AGENT_PHASE_IDS } from "./workflow-ids.ts";
 import { assertNoAbsolutePaths, scanStrings } from "./machine-path.ts";
 
 // Every rejection this loader can throw. Kept as one closed class hierarchy
@@ -90,6 +91,15 @@ export class ConfigUnknownProtectedOperationError extends ConfigError {
   constructor(operation: string) {
     super("E_CONFIG_UNKNOWN_PROTECTED_OPERATION", `unknown protected operation: "${operation}"`);
     this.name = "ConfigUnknownProtectedOperationError";
+  }
+}
+
+export class ConfigInvalidPhaseRouteError extends ConfigError {
+  readonly phaseId: string;
+  constructor(phaseId: string, detail: string) {
+    super("E_CONFIG_INVALID_PHASE_ROUTE", `routing.phase_routes.${phaseId} is invalid: ${detail}`);
+    this.name = "ConfigInvalidPhaseRouteError";
+    this.phaseId = phaseId;
   }
 }
 
@@ -189,6 +199,37 @@ function assertKnownReferences(config: AwsfConfig): void {
   for (const agent of config.agents) {
     if (!declaredAdapterIds.has(agent.harness.adapter)) {
       throw new ConfigUnknownAdapterReferenceError(`agents["${agent.name}"].harness.adapter`, agent.harness.adapter);
+    }
+  }
+
+  for (const [phaseId, route] of Object.entries(config.routing.phase_routes ?? {})) {
+    if (!(AGENT_PHASE_IDS as readonly string[]).includes(phaseId)) {
+      throw new ConfigInvalidPhaseRouteError(
+        phaseId,
+        `unknown agent phase; known phase ids: ${AGENT_PHASE_IDS.join(", ")}`,
+      );
+    }
+    const selectsAdapter = route.adapter !== undefined;
+    const selectsProvider = route.provider !== undefined;
+    if (selectsAdapter !== selectsProvider) {
+      throw new ConfigInvalidPhaseRouteError(
+        phaseId,
+        "adapter and provider must be supplied together; a half-explicit provider route is not executable evidence",
+      );
+    }
+    if (route.adapter !== undefined && !declaredAdapterIds.has(route.adapter)) {
+      throw new ConfigUnknownAdapterReferenceError(`routing.phase_routes.${phaseId}.adapter`, route.adapter);
+    }
+    if (
+      route.evaluation !== undefined &&
+      route.adapter === undefined &&
+      route.model === undefined &&
+      route.effort === undefined
+    ) {
+      throw new ConfigInvalidPhaseRouteError(
+        phaseId,
+        "evaluation metadata must qualify a selected adapter/provider, model, or effort rather than create a global score",
+      );
     }
   }
 

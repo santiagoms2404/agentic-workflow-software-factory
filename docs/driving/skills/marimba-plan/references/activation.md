@@ -31,12 +31,14 @@ workflow, with the synchronization fence unchanged.
 
 The group journal is the foundation shared with the future group timeline UI.
 This slice supplies exact inputs, append stages, units, amendments, closure and
-explicit unit-revision/attempt bindings. It does not finish all of Task 3:
-creation-time `awsf new --group` plumbing, the sessions `group_id` projection/public
-query, and continuation relationship backfill still require implementation.
+explicit unit-revision/attempt bindings. Task 3 has since added the execution
+half: `awsf new --group` and `awsf retry --group` record the driving session on
+the attempt, the projector writes `sessions.group_id`, and that column is in the
+public query. Group membership is never backfilled onto a run that predates it,
+because no group existed when it ran.
 Group membership and continuation are different relationships. Do not infer either
-from timing, task order or proximity. Cross-group continuation is not implemented
-by copying an attempt into another group.
+from timing, task order or proximity. Cross-group continuation is expressed by
+minting the next attempt in the next group, never by copying an attempt into one.
 
 Per-phase model/effort choice, the harness, canvas and visual editor are excluded.
 The skill does not alter mandatory priming, execution gates or accounting. A future

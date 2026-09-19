@@ -34,7 +34,7 @@ import { runProductionCommand } from "../../src/cli/commands/production-run.ts";
 import { journeyCommand, JourneyEvidenceRejected, JourneyNotApplicable } from "../../src/cli/commands/journey.ts";
 import { landCommand } from "../../src/cli/commands/land.ts";
 import { nextRevision, persistAttempt, readAttempt } from "../../src/cli/commands/attempt.ts";
-import { compiledPromptEvents, gatesForSession, getSession } from "../../src/observability/queries.ts";
+import { compiledPromptEvents, gatesForSession, getSession, routesForSession } from "../../src/observability/queries.ts";
 import { openDatabase } from "../../src/observability/sqlite.ts";
 import type { OwnerTerminal } from "../../src/cli/tty.ts";
 
@@ -133,7 +133,7 @@ class ScriptedT2Adapter implements HarnessAdapter {
     registration: BrokerProcessRegistration,
     signal: Parameters<TransportBroker["startProcess"]>[2],
   ): AsyncIterable<NormalizedEvent> {
-    const reviewing = this.id === "claude";
+    const reviewing = registration.role === "reviewer";
     this.#log.providers.push(this.#provider());
     this.#log.prompts.push(request.prompt);
     await broker.startProcess(registration, this.buildSpec(request), signal);
@@ -492,6 +492,29 @@ test("the full diff is retained host-private at 0600 and is never handed to the 
   }
 });
 
+test("an explicit adapter/provider mismatch is refused before any call is reserved or spent", async () => {
+  const world = await fixture(2, (config) => ({
+    ...config,
+    routing: {
+      ...config.routing,
+      phase_routes: {
+        builder: { adapter: "claude", provider: "openai-codex", model: "claude:opus", effort: "high" },
+      },
+    },
+  }));
+  try {
+    const { status, log } = await runT2(world, { kind: "accept" });
+    assert.equal(status.lifecycleState, "BLOCKED");
+    assert.match(status.blocker?.detail ?? "", /explicit provider.*does not match adapter provider/);
+    assert.equal(status.budget.callsSpent, 0);
+    assert.equal(status.budget.callsReserved, 0);
+    assert.deepEqual(log.launches, []);
+  } finally {
+    world.projection.close();
+    rmSync(world.root, { recursive: true, force: true });
+  }
+});
+
 test("a reviewer configured on the worker's own provider blocks before any call is spent", async () => {
   // The reviewer is moved onto the builder's adapter, which is exactly the
   // "soften a routing failure into a same-provider review" D10 forbids.
@@ -509,6 +532,44 @@ test("a reviewer configured on the worker's own provider blocks before any call 
     assert.equal(status.budget.callsSpent, 0, "a review that cannot happen is never paid for");
     assert.equal(status.budget.callsReserved, 0);
     assert.deepEqual(log.launches, [], "nothing launched");
+  } finally {
+    world.projection.close();
+    rmSync(world.root, { recursive: true, force: true });
+  }
+});
+
+test("explicit same-provider degraded review runs on the builder provider and records the degradation", async () => {
+  const world = await fixture(2, (config) => ({
+    ...config,
+    routing: {
+      ...config.routing,
+      review: "same-provider-degraded",
+      phase_routes: {
+        ...config.routing.phase_routes,
+        reviewer: {
+          adapter: "codex",
+          provider: "openai-codex",
+          model: "codex:gpt-5.6-sol",
+          effort: "high",
+        },
+      },
+    },
+  }));
+  try {
+    const { status, log } = await withLiveCandidate(world, { kind: "accept" })();
+    assert.equal(status.lifecycleState, "AWAITING_OWNER", status.blocker?.detail);
+    assert.deepEqual(log.providers, ["openai-codex", "openai-codex"]);
+    assert.match(status.lastActivity, /DEGRADED same-provider review/);
+    const db = openDatabase(join(world.stateRoot, "awsf.db"), { readonly: true });
+    try {
+      const routes = routesForSession(db, status.sessionId);
+      const reviewer = routes.find((row) => row.route.phaseId === "reviewer");
+      assert.equal(reviewer?.route.review.mode, "same-provider-degraded");
+      assert.equal(reviewer?.route.review.degraded, true);
+      assert.equal(reviewer?.route.requested.sources.adapter, "phase-override");
+      assert.equal(reviewer?.route.effective.provider, "openai-codex");
+      assert.equal(reviewer?.route.observed?.provider, "openai-codex");
+    } finally { db.close(); }
   } finally {
     world.projection.close();
     rmSync(world.root, { recursive: true, force: true });

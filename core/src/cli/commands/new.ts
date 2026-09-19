@@ -5,7 +5,10 @@ import { sha256 } from "../../contracts/owner-amendment.ts";
 import { attemptDir as attemptDirectory } from "../../persistence/platform-paths.ts";
 import { correctionAllowance } from "../../state/task-machine.ts";
 import { assertCeiling, ceilingFor, type CallCeilings, type Tier } from "../../state/tiers.ts";
+import type { PhaseRouteOverrides } from "../../workflow/route-flags.ts";
 import {
+  assertGroupId,
+  assertPlanRef,
   latestAttemptNumber,
   nextActionFor,
   persistAttempt,
@@ -21,11 +24,29 @@ export interface NewCommandOptions {
   readonly continuesTask?: string;
   /** Host-authorized seed, persisted atomically with the first target event. */
   readonly seed?: CandidateSeed;
+  /**
+   * The driving session that minted this task. Absent means NULL: no group
+   * existed for it, which is the honest record and never a guess.
+   */
+  readonly groupId?: string;
+  /**
+   * The registered plan this task belongs to, already resolved against the
+   * catalog by the caller. Absent means NULL: no plan was named, and none is
+   * inferred from the task id's shape or from the request's words.
+   */
+  readonly planRef?: string;
   readonly repository: string;
   readonly request: string;
   readonly workflow: string;
   readonly tier: Tier;
   readonly configSnapshotJson?: string;
+  /**
+   * The attempt's own `--route` selections. Attempt state, never folded into
+   * `configSnapshotJson`: the snapshot must keep equalling the file on disk or
+   * `awsf rework` and `awsf review` refuse this attempt for a difference the
+   * owner deliberately introduced.
+   */
+  readonly routeOverrides?: PhaseRouteOverrides;
   /**
    * The effective configuration's `risk.call_ceiling`. Omitted, the tier's
    * documented default applies — the same number the hardcoded constant gave
@@ -41,6 +62,8 @@ export interface NewCommandOptions {
 /** Mint the task's first attempt at DRAFT. Later attempts belong only to retry. */
 export async function newCommand(options: NewCommandOptions): Promise<{ attemptDir: string; status: AttemptStatus }> {
   const root = taskRoot(options.stateRoot, options.project, options.taskId);
+  if (options.groupId !== undefined) assertGroupId(options.groupId);
+  if (options.planRef !== undefined) assertPlanRef(options.planRef);
   if (options.continuesTask === options.taskId) {
     throw new Error(`${options.project}/${options.taskId} cannot continue itself`);
   }
@@ -72,6 +95,8 @@ export async function newCommand(options: NewCommandOptions): Promise<{ attemptD
     project: options.project,
     taskId: options.taskId,
     continuesTask: options.continuesTask ?? null,
+    groupId: options.groupId ?? null,
+    planRef: options.planRef ?? null,
     attempt,
     repository: resolve(options.repository),
     worktree: null,
@@ -95,6 +120,8 @@ export async function newCommand(options: NewCommandOptions): Promise<{ attemptD
       ceiling,
     },
     ceilingGrants: [],
+    routeOverrides: options.routeOverrides ?? {},
+    reviewDegradation: null,
     model: null,
     lastActivityAt: now,
     lastActivity: "attempt recorded; no worktree or provider exists yet",

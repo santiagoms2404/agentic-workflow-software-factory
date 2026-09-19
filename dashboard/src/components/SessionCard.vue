@@ -94,6 +94,11 @@ async function archiveSession(): Promise<void> {
   <a class="session-card" :class="stateTone(session.state)" :href="`#/sessions/${session.sessionId}`">
     <span class="card-id">{{ shortSessionId(session.sessionId) }}</span>
     <span class="card-workflow" :title="session.workflowId">{{ session.workflowId }}</span>
+    <!-- The plan this run named, shown even when the catalog no longer lists
+         it. The plan filter buckets such a run as "no registered plan", which
+         is true of the catalog and would otherwise leave the name it actually
+         recorded invisible everywhere on the screen. -->
+    <span v-if="session.planRef" class="card-plan" :title="`plan ${session.planRef}`">{{ session.planRef }}</span>
     <span class="card-request" :title="session.request">{{ session.request }}</span>
 
     <div v-if="lanes.length" class="mini-timeline" aria-label="Bounded real activity timeline">

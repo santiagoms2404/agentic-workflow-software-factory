@@ -463,6 +463,7 @@ async function runReviewCommand(options: ReviewCommandOptions): Promise<ReviewCo
   const route: ReviewRoute = await resolveReviewRoute({
     config: options.config, configPath: options.configPath, infra, recipe,
     reviewPhaseId: phases.review, workerProvider: recorded.worker?.provider, priorReview: recorded.review,
+    routeOverrides: status.routeOverrides, degraded: status.reviewDegradation !== null,
   });
 
   const evidence = {
@@ -490,7 +491,10 @@ async function runReviewCommand(options: ReviewCommandOptions): Promise<ReviewCo
   options.terminal.write(`Superseded review: ${superseded.phaseKey} returned ${superseded.output.verdict} with ${String(superseded.output.findings.length)} finding(s)`);
   options.terminal.write(`Evidence defect: ${superseded.evidenceDefect} — this is what makes that review replaceable, not your reason`);
   options.terminal.write(`Reason on record: ${reason}`);
-  options.terminal.write(`Route: ${route.adapterId} / ${route.model.provider} / ${route.agent.model} (cold, opposite the ${recorded.worker!.provider} worker)`);
+  const reviewRouteLabel = options.config.routing.review === "same-provider-degraded"
+    ? `cold, EXPLICIT DEGRADED SAME-PROVIDER mode with the ${recorded.worker!.provider} worker; reduced independence`
+    : `cold, opposite the ${recorded.worker!.provider} worker`;
+  options.terminal.write(`Route: ${route.adapterId} / ${route.model.provider} / ${route.agent.model} (${reviewRouteLabel})`);
   options.terminal.write(`Calls: ${status.budget.callsSpent}/${ceilingFor(status.tier, status.budget.ceiling)} spent — ${remainingCalls} remain; this spends one and holds one for its single permitted retry`);
   options.terminal.write(`Owner re-entries: ${status.budget.ownerReentries}/${status.budget.allowance.ownerReentries} — this spends the last one`);
   options.terminal.write(`The attempt leaves AWAITING_OWNER, where it could land, for REVIEWING, where it cannot.`);

@@ -50,6 +50,8 @@ import { AdapterError } from "../../adapters/interface.ts";
 import { assertPrivateSystemPrompt } from "../../adapters/system-prompt-file.ts";
 import type { AdapterEntry, AgentDefinition, AwsfConfig } from "../../config/schema.ts";
 import { BUILD_OUTPUT_SCHEMA_ID } from "../../contracts/build-output.ts";
+import type { RouteSelectionProvenance } from "../../contracts/route-selection.ts";
+import type { PhaseRouteOverrides } from "../../workflow/route-flags.ts";
 import type { EnvelopeBase } from "../../contracts/envelope-base.ts";
 import {
   UNREPORTED_TOKEN_USAGE,
@@ -83,6 +85,12 @@ import type { EdgeId, TaskState } from "../../state/task-machine.ts";
 import { compilePhase, type WorkflowRecipe } from "../../workflow/compiler.ts";
 import { composePromptBundle, type PromptBundle } from "../../workflow/prompt-composition.ts";
 import type { CompiledAgentPhase } from "../../workflow/phase.ts";
+import {
+  effectivePhaseRoute,
+  requestedPhaseRoute,
+  retainedRolePolicy,
+  routeSelectionProvenance,
+} from "../../workflow/phase-routing.ts";
 import {
   ReviewEvidenceUnfit,
   candidatePathsBetween,
@@ -428,6 +436,7 @@ export interface ReviewRoute extends PromptBundle {
   readonly adapterId: string;
   readonly adapter: HarnessAdapter;
   readonly model: ModelInfo;
+  readonly provenance: RouteSelectionProvenance;
 }
 
 export interface ResolveReviewRouteOptions {
@@ -440,6 +449,24 @@ export interface ResolveReviewRouteOptions {
   readonly workerProvider: string | undefined;
   /** The route a review already on record ran on, when there is one. */
   readonly priorReview?: RecordedRoute | null;
+  /**
+   * Whether the reviewer route must be available right now. A caller that is
+   * about to launch the review says yes. A caller validating the SELECTION
+   * ahead of an unrelated spend says no: availability at that moment predicts
+   * nothing about availability when the review actually launches minutes
+   * later, and refusing on it forfeits work for an outage the review is
+   * entitled to retry through. Same reasoning the worker route below already
+   * gets. Defaults to yes.
+   */
+  readonly requireAvailable?: boolean;
+  /** The attempt's own `--route` selections, which outrank `routing.phase_routes`. */
+  readonly routeOverrides?: PhaseRouteOverrides;
+  /**
+   * The owner's `awsf degrade-review` grant for THIS attempt. It can only ever
+   * relax the inversion, never tighten it, and it is read from attempt state —
+   * the host has no path to set it from a quota or transport failure.
+   */
+  readonly degraded?: boolean;
 }
 
 /**
@@ -454,8 +481,11 @@ export interface ResolveReviewRouteOptions {
 export async function resolveReviewRoute(options: ResolveReviewRouteOptions): Promise<ReviewRoute> {
   const { config, infra, recipe, reviewPhaseId } = options;
   const reviewAgentName = recipe.phases.find((phase) => phase.id === reviewPhaseId)!.owner;
-  const agent = config.agents.find((candidate) => candidate.name === reviewAgentName);
-  if (agent === undefined) throw new ProductionRouteUnavailable(reviewAgentName, "no explicit agent definition exists");
+  const role = config.agents.find((candidate) => candidate.name === reviewAgentName);
+  if (role === undefined) throw new ProductionRouteUnavailable(reviewAgentName, "no explicit agent definition exists");
+  const selection = requestedPhaseRoute(config, reviewPhaseId, role, options.routeOverrides);
+  const agent = selection.agent;
+  if (!retainedRolePolicy(selection.policy, agent)) throw new ReviewRouteMismatch("phase routing changed the reviewer's role policy");
   if (agent.writes.length !== 0) throw new ReviewRouteMismatch("a reviewer that can write is not a reviewer; `writes` must stay empty");
   // A resumable reviewer is argued with rather than briefed: a prior verdict
   // sits in its context and the new turn asks it to revise. A review bought
@@ -468,10 +498,18 @@ export async function resolveReviewRoute(options: ResolveReviewRouteOptions): Pr
   if (entry === undefined || entry.enabled === false) throw new ProductionRouteUnavailable(agent.harness.adapter, "route is disabled or undeclared");
   const adapter = infra.adapterFor(entry, agent.harness.adapter, config);
   if (adapter === null) throw new ProductionRouteUnavailable(agent.harness.adapter, "adapter kind has no production binding");
-  const available = await adapter.isAvailable();
-  if (available.status !== "available") throw new ProductionRouteUnavailable(agent.harness.adapter, available.detail ?? available.code ?? "blocked");
+  if (options.requireAvailable !== false) {
+    const available = await adapter.isAvailable();
+    if (available.status !== "available") throw new ProductionRouteUnavailable(agent.harness.adapter, available.detail ?? available.code ?? "blocked");
+  }
   const model = credentialSafeValue(await adapter.getModelInfo(agent.model), "configured reviewer route");
-  if (model.adapter !== adapter.id) throw new ReviewRouteMismatch(`adapter descriptor says ${model.adapter}, selected adapter is ${adapter.id}`);
+  const effective = effectivePhaseRoute(selection.requested, adapter.id, model);
+  const reviewMode = options.degraded === true ? "same-provider-degraded" : config.routing.review;
+  const provenance = routeSelectionProvenance({
+    requested: selection.requested,
+    effective,
+    reviewMode,
+  });
 
   // The pair is a property of the configured route surface. It is read from
   // what the adapters REPORT, never from the config's optional `provider`
@@ -479,27 +517,38 @@ export async function resolveReviewRoute(options: ResolveReviewRouteOptions): Pr
   const providers: string[] = [model.provider];
   for (const phase of recipe.phases) {
     if (phase.kind !== "agent" || phase.id === reviewPhaseId) continue;
-    const other = config.agents.find((candidate) => candidate.name === phase.owner);
-    if (other === undefined) throw new ProductionRouteUnavailable(phase.owner, "no explicit agent definition exists");
-    const otherEntry = config.adapters[other.harness.adapter];
-    if (otherEntry === undefined || otherEntry.enabled === false) throw new ProductionRouteUnavailable(other.harness.adapter, "route is disabled or undeclared");
-    const otherAdapter = infra.adapterFor(otherEntry, other.harness.adapter, config);
-    if (otherAdapter === null) throw new ProductionRouteUnavailable(other.harness.adapter, "adapter kind has no production binding");
+    const otherRole = config.agents.find((candidate) => candidate.name === phase.owner);
+    if (otherRole === undefined) throw new ProductionRouteUnavailable(phase.owner, "no explicit agent definition exists");
+    const other = requestedPhaseRoute(config, phase.id, otherRole, options.routeOverrides);
+    const otherEntry = config.adapters[other.agent.harness.adapter];
+    if (otherEntry === undefined || otherEntry.enabled === false) throw new ProductionRouteUnavailable(other.agent.harness.adapter, "route is disabled or undeclared");
+    const otherAdapter = infra.adapterFor(otherEntry, other.agent.harness.adapter, config);
+    if (otherAdapter === null) throw new ProductionRouteUnavailable(other.agent.harness.adapter, "adapter kind has no production binding");
     // Availability is deliberately NOT asked of the worker route. Nothing is
     // going to launch on it, and refusing a review because the builder's
     // provider is down would forfeit the candidate for an unrelated outage.
-    providers.push((await otherAdapter.getModelInfo(other.model)).provider);
+    const otherModel = await otherAdapter.getModelInfo(other.agent.model);
+    providers.push(effectivePhaseRoute(other.requested, otherAdapter.id, otherModel).provider);
   }
   const workerProvider = options.workerProvider;
   if (workerProvider === undefined) {
     throw new ReviewRecordMissing("no recorded worker call names the provider the inversion must exclude");
   }
-  const required = oppositeProvider(workerProvider, providerPairFrom(providers));
-  if (model.provider !== required) {
-    throw new InvalidReviewInversion(
-      `the worker ran on ${JSON.stringify(workerProvider)}, so the review must run on ${JSON.stringify(required)}; ` +
-        `the configured reviewer route resolves to ${JSON.stringify(model.provider)}`,
-    );
+  if (reviewMode === "same-provider-degraded") {
+    if (model.provider !== workerProvider) {
+      throw new InvalidReviewInversion(
+        `explicit same-provider-degraded mode requires reviewer and worker on ${JSON.stringify(workerProvider)}; ` +
+          `the configured reviewer route resolves to ${JSON.stringify(model.provider)}`,
+      );
+    }
+  } else {
+    const required = oppositeProvider(workerProvider, providerPairFrom(providers));
+    if (model.provider !== required) {
+      throw new InvalidReviewInversion(
+        `the worker ran on ${JSON.stringify(workerProvider)}, so the review must run on ${JSON.stringify(required)}; ` +
+          `the configured reviewer route resolves to ${JSON.stringify(model.provider)}`,
+      );
+    }
   }
   const priorReview = options.priorReview ?? null;
   if (priorReview !== null && (
@@ -519,6 +568,7 @@ export async function resolveReviewRoute(options: ResolveReviewRouteOptions): Pr
     adapterId: agent.harness.adapter,
     adapter,
     model,
+    provenance,
     ...prompts,
   };
 }
@@ -754,7 +804,9 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
     let phase: PhaseEvidenceRecord = {
       phaseId: phaseDb, ordinal: runOptions.ordinal + 1, key: phaseKey, name: phaseKey,
       kind: "agent", owner: route.agent.name,
-      description: `Audit exact candidate ${subject.candidateSha} on the opposite provider`,
+      description: config.routing.review === "same-provider-degraded"
+        ? `Audit exact candidate ${subject.candidateSha} in EXPLICIT DEGRADED SAME-PROVIDER mode (reduced independence)`
+        : `Audit exact candidate ${subject.candidateSha} on the opposite provider`,
       status: "QUEUED", correctionCount: 0, maxCorrections: 0, errorCode: null, errorMessage: null,
       startedAt: null, endedAt: null, createdAt,
     };
@@ -890,8 +942,9 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
           }, {
             type: "agent-start", phaseId: phaseDb, agent: route.agent.name, adapterId: route.adapterId,
             provider: route.model.provider, color: route.agent.color, requestedModel: route.agent.model,
-            sandboxBadge: launchGrant.badge, sandboxMechanism: launchGrant.mechanism, purpose: "review", at: launchAt,
+            sandboxBadge: launchGrant.badge, sandboxMechanism: launchGrant.mechanism, purpose: "review",
             persistence: phasePersistenceEvidence(route.agent, route.adapter, turnPreflight.continuityHandle, finalSpec, route.systemPrompt),
+            route: route.provenance, at: launchAt,
           });
           // The LAST host instruction before GO. The permission session is open
           // and the grant is built; this is the narrowest the window between
@@ -1041,7 +1094,10 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
 
     const output = await runMandatoryReview({
       workerProvider: options.workerProvider,
-      providers: providerPairFrom([options.workerProvider, route.model.provider]),
+      mode: config.routing.review,
+      ...(config.routing.review === "invert-provider"
+        ? { providers: providerPairFrom([options.workerProvider, route.model.provider]) }
+        : {}),
       isTransportFailure: (error) => {
         const transport = isReviewTransportFailure(error);
         if (transport) state.transportRetries += 1;

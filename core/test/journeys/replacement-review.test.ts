@@ -53,7 +53,7 @@ import { startCommand } from "../../src/cli/commands/start.ts";
 import type { BrokerOptions } from "../../src/execution/transport-broker.ts";
 import { CorrectionAllowanceExhausted, InteractiveOwnerRequired } from "../../src/state/errors.ts";
 import { InvalidReviewInversion } from "../../src/workflow/review-routing.ts";
-import { gatesForSession, getSession, transitionsForSession } from "../../src/observability/queries.ts";
+import { gatesForSession, getSession, routesForSession, transitionsForSession } from "../../src/observability/queries.ts";
 import { openDatabase } from "../../src/observability/sqlite.ts";
 import type { AttemptEvidence } from "../../src/observability/attempt-evidence.ts";
 import { callCeilingsOf } from "../../src/state/tiers.ts";
@@ -154,7 +154,7 @@ async function world(options: {
   evidenceGate?: "absent" | "passed" | "failed";
   configure?: (config: AwsfConfig) => AwsfConfig;
   /** Drift the route the SUPERSEDED review is recorded as having run on. */
-  recordedReviewRoute?: { adapterId?: string; requestedModel?: string };
+  recordedReviewRoute?: { adapterId?: string; provider?: string; requestedModel?: string };
 } = {}): Promise<World> {
   const root = mkdtempSync(join(tmpdir(), "awsf-replacement-review-"));
   const canonical = join(root, "canonical");
@@ -198,6 +198,14 @@ async function world(options: {
   const candidate = ownerCommit(prepared.worktree!, "feat: add generated source");
 
   const sessionId = prepared.sessionId;
+  const reviewerRole = config.agents.find((agent) => agent.name === "reviewer")!;
+  const reviewerOverride = config.routing.phase_routes?.reviewer;
+  const configuredReviewAdapter = reviewerOverride?.adapter ?? reviewerRole.harness.adapter;
+  const configuredReviewProvider = reviewerOverride?.provider ?? (configuredReviewAdapter === "codex" ? "openai-codex" : "anthropic");
+  const configuredReviewModel = reviewerOverride?.model ?? reviewerRole.model;
+  const recordedReviewAdapter = options.recordedReviewRoute?.adapterId ?? configuredReviewAdapter;
+  const recordedReviewProvider = options.recordedReviewRoute?.provider ?? configuredReviewProvider;
+  const recordedReviewModel = options.recordedReviewRoute?.requestedModel ?? configuredReviewModel;
   const world: World = {
     root, stateRoot, canonical, attemptDir: created.attemptDir, config, configPath, projection,
     candidate, sessionId, status: prepared,
@@ -248,9 +256,9 @@ async function world(options: {
   });
   await append(world, {
     type: "agent", phaseId: phaseId("reviewer"), agent: "reviewer",
-    adapterId: options.recordedReviewRoute?.adapterId ?? "claude", provider: "anthropic", color: null,
-    requestedModel: options.recordedReviewRoute?.requestedModel ?? "claude:opus",
-    resolvedModel: "claude:opus", modelProvenance: "route-attributed",
+    adapterId: recordedReviewAdapter, provider: recordedReviewProvider, color: null,
+    requestedModel: recordedReviewModel,
+    resolvedModel: recordedReviewModel, modelProvenance: "route-attributed",
     contextWindow: null, usageAuthority: "provider", usage: { inputTokens: 5, outputTokens: 5, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0, reasoningRelation: "included-in-output" },
     contextTokens: 10, costUsd: null, costAuthority: "unavailable", purpose: "review", at: AT,
   });
@@ -265,7 +273,7 @@ async function world(options: {
     });
   }
   await append(world, {
-    type: "review", phaseId: phaseId("reviewer"), adapterId: "claude", provider: "anthropic",
+    type: "review", phaseId: phaseId("reviewer"), adapterId: recordedReviewAdapter, provider: recordedReviewProvider,
     verdict: "accept", reviewedSha: candidate, findingCount: 0, at: AT,
   }, {
     lifecycleState: "AWAITING_OWNER", candidateSha: candidate,
@@ -397,7 +405,7 @@ class ScriptedReviewAdapter implements HarnessAdapter {
     };
     const runId = registration.runId;
     yield { kind: "run.started", seq: 1, runId, hostAt: AT, providerAt: null, adapter: this.id, requestedModel: request.model };
-    yield { kind: "model.resolved", seq: 2, runId, hostAt: AT, providerAt: null, adapter: this.id, provider: "anthropic", requestedModel: request.model, resolvedModel: `${request.model}-resolved`, provenance: "route-attributed" };
+    yield { kind: "model.resolved", seq: 2, runId, hostAt: AT, providerAt: null, adapter: this.id, provider: this.id === "claude" ? "anthropic" : "openai-codex", requestedModel: request.model, resolvedModel: `${request.model}-resolved`, provenance: "route-attributed" };
     const serialized = contractRetry && !correctedTurn
       ? JSON.stringify({ ...payload, findings: payload.findings.map((finding) => ({ ...finding, level: finding.severity })) })
       : JSON.stringify(payload);
@@ -517,6 +525,45 @@ test("a replacement review spends exactly one call, runs no builder, and returns
       assert.ok(fresh.some((gate) => gate.gate_id === "verdict_consistent" && gate.passed === 1));
       const original = gatesForSession(db, status.sessionId).filter((gate) => gate.phase_id.endsWith(":reviewer"));
       assert.equal(original.length, 0, "the superseded review's gate rows are untouched");
+    } finally { db.close(); }
+  } finally { await cleanup(fixture); }
+});
+
+test("an explicitly degraded replacement review stays on the worker provider and records reduced independence", async () => {
+  const fixture = await world({ configure: (config) => ({
+    ...config,
+    routing: {
+      ...config.routing,
+      review: "same-provider-degraded",
+      phase_routes: {
+        ...config.routing.phase_routes,
+        reviewer: {
+          adapter: "codex",
+          provider: "openai-codex",
+          model: "codex:gpt-5.6-sol",
+          effort: "high",
+        },
+      },
+    },
+  }) });
+  const launches: string[] = [];
+  const lines: string[] = [];
+  try {
+    const result = await run(fixture, "accept", { launches, lines });
+    assert.equal(result.status.lifecycleState, "AWAITING_OWNER", result.status.blocker?.detail);
+    assert.deepEqual(launches, ["codex"], "the replacement stays on the worker's provider without a substitute");
+    assert.match(lines.join("\n"), /EXPLICIT DEGRADED SAME-PROVIDER mode.*reduced independence/);
+
+    const db = openDatabase(join(fixture.stateRoot, "awsf.db"), { readonly: true });
+    try {
+      const session = getSession(db, result.status.sessionId);
+      assert.equal(session?.worker_provider, "openai-codex");
+      assert.equal(session?.review_provider, "openai-codex");
+      const replacement = routesForSession(db, result.status.sessionId)
+        .find((row) => row.phaseId.endsWith(":reviewer-re1"));
+      assert.equal(replacement?.route.review.mode, "same-provider-degraded");
+      assert.equal(replacement?.route.review.degraded, true);
+      assert.equal(replacement?.route.observed?.provider, "openai-codex");
     } finally { db.close(); }
   } finally { await cleanup(fixture); }
 });

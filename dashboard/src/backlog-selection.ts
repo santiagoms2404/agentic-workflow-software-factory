@@ -44,6 +44,23 @@ export function selectAllState(
   return count === visible.length ? "all" : "some";
 }
 
+/**
+ * What the backlog opens with.
+ *
+ * Arriving from a sessions-view plan card names one plan, and only that plan is
+ * selected: the context the reader was holding when they clicked survives the
+ * navigation. Arriving at the backlog directly selects every plan, which is
+ * what it has always done. A named plan the catalog does not list falls back to
+ * the default rather than opening an empty board with no way to tell why.
+ */
+export function initialPlanSelection(
+  plans: readonly BacklogPlan[],
+  requested: string | null | undefined,
+): readonly string[] {
+  const named = requested !== null && requested !== undefined && plans.some((plan) => plan.id === requested);
+  return named ? [requested] : plans.map((plan) => plan.id);
+}
+
 export function togglePlan(selected: readonly string[], planId: string): readonly string[] {
   return selected.includes(planId)
     ? selected.filter((id) => id !== planId)

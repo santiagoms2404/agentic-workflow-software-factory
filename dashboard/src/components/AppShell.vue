@@ -11,11 +11,13 @@ defineProps<{
   phaseName: string | null;
   settings: boolean;
   backlog: boolean;
+  groups: boolean;
+  canvas: boolean;
 }>();
 </script>
 <template>
   <div class="app-shell">
-    <TopNav :project="health?.project ?? 'AWSF'" :session-id="sessionId" :phase-name="phaseName" :settings="settings" :backlog="backlog">
+    <TopNav :project="health?.project ?? 'AWSF'" :session-id="sessionId" :phase-name="phaseName" :settings="settings" :backlog="backlog" :groups="groups" :canvas="canvas">
       <LiveIndicator :last-poll-at="lastPollAt" :poll-ms="pollMs" />
     </TopNav>
     <DegradedObservabilityBanner :degraded-sessions="health?.degradedSessions ?? 0" />

@@ -11,10 +11,11 @@ const EXPECTED = [
   "GET /api/v1/settings",
   "GET /api/v1/adapters",
   "GET /api/v1/tickets",
+  "GET /api/v1/groups",
   "POST /api/v1/sessions/:id/archive",
 ];
 
-test("the API has exactly seven reads and the single archive write", () => {
+test("every API route but the single archive write is a read", () => {
   const actual = API_ROUTE_TABLE.map((route) => `${route.method} ${route.path}`);
   assert.deepEqual(actual, EXPECTED);
   assert.equal(API_ROUTE_TABLE.filter((route) => route.method !== "GET").length, 1);

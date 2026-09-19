@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import type { BacklogTicket, TicketSourceResponse, TicketsResponse } from "../../shared/types.ts";
-import { togglePlan, visibleGroups as selectVisibleGroups, type PlanFilter } from "../backlog-selection.ts";
+import { initialPlanSelection, togglePlan, visibleGroups as selectVisibleGroups, type PlanFilter } from "../backlog-selection.ts";
 import BacklogBoard from "../components/BacklogBoard.vue";
 import BacklogMetricsRow from "../components/BacklogMetricsRow.vue";
 import PlanCardRow from "../components/PlanCardRow.vue";
 import TicketSourceOverlay from "../components/TicketSourceOverlay.vue";
 
-const props = defineProps<{ backlog: TicketsResponse }>();
+const props = defineProps<{ backlog: TicketsResponse; plan?: string | null }>();
 const selectedPlans = ref<readonly string[]>([]);
 const collapsedPlans = ref<readonly string[]>([]);
 const expandedColumns = ref<readonly string[]>([]);
@@ -19,10 +19,10 @@ const loadingSources = ref<readonly string[]>([]);
 const sourceErrors = ref<Readonly<Record<string, string>>>({});
 
 watch(
-  () => props.backlog.plans,
-  (plans) => {
+  () => [props.backlog.plans, props.plan] as const,
+  ([plans, requested]) => {
     if (hasSeededSelection || plans.length === 0) return;
-    selectedPlans.value = plans.map((plan) => plan.id);
+    selectedPlans.value = initialPlanSelection(plans, requested);
     hasSeededSelection = true;
   },
   { immediate: true },
@@ -75,9 +75,11 @@ function closeTicket(): void {
 </script>
 
 <template>
-  <main class="backlog-route">
-    <header><p class="eyebrow">read-only work queue</p><h1>Backlog</h1></header>
-    <BacklogMetricsRow :groups="groups" :projected-cost="backlog.projectedCost" />
+  <main class="backlog-route backlog-shell">
+    <div class="backlog-rail">
+      <header class="backlog-head"><p class="eyebrow">read-only work queue</p><h1>Backlog</h1></header>
+      <BacklogMetricsRow :groups="groups" :projected-cost="backlog.projectedCost" />
+    </div>
     <PlanCardRow v-model:selected="selectedPlans" v-model:filter="planFilter" :plans="backlog.plans" />
     <BacklogBoard
       :groups="groups"

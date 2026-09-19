@@ -4,6 +4,7 @@ import { queryPlanBacklog } from "../backlog.ts";
 import { PlanTicketReader } from "../persistence/plan-tickets.ts";
 import { loadCatalog } from "../registry/catalog.ts";
 import { resolvePlanSources, type ResolvedPlanSource } from "../registry/plan-source.ts";
+import { classifyPlans } from "../registry/plan-kind.ts";
 import { readLandingSummary } from "../persistence/landing-summary.ts";
 import { locateRunReport } from "../observability/run-report.ts";
 import { attemptDir } from "../persistence/platform-paths.ts";
@@ -51,14 +52,18 @@ import type {
   PhaseStatus,
   PhaseSummary,
   ProcessSummary,
+  GroupsResponse,
+  GroupTree,
   SessionCard,
   SessionDetailResponse,
+  SessionPlan,
   SessionsResponse,
   SettingsResponse,
   UsageTotals,
   TicketsResponse,
   TicketSourceResponse,
 } from "../../../dashboard/shared/types.ts";
+import { listGroupSummaries, readGroupDecisionTree } from "./planning-route.ts";
 import { ApiRequestError, jsonResponse, safely, type ApiHandler, type ApiResponse, type HandlerRequest } from "./responses.ts";
 import { decodePathSegments, validateAuthority } from "./security.ts";
 
@@ -71,6 +76,7 @@ export const API_ROUTE_TABLE = Object.freeze([
   { method: "GET", path: "/api/v1/settings", name: "settings" },
   { method: "GET", path: "/api/v1/adapters", name: "adapters" },
   { method: "GET", path: "/api/v1/tickets", name: "tickets" },
+  { method: "GET", path: "/api/v1/groups", name: "groups" },
   { method: "POST", path: "/api/v1/sessions/:id/archive", name: "archive" },
 ] as const);
 
@@ -174,6 +180,8 @@ function card(db: DatabaseSync, row: SessionRow): SessionCard {
     project: row.project_slug,
     taskId: row.task_id,
     continuesTask: row.continues_task,
+    groupId: row.group_id,
+    planRef: row.plan_ref,
     attempt: row.attempt,
     workflowId: row.workflow_id,
     riskTier: row.risk_tier,
@@ -331,7 +339,15 @@ function routeParams(routePath: string, segments: readonly string[]): Record<str
 export function createApiRouter(options: ApiRouterOptions): ApiRouter {
   const opener = options.open ?? openDatabase;
   const readDb = opener(options.dbPath, { readonly: true });
-  const ticketReader = new PlanTicketReader(options.planSources ?? resolveTicketPlanSources());
+  const planningStateRoot = options.stateRoot ?? dirname(options.dbPath);
+  const planSources = options.planSources ?? resolveTicketPlanSources();
+  const ticketReader = new PlanTicketReader(planSources);
+  // Structural classification only: `classifyPlans` reads no plan HTML, so the
+  // sessions list stays a database read plus one already-resolved catalog.
+  const sessionPlans: readonly SessionPlan[] = classifyPlans(planSources).map((plan) => ({
+    id: plan.id, name: plan.name, kind: plan.kind,
+    parentSpine: plan.parentSpine, parentSpineName: plan.parentSpineName,
+  }));
   let archiveDb: DatabaseSync | null = null;
 
   const handlers: Readonly<Record<ApiRouteName, ApiHandler>> = {
@@ -360,7 +376,10 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
         ...(state === undefined ? {} : { state }),
         archived: archivedRaw === "true",
       });
-      return jsonResponse({ sessions: rows.map((row) => card(readDb, row)) } satisfies SessionsResponse);
+      return jsonResponse({
+        sessions: rows.map((row) => card(readDb, row)),
+        plans: [...sessionPlans],
+      } satisfies SessionsResponse);
     }),
     session: safely(async (_request, params) => {
       const row = requireSession(readDb, params.id ?? "");
@@ -488,6 +507,32 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
         backlogSessionCosts(readDb).map((row) => ({ taskId: row.task_id, estimatedCostUsd: row.estimated_cost_usd, costAuthority: row.cost_authority })),
       );
       return jsonResponse(backlog satisfies TicketsResponse);
+    }),
+    groups: safely(async (request) => {
+      // One route, two shapes, exactly as `tickets` above: the list without a
+      // selector, one group's decision tree with it. A group id is a path-safe
+      // identifier on disk, so anything else is refused before it reaches the
+      // filesystem rather than being normalized into something that resolves.
+      const params = searchParams(request, ["group"]);
+      const group = params.get("group");
+      if (group === null) {
+        return jsonResponse(await listGroupSummaries({
+          stateRoot: planningStateRoot, project: options.config.project.slug,
+        }) satisfies GroupsResponse);
+      }
+      if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/u.test(group)) {
+        throw new ApiRequestError(400, "invalid-query", "group must be a path-safe identifier");
+      }
+      const tree = await readGroupDecisionTree({
+        stateRoot: planningStateRoot, project: options.config.project.slug, group,
+      });
+      // A group a run names but the planning store never recorded replays to
+      // revision 0, which `awsf group` also treats as absent: a driving session
+      // minted the id and captured nothing under it. That is a missing group,
+      // not an empty one, and returning a hollow tree would make the screen
+      // claim a session with no decisions rather than no session at all.
+      if (tree.revision === 0) throw new ApiRequestError(404, "group-not-found", "group not found");
+      return jsonResponse(tree satisfies GroupTree);
     }),
     adapters: safely(() => {
       const adapters: AdapterHealth[] = Object.entries(options.config.adapters).map(([id, entry]) => {

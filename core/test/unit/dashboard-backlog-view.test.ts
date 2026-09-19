@@ -78,11 +78,15 @@ test("plan controls use accessible dashboard toggle buttons", () => {
 test("backlog selection seeds once from the first non-empty response", () => {
   const route = source("dashboard/src/routes/backlog.vue");
   assert.match(route, /let hasSeededSelection = false;/u);
+  // The rule itself moved into `initialPlanSelection` when the sessions view
+  // gained plan cards that navigate here carrying a plan; the route keeps the
+  // seed-once guard and delegates the choice. `dashboard-session-plans.test.ts`
+  // holds the behaviour, and this keeps the guard from being lost with it.
   assert.match(
     route,
-    /if \(hasSeededSelection \|\| plans\.length === 0\) return;[^]*selectedPlans\.value = plans\.map\(\(plan\) => plan\.id\);[^]*hasSeededSelection = true;/u,
+    /if \(hasSeededSelection \|\| plans\.length === 0\) return;[^]*selectedPlans\.value = initialPlanSelection\(plans, requested\);[^]*hasSeededSelection = true;/u,
   );
-  assert.equal(route.match(/selectedPlans\.value = plans\.map/gu)?.length, 1);
+  assert.equal(route.match(/selectedPlans\.value = initialPlanSelection/gu)?.length, 1);
 });
 
 test("backlog metrics render ready, blocked, done, and projected cost in four columns", () => {
@@ -142,12 +146,52 @@ test("backlog columns default collapsed and toggle with plan-qualified keys", ()
   assert.match(css, /\.backlog-column\.collapsed h3\s*\{[^}]*margin-bottom:\s*0[^}]*\}/su);
 });
 
-test("plan-card and waterfall Chrome scrollbars share one effective dashboard style", () => {
-  const css = source("dashboard/src/styles/dashboard.css");
-  const planRowRule = /(?:^|\n)\.plan-card-row\s*\{([^}]*)\}/u.exec(css)?.[1] ?? "";
-  assert.doesNotMatch(planRowRule, /scrollbar-color/u);
-  assert.match(css, /\.waterfall-scroll::-webkit-scrollbar,\s*\.plan-card-row::-webkit-scrollbar\s*\{[^}]*height:\s*11px/su);
-  assert.match(css, /\.waterfall-scroll::-webkit-scrollbar-track,\s*\.plan-card-row::-webkit-scrollbar-track\s*\{[^}]*background:\s*var\(--panel-3\)/su);
-  assert.match(css, /\.waterfall-scroll::-webkit-scrollbar-thumb,\s*\.plan-card-row::-webkit-scrollbar-thumb\s*\{[^}]*background:\s*var\(--faint\)/su);
-  assert.match(css, /@supports not selector\(::-webkit-scrollbar\)\s*\{[^}]*scrollbar-color:\s*var\(--faint\) var\(--panel-3\)/su);
+/** Every selector whose rule makes the element scroll in some axis. */
+function scrollingSelectors(source: string): readonly string[] {
+  // Comments first: this stylesheet explains itself, and a paragraph sitting
+  // above a rule otherwise parses as part of its selector.
+  const css = source.replace(/\/\*[\s\S]*?\*\//gu, "");
+  const found: string[] = [];
+  for (const rule of css.matchAll(/(?:^|\n)([^{}@\n][^{}]*?)\{([^}]*)\}/gu)) {
+    const selector = (rule[1] ?? "").trim();
+    if (selector.includes("::-webkit-scrollbar")) continue;
+    if (!/overflow(?:-x|-y)?:\s*(?:auto|scroll)/u.test(rule[2] ?? "")) continue;
+    for (const part of selector.split(",")) found.push(part.trim());
+  }
+  return [...new Set(found)];
+}
+
+test("every scrolling surface takes the one shared scrollbar treatment", () => {
+  // One selector list, stated once in the shell. Three ad-hoc sets had already
+  // drifted — two heights, two track colours, one surface styling only Firefox
+  // — and a scrollbar nobody styled falls back to the browser's grey, which
+  // belongs to no palette.
+  const shell = source("dashboard/src/styles/morphism.css");
+  const base = source("dashboard/src/styles/dashboard.css");
+  // Index arithmetic, not a regex: a pattern that scans backwards over a
+  // selector list this long backtracks catastrophically, and this file is read
+  // on every unit run.
+  const anchor = shell.indexOf("::-webkit-scrollbar { width: 10px");
+  assert.ok(anchor > 0, "the shared treatment must be findable");
+  const block = shell.slice(shell.lastIndexOf("}", anchor) + 1, anchor).replace(/\/\*[\s\S]*?\*\//gu, "");
+  const covered = new Set(
+    block.split(",").map((part) => part.replace(/::-webkit-scrollbar.*$/u, "").trim()).filter((part) => part.length > 0),
+  );
+  const uncovered = [...scrollingSelectors(base), ...scrollingSelectors(shell)]
+    .filter((selector) => !covered.has(selector))
+    .sort();
+  assert.deepEqual(uncovered, [], "a scrolling surface outside the treatment renders a browser-grey scrollbar");
+
+  // Track and thumb are tokens, so all seven palettes and both modes inherit
+  // them; a hardcoded colour here works in exactly one.
+  assert.match(shell, /background:\s*var\(--neu-scroll-track\)/u);
+  assert.match(shell, /background-color:\s*var\(--neu-scroll-thumb\)/u);
+  assert.match(shell, /background-color:\s*var\(--neu-scroll-thumb-hover\)/u);
+  assert.match(shell, /scrollbar-color:\s*var\(--neu-scroll-thumb\) var\(--neu-scroll-track\)/u);
+  assert.match(base, /--neu-scroll-thumb:\s*color-mix\(/u);
+  // A light palette's text is dark, so it needs its own mix or the thumb reads
+  // as a bar of ink.
+  assert.match(base, /:root\[data-mode="light"\]\s*\{[^}]*--neu-scroll-thumb:/su);
+  // The page's own scrollbar is a surface like any other.
+  assert.ok(covered.has("html"), "the document scrollbar is styled too");
 });

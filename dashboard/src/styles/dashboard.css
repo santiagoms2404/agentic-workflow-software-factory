@@ -1,6 +1,13 @@
 /* Visual grammar adapted from the MIT-licensed Super Simple Software Factory visualizer; AWSF data and control semantics remain journal-backed and local. */
 :root {
-  --accent: #F26A1B;
+  /* Accent and count follow the active palette instead of one fixed orange.
+     Both are drawn from the semantically free hues: green, red, blue and amber
+     already mean pass, fail, running and warn, so only purple/cyan/violet are
+     available to carry selection and counts without overloading a status
+     colour. Substitution resolves against the palette's own --purple/--cyan. */
+  --accent: var(--purple);
+  --count: var(--cyan);
+  --select-all: var(--violet);
   --sans: "Segoe UI", "Helvetica Neue", system-ui, sans-serif;
   --mono: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   --radius: 16px;
@@ -82,6 +89,10 @@
   --purple: #A8C7B5;
   --cyan: #62C2AA;
   --violet: #8AAFA4;
+  /* Monochrome green: purple, cyan and violet all collapse toward the pass
+     colour, so accent and select-all are lifted into the violet family. */
+  --accent: #ADB9EE;
+  --select-all: #C9A6DD;
 }
 :root[data-theme="forest"][data-mode="light"] {
   --bg: #DAF1DE;
@@ -97,6 +108,8 @@
   --purple: #5B4768;
   --cyan: #176E66;
   --violet: #4F6574;
+  --accent: #454A87;
+  --select-all: #6B4A86;
 }
 
 :root[data-theme="lavender-slate"][data-mode="dark"] {
@@ -144,6 +157,9 @@
   --purple: #A8BE9A;
   --cyan: #71B7A0;
   --violet: #99A7C8;
+  /* Monochrome green, same lift as Forest. */
+  --accent: #A8B2DC;
+  --select-all: #C2A6D2;
 }
 :root[data-theme="earthy-obsidian"][data-mode="light"] {
   --bg: #DDE2DD;
@@ -159,6 +175,8 @@
   --purple: #586B47;
   --cyan: #326D5F;
   --violet: #526080;
+  --accent: #414A78;
+  --select-all: #654682;
 }
 
 :root[data-theme="navy-sky"][data-mode="dark"] {
@@ -256,6 +274,60 @@
 
 :root[data-mode="dark"] { --session-stack-lane-anchor: color-mix(in srgb, var(--bg) 96%, var(--panel)); }
 :root[data-mode="light"] { --session-stack-lane-anchor: color-mix(in srgb, var(--text) 96%, var(--dim)); }
+
+/* ---------------------------------------------------------------------------
+   Neumorphic layer.
+
+   Flat surfaces extruded only by a twin shadow pair — light from the top-left,
+   dark from the bottom-right. Nothing inside a control is a gradient: the
+   modelling lives entirely in the shadows, so the fill stays one solid colour.
+   Containers are wells (recessed); the controls on them are pills (raised).
+   Every value derives from the active palette, so all seven themes and both
+   modes inherit the treatment.
+   --------------------------------------------------------------------------- */
+:root {
+  --neu-surface: color-mix(in srgb, var(--panel-2) 94%, var(--text));
+  --neu-well: color-mix(in srgb, var(--panel) 90%, var(--bg));
+  --neu-light: color-mix(in srgb, var(--text) 16%, transparent);
+  --neu-dark: color-mix(in srgb, #000 58%, transparent);
+  --neu-radius: 999px;
+  --neu-radius-card: 18px;
+  /* A scrollbar is a control on a well: recessed track, raised thumb, both
+     mixed from the active palette so all seven inherit the treatment. */
+  --neu-scroll-track: var(--neu-well);
+  --neu-scroll-thumb: color-mix(in srgb, var(--text) 26%, var(--neu-surface));
+  --neu-scroll-thumb-hover: color-mix(in srgb, var(--text) 46%, var(--neu-surface));
+
+  /* Tight offsets with a wide blur: modelled, but no shadow bleeding onto the
+     neighbour below — that bleed is what reads as a gradient in a stacked menu. */
+  --neu-raised:
+    -3px -3px 9px var(--neu-light),
+    4px 4px 11px var(--neu-dark);
+  --neu-raised-soft:
+    -2px -2px 6px var(--neu-light),
+    3px 3px 8px var(--neu-dark);
+  --neu-hover:
+    -4px -4px 12px var(--neu-light),
+    5px 5px 15px var(--neu-dark);
+  --neu-pressed:
+    inset -2px -2px 6px var(--neu-light),
+    inset 3px 3px 7px var(--neu-dark);
+  --neu-pressed-soft:
+    inset -1px -1px 4px var(--neu-light),
+    inset 2px 2px 5px var(--neu-dark);
+}
+
+/* Light palettes need the shadow pair rebalanced or the extrusion inverts. */
+:root[data-mode="light"] {
+  --neu-surface: color-mix(in srgb, var(--panel) 92%, var(--bg));
+  --neu-well: color-mix(in srgb, var(--bg) 92%, var(--border));
+  --neu-light: #ffffff;
+  --neu-dark: color-mix(in srgb, var(--border) 62%, transparent);
+  /* A light palette's text is dark, so the same mix would read as a bar of ink.
+     Less of it, and the thumb stays a surface rather than becoming a stripe. */
+  --neu-scroll-thumb: color-mix(in srgb, var(--text) 17%, var(--neu-surface));
+  --neu-scroll-thumb-hover: color-mix(in srgb, var(--text) 32%, var(--neu-surface));
+}
 
 * { box-sizing: border-box; }
 html, body, #app { min-height: 100%; margin: 0; }
@@ -593,17 +665,6 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible, summary:focus-v
 .timeline-access button { width: 34px; height: 30px; border: 1px solid var(--border); border-radius: 7px; background: var(--panel-3); color: var(--text); cursor: pointer; }
 .scroll-cue { display: none; color: var(--cyan); }
 .waterfall-scroll { width: 100%; overflow-x: auto; overflow-y: hidden; overscroll-behavior-inline: contain; scrollbar-gutter: stable; }
-.waterfall-scroll::-webkit-scrollbar,
-.plan-card-row::-webkit-scrollbar { height: 11px; }
-.waterfall-scroll::-webkit-scrollbar-track,
-.plan-card-row::-webkit-scrollbar-track { border-radius: 999px; background: var(--panel-3); }
-.waterfall-scroll::-webkit-scrollbar-thumb,
-.plan-card-row::-webkit-scrollbar-thumb { border: 2px solid var(--panel-3); border-radius: 999px; background: var(--faint); }
-.waterfall-scroll::-webkit-scrollbar-thumb:hover,
-.plan-card-row::-webkit-scrollbar-thumb:hover { background: var(--dim); }
-@supports not selector(::-webkit-scrollbar) {
-  .waterfall-scroll, .plan-card-row { scrollbar-color: var(--faint) var(--panel-3); }
-}
 .waterfall { min-width: 1080px; }
 .waterfall-row { display: grid; grid-template-columns: 280px 1fr; }
 .axis-row { background: var(--panel-2); border-bottom: 1px solid var(--border); }
@@ -743,6 +804,358 @@ pre { max-height: 42vh; margin: 8px 0 0; padding: 12px 14px; overflow: auto; bor
 .plan-state-metrics { display: grid; grid-template-columns: repeat(4, auto); gap: 8px; margin-top: 14px; color: var(--faint); font: 10px var(--mono); }
 .plan-state-metrics span { display: flex; flex-direction: column; gap: 2px; }
 .plan-state-metrics b { color: var(--text); font-size: 14px; }
+.session-plan-picker .session-filter-heading { margin-bottom: 2px; }
+.session-plan-card { text-decoration: none; }
+.session-plan-open { margin-top: 9px; color: var(--dim); font: 11px var(--mono); }
+.session-plan-card:hover .session-plan-open { color: var(--text); }
+.session-plan-empty { margin: 2px 0 0; color: var(--dim); font: 13px var(--mono); }
+.card-plan { color: var(--dim); font: 11px var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.session-group-toggle { text-decoration: none; }
+/* Selecting a session and opening its tree are two acts, so they are two
+   controls — but both live inside the pill's own width. Beside it, the row was
+   wider than the strip and the list scrolled sideways to reach the link. */
+.session-group-entry { position: relative; display: flex; min-width: 0; }
+.session-group-entry .session-group-toggle { flex: 1 1 auto; min-width: 0; padding-right: 52px; }
+.session-group-open {
+  position: absolute;
+  top: 12px;
+  right: 13px;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--neu-radius);
+  background: var(--neu-surface);
+  box-shadow: var(--neu-raised-soft);
+  color: var(--dim);
+  text-decoration: none;
+  transition: box-shadow 170ms ease, color 170ms ease, transform 170ms ease;
+}
+.session-group-open:hover { color: var(--text); box-shadow: var(--neu-hover); transform: translateY(-1px); }
+.session-group-open svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+/* --- The board: cluster, driving session, deck --------------------------- */
+/* Typography carries the level as much as the depth does: the cluster label is
+   the smallest thing on the card and the session title the largest, so the
+   reader reads inwards rather than counting boxes. */
+.board-connection-note { margin: 0; color: var(--dim); font: 12px var(--mono); }
+.board-connection-hidden { margin: 0; font: 12px var(--mono); }
+/* Two lines, then an ellipsis, exactly as the menu entry clamps it: a
+   two-hundred-character ask is a paragraph, and a heading that becomes one
+   pushes the runs it names off the screen. The full ask is on the tree. */
+.board-group-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  margin: 0;
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.board-group-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 0; color: var(--dim); font: 11px var(--mono); }
+.board-group-meta code { color: var(--purple); }
+.board-group-empty { margin: 0; font: 13px var(--mono); }
+.board-cluster-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; }
+.board-cluster-canvas { min-height: 30px; padding: 5px 13px; font-size: 12px; text-decoration: none; }
+.board-group-expand-count, .board-group-expand-action { font: 12px var(--mono); }
+
+/* --- Canvas: the execution map --------------------------------------------- */
+/* Three hues so a reader tells a run from a session from a plan without
+   hovering anything. Colour here is information, not decoration, which is why
+   it is spent on the dots and on nothing else in this view. */
+.canvas-kind-run .canvas-kind-dot, .canvas-dot-run { background: var(--cyan); }
+.canvas-kind-session .canvas-kind-dot, .canvas-dot-session { background: var(--violet); }
+.canvas-kind-plan .canvas-kind-dot, .canvas-dot-plan { background: var(--amber); }
+/* Shape as well as hue, because hue alone cannot carry this in every palette:
+   Forest is monochromatic by design, and its cyan and violet sit a few steps
+   apart. A circle, a squircle and a rounded square separate at a glance on any
+   ground — and a silhouette needs no ring drawn around it to be read. */
+.canvas-kind-dot { width: 12px; height: 12px; flex: 0 0 auto; }
+.canvas-dot-run, .canvas-kind-run .canvas-kind-dot { border-radius: 50%; }
+.canvas-dot-session, .canvas-kind-session .canvas-kind-dot { border-radius: 32%; }
+.canvas-dot-plan, .canvas-kind-plan .canvas-kind-dot { border-radius: 14%; }
+.canvas-head p { margin: 0; }
+.canvas-head h1 { margin: 3px 0 0; font-size: 28px; }
+.canvas-head-note { margin-top: 6px; color: var(--dim); font: 12px var(--mono); }
+.canvas-parked-note { color: var(--dim); font: 11px var(--mono); }
+.canvas-parked-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; }
+.canvas-selected-title { margin: 2px 0 0; font-size: 17px; line-height: 1.35; }
+.canvas-selected-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; color: var(--dim); font: 11px var(--mono); }
+.canvas-selected-meta code { color: var(--purple); }
+.canvas-selected-summary { margin: 0; font: 12.5px var(--mono); }
+.canvas-edge { fill: none; stroke-width: 1.4; stroke: color-mix(in srgb, var(--faint) 62%, transparent); }
+/* A recorded continuation is the owner's connection string, and the only line
+   that is spent a colour; belonging to a session is a hairline, and coming
+   from a plan is dashed. A line nobody recorded would look like none of them. */
+.canvas-edge.edge-continuation { stroke: var(--accent); stroke-width: 2.2; }
+.canvas-edge.edge-plan { stroke-dasharray: 5 5; stroke: color-mix(in srgb, var(--amber) 50%, transparent); }
+.canvas-edge.dimmed { opacity: .2; }
+.canvas-edge.lit { opacity: 1; }
+.canvas-label {
+  position: absolute;
+  z-index: 4;
+  max-width: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  padding: 9px 13px;
+  transform: translateX(-50%);
+  border-radius: 13px;
+  background: var(--neu-surface);
+  box-shadow: var(--neu-raised);
+  pointer-events: none;
+}
+.canvas-label.held { pointer-events: auto; }
+.canvas-label-name { color: var(--text); font-size: 13px; line-height: 1.35; overflow-wrap: anywhere; }
+.canvas-label-meta { color: var(--dim); font: 10.5px var(--mono); }
+.canvas-label-open { color: var(--cyan); font: 11px var(--mono); text-decoration: none; }
+.canvas-label-open:hover { color: var(--text); }
+.canvas-empty { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; font: 13px var(--mono); }
+/* Shown only where the map steps aside, which is the narrow layout. */
+.canvas-too-narrow { display: none; grid-area: board; margin: 0; padding: 18px 20px; font-size: 14px; }
+.canvas-too-narrow a { color: var(--cyan); }
+
+/* --- The wheel ------------------------------------------------------------- */
+.canvas-opened-title { margin: 0; color: var(--text); font-size: 17px; line-height: 1.35; overflow-wrap: anywhere; }
+.canvas-opened-meta { margin: 0; color: var(--dim); font: 11.5px var(--mono); }
+.wheel-card-voice { margin: 0; color: var(--dim); font: 11px var(--mono); }
+.wheel-card-voice code { color: var(--purple); }
+.wheel-card-head { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.wheel-card-title { margin: 0; color: var(--text); font-size: 19px; line-height: 1.3; overflow-wrap: anywhere; }
+/* Three lines, then an ellipsis. An ask can run to a page, and an unbounded one
+   pushed the phases, the metrics and the way out clean off the card. The whole
+   of it is one click away on the run itself. */
+.wheel-card-request {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+  /* The clamp puts the ellipsis on the third line but does not always stop a
+     fourth from bleeding through the padded box, so the height is stated too. */
+  max-height: calc(3 * 1.55em + 24px);
+  margin: 0;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+/* The phases, left to right: the same pipeline idea as the wheel itself, one
+   zoom level in. It wraps rather than scrolling, so none of them is hidden. */
+.wheel-card-pipeline { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; font: 12px var(--mono); }
+.wheel-phase-glyph { color: var(--dim); }
+.wheel-phase.succeeded .wheel-phase-glyph { color: var(--green); }
+.wheel-phase.failed .wheel-phase-glyph, .wheel-phase.cancelled .wheel-phase-glyph { color: var(--red); }
+.wheel-phase.running .wheel-phase-glyph, .wheel-phase.validating .wheel-phase-glyph, .wheel-phase.correcting .wheel-phase-glyph { color: var(--amber); }
+.wheel-phase-name { color: var(--text); }
+.wheel-card-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; margin: 0; }
+.wheel-card-metrics dt { color: var(--faint); font: 10.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; }
+.wheel-card-metrics dd { margin: 2px 0 0; color: var(--text); font: 13px var(--mono); }
+.wheel-card-metrics small { color: var(--dim); }
+.wheel-card-summary { margin: 0; font: 12.5px var(--mono); }
+.wheel-count { flex: 0 0 auto; color: var(--dim); font: 11.5px var(--mono); }
+/* The ask this decision came out of, pinned above the wheel and changing as it
+   turns: "how this ask became these tasks", one slide at a time. */
+.canvas-ask { display: flex; flex-direction: column; gap: 5px; padding: 12px 16px; border-radius: 14px; background: var(--neu-well); box-shadow: var(--neu-pressed-soft); }
+.canvas-ask p { margin: 0; max-width: 100ch; color: var(--text); font-size: 14px; line-height: 1.5; }
+.canvas-ask .decision-voice { color: var(--faint); }
+.canvas-elsewhere { margin: 0; font: 12px var(--mono); }
+.canvas-view-switch { display: flex; gap: 8px; margin-left: auto; }
+/* A slide holds less than the reading does, so the reading is where the rest
+   of a long list stays; the card says how much it is not showing. */
+.decision-slide .decision-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.decision-slide .decision-row { font-size: 13px; }
+/* Why the run before this one is before it — and, for a declared continuation,
+   the reason the driver wrote down, which nothing else in the dashboard shows. */
+.canvas-relation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  max-width: 92ch;
+  margin: 0;
+  padding: 9px 16px;
+  border-radius: var(--neu-radius);
+  background: var(--neu-well);
+  box-shadow: var(--neu-pressed-soft);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.canvas-relation-kind { color: var(--cyan); font: 11.5px var(--mono); }
+/* The markers carry the run's own state, so the spine reads without a legend. */
+.wheel-marker.ok { background: var(--green); }
+.wheel-marker.warn { background: var(--amber); }
+.wheel-marker.error { background: var(--red); }
+.wheel-marker.running { background: var(--cyan); }
+
+/* --- The plan board -------------------------------------------------------- */
+.plan-board-counts { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; margin: 0; color: var(--dim); font: 12px var(--mono); }
+.plan-board-counts b { color: var(--text); }
+.plan-board-source { margin-left: auto; color: var(--cyan); text-decoration: none; }
+.plan-board-source:hover { color: var(--text); }
+.plan-milestone-head { display: flex; flex-direction: column; gap: 4px; }
+.plan-milestone-head h3 { margin: 0; color: var(--text); font-size: 14px; letter-spacing: .05em; text-transform: uppercase; }
+.plan-milestone-counts { display: flex; flex-wrap: wrap; gap: 3px 12px; margin: 0; color: var(--dim); font: 11px var(--mono); }
+.plan-ticket-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 0; font: 11px var(--mono); }
+.plan-ticket-head code { color: var(--purple); }
+.plan-ticket-state { color: var(--dim); }
+.plan-ticket.ticket-failed .plan-ticket-state { color: var(--red); }
+.plan-ticket.ticket-wip .plan-ticket-state { color: var(--amber); }
+.plan-ticket.ticket-done .plan-ticket-state { color: var(--green); }
+.plan-ticket-tier { margin-left: auto; color: var(--faint); }
+.plan-ticket-title { margin: 0; color: var(--text); font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
+.plan-ticket-waiting { margin: 0; color: var(--cyan); font: 11px var(--mono); }
+.plan-ticket-waiting.absent { color: var(--faint); }
+.plan-runs-note { color: var(--dim); font: 11px var(--mono); }
+.plan-run code { color: var(--purple); font-size: 11px; }
+.plan-run-task { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; }
+.plan-run-date { margin-left: auto; color: var(--dim); font: 11px var(--mono); }
+
+/* --- Driving sessions screen ---------------------------------------------- */
+.groups-head p { margin: 0; }
+.groups-head h1 { margin: 3px 0 0; font-size: 28px; }
+.groups-list-title { color: var(--text); font-size: 15px; line-height: 1.4; }
+.groups-list-meta { display: flex; flex-wrap: wrap; gap: 3px 12px; color: var(--dim); font: 12px var(--mono); }
+.groups-list-meta code { color: var(--purple); }
+.groups-canvas-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.groups-canvas-head h2 { margin: 3px 0 0; font-size: 21px; line-height: 1.4; }
+.groups-view-toggle { display: flex; gap: 8px; }
+.tree-graph-scroll { overflow: auto; overscroll-behavior: contain; max-height: calc(100vh - 250px); }
+.tree-graph { position: relative; }
+.tree-edges { position: absolute; inset: 0; pointer-events: none; }
+.tree-edge { fill: none; stroke-width: 1.5; }
+.tree-edge.edge-spine { stroke: var(--accent); }
+.tree-edge.edge-branch { stroke: color-mix(in srgb, var(--faint) 70%, transparent); stroke-dasharray: 4 4; }
+.tree-node { display: flex; flex-direction: column; gap: 4px; padding: 9px 13px; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.tree-node-label { font-size: 14px; line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-node-kind { margin: 0; color: var(--faint); font: 11px var(--mono); }
+.tree-node.node-decision .tree-node-label { color: var(--text); font-weight: 600; }
+.tree-node.node-ask .tree-node-label { color: var(--cyan); }
+.tree-node.node-not-taken .tree-node-label, .tree-node.node-superseded .tree-node-label { color: var(--dim); }
+
+/* The expanded card: the backlog ticket's shape — head, title, scrolling body —
+   at half the size and anchored where the compact node is, so opening one does
+   not make the reader find their place in the tree again. */
+.tree-node-panel { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; }
+.tree-node-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.tree-node-panel-title { margin: 0; font-size: 16px; line-height: 1.4; }
+.tree-node-panel-body { max-height: 38vh; overflow-y: auto; overscroll-behavior: contain; }
+.tree-node-close { padding: 2px 9px; border: 0; border-radius: var(--neu-radius); background: transparent; color: var(--dim); font: 16px var(--mono); line-height: 1.2; cursor: pointer; }
+.tree-node-close:hover { color: var(--text); }
+.tree-detail-text { margin: 0; color: var(--text); font-size: 14px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* --- The decision tree above a group of related runs ---------------------- */
+/* Three voices, three treatments — carried by depth and by type, never by a
+   coloured edge. The owner's own words are the only thing set in the body face
+   at full contrast; the assistant's reading and the machine facts are
+   monospace and dimmed; a decision that was taken stands proud of the canvas
+   and one that was not sits flush with it, which is the same raised-versus-
+   flush grammar the filters and the graph nodes already use. */
+.session-group-note, .session-group-unrecorded { color: var(--dim); font: 12px var(--mono); }
+/* Two lines, then an ellipsis: the full ask is on its own screen, and a
+   predictable entry height is what lets the list promise "the latest two". */
+.session-group-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.35;
+}
+.session-group-toggle.selected .session-group-title { color: var(--text); }
+.session-group-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; color: var(--dim); font: 11px var(--mono); }
+.absent { color: var(--faint); font-style: italic; }
+.decision-tree { display: flex; flex-direction: column; gap: 18px; }
+.decision-tree-counts { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0; color: var(--dim); font: 12px var(--mono); }
+.decision-tree-counts b { color: var(--text); }
+.decision-branch h4 { margin: 0 0 9px; color: var(--dim); font: 12px var(--mono); letter-spacing: .07em; text-transform: uppercase; }
+.decision-list { display: flex; flex-direction: column; gap: 16px; margin: 0; padding: 0; list-style: none; }
+/* Units are short records, so they tile rather than run down a column. */
+.decision-list.unit-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); align-items: start; }
+/* Title first and largest: it is the only thing a reader scans twenty of. */
+.decision-node h5 { margin: 4px 0 0; font-size: 19px; font-weight: 600; line-height: 1.35; }
+.decision-voice { margin: 0; color: var(--dim); font: 11.5px var(--mono); }
+/* The owner's exact bytes beside our reading of them, never under it: the point
+   of this section is that the two are different, and a column each says so
+   while using width that was going to waste. */
+/* The quote gets the wider column because it is a quote and can be any length;
+   our reading of it is a sentence. `start` keeps the short box its own height
+   instead of stretching it into a mostly empty panel beside a long ask. */
+.ask-split { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+/* The label sits above the reading rather than beside it: inline, the two ran
+   together into "read it asKeep the owner's words separate". */
+.decision-gloss { display: flex; flex-direction: column; gap: 5px; margin: 0; color: var(--dim); font-size: 13.5px; line-height: 1.6; }
+.owner-words { margin: 0; color: var(--text); font: 14px/1.6 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+/* The decision itself, lifted out of the field list: it was the fourth of five
+   rows of identical weight, and it is the line the reader came for. It takes
+   no measure because it is one sentence — a single line does not suffer from
+   the width a paragraph does. */
+.decision-reason {
+  margin: 0;
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+/* Four text boxes on a grid, not four rows down a page. Each is a recessed
+   card with its label on top, so the card uses the width it has and the reader
+   still gets a half-width measure instead of a thousand-pixel line. */
+/* Two, fixed — never auto-fit. Four boxes across three columns is three and a
+   hole, which is the blank space this layout exists to remove. Two columns
+   means four boxes are always a filled 2x2, and the cells line up as a table
+   rather than as a ragged wrap. */
+.decision-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+.decision-field { display: flex; flex-direction: column; gap: 8px; padding: 13px 16px; border-radius: 14px; }
+.decision-fields dt {
+  align-self: flex-start;
+  padding: 3px 12px;
+  border-radius: var(--neu-radius);
+  color: var(--dim);
+  font: 10px var(--mono);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.decision-fields dd { margin: 0; color: var(--text); font-size: 14.5px; line-height: 1.6; overflow-wrap: anywhere; }
+/* What a decision wrote and what it dropped are the same kind of list, so they
+   read as a pair side by side rather than stacking down the card. */
+.decision-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.decision-rows { display: flex; flex-direction: column; gap: 8px; padding: 13px 14px; border-radius: 14px; }
+.decision-rows .decision-voice { padding-left: 4px; color: var(--faint); }
+.decision-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 9px;
+  margin: 0;
+  padding: 10px 15px;
+  border-radius: 12px;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.decision-row.dropped { color: var(--dim); }
+.decision-row span { flex: 1 1 200px; }
+.decision-tasks { margin: 0; color: var(--dim); font: 12px var(--mono); }
+.decision-tasks code, .decision-row code, .session-group-meta code { color: var(--purple); }
+.decision-row code { flex: 0 0 auto; font-size: 12px; }
+.decision-change-unit { margin-left: 0; }
+.decision-tasks code + code { margin-left: 8px; }
+.decision-superseded { display: flex; flex-direction: column; gap: 7px; }
+.decision-superseded summary { color: var(--dim); font: 11px var(--mono); cursor: pointer; }
+.decision-superseded summary:hover { color: var(--text); }
 .backlog-groups { display: grid; gap: 24px; }
 .backlog-plan-group { min-width: 0; }
 .backlog-plan-heading { display: flex; align-items: center; gap: 9px; margin-bottom: 10px; }
@@ -778,7 +1191,7 @@ pre { max-height: 42vh; margin: 8px 0 0; padding: 12px 14px; overflow: auto; bor
 .build-prompt-control code { color: var(--purple); }
 .build-prompt-control button { padding: 5px 9px; }
 .build-prompt-control [role="status"] { margin-left: auto; color: var(--dim); }
-.ticket-source-scroll { min-height: 160px; overflow-y: auto; overscroll-behavior: contain; padding: 18px; scrollbar-color: var(--faint) var(--panel-3); }
+.ticket-source-scroll { min-height: 160px; overflow-y: auto; overscroll-behavior: contain; padding: 18px; }
 .ticket-source { width: 100%; max-height: none; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .ticket-source-status { color: var(--faint); }
 .ticket-source-error { color: var(--red); }

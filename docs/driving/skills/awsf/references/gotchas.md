@@ -133,11 +133,13 @@ formality.
 
 ### 8. Piped standard input refuses every owner act
 
-**Symptom.** `awsf land`, `cancel`, `journey`, `rework`, `review`, `raise`, `publish` or `resume` refuses when
-run from a script, a pipe, or any non-terminal context.
+**Symptom.** `awsf land`, `cancel`, `journey`, `rework`, `review`,
+`degrade-review`, `raise`, `publish` or `resume` refuses when run from a script,
+a pipe, or any non-terminal context.
 
-**Cause.** All eight — `land`, `cancel`, `journey`, `rework`, `review`, `raise`, `publish`, `resume` —
-require an interactive owner terminal, and the refusal comes from the
+**Cause.** All nine — `land`, `cancel`, `journey`, `rework`, `review`,
+`degrade-review`, `raise`, `publish`, `resume` — require an interactive owner
+terminal, and the refusal comes from the
 normative machine *before* any process can receive a signal and before any
 call is reserved. The check is a terminal-shape test (`process.stdin.isTTY`),
 not the authorisation boundary itself.

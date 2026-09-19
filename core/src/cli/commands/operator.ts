@@ -9,6 +9,7 @@ import { ceilingFor } from "../../state/tiers.ts";
 import { discoverAttempts, rebuildDatabase, type RebuildReport, type RebuildSource } from "../../observability/rebuild.ts";
 import { prepareDatabaseForReadonly } from "../../observability/sqlite.ts";
 import { journalFilePath } from "../../persistence/platform-paths.ts";
+import { declaredContinuation } from "../../persistence/task-relations.ts";
 import { toAttemptStatusProjection } from "./attempt-projection.ts";
 import { readAttempt, withLegacyDefaults, type AttemptEvent } from "./attempt.ts";
 
@@ -21,6 +22,12 @@ export async function rebuildCommand(stateRoot: string): Promise<RebuildReport> 
   const dirs = await discoverAttempts(stateRoot);
   const sources: RebuildSource[] = await Promise.all(dirs.map(async (dir): Promise<RebuildSource> => {
     const status = await readAttempt(dir);
+    // `awsf relate` writes no attempt record — the declaration is about the
+    // task, so it lives beside the attempt directories. A rebuild that read
+    // only `status.json` would drop every relation declared after the fact,
+    // which is the failure "delete the database and lose nothing" exists to
+    // prevent. `dir` is `<task>/<attempt>`, so its parent is the task root.
+    const relation = await declaredContinuation(join(dir, ".."));
     return {
       journalPath: journalFilePath(dir),
       // `record.event` is parsed JSON wearing a cast, so this is a
@@ -28,16 +35,26 @@ export async function rebuildCommand(stateRoot: string): Promise<RebuildReport> 
       // Without it a journal written before the owner re-entry counter existed
       // reaches the projector with `ownerReentries` undefined, which cannot be
       // bound, and the rebuild refuses — on the databases most in need of one.
-      attemptStatus: (record) => toAttemptStatusProjection(
-        stateRoot,
-        withLegacyDefaults((record.event as AttemptEvent).next),
-        record.event as AttemptEvent,
-      ),
+      attemptStatus: (record) => {
+        const projection = toAttemptStatusProjection(
+          stateRoot,
+          withLegacyDefaults((record.event as AttemptEvent).next),
+          record.event as AttemptEvent,
+        );
+        // The declaration is layered on here and not only on `session` below,
+        // because `session` is used ONLY for a source with no attempt journal:
+        // where one exists, the row is minted from this projection instead, and
+        // an override applied to the wrong one restores every session except
+        // the ones that actually have journals.
+        return relation === null ? projection : { ...projection, continuesTask: relation.continuesTask };
+      },
       session: {
         sessionId: status.sessionId,
         projectSlug: status.project,
         taskId: status.taskId,
-        continuesTask: status.continuesTask,
+        continuesTask: relation?.continuesTask ?? status.continuesTask,
+        groupId: status.groupId,
+        planRef: status.planRef,
         attempt: status.attempt,
         workflowId: status.workflow,
         riskTier: status.tier,

@@ -23,6 +23,7 @@ import type { ProcessIdentity } from "../../execution/launcher-barrier.ts";
 import type { AttemptEvidence } from "../../observability/attempt-evidence.ts";
 import type { Tier } from "../../state/tiers.ts";
 import type { CandidateSeed } from "../../contracts/candidate-seed.ts";
+import type { PhaseRouteOverrides } from "../../workflow/route-flags.ts";
 
 export interface PhaseMeter {
   readonly name: string;
@@ -78,6 +79,26 @@ export interface AttemptStatus {
   readonly taskId: string;
   /** Owner-declared task relationship recorded only when this task is created. */
   readonly continuesTask: string | null;
+  /**
+   * The driving session this attempt came out of, minted by that session and
+   * passed in at `awsf new` / `awsf retry`. Never inferred from timing or
+   * adjacency, and never inherited: an attempt created by a different session
+   * did not come out of the first one, so `retry` records what it was given and
+   * NULL when it was given nothing. That is what makes a continuation chain
+   * able to cross two groups instead of collapsing into one.
+   */
+  readonly groupId: string | null;
+  /**
+   * The registered plan this task belongs to, named at creation and never
+   * inferred. `sessions.plan_ref` has existed since migration 0005 with nothing
+   * writing it, because the only automatic link available — a task id equal to a
+   * ticket uid — matches zero real runs. So this is stated by the driver and
+   * validated against the catalog, or it is NULL.
+   *
+   * Unlike `groupId`, a retry CARRIES this: attempt 2 is more work on the same
+   * plan, while the group names the session that minted the attempt.
+   */
+  readonly planRef: string | null;
   readonly attempt: number;
   readonly repository: string;
   readonly worktree: string | null;
@@ -96,6 +117,20 @@ export interface AttemptStatus {
   readonly budget: BudgetState;
   /** Every `awsf raise` this task has been given, oldest first. */
   readonly ceilingGrants: readonly CeilingGrant[];
+  /**
+   * The `--route` selections this attempt was created with, keyed by phase.
+   *
+   * Attempt state rather than configuration, so `configSnapshotJson` still
+   * equals the file on disk and `awsf rework`/`awsf review` stay available to
+   * an attempt whose routing was chosen at the terminal.
+   */
+  readonly routeOverrides: PhaseRouteOverrides;
+  /**
+   * The owner's grant permitting a same-provider review on this attempt, or
+   * null. Never set by the host, and never inferred from a quota or transport
+   * failure — see `degrade-review.ts`.
+   */
+  readonly reviewDegradation: ReviewDegradation | null;
   readonly model: AttemptModel | null;
   readonly lastActivityAt: string;
   readonly lastActivity: string;
@@ -109,6 +144,22 @@ export interface AttemptStatus {
   readonly blocker: AttemptBlocker | null;
   readonly revision: number;
   readonly lastSourceSeq: number;
+}
+
+/**
+ * The owner's written permission for one attempt's review to run on the same
+ * provider as its builder.
+ *
+ * It is a grant, not a mode: the durable `routing.review` still says what the
+ * project does, and this says what the owner allowed once, with a reason on
+ * the record beside it.
+ */
+export interface ReviewDegradation {
+  /** The owner's written reason. Recorded here and in the journal; never sent to a provider. */
+  readonly reason: string;
+  /** The attempt the owner granted it from. */
+  readonly attempt: number;
+  readonly at: string;
 }
 
 export interface AttemptEvent {
@@ -135,6 +186,30 @@ export function isTerminalStatus(status: AttemptStatus): boolean {
   return (TERMINAL_STATES as readonly string[]).includes(status.lifecycleState);
 }
 
+/**
+ * The driving-session group id, validated as a path-safe identifier.
+ *
+ * Deliberately the same grammar and bound the planning store applies to a group
+ * id, restated rather than imported: `planning-isolation.test.ts` permits only
+ * `cli/commands/group.ts` to reach into `core/src/planning/`, and an execution
+ * module importing it to save six characters would be the first crack in that
+ * fence. Two one-way records of the same fact, neither side importing the other.
+ */
+export function assertGroupId(value: string): string {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/u.test(value)) {
+    throw new Error(`--group ${JSON.stringify(value)} is not a path-safe identifier of 1-100 characters`);
+  }
+  return value;
+}
+
+/** The plan stem, in the same grammar. Whether it is REGISTERED is `plan-ref.ts`. */
+export function assertPlanRef(value: string): string {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/u.test(value)) {
+    throw new Error(`--plan ${JSON.stringify(value)} is not a path-safe identifier of 1-100 characters`);
+  }
+  return value;
+}
+
 function validateComponent(label: string, value: string): void {
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value)) {
     throw new Error(`${label} must be one path-safe identifier`);
@@ -148,9 +223,13 @@ type LegacyBudget = Omit<BudgetState, "ownerReentries" | "allowance"> & {
 };
 
 /** And what one written before the ceiling was a dial holds. */
-type LegacyStatus = Omit<AttemptStatus, "ceilingGrants" | "continuesTask"> & {
+type LegacyStatus = Omit<AttemptStatus, "ceilingGrants" | "continuesTask" | "groupId" | "planRef" | "routeOverrides" | "reviewDegradation"> & {
   ceilingGrants?: readonly CeilingGrant[];
   continuesTask?: string | null;
+  groupId?: string | null;
+  planRef?: string | null;
+  routeOverrides?: PhaseRouteOverrides;
+  reviewDegradation?: ReviewDegradation | null;
 };
 
 /**
@@ -190,10 +269,24 @@ export function withLegacyDefaults(status: AttemptStatus): AttemptStatus {
   const budget = status.budget as LegacyBudget;
   const legacy = status as LegacyStatus;
   const budgetIsCurrent = budget.ownerReentries !== undefined && budget.allowance.ownerReentries !== undefined;
-  if (budgetIsCurrent && legacy.ceilingGrants !== undefined && legacy.continuesTask !== undefined) return status;
+  if (
+    budgetIsCurrent && legacy.ceilingGrants !== undefined && legacy.continuesTask !== undefined &&
+    legacy.groupId !== undefined && legacy.planRef !== undefined &&
+    legacy.routeOverrides !== undefined && legacy.reviewDegradation !== undefined
+  ) return status;
   return {
     ...status,
     continuesTask: legacy.continuesTask ?? null,
+    // A run that predates groups belongs to none, and NULL is what that says.
+    // Nothing infers one from when it ran or what ran beside it.
+    groupId: legacy.groupId ?? null,
+    // A run that predates plan linkage named no plan. Reading one out of its
+    // task id now would be the guess migration 0005 refused in the first place.
+    planRef: legacy.planRef ?? null,
+    // An attempt written before per-attempt routing existed chose neither, and
+    // reading it as "no override, no grant" is what it meant.
+    routeOverrides: legacy.routeOverrides ?? {},
+    reviewDegradation: legacy.reviewDegradation ?? null,
     ...(budgetIsCurrent ? {} : {
       budget: {
         ...budget,

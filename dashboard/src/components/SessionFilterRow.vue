@@ -37,15 +37,16 @@ const allState = computed(() => selectAllState(entryValues.value, props.selected
     </div>
     <div class="session-filter-options" role="group" :aria-label="`${label} choices`">
       <button
-        v-for="entry in entries"
+        v-for="(entry, index) in entries"
         :key="entry.value"
         type="button"
         class="session-filter-option"
         :class="{ selected: selected.includes(entry.value) }"
+        :style="{ '--rung': index }"
         :aria-pressed="selected.includes(entry.value)"
         @click="emit('update:selected', toggleFilterValue(selected, entry.value))"
       >
-        <span>{{ entry.value }}</span>
+        <span>{{ entry.label ?? entry.value }}</span>
         <span class="session-filter-count">{{ entry.count }} runs</span>
       </button>
     </div>

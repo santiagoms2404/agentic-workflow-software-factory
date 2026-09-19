@@ -188,7 +188,9 @@ async function sourceFixture(
   const sourceDir = join(stateRoot, "projects", PROJECT, "tasks", "generic-source", "1");
   const initial: AttemptStatus = {
     schema: "awsf/attempt-status/v1", sessionId: "source-session", project: PROJECT,
-    taskId: "generic-source", continuesTask: null, attempt: 1, repository, worktree: null,
+    taskId: "generic-source", continuesTask: null,
+    groupId: null,
+    planRef: null, attempt: 1, repository, worktree: null,
     workflow: options.workflow ?? "build-review", tier: 2, request: "adopt the generic candidate without rebuilding it",
     configSnapshotJson: "{}", lifecycleState: "GATING", baseSha: base, candidateSha: candidate,
     phase: null,
@@ -197,7 +199,8 @@ async function sourceFixture(
       correctionsAuto: 0, correctionsOwner: 0, ownerReentries: 0,
       allowance: { auto: 1, owner: 1, ownerReentries: 1 }, ceiling: 5,
     },
-    ceilingGrants: [], model: null, lastActivityAt: AT, lastActivity: "candidate completed",
+    ceilingGrants: [], routeOverrides: {}, reviewDegradation: null,
+    model: null, lastActivityAt: AT, lastActivity: "candidate completed",
     nextAction: "review", gatesPass: true, requiredReviewPresent: false, journeyApproved: false,
     protectedApprovalsValid: true, process: null, landingApproval: null, blocker: null,
     revision: 1, lastSourceSeq: 1,

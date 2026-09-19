@@ -25,6 +25,7 @@ import { injectOutputSchema } from "../../contracts/json-schema.ts";
 import { parseEnvelope } from "../../contracts/parse-envelope.ts";
 import { wrapEnvelope } from "../../contracts/stored-envelope.ts";
 import type { BuildOutput } from "../../contracts/build-output.ts";
+import type { RouteSelectionProvenance } from "../../contracts/route-selection.ts";
 import {
   UNREPORTED_TOKEN_USAGE,
   isPersistableKind,
@@ -63,6 +64,12 @@ import { ceilingFor } from "../../state/tiers.ts";
 import type { WorkflowRecipe } from "../../workflow/compiler.ts";
 import { composePromptBundle, type PromptBundle } from "../../workflow/prompt-composition.ts";
 import { PhaseGateFailure } from "../../workflow/engine.ts";
+import {
+  effectivePhaseRoute,
+  requestedPhaseRoute,
+  retainedRolePolicy,
+  routeSelectionProvenance,
+} from "../../workflow/phase-routing.ts";
 import { buildReviewWorkflow } from "../../workflow/recipes/build-review.ts";
 import { simpleSdlcWorkflow } from "../../workflow/recipes/simple-sdlc.ts";
 import type { OwnerTerminal } from "../tty.ts";
@@ -254,6 +261,7 @@ interface Route extends PromptBundle {
   readonly adapterId: string;
   readonly adapter: HarnessAdapter;
   readonly model: ModelInfo;
+  readonly provenance: RouteSelectionProvenance;
 }
 
 interface CandidateInspection {
@@ -408,8 +416,11 @@ async function resolveRoute(
   infra: ReworkInfrastructure,
   governingBuilder: RecordedRoute | null,
 ): Promise<Route> {
-  const agent = config.agents.find((candidate) => candidate.name === "builder");
-  if (agent === undefined || agent.writes.length === 0) throw new ProductionRouteUnavailable("builder", "supported owner rework requires the configured writable builder phase");
+  const role = config.agents.find((candidate) => candidate.name === "builder");
+  if (role === undefined || role.writes.length === 0) throw new ProductionRouteUnavailable("builder", "supported owner rework requires the configured writable builder phase");
+  const selection = requestedPhaseRoute(config, "builder", role, status.routeOverrides);
+  const agent = selection.agent;
+  if (!retainedRolePolicy(selection.policy, agent)) throw new ReworkRouteMismatch("phase routing changed the builder's role policy");
   const entry = config.adapters[agent.harness.adapter];
   if (entry === undefined || entry.enabled === false) throw new ProductionRouteUnavailable(agent.harness.adapter, "route is disabled or undeclared");
   const adapter = infra.adapterFor(entry, agent.harness.adapter, config);
@@ -417,7 +428,8 @@ async function resolveRoute(
   const available = await adapter.isAvailable();
   if (available.status !== "available") throw new ProductionRouteUnavailable(agent.harness.adapter, available.detail ?? available.code ?? "blocked");
   const model = credentialSafeValue(await adapter.getModelInfo(agent.model), "configured model route");
-  if (model.adapter !== adapter.id) throw new ReworkRouteMismatch(`adapter descriptor says ${model.adapter}, selected adapter is ${adapter.id}`);
+  const effective = effectivePhaseRoute(selection.requested, adapter.id, model);
+  const provenance = routeSelectionProvenance({ requested: selection.requested, effective });
   const prompts = await readReworkPromptPair(configPath, agent);
   assertPromptCompositionCurrent(prompts, governingBuilder, "builder");
   return {
@@ -425,6 +437,7 @@ async function resolveRoute(
     adapterId: agent.harness.adapter,
     adapter,
     model,
+    provenance,
     ...prompts,
   };
 }
@@ -596,6 +609,28 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
   );
   const governingRoutes = recordedRoutes(governingEvidence, governingReviewPhaseIds);
   const route = await resolveRoute(status, options.config, options.configPath, infra, governingRoutes.worker);
+  // A T2 rework will spend on both sides. Validate its review selection now,
+  // before the owner confirms and before L19 can reserve the builder call; the
+  // route is resolved again against the newly recorded builder immediately
+  // before review so a post-confirmation drift still fails closed.
+  if (recipe !== null) {
+    const phases = reviewPhasesOf(recipe);
+    await resolveReviewRoute({
+      config: options.config,
+      configPath: options.configPath,
+      infra,
+      recipe,
+      reviewPhaseId: phases.review,
+      workerProvider: route.model.provider,
+      priorReview: governingRoutes.review,
+      routeOverrides: status.routeOverrides,
+      degraded: status.reviewDegradation !== null,
+      // Selection only. The review does not launch here, so a reviewer that is
+      // momentarily unavailable must not refuse the rework the owner has not
+      // even confirmed yet; the pre-review resolution asks for availability.
+      requireAvailable: false,
+    });
+  }
   const displayedRevision = status.revision;
   const displayedOrdinal = nextReworkPhaseOrdinal(governingEvidence);
   const originalBundle = await readReworkPromptPair(options.configPath, route.agent);
@@ -618,8 +653,11 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
   options.terminal.write(`Budget: ${remainingCalls} call(s) and ${remainingOwner} owner re-entry allowance(s) remain`);
   options.terminal.write("This act spends one owner re-entry, invalidates every candidate gate and review, and gives up the option to land or cancel the current candidate unchanged.");
   if (recipe !== null) {
+    const reviewLabel = options.config.routing.review === "same-provider-degraded"
+      ? "EXPLICIT DEGRADED same-provider review (reduced independence)"
+      : "mandatory opposite-provider review";
     options.terminal.write(
-      `This T${status.tier} rework spends one call on the builder and one on the mandatory opposite-provider review of the new candidate, ` +
+      `This T${status.tier} rework spends one call on the builder and one on the ${reviewLabel} of the new candidate, ` +
         "and holds one more for that review's single permitted retry.",
     );
     options.terminal.write("The end-user journey attestation does not survive a new candidate; `awsf journey` runs again before landing.");
@@ -859,7 +897,8 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
       }, {
         type: "agent-start", phaseId, agent: route.agent.name, adapterId: route.adapterId,
         provider: route.model.provider, color: route.agent.color, requestedModel: route.agent.model,
-        sandboxBadge: launchGrant.badge, sandboxMechanism: launchGrant.mechanism, at: launchAt,
+        sandboxBadge: launchGrant.badge, sandboxMechanism: launchGrant.mechanism,
+        route: route.provenance, at: launchAt,
       });
       let delivery: OwnerAmendmentDelivery | null = null;
       if (ownerAmendment !== null) {
@@ -1119,6 +1158,8 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
         reviewPhaseId: phases.review,
         workerProvider: recorded.worker?.provider,
         priorReview: recorded.review,
+        routeOverrides: status.routeOverrides,
+        degraded: status.reviewDegradation !== null,
       });
       const intent = planIntentFrom(evidenceRecords) ?? requestOutput(status, options.config);
       prepared = await prepareReview({
@@ -1242,7 +1283,7 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
         candidateSha: candidate, budget: budget.snapshot(), gatesPass: true,
         requiredReviewPresent: true, journeyApproved: false, protectedApprovalsValid: true,
         blocker: null, phase: null, process: null,
-        lastActivity: `opposite-provider review on ${reviewRoute!.model.provider} of reworked candidate ${candidate} returned ${reviewOutput.verdict} with ${String(reviewOutput.findings.length)} finding(s)`,
+        lastActivity: `${options.config.routing.review === "same-provider-degraded" ? "DEGRADED same-provider" : "opposite-provider"} review on ${reviewRoute!.model.provider} of reworked candidate ${candidate} returned ${reviewOutput.verdict} with ${String(reviewOutput.findings.length)} finding(s)`,
         nextAction: `run \`awsf journey ${status.taskId}\` at a TTY, then \`awsf land ${status.taskId}\``,
       });
     return { status, confirmed: true };

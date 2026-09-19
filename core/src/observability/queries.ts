@@ -3,12 +3,15 @@
 // explicitly so private references cannot enter an API object by accident.
 
 import type { DatabaseSync } from "./sqlite.ts";
+import type { RouteSelectionProvenance } from "../contracts/route-selection.ts";
 
 export interface SessionRow {
   session_id: string;
   project_slug: string;
   task_id: string;
   continues_task: string | null;
+  group_id: string | null;
+  plan_ref: string | null;
   attempt: number;
   workflow_id: string;
   risk_tier: 0 | 1 | 2;
@@ -50,7 +53,7 @@ export interface SessionRow {
 }
 
 const SESSION_PUBLIC_COLUMNS = `
-  session_id, project_slug, task_id, continues_task, attempt, workflow_id, risk_tier, is_protected,
+  session_id, project_slug, task_id, continues_task, group_id, plan_ref, attempt, workflow_id, risk_tier, is_protected,
   lifecycle_state, request_text, base_sha, head_sha, candidate_sha,
   worker_provider, worker_model_requested, worker_model_resolved, review_provider, review_verdict,
   call_ceiling, calls_reserved, calls_spent, corrections_auto, corrections_owner, owner_reentries,
@@ -215,6 +218,42 @@ export function agentsForSession(db: DatabaseSync, sessionId: string): AgentRow[
       total_tokens, estimated_cost_usd, cost_authority, sandbox_badge, sandbox_mechanism,
       created_at, last_used_at
     FROM agent_sessions WHERE session_id = ? ORDER BY created_at, agent LIMIT 50`).all(sessionId) as unknown as AgentRow[];
+}
+
+export interface RouteProvenanceRow {
+  readonly eventRow: number;
+  readonly phaseId: string;
+  readonly startedAt: string;
+  readonly endedAt: string | null;
+  readonly route: RouteSelectionProvenance;
+}
+
+/** Requested, effective and observed route facts, in launch order. */
+export function routesForSession(db: DatabaseSync, sessionId: string): RouteProvenanceRow[] {
+  const rows = db.prepare(`SELECT event_row, phase_id, payload_json, started_at, ended_at
+      FROM events WHERE session_id = ? AND type = 'route_resolution'
+      ORDER BY event_row LIMIT 100`).all(sessionId) as unknown as Array<{
+        event_row: number;
+        phase_id: string | null;
+        payload_json: string;
+        started_at: string;
+        ended_at: string | null;
+      }>;
+  return rows.flatMap((row) => {
+    if (row.phase_id === null) return [];
+    try {
+      return [{
+        eventRow: row.event_row,
+        phaseId: row.phase_id,
+        startedAt: row.started_at,
+        endedAt: row.ended_at,
+        route: JSON.parse(row.payload_json) as RouteSelectionProvenance,
+      }];
+    } catch {
+      // A read model never invents provenance for a malformed projection row.
+      return [];
+    }
+  });
 }
 
 export interface EventRow {
