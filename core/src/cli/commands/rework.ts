@@ -625,9 +625,10 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
   // before the owner confirms and before L19 can reserve the builder call; the
   // route is resolved again against the newly recorded builder immediately
   // before review so a post-confirmation drift still fails closed.
+  let previewReviewRoute: ReviewRoute | null = null;
   if (recipe !== null) {
     const phases = reviewPhasesOf(recipe);
-    await resolveReviewRoute({
+    previewReviewRoute = await resolveReviewRoute({
       config: options.config,
       configPath: options.configPath,
       infra,
@@ -665,7 +666,7 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
   options.terminal.write(`Budget: ${remainingCalls} call(s) and ${remainingOwner} owner re-entry allowance(s) remain`);
   options.terminal.write("This act spends one owner re-entry, invalidates every candidate gate and review, and gives up the option to land or cancel the current candidate unchanged.");
   if (recipe !== null) {
-    const reviewLabel = options.config.routing.review === "same-provider-degraded"
+    const reviewLabel = previewReviewRoute!.provenance.review.mode === "same-provider-degraded"
       ? "EXPLICIT DEGRADED same-provider review (reduced independence)"
       : "mandatory opposite-provider review";
     options.terminal.write(
@@ -1293,7 +1294,7 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
         candidateSha: candidate, budget: budget.snapshot(), gatesPass: true,
         requiredReviewPresent: true, journeyApproved: false, protectedApprovalsValid: true,
         blocker: null, phase: null, process: null,
-        lastActivity: `${options.config.routing.review === "same-provider-degraded" ? "DEGRADED same-provider" : "opposite-provider"} review on ${reviewRoute!.model.provider} of reworked candidate ${candidate} returned ${reviewOutput.verdict} with ${String(reviewOutput.findings.length)} finding(s)`,
+        lastActivity: `${reviewRoute!.provenance.review.mode === "same-provider-degraded" ? "DEGRADED same-provider" : "opposite-provider"} review on ${reviewRoute!.model.provider} of reworked candidate ${candidate} returned ${reviewOutput.verdict} with ${String(reviewOutput.findings.length)} finding(s)`,
         nextAction: `run \`awsf journey ${status.taskId}\` at a TTY, then \`awsf land ${status.taskId}\``,
       });
     return { status, confirmed: true };

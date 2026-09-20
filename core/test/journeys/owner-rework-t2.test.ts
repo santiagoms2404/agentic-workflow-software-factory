@@ -761,6 +761,55 @@ test("an explicitly degraded owner rework review stays on the builder provider a
   } finally { await cleanup(fixture); }
 });
 
+// A7: `routing.review` stays at its ordinary default here — only the
+// attempt carries an owner `awsf degrade-review` grant. The confirmation
+// text and the journalled activity must both describe the review the grant
+// actually resolves to (same-provider-degraded), not the project default
+// that `config.routing.review` alone would say.
+// A7: `routing.review` stays at its ordinary default here — only the
+// attempt carries an owner `awsf degrade-review` grant. `resolveReviewRoute`
+// already resolves this correctly (`degraded: status.reviewDegradation !==
+// null`); the bug was that the CONFIRMATION TEXT inspected the raw config
+// mode instead of that resolution, so the owner was shown "mandatory
+// opposite-provider review" for a review the grant had already turned
+// same-provider. The owner declines here — this fixture's reviewer route is
+// only usable for a same-provider run, and driving the T2 review itself past
+// confirmation is a separate, unrelated route-wiring surface this ticket
+// does not touch — so only the preflight label under test is exercised.
+test("an attempt-level degrade-review grant is described as degraded in the confirmation prompt even though the project default stays opposite-provider", async () => {
+  const fixture = await world({ configure: (config) => ({
+    ...config,
+    routing: {
+      ...config.routing,
+      phase_routes: {
+        ...config.routing.phase_routes,
+        reviewer: {
+          adapter: "codex",
+          provider: "openai-codex",
+          model: "codex:gpt-5.6-sol",
+          effort: "high",
+        },
+      },
+    },
+  }) });
+  assert.equal(fixture.config.routing.review, "invert-provider", "the project default is unchanged by this fixture");
+  await append(fixture, null, {
+    reviewDegradation: { reason: "owner accepted reduced independence for this attempt", attempt: fixture.status.attempt, at: AT },
+  });
+  const before = readFileSync(join(fixture.attemptDir, "journal.jsonl"));
+  const script = scripted(fixture);
+  const lines: string[] = [];
+  try {
+    const result = await rework(fixture, script, { lines, answer: false });
+    assert.equal(result.confirmed, false);
+    assert.deepEqual(readFileSync(join(fixture.attemptDir, "journal.jsonl")), before, "a declined rework spends and records nothing");
+    // The confirmation prompt, printed before the review has even run, already
+    // has to know the grant overrides the project default.
+    assert.match(lines.join("\n"), /EXPLICIT DEGRADED same-provider review \(reduced independence\)/);
+    assert.doesNotMatch(lines.join("\n"), /mandatory opposite-provider review/);
+  } finally { await cleanup(fixture); }
+});
+
 test("the builder gets the defect and the reviewer gets the candidate; neither the defect nor the superseded verdict reaches the reviewer", async () => {
   const fixture = await world();
   const script = scripted(fixture);
