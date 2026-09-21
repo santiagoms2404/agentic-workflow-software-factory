@@ -1,3 +1,8 @@
+import { assertNoExecutionController, withExecutionLease } from "../../execution/operation-lease.ts";
+import { randomUUID } from "node:crypto";
+import { readProtectedState, inspectProtectedCandidate, assertProtectedPreservedBytes } from "../../workflow/protected-grants.ts";
+import { assertProtectedCandidateAuthorization, protectedFactDigest, type ProtectedCandidateAuthorization } from "../../contracts/protected-grant.ts";
+import { recoveryDigest } from "../../contracts/phase-recovery.ts";
 import {
   completeLanding,
   inspectLanding,
@@ -188,8 +193,18 @@ async function finish(
   }
   options.assertAdvancement?.(status.sessionId, "LANDED");
   try {
+    const protectedState = readProtectedState(options.attemptDir);
+    if (protectedState.grants.length > 0) {
+      const proof = inspectProtectedCandidate(options.attemptDir, candidate);
+      assertProtectedPreservedBytes(proof);
+      const approvals = protectedState.records.filter(record => record.event.evidence?.type === "protected-landing");
+      const record = approvals[0];
+      if (approvals.length !== 1 || record?.event.evidence?.type !== "protected-landing" || record.event.next.lifecycleState !== "LANDING" || record.event.next.landingApproval?.candidateSha !== candidate) throw new Error("protected landing lacks its unique atomic final owner approval");
+      assertProtectedCandidateAuthorization(record.event.evidence.authorization, { sessionId: status.sessionId, attempt: status.attempt, candidateSha: candidate,
+        integrationBaseSha: status.baseSha!, bindingChainDigest: proof.bindingChainDigest, protectedDeltaDigest: proof.protectedDeltaDigest });
+    }
     const seed = await verifiedTargetSeed(options.attemptDir, status);
-    const pin = seed === null ? undefined : { integrationBaseSha: seed.integrationBaseSha };
+    const pin = seed === null && protectedState.grants.length === 0 ? undefined : { integrationBaseSha: seed?.integrationBaseSha ?? status.baseSha! };
     const outcome = recover
       ? recoverLanding(status.repository, candidate, undefined, pin)
       : completeLanding(status.repository, candidate, undefined, pin);
@@ -223,6 +238,12 @@ async function finish(
 }
 
 export async function landCommand(options: LandCommandOptions): Promise<LandCommandResult> {
+  if (!options.terminal.interactive || (options.actor ?? "human") !== "human" || readProtectedState(options.attemptDir).grants.length === 0) return landUnderLease(options);
+  await assertNoExecutionController(options.attemptDir);
+  return withExecutionLease(options.attemptDir, async () => { await readAttempt(options.attemptDir); }, async () => landUnderLease(options));
+}
+
+async function landUnderLease(options: LandCommandOptions): Promise<LandCommandResult> {
   const current = await readAttempt(options.attemptDir);
   if (current.lifecycleState === "LANDING") {
     // Approval is already durable. Re-prompting would create two human gates;
@@ -254,8 +275,9 @@ export async function landCommand(options: LandCommandOptions): Promise<LandComm
   }
 
   const seed = await verifiedTargetSeed(options.attemptDir, current);
+  const hasProtectedGrant = readProtectedState(options.attemptDir).grants.length > 0;
   const inspection = inspectLanding(current.repository, current.candidateSha, undefined,
-    seed === null ? undefined : { integrationBaseSha: seed.integrationBaseSha });
+    seed === null && !hasProtectedGrant ? undefined : { integrationBaseSha: seed?.integrationBaseSha ?? current.baseSha! });
   if (seed !== null) {
     options.terminal.write(`Seeded candidate ${seed.seedCandidateSha}. Integration base pinned to ${seed.integrationBaseSha}. Fresh target assurance only.`);
     if (seed.ownerAmendment !== null) options.terminal.write(`Owner supplement: ${JSON.stringify(seed.ownerAmendment.text)}`);
@@ -275,11 +297,32 @@ export async function landCommand(options: LandCommandOptions): Promise<LandComm
   for (const line of supersededReviewLines(recordedReviews(await readAttemptEvidence(options.attemptDir), current.sessionId))) {
     options.terminal.write(line);
   }
+  let protectedAuthorization: ProtectedCandidateAuthorization | null = null;
+  const protectedState = readProtectedState(options.attemptDir);
+  if (protectedState.grants.length > 0) {
+    const proof = inspectProtectedCandidate(options.attemptDir, current.candidateSha);
+    assertProtectedPreservedBytes(proof);
+    options.terminal.write(`Protected candidate ${current.candidateSha}; binding chain ${proof.bindingChainDigest}.`);
+    for (const delta of proof.deltas) options.terminal.write(`${JSON.stringify(delta.path)}: ${delta.beforeBlob ?? "absent"} -> ${delta.afterBlob}, mode ${delta.afterMode}`);
+    if (!await options.terminal.confirm("Approve these exact protected contents and binding chain for this candidate?")) return { status: current, confirmed: false };
+    const unsigned: ProtectedCandidateAuthorization = { schema: "awsf.protected-candidate-authorization/v1", id: randomUUID(),
+      sessionId: current.sessionId, attempt: current.attempt, candidateSha: current.candidateSha, integrationBaseSha: current.baseSha!,
+      bindingChainDigest: proof.bindingChainDigest, protectedDeltaDigest: proof.protectedDeltaDigest, confirmedAt: new Date().toISOString(), digest: "" };
+    protectedAuthorization = { ...unsigned, digest: protectedFactDigest(unsigned) };
+  }
   options.terminal.write("Cost: 0 provider calls. This locally fast-forwards the canonical branch to the exact candidate and invalidates no passing gate.");
   options.terminal.write("Confirming seals this attempt as LANDED: rework, replacement review, cancellation, and landing a different candidate are no longer available; publication remains a separate owner act.");
   const confirmed = await options.terminal.confirm(`Land exact candidate ${current.candidateSha}?`);
   if (!confirmed) return { status: current, confirmed: false };
 
+  if (protectedAuthorization !== null) {
+    const latest = await readAttempt(options.attemptDir);
+    if (recoveryDigest(latest) !== recoveryDigest(current)) throw new Error("protected landing anchor changed during confirmation");
+    const proof = inspectProtectedCandidate(options.attemptDir, current.candidateSha);
+    assertProtectedPreservedBytes(proof);
+    assertProtectedCandidateAuthorization(protectedAuthorization, { sessionId: current.sessionId, attempt: current.attempt, candidateSha: current.candidateSha,
+      integrationBaseSha: current.baseSha!, bindingChainDigest: proof.bindingChainDigest, protectedDeltaDigest: proof.protectedDeltaDigest });
+  }
   options.assertAdvancement?.(current.sessionId, "LANDING");
   const decision = authorizeLanding(current, actor, true, inspection, true);
   const now = (options.now ?? ((): string => new Date().toISOString()))();
@@ -297,7 +340,7 @@ export async function landCommand(options: LandCommandOptions): Promise<LandComm
   const persisted = await persistAttempt(
     options.attemptDir,
     current.revision,
-    { kind: "attempt.transitioned", next: landing },
+    { kind: "attempt.transitioned", next: landing, ...(protectedAuthorization === null ? {} : { evidence: { type: "protected-landing" as const, authorization: protectedAuthorization } }) },
     options.projectRecord,
   );
   await options.afterLandingPersisted?.(persisted);

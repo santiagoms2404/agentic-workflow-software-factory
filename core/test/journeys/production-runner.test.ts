@@ -30,6 +30,11 @@ import { ProcessTransportBroker, runSystemCommand, type BrokerOptions } from "..
 import { createDashboardProjection } from "../../src/cli/commands/dashboard-projection.ts";
 import { newCommand } from "../../src/cli/commands/new.ts";
 import { main as cliMain } from "../../src/cli/main.ts";
+import { assertNoExecutionController } from "../../src/execution/operation-lease.ts";
+import { grantCommand } from "../../src/cli/commands/grant.ts";
+import { journeyCommand } from "../../src/cli/commands/journey.ts";
+import { landCommand } from "../../src/cli/commands/land.ts";
+import { readProtectedState, inspectProtectedCandidate } from "../../src/workflow/protected-grants.ts";
 import { raiseCommand } from "../../src/cli/commands/raise.ts";
 import { correctionHeadroom } from "../../src/cli/commands/workflows.ts";
 import { WORKFLOW_RECIPES, workflowRecipe } from "../../src/workflow/catalog.ts";
@@ -50,14 +55,18 @@ function git(repository: string, ...argv: string[]): string {
 
 const RESUME_INSTRUCTION = '  Report this café instruction verbatim in implementationNotes.\n"Keep existing write limits."  ';
 for (const scenario of ["success", "planner-open-question-once"] as const) {
-for (const { instruction, corrupt, routed } of [{ instruction: undefined, corrupt: false, routed: false }, { instruction: RESUME_INSTRUCTION, corrupt: false, routed: false }, { instruction: RESUME_INSTRUCTION, corrupt: true, routed: false }, { instruction: RESUME_INSTRUCTION, corrupt: false, routed: true }]) {
-test(`O1 ${routed ? "selected-route " : ""}${scenario} ${instruction === undefined ? "original input" : corrupt ? "substituted input refused" : "supplemented input"}: quota anchor survives refusal and resumes exactly one unstarted builder under a controller lease`, async () => {
+for (const { instruction, corrupt, routed, granted = false } of [{ instruction: undefined, corrupt: false, routed: false }, { instruction: RESUME_INSTRUCTION, corrupt: false, routed: false }, { instruction: RESUME_INSTRUCTION, corrupt: true, routed: false }, { instruction: RESUME_INSTRUCTION, corrupt: false, routed: true }, { instruction: RESUME_INSTRUCTION, corrupt: false, routed: false, granted: true }]) {
+test(`O1 ${granted ? "A2 grant " : ""}${routed ? "selected-route " : ""}${scenario} ${instruction === undefined ? "original input" : corrupt ? "substituted input refused" : "supplemented input"}: quota anchor survives refusal and resumes exactly one unstarted builder under a controller lease`, async () => {
   const world = await fixture("plan-build-test", 0, config => ({ ...config,
     adapters: { ...config.adapters, ...(routed ? { secondary: config.adapters.codex! } : {}) },
+    ...(granted ? { policy: { ...config.policy, protected_paths: [...config.policy.protected_paths, "core/src/generated.ts"] } } : {}),
     routing: { ...config.routing, quota_stop: { default: { minutes: 30, probe_timeout_ms: 1000 } } } }), 1,
     "write one bounded source", () => {}, routed ? { builder: { adapter: "secondary", provider: "openai-codex", effort: "low" } } : {});
   try {
     const prepared = await readAttempt(world.created.attemptDir);
+    if (granted) await grantCommand({ attemptDir: world.created.attemptDir, config: world.config, configPath: world.configPath, stateRoot: world.stateRoot,
+      phase: "builder", files: ["core/src/generated.ts"], reason: "Authorize one phase after quota readmission.", sandboxProbe: () => true,
+      terminal: { interactive: true, write: () => {}, confirm: async () => true } });
     let mode: "low" | "healthy" | "unknown" = "low";
     let launched = 0;
     const actualInputs: string[] = [];
@@ -80,7 +89,7 @@ test(`O1 ${routed ? "selected-route " : ""}${scenario} ${instruction === undefin
         createBroker: (brokerOptions: BrokerOptions): TransportBroker => {
           const delegate = fakeBroker(brokerOptions);
           return { startProcess: (registration, spec, signal) => { actualInputs.push(spec.stdin ?? ""); return delegate.startProcess(registration, spec, signal); } };
-        }, sandboxProbe: () => false, now: () => "2026-08-24T20:26:39.429Z",
+        }, sandboxProbe: () => granted, now: () => "2026-08-24T20:26:39.429Z",
         resolveExecutable: () => "/fixture/quota-axi",
         runCommand: ((executable, argv, opts) => {
           if (executable !== "/fixture/quota-axi") return runSystemCommand(executable, argv, opts);
@@ -95,6 +104,7 @@ test(`O1 ${routed ? "selected-route " : ""}${scenario} ${instruction === undefin
     const paused = await runProductionCommand(options);
     assert.equal(paused.lifecycleState, "RUNNING", paused.blocker?.detail);
     assert.equal(paused.recovery?.kind, "quota-pause");
+    if (granted) assert.equal(readProtectedState(world.created.attemptDir).consumptions.length, 0, "quota refusal never consumes an unstarted grant");
     if (routed) assert.equal(paused.recovery.quota?.adapterId, "secondary");
     assert.deepEqual(paused.recovery?.prefix.map(entry => entry.phaseKey), ["request", "planner"]);
     assert.equal(paused.budget.callsSpent, completedCalls);
@@ -186,6 +196,13 @@ test(`O1 ${routed ? "selected-route " : ""}${scenario} ${instruction === undefin
     assert.equal(replay.status.revision, resumed.revision);
     assert.equal(readFileSync(join(options.attemptDir, "journal.jsonl"), "utf8"), history);
     assert.equal(launched, completedCalls + 1);
+    if (granted) {
+      const facts = readProtectedState(world.created.attemptDir);
+      assert.equal(facts.consumptions.length, 1); assert.equal(facts.bindings.length, 1);
+      assert.equal(activations[0].protectedConsumption.grantDigest, facts.grants[0]!.digest);
+      assert.equal(activations[0].reservationId, facts.consumptions[0]!.reservationId);
+      return;
+    }
     if (instruction !== undefined) {
       const lines: string[] = [];
       const cli = { argv: ["resume", resumed.taskId, "--reason", "verify applied instruction", "--instruction", instruction,
@@ -774,6 +791,123 @@ async function fixture(
   await startCommand({ attemptDir: created.attemptDir, worktreeRoot: join(root, "worktrees"), configPath, preflight: () => ({ adapter: true, sandbox: true, observability: true }), projectRecord: projection.project });
   return { root, canonical, stateRoot, config, configPath, projection, created };
 }
+
+for (const workflow of ["build", "plan-build-test", "simple-sdlc"] as const) {
+  test(`A2 exact protected grant completes ${workflow} with one consumption, verified candidate and separate final approval`, async () => {
+    const world = await fixture(workflow, 0, config => ({ ...config, policy: { ...config.policy, protected_paths: [...config.policy.protected_paths, "core/src/generated.ts"] } }), workflow === "simple-sdlc" ? 2 : 1);
+    try {
+      const prepared = await readAttempt(world.created.attemptDir);
+      const granted = await grantCommand({ attemptDir: world.created.attemptDir, config: world.config, configPath: world.configPath, stateRoot: world.stateRoot,
+        phase: "builder", files: ["core/src/generated.ts"], reason: "Create exactly the generated source.", sandboxProbe: () => true,
+        terminal: { interactive: true, write: () => {}, confirm: async () => true }, projectRecord: world.projection.project });
+      assert.equal(granted.confirmed, true); assert.equal(granted.status.candidateSha, null);
+      let calls = 0;
+      const status = await runProductionCommand({ attemptDir: world.created.attemptDir, stateRoot: world.stateRoot, config: world.config, configPath: world.configPath,
+        projectRecord: world.projection.project, assertAdvancement: world.projection.assertAdvancement, assertLaunchProjection: world.projection.assertLaunchPermitted,
+        infrastructure: { adapterFor: (_entry, id) => new ScriptedAdapter(id, prepared.worktree!, request => {
+          calls++; if (!request.model.startsWith("claude:")) assert.match(request.prompt, /Host-verified one-use protected content grant/);
+        }), createBroker: fakeBroker, sandboxProbe: () => true } });
+      assert.equal(status.lifecycleState, "AWAITING_OWNER", JSON.stringify(status.blocker));
+      const facts = readProtectedState(world.created.attemptDir);
+      assert.equal(facts.consumptions.length, 1); assert.equal(facts.intents.length, 1); assert.equal(facts.bindings.length, 1);
+      assert.equal(facts.bindings[0]!.parentSha, prepared.baseSha);
+      assert.equal(inspectProtectedCandidate(world.created.attemptDir, status.candidateSha!).deltas.length, 1);
+      assert.equal(status.budget.callsSpent, calls); assert.equal(status.budget.callsReserved, 0);
+      if (workflow === "simple-sdlc") await journeyCommand({ attemptDir: world.created.attemptDir, journeyId: "protected-content-fixture", observedSha: status.candidateSha!,
+        terminal: { interactive: true, write: () => {}, confirm: async () => true }, projectRecord: world.projection.project });
+      const journal = readFileSync(join(world.created.attemptDir, "journal.jsonl"));
+      const declined = await landCommand({ attemptDir: world.created.attemptDir, terminal: { interactive: true, write: () => {}, confirm: async () => false } });
+      assert.equal(declined.confirmed, false); assert.deepEqual(readFileSync(join(world.created.attemptDir, "journal.jsonl")), journal);
+      let confirmations = 0;
+      const landed = await landCommand({ attemptDir: world.created.attemptDir, terminal: { interactive: true, write: () => {}, confirm: async () => { confirmations++; await assert.rejects(() => assertNoExecutionController(world.created.attemptDir), /controller/); return true; } }, projectRecord: world.projection.project });
+      assert.equal(landed.status.lifecycleState, "LANDED", JSON.stringify(landed.status.blocker));
+      assert.equal(confirmations, 2); assert.equal(git(world.canonical, "rev-parse", "HEAD"), status.candidateSha);
+    } finally { rmSync(world.root, { recursive: true, force: true }); }
+  });
+}
+
+for (const failure of ["decline", "noninteractive", "host", "outside-writes", "no-sandbox", "alias", "drift"] as const) {
+  test(`A2 protected issuance ${failure} is inert`, async () => {
+    const world = await fixture("build", 0, config => ({ ...config, policy: { ...config.policy, protected_paths: [...config.policy.protected_paths, "core/src/generated.ts"] } }));
+    try {
+      const before = readFileSync(join(world.created.attemptDir, "journal.jsonl"));
+      const action = () => grantCommand({ attemptDir: world.created.attemptDir, config: world.config, configPath: world.configPath, stateRoot: world.stateRoot,
+        phase: "builder", files: failure === "outside-writes" ? ["AGENTS.md"] : failure === "alias" ? ["core/src/generated.ts", "core/src/GENERATED.ts"] : ["core/src/generated.ts"],
+        reason: "Bounded fixture grant.", actor: failure === "host" ? "host" : "human", sandboxProbe: () => failure !== "no-sandbox",
+        terminal: { interactive: failure !== "noninteractive", write: () => {}, confirm: async () => {
+          if (failure === "drift") { const status = await readAttempt(world.created.attemptDir); writeFileSync(join(status.worktree!, "changed.txt"), "external drift\n"); }
+          return failure !== "decline";
+        } } });
+      if (failure === "decline") assert.equal((await action()).confirmed, false); else await assert.rejects(action);
+      assert.deepEqual(readFileSync(join(world.created.attemptDir, "journal.jsonl")), before);
+    } finally { rmSync(world.root, { recursive: true, force: true }); }
+  });
+}
+
+for (const cut of ["ungranted", "bad-envelope", "binding-drift", "intent-crash", "head-crash", "publication-crash", "landing-drift"] as const) {
+  test(`A2 ${cut} preserves evidence and never retries the protected generation`, async () => {
+    const world = await fixture("build", 0, config => ({ ...config, policy: { ...config.policy, protected_paths: [...config.policy.protected_paths, "core/src/generated.ts"] } }));
+    try {
+      const prepared = await readAttempt(world.created.attemptDir);
+      await grantCommand({ attemptDir: world.created.attemptDir, config: world.config, configPath: world.configPath, stateRoot: world.stateRoot,
+        phase: "builder", files: ["core/src/generated.ts"], reason: "One bounded generation.", sandboxProbe: () => true,
+        terminal: { interactive: true, write: () => {}, confirm: async () => true } });
+      let calls = 0; let injected = false;
+      const before = readFileSync(join(world.created.attemptDir, "journal.jsonl"));
+      if (cut === "binding-drift") writeFileSync(join(world.root, "prompts/builder/system.md"), "changed runtime prompt\n");
+      const options = { attemptDir: world.created.attemptDir, stateRoot: world.stateRoot, config: world.config, configPath: world.configPath,
+        projectRecord: async (record: Parameters<AttemptProjector>[0], status: Parameters<AttemptProjector>[1]) => {
+          await world.projection.project(record, status);
+          if (!injected && ((cut === "intent-crash" && record.event.evidence?.type === "protected-commit-intent") ||
+              (cut === "publication-crash" && record.event.evidence?.type === "protected-candidate"))) { injected = true; throw new Error("fixture host observer crash"); }
+        },
+        infrastructure: { afterProtectedHeadPublished: () => { if (cut === "head-crash") throw new Error("fixture crash after HEAD CAS"); },
+          adapterFor: (_entry: AdapterEntry, id: string) => new ScriptedAdapter(id, prepared.worktree!, () => {
+          calls++;
+          if (cut === "ungranted") { mkdirSync(join(prepared.worktree!, "core/src/state"), { recursive: true }); writeFileSync(join(prepared.worktree!, "core/src/state/ungranted.ts"), "ungranted\n"); }
+        }, cut === "bad-envelope" ? "malformed" : "success"), createBroker: fakeBroker, sandboxProbe: () => true } };
+      let result: Awaited<ReturnType<typeof runProductionCommand>> | null = null;
+      try { result = await runProductionCommand(options); } catch (error) {
+        assert.ok(cut === "binding-drift" || cut === "intent-crash" || cut === "head-crash" || cut === "publication-crash", String(error));
+      }
+      assert.equal(calls, cut === "binding-drift" ? 0 : 1);
+      if (cut === "binding-drift") assert.deepEqual(readFileSync(join(world.created.attemptDir, "journal.jsonl")), before);
+      if (cut === "landing-drift") {
+        assert.equal(result?.lifecycleState, "AWAITING_OWNER");
+        writeFileSync(join(prepared.worktree!, "core/src/generated.ts"), "changed after candidate binding\n");
+        const journal = readFileSync(join(world.created.attemptDir, "journal.jsonl"));
+        await assert.rejects(() => landCommand({ attemptDir: world.created.attemptDir, terminal: { interactive: true, write: () => {}, confirm: async () => assert.fail("drift must refuse before confirmation") } }), /protected/);
+        assert.deepEqual(readFileSync(join(world.created.attemptDir, "journal.jsonl")), journal);
+      } else if (cut !== "binding-drift") {
+        const facts = readProtectedState(world.created.attemptDir);
+        assert.equal(facts.consumptions.length, 1);
+        assert.equal(facts.bindings.length, cut === "publication-crash" ? 1 : 0);
+        if (cut.endsWith("crash")) assert.equal(facts.intents.length, 1);
+        const head = git(prepared.worktree!, "rev-parse", "HEAD");
+        const indexPath = git(prepared.worktree!, "rev-parse", "--path-format=absolute", "--git-path", "index");
+        if (cut === "head-crash") { assert.equal(head, facts.intents[0]!.binding.candidateSha); assert.equal(existsSync(`${indexPath}.lock`), true); }
+        const index = readFileSync(indexPath); const contents = readFileSync(join(prepared.worktree!, "core/src/generated.ts"));
+        await assert.rejects(() => resumeProductionCommand({ ...options, reason: "observe without replay", terminal: { interactive: true, write: () => {}, confirm: async () => true } }));
+        assert.equal(git(prepared.worktree!, "rev-parse", "HEAD"), head); assert.deepEqual(readFileSync(indexPath), index);
+        assert.deepEqual(readFileSync(join(prepared.worktree!, "core/src/generated.ts")), contents); assert.equal(calls, 1);
+      }
+      assert.equal(git(world.canonical, "rev-parse", "HEAD"), prepared.baseSha);
+    } finally { rmSync(world.root, { recursive: true, force: true }); }
+  });
+}
+
+test("A2 racing owner confirmations issue exactly one protected generation", async () => {
+  const world = await fixture("build", 0, config => ({ ...config, policy: { ...config.policy, protected_paths: [...config.policy.protected_paths, "core/src/generated.ts"] } }));
+  try {
+    let count = 0; let release!: () => void; const barrier = new Promise<void>(resolve => { release = resolve; });
+    const options = { attemptDir: world.created.attemptDir, config: world.config, configPath: world.configPath, stateRoot: world.stateRoot,
+      phase: "builder", files: ["core/src/generated.ts"], reason: "Exact racing confirmation.", sandboxProbe: () => true,
+      terminal: { interactive: true, write: () => {}, confirm: async () => { count++; if (count === 2) release(); await barrier; return true; } } };
+    const results = await Promise.allSettled([grantCommand(options), grantCommand(options)]);
+    assert.equal(results.filter(result => result.status === "fulfilled").length, 1);
+    assert.equal(readProtectedState(world.created.attemptDir).grants.length, 1);
+  } finally { rmSync(world.root, { recursive: true, force: true }); }
+});
 
 test("requested retention on an incomplete adapter blocks before any reservation or provider launch", async () => {
   const world = await fixture("build", 0, config => ({ ...config, agents: config.agents.map(agent => agent.name === "builder"

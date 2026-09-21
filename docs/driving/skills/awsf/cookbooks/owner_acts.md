@@ -1,7 +1,7 @@
 # Owner acts
 
-Nine commands are the owner's and not yours: `journey`, `land`, `cancel`,
-`rework`, `review`, `degrade-review`, `raise`, `publish`, `resume`. This document
+Ten commands are the owner's and not yours: `journey`, `land`, `cancel`,
+`rework`, `review`, `degrade-review`, `raise`, `publish`, `resume`, `grant`. This document
 is about **which one the evidence supports** and **what to hand the owner before
 they decide**. It is not a table
 of what each one costs, and the reason is at the bottom.
@@ -12,9 +12,9 @@ Prepare and explain. Never perform, and never recommend performing one without
 the evidence its edge requires.
 
 This is not merely a convention you could talk yourself out of — the lifecycle
-refuses a non-interactive invocation. Every one of the nine requires an
+refuses a non-interactive invocation. Every one of the ten requires an
 interactive owner terminal, and a piped or redirected standard input is
-refused by the normative machine *before* any process can receive a signal and
+refused by its CLI guard or the normative machine *before* any process can receive a signal and
 before any call is reserved. That refusal is a terminal-shape check, not the
 authorisation boundary: it stops an accidental non-interactive invocation, and
 the boundary a driving session actually operates under is the per-invocation
@@ -107,6 +107,26 @@ no matter how much you disliked its verdict. The command requires a written
 reason, and the reason is a record rather than a key: it does not unlock
 anything.
 
+**`grant`** authorizes exact protected content paths for one unstarted writing
+phase. The owner form is `awsf grant TASK --phase builder --file PATH`
+with one `--file` per exact path and `--reason "WHY"`. The confirmation pins the
+attempt, phase, physical roots, pre-write HEAD, baseline blobs/modes and runtime
+binding. It cannot expand the role's writes/tools, fall back from OS isolation,
+authorize corrections or deletion, or approve landing. Issuance is allowed only
+at a quiescent prepared or recoverable boundary. Consumption is atomic with the
+phase activation and reservation. A consumed or failed generation is never
+reissued automatically. Unfinished host effects retain their exact commit intent
+and refuse replay until host-effect recovery can reconcile them. A crash after
+HEAD publication can leave an `index.lock` alongside the original index. Preserve
+both and the journal. Recovery must match the recorded parent/tree/candidate,
+consumption and original/staged index digests before reconciling that lock;
+deleting it merely to retry does not authorize another execution.
+
+Landing asks separately about the exact final protected blobs and binding chain,
+then asks to land the candidate. A grant does not approve its own implementation:
+the initial verifier is installed through separately authorized external edits,
+and the running verifier refuses to grant writes to its own execution worktree.
+
 **`resume`** continues an unstarted phase from a journal-backed quota pause, or
 finishes a phase result that the host already validated and durably accepted.
 It preserves the original request, accepted phases, candidate and debit. It does
@@ -122,7 +142,7 @@ The same shape every time, and it is short:
 - the handle — task, attempt, lifecycle state, calls spent against the ceiling;
 - what the evidence says, with the phase's claim and the host's measurement kept
   distinct;
-- which of the nine the evidence supports, which it does not, and why;
+- which of the ten the evidence supports, which it does not, and why;
 - what remains — calls, correction rounds, and the attempt-scoped owner re-entry
   allowance, which is what several of these draw on and which does not refresh
   within an attempt.

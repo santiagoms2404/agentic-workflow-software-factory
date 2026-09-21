@@ -26,6 +26,7 @@ import { newCommand } from "./commands/new.ts";
 import { PlanRefUnknown, resolvePlanRef } from "./commands/plan-ref.ts";
 import { relateCommand } from "./commands/relate.ts";
 import { publishCommand } from "./commands/publish.ts";
+import { grantCommand } from "./commands/grant.ts";
 import { raiseCommand } from "./commands/raise.ts";
 import { degradeReviewCommand } from "./commands/degrade-review.ts";
 import { routesListCommand } from "./commands/routes.ts";
@@ -48,7 +49,7 @@ import { selectWorkflow, workflowsCommand } from "./commands/workflows.ts";
 
 /** The complete owner-facing command table; documentation reconciles against it. */
 export const CLI_COMMANDS = Object.freeze([
-  "init", "project", "new", "seed", "start", "run", "resume", "status", "watch", "rework", "review", "raise", "degrade-review", "journey", "land", "publish", "cancel", "retry",
+  "init", "project", "new", "seed", "start", "run", "resume", "status", "watch", "rework", "review", "raise", "grant", "degrade-review", "journey", "land", "publish", "cancel", "retry",
   "relate", "doctor", "gc", "dash", "routes", "db rebuild", "ticket", "backlog", "quota", "stage", "workflows", "group",
 ]);
 
@@ -61,6 +62,7 @@ interface ParsedArgs {
   readonly positionals: readonly string[];
   readonly flags: Readonly<Record<string, string>>;
   readonly repositories: readonly string[];
+  readonly files: readonly string[];
   /** Repeatable: one `--route` per phase, in the order they were written. */
   readonly routes: readonly string[];
 }
@@ -69,6 +71,7 @@ function parseArgs(args: readonly string[]): ParsedArgs {
   const positionals: string[] = [];
   const flags: Record<string, string> = {};
   const repositories: string[] = [];
+  const files: string[] = [];
   const routes: string[] = [];
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index] ?? "";
@@ -82,6 +85,7 @@ function parseArgs(args: readonly string[]): ParsedArgs {
       const value = arg.slice(equals + 1);
       if (key === "repository") repositories.push(value);
       else if (key === "route") routes.push(value);
+      else if (key === "file") files.push(value);
       else flags[key] = value;
       continue;
     }
@@ -103,10 +107,11 @@ function parseArgs(args: readonly string[]): ParsedArgs {
     if (value === undefined || value.startsWith("--")) throw new Error(`--${key} requires a value`);
     if (key === "repository") repositories.push(value);
     else if (key === "route") routes.push(value);
+    else if (key === "file") files.push(value);
     else flags[key] = value;
     index += 1;
   }
-  return { positionals, flags, repositories, routes };
+  return { positionals, flags, repositories, routes, files };
 }
 
 function commandEnvironment(env: NodeJS.ProcessEnv): Readonly<Record<string, string>> {
@@ -579,6 +584,15 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         }
         out(`${result.status.lifecycleState}: ${result.status.nextAction}`);
         return result.status.lifecycleState === "AWAITING_OWNER" ? 0 : 1;
+      }
+      case "grant": {
+        const configPath = resolve(parsed.flags.config ?? `${cwd}/awsf.config.yaml`);
+        const config = loadConfig(await readFile(configPath, "utf8"));
+        const result = await grantCommand({ attemptDir: located.attemptDir, config, configPath, stateRoot,
+          phase: parsed.flags.phase ?? "", files: parsed.files, reason: parsed.flags.reason ?? "",
+          terminal: options.terminal ?? processOwnerTerminal(), projectRecord: projection.project });
+        out(result.confirmed ? "Exact one-use protected grant recorded. Landing still requires separate approval." : "Protected grant declined; nothing recorded.");
+        return result.confirmed ? 0 : 1;
       }
       case "raise": {
         const reason = parsed.flags["reason"] ?? "";

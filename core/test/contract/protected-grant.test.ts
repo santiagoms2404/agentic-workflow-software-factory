@@ -10,6 +10,8 @@ function grant(): ProtectedGrant {
   return sign({ schema: "awsf.protected-grant/v1", id: "grant-one", generationId: "generation-one",
     subject: { project: "fixture", taskId: "bounded-edit", sessionId: "session-one", attempt: 1,
       repository: "/fixture/repository", worktree: "/fixture/worktree", commonGitDir: "/fixture/repository/.git",
+      worktreeGitDir: "/fixture/repository/.git/worktrees/fixture",
+      roots: ["/fixture/repository", "/fixture/repository/.git", "/fixture/worktree", "/fixture/repository/.git/worktrees/fixture"].map(path => ({ path, device: "1", inode: "2", uid: 1000, gid: 1000, mode: 0o755 })),
       integrationBaseSha: oid("1"), preWriteHeadSha: oid("2"), phaseKey: "builder", phaseOrdinal: 2, bindingDigest: hash("3") },
     files: [{ path: "core/src/policy/example.ts", blob: oid("4"), mode: "100644",
       parents: [{ path: "/fixture/worktree", device: "1", inode: "2", uid: 1000, gid: 1000, mode: 0o755 }],

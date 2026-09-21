@@ -33,7 +33,8 @@ export type ProtectedFileBaseline = Static<typeof ProtectedFileBaselineSchema>;
 
 export const ProtectedGrantSubjectSchema = Type.Object({
   project: id, taskId: id, sessionId: id, attempt: Type.Integer({ minimum: 1 }),
-  repository: path, commonGitDir: path, worktree: path,
+  repository: path, commonGitDir: path, worktree: path, worktreeGitDir: path,
+  roots: Type.Array(ProtectedFilesystemIdentitySchema, { minItems: 4, maxItems: 4 }),
   integrationBaseSha: oid, preWriteHeadSha: oid,
   phaseKey: id, phaseOrdinal: Type.Integer({ minimum: 1 }),
   /** Hash of immutable request/config/recipe/route/runtime bindings, excluding grant events. */

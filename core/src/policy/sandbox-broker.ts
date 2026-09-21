@@ -1,3 +1,5 @@
+import { assertProtectedOutput } from "../workflow/protected-grants.ts";
+import { protectedWriteContext, type ProtectedFilesCapability } from "../contracts/protected-capability.ts";
 import { existsSync, realpathSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
 import type { ProcessSpec } from "../adapters/interface.ts";
@@ -155,6 +157,7 @@ export function grantSandbox(
 }
 
 export interface PermissionSessionRequest extends SandboxRequest {
+  readonly protectedCapability?: ProtectedFilesCapability;
   readonly profile: string;
   readonly tools: readonly string[];
   readonly protectedPaths: readonly string[];
@@ -190,6 +193,14 @@ export class PermissionSession {
     const linux = request.platform === "linux" || (request.platform === undefined && process.platform === "linux");
     this.#osEnforced = linux && (request.sandboxProbe ?? hostProbe)("bwrap");
     this.sandboxBadge = linux ? (this.#osEnforced ? "os-enforced" : "tool-policy") : "unavailable";
+    if (request.protectedCapability !== undefined) {
+      const proof = protectedWriteContext(request.protectedCapability);
+      if (this.sandboxBadge !== "os-enforced" || proof?.grant.subject.worktree !== physical(request.worktree) ||
+          JSON.stringify(proof.policy) !== JSON.stringify({ profile: request.profile, tools: request.tools, writes: request.writes, protectedPaths: request.protectedPaths })) {
+        throw new Error("protected execution requires its original role policy, authentic worktree capability and OS sandbox");
+      }
+      assertProtectedOutput(request.protectedCapability, request.worktree);
+    }
   }
 
   sandbox(spec: ProcessSpec): SandboxGrant {
@@ -197,12 +208,15 @@ export class PermissionSession {
   }
 
   enforce(): PermissionResult {
+    if (this.#request.protectedCapability !== undefined) assertProtectedOutput(this.#request.protectedCapability, this.#request.worktree);
     const after = captureChangeSet(this.#request.worktree, this.#git);
     const mutations = changedPaths(this.before, after);
     enforcePathPolicy(mutations, {
       writes: this.profile.writes,
       protectedPaths: this.#request.protectedPaths,
+      ...(this.#request.protectedCapability === undefined ? {} : { protectedCapability: this.#request.protectedCapability }),
     });
+    if (this.#request.protectedCapability !== undefined) assertProtectedOutput(this.#request.protectedCapability, this.#request.worktree);
     return Object.freeze({ changedPaths: mutations, sandboxBadge: this.sandboxBadge });
   }
 }
