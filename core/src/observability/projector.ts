@@ -394,6 +394,7 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
           .run(`${sessionId}:owner-amendment:${amendment.id}`, sessionId, sourceSeq, sourceSeq, stringifyRedacted(amendment), amendment.confirmedAt);
       }
       return;
+    case "protected-activation":
     case "phase": {
       const phase = evidence.phase;
       // A phase-id match is the ordinary status-update path: retain its stored

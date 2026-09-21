@@ -22,7 +22,7 @@
  * with shell access can allocate a PTY and answer the confirmation. This list is
  * what makes the boundary real while a driving session runs with prompts off.
  */
-export const OWNER_ACTS = ["land", "cancel", "rework", "review", "degrade-review", "journey", "raise", "publish", "resume"] as const;
+export const OWNER_ACTS = ["land", "cancel", "rework", "review", "degrade-review", "journey", "raise", "publish", "resume", "grant"] as const;
 
 /** Lifecycle commands for which an external controller deadline is forbidden. */
 export const TIMEOUT_GUARDED_LIFECYCLE_COMMANDS = ["run", "rework", "review", "resume"] as const;

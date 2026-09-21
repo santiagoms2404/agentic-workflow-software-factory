@@ -63,6 +63,10 @@ import { riskTierSufficient } from "../../gates/risk.ts";
 import { candidateHygiene } from "../../gates/candidate-hygiene.ts";
 import { commandsPass } from "../../gates/commands.ts";
 import { envelopeValid } from "../../gates/envelope.ts";
+import { prepareProtectedConsumption, protectedGrantForPhase, readProtectedState, inspectProtectedCandidate, protectedPromptContext, assertProtectedOutput } from "../../workflow/protected-grants.ts";
+import { verifyProtectedWrite, verifyProtectedPreservation, type ProtectedFilesCapability } from "../../contracts/protected-capability.ts";
+import { protectedRootIdentity } from "../../workflow/protected-files.ts";
+import { commitProtectedAsHost } from "../../git/protected-commit.ts";
 import { diffMatchesClaims, headAdvanced, noProtectedPaths, writesWithinGlobs } from "../../gates/git-diff.ts";
 import { GateReport, type GateId } from "../../gates/interface.ts";
 import {
@@ -257,6 +261,8 @@ export class CommandPhaseFailure extends Error {
 }
 
 export interface ProductionInfrastructure {
+  /** Test seam for the durable protected commit intent / HEAD / index crash cut. */
+  readonly afterProtectedHeadPublished?: () => Promise<void> | void;
   adapterFor(entry: AdapterEntry, adapterId: string, config: AwsfConfig): HarnessAdapter | null;
   createBroker(options: BrokerOptions): TransportBroker;
   runCommand(executable: string, argv: readonly string[], options: SystemCommandOptions): ReturnType<typeof runSystemCommand>;
@@ -676,6 +682,7 @@ function phaseGates(
   tier: Tier,
   buildsCandidate: boolean,
   attributionBaseSha: string | null = null,
+  protectedCapabilities: () => Promise<readonly ProtectedFilesCapability[]> = async () => [],
 ): readonly GateDefinition[] {
   const observe = attributionBaseSha !== null && review === null
     ? (): readonly string[] => changesSinceBase(worktree, attributionBaseSha)
@@ -708,7 +715,7 @@ function phaseGates(
     },
     { id: "artifacts_exist", run: ({ envelope }) => artifactsExist(envelope.artifacts, read) },
     { id: "json_parses", run: ({ envelope }) => jsonParses(envelope.artifacts, read) },
-    { id: "no_protected_paths", run: () => noProtectedPaths(assurance(), config.policy.protected_paths) },
+    { id: "no_protected_paths", run: async () => noProtectedPaths(assurance(), config.policy.protected_paths, true, await protectedCapabilities()) },
   ];
   if (phaseId === "planner") {
     common.push(
@@ -998,7 +1005,7 @@ async function validatePreparedRepository(status: AttemptStatus): Promise<void> 
 
 type RecoveryInspection = Awaited<ReturnType<typeof inspectPhaseRecovery>>;
 
-async function productionRecoveryBinding(options: ProductionRunOptions, status: AttemptStatus): Promise<string> {
+export async function productionRecoveryBinding(options: Pick<ProductionRunOptions, "config" | "configPath">, status: AttemptStatus): Promise<string> {
   const recipe = SUPPORTED.get(status.workflow);
   if (recipe === undefined) throw new Error("recovery recipe unavailable");
   const prompts = await Promise.all(recipe.phases.filter(phase => phase.kind === "agent").map(async phase => {
@@ -1019,10 +1026,28 @@ async function productionRecoveryBinding(options: ProductionRunOptions, status: 
       maxCorrections: phase.maxCorrections, gates: phase.gates.map(gate => gate.id) })) });
 }
 
+export async function protectedGrantSubject(options: Pick<ProductionRunOptions, "config" | "configPath">, status: AttemptStatus, phaseKey: string): Promise<import("../../contracts/protected-grant.ts").ProtectedGrantSubject> {
+  const recipe = SUPPORTED.get(status.workflow);
+  const ordinal = recipe?.phases.findIndex(phase => phase.id === phaseKey) ?? -1;
+  const phase = recipe?.phases[ordinal];
+  if (phase?.kind !== "agent" || ordinal < 0 || status.worktree === null || status.baseSha === null ||
+      !options.config.agents.some(agent => agent.name === phase.owner && agent.writes.length > 0)) throw new Error("protected grant requires a prepared writing model phase");
+  if (resolve(status.worktree) === resolve(fileURLToPath(new URL("../../../../", import.meta.url)))) throw new Error("protected bootstrap cannot authorize the runtime implementing its own verifier");
+  const git = systemGitRunner(status.worktree);
+  return { project: status.project, taskId: status.taskId, sessionId: status.sessionId, attempt: status.attempt,
+    repository: status.repository, worktree: status.worktree, commonGitDir: runGit(git, ["rev-parse", "--path-format=absolute", "--git-common-dir"]).trim(),
+    worktreeGitDir: runGit(git, ["rev-parse", "--absolute-git-dir"]).trim(),
+    roots: [status.repository, runGit(git, ["rev-parse", "--path-format=absolute", "--git-common-dir"]).trim(), status.worktree, runGit(git, ["rev-parse", "--absolute-git-dir"]).trim()].map(protectedRootIdentity),
+    integrationBaseSha: status.baseSha, preWriteHeadSha: runGit(git, ["rev-parse", "HEAD"]).trim(), phaseKey, phaseOrdinal: ordinal + 1,
+    bindingDigest: await productionRecoveryBinding(options, status) };
+}
+
 async function executeProductionCommand(options: ProductionRunOptions, operationId: string,
   recovery?: { inspected: RecoveryInspection; reason: string; quotaReadings: BoundaryQuota[]; instruction?: ResumeInstruction | null }, preflightOnly = false): Promise<AttemptStatus> {
   const infra: ProductionInfrastructure = { ...DEFAULT_INFRASTRUCTURE, ...options.infrastructure };
   let status = recovery?.inspected.status ?? await readAttempt(options.attemptDir);
+  const protectedState = readProtectedState(options.attemptDir);
+  if (recovery !== undefined && protectedState.consumptions.some(consumption => !protectedState.bindings.some(binding => binding.consumptionId === consumption.id))) throw new Error("protected generation is consumed without a completed candidate binding; host-effect recovery must reconcile it without replay");
   if (recovery === undefined) {
     if (status.recovery != null) throw new Error("saved phase completion or quota anchor exists; use awsf resume");
     const recoveredReview = await settleExitedReview(options, status, infra.now());
@@ -1255,6 +1280,11 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     return status;
   }
 
+  for (const grant of protectedState.grants) {
+    if (protectedState.consumptions.some(value => value.grantId === grant.id)) continue;
+    if (process.platform !== "linux" || !(infra.sandboxProbe?.("bwrap") ?? (runSystemCommand("bwrap", ["--version"], 5000).status === 0))) throw new Error("protected grants require an OS-enforced sandbox");
+    prepareProtectedConsumption(options.attemptDir, await protectedGrantSubject(options, status, grant.subject.phaseKey), "preflight", "preflight");
+  }
   if (preflightOnly) return status;
   const budget = new CallBudget({
     taskId: status.taskId,
@@ -1299,13 +1329,13 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     await operation;
   };
 
-  const persistTransition = async (from: TaskState, to: TaskState, edgeId: EdgeId, source: string, code: string | null, detail: string | null, spawnSite: boolean, update: Partial<AttemptStatus>): Promise<void> => {
+  const persistTransition = async (from: TaskState, to: TaskState, edgeId: EdgeId, source: string, code: string | null, detail: string | null, spawnSite: boolean, update: Partial<AttemptStatus>, protectedConsumption?: import("../../contracts/protected-grant.ts").ProtectedGrantConsumption): Promise<void> => {
     const at = infra.now();
     transitionSeq += 1;
     await persist("attempt.transitioned", { lifecycleState: to, lastActivityAt: at, nextAction: nextActionFor(to, status.taskId), ...update }, {
       type: "transition", id: `${status.sessionId}:transition:${transitionSeq}`, seq: transitionSeq,
       from, to, actor: "host", edgeId, reasonSource: source, reasonCode: code, reasonDetail: detail,
-      spawnSite, at,
+      spawnSite, at, ...(protectedConsumption === undefined ? {} : { protectedConsumption }),
     });
   };
 
@@ -1691,7 +1721,10 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       .filter((candidate) => candidate.kind === "agent")
       .length;
     const coldCorrectionHeadroom = (): number => Math.max(0, budget.remaining - futureInitialCalls);
-    const routeMaximumCorrections = route.continuity
+    const phaseGrant = protectedState.grants.find(grant => grant.subject.phaseKey === phase.id) ?? null;
+    const protectedCapability = phaseGrant === null ? undefined : await verifyProtectedWrite({ attemptDir: options.attemptDir,
+      subject: await protectedGrantSubject(options, status, phase.id), operationId, reservationId: reservation.id });
+    const routeMaximumCorrections = phaseGrant !== null ? 0 : route.continuity
       ? phase.maxCorrections
       : Math.min(phase.maxCorrections, coldCorrectionHeadroom());
     const configuredRecord = phaseRecords.get(phase.id)!;
@@ -1721,6 +1754,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       tools: route.agent.tools.allow,
       writes: route.agent.writes,
       protectedPaths: options.config.policy.protected_paths,
+      ...(protectedCapability === undefined ? {} : { protectedCapability }),
       ...(infra.sandboxProbe === undefined ? {} : { sandboxProbe: infra.sandboxProbe }),
     });
     // Re-armed after every candidate commit, because both objects measure "what
@@ -1731,15 +1765,24 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     let permission: Pick<PermissionSession, "before" | "enforce" | "sandbox" | "sandboxBadge" | "profile"> = restored === null ? openPermission()
       : savedResultPermissions(restored, route.agent, status.worktree!, options.config.policy.protected_paths);
     const attributionBaseSha = seed === null ? null : runGit(systemGitRunner(status.worktree!), ["rev-parse", "HEAD"]).trim();
-    const openHostGit = (): HostPhaseGit<EnvelopeBase> => createHostPhaseGit<EnvelopeBase>({
-      repository: status.worktree!, ...(restored === null ? {} : { before: restored.before }),
-      commitMessage: (envelope) => phase.id === "builder"
-        ? (envelope as BuildOutput).proposedCommitMessage
-        : `chore: record ${phase.id} output`,
-    });
+    const openHostGit = (): HostPhaseGit<EnvelopeBase> => {
+      const message = (envelope: EnvelopeBase): string => phase.id === "builder" ? (envelope as BuildOutput).proposedCommitMessage : `chore: record ${phase.id} output`;
+      const ordinary = createHostPhaseGit<EnvelopeBase>({ repository: status.worktree!, ...(restored === null ? {} : { before: restored.before }), commitMessage: message });
+      if (protectedCapability === undefined) return ordinary;
+      let observed: readonly string[] | null = null;
+      return { captureDiff: () => { observed = ordinary.captureDiff(); return observed; }, commit: async (envelope, paths) => {
+        if (observed === null || paths !== observed) throw new Error("protected commit requires its host-captured diff object");
+        return commitProtectedAsHost({ attemptDir: options.attemptDir, capability: protectedCapability, message: message(envelope), paths,
+          writes: route.agent.writes, protectedPaths: options.config.policy.protected_paths,
+          ...(infra.afterProtectedHeadPublished === undefined ? {} : { afterHeadPublished: infra.afterProtectedHeadPublished }),
+          persistIntent: async intent => persist("attempt.updated", {}, { type: "protected-commit-intent", intent }),
+          persistBinding: async binding => persist("attempt.updated", {}, { type: "protected-candidate", binding }) });
+      } };
+    };
     let hostGit = openHostGit();
     const rolePrompt = renderProductionRolePrompt(phase, previous, designContext, status.request, route.agent);
-    const originalPrompt = rolePrompt + seedContext(status) + resumeInstructionContext(instructions);
+    const grantContext = protectedPromptContext(phaseGrant);
+    const originalPrompt = rolePrompt + seedContext(status) + resumeInstructionContext(instructions) + grantContext;
     const amendment = phase.id === seed?.builderPhaseKey ? seed.ownerAmendment : null;
     const instruction = instructionFor(phase.id);
     if (instruction !== null) {
@@ -1759,6 +1802,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     }
     const gatedPhase = {
       ...phase,
+      ...(phaseGrant === null ? {} : { maxCorrections: 0 }),
       // The engine renders once more at launch. Pin it to the exact prompt
       // persisted above, including architecture review's repository envelope.
       renderPrompt: () => renderedPrompt,
@@ -1779,6 +1823,12 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
           status.tier,
           recipe.phases.some((candidate) => candidate.kind === "agent" && candidate.owner === "builder"),
           attributionBaseSha,
+          async () => {
+            if (protectedState.grants.length === 0) return [];
+            const capabilities: ProtectedFilesCapability[] = protectedCapability === undefined ? [] : [protectedCapability];
+            if (readProtectedState(options.attemptDir).bindings.length > 0) capabilities.push(await verifyProtectedPreservation(options.attemptDir, runGit(systemGitRunner(status.worktree!), ["rev-parse", "HEAD"]).trim(), protectedCapability));
+            return capabilities;
+          },
         ),
       ],
     };
@@ -2096,6 +2146,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
         persistence: { persist: (envelope, raw) => persistEnvelope(phase.id, runIdFor(envelope.correctionRound), envelope, raw) },
         ...(restored === null ? {} : { initialEnvelope: recovery!.inspected.pendingEnvelope!, initialUsage: originalUsage.snapshot() }),
         onResultStored: async envelope => {
+          if (protectedCapability !== undefined) assertProtectedOutput(protectedCapability, status.worktree!);
           await phaseQueue;
           if (!envelope.valid || envelope.payload === null) return;
           const original = budget.reservation(reservation.id)!;
@@ -2160,6 +2211,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
          * task ceiling after every later required phase has retained headroom.
          */
         authorizeCorrection: ({ cause, correctionRound, reports }) => {
+          if (phaseGrant !== null) return { actor: null, reason: "protected generation is one-use; corrections require separate authorization" };
           if (restored !== null) return { actor: null, reason: "saved reply validation cannot authorize another model call" };
           const snapshot = budget.snapshot();
           if (snapshot.correctionsAuto >= snapshot.allowance.auto) {
@@ -2526,17 +2578,24 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
         const reservation = savedResult?.phaseKey === phase.id ? budget.restoreReservation(savedResult.reservation) : agentOrdinal === 1 && firstReservation !== null
           ? firstReservation
           : budget.reserve({ cost: 1, subject: `${compiled.id}:${phase.id}` });
+        const protectedConsumption = !protectedState.grants.some(value => value.subject.phaseKey === phase.id) ? null
+          : prepareProtectedConsumption(options.attemptDir, await protectedGrantSubject(options, status, phase.id), operationId, reservation.id);
         if (activationPending) {
           const started = { ...phaseRecords.get(phase.id)!, status: "RUNNING", startedAt: infra.now() };
           await persist("attempt.updated", { recovery: null, activeOperation: operationId, budget: budget.snapshot(),
             phase: { name: phase.id, state: "RUNNING", round: 0, maximumRounds: phase.maxCorrections } },
             { type: "resume-activation", operationId, quotaReadings: recovery!.quotaReadings,
               ...(recovery!.instruction == null ? {} : { ownerInstruction: recovery!.instruction }), checkpointId: recovery!.inspected.checkpoint.id,
-              reason: recovery!.reason, reservationId: reservation.id, phase: started });
+              reason: recovery!.reason, reservationId: reservation.id, phase: started,
+              ...(protectedConsumption === null ? {} : { protectedConsumption }) });
           phaseRecords.set(phase.id, started);
           activationPending = false;
-        } else if (agentOrdinal > 1 && savedResult?.phaseKey !== phase.id) {
-          await persist("attempt.updated", { budget: budget.snapshot(), lastActivityAt: infra.now(), lastActivity: `held one call for ${phase.id}` });
+        } else if (protectedConsumption !== null || (agentOrdinal > 1 && savedResult?.phaseKey !== phase.id)) {
+          const started = { ...phaseRecords.get(phase.id)!, status: "RUNNING", startedAt: infra.now() };
+          await persist("attempt.updated", { budget: budget.snapshot(), lastActivityAt: infra.now(), lastActivity: `held one call for ${phase.id}`,
+            ...(protectedConsumption === null ? {} : { activeOperation: operationId, phase: { name: phase.id, state: "RUNNING", round: 0, maximumRounds: 0 } }) },
+            protectedConsumption === null ? undefined : { type: "protected-activation", consumption: protectedConsumption, phase: started });
+          if (protectedConsumption !== null) phaseRecords.set(phase.id, started);
         }
         const result = await runAgent(phase, index + 1, previous, reservation, recovery === undefined && agentOrdinal === 1, null);
         previous = result.envelope;
@@ -2696,6 +2755,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     if (candidateSha === null && readOnlyResult === null) {
       throw new Error("workflow completed without a host candidate");
     }
+    if (protectedState.grants.length > 0 && candidateSha !== null) inspectProtectedCandidate(options.attemptDir, candidateSha);
     const l7Evidence = readOnlyResult === null
       ? { requiredPhasesTerminalSuccess: true, hostCommitCreated: true, baseSha: status.baseSha!, candidateSha: candidateSha! }
       : { requiredPhasesTerminalSuccess: true, hostCommitCreated: false, baseSha: status.baseSha!, readOnlyResult };
@@ -2981,7 +3041,7 @@ async function prepareResumeInstruction(options: ProductionRunOptions, inspected
   const previous = [...inspected.envelopes.values()].at(-1) ?? null;
   const design = [...inspected.envelopes.values()].find(value => value.schema === DESIGN_CONTEXT_SCHEMA_ID) as DesignContext | undefined;
   const originalPrompt = renderProductionRolePrompt(phase, previous, design ?? null, inspected.status.request, agent) +
-    seedContext(inspected.status) + resumeInstructionContext(inspected.instructions);
+    seedContext(inspected.status) + resumeInstructionContext(inspected.instructions) + protectedPromptContext(protectedGrantForPhase(options.attemptDir, phase.id));
   const seedAmendment = inspected.status.seed?.builderPhaseKey === phase.id ? inspected.status.seed.ownerAmendment : null;
   return { phaseKey: phase.id, ordinal, bundleDigest: recoveryDigest(bundle), originalPrompt, seedAmendment };
 }

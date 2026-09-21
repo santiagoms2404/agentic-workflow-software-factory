@@ -70,7 +70,7 @@ export async function inspectPhaseRecovery(attemptDir: string) {
   for (const record of scan.records) {
     if (record.event.next.sessionId !== status.sessionId || record.event.next.revision !== record.source_seq) throw new Error("recovery journal identity or sequence mismatch");
     const evidence = record.event.evidence;
-    if ((evidence?.type === "phase" || evidence?.type === "resume-activation") && evidence.phase !== null) phases.set(evidence.phase.key, evidence.phase);
+    if ((evidence?.type === "phase" || evidence?.type === "resume-activation" || evidence?.type === "protected-activation") && evidence.phase !== null) phases.set(evidence.phase.key, evidence.phase);
     if (evidence?.type === "phase-result-ready") phases.set(evidence.phase.key, evidence.phase);
     if (evidence?.type === "phase-accepted") {
       phases.set(evidence.phase.key, evidence.phase);

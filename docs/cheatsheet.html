@@ -558,7 +558,7 @@ npm run typecheck</pre>
   <p><strong>Nothing expires while you decide.</strong> A candidate waiting for a person stays waiting. Closing the session, shutting the machine, or coming back tomorrow changes nothing about the job&rsquo;s recorded state &mdash; the session was the thing driving, never the thing holding. And a candidate you never sign for changes nothing at all, which is exactly what makes the worked example safe for the next person to run.</p>
 
   <h3>The eight acts that are yours</h3>
-  <p>Eight acts belong to the owner, each with its own eligibility: <code>land</code>, <code>cancel</code>, <code>rework</code>, <code>review</code>, <code>journey</code>, <code>raise</code>, <code>publish</code> and <code>resume</code>. What makes them one set is not what they do, because they do quite different things. It is who may do them. <strong>Each is a decision a person takes, and each is refused to an assistant.</strong></p>
+  <p>Ten acts belong to the owner, each with its own eligibility: <code>land</code>, <code>cancel</code>, <code>rework</code>, <code>review</code>, <code>degrade-review</code>, <code>journey</code>, <code>raise</code>, <code>publish</code>, <code>resume</code> and <code>grant</code>. What makes them one set is not what they do, because they do quite different things. It is who may do them. <strong>Each is a decision a person takes, and each is refused to an assistant.</strong></p>
 
   <p><em>Refused</em> is the exact word, and this is the place to use leg 5&rsquo;s distinction on something that matters. The refusal is a thing that stops, not a record that reports: the surface marimba runs through denies the call before the act can begin. So it holds whether or not the assistant has read any instruction, agrees with it, or has been talked round to a different view. What you will see instead is marimba preparing the act, explaining it, and stopping. <strong>That stop is the machine, not the manners.</strong></p>
 
@@ -639,6 +639,7 @@ npm run awsf -- land TASK</pre>
   <p>A command is a name the factory answers to. This is the whole set: a name that is not here does not exist, and a name added to the factory tomorrow makes this list wrong until somebody adds it.</p>
 
   <ul data-awsf-fact-class="commands">
+    <li><code>grant</code></li>
     <li><code>init</code></li>
     <li><code>project</code></li>
     <li><code>new</code></li>
@@ -772,6 +773,7 @@ npm run awsf -- land TASK</pre>
   <p>These are the acts a person performs. The set is not a policy written down in a document and hoped for: it is the verb loop inside the guard that every driving session runs under, so an assistant is denied them by the tool surface before the act can begin &mdash; whatever it has read, whatever it agrees with, and whatever it has been talked round to.</p>
 
   <ul data-awsf-fact-class="owner-acts">
+    <li><code>grant</code></li>
     <li><code>resume</code></li>
     <li><code>land</code></li>
     <li><code>cancel</code></li>
@@ -792,6 +794,7 @@ npm run awsf -- land TASK</pre>
     <li><b><code>review</code></b>Buys one replacement second opinion on an unchanged candidate. It is available only when the recorded review is defective as evidence, so it cannot be used to shop for a verdict you like better.</li>
     <li><b><code>journey</code></b>Your attestation that you ran the built software yourself and it worked. Nothing inside the factory can answer that question, which is why the answer has to enter through a person &mdash; and why this act cannot pass itself.</li>
     <li><b><code>raise</code></b>Lifts one job&rsquo;s spending ceiling, for that job alone, bounded and recorded. A ceiling is a checkpoint rather than a cap; this is the checkpoint being answered by the person paying.</li>
+    <li><b><code>grant</code></b>Authorizes exact protected content files for one unstarted writing phase at a quiescent boundary. The owner uses <code>awsf grant TASK --phase builder --file PATH --reason "WHY"</code>, repeating <code>--file</code> for each path. It requires OS isolation and keeps existing role writes and tools. One activation consumes the generation. A separate final confirmation binds protected blobs and candidate SHA before landing. Failed generations, corrections and unfinished host effects receive no automatic replay authority.</li>
     <li><b><code>resume</code></b>Continues an unstarted phase at a verified quota boundary, or finishes a durably accepted phase result without repeating its model turn. Original input and debit stay intact. Genuinely interrupted turns and legacy attempts without checkpoints refuse.</li>
     <li><b><code>publish</code></b>Pushes landed work to the remote. The only act whose effect the factory cannot take back, and the reason it records what the remote actually did rather than what it intended.</li>
   </ul>

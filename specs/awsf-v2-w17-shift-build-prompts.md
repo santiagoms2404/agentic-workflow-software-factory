@@ -56,8 +56,11 @@ READ FIRST
 
 DO
   Create core/src/contracts/shift-manifest.ts declaring ShiftManifestSchema with $id
-    "awsf.shift-manifest/v1": plan, milestone, tickets (ordered array of {id, path, digest,
-    tier?, workflow?}), manifestDigest. Register it in contracts/registry.ts.
+    "awsf.shift-manifest/v1": plan, milestones (ordered array of milestone ids, minItems 1,
+    in the owner's selection order), tickets (ordered array of {id, path, digest, tier?,
+    workflow?}), manifestDigest. Register it in contracts/registry.ts.
+  A shift selects ONE OR MORE milestones. `milestones` is a list even when it holds one -
+    there is no singular form and no one-milestone special case.
   Create core/src/persistence/plan-ticket-body.ts. It extracts the single "## Build prompt"
     fenced block from a plan-ticket file and refuses a file with zero or more than one.
   Digest the WHOLE ticket file's bytes, not the prompt block. An appended ## Handoff entry
@@ -137,14 +140,22 @@ READ FIRST
   core/src/contracts/ticket.ts - TICKET_WORKFLOWS. It must NOT gain "shift"
 
 DO
-  Create core/src/workflow/shift/select.ts with selectShiftTickets(plan, milestone, records).
-  Return the milestone's tickets in topological order over depends_on, falling back to
-    ticket-id order for independents, so the order is deterministic and reproducible.
-  Select only state: todo. REFUSE BY NAME a milestone holding a wip or failed ticket -
-    do not skip it. A half-done milestone is the owner's decision, not the expander's.
-  Refuse: a depends_on edge leaving the milestone whose target is not done; a cycle;
-    an empty expansion. Each gets its own named error class.
-  Derive the shift's tier as the maximum of the selected tickets' declared tiers.
+  Create core/src/workflow/shift/select.ts with selectShiftTickets(plan, milestones, records).
+  `milestones` is an ORDERED LIST of one or more milestone ids. One milestone is the common
+    case, not a special case - there is no singular overload.
+  Return the selected milestones' tickets in ONE topological order over depends_on across
+    the whole selection, tie-broken by the milestone's position in the list and then by
+    ticket id, so the order is deterministic and reproducible.
+  Select only state: todo. REFUSE BY NAME a SELECTED milestone holding a wip or failed
+    ticket - do not skip it. A half-done milestone is the owner's decision, not the
+    expander's.
+  Refuse: a depends_on edge leaving THE SELECTION whose target is not done; a cycle; an
+    empty expansion; a repeated milestone id; a named milestone holding no tickets at all.
+    Each gets its own named error class.
+  An edge from one selected milestone INTO ANOTHER is not a refusal - it is inside the
+    selection, and honouring it is what the single topological order is for.
+  Derive the shift's tier as the maximum of the selected tickets' declared tiers, across
+    every selected milestone.
   Add a meta-test asserting no ticket anywhere declares workflow: shift and that
     TICKET_WORKFLOWS does not contain it.
 
@@ -152,10 +163,16 @@ DO NOT
   Do NOT widen TICKET_WORKFLOWS. A ticket names its own route; the shift is the container.
   Do NOT parse ticket ids for a naming convention. Compare them literally, the way
     dashboard/src/session-stacks.ts already does.
+  Do NOT require the selected milestones to be contiguous. M1,M3 with M2 skipped is
+    legitimate when M3 does not depend on M2; when it does, the leaving-the-selection
+    check already refuses it. A contiguity rule would refuse a correct selection.
 
 DONE WHEN
   npx tsx --test core/test/unit/shift-select.test.ts - every refusal fires on its own
     fixture directory, and the accepted case returns the exact expected order
+  The same test covers a THREE-MILESTONE selection: one topological order across all three,
+    a cross-milestone depends_on edge honoured rather than refused, and a non-contiguous
+    M1,M3 selection accepted when M3 is independent of M2
   npm run test:unit, npm run typecheck, npm run lint - green, count recorded
 
 COMMIT
@@ -647,7 +664,10 @@ READ FIRST
   specs/awsf-v2-w17-shift.html - milestone M3's ticket-count table IN FULL. It is the test cases
 
 DO
-  Create core/src/cli/commands/shift.ts with `awsf shift plan <stem> --milestone <Mx>`.
+  Create core/src/cli/commands/shift.ts with
+    `awsf shift plan <stem> --milestone <Mx>[,<My>,...]`. The flag takes a comma-separated
+    list and may also be repeated; both spell the same ordered selection. A range syntax is
+    deliberately NOT added - one spelling, not two.
   BEFORE writing anything, print: the ordered ticket ids and titles, minimumCalls = N + 1,
     the attempt's ceiling, the remaining headroom, and - when it does not fit - the exact
     number of awsf raise acts and the calls each must grant.
@@ -655,6 +675,10 @@ DO
     builder's declared maxCorrections: 1 buys nothing, so the shift has no correction round.
   Reuse CallCeilingExceeded for the refusal rather than minting a new class, so the
     dashboard's failure classifier meets a name it already knows.
+  DISTINGUISH THE TWO REFUSALS in the message: a selection that needs raise acts, and one
+    that no raise can fund because minimumCalls exceeds MAX_CALL_CEILING = 20. With
+    multi-milestone selection the second is reachable in ordinary use - 19 tickets is the
+    hard maximum for one shift - where with a single milestone it was hypothetical.
 
 DO NOT
   Do NOT spawn, reserve, or write to the ledger from this command. It reads and prints.

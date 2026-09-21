@@ -1,3 +1,4 @@
+import { protectedExemptionAllows, protectedWriteContext, type ProtectedFilesCapability } from "../contracts/protected-capability.ts";
 import { posix } from "node:path";
 
 export type PathViolationReason = "invalid-path" | "outside-write-globs" | "protected-path";
@@ -8,6 +9,7 @@ export interface PathViolation {
 }
 
 export interface PathPolicy {
+  readonly protectedCapability?: ProtectedFilesCapability;
   readonly writes: readonly string[];
   readonly protectedPaths: readonly string[];
   /** Defaults to this host's filesystem convention. */
@@ -124,7 +126,7 @@ export function evaluatePathPolicy(paths: readonly string[], policy: PathPolicy)
     if (!policy.writes.some((glob) => matchesPathGlob(path, glob, caseSensitive))) {
       reasons.push("outside-write-globs");
     }
-    if (policy.protectedPaths.some((glob) => matchesPathGlob(path, glob, caseSensitive))) {
+    if (policy.protectedPaths.some((glob) => matchesPathGlob(path, glob, protectedWriteContext(policy.protectedCapability) === null ? caseSensitive : false)) && !protectedExemptionAllows(policy.protectedCapability, path, "write")) {
       reasons.push("protected-path");
     }
     if (reasons.length > 0) violations.push(Object.freeze({ path, reasons: Object.freeze(reasons) }));

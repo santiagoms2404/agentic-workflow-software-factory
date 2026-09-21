@@ -101,7 +101,7 @@ pre.mermaid{background:transparent;border:0;padding:0;margin:0;font-family:var(-
   <!-- ===== HEADER + UPDATABLE METADATA ===== -->
   <header>
     <h1>Plan: AWSF v2 W17 — <code>shift</code></h1>
-    <p class="tagline">Sequential unattended execution of one milestone's tickets, as <strong>one attempt whose recipe is compiled from the tickets themselves</strong> — not as a runner that launches many.</p>
+    <p class="tagline">Sequential unattended execution of one or more milestones' tickets, as <strong>one attempt whose recipe is compiled from the tickets themselves</strong> — not as a runner that launches many.</p>
     <details class="meta">
       <summary>Metadata</summary>
       <dl>
@@ -157,7 +157,7 @@ flowchart LR
   <!-- ===== PURPOSE / PROBLEM / SOLUTION ===== -->
   <section id="purpose">
     <h2>Purpose</h2>
-    <p><code>shift</code> is a <strong>new workflow type</strong>: a recipe whose phase list is <em>compiled from a selected set of plan tickets</em> at attempt-creation time, rather than declared statically in <code>core/src/workflow/recipes/</code>. One shift executes one milestone's tickets in dependency order, unattended, inside one attempt, one worktree and one call ceiling, and reaches the owner exactly once.</p>
+    <p><code>shift</code> is a <strong>new workflow type</strong>: a recipe whose phase list is <em>compiled from a selected set of plan tickets</em> at attempt-creation time, rather than declared statically in <code>core/src/workflow/recipes/</code>. One shift executes the tickets of one <em>or more</em> selected milestones in dependency order, unattended, inside one attempt, one worktree and one call ceiling, and reaches the owner exactly once.</p>
     <p>It supersedes the <strong>&ldquo;away mode&rdquo; candidate</strong> recorded in the 2026-09-03 amendment of <a href="awsf-v2-plan.html">the v2 spine</a>. That entry's measurements are taken as given and are not re-derived here; the sections below say where this plan <em>departs</em> from it and why, and two of the departures are because the ground moved after 2026-09-03.</p>
   </section>
 
@@ -251,12 +251,12 @@ flowchart TD
 
     <h3>New Files</h3>
     <ul>
-      <li><span class="tag new">new</span> <code>core/src/contracts/shift-manifest.ts</code> — <code>ShiftManifestSchema</code> (<code>awsf.shift-manifest/v1</code>): plan stem, milestone, the ordered ticket entries with a byte digest each, and the manifest digest. TypeBox, like every other contract.</li>
+      <li><span class="tag new">new</span> <code>core/src/contracts/shift-manifest.ts</code> — <code>ShiftManifestSchema</code> (<code>awsf.shift-manifest/v1</code>): plan stem, the ordered list of selected milestones, the ordered ticket entries with a byte digest each, and the manifest digest. TypeBox, like every other contract.</li>
       <li><span class="tag new">new</span> <code>core/src/persistence/plan-ticket-body.ts</code> — the <code>## Build prompt</code> reader, split from <code>plan-tickets.ts</code> so the frontmatter path keeps its current cost and its current cache.</li>
-      <li><span class="tag new">new</span> <code>core/src/workflow/shift/select.ts</code> — plan + milestone → the ordered, filtered ticket list, and the refusal vocabulary for every way that selection can be empty, cyclic or already done.</li>
+      <li><span class="tag new">new</span> <code>core/src/workflow/shift/select.ts</code> — plan + one or more milestones → a single ordered, filtered ticket list, and the refusal vocabulary for every way that selection can be empty, cyclic, repeated or already done.</li>
       <li><span class="tag new">new</span> <code>core/src/workflow/shift/compile.ts</code> — <code>compileShift(manifest, bodies, config)</code> → <code>WorkflowRecipe</code>. Pure; reads no file, no clock and no provider.</li>
       <li><span class="tag new">new</span> <code>core/src/workflow/compiled-ids.ts</code> — <code>COMPILED_WORKFLOW_IDS</code>, the second vocabulary, so <code>catalog.ts</code>'s assertion keeps its exact current meaning for shipped recipes.</li>
-      <li><span class="tag new">new</span> <code>core/src/cli/commands/shift.ts</code> — <code>awsf shift plan &lt;stem&gt; --milestone &lt;Mx&gt;</code>: the pre-flight readout (tickets, calls, ceiling, raise acts needed) and the manifest write. <strong>Spawns nothing.</strong></li>
+      <li><span class="tag new">new</span> <code>core/src/cli/commands/shift.ts</code> — <code>awsf shift plan &lt;stem&gt; --milestone &lt;Mx&gt;[,&lt;My&gt;…]</code>: the pre-flight readout (tickets, calls, ceiling, raise acts needed) and the manifest write. <strong>Spawns nothing.</strong></li>
       <li><span class="tag new">new</span> <code>core/src/git/candidate-ref.ts</code> — the ref written at seal time. <span class="tag blocked">merge-blocked</span> at its call site, not in itself.</li>
       <li><span class="tag new">new</span> <code>core/test/unit/shift-*.test.ts</code>, <code>core/test/journeys/shift-milestone.test.ts</code> — the unit and journey coverage each milestone's Testing Strategy names.</li>
       <li><span class="tag new">new</span> <code>specs/awsf-v2-w17-shift-build-prompts.md</code>, <code>specs/tickets/awsf-v2-w17-shift/</code> — this plan's prompt artifacts, paired by the invariant-12 fence.</li>
@@ -279,7 +279,7 @@ flowchart TD
       <dt><code class="inv">INV-5</code></dt>
       <dd><strong>A shift never widens its own ceiling.</strong> <code>awsf raise</code> stays an interactive owner act with a recorded reason, and no shift code path reaches it. A shift that exhausts its ceiling stops and says where it is.</dd>
       <dt><code class="ac">AC-1</code></dt>
-      <dd>One selection act names a plan stem and a milestone; the host expands it to the ordered ticket list, refuses every ambiguous expansion by name, and records the selection with a per-file byte digest so a reader can later see exactly which tickets ran.</dd>
+      <dd>One selection act names a plan stem and one or more milestones; the host expands it to a single ordered ticket list spanning them, refuses every ambiguous expansion by name, and records the selection with a per-file byte digest so a reader can later see exactly which tickets ran.</dd>
       <dt><code class="ac">AC-2</code></dt>
       <dd>N tickets compile to a phase list whose <code>minimumCalls</code> is <code>N + 1</code>, admitted or refused against the attempt's ceiling <strong>at zero cost, before any process exists</strong>, with a refusal that names the shortfall in calls and in raise acts.</dd>
       <dt><code class="ac">AC-3</code></dt>
@@ -321,7 +321,7 @@ flowchart LR
       <p class="sub">Serves <code class="serves">AC-1</code> · <code class="serves">INV-4</code></p>
       <p><code>plan-tickets.ts</code>'s <code>ticketData</code> parses the frontmatter and stops; the <code>## Build prompt</code> block has no reader anywhere in <code>core/src</code>. Add one in a new file so the frontmatter path keeps its current fingerprint cache untouched, and define the manifest the selection writes.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>core/src/contracts/shift-manifest.ts</code> declares <code>ShiftManifestSchema</code> (<code>awsf.shift-manifest/v1</code>) as TypeBox: <code>plan</code>, <code>milestone</code>, <code>tickets: [{ id, path, digest, tier?, workflow? }]</code>, <code>manifestDigest</code>. Registered in <code>contracts/registry.ts</code> like every other schema</li>
+        <li><code class="status">[]</code> <code>core/src/contracts/shift-manifest.ts</code> declares <code>ShiftManifestSchema</code> (<code>awsf.shift-manifest/v1</code>) as TypeBox: <code>plan</code>, <code>milestones: string[]</code> (<code>minItems 1</code>, in the owner's selection order — a list even when it holds one, with no singular form), <code>tickets: [{ id, path, digest, tier?, workflow? }]</code>, <code>manifestDigest</code>. Registered in <code>contracts/registry.ts</code> like every other schema</li>
         <li><code class="status">[]</code> <code>core/src/persistence/plan-ticket-body.ts</code> extracts the single <code>## Build prompt\n\n</code> fenced block, refusing a file with zero or more than one — <strong>the same split the invariant-12 fence uses</strong>, so the two can never disagree about where a prompt begins</li>
         <li><code class="status">[]</code> The digest is over the <strong>whole ticket file's bytes</strong>, not the prompt block, so an appended <code>## Handoff</code> entry is a change the resume notices</li>
         <li><code class="status">[]</code> <code>plan-tickets.ts</code> is unchanged, and a test asserts its exported shape is byte-identical to before</li>
@@ -329,12 +329,14 @@ flowchart LR
 
       <h4>2. Milestone selection and its refusals</h4>
       <p class="sub">Serves <code class="serves">AC-1</code></p>
-      <p>Expansion from two flags to an ordered list. Every way it can be wrong gets a named refusal, because a selection that silently produces four tickets when the owner meant five is a batch that spends a night on the wrong work.</p>
+      <p>Expansion from two flags to an ordered list, where the milestone flag may name <strong>several</strong>. Every way it can be wrong gets a named refusal, because a selection that silently produces four tickets when the owner meant five is a batch that spends a night on the wrong work.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>selectShiftTickets(plan, milestone, records)</code> returns the milestone's tickets in <strong>topological order over <code>depends_on</code></strong>, falling back to ticket-id order for independents, so the order is deterministic and reproducible</li>
-        <li><code class="status">[]</code> Only <code>state: todo</code> tickets are selected. A milestone with a <code>wip</code> or <code>failed</code> ticket is <strong>refused by name</strong> rather than skipped — a half-done milestone is a decision the owner makes, not one the expander makes at midnight</li>
-        <li><code class="status">[]</code> A <code>depends_on</code> edge leaving the milestone is refused unless its target is <code>done</code>; a cycle is refused; an empty expansion is refused</li>
-        <li><code class="status">[]</code> The tier is <strong>derived, not declared</strong>: the shift's tier is the maximum of the selected tickets' declared tiers, matching how <code>awsf new</code> already derives tier from the route rather than taking it on trust</li>
+        <li><code class="status">[]</code> <code>selectShiftTickets(plan, milestones, records)</code> takes an <strong>ordered list of one or more milestone ids</strong> — one milestone is the common case, not a special case, and there is no singular overload — and returns their tickets in <strong>one topological order over <code>depends_on</code> across the whole selection</strong>, tie-broken by the milestone's position in the list and then by ticket id, so the order is deterministic and reproducible</li>
+        <li><code class="status">[]</code> Only <code>state: todo</code> tickets are selected. A <em>selected</em> milestone with a <code>wip</code> or <code>failed</code> ticket is <strong>refused by name</strong> rather than skipped — a half-done milestone is a decision the owner makes, not one the expander makes at midnight</li>
+        <li><code class="status">[]</code> A <code>depends_on</code> edge leaving <strong>the selection</strong> is refused unless its target is <code>done</code>; a cycle is refused; an empty expansion is refused; a repeated milestone id is refused; a named milestone holding no tickets at all is refused by name</li>
+        <li><code class="status">[]</code> An edge from one selected milestone <em>into another</em> is <strong>not</strong> a refusal — it is inside the selection, and honouring it is exactly what the single topological order is for</li>
+        <li><code class="status">[]</code> <strong>No contiguity rule.</strong> <code>M1,M3</code> with <code>M2</code> skipped is legitimate when <code>M3</code> does not depend on <code>M2</code>; when it does, the leaving-the-selection check already refuses it. A contiguity rule would refuse a correct selection and is not added</li>
+        <li><code class="status">[]</code> The tier is <strong>derived, not declared</strong>: the shift's tier is the maximum of the selected tickets' declared tiers <em>across every selected milestone</em>, matching how <code>awsf new</code> already derives tier from the route rather than taking it on trust</li>
         <li><code class="status">[]</code> No ticket may declare <code>workflow: shift</code>; <code>TICKET_WORKFLOWS</code> is not widened, and a meta-test says so. A ticket names its own route; the shift is the container</li>
       </ul>
 
@@ -343,6 +345,7 @@ flowchart LR
       <p>Pure functions over fixture ticket directories under <code>core/test/fixtures/</code>. No git, no clock, no provider, no network. The expander and the body reader are both total functions of bytes on disk, and the tests are written that way.</p>
       <ul class="checklist">
         <li><code class="status">[]</code> <code>npx tsx --test core/test/unit/shift-select.test.ts</code> — every refusal fires on its own fixture, and the accepted case returns the exact expected order</li>
+        <li><code class="status">[]</code> The same test covers a <strong>three-milestone selection</strong>: one topological order across all three, a cross-milestone <code>depends_on</code> edge honoured rather than refused, and a non-contiguous <code>M1,M3</code> selection accepted when <code>M3</code> is independent of <code>M2</code></li>
         <li><code class="status">[]</code> <code>npx tsx --test core/test/unit/shift-manifest.test.ts</code> — the manifest round-trips through TypeBox validation, and a one-byte change to any ticket file changes <code>manifestDigest</code></li>
         <li><code class="status">[]</code> <code>npm run test:unit</code> — green at the <strong>exact base SHA this milestone started from</strong>, count recorded in the commit body</li>
         <li><code class="status">[]</code> <code>npm run typecheck</code> and <code>npm run lint</code> — exit 0</li>
@@ -460,7 +463,8 @@ flowchart LR
       <p class="sub">Serves <code class="serves">AC-2</code> · <code class="serves">INV-5</code></p>
       <p><code>admitWorkflow</code> already throws <code>CallCeilingExceeded</code> carrying the tier, the ceiling, the request and what is already committed. What it cannot say is what the owner should <em>do</em>, and that is the whole difference between a refusal and a checkpoint.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>awsf shift plan &lt;stem&gt; --milestone &lt;Mx&gt;</code> prints, <strong>before writing anything</strong>: the ordered ticket ids and titles, <code>minimumCalls = N + 1</code>, the attempt's ceiling, the remaining headroom, and — when it does not fit — the exact number of <code>awsf raise</code> acts and the calls each must grant</li>
+        <li><code class="status">[]</code> <code>awsf shift plan &lt;stem&gt; --milestone &lt;Mx&gt;[,&lt;My&gt;…]</code> prints, <strong>before writing anything</strong>: the selected milestones, the ordered ticket ids and titles, <code>minimumCalls = N + 1</code> over the whole selection, the attempt's ceiling, the remaining headroom, and — when it does not fit — the exact number of <code>awsf raise</code> acts and the calls each must grant. The flag takes a comma-separated list and may also be repeated; both spell the same ordered selection, and a range syntax is deliberately not added</li>
+        <li><code class="status">[]</code> The readout <strong>distinguishes the two refusals</strong>: a selection that needs raise acts, and one that <em>no raise can fund</em> because <code>minimumCalls</code> exceeds <code>MAX_CALL_CEILING = 20</code>. Multi-milestone selection makes the second reachable in ordinary use — <strong>19 tickets is the hard maximum for one shift</strong> — where with a single milestone it was hypothetical</li>
         <li><code class="status">[]</code> The refusal reuses <code>CallCeilingExceeded</code> rather than inventing a class, so the dashboard's failure classifier meets a name it already knows</li>
         <li><code class="status">[]</code> The readout states the <strong>cold-correction consequence explicitly</strong>: at <code>ceiling === minimumCalls</code>, <code>coldCorrectionHeadroom()</code> is zero at every phase, so each builder's declared <code>maxCorrections: 1</code> buys nothing. A shift run at exactly its minimum has no correction round anywhere in it</li>
         <li><code class="status">[]</code> Nothing in this command spawns, reserves or writes to the ledger. It reads the catalog, the tickets and the attempt status, and prints</li>
@@ -689,7 +693,7 @@ flowchart LR
       <li><code class="status">[]</code> <code>npm test</code> — the full suite in one invocation, leaving <code>git status --porcelain</code> clean</li>
       <li><code class="status">[]</code> <code>npx tsx --test core/test/unit/meta/ticket-plan-sync.test.ts</code> — this plan pairs with <code>specs/tickets/awsf-v2-w17-shift/</code> and <code>specs/awsf-v2-w17-shift-build-prompts.md</code>; ids contiguous, milestones agreed, states matched, prompts byte-identical, and all eleven identifier-spine rows green</li>
       <li><code class="status">[]</code> The invariant-8 meta-tests (<code>no-destructive-paths</code>, <code>no-land-route</code>) and the child-process, publish, credential and skill fences are green <strong>with no exemption added by this workstream</strong></li>
-      <li><code class="status">[]</code> <code>awsf shift plan awsf-v2-w07-quota-telemetry --milestone M4</code> refuses at zero cost when the ceiling does not fit, naming the shortfall and the raise acts needed</li>
+      <li><code class="status">[]</code> <code>awsf shift plan awsf-v2-w07-quota-telemetry --milestone M4</code> and the multi-milestone form <code>--milestone M4,M5,M6</code> both refuse at zero cost when the ceiling does not fit, naming the shortfall and the raise acts needed — and the second names <code>MAX_CALL_CEILING</code> when no raise can fund it</li>
       <li><code class="status">[]</code> A sealed shift's candidate is reachable through its ref after an aggressive pruning collection pass in a throwaway repository, and unreachable without it</li>
       <li><code class="status">[]</code> <strong>One bounded live drive:</strong> a real milestone runs unattended end to end, reaches <code>AWAITING_OWNER</code> once, and the candidate is built fresh and looked at. This is the workstream's acceptance bar; the suite is not</li>
       <li><code class="status">[]</code> <span class="gate">G17</span> — <code>awsf.config.yaml</code>'s <code>workflows.enabled</code> gained <code>shift</code> as an owner-authored commit <em>before</em> M2's build, recorded in this plan's Amendments</li>
@@ -813,7 +817,7 @@ flowchart TD
       <li><strong>The seeding blocker is dissolved rather than solved.</strong> The amendment's item 4 was its most practical objection. One attempt means one seed of 139 MB regardless of N, so the objection does not survive the shape change. No work is planned against it.</li>
       <li><strong>Batch budgeting needs no new concept.</strong> The amendment's item 5 asked for a notion of budget the lifecycle lacks. It has one; it was only ever scoped to a task, and a shift is a task.</li>
       <li><strong>The ref-at-seal work shrinks.</strong> The amendment expected eight refs for eight runs. One shift produces one tip ref that keeps all N commits reachable, because each is an ancestor of the tip. Its judgement that this is the single most necessary piece is affirmed — and it is now smaller than it looked.</li>
-      <li><strong>Granularity is named, where the amendment left it open.</strong> One shift per <em>milestone</em>, not per plan. <code>MAX_CALL_CEILING = 20</code> makes a whole deep plan structurally impossible — <code>awsf-v2-w05-design-to-plan</code>'s 31 tickets would need 32 calls — while a milestone, measured at a median of 3 and a maximum of 6 across 60 of them, always fits.</li>
+      <li><strong>Granularity is named, where the amendment left it open.</strong> One shift per <em>selection of one or more milestones</em>, not per plan (widened by the 2026-09-20 amendment; it was one milestone as first authored). <code>MAX_CALL_CEILING = 20</code> makes a whole deep plan structurally impossible — <code>awsf-v2-w05-design-to-plan</code>'s 31 tickets would need 32 calls — while a milestone, measured at a median of 3 and a maximum of 6 across 60 of them, always fits.</li>
       <li><strong>A structural blocker the amendment did not reach.</strong> It stopped at what would have to be <em>built</em>. Compiling a phase list meets a compile-time invariant that refuses more than one build producer, and a module-load assertion that welds the id vocabulary to the recipe registry. Both are in Q1 and M2 task 5.</li>
     </ol>
 
@@ -946,6 +950,92 @@ flowchart LR
       <p><strong>No ticket's build prompt in this plan's own set needed regenerating.</strong> None of them instructed a
       session to resolve a Questionable — T06 was already written to the recommendation that Q1 has now adopted, so
       applying the decision made it consistent rather than requiring an edit.</p>
+    </details>
+
+    <details open>
+      <summary>2026-09-20 — selection widened from one milestone to one or more, at the owner's direction</summary>
+
+      <p><strong>No status marker moved, and no code was written.</strong> Every task in this plan is still
+      <code class="status">[]</code>; this amendment changes what three of them are authored to build, and the
+      paired Section B blocks and tickets <code>T01</code>, <code>T02</code> and <code>T08</code> move with it in
+      the same commit.</p>
+
+      <h3>The decision</h3>
+      <p>The owner asked that a shift be able to take <strong>several milestones in one selection, so that landing
+      happens once at the end however many milestones are in the shift</strong>. As first authored, selection was
+      <code>plan + one milestone</code>, and a run of three milestones meant three chained shifts and three owner
+      gates.</p>
+
+      <p><strong>Why this shape rather than chaining.</strong> Three chained shifts cannot run unattended end to
+      end, and the reason is measured rather than argued: a shift is never a legal seed or adoption target.
+      <code>validateInheritedSeed</code> (<code>core/src/workflow/candidate-seed.ts:101–105</code>) admits only
+      <code>build-review</code> and <code>simple-sdlc</code> at tier 2, <code>adopt.ts</code>'s <code>SUPPORTED</code>
+      map says the same, and task 17 of this plan declines <em>adopting into a shift</em> deliberately. So a chained
+      shift starts from the repository <code>HEAD</code>, and if milestone <em>n+1</em> builds on milestone
+      <em>n</em>'s code, the owner has to land in between — which is a TTY act, and the night is over. Widening the
+      selection removes that dependency instead of working around it, and it touches the selection surface rather
+      than the seed invariant. <strong>Two alternatives were rejected:</strong> landing between milestones (no code
+      change, but it is the interactive act this workstream exists to avoid), and admitting a shift as a seed target
+      (it reverses task 17's decision and buys a second reconciliation surface between an inherited diff and a
+      manifest).</p>
+
+      <h3>What changes</h3>
+      <ul>
+        <li><strong><code>AC-1</code></strong> now reads “one or more milestones” and “a single ordered ticket list
+        spanning them”.</li>
+        <li><strong>Task 1 — the manifest.</strong> <code>milestone: string</code> becomes
+        <code>milestones: string[]</code>, <code>minItems 1</code>, in the owner's selection order. It is a list
+        even when it holds one; there is no singular form and no one-milestone special case. Nothing is built yet,
+        so this is an authoring change, not a schema migration.</li>
+        <li><strong>Task 2 — the expander.</strong> <code>selectShiftTickets(plan, milestones, records)</code>
+        returns <em>one</em> topological order over <code>depends_on</code> across the whole selection, tie-broken
+        by the milestone's position in the list and then by ticket id.</li>
+        <li><strong>The refusal that generalises, and it is the whole of the change.</strong> “A
+        <code>depends_on</code> edge leaving <em>the milestone</em>” becomes “leaving <em>the selection</em>”. An
+        edge from one selected milestone into another is no longer a refusal at all — it is inside the selection,
+        and honouring it is what the single topological order is for. Three refusals are added: a repeated
+        milestone id, a named milestone holding no tickets, and the existing empty-expansion case now measured over
+        the whole selection.</li>
+        <li><strong>No contiguity rule, deliberately.</strong> <code>M1,M3</code> with <code>M2</code> skipped is a
+        legitimate selection when <code>M3</code> does not depend on <code>M2</code>; when it does, the
+        leaving-the-selection check already refuses it. A contiguity rule would refuse a correct selection, so the
+        checklist says not to add one.</li>
+        <li><strong>Task 8 — the CLI and the readout.</strong> <code>--milestone</code> takes a comma-separated
+        list and may also be repeated. A range syntax is not added: one spelling, not two.</li>
+        <li><strong>Task 3 — the tests.</strong> A three-milestone case, a cross-milestone edge honoured, and a
+        non-contiguous selection accepted.</li>
+      </ul>
+
+      <h3>What does not change, and is worth saying so</h3>
+      <ul>
+        <li><strong>One attempt, one worktree, one accumulating head, one owner gate.</strong> The shape this plan
+        exists to establish is untouched — this widens what may be <em>selected</em>, not what a shift <em>is</em>.</li>
+        <li><strong><code>minimumCalls = N + 1</code></strong>, with <code>N</code> now the total ticket count
+        across the selection. The formula is unchanged; only the input grows.</li>
+        <li><strong>Blocking semantics.</strong> A failing ticket still blocks the attempt at that ticket, with the
+        prefix durable and the tail unreserved.</li>
+        <li><strong>Task 17's chaining is not superseded.</strong> <code>--continues</code> and
+        <code>groupSessionStacks</code> remain how separate shifts are joined into one readable stack. A
+        multi-milestone selection reduces how often chaining is needed; it does not replace it.</li>
+        <li><strong>A shift is still never a seed or adoption target.</strong> Task 17's refusal stands, and this
+        amendment makes it less pressing rather than reopening it.</li>
+      </ul>
+
+      <h3>The bound this makes load-bearing</h3>
+      <p><code>MAX_CALL_CEILING = 20</code> (<code>core/src/state/tiers.ts:57</code>) is in code, not config, and
+      <code>minimumCalls = N + 1</code>. So <strong>19 tickets is the hard maximum for one shift</strong>, however
+      many milestones they span, and reaching 20 calls takes three <code>awsf raise</code> acts of five.
+      <strong>This changes the character of the refusal.</strong> Measured over the eleven authored v2 ticket sets,
+      the largest single milestone is six tickets, so <code>MAX_CALL_CEILING</code> was unreachable by a
+      one-milestone shift and its test case (<code>N = 31</code>) was hypothetical. It is now reachable in ordinary
+      use, which is why task 8 must tell the two refusals apart: <em>this needs raise acts</em> and <em>no raise can
+      fund this</em> are different sentences to read at a terminal before leaving the house.</p>
+
+      <h3>The operational consequence for markers</h3>
+      <p>A multi-milestone shift, when it lands, flips <strong>every selected milestone's markers and every selected
+      ticket's <code>state:</code> in one commit</strong>, and its single review covers the accumulated diff across
+      all of them. That is the difference the owner will actually notice, and it is consistent with AGENTS.md
+      invariant 2 — the markers are earned by the work that landed in that commit.</p>
     </details>
 
   </section>

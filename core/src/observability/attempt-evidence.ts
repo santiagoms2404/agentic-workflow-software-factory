@@ -55,17 +55,22 @@ export interface PhaseEvidenceRecord {
 
 /** Canonical production evidence carried by one attempt-journal record. */
 export type AttemptEvidence =
+  | { readonly type: "protected-commit-intent"; readonly intent: import("../git/protected-commit.ts").ProtectedCommitIntent }
+  | { readonly type: "protected-grant"; readonly grant: import("../contracts/protected-grant.ts").ProtectedGrant }
+  | { readonly type: "protected-activation"; readonly consumption: import("../contracts/protected-grant.ts").ProtectedGrantConsumption; readonly phase: PhaseEvidenceRecord }
+  | { readonly type: "protected-candidate"; readonly binding: import("../contracts/protected-grant.ts").ProtectedCandidateBinding }
+  | { readonly type: "protected-landing"; readonly authorization: import("../contracts/protected-grant.ts").ProtectedCandidateAuthorization }
   | { readonly type: "phase-result-ready"; readonly phase: PhaseEvidenceRecord; readonly checkpoint: import("../contracts/phase-recovery.ts").PhaseRecovery }
   | { readonly type: "phase-validation-started"; readonly phaseId: string; readonly checkpointId: string }
   | { readonly type: "phase-accepted"; readonly phase: PhaseEvidenceRecord; readonly accepted: import("../contracts/phase-recovery.ts").AcceptedPhase }
   | { readonly type: "quota-pause"; readonly checkpoint: import("../contracts/phase-recovery.ts").PhaseRecovery }
   | { readonly type: "resume-instruction-delivery"; readonly phaseId: string; readonly delivery: import("../contracts/owner-amendment.ts").OwnerAmendmentDelivery; readonly at: string }
-  | { readonly type: "resume-activation"; readonly ownerInstruction?: import("../contracts/resume-instruction.ts").ResumeInstruction | null; readonly quotaReadings?: readonly import("../contracts/phase-recovery.ts").BoundaryQuota[]; readonly operationId: string; readonly checkpointId: string; readonly reason: string; readonly reservationId: string | null; readonly phase: PhaseEvidenceRecord | null }
+  | { readonly type: "resume-activation"; readonly protectedConsumption?: import("../contracts/protected-grant.ts").ProtectedGrantConsumption; readonly ownerInstruction?: import("../contracts/resume-instruction.ts").ResumeInstruction | null; readonly quotaReadings?: readonly import("../contracts/phase-recovery.ts").BoundaryQuota[]; readonly operationId: string; readonly checkpointId: string; readonly reason: string; readonly reservationId: string | null; readonly phase: PhaseEvidenceRecord | null }
   | { readonly type: "candidate-seed"; readonly seed: CandidateSeed }
   | { readonly type: "owner-amendment-delivery"; readonly amendmentId: string; readonly amendmentDigest: string; readonly phaseId: string; readonly logicalTurnId: string; readonly originalInputDigest: string; readonly composedDigest: string; readonly at: string }
   | { readonly type: "candidate-adoption"; readonly adoption: CandidateAdoptionEvidence }
   | { readonly type: "rework-instruction-delivery"; readonly phaseId: string; readonly delivery: import("../contracts/owner-amendment.ts").OwnerAmendmentDelivery; readonly at: string }
-  | { readonly type: "transition"; readonly ownerAmendment?: import("../contracts/owner-amendment.ts").ReworkOwnerAmendment; readonly id: string; readonly seq: number; readonly from: TaskState; readonly to: TaskState; readonly actor: "host" | "owner" | "human"; readonly edgeId: string; readonly reasonSource: string; readonly reasonCode: string | null; readonly reasonDetail: string | null; readonly spawnSite: boolean; readonly at: string }
+  | { readonly type: "transition"; readonly protectedConsumption?: import("../contracts/protected-grant.ts").ProtectedGrantConsumption; readonly ownerAmendment?: import("../contracts/owner-amendment.ts").ReworkOwnerAmendment; readonly id: string; readonly seq: number; readonly from: TaskState; readonly to: TaskState; readonly actor: "host" | "owner" | "human"; readonly edgeId: string; readonly reasonSource: string; readonly reasonCode: string | null; readonly reasonDetail: string | null; readonly spawnSite: boolean; readonly at: string }
   | { readonly type: "phase"; readonly phase: PhaseEvidenceRecord }
   | { readonly type: "normalized-event"; readonly phaseId: string; readonly event: NormalizedEvent }
   | {

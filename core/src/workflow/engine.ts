@@ -44,6 +44,10 @@ export interface HostPhaseGit<T extends EnvelopeBase = EnvelopeBase> {
   /** Host observation after permission enforcement, never an agent-provided list. */
   captureDiff(): readonly string[];
   /** Returns null for a read-only/no-change phase. */
+  commit(envelope: T, changedPaths: readonly string[]): string | null | Promise<string | null>;
+}
+
+export interface SynchronousHostPhaseGit<T extends EnvelopeBase> extends HostPhaseGit<T> {
   commit(envelope: T, changedPaths: readonly string[]): string | null;
 }
 
@@ -53,7 +57,7 @@ export function createHostPhaseGit<T extends EnvelopeBase>(options: {
   commitMessage: (envelope: T) => string;
   git?: GitRunner;
   before?: import("../git/changes.ts").ChangeSetFingerprint;
-}): HostPhaseGit<T> {
+}): SynchronousHostPhaseGit<T> {
   const before = options.before ?? captureChangeSet(options.repository, options.git);
   let observed: readonly string[] | null = null;
   return {
@@ -468,7 +472,7 @@ export async function runAgentPhase<T extends EnvelopeBase>(
       // round that skipped this check would launder it.
       permission = options.permissions.enforce();
       changedPaths = options.hostGit.captureDiff();
-      candidateSha = options.hostGit.commit(envelope.payload!, changedPaths);
+      candidateSha = await options.hostGit.commit(envelope.payload!, changedPaths);
 
       // No verifier, or nothing to verify because the phase changed no files.
       if (options.verifyCandidate === undefined || candidateSha === null) {
