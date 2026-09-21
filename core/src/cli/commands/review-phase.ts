@@ -1092,10 +1092,17 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
       return payload;
     };
 
+    // `resolveReviewRoute` always names a real review mode for a route it hands
+    // back for a review phase; "not-review" is only the default for provenance
+    // built with no reviewMode at all, which never happens on this path.
+    const { mode: reviewMode } = route.provenance.review;
+    if (reviewMode === "not-review") {
+      throw new ReviewRouteMismatch("resolved review route carries no review mode");
+    }
     const output = await runMandatoryReview({
       workerProvider: options.workerProvider,
-      mode: config.routing.review,
-      ...(config.routing.review === "invert-provider"
+      mode: reviewMode,
+      ...(reviewMode === "invert-provider"
         ? { providers: providerPairFrom([options.workerProvider, route.model.provider]) }
         : {}),
       isTransportFailure: (error) => {

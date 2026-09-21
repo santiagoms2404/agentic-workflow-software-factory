@@ -810,6 +810,61 @@ test("an attempt-level degrade-review grant is described as degraded in the conf
   } finally { await cleanup(fixture); }
 });
 
+// The execution counterpart of the A7 reporting bug above: `prepareReview`
+// itself must resolve mode from `route.provenance.review.mode` — the SAME
+// resolution the confirmation text now reads — rather than re-deriving it
+// from `config.routing.review`. Before the fix, this exact fixture (grant
+// present, project default still "invert-provider", reviewer route already
+// same-provider by config) confirmed correctly and then threw
+// `InvalidReviewInversion` the instant the review actually launched, because
+// the launch call still took the invert-provider branch and asked
+// `providerPairFrom` to find two distinct providers in a pair that was one
+// provider twice. This drives the confirmation through to a real scripted
+// review and asserts the rework completes.
+test("an attempt-level degrade-review grant under the default invert-provider config completes rather than throwing InvalidReviewInversion", async () => {
+  const fixture = await world({ configure: (config) => ({
+    ...config,
+    routing: {
+      ...config.routing,
+      phase_routes: {
+        ...config.routing.phase_routes,
+        reviewer: {
+          adapter: "codex",
+          provider: "openai-codex",
+          model: "codex:gpt-5.6-sol",
+          effort: "high",
+        },
+      },
+    },
+  }) });
+  assert.equal(fixture.config.routing.review, "invert-provider", "the project default is unchanged by this fixture");
+  await append(fixture, null, {
+    reviewDegradation: { reason: "owner accepted reduced independence for this attempt", attempt: fixture.status.attempt, at: AT },
+  });
+  const script = scripted(fixture);
+  const lines: string[] = [];
+  try {
+    const result = await rework(fixture, script, { lines, answer: true });
+    assert.equal(result.status.lifecycleState, "AWAITING_OWNER", result.status.blocker?.detail);
+    assert.deepEqual(script.launches, ["codex", "codex"], "builder and review both ran, on the same provider the grant authorized");
+    assert.equal(script.builderPrompts.length, 1);
+    assert.equal(script.reviewerPrompts.length, 1);
+    assert.match(lines.join("\n"), /EXPLICIT DEGRADED same-provider review \(reduced independence\)/);
+
+    const db = openDatabase(join(fixture.stateRoot, "awsf.db"), { readonly: true });
+    try {
+      const session = getSession(db, result.status.sessionId);
+      assert.equal(session?.worker_provider, "openai-codex");
+      assert.equal(session?.review_provider, "openai-codex");
+      const review = routesForSession(db, result.status.sessionId)
+        .find((row) => row.phaseId.endsWith(":reviewer-rw1"));
+      assert.equal(review?.route.review.mode, "same-provider-degraded");
+      assert.equal(review?.route.review.degraded, true);
+      assert.equal(review?.route.observed?.provider, "openai-codex");
+    } finally { db.close(); }
+  } finally { await cleanup(fixture); }
+});
+
 test("the builder gets the defect and the reviewer gets the candidate; neither the defect nor the superseded verdict reaches the reviewer", async () => {
   const fixture = await world();
   const script = scripted(fixture);

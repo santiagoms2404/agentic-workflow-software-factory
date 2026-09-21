@@ -568,6 +568,61 @@ test("an explicitly degraded replacement review stays on the worker provider and
   } finally { await cleanup(fixture); }
 });
 
+// The execution counterpart of the same bug `prepareReview` shares with
+// `awsf rework`: it must resolve mode from `route.provenance.review.mode`
+// rather than re-deriving it from `config.routing.review`. Before the fix,
+// this fixture (attempt-level grant present, project default still
+// "invert-provider", reviewer route already same-provider by config) would
+// authorize the replacement and then throw `InvalidReviewInversion` the
+// instant the review actually launched.
+//
+// Note: this file's own confirmation-text line (review.ts ~494) still reads
+// `config.routing.review` directly, same as the bug A7 fixed in rework.ts —
+// so under this fixture it prints "cold, opposite the ... worker" even
+// though the review actually runs same-provider. That reporting mismatch is
+// its own bug in a file outside prepareReview's scope; this test does not
+// assert on that line and does not fix it.
+test("an attempt-level degrade-review grant under the default invert-provider config completes a replacement review rather than throwing InvalidReviewInversion", async () => {
+  const fixture = await world({ configure: (config) => ({
+    ...config,
+    routing: {
+      ...config.routing,
+      phase_routes: {
+        ...config.routing.phase_routes,
+        reviewer: {
+          adapter: "codex",
+          provider: "openai-codex",
+          model: "codex:gpt-5.6-sol",
+          effort: "high",
+        },
+      },
+    },
+  }) });
+  assert.equal(fixture.config.routing.review, "invert-provider", "the project default is unchanged by this fixture");
+  await append(fixture, null, {
+    reviewDegradation: { reason: "owner accepted reduced independence for this attempt", attempt: fixture.status.attempt, at: AT },
+  });
+  const launches: string[] = [];
+  const lines: string[] = [];
+  try {
+    const result = await run(fixture, "accept", { launches, lines });
+    assert.equal(result.status.lifecycleState, "AWAITING_OWNER", result.status.blocker?.detail);
+    assert.deepEqual(launches, ["codex"], "the replacement stays on the worker's provider without a substitute");
+
+    const db = openDatabase(join(fixture.stateRoot, "awsf.db"), { readonly: true });
+    try {
+      const session = getSession(db, result.status.sessionId);
+      assert.equal(session?.worker_provider, "openai-codex");
+      assert.equal(session?.review_provider, "openai-codex");
+      const replacement = routesForSession(db, result.status.sessionId)
+        .find((row) => row.phaseId.endsWith(":reviewer-re1"));
+      assert.equal(replacement?.route.review.mode, "same-provider-degraded");
+      assert.equal(replacement?.route.review.degraded, true);
+      assert.equal(replacement?.route.observed?.provider, "openai-codex");
+    } finally { db.close(); }
+  } finally { await cleanup(fixture); }
+});
+
 test("the confirmation prompt states the superseded verdict, its defect, the remaining calls, and what a failure costs", async () => {
   const fixture = await world();
   const lines: string[] = [];
