@@ -504,15 +504,27 @@ for (const sample of [
         assert.deepEqual(readFileSync(journalPath), stable);
       }
       const recovered = readFileSync(journalPath, "utf8").trim().split("\n").map(line => JSON.parse(line));
-      const started = recovered.findLastIndex(record => record.event.evidence?.type === "phase-validation-started");
-      assert.ok(started > cut);
-      // No proof exists that an already-started host validation had no effects. Do not replay it automatically.
+      // A3: host validation no longer clears the checkpoint. It advances it one
+      // stage at a time, so a cut inside the read-only prefix is replayed from
+      // durable evidence rather than refused. Cut at the first stage advance
+      // this reply reached and restore the bytes that stage recorded.
+      const started = recovered.findIndex((record, index) => index > cut && record.event.evidence?.type === "phase-validation-started");
+      assert.ok(started > cut, "a saved reply must record the stage its host validation reached");
+      assert.equal(recovered[started].event.next.recovery.kind, "validating");
+      assert.equal(recovered[started].event.next.recovery.validation.stage, "envelope-check");
+      assert.equal(recovered[started].event.evidence.checkpointId, anchor.recovery.id);
+      for (const later of workflowRecipe(sample.workflow)!.phases.slice(anchor.recovery.prefix.length + 1)) {
+        for (let round = 0; round <= later.maxCorrections; round++) rmSync(join(options.attemptDir, "envelopes", `${later.id}-${round}.json`), { force: true });
+      }
+      git(prepared.worktree!, "reset", "--mixed", anchor.recovery.worktreeHeadSha);
+      writeFileSync(git(prepared.worktree!, "rev-parse", "--path-format=absolute", "--git-path", "index"), indices.get(anchor.recovery.id)!);
       writeFileSync(journalPath, recovered.slice(0, started + 1).map(record => JSON.stringify(record)).join("\n") + "\n");
       writeFileSync(join(options.attemptDir, "status.json"), JSON.stringify(recovered[started].event.next));
-      const uncertain = readFileSync(journalPath);
-      await assert.rejects(resumeProductionCommand(resume), /no durable accepted-phase checkpoint/);
-      assert.deepEqual(readFileSync(journalPath), uncertain);
-      assert.equal(launches, expectedLaunches);
+      const replayed = await resumeProductionCommand(resume);
+      assert.equal(replayed.status.lifecycleState, sample.scenario === "gate" ? "BLOCKED" : "AWAITING_OWNER", replayed.status.blocker?.detail);
+      assert.equal(replayed.status.budget.callsSpent, anchor.budget.callsSpent);
+      assert.equal(replayed.status.budget.callsReserved, 0);
+      assert.equal(launches, expectedLaunches, "replaying a read-only validation prefix must not reopen the provider");
     } finally { world.projection.close(); rmSync(world.root, { recursive: true, force: true }); }
   });
 }
@@ -887,8 +899,43 @@ for (const cut of ["ungranted", "bad-envelope", "binding-drift", "intent-crash",
         const indexPath = git(prepared.worktree!, "rev-parse", "--path-format=absolute", "--git-path", "index");
         if (cut === "head-crash") { assert.equal(head, facts.intents[0]!.binding.candidateSha); assert.equal(existsSync(`${indexPath}.lock`), true); }
         const index = readFileSync(indexPath); const contents = readFileSync(join(prepared.worktree!, "core/src/generated.ts"));
-        await assert.rejects(() => resumeProductionCommand({ ...options, reason: "observe without replay", terminal: { interactive: true, write: () => {}, confirm: async () => true } }));
-        assert.equal(git(prepared.worktree!, "rev-parse", "HEAD"), head); assert.deepEqual(readFileSync(indexPath), index);
+        const sealed = ["BLOCKED", "CANCELLED", "PUBLISHED"].includes((await readAttempt(world.created.attemptDir)).lifecycleState);
+        const retained = facts.intents.length === 1 && facts.bindings.length === 0 && !sealed ? facts.intents[0]! : null;
+        const resume = { ...options, reason: "observe without replay", terminal: { interactive: true, write: () => {}, confirm: async () => true } };
+        if (retained === null) {
+          // Nothing is outstanding: the binding is durable or no host effect
+          // ever started. Resume may refuse or block, but it never replays the
+          // one-use generation and never touches the retained bytes.
+          const outcome = await resumeProductionCommand(resume).then(value => value.status.lifecycleState, error => String(error));
+          assert.match(outcome, /BLOCKED|protected|recovery refused/);
+          if (sealed) assert.match(outcome, /sealed in BLOCKED|recovery refused/);
+          assert.equal(git(prepared.worktree!, "rev-parse", "HEAD"), head);
+          assert.deepEqual(readFileSync(indexPath), index);
+        } else {
+          // A3: the interrupted publication is completed from durable evidence.
+          // A declined confirmation is inert.
+          const declined = await resumeProductionCommand({ ...resume, terminal: { ...resume.terminal, confirm: async () => false } });
+          assert.equal(declined.confirmed, false);
+          assert.equal(git(prepared.worktree!, "rev-parse", "HEAD"), head);
+          assert.deepEqual(readFileSync(indexPath), index);
+
+          const done = await resumeProductionCommand(resume);
+          assert.equal(done.confirmed, true);
+          assert.equal(done.status.candidateSha, retained.binding.candidateSha);
+          assert.equal(git(prepared.worktree!, "rev-parse", "HEAD"), retained.binding.candidateSha);
+          assert.equal(git(prepared.worktree!, "rev-parse", `${retained.binding.candidateSha}^{tree}`), retained.binding.treeSha);
+          assert.equal(git(prepared.worktree!, "status", "--porcelain"), "", "the reconciled index must match the published candidate");
+          assert.equal(existsSync(`${indexPath}.lock`), false);
+          const after = readProtectedState(world.created.attemptDir);
+          assert.equal(after.bindings.length, 1);
+          assert.equal(after.bindings[0]!.candidateSha, retained.binding.candidateSha);
+          // Replaying the same act is a no-op: there is nothing left unfinished.
+          const stable = readFileSync(join(world.created.attemptDir, "journal.jsonl"));
+          const again = await resumeProductionCommand(resume).then(() => "resolved", error => String(error));
+          assert.match(again, /resolved|BLOCKED|protected|recovery refused/);
+          assert.equal(git(prepared.worktree!, "rev-parse", "HEAD"), retained.binding.candidateSha);
+          if (again !== "resolved") assert.deepEqual(readFileSync(join(world.created.attemptDir, "journal.jsonl")), stable);
+        }
         assert.deepEqual(readFileSync(join(prepared.worktree!, "core/src/generated.ts")), contents); assert.equal(calls, 1);
       }
       assert.equal(git(world.canonical, "rev-parse", "HEAD"), prepared.baseSha);

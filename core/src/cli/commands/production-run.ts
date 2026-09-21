@@ -67,6 +67,12 @@ import { prepareProtectedConsumption, protectedGrantForPhase, readProtectedState
 import { verifyProtectedWrite, verifyProtectedPreservation, type ProtectedFilesCapability } from "../../contracts/protected-capability.ts";
 import { protectedRootIdentity } from "../../workflow/protected-files.ts";
 import { commitProtectedAsHost } from "../../git/protected-commit.ts";
+import { completeProtectedPublication, inspectProtectedPublication, unfinishedProtectedEffect } from "../../git/protected-reconcile.ts";
+import { protectedWriteContext } from "../../contracts/protected-capability.ts";
+import { stageOrdinal, type HostValidationProgress, type HostValidationStage } from "../../contracts/host-validation.ts";
+import { HOST_AUTHOR } from "../../git/commit.ts";
+import { hostCommitContentDigest, reconcileHostCommit } from "../../git/commit-reconcile.ts";
+import type { HostCommitAdoption } from "../../workflow/engine.ts";
 import { diffMatchesClaims, headAdvanced, noProtectedPaths, writesWithinGlobs } from "../../gates/git-diff.ts";
 import { GateReport, type GateId } from "../../gates/interface.ts";
 import {
@@ -127,7 +133,7 @@ import { writeRunReport } from "../../observability/run-report.ts";
 import { readAttemptEvidence } from "./review-record.ts";
 import { PermissionBreach } from "../../policy/path-policy.ts";
 import { openPermissionSession, type PermissionSession, type SandboxProbe } from "../../policy/sandbox-broker.ts";
-import { transition, type EdgeId, type TaskState } from "../../state/task-machine.ts";
+import { transition, SEALED_STATES, type EdgeId, type TaskState } from "../../state/task-machine.ts";
 import { createCompiledPhaseLaunchVerifier } from "../../workflow/phase-launch-authorization.ts";
 import { compileWorkflow, compileWorkflowStructure, type WorkflowRecipe } from "../../workflow/compiler.ts";
 import { composePromptBundle, type PromptBundle } from "../../workflow/prompt-composition.ts";
@@ -1047,7 +1053,24 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
   const infra: ProductionInfrastructure = { ...DEFAULT_INFRASTRUCTURE, ...options.infrastructure };
   let status = recovery?.inspected.status ?? await readAttempt(options.attemptDir);
   const protectedState = readProtectedState(options.attemptDir);
-  if (recovery !== undefined && protectedState.consumptions.some(consumption => !protectedState.bindings.some(binding => binding.consumptionId === consumption.id))) throw new Error("protected generation is consumed without a completed candidate binding; host-effect recovery must reconcile it without replay");
+  /**
+   * The crash window inside `commitProtectedAsHost`, between its durable intent
+   * and its durable binding.
+   *
+   * It is reconciled, never replayed: the candidate object already exists, and
+   * what is missing is a compare-and-swap and one pre-staged index whose bytes
+   * the intent pinned by digest. A consumption with no intent at all never
+   * reached that window and has no exact outcome to complete, so it still
+   * refuses.
+   */
+  // A retained protected host effect is reconciled by its own owner-confirmed
+  // act, never by a workflow run. Running one while it is outstanding would
+  // measure a later phase against whichever revision the crash left behind.
+  if (recovery !== undefined && protectedState.consumptions.some(consumption => !protectedState.bindings.some(binding => binding.consumptionId === consumption.id))) {
+    throw new Error(unfinishedProtectedEffect(protectedState) === null
+      ? "protected generation is consumed without a durable commit intent; no exact host effect exists to reconcile and no replay is authorized"
+      : "an interrupted protected host effect is retained; reconcile it before resuming this workflow");
+  }
   if (recovery === undefined) {
     if (status.recovery != null) throw new Error("saved phase completion or quota anchor exists; use awsf resume");
     const recoveredReview = await settleExitedReview(options, status, infra.now());
@@ -1780,6 +1803,67 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       } };
     };
     let hostGit = openHostGit();
+    const commitMessageFor = (envelope: EnvelopeBase): string => phase.id === "builder" ? (envelope as BuildOutput).proposedCommitMessage : `chore: record ${phase.id} output`;
+    const protectedConsumptionId = protectedCapability === undefined ? null : protectedWriteContext(protectedCapability)!.consumption.id;
+    /** The durable stage this phase is being resumed into, or null for an ordinary run. */
+    const restoredValidation = restored === null ? null : recovery?.inspected.checkpoint.validation ?? null;
+
+    /**
+     * The progress record for one stage. Only the `commit` stage carries an
+     * intent, and it records it from the worktree as it stands immediately
+     * before the transport — the same measurement the reconciliation will make
+     * again afterwards.
+     */
+    const validationProgressFor = async (stage: HostValidationStage, current: PhaseRecovery,
+      changed: readonly string[], envelope: StoredEnvelope<EnvelopeBase>): Promise<HostValidationProgress> => {
+      const pending = current.pending!;
+      const base: HostValidationProgress = { schema: "awsf.host-validation/v1", phaseKey: phase.id, ordinal,
+        round: pending.round, runId: pending.runId, envelopeId: pending.envelopeId, envelopeDigest: pending.envelopeDigest,
+        resultCheckpointId: current.validation?.resultCheckpointId ?? current.id, stage,
+        commitIntent: current.validation?.commitIntent ?? null, commitResult: current.validation?.commitResult ?? null,
+        protectedConsumptionId: current.validation?.protectedConsumptionId ?? null };
+      if (stageOrdinal(stage) < stageOrdinal("commit")) return { ...base, commitIntent: null, commitResult: null, protectedConsumptionId: null };
+      if (stage === "commit" && base.commitIntent === null && base.protectedConsumptionId === null) {
+        const git = systemGitRunner(status.worktree!);
+        const parentSha = runGit(git, ["rev-parse", "HEAD"]).trim();
+        if (protectedConsumptionId !== null) return { ...base, protectedConsumptionId };
+        return { ...base, commitIntent: { intentId: randomUUID(), phaseKey: phase.id, ordinal, round: pending.round, runId: pending.runId,
+          parentSha, message: commitMessageFor(envelope.payload!), author: HOST_AUTHOR, committer: HOST_AUTHOR,
+          changedPaths: [...changed], committedPaths: [...changesSinceBase(status.worktree!, parentSha, git)],
+          contentDigest: await hostCommitContentDigest(status.worktree!, parentSha, git),
+          treeDigest: await savedResultTreeDigest(status.worktree!, git) } };
+      }
+      if (stageOrdinal(stage) > stageOrdinal("commit") && base.commitResult === null && base.commitIntent !== null) {
+        const git = systemGitRunner(status.worktree!);
+        const head = runGit(git, ["rev-parse", "HEAD"]).trim();
+        return { ...base, commitResult: { intentId: base.commitIntent.intentId,
+          commitSha: head === base.commitIntent.parentSha ? null : head,
+          treeDigest: await savedResultTreeDigest(status.worktree!, git) } };
+      }
+      return base;
+    };
+
+    /**
+     * Adopt whatever the interrupted run actually produced.
+     *
+     * The ordinary path asks Git objects whether the recorded intent's commit
+     * exists; the protected path completes a publication whose every byte the
+     * intent pinned. Neither creates a commit that already exists, and neither
+     * re-dispatches a configured command that already ran.
+     */
+    const adoptRestoredCommit = async (progress: HostValidationProgress): Promise<HostCommitAdoption | null> => {
+      const verified = stageOrdinal(progress.stage) > stageOrdinal("verify-candidate");
+      // A protected generation is one-use, so its phase is never re-entered and
+      // this is unreachable for it: `verifyProtectedWrite` refuses a consumed
+      // activation long before the engine runs. Its publication is reconciled
+      // once, before any phase starts, by the block at the top of this command.
+      if (progress.protectedConsumptionId !== null) throw new Error("a protected generation's host effect is reconciled before re-entry, never inside one");
+      if (progress.commitIntent === null) return null;
+      const reconciliation = await reconcileHostCommit(progress.commitIntent, { worktree: status.worktree!, git: systemGitRunner(status.worktree!) });
+      if (reconciliation.outcome === "refused") throw new Error(`recovery refused: ${reconciliation.reason}`);
+      if (reconciliation.outcome === "not-committed") return null;
+      return { candidateSha: reconciliation.commitSha, verified };
+    };
     const rolePrompt = renderProductionRolePrompt(phase, previous, designContext, status.request, route.agent);
     const grantContext = protectedPromptContext(phaseGrant);
     const originalPrompt = rolePrompt + seedContext(status) + resumeInstructionContext(instructions) + grantContext;
@@ -2165,11 +2249,24 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
           await persist("attempt.updated", { recovery: checkpoint, budget: budget.snapshot() },
             { type: "phase-result-ready", phase: phaseRecords.get(phase.id)!, checkpoint });
         },
-        onValidationStart: async () => {
-          if (status.recovery?.pending?.phaseKey !== phase.id) return;
-          const checkpointId = status.recovery.id;
-          await persist("attempt.updated", { recovery: null }, { type: "phase-validation-started", phaseId: phaseDb, checkpointId });
+        /**
+         * Advance the durable stage instead of clearing the checkpoint.
+         *
+         * Before A3 this wrote `{ recovery: null }`, so a crash anywhere in
+         * host validation left a journal that could not say whether a gate had
+         * run or a commit had been created. Each stage now supersedes the last,
+         * citing the checkpoint it replaces, and the `commit` stage carries the
+         * exact intent its reconciliation needs.
+         */
+        onValidationStage: async (stage, context) => {
+          const current = status.recovery;
+          if (current?.pending?.phaseKey !== phase.id || context.correctionRound !== current.pending.round) return;
+          const progress = await validationProgressFor(stage, current, context.changedPaths, context.envelope);
+          const next: PhaseRecovery = { ...current, id: randomUUID(), kind: "validating", validation: progress, createdAt: infra.now() };
+          await persist("attempt.updated", { recovery: next },
+            { type: "phase-validation-started", phaseId: phaseDb, checkpointId: current.id });
         },
+        ...(restoredValidation === null ? {} : { reconcileCommit: async () => adoptRestoredCommit(restoredValidation) }),
         agentSessionId: status.sessionId,
         onPhaseState,
         onAccepted: async result => {
@@ -3046,6 +3143,66 @@ async function prepareResumeInstruction(options: ProductionRunOptions, inspected
   return { phaseKey: phase.id, ordinal, bundleDigest: recoveryDigest(bundle), originalPrompt, seedAmendment };
 }
 
+/**
+ * Finish an interrupted protected host effect, as its own owner act.
+ *
+ * It is deliberately NOT gated behind the phase checkpoint: `commitProtectedAsHost`
+ * crashes frequently leave the phase FAILED, and an attempt whose HEAD, index
+ * and journal disagree has to be reconcilable whatever became of the phase.
+ *
+ * Nothing is recreated. The commit object was written before the intent was
+ * recorded, so at most this moves HEAD to that exact object under a
+ * compare-and-swap, installs the exact pre-staged index the intent pinned by
+ * digest, and appends the binding it had already computed. It spends no call,
+ * runs no model, grants no further protected write and does not continue the
+ * workflow — the generation is one-use and stays spent.
+ */
+async function reconcileRetainedProtectedEffect(
+  options: ProductionRunOptions & { terminal: OwnerTerminal }, reason: string, current: AttemptStatus,
+): Promise<{ confirmed: boolean; status: AttemptStatus } | null> {
+  const state = readProtectedState(options.attemptDir);
+  const retained = unfinishedProtectedEffect(state);
+  if (retained === null) return null;
+  await assertNoExecutionController(options.attemptDir);
+  const publication = inspectProtectedPublication(state, retained);
+  if (publication.outcome === "refused") throw new Error(`protected host-effect recovery refused: ${publication.reason}`);
+  // A sealed attempt takes no further writes, so its binding can never become
+  // durable and completing the publication would leave the repository ahead of
+  // the journal. The retained bytes, the stale lock and the evidence all stay
+  // exactly as the crash left them.
+  if ((SEALED_STATES as readonly TaskState[]).includes(current.lifecycleState)) {
+    throw new Error(`protected host-effect recovery refused: this attempt is sealed in ${current.lifecycleState}, ` +
+      `so candidate ${retained.binding.candidateSha} cannot receive its durable binding here; the retained worktree, index and evidence are unchanged`);
+  }
+  options.terminal.write(
+    `An interrupted protected host effect is retained on ${current.taskId} attempt ${String(current.attempt)}.\n` +
+    `Candidate ${retained.binding.candidateSha} over ${String(retained.binding.deltas.length)} granted file(s); publication is ${publication.outcome}.\n` +
+    "Completing it creates no commit, repeats no model call, spends no call and authorizes no further protected write. " +
+    `The one-use generation is spent, so the workflow is not continued. Reason: ${reason}`);
+  if (!await options.terminal.confirm("Reconcile this interrupted protected host effect?")) return { confirmed: false, status: current };
+  return withExecutionLease(options.attemptDir, async () => {
+    const again = readProtectedState(options.attemptDir);
+    const still = unfinishedProtectedEffect(again);
+    if (still === null || recoveryDigest(still) !== recoveryDigest(retained)) throw new Error("the retained protected host effect changed during confirmation");
+    const verdict = inspectProtectedPublication(again, still);
+    if (verdict.outcome === "refused") throw new Error(`protected host-effect recovery refused: ${verdict.reason}`);
+  }, async () => {
+    const locked = readProtectedState(options.attemptDir);
+    const intent = unfinishedProtectedEffect(locked)!;
+    const verdict = inspectProtectedPublication(locked, intent);
+    let status = await readAttempt(options.attemptDir);
+    await completeProtectedPublication({ attemptDir: options.attemptDir, state: locked, intent, publication: verdict,
+      persistBinding: async binding => {
+        const detail = `reconciled the interrupted protected candidate ${binding.candidateSha} (${verdict.outcome})`;
+        status = await persistAttempt(options.attemptDir, status.revision, { kind: "attempt.updated",
+          next: nextRevision(status, { candidateSha: binding.candidateSha, lastActivityAt: (options.infrastructure?.now ?? DEFAULT_INFRASTRUCTURE.now)(),
+            lastActivity: detail, nextAction: `inspect ${binding.candidateSha}, then land it or issue a fresh grant` }),
+          evidence: { type: "protected-candidate", binding } }, options.projectRecord);
+      } });
+    return { confirmed: true, status };
+  });
+}
+
 /** Owner entry for an unstarted boundary or an already host-validated, durable phase result. No native reconnect. */
 export async function resumeProductionCommand(options: ProductionRunOptions & { reason: string; instruction?: string; terminal: OwnerTerminal }): Promise<{ confirmed: boolean; status: AttemptStatus }> {
   const reason = ownerText(options.reason);
@@ -3059,6 +3216,8 @@ export async function resumeProductionCommand(options: ProductionRunOptions & { 
     if (instructionText !== null && proved.instructions.at(-1)?.amendment.text !== instructionText) throw new Error("completed workflow has no unstarted phase for a new instruction");
     return { confirmed: true, status: proved.status };
   }
+  const reconciled = await reconcileRetainedProtectedEffect(options, reason, current);
+  if (reconciled !== null) return reconciled;
   const first = await preflightRecovery(options);
   const instructionPlan = instructionText === null ? null : await prepareResumeInstruction(options, first);
   const firstQuota = await readRecoveryQuota(options, first);

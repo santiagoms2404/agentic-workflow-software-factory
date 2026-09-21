@@ -14,6 +14,7 @@ import { FIRST_HOST_VALIDATION_STAGE, isRepeatableStage, stageOrdinal,
 export type HostValidationRecovery =
   | { readonly action: "replay"; readonly from: HostValidationStage }
   | { readonly action: "reconcile-commit"; readonly intent: HostCommitIntent; readonly result: HostCommitResult | null; readonly resumeAt: HostValidationStage }
+  | { readonly action: "reconcile-protected"; readonly consumptionId: string; readonly resumeAt: HostValidationStage }
   | { readonly action: "refuse"; readonly reason: string };
 
 /**
@@ -39,6 +40,13 @@ export type HostValidationRecovery =
 export function planHostValidationRecovery(progress: HostValidationProgress): HostValidationRecovery {
   if (isRepeatableStage(progress.stage) && stageOrdinal(progress.stage) < stageOrdinal("commit")) {
     return Object.freeze({ action: "replay" as const, from: FIRST_HOST_VALIDATION_STAGE });
+  }
+  if (progress.protectedConsumptionId !== null) {
+    // The protected transport keeps its own durable intent and binding, so the
+    // publication it left behind is identified against that evidence rather
+    // than against a second copy recorded here.
+    return Object.freeze({ action: "reconcile-protected" as const, consumptionId: progress.protectedConsumptionId,
+      resumeAt: progress.stage === "commit" ? "verify-candidate" as const : progress.stage });
   }
   if (progress.stage === "commit") {
     return Object.freeze({ action: "reconcile-commit" as const, intent: progress.commitIntent!, result: null, resumeAt: "verify-candidate" as const });

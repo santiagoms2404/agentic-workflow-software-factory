@@ -21,6 +21,7 @@ function progress(stage: HostValidationStage): HostValidationProgress {
     schema: "awsf.host-validation/v1", phaseKey: "builder", ordinal: 2, round: 0, runId: "run-1",
     envelopeId: "session:builder:0", envelopeDigest: HASH, resultCheckpointId: "checkpoint-1", stage,
     commitIntent: committing ? intent : null,
+    protectedConsumptionId: null,
     commitResult: committed ? { intentId: "intent-1", commitSha: COMMIT, treeDigest: HASH } : null,
   };
 }
@@ -55,10 +56,19 @@ test("a cut after every effectful step reconciles the recorded commit and then a
   assert.equal(plan.resumeAt, "accept");
 });
 
+test("a protected commit stage defers to its own durable intent and binding", () => {
+  for (const stage of ["commit", "verify-candidate", "accept"] as const) {
+    const plan = planHostValidationRecovery({ ...progress(stage), commitIntent: null, commitResult: null, protectedConsumptionId: "consumption-1" });
+    assert.ok(plan.action === "reconcile-protected", stage);
+    assert.equal(plan.consumptionId, "consumption-1");
+    assert.equal(plan.resumeAt, stage === "commit" ? "verify-candidate" : stage);
+  }
+});
+
 test("no cut in the table authorizes a model call, a second commit or a reset", () => {
   for (const stage of HOST_VALIDATION_STAGES) {
     const plan = planHostValidationRecovery(progress(stage));
-    assert.ok(["replay", "reconcile-commit", "refuse"].includes(plan.action), stage);
+    assert.ok(["replay", "reconcile-commit", "reconcile-protected", "refuse"].includes(plan.action), stage);
     if (plan.action === "replay") assert.equal(plan.from, "envelope-check");
   }
 });

@@ -156,7 +156,7 @@ async function advance(attemptDir: string, from: PhaseRecovery, progress: HostVa
 function progressAt(stage: HostValidationStage, resultCheckpointId: string, pending: SavedPhaseResult,
   commitIntent: HostCommitIntent | null = null, commitResult: HostValidationProgress["commitResult"] = null): HostValidationProgress {
   return { schema: "awsf.host-validation/v1", phaseKey: PHASE, ordinal: 1, round: pending.round, runId: RUN_ID,
-    envelopeId: pending.envelopeId, envelopeDigest: pending.envelopeDigest, resultCheckpointId, stage, commitIntent, commitResult };
+    envelopeId: pending.envelopeId, envelopeDigest: pending.envelopeDigest, resultCheckpointId, stage, commitIntent, commitResult, protectedConsumptionId: null };
 }
 
 test("a cut inside read-only host validation replays the prefix without touching a byte", async () => {

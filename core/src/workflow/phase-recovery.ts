@@ -181,6 +181,10 @@ export async function reconcileHostValidation(
   const inherited = checkpoint.prefix.at(-1)?.candidateSha ?? null;
   const plan = planHostValidationRecovery(progress);
   if (plan.action === "refuse") throw new Error(`recovery refused: ${plan.reason}`);
+  // A protected host effect is identified against its own durable intent and
+  // binding, under the execution lease, by `git/protected-reconcile.ts`.
+  // Preflight states the plan and touches nothing.
+  if (plan.action === "reconcile-protected") return Object.freeze({ plan, commit: null, candidateSha: inherited });
   if (plan.action === "replay") {
     if (await savedResultTreeDigest(status.worktree!, git) !== pending.worktreeDigest) throw new Error("saved reply worktree or index bytes changed");
     if (runGit(git, ["rev-parse", "HEAD"]).trim() !== checkpoint.worktreeHeadSha) throw new Error("recovery refused: HEAD moved during read-only host validation");

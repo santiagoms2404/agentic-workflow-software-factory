@@ -31,6 +31,7 @@ function progress(stage: HostValidationStage, overrides: Partial<HostValidationP
     schema: "awsf.host-validation/v1", phaseKey: "builder", ordinal: 2, round: 0, runId: "run-1",
     envelopeId: "session:builder:0", envelopeDigest: HASH, resultCheckpointId: "checkpoint-1", stage,
     commitIntent: committing ? intent() : null,
+    protectedConsumptionId: null,
     commitResult: committed ? { intentId: "intent-1", commitSha: COMMIT, treeDigest: HASH } : null,
     ...overrides,
   };
@@ -91,6 +92,27 @@ test("an empty change-set can never have produced a commit", () => {
     commitIntent: intent({ committedPaths: [] }),
     commitResult: { intentId: "intent-1", commitSha: null, treeDigest: HASH },
   }));
+});
+
+test("a protected commit stage names its consumption instead of carrying a second intent", () => {
+  for (const stage of ["commit", "verify-candidate", "accept"] as const) {
+    assertHostValidationProgress(progress(stage, { commitIntent: null, commitResult: null, protectedConsumptionId: "consumption-1" }));
+  }
+});
+
+test("a stage may not carry both a host commit intent and a protected consumption", () => {
+  assert.throws(() => assertHostValidationProgress(progress("commit", { protectedConsumptionId: "consumption-1" })),
+    /stage disagrees with its recorded commit evidence/);
+});
+
+test("a protected effect records no host commit result, because its binding is its result", () => {
+  assert.throws(() => assertHostValidationProgress(progress("accept", { commitIntent: null, protectedConsumptionId: "consumption-1" })),
+    /stage disagrees with its recorded commit evidence/);
+});
+
+test("a read-only stage may not claim a protected consumption either", () => {
+  assert.throws(() => assertHostValidationProgress(progress("gates", { protectedConsumptionId: "consumption-1" })),
+    /stage disagrees with its recorded commit evidence/);
 });
 
 test("an unknown stage or a malformed digest is refused before any field is read", () => {

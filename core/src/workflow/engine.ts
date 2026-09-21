@@ -5,6 +5,24 @@ import type { CallBudget } from "../execution/call-budget.ts";
 import type { GateReport } from "../gates/interface.ts";
 import { captureChangeSet, changedPaths, type GitRunner } from "../git/changes.ts";
 import { commitAsHost } from "../git/commit.ts";
+import type { HostValidationStage } from "../contracts/host-validation.ts";
+
+/** What the host knows at a validation stage. `changedPaths` is empty until `capture-diff` has run. */
+export interface HostValidationContext<T extends EnvelopeBase> {
+  readonly envelope: StoredEnvelope<T>;
+  readonly changedPaths: readonly string[];
+  readonly correctionRound: number;
+}
+
+/**
+ * A candidate adopted from durable evidence rather than created again.
+ * `verified` is true only when the durable stage proves the configured
+ * candidate commands already finished, so they are never dispatched twice.
+ */
+export interface HostCommitAdoption {
+  readonly candidateSha: string | null;
+  readonly verified: boolean;
+}
 import type { PermissionResult } from "../policy/sandbox-broker.ts";
 import type { PhaseSession, PhaseState } from "../state/phase-machine.ts";
 import {
@@ -126,7 +144,20 @@ export interface RunAgentPhaseOptions<T extends EnvelopeBase> {
   readonly initialEnvelope?: StoredEnvelope<T>;
   readonly initialUsage?: PhaseUsage;
   readonly onResultStored?: (envelope: StoredEnvelope<T>) => Promise<void>;
-  readonly onValidationStart?: () => Promise<void>;
+  /**
+   * Called BEFORE each host-validation stage, so a crash inside one is
+   * recovered against the stage that was about to run rather than against a
+   * cleared checkpoint. The first four stages only read and may be replayed;
+   * `commit` and `verify-candidate` act and may only be reconciled.
+   */
+  readonly onValidationStage?: (stage: HostValidationStage, context: HostValidationContext<T>) => Promise<void>;
+  /**
+   * Consulted in place of `hostGit.commit` when recovery restored a checkpoint
+   * that already carries a durable commit intent. Returning null means the
+   * transport provably never ran and the ordinary commit should proceed;
+   * returning a sha adopts the commit that already exists.
+   */
+  readonly reconcileCommit?: (context: HostValidationContext<T>) => Promise<HostCommitAdoption | null>;
   /** Durable/event observer; receives QUEUED first and FAILED on every abnormal exit. */
   readonly onPhaseState?: (state: PhaseState) => void;
   /** Durable host-validated completion, before the terminal phase notification. */
@@ -436,7 +467,8 @@ export async function runAgentPhase<T extends EnvelopeBase>(
       saved = undefined;
       envelopes.push(envelope);
       if (!recovering) await options.onResultStored?.(envelope);
-      await options.onValidationStart?.();
+      const stageContext = (): HostValidationContext<T> => ({ envelope, changedPaths, correctionRound });
+      await options.onValidationStage?.("envelope-check", stageContext());
       if (!envelope.valid || envelope.payload === null) {
         if (parseFixes >= MAX_PARSE_FIX_ATTEMPTS) {
           throw new EnvelopeValidationFailure(options.phase.id, envelopes, {
@@ -450,6 +482,7 @@ export async function runAgentPhase<T extends EnvelopeBase>(
         continue;
       }
 
+      await options.onValidationStage?.("gates", stageContext());
       lastReports = await runGates(options, envelope.payload, correctionRound);
       if (!lastReports.every((report) => report.passed)) {
         if (gateRound >= options.phase.maxCorrections) {
@@ -470,17 +503,32 @@ export async function runAgentPhase<T extends EnvelopeBase>(
       // send. Both run on EVERY round, never only the first — a correction that
       // fixed a failing test by writing outside its globs is a breach, and a
       // round that skipped this check would launder it.
+      await options.onValidationStage?.("permission-enforce", stageContext());
       permission = options.permissions.enforce();
+      await options.onValidationStage?.("capture-diff", stageContext());
       changedPaths = options.hostGit.captureDiff();
-      candidateSha = await options.hostGit.commit(envelope.payload!, changedPaths);
+      await options.onValidationStage?.("commit", stageContext());
+      // A restored checkpoint carrying a durable commit intent decides this by
+      // inspecting Git objects. Only an absent or provably-unrun intent reaches
+      // the transport, so no commit is ever created twice.
+      const reconciled = options.reconcileCommit === undefined ? null : await options.reconcileCommit(stageContext());
+      candidateSha = reconciled === null
+        ? await options.hostGit.commit(envelope.payload!, changedPaths)
+        : reconciled.candidateSha;
 
-      // No verifier, or nothing to verify because the phase changed no files.
-      if (options.verifyCandidate === undefined || candidateSha === null) {
+      // No verifier, nothing to verify because the phase changed no files, or a
+      // durable stage proving the configured commands already finished. The
+      // last case is why `verified` exists: re-dispatching an owner-configured
+      // command that has already run is exactly what recovery must not do.
+      if (options.verifyCandidate === undefined || candidateSha === null || reconciled?.verified === true) {
+        await options.onValidationStage?.("accept", stageContext());
         accepted = envelope;
         break;
       }
+      await options.onValidationStage?.("verify-candidate", stageContext());
       verification = await options.verifyCandidate({ candidateSha, changedPaths, correctionRound });
       if (verification.passed) {
+        await options.onValidationStage?.("accept", stageContext());
         accepted = envelope;
         break;
       }

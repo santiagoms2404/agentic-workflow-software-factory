@@ -15,10 +15,10 @@ capability is asserted. Every cut here is downstream of a reply that was already
 complete, already stored and already paid for; the only question is what the
 host did with it afterwards.
 
-It also implements no protected-write grant. D7 is consumed here only as a
-constraint: a recovered commit must remain reconcilable with a candidate
-binding, and the interface that binding needs is listed under *Open interface*
-rather than invented.
+It implements no protected-write grant. D7 is consumed here only as a
+constraint, and as an obligation: A2's `ProtectedCandidateBindingSchema` states
+that A3 must reconcile its exact parent/tree/commit tuple and never replay
+commit creation. That is done under *The protected host effect* below.
 
 ## What existed before
 
@@ -63,7 +63,7 @@ The `PhaseRecovery` checkpoint gains a fourth kind, `validating`, carrying a
 
 ```
 { schema, phaseKey, ordinal, round, runId, envelopeId, envelopeDigest,
-  resultCheckpointId, stage, commitIntent, commitResult }
+  resultCheckpointId, stage, commitIntent, commitResult, protectedConsumptionId }
 ```
 
 `resultCheckpointId` names the `result-ready` checkpoint this segment descends
@@ -122,8 +122,11 @@ tree, because neither names one outcome.
 
 ## The cut table
 
-`planHostValidationRecovery` maps a durable stage to one of three actions. No
-branch authorizes a model call, a second commit, a reset or a guess.
+`planHostValidationRecovery` maps a durable stage to one of four actions. No
+branch authorizes a model call, a second commit, a reset or a guess. A phase
+that commits under a protected grant records `protectedConsumptionId` instead of
+a `HostCommitIntent`, because that transport keeps its own durable intent and
+binding and a second, weaker copy here would be one more thing to disagree.
 
 | Cut | Durable stage | Classification | Action |
 |---|---|---|---|
@@ -137,6 +140,11 @@ branch authorizes a model call, a second commit, a reset or a guess.
 | A3-8 | `verify-candidate` | proved-safe-refusal | named refusal, candidate and tree retained |
 | A3-9 | `accept`, repository agrees with the recorded result | proved-completed-result-recovery | reconcile, then accept without re-running anything |
 | A3-10 | `accept`, repository disagrees | proved-safe-refusal | named refusal, nothing touched |
+| A3-11 | protected `commit`, HEAD and index pre-publication | proved-completed-result-recovery | compare-and-swap to the existing object, install the pinned index, bind |
+| A3-12 | protected `commit`, HEAD published, index pending | proved-completed-result-recovery | install the pinned index, bind |
+| A3-13 | protected, binding missing but publication complete | proved-completed-result-recovery | bind only |
+| A3-14 | protected, any other HEAD/index pair | proved-safe-refusal | named refusal, nothing touched |
+| A3-15 | protected, attempt sealed | proved-safe-refusal | named refusal, nothing touched |
 
 Replay always restarts at `envelope-check` rather than at the recorded stage.
 That costs one extra pure reduction and removes the question of whether a
@@ -215,71 +223,115 @@ crash left them.
 - **Uncertain liability.** An unsettled reservation or live process still
   refuses before anything else is evaluated. Nothing here refunds.
 
-## Integration requirements
+## The protected host effect
 
-A3 adds no call site inside `production-run.ts` or `engine.ts`; those files, and
-`attempt-evidence.ts` and `land.ts`, belong to the A2 protected-grant work. The
-seams below are what A2 (or whoever owns those files) must add for the cuts to
-become reachable from `awsf resume`. Two of the four files turn out to need no
-change at all.
+A2's `commitProtectedAsHost` is a second commit transport with its own durable
+evidence: a `protected-commit-intent` written before it publishes anything, and
+a `protected-candidate` binding written after everything. It creates the commit
+object with `commit-tree` **before** recording the intent, so at every cut
+between the two the candidate already exists in the object store and what is
+missing is only a HEAD compare-and-swap and the installation of one pre-staged
+index — both pinned by digest in that intent.
 
-**`core/src/observability/attempt-evidence.ts` — no change.** The existing
+`ProtectedCandidateBindingSchema` states the obligation directly: *A3 must
+reconcile this exact parent/tree/commit tuple, never replay commit creation.*
+`core/src/git/protected-reconcile.ts` does exactly that.
+
+`inspectProtectedPublication` is read-only. It verifies the candidate object's
+parent and tree, re-derives the protected delta from the tree and compares it to
+the binding, checks every granted path's current bytes against the recorded
+blob, then reads HEAD and the index file:
+
+| HEAD | Index | Outcome |
+|---|---|---|
+| granted pre-write revision | pre-publication digest | `unpublished` |
+| recorded candidate | pre-publication digest | `head-published` |
+| recorded candidate | staged digest | `published` |
+| anything else | anything else | `refused`, by name |
+
+`completeProtectedPublication` finishes only what remains. For `unpublished` it
+performs the compare-and-swap against the granted pre-write revision and
+installs the staged index; for `head-published` it installs the staged index
+alone, adopting the interrupted run's own leftover `index.lock` when that lock
+already holds exactly the staged bytes and never breaking one that does not; for
+`published` it appends the binding and nothing else. It stages nothing, resets
+nothing and creates no commit.
+
+`unfinishedProtectedEffect` treats a second unfinished effect as corruption
+rather than a cut, and a consumption with no intent at all as unreconcilable —
+that generation never reached the window and has no exact outcome to complete.
+
+### Where it runs
+
+The reconciliation is **not** gated behind the phase checkpoint. These crashes
+routinely leave the phase FAILED, and an attempt whose HEAD, index and journal
+disagree has to be reconcilable whatever became of the phase. It is its own
+owner-confirmed act at the head of `awsf resume`: read-only inspection, a
+confirmation naming the candidate and the publication state, then completion
+under the execution lease. It spends no call, runs no model, grants no further
+protected write and does **not** continue the workflow — the generation is
+one-use and stays spent. Declining is inert.
+
+Two refusals bound it. A publication whose state cannot be named exactly refuses
+before anything is touched. A **sealed** attempt (`BLOCKED`, `CANCELLED`,
+`PUBLISHED`) refuses too: it takes no further writes, so the binding could never
+become durable and completing the publication would leave the repository ahead
+of the journal. The retained worktree, index, stale lock and evidence all stay
+as the crash left them.
+
+Running a workflow while an effect is outstanding is refused: a later phase
+would otherwise measure against whichever revision the crash left behind.
+
+## Integration
+
+Applied on this branch, against `0eb01c1`. Three of the four files A2 owned need
+no change:
+
+**`core/src/observability/attempt-evidence.ts` — unchanged.** The existing
 `phase-validation-started` member (`{ phaseId, checkpointId }`) carries every
-stage advance. `checkpointId` names the checkpoint being superseded, which is
-exactly the chaining the recovery reader verifies.
+stage advance; `checkpointId` names the checkpoint being superseded, which is
+the chaining the recovery reader verifies.
 
-**`core/src/observability/projector.ts` — no change.**
+**`core/src/observability/projector.ts` — unchanged.**
 `phase-validation-started` is already a projector no-op, and the checkpoint
-travels inside `next`, which the recovery reader consumes directly.
+travels inside `next`.
 
-**`core/src/cli/commands/land.ts` — no change expected.** A3 produces no new
-landing evidence; the reconciled candidate is an ordinary accepted phase.
+**`core/src/cli/commands/land.ts` — unchanged.** A reconciled candidate is an
+ordinary bound candidate; `inspectProtectedCandidate` and the landing
+authorization see it exactly as they would have seen it without the crash.
 
-**`core/src/workflow/engine.ts` — two optional callbacks.** Both absent means
-byte-identical behaviour to today.
+**`core/src/workflow/engine.ts`** gains two optional callbacks. Both absent is
+byte-identical to the previous behaviour.
 
 ```ts
-readonly onValidationStage?: (stage: HostValidationStage) => Promise<void>;
-readonly hostCommitRecovery?: {
-  intent(parentSha: string, changedPaths: readonly string[], message: string): Promise<void>;
-  reconcile(): Promise<{ commitSha: string | null } | null>;
-  result(commitSha: string | null): Promise<void>;
-};
+readonly onValidationStage?: (stage: HostValidationStage, context: HostValidationContext<T>) => Promise<void>;
+readonly reconcileCommit?: (context: HostValidationContext<T>) => Promise<HostCommitAdoption | null>;
 ```
 
 `onValidationStage` replaces the single `onValidationStart` call with one call
-per stage, made **before** the stage runs. `hostCommitRecovery.intent` is
-awaited immediately before `options.hostGit.commit(...)`.
-`hostCommitRecovery.reconcile` is consulted **in place of**
-`options.hostGit.commit(...)` when a restored checkpoint already carries an
-intent; returning `null` means the transport never ran and the ordinary commit
-should proceed. `hostCommitRecovery.result` is awaited immediately after the
-commit returns.
+per stage, made **before** the stage runs. `reconcileCommit` is consulted in
+place of `hostGit.commit(...)` when a restored checkpoint carries a durable
+intent; returning `null` means the transport provably never ran and the ordinary
+commit proceeds. Its `verified` flag is what stops an owner-configured command
+that already finished from being dispatched a second time.
 
-**`core/src/cli/commands/production-run.ts` — carry the checkpoint across the
-segment.** Today `onValidationStart` persists `{ recovery: null }`. Instead,
-each stage advance persists `{ recovery: <next validating checkpoint> }` with
-the existing `phase-validation-started` evidence, citing the previous
-checkpoint's id. The commit intent is built from the worktree with
-`hostCommitContentDigest` and `changesSinceBase`, and the resume entry consults
-`verifyRecoveryWorktree`'s returned `ValidationReconciliation` to decide whether
-to replay the read-only prefix, adopt an existing commit or refuse. The saved
-reply's existing ban on a model call during validation stays in force.
+**`core/src/cli/commands/production-run.ts`** advances the checkpoint instead of
+clearing it. Each stage persists `{ recovery: <next validating checkpoint> }`
+with the existing `phase-validation-started` evidence citing the checkpoint it
+supersedes. The `commit` stage records either a `HostCommitIntent`, built from
+the worktree with `hostCommitContentDigest` and `changesSinceBase`, or the
+protected consumption id when the phase commits under a grant. The saved reply's
+existing ban on a model call during validation stays in force.
 
-## Open interface
+### One behaviour A2 pinned that A3 changes
 
-D7's **candidate-binding** evidence is not defined here, because A3 does not own
-it. A3's requirement on it is narrow and should be satisfied when it is written:
-
-1. The binding must be derivable from durable journal intent plus Git objects
-   alone, so that a crash between `git commit` and the binding append is
-   reconcilable rather than ambiguous.
-2. The binding must cite the same pre-write HEAD that `HostCommitIntent`
-   records as `parentSha`, so that one reconciled revision satisfies both.
-3. If the binding is appended in a later event than the commit result, the gap
-   is an A3 cut and needs its own stage between `commit` and `verify-candidate`.
-   Appending it in the same event as the commit result removes that cut
-   entirely, which is the cheaper answer.
+`core/test/journeys/production-runner.test.ts` asserted that a cut inside host
+validation refuses (`/no durable accepted-phase checkpoint/`), and that resume
+after a protected `intent-crash` leaves HEAD unmoved. Both pinned the boundary
+this work was asked to extend, and the second contradicts the obligation written
+into `ProtectedCandidateBindingSchema`. Those assertions now state the
+reconciled outcomes instead. Every preservation assertion beside them — retained
+bytes, unchanged spend, one model call, inert refusal — is kept.
 
 ## Tests
 
@@ -289,6 +341,7 @@ it. A3's requirement on it is narrow and should be satisfied when it is written:
 | unit | `core/test/unit/workflow/host-validation.test.ts` | the cut table, and that no cut authorizes a call, a second commit or a reset |
 | simulation | `core/test/simulation/host-commit-reconcile.test.ts` | commit reconciliation against disposable repositories, including every refusal and a non-destructiveness assertion after each one |
 | journeys | `core/test/journeys/host-validation-recovery.test.ts` | the cuts end to end against a disposable attempt and its own managed worktree |
+| journeys | `core/test/journeys/production-runner.test.ts` | the read-only prefix replayed through `awsf resume` without another model call, and A2's protected crash cuts reconciled or refused |
 
 Every fixture is created by `mkdtemp` and removed in `finally`. No test opens a
 runtime attempt of this project, and no test produces a crash in work anybody is

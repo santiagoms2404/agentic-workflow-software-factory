@@ -56,6 +56,13 @@ export const HostValidationProgressSchema = Type.Object({
   stage: HostValidationStageSchema,
   commitIntent: Type.Union([HostCommitIntentSchema, Type.Null()]),
   commitResult: Type.Union([HostCommitResultSchema, Type.Null()]),
+  /**
+   * Set instead of `commitIntent` when this phase commits under a protected
+   * grant. That transport records its own durable intent and binding, so the
+   * stage names the consumption and the reconciliation reads A2's evidence
+   * rather than keeping a second, weaker copy of it here.
+   */
+  protectedConsumptionId: Type.Union([id, Type.Null()]),
 }, { additionalProperties: false });
 export type HostValidationProgress = Static<typeof HostValidationProgressSchema>;
 
@@ -68,7 +75,9 @@ export function assertHostValidationProgress(value: unknown): asserts value is H
   if (!Value.Check(HostValidationProgressSchema, value)) throw new Error("host validation progress is invalid");
   const committing = stageOrdinal(value.stage) >= stageOrdinal("commit");
   const committed = stageOrdinal(value.stage) > stageOrdinal("commit");
-  if (committing !== (value.commitIntent !== null) || committed !== (value.commitResult !== null)) {
+  const protectedEffect = value.protectedConsumptionId !== null;
+  if (committing !== (value.commitIntent !== null || protectedEffect) || (value.commitIntent !== null && protectedEffect) ||
+      (value.commitResult !== null) !== (committed && !protectedEffect)) {
     throw new Error("host validation stage disagrees with its recorded commit evidence");
   }
   const intent = value.commitIntent;
