@@ -22,7 +22,13 @@ const digest = (bytes: Uint8Array): string => createHash("sha256").update(bytes)
 export async function commitProtectedAsHost(options: {
   attemptDir: string; capability: ProtectedFilesCapability; message: string; paths: readonly string[];
   writes: readonly string[]; protectedPaths: readonly string[];
-  /** Crash-injection seam after HEAD CAS and before index installation. */
+  /**
+   * Interruption seam after the HEAD CAS and before index installation.
+   *
+   * Throwing here models a handled interruption, which this function finishes
+   * and then re-raises. Killing the process here models the other half — the
+   * one only `awsf resume` can reconcile.
+   */
   afterHeadPublished?: () => Promise<void> | void;
   persistIntent: (intent: ProtectedCommitIntent) => Promise<void>;
   persistBinding: (binding: ProtectedCandidateBinding) => Promise<void>;
@@ -83,16 +89,41 @@ export async function commitProtectedAsHost(options: {
   }
   const lockPath = `${indexPath}.lock`;
   const lock = openSync(lockPath, "wx", 0o600);
+  let headPublished = false;
+  /** A caught interruption after the HEAD CAS. Finished below, then re-thrown. */
+  let interruption: unknown = null;
   try {
     if (digest(readFileSync(indexPath)) !== digest(beforeIndex)) throw new Error("protected index changed before publication");
     writeFileSync(lock, stagedIndex); fsyncSync(lock);
     runGit(git, ["-c", "core.fsync=all", "update-ref", "HEAD", candidate, grant.subject.preWriteHeadSha]);
+    headPublished = true;
     await options.afterHeadPublished?.();
     renameSync(lockPath, indexPath);
+  } catch (error) {
+    if (!headPublished) throw error;
+    // The compare-and-swap has already published this exact authorized
+    // candidate. Installing the index it was staged against is the remainder of
+    // that one act — same process, same execution lease, same one-use
+    // authority, and before anything can seal this attempt — so finishing it
+    // here is completion, not a retry: no object is created, no outcome is
+    // chosen and no rule about sealed attempts is relaxed. Leaving it instead
+    // strands a paid, owner-granted generation behind a sealed state that
+    // correctly refuses to bind it.
+    //
+    // A handled interruption only. Process death still lands in `awsf resume`'s
+    // reconciliation, which is the same completion proved from durable evidence.
+    interruption = error;
+    // If even the rename cannot be completed, the original interruption is what
+    // the caller sees and the retained lock, index and evidence are exactly
+    // what the recovery path expects to find.
+    try { renameSync(lockPath, indexPath); } catch { throw error; }
   } finally { closeSync(lock); }
   const indexDirectory = openSync(dirname(indexPath), "r");
   try { fsyncSync(indexDirectory); } finally { closeSync(indexDirectory); }
-  if (runGit(git, ["rev-parse", "HEAD"]).trim() !== candidate || runGit(git, ["rev-parse", `${candidate}^{tree}`]).trim() !== tree) throw new Error("protected candidate publication could not be verified");
+  if (runGit(git, ["rev-parse", "HEAD"]).trim() !== candidate || runGit(git, ["rev-parse", `${candidate}^{tree}`]).trim() !== tree) {
+    throw new Error("protected candidate publication could not be verified", interruption === null ? undefined : { cause: interruption });
+  }
   await options.persistBinding(binding);
+  if (interruption !== null) throw interruption;
   return candidate;
 }

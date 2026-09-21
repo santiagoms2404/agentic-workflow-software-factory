@@ -63,7 +63,7 @@ import { riskTierSufficient } from "../../gates/risk.ts";
 import { candidateHygiene } from "../../gates/candidate-hygiene.ts";
 import { commandsPass } from "../../gates/commands.ts";
 import { envelopeValid } from "../../gates/envelope.ts";
-import { prepareProtectedConsumption, protectedGrantForPhase, readProtectedState, inspectProtectedCandidate, protectedPromptContext, assertProtectedOutput } from "../../workflow/protected-grants.ts";
+import { prepareProtectedConsumption, protectedGrantForPhase, readProtectedState, inspectProtectedCandidate, protectedPromptContext, assertProtectedOutput, type ProtectedState } from "../../workflow/protected-grants.ts";
 import { verifyProtectedWrite, verifyProtectedPreservation, type ProtectedFilesCapability } from "../../contracts/protected-capability.ts";
 import { protectedRootIdentity } from "../../workflow/protected-files.ts";
 import { commitProtectedAsHost } from "../../git/protected-commit.ts";
@@ -3144,6 +3144,30 @@ async function prepareResumeInstruction(options: ProductionRunOptions, inspected
 }
 
 /**
+ * May this attempt still receive the durable binding this publication needs?
+ *
+ * Two questions, and both have to be asked again under the execution lease
+ * rather than once before the owner was prompted. A sealed attempt takes no
+ * further writes, so completing the publication would leave the repository
+ * ahead of the journal for good — a cancellation racing the confirmation must
+ * therefore leave every byte inert. And a status file that disagrees with its
+ * own journal names no single lifecycle at all, so neither answer can be
+ * trusted; that is the attempt-recovery path's business, not this one's.
+ */
+function assertReconcilableAttempt(state: ProtectedState, status: AttemptStatus, candidateSha: string): void {
+  const journal = state.status;
+  if (journal.revision !== status.revision || journal.lifecycleState !== status.lifecycleState ||
+      journal.sessionId !== status.sessionId || journal.attempt !== status.attempt || journal.worktree !== status.worktree) {
+    throw new Error("protected host-effect recovery refused: the attempt status file and its journal disagree, " +
+      `so candidate ${candidateSha} has no single lifecycle to bind against; reconcile the attempt itself first`);
+  }
+  if ((SEALED_STATES as readonly TaskState[]).includes(status.lifecycleState)) {
+    throw new Error(`protected host-effect recovery refused: this attempt is sealed in ${status.lifecycleState}, ` +
+      `so candidate ${candidateSha} cannot receive its durable binding here; the retained worktree, index and evidence are unchanged`);
+  }
+}
+
+/**
  * Finish an interrupted protected host effect, as its own owner act.
  *
  * It is deliberately NOT gated behind the phase checkpoint: `commitProtectedAsHost`
@@ -3166,30 +3190,30 @@ async function reconcileRetainedProtectedEffect(
   await assertNoExecutionController(options.attemptDir);
   const publication = inspectProtectedPublication(state, retained);
   if (publication.outcome === "refused") throw new Error(`protected host-effect recovery refused: ${publication.reason}`);
-  // A sealed attempt takes no further writes, so its binding can never become
-  // durable and completing the publication would leave the repository ahead of
-  // the journal. The retained bytes, the stale lock and the evidence all stay
-  // exactly as the crash left them.
-  if ((SEALED_STATES as readonly TaskState[]).includes(current.lifecycleState)) {
-    throw new Error(`protected host-effect recovery refused: this attempt is sealed in ${current.lifecycleState}, ` +
-      `so candidate ${retained.binding.candidateSha} cannot receive its durable binding here; the retained worktree, index and evidence are unchanged`);
-  }
+  assertReconcilableAttempt(state, current, retained.binding.candidateSha);
   options.terminal.write(
     `An interrupted protected host effect is retained on ${current.taskId} attempt ${String(current.attempt)}.\n` +
     `Candidate ${retained.binding.candidateSha} over ${String(retained.binding.deltas.length)} granted file(s); publication is ${publication.outcome}.\n` +
     "Completing it creates no commit, repeats no model call, spends no call and authorizes no further protected write. " +
     `The one-use generation is spent, so the workflow is not continued. Reason: ${reason}`);
   if (!await options.terminal.confirm("Reconcile this interrupted protected host effect?")) return { confirmed: false, status: current };
-  return withExecutionLease(options.attemptDir, async () => {
+  // Everything proved before the confirmation is proved again here, under the
+  // lease, because the owner's answer took wall-clock time that a concurrent
+  // `awsf cancel` could have used. `withExecutionLease` runs this inside its
+  // claim lock and BEFORE it writes its own lease file, so a refusal from here
+  // leaves the attempt directory, the journal, HEAD, the index and the retained
+  // lock byte-for-byte as they were.
+  const revalidate = async () => {
     const again = readProtectedState(options.attemptDir);
     const still = unfinishedProtectedEffect(again);
     if (still === null || recoveryDigest(still) !== recoveryDigest(retained)) throw new Error("the retained protected host effect changed during confirmation");
+    assertReconcilableAttempt(again, await readAttempt(options.attemptDir), still.binding.candidateSha);
     const verdict = inspectProtectedPublication(again, still);
     if (verdict.outcome === "refused") throw new Error(`protected host-effect recovery refused: ${verdict.reason}`);
-  }, async () => {
-    const locked = readProtectedState(options.attemptDir);
-    const intent = unfinishedProtectedEffect(locked)!;
-    const verdict = inspectProtectedPublication(locked, intent);
+    return { state: again, intent: still, verdict };
+  };
+  return withExecutionLease(options.attemptDir, async () => { await revalidate(); }, async () => {
+    const { state: locked, intent, verdict } = await revalidate();
     let status = await readAttempt(options.attemptDir);
     await completeProtectedPublication({ attemptDir: options.attemptDir, state: locked, intent, publication: verdict,
       persistBinding: async binding => {

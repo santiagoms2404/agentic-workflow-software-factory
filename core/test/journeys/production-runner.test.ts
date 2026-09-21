@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import type { AwsfConfig, AdapterEntry } from "../../src/config/schema.ts";
@@ -35,6 +36,7 @@ import { grantCommand } from "../../src/cli/commands/grant.ts";
 import { journeyCommand } from "../../src/cli/commands/journey.ts";
 import { landCommand } from "../../src/cli/commands/land.ts";
 import { readProtectedState, inspectProtectedCandidate } from "../../src/workflow/protected-grants.ts";
+import { stagedIndexBytes } from "../../src/git/protected-reconcile.ts";
 import { raiseCommand } from "../../src/cli/commands/raise.ts";
 import { correctionHeadroom } from "../../src/cli/commands/workflows.ts";
 import { WORKFLOW_RECIPES, workflowRecipe } from "../../src/workflow/catalog.ts";
@@ -893,13 +895,29 @@ for (const cut of ["ungranted", "bad-envelope", "binding-drift", "intent-crash",
       } else if (cut !== "binding-drift") {
         const facts = readProtectedState(world.created.attemptDir);
         assert.equal(facts.consumptions.length, 1);
-        assert.equal(facts.bindings.length, cut === "publication-crash" ? 1 : 0);
+        assert.equal(facts.bindings.length, cut === "publication-crash" || cut === "head-crash" ? 1 : 0);
         if (cut.endsWith("crash")) assert.equal(facts.intents.length, 1);
         const head = git(prepared.worktree!, "rev-parse", "HEAD");
         const indexPath = git(prepared.worktree!, "rev-parse", "--path-format=absolute", "--git-path", "index");
-        if (cut === "head-crash") { assert.equal(head, facts.intents[0]!.binding.candidateSha); assert.equal(existsSync(`${indexPath}.lock`), true); }
-        const index = readFileSync(indexPath); const contents = readFileSync(join(prepared.worktree!, "core/src/generated.ts"));
         const sealed = ["BLOCKED", "CANCELLED", "PUBLISHED"].includes((await readAttempt(world.created.attemptDir)).lifecycleState);
+        if (cut === "head-crash") {
+          // BUG-1. The interruption is thrown, not fatal, and it lands after the
+          // HEAD compare-and-swap: the same process, still holding the same
+          // lease and the same one-use authority, and this attempt has not
+          // sealed yet. So the remainder of that one authorized act — install
+          // the pinned index, append the binding it had already computed — is
+          // completed here rather than orphaned behind the sealed state that
+          // correctly refuses to bind it. Nothing is created or replayed.
+          assert.equal(head, facts.intents[0]!.binding.candidateSha);
+          assert.equal(facts.bindings[0]!.candidateSha, facts.intents[0]!.binding.candidateSha);
+          assert.equal(existsSync(`${indexPath}.lock`), false, "the interrupted run's own index lock must not outlive it");
+          assert.equal(git(prepared.worktree!, "status", "--porcelain"), "", "the installed index must match the published candidate");
+          assert.equal(sealed, true, "the interruption still fails the phase and seals the attempt");
+        }
+        // Captured after the head-crash checks above, because `git status`
+        // refreshes the index's stat cache and would otherwise make the
+        // preservation comparison below fail against a byte-identical tree.
+        const index = readFileSync(indexPath); const contents = readFileSync(join(prepared.worktree!, "core/src/generated.ts"));
         const retained = facts.intents.length === 1 && facts.bindings.length === 0 && !sealed ? facts.intents[0]! : null;
         const resume = { ...options, reason: "observe without replay", terminal: { interactive: true, write: () => {}, confirm: async () => true } };
         if (retained === null) {
@@ -908,7 +926,10 @@ for (const cut of ["ungranted", "bad-envelope", "binding-drift", "intent-crash",
           // one-use generation and never touches the retained bytes.
           const outcome = await resumeProductionCommand(resume).then(value => value.status.lifecycleState, error => String(error));
           assert.match(outcome, /BLOCKED|protected|recovery refused/);
-          if (sealed) assert.match(outcome, /sealed in BLOCKED|recovery refused/);
+          // head-crash no longer reaches the sealed-binding refusal: the
+          // interruption was handled, so its publication was completed before
+          // the attempt sealed and no effect is left outstanding to refuse.
+          if (sealed && cut !== "head-crash") assert.match(outcome, /sealed in BLOCKED|recovery refused/);
           assert.equal(git(prepared.worktree!, "rev-parse", "HEAD"), head);
           assert.deepEqual(readFileSync(indexPath), index);
         } else {
@@ -940,6 +961,221 @@ for (const cut of ["ungranted", "bad-envelope", "binding-drift", "intent-crash",
       }
       assert.equal(git(world.canonical, "rev-parse", "HEAD"), prepared.baseSha);
     } finally { rmSync(world.root, { recursive: true, force: true }); }
+  });
+}
+
+const PROTECTED_KILL_HOST = join(import.meta.dirname, "_protected-kill-host.ts");
+
+/**
+ * A world stopped exactly inside the protected publication window.
+ *
+ * The injection throws while the durable `protected-commit-intent` is being
+ * projected, so the transport never opened its index lock: the candidate object
+ * already exists, HEAD is still the granted pre-write revision, and the index is
+ * the pre-publication one. That is the `unpublished` cut, reached by running the
+ * real commands rather than by hand-writing a journal, and it is the state every
+ * test below starts from.
+ */
+async function retainedProtectedEffect() {
+  const world = await fixture("build", 0, config => ({ ...config, policy: { ...config.policy, protected_paths: [...config.policy.protected_paths, "core/src/generated.ts"] } }));
+  const prepared = await readAttempt(world.created.attemptDir);
+  await grantCommand({ attemptDir: world.created.attemptDir, config: world.config, configPath: world.configPath, stateRoot: world.stateRoot,
+    phase: "builder", files: ["core/src/generated.ts"], reason: "One bounded generation.", sandboxProbe: () => true,
+    terminal: { interactive: true, write: () => {}, confirm: async () => true }, projectRecord: world.projection.project });
+  let calls = 0; let injected = false;
+  const options = { attemptDir: world.created.attemptDir, stateRoot: world.stateRoot, config: world.config, configPath: world.configPath,
+    projectRecord: async (record: Parameters<AttemptProjector>[0], status: Parameters<AttemptProjector>[1]) => {
+      await world.projection.project(record, status);
+      if (!injected && record.event.evidence?.type === "protected-commit-intent") { injected = true; throw new Error("fixture host observer crash"); }
+    },
+    infrastructure: { adapterFor: (_entry: AdapterEntry, id: string) => new ScriptedAdapter(id, prepared.worktree!, () => { calls++; }),
+      createBroker: fakeBroker, sandboxProbe: () => true } };
+  await assert.rejects(() => runProductionCommand(options));
+  const worktree = prepared.worktree!;
+  const indexPath = git(worktree, "rev-parse", "--path-format=absolute", "--git-path", "index");
+  const facts = readProtectedState(world.created.attemptDir);
+  assert.equal(facts.intents.length, 1);
+  assert.equal(facts.bindings.length, 0);
+  assert.equal(git(worktree, "rev-parse", "HEAD"), facts.intents[0]!.binding.parentSha);
+  assert.equal(existsSync(`${indexPath}.lock`), false);
+  const status = await readAttempt(world.created.attemptDir);
+  assert.equal(["BLOCKED", "CANCELLED", "PUBLISHED"].includes(status.lifecycleState), false,
+    `an intent cut must leave a reconcilable attempt, not one sealed in ${status.lifecycleState}`);
+  const generated = join(worktree, "core/src/generated.ts");
+  const journalPath = join(world.created.attemptDir, "journal.jsonl");
+  return { world, worktree, indexPath, options, intent: facts.intents[0]!,
+    resume: (terminal: { interactive: boolean; write: () => void; confirm: () => Promise<boolean> }) =>
+      resumeProductionCommand({ ...options, reason: "reconcile the retained protected host effect", terminal }),
+    modelCalls: () => calls,
+    snapshot: () => ({ head: git(worktree, "rev-parse", "HEAD"), index: readFileSync(indexPath),
+      journal: readFileSync(journalPath), generated: readFileSync(generated),
+      lock: existsSync(`${indexPath}.lock`) ? readFileSync(`${indexPath}.lock`) : null }) };
+}
+
+const confirming = { interactive: true, write: () => {}, confirm: async () => true };
+const sha256Hex = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex");
+
+/** Kill a real host inside the real publication protocol, and prove it died there. */
+function killProtectedHost(attemptDir: string, stage: "head" | "binding"): void {
+  const child = spawnSync(process.execPath, ["--experimental-strip-types", "--no-warnings", PROTECTED_KILL_HOST, attemptDir, stage], { encoding: "utf8" });
+  assert.equal(child.signal, "SIGKILL", `the injection must land: ${String(child.status)} ${child.stdout}${child.stderr}`);
+}
+
+for (const stage of ["head", "binding"] as const) {
+  test(`A3 reconciles a protected publication after genuine process death at the ${stage} boundary`, async () => {
+    const retained = await retainedProtectedEffect();
+    const { world, worktree, indexPath, intent } = retained;
+    try {
+      const before = await readAttempt(world.created.attemptDir);
+      killProtectedHost(world.created.attemptDir, stage);
+
+      // What a power cut at that boundary leaves. No `finally` ran, so for the
+      // HEAD cut the lock is still present and the index is still the
+      // pre-publication one; for the binding cut both are finished and only the
+      // journal is behind. Neither death wrote a lifecycle transition, which is
+      // exactly why a hard death is not the same event as a caught exception.
+      assert.equal(git(worktree, "rev-parse", "HEAD"), intent.binding.candidateSha);
+      assert.equal(existsSync(`${indexPath}.lock`), stage === "head");
+      assert.equal(existsSync(join(world.created.attemptDir, "execution-lease.json")), true, "a killed host never releases its lease");
+      const dead = readProtectedState(world.created.attemptDir);
+      assert.equal(dead.intents.length, 1);
+      assert.equal(dead.bindings.length, 0);
+      assert.equal((await readAttempt(world.created.attemptDir)).revision, before.revision);
+
+      // Declining is inert even here.
+      const inert = retained.snapshot();
+      const declined = await retained.resume({ ...confirming, confirm: async () => false });
+      assert.equal(declined.confirmed, false);
+      assert.deepEqual(retained.snapshot(), inert);
+
+      const done = await retained.resume(confirming);
+      assert.equal(done.confirmed, true);
+      assert.equal(done.status.candidateSha, intent.binding.candidateSha);
+      assert.equal(git(worktree, "rev-parse", "HEAD"), intent.binding.candidateSha);
+      assert.equal(git(worktree, "status", "--porcelain"), "", "the installed index must match the published candidate");
+      assert.equal(existsSync(`${indexPath}.lock`), false, "adopting the dead host's own lock completes the rename it never reached");
+      const after = readProtectedState(world.created.attemptDir);
+      assert.equal(after.bindings.length, 1);
+      assert.equal(after.bindings[0]!.candidateSha, intent.binding.candidateSha);
+      assert.deepEqual(readFileSync(join(worktree, "core/src/generated.ts")), inert.generated);
+      assert.equal(retained.modelCalls(), 1, "reconciliation repeats no model call");
+      assert.equal(done.status.budget.callsSpent, before.budget.callsSpent, "reconciliation spends nothing");
+      assert.equal(done.status.budget.callsReserved, before.budget.callsReserved);
+      assert.equal(git(world.canonical, "rev-parse", "HEAD"), before.baseSha, "nothing is pushed or landed by reconciling");
+    } finally { rmSync(world.root, { recursive: true, force: true }); }
+  });
+}
+
+test("A3 refuses a publication whose attempt is sealed while the owner is deciding, and touches nothing", async () => {
+  const retained = await retainedProtectedEffect();
+  const { world } = retained;
+  try {
+    killProtectedHost(world.created.attemptDir, "head");
+    const inert = retained.snapshot();
+    // The seal lands inside the confirmation, which is precisely the window the
+    // pre-confirmation check cannot see. Completing the publication afterwards
+    // would leave the repository holding a candidate the journal can never
+    // record, so the whole act must become a refusal that writes nothing.
+    await assert.rejects(() => retained.resume({ ...confirming, confirm: async () => {
+      const current = await readAttempt(world.created.attemptDir);
+      await persistAttempt(world.created.attemptDir, current.revision, { kind: "attempt.updated",
+        next: nextRevision(current, { lifecycleState: "CANCELLED" }) }, world.projection.project);
+      return true;
+    } }), /sealed in CANCELLED/);
+    const after = retained.snapshot();
+    assert.equal(after.head, inert.head);
+    assert.deepEqual(after.index, inert.index);
+    assert.deepEqual(after.lock, inert.lock);
+    assert.deepEqual(after.generated, inert.generated);
+    assert.equal(readProtectedState(world.created.attemptDir).bindings.length, 0, "a sealed attempt takes no binding");
+    // Still exactly the half-published state the kill left: HEAD at the
+    // candidate, the index still the pre-publication one. A working tree that
+    // reads as dirty here is correct — that disagreement IS the unfinished
+    // publication, and refusing means leaving it alone rather than tidying it.
+    assert.equal(after.head, retained.intent.binding.candidateSha);
+    assert.equal(sha256Hex(after.index), retained.intent.beforeIndexDigest);
+  } finally { rmSync(world.root, { recursive: true, force: true }); }
+});
+
+for (const tamper of ["foreign-bytes", "symlink", "hardlink", "other-readable", "live-holder"] as const) {
+  test(`A3 never breaks a ${tamper} Git index lock`, async () => {
+    const retained = await retainedProtectedEffect();
+    const { world, indexPath, intent } = retained;
+    const lockPath = `${indexPath}.lock`;
+    const staged = stagedIndexBytes(world.created.attemptDir, intent);
+    const decoy = join(world.root, "decoy-index");
+    let holder: ReturnType<typeof spawn> | null = null;
+    try {
+      // Every variant but the first plants the EXACT staged bytes at mode 0600
+      // — which is precisely what the digest-equals-ownership rule accepted as
+      // proof. Each must still refuse, and for its own reason: a symlink points
+      // elsewhere, a hardlink is an alias into another file, a mode this code
+      // never writes is not this code's lock, and a visible holder is a lock in
+      // use.
+      if (tamper === "foreign-bytes") writeFileSync(lockPath, "another holder is mid-write\n", { mode: 0o600 });
+      if (tamper === "symlink") { writeFileSync(decoy, staged, { mode: 0o600 }); symlinkSync(decoy, lockPath); }
+      if (tamper === "hardlink") { writeFileSync(decoy, staged, { mode: 0o600 }); linkSync(decoy, lockPath); }
+      if (tamper === "other-readable") writeFileSync(lockPath, staged, { mode: 0o644 });
+      if (tamper === "live-holder") {
+        writeFileSync(lockPath, staged, { mode: 0o600 });
+        holder = spawn(process.execPath, ["-e", "const fs=require('node:fs');fs.openSync(process.argv[1],'r');process.stdout.write('held\\n');setInterval(()=>{},1000);", lockPath]);
+        await new Promise<void>((resolve, reject) => {
+          holder!.stdout!.once("data", () => { resolve(); });
+          holder!.once("exit", () => { reject(new Error("the lock holder exited before it held anything")); });
+        });
+      }
+      const inert = retained.snapshot();
+      await assert.rejects(() => retained.resume(confirming),
+        tamper === "symlink" ? /symbolic link/
+          : tamper === "hardlink" ? /regular, single-link file owned by this user/
+          : tamper === "other-readable" ? /reachable by other accounts/
+          : tamper === "live-holder" ? /still open in live process/
+          : /does not break another holder's lock/);
+      const after = retained.snapshot();
+      assert.equal(after.head, inert.head, "a refused adoption moves no reference");
+      assert.deepEqual(after.index, inert.index);
+      assert.deepEqual(after.lock, inert.lock, "the lock this recovery does not own is left exactly as it was");
+      assert.deepEqual(after.journal, inert.journal);
+      assert.equal(readProtectedState(world.created.attemptDir).bindings.length, 0);
+      if (tamper === "symlink" || tamper === "hardlink") assert.deepEqual(readFileSync(decoy), staged, "the lock's target is never written through");
+    } finally {
+      holder?.kill("SIGKILL");
+      rmSync(world.root, { recursive: true, force: true });
+    }
+  });
+}
+
+for (const tamper of ["index-drift", "granted-bytes", "root-identity", "redirected-index"] as const) {
+  test(`A3 refuses a retained publication when ${tamper} moved, and completes nothing`, async () => {
+    const retained = await retainedProtectedEffect();
+    const { world, worktree, indexPath } = retained;
+    const generated = join(worktree, "core/src/generated.ts");
+    const previousIndexFile = process.env["GIT_INDEX_FILE"];
+    try {
+      if (tamper === "index-drift") writeFileSync(indexPath, "not a Git index\n");
+      if (tamper === "granted-bytes") writeFileSync(generated, "export const generated = false;\n");
+      // One of the four physical roots the grant pinned by device, inode, uid,
+      // gid and mode. Changing only the mode leaves every byte of the tree
+      // alone and still means this is not the machine state the grant recorded.
+      if (tamper === "root-identity") chmodSync(worktree, 0o700);
+      if (tamper === "redirected-index") process.env["GIT_INDEX_FILE"] = join(world.root, "hijacked-index");
+      const inert = retained.snapshot();
+      await assert.rejects(() => retained.resume(confirming),
+        tamper === "index-drift" ? /neither the exact pre-publication nor the exact staged bytes/
+          : tamper === "granted-bytes" ? /granted worktree bytes no longer match|protected content/
+          : tamper === "root-identity" ? /protected repository root identity changed/
+          : /redirected away from the granted worktree Git directory/);
+      const after = retained.snapshot();
+      assert.equal(after.head, inert.head);
+      assert.deepEqual(after.index, inert.index);
+      assert.equal(after.lock, null, "a refusal opens no lock");
+      assert.deepEqual(after.journal, inert.journal);
+      assert.equal(readProtectedState(world.created.attemptDir).bindings.length, 0);
+      assert.equal(retained.modelCalls(), 1, "a refusal repeats no model call");
+    } finally {
+      if (previousIndexFile === undefined) delete process.env["GIT_INDEX_FILE"]; else process.env["GIT_INDEX_FILE"] = previousIndexFile;
+      rmSync(world.root, { recursive: true, force: true });
+    }
   });
 }
 

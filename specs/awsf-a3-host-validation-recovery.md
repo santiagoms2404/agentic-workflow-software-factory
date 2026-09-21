@@ -201,6 +201,32 @@ Repository-side, from `reconcileHostValidation` and `reconcileHostCommit`:
 - `recovery refused: the durable commit result and the repository name different revisions`.
 - `recovery refused: <the A3-8 command-ledger reason>`.
 
+Protected-effect side, from `protectedEffectContext`, `adoptRetainedIndexLock`
+and `assertReconcilableAttempt`:
+
+- `protected candidate lacks its original spent OS-enforced execution proof`.
+- `protected repository root identity changed`, `protected parent identity
+  changed`, `protected file deleted or permissions changed` — the grant's own
+  filesystem proofs, re-run.
+- `the worktree Git directory is not the one this grant was issued against`.
+- `the common Git directory is not the one this grant was issued against`.
+- `the Git index path is redirected away from the granted worktree Git directory`.
+- `<file> is a symbolic link; protected recovery never reads or writes through one`.
+- `<file> is not a regular, single-link file owned by this user`.
+- `the retained Git index lock is reachable by other accounts (mode <m>);
+  protected recovery only adopts a lock whose permissions it wrote itself`.
+- `<directory> is not an owner-private directory`.
+- `a Git index lock this publication did not write is present; recovery does not
+  break another holder's lock`.
+- `the retained Git index lock is still open in live process(es) <pids>; recovery
+  never takes a lock somebody is holding`.
+- `this process does not hold the attempt's execution lease`.
+- `the attempt status file and its journal disagree, so candidate <sha> has no
+  single lifecycle to bind against`.
+- `this attempt is sealed in <state>, so candidate <sha> cannot receive its
+  durable binding here` — now also raised under the lease, after the owner
+  confirmed.
+
 Every one of these leaves HEAD, the working tree, the index, the candidate, the
 accepted prefix, the original debit and any uncertain liability exactly as the
 crash left them.
@@ -237,6 +263,31 @@ index — both pinned by digest in that intent.
 reconcile this exact parent/tree/commit tuple, never replay commit creation.*
 `core/src/git/protected-reconcile.ts` does exactly that.
 
+### Nothing established before the crash is taken on trust
+
+`protectedEffectContext` is the one door into both the inspection and the
+completion, and it re-proves the machine from scratch every time it is opened.
+The grant's four physical roots and both Git directories are compared against
+the filesystem again (`verifyProtectedFilesystem`, plus `--absolute-git-dir` and
+`--git-common-dir`), every granted path is re-walked for symlinks, type, link
+count and ownership, and the original one-use OS-enforced execution is re-proved
+from the journal (`assertProtectedExecutionProof`). A grant whose roots moved
+names a different machine, and a candidate with no spent sandboxed execution
+behind it is not this generation's.
+
+The index is then located at `<worktreeGitDir>/index`, derived from that proof
+rather than from `rev-parse --git-path index` — which honours an inherited
+`GIT_INDEX_FILE` and would otherwise let an ambient environment variable point
+the whole reconciliation at a file the intent never measured. Git's own answer
+is still asked, and a disagreement refuses by name.
+
+Every Git control file this code reads or replaces — the index, the retained
+`index.lock`, the pre-staged index — is opened with `O_NOFOLLOW` and judged
+through that descriptor: regular file, exactly one link, owned by this user.
+Permission bits are deliberately *not* part of the test, because a worktree on a
+Windows drive under WSL reports one fixed mode for every inode, so a mode check
+there would refuse every honest repository while proving nothing.
+
 `inspectProtectedPublication` is read-only. It verifies the candidate object's
 parent and tree, re-derives the protected delta from the tree and compares it to
 the binding, checks every granted path's current bytes against the recorded
@@ -252,14 +303,113 @@ blob, then reads HEAD and the index file:
 `completeProtectedPublication` finishes only what remains. For `unpublished` it
 performs the compare-and-swap against the granted pre-write revision and
 installs the staged index; for `head-published` it installs the staged index
-alone, adopting the interrupted run's own leftover `index.lock` when that lock
-already holds exactly the staged bytes and never breaking one that does not; for
-`published` it appends the binding and nothing else. It stages nothing, resets
-nothing and creates no commit.
+alone, adopting the interrupted run's own leftover `index.lock`; for `published`
+it appends the binding and nothing else. It stages nothing, resets nothing and
+creates no commit.
+
+### Adopting a lock needs more than matching bytes
+
+A lock holding exactly the staged digest is *consistent with* being the dead
+run's own, and that is all. It establishes neither ownership nor quiescence.
+Scanning `/proc` for open descriptors does not repair that, for a reason that
+disqualifies it as evidence: **Git's index lock is exclusive by existence**, not
+by an open file handle. `O_CREAT | O_EXCL` takes it and a rename or unlink
+releases it, so its owner can close every descriptor and still own it. An empty
+scan therefore proves nothing — and three lesser problems point the same way:
+`/proc` visibility can be restricted even for this user's own processes
+(`hidepid`, a PID namespace), a holder can open the file in the instant after
+the scan returns, and unreadable entries are invisible.
+
+So the licence to adopt rests on four facts that hold together, none of which is
+the scan:
+
+1. **Those bytes could only have come from this run.** They are the exact digest
+   of an index built in `<attemptDir>/private/protected-host/<mkdtemp>` — a
+   `0700` directory on the attempt's own filesystem, the same one whose modes
+   `readProtectedState` already relies on for the journal, and never handed to
+   another process.
+2. **No other Git process holds this index lock.** Exclusive by existence cuts
+   both ways: a second Git could not have created `index.lock` while this one
+   exists.
+3. **The run that wrote it is dead.** `commitProtectedAsHost` executes under the
+   attempt's execution lease. `assertOwnExecutionLease` proves this process now
+   holds that lease, and acquiring it required `assertNoExecutionController` to
+   find no live controller. The writer was a controller; there is none.
+4. **The file is what it claims to be.** Not a symbolic link (`ELOOP` refuses by
+   name); regular; exactly one link, so not an alias into another tree; owned by
+   this user; and carrying the `0600` mode `commitProtectedAsHost` writes — all
+   read from one `O_NOFOLLOW` descriptor, so nothing can be substituted between
+   the check and the use.
+
+`visibleDescriptorHolders` sits on top as defence in depth: seeing a holder
+refuses; seeing none is claimed as nothing. Because nothing is claimed from it,
+an unreadable process is skipped rather than turned into a hard failure.
+
+Only then is the lock renamed onto the index — which is both the completion of
+the interrupted protocol and the release of the lock. An adopted lock is never
+rewritten, because its bytes are already verified and a refusal after that point
+should leave nothing altered. A new lock is created only when there is none, with
+`O_CREAT | O_EXCL | O_NOFOLLOW`. Nothing here ever unlinks, truncates or writes
+over a lock it has not established is its own.
+
+### Which permission checks apply, and why
+
+Permission bits are required exactly where this codebase chose them and can
+therefore insist on them, and nowhere else:
+
+| File | Written by | Check |
+|---|---|---|
+| retained `index.lock` | AWSF, `wx 0o600` | owner-private: any group or other bit refuses |
+| `<attemptDir>/private/protected-host/**` directories | AWSF, `0o700` | owner-private directory |
+| the pre-staged index inside them | Git | type, single link, ownership; its protection is the `0700` directory above it |
+| the working index | Git | type, single link, ownership — `0644` is Git's normal, correct answer |
+
+The distinction is authorship, not convenience. Demanding privacy of Git's own
+index would refuse honest repositories on every filesystem.
+
+**A known consequence, unresolved.** A worktree on a Windows drive under WSL
+(`/mnt/...`, DrvFs) reports mode `0777` for every inode, including files this
+code creates `0600`. The retained lock there cannot be shown to be owner-private
+and the `head-published` cut will refuse by name rather than adopt it. That is
+fail-closed and deliberate — the alternative is to drop a real check to
+accommodate one filesystem — but it means this one cut needs the owner's
+intervention when the repository lives on such a mount. The `unpublished` and
+`published` cuts are unaffected.
 
 `unfinishedProtectedEffect` treats a second unfinished effect as corruption
 rather than a cut, and a consumption with no intent at all as unreconcilable —
 that generation never reached the window and has no exact outcome to complete.
+
+### A handled interruption is finished, not orphaned
+
+`commitProtectedAsHost` publishes in two steps: the HEAD compare-and-swap, then
+the rename that installs the pre-staged index. An exception thrown between them
+used to propagate untouched — the phase failed, the attempt sealed in `BLOCKED`,
+and the reconciliation above then correctly refused, because a sealed attempt
+can never take the binding. The candidate was orphaned: a paid, OS-sandboxed,
+owner-granted generation that only a fresh grant and another paid generation
+could recover.
+
+The window is now closed at its own end. When the interruption is *handled* —
+the process is alive, still holds the execution lease, still holds the same
+one-use authority, and the attempt has not sealed yet — the remainder of that
+one already-authorized act is completed in place: the pinned index is installed
+and the binding that was already computed is appended. Then the original error
+is re-raised, so the interruption still fails the phase and still seals the
+attempt with its real reason.
+
+This is completion, not retry. No object is created, no outcome is chosen, no
+missing proof is invented, and no rule about sealed attempts is relaxed — the
+work simply happens before sealing rather than after it. If even the rename
+cannot be completed, the original interruption is what the caller sees and the
+retained lock, index and evidence are left exactly as the reconciliation path
+expects to find them.
+
+Process death is the other half and is unchanged: a killed host runs no `catch`
+and writes no lifecycle transition, so its cut is reconciled by `awsf resume`
+from durable evidence alone. The two are tested separately, and the second with
+a real `SIGKILL` in a real child process rather than a thrown error standing in
+for one.
 
 ### Where it runs
 
@@ -278,6 +428,18 @@ before anything is touched. A **sealed** attempt (`BLOCKED`, `CANCELLED`,
 become durable and completing the publication would leave the repository ahead
 of the journal. The retained worktree, index, stale lock and evidence all stay
 as the crash left them.
+
+Both are asked twice. The owner's answer takes wall-clock time, and a
+concurrent `awsf cancel` lands inside exactly that window, so eligibility, the
+status/journal agreement, the retained intent's identity and the publication
+state are all re-proved **under the execution lease** before a byte moves.
+`withExecutionLease` runs that revalidation inside its claim lock and before it
+writes its own lease file, so a cancellation racing the confirmation leaves the
+journal, HEAD, the index, the retained lock and the worktree byte-for-byte as
+they were. A status file that disagrees with its own journal is a third
+refusal: it names no single lifecycle, so neither the sealed test nor the
+binding's anchor can be trusted, and reconciling the attempt itself comes
+first.
 
 Running a workflow while an effect is outstanding is refused: a later phase
 would otherwise measure against whichever revision the crash left behind.
@@ -342,6 +504,7 @@ bytes, unchanged spend, one model call, inert refusal — is kept.
 | simulation | `core/test/simulation/host-commit-reconcile.test.ts` | commit reconciliation against disposable repositories, including every refusal and a non-destructiveness assertion after each one |
 | journeys | `core/test/journeys/host-validation-recovery.test.ts` | the cuts end to end against a disposable attempt and its own managed worktree |
 | journeys | `core/test/journeys/production-runner.test.ts` | the read-only prefix replayed through `awsf resume` without another model call, and A2's protected crash cuts reconciled or refused |
+| journeys | `core/test/journeys/production-runner.test.ts` + `_protected-kill-host.ts` | a real `SIGKILL` at each publication boundary, then reconciliation; a seal landing inside the confirmation; foreign, symlinked, hardlinked and live-held index locks; index drift, changed granted bytes, a changed parent identity and a redirected `GIT_INDEX_FILE` |
 
 Every fixture is created by `mkdtemp` and removed in `finally`. No test opens a
 runtime attempt of this project, and no test produces a crash in work anybody is

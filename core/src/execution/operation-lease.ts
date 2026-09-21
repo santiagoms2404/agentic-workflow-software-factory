@@ -17,6 +17,19 @@ async function holder(directory: string): Promise<Holder | null> {
     return value;
   } catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return null; throw error; }
 }
+/**
+ * THIS process holds the attempt's execution lease, right now.
+ *
+ * `assertNoExecutionController` proves nobody else is driving; this proves the
+ * caller is. A recovery that adopts an interrupted run's leftovers needs both:
+ * the lease was the thing that dead run held, so holding it now is what makes
+ * "the writer is gone" a fact rather than an assumption.
+ */
+export async function assertOwnExecutionLease(directory: string): Promise<void> {
+  const current = await holder(directory);
+  if (current === null || current.pid !== process.pid) throw new Error("this process does not hold the attempt's execution lease");
+}
+
 export async function assertNoExecutionController(directory: string): Promise<void> {
   const old = await holder(directory);
   if (old === null) return;
