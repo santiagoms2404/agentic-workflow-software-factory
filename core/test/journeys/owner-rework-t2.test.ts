@@ -50,7 +50,7 @@ import {
 } from "../../src/cli/commands/rework.ts";
 import { startCommand } from "../../src/cli/commands/start.ts";
 import type { BrokerOptions } from "../../src/execution/transport-broker.ts";
-import { agentsForSession, gatesForSession, getSession, routesForSession, transitionsForSession } from "../../src/observability/queries.ts";
+import { agentsForSession, gatesForSession, getSession, phasesForSession, routesForSession, transitionsForSession } from "../../src/observability/queries.ts";
 import { openDatabase } from "../../src/observability/sqlite.ts";
 import type { AttemptEvidence } from "../../src/observability/attempt-evidence.ts";
 import { locateRunReport, runReportRevision, writeRunReport } from "../../src/observability/run-report.ts";
@@ -861,6 +861,9 @@ test("an attempt-level degrade-review grant under the default invert-provider co
       assert.equal(review?.route.review.mode, "same-provider-degraded");
       assert.equal(review?.route.review.degraded, true);
       assert.equal(review?.route.observed?.provider, "openai-codex");
+      const reviewPhase = phasesForSession(db, result.status.sessionId).find((row) => row.phase_key === "reviewer-rw1");
+      assert.match(reviewPhase?.description ?? "", /EXPLICIT DEGRADED SAME-PROVIDER mode \(reduced independence\)/);
+      assert.doesNotMatch(reviewPhase?.description ?? "", /on the opposite provider/);
     } finally { db.close(); }
   } finally { await cleanup(fixture); }
 });

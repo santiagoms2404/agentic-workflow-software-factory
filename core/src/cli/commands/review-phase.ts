@@ -804,7 +804,7 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
     let phase: PhaseEvidenceRecord = {
       phaseId: phaseDb, ordinal: runOptions.ordinal + 1, key: phaseKey, name: phaseKey,
       kind: "agent", owner: route.agent.name,
-      description: config.routing.review === "same-provider-degraded"
+      description: route.provenance.review.mode === "same-provider-degraded"
         ? `Audit exact candidate ${subject.candidateSha} in EXPLICIT DEGRADED SAME-PROVIDER mode (reduced independence)`
         : `Audit exact candidate ${subject.candidateSha} on the opposite provider`,
       status: "QUEUED", correctionCount: 0, maxCorrections: 0, errorCode: null, errorMessage: null,
