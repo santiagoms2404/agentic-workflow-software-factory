@@ -402,11 +402,14 @@ export async function completeProtectedPublication(options: {
         runGit(git, ["-c", "core.fsync=all", "update-ref", "HEAD", binding.candidateSha, binding.parentSha]);
       }
       options.afterHeadPublished?.();
-      // Pre-mutation, not post-mortem: the lock we are about to install is
+      // Before installation, not after it: the lock we are about to install is
       // re-proved to be the witnessed inode, holding the witnessed bytes, still
-      // reachable at the name we are about to rename. A failure here refuses
-      // with the index untouched. What remains after it is the rename's own
-      // name-resolution window, which no Linux call can close.
+      // reachable at the name we are about to rename. A failure here leaves the
+      // index and that file untouched — but for an `unpublished` cut the
+      // compare-and-swap above has already run, so what it leaves is the
+      // `head-published` state, not the pre-publication one. What remains after
+      // it is the rename's own name-resolution window, which no Linux call can
+      // close.
       if (witness === null) throw new Error("this publication has no durable creation witness for the lock it is about to install");
       assertWitnessedLockAtMutationBoundary(lock, lockPath, witness, "the Git index lock this publication is installing");
       renameSync(lockPath, indexPath);

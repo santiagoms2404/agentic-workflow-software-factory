@@ -257,8 +257,18 @@ export function captureLockWitness(input: {
  * witnessed bytes, and that the *name* we are about to rename still resolves to
  * that same inode (so nothing swapped a different file into `lockPath`).
  *
- * All three refuse BEFORE anything is mutated, which is the distinction that
- * matters: this is pre-mutation refusal, not damage detected afterwards.
+ * All three refuse before the rename, so the index is never installed from a
+ * file this publication cannot identify, and the file itself is left alone.
+ *
+ * **What this refusal does NOT undo, and must not claim to.** Two of the three
+ * call sites reach it with the compare-and-swap already done — the transport
+ * publishes HEAD before installing the index, and so does the recovery path for
+ * an `unpublished` cut. Refusing here therefore leaves the repository in the
+ * `head-published` state, which is precisely the state the reconciliation is
+ * built to finish; it does not restore a pre-publication one. Only the recovery
+ * `head-published` cut reaches this check with HEAD untouched by the caller.
+ * The messages below say what is true of the index and the lock and stay silent
+ * about HEAD, because there is no single true statement about HEAD here.
  *
  * **What it cannot close.** Linux has no rename-by-descriptor — `renameat2`
  * takes names, and `/proc/self/fd/N` re-resolves to the path rather than to the
@@ -268,20 +278,20 @@ export function captureLockWitness(input: {
  * detected damage rather than silence, and it is the only mutation-boundary
  * guarantee this platform allows.
  */
+const REFUSES_INSTALLATION =
+  "this publication refuses to install it as the Git index; that file and the index are left exactly as they are";
+
 export function assertWitnessedLockAtMutationBoundary(descriptor: number, path: string, witness: ProtectedLockWitness, what: string): void {
   const held = lockIdentityOf(fstatSync(descriptor, { bigint: true }));
   const drift = lockIdentityDrift(held, witness.identity);
   if (drift !== null) {
-    throw new Error(`${what} no longer matches its durable creation witness (${drift} differs); ` +
-      "this publication refuses before it mutates the index, HEAD or the lock");
+    throw new Error(`${what} no longer matches its durable creation witness (${drift} differs); ${REFUSES_INSTALLATION}`);
   }
   if (descriptorDigest(descriptor) !== witness.contentDigest) {
-    throw new Error(`${what} no longer holds the bytes it was witnessed with; ` +
-      "this publication refuses before it mutates the index, HEAD or the lock");
+    throw new Error(`${what} no longer holds the bytes it was witnessed with; ${REFUSES_INSTALLATION}`);
   }
   const named = lstatSync(path, { bigint: true });
   if (named.dev !== BigInt(witness.identity.device) || named.ino !== BigInt(witness.identity.inode)) {
-    throw new Error(`${what} at its own path is no longer the file this publication holds open; ` +
-      "this publication refuses before it mutates the index, HEAD or the lock");
+    throw new Error(`${what} at its own path is no longer the file this publication holds open; ${REFUSES_INSTALLATION}`);
   }
 }

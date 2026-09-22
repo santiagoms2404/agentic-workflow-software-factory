@@ -1274,13 +1274,22 @@ test("A2 refuses to install an index lock that was swapped after the HEAD CAS, b
     assert.equal(status.lifecycleState, "BLOCKED");
     assert.match(JSON.stringify(status.blocker),
       /no longer matches its durable creation witness|at its own path is no longer the file this publication holds open/);
-    assert.match(JSON.stringify(status.blocker), /refuses before it mutates the index, HEAD or the lock/);
+    // What the refusal claims is exactly what it delivers: the index is not
+    // installed and the file at the lock path is left alone. It says nothing
+    // about HEAD, because the compare-and-swap ran before this boundary — see
+    // the HEAD assertion below, which pins the state this actually leaves.
+    assert.match(JSON.stringify(status.blocker),
+      /refuses to install it as the Git index; that file and the index are left exactly as they are/);
     const facts = readProtectedState(world.created.attemptDir);
     assert.equal(facts.intents.length, 1);
     assert.equal(facts.witnesses.length, 1, "the lock it created was witnessed before anything published");
     assert.equal(facts.bindings.length, 0, "a candidate whose index was never installed takes no binding");
+    // HEAD moved before this boundary was reached, and refusing does not undo
+    // that: what the refusal leaves is the `head-published` state — candidate
+    // at HEAD, index still pre-publication — which is exactly the cut the
+    // reconciliation path exists to finish.
     assert.equal(git(worktree, "rev-parse", "HEAD"), facts.intents[0]!.binding.candidateSha, "the compare-and-swap had already happened");
-    assert.equal(sha256Hex(readFileSync(indexPath)), facts.intents[0]!.beforeIndexDigest, "the index is exactly as it was: refused, not damaged");
+    assert.equal(sha256Hex(readFileSync(indexPath)), facts.intents[0]!.beforeIndexDigest, "the index is exactly as it was: never installed, not damaged");
     assert.deepEqual(readFileSync(lockPath), swapped, "the file somebody else put there is neither installed nor broken");
     assert.equal(calls, 1);
     assert.equal(git(world.canonical, "rev-parse", "HEAD"), prepared.baseSha);

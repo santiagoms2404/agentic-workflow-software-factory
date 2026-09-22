@@ -240,8 +240,10 @@ and `assertReconcilableAttempt`:
   journal rather than choosing between two records that fork one chain.
 - `protected index-lock witness is not a complete, well-formed creation record`.
 - `<the Git index lock> no longer matches its durable creation witness (<field>
-  differs); this publication refuses before it mutates the index, HEAD or the
-  lock` — the mutation boundary, on all three publication paths.
+  differs); this publication refuses to install it as the Git index; that file
+  and the index are left exactly as they are` — the mutation boundary, on all
+  three publication paths. On the two post-CAS paths this refusal leaves the
+  `head-published` state rather than the pre-publication one.
 - `this process does not hold the attempt's execution lease` — now raised by
   `commitProtectedAsHost` as well, before it reads or writes anything.
 - `the attempt status file and its journal disagree, so candidate <sha> has no
@@ -250,9 +252,28 @@ and `assertReconcilableAttempt`:
   durable binding here` — now also raised under the lease, after the owner
   confirmed.
 
-Every one of these leaves HEAD, the working tree, the index, the candidate, the
-accepted prefix, the original debit and any uncertain liability exactly as the
-crash left them.
+All of these leave the working tree, the index, the candidate, the accepted
+prefix, the original debit and any uncertain liability exactly as the crash left
+them. Three classes differ in what else they leave, and the difference is worth
+stating rather than averaging away:
+
+1. **Recovery preflight and inspection refusals** — everything from
+   `protectedEffectContext`, `inspectProtectedPublication`,
+   `assertReconcilableAttempt` and `adoptRetainedIndexLock`. These run before
+   any reference moves and before the lease body writes anything, so HEAD, the
+   index, the retained lock and the journal are all byte-identical afterwards.
+   Declining the confirmation is the same. This is the inert class.
+2. **An authorized publication refused at the mutation boundary**, after the
+   compare-and-swap. The index and the lock are untouched, but HEAD stands at
+   the candidate: the act was already authorized and half-performed, and what
+   remains is the `head-published` cut this table calls completable.
+3. **Lifecycle bookkeeping is not nothing.** A refusal raised inside a running
+   phase — class 2, or a transport-side refusal — fails that phase, and the
+   ordinary phase-abort path appends its failure and sealing records. The
+   journal is therefore *not* byte-identical for those cuts; it gains exactly
+   the evidence that says the phase failed and why. Only a real process death
+   writes nothing at all, which is precisely why it is the harder cut and why
+   it is tested separately.
 
 ## What A3 preserves
 
@@ -426,6 +447,23 @@ by name, permanently and automatically, with HEAD, the index, the lock and the
 journal untouched. Fail-closed is the point: the alternative is adopting on
 resemblance, which is the defect being corrected.
 
+**What this means for evidence written before the witness existed.** The refusal
+bites on a *retained lock with no witness*, not on an attempt's age. Four cases,
+and only two of them refuse:
+
+| Cut in older evidence | Behaviour |
+|---|---|
+| `published` | Unaffected. The lock block is skipped entirely; the reconciliation appends the binding and nothing else. |
+| `unpublished`, no lock on disk | Reconciles. Adoption returns `null` on `ENOENT`, recovery creates its own lock under `O_EXCL` and writes the first witness of that chain (`supersedes: null`). |
+| `unpublished`, lock present | Refuses: the lock cannot be attributed. |
+| `head-published` (which implies a retained lock) | Refuses, for the same reason. |
+
+Every one of these still passes through the unchanged checks that came before
+it — the grant's physical roots and Git directories, the one-use OS-enforced
+execution proof, the status/journal agreement, the sealed-state test and the
+owner's confirmation. Acquiring a witness qualifies a lock; it authorizes
+nothing on its own.
+
 ### The mutation boundary, and what it cannot close
 
 `rename(2)` resolves a **name**. Linux offers no rename-by-descriptor —
@@ -437,8 +475,18 @@ Immediately before every rename, on all three publication paths, three facts are
 re-proved from the descriptor held since creation: the inode still carries the
 witnessed identity (an in-place rewrite moves `ctimeNs` and size; an unlink moves
 the link count), it still holds the witnessed bytes, and the *name* about to be
-renamed still resolves to that same inode. A failure is a **pre-mutation
-refusal**: the index, HEAD and the lock are exactly as they were.
+renamed still resolves to that same inode. A failure **refuses the index
+installation**: the index is not written and the file at the lock path is left
+alone.
+
+It does **not** unwind the compare-and-swap, and must not be read as doing so.
+Two of the three call sites arrive here with HEAD already at the candidate — the
+transport publishes HEAD before installing the index (`protected-commit.ts`),
+and so does the recovery path for an `unpublished` cut. Refusing there leaves
+the `head-published` state, which is the cut this document's own table says is
+completable, not a pre-publication one. Only the recovery `head-published` cut
+reaches the check with HEAD untouched. The refusal text therefore states what is
+true of the index and the lock and says nothing about HEAD.
 
 What remains is the instant between that check and the rename. It is not
 closable here, so it is converted from silence into **detected damage**: after
@@ -448,11 +496,11 @@ becomes durable. Previously only the recovery path did; the normal and
 handled-error paths checked HEAD and tree alone, which made the same swap
 undetectable there.
 
-The two are deliberately distinguishable in the evidence. A pre-mutation refusal
+The two are deliberately distinguishable in the evidence. A refused installation
 names the witness (`... no longer matches its durable creation witness (<field>
-differs); this publication refuses before it mutates the index, HEAD or the
-lock`); detected damage names verification (`protected candidate publication
-could not be verified`).
+differs); this publication refuses to install it as the Git index; that file and
+the index are left exactly as they are`); detected damage names verification
+(`protected candidate publication could not be verified`).
 
 ### Which permission checks apply, and why
 
@@ -619,7 +667,9 @@ bytes, unchanged spend, one model call, inert refusal — is kept.
 | journeys | `core/test/journeys/host-validation-recovery.test.ts` | the cuts end to end against a disposable attempt and its own managed worktree |
 | journeys | `core/test/journeys/production-runner.test.ts` | the read-only prefix replayed through `awsf resume` without another model call, and A2's protected crash cuts reconciled or refused |
 | journeys | `core/test/journeys/production-runner.test.ts` + `_protected-kill-host.ts` | a real `SIGKILL` at each publication boundary, then reconciliation; a seal landing inside the confirmation; foreign, symlinked, hardlinked and live-held index locks; index drift, changed granted bytes, a changed parent identity and a redirected `GIT_INDEX_FILE` |
-| journeys | `core/test/journeys/production-runner.test.ts` + `_protected-kill-host.ts` | lock provenance: a real `SIGKILL` **before** the witness is durable (refuses) and **after** it (reconciles); adoption of the transport's own witnessed lock; a same-byte `0600` replacement with a closed descriptor, against both a transport-written and a recovery-written witness; an in-place rewrite; a witness recorded against another lock path; a forked witness chain; and a lock swapped at the writer's own mutation boundary, refused before the index moves |
+| journeys | `core/test/journeys/production-runner.test.ts` + `_protected-kill-host.ts` | lock provenance, **recovery path**: `_protected-kill-host.ts` drives `completeProtectedPublication` only, so its real `SIGKILL`s — before the witness is durable (refuses) and after it (reconciles) — are recovery-origin cuts with recovery-written witnesses |
+| journeys | `core/test/journeys/production-runner.test.ts` | lock provenance, **transport path**: the transport-origin witness cases use a projector observer throw inside `commitProtectedAsHost`, which is a caught exception rather than process death, and cover adoption of the transport's own witnessed lock, an in-place rewrite, and a witness recorded against another lock path |
+| journeys | `core/test/journeys/production-runner.test.ts` | origin-independent refusals: a same-byte `0600` replacement with a closed descriptor, run against **both** a transport-written and a recovery-written (real-`SIGKILL`) witness; a same-byte lock with no witness at all; a forked witness chain; and a lock swapped at the transport's own mutation boundary, which refuses the index installation after the CAS |
 | unit | `core/test/unit/execution/operation-lease.test.ts` | the transport refuses outright without the attempt's execution lease, writing nothing; a live witnessed controller never counts as settled |
 
 Every fixture is created by `mkdtemp` and removed in `finally`. No test opens a
