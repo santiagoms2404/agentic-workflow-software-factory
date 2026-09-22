@@ -18,7 +18,14 @@ for (const configured of config.agents) {
     const root = await mkdtemp(join(tmpdir(), "awsf-role-parity-test-"));
     t.after(() => rm(root, { recursive: true, force: true }));
     const fixture = await createRoleFixture(root, configured.name, "fixture-challenge");
-    const input = { config, configPath, workflow: fixture.workflow, role: configured.name,
+    // The shipped config is ephemeral for every role: original-turn retention
+    // buys nothing while no route supports continuation, so it is not paid by
+    // default. Role parity is therefore proved against an explicit, role-scoped
+    // opt-in, and the shipped default is asserted to refuse below — which is
+    // both halves of B-1 rather than only the disabled one.
+    const optedIn = structuredClone(config);
+    optedIn.agents.find(agent => agent.name === configured.name)!.harness.interrupted_turn = true;
+    const input = { config: optedIn, configPath, workflow: fixture.workflow, role: configured.name,
       selection: "proof-low" as const, previous: fixture.previous, designContext: fixture.designContext,
       recordedRequest: fixture.request, canonical: fixture.canonical, worktree: fixture.worktree,
       stateRoot: fixture.stateRoot, runtime: fixture.runtime, env: { ...fixture.env, OMIT_UNDEFINED: undefined } };
@@ -49,7 +56,7 @@ for (const configured of config.agents) {
     assert.equal(prepared.evidence.persistence.rescue, "proof-unavailable");
     assert.equal(prepared.evidence.configuredEffort, configured.thinking);
     assert.equal(prepared.evidence.selectedEffort, "low");
-    assert.equal(prepared.evidence.configDigest, continuityDigest(config));
+    assert.equal(prepared.evidence.configDigest, continuityDigest(optedIn));
     assert.ok(prepared.grant.spec.argv.includes("--session-id"));
     assert.equal(prepared.grant.spec.argv.includes("--resume"), false);
     if (configured.harness.adapter === "codex") {
@@ -74,8 +81,9 @@ for (const configured of config.agents) {
     assert.equal(await snapshotRoleFixture(fixture.worktree, fixture.gitControlPaths), changed);
     await symlink(join(root, "absent-outside-target"), join(fixture.worktree, "do-not-follow"));
     assert.notEqual(await snapshotRoleFixture(fixture.worktree, fixture.gitControlPaths), changed);
-    const disabled = structuredClone(config);
-    disabled.agents.find(agent => agent.name === configured.name)!.harness.interrupted_turn = false;
-    await assert.rejects(prepareRoleProbe({ ...input, config: disabled }), /not opted into/);
+    // The shipped configuration, unmodified: no role has opted in, so no role
+    // pays retention for a capability no installed route can redeem.
+    await assert.rejects(prepareRoleProbe({ ...input, config }), /not opted into/);
+    assert.equal(configured.harness.interrupted_turn, false, "the shipped config must not opt any role into retention");
   });
 }

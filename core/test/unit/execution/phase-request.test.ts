@@ -31,8 +31,14 @@ for (const configured of config.agents) {
     assert.equal(baseline.stdin, "fixture input");
     assert.ok(baseline.argv.includes(systemPromptPath));
     assert.equal(await readFile(systemPromptPath, "utf8"), prompts.systemPrompt);
-    assert.equal(agent.harness.interrupted_turn, true);
-    assert.equal(buildEffectiveConfig(config).agents.find((entry) => entry.name === agent.name)!.harness.interrupted_turn, true);
+    // The shipped configuration opts NO role into original-turn retention:
+    // while no installed route supports continuation, retention is a privacy
+    // and storage cost with nothing to redeem it. The retention mechanism
+    // itself is still exercised below, under an explicit role-scoped opt-in.
+    assert.equal(agent.harness.interrupted_turn, false);
+    assert.equal(buildEffectiveConfig(config).agents.find((entry) => entry.name === agent.name)!.harness.interrupted_turn, false);
+    assert.equal(phasePersistenceMode(agent, adapter), agent.name === "intake" ? "conversation-correction" : "ephemeral");
+    agent.harness.interrupted_turn = true;
     assert.equal(agent.harness.continuity, agent.name === "intake" ? "same-session" : "none");
     if (agent.name === "intake") {
       assert.equal(phasePersistenceMode(agent, adapter), "conversation-correction");
@@ -78,7 +84,12 @@ for (const Adapter of [ClaudeCodeAdapter, PiCodexAdapter]) {
       t.after(() => rm(root, { recursive: true, force: true }));
       const adapter = new Adapter();
       Object.defineProperty(adapter, member, { value: member === "supportsSameSessionCorrection" ? false : undefined });
-      const agent = config.agents.find(candidate => candidate.name === "builder")!;
+      // Opted in explicitly: this asserts the capability refusal, which only
+      // arises once a role has asked for retention. The shipped config asks for
+      // none, so taking the agent as-is would short-circuit to `ephemeral` and
+      // the refusal under test would never be reached.
+      const agent = { ...config.agents.find(candidate => candidate.name === "builder")!,
+        harness: { ...config.agents.find(candidate => candidate.name === "builder")!.harness, interrupted_turn: true } };
       const path = join(root, "continuity.json");
       const store = new ContinuityStore({ path });
       assert.equal(isContinuityCapable(adapter), false);
@@ -90,6 +101,7 @@ for (const Adapter of [ClaudeCodeAdapter, PiCodexAdapter]) {
 }
 
 test("unsupported persistence remains explicit and cannot claim interrupted-turn proof", () => {
-  const agent = config.agents.find((entry) => entry.name === "builder")!;
+  const base = config.agents.find((entry) => entry.name === "builder")!;
+  const agent = { ...base, harness: { ...base.harness, interrupted_turn: true } };
   assert.equal(phasePersistenceMode(agent, new StubAdapter({ providerPath: resolve(import.meta.dirname, "../../fixtures/providers/stub/stub-provider.mjs"), sideEffectPath: join(tmpdir(), "unused-phase-request-effect") })), "unavailable");
 });

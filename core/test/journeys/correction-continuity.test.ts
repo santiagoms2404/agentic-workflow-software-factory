@@ -347,6 +347,12 @@ type Direction = "codex-builds" | "claude-builds";
 
 function configText(): string {
   return readFileSync(resolve("awsf.config.yaml"), "utf8")
+    // This journey exists to exercise original-turn retention, so it opts in
+    // explicitly. The shipped config opts every role out — retention is a
+    // privacy and storage cost while no installed route supports continuation
+    // — and the declined case below is the shipped posture, kept as the
+    // contrast it always was.
+    .replaceAll("interrupted_turn: false", "interrupted_turn: true")
     .replace("  seed_paths: [node_modules]", "  seed_paths: []")
     .replace(
       "test: { argv: [npm, run, test:unit], timeout_seconds: 600 }",
