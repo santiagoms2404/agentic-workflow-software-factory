@@ -3,7 +3,11 @@ import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { recoveryDigest, recoveryBudgetDigest, type AcceptedPhase, type BoundaryQuota, type PhaseRecovery } from "../../contracts/phase-recovery.ts";
 import { inspectPhaseRecovery, verifyRecoveryWorktree, reconcileRecoveryStatus, reducePhaseContext } from "../../workflow/phase-recovery.ts";
-import { withExecutionLease, assertNoExecutionController } from "../../execution/operation-lease.ts";
+import { withExecutionLease, assertNoExecutionController, assertOwnExecutionLease } from "../../execution/operation-lease.ts";
+import { argvDigest, gateConfigDigest, gatesConfigDigest, COMMAND_LEDGER_PROTOCOL_VERSION } from "../../contracts/command-ledger.ts";
+import { ledgerGovernanceFailure, planAdoptedMeasurement, planCommandRecovery, planVerifyCandidateLedger, type CommandRecovery } from "../../workflow/command-ledger.ts";
+import type { VerifyCandidateLedgerVerdict } from "../../workflow/host-validation.ts";
+import { occurrenceKeyForMeasurement, readCommandLedger, retainedOutputDigest } from "../../workflow/command-ledger-store.ts";
 import type { OwnerTerminal } from "../tty.ts";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import type {
@@ -99,7 +103,7 @@ import {
   providerPairFrom,
   runMandatoryReview,
 } from "../../workflow/review-routing.ts";
-import { assertClean, captureChangeSet, changedPaths, changesSinceBase, runGit, systemGitRunner } from "../../git/changes.ts";
+import { assertClean, captureChangeSet, changedPaths, changesSinceBase, runGit, systemGitRunner, WorktreeNotClean } from "../../git/changes.ts";
 import { ContinuityStore, continuityHandle } from "../../execution/continuity-store.ts";
 import { buildPhaseRequest, openRetainedColdTurn, phasePersistenceMode, phasePersistenceEvidence, redactPhaseProcess } from "../../execution/phase-request.ts";
 import { loadCatalog } from "../../registry/catalog.ts";
@@ -168,7 +172,91 @@ import {
   type AttemptStatus,
 } from "./attempt.ts";
 
-const { chmod, lstat, mkdir, readFile, realpath, writeFile } = fs;
+const { chmod, lstat, mkdir, open, readFile, realpath, writeFile } = fs;
+
+/**
+ * Make one path's bytes durable. The file must be fsynced before any journal
+ * record cites its digest, and its parent directory after, or the entry naming
+ * it can survive without it.
+ */
+async function fsyncPath(path: string): Promise<void> {
+  const handle = await open(path, "r");
+  try { await handle.sync(); } finally { await handle.close(); }
+}
+
+/**
+ * Observe the worktree pins without throwing.
+ *
+ * `runGit` raises on a non-zero git exit, and `git status` failing is not
+ * hypothetical here — a held `index.lock` is the whole subject of I2. If the
+ * observation threw, the result record below it would never be written and the
+ * occurrence would be stuck holding an intent with no result: the permanent
+ * refusal, for a command that in fact settled and whose output is already
+ * durable. An unreadable observation is recorded as unknown instead.
+ */
+function observePins(worktree: string): { clean: boolean; head: string | null } {
+  try {
+    const runner = systemGitRunner(worktree);
+    const clean = runGit(runner, ["status", "--porcelain"]).trim().length === 0;
+    const head = runGit(runner, ["rev-parse", "HEAD"]).trim();
+    return { clean, head: /^[0-9a-f]{40}$/u.test(head) ? head : null };
+  } catch {
+    return { clean: false, head: null };
+  }
+}
+
+/** This dispatch site's ledger identity. The list of sites is closed in the contract. */
+const MEASURE_DISPATCHER = "production-run/measure-candidate" as const;
+
+/**
+ * What the command ledger can say about an interrupted `verify-candidate`.
+ *
+ * A3 left that stage refusing unconditionally because a missing per-command
+ * result is not proof a command did not run. With the ledger the stage becomes
+ * decidable, so this reduces the durable evidence to one verdict and hands it
+ * to the pure planner. `undefined` — no worktree, or an unreadable ledger —
+ * keeps the original refusal rather than guessing.
+ */
+async function verifyCandidateLedgerVerdict(
+  attemptDir: string, config: AwsfConfig, status: AttemptStatus, checkpoint: PhaseRecovery,
+): Promise<VerifyCandidateLedgerVerdict | undefined> {
+  const progress = checkpoint.validation;
+  if (progress === undefined || progress.stage !== "verify-candidate" || status.worktree === null) return undefined;
+  const candidateSha = progress.commitResult?.commitSha ?? checkpoint.prefix.at(-1)?.candidateSha ?? null;
+  if (candidateSha === null) return undefined;
+  let snapshot;
+  let worktreeRealPath;
+  try {
+    snapshot = await readCommandLedger(attemptDir);
+    worktreeRealPath = await realpath(status.worktree);
+  } catch { return undefined; }
+  const occurrenceKey = occurrenceKeyForMeasurement(progress.phaseKey, candidateSha, progress.round);
+  const gateIds = Object.keys(config.gates);
+  const gatesDigest = gatesConfigDigest(config.gates);
+  return planVerifyCandidateLedger(snapshot, gateIds.map(gateId => ({
+    dispatcherId: MEASURE_DISPATCHER, occurrenceKey, gateId, gateIds,
+    argvDigest: argvDigest(config.gates[gateId]!.argv),
+    gateConfigDigest: gateConfigDigest(config.gates[gateId]!), gatesConfigDigest: gatesDigest,
+    cwd: status.worktree!, worktreeRealPath,
+    timeoutMs: config.gates[gateId]!.timeout_seconds * 1_000,
+    maxOutputBytes: config.runtime.max_output_bytes,
+    candidateSha, attempt: status.attempt, sessionId: status.sessionId,
+  })));
+}
+
+/**
+ * A configured command whose recovery the ledger refuses to decide.
+ *
+ * Its own class, because it must not read as an ordinary gate failure: the
+ * candidate is untouched and nothing was re-dispatched. The phase record keeps
+ * the name, so the refusal is legible after the fact.
+ */
+class CommandLedgerRefusal extends Error {
+  constructor(gateId: string, reason: string) {
+    super(`configured command ${gateId} cannot be recovered: ${reason}`);
+    this.name = "CommandLedgerRefusal";
+  }
+}
 
 const HOST = globalThis as unknown as {
   process: { env: Readonly<Record<string, string>> };
@@ -1132,7 +1220,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
   } | null = null;
   try {
     if (recovery === undefined) await validatePreparedRepository(status);
-    else await verifyRecoveryWorktree(status, recovery.inspected.checkpoint);
+    else await verifyRecoveryWorktree(status, recovery.inspected.checkpoint, await verifyCandidateLedgerVerdict(options.attemptDir, options.config, status, recovery.inspected.checkpoint));
     for (const [phaseIndex, phase] of compiled.phases.entries()) {
       if (phase.kind !== "agent" || phaseIndex < (recovery?.inspected.checkpoint.prefix.length ?? 0)) continue;
       const role = agents.get(phase.owner)!;
@@ -1576,7 +1664,13 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
    * against the same SHA, which would spend the wall clock twice to learn the
    * same thing and could disagree with itself.
    */
-  const measureCandidate = async (phaseId: string, candidateSha: string, round: number): Promise<CandidateMeasurement> => {
+  const measureCandidate = async (phaseId: string, candidateSha: string, round: number, origin: "verify-candidate" | "phase-dispatch" = "phase-dispatch"): Promise<CandidateMeasurement> => {
+    await assertOwnExecutionLease(options.attemptDir);
+    // Read BEFORE this run writes its own hygiene record. A dispatch point
+    // visible in this snapshot therefore belongs to an earlier run, which is
+    // what lets a pre-ledger run's bare hygiene record be told apart from this
+    // run's own — the two are otherwise identical.
+    const ledger = await readCommandLedger(options.attemptDir);
     const gitRunner = systemGitRunner(status.worktree!);
     if (seed !== null) {
       const paths = candidatePathsBetween(status.worktree!, seed.integrationBaseSha, candidateSha);
@@ -1612,33 +1706,174 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       };
     }
 
-    assertClean(status.worktree!, "before");
+    // Four aborts sit between the unconditional hygiene record above and the
+    // first spawn below. Each one reaches the dispatch point and dispatches
+    // nothing, so without a closure marker the completeness predicate reads the
+    // silence as an ungoverned dispatch and refuses every later decision in the
+    // attempt — for something that never happened.
+    const occurrenceKey = occurrenceKeyForMeasurement(phaseId, candidateSha, round);
+    const closeOccurrence = async (reason: string): Promise<void> => {
+      await persist("attempt.updated", {}, { type: "command-occurrence-closed", closure: {
+        schema: "awsf.command-occurrence-closed/v1", dispatcherId: MEASURE_DISPATCHER,
+        occurrenceKey, reason, closedAt: infra.now(),
+      } });
+    };
+    // Governance is decided from the snapshot taken BEFORE this run wrote
+    // anything, and decided BEFORE the opening below is persisted. Writing the
+    // opening first would be self-exculpating: a run that correctly refuses an
+    // earlier ungoverned dispatch would leave behind the very marker that makes
+    // the next run believe the occurrence was always governed, and that run
+    // would re-dispatch the owner's argv over an unknown prior effect.
+    const ungoverned = ledgerGovernanceFailure(ledger, MEASURE_DISPATCHER, occurrenceKey);
+    if (ungoverned !== null) throw new CommandLedgerRefusal("candidate measurement", ungoverned);
+    await persist("attempt.updated", {}, { type: "command-occurrence-opened", opening: {
+      schema: "awsf.command-occurrence-opened/v1", dispatcherId: MEASURE_DISPATCHER,
+      occurrenceKey, protocolVersion: COMMAND_LEDGER_PROTOCOL_VERSION, openedAt: infra.now(),
+    } });
+    try {
+      assertClean(status.worktree!, "before");
+    } catch (error) {
+      await closeOccurrence("the worktree was dirty before any configured command was dispatched");
+      throw error;
+    }
     const observedHead = runGit(gitRunner, ["rev-parse", "HEAD"]).trim();
-    if (observedHead !== candidateSha) throw new Error(`candidate moved before commands: ${observedHead} != ${candidateSha}`);
+    if (observedHead !== candidateSha) {
+      await closeOccurrence("the candidate moved before any configured command was dispatched");
+      throw new Error(`candidate moved before commands: ${observedHead} != ${candidateSha}`);
+    }
+    const gateIds = Object.keys(options.config.gates);
+    const gatesDigest = gatesConfigDigest(options.config.gates);
+    const worktreeRealPath = await realpath(status.worktree!);
+    const baseExpectation = {
+      dispatcherId: MEASURE_DISPATCHER, gateIds, gatesConfigDigest: gatesDigest,
+      cwd: status.worktree!, worktreeRealPath, candidateSha,
+      attempt: status.attempt, sessionId: status.sessionId,
+    };
+    /**
+     * A host command phase reuses the builder's measurement of this exact
+     * candidate — the one edge that exists today, and only that one. The
+     * builder's occurrence is looked up by its own recorded key, so a SECOND
+     * command phase cannot inherit the FIRST one's dispatch and quietly run
+     * nothing: only `origin: "verify-candidate"` entries are adoptable.
+     */
+    let adopted: ReadonlyMap<string, CommandRecovery & { action: "restore" }> | null = null;
+    if (origin === "phase-dispatch") {
+      const first = Object.entries(options.config.gates)[0];
+      if (first !== undefined) {
+        const plan = planAdoptedMeasurement(ledger, {
+          ...baseExpectation,
+          argvDigest: argvDigest(first[1].argv), gateConfigDigest: gateConfigDigest(first[1]),
+          timeoutMs: first[1].timeout_seconds * 1_000, maxOutputBytes: options.config.runtime.max_output_bytes,
+        });
+        if (plan.action === "refuse") throw new CommandLedgerRefusal("candidate measurement", plan.reason);
+        if (plan.action === "adopt") {
+          adopted = new Map(plan.entries.map(entry =>
+            [entry.intent.gateId, { action: "restore" as const, intent: entry.intent, result: entry.result }]));
+        }
+      }
+    }
     const commands: TestOutput["commands"] = [];
     const failures: string[] = [];
     const commandFailures: CorrectionCommandFailure[] = [];
     const renderedSections: string[] = [];
+    const commandPins = new Map<string, { cleanBefore: boolean; cleanAfter: boolean }>();
     for (const [gateId, configured] of Object.entries(options.config.gates)) {
       const started = Date.now();
-      const [executable, ...argv] = configured.argv;
-      const result = infra.runCommand(executable!, argv, {
-        timeoutMs: configured.timeout_seconds * 1_000,
-        cwd: status.worktree!,
-        maxBuffer: options.config.runtime.max_output_bytes,
-      });
-      // The COMPLETE output is retained privately, mode 0600. Retaining only the
-      // bounded rendering is exactly the defect pilot 2 hit: the one segment
-      // needed to fix the failure had already been discarded before anything
-      // asked for it.
-      const output = `${result.stdout}${result.stderr}${result.error === null ? "" : `\n${result.error}`}`;
       const outputRelative = join("raw", `command-${phaseId}-${gateId}-${String(round)}.txt`);
       const outputAbsolute = join(options.attemptDir, outputRelative);
-      await mkdir(dirname(outputAbsolute), { recursive: true });
-      await writeFile(outputAbsolute, output, { mode: 0o600 });
-      await chmod(outputAbsolute, 0o600);
-      const exitCode = result.status ?? -1;
-      commands.push({ gateId, argv: [...configured.argv], exitCode, durationMs: Date.now() - started, outputRef: outputRelative });
+      const expectation = {
+        dispatcherId: MEASURE_DISPATCHER, occurrenceKey, gateId, gateIds,
+        argvDigest: argvDigest(configured.argv), gateConfigDigest: gateConfigDigest(configured),
+        gatesConfigDigest: gatesDigest, cwd: status.worktree!, worktreeRealPath,
+        timeoutMs: configured.timeout_seconds * 1_000, maxOutputBytes: options.config.runtime.max_output_bytes,
+        candidateSha, attempt: status.attempt, sessionId: status.sessionId,
+      } as const;
+      const planned = adopted?.get(gateId) ?? planCommandRecovery(ledger, expectation);
+      if (planned.action === "refuse") throw new CommandLedgerRefusal(gateId, planned.reason);
+
+      let output: string;
+      let exitCode: number;
+      let durationMs: number;
+      if (planned.action === "restore") {
+        // The command body never runs again. Everything the measurement needs is
+        // rebuilt from the bytes the digest check just verified.
+        output = await readFile(join(options.attemptDir, planned.result.outputRef!), "utf8");
+        exitCode = planned.result.exitCode;
+        durationMs = planned.result.durationMs;
+        commandPins.set(gateId, { cleanBefore: planned.intent.cleanBefore, cleanAfter: planned.result.cleanAfter });
+      } else {
+        const intentId = randomUUID();
+        await persist("attempt.updated", {}, { type: "command-dispatch-intent", intent: {
+          schema: "awsf.command-dispatch-intent/v1", intentId, dispatcherId: MEASURE_DISPATCHER,
+          occurrenceKey, gateId, origin, phaseKey: phaseId, phaseOrdinal: 0, round,
+          attempt: status.attempt, sessionId: status.sessionId,
+          argv: [...configured.argv], argvDigest: expectation.argvDigest,
+          cwd: expectation.cwd, worktreeRealPath, timeoutMs: expectation.timeoutMs,
+          maxOutputBytes: expectation.maxOutputBytes, gateConfigDigest: expectation.gateConfigDigest,
+          gatesConfigDigest: gatesDigest, candidateSha, headBefore: candidateSha, cleanBefore: true,
+          dispatchedAt: infra.now(),
+        } });
+        const [executable, ...argv] = configured.argv;
+        const result = infra.runCommand(executable!, argv, {
+          timeoutMs: configured.timeout_seconds * 1_000,
+          cwd: status.worktree!,
+          maxBuffer: options.config.runtime.max_output_bytes,
+        });
+        // The COMPLETE output is retained privately, mode 0600. Retaining only the
+        // bounded rendering is exactly the defect pilot 2 hit: the one segment
+        // needed to fix the failure had already been discarded before anything
+        // asked for it.
+        output = `${result.stdout}${result.stderr}${result.error === null ? "" : `\n${result.error}`}`;
+        await mkdir(dirname(outputAbsolute), { recursive: true });
+        await writeFile(outputAbsolute, output, { mode: 0o600 });
+        await chmod(outputAbsolute, 0o600);
+        // fsync AFTER the chmod, so the mode is durable too, and before the
+        // result record, so no journal line ever cites bytes that are not.
+        await fsyncPath(outputAbsolute);
+        await fsyncPath(dirname(outputAbsolute));
+        exitCode = result.status ?? -1;
+        durationMs = Date.now() - started;
+
+        // Observe, record, THEN abort. The two checks below used to throw
+        // outright, which left an intent with no result for a command whose
+        // effect on the tree is precisely what was observed — the one case a
+        // restore must never treat as a clean measurement.
+        const pins = observePins(status.worktree!);
+        const cleanAfter = pins.clean && pins.head !== null;
+        await persist("attempt.updated", {}, { type: "command-dispatch-result", result: {
+          // An unreadable observation is `no-exit`: not restorable, rather than
+          // an `exited` record asserting pins nothing actually read.
+          schema: "awsf.command-dispatch-result/v1", intentId,
+          outcome: result.status === null || pins.head === null ? "no-exit" : "exited",
+          exitCode, durationMs, outputRef: outputRelative,
+          outputBytes: Buffer.byteLength(output), outputDigest: retainedOutputDigest(output),
+          headAfter: pins.head ?? candidateSha, cleanAfter,
+          descendantQuiescence: "unproved", settledAt: infra.now(),
+        } });
+        commandPins.set(gateId, { cleanBefore: true, cleanAfter });
+        if (!cleanAfter) {
+          await closeOccurrence(`${gateId} left the worktree dirty`);
+          // Abort unconditionally. Re-asserting would let the loop continue if a
+          // surviving descendant tidied up in between — leaving the occurrence
+          // both closed and still accumulating intents, which contradicts what
+          // the closure means. `assertClean` is called first only so the
+          // original `WorktreeNotClean` class reaches the phase record's
+          // errorCode; if the tree now looks clean it cannot supply one.
+          assertClean(status.worktree!, "after");
+          throw new WorktreeNotClean("after", "the worktree was dirty when the command settled");
+        }
+        if (pins.head !== candidateSha) {
+          await closeOccurrence(`${gateId} moved the candidate`);
+          throw new Error(`candidate moved during ${gateId}`);
+        }
+      }
+
+      // A restore cites the path its own result recorded. For a same-key
+      // restore that is this occurrence's path; for an adopted one it is the
+      // producing phase's, and citing this phase's would name a file that does
+      // not exist.
+      commands.push({ gateId, argv: [...configured.argv], exitCode, durationMs,
+        outputRef: planned.action === "restore" ? planned.result.outputRef ?? outputRelative : outputRelative });
       const bounded = boundCommandOutput(output);
       const rendered = renderCommandEvidence(bounded);
       renderedSections.push(`### ${gateId} (exit ${String(exitCode)})\n${rendered}`);
@@ -1646,9 +1881,6 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
         failures.push(`${gateId} exited ${exitCode}`);
         commandFailures.push({ gateId, argv: [...configured.argv], exitCode, evidence: rendered });
       }
-      assertClean(status.worktree!, "after");
-      const afterHead = runGit(systemGitRunner(status.worktree!), ["rev-parse", "HEAD"]).trim();
-      if (afterHead !== candidateSha) throw new Error(`candidate moved during ${gateId}`);
     }
     const testOutput: TestOutput = {
       schema: "awsf.test-output/v1", producerStatus: failures.length === 0 ? "success" : "failure",
@@ -1659,7 +1891,12 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     };
     const aggregate = new GateReport("commands_pass");
     for (const [gateId, configured] of Object.entries(options.config.gates)) {
-      const report = commandsPass(testOutput, { gateId, argv: configured.argv }, { candidateSha, cleanBefore: true, cleanAfter: true });
+      // The pins come from what each command actually recorded, not from
+      // literals. A restored measurement is only ever offered when its own
+      // recorded pins held, so passing them through keeps the aggregate from
+      // asserting a fact nothing checked.
+      const pins = commandPins.get(gateId) ?? { cleanBefore: true, cleanAfter: true };
+      const report = commandsPass(testOutput, { gateId, argv: configured.argv }, { candidateSha, ...pins });
       reportWith(aggregate, report.checks.map((check) => ({ ...check, item: `${gateId}:${check.item}` })));
     }
     if (Object.keys(options.config.gates).length === 0) aggregate.check("configured commands", true, "no commands configured");
@@ -1957,7 +2194,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
      */
     const verifyCandidate = phase.id === "builder" && reviewContext === null && route.continuity
       ? async ({ candidateSha, correctionRound }: { candidateSha: string; correctionRound: number }): Promise<CandidateVerification> => {
-          const measured = await measureCandidate(phase.id, candidateSha, correctionRound);
+          const measured = await measureCandidate(phase.id, candidateSha, correctionRound, "verify-candidate");
           const passed = measured.hygiene.passed && measured.aggregate.passed && measured.failures.length === 0;
           // The next round measures from THIS candidate, so both round-scoped
           // observers are re-armed against the tree as it now stands.
@@ -2549,7 +2786,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     if (!isReviewPhase(next) && agentOrdinal > 0 && selectedQuota !== null && prefix.length === compiled.phases.indexOf(next)) {
       const checkpoint = await checkpointAt("quota-pause", selectedQuota);
       if (checkpoint === null) throw new Error("quota boundary has unsettled execution; no pause or refund permitted");
-      await verifyRecoveryWorktree(status, checkpoint);
+      await verifyRecoveryWorktree(status, checkpoint, await verifyCandidateLedgerVerdict(options.attemptDir, options.config, status, checkpoint));
       await persist("attempt.updated", { recovery: checkpoint, phase: null, process: null, budget: budget.snapshot(),
         lastActivity: detail, lastActivityAt: infra.now(), nextAction: `quota-paused before ${next.id}; run awsf resume ${status.taskId} --reason "quota recovered"` },
         { type: "quota-pause", checkpoint });
@@ -3080,7 +3317,7 @@ async function preflightRecovery(options: ProductionRunOptions): Promise<Recover
     const next = recipe.phases[checkpoint.prefix.length];
     if (status.lifecycleState !== "RUNNING" || next?.kind !== "agent" || isReviewPhase(next)) throw new Error("quota anchor does not name an unstarted ordinary agent phase");
   }
-  await verifyRecoveryWorktree(status, checkpoint);
+  await verifyRecoveryWorktree(status, checkpoint, await verifyCandidateLedgerVerdict(options.attemptDir, options.config, status, checkpoint));
   if (checkpoint.pending !== undefined) {
     const phase = recipe.phases[checkpoint.prefix.length];
     if (phase?.id !== checkpoint.pending.phaseKey || phase.schemaId !== inspected.pendingEnvelope?.schemaId) throw new Error("saved reply does not match the compiled phase");

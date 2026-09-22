@@ -8,6 +8,9 @@
 // target carries freshly entered owner intent rather than the source request.
 
 import { randomUUID } from "node:crypto";
+import { argvDigest, gateConfigDigest, gatesConfigDigest, COMMAND_LEDGER_PROTOCOL_VERSION } from "../../contracts/command-ledger.ts";
+import { ledgerGovernanceFailure, planCommandRecovery } from "../../workflow/command-ledger.ts";
+import { occurrenceKeyForAdoption, readCommandLedger, retainedOutputDigest } from "../../workflow/command-ledger-store.ts";
 import { existsSync, promises as fs } from "node:fs";
 import { dirname, join } from "node:path";
 import { registeredAdapter } from "../../adapters/registry.ts";
@@ -66,7 +69,63 @@ import {
 } from "./review-phase.ts";
 import { candidatePathsBetween } from "../../workflow/review-evidence.ts";
 
-const { chmod, mkdir, writeFile } = fs;
+const { chmod, mkdir, open, readFile, realpath, writeFile } = fs;
+
+/**
+ * Observe the candidate pins without throwing; see the note on the twin in
+ * production-run.ts.
+ */
+function observePins(worktree: string, candidateSha: string): { clean: boolean; head: string | null } {
+  try {
+    const runner = systemGitRunner(worktree);
+    const clean = runGit(runner, ["status", "--porcelain"]).trim().length === 0;
+    const head = runGit(runner, ["rev-parse", "HEAD"]).trim();
+    return { clean: clean && head === candidateSha, head: /^[0-9a-f]{40}$/u.test(head) ? head : null };
+  } catch {
+    return { clean: false, head: null };
+  }
+}
+
+/** This dispatch site's ledger identity. */
+const ADOPT_DISPATCHER = "adopt/adoption-tests" as const;
+
+/** Make one path's bytes durable before any journal record cites their digest. */
+async function fsyncPath(path: string): Promise<void> {
+  const handle = await open(path, "r");
+  try { await handle.sync(); } finally { await handle.close(); }
+}
+
+/**
+ * A configured command whose recovery the ledger refuses to decide, or a ledger
+ * write that failed.
+ *
+ * Its own class so the surrounding catch-all can let it through. Absorbing it
+ * would report "the gates failed" for something that is not a gate failure, and
+ * leave a half-written occurrence that makes the next recovery refuse citing a
+ * dispatch that never happened.
+ */
+class CommandLedgerRefusal extends Error {
+  constructor(gateId: string, reason: string) {
+    super(`configured command ${gateId} cannot be recovered: ${reason}`);
+    this.name = "CommandLedgerRefusal";
+  }
+}
+
+/**
+ * Run one ledger read or write so that its failure keeps its own identity.
+ *
+ * Without this the surrounding catch-all converts a torn journal or a failed
+ * append into "fresh adoption gates aborted" — indistinguishable from a real
+ * gate failure, and leaving a half-written occurrence for the next recovery to
+ * misread as an unknown dispatch.
+ */
+async function ledgerStep<T>(what: string, step: () => Promise<T>): Promise<T> {
+  try {
+    return await step();
+  } catch (error) {
+    throw new CommandLedgerRefusal(what, safeFailure(error).message);
+  }
+}
 const SUPPORTED = new Map<string, WorkflowRecipe>([
   [buildReviewWorkflow.id, buildReviewWorkflow],
   [simpleSdlcWorkflow.id, simpleSdlcWorkflow],
@@ -466,6 +525,12 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
   const attemptDir = created.attemptDir;
   let writeQueue: Promise<void> = Promise.resolve();
   let transitionSeq = 0;
+  const closeOccurrence = async (occurrenceKey: string, reason: string): Promise<void> => {
+    await persist("attempt.updated", {}, { type: "command-occurrence-closed", closure: {
+      schema: "awsf.command-occurrence-closed/v1", dispatcherId: ADOPT_DISPATCHER,
+      occurrenceKey, reason, closedAt: infra.now(),
+    } });
+  };
   const persist = async (kind: AttemptEvent["kind"], update: Partial<AttemptStatus>, evidence?: AttemptEvidence): Promise<void> => {
     const operation = writeQueue.then(async () => {
       status = await persistAttempt(attemptDir, status.revision, {
@@ -559,6 +624,9 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
     assertCandidatePinned(candidate, status.worktree!, "before fresh gates");
     const git = systemGitRunner(status.worktree!);
     const hygieneResult = git(["diff", "--check", `${candidate.baseSha}..${candidate.candidateSha}`, "--"]);
+    // Read before this run's own hygiene record exists, so a dispatch point in
+    // the snapshot belongs to an earlier run.
+    const ledger = await ledgerStep("ledger read", () => readCommandLedger(attemptDir));
     const hygiene = candidateHygiene({
       expectedBaseSha: candidate.baseSha,
       observedBaseSha: runGit(git, ["rev-parse", `${candidate.baseSha}^{commit}`]).trim(),
@@ -588,37 +656,120 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
     const failures: string[] = [];
     const sections: string[] = [];
     const structuralReports = [hygiene, protectedReport, writesReport];
+    // `adopt` creates this attempt directory in this process and no other
+    // controller can hold its lease, so there is nothing to assert ownership
+    // against — unlike the production and rework dispatchers, which run inside
+    // an existing attempt another process could be driving. Two concurrent
+    // adoptions of one source produce two distinct target attempts with
+    // distinct directories, so neither can see the other's ledger.
+    const occurrenceKey = occurrenceKeyForAdoption(phaseId, candidate.candidateSha);
+    // Decided before the opening is written; see the note at the same point in
+    // production-run.ts. A refusal must not leave behind its own exculpation.
+    const ungoverned = ledgerGovernanceFailure(ledger, ADOPT_DISPATCHER, occurrenceKey);
+    if (ungoverned !== null) throw new CommandLedgerRefusal("adoption tests", ungoverned);
+    await ledgerStep("occurrence opening", () => persist("attempt.updated", {}, { type: "command-occurrence-opened", opening: {
+      schema: "awsf.command-occurrence-opened/v1", dispatcherId: ADOPT_DISPATCHER,
+      occurrenceKey, protocolVersion: COMMAND_LEDGER_PROTOCOL_VERSION, openedAt: infra.now(),
+    } }));
     if (structuralReports.every((report) => report.passed)) {
+      const gateIds = Object.keys(options.config.gates);
+      const gatesDigest = gatesConfigDigest(options.config.gates);
+      const worktreeRealPath = await realpath(status.worktree!);
       for (const [gateId, configured] of Object.entries(options.config.gates)) {
-        assertCandidatePinned(candidate, status.worktree!, `before ${gateId}`);
+        try {
+          assertCandidatePinned(candidate, status.worktree!, `before ${gateId}`);
+        } catch (error) {
+          await closeOccurrence(occurrenceKey, `the candidate moved before ${gateId} was dispatched`);
+          throw error;
+        }
         const started = Date.now();
+        const relative = join("raw", `command-adoption-tests-${candidate.candidateSha}-${gateId}-0.txt`);
+        const absolute = join(attemptDir, relative);
+        const planned = planCommandRecovery(ledger, {
+          dispatcherId: ADOPT_DISPATCHER, occurrenceKey, gateId, gateIds,
+          argvDigest: argvDigest(configured.argv), gateConfigDigest: gateConfigDigest(configured),
+          gatesConfigDigest: gatesDigest, cwd: status.worktree!, worktreeRealPath,
+          timeoutMs: configured.timeout_seconds * 1_000, maxOutputBytes: options.config.runtime.max_output_bytes,
+          candidateSha: candidate.candidateSha, attempt: status.attempt, sessionId: status.sessionId,
+        });
+        if (planned.action === "refuse") throw new CommandLedgerRefusal(gateId, planned.reason);
+        let output: string;
+        let exitCode: number;
+        let durationMs: number;
+        if (planned.action === "restore") {
+          output = await readFile(join(attemptDir, planned.result.outputRef!), "utf8");
+          exitCode = planned.result.exitCode;
+          durationMs = planned.result.durationMs;
+        } else {
+        const intentId = randomUUID();
+        await ledgerStep(`${gateId} intent`, () => persist("attempt.updated", {}, { type: "command-dispatch-intent", intent: {
+          schema: "awsf.command-dispatch-intent/v1", intentId, dispatcherId: ADOPT_DISPATCHER,
+          occurrenceKey, gateId, origin: "phase-dispatch", phaseKey: "adoption-tests", phaseOrdinal: 0, round: 0,
+          attempt: status.attempt, sessionId: status.sessionId,
+          argv: [...configured.argv], argvDigest: argvDigest(configured.argv),
+          cwd: status.worktree!, worktreeRealPath, timeoutMs: configured.timeout_seconds * 1_000,
+          maxOutputBytes: options.config.runtime.max_output_bytes,
+          gateConfigDigest: gateConfigDigest(configured), gatesConfigDigest: gatesDigest,
+          candidateSha: candidate.candidateSha, headBefore: candidate.candidateSha, cleanBefore: true,
+          dispatchedAt: infra.now(),
+        } }));
         const [executable, ...argv] = configured.argv;
         const result = infra.runCommand(executable!, argv, {
           timeoutMs: configured.timeout_seconds * 1_000,
           cwd: status.worktree!,
           maxBuffer: options.config.runtime.max_output_bytes,
         });
-        const output = credentialSafeGateOutput(
-          `${result.stdout}${result.stderr}${result.error === null ? "" : `\n${result.error}`}`,
-        );
-        const relative = join("raw", `command-adoption-tests-${gateId}-0.txt`);
-        const absolute = join(attemptDir, relative);
+        const raw = `${result.stdout}${result.stderr}${result.error === null ? "" : `\n${result.error}`}`;
+        exitCode = result.status ?? -1;
+        durationMs = Date.now() - started;
+        try {
+          output = credentialSafeGateOutput(raw);
+        } catch (error) {
+          const withheldPins = observePins(status.worktree!, candidate.candidateSha);
+          await persist("attempt.updated", {}, { type: "command-dispatch-result", result: {
+            schema: "awsf.command-dispatch-result/v1", intentId, outcome: "withheld",
+            exitCode, durationMs, outputRef: null, outputBytes: null, outputDigest: null,
+            headAfter: withheldPins.head ?? candidate.candidateSha, cleanAfter: withheldPins.clean,
+            descendantQuiescence: "unproved", settledAt: infra.now(),
+          } });
+          throw error;
+        }
         await mkdir(dirname(absolute), { recursive: true });
         await writeFile(absolute, output, { mode: 0o600 });
         await chmod(absolute, 0o600);
-        const exitCode = result.status ?? -1;
-        commands.push({ gateId, argv: [...configured.argv], exitCode, durationMs: Date.now() - started, outputRef: relative });
+        await fsyncPath(absolute);
+        await fsyncPath(dirname(absolute));
+        // Observed, not assumed. Recording `cleanAfter: true` unread is how a
+        // command that dirtied the tree becomes a restorable clean measurement.
+        const pins = observePins(status.worktree!, candidate.candidateSha);
+        await ledgerStep(`${gateId} result`, () => persist("attempt.updated", {}, { type: "command-dispatch-result", result: {
+          schema: "awsf.command-dispatch-result/v1", intentId,
+          outcome: result.status === null || pins.head === null ? "no-exit" : "exited",
+          exitCode, durationMs, outputRef: relative,
+          outputBytes: Buffer.byteLength(output), outputDigest: retainedOutputDigest(output),
+          headAfter: pins.head ?? candidate.candidateSha, cleanAfter: pins.clean,
+          descendantQuiescence: "unproved", settledAt: infra.now(),
+        } }));
+        }
+        commands.push({ gateId, argv: [...configured.argv], exitCode, durationMs, outputRef: relative });
         sections.push(`### ${gateId} (exit ${String(exitCode)})\n${bounded(output, TEST_OUTPUT_TAIL_MAX_CHARS)}`);
         if (exitCode !== 0) failures.push(`${gateId} exited ${String(exitCode)}`);
         try {
           assertCandidatePinned(candidate, status.worktree!, `after ${gateId}`);
         } catch (error) {
           failures.push(`${gateId} moved or dirtied the candidate: ${safeFailure(error).message}`);
+          // The remaining gates are withheld deliberately, not left undone.
+          await closeOccurrence(occurrenceKey, `${gateId} moved or dirtied the candidate`);
           break;
         }
       }
     } else {
       failures.push(...structuralReports.filter((report) => !report.passed).map((report) => `${report.gateId} failed`));
+      // Hygiene passed and was recorded, so this occurrence reached its dispatch
+      // point; the structural gates then withheld every command. This is the
+      // ordinary outcome for a candidate that touches a protected path, and
+      // without the marker its silence would read as an ungoverned dispatch.
+      await closeOccurrence(occurrenceKey, "structural gates failed before any configured command was dispatched");
     }
     const testOutput: TestOutput = {
       schema: "awsf.test-output/v1",
@@ -651,6 +802,10 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
   try {
     measurement = await measure();
   } catch (error) {
+    // A ledger refusal or a failed ledger write is not a gate failure. Reporting
+    // it as one would hide the real cause and leave a half-written occurrence
+    // behind for the next recovery to misread.
+    if (error instanceof CommandLedgerRefusal) throw error;
     const failure = safeFailure(error);
     measurement = {
       testOutput: {

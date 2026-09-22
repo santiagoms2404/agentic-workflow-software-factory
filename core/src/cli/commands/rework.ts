@@ -1,7 +1,10 @@
 import { existsSync, readFileSync, statSync, promises as fs } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { canonicalJson, composeOwnerAmendment, createOwnerAmendment, ownerText, sha256, type ReworkOwnerAmendment, type OwnerAmendmentDelivery } from "../../contracts/owner-amendment.ts";
-import { withExecutionLease } from "../../execution/operation-lease.ts";
+import { argvDigest, gateConfigDigest, gatesConfigDigest, COMMAND_LEDGER_PROTOCOL_VERSION } from "../../contracts/command-ledger.ts";
+import { ledgerGovernanceFailure, planCommandRecovery } from "../../workflow/command-ledger.ts";
+import { occurrenceKeyForRework, readCommandLedger, retainedOutputDigest } from "../../workflow/command-ledger-store.ts";
+import { withExecutionLease, assertOwnExecutionLease } from "../../execution/operation-lease.ts";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import type {
   AdapterEntry,
@@ -109,7 +112,40 @@ import {
   type RecordedRoute,
 } from "./review-record.ts";
 
-const { chmod, mkdir, readFile, realpath, writeFile } = fs;
+const { chmod, mkdir, open, readFile, realpath, writeFile } = fs;
+
+/**
+ * Observe the worktree pins without throwing; see the note on the twin in
+ * production-run.ts. An observation that fails must not strand the occurrence
+ * holding an intent with no result.
+ */
+function observePins(worktree: string): { clean: boolean; head: string | null } {
+  try {
+    const runner = systemGitRunner(worktree);
+    const clean = runGit(runner, ["status", "--porcelain"]).trim().length === 0;
+    const head = runGit(runner, ["rev-parse", "HEAD"]).trim();
+    return { clean, head: /^[0-9a-f]{40}$/u.test(head) ? head : null };
+  } catch {
+    return { clean: false, head: null };
+  }
+}
+
+/** This dispatch site's ledger identity. */
+const REWORK_DISPATCHER = "rework/owner-gates" as const;
+
+/** Make one path's bytes durable before any journal record cites their digest. */
+async function fsyncPath(path: string): Promise<void> {
+  const handle = await open(path, "r");
+  try { await handle.sync(); } finally { await handle.close(); }
+}
+
+/** A configured command whose recovery the ledger refuses to decide. Never an ordinary gate failure. */
+class CommandLedgerRefusal extends Error {
+  constructor(gateId: string, reason: string) {
+    super(`configured command ${gateId} cannot be recovered: ${reason}`);
+    this.name = "CommandLedgerRefusal";
+  }
+}
 
 /**
  * The tier fork, as the lifecycle already draws it.
@@ -1052,6 +1088,10 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
     const hygieneResult = git(["diff", "--check", `${status.baseSha!}..${candidate}`, "--"]);
     const headAfterHygiene = runGit(git, ["rev-parse", "HEAD"]).trim();
     const cleanAfterHygiene = runGit(git, ["status", "--porcelain"]).trim().length === 0;
+    await assertOwnExecutionLease(options.attemptDir);
+    // Read before this run's own hygiene record exists, so a dispatch point in
+    // the snapshot belongs to an earlier run.
+    const ledger = await readCommandLedger(options.attemptDir);
     const hygiene = candidateHygiene({
       expectedBaseSha: status.baseSha!, observedBaseSha: runGit(git, ["rev-parse", status.baseSha!]).trim(),
       expectedCandidateSha: candidate, headBefore: headBeforeHygiene, headAfter: headAfterHygiene,
@@ -1066,23 +1106,104 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
     const commandReports: GateReport[] = [];
     const failures: string[] = [];
     let outputTail = "";
+    const occurrenceKey = occurrenceKeyForRework(phaseKey, candidate);
+    // Decided before the opening is written; see the note at the same point in
+    // production-run.ts. A refusal must not leave behind its own exculpation.
+    const ungoverned = ledgerGovernanceFailure(ledger, REWORK_DISPATCHER, occurrenceKey);
+    if (ungoverned !== null) throw new CommandLedgerRefusal("owner rework gates", ungoverned);
+    await persist("attempt.updated", {}, { type: "command-occurrence-opened", opening: {
+      schema: "awsf.command-occurrence-opened/v1", dispatcherId: REWORK_DISPATCHER,
+      occurrenceKey, protocolVersion: COMMAND_LEDGER_PROTOCOL_VERSION, openedAt: infra.now(),
+    } });
+    const gateIds = Object.keys(options.config.gates);
+    const gatesDigest = gatesConfigDigest(options.config.gates);
+    const worktreeRealPath = await realpath(status.worktree!);
     for (const [gateId, configured] of Object.entries(options.config.gates)) {
       const started = Date.now();
       const cleanBefore = runGit(git, ["status", "--porcelain"]).trim().length === 0 && runGit(git, ["rev-parse", "HEAD"]).trim() === candidate;
+      const outputRelative = join("raw", `command-${phaseKey}-${candidate}-${gateId}.txt`);
+      const planned = planCommandRecovery(ledger, {
+        dispatcherId: REWORK_DISPATCHER, occurrenceKey, gateId, gateIds,
+        argvDigest: argvDigest(configured.argv), gateConfigDigest: gateConfigDigest(configured),
+        gatesConfigDigest: gatesDigest, cwd: status.worktree!, worktreeRealPath,
+        timeoutMs: configured.timeout_seconds * 1_000, maxOutputBytes: options.config.runtime.max_output_bytes,
+        candidateSha: candidate, attempt: status.attempt, sessionId: status.sessionId,
+      });
+      if (planned.action === "refuse") throw new CommandLedgerRefusal(gateId, planned.reason);
+      let rawCommandOutput: string;
+      let exit: number;
+      let durationMs: number;
+      if (planned.action === "restore") {
+        rawCommandOutput = await readFile(join(options.attemptDir, planned.result.outputRef!), "utf8");
+        exit = planned.result.exitCode;
+        durationMs = planned.result.durationMs;
+      } else {
+      const intentId = randomUUID();
+      await persist("attempt.updated", {}, { type: "command-dispatch-intent", intent: {
+        schema: "awsf.command-dispatch-intent/v1", intentId, dispatcherId: REWORK_DISPATCHER,
+        occurrenceKey, gateId, origin: "phase-dispatch", phaseKey, phaseOrdinal: 0, round: 0,
+        attempt: status.attempt, sessionId: status.sessionId,
+        argv: [...configured.argv], argvDigest: argvDigest(configured.argv),
+        cwd: status.worktree!, worktreeRealPath, timeoutMs: configured.timeout_seconds * 1_000,
+        maxOutputBytes: options.config.runtime.max_output_bytes,
+        gateConfigDigest: gateConfigDigest(configured), gatesConfigDigest: gatesDigest,
+        candidateSha: candidate, headBefore: candidate, cleanBefore,
+        dispatchedAt: infra.now(),
+      } });
       const [executable, ...argv] = configured.argv;
       const result = infra.runCommand(executable!, argv, {
         timeoutMs: configured.timeout_seconds * 1_000, cwd: status.worktree!, maxBuffer: options.config.runtime.max_output_bytes,
       });
-      const rawCommandOutput = `${result.stdout}${result.stderr}${result.error === null ? "" : `\n${result.error}`}`;
-      credentialSafeText(rawCommandOutput, "configured gate output");
+      rawCommandOutput = `${result.stdout}${result.stderr}${result.error === null ? "" : `\n${result.error}`}`;
+      exit = result.status ?? -1;
+      durationMs = Date.now() - started;
+      try {
+        credentialSafeText(rawCommandOutput, "configured gate output");
+      } catch (error) {
+        // The command already ran. Without a result record this occurrence would
+        // hold an intent forever and every later recovery would refuse citing an
+        // unknown effect, when the actual cause is that the bytes were refused.
+        const withheldPins = observePins(status.worktree!);
+        await persist("attempt.updated", {}, { type: "command-dispatch-result", result: {
+          schema: "awsf.command-dispatch-result/v1", intentId, outcome: "withheld",
+          exitCode: exit, durationMs, outputRef: null, outputBytes: null, outputDigest: null,
+          headAfter: withheldPins.head ?? candidate, cleanAfter: withheldPins.clean && withheldPins.head !== null,
+          descendantQuiescence: "unproved", settledAt: infra.now(),
+        } });
+        throw error;
+      }
+      // The COMPLETE output is retained, not the bounded rendering: a bounded
+      // file cannot answer a restore, so an intent recorded against one could
+      // never be settled from its own evidence.
+      const outputAbsolute = join(options.attemptDir, outputRelative);
+      await writeFile(outputAbsolute, rawCommandOutput, { mode: 0o600 });
+      await chmod(outputAbsolute, 0o600);
+      await fsyncPath(outputAbsolute);
+      await fsyncPath(dirname(outputAbsolute));
+      const pins = observePins(status.worktree!);
+      await persist("attempt.updated", {}, { type: "command-dispatch-result", result: {
+        schema: "awsf.command-dispatch-result/v1", intentId,
+        outcome: result.status === null || pins.head === null ? "no-exit" : "exited",
+        exitCode: exit, durationMs, outputRef: outputRelative,
+        outputBytes: Buffer.byteLength(rawCommandOutput), outputDigest: retainedOutputDigest(rawCommandOutput),
+        headAfter: pins.head ?? candidate,
+        cleanAfter: pins.clean && pins.head !== null, descendantQuiescence: "unproved", settledAt: infra.now(),
+      } });
+      }
       const commandOutput = bounded(rawCommandOutput);
-      const outputRelative = join("raw", `command-${phaseKey}-${gateId}.txt`);
-      await writeFile(join(options.attemptDir, outputRelative), commandOutput, { mode: 0o600 });
-      const exit = result.status ?? -1;
-      commands.push({ gateId, argv: [...configured.argv], exitCode: exit, durationMs: Date.now() - started, outputRef: outputRelative });
+      commands.push({ gateId, argv: [...configured.argv], exitCode: exit, durationMs, outputRef: outputRelative });
       if (exit !== 0) failures.push(`${gateId} exited ${exit}`);
       outputTail = bounded(`${outputTail}\n${commandOutput}`);
       const cleanAfter = runGit(git, ["status", "--porcelain"]).trim().length === 0 && runGit(git, ["rev-parse", "HEAD"]).trim() === candidate;
+      if (!cleanAfter) {
+        // The remaining gates are withheld on purpose: they must not run against
+        // a tree a prior command corrupted. Recording that keeps a later
+        // recovery from reading their absence as work to resume.
+        await persist("attempt.updated", {}, { type: "command-occurrence-closed", closure: {
+          schema: "awsf.command-occurrence-closed/v1", dispatcherId: REWORK_DISPATCHER, occurrenceKey,
+          reason: `${gateId} left the worktree dirty or moved the candidate`, closedAt: infra.now(),
+        } });
+      }
       const partial: TestOutput = {
         schema: "awsf.test-output/v1", producerStatus: exit === 0 ? "success" : "failure", summary: `${gateId} host command`,
         artifacts: [], notesForNextPhase: "owner rework host gates", passed: exit === 0,

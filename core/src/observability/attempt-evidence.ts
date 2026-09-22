@@ -65,6 +65,25 @@ export type AttemptEvidence =
    * evidence a later reconciliation reads, not a fact the dashboard projects.
    */
   | { readonly type: "protected-lock-witness"; readonly witness: import("../git/protected-lock.ts").ProtectedLockWitness }
+  /**
+   * A ledger-aware dispatcher reached this occurrence's dispatch point. Absence
+   * of an intent means "never ran" only under one of these: a passing hygiene
+   * record alone cannot separate a governed run that died before its first
+   * intent from a pre-ledger binary that dispatched silently.
+   */
+  | { readonly type: "command-occurrence-opened"; readonly opening: import("../contracts/command-ledger.ts").CommandOccurrenceOpened }
+  /** One owner-configured command, recorded durably BEFORE it is spawned. */
+  | { readonly type: "command-dispatch-intent"; readonly intent: import("../contracts/command-ledger.ts").CommandDispatchIntent }
+  /** How it settled, recorded durably before any gate, envelope or phase reads the measurement. */
+  | { readonly type: "command-dispatch-result"; readonly result: import("../contracts/command-ledger.ts").CommandDispatchResult }
+  /**
+   * This occurrence will dispatch nothing further, deliberately — either a gate
+   * loop stopped early, or an abort between the hygiene record and the first
+   * spawn meant it reached the dispatch point and dispatched nothing. Without
+   * it the completeness predicate would read that silence as an ungoverned
+   * dispatch and refuse every later decision in the attempt.
+   */
+  | { readonly type: "command-occurrence-closed"; readonly closure: import("../contracts/command-ledger.ts").CommandOccurrenceClosed }
   | { readonly type: "protected-grant"; readonly grant: import("../contracts/protected-grant.ts").ProtectedGrant }
   | { readonly type: "protected-activation"; readonly consumption: import("../contracts/protected-grant.ts").ProtectedGrantConsumption; readonly phase: PhaseEvidenceRecord }
   | { readonly type: "protected-candidate"; readonly binding: import("../contracts/protected-grant.ts").ProtectedCandidateBinding }

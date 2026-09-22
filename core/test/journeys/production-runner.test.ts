@@ -2334,6 +2334,70 @@ test("rerunning an exited legacy review settles the stale REVIEWING attempt to a
   }
 });
 
+test("the configured command runs once per candidate across both host command phases", async () => {
+  // The real dispatcher, not a re-implementation of it. The gate is
+  // deliberately non-idempotent — it appends a line to a counter file kept
+  // OUTSIDE the managed worktree, because a file written inside would dirty
+  // the tree and trip the host's own cleanliness check before any assertion
+  // could run. A second dispatch of the same occurrence shows up as a second
+  // line, so an accidental re-run fails visibly rather than passing quietly.
+  const counter = join(mkdtempSync(join(tmpdir(), "awsf-ledger-counter-")), "counter.txt");
+  const world = await fixture("build", 0, (config) => ({
+    ...config,
+    gates: { counter: { argv: ["sh", "-c", `printf 'ran\n' >> ${JSON.stringify(counter)}`], timeout_seconds: 30 } },
+  }));
+  try {
+    const prepared = await readAttempt(world.created.attemptDir);
+    const status = await runProductionCommand({
+      attemptDir: world.created.attemptDir, stateRoot: world.stateRoot,
+      config: world.config, configPath: world.configPath, projectRecord: world.projection.project,
+      infrastructure: { adapterFor: (_entry: AdapterEntry, id: string) => new ScriptedAdapter(id, prepared.worktree!, () => {}),
+        createBroker: fakeBroker, sandboxProbe: () => true },
+    });
+    assert.equal(status.lifecycleState, "AWAITING_OWNER", JSON.stringify(status.blocker));
+    const runs = readFileSync(counter, "utf8").split("\n").filter(line => line === "ran").length;
+    // The builder measures the candidate, and the `tests` phase records that
+    // measurement rather than repeating it. Two runs here would mean the
+    // ledger's reuse edge is not being taken.
+    assert.equal(runs, 1, "the owner's command must run exactly once per candidate");
+  } finally {
+    world.projection.close();
+    rmSync(world.root, { recursive: true, force: true });
+  }
+});
+
+test("a measured occurrence carries a durable intent and result for every configured gate", async () => {
+  // The evidence a recovery reads has to exist after an ordinary run, not only
+  // after a crash. Without this, every recovery assertion elsewhere is testing
+  // a journal shape the real dispatcher may never produce.
+  const counter = join(mkdtempSync(join(tmpdir(), "awsf-ledger-evidence-")), "counter.txt");
+  const world = await fixture("build", 0, (config) => ({
+    ...config,
+    gates: { counter: { argv: ["sh", "-c", `printf 'ran\n' >> ${JSON.stringify(counter)}`], timeout_seconds: 30 } },
+  }));
+  try {
+    const prepared = await readAttempt(world.created.attemptDir);
+    const status = await runProductionCommand({
+      attemptDir: world.created.attemptDir, stateRoot: world.stateRoot,
+      config: world.config, configPath: world.configPath, projectRecord: world.projection.project,
+      infrastructure: { adapterFor: (_entry: AdapterEntry, id: string) => new ScriptedAdapter(id, prepared.worktree!, () => {}),
+        createBroker: fakeBroker, sandboxProbe: () => true },
+    });
+    assert.equal(status.lifecycleState, "AWAITING_OWNER", JSON.stringify(status.blocker));
+    const journal = readFileSync(join(world.created.attemptDir, "journal.jsonl"), "utf8");
+    const kinds = journal.split("\n").filter(Boolean)
+      .map(line => (JSON.parse(line) as { event?: { evidence?: { type?: string } } }).event?.evidence?.type);
+    assert.ok(kinds.includes("command-occurrence-opened"), "the dispatch point must be recorded as governed");
+    assert.equal(kinds.filter(kind => kind === "command-dispatch-intent").length, 1);
+    assert.equal(kinds.filter(kind => kind === "command-dispatch-result").length, 1);
+    // One intent and one result for one command: a second of either would be
+    // the ledger corruption the planner refuses on.
+  } finally {
+    world.projection.close();
+    rmSync(world.root, { recursive: true, force: true });
+  }
+});
+
 test("production refuses a current config that differs from durable attempt evidence", async () => {
   const world = await fixture("build");
   let routeResolved = false;
