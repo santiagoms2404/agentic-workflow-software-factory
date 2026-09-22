@@ -56,6 +56,15 @@ export interface PhaseEvidenceRecord {
 /** Canonical production evidence carried by one attempt-journal record. */
 export type AttemptEvidence =
   | { readonly type: "protected-commit-intent"; readonly intent: import("../git/protected-commit.ts").ProtectedCommitIntent }
+  /**
+   * The identity of one `index.lock` at the moment its creator finished writing
+   * it, before anything was published. It is the only thing that distinguishes
+   * the interrupted writer's own lock from a replacement an ordinary same-user
+   * Git could have taken in the meantime, so recovery refuses to adopt a lock
+   * without one. A projector no-op, like `phase-validation-started`: it is
+   * evidence a later reconciliation reads, not a fact the dashboard projects.
+   */
+  | { readonly type: "protected-lock-witness"; readonly witness: import("../git/protected-lock.ts").ProtectedLockWitness }
   | { readonly type: "protected-grant"; readonly grant: import("../contracts/protected-grant.ts").ProtectedGrant }
   | { readonly type: "protected-activation"; readonly consumption: import("../contracts/protected-grant.ts").ProtectedGrantConsumption; readonly phase: PhaseEvidenceRecord }
   | { readonly type: "protected-candidate"; readonly binding: import("../contracts/protected-grant.ts").ProtectedCandidateBinding }

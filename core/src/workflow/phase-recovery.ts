@@ -12,6 +12,8 @@ import { journalFilePath, statusFilePath, lockFilePath } from "../persistence/pl
 import { AttemptLock } from "../persistence/attempt-lock.ts";
 import { writeStatus } from "../persistence/status-store.ts";
 import { assertClean, runGit, type GitRunner } from "../git/changes.ts";
+import { reconcileHostCommit, type HostCommitReconciliation } from "../git/commit-reconcile.ts";
+import { planHostValidationRecovery, type HostValidationRecovery } from "./host-validation.ts";
 import { runSystemCommand } from "../execution/transport-broker.ts";
 const readOnlyGit = (repository: string): GitRunner => argv => runSystemCommand("git", ["-C", repository, ...argv], {
   env: { ...Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined)),
@@ -19,6 +21,18 @@ const readOnlyGit = (repository: string): GitRunner => argv => runSystemCommand(
 });
 import type { PhaseEvidenceRecord } from "../observability/attempt-evidence.ts";
 import { acceptedResumeInstructions } from "./resume-instruction.ts";
+
+/**
+ * Everything a stage advance may NOT change: the accepted prefix, the identity
+ * pins, the retained debit and the saved reply itself. A `validating`
+ * checkpoint is tied to the `result-ready` checkpoint that proved the reply by
+ * this digest, because `id`, `createdAt`, `kind` and `validation` are exactly
+ * the four fields an advance is allowed to move.
+ */
+function savedReplyBinding(checkpoint: PhaseRecovery): string {
+  const { id: _id, createdAt: _createdAt, kind: _kind, validation: _validation, ...bound } = checkpoint;
+  return recoveryDigest(bound);
+}
 
 /** Reads journal truth without repairing anything during owner preflight. */
 export async function inspectPhaseRecovery(attemptDir: string) {
@@ -44,14 +58,39 @@ export async function inspectPhaseRecovery(attemptDir: string) {
     throw new Error("recovery refused: active or unsettled execution; no refund or relaunch is authorized");
   }
   const pending = checkpoint.pending;
+  const progress = checkpoint.validation;
   let pendingEnvelope: StoredEnvelope<EnvelopeBase> | null = null;
   if (pending !== undefined) {
-    const proof = scan.records.findLast(record => record.event.evidence?.type === "phase-result-ready");
-    if (proof?.event.evidence?.type !== "phase-result-ready" || recoveryDigest(proof.event.evidence.checkpoint) !== recoveryDigest(checkpoint) ||
-        proof.event.evidence.phase.key !== pending.phaseKey || proof.event.evidence.phase.ordinal !== pending.ordinal ||
-        proof.event.evidence.phase.status !== "VALIDATING" || proof.event.evidence.phase.correctionCount !== pending.round ||
-        pending.reservation.attempt !== status.attempt ||
-        scan.records.some(record => record.event.evidence?.type === "phase-validation-started" && record.event.evidence.checkpointId === checkpoint.id)) throw new Error("saved reply validation has started or its completion proof changed");
+    const proof = scan.records.findLast(record => record.event.evidence?.type === "phase-result-ready" &&
+      (progress === undefined || record.event.evidence.checkpoint.id === progress.resultCheckpointId));
+    const origin = proof?.event.evidence?.type === "phase-result-ready" ? proof.event.evidence.checkpoint : null;
+    // Before validation starts the checkpoint IS the completion proof. Once it
+    // starts, the checkpoint advances stage by stage while the original
+    // completion proof stays where it was written, so the two are tied by the
+    // cited id and by every binding a stage advance may not touch — the
+    // accepted prefix, the worktree pins, the saved reply and its debit.
+    const ties = origin !== null && (progress === undefined
+      ? recoveryDigest(origin) === recoveryDigest(checkpoint)
+      : origin.kind === "result-ready" && savedReplyBinding(origin) === savedReplyBinding(checkpoint));
+    if (!ties || proof!.event.evidence!.type !== "phase-result-ready" || proof!.event.evidence.phase.key !== pending.phaseKey ||
+        proof!.event.evidence.phase.ordinal !== pending.ordinal || proof!.event.evidence.phase.status !== "VALIDATING" ||
+        proof!.event.evidence.phase.correctionCount !== pending.round || pending.reservation.attempt !== status.attempt ||
+        scan.records.some(record => record.event.evidence?.type === "phase-validation-started" && record.event.evidence.checkpointId === checkpoint.id)) {
+      throw new Error("saved reply validation has started or its completion proof changed");
+    }
+    if (progress !== undefined) {
+      // A durable stage is only ever installed by the event that announces the
+      // stage advance. A checkpoint that appeared in any other event is not a
+      // record of what the host actually reached.
+      const installed = scan.records.find(record => record.event.next.recovery != null &&
+        recoveryDigest(record.event.next.recovery) === recoveryDigest(checkpoint));
+      if (installed?.event.evidence?.type !== "phase-validation-started" ||
+          installed.event.evidence.phaseId !== `${status.sessionId}:${pending.phaseKey}` ||
+          !scan.records.some(record => record.event.evidence?.type === "phase-validation-started" &&
+            record.event.evidence.checkpointId === progress.resultCheckpointId)) {
+        throw new Error("host validation stage has no durable advance evidence");
+      }
+    }
     const exit = scan.records.map(record => record.event.evidence).findLast(evidence => evidence?.type === "process" && evidence.record.runId === pending.runId);
     if (exit?.type !== "process" || exit.status !== "EXITED" || exit.exitCode !== 0 || exit.endedAt === null || exit.phaseId !== `${status.sessionId}:${pending.phaseKey}`) throw new Error("saved reply has no completed original process");
     const originRun = pending.runId.replace(/:c\d+$/, "");
@@ -110,14 +149,78 @@ export async function inspectPhaseRecovery(attemptDir: string) {
   return { status, checkpoint, phases, envelopes, instructions, pendingInstruction, pendingEnvelope, records: scan.records, disk };
 }
 
-export async function verifyRecoveryWorktree(status: AttemptStatus, checkpoint: PhaseRecovery): Promise<void> {
+/**
+ * What a recovering host may do about an interrupted host-validation segment,
+ * and the candidate that segment is bound to.
+ *
+ * `commit` is null when the cut fell inside the read-only prefix, where no
+ * commit could have been attempted. `candidateSha` is the revision the phase
+ * would accept: the reconciled commit, or the prefix's existing candidate when
+ * nothing was committed.
+ */
+export interface ValidationReconciliation {
+  readonly plan: HostValidationRecovery;
+  readonly commit: HostCommitReconciliation | null;
+  readonly candidateSha: string | null;
+}
+
+/**
+ * Reconcile the effectful half of host validation against Git objects.
+ *
+ * Nothing here writes. Every branch either identifies one exact outcome or
+ * throws, and a throw leaves the worktree, the index, the candidate and the
+ * retained debit exactly as the crash left them. In particular, an ambiguous
+ * commit history is a refusal — never a reset, a clean, a stash, or a second
+ * commit that would "make it look right".
+ */
+export async function reconcileHostValidation(
+  status: AttemptStatus, checkpoint: PhaseRecovery, git: GitRunner,
+): Promise<ValidationReconciliation> {
+  const progress = checkpoint.validation!;
+  const pending = checkpoint.pending!;
+  const inherited = checkpoint.prefix.at(-1)?.candidateSha ?? null;
+  const plan = planHostValidationRecovery(progress);
+  if (plan.action === "refuse") throw new Error(`recovery refused: ${plan.reason}`);
+  // A protected host effect is identified against its own durable intent and
+  // binding, under the execution lease, by `git/protected-reconcile.ts`.
+  // Preflight states the plan and touches nothing.
+  if (plan.action === "reconcile-protected") return Object.freeze({ plan, commit: null, candidateSha: inherited });
+  if (plan.action === "replay") {
+    if (await savedResultTreeDigest(status.worktree!, git) !== pending.worktreeDigest) throw new Error("saved reply worktree or index bytes changed");
+    if (runGit(git, ["rev-parse", "HEAD"]).trim() !== checkpoint.worktreeHeadSha) throw new Error("recovery refused: HEAD moved during read-only host validation");
+    return Object.freeze({ plan, commit: null, candidateSha: inherited });
+  }
+  const commit = await reconcileHostCommit(plan.intent, { worktree: status.worktree!, git });
+  if (commit.outcome === "refused") throw new Error(`recovery refused: ${commit.reason}`);
+  if (commit.outcome === "not-committed") {
+    // The transport never ran, so the exact bytes it was going to commit must
+    // still be the exact bytes the saved reply left behind.
+    if (await savedResultTreeDigest(status.worktree!, git) !== pending.worktreeDigest) throw new Error("saved reply worktree or index bytes changed");
+  }
+  const recorded = plan.result;
+  if (recorded !== null) {
+    if ((recorded.commitSha === null) !== (commit.outcome === "not-committed") ||
+        (commit.outcome === "committed" && commit.commitSha !== recorded.commitSha)) {
+      throw new Error("recovery refused: the durable commit result and the repository name different revisions");
+    }
+    if (await savedResultTreeDigest(status.worktree!, git) !== recorded.treeDigest) throw new Error("recovery refused: worktree or index bytes changed after the recorded commit");
+  }
+  return Object.freeze({ plan, commit,
+    candidateSha: commit.outcome === "committed" ? commit.commitSha : inherited });
+}
+
+export async function verifyRecoveryWorktree(status: AttemptStatus, checkpoint: PhaseRecovery): Promise<ValidationReconciliation | null> {
   if (status.worktree === null || status.baseSha === null) throw new Error("recovery has no worktree");
   const git = readOnlyGit(status.worktree);
   const canonical = readOnlyGit(status.repository);
-  if (checkpoint.pending === undefined) assertClean(status.worktree, "before", git);
-  else if (await savedResultTreeDigest(status.worktree, git) !== checkpoint.pending.worktreeDigest) throw new Error("saved reply worktree or index bytes changed");
+  // A `validating` checkpoint answers the tree and HEAD questions against its
+  // recorded commit intent, because HEAD legitimately advances at exactly one
+  // point inside the segment. Every other checkpoint keeps the original rule.
+  const reconciliation = checkpoint.validation === undefined ? null : await reconcileHostValidation(status, checkpoint, git);
+  if (reconciliation === null && checkpoint.pending === undefined) assertClean(status.worktree, "before", git);
+  else if (reconciliation === null && await savedResultTreeDigest(status.worktree, git) !== checkpoint.pending!.worktreeDigest) throw new Error("saved reply worktree or index bytes changed");
   if (runGit(git, ["rev-parse", "--abbrev-ref", "HEAD"]).trim() !== "HEAD" ||
-      runGit(git, ["rev-parse", "HEAD"]).trim() !== checkpoint.worktreeHeadSha ||
+      (reconciliation === null && runGit(git, ["rev-parse", "HEAD"]).trim() !== checkpoint.worktreeHeadSha) ||
       runGit(canonical, ["rev-parse", "HEAD"]).trim() !== checkpoint.integrationBaseSha ||
       await realpath(runGit(git, ["rev-parse", "--show-toplevel"]).trim()) !== await realpath(status.worktree) ||
       await realpath(runGit(git, ["rev-parse", "--path-format=absolute", "--git-common-dir"]).trim()) !== checkpoint.commonGitDir ||
@@ -127,6 +230,7 @@ export async function verifyRecoveryWorktree(status: AttemptStatus, checkpoint: 
   }
   const registered = runGit(canonical, ["worktree", "list", "--porcelain", "-z"]);
   if (!registered.split("\0").includes(`worktree ${resolve(status.worktree)}`)) throw new Error("recovery worktree is no longer registered");
+  return reconciliation;
 }
 
 /** Only called after owner confirmation and validation, under the execution lease. */
