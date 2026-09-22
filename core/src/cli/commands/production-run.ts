@@ -66,8 +66,8 @@ import { envelopeValid } from "../../gates/envelope.ts";
 import { prepareProtectedConsumption, protectedGrantForPhase, readProtectedState, inspectProtectedCandidate, protectedPromptContext, assertProtectedOutput, type ProtectedState } from "../../workflow/protected-grants.ts";
 import { verifyProtectedWrite, verifyProtectedPreservation, type ProtectedFilesCapability } from "../../contracts/protected-capability.ts";
 import { protectedRootIdentity } from "../../workflow/protected-files.ts";
-import { commitProtectedAsHost } from "../../git/protected-commit.ts";
-import { completeProtectedPublication, inspectProtectedPublication, unfinishedProtectedEffect } from "../../git/protected-reconcile.ts";
+import { commitProtectedAsHost, type ProtectedCommitIntent } from "../../git/protected-commit.ts";
+import { completeProtectedPublication, inspectProtectedPublication, retainedLockWitness, unfinishedProtectedEffect } from "../../git/protected-reconcile.ts";
 import { protectedWriteContext } from "../../contracts/protected-capability.ts";
 import { stageOrdinal, type HostValidationProgress, type HostValidationStage } from "../../contracts/host-validation.ts";
 import { HOST_AUTHOR } from "../../git/commit.ts";
@@ -1799,6 +1799,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
           writes: route.agent.writes, protectedPaths: options.config.policy.protected_paths,
           ...(infra.afterProtectedHeadPublished === undefined ? {} : { afterHeadPublished: infra.afterProtectedHeadPublished }),
           persistIntent: async intent => persist("attempt.updated", {}, { type: "protected-commit-intent", intent }),
+          persistWitness: async witness => persist("attempt.updated", {}, { type: "protected-lock-witness", witness }),
           persistBinding: async binding => persist("attempt.updated", {}, { type: "protected-candidate", binding }) });
       } };
     };
@@ -3203,10 +3204,16 @@ async function reconcileRetainedProtectedEffect(
   // claim lock and BEFORE it writes its own lease file, so a refusal from here
   // leaves the attempt directory, the journal, HEAD, the index and the retained
   // lock byte-for-byte as they were.
+  // The intent AND the lock's creation record. A witness appended or replaced
+  // while the owner was deciding would change which file this completion is
+  // entitled to install, so it is part of what must not have moved.
+  const fingerprint = (source: ProtectedState, effect: ProtectedCommitIntent): string =>
+    recoveryDigest({ intent: effect, witness: retainedLockWitness(source, effect) });
+  const anchor = fingerprint(state, retained);
   const revalidate = async () => {
     const again = readProtectedState(options.attemptDir);
     const still = unfinishedProtectedEffect(again);
-    if (still === null || recoveryDigest(still) !== recoveryDigest(retained)) throw new Error("the retained protected host effect changed during confirmation");
+    if (still === null || fingerprint(again, still) !== anchor) throw new Error("the retained protected host effect changed during confirmation");
     assertReconcilableAttempt(again, await readAttempt(options.attemptDir), still.binding.candidateSha);
     const verdict = inspectProtectedPublication(again, still);
     if (verdict.outcome === "refused") throw new Error(`protected host-effect recovery refused: ${verdict.reason}`);
@@ -3215,11 +3222,19 @@ async function reconcileRetainedProtectedEffect(
   return withExecutionLease(options.attemptDir, async () => { await revalidate(); }, async () => {
     const { state: locked, intent, verdict } = await revalidate();
     let status = await readAttempt(options.attemptDir);
+    const now = options.infrastructure?.now ?? DEFAULT_INFRASTRUCTURE.now;
     await completeProtectedPublication({ attemptDir: options.attemptDir, state: locked, intent, publication: verdict,
+      now,
+      persistWitness: async witness => {
+        status = await persistAttempt(options.attemptDir, status.revision, { kind: "attempt.updated",
+          next: nextRevision(status, { lastActivityAt: now(),
+            lastActivity: `recorded the index lock this reconciliation created for candidate ${witness.candidateSha}` }),
+          evidence: { type: "protected-lock-witness", witness } }, options.projectRecord);
+      },
       persistBinding: async binding => {
         const detail = `reconciled the interrupted protected candidate ${binding.candidateSha} (${verdict.outcome})`;
         status = await persistAttempt(options.attemptDir, status.revision, { kind: "attempt.updated",
-          next: nextRevision(status, { candidateSha: binding.candidateSha, lastActivityAt: (options.infrastructure?.now ?? DEFAULT_INFRASTRUCTURE.now)(),
+          next: nextRevision(status, { candidateSha: binding.candidateSha, lastActivityAt: now(),
             lastActivity: detail, nextAction: `inspect ${binding.candidateSha}, then land it or issue a fresh grant` }),
           evidence: { type: "protected-candidate", binding } }, options.projectRecord);
       } });

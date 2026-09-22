@@ -19,9 +19,10 @@ const binding = (consumptionId: string): ProtectedCandidateBinding =>
 const intent = (consumptionId: string): ProtectedCommitIntent =>
   ({ binding: binding(consumptionId), beforeIndexDigest: "f".repeat(64), stagedIndexDigest: "0".repeat(64) });
 
-function state(input: Partial<Pick<ProtectedState, "consumptions" | "intents" | "bindings">>): ProtectedState {
+function state(input: Partial<Pick<ProtectedState, "consumptions" | "intents" | "bindings" | "witnesses">>): ProtectedState {
   return { status: {} as ProtectedState["status"], records: [], grants: [],
-    consumptions: input.consumptions ?? [], intents: input.intents ?? [], bindings: input.bindings ?? [] };
+    consumptions: input.consumptions ?? [], intents: input.intents ?? [], bindings: input.bindings ?? [],
+    witnesses: input.witnesses ?? [] };
 }
 
 test("a consumption whose intent and binding are both durable has nothing unfinished", () => {

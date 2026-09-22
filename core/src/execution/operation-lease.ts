@@ -5,7 +5,7 @@ import { AttemptLock } from "../persistence/attempt-lock.ts";
 import { createHostPort } from "./process-controller.ts";
 import { runSystemCommand } from "./transport-broker.ts";
 
-interface Holder { id: string; pid: number; startIdentity: string }
+export interface Holder { id: string; pid: number; startIdentity: string }
 const pathFor = (directory: string) => join(directory, "execution-lease.json");
 async function holder(directory: string): Promise<Holder | null> {
   try {
@@ -25,9 +25,32 @@ async function holder(directory: string): Promise<Holder | null> {
  * the lease was the thing that dead run held, so holding it now is what makes
  * "the writer is gone" a fact rather than an assumption.
  */
-export async function assertOwnExecutionLease(directory: string): Promise<void> {
+export async function ownExecutionLease(directory: string): Promise<Holder> {
   const current = await holder(directory);
   if (current === null || current.pid !== process.pid) throw new Error("this process does not hold the attempt's execution lease");
+  return current;
+}
+
+export async function assertOwnExecutionLease(directory: string): Promise<void> {
+  await ownExecutionLease(directory);
+}
+
+/**
+ * The controller a durable record names is not running now.
+ *
+ * `assertNoExecutionController` asks about whoever holds the lease *file*;
+ * this asks about one specific, already-recorded process — the one that created
+ * an artefact a recovery is about to adopt. A lease file can be gone while its
+ * writer lives, so "no controller" is not the same fact as "that writer is
+ * dead", and the second is the one an adoption needs. `startIdentity` is what
+ * makes it proof against PID reuse; a port that cannot report one is treated as
+ * a live match, never as an absence.
+ */
+export function assertControllerSettled(controller: { pid: number; startIdentity: string }, what: string): void {
+  const live = createHostPort({ command: runSystemCommand }).census().find(row => row.pid === controller.pid && row.alive);
+  if (live !== undefined && (live.startIdentity === null || live.startIdentity === controller.startIdentity)) {
+    throw new Error(`${what} was created by process ${String(controller.pid)}, which is still running; recovery never takes over from a live writer`);
+  }
 }
 
 export async function assertNoExecutionController(directory: string): Promise<void> {

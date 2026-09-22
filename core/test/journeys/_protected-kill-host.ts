@@ -18,10 +18,20 @@
 import { withExecutionLease } from "../../src/execution/operation-lease.ts";
 import { completeProtectedPublication, inspectProtectedPublication, unfinishedProtectedEffect } from "../../src/git/protected-reconcile.ts";
 import { readProtectedState } from "../../src/workflow/protected-grants.ts";
+import { nextRevision, persistAttempt, readAttempt } from "../../src/cli/commands/attempt.ts";
 
-/** `head` dies between the HEAD CAS and the index install; `binding` dies after both, before the binding is durable. */
+/**
+ * Four ordered deaths inside one protocol.
+ *
+ * `lock` dies after the index lock exists and holds the staged bytes but before
+ * its creation record is durable — the window that has to refuse, because a
+ * later recovery has nothing to attribute the file with. `witness` dies just
+ * after that record lands and before HEAD moves, which is the window that has
+ * to reconcile. `head` dies between the HEAD CAS and the index install, and
+ * `binding` after both, before the binding is durable.
+ */
 const attemptDir = process.argv[2]!;
-const stage = process.argv[3]! as "head" | "binding";
+const stage = process.argv[3]! as "lock" | "witness" | "head" | "binding";
 
 await withExecutionLease(attemptDir, async () => {}, async () => {
   const state = readProtectedState(attemptDir);
@@ -32,6 +42,16 @@ await withExecutionLease(attemptDir, async () => {}, async () => {
   await completeProtectedPublication({
     attemptDir, state, intent, publication,
     ...(stage === "head" ? { afterHeadPublished: () => process.kill(process.pid, "SIGKILL") } : {}),
+    persistWitness: async witness => {
+      // The callback fires with the lock created and nothing yet published, so
+      // killing before the append is exactly the unwitnessed-lock cut and
+      // killing after it is the witnessed one.
+      if (stage === "lock") process.kill(process.pid, "SIGKILL");
+      const status = await readAttempt(attemptDir);
+      await persistAttempt(attemptDir, status.revision, { kind: "attempt.updated",
+        next: nextRevision(status, {}), evidence: { type: "protected-lock-witness", witness } });
+      if (stage === "witness") process.kill(process.pid, "SIGKILL");
+    },
     persistBinding: async () => {
       if (stage !== "binding") throw new Error("the kill seam never fired");
       process.kill(process.pid, "SIGKILL");

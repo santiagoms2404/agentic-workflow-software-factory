@@ -8,6 +8,7 @@ import { recoveryDigest } from "../contracts/phase-recovery.ts";
 import { assertProtectedGrant, assertProtectedConsumption, assertProtectedCandidateBinding, protectedFactDigest,
   type ProtectedGrant, type ProtectedGrantConsumption, type ProtectedGrantSubject, type ProtectedCandidateBinding, type ProtectedBlobDelta } from "../contracts/protected-grant.ts";
 import { protectedWriteContext, type ProtectedFilesCapability } from "../contracts/protected-capability.ts";
+import { assertProtectedLockWitness, type ProtectedLockWitness } from "../git/protected-lock.ts";
 import { runGit, systemGitRunner, assertClean } from "../git/changes.ts";
 import { protectedTreeDelta, protectedContentDeltas } from "../git/protected-delta.ts";
 import { matchesPathGlob } from "../policy/path-policy.ts";
@@ -21,6 +22,14 @@ export interface ProtectedState {
   consumptions: readonly ProtectedGrantConsumption[];
   bindings: readonly ProtectedCandidateBinding[];
   intents: readonly import("../git/protected-commit.ts").ProtectedCommitIntent[];
+  /**
+   * Index-lock creation records, in journal order, one chain per consumption.
+   *
+   * Each cites the witness it supersedes, so a consumption's chain is linear by
+   * construction: two records claiming the same predecessor are a fork, which
+   * is corruption rather than a later attempt, and refuse the whole read.
+   */
+  witnesses: readonly ProtectedLockWitness[];
 }
 export function readProtectedState(attemptDir: string): ProtectedState {
   const path = join(attemptDir, "journal.jsonl");
@@ -33,6 +42,7 @@ export function readProtectedState(attemptDir: string): ProtectedState {
   if (status === null) throw new Error("protected evidence has no attempt");
   const grants: ProtectedGrant[] = []; const consumptions: ProtectedGrantConsumption[] = []; const bindings: ProtectedCandidateBinding[] = [];
   const intents: import("../git/protected-commit.ts").ProtectedCommitIntent[] = [];
+  const witnesses: ProtectedLockWitness[] = [];
   for (const record of records) {
     if (record.event.next.revision !== record.source_seq || record.event.next.sessionId !== status.sessionId) throw new Error("protected journal identity or sequence mismatch");
     const evidence = record.event.evidence;
@@ -61,6 +71,25 @@ export function readProtectedState(attemptDir: string): ProtectedState {
           !/^[a-f0-9]{64}$/u.test(intent.beforeIndexDigest) || !/^[a-f0-9]{64}$/u.test(intent.stagedIndexDigest)) throw new Error("protected commit intent is orphaned, invalid or duplicated");
       assertProtectedCandidateBinding(intent.binding, grant, consumption); intents.push(intent);
     }
+    if (evidence?.type === "protected-lock-witness") {
+      // A witness is only ever read as proof about a lock, so a torn, forked or
+      // misbound one is refused here rather than weighed later. The chain check
+      // is what makes "the current witness" a single, unambiguous record: the
+      // last one for this consumption, each citing its predecessor.
+      const witness = evidence.witness;
+      assertProtectedLockWitness(witness);
+      const intent = intents.find(value => value.binding.consumptionId === witness.consumptionId);
+      const chain = witnesses.filter(value => value.consumptionId === witness.consumptionId);
+      if (intent === undefined || witnesses.some(value => value.id === witness.id) ||
+          witness.supersedes !== (chain.at(-1)?.id ?? null) ||
+          witness.grantId !== intent.binding.grantId || witness.candidateSha !== intent.binding.candidateSha ||
+          witness.parentSha !== intent.binding.parentSha || witness.treeSha !== intent.binding.treeSha ||
+          witness.beforeIndexDigest !== intent.beforeIndexDigest || witness.stagedIndexDigest !== intent.stagedIndexDigest ||
+          witness.contentDigest !== intent.stagedIndexDigest) {
+        throw new Error("protected index-lock witness is orphaned, duplicated, forked or bound to another publication");
+      }
+      witnesses.push(witness);
+    }
     if (evidence?.type === "protected-candidate") {
       const binding = evidence.binding; const grant = grants.find(value => value.id === binding.grantId);
       const consumption = consumptions.find(value => value.id === binding.consumptionId);
@@ -71,7 +100,7 @@ export function readProtectedState(attemptDir: string): ProtectedState {
     }
   }
   if (grants.length > 0 && ((stat.mode & 0o077) !== 0 || (process.getuid !== undefined && stat.uid !== process.getuid()))) throw new Error("protected journal must be owner-private");
-  return { status, records, grants, consumptions, bindings, intents };
+  return { status, records, grants, consumptions, bindings, intents, witnesses };
 }
 function freeze<T>(value: T): T {
   if (typeof value === "object" && value !== null) { Object.values(value).forEach(freeze); Object.freeze(value); }

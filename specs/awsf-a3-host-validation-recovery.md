@@ -141,7 +141,8 @@ binding and a second, weaker copy here would be one more thing to disagree.
 | A3-9 | `accept`, repository agrees with the recorded result | proved-completed-result-recovery | reconcile, then accept without re-running anything |
 | A3-10 | `accept`, repository disagrees | proved-safe-refusal | named refusal, nothing touched |
 | A3-11 | protected `commit`, HEAD and index pre-publication | proved-completed-result-recovery | compare-and-swap to the existing object, install the pinned index, bind |
-| A3-12 | protected `commit`, HEAD published, index pending | proved-completed-result-recovery | install the pinned index, bind |
+| A3-12 | protected `commit`, HEAD published, index pending, retained lock **witnessed** | proved-completed-result-recovery | adopt that exact inode, install the pinned index, bind |
+| A3-12r | protected `commit`, a retained lock with no witness or a witness that does not match it | proved-safe-refusal | named refusal, the lock left untouched and undeleted |
 | A3-13 | protected, binding missing but publication complete | proved-completed-result-recovery | bind only |
 | A3-14 | protected, any other HEAD/index pair | proved-safe-refusal | named refusal, nothing touched |
 | A3-15 | protected, attempt sealed | proved-safe-refusal | named refusal, nothing touched |
@@ -220,7 +221,29 @@ and `assertReconcilableAttempt`:
   break another holder's lock`.
 - `the retained Git index lock is still open in live process(es) <pids>; recovery
   never takes a lock somebody is holding`.
-- `this process does not hold the attempt's execution lease`.
+- `the retained Git index lock has no durable creation witness, so recovery
+  cannot show this publication created it rather than an ordinary same-user Git;
+  HEAD, the index, the lock and the journal are left exactly as they are` — the
+  legacy case, and the crash between lock creation and its witness.
+- `the retained Git index lock is not the file this publication created (<field>
+  differs from its durable creation witness); recovery neither adopts nor breaks
+  a lock it cannot identify` — a replacement, a recycled inode, or an in-place
+  rewrite.
+- `the retained Git index lock's durable witness belongs to a different
+  protected publication`.
+- `the retained Git index lock's durable witness was recorded against a
+  different worktree, Git directory or lock path`.
+- `the retained Git index lock was created by process <pid>, which is still
+  running; recovery never takes over from a live writer`.
+- `protected index-lock witness is orphaned, duplicated, forked or bound to
+  another publication` — from `readProtectedState`, which refuses the whole
+  journal rather than choosing between two records that fork one chain.
+- `protected index-lock witness is not a complete, well-formed creation record`.
+- `<the Git index lock> no longer matches its durable creation witness (<field>
+  differs); this publication refuses before it mutates the index, HEAD or the
+  lock` — the mutation boundary, on all three publication paths.
+- `this process does not hold the attempt's execution lease` — now raised by
+  `commitProtectedAsHost` as well, before it reads or writes anything.
 - `the attempt status file and its journal disagree, so candidate <sha> has no
   single lifecycle to bind against`.
 - `this attempt is sealed in <state>, so candidate <sha> cannot receive its
@@ -284,9 +307,9 @@ is still asked, and a disagreement refuses by name.
 Every Git control file this code reads or replaces — the index, the retained
 `index.lock`, the pre-staged index — is opened with `O_NOFOLLOW` and judged
 through that descriptor: regular file, exactly one link, owned by this user.
-Permission bits are deliberately *not* part of the test, because a worktree on a
-Windows drive under WSL reports one fixed mode for every inode, so a mode check
-there would refuse every honest repository while proving nothing.
+Permission bits are required exactly where this codebase chose them and nowhere
+else; which file gets which test, and the DrvFs consequence of that choice, are
+under *Which permission checks apply, and why* below.
 
 `inspectProtectedPublication` is read-only. It verifies the candidate object's
 parent and tree, re-derives the protected delta from the tree and compares it to
@@ -303,11 +326,12 @@ blob, then reads HEAD and the index file:
 `completeProtectedPublication` finishes only what remains. For `unpublished` it
 performs the compare-and-swap against the granted pre-write revision and
 installs the staged index; for `head-published` it installs the staged index
-alone, adopting the interrupted run's own leftover `index.lock`; for `published`
-it appends the binding and nothing else. It stages nothing, resets nothing and
-creates no commit.
+alone, adopting the interrupted run's own leftover `index.lock` **only when a
+durable creation witness identifies that exact file**, and refusing otherwise;
+for `published` it appends the binding and nothing else. It stages nothing,
+resets nothing and creates no commit.
 
-### Adopting a lock needs more than matching bytes
+### Adopting a lock needs a record made when it was created
 
 A lock holding exactly the staged digest is *consistent with* being the dead
 run's own, and that is all. It establishes neither ownership nor quiescence.
@@ -320,37 +344,115 @@ scan therefore proves nothing — and three lesser problems point the same way:
 (`hidepid`, a PID namespace), a holder can open the file in the instant after
 the scan returns, and unreadable entries are invisible.
 
-So the licence to adopt rests on four facts that hold together, none of which is
-the scan:
+**Nor is it enough to add owner-private permissions and a live AWSF lease.** The
+case that defeats that argument needs no attacker. Our writer dies; an ordinary
+same-user `git add` or `git status` in the same worktree creates its own
+`index.lock`, writes an index, closes every descriptor and goes on owning the
+lock by existence. It never takes this attempt's execution lease and never
+touches its journal, so no trusted component is compromised and nothing about
+the lease says anything about that file. Against a `head-published` tree — where
+HEAD is already the candidate and the working files are the candidate's content
+— a foreign Git staging the same entries against the same inodes can produce
+byte-identical bytes. Such a file is regular, single-link, this user's, `0600`,
+digest-equal and invisible to the scan. Adopting it would destroy a live
+holder's lock and its in-flight index, which is precisely what this recovery
+promises never to do.
 
-1. **Those bytes could only have come from this run.** They are the exact digest
-   of an index built in `<attemptDir>/private/protected-host/<mkdtemp>` — a
-   `0700` directory on the attempt's own filesystem, the same one whose modes
-   `readProtectedState` already relies on for the journal, and never handed to
-   another process.
-2. **No other Git process holds this index lock.** Exclusive by existence cuts
-   both ways: a second Git could not have created `index.lock` while this one
-   exists.
-3. **The run that wrote it is dead.** `commitProtectedAsHost` executes under the
-   attempt's execution lease. `assertOwnExecutionLease` proves this process now
-   holds that lease, and acquiring it required `assertNoExecutionController` to
-   find no live controller. The writer was a controller; there is none.
-4. **The file is what it claims to be.** Not a symbolic link (`ELOOP` refuses by
-   name); regular; exactly one link, so not an alias into another tree; owned by
-   this user; and carrying the `0600` mode `commitProtectedAsHost` writes — all
-   read from one `O_NOFOLLOW` descriptor, so nothing can be substituted between
-   the check and the use.
+The missing fact is *continuity*: exclusivity **now** is not the same as "this
+file has existed continuously since we created it", and nothing observable after
+the fact distinguishes them. So continuity is **recorded at creation** instead of
+inferred afterwards. Whichever half creates the lock — the transport, or an
+earlier reconciliation — writes a durable `protected-lock-witness` to the
+journal once the lock's bytes are final and fsynced and **before** anything is
+published:
+
+```
+{ schema, id, supersedes, writer: "host-commit" | "recovery",
+  grantId, consumptionId, candidateSha, parentSha, treeSha,
+  beforeIndexDigest, stagedIndexDigest, contentDigest,
+  worktree, worktreeGitDir, indexPath, lockPath,
+  identity: { device, inode, links, uid, gid, mode, sizeBytes, ctimeNs, mtimeNs },
+  controller: { leaseId, pid, startIdentity }, createdAt }
+```
+
+Every 64-bit field is a decimal string: a device or inode number can exceed
+`Number.MAX_SAFE_INTEGER`, and `ctimeNs` must keep every nanosecond digit.
+`ctimeNs` is the load-bearing one. `dev`/`ino` alone are recyclable — unlink a
+file and the next `O_CREAT` may be handed the same inode — and an unprivileged
+process can set `mtime` with `utimensat`, but it cannot set `ctime`: every
+operation that would forge one moves it to now.
+
+Adoption then requires all of:
+
+1. **A durable creation witness exists for this publication**, resolved as the
+   last record in that consumption's chain. No witness means the lock cannot be
+   attributed, and that refuses.
+2. **The file at `lockPath` is that exact inode** — device, inode, link count,
+   uid, gid, mode, size, `ctimeNs` and `mtimeNs` all compared against the
+   witness through one `O_NOFOLLOW` descriptor.
+3. **It still holds the witnessed bytes**, digested from that same descriptor,
+   and those bytes are the exact pre-staged index the intent pinned, built in a
+   `0700` directory on the attempt's own filesystem.
+4. **The controller that created it is settled.** The witness names the
+   execution-lease holder by pid and start identity. Either that is this very
+   process — which holds the lease now, proved separately — or the process
+   census must show it is no longer running. `startIdentity` is what makes that
+   proof against PID reuse; a census that cannot report one counts as a live
+   match, never as an absence.
+5. **The file is what it claims to be**: not a symbolic link (`ELOOP` refuses by
+   name), regular, exactly one link, owned by this user, and carrying the `0600`
+   mode this codebase writes.
+
+The witness also carries the lease that created it, which is only meaningful if
+the writer really held one — so `commitProtectedAsHost` now **asserts** its own
+execution lease as its first statement, rather than inheriting it ambiently from
+whatever wrapper called it. A caller outside a lease changes nothing at all.
 
 `visibleDescriptorHolders` sits on top as defence in depth: seeing a holder
 refuses; seeing none is claimed as nothing. Because nothing is claimed from it,
 an unreadable process is skipped rather than turned into a hard failure.
 
-Only then is the lock renamed onto the index — which is both the completion of
-the interrupted protocol and the release of the lock. An adopted lock is never
-rewritten, because its bytes are already verified and a refusal after that point
-should leave nothing altered. A new lock is created only when there is none, with
-`O_CREAT | O_EXCL | O_NOFOLLOW`. Nothing here ever unlinks, truncates or writes
-over a lock it has not established is its own.
+An adopted lock is never rewritten, because its bytes are already verified and a
+refusal after that point should leave nothing altered. A new lock is created
+only when there is none, with `O_CREAT | O_EXCL | O_NOFOLLOW` — and that
+creation writes its own witness, chained to any previous one by `supersedes`, so
+the next recovery is owed the same evidence this one demanded. Nothing here ever
+unlinks, truncates or writes over a lock it has not established is its own, and
+nothing tells an operator to delete one it cannot prove.
+
+**The ordering cost, accepted deliberately.** A crash between creating the lock
+and making its witness durable leaves a lock nothing can attribute. That refuses
+by name, permanently and automatically, with HEAD, the index, the lock and the
+journal untouched. Fail-closed is the point: the alternative is adopting on
+resemblance, which is the defect being corrected.
+
+### The mutation boundary, and what it cannot close
+
+`rename(2)` resolves a **name**. Linux offers no rename-by-descriptor —
+`renameat2` takes names, and `/proc/self/fd/N` re-resolves to the path rather
+than to the inode — so holding the lock open does not make installing it atomic
+with respect to a same-uid swap. That is stated rather than engineered around.
+
+Immediately before every rename, on all three publication paths, three facts are
+re-proved from the descriptor held since creation: the inode still carries the
+witnessed identity (an in-place rewrite moves `ctimeNs` and size; an unlink moves
+the link count), it still holds the witnessed bytes, and the *name* about to be
+renamed still resolves to that same inode. A failure is a **pre-mutation
+refusal**: the index, HEAD and the lock are exactly as they were.
+
+What remains is the instant between that check and the rename. It is not
+closable here, so it is converted from silence into **detected damage**: after
+the rename, all three paths — normal, handled-error and recovery — now verify
+the installed **index digest** against the staged digest before any binding
+becomes durable. Previously only the recovery path did; the normal and
+handled-error paths checked HEAD and tree alone, which made the same swap
+undetectable there.
+
+The two are deliberately distinguishable in the evidence. A pre-mutation refusal
+names the witness (`... no longer matches its durable creation witness (<field>
+differs); this publication refuses before it mutates the index, HEAD or the
+lock`); detected damage names verification (`protected candidate publication
+could not be verified`).
 
 ### Which permission checks apply, and why
 
@@ -449,14 +551,26 @@ would otherwise measure against whichever revision the crash left behind.
 Applied on this branch, against `0eb01c1`. Three of the four files A2 owned need
 no change:
 
-**`core/src/observability/attempt-evidence.ts` — unchanged.** The existing
-`phase-validation-started` member (`{ phaseId, checkpointId }`) carries every
-stage advance; `checkpointId` names the checkpoint being superseded, which is
-the chaining the recovery reader verifies.
+**`core/src/observability/attempt-evidence.ts` — one added member.** The
+existing `phase-validation-started` member (`{ phaseId, checkpointId }`) carries
+every stage advance; `checkpointId` names the checkpoint being superseded, which
+is the chaining the recovery reader verifies. The lock-provenance correction
+adds `protected-lock-witness`, the only durable record written *between* the
+intent and the binding.
 
 **`core/src/observability/projector.ts` — unchanged.**
 `phase-validation-started` is already a projector no-op, and the checkpoint
-travels inside `next`.
+travels inside `next`. `protected-lock-witness` needs no case either: the
+evidence switch has no default branch and every `protected-*` member is already
+a no-op there. It is recovery evidence, not a dashboard fact, so it is read from
+the journal and projected nowhere — no SQLite migration, no schema change.
+
+**`core/src/git/protected-lock.ts` — new.** The descriptor-identity layer both
+halves share: the witness shape and its validator, `O_NOFOLLOW` reads judged
+from the descriptor, nanosecond-safe identity capture and comparison, a
+repeatable absolute-offset digest (a descriptor's cursor is consumed by an
+ordinary read, and the lock is measured twice), and the mutation-boundary
+assertion.
 
 **`core/src/cli/commands/land.ts` — unchanged.** A reconciled candidate is an
 ordinary bound candidate; `inspectProtectedCandidate` and the landing
@@ -505,6 +619,8 @@ bytes, unchanged spend, one model call, inert refusal — is kept.
 | journeys | `core/test/journeys/host-validation-recovery.test.ts` | the cuts end to end against a disposable attempt and its own managed worktree |
 | journeys | `core/test/journeys/production-runner.test.ts` | the read-only prefix replayed through `awsf resume` without another model call, and A2's protected crash cuts reconciled or refused |
 | journeys | `core/test/journeys/production-runner.test.ts` + `_protected-kill-host.ts` | a real `SIGKILL` at each publication boundary, then reconciliation; a seal landing inside the confirmation; foreign, symlinked, hardlinked and live-held index locks; index drift, changed granted bytes, a changed parent identity and a redirected `GIT_INDEX_FILE` |
+| journeys | `core/test/journeys/production-runner.test.ts` + `_protected-kill-host.ts` | lock provenance: a real `SIGKILL` **before** the witness is durable (refuses) and **after** it (reconciles); adoption of the transport's own witnessed lock; a same-byte `0600` replacement with a closed descriptor, against both a transport-written and a recovery-written witness; an in-place rewrite; a witness recorded against another lock path; a forked witness chain; and a lock swapped at the writer's own mutation boundary, refused before the index moves |
+| unit | `core/test/unit/execution/operation-lease.test.ts` | the transport refuses outright without the attempt's execution lease, writing nothing; a live witnessed controller never counts as settled |
 
 Every fixture is created by `mkdtemp` and removed in `finally`. No test opens a
 runtime attempt of this project, and no test produces a crash in work anybody is
