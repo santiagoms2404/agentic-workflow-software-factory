@@ -77,7 +77,7 @@ const message = {
   role: "assistant",
   content: [{ type: "text", text: JSON.stringify(envelope) }],
   provider: "openai-codex",
-  model: "gpt-5.6-sol",
+  model: valueAfter("--model") ?? "gpt-6-sol",
   usage: {
     input: 7,
     output: 11,

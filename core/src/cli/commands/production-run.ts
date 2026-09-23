@@ -138,8 +138,9 @@ import { readAttemptEvidence } from "./review-record.ts";
 import type { VisualReferenceBinding, VisualReferencesBound } from "../../contracts/visual-references.ts";
 import { visualReferencesInspected, type PhaseVisualObservation } from "../../gates/visual-inspection.ts";
 import {
-  assertSameFrames, assertVisualRoute, deliverVisualReferences, deliveryDirectory, matchObservations, readVisualBinding,
-  revalidateDelivery, verifyVisualReferences, visualReferencePrompt, type VisualDelivery,
+  assertRouteDeliversImages, assertSameFrames, assertVisualRoute, deliverVisualReferences, deliveryDirectory, matchObservations,
+  plannedDelivery, readVisualBinding, recordedVisualBound, revalidateDelivery, verifyVisualReferences, visualReferencePrompt,
+  type VisualDelivery,
 } from "../../workflow/visual-references.ts";
 import { PermissionBreach } from "../../policy/path-policy.ts";
 import { openPermissionSession, type PermissionSession, type SandboxProbe } from "../../policy/sandbox-broker.ts";
@@ -1271,6 +1272,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       // per-phase override, and before any call is reserved.
       if (visualBinding?.phases.includes(phase.id) === true) {
         assertVisualRoute({ phaseId: phase.id, adapterId: adapter.id, model, profile: agent.tools.profile, tools: agent.tools.allow });
+        await assertRouteDeliversImages(adapter.id, { home: HOST.process.env.HOME, cwd: status.worktree });
       }
       const effective = effectivePhaseRoute(selection.requested, adapter.id, model);
       const provenance = routeSelectionProvenance({
@@ -2038,6 +2040,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       const fresh = await verifyVisualReferences(visualBinding!, { planRef: status.planRef,
         agentPhases: compiled.phases.filter((candidate) => candidate.kind === "agent").map((candidate) => candidate.id) });
       assertSameFrames(visualBound!, fresh.bound);
+      await assertRouteDeliversImages(route.adapter.id, { home: HOST.process.env.HOME, cwd: status.worktree! });
       visualDelivery = await deliverVisualReferences(fresh, deliveryDirectory(options.attemptDir, runId));
     }
     const openPermission = (): PermissionSession => openPermissionSession({
@@ -3433,8 +3436,14 @@ async function prepareResumeInstruction(options: ProductionRunOptions, inspected
   const phase = compiled.phases[ordinal - 1] as CompiledAgentPhase;
   const previous = [...inspected.envelopes.values()].at(-1) ?? null;
   const design = [...inspected.envelopes.values()].find(value => value.schema === DESIGN_CONTEXT_SCHEMA_ID) as DesignContext | undefined;
+  // A bound phase's launch appends its visual block, and the instruction's
+  // digest has to be of the input that will actually launch. The paths are a
+  // pure function of the launch, so they are named here before delivery.
+  const bound = await recordedVisualBound(options.attemptDir);
+  const visual = bound === null || !bound.phases.includes(phase.id) ? ""
+    : visualReferencePrompt(plannedDelivery(bound, deliveryDirectory(options.attemptDir, `${inspected.status.sessionId}:${phase.id}:run`)));
   const originalPrompt = renderProductionRolePrompt(phase, previous, design ?? null, inspected.status.request, agent) +
-    seedContext(inspected.status) + resumeInstructionContext(inspected.instructions) + protectedPromptContext(protectedGrantForPhase(options.attemptDir, phase.id));
+    seedContext(inspected.status) + resumeInstructionContext(inspected.instructions) + protectedPromptContext(protectedGrantForPhase(options.attemptDir, phase.id)) + visual;
   const seedAmendment = inspected.status.seed?.builderPhaseKey === phase.id ? inspected.status.seed.ownerAmendment : null;
   return { phaseKey: phase.id, ordinal, bundleDigest: recoveryDigest(bundle), originalPrompt, seedAmendment };
 }

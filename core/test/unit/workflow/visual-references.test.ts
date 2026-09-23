@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  assertSameFrames, assertVisualRoute, deliverVisualReferences, deliveryDirectory, matchObservations, parseVisualBinding,
+  assertRouteDeliversImages, assertSameFrames, assertVisualRoute, deliverVisualReferences, deliveryDirectory, matchObservations,
+  parseVisualBinding, plannedDelivery,
   readVisualBinding, recordVisualBinding, refuseUndeliveredVisualPhases, revalidateDelivery, verifyVisualReferences,
   visualBindingDigest, visualReferencePrompt, VisualReferenceRefused, type VisualRefusalCode,
 } from "../../../src/workflow/visual-references.ts";
@@ -150,7 +151,13 @@ test("V1 delivery writes only the verified bytes, read-only, outside any worktre
     for (const frame of delivery.frames) assert.ok(prompt.includes(`${frame.path} (sha256 ${frame.sha256})`));
     assert.doesNotMatch(prompt, /design library/, "the source root never reaches the worker");
     await revalidateDelivery(delivery);
-    await refusedWith("delivery-exists", () => deliverVisualReferences(verified, directory));
+    // Re-entering the same launch reuses and re-proves the copy it made, completing an interrupted write.
+    rmSync(delivery.frames[1]!.path);
+    assert.deepEqual(await deliverVisualReferences(verified, directory), delivery);
+    assert.deepEqual(plannedDelivery(verified.bound, directory), delivery, "the prompt can name the paths before delivery");
+    writeFileSync(join(directory, "stray.png"), discPng(3));
+    await refusedWith("delivery-changed", () => deliverVisualReferences(verified, directory));
+    rmSync(join(directory, "stray.png"));
 
     // A worker running as the same user can defeat mode bits; it cannot defeat the digest.
     chmodSync(delivery.frames[0]!.path, 0o644);
@@ -203,7 +210,7 @@ test("V2 the private binding and its journal record must agree in both direction
 
 test("V1/V2 the route check admits demonstrated image routes and refuses text-only, no-tools and read-less ones", async () => {
   const model = { supportsImages: true, requestedModel: "opus" };
-  for (const [adapterId, requestedModel] of [["claude-code", "opus"], ["claude-code", "claude:opus"], ["pi-codex", "gpt-5.6-sol"]] as const) {
+  for (const [adapterId, requestedModel] of [["claude-code", "opus"], ["claude-code", "claude:opus"], ["pi-codex", "gpt-5.6-sol"], ["pi-codex", "codex:gpt-6-sol"]] as const) {
     for (const [profile, tools] of [["readonly", ["read", "grep"]], ["managed-worker", ["read", "edit", "write", "exec"]]] as const) {
       assertVisualRoute({ phaseId: "builder", adapterId, model: { supportsImages: true, requestedModel }, profile, tools });
     }
@@ -211,7 +218,7 @@ test("V1/V2 the route check admits demonstrated image routes and refuses text-on
   await refusedWith("route-unsupported", () => assertVisualRoute({ phaseId: "builder", adapterId: "fixture", model, profile: "readonly", tools: ["read"] }));
   await refusedWith("route-unsupported", () => assertVisualRoute({ phaseId: "builder", adapterId: "antigravity", model, profile: "readonly", tools: ["read"] }));
   await refusedWith("route-unsupported", () => assertVisualRoute({ phaseId: "builder", adapterId: "claude-code", model: { supportsImages: true, requestedModel: "sonnet" }, profile: "readonly", tools: ["read"] }));
-  await refusedWith("route-unsupported", () => assertVisualRoute({ phaseId: "builder", adapterId: "pi-codex", model: { supportsImages: true, requestedModel: "gpt-5.6-luna" }, profile: "readonly", tools: ["read"] }));
+  await refusedWith("route-unsupported", () => assertVisualRoute({ phaseId: "builder", adapterId: "pi-codex", model: { supportsImages: true, requestedModel: "gpt-6-luna" }, profile: "readonly", tools: ["read"] }));
   await refusedWith("route-text-only", () => assertVisualRoute({ phaseId: "builder", adapterId: "pi-codex", model: { supportsImages: false, requestedModel: "gpt-5.3-codex-spark" }, profile: "readonly", tools: ["read"] }));
   await refusedWith("tool-unavailable", () => assertVisualRoute({ phaseId: "builder", adapterId: "claude-code", model, profile: "no-tools", tools: [] }));
   await refusedWith("tool-unavailable", () => assertVisualRoute({ phaseId: "builder", adapterId: "claude-code", model, profile: "managed-worker", tools: ["edit", "write", "exec"] }));
@@ -249,4 +256,28 @@ test("image structure is decided from bytes: PNG scanlines and JPEG frame header
   assert.throws(() => inspectImage(jpeg.subarray(0, jpeg.length - 1)), /EOI/);
   const extra = Buffer.concat([png(2, 2, () => [0, 0, 0]), Buffer.from("tail")]);
   assert.throws(() => inspectImage(extra), /after IEND|truncated/);
+});
+
+test("V2 pi's own image-blocking setting is refused from either file pi reads; other routes are not affected", async () => {
+  const home = mkdtempSync(join(tmpdir(), "awsf home "));
+  const cwd = mkdtempSync(join(tmpdir(), "awsf worktree "));
+  try {
+    await assertRouteDeliversImages("pi-codex", { home, cwd });
+    const agent = join(home, ".pi", "agent");
+    mkdirSync(agent, { recursive: true });
+    writeFileSync(join(agent, "settings.json"), JSON.stringify({ defaultModel: "gpt-6-sol", images: { autoResize: true } }));
+    await assertRouteDeliversImages("pi-codex", { home, cwd });
+    writeFileSync(join(agent, "settings.json"), JSON.stringify({ images: { blockImages: true } }));
+    await refusedWith("route-images-blocked", () => assertRouteDeliversImages("pi-codex", { home, cwd }));
+    await assertRouteDeliversImages("claude-code", { home, cwd });
+    writeFileSync(join(agent, "settings.json"), "{ not json");
+    await refusedWith("route-images-blocked", () => assertRouteDeliversImages("pi-codex", { home, cwd }));
+    writeFileSync(join(agent, "settings.json"), "{}");
+    mkdirSync(join(cwd, ".pi"));
+    writeFileSync(join(cwd, ".pi", "settings.json"), JSON.stringify({ "images.blockImages": true }));
+    await refusedWith("route-images-blocked", () => assertRouteDeliversImages("pi-codex", { home, cwd }));
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+    rmSync(cwd, { recursive: true, force: true });
+  }
 });

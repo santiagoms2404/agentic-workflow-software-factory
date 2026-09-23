@@ -47,7 +47,7 @@ agents:
     writes: []
 
   - name: builder
-    model: codex:gpt-5.6-sol
+    model: codex:gpt-6-sol
     thinking: xhigh
     color: "#22D3EE"
     purpose: Implement the validated plan in the assigned worktree.
@@ -113,7 +113,7 @@ agents:
   - name: architecture-reviewer
     # Cross-provider independence is configured here. Keep this role on the
     # provider opposite designer and change both together if either moves.
-    model: codex:gpt-5.6-sol
+    model: codex:gpt-6-sol
     thinking: high
     color: "#FB7185"
     purpose: Judge a design against its own stated invariants and name what it did not check.

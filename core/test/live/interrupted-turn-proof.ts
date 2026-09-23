@@ -45,7 +45,7 @@ if (quota.status !== 0 || quota.stdout.includes("exhausted_now")) throw new Erro
 if (/stale|headroom_unknown/.test(quota.stdout) && !values["allow-unknown-quota"]) throw new Error("unknown quota requires explicit bounded-research consent");
 console.log(JSON.stringify({ role: configured.name, selection: values.selection, cut: values.cut,
   configuredModel: configured.model, configuredEffort: configured.thinking,
-  selectedModel: values.selection === "configured" ? configured.model : entry.kind === "claude-code" ? "claude:sonnet" : "codex:gpt-5.6-luna",
+  selectedModel: values.selection === "configured" ? configured.model : entry.kind === "claude-code" ? "claude:sonnet" : "codex:gpt-6-luna",
   selectedEffort: values.selection === "configured" ? configured.thinking : "low",
   executable, version: version.stdout.trim(), maxOriginalTurns: 1, releaseEligible: false }, null, 2));
 if (!values["confirm-spend"]) {

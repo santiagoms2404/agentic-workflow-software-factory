@@ -1727,7 +1727,7 @@ test("process-backed production build crosses the real barrier, parser, audit, a
       assert.equal(candidate.state, "RUNNING");
       const builder = candidate.agents.find((agent) => agent.agent === "builder");
       assert.equal(builder?.provider, "openai-codex");
-      assert.equal(builder?.requestedModel, "codex:gpt-5.6-sol");
+      assert.equal(builder?.requestedModel, "codex:gpt-6-sol");
       assert.equal(builder?.resolvedModel, null);
       assert.equal(builder?.inputTokens, null);
       assert.equal(builder?.sandboxBadge, "tool-policy");

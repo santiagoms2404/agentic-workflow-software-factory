@@ -777,7 +777,7 @@ test("process-backed L19 repairs candidate A, commits B on top, projects fresh e
           const liveDb = openDatabase(join(fixture.stateRoot, "awsf.db"), { readonly: true });
           try {
             const live = agentsForSession(liveDb, fixture.status.sessionId).find((row) => row.agent === "builder");
-            sawLiveRoute = live?.requested_model === "codex:gpt-5.6-sol" && live.resolved_model === null;
+            sawLiveRoute = live?.requested_model === "codex:gpt-6-sol" && live.resolved_model === null;
             sawLiveSandbox = live?.sandbox_badge === "tool-policy" && live.sandbox_mechanism === "adapter-tool-policy";
             const prompts = compiledPromptEvents(liveDb, `${fixture.status.sessionId}:owner-rework-1`);
             const system = prompts.find((event) => event.name === "system");

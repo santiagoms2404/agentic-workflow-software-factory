@@ -27,7 +27,12 @@ import { PiCodexAdapter } from "../../src/adapters/pi-codex.ts";
 import { createDashboardProjection } from "../../src/cli/commands/dashboard-projection.ts";
 import { newCommand } from "../../src/cli/commands/new.ts";
 import { startCommand } from "../../src/cli/commands/start.ts";
-import { runProductionCommand } from "../../src/cli/commands/production-run.ts";
+import { resumeProductionCommand, runProductionCommand, type ProductionInfrastructure } from "../../src/cli/commands/production-run.ts";
+import { raiseCommand } from "../../src/cli/commands/raise.ts";
+import { correctionHeadroom } from "../../src/cli/commands/workflows.ts";
+import { workflowRecipe } from "../../src/workflow/catalog.ts";
+import { runSystemCommand } from "../../src/execution/transport-broker.ts";
+import type { PlanOutput } from "../../src/contracts/plan-output.ts";
 import { reworkCommand } from "../../src/cli/commands/rework.ts";
 import { readAttempt } from "../../src/cli/commands/attempt.ts";
 import type { AttemptEvidence } from "../../src/observability/attempt-evidence.ts";
@@ -45,6 +50,15 @@ function build(): BuildOutput {
     schema: "awsf.build-output/v1", producerStatus: "success", summary: "wrote one source after opening the references",
     artifacts: [{ path: SOURCE, kind: "source", description: "bounded source" }], notesForNextPhase: "run host commands",
     changedFiles: [SOURCE], implementationNotes: ["fixture implementation"], commandsRun: [], proposedCommitMessage: "feat: add generated source",
+  };
+}
+
+function plan(): PlanOutput {
+  return {
+    schema: "awsf.plan-output/v1", producerStatus: "success", summary: "write the bounded source",
+    artifacts: [], notesForNextPhase: `write ${SOURCE}`, goals: ["write one source"], nonGoals: ["touch anything else"],
+    implementationSteps: [{ id: "one", title: "write source", files: [SOURCE], acceptanceCriteria: ["configured command passes"] }],
+    testStrategy: ["run configured command"], risks: [], openQuestions: [],
   };
 }
 
@@ -121,6 +135,7 @@ class VisualAdapter implements ContinuityCapableAdapter {
     this.#turns.push({ adapter: this.id, prompt: request.prompt, measured: observed?.images !== undefined, continuity: request.continuity?.turn });
     await broker.startProcess(registration, this.buildSpec(request), signal);
     const role = request.prompt.includes("awsf.review-output/v1") ? "reviewer" : "builder";
+    const planning = role === "builder" && !request.prompt.includes("awsf.build-output/v1");
     const stated = deliveredPaths(request.prompt);
     const paths = stated.size > 0 || request.continuity?.turn !== "resume" ? stated : this.#remembered;
     this.#remembered = paths;
@@ -131,7 +146,7 @@ class VisualAdapter implements ContinuityCapableAdapter {
     push({ kind: "run.started", adapter: this.id, requestedModel: request.model });
     push({ kind: "model.resolved", adapter: this.id, provider: this.#provider(), requestedModel: request.model, resolvedModel: `${request.model}-resolved`, provenance: "route-attributed" });
     let tool = 0;
-    for (const frame of this.#behaviour.open?.(turn, [...paths.keys()], role) ?? [...paths.keys()]) {
+    for (const frame of planning ? [] : this.#behaviour.open?.(turn, [...paths.keys()], role) ?? [...paths.keys()]) {
       // The read tool: whatever bytes are on disk at that path are what the model receives.
       const bytes = readFileSync(paths.get(frame)!);
       tool += 1;
@@ -140,8 +155,9 @@ class VisualAdapter implements ContinuityCapableAdapter {
       observed?.images?.push({ toolCallId: `t${String(tool)}`, toolName: "read", outcome: "ok", mediaType: "image/png", bytes: bytes.length, sha256: sha256(bytes) });
     }
     this.#behaviour.after?.(turn, paths);
-    let payload: BuildOutput | ReviewOutput;
-    if (role === "reviewer") payload = review(this.#candidate());
+    let payload: BuildOutput | ReviewOutput | PlanOutput;
+    if (planning) payload = plan();
+    else if (role === "reviewer") payload = review(this.#candidate());
     else {
       mkdirSync(join(this.#worktree, "core", "src"), { recursive: true });
       writeFileSync(join(this.#worktree, SOURCE), `export const generated = ${String(turn)};\n`);
@@ -197,7 +213,7 @@ function configText(): string {
 }
 
 interface WorldOptions {
-  readonly workflow?: "build" | "build-review";
+  readonly workflow?: "build" | "build-review" | "plan-build-test";
   readonly phases?: readonly string[] | null;
   readonly configure?: (config: AwsfConfig) => AwsfConfig;
   readonly beforeRun?: (library: ReferenceLibrary) => void;
@@ -228,8 +244,13 @@ async function world(options: WorldOptions = {}) {
   const workflow = options.workflow ?? "build";
   const projection = createDashboardProjection(stateRoot);
   const created = await newCommand({ stateRoot, project: config.project.slug, taskId: `visual-${workflow}`, repository: canonical,
-    request: "write one bounded source that matches the bound references", workflow, tier: workflow === "build" ? 1 : 2,
+    request: "write one bounded source that matches the bound references", workflow, tier: workflow === "build-review" ? 2 : 1,
     configSnapshotJson: JSON.stringify(config), projectRecord: projection.project });
+  const headroom = correctionHeadroom(config, workflowRecipe(workflow)!);
+  if (headroom.unfundable) {
+    await raiseCommand({ attemptDir: created.attemptDir, calls: headroom.callsNeeded, reason: "fixture funds the cold correction",
+      terminal: { interactive: true, write: () => {}, confirm: async () => true }, projectRecord: projection.project });
+  }
   let bindingPath: string | undefined;
   if (options.phases !== null) {
     bindingPath = join(root, "owner binding.yaml");
@@ -241,14 +262,21 @@ async function world(options: WorldOptions = {}) {
   options.beforeRun?.(library);
   const prepared = await readAttempt(created.attemptDir);
   const turns: Turn[] = [];
-  const run = (behaviour: Behaviour = {}, ids: Readonly<Record<string, string>> = { claude: "claude-code", codex: "pi-codex" }) =>
-    runProductionCommand({ attemptDir: created.attemptDir, stateRoot, config, configPath, projectRecord: projection.project,
+  const runOptions = (behaviour: Behaviour = {}, ids: Readonly<Record<string, string>> = { claude: "claude-code", codex: "pi-codex" },
+    extra: Partial<ProductionInfrastructure> = {}) => {
+    const adapters = new Map<string, VisualAdapter>();
+    return { attemptDir: created.attemptDir, stateRoot, config, configPath, projectRecord: projection.project,
       assertAdvancement: projection.assertAdvancement, assertLaunchProjection: projection.assertLaunchPermitted,
-      infrastructure: { adapterFor: (_entry, id) => new VisualAdapter(ids[id] ?? id, prepared.worktree!, turns, behaviour,
-        () => git(prepared.worktree!, "rev-parse", "HEAD")), createBroker: fakeBroker, sandboxProbe: () => false } });
+      infrastructure: { adapterFor: (_entry: unknown, id: string) => {
+        // One adapter per route for the whole run, so a resumed conversation keeps its memory.
+        if (!adapters.has(id)) adapters.set(id, new VisualAdapter(ids[id] ?? id, prepared.worktree!, turns, behaviour, () => git(prepared.worktree!, "rev-parse", "HEAD")));
+        return adapters.get(id)!;
+      }, createBroker: fakeBroker, sandboxProbe: () => false, ...extra } };
+  };
+  const run = (behaviour: Behaviour = {}, ids?: Readonly<Record<string, string>>) => runProductionCommand(runOptions(behaviour, ids));
   const evidence = (): AttemptEvidence[] => readFileSync(join(created.attemptDir, "journal.jsonl"), "utf8").split("\n").filter(Boolean)
     .map((line) => (JSON.parse(line) as { event: { evidence?: AttemptEvidence } }).event.evidence).filter((value): value is AttemptEvidence => value !== undefined);
-  return { root, canonical, stateRoot, config, configPath, library, created, prepared, turns, run, evidence, projection };
+  return { root, canonical, stateRoot, config, configPath, library, created, prepared, turns, run, options: runOptions, evidence, projection };
 }
 
 function gate(evidence: readonly AttemptEvidence[], phase: string) {
@@ -444,3 +472,53 @@ for (const [open, expected] of [[3, "AWAITING_OWNER"], [1, "BLOCKED"]] as const)
     } finally { rmSync(w.root, { recursive: true, force: true }); }
   });
 }
+
+test("V2 a pi route whose settings block images is refused before any call", async () => {
+  const w = await world();
+  try {
+    mkdirSync(join(w.prepared.worktree!, ".pi"), { recursive: true });
+    writeFileSync(join(w.prepared.worktree!, ".pi", "settings.json"), JSON.stringify({ images: { blockImages: true } }));
+    const status = await w.run();
+    assert.equal(status.lifecycleState, "BLOCKED");
+    assert.match(status.blocker?.detail ?? "", /route-images-blocked/);
+    assert.equal(status.budget.callsSpent, 0);
+    assert.equal(w.turns.length, 0);
+  } finally { rmSync(w.root, { recursive: true, force: true }); }
+});
+
+test("V1 an owner instruction resumed into a bound builder carries the same visual block the launch delivers", async () => {
+  const w = await world({ workflow: "plan-build-test", configure: (config) => ({ ...config,
+    routing: { ...config.routing, quota_stop: { default: { minutes: 30, probe_timeout_ms: 1000 } } } }) });
+  try {
+    let mode: "low" | "healthy" = "low";
+    const quota: Partial<ProductionInfrastructure> = {
+      now: () => "2026-08-24T20:26:39.429Z",
+      resolveExecutable: () => "/fixture/quota-axi",
+      runCommand: ((executable, argv, opts) => {
+        if (executable !== "/fixture/quota-axi") return runSystemCommand(executable, argv, opts);
+        if (argv[0] === "--version") return { status: 0, stdout: "quota-axi 0.1.29", stderr: "", error: null };
+        const data = JSON.parse(readFileSync(resolve("core/test/fixtures/quota-axi/nominal.json"), "utf8"));
+        if (mode === "low") data.providers[1].windows[0].resetsAt = "2026-08-24T20:27:39.429Z";
+        return { status: 0, stdout: JSON.stringify(data), stderr: "", error: null };
+      }) satisfies typeof runSystemCommand,
+    };
+    // The quota fixture's clock is pinned, as in the O1 journey, so the SQLite
+    // projection guards (which read real time) are left out here too.
+    const { assertLaunchProjection: _launch, assertAdvancement: _advance, ...pinned } = w.options({}, undefined, quota);
+    const paused = await runProductionCommand(pinned);
+    assert.equal(paused.recovery?.kind, "quota-pause", JSON.stringify(paused.blocker));
+    assert.equal(w.turns.length, 1, "only the planner ran");
+    const terminal = { interactive: true, write: () => {}, confirm: async () => true };
+    await raiseCommand({ attemptDir: w.created.attemptDir, calls: 1, reason: "fund remaining phase headroom", terminal });
+    mode = "healthy";
+    const instruction = "Keep the disc centred in every rendered card.";
+    const resumed = await resumeProductionCommand({ ...pinned, reason: "quota recovered", instruction, terminal });
+    assert.equal(resumed.status.lifecycleState, "AWAITING_OWNER", JSON.stringify(resumed.status.blocker));
+    const builder = w.turns.at(-1)!;
+    assert.match(builder.prompt, /VISUAL REFERENCES/);
+    assert.ok(builder.prompt.includes(JSON.stringify(instruction)));
+    const evidence = w.evidence();
+    assert.deepEqual(evidence.filter((value) => value.type === "resume-instruction-delivery").map((value) => value.type === "resume-instruction-delivery" && value.delivery.state), ["intent", "submitted"]);
+    assert.deepEqual(gate(evidence, "builder").map((row) => row.type === "gate" && row.passed), [true]);
+  } finally { rmSync(w.root, { recursive: true, force: true }); }
+});

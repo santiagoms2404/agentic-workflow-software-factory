@@ -42,7 +42,7 @@ const envelope = {
   proposedCommitMessage: "feat: add generated source",
 };
 const message = {
-  role: "assistant", content: [{ type: "text", text: JSON.stringify(envelope) }], provider: "openai-codex", model: "gpt-5.6-sol",
+  role: "assistant", content: [{ type: "text", text: JSON.stringify(envelope) }], provider: "openai-codex", model: valueAfter("--model") ?? "gpt-6-sol",
   usage: { input: 7, output: 11, cacheRead: 0, cacheWrite: 0, reasoning: 0, totalTokens: 18, cost: { total: 0.0001 } },
   stopReason: "stop", timestamp: 1786218992997,
 };

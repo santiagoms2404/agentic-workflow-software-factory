@@ -43,7 +43,7 @@ import { journalFilePath } from "../persistence/platform-paths.ts";
 import { normalizeRepositoryPath } from "../policy/path-policy.ts";
 import { ImageDecodeFailure, inspectImage } from "./visual-image.ts";
 
-const { mkdir, open, readFile, realpath, stat, writeFile } = fs;
+const { mkdir, open, readdir, readFile, realpath, stat, writeFile } = fs;
 
 export const VISUAL_BINDING_FILE = "visual-references.json";
 
@@ -58,7 +58,10 @@ export const VISUAL_BINDING_FILE = "visual-references.json";
  */
 export const VISUAL_ROUTES: Readonly<Record<string, Readonly<Record<string, string>>>> = Object.freeze({
   "claude-code": Object.freeze({ opus: "Claude Code 2.1.280 `Read`, resolved claude-opus-5-5" }),
-  "pi-codex": Object.freeze({ "gpt-5.6-sol": "pi 0.87.1 `read`, resolved gpt-5.6-sol" }),
+  "pi-codex": Object.freeze({
+    "gpt-5.6-sol": "pi 0.87.1 `read`, resolved gpt-5.6-sol",
+    "gpt-6-sol": "pi 0.87.1 `read`, resolved gpt-6-sol",
+  }),
 });
 
 export type VisualRefusalCode =
@@ -66,8 +69,8 @@ export type VisualRefusalCode =
   | "root-invalid" | "index-invalid" | "index-uncommitted" | "digests-invalid" | "index-digest-mismatch"
   | "selection-invalid" | "frame-unknown" | "frame-duplicate" | "count-exceeded"
   | "path-escape" | "image-missing" | "image-unreadable" | "image-type" | "image-too-large" | "image-corrupt"
-  | "image-digest-mismatch" | "source-changed" | "delivery-exists" | "delivery-changed"
-  | "route-unsupported" | "route-text-only" | "tool-unavailable" | "phase-unknown" | "path-unsupported";
+  | "image-digest-mismatch" | "source-changed" | "delivery-changed"
+  | "route-unsupported" | "route-text-only" | "route-images-blocked" | "tool-unavailable" | "phase-unknown" | "path-unsupported";
 
 /** Every refusal names its reason code and what the owner can do about it. */
 export class VisualReferenceRefused extends Error {
@@ -366,27 +369,41 @@ export interface VisualDelivery {
 }
 
 /**
- * Writes exactly the verified buffers into a directory that must not exist
- * yet, each file 0444. Mode bits deter an accidental overwrite; they do not
- * stop the same user, which is why every turn re-hashes. The directory stays
- * 0700 so the owner can still clear the state tree with ordinary tools.
+ * Where one launch's frames live. Pure, so a prompt composed before delivery —
+ * a resumed owner instruction's digest, for one — names exactly these paths.
+ */
+export function plannedDelivery(bound: Pick<VisualReferencesBound, "frames">, directory: string): VisualDelivery {
+  return {
+    directory,
+    frames: bound.frames.map((frame, position) => ({ id: frame.id, sha256: frame.sha256,
+      path: join(directory, `${String(position + 1).padStart(2, "0")}-${frame.id}.${frame.mediaType === "image/png" ? "png" : "jpg"}`) })),
+  };
+}
+
+/**
+ * Writes exactly the verified buffers, each file 0444. Mode bits deter an
+ * accidental overwrite; they do not stop the same user, which is why every
+ * turn re-hashes. The directory stays 0700 so the owner can still clear the
+ * state tree with ordinary tools.
+ *
+ * Idempotent per launch: a re-entry of the same launch — crash recovery, a
+ * resumed owner instruction — finds the copy it made, completes any file the
+ * interruption never wrote, and re-proves every byte. Anything in the
+ * directory that this launch would not have delivered is refused.
  */
 export async function deliverVisualReferences(verified: VerifiedVisualReferences, directory: string): Promise<VisualDelivery> {
-  await mkdir(dirname(directory), { recursive: true, mode: 0o700 });
-  try {
-    await mkdir(directory, { mode: 0o700 });
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "EEXIST") refuse("delivery-exists", "this launch's delivery directory already exists");
-    throw error;
+  const delivery = plannedDelivery(verified.bound, directory);
+  await mkdir(directory, { recursive: true, mode: 0o700 });
+  const expected = new Set(delivery.frames.map((frame) => frame.path.slice(directory.length + 1)));
+  const foreign = (await readdir(directory)).filter((name) => !expected.has(name));
+  if (foreign.length > 0) refuse("delivery-changed", `this launch's delivery directory holds ${String(foreign.length)} file(s) it did not deliver`);
+  for (const frame of delivery.frames) {
+    try {
+      await writeFile(frame.path, verified.images.get(frame.id)!, { flag: "wx", mode: 0o444 });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    }
   }
-  const frames: DeliveredVisualFrame[] = [];
-  for (const [position, frame] of verified.bound.frames.entries()) {
-    const extension = frame.mediaType === "image/png" ? "png" : "jpg";
-    const path = join(directory, `${String(position + 1).padStart(2, "0")}-${frame.id}.${extension}`);
-    await writeFile(path, verified.images.get(frame.id)!, { flag: "wx", mode: 0o444 });
-    frames.push({ id: frame.id, sha256: frame.sha256, path });
-  }
-  const delivery = { directory, frames };
   await revalidateDelivery(delivery);
   return delivery;
 }
@@ -401,6 +418,40 @@ export async function revalidateDelivery(delivery: VisualDelivery): Promise<void
       return refuse("delivery-changed", `the delivered file for frame ${frame.id} is missing`);
     }
     if (sha256(bytes) !== frame.sha256) refuse("delivery-changed", `the delivered file for frame ${frame.id} was replaced`);
+  }
+}
+
+/**
+ * pi applies its own `images.blockImages` setting AFTER the read tool returns,
+ * so a blocked image still reaches the stream the host measures while the
+ * model receives nothing. The host reads the two files that pi 0.87.1 reads
+ * for a launch — the agent directory under the child's HOME (AWSF passes no
+ * `PI_CODING_AGENT_DIR`) and the worktree's `.pi/` — and refuses first.
+ */
+export async function assertRouteDeliversImages(adapterId: string, context: { readonly home: string | undefined; readonly cwd: string }): Promise<void> {
+  if (adapterId !== "pi-codex") return;
+  const files: [string, string][] = [
+    ...(context.home === undefined ? [] : [["pi's agent settings", join(context.home, ".pi", "agent", "settings.json")] as [string, string]]),
+    ["the worktree's .pi settings", join(context.cwd, ".pi", "settings.json")],
+  ];
+  for (const [label, file] of files) {
+    let text: string;
+    try {
+      text = await readFile(file, "utf8");
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
+      return refuse("route-images-blocked", `${label} cannot be read, so image delivery cannot be established`);
+    }
+    let doc: unknown;
+    try {
+      doc = JSON.parse(text);
+    } catch {
+      return refuse("route-images-blocked", `${label} is not JSON, so image delivery cannot be established`);
+    }
+    const settings = (doc ?? {}) as { images?: { blockImages?: unknown }; "images.blockImages"?: unknown };
+    if (settings.images?.blockImages === true || settings["images.blockImages"] === true) {
+      refuse("route-images-blocked", `${label} set images.blockImages, so pi strips every image before the model sees it; unset it or route the phase to Claude`);
+    }
   }
 }
 

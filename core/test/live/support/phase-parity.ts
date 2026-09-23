@@ -48,7 +48,7 @@ export async function prepareRoleProbe(input: {
   const entry = input.config.adapters[configured.harness.adapter];
   if (entry?.kind !== "claude-code" && entry?.kind !== "pi-codex") throw new InterruptedTurnRefused("proof-unavailable", "no reviewed proof route for this adapter kind");
   const agent = input.selection === "configured" ? configured : { ...configured,
-    model: entry.kind === "claude-code" ? "claude:sonnet" : "codex:gpt-5.6-luna", thinking: "low" as const };
+    model: entry.kind === "claude-code" ? "claude:sonnet" : "codex:gpt-6-luna", thinking: "low" as const };
   const adapter = registeredAdapter(input.config.adapters, agent.harness.adapter, input.config.runtime);
   if (adapter === null || !isContinuityCapable(adapter)) throw new InterruptedTurnRefused("proof-unavailable", "configured adapter has no retention transport");
   if (input.role === "architecture-reviewer" && input.designContext === undefined) throw new Error("architecture review requires the original host repository context");

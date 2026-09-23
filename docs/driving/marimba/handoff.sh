@@ -26,10 +26,10 @@ case "$variant" in
   cc-opus-high)     set -- claude --model opus   --effort high ;;
   cc-sonnet-high)   set -- claude --model sonnet --effort high ;;
   cc-sonnet-medium) set -- claude --model sonnet --effort medium ;;
-  pi-sol-xhigh)     set -- pi --model gpt-5.6-sol   --thinking xhigh ;;
-  pi-sol-high)      set -- pi --model gpt-5.6-sol   --thinking high ;;
+  pi-sol-xhigh)     set -- pi --model gpt-6-sol     --thinking xhigh ;;
+  pi-sol-high)      set -- pi --model gpt-6-sol     --thinking high ;;
   pi-terra-high)    set -- pi --model gpt-5.6-terra --thinking high ;;
-  pi-luna-high)     set -- pi --model gpt-5.6-luna  --thinking high ;;
+  pi-luna-high)     set -- pi --model gpt-6-luna    --thinking high ;;
   *) die "refused; unknown variant '$variant'. The variant is a name from this script's own table, never a command line." ;;
 esac
 # Each harness gets its own guard and its own contract flag. Neither is optional.
