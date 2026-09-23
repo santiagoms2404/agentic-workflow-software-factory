@@ -62,6 +62,7 @@ import {
   scrubCredentials,
 } from "../../policy/redaction.ts";
 import { openPermissionSession, type SandboxProbe } from "../../policy/sandbox-broker.ts";
+import { refuseUndeliveredVisualPhases } from "../../workflow/visual-references.ts";
 import { transition, type EdgeId, type TaskState } from "../../state/task-machine.ts";
 import { ceilingFor } from "../../state/tiers.ts";
 import type { WorkflowRecipe } from "../../workflow/compiler.ts";
@@ -652,6 +653,9 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
   const firstInspection = inspectCandidate(status);
   const prior = await priorBuild(options.attemptDir);
   const governingEvidence = await readAttemptEvidence(options.attemptDir);
+  // A rework rebuilds the candidate, so every visual verdict it could carry
+  // would come from a phase that never received the bound references.
+  await refuseUndeliveredVisualPhases(options.attemptDir, "all", "rework");
   const governingReviewPhaseIds = new Set(
     recordedReviews(governingEvidence, status.sessionId).map((review) => review.phaseId),
   );

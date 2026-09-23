@@ -37,6 +37,7 @@ import {
   type ModelInfo,
   type ModelRequest,
   type ObservedProviderSession,
+  type ObservedToolImage,
   type BrokerProcessRegistration,
   type ProcessSpec,
   type ProcessTransport,
@@ -298,6 +299,8 @@ export interface ClaudeParseOptions {
   requestedModel?: string;
   /** Filled in as the stream names the session and the model. */
   session?: ClaudeSessionRecord;
+  /** Filled with image tool results, by digest, when the caller asks. */
+  images?: ObservedToolImage[];
 }
 
 export interface ClaudeCodeAdapterOptions {
@@ -492,7 +495,8 @@ export class ClaudeCodeAdapter implements ContinuityCapableAdapter {
     // question a failure raises.
     const record: ClaudeSessionRecord = { sessionId: null, resolvedModel: null };
     try {
-      yield* this.parse(transport, signal, { requestedModel: selectorFor(request.model), session: record });
+      yield* this.parse(transport, signal, { requestedModel: selectorFor(request.model), session: record,
+        ...(observed?.images === undefined ? {} : { images: observed.images }) });
     } finally {
       if (observed !== undefined) {
         observed.sessionId = record.sessionId;
@@ -550,6 +554,7 @@ export class ClaudeCodeAdapter implements ContinuityCapableAdapter {
       provider: CLAUDE_PROVIDER,
       requestedModel: options.requestedModel ?? "unknown-model",
       ...(options.session === undefined ? {} : { session: options.session }),
+      ...(options.images === undefined ? {} : { images: options.images }),
     });
 
     // Started BEFORE the first byte is read, and never stopped. A child that

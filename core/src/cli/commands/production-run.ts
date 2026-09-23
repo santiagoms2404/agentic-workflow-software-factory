@@ -135,6 +135,12 @@ import {
 import type { AgentPurpose, AttemptEvidence, PhaseEvidenceRecord } from "../../observability/attempt-evidence.ts";
 import { writeRunReport } from "../../observability/run-report.ts";
 import { readAttemptEvidence } from "./review-record.ts";
+import type { VisualReferenceBinding, VisualReferencesBound } from "../../contracts/visual-references.ts";
+import { visualReferencesInspected, type PhaseVisualObservation } from "../../gates/visual-inspection.ts";
+import {
+  assertSameFrames, assertVisualRoute, deliverVisualReferences, deliveryDirectory, matchObservations, readVisualBinding,
+  revalidateDelivery, verifyVisualReferences, visualReferencePrompt, type VisualDelivery,
+} from "../../workflow/visual-references.ts";
 import { PermissionBreach } from "../../policy/path-policy.ts";
 import { openPermissionSession, type PermissionSession, type SandboxProbe } from "../../policy/sandbox-broker.ts";
 import { transition, SEALED_STATES, type EdgeId, type TaskState } from "../../state/task-machine.ts";
@@ -1218,9 +1224,17 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     readonly pair?: readonly [string, string];
     readonly reviewPhaseId: string;
   } | null = null;
+  // The owner's visual binding, if this attempt was started with one. Read
+  // inside the preflight so a missing, changed or unrecorded binding blocks
+  // before any call rather than letting a visual attempt run text-only.
+  let visualBound: VisualReferencesBound | null = null;
+  let visualBinding: VisualReferenceBinding | null = null;
   try {
     if (recovery === undefined) await validatePreparedRepository(status);
     else await verifyRecoveryWorktree(status, recovery.inspected.checkpoint, await verifyCandidateLedgerVerdict(options.attemptDir, options.config, status, recovery.inspected.checkpoint));
+    const boundRecord = (await readAttemptEvidence(options.attemptDir)).findLast((evidence) => evidence.type === "visual-references-bound");
+    visualBound = boundRecord?.type === "visual-references-bound" ? boundRecord.bound : null;
+    visualBinding = await readVisualBinding(options.attemptDir, visualBound);
     for (const [phaseIndex, phase] of compiled.phases.entries()) {
       if (phase.kind !== "agent" || phaseIndex < (recovery?.inspected.checkpoint.prefix.length ?? 0)) continue;
       const role = agents.get(phase.owner)!;
@@ -1252,6 +1266,12 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       const available = await adapter.isAvailable();
       if (available.status !== "available") throw new ProductionRouteUnavailable(agent.harness.adapter, available.detail ?? available.code ?? "blocked");
       const model = await adapter.getModelInfo(agent.model);
+      // A bound phase must reach the model through a demonstrated image route
+      // with its read tool intact — checked on the EFFECTIVE route, after any
+      // per-phase override, and before any call is reserved.
+      if (visualBinding?.phases.includes(phase.id) === true) {
+        assertVisualRoute({ phaseId: phase.id, adapterId: adapter.id, model, profile: agent.tools.profile, tools: agent.tools.allow });
+      }
       const effective = effectivePhaseRoute(selection.requested, adapter.id, model);
       const provenance = routeSelectionProvenance({
         requested: selection.requested,
@@ -2005,6 +2025,21 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     const runtimeDir = join(options.attemptDir, "private", phase.id);
     await mkdir(runtimeDir, { recursive: true, mode: 0o700 });
     const systemPromptPath = restored === null ? await infra.writeSystemPrompt(route.systemPrompt, runtimeDir) : "";
+    // Visual references: re-verified from source against the start-time record
+    // and copied fresh for THIS launch. A saved reply re-validates from the
+    // journal's inspection records alone and launches nothing, so it copies
+    // nothing. Observations are phase-local: another phase's never count.
+    const visualPhase = visualBinding !== null && visualBound !== null && visualBinding.phases.includes(phase.id);
+    const visualObservations: PhaseVisualObservation[] = restored === null ? [] : (recovery?.inspected.records ?? [])
+      .flatMap((row) => row.event.evidence?.type === "visual-reference-inspection" && row.event.evidence.phaseId === phaseDb
+        ? row.event.evidence.observations.map((observation) => ({ ...observation, phaseId: phaseDb })) : []);
+    let visualDelivery: VisualDelivery | null = null;
+    if (visualPhase && restored === null) {
+      const fresh = await verifyVisualReferences(visualBinding!, { planRef: status.planRef,
+        agentPhases: compiled.phases.filter((candidate) => candidate.kind === "agent").map((candidate) => candidate.id) });
+      assertSameFrames(visualBound!, fresh.bound);
+      visualDelivery = await deliverVisualReferences(fresh, deliveryDirectory(options.attemptDir, runId));
+    }
     const openPermission = (): PermissionSession => openPermissionSession({
       canonicalRepository: status.repository,
       worktree: status.worktree!,
@@ -2014,6 +2049,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       tools: route.agent.tools.allow,
       writes: route.agent.writes,
       protectedPaths: options.config.policy.protected_paths,
+      ...(visualDelivery === null ? {} : { readOnlyRoots: [visualDelivery.directory] }),
       ...(protectedCapability === undefined ? {} : { protectedCapability }),
       ...(infra.sandboxProbe === undefined ? {} : { sandboxProbe: infra.sandboxProbe }),
     });
@@ -2024,6 +2060,13 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     // separate check, taken from the attempt base by `phaseGates`.
     let permission: Pick<PermissionSession, "before" | "enforce" | "sandbox" | "sandboxBadge" | "profile"> = restored === null ? openPermission()
       : savedResultPermissions(restored, route.agent, status.worktree!, options.config.policy.protected_paths);
+    if (visualDelivery !== null) {
+      await persist("attempt.updated", { lastActivityAt: infra.now(), lastActivity: `${phase.id}: delivered ${String(visualDelivery.frames.length)} visual reference(s)` }, {
+        type: "visual-references-delivered", phaseId: phaseDb, runId, bindingDigest: visualBound!.bindingDigest,
+        frames: visualDelivery.frames.map((frame) => ({ id: frame.id, sha256: frame.sha256 })),
+        readOnly: permission.sandboxBadge === "os-enforced" ? "os-enforced" : "digest-checked", at: infra.now(),
+      });
+    }
     const attributionBaseSha = seed === null ? null : runGit(systemGitRunner(status.worktree!), ["rev-parse", "HEAD"]).trim();
     const openHostGit = (): HostPhaseGit<EnvelopeBase> => {
       const message = (envelope: EnvelopeBase): string => phase.id === "builder" ? (envelope as BuildOutput).proposedCommitMessage : `chore: record ${phase.id} output`;
@@ -2104,7 +2147,8 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     };
     const rolePrompt = renderProductionRolePrompt(phase, previous, designContext, status.request, route.agent);
     const grantContext = protectedPromptContext(phaseGrant);
-    const originalPrompt = rolePrompt + seedContext(status) + resumeInstructionContext(instructions) + grantContext;
+    const originalPrompt = rolePrompt + seedContext(status) + resumeInstructionContext(instructions) + grantContext +
+      (visualDelivery === null ? "" : visualReferencePrompt(visualDelivery));
     const amendment = phase.id === seed?.builderPhaseKey ? seed.ownerAmendment : null;
     const instruction = instructionFor(phase.id);
     if (instruction !== null) {
@@ -2152,6 +2196,10 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
             return capabilities;
           },
         ),
+        ...(visualPhase ? [{
+          id: "visual_references_inspected",
+          run: () => visualReferencesInspected({ phaseId: phaseDb, frames: visualBound!.frames, observations: visualObservations }),
+        }] : []),
       ],
     };
     let phaseQueue = Promise.resolve();
@@ -2241,6 +2289,10 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
         turnIndex += 1;
         await phaseQueue;
         const turnRunId = runIdFor(turn);
+        // Every turn — corrections included — re-proves the delivered bytes
+        // before anything is held or launched, rather than trusting that the
+        // copy an earlier turn saw is still the copy on disk.
+        if (visualDelivery !== null) await revalidateDelivery(visualDelivery);
         const turnLaunch = turn === 0
           ? launch
           : { phaseId: phaseDb, adapterId: route.adapterId, role: route.agent.name, registeredAt: infra.now() };
@@ -2357,7 +2409,8 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
         let output = "";
         let resolved: { model: string; provenance: ModelResolutionProvenance } | null = null;
         let terminal: NormalizedEvent | null = null;
-        const observed: ObservedProviderSession = { sessionId: null, resolvedModel: null, costUsd: null };
+        const observed: ObservedProviderSession = { sessionId: null, resolvedModel: null, costUsd: null,
+          ...(visualDelivery === null ? {} : { images: [] }) };
         arm();
         try {
           for await (const event of route.adapter.execute(request, sandboxingBroker, registration, controller.signal, observed)) {
@@ -2378,6 +2431,11 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
           throw error;
         } finally {
           if (idle !== null) HOST.clearTimeout(idle);
+        }
+        if (visualDelivery !== null) {
+          const observations = matchObservations(visualBound!.frames, observed.images ?? []);
+          visualObservations.push(...observations.map((observation) => ({ ...observation, phaseId: phaseDb })));
+          await persist("attempt.updated", {}, { type: "visual-reference-inspection", phaseId: phaseDb, runId: turnRunId, observations, at: infra.now() });
         }
         if (terminal?.kind === "run.completed" && terminal.exitCode === 0 && turnLaunch.transport !== undefined) {
           const stopped = await turnLaunch.transport.cancel("completed provider turn cleanup");

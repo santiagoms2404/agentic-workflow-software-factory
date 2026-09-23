@@ -153,3 +153,20 @@ confirmed price — on the adapter whose whole point was making cost authority v
   enough to trigger automatic compaction (which would settle whether a compaction's
   summarization call reports usage anywhere the decoder can sum it — the review says
   `compaction_end.result.usage`, and no such field exists in the 0.80.3 source).
+
+## `derived-image-read-tool.jsonl` — DERIVED from a 2026-09-23 image-read probe
+
+A new fact, so a new call: what pi returns when its `read` tool opens an image. One
+bounded call on 2026-09-23, `pi` 0.87.1, with the adapter's readonly argv
+(`--mode json -p --provider openai-codex --model gpt-5.6-luna --no-session --thinking low
+--no-extensions --no-skills --no-prompt-templates --no-themes --no-context-files --tools
+read,grep,find,ls`), prompt on stdin asking it to read one PNG outside its cwd and
+describe it. The PNG was synthetic — a 200×200 flat background with one red disc, drawn
+by a throwaway script — so the payload carries no personal or product data.
+
+Transformations, and only these: the two lines kept are the run's own
+`tool_execution_start` and `tool_execution_end`, verbatim; every other line is dropped;
+the machine scratch directory in the tool's `path` argument is replaced by `/fixture`.
+The base64 image in the result is the file's exact bytes: its SHA-256,
+`44ed3e13bd8a2be50f95fd9ea30d71363b085d5a562f6dd9edd179ac7d04f44d`, equals the file's.
+The model described the disc's colour and position correctly.

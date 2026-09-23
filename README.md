@@ -511,6 +511,7 @@ green run is readable evidence six weeks later.
 | `commands_pass` | The configured quality commands, run **by the host** against the **host-created** candidate: the configured gate is recorded, the argv is exact, the candidate SHA is exact, the tree is clean before and after, and the exit code is zero. Its bounded failure output is windowed head / first-failure / tail rather than a plain tail slice — pilot 2's builder claimed 240/240 green while the host measured 239 pass and 1 fail, and a tail slice carried the true totals in a fragment that began mid-test. |
 | `journey_passes` | Three separate checks, not one: that the journey **ran**, that it **passed**, and that the revision it ran against is the **exact candidate**. |
 | `design_evidence_present` | Every repository the catalog declares was resolved to machine-local revision evidence exactly once. Missing, duplicated and unexpected repository ids all fail, and so does a target left unresolved. |
+| `visual_references_inspected` | Attached only to a phase an owner bound visual references to. Every bound frame must have come back, byte for byte, from a successful image-tool call made by **that phase's own turns**. A path in the prompt, a worker's claim, a host-side hash and another phase's reads all leave a frame unobserved. It proves delivery into the model's context, never the quality of the judgment made from it. |
 
 ### Plan continuity — does the work still match what was agreed?
 
@@ -681,6 +682,46 @@ in `core/src/config/schema.ts` by a loader that hard-rejects:
 `core/src/config/effective-config.ts` produces the redacted snapshot that backs
 the API and the dashboard, with a defence-in-depth redaction pass on top of what
 the loader already guarantees.
+
+## Visual references
+
+A phase that makes visual decisions can be bound to owner-supplied design images
+at `awsf start`:
+
+```bash
+awsf start <task> --visual-references <binding.yaml>
+```
+
+The binding is machine-local launch context, never committed and never a ticket
+field. It names an absolute `root`, a root-relative `index` that must be the
+root's committed Git blob, a `digests` file bound to that index's bytes, a
+`selection` (explicit `frames`, or a `ticket` scoped by the attempt's `--plan`)
+and the agent `phases` that need the images:
+
+```yaml
+schema: awsf.visual-reference-binding/v1
+root: /absolute/path/to/plan-repository
+index: specs/design-index.json    # { version: 1, frames: [{ id, image }], ticketFrames? }
+digests: design/capture.json      # { indexSha256, images: { <frame id>: <sha256> } }
+selection: { plan: <plan stem>, ticket: T06 }
+phases: [builder]
+```
+
+`start` verifies it before creating anything and leaves the attempt in `DRAFT` if
+it fails: containment after realpath, no traversal or escaping symlink, PNG or
+JPEG decoded from its bytes, at most 32 frames, 4 MiB and 2000 px per edge, and
+every digest. The binding is kept privately in the attempt and journalled by
+digest only. Each bound phase launch re-verifies the source against that record,
+copies exactly the selected bytes into a fresh directory outside the worktree,
+and re-hashes it before every turn, corrections included. Under `bwrap` that
+directory is bound read-only; without it (the `tool-policy` badge) it is only
+digest-checked, and the delivery record says which.
+
+Only adapter and model routes a real managed worker has demonstrated are
+admitted — today `claude-code` with `opus` and `pi-codex` with `gpt-5.6-sol`,
+listed in `VISUAL_ROUTES` in `core/src/workflow/visual-references.ts` — and only
+with `read` in `tools.allow`; anything else blocks before a call is reserved. `awsf rework` and `awsf review` do not deliver references and
+refuse a bound phase rather than run it text-only.
 
 ## Portability
 

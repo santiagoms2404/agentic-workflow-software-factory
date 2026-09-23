@@ -95,6 +95,16 @@ export type AttemptEvidence =
   | { readonly type: "resume-instruction-delivery"; readonly phaseId: string; readonly delivery: import("../contracts/owner-amendment.ts").OwnerAmendmentDelivery; readonly at: string }
   | { readonly type: "resume-activation"; readonly protectedConsumption?: import("../contracts/protected-grant.ts").ProtectedGrantConsumption; readonly ownerInstruction?: import("../contracts/resume-instruction.ts").ResumeInstruction | null; readonly quotaReadings?: readonly import("../contracts/phase-recovery.ts").BoundaryQuota[]; readonly operationId: string; readonly checkpointId: string; readonly reason: string; readonly reservationId: string | null; readonly phase: PhaseEvidenceRecord | null }
   | { readonly type: "candidate-seed"; readonly seed: CandidateSeed }
+  /**
+   * The owner's visual binding as the host verified it at start: digests, frame
+   * ids and bound phases, never the root path or the pixels. Its private twin
+   * holds the path; the two must agree for any later phase to launch.
+   */
+  | { readonly type: "visual-references-bound"; readonly bound: import("../contracts/visual-references.ts").VisualReferencesBound; readonly at: string }
+  /** One bound phase launch received a fresh, re-verified copy of every bound frame. */
+  | { readonly type: "visual-references-delivered"; readonly phaseId: string; readonly runId: string; readonly bindingDigest: string; readonly frames: readonly { readonly id: string; readonly sha256: string }[]; readonly readOnly: "os-enforced" | "digest-checked"; readonly at: string }
+  /** What one turn's image tool actually returned into the model's context, by digest. */
+  | { readonly type: "visual-reference-inspection"; readonly phaseId: string; readonly runId: string; readonly observations: readonly import("../contracts/visual-references.ts").VisualObservation[]; readonly at: string }
   | { readonly type: "owner-amendment-delivery"; readonly amendmentId: string; readonly amendmentDigest: string; readonly phaseId: string; readonly logicalTurnId: string; readonly originalInputDigest: string; readonly composedDigest: string; readonly at: string }
   | { readonly type: "candidate-adoption"; readonly adoption: CandidateAdoptionEvidence }
   | { readonly type: "rework-instruction-delivery"; readonly phaseId: string; readonly delivery: import("../contracts/owner-amendment.ts").OwnerAmendmentDelivery; readonly at: string }

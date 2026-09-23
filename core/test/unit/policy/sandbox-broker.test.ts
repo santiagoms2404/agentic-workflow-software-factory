@@ -200,3 +200,25 @@ test("a clean reviewer writes: [] run is green", () => {
   });
   assert.deepEqual(session.enforce(), { changedPaths: [], sandboxBadge: "unavailable" });
 });
+
+test("delivered visual references are re-bound read-only after the state-root mask, and only when present", () => {
+  const references = "/srv/awsf-state/sessions/s1/attempts/1-refs";
+  const plain = grantSandbox(SPEC, { ...ROOTS, writes: ["src/**"], platform: "linux" }, () => true);
+  const empty = grantSandbox(SPEC, { ...ROOTS, writes: ["src/**"], readOnlyRoots: [], platform: "linux" }, () => true);
+  assert.deepEqual(empty.spec.argv, plain.spec.argv, "a request with no inputs keeps the reviewed argv byte for byte");
+  const grant = grantSandbox(SPEC, { ...ROOTS, writes: ["src/**"], readOnlyRoots: [references], platform: "linux" }, () => true);
+  const argv = grant.spec.argv;
+  const bind = argv.indexOf(references);
+  assert.equal(argv[bind - 1], "--ro-bind");
+  assert.equal(argv[bind + 1], references);
+  assert.ok(bind > argv.indexOf("--tmpfs"), "the mask comes first, so the rebind is what survives");
+  assert.ok(!grant.writableRoots.includes(references));
+  const toolPolicy = grantSandbox(SPEC, { ...ROOTS, writes: [], readOnlyRoots: [references], platform: "linux" }, () => false);
+  assert.equal(toolPolicy.badge, "tool-policy", "without bwrap nothing claims the inputs are OS-protected");
+});
+
+test("a read-only input root may not overlap the worktree or the writable runtime", () => {
+  for (const root of [ROOTS.worktree, `${ROOTS.worktree}/refs`, ROOTS.sessionRuntime, `${ROOTS.sessionRuntime}/refs`, "relative/refs"]) {
+    assert.throws(() => assertSandboxRoots({ ...ROOTS, readOnlyRoots: [root] }), /read-only input roots/, root);
+  }
+});

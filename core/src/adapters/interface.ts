@@ -139,6 +139,23 @@ export interface ObservedProviderSession {
   sessionId: string | null;
   resolvedModel: string | null;
   costUsd?: number | null;
+  /**
+   * Present only when the caller wants image tool results measured. The
+   * decoder appends one entry per image block a settled tool call returned;
+   * the payload itself is never retained.
+   */
+  images?: ObservedToolImage[];
+}
+
+/** One image a provider's tool returned into the model's context, by digest. */
+export interface ObservedToolImage {
+  /** Host-minted `t1, t2, …` — the same id the tool.completed event carries. */
+  readonly toolCallId: string;
+  readonly toolName: string;
+  readonly outcome: "ok" | "error";
+  readonly mediaType: string;
+  readonly bytes: number;
+  readonly sha256: string;
 }
 
 export interface ModelRequest {

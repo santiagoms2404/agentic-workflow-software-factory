@@ -19,6 +19,7 @@ export const GATE_IDS = [
   "design_evidence_present",
   "architecture_verdict_consistent",
   "architecture_review_clear",
+  "visual_references_inspected",
 ] as const;
 
 export type GateId = (typeof GATE_IDS)[number];

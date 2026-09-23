@@ -104,3 +104,23 @@ two shapes — a trailing `|<epoch seconds>` and a `reset[s|_at]: …` phrase �
 - A second live call is only warranted by a *new* fact nobody has captured — an
   exhausted `rate_limit_event` being the obvious one. If you ever capture one, replace
   `derived-quota-rate-limit.jsonl` with the real bytes and delete its paragraph above.
+
+## `derived-image-read-tool.jsonl` — DERIVED from a 2026-09-23 image-read probe
+
+A new fact, so a new call: what Claude Code returns when `Read` opens an image. One
+bounded call on 2026-09-23, `claude` 2.1.280, with the adapter's readonly argv and
+`--model haiku --effort low` (`--print --output-format stream-json
+--include-partial-messages --verbose --model haiku --no-session-persistence --effort low
+--permission-mode dontAsk --tools Read,Glob,Grep --disallowed-tools
+Bash,Write,Edit,NotebookEdit`), prompt on stdin asking it to read one PNG outside its
+cwd and describe it. It needed no `--add-dir`. The PNG was synthetic — a 200×200 flat
+background with one red disc, drawn by a throwaway script — so the payload carries no
+personal or product data.
+
+Transformations, and only these: the two lines kept are the run's own `assistant`
+message carrying the `tool_use` and the `user` message carrying its `tool_result`,
+verbatim; every other line is dropped; the machine scratch directory in the tool's
+`file_path` argument is replaced by `/fixture`. The base64 image in the result is the
+file's exact bytes: its SHA-256,
+`44ed3e13bd8a2be50f95fd9ea30d71363b085d5a562f6dd9edd179ac7d04f44d`, equals the file's.
+The model described the disc's colour and position correctly.

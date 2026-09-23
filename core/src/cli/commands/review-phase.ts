@@ -81,6 +81,7 @@ import type { AttemptEvidence, PhaseEvidenceRecord } from "../../observability/a
 import { PermissionBreach } from "../../policy/path-policy.ts";
 import { REDACTED_VALUE, scrubCredentialString, scrubCredentials } from "../../policy/redaction.ts";
 import { openPermissionSession, type PermissionSession, type SandboxGrant, type SandboxProbe } from "../../policy/sandbox-broker.ts";
+import { refuseUndeliveredVisualPhases } from "../../workflow/visual-references.ts";
 import type { EdgeId, TaskState } from "../../state/task-machine.ts";
 import { compilePhase, type WorkflowRecipe } from "../../workflow/compiler.ts";
 import { composePromptBundle, type PromptBundle } from "../../workflow/prompt-composition.ts";
@@ -713,6 +714,7 @@ export interface PreparedReview {
  */
 export async function prepareReview(options: PrepareReviewOptions): Promise<PreparedReview> {
   const { subject, config, infra, recipe, route, generation } = options;
+  await refuseUndeliveredVisualPhases(subject.attemptDir, [options.reviewPhaseId], generation.startsWith("rw") ? "rework" : "review");
   const phaseKey = `${options.reviewPhaseId}-${generation}`;
   const contextKey = `review-context-${generation}`;
   const composed = await composeReviewEvidence({

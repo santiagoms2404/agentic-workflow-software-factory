@@ -10,6 +10,8 @@ import { correctionsFundableFor, minimumCallsFor, workflowRecipe } from "../../w
 import { composePromptBundle } from "../../workflow/prompt-composition.ts";
 import { correctionHeadroom } from "./workflows.ts";
 import { verifiedTargetSeed, validateSeedStartup } from "../../workflow/candidate-seed.ts";
+import { parseVisualBinding, recordVisualBinding, verifyVisualReferences, type VerifiedVisualReferences } from "../../workflow/visual-references.ts";
+import type { VisualReferenceBinding } from "../../contracts/visual-references.ts";
 import {
   nextActionFor,
   nextRevision,
@@ -35,6 +37,12 @@ export interface StartCommandOptions {
   readonly preflight?: (status: AttemptStatus) => Promise<StartPreflight> | StartPreflight;
   readonly now?: () => string;
   readonly projectRecord?: AttemptProjector;
+  /**
+   * Owner launch context: a machine-local visual-reference binding file. It is
+   * verified before any side effect and recorded before PREPARED, so an attempt
+   * started with it can never run its bound phases without it.
+   */
+  readonly visualReferences?: string;
 }
 
 async function defaultPreflight(status: AttemptStatus, configPath: string): Promise<StartPreflight> {
@@ -184,6 +192,18 @@ export async function startCommand(options: StartCommandOptions): Promise<Attemp
     }
   }
 
+  // Verified BEFORE the worktree exists and without blocking the DRAFT: a bad
+  // binding is fixed by editing the owner's file and running start again.
+  let visual: { readonly binding: VisualReferenceBinding; readonly verified: VerifiedVisualReferences } | null = null;
+  if (options.visualReferences !== undefined) {
+    const binding = parseVisualBinding(await readFile(resolve(options.visualReferences), "utf8"));
+    const verified = await verifyVisualReferences(binding, {
+      planRef: current.planRef,
+      agentPhases: recipe.phases.filter((phase) => phase.kind === "agent").map((phase) => phase.id),
+    });
+    visual = { binding, verified };
+  }
+
   const seed = await verifiedTargetSeed(options.attemptDir, current);
   if (seed !== null) await validateSeedStartup(seed, current, config, configPath, options.attemptDir);
   const baseSha = seed?.integrationBaseSha ?? runGit(systemGitRunner(current.repository), ["rev-parse", "HEAD"]).trim();
@@ -230,6 +250,16 @@ export async function startCommand(options: StartCommandOptions): Promise<Attemp
     throw error;
   }
   const preflight = await (options.preflight ?? ((status) => defaultPreflight(status, configPath)))(current);
+  let prepared = current;
+  if (visual !== null) {
+    await recordVisualBinding(options.attemptDir, visual.binding);
+    const at = (options.now ?? ((): string => new Date().toISOString()))();
+    prepared = await persistAttempt(options.attemptDir, current.revision, {
+      kind: "attempt.updated",
+      next: nextRevision(current, { lastActivityAt: at, lastActivity: `bound ${String(visual.verified.bound.frames.length)} visual reference(s) to ${visual.binding.phases.join(", ")}` }),
+      evidence: { type: "visual-references-bound", bound: visual.verified.bound, at },
+    }, options.projectRecord);
+  }
   const decision = transition({
     from: current.lifecycleState,
     to: "PREPARED",
@@ -246,7 +276,7 @@ export async function startCommand(options: StartCommandOptions): Promise<Attemp
     },
   });
   const now = (options.now ?? ((): string => new Date().toISOString()))();
-  const next = nextRevision(current, {
+  const next = nextRevision(prepared, {
     lifecycleState: decision.to,
     baseSha,
     worktree: managed.path,
@@ -256,7 +286,7 @@ export async function startCommand(options: StartCommandOptions): Promise<Attemp
   });
   return persistAttempt(
     options.attemptDir,
-    current.revision,
+    prepared.revision,
     { kind: "attempt.transitioned", next },
     options.projectRecord,
   );

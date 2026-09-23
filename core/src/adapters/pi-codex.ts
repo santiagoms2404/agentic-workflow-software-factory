@@ -53,6 +53,7 @@ import {
   type ModelInfo,
   type ModelRequest,
   type ObservedProviderSession,
+  type ObservedToolImage,
   type BrokerProcessRegistration,
   type ProcessSpec,
   type ProcessTransport,
@@ -156,6 +157,14 @@ export const PI_MANAGED_WORKER_TOOLS: readonly string[] = Object.freeze([
   "edit",
   "write",
 ]);
+
+/**
+ * `openai-codex` models that take no image input, read off `pi --list-models`
+ * on 0.87.1 (its `images` column). `supportsImages` is a claim visual work
+ * relies on, so a model the table marks text-only is reported as one rather
+ * than inheriting the route's default.
+ */
+export const PI_TEXT_ONLY_MODELS: readonly string[] = Object.freeze(["gpt-5.3-codex-spark"]);
 
 /** The profile vocabulary of `awsf.config.yaml` § `agents[].tools.profile`. */
 export const PI_TOOL_PROFILES = ["readonly", "managed-worker", "no-tools"] as const;
@@ -391,6 +400,8 @@ export interface PiParseOptions {
   requestedModel?: string;
   /** Filled in as the stream names the session, the model, and the price. */
   session?: PiSessionRecord;
+  /** Filled with image tool results, by digest, when the caller asks. */
+  images?: ObservedToolImage[];
 }
 
 export interface PiCodexAdapterOptions {
@@ -497,14 +508,15 @@ export class PiCodexAdapter implements ContinuityCapableAdapter {
    * that owns the number is T15's.
    */
   async getModelInfo(model: string): Promise<ModelInfo> {
+    const requestedModel = selectorFor(model);
     return {
       adapter: this.id,
       provider: PI_PROVIDER,
-      requestedModel: selectorFor(model),
+      requestedModel,
       contextWindow: null,
       supportsThinking: true,
       supportsTools: true,
-      supportsImages: true,
+      supportsImages: !PI_TEXT_ONLY_MODELS.includes(requestedModel),
       continuity: "same-session-correction",
       usageAuthority: "provider",
       costAuthority: "catalog-estimate",
@@ -673,7 +685,8 @@ export class PiCodexAdapter implements ContinuityCapableAdapter {
     // conversation was that" is exactly the question a failure raises.
     const record: PiSessionRecord = { sessionId: null, resolvedModel: null, costUsd: null };
     try {
-      yield* this.parse(transport, signal, { requestedModel: selectorFor(request.model), session: record });
+      yield* this.parse(transport, signal, { requestedModel: selectorFor(request.model), session: record,
+        ...(observed?.images === undefined ? {} : { images: observed.images }) });
     } finally {
       if (observed !== undefined) {
         observed.sessionId = record.sessionId;
@@ -733,6 +746,7 @@ export class PiCodexAdapter implements ContinuityCapableAdapter {
       requestedModel: options.requestedModel ?? "unknown-model",
       now: this.#now,
       ...(options.session === undefined ? {} : { session: options.session }),
+      ...(options.images === undefined ? {} : { images: options.images }),
     });
 
     // Started BEFORE the first byte is read, and never stopped. A child that

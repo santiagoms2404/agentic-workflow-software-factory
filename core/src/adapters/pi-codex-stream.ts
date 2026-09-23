@@ -42,8 +42,10 @@
 // ---------------------------------------------------------------------------
 
 import type { NormalizedEvent } from "../contracts/normalized-events.ts";
+import type { ObservedToolImage } from "./interface.ts";
 import type { EventSequencer } from "./stream/event-sequencer.ts";
 import { summarize } from "./stream/snippet.ts";
+import { redactToolImages, toolResultImages } from "./stream/tool-images.ts";
 
 interface PiUsage {
   input?: unknown;
@@ -126,6 +128,8 @@ export interface PiStreamDecoderOptions {
   /** What the host ASKED for. The stream says what answered; the two are different facts. */
   requestedModel: string;
   session?: PiSessionRecord;
+  /** Filled with the digest of every image a settled tool call returned. */
+  images?: ObservedToolImage[];
   /** Host clock, injected so a replayed transcript is byte-stable. */
   now?: () => string;
 }
@@ -142,6 +146,7 @@ export class PiStreamDecoder {
    * sequencer's bookkeeping is its own.
    */
   readonly #openTools = new Set<string>();
+  readonly #images: ObservedToolImage[] | undefined;
   #started = false;
   /** The last stop reason any assistant turn reported. Decides the terminal. */
   #stopReason: string | null = null;
@@ -154,6 +159,7 @@ export class PiStreamDecoder {
     this.#provider = options.provider;
     this.#requestedModel = options.requestedModel;
     this.#session = options.session ?? { sessionId: null, resolvedModel: null, costUsd: null };
+    this.#images = options.images;
     this.#now = options.now ?? ((): string => new Date().toISOString());
   }
 
@@ -439,12 +445,21 @@ export class PiStreamDecoder {
     const id = line.toolCallId;
     if (typeof id !== "string" || id.length === 0) return [];
     this.#openTools.delete(id);
-    return sequencer.toolCompleted({
+    const outcome = line.isError === true ? "error" : "ok";
+    const settled = sequencer.toolCompleted({
       providerToolId: id,
-      outcome: line.isError === true ? "error" : "ok",
+      outcome,
       resultSnippet: summarizeResult(line.result),
       providerAt: null,
     });
+    const completed = settled.find((event) => event.kind === "tool.completed");
+    if (this.#images !== undefined && completed?.kind === "tool.completed") {
+      for (const image of toolResultImages(line.result)) {
+        this.#images.push(Object.freeze({ toolCallId: completed.toolCallId,
+          toolName: typeof line.toolName === "string" ? line.toolName : "tool", outcome, ...image }));
+      }
+    }
+    return settled;
   }
 
   /**
@@ -601,14 +616,15 @@ function providerAt(message: PiMessage | undefined): string | null {
 function summarizeResult(result: unknown): string {
   if (result === null || typeof result !== "object") return summarize(result);
   const content = (result as { content?: unknown }).content;
-  if (!Array.isArray(content)) return summarize(result);
+  if (!Array.isArray(content)) return summarize(redactToolImages(result));
   const texts = content
     .filter((block): block is { text: string } => {
       if (block === null || typeof block !== "object") return false;
       return typeof (block as { text?: unknown }).text === "string";
     })
     .map((block) => block.text);
-  return texts.length === 0 ? summarize(result) : summarize(texts.join("\n"));
+  // An image-only result would otherwise put its base64 payload in the journal.
+  return texts.length === 0 ? summarize(redactToolImages(result)) : summarize(texts.join("\n"));
 }
 
 /**

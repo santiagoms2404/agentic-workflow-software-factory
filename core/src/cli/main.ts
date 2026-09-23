@@ -494,6 +494,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
           worktreeRoot: resolve(parsed.flags["worktree-root"] ?? env.AWSF_WORKTREE_ROOT ?? defaultWorktreeRoot(stateRoot)),
           configPath,
           ...(parsed.flags.stub === "true" ? { preflight: () => ({ adapter: true, sandbox: true, observability: true }) } : {}),
+          ...(parsed.flags["visual-references"] === undefined ? {} : { visualReferences: parsed.flags["visual-references"] }),
           projectRecord: projection.project,
         });
         out(`Prepared ${taskId} at ${status.baseSha}.`);

@@ -22,8 +22,10 @@
 // ---------------------------------------------------------------------------
 
 import type { NormalizedEvent } from "../contracts/normalized-events.ts";
+import type { ObservedToolImage } from "./interface.ts";
 import type { EventSequencer } from "./stream/event-sequencer.ts";
 import { summarize } from "./stream/snippet.ts";
+import { redactToolImages, toolResultImages } from "./stream/tool-images.ts";
 
 interface ClaudeContentBlock {
   type?: string;
@@ -77,6 +79,8 @@ export interface ClaudeStreamDecoderOptions {
   /** What the host ASKED for. The stream says what answered; the two are different facts. */
   requestedModel: string;
   session?: ClaudeSessionRecord;
+  /** Filled with the digest of every image a settled tool call returned. */
+  images?: ObservedToolImage[];
 }
 
 export class ClaudeStreamDecoder {
@@ -90,6 +94,9 @@ export class ClaudeStreamDecoder {
    * sequencer's bookkeeping is its own.
    */
   readonly #openTools = new Set<string>();
+  /** Tool names by provider id; a `tool_result` names only the id it settles. */
+  readonly #toolNames = new Map<string, string>();
+  readonly #images: ObservedToolImage[] | undefined;
   #started = false;
   /**
    * The per-API-call usage the `message_delta` events report, accumulated.
@@ -109,6 +116,7 @@ export class ClaudeStreamDecoder {
     this.#provider = options.provider;
     this.#requestedModel = options.requestedModel;
     this.#session = options.session ?? { sessionId: null, resolvedModel: null };
+    this.#images = options.images;
   }
 
   get session(): ClaudeSessionRecord {
@@ -334,6 +342,7 @@ export class ClaudeStreamDecoder {
       if (block.type !== "tool_use" || typeof block.id !== "string" || block.id.length === 0) continue;
       if (this.#openTools.has(block.id)) continue;
       this.#openTools.add(block.id);
+      this.#toolNames.set(block.id, typeof block.name === "string" ? block.name : "tool");
       out.push(
         ...sequencer.toolRequested({
           providerToolId: block.id,
@@ -354,14 +363,22 @@ export class ClaudeStreamDecoder {
       const id = block.tool_use_id;
       if (typeof id !== "string" || id.length === 0) continue;
       this.#openTools.delete(id);
-      out.push(
-        ...sequencer.toolCompleted({
-          providerToolId: id,
-          outcome: block.is_error === true ? "error" : "ok",
-          resultSnippet: summarize(block.content),
-          providerAt: providerAt(line),
-        }),
-      );
+      const outcome = block.is_error === true ? "error" : "ok";
+      const settled = sequencer.toolCompleted({
+        providerToolId: id,
+        outcome,
+        // An image result would otherwise put its base64 payload in the journal.
+        resultSnippet: summarize(redactToolImages(block.content)),
+        providerAt: providerAt(line),
+      });
+      out.push(...settled);
+      const completed = settled.find((event) => event.kind === "tool.completed");
+      if (this.#images !== undefined && completed?.kind === "tool.completed") {
+        for (const image of toolResultImages(block.content)) {
+          this.#images.push(Object.freeze({ toolCallId: completed.toolCallId,
+            toolName: this.#toolNames.get(id) ?? "tool", outcome, ...image }));
+        }
+      }
     }
     return out;
   }

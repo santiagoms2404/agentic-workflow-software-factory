@@ -372,6 +372,21 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
         .run(`${sessionId}:owner-amendment-delivery:${evidence.amendmentId}`, sessionId, evidence.phaseId, sourceSeq, sourceSeq,
           stringifyRedacted(evidence), evidence.at);
       return;
+    case "visual-references-bound":
+    case "visual-references-delivered":
+    case "visual-reference-inspection": {
+      // Digests, frame ids and outcomes only: the evidence carries no path and
+      // no pixels by construction. The phase column stays NULL because delivery
+      // is recorded before the phase row necessarily exists.
+      const key = evidence.type === "visual-references-bound" ? "" : `:${evidence.runId}`;
+      const name = evidence.type === "visual-references-bound" ? "visual references bound"
+        : evidence.type === "visual-references-delivered" ? "visual references delivered" : "visual reference inspection";
+      db.prepare(`INSERT OR IGNORE INTO events
+        (event_id, session_id, phase_id, first_source_seq, last_source_seq, type, name,
+         payload_json, started_at) VALUES (?, ?, NULL, ?, ?, 'notice', ?, ?, ?)`)
+        .run(`${sessionId}:${evidence.type}${key}`, sessionId, sourceSeq, sourceSeq, name, stringifyRedacted(evidence), evidence.at);
+      return;
+    }
     case "candidate-adoption":
       db.prepare(`INSERT OR IGNORE INTO events
         (event_id, session_id, phase_id, first_source_seq, last_source_seq, type, name,

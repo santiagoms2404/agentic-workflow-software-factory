@@ -41,6 +41,14 @@ export interface SandboxRequest {
    */
   readonly stateRoot: string;
   readonly writes: readonly string[];
+  /**
+   * Host-provisioned inputs the phase may read and never write — today only
+   * delivered visual references. Each is re-bound read-only AFTER the state
+   * root mask, so under bwrap it is the one extra part of the state tree the
+   * phase can see. Without an OS sandbox nothing makes it read-only; the host
+   * detects a replacement by digest instead of preventing it.
+   */
+  readonly readOnlyRoots?: readonly string[];
   readonly platform?: NodeJS.Platform;
 }
 
@@ -83,6 +91,13 @@ export function assertSandboxRoots(request: Omit<SandboxRequest, "writes" | "pla
   if (inside(canonical, runtime)) {
     throw new Error("session runtime may not make part of the canonical repository writable");
   }
+  for (const root of request.readOnlyRoots ?? []) {
+    if (!isAbsolute(root)) throw new Error("read-only input roots must be absolute machine-local paths");
+    const input = physical(root);
+    if (inside(worktree, input) || inside(input, worktree) || inside(runtime, input) || inside(input, runtime)) {
+      throw new Error("read-only input roots must be disjoint from the managed worktree and the writable session runtime");
+    }
+  }
 }
 
 function bwrapSpec(spec: ProcessSpec, request: SandboxRequest): ProcessSpec {
@@ -110,6 +125,7 @@ function bwrapSpec(spec: ProcessSpec, request: SandboxRequest): ProcessSpec {
       worktreeBind, request.worktree, request.worktree,
       "--bind", request.sessionRuntime, request.sessionRuntime,
       "--ro-bind", request.canonicalRepository, request.canonicalRepository,
+      ...(request.readOnlyRoots ?? []).flatMap((root) => ["--ro-bind", root, root]),
       "--chdir", spec.cwd,
       "--",
       spec.executable,
