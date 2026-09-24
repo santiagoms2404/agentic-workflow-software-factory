@@ -782,6 +782,7 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
     tools: route.agent.tools.allow,
     writes: route.agent.writes,
     protectedPaths: options.config.policy.protected_paths,
+    providerWritableRoots: route.adapter.providerWritableRoots?.(HOST.process.env) ?? [],
     ...(infra.sandboxProbe === undefined ? {} : { sandboxProbe: infra.sandboxProbe }),
   });
   const request: ModelRequest = {

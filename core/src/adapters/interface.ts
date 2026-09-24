@@ -454,6 +454,13 @@ export interface HarnessAdapter {
    * default, because that is what it is.
    */
   parse(transport: ProcessTransport, signal?: AbortSignal): AsyncIterable<NormalizedEvent>;
+  /**
+   * Directories the provider CLI ITSELF must write to in order to start at all
+   * — its own lock and credential refresh — given the child's environment.
+   * Pure: it names paths and touches nothing. Omitted means none. The OS
+   * sandbox binds exactly these writable and nothing more of the host.
+   */
+  providerWritableRoots?(env: Readonly<Record<string, string | undefined>>): readonly string[];
   execute(
     request: ModelRequest,
     broker: TransportBroker,

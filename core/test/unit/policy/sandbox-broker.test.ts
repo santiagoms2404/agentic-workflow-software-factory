@@ -1,5 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   PermissionSession,
   assertSandboxRoots,
@@ -221,4 +224,35 @@ test("a read-only input root may not overlap the worktree or the writable runtim
   for (const root of [ROOTS.worktree, `${ROOTS.worktree}/refs`, ROOTS.sessionRuntime, `${ROOTS.sessionRuntime}/refs`, "relative/refs"]) {
     assert.throws(() => assertSandboxRoots({ ...ROOTS, readOnlyRoots: [root] }), /read-only input roots/, root);
   }
+});
+
+test("a provider's own state directory is bound writable only when it exists, and never inside AWSF's roots", () => {
+  const home = mkdtempSync(join(tmpdir(), "awsf-provider-home-"));
+  try {
+    const agentDir = join(home, ".pi", "agent");
+    const absent = grantSandbox(SPEC, { ...ROOTS, writes: [], providerWritableRoots: [agentDir], platform: "linux" }, () => true);
+    assert.ok(!absent.spec.argv.includes(agentDir), "a missing directory is neither created nor bound");
+    mkdirSync(agentDir, { recursive: true });
+    const grant = grantSandbox(SPEC, { ...ROOTS, writes: [], providerWritableRoots: [agentDir], platform: "linux" }, () => true);
+    const at = grant.spec.argv.indexOf(agentDir);
+    assert.equal(grant.spec.argv[at - 1], "--bind");
+    assert.ok(at > grant.spec.argv.indexOf("--ro-bind"), "bound after the read-only root, so it is what survives");
+    assert.ok(grant.writableRoots.includes(agentDir));
+    const plain = grantSandbox(SPEC, { ...ROOTS, writes: [], platform: "linux" }, () => true);
+    assert.deepEqual(grantSandbox(SPEC, { ...ROOTS, writes: [], providerWritableRoots: [], platform: "linux" }, () => true).spec.argv, plain.spec.argv);
+  } finally { rmSync(home, { recursive: true, force: true }); }
+});
+
+test("a provider state root overlapping the worktree, the canonical checkout or the state root is refused", () => {
+  for (const root of [ROOTS.worktree, `${ROOTS.worktree}/x`, ROOTS.canonicalRepository, `${ROOTS.stateRoot}/other-attempt`, "/srv", "relative/agent"]) {
+    assert.throws(() => assertSandboxRoots({ ...ROOTS, providerWritableRoots: [root] }), /provider state root/, root);
+  }
+});
+
+test("pi declares exactly its agent directory under the child's HOME; Claude declares none", async () => {
+  const { PiCodexAdapter } = await import("../../../src/adapters/pi-codex.ts");
+  const { ClaudeCodeAdapter } = await import("../../../src/adapters/claude-code.ts");
+  assert.deepEqual(new PiCodexAdapter().providerWritableRoots({ HOME: "/home/owner" }), ["/home/owner/.pi/agent"]);
+  assert.deepEqual(new PiCodexAdapter().providerWritableRoots({}), []);
+  assert.equal("providerWritableRoots" in new ClaudeCodeAdapter(), false);
 });

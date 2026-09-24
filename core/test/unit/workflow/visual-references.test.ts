@@ -210,14 +210,15 @@ test("V2 the private binding and its journal record must agree in both direction
 
 test("V1/V2 the route check admits demonstrated image routes and refuses text-only, no-tools and read-less ones", async () => {
   const model = { supportsImages: true, requestedModel: "opus" };
-  for (const [adapterId, requestedModel] of [["claude-code", "opus"], ["claude-code", "claude:opus"], ["pi-codex", "gpt-5.6-sol"], ["pi-codex", "codex:gpt-6-sol"]] as const) {
+  for (const [adapterId, requestedModel] of [["claude-code", "opus"], ["claude-code", "claude:opus"], ["claude-code", "sonnet"], ["pi-codex", "gpt-5.6-sol"],
+    ["pi-codex", "codex:gpt-6-sol"], ["pi-codex", "gpt-5.6-terra"], ["pi-codex", "gpt-6-astra"]] as const) {
     for (const [profile, tools] of [["readonly", ["read", "grep"]], ["managed-worker", ["read", "edit", "write", "exec"]]] as const) {
       assertVisualRoute({ phaseId: "builder", adapterId, model: { supportsImages: true, requestedModel }, profile, tools });
     }
   }
   await refusedWith("route-unsupported", () => assertVisualRoute({ phaseId: "builder", adapterId: "fixture", model, profile: "readonly", tools: ["read"] }));
   await refusedWith("route-unsupported", () => assertVisualRoute({ phaseId: "builder", adapterId: "antigravity", model, profile: "readonly", tools: ["read"] }));
-  await refusedWith("route-unsupported", () => assertVisualRoute({ phaseId: "builder", adapterId: "claude-code", model: { supportsImages: true, requestedModel: "sonnet" }, profile: "readonly", tools: ["read"] }));
+  await refusedWith("route-unsupported", () => assertVisualRoute({ phaseId: "builder", adapterId: "claude-code", model: { supportsImages: true, requestedModel: "haiku" }, profile: "readonly", tools: ["read"] }));
   await refusedWith("route-unsupported", () => assertVisualRoute({ phaseId: "builder", adapterId: "pi-codex", model: { supportsImages: true, requestedModel: "gpt-6-luna" }, profile: "readonly", tools: ["read"] }));
   await refusedWith("route-text-only", () => assertVisualRoute({ phaseId: "builder", adapterId: "pi-codex", model: { supportsImages: false, requestedModel: "gpt-5.3-codex-spark" }, profile: "readonly", tools: ["read"] }));
   await refusedWith("tool-unavailable", () => assertVisualRoute({ phaseId: "builder", adapterId: "claude-code", model, profile: "no-tools", tools: [] }));

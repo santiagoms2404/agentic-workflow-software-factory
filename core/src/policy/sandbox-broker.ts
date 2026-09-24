@@ -49,6 +49,14 @@ export interface SandboxRequest {
    * detects a replacement by digest instead of preventing it.
    */
   readonly readOnlyRoots?: readonly string[];
+  /**
+   * The provider CLI's own state directory, when it cannot start without
+   * writing there (`HarnessAdapter.providerWritableRoots`). Bound writable,
+   * and only when it exists: the one host path outside the attempt a phase
+   * may write. It may never overlap the worktree, the canonical checkout or
+   * the state root, so it can never unmask another attempt.
+   */
+  readonly providerWritableRoots?: readonly string[];
   readonly platform?: NodeJS.Platform;
 }
 
@@ -91,6 +99,16 @@ export function assertSandboxRoots(request: Omit<SandboxRequest, "writes" | "pla
   if (inside(canonical, runtime)) {
     throw new Error("session runtime may not make part of the canonical repository writable");
   }
+  const canonicalState = physical(request.stateRoot);
+  for (const root of request.providerWritableRoots ?? []) {
+    if (!isAbsolute(root)) throw new Error("provider state roots must be absolute machine-local paths");
+    const provider = physical(root);
+    for (const [name, other] of [["managed worktree", worktree], ["canonical repository", canonical], ["state root", canonicalState]] as const) {
+      if (inside(other, provider) || inside(provider, other)) {
+        throw new Error(`a provider state root may not overlap the ${name}`);
+      }
+    }
+  }
   for (const root of request.readOnlyRoots ?? []) {
     if (!isAbsolute(root)) throw new Error("read-only input roots must be absolute machine-local paths");
     const input = physical(root);
@@ -98,6 +116,11 @@ export function assertSandboxRoots(request: Omit<SandboxRequest, "writes" | "pla
       throw new Error("read-only input roots must be disjoint from the managed worktree and the writable session runtime");
     }
   }
+}
+
+/** The provider roots that exist; a missing one is not created, and not bound. */
+function providerRoots(request: SandboxRequest): readonly string[] {
+  return (request.providerWritableRoots ?? []).filter((root) => existsSync(root));
 }
 
 function bwrapSpec(spec: ProcessSpec, request: SandboxRequest): ProcessSpec {
@@ -126,6 +149,7 @@ function bwrapSpec(spec: ProcessSpec, request: SandboxRequest): ProcessSpec {
       "--bind", request.sessionRuntime, request.sessionRuntime,
       "--ro-bind", request.canonicalRepository, request.canonicalRepository,
       ...(request.readOnlyRoots ?? []).flatMap((root) => ["--ro-bind", root, root]),
+      ...providerRoots(request).flatMap((root) => ["--bind", root, root]),
       "--chdir", spec.cwd,
       "--",
       spec.executable,
@@ -159,6 +183,7 @@ export function grantSandbox(
       writableRoots: Object.freeze([
         ...(request.writes.length === 0 ? [] : [physical(request.worktree)]),
         physical(request.sessionRuntime),
+        ...providerRoots(request).map(physical),
       ]),
       spec: bwrapSpec(spec, request),
     });

@@ -2053,6 +2053,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       writes: route.agent.writes,
       protectedPaths: options.config.policy.protected_paths,
       ...(visualDelivery === null ? {} : { readOnlyRoots: [visualDelivery.directory] }),
+      providerWritableRoots: route.adapter.providerWritableRoots?.(HOST.process.env) ?? [],
       ...(protectedCapability === undefined ? {} : { protectedCapability }),
       ...(infra.sandboxProbe === undefined ? {} : { sandboxProbe: infra.sandboxProbe }),
     });

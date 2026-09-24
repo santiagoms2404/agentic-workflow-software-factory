@@ -715,13 +715,18 @@ digest only. Each bound phase launch re-verifies the source against that record,
 copies exactly the selected bytes into a fresh directory outside the worktree,
 and re-hashes it before every turn, corrections included. Under `bwrap` that
 directory is bound read-only; without it (the `tool-policy` badge) it is only
-digest-checked, and the delivery record says which.
+digest-checked, and the delivery record says which. Under `bwrap` a pi phase
+also gets pi's own agent directory (`~/.pi/agent`) writable, because pi locks
+its credentials before it can start; nothing else of the host is writable.
 
 Only adapter and model routes a real managed worker has demonstrated are
-admitted — today `claude-code` with `opus` and `pi-codex` with `gpt-6-sol` or `gpt-5.6-sol`,
-listed in `VISUAL_ROUTES` in `core/src/workflow/visual-references.ts` — and only
-with `read` in `tools.allow`; anything else blocks before a call is reserved. `awsf rework` and `awsf review` do not deliver references and
-refuse a bound phase rather than run it text-only.
+admitted — today `claude-code` with `opus` or `sonnet`, and `pi-codex` with
+`gpt-6-sol`, `gpt-6-astra`, `gpt-5.6-sol` or `gpt-5.6-terra` — listed in
+`VISUAL_ROUTES` in `core/src/workflow/visual-references.ts`, and only with
+`read` in `tools.allow`; anything else blocks before a call is reserved.
+`gpt-6-luna` is not admitted: it received the exact bytes and misread the
+image. `awsf rework` and `awsf review` do not deliver references and refuse a
+bound phase rather than run it text-only.
 
 ## Portability
 

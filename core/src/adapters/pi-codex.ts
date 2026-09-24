@@ -523,6 +523,19 @@ export class PiCodexAdapter implements ContinuityCapableAdapter {
     };
   }
 
+  /**
+   * pi 0.87.1 reads its credentials and settings only after taking a lock it
+   * creates beside them (`mkdir auth.json.lock`, `settings.json.lock`), so a
+   * read-only agent directory ends every run before the model is called:
+   * `EROFS … auth.json.lock`, measured under bwrap on 2026-09-23. The directory
+   * is the one pi resolves from the child's HOME — AWSF passes no
+   * `PI_CODING_AGENT_DIR` — and it is the only host path this route needs.
+   */
+  providerWritableRoots(env: Readonly<Record<string, string | undefined>>): readonly string[] {
+    const home = env["HOME"];
+    return home === undefined || home.length === 0 ? [] : [join(home, ".pi", "agent")];
+  }
+
   /** pi has `--session-dir`, so its transcript stays inside the attempt. */
   continuityStoreDir(runtimeDir: string): string {
     return join(runtimeDir, PI_SESSION_DIR_NAME);

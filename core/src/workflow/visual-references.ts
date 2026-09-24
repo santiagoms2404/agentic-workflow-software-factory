@@ -57,10 +57,17 @@ export const VISUAL_BINDING_FILE = "visual-references.json";
  * `supportsImages` is a claim, this table is a measurement.
  */
 export const VISUAL_ROUTES: Readonly<Record<string, Readonly<Record<string, string>>>> = Object.freeze({
-  "claude-code": Object.freeze({ opus: "Claude Code 2.1.280 `Read`, resolved claude-opus-5-5" }),
+  // gpt-6-luna is deliberately absent: its read returned the exact bytes, but
+  // it placed the held-out shape in the wrong quadrant (2026-09-23, bwrap).
+  "claude-code": Object.freeze({
+    opus: "Claude Code 2.1.280 `Read`, resolved claude-opus-5-5; re-proved under bwrap",
+    sonnet: "Claude Code 2.1.281 `Read`, resolved claude-sonnet-5, under bwrap",
+  }),
   "pi-codex": Object.freeze({
     "gpt-5.6-sol": "pi 0.87.1 `read`, resolved gpt-5.6-sol",
-    "gpt-6-sol": "pi 0.87.1 `read`, resolved gpt-6-sol",
+    "gpt-6-sol": "pi 0.87.1 `read`, resolved gpt-6-sol; re-proved under bwrap",
+    "gpt-5.6-terra": "pi 0.87.1 `read`, resolved gpt-5.6-terra, under bwrap",
+    "gpt-6-astra": "pi 0.87.1 `read`, resolved gpt-6-astra, under bwrap",
   }),
 });
 

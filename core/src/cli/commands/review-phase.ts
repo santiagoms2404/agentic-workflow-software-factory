@@ -759,6 +759,7 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
     tools: route.agent.tools.allow,
     writes: route.agent.writes,
     protectedPaths: config.policy.protected_paths,
+    providerWritableRoots: route.adapter.providerWritableRoots?.(HOST.process.env) ?? [],
     ...(infra.sandboxProbe === undefined ? {} : { sandboxProbe: infra.sandboxProbe }),
   });
   /**
