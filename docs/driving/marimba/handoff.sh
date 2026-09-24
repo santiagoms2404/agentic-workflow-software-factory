@@ -46,4 +46,4 @@ esac
 
 exec herdr agent start "marimba-$(date +%H%M%S)" \
   --cwd "$REPO" --split right \
-  -- "$@" "Read /prime-awsf and follow it fully before anything else. Do not print a status board. Then read the handoff at $file and follow it. Treat every fact in it as a claim to verify against the repository, not as settled truth."
+  -- "$@" "Read docs/driving/commands/prime-awsf.md (the /prime-awsf command) and follow it fully before anything else. Do not print a status board. Then read the handoff at $file and follow it. Treat every fact in it as a claim to verify against the repository, not as settled truth."

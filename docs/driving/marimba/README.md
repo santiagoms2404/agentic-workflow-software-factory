@@ -118,6 +118,11 @@ pi -e /absolute/path/to/checkout/docs/driving/marimba/marimba-guard.pi.ts
 variants already spelled out. Copy it into your own shell profile and replace
 the one placeholder.
 
+pi has no `/prime-awsf` until you register it: add the absolute path of the
+command file, `../commands/prime-awsf.md` from this directory, to the `prompts` list in
+`~/.pi/agent/settings.json`. Without it, a session told to run `/prime-awsf`
+spends its first turns searching for the file.
+
 **The `-e` is not optional, and this port's one weakness is that forgetting it
 is silent.** The shell guard fails *closed* when its interpreter cannot run — a
 machine defect denies everything and says why. An extension that is simply not
