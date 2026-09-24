@@ -99,7 +99,7 @@ code.inv { color:var(--accent); } code.ac { color:var(--good); }
     <summary>Metadata</summary>
     <dl>
       <dt>created</dt><dd>2026-08-27</dd>
-      <dt>modified</dt><dd>2026-08-27, 2026-08-27, 2026-08-27, 2026-08-28, 2026-08-29, 2026-08-29, 2026-08-29</dd>
+      <dt>modified</dt><dd>2026-08-27, 2026-08-27, 2026-08-27, 2026-08-28, 2026-08-29, 2026-08-29, 2026-08-29, 2026-09-24</dd>
       <dt>commits</dt><dd>none — authoring only; no implementation code was written, none — first owner review applied, none — second owner review applied; the plan, its build prompts and its ticket set land in this commit</dd>
       <dt>agent name</dt><dd>claude-opus-5</dd>
       <dt>session id</dt><dd>not recorded — AGENTS.md invariant 1 keeps live session state out of every committed file in this repository</dd>
@@ -746,7 +746,7 @@ in the generated file, then run it at the lowest risk tier.</pre>
 
   <!-- ================= M5 ================= -->
   <div class="phase">
-    <h3><code class="status">[wip]</code> Milestone M5: The graduation — two real tasks</h3>
+    <h3><code class="status">[x]</code> Milestone M5: The graduation — two real tasks</h3>
     <p><em>This is the acceptance test.</em> Two real jobs go through the factory, each driven by a person following the document and nothing else. The driver is the factory's author, so each run is asymmetric — it can fail meaningfully and it cannot pass meaningfully — and <strong>the second run is what the first one cannot be</strong>: a check on whether the document is being read rather than remembered.</p>
     <figure>
       <pre class="mermaid">
@@ -805,11 +805,11 @@ flowchart LR
     <p>The acceptance evidence is a record, checked for completeness and for honesty about its own strength. Every fence is re-run because T21 edited the document.</p>
     <p class="serves"><code class="serves">AC-10</code> <code class="serves">AC-11</code></p>
     <ul class="checklist">
-      <li><code class="status">[]</code> Every consultation from both runs appears in the ticket README with exactly one disposition (<code>AC-11</code>)</li>
-      <li><code class="status">[]</code> The delta is recorded and interpreted, and the record says which of the three readings it fell under (<code>AC-10</code>)</li>
-      <li><code class="status">[]</code> The record states plainly what the runs prove and what they do not, and names the deferred two-reader attempt as future work rather than as a pending gate</li>
-      <li><code class="status">[]</code> <code>npm run test:unit</code> — green over the edited document, with every induced-failure leg re-run</li>
-      <li><code class="status">[]</code> Any row that cannot be made green is <code>[f]</code> with its blocking workstream named in the plan, not in the ticket alone</li>
+      <li><code class="status">[x]</code> Every consultation from both runs appears in the ticket README with exactly one disposition (<code>AC-11</code>)</li>
+      <li><code class="status">[x]</code> The delta is recorded and interpreted, and the record says which of the three readings it fell under (<code>AC-10</code>)</li>
+      <li><code class="status">[x]</code> The record states plainly what the runs prove and what they do not, and names the deferred two-reader attempt as future work rather than as a pending gate</li>
+      <li><code class="status">[x]</code> <code>npm run test:unit</code> — green over the edited document, with every induced-failure leg re-run</li>
+      <li><code class="status">[x]</code> Any row that cannot be made green is <code>[f]</code> with its blocking workstream named in the plan, not in the ticket alone</li>
     </ul>
     <div class="loop">🔁 <strong>Do not exit this milestone until every box is checked.</strong> Reporting an author-driven run as a clean external pass is the single failure this workstream must not commit, because the whole spine exists to stop exactly that.</div>
   </div>
@@ -1486,6 +1486,16 @@ NEW leaks body: true</code></pre>
     <p>The owner fast-forwarded the canonical branch to the candidate <strong>by hand</strong> — the identical operation the lifecycle performs, verified first as an exact ancestor relationship and then re-gated: <strong>1617 of 1617, lint and typecheck clean</strong>. No new commit exists; the candidate&rsquo;s own commit is canonical. The attempt stays at <code>AWAITING_OWNER</code> as a reproduction, with the journey attestation permanently in its journal.</p>
     <p>This is the <strong>third</strong> attempt in this series to be sealed or stranded by a property of the owner-act paths rather than by the work, after the credential rejection and the correction-headroom gap recorded above. Two of the three were recovered by taking the candidate by hand. That route is not a workaround to normalise — it is evidence that <strong>the rework and journey paths carry defects the recipe paths do not</strong>, and that an owner reaching for them after a review is reaching for the least-exercised code in the lifecycle.</p>
     <p>One diagnostic habit earned its place again: the collision was reconstructed entirely from <code>journal.jsonl</code> by replaying phase records and comparing ordinals. The journal was intact throughout, which is what made the hand landing safe to reason about rather than merely convenient.</p>
+  </details>
+
+  <details open>
+    <summary>2026-09-24 — M5 closed: the graduation record is complete and honest about its strength</summary>
+    <p><strong>What is now observably true.</strong> Two real jobs were driven end to end through the document and nothing else, each to an owner-facing stop. Run one (the dashboard visual redesign) reached <code>AWAITING_OWNER</code> with full evidence and was landed by the owner's own attestation. Run two (the plan-grouped backlog) reached a refusal at workflow compilation, before any phase ran, on a provider-inversion precondition unrelated to the document. Both are recorded as what they are: an author-driven test, which can fail meaningfully and cannot pass meaningfully. <strong>The runs prove the document is sufficient to drive with. They do not, and cannot, prove it is comprehensible to somebody new</strong> — only a second reader can, and Q7 names that as scheduled future work, not a pending gate, so it does not block this close.</p>
+    <p><strong>The delta.</strong> Consultations fell from 11 in run one to 8 in run two, a delta of −3, which the record files under the plan's <strong>fall</strong> reading: the document is being learned from. The evidence is limited rather than clean — the driver opened no section in run two and named fresh memory of run one as the source for the request's shape, which is itself recorded as a consultation (entry 2.2) precisely so this reading does not overstate itself. Two sections opened in run one and not run two (<code>Prime a session</code>, <code>Stop at the signature</code>); fourteen sections were never opened in either run, recorded as a finding about the document's shape rather than proof of their being unnecessary.</p>
+    <p><strong>Every task in M5 and its final state.</strong> Task 19 (run one) — <code>[x]</code>. Task 20 (run two and the delta) — <code>[x]</code>. Task 21 (close the residue) — <code>[x]</code>: all 19 consultations from both runs carry exactly one of T03's four dispositions — 13 <code>document</code> (each answered in <code>docs/cheatsheet.html</code> at the point it happened), 6 <code>accepted absence</code> (each named in the document's limits section), 0 <code>route</code>, 0 <code>owner-side</code>. No row in M5 closes <code>[f]</code>; no consultation needed a factory change. Task 22 (this testing strategy) — <code>[x]</code>: the ticket README's graduation record carries every consultation with one disposition, the delta recorded and interpreted with its reading named, and the stated limit repeated plainly, with the two-reader attempt named as future work (<code>specs/tickets/awsf-v2-w12-cheatsheet/README.md</code> lines 265, 298).</p>
+    <p><strong>What the factory produced for each real task, apart from what the document proved.</strong> Run one: a build-and-review candidate at T2 on two provider calls (after a zero-spend T1 refusal), seven dashboard files changed, unit suite 1509/0, typecheck and lint clean; landed by local fast-forward at <code>5985f52</code>. Run two: the frozen protocol produced a zero-spend refusal and no candidate; after the protocol stopped, three further <code>simple-sdlc</code> attempts and two <code>build-review</code> drives were needed before the backlog feature reached <code>AWAITING_OWNER</code> and landed, first at <code>2fb0bc6</code> and then, after a rework fixing the credential-matching word boundary, at <code>1d34a02</code>. These are factory results, kept separate from the document's own claim because they are different claims — a factory failure in them is not a document failure.</p>
+    <p><strong>Landing commit SHAs.</strong> <code>5985f52</code> (run one, dashboard Lab palettes), <code>2fb0bc6</code> (run two, first backlog landing), <code>1d34a02</code> (run two, the follow-up rework that fixed backlog selection and credential matching).</p>
+    <p><strong>Suite counts at close.</strong> <code>npm run test:unit</code> — 2112/2112, exit 0, including every induced-failure leg in <code>core/test/unit/meta/cheatsheet-reconciliation.test.ts</code>. <code>npm run typecheck</code> — exit 0 for core and dashboard. <code>npm run lint</code> — 582 files, 0 warnings, 0 errors.</p>
   </details>
 </section>
 
