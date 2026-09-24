@@ -283,6 +283,7 @@ npm run awsf -- doctor    # the same command, in another form</pre>
   <p class="ask"><span class="lbl">Ask for</span>&ldquo;The repository has a <code>justfile</code> whose targets are meant to be thin wrappers over the project&rsquo;s npm scripts. Add one test that checks that promise: every target that delegates to an npm script must name a script that actually exists. Put it with the other tests that check documents and configuration against the code. Do not change the <code>justfile</code> and do not change any existing test. It is done when the new test passes and the whole suite still passes.&rdquo;</p>
   <p>That is a paragraph of English with a boundary at the end of it. It names a result, the place the result belongs, two things not to touch, and the condition that decides it is finished.</p>
   <p><strong>Why an example and not a real job.</strong> This one can be run again &mdash; by you, tomorrow, and by the next person who reads this file &mdash; because the route never lands anything, so the checkout is unchanged afterwards and the job is still missing when the next person asks for it. A real job is only new once, which makes it useless as something to practise on.</p>
+  <p><strong>When the job is your own, write it in the same four parts:</strong> the result you want, where it belongs, what must not change, and how anyone would tell it is done. Write the last part before anything launches. It is the boundary leg 6 compares the candidate against, and a boundary written after the result arrives measures nothing. Leave the route out of the paragraph: naming a second opinion, a worker or a way of working in it steers the route and its cost on marimba&rsquo;s behalf. Describe the result, and let marimba offer the routes that reach it.</p>
 
   <h3>Four things that surprise people here</h3>
   <p><strong>The six legs are the order you travel, not an order the factory enforces.</strong> If you decided what you wanted before you opened a session &mdash; most people do &mdash; nothing is wrong and nothing needs redoing. The factory checks the shape of what it is handed, never the order in which you thought of it.</p>
@@ -307,6 +308,12 @@ npm run awsf -- run TASK</pre>
   <p><strong>Read the corrections figure before you agree to a route.</strong> A worker that returns a malformed answer can be asked again, but on most routes asking again costs a whole provider call, so the figure is how many such re-asks the <em>entire run</em> can survive &mdash; not how many each step gets. A zero means the first malformed answer ends the job on its first occurrence, and <code>start</code> refuses that route outright rather than letting you find out mid-run. The refusal names the remedy and the exact number of calls it needs:</p>
   <pre>npm run awsf -- raise TASK --calls &lt;n&gt; --reason "&lt;why this run needs the headroom&gt;"</pre>
   <p>That is <strong>yours to run, not marimba&rsquo;s</strong> &mdash; it is one of the eight acts in leg 5 &mdash; and it belongs between <code>new</code> and <code>start</code>. It spends nothing, but the window closes once a job stops: a stopped job refuses the grant. Marimba should put this in front of you before it asks you to start anything whose margin is thin; if it does not, that is the gap to report.</p>
+
+  <p><strong>marimba may stop after preparing and ask before it runs.</strong> Nothing is spent before <code>run</code>, so a careful session prepares the job, stops at <code>PREPARED</code>, and tells you what it staged, which route it chose, what has been spent so far, which is nothing, and the request as the factory recorded it. That is the cheapest moment to compare the request with what you meant.</p>
+  <p><strong>Your answer to that stop is the spending decision this leg is about.</strong> Saying go is choosing the first of the three routes above: <code>run</code> reserves the call, and the call is spent whatever comes back. Saying no leaves a prepared job that has cost nothing.</p>
+
+  <p><strong>A refusal can arrive here, at launch, before anything is spent.</strong> Read it exactly as leg 5 describes: what refused, what it was protecting, what was not spent, and what you may now decide. No work was done, so there is no candidate, and the decision that follows is leg 6&rsquo;s, taken without one.</p>
+  <p><strong>A new job created to get past a refusal is a decision about your job, so it is yours.</strong> You should see the refusal before any replacement exists, and agree to the replacement before it runs. If marimba creates one and carries on, ask it for the refusal it stepped past, and report that it did not stop.</p>
 
   <figure>
     <svg viewBox="0 0 720 200" role="img" aria-label="The three commands of leg 3 cause two recorded moves. new registers the job as DRAFT, start makes the move L1 to PREPARED with spawn false, and run makes the move L4 to RUNNING with spawn true. A dashed boundary sits on L4: nothing is spent to the left of it, and one provider call is reserved to the right.">
@@ -529,7 +536,7 @@ npm run typecheck</pre>
     <li><b>Things that report</b>The dashboard, the status text, and the factory&rsquo;s running account of what happened. They watched, and they wrote it down. They prevented nothing, and were never built to.</li>
   </ul>
   <p><strong>Where this bites in practice.</strong> The checks row on leg 4 is a report: a list ran, and nothing in it failed. That is a true and useful thing to be told. Read as though it had <em>stopped</em> something, it becomes a promise nobody made. The confusion runs the other way too &mdash; hunting through the records for the trace of something a stop prevented is hunting for a thing that, by design, never happened.</p>
-  <p>So when anyone tells you the factory will not let something happen &mdash; this guide included &mdash; the useful question is which of the two they mean. <strong>And a thing that stops, stops in one place.</strong> The refusal you read stopped that job at that point. It is not a claim that nothing anywhere could ever get past. It is the shape of what this factory accepts, which is what the top of this leg said, and it is why the move is always to change the request.</p>
+  <p>So when anyone tells you the factory will not let something happen &mdash; this guide included &mdash; the useful question is which of the two they mean. <strong>And a thing that stops, stops in one place.</strong> The refusal you read stopped that job at that point. It is not a claim that nothing anywhere could ever get past. It is the shape of what this factory accepts, which is what the top of this leg said, and it is why the move is to change the request, or to stop when the cause is the factory&rsquo;s own route rather than your request, as leg 6 describes.</p>
 
   <div class="curtain">
     <p><span class="lbl">Behind the curtain</span> A refusal names a condition, and the conditions are properties of the moves the factory is permitted to make; those moves are in <a href="#reference-legal-edges">Legal edges</a>. The stage a refused job comes to rest in is one of the entries in <a href="#reference-lifecycle-states">Lifecycle states</a>, and it is a resting place rather than a dead end.</p>
@@ -555,6 +562,11 @@ npm run typecheck</pre>
 
   <p class="ask"><span class="lbl">Ask for</span>&ldquo;Show me the request as the factory received it, and how the candidate compares with the boundary I gave you.&rdquo;</p>
 
+  <p><strong>Some changes can only be judged by looking at them.</strong> The checks this project runs are the suite, the typechecker and the linter, all against source, and the second opinion reads a diff. None of them puts the change on a screen. When what you asked for is something you see, the evidence is the candidate itself, built and shown to you in the form it is used in.</p>
+  <p><strong>A picture of the candidate is not the candidate.</strong> A reconstruction marimba draws of how the change should look is the claim half of <em>claim and measurement</em> below, however faithful it is. It shows what marimba expects, not what was built.</p>
+  <p><strong>Asking marimba to build the candidate and show it to you is a read.</strong> It lands nothing, changes no recorded state, and is not one of the acts that are yours, so marimba may do it and you may ask for it.</p>
+  <p class="ask"><span class="lbl">Ask for</span>&ldquo;Build the candidate exactly as it is and show it to me running. Land nothing.&rdquo;</p>
+
   <p><strong>Nothing expires while you decide.</strong> A candidate waiting for a person stays waiting. Closing the session, shutting the machine, or coming back tomorrow changes nothing about the job&rsquo;s recorded state &mdash; the session was the thing driving, never the thing holding. And a candidate you never sign for changes nothing at all, which is exactly what makes the worked example safe for the next person to run.</p>
 
   <h3>The eight acts that are yours</h3>
@@ -578,6 +590,13 @@ npm run awsf -- land TASK</pre>
     <li><b>What is left</b>What the job may still spend, how many correction rounds remain, and what is left of the allowance for sending it back for another look. Your job&rsquo;s numbers, not general ones.</li>
     <li><b>Which acts the evidence supports</b>Of the eight, which ones the evidence would carry, which ones it would not, and the reason for each.</li>
   </ul>
+
+  <h3>When the route ended in a refusal instead</h3>
+  <p>A refused job reaches this leg with no candidate. The decision is still yours and still made from evidence, and the first piece of evidence to ask for is the cause.</p>
+  <p class="ask"><span class="lbl">Ask for</span>&ldquo;Diagnose this refusal read-only. Is the cause my request, the route, the project&rsquo;s configuration, or the machine it ran on? Change nothing.&rdquo;</p>
+  <p><strong>The diagnosis is marimba&rsquo;s reading to do.</strong> It may have to read the factory&rsquo;s configuration or its source to find the answer, and you should not have to. What you need back is which of the four it is, and the evidence for it.</p>
+  <p><strong>Only the first is yours to fix by changing the request.</strong> When the cause is the route or the configuration, a different route is a fix only if it still does everything your boundary asked for. A route that skips a step you required does not complete your job. It swaps it for a smaller one, and the boundary you wrote at leg 3 no longer describes what you would get.</p>
+  <p><strong>Stopping is a complete ending.</strong> Leave the refused job exactly as it is: it stays readable, nothing expires, and it costs nothing more. Stopping needs no replacement job and no act of yours. A cause found in the factory itself is a finding for whoever maintains the factory, and the refused job is its evidence.</p>
 
   <p><strong>This guide stops here, and the stop is deliberate.</strong> It tells you what to have in hand before you decide. It does not tell you which way to decide, and it never will.</p>
 
@@ -625,6 +644,9 @@ npm run awsf -- land TASK</pre>
     <li><b>Journal size or composition</b>This guide sends you to the dashboard rather than a journal, and no current workstream owns changing what the journal stores.</li>
     <li><b>A new project&rsquo;s entry path</b>This route is for this checkout, because preparing a greenfield project currently requires protected configuration; W03 owns that missing entry path.</li>
     <li><b>Installing marimba or its launcher</b>Those are per-person, per-machine setup owned by the person who hands you this file, not by this repository or this guide.</li>
+    <li><b>What your job is about</b>The material a job depends on, such as a palette, a specification or a style guide, is yours to supply in the request. This guide covers driving the factory and cannot hold any one job&rsquo;s subject matter.</li>
+    <li><b>Your job&rsquo;s own account</b>The dashboard card, and marimba&rsquo;s reports after priming, after preparing, at the signature and at a stop, are where your job&rsquo;s facts are. This guide says what to read in each of them and cannot contain the facts themselves.</li>
+    <li><b>Whether the candidate is right</b>Looking at the candidate and judging it against your boundary is the act at leg 6. This guide sends you to it and cannot do it for you.</li>
   </ul>
 
   <h3>What this has been shown to prove</h3>

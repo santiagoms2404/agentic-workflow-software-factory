@@ -1131,6 +1131,90 @@ new. Run two's eight consultations and its reliance on memory prevent reporting 
 external pass. The factory's zero-spend refusal is a separate finding and does not strengthen or
 weaken that document claim.
 
+## T21 — every graduation consultation closed
+
+All nineteen consultations, eleven from run one and eight from run two, carry exactly one of T03's
+four dispositions. Entry `1.n` is run one's consultation `n` and `2.n` is run two's, numbered as
+recorded above. No two were merged: where two entries share an answer, each names the sentence that
+answers it.
+
+**The rule that separates `document` from `accepted absence` here.** Several consultations were
+reads of a surface the document already sent the reader to at that point, and the answer was the
+job's own facts: its card, or marimba's report. A document cannot contain one job's facts, so those
+are accepted absences. A consultation is `document` when the document, at the point it happened,
+did not yet say what the reader needed. Every such answer is a new or changed sentence in
+`docs/cheatsheet.html` at that leg.
+
+| Entry | Leg and point | Disposition | Answered where, or the reason and what reopens it |
+| --- | --- | --- | --- |
+| 1.1 | Leg 3, before the request | document | **Give it one small job**, the new paragraph after the worked example: a real job is written in the worked example's four parts, the boundary is written before launch because leg 6 compares against it, and the route stays out of the paragraph |
+| 1.2 | Leg 3, expanding the request | accepted absence | **Reason:** the style guide supplied the job's subject matter, not knowledge of the factory, and no driving guide can hold one job's content. Limits bullet *What your job is about*. **Reopens:** a run in which the factory cannot reach material the request names, which is a factory question, not this document's |
+| 1.3 | Leg 3, after preparation | document | **Give it one small job**, *marimba may stop after preparing and ask before it runs*: what the stop at `PREPARED` reports, and that it is the cheapest point to check the recorded request |
+| 1.4 | Leg 3, after `PREPARED`, before spend | document | **Give it one small job**, *Your answer to that stop is the spending decision*: go means the first route and a spent call, no means a prepared job that cost nothing |
+| 1.5 | Leg 3, at launch | document | **Give it one small job**, two paragraphs: a refusal can arrive at launch and is read with leg 5's four things, and a replacement job created to get past a refusal is the owner's decision, to be seen and agreed before it runs |
+| 1.6 | Leg 4, after the replacement | accepted absence | **Reason:** the job's dashboard card is the surface leg 4 already named for *has it started*, and the answer was that job's own state. Limits bullet *Your job's own account*. **Reopens:** a run in which the card cannot answer a leg-4 question the document sends the reader to it for |
+| 1.7 | Leg 6, first handoff | accepted absence | **Reason:** marimba's owner-gate report is the fixed set leg 6 already listed, and it carried that job's own evidence. The driver then opened the document. Limits bullet *Your job's own account*. **Reopens:** a handoff that needs a fact outside leg 6's fixed set |
+| 1.8 | Leg 6, after reading `Stop at the signature` | document | **Stop at the signature**, *Some changes can only be judged by looking at them*. The first two clauses of the question were the document's own *Ask for* line verbatim; the third, visual evidence, had no answer until this sentence |
+| 1.9 | Leg 6, first visual check | document | **Stop at the signature**, *A picture of the candidate is not the candidate*: a reconstruction is the claim half of claim and measurement |
+| 1.10 | Leg 6, after the static check | document | **Stop at the signature**, *Asking marimba to build the candidate and show it to you is a read*, with an *Ask for* line |
+| 1.11 | Leg 6, final visual check | accepted absence | **Reason:** inspecting the candidate against the boundary is the owner act's own evidence, and the document's job is to send the reader there, which 1.8–1.10 now do. Limits bullet *Whether the candidate is right*. **Reopens:** a run in which judging the candidate needs a source other than the candidate itself |
+| 2.1 | Leg 2, after priming | accepted absence | **Reason:** leg 2's *How to read what comes back* already said what a priming report contains, and the report carried that session's own facts. Limits bullet *Your job's own account*. **Reopens:** a priming report containing something that section does not cover |
+| 2.2 | Leg 3, writing the request | document | **Give it one small job**, the same paragraph as 1.1. Kept separate from 1.1 because this entry is memory of run one rather than a conversation, which `AC-10`'s read-or-remembered check needs to see |
+| 2.3 | Leg 3, at launch | document | **Give it one small job**, *A refusal can arrive here, at launch*. The same paragraph answers the first half of 1.5; the replacement half of 1.5 has no counterpart here, because run two created no replacement |
+| 2.4 | Leg 6, after the refusal | document | **Stop at the signature**, new subsection *When the route ended in a refusal instead*: a refused job reaches leg 6 without a candidate, and the first thing to ask for is a read-only diagnosis of the cause, with an *Ask for* line |
+| 2.5 | Leg 6, route diagnosis | document | Same subsection, *The diagnosis is marimba's reading to do*: marimba may read configuration or source, the reader should not have to, and what comes back is which of four causes it is |
+| 2.6 | Leg 6, after diagnosis | document | Same subsection, *Only the first is yours to fix by changing the request*: a route that skips a step the boundary required swaps the job for a smaller one |
+| 2.7 | Leg 6, deciding the next step | document | Same subsection, *Stopping is a complete ending*: leave the refused job as it is, with no replacement and no owner act, and treat a cause in the factory as a finding for its maintainer |
+| 2.8 | Leg 6, final stop | accepted absence | **Reason:** marimba's closing report confirmed that job's own state, and 2.7's sentence now says what a stop leaves. Limits bullet *Your job's own account*. **Reopens:** a stop whose report the leg-6 subsection does not explain |
+
+| Disposition | Entries | Count |
+| --- | --- | ---: |
+| **document** | 1.1, 1.3, 1.4, 1.5, 1.8, 1.9, 1.10, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7 | 13 |
+| **route** | none | 0 |
+| **owner-side** | none | 0 |
+| **accepted absence** | 1.2, 1.6, 1.7, 1.11, 2.1, 2.8 | 6 |
+| | | **19** |
+
+**One sentence outside the consultation points changed, and why.** Leg 5 ended by saying the move
+after a refusal is *always* to change the request. Run two refused on the factory's own route, where
+changing the request fixes nothing, so 2.6's answer would have contradicted it. The sentence now says
+the move is to change the request, or to stop when the cause is the route, and points to leg 6.
+
+**No consultation is routed, so no plan row is `[f]`.** Every consultation's answer was reachable
+without a factory change. The factory causes behind both runs' refusals are factory results, recorded
+below, not document gaps. Run two's cause, review inversion computed against the planner instead of
+the builder, was fixed by `1aafbe5` after T20's record, and the plan's 2026-08-30 Amendment records
+the inversion holding on the next live drive.
+
+**The six accepted absences are in the document's limits section** as three bullets: *What your job
+is about* (1.2), *Your job's own account* (1.6, 1.7, 2.1, 2.8) and *Whether the candidate is right*
+(1.11). Each entry keeps its own reason and reopening evidence in the table above.
+
+### What the factory produced, recorded apart from what the document proved
+
+The two claims are separate. The document's claim for both runs is the one already stated: sufficient
+to drive with, 11 and then 8 consultations, author-driven. The rows below are the factory's result
+for each real task, and a factory failure in them is not a document failure.
+
+| Task | Under the frozen protocol | After the protocol stopped | Landed |
+| --- | --- | --- | --- |
+| Run one: dashboard palettes | A build-and-review candidate at T2 on two provider calls, after a zero-spend refusal of the same job prepared at T1: seven dashboard files, unit suite 1509/0, typecheck and lint clean. The protocol stopped at `AWAITING_OWNER` | The owner attested the journey and landed the same candidate by local fast-forward, with no rebuild and no further call | **Yes**, `5985f52` |
+| Run two: plan-grouped backlog | A zero-spend refusal before the planning phase: the mandatory review resolved to the planner's provider. No plan, candidate or gate evidence | Recorded in the plan's Amendments: three `simple-sdlc` attempts blocked at the planner's gates (2026-08-30); a `build-review` candidate that was gate-green and accepted but stranded at `REVIEWING` (2026-08-30); a `simple-sdlc` attempt whose planner never received the request and built a different task (2026-08-31); then two `build-review` T2 drives with an owner rework between them that blocked, of which the second reached `AWAITING_OWNER` with verdict `accept`, 17 of 17 gates and 2 calls (2026-09-03) | **Yes.** The 2026-09-03 Amendment records the journeyed landing at `1d34a02`. `main` shows the grouped backlog arriving at `2fb0bc6`, the parent of `1d34a02`, which that Amendment does not attribute to a run |
+
+**The factory findings from the runs' expectation mismatches stay factory findings.** Run one's
+second mismatch, marimba creating a replacement job after a refusal and continuing without stopping
+for the owner, is not a consultation and is not dispositioned here. The document now tells the reader
+to expect to see a refusal before any replacement (1.5). No route for marimba's behaviour was written
+by T19, T20 or this task.
+
+### Fences re-run over the edited document
+
+The edits added no section, no index entry, no command block and no external reference.
+`node --experimental-strip-types --test core/test/unit/meta/cheatsheet-reconciliation.test.ts` runs
+the six class fences, the command fence, the reader-warning fence, the index fence and the
+offline fence over `docs/cheatsheet.html`: 20 pass, 0 fail, exit 0. Re-running the induced-failure
+legs is T22's.
+
 ## M3 close — T15 walkthrough coverage and fence evidence
 
 The sixteen `document · walkthrough` entries are answered at the point where the reader needs them:
