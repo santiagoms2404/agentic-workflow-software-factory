@@ -21,8 +21,9 @@ Run `/prime-awsf` first if this session has not been primed.
   what the next command and the owner both key off.
 - **Reference, never restate.** No schema, edge id, tier ceiling, gate id,
   blocker code or model id belongs in these documents. Point at
-  `core/src/contracts/`, `core/src/state/`, `awsf.config.yaml` and
-  `specs/awsf-plan.html`, all of which are single-sourced and tested.
+  `core/src/contracts/`, `core/src/state/`, `awsf.config.yaml` and the plans
+  under `specs/` (the v2 spine and its deep plans; v1 is complete), all of which
+  are single-sourced and tested.
 
 ## What you may run freely
 
