@@ -46,6 +46,8 @@ Questions put to the owner and not yet answered. Every reference code in play (F
 Dashboard URL and process, other sessions or worktrees active on this repository, and handoff files cited (path and sha256).
 
 Rules:
+- Owner words and owner rules come only from the owner's own messages. A line marked as the agent's own note_to_self is marimba's words: never file it, or anything it says marimba will or will not do, as the owner's.
+- The <kept-turns> stay in the context after this summary and are newer than the conversation: do not restate them, and drop from "Work in flight" and "Pending on the owner" anything they settle.
 - Never state or imply that the session is primed. Priming does not survive a compaction; the re-prime pack replaces it.
 - A value from a status command is an observation, not current state. Attach the time it was observed.
 - No file lists, no file contents, no step-by-step narration, no status board.
