@@ -17,8 +17,8 @@ human authorises anything that becomes permanent.**
 > M0–M11, 38 tasks, both adoption pilots landed on real work. **v2 is the
 > current workstream**: seventeen workstreams on a spine plan, nine landed, each
 > milestone carrying its own deep plan with its own tickets, amendments and
-> validation. The factory has driven 44 real sessions on this repository and
-> landed 8 of them. No native-Windows write parity is claimed. Every number on
+> validation. The factory has driven 40 real sessions on this repository and
+> landed 7 of them. No native-Windows write parity is claimed. Every number on
 > this page is reproduced by a command in
 > [Verifying these claims](#verifying-these-claims).
 
@@ -29,7 +29,7 @@ is exercisable with no account, no key and no quota spent:
 
 ```bash
 npm install
-npm test                                    # 2,167 tests, four layers
+npm test                                    # 2,622 tests, four layers
 npm run awsf -- new T01-fixture "describe the task" --workflow simple-sdlc --tier 1
 npm run awsf -- start T01-fixture --stub true
 npm run awsf -- run T01-fixture --stub true
@@ -47,16 +47,16 @@ a fixture.
 |---|---|---|
 | Task lifecycle | 11 states, 27 legal edges, 94 rejected ordered pairs of the 121-pair matrix | [`core/src/state/task-machine.ts`](core/src/state/task-machine.ts) |
 | Phase submachine | 8 states, with a same-session correction loop | [`core/src/state/phase-machine.ts`](core/src/state/phase-machine.ts) |
-| Postcondition gates | 20 | [`core/src/gates/interface.ts`](core/src/gates/interface.ts) |
-| Tests | 2,167 across 4 layers — unit 1,815 · contract 95 · simulation 84 · journeys 173 | `core/test/` |
+| Postcondition gates | 21 | [`core/src/gates/interface.ts`](core/src/gates/interface.ts) |
+| Tests | 2,622 across 4 layers — unit 2,112 · contract 149 · simulation 98 · journeys 263 | `core/test/` |
 | Architecture fences | 33 meta-tests that fail the build when a boundary is crossed | [`core/test/unit/meta/`](core/test/unit/meta) |
-| Owner CLI | 27 commands | `CLI_COMMANDS` in [`core/src/cli/main.ts`](core/src/cli/main.ts) |
+| Owner CLI | 31 commands | `CLI_COMMANDS` in [`core/src/cli/main.ts`](core/src/cli/main.ts) |
 | Workflows | 8 recipes | [`core/src/workflow/recipes/`](core/src/workflow/recipes) |
 | Provider adapters | 3 real + 1 fixture stub | [`core/src/adapters/catalog.ts`](core/src/adapters/catalog.ts) |
 | Process supervision | 1 port, 3 OS implementations, 1 shared contract suite | [`core/src/execution/platform/`](core/src/execution/platform) |
-| HTTP API | 8 reads + 1 archive write | [`core/src/api/routes.ts`](core/src/api/routes.ts) |
-| Plans | 16 plan documents carrying **189 dated amendment entries** | [`specs/`](specs) |
-| Real runs on this repo | 44 sessions · 137 transitions · 228 phases · 508 gate results · 8.07M tokens · 84 provider calls | the journal and its projection |
+| HTTP API | 9 reads + 1 archive write | [`core/src/api/routes.ts`](core/src/api/routes.ts) |
+| Plans | 16 plan documents carrying **190 dated amendment entries** | [`specs/`](specs) |
+| Real runs on this repo | 40 sessions · 125 transitions · 212 phases · 459 gate results · 7.44M tokens · 78 provider calls | the journal and its projection |
 
 ## What this is
 
@@ -173,9 +173,9 @@ Amber nodes are the ones only a human can move into or out of.
 
 All 27 legal edges, all 94 rejected pairs and the ordered rejection contract are
 green in the suite. `LANDED` and `PUBLISHED` are reachable only through a human
-at an interactive terminal. Of the 137 transitions in this repository's current
-projection, 129 were taken by the host and 8 by a human — and every one of those
-eight is owner re-entry: seven reworks and one replacement review.
+at an interactive terminal. Of the 125 transitions in this repository's current
+projection, 118 were taken by the host and 7 by a human — and every one of those
+seven is owner re-entry, an `L19` rework.
 
 ## marimba — the driving layer
 
@@ -210,7 +210,7 @@ fences, defined once in
 | Fence | What it denies | Why |
 |---|---|---|
 | **1 — delegation-shaped tool names** | Any tool whose normalised name contains one of 14 delegation stems (`agent`, `task`, `spawn`, `worktree`, `cron`, …) | A driving session must not start work the factory has no attempt directory, journal record, reserved call or gate for. Classification is by *shape*, not a fixed list, so a delegation tool that did not exist when the fence was written is denied on arrival. Ten observe-or-stop names are excluded by whole name; an MCP server's nouns are never classified. |
-| **2 — owner-act command text** | A shell command invoking any of the 8 acts the lifecycle reserves for the owner: `land`, `cancel`, `rework`, `review`, `journey`, `raise`, `publish`, `resume` | `processOwnerTerminal()` checks `stdin.isTTY`, which is a terminal-*shape* test. A same-user agent with shell access can allocate a PTY and answer the confirmation, so the TTY check is not the boundary — this fence is. |
+| **2 — owner-act command text** | A shell command invoking any of the 10 acts the lifecycle reserves for the owner: `land`, `cancel`, `rework`, `review`, `degrade-review`, `journey`, `raise`, `publish`, `resume`, `grant` | `processOwnerTerminal()` checks `stdin.isTTY`, which is a terminal-*shape* test. A same-user agent with shell access can allocate a PTY and answer the confirmation, so the TTY check is not the boundary — this fence is. |
 | **3 — lifecycle timeout metadata** | A finite timeout, as declared metadata or as a written `timeout` wrapper, around `run`, `rework`, `review` or `resume` | An external deadline on a lifecycle command kills a run mid-transition. |
 
 If the payload parser cannot run at all, the guard **fails closed** and says so.
@@ -273,8 +273,8 @@ operations carry it:
 same journal. They grant no execution permission, and a packet that *looks*
 ready is never a reason to launch a worker.
 
-Two groups exist on this repository, holding 85 events between them: 31
-captures, 27 proposals and 22 applied decisions across 15 named units. The
+Two groups exist on this repository, holding 85 events between them: 34
+captures, 28 proposals and 23 applied decisions across 15 named units. The
 journal keeps the proposals that were **never** taken as well as the ones that
 were, which is how a superseded scope stays readable instead of disappearing —
 one unit in it went through three proposals before the owner's answers made the
@@ -284,12 +284,12 @@ third the one that landed.
 
 Worth separating, because the two look alike from outside.
 
-**Through driving sessions.** 44 real attempts on this repository, 8 landed and
+**Through driving sessions.** 40 real attempts on this repository, 7 landed and
 sealed, the rest blocked, cancelled or still open — every one of them prepared,
 launched and read by a driving session, and every landing authorised by the
-owner at a terminal. Twenty-six of them ran `build-review` at T2 with an
-opposite-provider reviewer; the recorded verdicts are 6 `accept` and
-8 `concern`, and a `concern` has been landed on the record rather than argued
+owner at a terminal. Twenty-two of them ran `build-review` at T2 with an
+opposite-provider reviewer; the recorded verdicts are 5 `accept` and
+7 `concern`, and a `concern` has been landed on the record rather than argued
 away.
 
 **Outside them.** The marimba roadmap's Tasks 3, 4, 5, 6 and 7 were built by
@@ -310,16 +310,81 @@ successor with the guard omitted. A handoff carries facts with their sources
 (`file:line`), never conclusions, because the receiving session is told to
 verify and can only do that against a source.
 
+### Staying in one session: self-compaction
+
+A handoff is for work that is not a continuation. Continuations stay in the
+session — and a long one fills its context. On the pi path, marimba now
+compacts **itself**, at a checkpoint it chooses, instead of waiting for pi's
+automatic compaction near the wall.
+
+The mechanism is a pi extension, `self-compact`, installed user-level and
+loaded from the owner's pi settings. It is **not in this repository and not in
+the execution path**: no gate, transition or guard depends on it, and worker
+phases never load it (the adapter launches pi with `--no-extensions`, and the
+extension switches itself off in `-p` and `--mode json` runs). What the
+repository holds is marimba's profile for it,
+[`docs/driving/marimba/compaction/`](docs/driving/marimba/compaction), selected
+when `PI_MARIMBA=1` and the checkout is the working directory.
+
+| Line | Tokens on a 272k window | What happens |
+|---|---|---|
+| notice | 150k (`150k\|55%`) | A transient heads-up; nothing blocked. |
+| warning | 200k (`200k\|74%`) | Compact at the next checkpoint: after a report to the owner, after a run is launched and waiting, after an owner decision is carried out — never mid-way through reading a blocked attempt. |
+| lock | 240k (`+40k\|15%`) | Every tool except `self_compact` and `view_context` is blocked. |
+
+`a|b` takes the smaller value, so the same profile scales down on a smaller
+window and stays at 240k on a 1M one.
+
+marimba calls `self_compact` with a `note_to_self` (at most 6,000 characters)
+shaped by the profile's template: `RESUME`, `DOING`, `WAITING ON`, `THINKING`,
+`UNVERIFIED`, `TRAPS`, `RE-READ`. The compaction runs with marimba's own
+summary prompt, and afterwards the session receives, in order:
+
+1. **A re-prime pack**, read fresh from disk: the two driving skills (`awsf`,
+   `marimba-plan`), the gotchas reference and the run-and-observe cookbook —
+   31,482 characters, about 7.9k tokens. Priming does not survive a compaction, and this is the
+   judgment layer brought back without a full re-prime. `CONTRACT.md` and
+   `AGENTS.md` are left out because they sit in the system prompt, which a
+   compaction keeps.
+2. **The summary.** It points at the group journal and the status store instead
+   of copying them, and keeps what only the conversation holds: the owner's
+   words that were never captured, standing rules the owner stated, the lineage
+   of each unit in flight and who owns it, proposals awaiting `apply`, owner
+   acts prepared but not performed, quota-gated decisions, the practices the
+   session learned, and every reference code in play. It may never claim the
+   session is still primed.
+3. **The note, verbatim.** `RESUME: continue` carries on; `RESUME:
+   wait-for-owner` returns the note and starts no turn, so a question put to
+   the owner is never answered on the owner's behalf.
+
+Every note is also archived under `~/.local/state/marimba-handoffs/compactions/`,
+outside the repository. The footer carries the gauge — the bar in place of the
+plain context percentage, and a status line with the phase, the three lines and
+what is left before the lock, in the colors of the model's theme.
+
+Why it exists, measured: in a past pi driving session under pi's default
+compaction, priming alone ran into a compaction before it finished, a later
+summary still read "[x] Primed" after the primed text was gone, and the next
+run launch after that compaction set an 1800 s controller timeout the earlier,
+primed launches had not — the incident fence 3 now denies.
+
+**Not covered.** The Claude Code path gets none of this: Claude Code cannot let
+a model trigger its own compaction or replace its summary prompt, so a
+Claude Code marimba still relies on `/compact` and a handoff. And the extension
+is proven by its own suite, not yet by a real driving session on this
+repository.
+
 ### What marimba reads
 
 `/prime-awsf` orients a session, then
 [`docs/driving/skills/awsf/SKILL.md`](docs/driving/skills/awsf/SKILL.md) is the
-judgment layer: a posture, four hard rules, and a routes table pointing at six
-cookbooks (preflight, prompting, workflow and tier choice, run and observe, read
-a blocked attempt, owner acts) and three references (evidence map, lifecycle,
-gotchas). The suite asserts every path in that table resolves, so the table
-cannot quietly outlive the tree. `marimba-plan` is the companion skill for the
-group journal — capturing requests, proposing units, and reading progress back.
+judgment layer: a posture, four hard rules, and a routes table pointing at seven
+cookbooks (preflight, prompting, workflow and tier choice, run and observe,
+selecting a model, effort or provider for a phase, read a blocked attempt, owner
+acts) and three references (evidence map, lifecycle, gotchas). The suite
+asserts every path in that table resolves, so the table cannot quietly outlive
+the tree. `marimba-plan` is the companion skill for the group journal —
+capturing requests, proposing units, and reading progress back.
 
 ## The dashboard
 
@@ -358,8 +423,8 @@ see everything through it and reach nothing:
 Polling is cadence-aware — 500 ms on a live session, 2 s on the grid, 5 s idle —
 with bounded exponential backoff and focus catch-up.
 
-**The page has exactly one lever.** Of the nine API routes, eight are reads and
-the ninth archives a card. There is no start button, no land button, no retry
+**The page has exactly one lever.** Of the ten API routes, nine are reads and
+the tenth archives a card. There is no start button, no land button, no retry
 button: every act that changes anything is a CLI command the owner types at a
 terminal. A meta-test asserts the route table stays that shape.
 
@@ -370,11 +435,10 @@ npm run dash:build
 npm run awsf -- dash          # loopback only, 127.0.0.1
 ```
 
-### The dashboard is further along on `task3.5` than on `main`
+### Driving sessions, on the page
 
-Stated rather than smoothed over, because the difference is large and a reader
-comparing branches will find it. `main` carries 26 components and ~4.0K lines;
-`task3.5` carries 38 components and ~9.9K lines, and adds:
+The roadmap's dashboard work, built on the `task3.5` branch, is merged into
+`main`: 37 components. Beyond the views above it adds:
 
 - **An execution canvas** — a reproducible force-directed map of runs, plans and
   driving sessions, filterable by kind, with a wheel that opens a run into its
@@ -389,13 +453,6 @@ comparing branches will find it. `main` carries 26 components and ~4.0K lines;
   guessed at. The distinction is the whole point: a refusal is the factory doing
   its job, a quota failure means nothing was wrong with the work.
 - **A notification sound**, so that silence means nothing needs you.
-
-`main` is currently mid-flight on the roadmap's Task 8 (recovery and adoption,
-the protected-quota foundation, seeded continuation) and its tree is dirty. The
-merge happens when Task 8 is done — and it is a gate, not a preference: W17's
-deep plan records `G17-M`, measured 2026-09-15 from merge-base `8268258`, with
-`main` 8 commits ahead, `task3.5` 27 ahead, and a trial merge conflicting in 17
-files.
 
 ## Workflows
 
@@ -465,7 +522,7 @@ the journal. It is bounded per act and in total, task-scoped, carried forward by
 
 ## Gates
 
-Twenty postcondition gates. A gate runs **after** a phase produces output and
+Twenty-one postcondition gates. A gate runs **after** a phase produces output and
 before anything downstream is allowed to treat it as real. A passing gate
 records *what it verified*, item by item, rather than a boolean — which is why a
 green run is readable evidence six weeks later.
@@ -523,14 +580,16 @@ green run is readable evidence six weeks later.
 
 ## Owner acts
 
-Eight acts the lifecycle reserves for a human. Each is interactive, each is
+Ten acts the lifecycle reserves for a human. Each is interactive, each is
 journalled, and none can be reached by a model.
 
 | Act | What it does |
 |---|---|
 | `awsf rework TASK "<concrete defect>"` | One fresh builder call on a new candidate built on the prior one, with fresh gates. T1 only: what it produces has not been reviewed. |
 | `awsf review TASK --reason "..."` | The T2 counterpart. Replaces a review recorded without evidence, once, on the opposite provider, changing no tree — so it preserves the green rather than invalidating it. A review carrying a *passing* `review_evidence_present` row is not replaceable at all, so disliking a verdict cannot buy a second opinion. |
+| `awsf degrade-review TASK --reason "..."` | Lets **one** attempt's review run on its builder's own provider, when the opposite provider is out of quota. Attempt-scoped and unrepeatable — the project's `routing.review` is untouched, so the next attempt is independent again. The host itself never selects a same-provider review. |
 | `awsf raise TASK --calls N --reason "..."` | Grants a live attempt more calls, bounded and journalled. |
+| `awsf grant TASK --phase PHASE --file PATH --reason "..."` | A one-use grant for one phase to write the exact protected files named, recorded at a quiescent boundary with their current blobs. Landing still needs its own approval. |
 | `awsf journey TASK --journey ID --sha REVISION` | Records the end-user journey. The gate checks separately that it ran, that it passed, and that the revision is the exact candidate. |
 | `awsf land TASK` | Local fast-forward only, from a TTY, through a persisted `LANDING` state. |
 | `awsf publish TASK` | Publishes a landed revision to its configured remote branch and seals the attempt. |
@@ -551,7 +610,7 @@ The plan is the unit of work, and it nests two levels deep.
    A meta-test asserts a plan and its tickets can never disagree.
 4. **An amendments log** at the end of every plan records what changed after
    authoring — each entry dated, each naming what moved and what deliberately
-   did not. There are **189 such entries** across 16 plan documents, and they
+   did not. There are **190 such entries** across 16 plan documents, and they
    are where the project's real history lives: the corrections, the questions
    the owner answered against a recommendation, and the findings that only a
    live drive could produce.
@@ -612,10 +671,10 @@ Do not take a green unit suite as evidence about process trees or Git landing �
 
 | Layer | Tests | What only this layer can prove |
 |---|---|---|
-| `unit` | 1,815 | Pure logic: the transition matrix, gate arithmetic, contract parsing, and the 33 architecture fences |
-| `contract` | 95 | That all three `ProcessSupervisor` implementations satisfy one shared behavioural contract |
-| `simulation` | 84 | Crash safety: SIGKILL injected at every step of the launch sequence, torn journal lines, orphan reaping, rebuild identity |
-| `journeys` | 173 | End-to-end owner paths — correction, rework, review inversion, permission breach, human gate, publish — against captured provider fixtures |
+| `unit` | 2,112 | Pure logic: the transition matrix, gate arithmetic, contract parsing, and the 33 architecture fences |
+| `contract` | 149 | That all three `ProcessSupervisor` implementations satisfy one shared behavioural contract |
+| `simulation` | 98 | Crash safety: SIGKILL injected at every step of the launch sequence, torn journal lines, orphan reaping, rebuild identity |
+| `journeys` | 263 | End-to-end owner paths — correction, rework, review inversion, permission breach, human gate, publish — against captured provider fixtures |
 
 The journey suite spends no provider quota.
 
@@ -640,7 +699,7 @@ core/                     @awsf/core — the host
   src/state/                 the pure task and phase machines; imports nothing impure
   src/contracts/             runtime-validated envelopes, TypeBox-generated schemas
   src/workflow/              the eight recipes, the phase engine, the correction economy
-  src/gates/                 the twenty postcondition gates
+  src/gates/                 the twenty-one postcondition gates
   src/execution/             process supervision, the PID-before-spawn barrier, call budget
   src/adapters/              claude-code, pi-codex, antigravity, fixture stub
   src/persistence/           the append-only journal and status store
@@ -650,7 +709,7 @@ core/                     @awsf/core — the host
   src/api/                   the loopback HTTP server
   test/{unit,contract,simulation,journeys}/    four executable proof layers
 dashboard/                Vue 3 + Vite, loopback-only, cursor-polling dashboard
-docs/driving/             marimba: the driving role's contract, guards, skills and cookbooks
+docs/driving/             marimba: the driving role's contract, guards, skills, cookbooks and compaction profile
 prompts/<agent>/          system.md / user.md pairs per agent, referenced by awsf.config.yaml
 records/pilots/           the two real adoption pilots, written up with their evidence
 ```
