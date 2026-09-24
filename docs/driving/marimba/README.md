@@ -14,6 +14,7 @@ performed by the two scripts in this directory.
 | `marimba-guard-rules.mts` | All three fences as pure rules, importing nothing. The one place either harness's lists are written. |
 | `marimba-guard.pi.ts` | The pi port of the guard: the same two shared fences, plus the pi-only lifecycle-timeout floor, bound to `tool_call` and `session_start`. |
 | `aliases.example.sh` | Launch aliases per harness, model and effort, as a template. One absolute path is left as a placeholder. |
+| `compaction/` | marimba's self-compaction profile for pi: thresholds, the summary prompt, the note template, and the re-prime pack read fresh from disk after every compaction. Read by the user-level `self-compact` pi extension when `PI_MARIMBA=1`; see below. |
 | `README.md` | This file. |
 
 **Read the guard's header before trusting it with anything.** It names, with
@@ -145,3 +146,30 @@ It is deliberately **not** a self-test. Issuing a call designed to be denied,
 just to watch it be denied, would put a document in the execution path of its
 own boundary. The guard's behaviour is proven offline instead, by a payload
 matrix under `core/test/unit/meta/` that runs against these same bytes.
+
+## Self-compaction on the pi path
+
+`compaction/` is data for a pi extension that is **not** in this repository:
+`self-compact`, installed user-level and loaded from the owner's pi settings.
+It lets marimba compact its own context at a checkpoint it chooses, with a note
+to itself that returns verbatim afterwards. With `PI_MARIMBA=1` and the
+checkout as the working directory, the extension reads this directory instead
+of its universal profile:
+
+- `profile.json` — thresholds, the note budget, where notes are archived
+  (outside the repository), and the re-prime pack.
+- `USER_PROMPT_COMPACTION_MESSAGE.md` — the summary prompt. It points at the
+  group journal and the status store instead of copying them, and it never lets
+  a summary claim the session is still primed.
+- `NOTE_TEMPLATE.md`, `USER_PROMPT_SOFT_SELF_COMPACT.md`,
+  `USER_PROMPT_WARNING_SELF_COMPACT.md` — the note's shape and the two
+  threshold messages.
+
+**Priming does not survive a compaction.** The re-prime pack is the answer: the
+files `profile.json` lists are read fresh from disk after every compaction and
+delivered before the summary and the note, so the judgment layer comes back
+without a full re-prime. `CONTRACT.md` and `AGENTS.md` are not in the pack
+because they sit in the system prompt, which a compaction keeps.
+
+None of these files carries live state; the notes themselves are archived under
+the owner's state directory, never here.
