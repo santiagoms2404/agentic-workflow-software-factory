@@ -1,70 +1,75 @@
+---
+description: Prime an AWSF driving session — the judgment layer plus live facts from the code
+---
 # /prime-awsf
 
-Orient a driving session in AWSF — the tier above the factory, where the owner
-decides what to ask for, prepares it, launches it, watches it, and reads what
-came back.
+Orient a driving session: the tier above the factory, where the owner decides
+what to ask for, prepares it, launches it, watches it and reads what came back.
+Load exactly what follows. Every item is a single source or printed from the
+code; nothing here restates one, because a copy goes wrong quietly. Paths
+starting `../` are relative to this file; every other path and every command is
+from the checkout root.
 
-Read the following in this order. Each is the source of truth for what it
-covers, and nothing here restates any of it: a copy is a second source of truth
-that goes wrong quietly.
+Already in your context — do not re-read: `AGENTS.md` (project instructions)
+and, in a marimba session, `../marimba/CONTRACT.md` (system prompt).
 
-1. `../skills/awsf/SKILL.md` — **the judgment layer, and the entry
-   point this command exists to serve.** It carries the posture, the hard rules,
-   and the routes table that says which cookbook answers which request. Read its
-   table now; read the cookbook a request calls for when the request arrives,
-   and no more. Everything below is a source that table points at.
+## 1. Read, in this order
 
-   This is first for a reason that was learned the expensive way: the skill said
-   *"run `/prime-awsf` first"* while this command never pointed back, so a
-   session primed from the cheatsheet knew every source of truth and none of the
-   judgment for using them — including the preflight that resolves a request
-   against the repository before a call is reserved. A pointer that goes one way
-   is how a driving session arrives well-read and unprepared.
-2. `AGENTS.md` — the invariants a session working *on* this repository may not
-   break. Invariant 1 is the one that shapes this command: no committed file
-   ever encodes which task, attempt or session is running.
-3. **The lifecycle contract** — `core/src/state/task-machine.ts` for the task
-   states, the legal edges and the ordered rejection contract;
-   `core/src/state/guards.ts` for the evidence each edge demands;
-   `core/src/state/tiers.ts` for the risk tiers and their call ceilings. The
-   numbers live there and only there.
-4. **The phase submachine and the escalation ladder** —
-   `core/src/state/phase-machine.ts` for what happens inside an executing state,
-   and `core/src/workflow/` for the recipes, the correction allowance, and the
-   escalation from a failed gate to a counted state transition.
-5. `awsf.config.yaml` — the only committed tuning surface: adapters, routing,
-   the per-agent model/prompt/harness/tools dial, workflows, gates, risk,
-   policy, observability. `core/src/config/schema.ts` is what validates it.
-6. **The state-root layout** — `core/src/persistence/platform-paths.ts` resolves
-   where durable state lives per platform and names every file inside an attempt
-   directory. `private/` is one of them and is never opened; see the skill's
-   hard rules.
-7. `specs/awsf-plan.html` — the plan, its status markers, and its Amendments,
-   which are where measured traps and past decisions are recorded.
+1. `../skills/awsf/SKILL.md` — posture, owner acts, hard rules, and
+   the routes table. Read the table now; read a cookbook only when a request
+   calls for it.
+2. `../skills/awsf/cookbooks/run_and_observe.md` — launching and
+   watching a run.
+3. `../skills/awsf/references/gotchas.md` — every trap measured so
+   far.
+4. `../skills/marimba-plan/SKILL.md` — the group journal.
 
-## Preflight
+These four are also what a marimba session reloads after a compaction.
 
-Confirm the toolchain before driving anything, rather than after:
+## 2. Print the live facts
+
+Current by construction: recipes, phases, minimum calls and tier ceilings;
+adapters, efforts and routable phase ids; the group operations and their flags;
+every lifecycle edge with its actors, spawn site and interactivity; the v2
+milestone markers.
 
 ```bash
-npm install
-npm test
-npm run lint
-just awsf doctor
+npm run awsf --silent -- workflows
+npm run awsf --silent -- routes list 2>&1
+npm run awsf --silent -- group help
+grep -E '^\s*\{ id: "L[0-9]+"' core/src/state/task-machine.ts
+grep -E '<h3><code class="status">' specs/awsf-v2-plan.html | sed -E 's/<[^>]+>//g; s/^ +//'
 ```
 
-The diagnosis command is read-only by construction and has no repair path — a
-finding is evidence for the owner, never permission to alter an attempt.
+`just awsf X` in any driving document is `npm run awsf -- X`; use the npm form
+when `just` is not installed.
 
-## Then stop
+## 3. Preflight — unless the owner waives it
 
-Priming ends here. **Do not print a status board.** Volunteered state is guessed
-state: it is stale on arrival, because state printed before the request
-describes a system the very next run changes, and probing to look prepared is
-how a session ends up confidently wrong in its first message.
+```bash
+npm install --no-audit --no-fund 2>&1 | tail -n 1
+npm test 2>&1 | grep -E '^# (tests|pass|fail) |^layers|^not ok'
+npm run lint 2>&1 | tail -n 2
+npm run awsf --silent -- doctor 2>&1 | grep -vE 'recovery: no live controller|candidate: none'
+```
 
-There is a second reason, specific to this repository. A command that opened
-with a live status board would be one edit away from a committed file encoding
-which attempt is running — `AGENTS.md` invariant 1, breached by the document
-meant to teach it. State is read when a request needs it, against the task the
-owner names, and it stays out of every file here.
+Report any red before driving: a red base blocks a correct build. `doctor` is
+read-only and has no repair path; a finding is evidence for the owner, never
+permission to alter an attempt.
+
+## 4. Look up on demand, never preload
+
+- guards, tiers, the phase machine, error classes: `core/src/state/`, mapped
+  question by question in `../skills/awsf/references/lifecycle.md`
+- where evidence lives: `../skills/awsf/references/evidence_map.md`
+- committed tuning: `awsf.config.yaml`, validated by `core/src/config/schema.ts`
+- a workstream's scope and decisions: its deep plan `specs/awsf-v2-w*.html`.
+  `specs/awsf-plan.html` is v1 and complete: open its Amendments only to learn
+  why a v1 edge exists.
+
+## 5. Then stop
+
+Do not print a status board: state volunteered before a request is stale on
+arrival, and a file that shows it breaks `AGENTS.md` invariant 1. Read state
+when a request needs it, for the task the owner names. Say you are primed in
+one line.
