@@ -1,0 +1,17 @@
+{
+  "name": "marimba",
+  "thresholds": { "softAt": "150k|55%", "at": "200k|74%", "buffer": "40k|15%" },
+  "noteMaxChars": 6000,
+  "noteDir": "~/.local/state/marimba-handoffs/compactions",
+  "appendFileLists": false,
+  "reprime": {
+    "files": [
+      "docs/driving/skills/awsf/SKILL.md",
+      "docs/driving/skills/marimba-plan/SKILL.md",
+      "docs/driving/skills/awsf/references/gotchas.md",
+      "docs/driving/skills/awsf/cookbooks/run_and_observe.md"
+    ],
+    "skillsReadInSession": false,
+    "maxChars": 40000
+  }
+}
