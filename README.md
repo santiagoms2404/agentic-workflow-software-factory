@@ -376,7 +376,13 @@ repository.
 
 ### What marimba reads
 
-`/prime-awsf` orients a session, then
+[`/prime-awsf`](docs/driving/commands/prime-awsf.md) orients a session by
+reading four documents — the two driving skills, the run-and-observe cookbook
+and the gotchas — and printing the rest from the code: the workflow registry,
+the route vocabulary, the group operations, the lifecycle edge table and the v2
+milestone markers. Everything else is looked up when a request needs it. In two
+otherwise identical pilot sessions this cut priming from 1.87M tokens, four
+compactions and 336 s to 87.5k tokens, none and 128 s.
 [`docs/driving/skills/awsf/SKILL.md`](docs/driving/skills/awsf/SKILL.md) is the
 judgment layer: a posture, four hard rules, and a routes table pointing at seven
 cookbooks (preflight, prompting, workflow and tier choice, run and observe,
