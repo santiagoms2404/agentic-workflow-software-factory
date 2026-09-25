@@ -99,9 +99,9 @@ code.inv { color:var(--accent); } code.ac { color:var(--good); }
     <summary>Metadata</summary>
     <dl>
       <dt>created</dt><dd>2026-08-27</dd>
-      <dt>modified</dt><dd>2026-08-27, 2026-08-27, 2026-08-27, 2026-08-28, 2026-08-29, 2026-08-29, 2026-08-29, 2026-09-24</dd>
+      <dt>modified</dt><dd>2026-08-27, 2026-08-27, 2026-08-27, 2026-08-28, 2026-08-29, 2026-08-29, 2026-08-29, 2026-09-24, 2026-09-24</dd>
       <dt>commits</dt><dd>none — authoring only; no implementation code was written, none — first owner review applied, none — second owner review applied; the plan, its build prompts and its ticket set land in this commit</dd>
-      <dt>agent name</dt><dd>claude-opus-5</dd>
+      <dt>agent name</dt><dd>claude-opus-5, claude-opus-5-5</dd>
       <dt>session id</dt><dd>not recorded — AGENTS.md invariant 1 keeps live session state out of every committed file in this repository</dd>
       <dt>back refs</dt><dd>./awsf-v2-plan.html (spine milestone M12, the In Plain Language register, Shared Invariants and Constraints), ./tickets/awsf-v2-plan/W12.md (meta-prompt), ./awsf-v2-plan-build-prompts.md (§ Section B → W12), ./awsf-v2-candidates-fuse-version.md (§10 first, then §2.6 and the DR7 row of §1), ./awsf-v2-w01-marimba-contract.html (the driving role this document teaches), ./awsf-v2-w02-evidence-readability.html (the dashboard the graduation run rebuilds), ./awsf-v2-w03-awsf-init.html, ./awsf-v2-w07-quota-telemetry.html, ./awsf-v2-w08-publish.html, ./awsf-v2-w11-five-stage-ladder.html, ./tickets/awsf-v2-w11-five-stage-ladder/README.md (T01's measured stop list, inherited), ../README.md, ../AGENTS.md (invariants 1, 10), ../docs/driving/ (the agent-facing tree this document must not duplicate), ../core/test/unit/meta/doc-reconciliation.test.ts, ../core/src/cli/main.ts, ../core/src/state/task-machine.ts, ../core/src/state/tiers.ts, ../awsf.config.yaml, owner-side reference: "Factory Body Mind — Technical Reference" (§08 and §19; outside this repository)</dd>
       <dt>forward refs</dt><dd>./awsf-v2-w12-cheatsheet-build-prompts.md, ./tickets/awsf-v2-w12-cheatsheet/ (T01–T23 plus README.md)</dd>
@@ -816,21 +816,21 @@ flowchart LR
 
   <!-- ================= M6 ================= -->
   <div class="phase">
-    <h3><code class="status">[]</code> Milestone M6: Close the leaf, then close v2</h3>
+    <h3><code class="status">[x]</code> Milestone M6: Close the leaf, then close v2</h3>
     <p><em>W12 is the last workstream in v2's core.</em> Closing it closes the expansion, so this milestone's spine Amendment is the record of what v2 delivered as much as of what W12 did. It also hands the owner the one package that cannot land from here.</p>
 
     <h4>23. Close, and hand over the owner-side package</h4>
     <p class="serves"><code class="serves">AC-12</code> <code class="serves">INV-4</code></p>
     <ul class="checklist">
-      <li><code class="status">[]</code> Confirm every marker in this plan reads <code>[x]</code> or <code>[f]</code>, and that every <code>[f]</code> names its blocking workstream</li>
-      <li><code class="status">[]</code> <code>npm test</code> — record suite counts and wall time; <code>npm run lint</code> and <code>npm run typecheck</code> exit 0 (<code>AC-12</code>)</li>
-      <li><code class="status">[]</code> Append the M6 closing Amendment to this plan: what W12 delivered, every task's final state, the friction, and the landing SHAs</li>
-      <li><code class="status">[]</code> In the same commit, flip <code>specs/awsf-v2-plan.html</code>'s Milestone M12 / W12 marker and its checklist, and <code>specs/tickets/awsf-v2-plan/W12.md</code>'s state</li>
-      <li><code class="status">[]</code> Append the closing Amendment to the spine: what W12 delivered claim by claim, what it routed and to whom, every <code>[f]</code> row with its block, and — per Q9 — whether W12 satisfies the <em>"v2's core lands"</em> precondition W13 and W14 both name</li>
-      <li><code class="status">[]</code> Prepare the <strong>owner-side handover</strong>, which is not committed here: the corrected §08 rows for the external technical-reference document, a new marimba subsection describing how a person drives the factory, a link to the cheatsheet, and the extension prompt in the shape that document's own §19 specifies</li>
-      <li><code class="status">[]</code> Name the deferred two-reader attempt as future work with what it would prove, so it is scheduled rather than forgotten</li>
-      <li><code class="status">[]</code> Confirm no runtime report, receipt or manifest file was committed by any milestone (<code>INV-4</code>)</li>
-      <li><code class="status">[]</code> Leave W09, W10, W13 and W14 markers untouched</li>
+      <li><code class="status">[x]</code> Confirm every marker in this plan reads <code>[x]</code> or <code>[f]</code>, and that every <code>[f]</code> names its blocking workstream</li>
+      <li><code class="status">[x]</code> <code>npm test</code> — record suite counts and wall time; <code>npm run lint</code> and <code>npm run typecheck</code> exit 0 (<code>AC-12</code>)</li>
+      <li><code class="status">[x]</code> Append the M6 closing Amendment to this plan: what W12 delivered, every task's final state, the friction, and the landing SHAs</li>
+      <li><code class="status">[x]</code> In the same commit, flip <code>specs/awsf-v2-plan.html</code>'s Milestone M12 / W12 marker and its checklist, and <code>specs/tickets/awsf-v2-plan/W12.md</code>'s state</li>
+      <li><code class="status">[x]</code> Append the closing Amendment to the spine: what W12 delivered claim by claim, what it routed and to whom, every <code>[f]</code> row with its block, and — per Q9 — whether W12 satisfies the <em>"v2's core lands"</em> precondition W13 and W14 both name</li>
+      <li><code class="status">[x]</code> Prepare the <strong>owner-side handover</strong>, which is not committed here: the corrected §08 rows for the external technical-reference document, a new marimba subsection describing how a person drives the factory, a link to the cheatsheet, and the extension prompt in the shape that document's own §19 specifies</li>
+      <li><code class="status">[x]</code> Name the deferred two-reader attempt as future work with what it would prove, so it is scheduled rather than forgotten</li>
+      <li><code class="status">[x]</code> Confirm no runtime report, receipt or manifest file was committed by any milestone (<code>INV-4</code>)</li>
+      <li><code class="status">[x]</code> Leave W09, W10, W13 and W14 markers untouched</li>
     </ul>
     <div class="loop">🔁 <strong>This is the only task that writes to the spine.</strong> A marker flipped before its evidence exists is invariant 2 breached by the workstream whose subject is trust.</div>
   </div>
@@ -840,18 +840,18 @@ flowchart LR
   <h2>Validation Commands</h2>
   <p>Every command here is offline. The two graduation runs in M5 are the only part of this workstream that spends provider quota, and they spend it on real tasks rather than on tests.</p>
   <ul class="checklist">
-    <li><code class="status">[]</code> <code>npm run test:unit</code> — the reconciliation fences, the meta-tests, and the plan/ticket sync fence</li>
-    <li><code class="status">[]</code> <code>npm run typecheck</code> — the new meta-test typechecks under the core project</li>
-    <li><code class="status">[]</code> <code>npm run lint</code> — exit 0</li>
-    <li><code class="status">[]</code> <code>npm test</code> — all four layers at close, counts recorded in the M6 Amendment</li>
-    <li><code class="status">[]</code> The leg-one normalization removed → red; restored → green (<code>AC-2</code>)</li>
-    <li><code class="status">[]</code> An invented command in a real command block → red, in each of the three invocation forms; a command in prose → still green (<code>AC-3</code>)</li>
-    <li><code class="status">[]</code> The reader warning deleted → red; moved after the first command block → red (<code>AC-4</code>)</li>
-    <li><code class="status">[]</code> <strong>Twelve induced failures across six fact classes</strong> — one omission and one invention per class — each observed red and returned green (<code>AC-6</code>)</li>
-    <li><code class="status">[]</code> A section with no index entry → red; an index entry for no section → red (<code>AC-7</code>)</li>
-    <li><code class="status">[]</code> An injected external reference → red; removed → green, and the document opens with the network disabled (<code>AC-8</code>)</li>
-    <li><code class="status">[]</code> The friction log and both graduation records are in the ticket README, every entry with one disposition, and the delta is recorded and interpreted (<code>AC-1</code>, <code>AC-5</code>, <code>AC-9</code>, <code>AC-10</code>, <code>AC-11</code>)</li>
-    <li><code class="status">[]</code> No committed file in this workstream's diff carries an identifier or an absolute machine path (<code>INV-3</code>); no report file exists in the diff (<code>INV-4</code>)</li>
+    <li><code class="status">[x]</code> <code>npm run test:unit</code> — the reconciliation fences, the meta-tests, and the plan/ticket sync fence</li>
+    <li><code class="status">[x]</code> <code>npm run typecheck</code> — the new meta-test typechecks under the core project</li>
+    <li><code class="status">[x]</code> <code>npm run lint</code> — exit 0</li>
+    <li><code class="status">[x]</code> <code>npm test</code> — all four layers at close, counts recorded in the M6 Amendment</li>
+    <li><code class="status">[x]</code> The leg-one normalization removed → red; restored → green (<code>AC-2</code>)</li>
+    <li><code class="status">[x]</code> An invented command in a real command block → red, in each of the three invocation forms; a command in prose → still green (<code>AC-3</code>)</li>
+    <li><code class="status">[x]</code> The reader warning deleted → red; moved after the first command block → red (<code>AC-4</code>)</li>
+    <li><code class="status">[x]</code> <strong>Twelve induced failures across six fact classes</strong> — one omission and one invention per class — each observed red and returned green (<code>AC-6</code>)</li>
+    <li><code class="status">[x]</code> A section with no index entry → red; an index entry for no section → red (<code>AC-7</code>)</li>
+    <li><code class="status">[x]</code> An injected external reference → red; removed → green, and the document opens with the network disabled (<code>AC-8</code>)</li>
+    <li><code class="status">[x]</code> The friction log and both graduation records are in the ticket README, every entry with one disposition, and the delta is recorded and interpreted (<code>AC-1</code>, <code>AC-5</code>, <code>AC-9</code>, <code>AC-10</code>, <code>AC-11</code>)</li>
+    <li><code class="status">[x]</code> No committed file in this workstream's diff carries an identifier or an absolute machine path (<code>INV-3</code>); no report file exists in the diff (<code>INV-4</code>)</li>
   </ul>
   <div class="loop">🔁 <strong>The plan is not complete until every box is checked and every command passes.</strong> If a step is genuinely impossible, mark it <code>[f]</code>, name the blocking condition, and move on.</div>
 </section>
@@ -1496,6 +1496,44 @@ NEW leaks body: true</code></pre>
     <p><strong>What the factory produced for each real task, apart from what the document proved.</strong> Run one: a build-and-review candidate at T2 on two provider calls (after a zero-spend T1 refusal), seven dashboard files changed, unit suite 1509/0, typecheck and lint clean; landed by local fast-forward at <code>5985f52</code>. Run two: the frozen protocol produced a zero-spend refusal and no candidate; after the protocol stopped, three further <code>simple-sdlc</code> attempts and two <code>build-review</code> drives were needed before the backlog feature reached <code>AWAITING_OWNER</code> and landed, first at <code>2fb0bc6</code> and then, after a rework fixing the credential-matching word boundary, at <code>1d34a02</code>. These are factory results, kept separate from the document's own claim because they are different claims — a factory failure in them is not a document failure.</p>
     <p><strong>Landing commit SHAs.</strong> <code>5985f52</code> (run one, dashboard Lab palettes), <code>2fb0bc6</code> (run two, first backlog landing), <code>1d34a02</code> (run two, the follow-up rework that fixed backlog selection and credential matching).</p>
     <p><strong>Suite counts at close.</strong> <code>npm run test:unit</code> — 2112/2112, exit 0, including every induced-failure leg in <code>core/test/unit/meta/cheatsheet-reconciliation.test.ts</code>. <code>npm run typecheck</code> — exit 0 for core and dashboard. <code>npm run lint</code> — 582 files, 0 warnings, 0 errors.</p>
+  </details>
+  <details>
+    <summary>2026-09-24 — M6 closed: every marker in this plan is settled, the spine's W12 row is amended by the owner, and W12 closes</summary>
+    <p><strong>Every marker in this plan now reads <code>[x]</code>, and none reads <code>[f]</code>.</strong> All six milestones, all twenty-three tasks, every task checklist box, and all twelve Validation Commands rows. There is therefore no blocking workstream to name. T01–T23 are <code>done</code> in the ticket set, and <code>ticket-plan-sync.test.ts</code> checks each against both its milestone marker and its own checklist.</p>
+
+    <p><strong>What W12 delivered.</strong></p>
+    <ul>
+      <li><code>docs/cheatsheet.html</code>: one hand-authored, self-contained file with sixteen sections. Six walkthrough legs, three boundary sections (what the reader is never asked to do, what the document owns, and what it does not cover), and six reference sections, one per fenced fact class. It has no markdown twin, no renderer, and no build step.</li>
+      <li><code>core/test/unit/meta/cheatsheet-reconciliation.test.ts</code>: all five fence legs over that file, each with in-memory specimens that prove it bites in both directions.</li>
+      <li>The shared extractor in <code>core/test/unit/meta/_driving.ts</code> now reads all three invocation forms (<code>awsf X</code>, <code>npm run awsf -- X</code> and <code>just awsf X</code>). This made every <code>awsf</code> command in <code>README.md</code> checkable for the first time. It also turned the README's stale lifecycle numbers red, and T06 repaired them.</li>
+      <li>The friction log, with forty-one observed and seven inherited entries, each with one disposition and one half. Its routed requests went to W01 and W03, and its closure findings (O28 and O34–O36) became the evidence behind W15's declaration in the spine.</li>
+      <li>The graduation record. Two real tasks were driven through the document with 11 and then 8 consultations, a delta of −3. All 19 consultations were dispositioned: 13 answered in the document and 6 accepted absences, with none routed and none owner-side.</li>
+    </ul>
+
+    <p><strong>Every task's final state.</strong> M1 T01–T04 <code>[x]</code>. M2 T05–T10 <code>[x]</code>. M3 T11–T15 <code>[x]</code>. M4 T16–T18 <code>[x]</code>. M5 T19–T22 <code>[x]</code>. M6 T23 <code>[x]</code>.</p>
+
+    <p><strong>The Validation Commands rows were closed on evidence re-run in this session, not on the earlier Amendments.</strong> The earlier closes were each true when written. Since then, T21 edited the document, and the source sets grew under it. So every induced-failure leg was re-run against the committed <code>docs/cheatsheet.html</code> (and against <code>_driving.ts</code> for leg one). Each case mutated the file in place, ran <code>node --experimental-strip-types --test core/test/unit/meta/cheatsheet-reconciliation.test.ts</code>, and restored the original bytes behind an exit and signal handler. Twenty-three cases, all as expected. The unmodified document ran 20 of 20 green. Every one of these went red with exactly one failing test: leg one with its normalization removed (<code>AC-2</code>); an invented command in a real command block, in each of the three invocation forms (<code>AC-3</code>); the reader warning deleted, and the warning moved after the first command block (<code>AC-4</code>); one omission and one invention in each of the six fact classes, twelve cases (<code>AC-6</code>); a section with no index entry, and an index entry pointing at no section (<code>AC-7</code>); and an injected external stylesheet (<code>AC-8</code>). The same invented command written only in prose stayed green, so the exemption is deliberate. The tree was byte-clean after the sweep. The document was also rendered by headless Chrome from a copy outside the repository, with every DNS lookup mapped to not-found and the proxy pointed at a closed port. It rendered fully, both columns and all of its styling, with nothing fetched. The live-identifier and absolute-path scans of this workstream's committed files found nothing (<code>INV-3</code>). Across every W12 commit, no path whose basename contains <code>receipt</code> or <code>manifest</code> was added (<code>INV-4</code>).</p>
+
+    <p><strong>What the set-equality fences did after M4, which no review could have done.</strong> M4 closed with 23 commands and 7 owner acts. Today <code>CLI_COMMANDS</code> exports 31 entries and the guard's verb loop names ten acts: <code>degrade-review</code>, <code>resume</code> and <code>grant</code> arrived in <code>a192160</code> and <code>eb996ae</code>, after this plan was authored. Each addition turned the suite red until the document named it. The spine said the cheatsheet could only be written once the command surface stopped moving. The surface did not stop. The document stayed true anyway, because it is bound to its sources rather than frozen beside them.</p>
+
+    <p><strong>Three things found at close, recorded rather than repaired, because this task closes and does not edit.</strong></p>
+    <ul>
+      <li><strong>The guard's header comment is stale for the third time.</strong> <code>docs/driving/marimba/delegation-guard.sh</code> line 16 says <em>"one of the eight acts"</em>. The loop names ten. This is the same comment that said <em>"six"</em> when the plan was authored, and nothing fences it, because only the loop is a source. <code>docs/driving/**</code> is in <code>policy.protected_paths</code>, so the repair is the owner's edit.</li>
+      <li><strong>The cheatsheet's index misstates its own status.</strong> The ten walkthrough and boundary entries in <code>nav[data-awsf-index]</code> carry <code>dot pending</code> ("not yet written"), while each of those sections' own heading carries <code>dot built</code>. The index fence checks anchors, not dots, so the status language is an unfenced class of fact inside the one file this workstream fenced. The error understates rather than overstates, so it does not breach the document's rule that a dot never says built about something that is not. It is still a stale fact, and repairing it is a one-attribute edit per entry.</li>
+      <li><strong>The external technical-reference document was renumbered after this plan named it.</strong> Its extension template is now <strong>§21</strong>, not §19. §18–§20 are interview-preparation sections added since. The handover follows §21.</li>
+    </ul>
+
+    <p><strong>The owner-side handover was prepared and given to the owner as text, and is not committed here.</strong> It contains the corrected §08 rows, a marimba subsection, a link to the cheatsheet, and the extension prompt in §21's shape. One correction to T23's own brief was measured rather than copied. The brief says W01's <em>"six owner-act command shapes"</em> should read seven. The guard's loop names ten, and the handover says ten.</p>
+
+    <p><strong>The deferred two-reader attempt is future work, not a pending gate (Q7).</strong> Two readers who did not build the factory would each follow the walkthrough, on a machine that has never held this checkout, under the frozen observation protocol in the ticket README. The first run would prove what the author-driven runs cannot: that the document is <em>comprehensible</em> to somebody new, rather than only <em>sufficient to drive with</em>. Every consultation it needs would be a hole the author could not see. The second reader is the control. A stop both readers hit is a gap in the document, and a stop only one hits is a question about that reader. It would also test the one leg neither graduation run could reach: a greenfield project, which still needs the three W03 requests (<code>W03-GREENFIELD-ENTRY</code>) before it is walkable. Those requests stand unless W03's code has closed them since. It becomes schedulable when a reader exists. Q1 records that none does yet.</p>
+
+    <p><strong>Landing SHAs, by milestone.</strong> M1: <code>1cc5158</code>, <code>e345157</code>, <code>5a52172</code>, <code>296819f</code>. M2: <code>4673b03</code>, <code>e102bf9</code>, <code>de7318d</code>, <code>6b376dd</code>, <code>e232688</code>, <code>5faff7f</code>. M3: <code>6c42a32</code>, <code>def29b7</code>, <code>4ffac7d</code>, <code>ea156c6</code>, <code>7b6ab01</code>, <code>aabf1d5</code>. M4: <code>d42aeaa</code>, <code>3bf189a</code>, <code>83fa29b</code>. M5: <code>7ca7d16</code>, <code>e10de8e</code>, <code>aca3d17</code>, <code>bc0af41</code>. The graduation tasks' own landings were <code>5985f52</code>, <code>2fb0bc6</code> and <code>1d34a02</code>. M6 lands in the commit that carries this Amendment, on base <code>bc0af41</code>. A commit cannot name its own SHA.</p>
+
+    <p><strong>Suite counts at close, measured at base <code>bc0af41</code> before any edit.</strong> <code>npm test</code> — all four layers, each with its own exit code: unit 2112/2112, contract 149/149, simulation 98/98, journeys 263/263 — 2622/2622, exit 0, 3319 s wall. <code>npm run lint</code> — 582 files, 0 warnings, 0 errors. <code>npm run typecheck</code> — exit 0 for core and dashboard.</p>
+
+    <p><strong>What was re-run after these edits.</strong> All meta-tests passed, 211 of 211, <code>ticket-plan-sync</code> included. The unit tests that read <code>specs/</code> passed, 474 of 474. The three journey files that read <code>specs/</code> ran as one batch and passed 105 of 107. Both failures were A3 <em>genuine process death</em> journeys, at the head and binding boundaries. Those journeys build a throwaway repository, SIGKILL a real host inside the publication protocol, and read no plan. Re-run alone on the edited tree, all three boundaries passed, 3 of 3, and they passed in the full run at base. The pattern already recorded in this plan's 2026-09-01 Amendment fits: an assertion on an operating-system transition, measured under load. It is recorded here, not repaired, and the failing assertion text was not retained.</p>
+
+    <p><strong>Build metadata.</strong> The commit is authored and committed as <code>Santiago Marin &lt;santiagomarinsuarez@me.com&gt;</code>, with no agent, model or tool in its author, committer, message or trailers. Built on anthropic:claude-opus-5-5. No live task, attempt, run or session identifier, and no absolute machine path, is recorded here.</p>
   </details>
 </section>
 
