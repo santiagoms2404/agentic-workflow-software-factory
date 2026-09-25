@@ -10,7 +10,7 @@ const IDS = ["T01", "T02", "T03"] as const;
 
 async function main(): Promise<void> {
   const [directory, plan] = process.argv.slice(2);
-  if (!directory || !plan) throw new Error("usage: _shift-manifest-child.ts <directory> <plan>");
+  if (!directory || !plan) throw new Error("usage: _shift-selection-child.ts <directory> <plan>");
   const tickets = [];
   for (const id of IDS) {
     const file = await readPlanTicketFile(`${directory}/${id}.md`);

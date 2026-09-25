@@ -1088,7 +1088,7 @@ flowchart LR
       <h3>Decisions made inside the milestone the plan did not already carry</h3>
       <ul>
         <li>The cross-process digest test spawns a second <code>node --experimental-strip-types</code> process
-        from a non-<code>.test.ts</code> helper (<code>core/test/unit/_shift-manifest-child.ts</code>), following
+        from a non-<code>.test.ts</code> helper (<code>core/test/unit/_shift-selection-child.ts</code>), following
         <code>marimba-guard.test.ts</code>'s precedent that the child-process fence (AGENTS.md invariant 3) scopes
         to <code>core/src</code> only — a test asserting a cross-process property is the one place spawning a
         process is the point, not a workaround.</li>

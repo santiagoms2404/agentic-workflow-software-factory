@@ -35,7 +35,7 @@ async function manifestOver(directory: string): Promise<ShiftManifest> {
   return sealShiftManifest({ plan: PLAN, milestones: ["M1"], tickets });
 }
 
-const CHILD_SCRIPT = join(import.meta.dirname, "_shift-manifest-child.ts");
+const CHILD_SCRIPT = join(import.meta.dirname, "_shift-selection-child.ts");
 
 /** Seals the same manifest in a FRESH node process, over the same directory's bytes. */
 function manifestDigestInChildProcess(directory: string): string {
