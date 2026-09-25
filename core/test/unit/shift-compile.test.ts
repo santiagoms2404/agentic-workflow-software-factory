@@ -12,7 +12,6 @@ import { sealShiftManifest, type ShiftManifest } from "../../src/contracts/shift
 import { parsePlanTicketBody, ticketFileDigest } from "../../src/persistence/plan-ticket-body.ts";
 import {
   InvalidPhaseDescription,
-  InvalidReviewBuildProducerCount,
   assertEarnedDescription,
   compilePhase,
   compileWorkflowStructure,
@@ -130,20 +129,18 @@ test("minimumCalls === tickets.length + 1, asserted directly", () => {
     const recipe = compile(ids);
     assert.equal(recipe.phases.filter((phase) => phase.kind === "agent").length, count + 1, `${count} tickets`);
   }
-  // The compiler's own count, at the one size its review rule admits today.
+  // The compiler's own count.
   const one = compileWorkflowStructure(compile(["T01"]));
   assert.equal(one.minimumCalls, 2);
   assert.equal(one.reviewBuildPhaseId, "t01-build");
 });
 
-test("more than one ticket meets reviewBuildPhaseId's single-producer rule, which T06 amends", () => {
-  // Pinned so the amendment is seen to change it: until T06, a shift of N >= 2
-  // cannot carry its review phase through compileWorkflowStructure at all.
-  assert.throws(
-    () => compileWorkflowStructure(compile(THREE)),
-    (error: unknown) => error instanceof InvalidReviewBuildProducerCount
-      && error.phaseIds.join(",") === "t01-build,t02-build,t03-build",
-  );
+test("more than one ticket carries its review through compileWorkflowStructure", () => {
+  // Until T06 this threw InvalidReviewBuildProducerCount. The provider half of
+  // the amended rule is shift-inversion.test.ts's.
+  const three = compileWorkflowStructure(compile(THREE));
+  assert.equal(three.minimumCalls, 4);
+  assert.deepEqual(three.reviewBuildPhaseIds, ["t01-build", "t02-build", "t03-build"]);
 });
 
 test("every phase earns its description from the ticket's title, never its id", () => {

@@ -146,7 +146,7 @@ import { PermissionBreach } from "../../policy/path-policy.ts";
 import { openPermissionSession, type PermissionSession, type SandboxProbe } from "../../policy/sandbox-broker.ts";
 import { transition, SEALED_STATES, type EdgeId, type TaskState } from "../../state/task-machine.ts";
 import { createCompiledPhaseLaunchVerifier } from "../../workflow/phase-launch-authorization.ts";
-import { compileWorkflow, compileWorkflowStructure, type WorkflowRecipe } from "../../workflow/compiler.ts";
+import { compileWorkflow, compileWorkflowStructure, reviewWorkerProvider, type WorkflowRecipe } from "../../workflow/compiler.ts";
 import { composePromptBundle, type PromptBundle } from "../../workflow/prompt-composition.ts";
 import type { CompiledAgentPhase } from "../../workflow/phase.ts";
 import { outputOwnershipCheck } from "../../workflow/output-ownership.ts";
@@ -1357,10 +1357,6 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     // returns the provider the adapter will actually reach.
     const reviewPhase = compiled.phases.find(isReviewPhase);
     if (reviewPhase !== undefined) {
-      const buildPhaseId = compiled.reviewBuildPhaseId;
-      if (buildPhaseId === null) {
-        throw new InvalidReviewInversion("the compiled review workflow has no build-producing agent phase");
-      }
       const providerFor = (phaseId: string): string => {
         const fresh = routes.get(phaseId)?.model.provider;
         if (fresh !== undefined) return fresh;
@@ -1369,7 +1365,13 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
         if (evidence?.type !== "agent-start") throw new InvalidReviewInversion("accepted phase has no recorded original provider");
         return evidence.provider;
       };
-      const workerProvider = providerFor(buildPhaseId);
+      // A shift has one builder per ticket, and routes are keyed by phase id,
+      // so one override can move one builder. The worker is the one provider
+      // every builder resolves to; builders on two providers are refused here
+      // by name. This runs before the mode is read, so under
+      // same-provider-degraded the builders must still agree and the reviewer
+      // must join them: a degraded shift runs on one provider end to end.
+      const workerProvider = reviewWorkerProvider(compiled, providerFor);
       const configured = providerFor(reviewPhase.id);
       if (reviewMode === "same-provider-degraded") {
         if (configured !== workerProvider) {

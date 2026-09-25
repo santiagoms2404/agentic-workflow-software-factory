@@ -404,13 +404,13 @@ flowchart TD
       <h4>6. Review inversion for a workflow with many builders</h4>
       <p class="sub">Serves <code class="serves">AC-2</code></p>
       <p><strong>The one hard structural blocker.</strong> <code>reviewBuildPhaseId</code> collects every agent phase carrying <code>awsf.build-output/v1</code> and throws <code>InvalidReviewBuildProducerCount</code> unless there is exactly one. A five-ticket shift has five, so it cannot carry a review phase at all as the code stands. The check is called from <code>compileWorkflowStructure</code>, so it fires on the recovery path too.</p>
-      <p><strong>The amendment, and why it is narrow.</strong> The check exists to make the review's inversion well-defined: <code>production-run.ts:1157</code> reads the worker provider off that one phase and inverts against it. A shift's builders all run on <strong>one route</strong>, so the inversion is well-defined by the providers, not by the phase count. The rule becomes <em>&ldquo;the build producers resolve to exactly one distinct provider&rdquo;</em>, which is strictly what was always being checked, and which still refuses every case the current rule refuses.</p>
+      <p><strong>The amendment, and why it is narrow.</strong> The check exists to make the review's inversion well-defined: <code>production-run.ts:1157</code> reads the worker provider off that one phase and inverts against it. A shift's builders share one owner and so one provider, unless a per-phase route override moves one, so the inversion is well-defined by the providers, not by the phase count. The rule becomes <em>&ldquo;the build producers resolve to exactly one distinct provider&rdquo;</em>, which is what was always being checked. It still refuses a review with no build producer and builders split across providers. It admits several builders on one provider, which the old rule refused and which is the point (corrected 2026-09-25, see Amendments).</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>CompiledWorkflow</code> carries <code>reviewBuildPhaseIds: readonly string[]</code> beside the existing single id, and the single id keeps its exact current value for every shipped recipe</li>
-        <li><code class="status">[]</code> A workflow with a review phase and <strong>zero</strong> build producers is still refused, with the same error class and the same message shape</li>
-        <li><code class="status">[]</code> <code>production-run.ts:1143–1167</code> resolves <code>workerProvider</code> from the build producers and <strong>refuses when they do not agree</strong>, with a message naming the disagreeing phases rather than a count</li>
-        <li><code class="status">[]</code> <code>providerPairFrom</code> is unchanged: N builders on one provider and one reviewer on the other still yields exactly two distinct providers</li>
-        <li><code class="status">[]</code> <strong>Authored against the post-merge file.</strong> <code>task3.5</code> adds <code>ReviewRouteMode</code> and a <code>"same-provider-degraded"</code> mode to <code>review-routing.ts</code>; this task must state what a shift does under that mode rather than discover it after the merge</li>
+        <li><code class="status">[x]</code> <code>CompiledWorkflow</code> carries <code>reviewBuildPhaseIds: readonly string[]</code> beside the existing single id, and the single id keeps its exact current value for every shipped recipe</li>
+        <li><code class="status">[x]</code> A workflow with a review phase and <strong>zero</strong> build producers is still refused, with the same error class and the same message shape</li>
+        <li><code class="status">[x]</code> <code>production-run.ts</code>'s inversion preflight resolves <code>workerProvider</code> from the build producers through <code>reviewWorkerProvider</code> and <strong>refuses when they do not agree</strong>, with <code>ReviewBuildProvidersDisagree</code> naming each build phase and its provider rather than a count (reworded 2026-09-25, see Amendments)</li>
+        <li><code class="status">[x]</code> <code>providerPairFrom</code> is unchanged: N builders on one provider and one reviewer on the other still yields exactly two distinct providers</li>
+        <li><code class="status">[x]</code> <strong>Authored against the post-merge file.</strong> Under <code>"same-provider-degraded"</code>, a shift's builders must still resolve to one provider and the reviewer must be on it. The agreement check runs before the mode is read, so a degraded shift runs on one provider end to end (reworded 2026-09-25, see Amendments)</li>
       </ul>
 
       <h4>7. Testing Strategy</h4>
@@ -1194,6 +1194,45 @@ flowchart LR
         check. <code>production-run.ts</code>'s <code>SUPPORTED</code> map and <code>routes.ts</code> read
         <code>WORKFLOW_RECIPES</code> directly and are M4's to extend. <code>config/workflow-ids.ts</code> was not
         edited.</li>
+      </ul>
+    </details>
+
+    <details open>
+      <summary>2026-09-25 — task 6 built: the review rule is checked in two places</summary>
+
+      <p><strong>Markers:</strong> task 6's five rows move to <code class="status">[x]</code>. Rows 3 and 5 are
+      reworded to what was built, and the task's second paragraph is corrected. M2 stays
+      <code class="status">[wip]</code>.</p>
+
+      <h3>Where the rule lives</h3>
+      <p>The rule is &ldquo;the build producers resolve to exactly one distinct provider&rdquo;. The compiler knows
+      phases, not providers, so it is checked in two places. <code>compileWorkflowStructure</code> refuses a review
+      with zero build producers with <code>InvalidReviewBuildProducerCount</code>, on the first run and on recovery.
+      <code>reviewWorkerProvider(compiled, providerFor)</code> in <code>compiler.ts</code> is the provider half. The
+      runner calls it in its inversion preflight, after every route resolves and before any process, on the first run
+      and on recovery. It refuses builders on more than one provider with <code>ReviewBuildProvidersDisagree</code>,
+      naming each phase and its provider. That class extends <code>InvalidReviewInversion</code>, so the blocker code
+      stays <code>phase-abort</code>. The compile check alone is &ldquo;at least one&rdquo;, which is why the provider
+      half is not optional.</p>
+
+      <h3>The correction to task 6's wording</h3>
+      <p>The task said the amended rule &ldquo;still refuses every case the current rule refuses&rdquo;. It does not.
+      The old rule refused two builders on one provider, and the new one admits them. That is the point of the
+      amendment. It also admits builders on different models of one provider, because inversion is by provider. The
+      task also said a shift's builders &ldquo;all run on one route&rdquo;. Routes are keyed by phase id, so a
+      per-phase override can move one builder to another provider. The provider half is what catches that.</p>
+
+      <h3>What task 6 decided that the plan did not carry</h3>
+      <ul>
+        <li><strong><code>reviewBuildPhaseId</code> is null when there are two or more builders.</strong> Naming the
+        first or the last builder was rejected: a reader of the single id would invert against one builder and skip
+        the agreement check. For the eight shipped recipes it is unchanged. A test pins each value measured at
+        <code>e39ac26</code>, and each recipe's compiled form hashes the same before and after.</li>
+        <li><strong>The zero-producer message changed words, not shape.</strong> It now says &ldquo;requires at least
+        one build-producing agent phase &hellip;, all on one provider; found 0&rdquo;, where it said &ldquo;exactly
+        one&rdquo;.</li>
+        <li><strong>Under <code>same-provider-degraded</code></strong>, the agreement check runs before the mode is
+        read. The builders must agree, and the reviewer must be on their provider.</li>
       </ul>
     </details>
 

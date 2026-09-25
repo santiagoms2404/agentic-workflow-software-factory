@@ -63,7 +63,7 @@ test("review workflows identify the build-producing agent by output schema", () 
   assert.equal(compileWorkflow(buildWorkflow, 1).reviewBuildPhaseId, null);
 });
 
-test("review workflows fail closed unless exactly one agent produces build output", () => {
+test("review workflows fail closed with no build producer, and name every producer", () => {
   let launchCount = 0;
   const compileBeforeLaunch = (workflow: WorkflowRecipe) => {
     const compiled = compileWorkflow(workflow, workflow.tier);
@@ -80,18 +80,19 @@ test("review workflows fail closed unless exactly one agent produces build outpu
     (error: Error) => error instanceof InvalidReviewBuildProducerCount && error.count === 0,
   );
 
+  assert.equal(launchCount, 0, "invalid review topology is rejected before launch");
+
+  // Two builders compile since T06. Whether they share a provider is decided
+  // once routes exist, by reviewWorkerProvider (shift-inversion.test.ts).
   const builder = buildReviewWorkflow.phases.find((phase) => phase.id === "builder")!;
-  const ambiguous = {
+  const twoBuilders = {
     ...buildReviewWorkflow,
     id: "review-with-two-builds",
     phases: [...buildReviewWorkflow.phases, { ...builder, id: "second-builder" }],
   } satisfies WorkflowRecipe;
-  assert.throws(
-    () => compileBeforeLaunch(ambiguous),
-    (error: Error) => error instanceof InvalidReviewBuildProducerCount &&
-      error.count === 2 && error.phaseIds.join(",") === "builder,second-builder",
-  );
-  assert.equal(launchCount, 0, "invalid review topology is rejected before launch");
+  const compiled = compileBeforeLaunch(twoBuilders);
+  assert.deepEqual(compiled.reviewBuildPhaseIds, ["builder", "second-builder"]);
+  assert.equal(compiled.reviewBuildPhaseId, null);
 });
 
 test("a real shipped workflow whose minimum cannot fit the selected tier is rejected before execution", () => {

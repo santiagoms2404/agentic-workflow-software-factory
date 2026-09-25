@@ -14,6 +14,7 @@ import type {
   CompiledPhase,
   PhaseDefinition,
 } from "./phase.ts";
+import { InvalidReviewInversion } from "./review-routing.ts";
 
 export class InvalidPhaseDescription extends Error {
   readonly phaseId: string;
@@ -118,8 +119,8 @@ export class InvalidReviewBuildProducerCount extends Error {
 
   constructor(phaseIds: readonly string[]) {
     super(
-      `a workflow with a review phase requires exactly one build-producing agent phase ` +
-        `with schema ${JSON.stringify(BUILD_OUTPUT_SCHEMA_ID)}; found ${phaseIds.length}` +
+      `a workflow with a review phase requires at least one build-producing agent phase ` +
+        `with schema ${JSON.stringify(BUILD_OUTPUT_SCHEMA_ID)}, all on one provider; found ${phaseIds.length}` +
         (phaseIds.length === 0 ? "" : ` (${phaseIds.join(", ")})`),
     );
     this.name = "InvalidReviewBuildProducerCount";
@@ -128,24 +129,89 @@ export class InvalidReviewBuildProducerCount extends Error {
   }
 }
 
-function reviewBuildPhaseId(phases: readonly PhaseDefinition[]): string | null {
+/** The build producers of one review resolved to more than one provider. */
+export class ReviewBuildProvidersDisagree extends InvalidReviewInversion {
+  readonly providers: readonly { readonly provider: string; readonly phaseIds: readonly string[] }[];
+
+  constructor(providers: readonly { readonly provider: string; readonly phaseIds: readonly string[] }[]) {
+    super(
+      "every build producer must resolve to one provider for the review to invert against; " +
+        providers.map(({ provider, phaseIds }) => `${phaseIds.join(", ")} on ${JSON.stringify(provider)}`).join("; "),
+    );
+    this.name = "ReviewBuildProvidersDisagree";
+    this.providers = Object.freeze(providers.map(({ provider, phaseIds }) =>
+      Object.freeze({ provider, phaseIds: Object.freeze([...phaseIds]) })));
+  }
+}
+
+/**
+ * A review inverts against the provider that built the candidate. The rule
+ * that guards it is: the build producers resolve to exactly one distinct
+ * provider.
+ *
+ * It used to read "exactly one build-producing agent phase". The runner only
+ * ever used that phase to look up a provider, so the phase count was
+ * incidental. A shift has one builder per ticket, and the inversion is as well
+ * defined for N builders on one provider as for one builder.
+ *
+ * The compiler knows phases, not providers, so the rule is checked in two
+ * places. Here, a review with no build producer is refused, and because
+ * `compileWorkflowStructure` calls this, recovery refuses it too.
+ * `reviewWorkerProvider` is the provider half: the runner calls it once every
+ * route is resolved and before any process starts, and it refuses producers
+ * on more than one provider, naming each phase.
+ *
+ * What it still refuses: a review with no build producer, and build producers
+ * on two or more providers. What it no longer refuses: several build producers
+ * on one provider, even on different models of that provider, because
+ * inversion is by provider. The count check alone is "at least one", which is
+ * why the provider half is not optional.
+ */
+function reviewBuildPhaseIds(phases: readonly PhaseDefinition[]): readonly string[] {
   const hasReview = phases.some(
     (phase) => phase.kind === "agent" && phase.schemaId === REVIEW_OUTPUT_SCHEMA_ID,
   );
-  if (!hasReview) return null;
+  if (!hasReview) return Object.freeze([]);
 
   const buildPhaseIds = phases
     .filter((phase) => phase.kind === "agent" && phase.schemaId === BUILD_OUTPUT_SCHEMA_ID)
     .map((phase) => phase.id);
-  if (buildPhaseIds.length !== 1) throw new InvalidReviewBuildProducerCount(buildPhaseIds);
-  return buildPhaseIds[0]!;
+  if (buildPhaseIds.length === 0) throw new InvalidReviewBuildProducerCount(buildPhaseIds);
+  return Object.freeze(buildPhaseIds);
+}
+
+/**
+ * The one provider every build producer resolves to, which the review inverts
+ * against. `providerFor` is the caller's route lookup, so this stays pure.
+ */
+export function reviewWorkerProvider(
+  compiled: Pick<CompiledWorkflow, "reviewBuildPhaseIds">,
+  providerFor: (phaseId: string) => string,
+): string {
+  if (compiled.reviewBuildPhaseIds.length === 0) throw new InvalidReviewBuildProducerCount([]);
+  const byProvider = new Map<string, string[]>();
+  for (const phaseId of compiled.reviewBuildPhaseIds) {
+    const provider = providerFor(phaseId);
+    byProvider.set(provider, [...(byProvider.get(provider) ?? []), phaseId]);
+  }
+  if (byProvider.size !== 1) {
+    throw new ReviewBuildProvidersDisagree([...byProvider].map(([provider, phaseIds]) => ({ provider, phaseIds })));
+  }
+  return [...byProvider.keys()][0]!;
 }
 
 export interface CompiledWorkflow {
   readonly id: string;
   readonly minimumCalls: number;
-  /** Structural build producer that an optional review must invert against. */
+  /**
+   * The build producer an optional review inverts against, when there is
+   * exactly one. Null with no review phase, and null when several producers
+   * share the review: none of them alone is the worker, and a reader that
+   * took one would skip the check `reviewWorkerProvider` makes.
+   */
   readonly reviewBuildPhaseId: string | null;
+  /** Every build producer a review covers, in phase order. Empty with no review phase. */
+  readonly reviewBuildPhaseIds: readonly string[];
   readonly phases: readonly CompiledPhase[];
 }
 
@@ -170,11 +236,12 @@ export function compileWorkflowStructure(workflow: WorkflowDefinition): Compiled
     ids.add(phase.id);
   }
   const minimumCalls = workflow.phases.filter((phase) => phase.kind === "agent").length;
-  const buildPhaseId = reviewBuildPhaseId(workflow.phases);
+  const buildPhaseIds = reviewBuildPhaseIds(workflow.phases);
   return Object.freeze({
     id: workflow.id,
     minimumCalls,
-    reviewBuildPhaseId: buildPhaseId,
+    reviewBuildPhaseId: buildPhaseIds.length === 1 ? buildPhaseIds[0]! : null,
+    reviewBuildPhaseIds: buildPhaseIds,
     phases: Object.freeze(workflow.phases.map((phase) => compilePhase(phase))),
   });
 }
