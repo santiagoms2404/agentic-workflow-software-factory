@@ -106,8 +106,8 @@ pre.mermaid{background:transparent;border:0;padding:0;margin:0;font-family:var(-
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-09-15</dd>
-        <dt>modified</dt>     <dd>2026-09-15, 2026-09-15 (Questionables decided), 2026-09-20 (selection widened), 2026-09-24 (M1 closed), 2026-09-25 (task 5; G17 reordered after it)</dd>
-        <dt>commits</dt>      <dd>M1 landed: a3d83ef (T01), 323bd0c (T02), and this commit (T03)</dd>
+        <dt>modified</dt>     <dd>2026-09-15, 2026-09-15 (Questionables decided), 2026-09-20 (selection widened), 2026-09-24 (M1 closed), 2026-09-25 (task 5; G17 reordered after it), 2026-09-25 (task 6), 2026-09-25 (M2 closed)</dd>
+        <dt>commits</dt>      <dd>M1 landed: a3d83ef (T01), 323bd0c (T02), d5b3b2c (T03). M2 landed: 16e6f47 (T04), c9bbcc2 (T05), c5c830b (T06), and this commit (T07)</dd>
         <dt>agent name</dt>   <dd>Claude Opus 5</dd>
         <dt>session id</dt>   <dd>not recorded — AGENTS.md invariant 1 keeps live session state out of every committed file in this repository</dd>
         <dt>back refs</dt>    <dd>./awsf-v2-plan.html (the v2 spine, § Milestone M17 → W17, and its 2026-09-03 amendment which this plan supersedes), ../AGENTS.md (the twelve invariants), ./awsf-v2-w04-project-registry.html (the <code>delivery</code> posture this plan reads), ./awsf-v2-w07-quota-telemetry.html (the L26 boundary stop a long shift will meet)</dd>
@@ -357,7 +357,7 @@ flowchart LR
     </div>
 
     <div class="phase">
-      <h3><code class="status">[wip]</code> Milestone M2: The compiler — tickets into phases <span class="wtag core">core of the workstream</span></h3>
+      <h3><code class="status">[x]</code> Milestone M2: The compiler — tickets into phases <span class="wtag core">core of the workstream</span></h3>
       <p>The mechanism this whole workstream exists for. <code>compileWorkflow</code> already accepts <code>readonly phases: readonly PhaseDefinition[]</code> and never consults the catalogue, so a compiled phase list is <strong>structurally supported today</strong> — but all eight shipped recipes are static, and two things in the surrounding code assume that. This milestone builds the compiler and settles both.</p>
       <figure>
         <pre class="mermaid">
@@ -417,11 +417,11 @@ flowchart TD
       <p class="sub">Serves <code class="serves">AC-2</code> · <code class="serves">AC-3</code> · <code class="serves">INV-4</code></p>
       <p>The compiler is pure, so its tests are pure. The two amended invariants get <strong>negative</strong> tests first — a rule that has never been watched refuse is decoration — and the reproducibility property is tested by compiling twice across a process boundary.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>npx tsx --test core/test/unit/shift-compile.test.ts</code> — phase shape, ordering, <code>minimumCalls === N + 1</code>, earned descriptions, and the <code>previous_envelope</code> chain</li>
-        <li><code class="status">[]</code> A compiled workflow with build producers on <strong>two different providers</strong> is refused, naming both phases — the case the amended rule must still catch</li>
-        <li><code class="status">[]</code> A review workflow with <strong>zero</strong> build producers is still refused with <code>InvalidReviewBuildProducerCount</code>, and every shipped recipe still compiles unchanged</li>
-        <li><code class="status">[]</code> Adding a compiled id to <code>WORKFLOW_RECIPES</code> makes the new catalogue assertion go red — <strong>proven by inducing it</strong>, not asserted in prose</li>
-        <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code>, <code>npm run lint</code> — green, counts recorded</li>
+        <li><code class="status">[x]</code> <code>npx tsx --test core/test/unit/shift-compile.test.ts</code> — phase shape, ordering, <code>minimumCalls === N + 1</code>, earned descriptions, and the <code>previous_envelope</code> chain</li>
+        <li><code class="status">[x]</code> A compiled workflow with build producers on <strong>two different providers</strong> is refused, naming both phases — the case the amended rule must still catch</li>
+        <li><code class="status">[x]</code> A review workflow with <strong>zero</strong> build producers is still refused with <code>InvalidReviewBuildProducerCount</code>, and every shipped recipe still compiles unchanged</li>
+        <li><code class="status">[x]</code> Adding a compiled id to <code>WORKFLOW_RECIPES</code> makes the new catalogue assertion go red — <strong>proven by inducing it</strong>, not asserted in prose (induced in T05's session, watched red, reverted; see task 5's Amendment)</li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code>, <code>npm run lint</code> — green, counts recorded (2169/2169 unit, typecheck exit 0, lint 0 warnings/0 errors)</li>
       </ul>
       <div class="loop">
         🔁 <strong>Do not exit this phase until every box above is checked.</strong>
@@ -698,7 +698,7 @@ flowchart LR
       <li><code class="status">[]</code> <code>awsf shift plan awsf-v2-w07-quota-telemetry --milestone M4</code> and the multi-milestone form <code>--milestone M4,M5,M6</code> both refuse at zero cost when the ceiling does not fit, naming the shortfall and the raise acts needed — and the second names <code>MAX_CALL_CEILING</code> when no raise can fund it</li>
       <li><code class="status">[]</code> A sealed shift's candidate is reachable through its ref after an aggressive pruning collection pass in a throwaway repository, and unreachable without it</li>
       <li><code class="status">[]</code> <strong>One bounded live drive:</strong> a real milestone runs unattended end to end, reaches <code>AWAITING_OWNER</code> once, and the candidate is built fresh and looked at. This is the workstream's acceptance bar; the suite is not</li>
-      <li><code class="status">[]</code> <span class="gate">G17</span> — <code>awsf.config.yaml</code>'s <code>workflows.enabled</code> gained <code>shift</code>, and <code>docs/cheatsheet.html</code>'s workflow facts gained <code>workflow|shift</code>, as one owner-authored commit <em>after</em> M2 task 5's loader change (reordered 2026-09-25), recorded in this plan's Amendments</li>
+      <li><code class="status">[x]</code> <span class="gate">G17</span> — <code>awsf.config.yaml</code>'s <code>workflows.enabled</code> gained <code>shift</code>, and <code>docs/cheatsheet.html</code>'s workflow facts gained <code>workflow|shift</code>, as one owner-authored commit <em>after</em> M2 task 5's loader change (reordered 2026-09-25), recorded in this plan's Amendments — confirmed landed at M2's close (2026-09-25): both files carry it on the tree this task started from</li>
       <li><code class="status">[]</code> <span class="gate">G17-M</span> — <code>main</code> and <code>task3.5</code> are merged before M4 starts, and the merge's own suite is green at its landing SHA</li>
     </ul>
     <div class="loop">
@@ -1234,6 +1234,102 @@ flowchart LR
         <li><strong>Under <code>same-provider-degraded</code></strong>, the agreement check runs before the mode is
         read. The builders must agree, and the reviewer must be on their provider.</li>
       </ul>
+    </details>
+
+    <details open>
+      <summary>2026-09-25 — Milestone M2 closed: the compiler</summary>
+
+      <h3>What is now observably true</h3>
+      <p>A selection of one or more tickets compiles, purely and reproducibly, to a phase list a real
+      recipe can run. Per ticket: <code>t&lt;NN&gt;-brief</code> (host, the ticket's own <code>## Build
+      prompt</code> verbatim, zero calls), <code>t&lt;NN&gt;-build</code> (owner <code>builder</code>, one call),
+      <code>t&lt;NN&gt;-tests</code> (host gates, zero calls); then once for the whole shift,
+      <code>shift-review-context</code> and <code>shift-review</code> (owner <code>reviewer</code>, one call).
+      <code>minimumCalls === N + 1</code> is asserted directly, not inferred. The same manifest and ticket bytes
+      compile to a byte-identical recipe twice — in the same process and in a fresh one spawned across a real
+      process boundary — closing <code>INV-4</code>'s reproducibility claim for the compiler. <code>catalog.ts</code>
+      now carries two disjoint vocabularies, <code>WORKFLOW_IDS</code>/<code>WORKFLOW_RECIPES</code> for the eight
+      shipped recipes and <code>COMPILED_WORKFLOW_IDS</code> for <code>shift</code> alone, each cross-checked by its
+      own assertion at module load. <code>reviewBuildPhaseId</code>'s inversion rule is amended from &ldquo;exactly
+      one build phase&rdquo; to &ldquo;the build producers resolve to exactly one distinct provider&rdquo;, checked
+      in the two places that can see it — the compiler sees phases and refuses zero producers with
+      <code>InvalidReviewBuildProducerCount</code>; <code>reviewWorkerProvider</code> sees providers and refuses a
+      split with <code>ReviewBuildProvidersDisagree</code>, naming every build phase and its provider. Every shipped
+      recipe still compiles unchanged, pinned by value against <code>e39ac26</code>.</p>
+
+      <h3>Every task and its final state</h3>
+      <ul>
+        <li><strong>T04 — <code>compileShift</code>, the ticket-phase group and the review tail.</strong>
+        <code class="status">[x]</code>, landed <code>16e6f47</code>. No <code>[f]</code> rows. Its
+        <code>{previous_envelope}</code> row was corrected against the code, not the plan, in the 2026-09-25
+        amendment above.</li>
+        <li><strong>T05 — the compiled-workflow vocabulary, split from the shipped catalogue.</strong>
+        <code class="status">[x]</code>, landed <code>c9bbcc2</code>. No <code>[f]</code> rows. G17 reordered to
+        follow it, recorded in the 2026-09-25 amendment above; the owner's G17 commit (<code>e39ac26</code>) has
+        since landed and this milestone's Validation row for it is flipped below.</li>
+        <li><strong>T06 — review inversion for a workflow with many builders.</strong> <code class="status">[x]</code>,
+        landed <code>c5c830b</code>. No <code>[f]</code> rows. Two rows reworded to what was built, recorded in the
+        2026-09-25 amendment above.</li>
+        <li><strong>T07 — Testing Strategy for M2.</strong> <code class="status">[x]</code>, landed with this commit.
+        No <code>[f]</code> rows. All net-new coverage the row named — the two-provider refusal, the zero-producer
+        refusal, and the cross-process reproducibility proof — was already built into
+        <code>shift-compile.test.ts</code>, <code>shift-catalog.test.ts</code> and <code>shift-inversion.test.ts</code>
+        by T04–T06; this task's own work was closing the checklist, confirming the induced-violation proofs and
+        writing this Amendment.</li>
+      </ul>
+
+      <h3>Friction, and what a later milestone must do differently because of it</h3>
+      <p><strong>The ordering gate moved, and the plan's own row was wrong about it.</strong> Q7's closing sentence
+      said G17 &ldquo;lands before M2 either way&rdquo;; T05 found that <code>load.ts</code> refused <code>shift</code>
+      as an unknown id before its own change, so the owner's config commit would have broken every command had it
+      landed first. G17 is reordered to follow T05, and that reordering is now itself closed: both
+      <code>awsf.config.yaml</code> and <code>docs/cheatsheet.html</code> carry <code>shift</code> on the tree this
+      task started from. <strong>A later milestone should not trust a plan's stated gate order against code it has
+      not yet built</strong> — an ordering claim about a gate that depends on this milestone's own output is a
+      prediction, not a fact, until the milestone that produces the precondition lands.</p>
+      <p><strong>The two amended rules' induced-violation proofs were built inside T05 and T06, not T07.</strong>
+      T05 induced a placeholder compiled recipe into <code>WORKFLOW_RECIPES</code>, alone and with its id also added
+      to <code>WORKFLOW_IDS</code>, watched <code>assertCompiledVocabulary</code> throw, then reverted. T06 induced
+      three violations directly in <code>compiler.ts</code> — the provider check disabled, the zero-producer throw
+      removed, the old single-phase rule restored — watched the corresponding tests go red, then reverted, comparing
+      the file back to its saved original. This task's DO row asking for the same proof is satisfied by citing
+      those sessions rather than repeating the induction: the properties the checklist names are already permanent
+      regression tests (<code>shift-catalog.test.ts</code>'s <code>assertCompiledVocabulary</code> test,
+      <code>shift-inversion.test.ts</code>'s two-provider and zero-producer tests), and re-inducing the same
+      violations here would prove nothing the earlier sessions had not already proven and left in the tree as a
+      test. <strong>A later milestone's own Testing Strategy task should read its predecessors' Handoffs for this
+      before assuming it owes a fresh induction</strong> — the induction is owed once, by the task that writes the
+      rule, and the closing task's job is to confirm the resulting test is real, not decorative.</p>
+      <p>Nothing else took longer than expected: M2's two shared-file edits (<code>catalog.ts</code>,
+      <code>review-routing.ts</code>) were authored against the post-<code>task3.5</code>-merge files as the plan
+      required, and no merge-conflict friction showed up because neither file had moved further by the time T05
+      and T06 built.</p>
+
+      <h3>Decisions made inside the milestone the plan did not already carry</h3>
+      <ul>
+        <li><strong>The vocabulary is a leaf</strong> (T05): <code>compiled-ids.ts</code> spells
+        <code>"shift"</code> itself rather than importing a shared constant, so config validation does not load the
+        compiler; the catalogue's compiled registry is keyed separately, and its own assertion fails at load if the
+        two strings drift.</li>
+        <li><strong><code>reviewBuildPhaseId</code> is <code>null</code> for two or more builders</strong> (T06):
+        naming the first or last builder was rejected because a reader of the single id would invert against one
+        builder and skip the agreement check silently.</li>
+        <li><strong>The zero-producer message changed words, not shape</strong> (T06): &ldquo;at least one &hellip;,
+        all on one provider; found 0&rdquo; where it said &ldquo;exactly one&rdquo;, keeping the same error class and
+        blocker code.</li>
+        <li><strong>T07 does not re-run the induced violations</strong>: cited above, and recorded here so T10, T13
+        and T16 do not read this milestone's clean induction history as license to skip their own first induction.</li>
+      </ul>
+
+      <h3>Landing commits and suite counts at close</h3>
+      <p>M2's three implementation commits: <code>16e6f47</code> (T04), <code>c9bbcc2</code> (T05),
+      <code>c5c830b</code> (T06); this commit closes T07 and the milestone. Owner's G17 commit: <code>e39ac26</code>.
+      <code>npx tsx --test core/test/unit/shift-compile.test.ts core/test/unit/shift-catalog.test.ts
+      core/test/unit/shift-inversion.test.ts</code>: 25/25. <code>npm run test:unit</code>: 2169/2169, run at base
+      SHA <code>c5c830b</code> before this task changed anything. <code>npm run typecheck</code>: exit 0 across both
+      projects. <code>npm run lint</code>: 0 warnings, 0 errors on 596 files. <code>npm test</code>: full suite in
+      one invocation, <code>layers: unit=0 contract=0 sim=0 journeys=0</code>, 263 journeys, exit 0,
+      <code>git status --porcelain</code> clean afterward.</p>
     </details>
 
   </section>
