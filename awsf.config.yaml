@@ -123,7 +123,7 @@ agents:
     writes: []
 
 workflows:
-    enabled: [scout, plan, build, plan-build-test, build-review, simple-sdlc, intake, design-to-plan]
+    enabled: [scout, plan, build, plan-build-test, build-review, simple-sdlc, intake, design-to-plan, shift]
 
 gates:
   test: { argv: [npm, run, test:unit], timeout_seconds: 600 }
