@@ -325,8 +325,9 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
     case "phase-accepted":
     case "phase-result-ready":
     case "resume-activation":
-    case "quota-pause": {
-      if (evidence.type !== "quota-pause" && evidence.phase !== null) applyAttemptEvidence(db, sessionId, sourceSeq, { type: "phase", phase: evidence.phase });
+    case "quota-pause":
+    case "ceiling-pause": {
+      if (evidence.type !== "quota-pause" && evidence.type !== "ceiling-pause" && evidence.phase !== null) applyAttemptEvidence(db, sessionId, sourceSeq, { type: "phase", phase: evidence.phase });
       db.prepare(`INSERT OR IGNORE INTO events
         (event_id, session_id, phase_id, first_source_seq, last_source_seq, type, name, payload_json)
         VALUES (?, ?, NULL, ?, ?, 'notice', ?, ?)`)

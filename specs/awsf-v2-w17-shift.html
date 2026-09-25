@@ -106,8 +106,8 @@ pre.mermaid{background:transparent;border:0;padding:0;margin:0;font-family:var(-
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-09-15</dd>
-        <dt>modified</dt>     <dd>2026-09-15, 2026-09-15 (Questionables decided), 2026-09-20 (selection widened), 2026-09-24 (M1 closed), 2026-09-25 (task 5; G17 reordered after it), 2026-09-25 (task 6), 2026-09-25 (M2 closed), 2026-09-25 (task 8)</dd>
-        <dt>commits</dt>      <dd>M1 landed: a3d83ef (T01), 323bd0c (T02), d5b3b2c (T03). M2 landed: 16e6f47 (T04), c9bbcc2 (T05), c5c830b (T06), 060b698 (T07). M3: this commit (T08)</dd>
+        <dt>modified</dt>     <dd>2026-09-15, 2026-09-15 (Questionables decided), 2026-09-20 (selection widened), 2026-09-24 (M1 closed), 2026-09-25 (task 5; G17 reordered after it), 2026-09-25 (task 6), 2026-09-25 (M2 closed), 2026-09-25 (task 8), 2026-09-25 (task 9; the shift binding pulled forward)</dd>
+        <dt>commits</dt>      <dd>M1 landed: a3d83ef (T01), 323bd0c (T02), d5b3b2c (T03). M2 landed: 16e6f47 (T04), c9bbcc2 (T05), c5c830b (T06), 060b698 (T07). M3: 852b0a8 (T08), this commit (T09)</dd>
         <dt>agent name</dt>   <dd>Claude Opus 5</dd>
         <dt>session id</dt>   <dd>not recorded — AGENTS.md invariant 1 keeps live session state out of every committed file in this repository</dd>
         <dt>back refs</dt>    <dd>./awsf-v2-plan.html (the v2 spine, § Milestone M17 → W17, and its 2026-09-03 amendment which this plan supersedes), ../AGENTS.md (the twelve invariants), ./awsf-v2-w04-project-registry.html (the <code>delivery</code> posture this plan reads), ./awsf-v2-w07-quota-telemetry.html (the L26 boundary stop a long shift will meet)</dd>
@@ -430,7 +430,7 @@ flowchart TD
     </div>
 
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone M3: One ceiling for the whole shift <span class="wtag core">buildable now</span></h3>
+      <h3><code class="status">[wip]</code> Milestone M3: One ceiling for the whole shift <span class="wtag core">buildable now</span></h3>
       <p>The amendment's fifth missing piece was <em>&ldquo;batch budgeting — away mode needs a notion of budget the lifecycle does not currently have.&rdquo;</em> <strong>The one-attempt shape removes that need entirely.</strong> One shift is one task, one <code>CallBudget</code> and one ceiling; <code>admitWorkflow</code> already refuses a workflow whose <code>minimumCalls</code> cannot fit, before any process exists. This milestone is therefore not new machinery — it is making the existing machinery's arithmetic legible to someone about to leave the house.</p>
       <figure>
         <pre class="mermaid">
@@ -474,10 +474,10 @@ flowchart LR
       <p class="sub">Serves <code class="serves">INV-5</code></p>
       <p><code>awsf raise</code> refuses a piped stdin before anything is written, so <strong>a running shift structurally cannot widen itself</strong> — and that is the design working, not a gap. What the shift owes is that arriving at the ceiling is legible and recoverable rather than terminal.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> A shift that reaches its ceiling mid-run stops with the accepted prefix durable, exactly as any other ceiling stop does, and the recovery checkpoint names the ticket it stopped before</li>
-        <li><code class="status">[]</code> The stop message names the <strong>ticket id</strong>, not only the phase id — <code>t14-build</code> means nothing to someone reading it over breakfast</li>
-        <li><code class="status">[]</code> A meta-test asserts <strong>no module under <code>core/src/workflow/shift/</code> imports <code>raise.ts</code></strong>, so the absence is mechanical rather than remembered</li>
-        <li><code class="status">[]</code> After an owner raise, <code>awsf resume</code> continues from the accepted prefix without re-running any completed phase and without re-spending any settled call</li>
+        <li><code class="status">[x]</code> A shift that can no longer fund the correction round its next ticket build declares stops at the clean boundary before that build, <code>RUNNING</code> under a <code>ceiling-pause</code> checkpoint with the accepted prefix durable, and the checkpoint names the ticket it stopped before. A resume without a raise is refused by the same <code>CallCeilingExceeded</code> every other resume meets (reworded 2026-09-25, see Amendments)</li>
+        <li><code class="status">[x]</code> The stop message names the <strong>ticket id</strong>, not only the phase id — <code>t14-build</code> means nothing to someone reading it over breakfast</li>
+        <li><code class="status">[x]</code> A meta-test asserts <strong>no module under <code>core/src/workflow/shift/</code> imports <code>raise.ts</code></strong>, so the absence is mechanical rather than remembered (built by task 8 as <code>shift-no-raise-import.test.ts</code>; task 9's new <code>shift/bind.ts</code> passes it)</li>
+        <li><code class="status">[x]</code> After an owner raise, <code>awsf resume</code> continues from the accepted prefix without re-running any completed phase and without re-spending any settled call</li>
       </ul>
 
       <h4>10. Testing Strategy</h4>
@@ -1330,6 +1330,75 @@ flowchart LR
       projects. <code>npm run lint</code>: 0 warnings, 0 errors on 596 files. <code>npm test</code>: full suite in
       one invocation, <code>layers: unit=0 contract=0 sim=0 journeys=0</code>, 263 journeys, exit 0,
       <code>git status --porcelain</code> clean afterward.</p>
+    </details>
+
+    <details open>
+      <summary>2026-09-25 — task 9 built: the ceiling stop, and the binding it needed</summary>
+
+      <p><strong>Markers:</strong> task 9's four rows move to <code class="status">[x]</code>. Row 1 is reworded to
+      what was built. M3 moves to <code class="status">[wip]</code>: task 8 set its ticket to <code>done</code> and
+      left the milestone at <code class="status">[]</code>, which the invariant-12 fence refuses, so
+      <code>npm run test:unit</code> was red at <code>852b0a8</code> (2180/2181, the one failure being that pairing).</p>
+
+      <h3>The binding moved here from M4, by the owner's decision</h3>
+      <p>Task 9's journey needs a shift to run through <code>production-run.ts</code>, and no attempt could carry a
+      selection. The task 5 Amendment said whichever task reached that first must add the field. The owner chose to
+      take it here rather than stop task 9. <code>AttemptStatus.shift</code> holds the sealed
+      <code>awsf.shift-manifest/v1</code>, set only by <code>awsf new</code>, which refuses a shift without one and
+      any other workflow with one. <code>workflow/shift/bind.ts</code> reads the named ticket files from the canonical
+      repository and compiles them. <code>awsf start</code>, the first run, the recovery binding and every resume
+      entry resolve the recipe through it. The recovery binding digest gains the manifest digest for a shift only, so
+      every shipped attempt's digest is unchanged. <code>CompiledWorkflowUnbound</code> now fires only for a shift
+      with no bound selection. The CLI flag that would pass a manifest to <code>awsf new</code> is not built.</p>
+
+      <h3>Three runner gaps the first real shift run found</h3>
+      <ul>
+        <li><strong>Every compiled phase failed <code>envelope_valid</code></strong>, because the output-ownership
+        table is keyed by shipped phase id. Each shift phase now answers to the shipped role it repeats (brief as
+        <code>request</code>, build as <code>builder</code>, tests as <code>tests</code>, the tail as
+        <code>review-context</code> and <code>reviewer</code>) through <code>shiftPhaseRole</code>. The same key
+        selects the builder's <code>diff_matches_claims</code>, <code>writes_within_globs</code> and
+        <code>risk_tier_sufficient</code> gates. Without it a ticket build would have run with none of its write
+        checks.</li>
+        <li><strong>Ticket 2's build was charged with ticket 1's file</strong> by <code>diff_matches_claims</code>,
+        which measured from the attempt base. A shift phase is now measured from the head it started on, the way a
+        seeded phase already was. The write-risk and protected-path checks still see the whole candidate from the
+        base.</li>
+        <li><strong>The <code>engineer</code> branch emitted the attempt's request</strong> for every
+        <code>t&lt;NN&gt;-brief</code>. It now emits the brief's compiled <code>intent</code>. This is task 11's row.
+        It is left <code class="status">[]</code> for task 11 to flip, and the journey asserts each builder is
+        rendered its own ticket's prompt.</li>
+      </ul>
+
+      <h3>Where the stop is, and why not after a failed build</h3>
+      <p>The plan assumed a shift can reach its ceiling mid-run. On the first run it cannot overspend.
+      <code>compileWorkflow</code> admits <code>minimumCalls</code> before any process, and
+      <code>coldCorrectionHeadroom</code> never lets a correction take a later phase's call. What the ceiling does do
+      mid-run is remove a declared correction round: the runner launched the build with its round set to zero, and a
+      malformed reply then blocked the attempt. <code>BLOCKED</code> is terminal and <code>awsf raise</code> refuses
+      it, so that stop was a dead end. Stopping <em>after</em> the failed build was rejected. Resuming it would mean
+      discarding the reply's uncommitted writes, and the host has no path that does that and must not gain one. So
+      the shift stops at the clean boundary before a cold, correcting ticket build when the remaining ceiling cannot
+      cover that build, every later agent phase, and one correction call. That is <code>awsf start</code>'s
+      unfundable-correction rule applied again at each ticket. It is the same test <code>preflightRecovery</code>
+      applies, so a resume without a raise is refused and one after it proceeds. The pause is scoped to shifts.
+      Shipped recipes keep their behaviour.</p>
+
+      <h3>What the owner reads</h3>
+      <p>The checkpoint carries <code>ticket</code>, set on every checkpoint whose next phase belongs to a ticket. The
+      stop's activity line reads <code>ceiling stop before ticket T02 (t02-build)</code>, and its next action names
+      the <code>awsf raise</code> act and its call count, or says no raise can fund it past
+      <code>MAX_CALL_CEILING</code>. <code>awsf status</code> prints <code>ceiling-paused</code> and the next ticket.
+      The resume refusal is still <code>CallCeilingExceeded</code>, restated as <code>resume of &lt;task&gt; before
+      ticket T02 (t02-build)</code> with the same two-refusal split task 8 drew.</p>
+
+      <h3>Evidence</h3>
+      <p><code>core/test/journeys/shift-ceiling.test.ts</code>: three tickets at T2's ceiling of five with a cold
+      builder. Ticket 1's malformed first reply spends the one call of headroom on its correction, and the shift
+      pauses before T02 with <code>[t01-brief, t01-build, t01-tests, t02-brief]</code> accepted. The first run's
+      ledger holds two settled reservations and none outstanding. A resume is refused, a non-TTY raise is refused,
+      and after a one-call raise the resume completes: five launches, none twice, and three ticket commits on one
+      head with ticket 1's unchanged. <code>npm run test:unit</code>: 2181/2181. <code>npm run test:journeys</code>: 264/264. <code>npm run typecheck</code>: exit 0 across both projects. <code>npm run lint</code>: 0 warnings, 0 errors on 601 files.</p>
     </details>
 
   </section>

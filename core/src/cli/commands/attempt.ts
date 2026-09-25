@@ -112,6 +112,12 @@ export interface AttemptStatus {
   readonly candidateSha: string | null;
   /** Immutable target-bound provenance, absent on ordinary and historical attempts. */
   readonly seed?: CandidateSeed | null;
+  /**
+   * The sealed shift selection this attempt compiles its recipe from, recorded
+   * once at creation and absent on every other workflow. Recovery recompiles
+   * from it and the ticket files it names, and refuses when a byte moved.
+   */
+  readonly shift?: import("../../contracts/shift-selection-record.ts").ShiftManifest | null;
   readonly phase: PhaseMeter | null;
   /** `budget.ceiling` is this task's effective ceiling, grants included. */
   readonly budget: BudgetState;

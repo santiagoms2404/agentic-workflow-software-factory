@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
+import { Value } from "@sinclair/typebox/value";
 import { assertCandidateSeed, type CandidateSeed } from "../../contracts/candidate-seed.ts";
+import { ShiftManifestSchema, shiftManifestDigest, type ShiftManifest } from "../../contracts/shift-selection-record.ts";
+import { isCompiledWorkflowId } from "../../workflow/compiled-ids.ts";
 import { sha256 } from "../../contracts/owner-amendment.ts";
 import { attemptDir as attemptDirectory } from "../../persistence/platform-paths.ts";
 import { correctionAllowance } from "../../state/task-machine.ts";
@@ -24,6 +27,8 @@ export interface NewCommandOptions {
   readonly continuesTask?: string;
   /** Host-authorized seed, persisted atomically with the first target event. */
   readonly seed?: CandidateSeed;
+  /** The sealed selection a `shift` compiles from. Required for a shift and refused for anything else. */
+  readonly shift?: ShiftManifest;
   /**
    * The driving session that minted this task. Absent means NULL: no group
    * existed for it, which is the honest record and never a guess.
@@ -75,6 +80,14 @@ export async function newCommand(options: NewCommandOptions): Promise<{ attemptD
       );
     }
   }
+  // A shift's phase list exists only once a selection is bound, so the binding
+  // is made here, where the attempt is, and never inferred later.
+  if (isCompiledWorkflowId(options.workflow) !== (options.shift !== undefined)) {
+    throw new Error(`workflow ${JSON.stringify(options.workflow)} ${options.shift === undefined ? "requires" : "cannot carry"} a sealed shift selection`);
+  }
+  if (options.shift !== undefined && (!Value.Check(ShiftManifestSchema, options.shift) || shiftManifestDigest(options.shift) !== options.shift.manifestDigest)) {
+    throw new Error("shift selection is not a sealed awsf.shift-manifest/v1");
+  }
   const existing = await latestAttemptNumber(root);
   if (existing !== null) {
     throw new Error(`${options.project}/${options.taskId} already has attempt ${existing}; use \`awsf retry\` after it is terminal`);
@@ -108,6 +121,7 @@ export async function newCommand(options: NewCommandOptions): Promise<{ attemptD
     baseSha: options.seed?.integrationBaseSha ?? null,
     candidateSha: null,
     ...(options.seed === undefined ? {} : { seed: options.seed }),
+    ...(options.shift === undefined ? {} : { shift: options.shift }),
     phase: null,
     budget: {
       attempt,

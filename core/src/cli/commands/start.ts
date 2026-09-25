@@ -14,6 +14,7 @@ import {
   workflowRecipe,
 } from "../../workflow/catalog.ts";
 import { composePromptBundle } from "../../workflow/prompt-composition.ts";
+import { bindShiftRecipe } from "../../workflow/shift/bind.ts";
 import { correctionHeadroom } from "./workflows.ts";
 import { verifiedTargetSeed, validateSeedStartup } from "../../workflow/candidate-seed.ts";
 import { parseVisualBinding, recordVisualBinding, verifyVisualReferences, type VerifiedVisualReferences } from "../../workflow/visual-references.ts";
@@ -156,12 +157,14 @@ export async function startCommand(options: StartCommandOptions): Promise<Attemp
   if (!config.workflows.enabled.includes(current.workflow)) {
     throw new Error(`workflow ${current.workflow} is not enabled by ${configPath}`);
   }
-  const recipe = workflowRecipe(current.workflow);
+  let recipe = workflowRecipe(current.workflow);
   if (recipe === null) {
     const compiled = compiledWorkflow(current.workflow);
-    // No attempt carries a bound selection yet, so there is nothing to compile.
-    if (compiled !== null) throw new CompiledWorkflowUnbound(compiled.id, `task ${current.taskId}`);
-    throw new Error(`workflow ${JSON.stringify(current.workflow)} has no shipped recipe`);
+    if (compiled === null) throw new Error(`workflow ${JSON.stringify(current.workflow)} has no shipped recipe`);
+    if (current.shift == null) throw new CompiledWorkflowUnbound(compiled.id, `task ${current.taskId}`);
+    // Start reads only the phase list's shape (its count, owners and tier),
+    // which no prompt moves; the runner compiles again with the real ones.
+    recipe = await bindShiftRecipe(current.repository, current.shift, { prompts: { builder: "", reviewer: "" } });
   }
   // Zero cost, and deliberately BEFORE the worktree and BEFORE any adapter is
   // contacted. It also deliberately does NOT block the DRAFT: `awsf raise` is

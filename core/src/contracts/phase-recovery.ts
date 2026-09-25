@@ -18,7 +18,13 @@ export const BoundaryQuotaSchema = Type.Object({
 export type BoundaryQuota = Static<typeof BoundaryQuotaSchema>;
 export const PhaseRecoverySchema = Type.Object({
   schema: Type.Literal("awsf.phase-recovery/v1"), id, sessionId: id,
-  kind: Type.Union([Type.Literal("completed-phase"), Type.Literal("quota-pause"), Type.Literal("result-ready"), Type.Literal("validating")]),
+  // `ceiling-pause` is a shift stopping at a clean boundary before a ticket whose
+  // declared correction round the task ceiling can no longer fund. Only an owner
+  // `awsf raise` moves the ceiling; the shift never widens it (W17 INV-5).
+  kind: Type.Union([Type.Literal("completed-phase"), Type.Literal("quota-pause"), Type.Literal("result-ready"), Type.Literal("validating"), Type.Literal("ceiling-pause")]),
+  // The shift ticket whose phase is next after the accepted prefix, so a stop
+  // names the ticket the owner wrote rather than only a compiled phase id.
+  ticket: Type.Optional(Type.String({ pattern: "^[TW][0-9]{2}$" })),
   pending: Type.Optional(SavedPhaseResultSchema),
   // Present only while a saved reply is inside host validation. It names the exact
   // stage the host had reached and, once the commit transport was about to run,

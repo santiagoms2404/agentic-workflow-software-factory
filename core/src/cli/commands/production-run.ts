@@ -62,7 +62,7 @@ import {
   type SystemCommandOptions,
 } from "../../execution/transport-broker.ts";
 import { artifactsExist, filesNonEmpty, jsonParses, type ArtifactObservation } from "../../gates/artifacts.ts";
-import type { Tier } from "../../state/tiers.ts";
+import { MAX_CALL_CEILING, type Tier } from "../../state/tiers.ts";
 import { riskTierSufficient } from "../../gates/risk.ts";
 import { candidateHygiene } from "../../gates/candidate-hygiene.ts";
 import { commandsPass } from "../../gates/commands.ts";
@@ -145,6 +145,7 @@ import {
 import { PermissionBreach } from "../../policy/path-policy.ts";
 import { openPermissionSession, type PermissionSession, type SandboxProbe } from "../../policy/sandbox-broker.ts";
 import { transition, SEALED_STATES, type EdgeId, type TaskState } from "../../state/task-machine.ts";
+import { CallCeilingExceeded } from "../../state/errors.ts";
 import { createCompiledPhaseLaunchVerifier } from "../../workflow/phase-launch-authorization.ts";
 import { compileWorkflow, compileWorkflowStructure, reviewWorkerProvider, type WorkflowRecipe } from "../../workflow/compiler.ts";
 import { composePromptBundle, type PromptBundle } from "../../workflow/prompt-composition.ts";
@@ -168,6 +169,8 @@ import {
 import type { GateDefinition } from "../../workflow/phase.ts";
 import type { PhaseState } from "../../state/phase-machine.ts";
 import { WORKFLOW_RECIPES } from "../../workflow/catalog.ts";
+import { SHIFT_WORKFLOW_ID, type ShiftBriefPhase } from "../../workflow/shift/compile.ts";
+import { bindShiftRecipe, shiftPhaseRole, shiftTicketOf } from "../../workflow/shift/bind.ts";
 import {
   nextActionFor,
   nextRevision,
@@ -276,7 +279,25 @@ const SUPPORTED = new Map<string, WorkflowRecipe>(
   WORKFLOW_RECIPES.map((recipe) => [recipe.id, recipe]),
 );
 
-const SUPPORTED_NAMES = [...SUPPORTED.keys()].join(", ");
+const SUPPORTED_NAMES = [...SUPPORTED.keys(), SHIFT_WORKFLOW_ID].join(", ");
+
+/**
+ * The recipe this attempt runs: a shipped one by id, or a shift compiled from
+ * the selection bound to the attempt at `awsf new`. The first run, the
+ * recovery binding and every resume entry resolve through here, so they can
+ * never compile two different phase lists for one attempt.
+ */
+async function attemptRecipe(options: Pick<ProductionRunOptions, "config" | "configPath">, status: AttemptStatus): Promise<WorkflowRecipe | undefined> {
+  const shipped = SUPPORTED.get(status.workflow);
+  if (shipped !== undefined || status.workflow !== SHIFT_WORKFLOW_ID || status.shift == null) return shipped;
+  const userPrompt = async (name: string): Promise<string> => {
+    const agent = options.config.agents.find((candidate) => candidate.name === name);
+    if (agent === undefined) throw new ProductionRouteUnavailable(name, "no explicit agent definition exists");
+    return (await readProductionPromptPair(options.configPath, agent)).userPrompt;
+  };
+  return bindShiftRecipe(status.repository, status.shift,
+    { prompts: { builder: await userPrompt("builder"), reviewer: await userPrompt("reviewer") } });
+}
 const READ_ONLY_RESULT_SCHEMA_BY_WORKFLOW: ReadonlyMap<string, "awsf.scout-output/v1" | "awsf.plan-output/v1"> = new Map([
   ["scout", "awsf.scout-output/v1"],
   ["plan", "awsf.plan-output/v1"],
@@ -1107,7 +1128,7 @@ async function validatePreparedRepository(status: AttemptStatus): Promise<void> 
 type RecoveryInspection = Awaited<ReturnType<typeof inspectPhaseRecovery>>;
 
 export async function productionRecoveryBinding(options: Pick<ProductionRunOptions, "config" | "configPath">, status: AttemptStatus): Promise<string> {
-  const recipe = SUPPORTED.get(status.workflow);
+  const recipe = await attemptRecipe(options, status);
   if (recipe === undefined) throw new Error("recovery recipe unavailable");
   const prompts = await Promise.all(recipe.phases.filter(phase => phase.kind === "agent").map(async phase => {
     const agent = options.config.agents.find(agent => agent.name === phase.owner);
@@ -1122,13 +1143,17 @@ export async function productionRecoveryBinding(options: Pick<ProductionRunOptio
     return [relative(sourceRoot, path), sha256(await readFile(path, "utf8"))] as const;
   }))).sort(([a], [b]) => a.localeCompare(b));
   return recoveryDigest({ request: status.request, seed: status.seed ?? null, config: options.config,
+    // Present only for a shift, so every shipped attempt's digest is unchanged.
+    // The manifest digest covers each ticket's byte digest, and the recipe
+    // above was compiled only because the bytes on disk still match them.
+    ...(status.shift == null ? {} : { shift: status.shift.manifestDigest }),
     routeOverrides: status.routeOverrides, reviewDegradation: status.reviewDegradation, prompts, sources,
     phases: recipe.phases.map(phase => ({ id: phase.id, kind: phase.kind, owner: phase.owner, schema: phase.schemaId,
       maxCorrections: phase.maxCorrections, gates: phase.gates.map(gate => gate.id) })) });
 }
 
 export async function protectedGrantSubject(options: Pick<ProductionRunOptions, "config" | "configPath">, status: AttemptStatus, phaseKey: string): Promise<import("../../contracts/protected-grant.ts").ProtectedGrantSubject> {
-  const recipe = SUPPORTED.get(status.workflow);
+  const recipe = await attemptRecipe(options, status);
   const ordinal = recipe?.phases.findIndex(phase => phase.id === phaseKey) ?? -1;
   const phase = recipe?.phases[ordinal];
   if (phase?.kind !== "agent" || ordinal < 0 || status.worktree === null || status.baseSha === null ||
@@ -1172,7 +1197,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     if (recoveredReview !== null) return recoveredReview;
     if (status.lifecycleState !== "PREPARED") throw new Error(`production run requires PREPARED, got ${status.lifecycleState}`);
   }
-  const recipe = SUPPORTED.get(status.workflow);
+  const recipe = await attemptRecipe(options, status);
   // The attempt's tier and the recipe's tier must agree, and the tier is then
   // carried rather than assumed: a workflow that buys a review and a journey is
   // not the same product as one that does not, and recording it as T1 would
@@ -1972,6 +1997,9 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     continuityHandle: continuityHandle(phase.id),
   });
 
+  // A compiled shift phase answers to the shipped role it repeats; every other
+  // phase is its own role, exactly as before.
+  const roleOf = (phaseId: string): string => shiftPhaseRole(recipe.phases, phaseId) ?? phaseId;
   const runAgent = async (
     phase: CompiledAgentPhase,
     ordinal: number,
@@ -2073,9 +2101,13 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
         readOnly: permission.sandboxBadge === "os-enforced" ? "os-enforced" : "digest-checked", at: infra.now(),
       });
     }
-    const attributionBaseSha = seed === null ? null : runGit(systemGitRunner(status.worktree!), ["rev-parse", "HEAD"]).trim();
+    // A seeded phase, and a shift phase after the first ticket's, starts on a
+    // head that already holds work it did not write. Its claims are measured
+    // from the head it started on (for ticket 1, the base itself); the risk
+    // and protected checks still see the whole candidate from the base.
+    const attributionBaseSha = seed === null && shiftPhaseRole(recipe.phases, phase.id) === null ? null : runGit(systemGitRunner(status.worktree!), ["rev-parse", "HEAD"]).trim();
     const openHostGit = (): HostPhaseGit<EnvelopeBase> => {
-      const message = (envelope: EnvelopeBase): string => phase.id === "builder" ? (envelope as BuildOutput).proposedCommitMessage : `chore: record ${phase.id} output`;
+      const message = (envelope: EnvelopeBase): string => roleOf(phase.id) === "builder" ? (envelope as BuildOutput).proposedCommitMessage : `chore: record ${phase.id} output`;
       const ordinary = createHostPhaseGit<EnvelopeBase>({ repository: status.worktree!, ...(restored === null ? {} : { before: restored.before }), commitMessage: message });
       if (protectedCapability === undefined) return ordinary;
       let observed: readonly string[] | null = null;
@@ -2090,7 +2122,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       } };
     };
     let hostGit = openHostGit();
-    const commitMessageFor = (envelope: EnvelopeBase): string => phase.id === "builder" ? (envelope as BuildOutput).proposedCommitMessage : `chore: record ${phase.id} output`;
+    const commitMessageFor = (envelope: EnvelopeBase): string => roleOf(phase.id) === "builder" ? (envelope as BuildOutput).proposedCommitMessage : `chore: record ${phase.id} output`;
     const protectedConsumptionId = protectedCapability === undefined ? null : protectedWriteContext(protectedCapability)!.consumption.id;
     /** The durable stage this phase is being resumed into, or null for an ordinary run. */
     const restoredValidation = restored === null ? null : recovery?.inspected.checkpoint.validation ?? null;
@@ -2181,7 +2213,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       gates: [
         ...phase.gates,
         ...phaseGates(
-          phase.id,
+          roleOf(phase.id),
           permission.profile.writes,
           status.worktree!,
           status.baseSha!,
@@ -2246,7 +2278,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
      * pre-continuity behaviour: the commit stands, the `tests` phase measures
      * it, and a red suite blocks on L8 exactly as it did before.
      */
-    const verifyCandidate = phase.id === "builder" && reviewContext === null && route.continuity
+    const verifyCandidate = roleOf(phase.id) === "builder" && reviewContext === null && route.continuity
       ? async ({ candidateSha, correctionRound }: { candidateSha: string; correctionRound: number }): Promise<CandidateVerification> => {
           const measured = await measureCandidate(phase.id, candidateSha, correctionRound, "verify-candidate");
           const passed = measured.hygiene.passed && measured.aggregate.passed && measured.failures.length === 0;
@@ -2575,7 +2607,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
           await phaseQueue;
           const gatedSha = reviewContext === null ? result.candidateSha : reviewContext.candidateSha;
           for (const report of result.gateReports) await persistGate(phase.id, report, gatedSha, result.correctionRounds);
-          if (phase.id === "builder") {
+          if (roleOf(phase.id) === "builder") {
             const report = headAdvanced({ baseSha: status.baseSha!, headSha: result.candidateSha, hostCommitExists: result.candidateSha !== null });
             await persistGate(phase.id, report, result.candidateSha);
             if (!report.passed) throw new PhaseGateFailure(phase.id, [report]);
@@ -2716,8 +2748,10 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     if ((prefix.length === 0 && pending === undefined) || status.process !== null || budget.outstanding().length > 0) return null;
     const git = systemGitRunner(status.worktree!);
     if (pending === undefined) assertClean(status.worktree!, "after", git);
+    const nextPhase = recipe.phases[prefix.length];
+    const ticket = nextPhase === undefined ? null : shiftTicketOf(recipe.phases, nextPhase.id);
     const checkpoint: PhaseRecovery = { schema: "awsf.phase-recovery/v1", id: randomUUID(), sessionId: status.sessionId,
-      kind, ...(pending === undefined ? {} : { pending }), workflowId: compiled.id, bindingDigest, prefix: [...prefix],
+      kind, ...(pending === undefined ? {} : { pending }), ...(ticket === null ? {} : { ticket }), workflowId: compiled.id, bindingDigest, prefix: [...prefix],
       repository: await realpath(status.repository), worktree: await realpath(status.worktree!),
       commonGitDir: await realpath(runGit(git, ["rev-parse", "--path-format=absolute", "--git-common-dir"]).trim()),
       integrationBaseSha: status.baseSha!, worktreeHeadSha: runGit(git, ["rev-parse", "HEAD"]).trim(),
@@ -2745,6 +2779,41 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       { type: "phase-accepted", phase: record, accepted });
     if (instruction !== null) instructions.push(instruction);
     applyAcceptedContext();
+  };
+
+  /**
+   * A shift that can no longer fund the correction round its next ticket build
+   * declares stops at the clean boundary before that build, instead of running
+   * it with the round silently removed. A malformed reply there would otherwise
+   * block the attempt terminally, and a BLOCKED attempt cannot be raised.
+   *
+   * It is `awsf start`'s unfundable-correction rule applied again at each
+   * ticket, and `preflightRecovery` asks the same question, so a resume
+   * without a raise refuses and one after it proceeds. The shift never widens
+   * its own ceiling: only the owner's `awsf raise` at a TTY does (INV-5).
+   * The stop is placed before, not after, a failed build because the host has
+   * no path that discards a reply's uncommitted writes, and must not gain one.
+   */
+  const ceilingPauseBefore = async (phase: CompiledAgentPhase, index: number): Promise<boolean> => {
+    const ticket = shiftTicketOf(recipe.phases, phase.id);
+    const route = routes.get(phase.id);
+    if (ticket === null || route === undefined || route.continuity || phase.maxCorrections === 0 ||
+        budget.allowance.auto === 0 || prefix.length !== index) return false;
+    const initialCalls = compiled.phases.slice(index).filter((candidate) => candidate.kind === "agent").length;
+    if (budget.remaining >= initialCalls + 1) return false;
+    const short = initialCalls + 1 - budget.remaining;
+    const checkpoint = await checkpointAt("ceiling-pause", null);
+    if (checkpoint === null) throw new Error("ceiling boundary has unsettled execution; no pause permitted");
+    await verifyRecoveryWorktree(status, checkpoint, await verifyCandidateLedgerVerdict(options.attemptDir, options.config, status, checkpoint));
+    const detail = `ceiling stop before ticket ${ticket} (${phase.id}): ${String(budget.committed)} of ${String(budget.ceiling)} calls spent; ` +
+      `${ticket}, every ticket after it and the review need ${String(initialCalls)} call(s), and ${ticket}'s declared correction round needs 1 more`;
+    const remedy = budget.ceiling + short > MAX_CALL_CEILING
+      ? `no awsf raise can fund it, because ${String(budget.ceiling + short)} exceeds MAX_CALL_CEILING (${String(MAX_CALL_CEILING)})`
+      : `the owner runs \`awsf raise ${status.taskId} --calls ${String(short)} --reason "<why>"\` at a TTY, then \`awsf resume ${status.taskId} --reason "<why>"\``;
+    await persist("attempt.updated", { recovery: checkpoint, phase: null, process: null, budget: budget.snapshot(),
+      lastActivity: detail, lastActivityAt: infra.now(), nextAction: `ceiling-paused before ticket ${ticket}; ${remedy}` },
+      { type: "ceiling-pause", checkpoint });
+    return true;
   };
 
   const quotaRoutesByAdapter = new Map(
@@ -2958,7 +3027,9 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       }
       if (phase.kind === "engineer") {
         await persistPhase(phase.id, "RUNNING");
-        const request = requestOutput(status, options.config);
+        // A shift brief carries its ticket's own compiled intent; every other
+        // engineer phase restates the owner's request.
+        const request = "intent" in phase ? (phase as unknown as ShiftBriefPhase).intent : requestOutput(status, options.config);
         previous = request;
         intent = request;
         await persistHostEnvelope(phase.id, previous);
@@ -2973,6 +3044,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
           reviewPhase = { phase, ordinal: index + 1 };
           continue;
         }
+        if (agentOrdinal > 0 && savedResult?.phaseKey !== phase.id && await ceilingPauseBefore(phase, index)) return status;
         agentOrdinal += 1;
         const reservation = savedResult?.phaseKey === phase.id ? budget.restoreReservation(savedResult.reservation) : agentOrdinal === 1 && firstReservation !== null
           ? firstReservation
@@ -3372,14 +3444,14 @@ async function preflightRecovery(options: ProductionRunOptions): Promise<Recover
   if (!["RUNNING", "GATING", "REVIEWING"].includes(status.lifecycleState)) throw new Error("resume requires an unfinished, unsealed workflow");
   if (toConfigSnapshotJson(options.config) !== status.configSnapshotJson ||
       await productionRecoveryBinding(options, status) !== checkpoint.bindingDigest) throw new Error("resume refused: configuration, request, recipe or prompts changed");
-  const recipe = SUPPORTED.get(status.workflow)!;
+  const recipe = (await attemptRecipe(options, status))!;
   for (const entry of checkpoint.prefix) {
     const phase = recipe.phases[entry.ordinal - 1];
     if (phase?.id !== entry.phaseKey || inspected.envelopes.get(entry.phaseKey)?.schema !== phase.schemaId) throw new Error("resume accepted prefix does not match the compiled recipe");
   }
-  if (checkpoint.kind === "quota-pause") {
+  if (checkpoint.kind === "quota-pause" || checkpoint.kind === "ceiling-pause") {
     const next = recipe.phases[checkpoint.prefix.length];
-    if (status.lifecycleState !== "RUNNING" || next?.kind !== "agent" || isReviewPhase(next)) throw new Error("quota anchor does not name an unstarted ordinary agent phase");
+    if (status.lifecycleState !== "RUNNING" || next?.kind !== "agent" || isReviewPhase(next)) throw new Error(`${checkpoint.kind === "quota-pause" ? "quota" : "ceiling"} anchor does not name an unstarted ordinary agent phase`);
   }
   await verifyRecoveryWorktree(status, checkpoint, await verifyCandidateLedgerVerdict(options.attemptDir, options.config, status, checkpoint));
   if (checkpoint.pending !== undefined) {
@@ -3392,13 +3464,28 @@ async function preflightRecovery(options: ProductionRunOptions): Promise<Recover
   const ledger = new CallBudget({ taskId: status.taskId, tier: status.tier, allowance: status.budget.allowance,
     ...(status.budget.ceiling === undefined ? {} : { ceiling: status.budget.ceiling }),
     carried: { attempt: status.attempt, callsSpent: status.budget.callsSpent } });
-  ledger.admitWorkflow({ id: recipe.id, minimumCalls: remaining.length + coldHeadroom });
+  try {
+    ledger.admitWorkflow({ id: recipe.id, minimumCalls: remaining.length + coldHeadroom });
+  } catch (error) {
+    if (!(error instanceof CallCeilingExceeded)) throw error;
+    // The same refusal, restated in the owner's units: the ticket the shift
+    // stopped before, and whether any raise can fund the rest at all.
+    const next = recipe.phases[checkpoint.prefix.length];
+    const ticket = next === undefined ? null : shiftTicketOf(recipe.phases, next.id);
+    const short = error.committed + error.requested - error.ceiling;
+    const where = next === undefined ? "" : ` before ${ticket === null ? next.id : `ticket ${ticket} (${next.id})`}`;
+    const remedy = error.ceiling + short > MAX_CALL_CEILING
+      ? `no awsf raise can fund the rest, because ${String(error.ceiling + short)} exceeds MAX_CALL_CEILING (${String(MAX_CALL_CEILING)})`
+      : `needs ${String(short)} more call(s) from the owner's \`awsf raise ${status.taskId}\` at a TTY before it can continue`;
+    throw new CallCeilingExceeded({ from: null, to: null, subject: `resume of ${status.taskId}${where}: ${remedy}`,
+      tier: error.tier, ceiling: error.ceiling, requested: error.requested, committed: error.committed });
+  }
   await executeProductionCommand(options, "read-only-recovery-preflight", { inspected, reason: "preflight", quotaReadings: [] }, true);
   return inspected;
 }
 
 async function readRecoveryQuota(options: ProductionRunOptions, inspected: RecoveryInspection): Promise<BoundaryQuota | null> {
-  const phase = SUPPORTED.get(inspected.status.workflow)!.phases.slice(inspected.checkpoint.prefix.length).find(phase => phase.kind === "agent" && phase.id !== inspected.checkpoint.pending?.phaseKey);
+  const phase = (await attemptRecipe(options, inspected.status))!.phases.slice(inspected.checkpoint.prefix.length).find(phase => phase.kind === "agent" && phase.id !== inspected.checkpoint.pending?.phaseKey);
   if (phase === undefined) return null;
   const role = options.config.agents.find(agent => agent.name === phase.owner)!;
   const agent = requestedPhaseRoute(options.config, phase.id, role, inspected.status.routeOverrides).agent;
@@ -3428,7 +3515,7 @@ async function readRecoveryQuota(options: ProductionRunOptions, inspected: Recov
 
 async function prepareResumeInstruction(options: ProductionRunOptions, inspected: RecoveryInspection) {
   if (inspected.checkpoint.pending !== undefined) throw new Error("a saved reply cannot receive a new instruction before validation");
-  const recipe = SUPPORTED.get(inspected.status.workflow)!;
+  const recipe = (await attemptRecipe(options, inspected.status))!;
   const ordinal = inspected.checkpoint.prefix.length + 1;
   const definition = recipe.phases[ordinal - 1];
   if (definition?.kind !== "agent") throw new Error("resume --instruction requires the next unstarted phase to be a model step; it cannot amend host code or a completed result");
@@ -3555,7 +3642,7 @@ export async function resumeProductionCommand(options: ProductionRunOptions & { 
   const instructionText = options.instruction === undefined ? null : ownerText(options.instruction);
   if (!options.terminal.interactive) throw new Error("resume requires owner confirmation at a TTY");
   const current = await readAttempt(options.attemptDir);
-  const recipe = SUPPORTED.get(current.workflow);
+  const recipe = await attemptRecipe(options, current);
   if (current.lifecycleState === "AWAITING_OWNER" && current.recovery?.prefix.length === recipe?.phases.length) {
     const proved = await inspectPhaseRecovery(options.attemptDir);
     if (proved.status.revision !== current.revision) throw new Error("completed status is stale");
