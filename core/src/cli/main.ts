@@ -10,7 +10,11 @@ import { loadConfig } from "../config/load.ts";
 import { loadCatalog } from "../registry/catalog.ts";
 import { resolvePlanSources } from "../registry/plan-source.ts";
 import { resolveStateRoot } from "../persistence/platform-paths.ts";
-import { callCeilingsOf } from "../state/tiers.ts";
+import { PlanTicketReader } from "../persistence/plan-tickets.ts";
+import { callCeilingsOf, type Tier } from "../state/tiers.ts";
+import { resolveTicketPlanSources } from "../api/routes.ts";
+import { selectShiftTickets } from "../workflow/shift/select.ts";
+import { SHIFT_TIER_FLOOR } from "../workflow/shift/compile.ts";
 import { processOwnerTerminal, type OwnerTerminal } from "./tty.ts";
 import { adoptCommand } from "./commands/adopt.ts";
 import { backlogCommand } from "./commands/backlog.ts";
@@ -46,11 +50,12 @@ import { statusCommand } from "./commands/status.ts";
 import { intakeRequest, listTickets, showTicket, ticketStoreFor, ticketStoreForPlan } from "./commands/ticket.ts";
 import { watchCommand } from "./commands/watch.ts";
 import { selectWorkflow, workflowsCommand } from "./commands/workflows.ts";
+import { assertShiftAdmission, assessShiftAdmission, parseMilestoneSelection, shiftPlanReadout } from "./commands/shift.ts";
 
 /** The complete owner-facing command table; documentation reconciles against it. */
 export const CLI_COMMANDS = Object.freeze([
   "init", "project", "new", "seed", "start", "run", "resume", "status", "watch", "rework", "review", "raise", "grant", "degrade-review", "journey", "land", "publish", "cancel", "retry",
-  "relate", "doctor", "gc", "dash", "routes", "db rebuild", "ticket", "backlog", "quota", "stage", "workflows", "group",
+  "relate", "doctor", "gc", "dash", "routes", "db rebuild", "ticket", "backlog", "quota", "stage", "workflows", "shift plan", "group",
 ]);
 
 const USAGE = `usage: awsf init [path] --project <slug>\n       awsf <${CLI_COMMANDS.join("|")}> [task] [options]`;
@@ -65,6 +70,13 @@ interface ParsedArgs {
   readonly files: readonly string[];
   /** Repeatable: one `--route` per phase, in the order they were written. */
   readonly routes: readonly string[];
+  /**
+   * Repeatable: `--milestone M4 --milestone M5` and `--milestone M4,M5` spell
+   * the same ordered selection; `parseMilestoneSelection` (shift.ts) splits
+   * each entry on its commas, so either form — or a mix of both — lands here
+   * as one flat list before that split runs.
+   */
+  readonly milestones: readonly string[];
 }
 
 function parseArgs(args: readonly string[]): ParsedArgs {
@@ -73,6 +85,7 @@ function parseArgs(args: readonly string[]): ParsedArgs {
   const repositories: string[] = [];
   const files: string[] = [];
   const routes: string[] = [];
+  const milestones: string[] = [];
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index] ?? "";
     if (!arg.startsWith("--")) {
@@ -86,6 +99,7 @@ function parseArgs(args: readonly string[]): ParsedArgs {
       if (key === "repository") repositories.push(value);
       else if (key === "route") routes.push(value);
       else if (key === "file") files.push(value);
+      else if (key === "milestone") milestones.push(value);
       else flags[key] = value;
       continue;
     }
@@ -108,10 +122,11 @@ function parseArgs(args: readonly string[]): ParsedArgs {
     if (key === "repository") repositories.push(value);
     else if (key === "route") routes.push(value);
     else if (key === "file") files.push(value);
+    else if (key === "milestone") milestones.push(value);
     else flags[key] = value;
     index += 1;
   }
-  return { positionals, flags, repositories, routes, files };
+  return { positionals, flags, repositories, routes, files, milestones };
 }
 
 function commandEnvironment(env: NodeJS.ProcessEnv): Readonly<Record<string, string>> {
@@ -345,6 +360,33 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       const configPath = resolve(parsed.flags.config ?? `${cwd}/awsf.config.yaml`);
       const config = loadConfig(await readFile(configPath, "utf8"));
       for (const line of workflowsCommand(config)) out(line);
+      return 0;
+    }
+
+    if (command === "shift") {
+      // Read-only pre-flight: it reads the catalog, the tickets and the
+      // config, and prints. It spawns nothing, reserves nothing and writes no
+      // manifest — binding a sealed selection to an attempt is a later
+      // ticket's scope (specs/awsf-v2-w17-shift.html Amendments, 2026-09-25).
+      if (parsed.positionals[0] !== "plan" || parsed.positionals.length !== 2) {
+        throw new Error("usage: awsf shift plan <stem> --milestone <Mx>[,<My>,...] [--config PATH]");
+      }
+      const stem = parsed.positionals[1]!;
+      const milestones = parseMilestoneSelection(parsed.milestones);
+      const reader = new PlanTicketReader(resolveTicketPlanSources(cwd));
+      const records = (await reader.load()).flatMap((group) => group.records);
+      const selection = selectShiftTickets(stem, milestones, records);
+      const configPath = resolve(parsed.flags.config ?? `${cwd}/awsf.config.yaml`);
+      const config = loadConfig(await readFile(configPath, "utf8"));
+      const tier: Tier = selection.tier === null ? SHIFT_TIER_FLOOR : (Math.max(SHIFT_TIER_FLOOR, selection.tier) as Tier);
+      const admission = assessShiftAdmission(selection.tickets.length + 1, tier, callCeilingsOf(config.risk.call_ceiling));
+      for (const line of shiftPlanReadout({
+        plan: stem,
+        milestones: selection.milestones,
+        tickets: selection.tickets.map((record) => ({ id: record.ticket.id, title: record.ticket.title })),
+        admission,
+      })) out(line);
+      assertShiftAdmission(admission, `shift plan ${stem} --milestone ${milestones.join(",")}`);
       return 0;
     }
 
