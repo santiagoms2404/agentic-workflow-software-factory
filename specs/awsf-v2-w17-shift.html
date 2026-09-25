@@ -106,9 +106,9 @@ pre.mermaid{background:transparent;border:0;padding:0;margin:0;font-family:var(-
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-09-15</dd>
-        <dt>modified</dt>     <dd>2026-09-15, 2026-09-15 (Questionables decided), 2026-09-20 (selection widened), 2026-09-24 (M1 closed), 2026-09-25 (task 5; G17 reordered after it), 2026-09-25 (task 6), 2026-09-25 (M2 closed), 2026-09-25 (task 8), 2026-09-25 (task 9; the shift binding pulled forward), 2026-09-25 (CLI wiring, owner-directed, outside the ticket set)</dd>
-        <dt>commits</dt>      <dd>M1 landed: a3d83ef (T01), 323bd0c (T02), d5b3b2c (T03). M2 landed: 16e6f47 (T04), c9bbcc2 (T05), c5c830b (T06), 060b698 (T07). M3: 852b0a8 (T08), a66ccde (CLI wiring, owner-directed), 2a4e58d (T09)</dd>
-        <dt>agent name</dt>   <dd>Claude Opus 5</dd>
+        <dt>modified</dt>     <dd>2026-09-15, 2026-09-15 (Questionables decided), 2026-09-20 (selection widened), 2026-09-24 (M1 closed), 2026-09-25 (task 5; G17 reordered after it), 2026-09-25 (task 6), 2026-09-25 (M2 closed), 2026-09-25 (task 8), 2026-09-25 (task 9; the shift binding pulled forward), 2026-09-25 (CLI wiring, owner-directed, outside the ticket set), 2026-09-25 (M3 closed: task 10)</dd>
+        <dt>commits</dt>      <dd>M1 landed: a3d83ef (T01), 323bd0c (T02), d5b3b2c (T03). M2 landed: 16e6f47 (T04), c9bbcc2 (T05), c5c830b (T06), 060b698 (T07). M3 landed: 852b0a8 (T08), a66ccde (CLI wiring, owner-directed), 2a4e58d (T09), this commit (T10)</dd>
+        <dt>agent name</dt>   <dd>Claude Opus 5, Claude Sonnet 5 (task 10)</dd>
         <dt>session id</dt>   <dd>not recorded — AGENTS.md invariant 1 keeps live session state out of every committed file in this repository</dd>
         <dt>back refs</dt>    <dd>./awsf-v2-plan.html (the v2 spine, § Milestone M17 → W17, and its 2026-09-03 amendment which this plan supersedes), ../AGENTS.md (the twelve invariants), ./awsf-v2-w04-project-registry.html (the <code>delivery</code> posture this plan reads), ./awsf-v2-w07-quota-telemetry.html (the L26 boundary stop a long shift will meet)</dd>
         <dt>forward refs</dt> <dd>./tickets/awsf-v2-w17-shift/ (the execution surface), ./awsf-v2-w17-shift-build-prompts.md (§ Section B, the prompt source the invariant-12 fence pairs against)</dd>
@@ -430,7 +430,7 @@ flowchart TD
     </div>
 
     <div class="phase">
-      <h3><code class="status">[wip]</code> Milestone M3: One ceiling for the whole shift <span class="wtag core">buildable now</span></h3>
+      <h3><code class="status">[x]</code> Milestone M3: One ceiling for the whole shift <span class="wtag core">buildable now</span></h3>
       <p>The amendment's fifth missing piece was <em>&ldquo;batch budgeting — away mode needs a notion of budget the lifecycle does not currently have.&rdquo;</em> <strong>The one-attempt shape removes that need entirely.</strong> One shift is one task, one <code>CallBudget</code> and one ceiling; <code>admitWorkflow</code> already refuses a workflow whose <code>minimumCalls</code> cannot fit, before any process exists. This milestone is therefore not new machinery — it is making the existing machinery's arithmetic legible to someone about to leave the house.</p>
       <figure>
         <pre class="mermaid">
@@ -484,10 +484,10 @@ flowchart LR
       <p class="sub">Serves <code class="serves">AC-2</code> · <code class="serves">INV-5</code></p>
       <p>Arithmetic first, as pure-function tests over <code>fitsCeiling</code> and <code>admitWorkflow</code> with no ledger and no I/O. Then one fixture-route journey that walks a shift into its ceiling and back out, because the recovery half is where a refusal becomes either a checkpoint or a dead end.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>npx tsx --test core/test/unit/shift-budget.test.ts</code> — the whole table above as cases, including <code>N = 31</code> refused for exceeding <code>MAX_CALL_CEILING</code> rather than for exceeding a tier</li>
-        <li><code class="status">[]</code> <code>npx tsx --test core/test/journeys/shift-ceiling.test.ts</code> — a fixture-adapter shift stops at the ceiling, the prefix is durable, and a resume after a granted raise completes without re-spending</li>
-        <li><code class="status">[]</code> The no-<code>raise</code>-import fence goes red when the import is added, <strong>proven by adding it</strong> and watching it fail</li>
-        <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code>, <code>npm run lint</code> — green, counts recorded</li>
+        <li><code class="status">[x]</code> <code>npx tsx --test core/test/unit/shift-budget.test.ts</code> — the whole table above as cases, including <code>N = 31</code> refused for exceeding <code>MAX_CALL_CEILING</code> rather than for exceeding a tier</li>
+        <li><code class="status">[x]</code> <code>npx tsx --test core/test/journeys/shift-ceiling.test.ts</code> — a fixture-adapter shift stops at the ceiling, the prefix is durable, and a resume after a granted raise completes without re-spending</li>
+        <li><code class="status">[x]</code> The no-<code>raise</code>-import fence goes red when the import is added, <strong>proven by adding it</strong> and watching it fail</li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code>, <code>npm run lint</code> — green, counts recorded</li>
       </ul>
       <div class="loop">
         🔁 <strong>Do not exit this phase until every box above is checked.</strong>
@@ -1449,6 +1449,93 @@ flowchart LR
       conflated their in-flight state with this change's own correctness. Committed as <code>a66ccde</code>, isolated
       to <code>core/src/cli/main.ts</code>, <code>core/test/unit/meta/_driving.ts</code> and
       <code>docs/cheatsheet.html</code> — no file task 9 held open was touched.</p>
+    </details>
+
+    <details open>
+      <summary>2026-09-25 — Milestone M3 closed: one ceiling for the whole shift</summary>
+
+      <h3>What is now observably true</h3>
+      <p>A shift's batch admission is legible arithmetic, checked at zero cost before any process exists:
+      <code>minimumCalls = N + 1</code> against the attempt's ceiling, refusing with the exact raise-act shortfall or
+      naming <code>MAX_CALL_CEILING</code> by name when no raise can fund it — proven directly as the whole
+      milestone-table above, including <code>N = 31</code>. A shift that cannot fund its next ticket's correction
+      stops cleanly before that ticket, under a <code>ceiling-pause</code> checkpoint naming the ticket id, with the
+      accepted prefix durable and no later call reserved or spent; a resume without a raise meets the same
+      <code>CallCeilingExceeded</code> every other resume does, and a resume after one completes without re-spending
+      anything settled. <code>awsf raise</code>'s interactive-terminal requirement makes a shift widening its own
+      ceiling structurally unreachable — mechanically fenced by
+      <code>shift-no-raise-import.test.ts</code>, and this task re-proved the fence directly against a real module
+      under <code>core/src/workflow/shift/</code> (<code>bind.ts</code>, per T09's Handoff), not only its own
+      synthetic self-test: the import was added, <code>shift-no-raise-import.test.ts</code> went from 2/2 to 1/2
+      (offender: <code>core/src/workflow/shift/bind.ts</code>), then reverted, restoring 2/2 with
+      <code>git diff --stat</code> empty.</p>
+
+      <h3>Every task and its final state</h3>
+      <ul>
+        <li><strong>T08 — batch admission, refused at zero cost.</strong> <code class="status">[x]</code>, landed
+        <code>852b0a8</code>. No <code>[f]</code> rows.</li>
+        <li><strong>T09 — ceiling exhaustion mid-shift is a checkpoint, not a failure.</strong>
+        <code class="status">[x]</code>, landed <code>2a4e58d</code>. No <code>[f]</code> rows. Its own row 1 was
+        reworded to what was built, recorded in the 2026-09-25 amendment above. The owner-directed CLI-wiring commit
+        (<code>a66ccde</code>) landed alongside it and is its own separate amendment, not a T09 or T10 obligation.</li>
+        <li><strong>T10 — Testing Strategy for M3.</strong> <code class="status">[x]</code>, landed with this commit.
+        No <code>[f]</code> rows. Unlike M1's and M2's closing tasks, this one needed no new test file and no new
+        coverage: <code>shift-budget.test.ts</code> and <code>shift-ceiling.test.ts</code> were already complete from
+        T08 and T09, and the fence's self-test already exercised its regex. This task's own net-new work was
+        re-running all three as closing checks and performing the induced-import proof against a real fenced module
+        rather than only the fence's synthetic string, closing the gap between what the self-test proves (the regex
+        logic) and what the checklist row actually asks for (a real file in the fenced directory tripping the
+        walker).</li>
+      </ul>
+
+      <h3>Friction, and what a later milestone must do differently because of it</h3>
+      <p><strong>A milestone's closing task can be pure verification with zero net-new coverage, and that is a
+      legitimate shape, not a shortcut taken.</strong> M1's and M2's closing tasks each carried real net-new proof
+      work (the cross-process digest, the two-provider and zero-producer inductions). M3's did not, because T08 and
+      T09 had already built and proved everything the checklist named, including the fence's own regex self-test.
+      <strong>A later milestone's task 13/16 should check its predecessors' Handoffs and the checklist rows
+      themselves before assuming it owes fresh coverage</strong> — sometimes the honest closing work is confirming
+      what already exists is real, not writing more of it.</p>
+      <p><strong>The fence's own self-test is not the same proof the checklist row asks for, and the difference is
+      worth naming for M4 through M6.</strong> <code>shift-no-raise-import.test.ts</code> ships with a second test
+      that exercises its regex against a synthetic import string — a real proof that the detector's pattern works,
+      but not a demonstration that the fence actually walks and catches a real file under
+      <code>core/src/workflow/shift/</code>. A checklist row asking to prove a fence "goes red when the import is
+      added" is asking for the second thing. T09's Handoff named <code>bind.ts</code> as the plausible real target;
+      this task used it. <strong>A later milestone with its own induced-violation row should check whether a
+      candidate fence already ships a synthetic self-test before treating that self-test as satisfying the row</strong>
+      — it does not, on its own.</p>
+      <p>Nothing else took longer than expected. <code>npm run test:unit</code> at this task's own base SHA
+      (<code>151dcfb</code>, before this task changed anything): 2181/2181, green.</p>
+
+      <h3>Decisions made inside the milestone the plan did not already carry</h3>
+      <ul>
+        <li>The induced-import proof edits <code>core/src/workflow/shift/bind.ts</code> rather than
+        <code>compile.ts</code> or <code>select.ts</code>, following T09's Handoff C4: <code>bind.ts</code> does file
+        I/O and is the file a real <code>raise.ts</code> import is most plausible to land in by accident, so it is
+        the most honest place to prove the fence catches one.</li>
+        <li>No second fixture or synthetic import test was added alongside the existing self-test. The self-test
+        stays as the fast, always-run regex check; this task's induce-and-revert is the one-time, by-hand proof the
+        checklist row asks for, not a permanent addition — repeating it as a standing test would just be the
+        self-test again with extra steps.</li>
+      </ul>
+
+      <h3>Landing commits and suite counts at close</h3>
+      <p>M3's two implementation commits: <code>852b0a8</code> (T08), <code>2a4e58d</code> (T09); the owner-directed
+      CLI-wiring commit <code>a66ccde</code> and its two documentation amendments (<code>708d18a</code>,
+      <code>d0dcf97</code>) landed alongside and after T09; this commit closes T10 and the milestone. An unrelated
+      CI-only fix landed on <code>main</code> immediately before this commit, outside this workstream's scope:
+      <code>7bc3a53</code> corrected <code>core/test/fixtures/providers/codex/visual-reference-fixture.mjs</code>
+      from mode <code>100644</code> to <code>100755</code> — the only provider fixture <code>.mjs</code> not already
+      executable, masked locally by DrvFs reporting every inode as <code>0777</code> on <code>/mnt/d</code>, and
+      failing two cases of <code>core/test/journeys/visual-references.test.ts</code> on GitHub Actions' real ext4 for
+      two pushed runs in a row. <code>npx tsx --test core/test/unit/shift-budget.test.ts
+      core/test/journeys/shift-ceiling.test.ts core/test/unit/meta/shift-no-raise-import.test.ts</code>: 13/13.
+      <code>npm run test:unit</code>: 2181/2181, run at base SHA <code>151dcfb</code> before this task changed
+      anything. <code>npm run typecheck</code>: exit 0 across both projects. <code>npm run lint</code>: 0 warnings, 0
+      errors on 601 files. <code>npm test</code>: full suite in one invocation,
+      <code>layers: unit=0 contract=0 sim=0 journeys=0</code>, exit 0, <code>git status --porcelain</code> clean
+      afterward.</p>
     </details>
 
   </section>
