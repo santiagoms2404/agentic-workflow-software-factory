@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { copyFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -32,6 +33,15 @@ async function manifestOver(directory: string): Promise<ShiftManifest> {
     tickets.push({ id, path: `specs/tickets/${PLAN}/${id}.md`, digest: file.digest });
   }
   return sealShiftManifest({ plan: PLAN, milestones: ["M1"], tickets });
+}
+
+const CHILD_SCRIPT = join(import.meta.dirname, "_shift-manifest-child.ts");
+
+/** Seals the same manifest in a FRESH node process, over the same directory's bytes. */
+function manifestDigestInChildProcess(directory: string): string {
+  return execFileSync(process.execPath, ["--experimental-strip-types", CHILD_SCRIPT, directory, PLAN], {
+    encoding: "utf8",
+  });
 }
 
 test("the manifest is registered as a host record and never as a wire envelope", () => {
@@ -73,6 +83,33 @@ test("a one-byte change to any ticket file changes manifestDigest", async () => 
       await writeFile(path, original);
     }
     assert.equal((await manifestOver(directory)).manifestDigest, before.manifestDigest);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("identical bytes give an identical manifestDigest across two processes, and one changed byte does not", async () => {
+  const directory = await ticketCopies();
+  try {
+    const before = await manifestOver(directory);
+    assert.equal(
+      manifestDigestInChildProcess(directory),
+      before.manifestDigest,
+      "a fresh process sealed a different digest over the identical bytes",
+    );
+
+    const path = join(directory, `${IDS[0]}.md`);
+    const original = await readFile(path);
+    const moved = Buffer.from(original);
+    const at = moved.indexOf('title: "') + 'title: "'.length;
+    moved[at] = moved[at]! ^ 1;
+    await writeFile(path, moved);
+    assert.notEqual(
+      manifestDigestInChildProcess(directory),
+      before.manifestDigest,
+      "a moved byte left the child process's manifestDigest unchanged",
+    );
+    await writeFile(path, original);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

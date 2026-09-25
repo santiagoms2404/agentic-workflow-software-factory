@@ -106,8 +106,8 @@ pre.mermaid{background:transparent;border:0;padding:0;margin:0;font-family:var(-
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-09-15</dd>
-        <dt>modified</dt>     <dd>2026-09-15, 2026-09-15 (Questionables decided)</dd>
-        <dt>commits</dt>      <dd>not yet landed</dd>
+        <dt>modified</dt>     <dd>2026-09-15, 2026-09-15 (Questionables decided), 2026-09-20 (selection widened), 2026-09-24 (M1 closed)</dd>
+        <dt>commits</dt>      <dd>M1 landed: a3d83ef (T01), 323bd0c (T02), and this commit (T03)</dd>
         <dt>agent name</dt>   <dd>Claude Opus 5</dd>
         <dt>session id</dt>   <dd>not recorded — AGENTS.md invariant 1 keeps live session state out of every committed file in this repository</dd>
         <dt>back refs</dt>    <dd>./awsf-v2-plan.html (the v2 spine, § Milestone M17 → W17, and its 2026-09-03 amendment which this plan supersedes), ../AGENTS.md (the twelve invariants), ./awsf-v2-w04-project-registry.html (the <code>delivery</code> posture this plan reads), ./awsf-v2-w07-quota-telemetry.html (the L26 boundary stop a long shift will meet)</dd>
@@ -301,7 +301,7 @@ flowchart TD
     <p class="sub"><strong>Ordering gate <span class="gate">G17-M</span> — the merge.</strong> M1, M2 and M3 are new files plus two small edits and can be built on <code>main</code> today. <strong>M4 and M5 may not start until <code>main</code> and <code>task3.5</code> are merged</strong>, and M2's two shared-file edits are best taken after it too. The measurement and the reasoning are in <a href="#notes">Notes → The merge, measured</a>.</p>
 
     <div class="phase">
-      <h3><code class="status">[wip]</code> Milestone M1: Selection and the manifest <span class="wtag core">buildable now</span></h3>
+      <h3><code class="status">[x]</code> Milestone M1: Selection and the manifest <span class="wtag core">buildable now</span></h3>
       <p>The shift's input is a selection the owner makes once, and its durable record. Nothing here executes, compiles or spawns; this milestone ends with a manifest on disk and a reader that can turn a ticket file into the bytes a phase will carry. It is deliberately first because <strong>every later milestone depends on the selection being reproducible</strong>, and because it is the whole of the workstream that needs no merge.</p>
       <figure>
         <pre class="mermaid">
@@ -344,11 +344,11 @@ flowchart LR
       <p class="sub">Serves <code class="serves">AC-1</code> · <code class="serves">INV-4</code></p>
       <p>Pure functions over fixture ticket directories under <code>core/test/fixtures/</code>. No git, no clock, no provider, no network. The expander and the body reader are both total functions of bytes on disk, and the tests are written that way.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>npx tsx --test core/test/unit/shift-select.test.ts</code> — every refusal fires on its own fixture, and the accepted case returns the exact expected order</li>
-        <li><code class="status">[]</code> The same test covers a <strong>three-milestone selection</strong>: one topological order across all three, a cross-milestone <code>depends_on</code> edge honoured rather than refused, and a non-contiguous <code>M1,M3</code> selection accepted when <code>M3</code> is independent of <code>M2</code></li>
-        <li><code class="status">[]</code> <code>npx tsx --test core/test/unit/shift-manifest.test.ts</code> — the manifest round-trips through TypeBox validation, and a one-byte change to any ticket file changes <code>manifestDigest</code></li>
-        <li><code class="status">[]</code> <code>npm run test:unit</code> — green at the <strong>exact base SHA this milestone started from</strong>, count recorded in the commit body</li>
-        <li><code class="status">[]</code> <code>npm run typecheck</code> and <code>npm run lint</code> — exit 0</li>
+        <li><code class="status">[x]</code> <code>npx tsx --test core/test/unit/shift-select.test.ts</code> — every refusal fires on its own fixture, and the accepted case returns the exact expected order</li>
+        <li><code class="status">[x]</code> The same test covers a <strong>three-milestone selection</strong>: one topological order across all three, a cross-milestone <code>depends_on</code> edge honoured rather than refused, and a non-contiguous <code>M1,M3</code> selection accepted when <code>M3</code> is independent of <code>M2</code></li>
+        <li><code class="status">[x]</code> <code>npx tsx --test core/test/unit/shift-manifest.test.ts</code> — the manifest round-trips through TypeBox validation, and a one-byte change to any ticket file changes <code>manifestDigest</code>. Built as <code>shift-selection-record.test.ts</code> under the junk-drawer rename (see task 1's amendment); this task adds the cross-process half of the digest property with a spawned second node process over the same bytes</li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code> — green at the <strong>exact base SHA this milestone started from</strong>, count recorded in the commit body</li>
+        <li><code class="status">[x]</code> <code>npm run typecheck</code> and <code>npm run lint</code> — exit 0</li>
       </ul>
       <div class="loop">
         🔁 <strong>Do not exit this phase until every box above is checked.</strong>
@@ -1036,6 +1036,75 @@ flowchart LR
       ticket's <code>state:</code> in one commit</strong>, and its single review covers the accumulated diff across
       all of them. That is the difference the owner will actually notice, and it is consistent with AGENTS.md
       invariant 2 — the markers are earned by the work that landed in that commit.</p>
+    </details>
+
+    <details open>
+      <summary>2026-09-24 — Milestone M1 closed: selection and the manifest</summary>
+
+      <h3>What is now observably true</h3>
+      <p>A plan stem and one or more milestone ids expand, through the real <code>PlanTicketReader</code>, to a
+      single deterministic topological order over <code>depends_on</code> — <code>selectShiftTickets</code> in
+      <code>core/src/workflow/shift/select.ts</code> — with a named refusal class for every way that expansion can
+      be wrong: a repeated milestone, a milestone with no tickets, a milestone holding a <code>wip</code> or
+      <code>failed</code> ticket, a <code>depends_on</code> edge leaving the selection, a cycle, an empty
+      expansion, and a duplicate ticket id. The selection carries a derived tier — the maximum declared tier across
+      every selected ticket, <code>null</code> when none declares one — never a taken-on-trust value. A selection
+      seals into <code>ShiftManifestSchema</code> (<code>awsf.shift-manifest/v1</code>, committed as
+      <code>core/src/contracts/shift-selection-record.ts</code> under the junk-drawer rename): plan, ordered
+      milestones, per-ticket <code>{id, path, digest}</code>, and a <code>manifestDigest</code> that is now proven,
+      not merely asserted, to survive a process boundary — two independent <code>node</code> processes sealing the
+      identical ticket bytes produce the identical digest, and a single moved byte in either process changes it in
+      both. <code>plan-tickets.ts</code> is untouched; the body reader lives in its own file, pinned by sha256
+      against the pre-T01 base.</p>
+
+      <h3>Every task and its final state</h3>
+      <ul>
+        <li><strong>T01 — the manifest contract and the body reader.</strong> <code class="status">[x]</code>,
+        landed <code>a3d83ef</code>. No <code>[f]</code> rows.</li>
+        <li><strong>T02 — milestone selection and its refusals.</strong> <code class="status">[x]</code>, landed
+        <code>323bd0c</code>. No <code>[f]</code> rows.</li>
+        <li><strong>T03 — Testing Strategy for M1.</strong> <code class="status">[x]</code>, landed with this
+        commit. No <code>[f]</code> rows: the fixture ticket directories M1's tests need were already built in
+        T02 (<code>core/test/fixtures/shift-select/&lt;case&gt;/</code>); this task's own net-new work was the
+        cross-process half of the digest property, which was previously proved in one process only.</li>
+      </ul>
+
+      <h3>Friction, and what a later milestone must do differently because of it</h3>
+      <p><strong>The plan's own DONE WHEN row named a file that was never going to exist.</strong>
+      <code>shift-manifest.test.ts</code> is unbuildable under AGENTS.md invariant 10 — the junk-drawer fence
+      refuses any tracked basename matching <code>/manifest/i</code> — so T01 built
+      <code>shift-selection-record.test.ts</code> instead and every later reference to the plan's row means that
+      file. <strong>M2 onward should read a task's DONE WHEN test-file names as a naming intent, not a filename
+      guarantee</strong>, and check the junk-drawer fence before authoring any file with <code>manifest</code> or
+      <code>receipt</code> in it.</p>
+      <p><strong>The cross-process proof was scoped out of T01 and T02 and left for T03 by name</strong> (their own
+      Handoffs said so), which is the correct call — a testing-strategy task is exactly where a property proved in
+      one process gets its second, independent process — but it means a milestone's Testing Strategy task should
+      not be read as "run the tests the earlier tasks already wrote," it can carry real net-new coverage of its
+      own. A later milestone's task 7/10/13/16 should budget for that rather than assume a rubber stamp.</p>
+      <p>Nothing else took longer than expected: M1 is three new files, no merge dependency, and the plan's own
+      framing of it as "buildable now" held.</p>
+
+      <h3>Decisions made inside the milestone the plan did not already carry</h3>
+      <ul>
+        <li>The cross-process digest test spawns a second <code>node --experimental-strip-types</code> process
+        from a non-<code>.test.ts</code> helper (<code>core/test/unit/_shift-manifest-child.ts</code>), following
+        <code>marimba-guard.test.ts</code>'s precedent that the child-process fence (AGENTS.md invariant 3) scopes
+        to <code>core/src</code> only — a test asserting a cross-process property is the one place spawning a
+        process is the point, not a workaround.</li>
+        <li>No new fixture ticket tree was built for the manifest tests. They continue to copy the three real
+        <code>specs/tickets/awsf-v2-w17-shift/T01–T03.md</code> files into a tmpdir (T01's original design) rather
+        than moving onto a synthetic fixture, because the real tickets already carry the real
+        <code>## Build prompt</code> shape the reader must parse, and a synthetic copy would only add a second
+        shape to keep in sync with no independence benefit worth the duplication.</li>
+      </ul>
+
+      <h3>Landing commits and suite counts at close</h3>
+      <p>M1's three commits: <code>a3d83ef</code> (T01), <code>323bd0c</code> (T02), and this commit (T03).
+      <code>npx tsx --test core/test/unit/shift-select.test.ts core/test/unit/shift-selection-record.test.ts</code>:
+      19/19. <code>npm run test:unit</code>: green, count recorded in this commit's body.
+      <code>npm run typecheck</code>: exit 0. <code>npm run lint</code>: 0 warnings, 0 errors.
+      <code>npm test</code>: full suite in one invocation, exit 0, working tree clean afterward.</p>
     </details>
 
   </section>
