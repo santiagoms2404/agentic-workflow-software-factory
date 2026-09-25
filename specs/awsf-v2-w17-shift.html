@@ -386,7 +386,7 @@ flowchart TD
         <li><code class="status">[x]</code> <code>minimumCalls === tickets.length + 1</code>, asserted directly rather than inferred — it is the number every budget decision in M3 is made against</li>
         <li><code class="status">[x]</code> Every phase passes <code>assertEarnedDescription</code>: a description that normalises to its own id is refused by <code>compilePhase</code>, so a generated description must carry the ticket's <em>title</em>, not its id</li>
         <li><code class="status">[x]</code> The <code>brief</code> phase emits the ticket's <code>## Build prompt</code> block verbatim as the segment's intent. <strong>No model interprets the ticket</strong> — the owner already wrote the prompt, and paraphrasing it would cost a call to lose fidelity</li>
-        <li><code class="status">[x]</code> <code>reducePhaseContext</code>'s last-wins-per-schema behaviour is <strong>asserted, not assumed</strong>: ticket <em>n</em>'s builder receives ticket <em>n−1</em>'s build envelope as <code>{previous_envelope}</code>, and the test says so explicitly</li>
+        <li><code class="status">[x]</code> <code>reducePhaseContext</code>'s behaviour is <strong>asserted, not assumed</strong>: when ticket <em>n</em>'s builder starts, <code>schemas.get("awsf.build-output/v1")</code> is ticket <em>n−1</em>'s build envelope (last wins per schema), and <code>{previous_envelope}</code> is ticket <em>n</em>'s own brief (the last accepted envelope). Ticket <em>n−1</em>'s work reaches ticket <em>n</em> through the tree, and the test says so explicitly (corrected 2026-09-25, see Amendments)</li>
         <li><code class="status">[x]</code> The same manifest and the same ticket bytes compile to a byte-identical recipe, twice, in the same process and in a fresh one</li>
       </ul>
 
@@ -525,6 +525,8 @@ stateDiagram-v2
         <li><code class="status">[]</code> No later ticket's phase reserves a call after the block — asserted against the ledger's <code>history()</code>, not against a log line</li>
         <li><code class="status">[]</code> <code>awsf resume</code> re-runs only the blocked ticket's phases, and a journey test proves the earlier tickets' commits are still on the worktree head</li>
         <li><code class="status">[]</code> <strong>Rework is not the recovery instrument, and the code is why.</strong> Every phase the rework path creates is <code>maxCorrections: 0</code>, and that path <em>rejects</em> provider output matching a credential pattern where a normal run scrubs it. A shift that blocks surfaces; it never retries itself into a corner. A meta-test asserts no shift module imports <code>rework.ts</code></li>
+        <li><code class="status">[]</code> The runner's <code>engineer</code> branch emits a shift brief's compiled <code>intent</code> (<code>ShiftBriefPhase.intent</code>), not <code>requestOutput(status)</code>. Today it ignores <code>phase.execute</code>, so every <code>t&lt;NN&gt;-brief</code> would carry the attempt's request instead of its ticket's prompt (added 2026-09-25, see Amendments)</li>
+        <li><code class="status">[]</code> <code>shift-review-context</code> composes the intent of <strong>every</strong> <code>t&lt;NN&gt;-brief</code>. Today review intent is <code>schemas.get("awsf.plan-output/v1")</code>, last wins, so the one review would judge N tickets' diff against the last ticket's brief only (added 2026-09-25, see Amendments)</li>
         <li><code class="status">[]</code> An environmental failure — the case where the block might not be about that ticket at all — is <strong>distinguishable in the record</strong>: the blocker carries one of the six deterministic reason sources, and a <code>gate</code> source reads differently from a <code>process</code> one</li>
       </ul>
 
@@ -1105,6 +1107,46 @@ flowchart LR
       19/19. <code>npm run test:unit</code>: green, count recorded in this commit's body.
       <code>npm run typecheck</code>: exit 0. <code>npm run lint</code>: 0 warnings, 0 errors.
       <code>npm test</code>: full suite in one invocation, exit 0, working tree clean afterward.</p>
+    </details>
+
+    <details open>
+      <summary>2026-09-25 — task 4's <code>{previous_envelope}</code> claim corrected, and two runner gaps moved into task 11</summary>
+
+      <p><strong>Markers:</strong> task 4's rows stay <code class="status">[x]</code> (T04, <code>16e6f47</code>). Task 11
+      gains two <code class="status">[]</code> rows. No other marker moved. Building T04 against the code found two
+      things the plan had not written. As the owner directs, a session's finding against the code overrides the plan's
+      wording.</p>
+
+      <h3>The correction: what ticket <em>n</em>'s builder actually receives</h3>
+      <p>Task 4 said ticket <em>n</em>'s builder receives ticket <em>n−1</em>'s build envelope as
+      <code>{previous_envelope}</code>. The code says otherwise. <code>reducePhaseContext</code>
+      (<code>core/src/workflow/phase-recovery.ts</code>) returns two things. <code>previous</code> is the last accepted
+      envelope in phase order, and for <code>t&lt;NN&gt;-build</code> that is its own <code>t&lt;NN&gt;-brief</code>.
+      <code>schemas</code> is keyed by schema, last wins, and there ticket <em>n−1</em>'s build envelope is
+      <code>schemas.get("awsf.build-output/v1")</code>. The live loop in <code>production-run.ts</code> sets
+      <code>previous</code> the same way. <code>core/test/unit/shift-compile.test.ts</code> asserts both, including
+      that ticket <em>n−1</em>'s build summary is absent from ticket <em>n</em>'s rendered builder prompt.</p>
+      <p><strong>This is the right behaviour, and the phase order stays as it is.</strong> The builder needs its own
+      ticket's prompt and handoff. Ticket <em>n−1</em>'s work is already in the worktree it builds on, as its own host
+      commit (<code>AC-3</code>). Reordering the phases, or passing <em>n−1</em>'s build envelope instead, would either
+      drop the ticket's intent from the builder's prompt or render it twice. The task 4 row is reworded to the
+      measured behaviour. T04's build prompt, in the ticket and in Section B, is left as authored: it is the record of
+      what that session was asked to do, and this amendment is the correction.</p>
+
+      <h3>Two runner gaps, moved into task 11</h3>
+      <ul>
+        <li><strong>The brief is not emitted.</strong> <code>production-run.ts</code>'s <code>engineer</code> branch
+        ignores <code>phase.execute</code> and emits <code>requestOutput(status)</code>, the attempt's request. A shift
+        brief must emit its compiled <code>intent</code>, which <code>compileShift</code> already builds from the
+        ticket's bytes.</li>
+        <li><strong>The review sees one ticket's intent.</strong> Review intent is
+        <code>schemas.get("awsf.plan-output/v1")</code>. Last wins, so <code>shift-review-context</code> would carry the
+        last ticket's brief only. It must carry every brief.</li>
+      </ul>
+      <p><strong>Why task 11 and not now:</strong> both changes are in <code>production-run.ts</code>, which is
+      gated on <span class="gate">G17-M</span> and is one of the seventeen conflicted files. Task 11 is the first task
+      that runs a shift through the runner, and its resume journey reaches the review. Both are recorded in T07's
+      and T11's Handoff.</p>
     </details>
 
   </section>
