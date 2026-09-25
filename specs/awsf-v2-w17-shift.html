@@ -106,8 +106,8 @@ pre.mermaid{background:transparent;border:0;padding:0;margin:0;font-family:var(-
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-09-15</dd>
-        <dt>modified</dt>     <dd>2026-09-15, 2026-09-15 (Questionables decided), 2026-09-20 (selection widened), 2026-09-24 (M1 closed), 2026-09-25 (task 5; G17 reordered after it), 2026-09-25 (task 6), 2026-09-25 (M2 closed), 2026-09-25 (task 8), 2026-09-25 (task 9; the shift binding pulled forward)</dd>
-        <dt>commits</dt>      <dd>M1 landed: a3d83ef (T01), 323bd0c (T02), d5b3b2c (T03). M2 landed: 16e6f47 (T04), c9bbcc2 (T05), c5c830b (T06), 060b698 (T07). M3: 852b0a8 (T08), this commit (T09)</dd>
+        <dt>modified</dt>     <dd>2026-09-15, 2026-09-15 (Questionables decided), 2026-09-20 (selection widened), 2026-09-24 (M1 closed), 2026-09-25 (task 5; G17 reordered after it), 2026-09-25 (task 6), 2026-09-25 (M2 closed), 2026-09-25 (task 8), 2026-09-25 (task 9; the shift binding pulled forward), 2026-09-25 (CLI wiring, owner-directed, outside the ticket set)</dd>
+        <dt>commits</dt>      <dd>M1 landed: a3d83ef (T01), 323bd0c (T02), d5b3b2c (T03). M2 landed: 16e6f47 (T04), c9bbcc2 (T05), c5c830b (T06), 060b698 (T07). M3: 852b0a8 (T08), a66ccde (CLI wiring, owner-directed), 2a4e58d (T09)</dd>
         <dt>agent name</dt>   <dd>Claude Opus 5</dd>
         <dt>session id</dt>   <dd>not recorded — AGENTS.md invariant 1 keeps live session state out of every committed file in this repository</dd>
         <dt>back refs</dt>    <dd>./awsf-v2-plan.html (the v2 spine, § Milestone M17 → W17, and its 2026-09-03 amendment which this plan supersedes), ../AGENTS.md (the twelve invariants), ./awsf-v2-w04-project-registry.html (the <code>delivery</code> posture this plan reads), ./awsf-v2-w07-quota-telemetry.html (the L26 boundary stop a long shift will meet)</dd>
@@ -1399,6 +1399,56 @@ flowchart LR
       ledger holds two settled reservations and none outstanding. A resume is refused, a non-TTY raise is refused,
       and after a one-call raise the resume completes: five launches, none twice, and three ticket commits on one
       head with ticket 1's unchanged. <code>npm run test:unit</code>: 2181/2181. <code>npm run test:journeys</code>: 264/264. <code>npm run typecheck</code>: exit 0 across both projects. <code>npm run lint</code>: 0 warnings, 0 errors on 601 files.</p>
+    </details>
+
+    <details open>
+      <summary>2026-09-25 — <code>awsf shift plan</code> wired into the CLI (owner-directed, outside the ticket set)</summary>
+
+      <p><strong>No task in M3 through M6 registers <code>core/src/cli/commands/shift.ts</code> as a real terminal
+      command.</strong> Task 8's own DONE WHEN asked only for the readout's arithmetic and its unit tests; task 9,
+      built and landed alongside this entry, adds <code>AttemptStatus.shift</code> and the machinery to run an
+      already-sealed selection through <code>production-run.ts</code>, but says explicitly: <em>&ldquo;the CLI flag
+      that would pass a manifest to <code>awsf new</code> is not built.&rdquo;</em> Global Validation (§ Validation
+      Commands) already asserts <code>awsf shift plan &lt;stem&gt; --milestone &lt;Mx&gt;</code> as a real, runnable
+      command — the only gap was that nothing in <code>core/src/cli/main.ts</code>'s dispatch table pointed at it.
+      The owner asked for it directly, between tasks, rather than waiting for a ticket to claim it; this entry is
+      that request's record, since no ticket's <code>state:</code> or checklist names this work.</p>
+
+      <h3>What was built</h3>
+      <p><code>awsf shift plan &lt;stem&gt; --milestone &lt;Mx&gt;[,&lt;My&gt;…]</code> is now a dispatch case in
+      <code>main.ts</code>: it resolves the catalog's plan sources the same way the dashboard API already does
+      (<code>resolveTicketPlanSources</code> + <code>PlanTicketReader</code>), runs the real
+      <code>selectShiftTickets</code>, and prints task 8's readout before calling <code>assertShiftAdmission</code> —
+      reads and prints only, the same contract task 8's DO NOT list drew for the pure function. <code>--milestone</code>
+      joined <code>--route</code>/<code>--file</code>/<code>--repository</code> as a repeatable flag in
+      <code>parseArgs</code>, so <code>--milestone M4,M5</code> and <code>--milestone M4 --milestone M5</code> parse to
+      one flat list before <code>parseMilestoneSelection</code> ever runs — proven identical by a live smoke test
+      against this plan's own M4/M5 tickets, not merely asserted.</p>
+      <p><code>CLI_COMMANDS</code> gained <code>"shift plan"</code> as a two-word entry, on the same precedent as
+      <code>"db rebuild"</code>. The cheatsheet-reconciliation fence checks that table against
+      <code>docs/cheatsheet.html</code>'s <code>commands</code> fact-class list by exact set equality in both
+      directions, so the cheatsheet's list and <code>_driving.ts</code>'s <code>AWSF_CLI</code> regex (which
+      special-cases <code>db rebuild</code> the same way <code>shift plan</code> now needs) both moved in the same
+      commit as <code>CLI_COMMANDS</code> — the fence would have gone red on any one of the three alone.</p>
+
+      <h3>What stayed out of scope</h3>
+      <p>This is the pre-flight step only. It still writes no manifest and binds nothing to an attempt — that surface
+      is task 9's <code>workflow/shift/bind.ts</code>, and the CLI flag that hands a sealed manifest to
+      <code>awsf new</code> remains exactly as task 9 left it: not built. The two do not overlap: one prints a
+      selection's admission before anything exists, the other runs an already-bound one.</p>
+
+      <h3>Evidence</h3>
+      <p>A live smoke test against this plan's own tickets: <code>awsf shift plan awsf-v2-w17-shift --milestone
+      M4,M5</code> reports <code>minimumCalls = 6 + 1 = 7</code>, refuses against T2's ceiling of 5, and recommends
+      one raise act to 10 — the same numbers task 8's unit tests assert for that row. The repeated-flag spelling
+      produces byte-identical output. <code>cheatsheet-reconciliation.test.ts</code> and
+      <code>doc-reconciliation.test.ts</code>: 31/31. <code>npm run typecheck</code>: exit 0 across both projects.
+      <code>npm run lint</code>: 0 warnings, 0 errors. A full <code>npm run test:unit</code> was not run at commit
+      time: task 9's session held uncommitted work in unrelated files (<code>production-run.ts</code>,
+      <code>attempt.ts</code>, a new <code>shift/bind.ts</code>) at that moment, and running the full suite would have
+      conflated their in-flight state with this change's own correctness. Committed as <code>a66ccde</code>, isolated
+      to <code>core/src/cli/main.ts</code>, <code>core/test/unit/meta/_driving.ts</code> and
+      <code>docs/cheatsheet.html</code> — no file task 9 held open was touched.</p>
     </details>
 
   </section>
