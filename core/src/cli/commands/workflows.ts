@@ -1,7 +1,13 @@
 import type { AwsfConfig } from "../../config/schema.ts";
 import { callCeilingsOf, ceilingFor, TIERS, type ResolvedCeiling, type Tier } from "../../state/tiers.ts";
 import type { WorkflowRecipe } from "../../workflow/compiler.ts";
-import { correctionsFundableFor, minimumCallsFor, workflowRecipe } from "../../workflow/catalog.ts";
+import {
+  COMPILED_WORKFLOWS,
+  compiledWorkflow,
+  correctionsFundableFor,
+  minimumCallsFor,
+  workflowRecipe,
+} from "../../workflow/catalog.ts";
 
 export interface WorkflowSelection {
   readonly workflow: string;
@@ -15,16 +21,24 @@ export function selectWorkflow(
   requestedTier?: string,
 ): WorkflowSelection {
   const recipe = workflowRecipe(workflow);
-  if (recipe === null) throw new Error(`workflow ${JSON.stringify(workflow)} has no shipped recipe`);
+  const compiled = recipe === null ? compiledWorkflow(workflow) : null;
+  if (recipe === null && compiled === null) throw new Error(`workflow ${JSON.stringify(workflow)} has no shipped recipe`);
   if (!config.workflows.enabled.includes(workflow)) {
     throw new Error(`workflow ${JSON.stringify(workflow)} is not enabled`);
   }
-  const parsed = requestedTier === undefined ? recipe.tier : Number(requestedTier.replace(/^T/u, ""));
+  // A compiled workflow has no recipe tier yet, only the floor every
+  // selection starts from. A selection may raise it, so a higher tier is
+  // admitted and a lower one never is.
+  const required = recipe?.tier ?? compiled!.tierFloor;
+  const parsed = requestedTier === undefined ? required : Number(requestedTier.replace(/^T/u, ""));
   if (parsed !== 0 && parsed !== 1 && parsed !== 2) {
     throw new Error(`tier must be 0, 1, or 2; got ${requestedTier ?? ""}`);
   }
-  if (parsed !== recipe.tier) {
+  if (recipe !== null && parsed !== recipe.tier) {
     throw new Error(`workflow ${JSON.stringify(workflow)} requires --tier T${recipe.tier}; got T${parsed}`);
+  }
+  if (compiled !== null && parsed < compiled.tierFloor) {
+    throw new Error(`workflow ${JSON.stringify(workflow)} is compiled at T${compiled.tierFloor} or above; got T${parsed}`);
   }
   return Object.freeze({ workflow, tier: parsed });
 }
@@ -36,6 +50,7 @@ export function workflowsCommand(config: AwsfConfig): readonly string[] {
     `Tier ceilings: ${TIERS.map((tier) => `T${tier}=${String(ceilingFor(tier, ceilings))}`).join(", ")}`,
   ];
   for (const id of config.workflows.enabled) {
+    if (compiledWorkflow(id) !== null) continue;
     const recipe = workflowRecipe(id);
     if (recipe === null) {
       lines.push(`${id}: enabled but no shipped recipe is registered`);
@@ -49,6 +64,16 @@ export function workflowsCommand(config: AwsfConfig): readonly string[] {
       `${recipe.id}: T${recipe.tier}, ${String(minimumCallsFor(recipe))} provider call(s), ` +
         `ceiling ${String(ceilingFor(recipe.tier, ceilings))}, ` +
         `corrections fundable: ${headroom.fundable <= 0 ? `${String(headroom.fundable)} (none)` : String(headroom.fundable)} — ${phases}`,
+    );
+  }
+  // A compiled workflow's phases, calls and headroom are all counted from the
+  // tickets a selection names, so any number printed here would be wrong for
+  // most selections. It gets its own section and says so.
+  lines.push("Compiled per selection (phase count is selection-dependent):");
+  for (const compiled of COMPILED_WORKFLOWS) {
+    lines.push(
+      `${compiled.id}: ${config.workflows.enabled.includes(compiled.id) ? "enabled" : "not enabled"}, ` +
+        `T${compiled.tierFloor} or above, phase count selection-dependent — agents ${compiled.agentOwners.join(", ")}`,
     );
   }
   return Object.freeze(lines);

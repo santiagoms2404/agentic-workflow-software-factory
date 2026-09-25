@@ -27,6 +27,11 @@ write globs, and `adopt.ts` and the production runner both refuse a workflow the
 not enable. Inventing an owner-authorized protected-change mechanism to route around this is the
 boundary working, not a bug.
 
+**Reordered 2026-09-25: G17 now follows T05.** Before T05, `load.ts` refused `shift` as an unknown
+id, so a config commit that came first would have broken every command. The owner's commit
+lands after T05 and must also add `workflow|shift` to `docs/cheatsheet.html`'s workflow facts in
+the same commit. The plan's 2026-09-25 amendment has the evidence.
+
 ### G17-M — the merge (blocks **T11** onward, and ideally **T05**)
 
 `main` and `task3.5` must be **merged before T11 starts**. Measured 2026-09-15 from merge-base

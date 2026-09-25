@@ -6,7 +6,13 @@ import { runGit, systemGitRunner } from "../../git/changes.ts";
 import { createWorktree, seedWorktreePaths } from "../../git/worktrees.ts";
 import { transition } from "../../state/task-machine.ts";
 import { callCeilingsOf } from "../../state/tiers.ts";
-import { correctionsFundableFor, minimumCallsFor, workflowRecipe } from "../../workflow/catalog.ts";
+import {
+  compiledWorkflow,
+  CompiledWorkflowUnbound,
+  correctionsFundableFor,
+  minimumCallsFor,
+  workflowRecipe,
+} from "../../workflow/catalog.ts";
 import { composePromptBundle } from "../../workflow/prompt-composition.ts";
 import { correctionHeadroom } from "./workflows.ts";
 import { verifiedTargetSeed, validateSeedStartup } from "../../workflow/candidate-seed.ts";
@@ -64,15 +70,18 @@ async function validateConfiguredPrompts(
   workflow: string,
 ): Promise<void> {
   const recipe = workflowRecipe(workflow);
-  if (recipe === null) throw new Error(`workflow ${JSON.stringify(workflow)} has no shipped recipe`);
+  const compiled = recipe === null ? compiledWorkflow(workflow) : null;
+  if (recipe === null && compiled === null) throw new Error(`workflow ${JSON.stringify(workflow)} has no shipped recipe`);
+  // A compiled workflow routes to the same agents whatever its selection, so
+  // their prompts are checked from the compiler's declaration.
+  const owners = recipe === null
+    ? compiled!.agentOwners
+    : recipe.phases.filter((phase) => phase.kind === "agent").map((phase) => phase.owner);
   const agents = new Map(config.agents.map((agent) => [agent.name, agent]));
-  const checked = new Set<string>();
-  for (const phase of recipe.phases) {
-    if (phase.kind !== "agent" || checked.has(phase.owner)) continue;
-    checked.add(phase.owner);
-    const agent = agents.get(phase.owner);
+  for (const owner of new Set(owners)) {
+    const agent = agents.get(owner);
     if (agent === undefined) {
-      throw new Error(`workflow ${JSON.stringify(workflow)} requires configured agent ${JSON.stringify(phase.owner)}`);
+      throw new Error(`workflow ${JSON.stringify(workflow)} requires configured agent ${JSON.stringify(owner)}`);
     }
     await composePromptBundle({ configPath, agent });
   }
@@ -148,7 +157,12 @@ export async function startCommand(options: StartCommandOptions): Promise<Attemp
     throw new Error(`workflow ${current.workflow} is not enabled by ${configPath}`);
   }
   const recipe = workflowRecipe(current.workflow);
-  if (recipe === null) throw new Error(`workflow ${JSON.stringify(current.workflow)} has no shipped recipe`);
+  if (recipe === null) {
+    const compiled = compiledWorkflow(current.workflow);
+    // No attempt carries a bound selection yet, so there is nothing to compile.
+    if (compiled !== null) throw new CompiledWorkflowUnbound(compiled.id, `task ${current.taskId}`);
+    throw new Error(`workflow ${JSON.stringify(current.workflow)} has no shipped recipe`);
+  }
   // Zero cost, and deliberately BEFORE the worktree and BEFORE any adapter is
   // contacted. It also deliberately does NOT block the DRAFT: `awsf raise` is
   // legal on a live attempt and terminal on a BLOCKED one, so blocking here

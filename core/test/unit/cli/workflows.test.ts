@@ -5,7 +5,7 @@ import { test } from "node:test";
 
 import { loadConfig } from "../../../src/config/load.ts";
 import { correctionHeadroom, selectWorkflow, workflowsCommand } from "../../../src/cli/commands/workflows.ts";
-import { correctionsFundableFor, workflowRecipe } from "../../../src/workflow/catalog.ts";
+import { compiledWorkflow, correctionsFundableFor, workflowRecipe } from "../../../src/workflow/catalog.ts";
 import { callCeilingsOf } from "../../../src/state/tiers.ts";
 
 const config = loadConfig(readFileSync(resolve("awsf.config.yaml"), "utf8"));
@@ -33,7 +33,8 @@ test("workflow selection adopts the recipe tier and rejects unknown, disabled, o
 
 test("every row states its correction headroom, and a zero says so in words", () => {
   const lines = workflowsCommand(config);
-  for (const id of config.workflows.enabled) {
+  // A compiled id has no headroom until a selection sets its call count.
+  for (const id of config.workflows.enabled.filter((enabled) => compiledWorkflow(enabled) === null)) {
     const row = lines.find((line) => line.startsWith(`${id}:`)) ?? "";
     assert.match(row, /corrections fundable: (?:-?\d+ \(none\)|[1-9]\d*)/u, id);
   }

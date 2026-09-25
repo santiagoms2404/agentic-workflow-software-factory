@@ -106,7 +106,7 @@ pre.mermaid{background:transparent;border:0;padding:0;margin:0;font-family:var(-
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-09-15</dd>
-        <dt>modified</dt>     <dd>2026-09-15, 2026-09-15 (Questionables decided), 2026-09-20 (selection widened), 2026-09-24 (M1 closed)</dd>
+        <dt>modified</dt>     <dd>2026-09-15, 2026-09-15 (Questionables decided), 2026-09-20 (selection widened), 2026-09-24 (M1 closed), 2026-09-25 (task 5; G17 reordered after it)</dd>
         <dt>commits</dt>      <dd>M1 landed: a3d83ef (T01), 323bd0c (T02), and this commit (T03)</dd>
         <dt>agent name</dt>   <dd>Claude Opus 5</dd>
         <dt>session id</dt>   <dd>not recorded — AGENTS.md invariant 1 keeps live session state out of every committed file in this repository</dd>
@@ -394,11 +394,11 @@ flowchart TD
       <p class="sub">Serves <code class="serves">AC-2</code> · <code class="serves">INV-4</code></p>
       <p><code>catalog.ts</code> throws at module load if <code>WORKFLOW_IDS</code> and <code>WORKFLOW_RECIPES</code> disagree. Adding <code>"shift"</code> to the id list without a static recipe therefore crashes the CLI at import — and registering a placeholder recipe would make <code>minimumCallsFor</code> and <code>correctionsFundableFor</code> report a fiction. Split the vocabulary instead.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>COMPILED_WORKFLOW_IDS = ["shift"]</code> in its own module. <code>catalog.ts</code>'s assertion keeps its <strong>exact current text and meaning</strong> for shipped recipes; a second assertion says every compiled id has a compiler and appears in no shipped recipe</li>
-        <li><code class="status">[]</code> <code>config/load.ts</code> admits <code>workflows.enabled</code> and <code>project.default_workflow</code> members from either vocabulary; a compiled id as <code>default_workflow</code> is <strong>refused</strong> — a shift is always an explicit act</li>
-        <li><code class="status">[]</code> <code>selectWorkflow</code>, <code>start.ts:58</code>/<code>:142</code> and <code>candidate-seed.ts:102</code>/<code>:121</code> each resolve a compiled id through the compiler rather than returning <code>null</code> and failing with a message about an unknown recipe</li>
-        <li><code class="status">[]</code> <code>awsf workflows</code> lists compiled ids in their own section, saying a shift's phase count is <em>selection-dependent</em> rather than printing a number that would be wrong</li>
-        <li><code class="status">[]</code> <strong><span class="gate">G17</span>:</strong> <code>awsf.config.yaml</code>'s <code>workflows.enabled</code> gains <code>shift</code> as an <strong>owner-authored commit that lands before this milestone's build</strong>. No agent can write that file — <code>path-policy</code> rejects <code>protected-path</code> independently of the write globs, and inventing an owner-authorized protected-change mechanism is the boundary working, not a bug</li>
+        <li><code class="status">[x]</code> <code>COMPILED_WORKFLOW_IDS = ["shift"]</code> in its own module. <code>catalog.ts</code>'s assertion keeps its <strong>exact current text and meaning</strong> for shipped recipes; a second assertion says every compiled id has a compiler and appears in no shipped recipe</li>
+        <li><code class="status">[x]</code> <code>config/load.ts</code> admits <code>workflows.enabled</code> and <code>project.default_workflow</code> members from either vocabulary; a compiled id as <code>default_workflow</code> is <strong>refused</strong> — a shift is always an explicit act</li>
+        <li><code class="status">[x]</code> <code>selectWorkflow</code>, <code>start.ts:58</code>/<code>:142</code> and <code>candidate-seed.ts:102</code>/<code>:121</code> each resolve a compiled id through the compiler rather than returning <code>null</code> and failing with a message about an unknown recipe</li>
+        <li><code class="status">[x]</code> <code>awsf workflows</code> lists compiled ids in their own section, saying a shift's phase count is <em>selection-dependent</em> rather than printing a number that would be wrong</li>
+        <li><code class="status">[x]</code> <strong><span class="gate">G17</span>, reordered:</strong> the loader admits <code>shift</code> in <code>workflows.enabled</code>, so the owner-authored commit that enables it can load. That commit lands <strong>after</strong> this task, not before: until this task, <code>load.ts</code> refused <code>shift</code> as an unknown id and every command that loads the config failed. No agent can write <code>awsf.config.yaml</code> — <code>path-policy</code> rejects <code>protected-path</code> independently of the write globs — so the owner act itself is tracked in Validation (reordered 2026-09-25, see Amendments)</li>
       </ul>
 
       <h4>6. Review inversion for a workflow with many builders</h4>
@@ -698,7 +698,7 @@ flowchart LR
       <li><code class="status">[]</code> <code>awsf shift plan awsf-v2-w07-quota-telemetry --milestone M4</code> and the multi-milestone form <code>--milestone M4,M5,M6</code> both refuse at zero cost when the ceiling does not fit, naming the shortfall and the raise acts needed — and the second names <code>MAX_CALL_CEILING</code> when no raise can fund it</li>
       <li><code class="status">[]</code> A sealed shift's candidate is reachable through its ref after an aggressive pruning collection pass in a throwaway repository, and unreachable without it</li>
       <li><code class="status">[]</code> <strong>One bounded live drive:</strong> a real milestone runs unattended end to end, reaches <code>AWAITING_OWNER</code> once, and the candidate is built fresh and looked at. This is the workstream's acceptance bar; the suite is not</li>
-      <li><code class="status">[]</code> <span class="gate">G17</span> — <code>awsf.config.yaml</code>'s <code>workflows.enabled</code> gained <code>shift</code> as an owner-authored commit <em>before</em> M2's build, recorded in this plan's Amendments</li>
+      <li><code class="status">[]</code> <span class="gate">G17</span> — <code>awsf.config.yaml</code>'s <code>workflows.enabled</code> gained <code>shift</code>, and <code>docs/cheatsheet.html</code>'s workflow facts gained <code>workflow|shift</code>, as one owner-authored commit <em>after</em> M2 task 5's loader change (reordered 2026-09-25), recorded in this plan's Amendments</li>
       <li><code class="status">[]</code> <span class="gate">G17-M</span> — <code>main</code> and <code>task3.5</code> are merged before M4 starts, and the merge's own suite is green at its landing SHA</li>
     </ul>
     <div class="loop">
@@ -1147,6 +1147,54 @@ flowchart LR
       gated on <span class="gate">G17-M</span> and is one of the seventeen conflicted files. Task 11 is the first task
       that runs a shift through the runner, and its resume journey reaches the review. Both are recorded in T07's
       and T11's Handoff.</p>
+    </details>
+
+    <details open>
+      <summary>2026-09-25 — task 5 built, and G17 reordered to follow it</summary>
+
+      <p><strong>Markers:</strong> task 5's five rows move to <code class="status">[x]</code>, the G17 row reworded to
+      what this task owed it. The Validation G17 row stays <code class="status">[]</code> and is reworded to the new
+      order. M2 stays <code class="status">[wip]</code>. The owner chose this order on 2026-09-25, after the session
+      stopped at the gate and showed why the written order could not land.</p>
+
+      <h3>Why G17 could not come first</h3>
+      <p>The plan said the owner's config commit lands before task 5 builds, because M2's tests need the id admitted.
+      The tests need the <em>loader</em> to admit it, and the loader was task 5's own work. Before it,
+      <code>load.ts</code> checked <code>workflows.enabled</code> against <code>KNOWN_WORKFLOW_IDS</code> alone. Loading
+      the committed config with <code>shift</code> appended threw <code>ConfigUnknownWorkflowError unknown workflow id:
+      "shift"</code>, so that commit would have broken every command that reads the config, and the suite with it.
+      Q7's closing sentence, that G17 "lands before M2 either way", is superseded: G17 lands after task 5.</p>
+      <p><strong>What the owner's G17 commit must contain.</strong> <code>awsf.config.yaml</code>'s
+      <code>workflows.enabled</code> gains <code>shift</code>, and <code>docs/cheatsheet.html</code>'s
+      <code>workflows-and-gates</code> list gains <code>&lt;li&gt;&lt;code&gt;workflow|shift&lt;/code&gt;&lt;/li&gt;</code>
+      in the same commit. The cheatsheet-reconciliation fence compares that list to the loaded config as a set, so
+      either edit alone turns it red. Task 5 also narrowed <code>workflows.test.ts</code>'s headroom loop to shipped
+      ids, which would otherwise have gone red on the owner's commit.</p>
+
+      <h3>What task 5 decided that the plan did not carry</h3>
+      <ul>
+        <li><strong>The vocabulary is a leaf.</strong> <code>compiled-ids.ts</code> spells <code>"shift"</code> itself
+        instead of importing <code>SHIFT_WORKFLOW_ID</code>, so config validation does not load the compiler. The
+        catalogue's compiled registry is keyed by <code>SHIFT_WORKFLOW_ID</code>, and its assertion fails at load if the
+        two strings drift.</li>
+        <li><strong>The new assertion runs first.</strong> A placeholder recipe under a compiled id is reported as that,
+        not as the shipped mismatch, and a placeholder added to both shipped lists, which the shipped assertion would
+        accept, is refused too. Both were induced and watched red, then reverted.</li>
+        <li><strong>The compiled path declares only what every compilation shares:</strong> tier floor, agent owners,
+        and whether it buys a review. A test compiles a real one-ticket shift and checks each field. The phase count and
+        call count are left out, so <code>awsf workflows</code> prints neither.</li>
+        <li><strong><code>awsf start</code> on a shift refuses with <code>CompiledWorkflowUnbound</code>.</strong> No
+        attempt field binds a sealed selection to an attempt yet, so there is nothing to compile. No task in this plan
+        names that binding: task 8 writes the manifest and M4's runner compiles the recipe, and whichever reaches it first
+        must add the field and replace this refusal with a call to <code>compileShift</code>.</li>
+        <li><strong>Candidate seeding refuses a shift target by name.</strong> A seed binds one builder phase fixed before
+        the run, and a shift has one builder per ticket.</li>
+        <li><strong>Left as they were:</strong> <code>awsf new</code>'s same-provider review notice. It predicts by phase
+        id, and a shift's phase ids exist only after selection, so it stays silent and the runner's inversion is the
+        check. <code>production-run.ts</code>'s <code>SUPPORTED</code> map and <code>routes.ts</code> read
+        <code>WORKFLOW_RECIPES</code> directly and are M4's to extend. <code>config/workflow-ids.ts</code> was not
+        edited.</li>
+      </ul>
     </details>
 
   </section>

@@ -39,7 +39,7 @@ import {
 } from "./attempt.ts";
 import { REVIEW_OUTPUT_SCHEMA_ID } from "../../contracts/review-output.ts";
 import { REDACTED_VALUE, scrubCredentialString } from "../../policy/redaction.ts";
-import { workflowRecipe } from "../../workflow/catalog.ts";
+import { compiledWorkflow, workflowRecipe } from "../../workflow/catalog.ts";
 import type { OwnerTerminal } from "../tty.ts";
 
 const MAX_REASON = 2_000;
@@ -123,7 +123,7 @@ export function assertDegradeReason(reason: string): string {
 /** Whether this attempt's workflow buys a review at all. */
 export function workflowBuysReview(workflow: string): boolean {
   const recipe = workflowRecipe(workflow);
-  if (recipe === null) return false;
+  if (recipe === null) return compiledWorkflow(workflow)?.buysReview ?? false;
   return recipe.phases.some((phase) => phase.kind === "agent" && phase.schemaId === REVIEW_OUTPUT_SCHEMA_ID);
 }
 

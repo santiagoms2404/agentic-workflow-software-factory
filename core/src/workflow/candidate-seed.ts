@@ -13,7 +13,7 @@ import { assertClean, runGit, systemGitRunner } from "../git/changes.ts";
 import { HOST_AUTHOR } from "../git/commit.ts";
 import type { JournalRecord } from "../persistence/journal.ts";
 import { readAttempt, withLegacyDefaults, type AttemptEvent, type AttemptStatus } from "../cli/commands/attempt.ts";
-import { workflowRecipe } from "./catalog.ts";
+import { compiledWorkflow, workflowRecipe } from "./catalog.ts";
 import { composePromptBundle } from "./prompt-composition.ts";
 import { candidatePathsBetween } from "./review-evidence.ts";
 
@@ -98,7 +98,19 @@ export async function inspectSeedSource(dir: string, repository: string, expecte
   return { ...read, baseSha: source.baseSha, candidateSha: expected.candidateSha };
 }
 
+/**
+ * A seed binds one builder phase fixed before the run. A compiled workflow has
+ * no phase list until its selection is bound, and then one builder per ticket,
+ * so it is refused by name rather than as an unknown recipe.
+ */
+function refuseCompiledSeedTarget(workflow: string): void {
+  if (compiledWorkflow(workflow) !== null) {
+    throw new CandidateSeedRejected(`target ${JSON.stringify(workflow)} is compiled per selection and has no single builder phase to seed`);
+  }
+}
+
 export function validateInheritedSeed(repository: string, seed: Pick<CandidateSeed, "workflow" | "integrationBaseSha" | "seedCandidateSha">, config: AwsfConfig): readonly string[] {
+  refuseCompiledSeedTarget(seed.workflow);
   const recipe = workflowRecipe(seed.workflow);
   if (recipe === null || recipe.tier !== 2 || !["build-review", "simple-sdlc"].includes(recipe.id) || !config.workflows.enabled.includes(recipe.id)) {
     throw new CandidateSeedRejected("target must use an enabled T2 build/review workflow");
@@ -118,6 +130,7 @@ export function validateInheritedSeed(repository: string, seed: Pick<CandidateSe
 }
 
 export async function builderSeedBinding(config: AwsfConfig, configPath: string, workflow: string) {
+  refuseCompiledSeedTarget(workflow);
   const recipe = workflowRecipe(workflow);
   const index = recipe?.phases.findIndex((phase) => phase.kind === "agent" && phase.owner === "builder") ?? -1;
   const phase = recipe?.phases[index];

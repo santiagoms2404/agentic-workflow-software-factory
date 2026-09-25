@@ -12,6 +12,7 @@ import {
 } from "./schema.ts";
 import { MAX_CALL_CEILING, MIN_CALL_CEILING } from "../state/tiers.ts";
 import { AGENT_PHASE_IDS } from "./workflow-ids.ts";
+import { isCompiledWorkflowId } from "../workflow/compiled-ids.ts";
 import { assertNoAbsolutePaths, scanStrings } from "./machine-path.ts";
 
 // Every rejection this loader can throw. Kept as one closed class hierarchy
@@ -70,6 +71,17 @@ export class ConfigUnknownWorkflowError extends ConfigError {
   constructor(id: string) {
     super("E_CONFIG_UNKNOWN_WORKFLOW", `unknown workflow id: "${id}"`);
     this.name = "ConfigUnknownWorkflowError";
+  }
+}
+
+/** A shift is always an explicit act, so no compiled workflow can be the one `awsf new` picks unasked. */
+export class ConfigCompiledDefaultWorkflowError extends ConfigError {
+  constructor(id: string) {
+    super(
+      "E_CONFIG_COMPILED_DEFAULT_WORKFLOW",
+      `project.default_workflow cannot be the compiled workflow "${id}"; name it with --workflow instead`,
+    );
+    this.name = "ConfigCompiledDefaultWorkflowError";
   }
 }
 
@@ -234,9 +246,12 @@ function assertKnownReferences(config: AwsfConfig): void {
   }
 
   for (const id of config.workflows.enabled) {
-    if (!(KNOWN_WORKFLOW_IDS as readonly string[]).includes(id)) {
+    if (!(KNOWN_WORKFLOW_IDS as readonly string[]).includes(id) && !isCompiledWorkflowId(id)) {
       throw new ConfigUnknownWorkflowError(id);
     }
+  }
+  if (isCompiledWorkflowId(config.project.default_workflow)) {
+    throw new ConfigCompiledDefaultWorkflowError(config.project.default_workflow);
   }
   if (!(KNOWN_WORKFLOW_IDS as readonly string[]).includes(config.project.default_workflow)) {
     throw new ConfigUnknownWorkflowError(config.project.default_workflow);
