@@ -84,6 +84,14 @@ in the tree. The 2026-09-03 spine amendment records a **candidate** and adopts n
 `AGENTS.md` in full · `specs/awsf-v2-w17-shift.html` (Purpose, Problem, Solution and Identifier Spine
 in full, then the task's own section) · this README.
 
+**Then your own ticket file, `specs/tickets/awsf-v2-w17-shift/T<NN>.md`, with `<NN>` taken from the
+prompt's `TASK <n> of 18` line, and its `## Handoff` section in full, before changing anything.** The
+build prompt you were handed does not name this file, because every prompt must stay byte-identical to its
+Section B block. The Handoff is where earlier sessions record what changed after the prompt was written:
+files that moved, scope already done or newly absorbed, and findings that overturn the prompt. Where the
+Handoff and the prompt disagree, the Handoff wins unless it says otherwise. An empty Handoff is a real
+answer, but you only know it is empty by opening the file.
+
 ### The baseline rule
 
 Run `npm run test:unit` **at the exact base SHA your task starts from**, before changing anything,
