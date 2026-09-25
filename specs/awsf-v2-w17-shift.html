@@ -357,7 +357,7 @@ flowchart LR
     </div>
 
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone M2: The compiler — tickets into phases <span class="wtag core">core of the workstream</span></h3>
+      <h3><code class="status">[wip]</code> Milestone M2: The compiler — tickets into phases <span class="wtag core">core of the workstream</span></h3>
       <p>The mechanism this whole workstream exists for. <code>compileWorkflow</code> already accepts <code>readonly phases: readonly PhaseDefinition[]</code> and never consults the catalogue, so a compiled phase list is <strong>structurally supported today</strong> — but all eight shipped recipes are static, and two things in the surrounding code assume that. This milestone builds the compiler and settles both.</p>
       <figure>
         <pre class="mermaid">
@@ -381,13 +381,13 @@ flowchart TD
       <p class="sub">Serves <code class="serves">AC-2</code> · <code class="serves">AC-3</code></p>
       <p>A pure function from a manifest plus the ticket bodies to a <code>WorkflowRecipe</code>. It reads no file, no clock and no provider — the caller supplies the bytes, which is what makes the recipe reproducible on recovery.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> Per ticket, three phases in order: <code>t&lt;NN&gt;-brief</code> (<code>engineer</code>, <code>awsf.plan-output/v1</code>, host), <code>t&lt;NN&gt;-build</code> (<code>agent</code>, owner <code>builder</code>, <code>awsf.build-output/v1</code>, <code>maxCorrections: 1</code>), <code>t&lt;NN&gt;-tests</code> (<code>code</code>, owner <code>host</code>, <code>awsf.test-output/v1</code>)</li>
-        <li><code class="status">[]</code> Then exactly once: <code>shift-review-context</code> (<code>code</code>, <code>awsf.review-context/v1</code>) and <code>shift-review</code> (<code>agent</code>, owner <code>reviewer</code>, <code>awsf.review-output/v1</code>)</li>
-        <li><code class="status">[]</code> <code>minimumCalls === tickets.length + 1</code>, asserted directly rather than inferred — it is the number every budget decision in M3 is made against</li>
-        <li><code class="status">[]</code> Every phase passes <code>assertEarnedDescription</code>: a description that normalises to its own id is refused by <code>compilePhase</code>, so a generated description must carry the ticket's <em>title</em>, not its id</li>
-        <li><code class="status">[]</code> The <code>brief</code> phase emits the ticket's <code>## Build prompt</code> block verbatim as the segment's intent. <strong>No model interprets the ticket</strong> — the owner already wrote the prompt, and paraphrasing it would cost a call to lose fidelity</li>
-        <li><code class="status">[]</code> <code>reducePhaseContext</code>'s last-wins-per-schema behaviour is <strong>asserted, not assumed</strong>: ticket <em>n</em>'s builder receives ticket <em>n−1</em>'s build envelope as <code>{previous_envelope}</code>, and the test says so explicitly</li>
-        <li><code class="status">[]</code> The same manifest and the same ticket bytes compile to a byte-identical recipe, twice, in the same process and in a fresh one</li>
+        <li><code class="status">[x]</code> Per ticket, three phases in order: <code>t&lt;NN&gt;-brief</code> (<code>engineer</code>, <code>awsf.plan-output/v1</code>, host), <code>t&lt;NN&gt;-build</code> (<code>agent</code>, owner <code>builder</code>, <code>awsf.build-output/v1</code>, <code>maxCorrections: 1</code>), <code>t&lt;NN&gt;-tests</code> (<code>code</code>, owner <code>host</code>, <code>awsf.test-output/v1</code>)</li>
+        <li><code class="status">[x]</code> Then exactly once: <code>shift-review-context</code> (<code>code</code>, <code>awsf.review-context/v1</code>) and <code>shift-review</code> (<code>agent</code>, owner <code>reviewer</code>, <code>awsf.review-output/v1</code>)</li>
+        <li><code class="status">[x]</code> <code>minimumCalls === tickets.length + 1</code>, asserted directly rather than inferred — it is the number every budget decision in M3 is made against</li>
+        <li><code class="status">[x]</code> Every phase passes <code>assertEarnedDescription</code>: a description that normalises to its own id is refused by <code>compilePhase</code>, so a generated description must carry the ticket's <em>title</em>, not its id</li>
+        <li><code class="status">[x]</code> The <code>brief</code> phase emits the ticket's <code>## Build prompt</code> block verbatim as the segment's intent. <strong>No model interprets the ticket</strong> — the owner already wrote the prompt, and paraphrasing it would cost a call to lose fidelity</li>
+        <li><code class="status">[x]</code> <code>reducePhaseContext</code>'s last-wins-per-schema behaviour is <strong>asserted, not assumed</strong>: ticket <em>n</em>'s builder receives ticket <em>n−1</em>'s build envelope as <code>{previous_envelope}</code>, and the test says so explicitly</li>
+        <li><code class="status">[x]</code> The same manifest and the same ticket bytes compile to a byte-identical recipe, twice, in the same process and in a fresh one</li>
       </ul>
 
       <h4>5. The compiled-workflow vocabulary, split from the shipped catalogue</h4>

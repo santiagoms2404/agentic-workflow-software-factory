@@ -6,6 +6,8 @@ import { join } from "node:path";
 import * as planTickets from "../../src/persistence/plan-tickets.ts";
 import {
   parsePlanTicketBody,
+  parsePlanTicketHandoff,
+  parsePlanTicketIdentity,
   PlanTicketBodyError,
   readPlanTicketFile,
   ticketFileDigest,
@@ -71,6 +73,29 @@ test("an appended handoff entry changes the digest and leaves the prompt alone",
   assert.notEqual(handedOff, source);
   assert.notEqual(ticketFileDigest(Buffer.from(handedOff)), ticketFileDigest(Buffer.from(source)));
   assert.deepEqual(parsePlanTicketBody(handedOff), parsePlanTicketBody(source));
+});
+
+test("the handoff reader returns the section above the prompt, and refuses two", () => {
+  const source = readFileSync(W17_T01, "utf8");
+  const handoff = parsePlanTicketHandoff(source);
+  assert.ok(handoff.startsWith("_Empty at authoring time."));
+  assert.ok(!handoff.includes("## Build prompt") && !handoff.endsWith("\n"));
+  const appended = source.replace("\n## Build prompt\n\n", "\nC9. A later correction.\n\n## Build prompt\n\n");
+  assert.ok(parsePlanTicketHandoff(appended).endsWith("C9. A later correction."));
+  assert.equal(parsePlanTicketHandoff(source.replace("## Handoff\n", "## Notes\n")), "");
+  assert.throws(
+    () => parsePlanTicketHandoff(source.replace("## Handoff\n", "## Handoff\n\nfirst\n\n## Handoff\n")),
+    refusal("E_PLAN_TICKET_MULTIPLE_HANDOFFS"),
+  );
+});
+
+test("the identity reader returns the frontmatter id and title only", () => {
+  const source = readFileSync(W17_T01, "utf8");
+  assert.deepEqual(parsePlanTicketIdentity(source), {
+    id: "T01", title: "The shift manifest contract and the plan-ticket body reader",
+  });
+  assert.equal(parsePlanTicketIdentity(source.replace(/^title: .*$/mu, "title: \"\"")), null);
+  assert.equal(parsePlanTicketIdentity("no frontmatter"), null);
 });
 
 test("plan-tickets.ts keeps its bytes and its exported shape", () => {

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import { parseDocument } from "yaml";
 
 // The ticket-body reader, split from plan-tickets.ts so the frontmatter path
 // keeps its current cost and its stat-keyed cache: listing a backlog never
@@ -32,7 +33,8 @@ export type PlanTicketBodyRefusal =
   | "E_PLAN_TICKET_NO_FRONTMATTER"
   | "E_PLAN_TICKET_NO_BUILD_PROMPT"
   | "E_PLAN_TICKET_MULTIPLE_BUILD_PROMPTS"
-  | "E_PLAN_TICKET_PROMPT_NOT_FENCED";
+  | "E_PLAN_TICKET_PROMPT_NOT_FENCED"
+  | "E_PLAN_TICKET_MULTIPLE_HANDOFFS";
 
 export class PlanTicketBodyError extends Error {
   readonly code: PlanTicketBodyRefusal;
@@ -82,6 +84,52 @@ export function parsePlanTicketBody(source: string, label = "ticket"): PlanTicke
     throw new PlanTicketBodyError("E_PLAN_TICKET_PROMPT_NOT_FENCED", `${label}'s build prompt is not one fenced block`);
   }
   return Object.freeze({ prompt, text: prompt.slice(FENCE_OPEN.length, prompt.length - FENCE_CLOSE.length) });
+}
+
+const HANDOFF_HEADING = "## Handoff\n";
+
+export interface PlanTicketIdentity {
+  readonly id: string;
+  readonly title: string;
+}
+
+/**
+ * The frontmatter's `id` and `title`, and nothing else: a compiled phase needs
+ * the title for its description and the id to prove the bytes are the ticket
+ * the manifest names. plan-tickets.ts keeps sole ownership of the full
+ * frontmatter vocabulary; this reads two strings, or null.
+ */
+export function parsePlanTicketIdentity(source: string): PlanTicketIdentity | null {
+  const match = FRONTMATTER.exec(source);
+  if (match === null) return null;
+  const document = parseDocument(match[1] ?? "");
+  if (document.errors.length > 0) return null;
+  const value = document.toJSON() as Record<string, unknown> | null;
+  if (value === null || typeof value !== "object" || typeof value.id !== "string" || typeof value.title !== "string" || value.title.length === 0) {
+    return null;
+  }
+  return Object.freeze({ id: value.id, title: value.title });
+}
+
+/**
+ * The ticket's `## Handoff` section: everything from its heading up to the
+ * next level-two heading (the prompt's), without the blank lines around it.
+ * "" when the ticket has none. The Handoff sits above the prompt so the fence's
+ * split never sees it, but it is written later and corrects the prompt.
+ */
+export function parsePlanTicketHandoff(source: string, label = "ticket"): string {
+  const match = FRONTMATTER.exec(source);
+  if (match === null) {
+    throw new PlanTicketBodyError("E_PLAN_TICKET_NO_FRONTMATTER", `${label} has no frontmatter block`);
+  }
+  const head = `\n${(match[2] ?? "").split(PROMPT_HEADING)[0] ?? ""}`;
+  const sections = head.split(`\n${HANDOFF_HEADING}`);
+  if (sections.length < 2) return "";
+  if (sections.length > 2) {
+    throw new PlanTicketBodyError("E_PLAN_TICKET_MULTIPLE_HANDOFFS", `${label} has ${sections.length - 1} "## Handoff" sections`);
+  }
+  const section = (sections[1] ?? "").split(/\n## /u)[0] ?? "";
+  return section.replace(/^\n+/u, "").replace(/\n+$/u, "");
 }
 
 /** Reads one ticket file's bytes once: the digest and the prompt come from the same read. */
