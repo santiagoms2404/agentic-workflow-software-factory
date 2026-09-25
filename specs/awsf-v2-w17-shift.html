@@ -301,7 +301,7 @@ flowchart TD
     <p class="sub"><strong>Ordering gate <span class="gate">G17-M</span> — the merge.</strong> M1, M2 and M3 are new files plus two small edits and can be built on <code>main</code> today. <strong>M4 and M5 may not start until <code>main</code> and <code>task3.5</code> are merged</strong>, and M2's two shared-file edits are best taken after it too. The measurement and the reasoning are in <a href="#notes">Notes → The merge, measured</a>.</p>
 
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone M1: Selection and the manifest <span class="wtag core">buildable now</span></h3>
+      <h3><code class="status">[wip]</code> Milestone M1: Selection and the manifest <span class="wtag core">buildable now</span></h3>
       <p>The shift's input is a selection the owner makes once, and its durable record. Nothing here executes, compiles or spawns; this milestone ends with a manifest on disk and a reader that can turn a ticket file into the bytes a phase will carry. It is deliberately first because <strong>every later milestone depends on the selection being reproducible</strong>, and because it is the whole of the workstream that needs no merge.</p>
       <figure>
         <pre class="mermaid">
@@ -321,10 +321,10 @@ flowchart LR
       <p class="sub">Serves <code class="serves">AC-1</code> · <code class="serves">INV-4</code></p>
       <p><code>plan-tickets.ts</code>'s <code>ticketData</code> parses the frontmatter and stops; the <code>## Build prompt</code> block has no reader anywhere in <code>core/src</code>. Add one in a new file so the frontmatter path keeps its current fingerprint cache untouched, and define the manifest the selection writes.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>core/src/contracts/shift-manifest.ts</code> declares <code>ShiftManifestSchema</code> (<code>awsf.shift-manifest/v1</code>) as TypeBox: <code>plan</code>, <code>milestones: string[]</code> (<code>minItems 1</code>, in the owner's selection order — a list even when it holds one, with no singular form), <code>tickets: [{ id, path, digest, tier?, workflow? }]</code>, <code>manifestDigest</code>. Registered in <code>contracts/registry.ts</code> like every other schema</li>
-        <li><code class="status">[]</code> <code>core/src/persistence/plan-ticket-body.ts</code> extracts the single <code>## Build prompt\n\n</code> fenced block, refusing a file with zero or more than one — <strong>the same split the invariant-12 fence uses</strong>, so the two can never disagree about where a prompt begins</li>
-        <li><code class="status">[]</code> The digest is over the <strong>whole ticket file's bytes</strong>, not the prompt block, so an appended <code>## Handoff</code> entry is a change the resume notices</li>
-        <li><code class="status">[]</code> <code>plan-tickets.ts</code> is unchanged, and a test asserts its exported shape is byte-identical to before</li>
+        <li><code class="status">[x]</code> <code>core/src/contracts/shift-manifest.ts</code> declares <code>ShiftManifestSchema</code> (<code>awsf.shift-manifest/v1</code>) as TypeBox: <code>plan</code>, <code>milestones: string[]</code> (<code>minItems 1</code>, in the owner's selection order — a list even when it holds one, with no singular form), <code>tickets: [{ id, path, digest, tier?, workflow? }]</code>, <code>manifestDigest</code>. Registered in <code>contracts/registry.ts</code> like every other schema</li>
+        <li><code class="status">[x]</code> <code>core/src/persistence/plan-ticket-body.ts</code> extracts the single <code>## Build prompt\n\n</code> fenced block, refusing a file with zero or more than one — <strong>the same split the invariant-12 fence uses</strong>, so the two can never disagree about where a prompt begins</li>
+        <li><code class="status">[x]</code> The digest is over the <strong>whole ticket file's bytes</strong>, not the prompt block, so an appended <code>## Handoff</code> entry is a change the resume notices</li>
+        <li><code class="status">[x]</code> <code>plan-tickets.ts</code> is unchanged, and a test asserts its exported shape is byte-identical to before</li>
       </ul>
 
       <h4>2. Milestone selection and its refusals</h4>

@@ -30,6 +30,7 @@ import { PlanOutputSchema, PLAN_OUTPUT_SCHEMA_ID, type PlanOutput } from "./plan
 import { ReviewContextSchema, REVIEW_CONTEXT_SCHEMA_ID, type ReviewContext } from "./review-context.ts";
 import { ReviewOutputSchema, REVIEW_OUTPUT_SCHEMA_ID, type ReviewOutput } from "./review-output.ts";
 import { ScoutOutputSchema, SCOUT_OUTPUT_SCHEMA_ID, type ScoutOutput } from "./scout-output.ts";
+import { ShiftManifestSchema, SHIFT_MANIFEST_SCHEMA_ID } from "./shift-selection-record.ts";
 import { TestOutputSchema, TEST_OUTPUT_SCHEMA_ID, type TestOutput } from "./test-output.ts";
 
 /**
@@ -81,6 +82,17 @@ export interface EnvelopeTypeById {
 }
 
 export const ENVELOPE_SCHEMA_IDS = Object.keys(ENVELOPE_SCHEMAS) as EnvelopeSchemaId[];
+
+/**
+ * Every host-written record schema, keyed by its schema id.
+ *
+ * Disjoint from ENVELOPE_SCHEMAS on purpose: a record is written by the host
+ * and never parsed out of provider output, so it must not become a schema-fit
+ * candidate or be injected into an agent's prompt.
+ */
+export const RECORD_SCHEMAS = {
+  [SHIFT_MANIFEST_SCHEMA_ID]: ShiftManifestSchema,
+} as const;
 
 export class UnknownEnvelopeSchemaError extends Error {
   readonly code = "E_UNKNOWN_ENVELOPE_SCHEMA";

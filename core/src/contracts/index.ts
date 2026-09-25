@@ -5,6 +5,7 @@
 
 export * from "./typebox.ts";
 export * from "./ticket.ts";
+export * from "./shift-selection-record.ts";
 export * from "./envelope-base.ts";
 export * from "./plan-output.ts";
 export * from "./build-output.ts";
