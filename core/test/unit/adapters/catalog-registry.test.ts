@@ -24,11 +24,22 @@ test("catalog resolves only documented family aliases", () => {
     adapterKind: "claude-code",
     provider: "anthropic",
     contextWindow: null,
+    modelNamePattern: /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/,
     requestedModel: "opus",
+  });
+  assert.deepEqual(resolveSelector("openrouter:~deepseek/deepseek-v4-flash-latest"), {
+    alias: "openrouter",
+    adapterKind: "pi-openrouter",
+    provider: "openrouter",
+    contextWindow: null,
+    modelNamePattern: /^(?=.{1,128}$)(?:[A-Za-z0-9][A-Za-z0-9._-]*|~?[A-Za-z0-9][A-Za-z0-9._-]*\/[A-Za-z0-9][A-Za-z0-9._-]*)$/,
+    requestedModel: "~deepseek/deepseek-v4-flash-latest",
   });
   assert.equal(resolveSelector("opus"), null);
   assert.equal(resolveSelector("unknown:opus"), null);
+  assert.equal(resolveSelector("codex:z-ai/glm-5.2"), null);
   assert.equal(resolveSelector("codex:gpt:5"), null);
+  assert.equal(resolveSelector("openrouter:z-ai/glm-5.2:high"), null);
 });
 
 test("resolved identity is stream evidence or honestly unknown", () => {

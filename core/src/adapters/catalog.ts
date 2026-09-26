@@ -2,20 +2,28 @@
 // `claude:opus` says which family AWSF asks; only a provider stream can say
 // what model answered. Context windows remain null until catalog evidence is
 // deliberately added — a made-up ceiling is worse than no ceiling.
+// resolveSelector is declarative today: it has no production caller, so it is
+// not a gate for live routes.
 
 import type { ModelResolutionProvenance, NormalizedEvent } from "../contracts/normalized-events.ts";
 
 export interface ModelFamily {
   alias: string;
-  adapterKind: "claude-code" | "pi-codex" | "antigravity";
+  adapterKind: "claude-code" | "pi-codex" | "pi-openrouter" | "antigravity";
   provider: string;
   contextWindow: number | null;
+  modelNamePattern: RegExp;
 }
 
+const PLAIN_MODEL_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+// Mirror the OpenRouter route's id shape without sharing its guard with Codex.
+const OPENROUTER_MODEL_NAME = /^(?=.{1,128}$)(?:[A-Za-z0-9][A-Za-z0-9._-]*|~?[A-Za-z0-9][A-Za-z0-9._-]*\/[A-Za-z0-9][A-Za-z0-9._-]*)$/;
+
 export const MODEL_FAMILIES: readonly ModelFamily[] = Object.freeze([
-  { alias: "claude", adapterKind: "claude-code", provider: "anthropic", contextWindow: null },
-  { alias: "codex", adapterKind: "pi-codex", provider: "openai-codex", contextWindow: null },
-  { alias: "antigravity", adapterKind: "antigravity", provider: "google", contextWindow: null },
+  { alias: "claude", adapterKind: "claude-code", provider: "anthropic", contextWindow: null, modelNamePattern: PLAIN_MODEL_NAME },
+  { alias: "codex", adapterKind: "pi-codex", provider: "openai-codex", contextWindow: null, modelNamePattern: PLAIN_MODEL_NAME },
+  { alias: "antigravity", adapterKind: "antigravity", provider: "google", contextWindow: null, modelNamePattern: PLAIN_MODEL_NAME },
+  { alias: "openrouter", adapterKind: "pi-openrouter", provider: "openrouter", contextWindow: null, modelNamePattern: OPENROUTER_MODEL_NAME },
 ]);
 
 export interface CatalogSelector extends ModelFamily {
@@ -28,9 +36,10 @@ export function resolveSelector(selector: string): CatalogSelector | null {
   if (separator <= 0 || separator !== selector.lastIndexOf(":")) return null;
   const alias = selector.slice(0, separator);
   const requestedModel = selector.slice(separator + 1);
-  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(requestedModel)) return null;
   const family = MODEL_FAMILIES.find((entry) => entry.alias === alias);
-  return family === undefined ? null : { ...family, requestedModel };
+  return family !== undefined && family.modelNamePattern.test(requestedModel)
+    ? { ...family, requestedModel }
+    : null;
 }
 
 export interface ResolvedIdentity {
