@@ -3,6 +3,7 @@
 
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
+import { CANDIDATE_REF_STATES, writeCandidateRef } from "../../git/candidate-ref.ts";
 import { AttemptLock, SealedAttempt, runWriteProtocol } from "../../persistence/attempt-lock.ts";
 import { Journal, type JournalRecord } from "../../persistence/journal.ts";
 import {
@@ -317,12 +318,34 @@ export async function readAttempt(attemptDir: string): Promise<AttemptStatus> {
   return withLegacyDefaults(status);
 }
 
+/**
+ * Writes the candidate ref when a transition reaches the owner gate or seals
+ * the attempt. It runs here, on the one path every status write takes, so no
+ * command that seals an attempt can skip it, and before the status, so no crash
+ * leaves a durable seal whose candidate only a worktree holds.
+ *
+ * It never refuses the transition. Reaching BLOCKED or CANCELLED must stay
+ * possible whatever Git says, and a failed write leaves the candidate exactly
+ * as reachable as it was before this ref existed. `readCandidateRef` is how a
+ * reader tells whether the ref is there.
+ */
+function keepCandidateReachable(event: AttemptEvent): void {
+  const next = event.next;
+  if (event.kind !== "attempt.transitioned" || next.candidateSha === null || !CANDIDATE_REF_STATES.includes(next.lifecycleState)) return;
+  try {
+    writeCandidateRef(next.repository, next, next.candidateSha);
+  } catch {
+    // Deliberately not rethrown; see above.
+  }
+}
+
 export async function persistAttempt(
   attemptDir: string,
   expectedRevision: number | null,
   event: AttemptEvent,
   project?: AttemptProjector,
 ): Promise<AttemptStatus> {
+  keepCandidateReachable(event);
   const journal = new Journal<AttemptEvent>(journalFilePath(attemptDir));
   const lock = new AttemptLock(lockFilePath(attemptDir));
   try {

@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { BUILD_OUTPUT_SCHEMA_ID } from "../../contracts/build-output.ts";
+import type { AcceptedPhase } from "../../contracts/phase-recovery.ts";
 import { REVIEW_CONTEXT_SCHEMA_ID } from "../../contracts/review-context.ts";
 import { REVIEW_OUTPUT_SCHEMA_ID } from "../../contracts/review-output.ts";
 import { TEST_OUTPUT_SCHEMA_ID } from "../../contracts/test-output.ts";
@@ -42,6 +43,31 @@ export function shiftTicketOf(phases: readonly PhaseDefinition[], phaseId: strin
     if (phase.id === phaseId) return current;
   }
   return null;
+}
+
+export interface ShiftTicketCandidate {
+  readonly ticketId: string;
+  /** The commit this ticket's accepted build made, or null while its build is not accepted. */
+  readonly candidateSha: string | null;
+}
+
+/**
+ * Every ticket's own candidate SHA against its ticket id, in the order the
+ * shift runs them. A projection of the accepted-phase prefix, which already
+ * stores the candidate each accepted build produced; nothing new is recorded.
+ * An accepted build always carries its own host commit, because the runner
+ * refuses a builder whose head did not advance.
+ */
+export function shiftTicketCandidates(
+  phases: readonly PhaseDefinition[],
+  prefix: readonly AcceptedPhase[],
+): readonly ShiftTicketCandidate[] {
+  const accepted = new Map(prefix.map((entry) => [entry.phaseKey, entry.candidateSha]));
+  return Object.freeze(phases.flatMap((phase) => {
+    const ticketId = shiftTicketOf(phases, phase.id);
+    if (ticketId === null || shiftPhaseRole(phases, phase.id) !== "builder") return [];
+    return [Object.freeze({ ticketId, candidateSha: accepted.get(phase.id) ?? null })];
+  }));
 }
 
 /**

@@ -534,11 +534,11 @@ stateDiagram-v2
       <p class="sub">Serves <code class="serves">AC-5</code></p>
       <p>The amendment called this <em>&ldquo;the single most necessary piece, and it is small — nothing else in away mode is safe until this is.&rdquo;</em> That judgement is affirmed and the scope <strong>shrinks</strong>: the one-attempt shape means a shift of N tickets produces N commits on <strong>one advancing detached head</strong>, so a single ref at the tip keeps all N reachable. Where the amendment expected eight refs for eight runs, this needs one.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> A ref is written at seal time under a namespace that cannot collide with a user branch — <code>refs/awsf/candidates/&lt;project&gt;/&lt;taskId&gt;/&lt;attempt&gt;</code> — pointing at the sealed candidate SHA</li>
-        <li><code class="status">[]</code> The write is a plain non-forcing <code>update-ref</code> with no delete path, and it is <strong>swept by the invariant-8 meta-tests</strong> (<code>no-destructive-paths</code>, <code>no-land-route</code>) rather than exempted from them</li>
-        <li><code class="status">[]</code> Every ticket's own candidate SHA is recorded against its ticket id. <strong>The data already exists</strong> — <code>acceptPhase</code> stores <code>candidateSha</code> on each accepted phase in the recovery prefix — so this is a projection, not a new record</li>
-        <li><code class="status">[]</code> <strong>No per-ticket refs.</strong> Each ticket's commit is an ancestor of the tip, so the tip ref alone makes every one reachable; per-ticket refs would be N times the surface for zero extra reachability</li>
-        <li><code class="status">[]</code> The ref is written for <strong>every</strong> sealed attempt, not only a shift's. A dangling candidate is not a shift-specific hazard, and fixing it only for shifts would leave the general case exactly as it is</li>
+        <li><code class="status">[x]</code> A ref is written at seal time under a namespace that cannot collide with a user branch — <code>refs/awsf/candidates/&lt;project&gt;/&lt;taskId&gt;/&lt;attempt&gt;</code> — pointing at the sealed candidate SHA. <em>&ldquo;Seal time&rdquo; is every transition into <code>AWAITING_OWNER</code> or a sealed state (<code>BLOCKED</code>, <code>CANCELLED</code>, <code>PUBLISHED</code>), written from <code>persistAttempt</code> before the status (reworded 2026-09-25, see Amendments)</em></li>
+        <li><code class="status">[x]</code> The write is a plain non-forcing <code>update-ref</code> with no delete path, and it is <strong>swept by the invariant-8 meta-tests</strong> (<code>no-destructive-paths</code>, <code>no-land-route</code>) rather than exempted from them</li>
+        <li><code class="status">[x]</code> Every ticket's own candidate SHA is recorded against its ticket id. <strong>The data already exists</strong> — <code>acceptPhase</code> stores <code>candidateSha</code> on each accepted phase in the recovery prefix — so this is a projection, not a new record</li>
+        <li><code class="status">[x]</code> <strong>No per-ticket refs.</strong> Each ticket's commit is an ancestor of the tip, so the tip ref alone makes every one reachable; per-ticket refs would be N times the surface for zero extra reachability</li>
+        <li><code class="status">[x]</code> The ref is written for <strong>every</strong> sealed attempt, not only a shift's. A dangling candidate is not a shift-specific hazard, and fixing it only for shifts would leave the general case exactly as it is</li>
       </ul>
 
       <h4>13. Testing Strategy</h4>
@@ -1629,6 +1629,68 @@ flowchart LR
       errors on 601 files. <code>npm test</code>: full suite in one invocation,
       <code>layers: unit=0 contract=0 sim=0 journeys=0</code>, exit 0, <code>git status --porcelain</code> clean
       afterward.</p>
+    </details>
+
+    <details open>
+      <summary>2026-09-25 — task 12 built: one candidate ref at the owner gate and at every seal</summary>
+
+      <p><strong>Markers:</strong> task 12's five rows move to <code class="status">[x]</code>. Row 1 is reworded to
+      say which transitions count as seal time. M4 stays <code class="status">[wip]</code> for task 13. Gate
+      <span class="gate">G17-M</span> was confirmed before any change: <code>task3.5</code> is an ancestor of
+      <code>main</code> at <code>d79a2c5</code>.</p>
+
+      <h3>What seal time means</h3>
+      <p><code>SEALED_STATES</code> is <code>BLOCKED</code>, <code>CANCELLED</code> and <code>PUBLISHED</code>. It does
+      not contain <code>AWAITING_OWNER</code>, which is where an unattended shift waits all night, and task 14's
+      readout prints the ref for an attempt in exactly that state. So the ref is written on every transition into
+      <code>CANDIDATE_REF_STATES</code>: <code>AWAITING_OWNER</code> plus the three sealed states.
+      <code>LANDING</code> and <code>LANDED</code> are left out because L20 only leaves
+      <code>AWAITING_OWNER</code>, so a landing candidate already has its ref. A shift stopped at
+      <code>RUNNING</code> by a ticket block or a ceiling pause writes none. Its worktree's detached HEAD still holds
+      the head, and the journey asserts no ref exists there.</p>
+
+      <h3>Where it is written, and the alternatives rejected</h3>
+      <p><code>persistAttempt</code> writes it, on an <code>attempt.transitioned</code> event, before the status.
+      That function is the one path every status write takes, so no command can seal an attempt without it.
+      Writing it at seal sites inside <code>production-run.ts</code>, as the prompt framed it, was rejected:
+      <code>review.ts</code>, <code>rework.ts</code>, <code>cancel.ts</code>, <code>publish.ts</code>,
+      <code>start.ts</code> and <code>adopt.ts</code> seal attempts too, and a runner-only write would not cover
+      &ldquo;every sealed attempt&rdquo;. Writing after the status was rejected because a crash between the two leaves
+      a sealed attempt with no ref, and nothing touches a sealed attempt again to repair it. Failing the transition
+      when Git fails was rejected because <code>BLOCKED</code> and <code>CANCELLED</code> must stay reachable. A
+      failed write leaves the candidate as reachable as it was before this task, and
+      <code>readCandidateRef</code> is how a reader tells.</p>
+
+      <h3>The write's shape</h3>
+      <p><code>core/src/git/candidate-ref.ts</code> creates the ref with an empty expected old value, returns
+      <code>unchanged</code> when the ref already names the candidate, and advances it to a descendant under a
+      compare-and-swap. Anything else raises <code>CandidateRefConflict</code> and leaves the ref where it was. A
+      create-only ref was rejected: the first <code>AWAITING_OWNER</code> would pin it, and an owner rework through
+      L19 builds a new candidate on the same head, so the ref must be able to follow a descendant. The namespace
+      sits outside <code>refs/heads</code>, so no branch listing shows it. No force, no delete and no batch spelling
+      exists in the module, and <code>no-destructive-paths</code> sweeps it unmodified.</p>
+
+      <h3>The per-ticket record</h3>
+      <p><code>shiftTicketCandidates(phases, prefix)</code> in <code>workflow/shift/bind.ts</code> reads each ticket's
+      accepted build phase from the recovery prefix and returns its <code>candidateSha</code> against the ticket id,
+      or <code>null</code> while that build is unaccepted. At <code>AWAITING_OWNER</code> the prefix holds every
+      phase. An accepted build always has its own commit, because <code>headAdvanced</code> refuses a builder
+      whose head did not move. No status field was added.</p>
+
+      <h3>Evidence</h3>
+      <p><code>npx tsx --test core/test/unit/candidate-ref.test.ts</code>: 7/7. Three commits chained the way a shift
+      leaves them survive <code>gc --aggressive --prune=now</code> with reflogs expired and
+      <code>prune --expire=now</code> when the tip ref exists, and all three are gone without it. Disabling the one
+      call in <code>persistAttempt</code> took the owner-gate case from pass to fail, and restoring it passed.
+      <code>npx tsx --test core/test/journeys/shift-blocked.test.ts</code>: 2/2, now also asserting no ref at the
+      ticket block, one ref at the tip in the canonical repository at <code>AWAITING_OWNER</code>, and each of the
+      six tickets projected to its own commit. <code>git worktree list</code> on this repository shows 18 entries
+      marked <code>prunable</code>, whose detached candidates only the stale worktree record holds.
+      <code>npm run test:unit</code>: 2184/2184 at base <code>d79a2c5</code> in a clean detached worktree,
+      before any change, and 2191/2191 after (the seven new cases). <code>npm run test:journeys</code>: 266/266.
+      Both runs left zero <code>refs/awsf</code> refs in this repository, whose own tests persist attempts against
+      it. <code>npm run typecheck</code>: exit 0 across both projects. <code>npm run lint</code>: 0 warnings, 0
+      errors on 605 files.</p>
     </details>
 
   </section>

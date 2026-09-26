@@ -31,6 +31,8 @@ import { startCommand } from "../../src/cli/commands/start.ts";
 import { statusCommand } from "../../src/cli/commands/status.ts";
 import type { CallBudget, Reservation } from "../../src/execution/call-budget.ts";
 import { runSystemCommand, type BrokerOptions } from "../../src/execution/transport-broker.ts";
+import { readCandidateRef } from "../../src/git/candidate-ref.ts";
+import { bindShiftRecipe, shiftTicketCandidates } from "../../src/workflow/shift/bind.ts";
 import { ticketFileDigest } from "../../src/persistence/plan-ticket-body.ts";
 import { callCeilingsOf } from "../../src/state/tiers.ts";
 
@@ -298,6 +300,7 @@ test("a red gate on ticket 3 of 6 blocks the shift there, keeps the prefix, rese
     assert.equal(prefixCommits.length, 3);
     assert.equal(prefixCommits[2], ticketThreeSha);
     assert.equal(git(prepared.worktree!, "rev-parse", "HEAD"), ticketThreeSha);
+    assert.equal(readCandidateRef(fixture.canonical, blocked), null, "a ticket block does not seal, so no candidate ref is written");
 
     // A resume before the cause is fixed re-measures ticket 3 only. It builds
     // nothing and holds no call, so no broker is ever created for it.
@@ -331,6 +334,15 @@ test("a red gate on ticket 3 of 6 blocks the shift there, keeps the prefix, rese
     assert.equal(commits.length, 6);
     assert.deepEqual(commits.slice(0, 3), prefixCommits, "the earlier tickets' commits survived the block and the resume");
     for (const id of TICKETS) assert.ok(git(prepared.worktree!, "ls-files", `core/src/widget-${id.toLowerCase()}.ts`).length > 0);
+
+    // One ref at the tip, in the canonical repository, and every ticket's own
+    // commit projected from the accepted prefix against its ticket id.
+    assert.equal(done.candidateSha, commits[5]);
+    assert.equal(readCandidateRef(fixture.canonical, done), commits[5]);
+    assert.equal(git(fixture.canonical, "for-each-ref", "--format=%(refname)", "refs/awsf"), `refs/awsf/candidates/${done.project}/${done.taskId}/1`);
+    const recipe = await bindShiftRecipe(fixture.canonical, done.shift!, { prompts: { builder: "", reviewer: "" } });
+    assert.deepEqual(shiftTicketCandidates(recipe.phases, done.recovery!.prefix),
+      TICKETS.map((ticketId, index) => ({ ticketId, candidateSha: commits[index] })));
 
     // The one review is judged against every ticket's brief, not the last.
     const contexts = (await readAttemptEvidence(fixture.attemptDir))
