@@ -106,9 +106,9 @@ pre.mermaid{background:transparent;border:0;padding:0;margin:0;font-family:var(-
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-09-15</dd>
-        <dt>modified</dt>     <dd>2026-09-15, 2026-09-15 (Questionables decided), 2026-09-20 (selection widened), 2026-09-24 (M1 closed), 2026-09-25 (task 5; G17 reordered after it), 2026-09-25 (task 6), 2026-09-25 (M2 closed), 2026-09-25 (task 8), 2026-09-25 (task 9; the shift binding pulled forward), 2026-09-25 (CLI wiring, owner-directed, outside the ticket set), 2026-09-25 (M3 closed: task 10), 2026-09-25 (task 11), 2026-09-25 (task 12), 2026-09-25 (M4 closed: task 13), 2026-09-25 (task 14), 2026-09-25 (task 15), 2026-09-26 (M5 closed: task 16), 2026-09-26 (task 17; cancel seals a parked shift, owner-directed)</dd>
-        <dt>commits</dt>      <dd>M1 landed: a3d83ef (T01), 323bd0c (T02), d5b3b2c (T03). M2 landed: 16e6f47 (T04), c9bbcc2 (T05), c5c830b (T06), 060b698 (T07). M3 landed: 852b0a8 (T08), a66ccde (CLI wiring, owner-directed), 2a4e58d (T09), 185c462 (T10). M4 landed: d79a2c5 (T11), 7bc79bd (T12), e85f648 (T13). M5 landed: 0b1e151 (T14), 3ccd3b1 (T15), this commit (T16)</dd>
-        <dt>agent name</dt>   <dd>Claude Opus 5, Claude Sonnet 5 (tasks 10-16)</dd>
+        <dt>modified</dt>     <dd>2026-09-15, 2026-09-15 (Questionables decided), 2026-09-20 (selection widened), 2026-09-24 (M1 closed), 2026-09-25 (task 5; G17 reordered after it), 2026-09-25 (task 6), 2026-09-25 (M2 closed), 2026-09-25 (task 8), 2026-09-25 (task 9; the shift binding pulled forward), 2026-09-25 (CLI wiring, owner-directed, outside the ticket set), 2026-09-25 (M3 closed: task 10), 2026-09-25 (task 11), 2026-09-25 (task 12), 2026-09-25 (M4 closed: task 13), 2026-09-25 (task 14), 2026-09-25 (task 15), 2026-09-26 (M5 closed: task 16), 2026-09-26 (task 17; cancel seals a parked shift, owner-directed), 2026-09-26 (M6 closed: task 18, the live drive, and the workstream)</dd>
+        <dt>commits</dt>      <dd>M1 landed: a3d83ef (T01), 323bd0c (T02), d5b3b2c (T03). M2 landed: 16e6f47 (T04), c9bbcc2 (T05), c5c830b (T06), 060b698 (T07). M3 landed: 852b0a8 (T08), a66ccde (CLI wiring, owner-directed), 2a4e58d (T09), 185c462 (T10). M4 landed: d79a2c5 (T11), 7bc79bd (T12), e85f648 (T13). M5 landed: 0b1e151 (T14), 3ccd3b1 (T15), 98cb567 (T16). M6 landed: daa4bb0 (T17), the commit carrying this entry (T18)</dd>
+        <dt>agent name</dt>   <dd>Claude Opus 5, Claude Sonnet 5 (tasks 10-16), Claude Opus 5.5 (task 18)</dd>
         <dt>session id</dt>   <dd>not recorded — AGENTS.md invariant 1 keeps live session state out of every committed file in this repository</dd>
         <dt>back refs</dt>    <dd>./awsf-v2-plan.html (the v2 spine, § Milestone M17 → W17, and its 2026-09-03 amendment which this plan supersedes), ../AGENTS.md (the twelve invariants), ./awsf-v2-w04-project-registry.html (the <code>delivery</code> posture this plan reads), ./awsf-v2-w07-quota-telemetry.html (the L26 boundary stop a long shift will meet)</dd>
         <dt>forward refs</dt> <dd>./tickets/awsf-v2-w17-shift/ (the execution surface), ./awsf-v2-w17-shift-build-prompts.md (§ Section B, the prompt source the invariant-12 fence pairs against)</dd>
@@ -638,7 +638,7 @@ flowchart LR
     </div>
 
     <div class="phase">
-      <h3><code class="status">[wip]</code> Milestone M6: Chaining, adoption, and closure <span class="wtag core">gated on <span class="gate">G17-M</span></span></h3>
+      <h3><code class="status">[x]</code> Milestone M6: Chaining, adoption, and closure <span class="wtag core">gated on <span class="gate">G17-M</span></span></h3>
       <p>What makes the owner's record work across a whole deep plan, and what to do with a shift that held good work but could not finish. Both are mostly <em>recognition</em> rather than construction: the chaining mechanism already exists and is already rendered, and the recovery instrument already exists and only refuses a shift because of one hard-coded map.</p>
       <figure>
         <pre class="mermaid">
@@ -670,12 +670,12 @@ flowchart LR
       <p class="sub">Serves <code class="serves">AC-1</code> · <code class="serves">AC-2</code> · <code class="serves">AC-3</code> · <code class="serves">AC-4</code> · <code class="serves">AC-5</code> · <code class="serves">AC-6</code> · <code class="serves">INV-1</code> · <code class="serves">INV-2</code> · <code class="serves">INV-3</code> · <code class="serves">INV-4</code> · <code class="serves">INV-5</code></p>
       <p>The end-to-end proof, and the only task that touches the spine. One full offline journey drives a real milestone's tickets through the fixture adapter from selection to <code>AWAITING_OWNER</code>, and every acceptance row above is asserted in one place so a reader can see the whole claim discharged rather than scattered.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>npx tsx --test core/test/journeys/shift-milestone.test.ts</code> — selection through <code>AWAITING_OWNER</code> on the fixture route, with the readout, the ref and the per-ticket record all asserted</li>
-        <li><code class="status">[]</code> <code>npm test</code> — the full suite in one invocation, leaving <code>git status --porcelain</code> clean</li>
-        <li><code class="status">[]</code> <code>npm run test:unit</code> — the invariant-12 fence pairs this plan with <code>specs/tickets/awsf-v2-w17-shift/</code> and all eleven identifier-spine rows are green</li>
-        <li><code class="status">[]</code> <strong>One bounded live drive</strong> — the only quota this workstream spends. One real milestone, unattended, end to end, with the sealed candidate opened and looked at. The suite is not the acceptance bar and this is the row that admits it</li>
-        <li><code class="status">[]</code> Every milestone above reads <code class="status">[x]</code>, and the milestone-closing amendments are recorded in this plan's Amendments section with their landing SHAs</li>
-        <li><code class="status">[]</code> <strong>Only this task</strong> flips <code>specs/awsf-v2-plan.html</code>'s Milestone M17 / W17 marker and <code>specs/tickets/awsf-v2-plan/W17.md</code>'s state, in the same commit, and records the workstream-closing amendment in the spine</li>
+        <li><code class="status">[x]</code> <code>npx tsx --test core/test/journeys/shift-milestone.test.ts</code> — selection through <code>AWAITING_OWNER</code> on the fixture route, with the readout, the ref and the per-ticket record all asserted</li>
+        <li><code class="status">[x]</code> <code>npm test</code> — the full suite in one invocation, leaving <code>git status --porcelain</code> clean</li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code> — the invariant-12 fence pairs this plan with <code>specs/tickets/awsf-v2-w17-shift/</code> and all eleven identifier-spine rows are green</li>
+        <li><code class="status">[x]</code> <strong>One bounded live drive</strong> — the only quota this workstream spends. One real milestone, unattended, end to end, with the sealed candidate opened and looked at. The suite is not the acceptance bar and this is the row that admits it</li>
+        <li><code class="status">[x]</code> Every milestone above reads <code class="status">[x]</code>, and the milestone-closing amendments are recorded in this plan's Amendments section with their landing SHAs</li>
+        <li><code class="status">[x]</code> <strong>Only this task</strong> flips <code>specs/awsf-v2-plan.html</code>'s Milestone M17 / W17 marker and <code>specs/tickets/awsf-v2-plan/W17.md</code>'s state, in the same commit, and records the workstream-closing amendment in the spine</li>
       </ul>
       <div class="loop">
         🔁 <strong>Do not exit this phase until every box above is checked.</strong>
@@ -689,17 +689,17 @@ flowchart LR
     <h2>Validation Commands</h2>
     <p>Every row runs offline and spends no quota, except the one that is explicitly a live drive. Run the suite <strong>at the exact base SHA a milestone starts from</strong> before changing anything: a red baseline blocks a correct build and neither <code>doctor</code> nor <code>lint</code> catches one.</p>
     <ul class="checklist">
-      <li><code class="status">[]</code> <code>npm run test:unit</code> — green, with the count recorded in each milestone's closing commit body</li>
-      <li><code class="status">[]</code> <code>npm run typecheck</code> — exits 0 across both projects</li>
-      <li><code class="status">[]</code> <code>npm run lint</code> — zero warnings, zero errors</li>
-      <li><code class="status">[]</code> <code>npm test</code> — the full suite in one invocation, leaving <code>git status --porcelain</code> clean</li>
-      <li><code class="status">[]</code> <code>npx tsx --test core/test/unit/meta/ticket-plan-sync.test.ts</code> — this plan pairs with <code>specs/tickets/awsf-v2-w17-shift/</code> and <code>specs/awsf-v2-w17-shift-build-prompts.md</code>; ids contiguous, milestones agreed, states matched, prompts byte-identical, and all eleven identifier-spine rows green</li>
-      <li><code class="status">[]</code> The invariant-8 meta-tests (<code>no-destructive-paths</code>, <code>no-land-route</code>) and the child-process, publish, credential and skill fences are green <strong>with no exemption added by this workstream</strong></li>
-      <li><code class="status">[]</code> <code>awsf shift plan awsf-v2-w07-quota-telemetry --milestone M4</code> and the multi-milestone form <code>--milestone M4,M5,M6</code> both refuse at zero cost when the ceiling does not fit, naming the shortfall and the raise acts needed — and the second names <code>MAX_CALL_CEILING</code> when no raise can fund it</li>
-      <li><code class="status">[]</code> A sealed shift's candidate is reachable through its ref after an aggressive pruning collection pass in a throwaway repository, and unreachable without it</li>
-      <li><code class="status">[]</code> <strong>One bounded live drive:</strong> a real milestone runs unattended end to end, reaches <code>AWAITING_OWNER</code> once, and the candidate is built fresh and looked at. This is the workstream's acceptance bar; the suite is not</li>
+      <li><code class="status">[x]</code> <code>npm run test:unit</code> — green, with the count recorded in each milestone's closing commit body</li>
+      <li><code class="status">[x]</code> <code>npm run typecheck</code> — exits 0 across both projects</li>
+      <li><code class="status">[x]</code> <code>npm run lint</code> — zero warnings, zero errors</li>
+      <li><code class="status">[x]</code> <code>npm test</code> — the full suite in one invocation, leaving <code>git status --porcelain</code> clean</li>
+      <li><code class="status">[x]</code> <code>npx tsx --test core/test/unit/meta/ticket-plan-sync.test.ts</code> — this plan pairs with <code>specs/tickets/awsf-v2-w17-shift/</code> and <code>specs/awsf-v2-w17-shift-build-prompts.md</code>; ids contiguous, milestones agreed, states matched, prompts byte-identical, and all eleven identifier-spine rows green</li>
+      <li><code class="status">[x]</code> The invariant-8 meta-tests (<code>no-destructive-paths</code>, <code>no-land-route</code>) and the child-process, publish, credential and skill fences are green <strong>with no exemption added by this workstream</strong></li>
+      <li><code class="status">[x]</code> A selection that does not fit refuses at zero cost, naming the shortfall and the raise acts needed, and one past <code>MAX_CALL_CEILING</code> says no raise can fund it. <em>Reworded 2026-09-26:</em> W07's M4–M6 are done, so the command this row named now refuses as <code>ShiftEmptyExpansion</code> before any ceiling is read. Measured instead on live todo selections: <code>awsf shift plan awsf-v2-w09-agy-adapter --milestone M1,M2</code> (10 calls, 1 raise act, 5&nbsp;&rarr;&nbsp;10) and <code>awsf shift plan awsf-v2-w10-mf-adapter --milestone M1,M2,M3,M4,M5,M6,M7</code> (24 calls, past <code>MAX_CALL_CEILING</code>), both exit 1 with <code>CallCeilingExceeded</code> (see Amendments)</li>
+      <li><code class="status">[x]</code> A sealed shift's candidate is reachable through its ref after an aggressive pruning collection pass in a throwaway repository, and unreachable without it</li>
+      <li><code class="status">[x]</code> <strong>One bounded live drive:</strong> a real milestone runs unattended end to end, reaches <code>AWAITING_OWNER</code> once, and the candidate is built fresh and looked at. This is the workstream's acceptance bar; the suite is not</li>
       <li><code class="status">[x]</code> <span class="gate">G17</span> — <code>awsf.config.yaml</code>'s <code>workflows.enabled</code> gained <code>shift</code>, and <code>docs/cheatsheet.html</code>'s workflow facts gained <code>workflow|shift</code>, as one owner-authored commit <em>after</em> M2 task 5's loader change (reordered 2026-09-25), recorded in this plan's Amendments — confirmed landed at M2's close (2026-09-25): both files carry it on the tree this task started from</li>
-      <li><code class="status">[]</code> <span class="gate">G17-M</span> — <code>main</code> and <code>task3.5</code> are merged before M4 starts, and the merge's own suite is green at its landing SHA</li>
+      <li><code class="status">[x]</code> <span class="gate">G17-M</span> — <code>main</code> and <code>task3.5</code> are merged before M4 starts, and the merge's own suite is green at its landing SHA</li>
     </ul>
     <div class="loop">
       🔁 <strong>The plan is not complete until every box is checked and every command passes. If for some reason a step is not possible to complete, mark it with [f] and move on if possible.</strong>
@@ -766,6 +766,7 @@ flowchart TD
       <summary><span class="qdecided">DECIDED</span> Q6 <span class="muted">(carried from the amendment, unchanged)</span> — How does an owner review a multi-ticket candidate without a session per ticket?</summary>
       <p class="decided"><b>Decided (2026-09-15):</b> <strong>one readout plus one freshly built preview — decided to unblock M5, with a named falsifier.</strong> The owner directed that this plan’s own recommendation be applied to every Questionable; the reasoning below is the recommending session’s and is recorded in full rather than as a bare choice. See Amendments.</p>
       <p class="decided"><b>This one is decided, not closed.</b> It is the plan’s hardest question and the shape helps least with it. The decision is taken so M5 can be built, and <strong>T18’s bounded live drive is its falsifier</strong>: if driving a real milestone shows the readout is not enough, the finding is recorded here, the <em>digest that earns attention per ticket</em> option is where it goes next, and <code>R5</code> stays on the risk register until then.</p>
+      <p class="decided"><b>Falsifier run, 2026-09-26: the readout is enough to find the candidate, not enough to judge it.</b> T18's live drive of <code>awsf-v2-w16-openrouter-adapter</code> M1 reached the owner gate with every row green: three tickets, <code>gates 3/3</code> each, one review with 0 findings. The owner still has to open the diff to judge it, and doing so found a duplicated selector pattern the review did not mention. The accumulated diff stat that <code>awsf preview</code> prints for a non-visual candidate does not say which ticket changed which file. The readout is kept as built. The next step is the <em>digest that earns attention per ticket</em> option, starting with a per-ticket diff stat, and R5 stays open. The evidence is in the M6-closing Amendment.</p>
       <p class="qa-answer"><strong>Why start here.</strong> The accumulated diff is structurally one change, and treating it as one is the cheapest thing that could work. <em>A digest that earns attention</em> is the most interesting option and the one to reach for next — it would use the review’s findings and the per-ticket diffs to say <em>which</em> tickets deserve a look, a judgment the factory has never made. <em>Sequential per-ticket preview</em> is the honest expensive answer and it re-creates the N-sessions cost this workstream exists to remove.</p>
       <p class="qa-answer"><strong>The hardest remaining question, and the one the shape helps least with.</strong> It is also where the batch's correctness is actually established: defects that mattered across this series were found by driving and by looking at a screen, not by 1800 green tests, and N tickets multiply exposure to exactly that gap. <em>One readout plus one fresh preview</em> is what M5 assumes and it is the cheapest thing that could work — it treats the accumulated diff as one change, which it structurally is. <em>A digest that earns attention</em> is the amendment's own suggestion and the most interesting: it would use the review's findings and the per-ticket diffs to say <em>which</em> tickets deserve a look, which is a judgment the factory has never made before. <em>Sequential per-ticket preview</em> is the honest, expensive answer and it re-creates the N-sessions cost this workstream exists to remove.</p>
     </details>
@@ -966,7 +967,7 @@ flowchart TD
         <tr><td><strong>R2 — the compiled recipe drifts from its manifest</strong></td><td>Recovery recompiles and compares a binding digest. A compiler that is not a pure function of recorded bytes turns every resume into a refusal — or worse, silently runs a different phase list.</td><td><code>INV-4</code>, and M2's reproducibility test compiling twice across a process boundary. The manifest digests whole ticket files, so an appended <code>## Handoff</code> is a change the resume notices.</td></tr>
         <tr><td><strong>R3 — a shift is run at exactly its minimum ceiling</strong></td><td><code>coldCorrectionHeadroom()</code> is <code>max(0, remaining − futureInitialCalls)</code>, so at <code>ceiling === minimumCalls</code> every declared <code>maxCorrections: 1</code> is worth zero. The recipe would claim a correction round it cannot fund — the exact defect <code>correctionsFundableFor</code> was written to expose in three shipped recipes.</td><td>M3 task 8 states it in the pre-flight readout, in words, before the owner leaves.</td></tr>
         <tr><td><strong>R4 — the review widens instead of being amended</strong></td><td>Q1's first option touches a compile-time invariant. The tempting shortcut is to relax the check to &ldquo;at least one&rdquo;, which would let a genuinely ambiguous inversion through.</td><td>M2 task 6's checklist requires the two-provider case to be <strong>refused by name</strong> and the zero-producer case to keep its current error class, both proven by tests that were watched to fail.</td></tr>
-        <tr><td><strong>R5 — the owner reviews six tickets the way he reviews one</strong></td><td>Q6 is decided rather than closed, and the failure is silent: a readout that is easy to skim is a readout that gets skimmed. Defects that mattered here were found by looking at a screen.</td><td>The acceptance bar is one live drive with the candidate opened, not a green suite. If that drive shows the readout is not enough, Q6 is where the finding is recorded.</td></tr>
+        <tr><td><strong>R5 — the owner reviews six tickets the way he reviews one</strong></td><td>Q6 is decided rather than closed, and the failure is silent: a readout that is easy to skim is a readout that gets skimmed. Defects that mattered here were found by looking at a screen.</td><td>The acceptance bar is one live drive with the candidate opened, not a green suite. If that drive shows the readout is not enough, Q6 is where the finding is recorded. <em>2026-09-26:</em> it did, in part (Q6); R5 stays open.</td></tr>
         <tr><td><strong>R6 — a shift becomes the default way work is done</strong></td><td>It is faster and it spends quota that would otherwise expire. That is the argument for it and also the way an unreviewed batch becomes normal.</td><td>A compiled id is refused as <code>default_workflow</code> (M2 task 5), the config entry is an owner act (<span class="gate">G17</span>), and the landing edge is unchanged.</td></tr>
       </tbody>
     </table>
@@ -2014,6 +2015,137 @@ flowchart LR
       <code>npm run test:unit</code>: 2214/2214 at base <code>d79a2c5</code> before any change, and 2216/2216
       after. <code>npm run typecheck</code>: exit 0 across both projects. <code>npm run lint</code>: 0 warnings,
       0 errors on 613 files.</p>
+    </details>
+
+    <details open>
+      <summary>2026-09-26 — task 18 built, Milestone M6 closed, and the workstream closed: one real milestone ran unattended to the owner gate</summary>
+
+      <p><strong>Markers:</strong> task 18's six rows, Milestone M6's header and every Validation row move to
+      <code class="status">[x]</code>. The row that named <code>awsf-v2-w07-quota-telemetry</code>'s M4 is reworded, below.
+      Every marker in this plan now reads <code class="status">[x]</code>, so this same commit flips the spine's
+      Milestone M17 / W17 and <code>specs/tickets/awsf-v2-plan/W17.md</code>. No row closed <code class="status">[f]</code>.</p>
+
+      <h3>What M6 accomplished, in terms of what is now observably true</h3>
+      <p>A real terminal can start a shift. <code>awsf new &lt;task&gt; "&lt;request&gt;" --workflow shift --plan &lt;stem&gt;
+      --milestone &lt;Mx&gt;[,&lt;My&gt;…]</code> runs the same selection <code>awsf shift plan</code> prints, seals it with a
+      whole-file digest per ticket, and binds it to the attempt it creates, so the manifest lives in the state root beside the
+      attempt, as Q5 decided. The tier is derived from the selection, and a <code>--tier</code> that disagrees is refused before
+      the attempt exists. A compiled workflow without <code>--plan</code> and <code>--milestone</code> is refused, and so is
+      <code>--milestone</code> on a shipped workflow. Before this task no CLI path did this, and every journey called
+      <code>newCommand</code> directly (T09's C1, T17's C5).</p>
+      <p>A real milestone ran through it unattended, end to end: <code>awsf-v2-w16-openrouter-adapter</code> M1, three tickets,
+      on the shipped routes (builder <code>codex:gpt-6-sol</code> at <code>xhigh</code>, reviewer <code>claude:opus</code>). It reached
+      <code>AWAITING_OWNER</code> once, at 4 of 5 calls, with one ref at the tip.
+      <code>core/test/journeys/shift-milestone.test.ts</code> drives the same path offline, through the real CLI for every step a
+      terminal takes. It ends in a table that names a proof for each of the eleven Identifier Spine rows, so the whole claim
+      can be read in one file.</p>
+
+      <h3>The live drive, and what it found</h3>
+      <p><strong>First task, <code>w16-m1-shift</code>: blocked at T01.</strong> The first <code>awsf start</code> failed on
+      <code>git worktree add … spawnSync git ETIMEDOUT</code>. <code>systemGitRunner</code> gives every git call 30&nbsp;s, and the
+      checkout from <code>/mnt/d</code> to ext4 ran over that while the baseline suite, a typecheck and a dashboard build all
+      loaded the same disk. The attempt stayed <code>DRAFT</code>. The same checkout took 11&nbsp;s once the disk was quiet, and
+      a second <code>start</code> prepared the attempt in 4&nbsp;min&nbsp;50&nbsp;s, most of it spent seeding <code>node_modules</code>.
+      The T01 builder then ran for about 35 minutes. It edited the plan HTML and the state and Handoff of tickets T01 to T04,
+      because the ticket's own MARKERS and HANDOFF sections tell it to. The host refused the change with
+      <code>PermissionBreach … offending paths: "specs/awsf-v2-w16-openrouter-adapter.html", "specs/tickets/…/T01.md"</code>
+      and four more. A permission breach aborts the phase with no correction round, so the attempt sealed <code>BLOCKED</code>
+      at 1 call.</p>
+      <p><strong>The fix.</strong> A plan ticket's prompt is written for a whole session: it tells its reader to commit, flip
+      markers and write handoffs. Every shift of real tickets would therefore breach on its first ticket. The brief still
+      carries the prompt verbatim, so Q2 holds. Each brief's host-authored <code>nonGoals</code> gain one entry. It names that
+      bookkeeping as the host's and the owner's, and tells the builder to leave every file outside its write boundary untouched
+      even where the prompt says to edit it. Two alternatives were rejected: editing the prompt breaks Q2, and widening the
+      builder's write globs to <code>specs/**</code> needs a protected-config change and puts plan markers in an agent's hands.
+      <code>shift-compile.test.ts</code> gains a case for the new entry.</p>
+      <p><strong>Why a second task and not <code>awsf retry</code>.</strong> A retry carries spent calls forward within the task.
+      With 1 of 5 spent, attempt 2 would have 4 calls against a <code>minimumCalls</code> of 4 and no correction headroom, and
+      <code>awsf start</code> refuses that as an unfundable cold correction. So the second drive was a new task,
+      <code>w16-m1-shift-b</code>, created with <code>--continues w16-m1-shift</code> so the two form one session stack. The first
+      attempt could not be cancelled once the fault was seen: <code>awsf cancel</code> requires an interactive owner terminal,
+      and this session did not fake one. It sealed itself on the breach.</p>
+      <p><strong>Second task, <code>w16-m1-shift-b</code>: reached the owner gate.</strong> It sealed the same manifest digest
+      (<code>411b3af2…</code>) over the same ticket bytes. T01 built in about 14 minutes, T02 in about 7 and T03 in about 10. Each
+      is its own host commit under the owner's identity (<code>65e7abf</code>, <code>77e4619</code>, <code>b88be25</code>). Each
+      gate phase was 3/3, no build spent a correction, and the one review, on <code>claude-opus-5-5</code>, accepted with 0 findings.
+      The journal holds exactly one transition into <code>AWAITING_OWNER</code>, and
+      <code>refs/awsf/candidates/agentic-workflow-software-factory/w16-m1-shift-b/1</code> points at <code>b88be25</code>.</p>
+      <p><strong>What was seen when the candidate was opened.</strong> <code>awsf preview w16-m1-shift-b</code> read the
+      <code>service</code> posture, found no changed path under <code>preview.sources</code> (<code>dashboard</code>), and printed
+      the diff readout alone: four files, +144/−6. The candidate was then checked out fresh at <code>b88be25</code> in a separate
+      ext4 worktree. Its two new test files passed 9/9, and its unit suite passed 2221/2221 in 149&nbsp;s there, and <code>npm run typecheck</code> exited 0. The source
+      diff was read line by line. It adds <code>core/src/adapters/pi-openrouter.ts</code>, which holds the selector guard and
+      explains the colon and slash refusals in its own words. It gives every catalog family its own <code>modelNamePattern</code>,
+      so only OpenRouter resolves a slash-bearing id. Its tests prove that Codex still refuses every OpenRouter id.</p>
+      <p><strong>What the readout failed to surface.</strong></p>
+      <ul>
+        <li>The review found nothing, but the diff carries the OpenRouter id pattern twice, in <code>catalog.ts</code> and in
+        <code>pi-openrouter.ts</code>, kept apart on purpose by a comment. That is a drift risk the owner sees only by reading
+        the diff.</li>
+        <li>The drive delivered code only. W16's T01 to T03 still read <code>state: todo</code> and its M1 markers
+        <code class="status">[]</code>. That is consistent under invariant 12, but nothing in the readout says the owner owes
+        those flips at landing.</li>
+        <li>The readout does not say which ticket changed which file, and the preview's diff stat covers the whole accumulated
+        diff. Recorded in Q6 and R5.</li>
+        <li>For the blocked first task, the readout said three wrong things. T01's row read <code>not run</code> though T01 ran
+        and breached, because only a red gate marks a row RED. The ref line said the ref is written when the attempt seals, on
+        an attempt that had sealed: there was no candidate commit to point at. And the next action named <code>awsf retry</code>,
+        which the carried spend makes unstartable for this shift.</li>
+        <li>The candidate is based on <code>daa4bb0</code> and this commit lands after it, so <code>awsf land</code> will meter it
+        one commit behind <code>main</code>. The readout does not say so before the owner reaches the land prompt.</li>
+      </ul>
+
+      <h3>Every task in M6 and its final state</h3>
+      <ul>
+        <li><code class="status">[x]</code> Task 17: chaining and shift adoption. Closed 2026-09-26 in <code>daa4bb0</code>.</li>
+        <li><code class="status">[x]</code> Task 18 (this task): the milestone journey, the live drive and the closing duties.
+        Closed 2026-09-26. No row was left <code class="status">[f]</code>.</li>
+      </ul>
+
+      <h3>Friction, and what a later workstream must do differently because of it</h3>
+      <ul>
+        <li><strong>No task in the plan built the CLI path that starts a shift.</strong> The New Files row gave
+        <code>awsf shift plan</code> "the manifest write", <code>a66ccde</code> wired the readout without it, and T09 bound a
+        manifest to an attempt with no flag to pass one. The gap was recorded twice in Handoffs and built here. A later plan that
+        defines an owner act should give the command that performs it its own task, not only a row in its file table.</li>
+        <li><strong>The first real ticket prompt broke the first real shift.</strong> Every offline journey used synthetic
+        one-line prompts, so none could show that a real prompt's bookkeeping sections breach the builder's write boundary.
+        Only the live drive showed it.</li>
+        <li><strong>Plan sources resolve self-placement from the process's working directory, not from the repository
+        argument.</strong> <code>main({ cwd })</code> against another checkout finds no plan, so the journey has to
+        <code>chdir</code> into its fixture repository to exercise the real CLI.</li>
+        <li><strong>Timing on this machine.</strong> <code>npm run test:unit</code> took 1080&nbsp;s on <code>/mnt/d</code> and
+        295&nbsp;s on ext4 at the same SHA. The drive's gate runs it with a 600&nbsp;s timeout, so the gate works only because
+        worktrees live on ext4. The 30&nbsp;s git timeout does not hold a worktree checkout under load.</li>
+        <li><strong>A heavy new journey tipped an old flake over.</strong> <code>shift-milestone.test.ts</code> loads the whole
+        CLI graph, and with it in the parallel suite, <code>human-gate.test.ts</code>'s real-stdin child timed out at 60&nbsp;s
+        in two consecutive full runs. T11 had recorded the same timeout once. That child's timeout is raised to 180&nbsp;s. A
+        refusal proof is not a startup benchmark, which the test's own comment already says.</li>
+      </ul>
+
+      <h3>Decisions made inside the milestone that the plan did not already carry</h3>
+      <ul>
+        <li>A shift is started by <code>awsf new --workflow shift --plan --milestone</code>, and <code>awsf shift plan</code>
+        stays read-only. The manifest is stored on the attempt's status and nowhere else, so no second copy can drift.</li>
+        <li>The brief's host-authored <code>nonGoals</code> hand the prompt's bookkeeping back to the host and the owner. The
+        prompt itself stays verbatim.</li>
+        <li>A shift that breaches or blocks early is re-driven as a new task chained with <code>--continues</code>, not retried,
+        until retry can start an attempt whose carried spend still fits the shift.</li>
+        <li>The Validation row that named W07's M4 is reworded. W07's M4 to M6 are done, so that command now refuses as
+        <code>ShiftEmptyExpansion</code> before any ceiling is read. The same property was measured on live todo selections.
+        <code>awsf shift plan awsf-v2-w09-agy-adapter --milestone M1,M2</code> prints 10 calls against 5 and 1 raise act
+        (5&nbsp;&rarr;&nbsp;10). <code>awsf shift plan awsf-v2-w10-mf-adapter --milestone M1,M2,M3,M4,M5,M6,M7</code> prints 24
+        calls, past <code>MAX_CALL_CEILING</code>, which no raise can fund. Both exit 1 with
+        <code>CallCeilingExceeded</code>.</li>
+        <li>W16's M1 tickets were not touched while either drive's attempt was alive. The manifest digests them whole, and any
+        moved byte would make a recompile refuse.</li>
+      </ul>
+
+      <h3>Landing commits and suite counts at close</h3>
+      <p>M6 landed in <code>daa4bb0</code> (T17) and in the commit carrying this entry (T18), which cannot name its own SHA.
+      The drive's candidate, <code>b88be25</code>, is not landed; landing it is the owner's act.
+      <code>npm run test:unit</code> at base <code>daa4bb0</code>, in a clean detached worktree before any change: 2216/2216.
+      <code>npm test</code>, the full suite in one invocation: unit 2217/2217, contract 149/149, simulation 98/98, journeys 272/272, exit 0, 2720&nbsp;s, with <code>git status --porcelain</code> showing only this task's own changes afterwards. Two earlier full runs failed one journey each, <code>human-gate.test.ts</code>'s real-stdin refusal, whose child hit its 60&nbsp;s spawn timeout; the file passed 8/8 run alone. That timeout is now 180&nbsp;s, and in the green run the case took 52&nbsp;s. <code>npx tsx --test core/test/journeys/shift-milestone.test.ts</code>: 2/2. <code>npx tsx --test core/test/unit/meta/ticket-plan-sync.test.ts</code>: 14/14. <code>npm run typecheck</code>: exit 0 across both projects. <code>npm run lint</code>: 0 warnings, 0 errors on 614 files.</p>
     </details>
 
   </section>

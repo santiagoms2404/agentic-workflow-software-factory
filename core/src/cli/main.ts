@@ -13,7 +13,8 @@ import { resolveStateRoot } from "../persistence/platform-paths.ts";
 import { PlanTicketReader } from "../persistence/plan-tickets.ts";
 import { callCeilingsOf, type Tier } from "../state/tiers.ts";
 import { resolveTicketPlanSources } from "../api/routes.ts";
-import { selectShiftTickets } from "../workflow/shift/select.ts";
+import { selectShiftTickets, type ShiftSelection } from "../workflow/shift/select.ts";
+import { isCompiledWorkflowId } from "../workflow/compiled-ids.ts";
 import { SHIFT_TIER_FLOOR } from "../workflow/shift/compile.ts";
 import { processOwnerTerminal, type OwnerTerminal } from "./tty.ts";
 import { adoptCommand } from "./commands/adopt.ts";
@@ -51,7 +52,7 @@ import { statusCommand } from "./commands/status.ts";
 import { intakeRequest, listTickets, showTicket, ticketStoreFor, ticketStoreForPlan } from "./commands/ticket.ts";
 import { watchCommand } from "./commands/watch.ts";
 import { selectWorkflow, workflowsCommand } from "./commands/workflows.ts";
-import { assertShiftAdmission, assessShiftAdmission, parseMilestoneSelection, shiftPlanReadout } from "./commands/shift.ts";
+import { assertShiftAdmission, assessShiftAdmission, parseMilestoneSelection, sealShiftSelection, shiftPlanReadout } from "./commands/shift.ts";
 
 /** The complete owner-facing command table; documentation reconciles against it. */
 export const CLI_COMMANDS = Object.freeze([
@@ -128,6 +129,19 @@ function parseArgs(args: readonly string[]): ParsedArgs {
     index += 1;
   }
   return { positionals, flags, repositories, routes, files, milestones };
+}
+
+/** The shift selection both `awsf shift plan` and `awsf new --workflow shift` read, and the tier it derives. */
+async function shiftSelectionFor(
+  cwd: string,
+  stem: string,
+  milestones: readonly string[],
+): Promise<{ selection: ShiftSelection; tier: Tier }> {
+  const reader = new PlanTicketReader(resolveTicketPlanSources(cwd));
+  const records = (await reader.load()).flatMap((group) => group.records);
+  const selection = selectShiftTickets(stem, milestones, records);
+  const tier: Tier = selection.tier === null ? SHIFT_TIER_FLOOR : (Math.max(SHIFT_TIER_FLOOR, selection.tier) as Tier);
+  return { selection, tier };
 }
 
 function commandEnvironment(env: NodeJS.ProcessEnv): Readonly<Record<string, string>> {
@@ -367,19 +381,16 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
     if (command === "shift") {
       // Read-only pre-flight: it reads the catalog, the tickets and the
       // config, and prints. It spawns nothing, reserves nothing and writes no
-      // manifest — binding a sealed selection to an attempt is a later
-      // ticket's scope (specs/awsf-v2-w17-shift.html Amendments, 2026-09-25).
+      // manifest: `awsf new --workflow shift` seals the same selection and
+      // binds it to the attempt it creates.
       if (parsed.positionals[0] !== "plan" || parsed.positionals.length !== 2) {
         throw new Error("usage: awsf shift plan <stem> --milestone <Mx>[,<My>,...] [--config PATH]");
       }
       const stem = parsed.positionals[1]!;
       const milestones = parseMilestoneSelection(parsed.milestones);
-      const reader = new PlanTicketReader(resolveTicketPlanSources(cwd));
-      const records = (await reader.load()).flatMap((group) => group.records);
-      const selection = selectShiftTickets(stem, milestones, records);
+      const { selection, tier } = await shiftSelectionFor(cwd, stem, milestones);
       const configPath = resolve(parsed.flags.config ?? `${cwd}/awsf.config.yaml`);
       const config = loadConfig(await readFile(configPath, "utf8"));
-      const tier: Tier = selection.tier === null ? SHIFT_TIER_FLOOR : (Math.max(SHIFT_TIER_FLOOR, selection.tier) as Tier);
       const admission = assessShiftAdmission(selection.tickets.length + 1, tier, callCeilingsOf(config.risk.call_ceiling));
       for (const line of shiftPlanReadout({
         plan: stem,
@@ -464,7 +475,26 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         parsed.flags.workflow ?? config.project.default_workflow,
         parsed.flags.tier,
       );
-      const { workflow, tier } = selection;
+      const { workflow } = selection;
+      let { tier } = selection;
+      // A shift seals its selection here, from `--plan` and `--milestone`,
+      // and the attempt stores the manifest (Q5). Its tier is derived from
+      // the selected tickets, so a `--tier` that disagrees is refused before
+      // the attempt exists rather than when `awsf start` compiles it.
+      let shift: Awaited<ReturnType<typeof sealShiftSelection>> | undefined;
+      if (isCompiledWorkflowId(workflow)) {
+        if (parsed.flags.plan === undefined || parsed.milestones.length === 0) {
+          throw new Error(`workflow ${JSON.stringify(workflow)} requires --plan <stem> and --milestone <Mx>[,<My>,...]`);
+        }
+        const selected = await shiftSelectionFor(cwd, parsed.flags.plan, parseMilestoneSelection(parsed.milestones));
+        if (parsed.flags.tier !== undefined && selected.tier !== tier) {
+          throw new Error(`this selection derives T${String(selected.tier)}; got --tier ${parsed.flags.tier}`);
+        }
+        tier = selected.tier;
+        shift = await sealShiftSelection(cwd, selected.selection);
+      } else if (parsed.milestones.length > 0) {
+        throw new Error(`--milestone selects a shift; workflow ${JSON.stringify(workflow)} takes none`);
+      }
       const routeOverrides = parseRouteFlags(parsed.routes);
       const planRef = parsed.flags.plan === undefined
         ? undefined
@@ -482,6 +512,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         request,
         workflow,
         tier,
+        ...(shift === undefined ? {} : { shift }),
         configSnapshotJson: toConfigSnapshotJson(config),
         routeOverrides,
         callCeilings: callCeilingsOf(config.risk.call_ceiling),
@@ -489,6 +520,9 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         projectRecord: projection.project,
       });
       out(`Created ${project}/${taskId} attempt ${result.status.attempt} in DRAFT.`);
+      if (shift !== undefined) {
+        out(`Shift: ${shift.plan} ${shift.milestones.join(",")}, ${String(shift.tickets.length)} ticket(s) sealed as ${shift.manifestDigest}.`);
+      }
       if (result.status.groupId !== null) out(`Group: ${result.status.groupId} — this run is recorded as part of that driving session.`);
       if (result.status.planRef !== null) out(`Plan: ${result.status.planRef} — this run is recorded against that registered plan.`);
       for (const [phaseId, selected] of Object.entries(routeOverrides)) {

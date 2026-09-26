@@ -1,5 +1,10 @@
+import { readFile } from "node:fs/promises";
+import { relative, sep } from "node:path";
+import { sealShiftManifest, type ShiftManifest } from "../../contracts/shift-selection-record.ts";
+import { ticketFileDigest } from "../../persistence/plan-ticket-body.ts";
 import { CallCeilingExceeded } from "../../state/errors.ts";
 import { ceilingFor, MAX_CALL_CEILING, type ResolvedCeiling, type Tier } from "../../state/tiers.ts";
+import type { ShiftSelection } from "../../workflow/shift/select.ts";
 import { MAX_GRANT_CALLS } from "./raise.ts";
 
 // `awsf shift plan <stem> --milestone <Mx>[,<My>,...]` — the pre-flight
@@ -156,4 +161,27 @@ export function shiftPlanReadout(options: {
     );
   }
   return Object.freeze(lines);
+}
+
+/**
+ * Seals a selection into the manifest `awsf new --workflow shift` binds to
+ * its attempt. Each ticket file is read once and digested whole, and its path
+ * is recorded relative to the repository the attempt runs against, because
+ * that is where `bindShiftRecipe` reads the bytes back on every compile.
+ * Q5 put the manifest in the state root beside the attempt, and the attempt's
+ * own status already stores it, so nothing is written here.
+ */
+export async function sealShiftSelection(repository: string, selection: ShiftSelection): Promise<ShiftManifest> {
+  const tickets = [];
+  for (const record of selection.tickets) {
+    const path = relative(repository, record.path).split(sep).join("/");
+    tickets.push({
+      id: record.ticket.id,
+      path,
+      digest: ticketFileDigest(await readFile(record.path)),
+      ...(record.ticket.tier === undefined ? {} : { tier: record.ticket.tier }),
+      ...(record.ticket.workflow === undefined ? {} : { workflow: record.ticket.workflow }),
+    });
+  }
+  return sealShiftManifest({ plan: selection.plan, milestones: [...selection.milestones], tickets });
 }

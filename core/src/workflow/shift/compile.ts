@@ -130,7 +130,18 @@ function briefIntent(id: string, title: string, prompt: string, handoff: string)
     notesForNextPhase: handoff.length === 0
       ? ""
       : `Handoff for ${id}, written after its build prompt. Where the two disagree, this wins:\n\n${handoff}`,
-    nonGoals: ["Work that belongs to another ticket in this shift"],
+    // The prompt is carried verbatim, and a plan ticket's prompt is written for
+    // a whole session: it tells its reader to commit, flip plan and ticket
+    // markers and append handoffs. Inside a shift the host commits each ticket
+    // and those records are the owner's at landing, so a builder that obeys
+    // them writes outside its boundary and spends the shift's one correction.
+    // Found by the W17 live drive (specs/awsf-v2-w17-shift.html, 2026-09-26).
+    nonGoals: [
+      "Work that belongs to another ticket in this shift",
+      "The prompt's own bookkeeping: committing, flipping plan or ticket status markers, and appending Handoff entries. " +
+        "The host commits each ticket and the owner writes those records at landing, so leave every file outside the " +
+        "exact repository write boundary untouched, even where the prompt says to edit it",
+    ],
     implementationSteps: [{
       id,
       title,

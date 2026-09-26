@@ -194,9 +194,9 @@ figcaption { color:var(--muted); font-size:12px; margin-top:10px; font-style:ita
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-08-20</dd>
-        <dt>modified</dt>     <dd>2026-08-20, 2026-08-21, 2026-08-27, 2026-09-15, 2026-09-15, 2026-09-24</dd>
+        <dt>modified</dt>     <dd>2026-08-20, 2026-08-21, 2026-08-27, 2026-09-15, 2026-09-15, 2026-09-24, 2026-09-26 (W17 closed by awsf-v2-w17-shift T18)</dd>
         <dt>commits</dt>      <dd>0c56e9e (the spine, its build prompts and its ticket set — authored 2026-08-20, four Questionables decided by owner review 2026-08-21, committed together as one deliverable)</dd>
-        <dt>agent name</dt>   <dd>claude-opus-5, claude-opus-5, claude-opus-5, claude-opus-5, claude-opus-5-5</dd>
+        <dt>agent name</dt>   <dd>claude-opus-5, claude-opus-5, claude-opus-5, claude-opus-5, claude-opus-5-5, claude-opus-5-5 (W17 close)</dd>
         <dt>session id</dt>   <dd>not recorded — AGENTS.md invariant 1 keeps live session state out of every committed file in this repository</dd>
         <dt>back refs</dt>    <dd>./awsf-v2-intent.md (the approved intent; this plan's single input), ./awsf-v2-candidates-fuse-version.md (the only detail source: evidence, collisions, routes to strong, buildability), ./awsf-plan.html (v1 — history, not backlog), ../AGENTS.md (the twelve invariants), ./awsf-v2-candidates.md and ./awsf-v2-candidates-GPT-version.md (frozen records; both carry claims their own headers mark false — superseded by the fused version and deliberately not read while authoring this plan)</dd>
         <dt>forward refs</dt> <dd>./awsf-v2-plan-build-prompts.md, ./tickets/awsf-v2-plan/ (W01–W14, one file per workstream), ./tickets/awsf-v2-plan/README.md, ./awsf-v2-w01-marimba-contract.html, ./awsf-v2-w02-evidence-readability.html, ./awsf-v2-w03-awsf-init.html, ./awsf-v2-w04-project-registry.html, ./awsf-v2-w05-design-to-plan.html, ./awsf-v2-w06-prompt-composition.html, ./awsf-v2-w07-quota-telemetry.html, ./awsf-v2-w08-publish.html, ./awsf-v2-w09-agy-adapter.html, ./awsf-v2-w10-mf-adapter.html, ./awsf-v2-w11-five-stage-ladder.html, ./awsf-v2-w12-cheatsheet.html, ./awsf-v2-w13-deploy.html, ./awsf-v2-w14-monitor.html (all fourteen: not yet authored), ./awsf-v2-w16-openrouter-adapter.html, ./awsf-v2-w17-shift.html and ./awsf-v2-w16-openrouter-adapter-build-prompts.md and ./tickets/awsf-v2-w16-openrouter-adapter/ (W16 — authored 2026-09-15, awaiting owner review)</dd>
@@ -971,8 +971,8 @@ flowchart LR
     </div>
 
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone M17: W17 — <code>shift</code>, a milestone as one attempt <span class="wtag core">v2 core</span></h3>
-      <p class="deep-plan"><a href="awsf-v2-w17-shift.html">Deep plan: AWSF v2 W17 — shift</a> <span class="muted">authored 2026-09-15, awaiting owner review</span></p>
+      <h3><code class="status">[x]</code> Milestone M17: W17 — <code>shift</code>, a milestone as one attempt <span class="wtag core">v2 core</span></h3>
+      <p class="deep-plan"><a href="awsf-v2-w17-shift.html">Deep plan: AWSF v2 W17 — shift</a> <span class="muted">authored 2026-09-15; closed 2026-09-26 by its T18</span></p>
       <p><em>Exists because the owner's subscription resets on a clock whether or not he is awake, and because a list of dependent tickets is the shape his work actually arrives in.</em> <strong>It supersedes the &ldquo;away mode&rdquo; candidate</strong> recorded in this plan's 2026-09-03 amendment, which adopted nothing and moved no marker. Its deep plan was authored before any of its code was written.</p>
       <h4>17. W17 — <code>shift</code>, a milestone as one attempt</h4>
       <table class="taskmeta">
@@ -989,16 +989,16 @@ flowchart LR
         Pure compilation from recorded bytes, twice, across a process boundary, because recovery recompiles and compares a binding digest. Both amended rules <strong>proven to bite</strong>: build producers on two different providers refused by name, and a review workflow with zero producers still throwing its original error class. A six-ticket shift with a red gate on ticket 3 blocking there, with the prefix durable, the tail unreserved and the resume completing. A sealed candidate reachable through its ref after an aggressive pruning pass in a throwaway repository, and unreachable without it. Fences asserting that no shift module imports <code>raise.ts</code> or <code>rework.ts</code>, and that nothing it adds can produce <code>L20</code>. All offline — plus <strong>one bounded live drive</strong>.
       </div>
       <ul class="checklist">
-        <li><code class="status">[]</code> Deep plan <code>awsf-v2-w17-shift.html</code> authored with its build prompts and its <code>specs/tickets/awsf-v2-w17-shift/</code> set, and approved by the owner</li>
-        <li><code class="status">[]</code> A shift is a compiled workflow, not a launcher: a meta-test asserts no module it adds spawns a run, and <code>L20</code> stays <code>actors: ["human"], interactive: true</code> with no exemption</li>
-        <li><code class="status">[]</code> <code>reviewBuildPhaseId</code>'s amendment is narrow — one distinct build <em>provider</em> — and every shipped recipe compiles to the same value it did before</li>
-        <li><code class="status">[]</code> <code>WORKFLOW_RECIPES</code> gains no placeholder: the compiled-id vocabulary is separate and <code>catalog.ts</code>'s existing assertion keeps its exact meaning</li>
-        <li><code class="status">[]</code> One ceiling for the whole shift, refused at zero cost with the shortfall and the raise acts named; no shift path reaches <code>awsf raise</code></li>
-        <li><code class="status">[]</code> Every sealed attempt's candidate lands on a ref, and the invariant-8 meta-tests stay green with no exemption added</li>
-        <li><code class="status">[]</code> The owner gate is reached once, over a candidate built fresh, with a per-ticket readout and a preview derived from the project's <code>delivery</code> posture</li>
-        <li><code class="status">[]</code> <span class="gate">G17</span> is honoured: the <code>workflows.enabled</code> change lands as an owner-authored commit before the build that needs it</li>
-        <li><code class="status">[]</code> <span class="gate">G17-M</span> is honoured: <code>main</code> and <code>task3.5</code> are merged, with a green suite at the merge's landing SHA, before the workstream's M4 starts</li>
-        <li><code class="status">[]</code> The deep plan's own milestones all reach <code>[x]</code>, or the workstream is closed with its <code>[f]</code> rows and the blocks that hold them recorded</li>
+        <li><code class="status">[x]</code> Deep plan <code>awsf-v2-w17-shift.html</code> authored with its build prompts and its <code>specs/tickets/awsf-v2-w17-shift/</code> set, and approved by the owner</li>
+        <li><code class="status">[x]</code> A shift is a compiled workflow, not a launcher: a meta-test asserts no module it adds spawns a run, and <code>L20</code> stays <code>actors: ["human"], interactive: true</code> with no exemption</li>
+        <li><code class="status">[x]</code> <code>reviewBuildPhaseId</code>'s amendment is narrow — one distinct build <em>provider</em> — and every shipped recipe compiles to the same value it did before</li>
+        <li><code class="status">[x]</code> <code>WORKFLOW_RECIPES</code> gains no placeholder: the compiled-id vocabulary is separate and <code>catalog.ts</code>'s existing assertion keeps its exact meaning</li>
+        <li><code class="status">[x]</code> One ceiling for the whole shift, refused at zero cost with the shortfall and the raise acts named; no shift path reaches <code>awsf raise</code></li>
+        <li><code class="status">[x]</code> Every sealed attempt's candidate lands on a ref, and the invariant-8 meta-tests stay green with no exemption added</li>
+        <li><code class="status">[x]</code> The owner gate is reached once, over a candidate built fresh, with a per-ticket readout and a preview derived from the project's <code>delivery</code> posture</li>
+        <li><code class="status">[x]</code> <span class="gate">G17</span> is honoured: the <code>workflows.enabled</code> change lands as an owner-authored commit before the build that needs it</li>
+        <li><code class="status">[x]</code> <span class="gate">G17-M</span> is honoured: <code>main</code> and <code>task3.5</code> are merged, with a green suite at the merge's landing SHA, before the workstream's M4 starts</li>
+        <li><code class="status">[x]</code> The deep plan's own milestones all reach <code>[x]</code>, or the workstream is closed with its <code>[f]</code> rows and the blocks that hold them recorded</li>
       </ul>
       <div class="loop">🔁 <strong>The acceptance bar is one live drive, not the suite.</strong> This workstream exists to spend quota while nobody is watching, and the only way to know it is safe to do that is to watch it do it once.</div>
     </div>
@@ -1397,6 +1397,72 @@ stateDiagram-v2
       <p><strong>The deferred two-reader attempt (W12 Q7) is future work, not a gate.</strong> Two readers who did not build the factory would each drive the walkthrough on a machine that has never held this checkout. The first would prove comprehensibility, the claim W12 does not make. The second would separate a gap in the document from a question about one reader. It becomes schedulable when a reader exists. It would also need W03's greenfield requests closed, or it will stop at the first stage boundary.</p>
 
       <p><strong>Landing and suite counts.</strong> W12 closes in the commit that carries this entry, on base <code>bc0af41</code>. A commit cannot name its own SHA. The deep plan's closing Amendment lists every milestone's landing SHAs. <code>npm test</code> — all four layers, each with its own exit code: unit 2112/2112, contract 149/149, simulation 98/98, journeys 263/263 — 2622/2622, exit 0, 3319 s wall. <code>npm run lint</code> — 582 files, 0 warnings, 0 errors. <code>npm run typecheck</code> — exit 0 for core and dashboard. W12 is <code>[x]</code>.</p>
+    </details>
+
+    <details>
+      <summary>2026-09-26 — W17 landed: milestone M17 goes [x], after one real milestone ran unattended to the owner gate</summary>
+      <p><code>awsf-v2-w17-shift.html</code>'s eighteen tasks and six milestones are complete, and every marker in it reads
+      <code class="status">[x]</code>, with no row at <code class="status">[f]</code>. Its task 18 flips Milestone M17 / W17 and
+      <code>specs/tickets/awsf-v2-plan/W17.md</code> in the commit that carries this entry. The deep plan's M6-closing
+      Amendment holds the detail. This entry records the claims the spine made for W17 and what met each one.</p>
+
+      <p><strong>The claims, one by one.</strong></p>
+      <ul>
+        <li><em>A shift is a compiled workflow, not a launcher.</em> A shift is one attempt whose phase list
+        <code>compileShift</code> builds from the selected tickets: three phases per ticket and one review tail, so
+        <code>minimumCalls = N + 1</code>. <code>shift-owner-gate-fence.test.ts</code> bars every W17 module from
+        <code>child_process</code>, from a lifecycle transition, from <code>awsf land</code>, from a clock and from a timer.
+        <code>L20</code> is unchanged.</li>
+        <li><em><code>reviewBuildPhaseId</code>'s amendment is narrow.</em> It now requires one distinct build provider (T06,
+        <code>c5c830b</code>). Builders split across providers and a review with zero producers are both still refused, and every
+        shipped recipe compiles to its old value.</li>
+        <li><em>No placeholder in <code>WORKFLOW_RECIPES</code>.</em> <code>COMPILED_WORKFLOW_IDS</code> is a second vocabulary
+        (T05, <code>c9bbcc2</code>), and <code>catalog.ts</code>'s assertion kept its meaning. It was induced red in T05's
+        session.</li>
+        <li><em>One ceiling, refused at zero cost, and no path to <code>awsf raise</code>.</em> This came from T08, T09 and T10,
+        and a fence bars shift modules from <code>raise.ts</code>. On live selections, a 10-call W09 selection and a 24-call W10
+        selection each refuse before anything is written, naming 1 raise act and <code>MAX_CALL_CEILING</code>
+        respectively.</li>
+        <li><em>Every sealed attempt's candidate lands on a ref.</em> This came from T12 (<code>7bc79bd</code>), with no
+        invariant-8 exemption. Both live-drive tasks were checked against it: the shift at the owner gate carries
+        <code>refs/awsf/candidates/…/w16-m1-shift-b/1</code>, and the breached one had no candidate commit to point at.</li>
+        <li><em>The owner gate is reached once, over a candidate built fresh, with a per-ticket readout and a preview from
+        <code>delivery</code>.</em> This came from T14 to T16. In the live drive, <code>w16-m1-shift-b</code> reached
+        <code>AWAITING_OWNER</code> once. Its readout named three tickets, three commits, gates 3/3 each and one review. The
+        preview followed this repository's <code>service</code> posture to a diff readout, because no changed path was under
+        <code>preview.sources</code>.</li>
+        <li><em>The acceptance bar is one live drive.</em> <code>awsf-v2-w16-openrouter-adapter</code> M1 ran unattended on the
+        shipped routes, and the candidate, <code>b88be25</code>, was checked out fresh, tested and read. It is not landed;
+        landing it is the owner's act.</li>
+      </ul>
+
+      <p><strong>Questionables.</strong> All seven were decided on 2026-09-15. Q6, the one decided but left open, has now been
+      run against its falsifier. The readout found the candidate and said what ran, but judging the candidate still took
+      opening the diff, which showed a duplicated selector pattern the review had not raised. Q6 and R5 record this, and the
+      next step is the per-ticket digest option. Q2 holds, with one addition: each brief's host-authored non-goals now hand the
+      prompt's commit, marker and handoff steps back to the host and the owner.</p>
+
+      <p><strong>What the 2026-09-03 entry and this spine assumed wrongly, and the surprises.</strong> The away-mode entry
+      expected the unattended run's risk to sit in recovery, seeding and budgets. The first real failure came from the tickets
+      themselves: their prompts are written for a whole session and tell the reader to commit and flip plan markers, which a
+      builder may not write. The first live attempt breached on T01 for that reason. The spine's own W17 row listed a CLI that
+      starts a shift as already implied. No task built it until task 18. A shift that fails early cannot be retried within its
+      task, because a retry carries spent calls forward, so it is re-driven as a chained task instead. And the ref-at-seal
+      claim met a sealed attempt with no candidate at all, which the readout words as though the ref were still to come.</p>
+
+      <p><strong>Routed elsewhere, not built.</strong> The readout gaps the drive found belong to a later readout task, most
+      likely where Q6's digest is built. They are: a build-phase block renders its ticket as <code>not run</code>; a sealed
+      attempt with no candidate reads as awaiting its ref; <code>awsf retry</code> is recommended where it cannot start; and
+      a base behind <code>main</code> is not flagged. The failure classifier edit the 2026-09-15 entry named, adding W17's
+      error classes to <code>CLASSIFIED</code>, was not taken by any W17 task and stays open. The 30&nbsp;s git timeout that a
+      worktree checkout exceeded under load is a host setting and was left as it is. W16's M1 plan markers and ticket states
+      are the owner's to flip if and when <code>b88be25</code> lands.</p>
+
+      <p><strong>Rows at <code class="status">[f]</code>.</strong> None.</p>
+
+      <p><strong>Landing and suite counts.</strong> W17 closes in the commit that carries this entry, on base
+      <code>daa4bb0</code>; a commit cannot name its own SHA. The deep plan's metadata lists every task's landing SHA.
+      <code>npm test</code>: unit 2217/2217, contract 149/149, simulation 98/98, journeys 272/272, exit 0, 2720&nbsp;s. <code>npm run typecheck</code> exit 0; <code>npm run lint</code> 0 warnings, 0 errors on 614 files; ticket-plan sync and all identifier-spine rows 14/14. W17 is <code class="status">[x]</code>.</p>
     </details>
   </section>
 

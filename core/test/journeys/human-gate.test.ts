@@ -188,7 +188,9 @@ test("the real process.stdin pipe is refused even when it contains yes", async (
       encoding: "utf8",
       // A cold WSL2 strip-types + SQLite startup can exceed 20 s under the
       // full parallel suite; this is a refusal proof, not a startup benchmark.
-      timeout: 60_000,
+      // It passed inside 60 s run alone and timed out at 60 s in two full
+      // suite runs once shift-milestone.test.ts joined the parallel load.
+      timeout: 180_000,
     });
     assert.equal(child.status, 1, child.stderr);
     assert.match(child.stderr, /InteractiveOwnerRequired/);

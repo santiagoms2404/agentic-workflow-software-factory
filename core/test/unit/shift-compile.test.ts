@@ -172,6 +172,21 @@ test("the brief carries the build prompt verbatim, then the handoff that correct
   assert.equal(await brief.execute(context), brief.intent);
 });
 
+test("the brief keeps the prompt verbatim and hands its bookkeeping back to the host and the owner", () => {
+  // The W17 live drive's first builder obeyed its ticket's MARKERS and
+  // HANDOFF steps and edited specs/, outside the builder's write boundary.
+  // The prompt stays byte for byte; the host-authored non-goals say which of
+  // its instructions a shift builder does not carry out.
+  const { manifest, bodies } = fixture(THREE);
+  for (const phase of compileShift(manifest, bodies, CONFIG).phases) {
+    if (!("intent" in phase)) continue;
+    const { nonGoals } = (phase as ShiftBriefPhase).intent;
+    assert.equal(nonGoals[0], "Work that belongs to another ticket in this shift");
+    assert.match(nonGoals[1] ?? "", /committing, flipping plan or ticket status markers, and appending Handoff entries/u);
+    assert.match(nonGoals[1] ?? "", /outside the exact repository write boundary/u);
+  }
+});
+
 test("a ticket with no handoff section leaves the brief's notes empty", () => {
   const source = ticketSource("T01").replace(/## Handoff\n\n[\s\S]*?\n\n## Build prompt/u, "## Build prompt");
   const { manifest, bodies } = fixture(["T01"], { T01: source });
