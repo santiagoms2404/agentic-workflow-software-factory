@@ -106,9 +106,9 @@ pre.mermaid{background:transparent;border:0;padding:0;margin:0;font-family:var(-
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-09-15</dd>
-        <dt>modified</dt>     <dd>2026-09-15, 2026-09-15 (Questionables decided), 2026-09-20 (selection widened), 2026-09-24 (M1 closed), 2026-09-25 (task 5; G17 reordered after it), 2026-09-25 (task 6), 2026-09-25 (M2 closed), 2026-09-25 (task 8), 2026-09-25 (task 9; the shift binding pulled forward), 2026-09-25 (CLI wiring, owner-directed, outside the ticket set), 2026-09-25 (M3 closed: task 10)</dd>
-        <dt>commits</dt>      <dd>M1 landed: a3d83ef (T01), 323bd0c (T02), d5b3b2c (T03). M2 landed: 16e6f47 (T04), c9bbcc2 (T05), c5c830b (T06), 060b698 (T07). M3 landed: 852b0a8 (T08), a66ccde (CLI wiring, owner-directed), 2a4e58d (T09), this commit (T10)</dd>
-        <dt>agent name</dt>   <dd>Claude Opus 5, Claude Sonnet 5 (task 10)</dd>
+        <dt>modified</dt>     <dd>2026-09-15, 2026-09-15 (Questionables decided), 2026-09-20 (selection widened), 2026-09-24 (M1 closed), 2026-09-25 (task 5; G17 reordered after it), 2026-09-25 (task 6), 2026-09-25 (M2 closed), 2026-09-25 (task 8), 2026-09-25 (task 9; the shift binding pulled forward), 2026-09-25 (CLI wiring, owner-directed, outside the ticket set), 2026-09-25 (M3 closed: task 10), 2026-09-25 (task 11), 2026-09-25 (task 12), 2026-09-25 (M4 closed: task 13)</dd>
+        <dt>commits</dt>      <dd>M1 landed: a3d83ef (T01), 323bd0c (T02), d5b3b2c (T03). M2 landed: 16e6f47 (T04), c9bbcc2 (T05), c5c830b (T06), 060b698 (T07). M3 landed: 852b0a8 (T08), a66ccde (CLI wiring, owner-directed), 2a4e58d (T09), 185c462 (T10). M4 landed: d79a2c5 (T11), 7bc79bd (T12), this commit (T13)</dd>
+        <dt>agent name</dt>   <dd>Claude Opus 5, Claude Sonnet 5 (tasks 10-13)</dd>
         <dt>session id</dt>   <dd>not recorded — AGENTS.md invariant 1 keeps live session state out of every committed file in this repository</dd>
         <dt>back refs</dt>    <dd>./awsf-v2-plan.html (the v2 spine, § Milestone M17 → W17, and its 2026-09-03 amendment which this plan supersedes), ../AGENTS.md (the twelve invariants), ./awsf-v2-w04-project-registry.html (the <code>delivery</code> posture this plan reads), ./awsf-v2-w07-quota-telemetry.html (the L26 boundary stop a long shift will meet)</dd>
         <dt>forward refs</dt> <dd>./tickets/awsf-v2-w17-shift/ (the execution surface), ./awsf-v2-w17-shift-build-prompts.md (§ Section B, the prompt source the invariant-12 fence pairs against)</dd>
@@ -496,7 +496,7 @@ flowchart LR
     </div>
 
     <div class="phase">
-      <h3><code class="status">[wip]</code> Milestone M4: Failure, durability, and the ref <span class="wtag core">gated on <span class="gate">G17-M</span></span></h3>
+      <h3><code class="status">[x]</code> Milestone M4: Failure, durability, and the ref <span class="wtag core">gated on <span class="gate">G17-M</span></span></h3>
       <p>Two questions a night run must answer before it is trusted with one: what happens when ticket 3 of 6 fails, and where does the work live while everyone is asleep. <strong>This milestone may not start until <code>main</code> and <code>task3.5</code> are merged</strong> — the ref is written at seal time, which is inside <code>production-run.ts</code>, the most heavily diverged file in the pair.</p>
       <figure>
         <pre class="mermaid">
@@ -545,11 +545,11 @@ stateDiagram-v2
       <p class="sub">Serves <code class="serves">AC-4</code> · <code class="serves">AC-5</code></p>
       <p>Git behaviour is tested against a temporary-directory <code>git init</code> round trip, never against this repository. Failure behaviour is tested through the fixture adapter, so no quota is spent and the red gate is deterministic.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>npx tsx --test core/test/journeys/shift-blocked.test.ts</code> — a six-ticket shift with a red gate on ticket 3: blocks there, prefix durable, tail unreserved, resume completes</li>
-        <li><code class="status">[]</code> <code>npx tsx --test core/test/unit/candidate-ref.test.ts</code> — the ref is created, is not a branch, and re-running the write on the same SHA is idempotent</li>
-        <li><code class="status">[]</code> In a throwaway repository, the sealed candidate <strong>survives an aggressive pruning collection pass</strong> with the ref present and is unreachable without it — the property the ref exists for, proven in both directions</li>
-        <li><code class="status">[]</code> The invariant-8 meta-tests are <strong>green without an added exemption</strong>, and a test asserts no exemption was added</li>
-        <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code>, <code>npm run lint</code> — green, counts recorded</li>
+        <li><code class="status">[x]</code> <code>npx tsx --test core/test/journeys/shift-blocked.test.ts</code> — a six-ticket shift with a red gate on ticket 3: blocks there, prefix durable, tail unreserved, resume completes</li>
+        <li><code class="status">[x]</code> <code>npx tsx --test core/test/unit/candidate-ref.test.ts</code> — the ref is created, is not a branch, and re-running the write on the same SHA is idempotent</li>
+        <li><code class="status">[x]</code> In a throwaway repository, the sealed candidate <strong>survives an aggressive pruning collection pass</strong> with the ref present and is unreachable without it — the property the ref exists for, proven in both directions</li>
+        <li><code class="status">[x]</code> The invariant-8 meta-tests are <strong>green without an added exemption</strong>, and a test asserts no exemption was added</li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code>, <code>npm run lint</code> — green, counts recorded</li>
       </ul>
       <div class="loop">
         🔁 <strong>Do not exit this phase until every box above is checked.</strong>
@@ -1691,6 +1691,82 @@ flowchart LR
       Both runs left zero <code>refs/awsf</code> refs in this repository, whose own tests persist attempts against
       it. <code>npm run typecheck</code>: exit 0 across both projects. <code>npm run lint</code>: 0 warnings, 0
       errors on 605 files.</p>
+    </details>
+
+    <details open>
+      <summary>2026-09-25 — M4 closed: task 13 verified both DONE WHEN files complete, wrote nothing new</summary>
+
+      <p><strong>Markers:</strong> task 13's five rows move to <code class="status">[x]</code>. Milestone M4's
+      <code>&lt;h3&gt;</code> header moves to <code class="status">[x]</code>. No row is left <code class="status">[f]</code>.</p>
+
+      <h3>What M4 accomplished, in terms of what is now observably true</h3>
+      <p>A shift that hits a red gate stops exactly at the ticket that failed it, not before and not after: the
+      accepted prefix's commits stay on the worktree's advancing detached head, no later ticket's phase ever reserves
+      a call against the ledger's own <code>history()</code>, and the blocker record distinguishes a gate that ran
+      and measured red from a process that never reported a verdict at all — the same block reads as
+      <code>source: "gate"</code> in one case and <code>source: "process"</code> in the other, and the owner-facing
+      <code>detail</code> string differs correspondingly (<code>… is red on &lt;sha&gt;: …</code> versus
+      <code>… so the host could not measure it and the cause may not be this ticket</code>). <code>awsf resume</code>
+      re-measures only the blocked ticket's gate phase against the same candidate — proven by dispatching the
+      scripted gate a second time before the cause is fixed, holding no ledger and reserving no call — then, once
+      green, runs the unrun tail and the one review, repeating nothing already accepted. Every sealed shift's tip
+      commit is reachable by exactly one ref under <code>refs/awsf/candidates/&lt;project&gt;/&lt;taskId&gt;/&lt;attempt&gt;</code>,
+      proven both ways in a throwaway <code>git init</code> repository: three chained commits survive
+      <code>gc --aggressive --prune=now</code> with reflogs expired and <code>prune --expire=now</code> when the ref
+      holds them, and all three are gone without it. The invariant-8 meta-tests (<code>no-destructive-paths</code>,
+      <code>no-land-route</code>) stay green with no exemption text added for <code>candidate-ref.ts</code>, and a
+      test reads both fence files directly to say so.</p>
+
+      <h3>Every task and its final state</h3>
+      <ul>
+        <li><strong>T11 — a failing ticket blocks the attempt, and the prefix resumes.</strong>
+        <code class="status">[x]</code>, landed <code>d79a2c5</code>. No <code class="status">[f]</code> rows.</li>
+        <li><strong>T12 — the ref at seal time, and the per-ticket candidate record.</strong>
+        <code class="status">[x]</code>, landed <code>7bc79bd</code>. No <code class="status">[f]</code> rows.</li>
+        <li><strong>T13 — Testing Strategy for M4.</strong> <code class="status">[x]</code>, landed with this commit.
+        No <code class="status">[f]</code> rows. Like T10 closing M3, this task carried no net-new coverage: T11's
+        Handoff (C1) and T12's Handoff (C7, C9) each said their predecessor's session had already built every row
+        this task's checklist names — <code>core/test/journeys/shift-blocked.test.ts</code> (both cases: the red
+        gate and the no-exit-status process failure) and <code>core/test/unit/candidate-ref.test.ts</code> (all nine
+        cases, including the prune-survival pair and the no-exemption sweep). This task's own work was re-running
+        both files, re-running the full gate stack, and confirming the checklist rows describe what the code
+        actually does rather than writing anything new.</li>
+      </ul>
+
+      <h3>Friction, and what a later milestone must do differently because of it</h3>
+      <p>Nothing here took longer than the plan expected; the friction M3's amendment already named — a closing task
+      can legitimately be pure verification with zero net-new coverage — repeated exactly, for the same reason: T11
+      and T12 each built past their own checklist into the shared journey and unit files task 13 was going to need,
+      and said so in their Handoffs. <strong>M5's and M6's closing tasks (16, and 17/18) should read T14/T15's and
+      T17's Handoffs before assuming they owe fresh test files</strong> — the pattern established across M3 and M4 is
+      that a milestone's earlier implementation tasks increasingly write the closing task's coverage as a side effect
+      of proving their own row, and the closing task's honest job is to verify that claim against the actual test run
+      rather than duplicate it.</p>
+      <p>One thing the plan's M4 diagram got wrong, already corrected in T11's own amendment and reaffirmed here for
+      the record: the state diagram at the top of this milestone still draws <code>t13 --&gt; BLOCKED: gate red</code>
+      and <code>BLOCKED --&gt; RESUME</code>, but the lifecycle <code>BLOCKED</code> state is sealed and
+      <code>awsf resume</code> refuses it outright. A red ticket instead stops the shift at <code>RUNNING</code> under
+      a <code>ticket-block</code> recovery checkpoint with <code>status.blocker</code> set, and that is what
+      <code>shift-blocked.test.ts</code> asserts throughout. The diagram is left as drawn — fixing figure prose is not
+      this task's scope — and a reader should trust the checklist rows and the Handoffs over the mermaid source.</p>
+
+      <h3>Decisions made inside the milestone the plan did not already carry</h3>
+      <ul>
+        <li>No additional fixture, no additional test file, and no rewrite of either T11's or T12's coverage. Per the
+        never-do list and per this milestone's own Testing Strategy row wording ("blocks there, prefix durable, tail
+        unreserved, resume completes" and "the ref is created, is not a branch, and re-running the write on the same
+        SHA is idempotent"), both files already assert exactly the properties named — re-running them on the exact
+        base SHA is the closing evidence, not a reason to add more.</li>
+      </ul>
+
+      <h3>Landing commits and suite counts at close</h3>
+      <p>M4's two implementation commits: <code>d79a2c5</code> (T11), <code>7bc79bd</code> (T12); this commit closes
+      T13 and the milestone. <code>npx tsx --test core/test/journeys/shift-blocked.test.ts
+      core/test/unit/candidate-ref.test.ts</code>: 9/9. <code>npm run test:unit</code>: 2191/2191, run at base SHA
+      <code>7bc79bd</code> before this task changed anything — matching T12's own recorded close count exactly, so
+      no baseline drifted between the two sessions. <code>npm run typecheck</code>: exit 0 across both projects.
+      <code>npm run lint</code>: 0 warnings, 0 errors on 605 files. <code>npm test</code>: full suite in one
+      invocation, exit 0, <code>git status --porcelain</code> clean afterward.</p>
     </details>
 
   </section>
