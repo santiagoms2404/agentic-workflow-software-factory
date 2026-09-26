@@ -9,6 +9,7 @@
 import { journeyPasses } from "../../gates/journey.ts";
 import { runGit, systemGitRunner } from "../../git/changes.ts";
 import { buildReviewWorkflow } from "../../workflow/recipes/build-review.ts";
+import { isCompiledWorkflowId } from "../../workflow/compiled-ids.ts";
 import { simpleSdlcWorkflow } from "../../workflow/recipes/simple-sdlc.ts";
 import type { OwnerTerminal } from "../tty.ts";
 import { readAttemptEvidence } from "./review-record.ts";
@@ -24,8 +25,10 @@ import {
  * The journey is a phase of the attempt in the evidence model's sense — it has
  * an ordinal, a status, and a window — and its kind is `engineer` for the same
  * reason the `request` phase is: both are content a human supplied rather than a
- * provider. The known phase counts guard which workflows may append it; its
- * ordinal follows every phase the attempt journal has already recorded.
+ * provider. The known phase counts guard which workflows may append it, and a
+ * compiled workflow such as `shift` may too: its phase list is fixed by its own
+ * sealed selection, and it reaches the same T2 owner gate. The ordinal follows
+ * every phase the attempt journal has already recorded.
  */
 const WORKFLOW_PHASE_COUNTS = new Map<string, number>([
   [buildReviewWorkflow.id, buildReviewWorkflow.phases.length],
@@ -80,6 +83,11 @@ export async function journeyCommand(options: JourneyCommandOptions): Promise<Jo
     throw new JourneyNotApplicable("recording a journey requires an interactive owner terminal");
   }
   if (status.journeyApproved) throw new JourneyNotApplicable("this attempt already carries an approved journey");
+  // Checked before the prompt, so an owner is never asked to attest to a
+  // journey this command would then refuse to record.
+  if (!WORKFLOW_PHASE_COUNTS.has(status.workflow) && !isCompiledWorkflowId(status.workflow)) {
+    throw new JourneyNotApplicable(`workflow ${JSON.stringify(status.workflow)} has no known phase count to append a journey to`);
+  }
 
   const trimmedId = options.journeyId.trim();
   if (trimmedId.length === 0) throw new JourneyEvidenceRejected(["the journey needs a recorded id"]);
@@ -122,9 +130,6 @@ export async function journeyCommand(options: JourneyCommandOptions): Promise<Jo
   if (!confirmed) return { status, confirmed: false };
 
   const at = (options.now ?? ((): string => new Date().toISOString()))();
-  if (!WORKFLOW_PHASE_COUNTS.has(status.workflow)) {
-    throw new JourneyNotApplicable(`workflow ${JSON.stringify(status.workflow)} has no known phase count to append a journey to`);
-  }
   const recordedEvidence = await readAttemptEvidence(options.attemptDir);
   const ordinal = recordedEvidence.reduce(
     (highest, evidence) => evidence.type === "phase" ? Math.max(highest, evidence.phase.ordinal) : highest,

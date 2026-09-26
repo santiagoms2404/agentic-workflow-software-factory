@@ -1464,6 +1464,13 @@ stateDiagram-v2
       <code>daa4bb0</code>; a commit cannot name its own SHA. The deep plan's metadata lists every task's landing SHA.
       <code>npm test</code>: unit 2217/2217, contract 149/149, simulation 98/98, journeys 272/272, exit 0, 2720&nbsp;s. <code>npm run typecheck</code> exit 0; <code>npm run lint</code> 0 warnings, 0 errors on 614 files; ticket-plan sync and all identifier-spine rows 14/14. W17 is <code class="status">[x]</code>.</p>
     </details>
+    <details>
+      <summary>2026-09-26 — W17 correction after its close: a shift can now be journeyed, so it can land</summary>
+      <p>W17 stays <code class="status">[x]</code>. After the close, <code>awsf journey</code> was found to refuse every workflow
+      but <code>build-review</code> and <code>simple-sdlc</code>. <code>L20</code> requires an approved journey at T2, so no
+      shift could land. <code>journeyCommand</code> now admits a compiled workflow and checks this before its prompt, and the
+      milestone journey lands a fixture shift. The deep plan's amendment of the same date has the detail.</p>
+    </details>
   </section>
 
 </main>

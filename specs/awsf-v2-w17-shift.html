@@ -106,7 +106,7 @@ pre.mermaid{background:transparent;border:0;padding:0;margin:0;font-family:var(-
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-09-15</dd>
-        <dt>modified</dt>     <dd>2026-09-15, 2026-09-15 (Questionables decided), 2026-09-20 (selection widened), 2026-09-24 (M1 closed), 2026-09-25 (task 5; G17 reordered after it), 2026-09-25 (task 6), 2026-09-25 (M2 closed), 2026-09-25 (task 8), 2026-09-25 (task 9; the shift binding pulled forward), 2026-09-25 (CLI wiring, owner-directed, outside the ticket set), 2026-09-25 (M3 closed: task 10), 2026-09-25 (task 11), 2026-09-25 (task 12), 2026-09-25 (M4 closed: task 13), 2026-09-25 (task 14), 2026-09-25 (task 15), 2026-09-26 (M5 closed: task 16), 2026-09-26 (task 17; cancel seals a parked shift, owner-directed), 2026-09-26 (M6 closed: task 18, the live drive, and the workstream)</dd>
+        <dt>modified</dt>     <dd>2026-09-15, 2026-09-15 (Questionables decided), 2026-09-20 (selection widened), 2026-09-24 (M1 closed), 2026-09-25 (task 5; G17 reordered after it), 2026-09-25 (task 6), 2026-09-25 (M2 closed), 2026-09-25 (task 8), 2026-09-25 (task 9; the shift binding pulled forward), 2026-09-25 (CLI wiring, owner-directed, outside the ticket set), 2026-09-25 (M3 closed: task 10), 2026-09-25 (task 11), 2026-09-25 (task 12), 2026-09-25 (M4 closed: task 13), 2026-09-25 (task 14), 2026-09-25 (task 15), 2026-09-26 (M5 closed: task 16), 2026-09-26 (task 17; cancel seals a parked shift, owner-directed), 2026-09-26 (M6 closed: task 18, the live drive, and the workstream), 2026-09-26 (a shift can be journeyed, so it can land)</dd>
         <dt>commits</dt>      <dd>M1 landed: a3d83ef (T01), 323bd0c (T02), d5b3b2c (T03). M2 landed: 16e6f47 (T04), c9bbcc2 (T05), c5c830b (T06), 060b698 (T07). M3 landed: 852b0a8 (T08), a66ccde (CLI wiring, owner-directed), 2a4e58d (T09), 185c462 (T10). M4 landed: d79a2c5 (T11), 7bc79bd (T12), e85f648 (T13). M5 landed: 0b1e151 (T14), 3ccd3b1 (T15), 98cb567 (T16). M6 landed: daa4bb0 (T17), the commit carrying this entry (T18)</dd>
         <dt>agent name</dt>   <dd>Claude Opus 5, Claude Sonnet 5 (tasks 10-16), Claude Opus 5.5 (task 18)</dd>
         <dt>session id</dt>   <dd>not recorded — AGENTS.md invariant 1 keeps live session state out of every committed file in this repository</dd>
@@ -2146,6 +2146,28 @@ flowchart LR
       The drive's candidate, <code>b88be25</code>, is not landed; landing it is the owner's act.
       <code>npm run test:unit</code> at base <code>daa4bb0</code>, in a clean detached worktree before any change: 2216/2216.
       <code>npm test</code>, the full suite in one invocation: unit 2217/2217, contract 149/149, simulation 98/98, journeys 272/272, exit 0, 2720&nbsp;s, with <code>git status --porcelain</code> showing only this task's own changes afterwards. Two earlier full runs failed one journey each, <code>human-gate.test.ts</code>'s real-stdin refusal, whose child hit its 60&nbsp;s spawn timeout; the file passed 8/8 run alone. That timeout is now 180&nbsp;s, and in the green run the case took 52&nbsp;s. <code>npx tsx --test core/test/journeys/shift-milestone.test.ts</code>: 2/2. <code>npx tsx --test core/test/unit/meta/ticket-plan-sync.test.ts</code>: 14/14. <code>npm run typecheck</code>: exit 0 across both projects. <code>npm run lint</code>: 0 warnings, 0 errors on 614 files.</p>
+    </details>
+
+    <details open>
+      <summary>2026-09-26 — after the close: a shift could not be journeyed, so it could not land</summary>
+
+      <p><strong>No marker moves.</strong> This corrects a defect the M6 close missed. It was found when the owner asked for
+      the live drive's journey and land commands.</p>
+      <p><code>awsf journey</code> admitted only the workflows in its <code>WORKFLOW_PHASE_COUNTS</code> map,
+      <code>build-review</code> and <code>simple-sdlc</code>, and threw <code>JourneyNotApplicable</code> for any other. It
+      threw <em>after</em> the owner had confirmed the attestation. The <code>L20</code> guard requires an approved journey
+      at T2 (<code>core/src/state/guards.ts:365</code>), and every shift is at least T2, so no shift could land. INV-1 held,
+      and so did AC-6, which ends at the owner gate. But the workstream's purpose, one owner act instead of N, was
+      unreachable. <code>shift-milestone.test.ts</code> asserted only that <code>land</code> refuses a non-interactive stdin,
+      and no journey ever landed a shift.</p>
+      <p><strong>The fix.</strong> <code>journeyCommand</code> now also admits a compiled workflow. The count in that map is
+      never read, only membership, and a shift's phase list is fixed by its sealed selection. The check moves ahead of the
+      prompt, so no owner is asked to attest to a journey the command would then refuse to record.
+      <code>shift-milestone.test.ts</code> now journeys and lands its fixture shift through an interactive owner terminal
+      and asserts that <code>main</code> fast-forwards to the shift's tip. With the fix reverted, the journey fails on
+      <code>JourneyNotApplicable</code>.</p>
+      <p><strong>What a later workstream should take from it.</strong> A workflow that ends at the owner gate is proven only
+      when a test carries it through the gate. Stopping at <code>AWAITING_OWNER</code> proves the run, not the landing.</p>
     </details>
 
   </section>

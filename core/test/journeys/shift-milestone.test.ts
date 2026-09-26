@@ -23,6 +23,7 @@ import type { ReviewOutput } from "../../src/contracts/review-output.ts";
 import { main } from "../../src/cli/main.ts";
 import { readAttempt } from "../../src/cli/commands/attempt.ts";
 import { createDashboardProjection } from "../../src/cli/commands/dashboard-projection.ts";
+import { journeyCommand } from "../../src/cli/commands/journey.ts";
 import { landCommand } from "../../src/cli/commands/land.ts";
 import { runProductionCommand } from "../../src/cli/commands/production-run.ts";
 import { readAttemptEvidence } from "../../src/cli/commands/review-record.ts";
@@ -223,7 +224,7 @@ async function cli(canonical: string, argv: readonly string[]): Promise<{ code: 
 
 const serialized = (recipe: unknown): string => serializeShiftRecipe(recipe as ShiftRecipe);
 
-test("one milestone runs from selection to AWAITING_OWNER once, with the readout, the ref and the per-ticket record", async () => {
+test("one milestone runs from selection to AWAITING_OWNER once, with the readout, the ref and the per-ticket record, then journeys and lands", async () => {
   const fixture = world();
   const common = ["--state-root", fixture.stateRoot, "--config", fixture.configPath];
   try {
@@ -367,6 +368,17 @@ test("one milestone runs from selection to AWAITING_OWNER once, with the readout
     assert.equal(brokered.length, launches.length, `every provider launch was a broker start: ${brokered.join(", ")}`);
     assert.equal(git(fixture.canonical, "rev-parse", "main"), prepared.baseSha);
     assert.equal(git(fixture.canonical, "remote"), "");
+
+    // The owner's half, which the workstream first closed without: a shift is
+    // a T2 candidate, so landing needs an attested journey, and `awsf journey`
+    // once refused every workflow but build-review and simple-sdlc.
+    const owner = { interactive: true, write: () => {}, confirm: async () => true };
+    const journeyed = await journeyCommand({ attemptDir, terminal: owner, journeyId: "fixture-milestone-walkthrough", observedSha: commits.at(-1)! });
+    assert.equal(journeyed.confirmed, true);
+    assert.equal(journeyed.status.journeyApproved, true);
+    const landed = await landCommand({ attemptDir, terminal: owner });
+    assert.equal(landed.status.lifecycleState, "LANDED", landed.status.lastActivity);
+    assert.equal(git(fixture.canonical, "rev-parse", "main"), commits.at(-1), "landing fast-forwarded main to the shift's tip");
   } finally {
     rmSync(fixture.root, { recursive: true, force: true });
   }
