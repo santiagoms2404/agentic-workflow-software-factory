@@ -296,6 +296,9 @@ test("a red gate on ticket 3 of 6 blocks the shift there, keeps the prefix, rese
 
     // Every earlier ticket's commit is on the head, ticket 3's red one last.
     const ticketThreeSha = blocked.recovery!.prefix.at(-1)!.candidateSha!;
+    // The owner readout, gathered by `awsf status` from the real records.
+    assert.ok(lines.includes(`  T03  Ticket T03 adds its own widget  ${ticketThreeSha.slice(0, 7)}  RED: gates red`), lines.join("\n"));
+    assert.ok(lines.includes("  T04  Ticket T04 adds its own widget  -------  not run"), lines.join("\n"));
     const prefixCommits = git(prepared.worktree!, "rev-list", "--reverse", `${prepared.baseSha!}..HEAD`).split("\n");
     assert.equal(prefixCommits.length, 3);
     assert.equal(prefixCommits[2], ticketThreeSha);
@@ -340,6 +343,14 @@ test("a red gate on ticket 3 of 6 blocks the shift there, keeps the prefix, rese
     assert.equal(done.candidateSha, commits[5]);
     assert.equal(readCandidateRef(fixture.canonical, done), commits[5]);
     assert.equal(git(fixture.canonical, "for-each-ref", "--format=%(refname)", "refs/awsf"), `refs/awsf/candidates/${done.project}/${done.taskId}/1`);
+    const readout = await statusCommand(fixture.attemptDir);
+    for (const [index, id] of TICKETS.entries()) {
+      assert.ok(readout.includes(`  ${id}  Ticket ${id} adds its own widget  ${commits[index]!.slice(0, 7)}  gates 1/1`), readout.join("\n"));
+    }
+    assert.ok(readout.some((line) => /^Shift review: accept by claude\/\S+ on [0-9a-f]{7} for the accumulated diff — 0 finding\(s\), 0 blocking$/u.test(line)), readout.join("\n"));
+    assert.ok(readout.includes(`Candidate ref: refs/awsf/candidates/${done.project}/${done.taskId}/1 at ${commits[5]!} — ` +
+      `reach it with \`git log refs/awsf/candidates/${done.project}/${done.taskId}/1\`; no worktree is needed`), readout.join("\n"));
+    assert.ok(readout.some((line) => line.startsWith("Owner gate: AWAITING_OWNER since ")), readout.join("\n"));
     const recipe = await bindShiftRecipe(fixture.canonical, done.shift!, { prompts: { builder: "", reviewer: "" } });
     assert.deepEqual(shiftTicketCandidates(recipe.phases, done.recovery!.prefix),
       TICKETS.map((ticketId, index) => ({ ticketId, candidateSha: commits[index] })));

@@ -7,6 +7,7 @@ import { formatRouteOverride } from "../../workflow/route-flags.ts";
 import { locateRunReport, runReportRevision } from "../../observability/run-report.ts";
 import { readAttemptEvidence } from "./review-record.ts";
 import { readAttempt, type AttemptStatus } from "./attempt.ts";
+import { shiftReadout } from "./shift-readout.ts";
 import { declaredContinuation, type TaskRelation } from "../../persistence/task-relations.ts";
 
 function phaseLine(status: AttemptStatus): string {
@@ -230,6 +231,7 @@ export async function statusCommand(
     const ticket = status.recovery.ticket === undefined ? "" : `; next ticket ${status.recovery.ticket}`;
     lines.push(`Recovery: ${kind}; ${status.recovery.prefix.length} completed phase(s)${ticket}. Native interrupted-turn reconnect is not implied.`);
   }
+  lines.push(...await shiftReadout(status, records));
   if (report !== null) {
     // Every command that moves the candidate, the verdict or the lifecycle
     // re-renders this. The stamp is the belt-and-braces: a writer that forgets

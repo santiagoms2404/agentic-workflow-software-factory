@@ -558,7 +558,7 @@ stateDiagram-v2
     </div>
 
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone M5: The single owner gate <span class="wtag core">gated on <span class="gate">G17-M</span></span></h3>
+      <h3><code class="status">[wip]</code> Milestone M5: The single owner gate <span class="wtag core">gated on <span class="gate">G17-M</span></span></h3>
       <p>Everything above exists so that this is one act instead of N. The shift reaches <code>AWAITING_OWNER</code> once, and what the owner reads there has to carry N tickets' worth of evidence without costing N sessions. <strong>This is where the batch's correctness is actually established</strong> — the amendment's third live-drive finding said the suite is not the acceptance bar, and batching multiplies exposure to exactly that gap.</p>
       <figure>
         <pre class="mermaid">
@@ -603,11 +603,11 @@ flowchart LR
         <figcaption>The proposed <code>AWAITING_OWNER</code> readout for a five-ticket shift. Every row is already recorded — the ticket id comes from the manifest, the SHA from the accepted phase, the gate count from the persisted gate rows. Nothing here is a new measurement; it is the first time they are printed together.</figcaption>
       </figure>
       <ul class="checklist">
-        <li><code class="status">[]</code> The readout names, per ticket: id, title, its own candidate SHA, and its gate result — sourced from the manifest and the accepted-phase records, never recomputed</li>
-        <li><code class="status">[]</code> The review's findings are listed once, for the accumulated diff, with the count of blocking findings stated separately from the total</li>
-        <li><code class="status">[]</code> The ref is printed, so the owner can reach the candidate with ordinary git and without a worktree</li>
-        <li><code class="status">[]</code> <strong>INV-1 is asserted, not assumed:</strong> a meta-test confirms no module this workstream adds can produce <code>L20</code> or supply a reason that a timer could turn into <code>L21</code>, and that <code>awsf land</code> still refuses a non-interactive stdin</li>
-        <li><code class="status">[]</code> The readout is a <code>status</code> projection. <strong>It starts nothing</strong>, and a shift with a failed ticket renders the same shape with that ticket's row red and the tail marked not-run</li>
+        <li><code class="status">[x]</code> The readout names, per ticket: id, title, its own candidate SHA, and its gate result — sourced from the manifest and the accepted-phase records, never recomputed. <em>The gate count is the accepted gate phase's <code>awsf.test-output/v1</code> commands, not the persisted gate rows, which are per gate id rather than per configured command; the title is the compiled brief's (reworded 2026-09-25, see Amendments)</em></li>
+        <li><code class="status">[x]</code> The review's findings are listed once, for the accumulated diff, with the count of blocking findings stated separately from the total</li>
+        <li><code class="status">[x]</code> The ref is printed, so the owner can reach the candidate with ordinary git and without a worktree</li>
+        <li><code class="status">[x]</code> <strong>INV-1 is asserted, not assumed:</strong> a meta-test confirms no module this workstream adds can produce <code>L20</code> or supply a reason that a timer could turn into <code>L21</code>, and that <code>awsf land</code> still refuses a non-interactive stdin</li>
+        <li><code class="status">[x]</code> The readout is a <code>status</code> projection. <strong>It starts nothing</strong>, and a shift with a failed ticket renders the same shape with that ticket's row red and the tail marked not-run. <em>&ldquo;Red&rdquo; is the word <code>RED</code> leading the gate column: no CLI output in this repository carries colour codes, and <code>awsf status</code> is read through pipes and asserted line by line (reworded 2026-09-25, see Amendments)</em></li>
       </ul>
 
       <h4>15. The candidate is built fresh, and the preview follows <code>delivery</code></h4>
@@ -1767,6 +1767,66 @@ flowchart LR
       no baseline drifted between the two sessions. <code>npm run typecheck</code>: exit 0 across both projects.
       <code>npm run lint</code>: 0 warnings, 0 errors on 605 files. <code>npm test</code>: full suite in one
       invocation, exit 0, <code>git status --porcelain</code> clean afterward.</p>
+    </details>
+
+    <details open>
+      <summary>2026-09-25 — task 14 built: the owner readout, and INV-1 as a fence</summary>
+
+      <p><strong>Markers:</strong> task 14's five rows move to <code class="status">[x]</code>. Rows 1 and 5 are
+      reworded to say where the gate count and the title come from and what &ldquo;red&rdquo; is. Milestone M5's
+      header moves to <code class="status">[wip]</code> for tasks 15 and 16. Gate <span class="gate">G17-M</span>
+      was confirmed before any change: <code>task3.5</code> is an ancestor of <code>main</code> at
+      <code>e85f648</code>.</p>
+
+      <h3>Where each column comes from</h3>
+      <p><code>core/src/cli/commands/shift-readout.ts</code> splits a pure <code>formatShiftReadout</code> from the
+      <code>shiftReadout</code> gatherer that <code>awsf status</code> calls for any attempt carrying a manifest.
+      The ticket list, order and titles come from the recipe <code>bindShiftRecipe</code> rebuilds from the
+      manifest. That rebuild is digest-checked, so a title is the one in the words that ran. If a ticket file moved,
+      the readout prints the refusal and no rows. Each SHA is the accepted build's <code>candidateSha</code> in the
+      recovery prefix. The gate column is the accepted gate phase's <code>awsf.test-output/v1</code> envelope,
+      counted as commands that exited 0 against commands run. The mockup's caption said &ldquo;persisted gate
+      rows&rdquo;, but those rows are per gate id (<code>candidate_hygiene</code>, <code>commands_pass</code>), not
+      per configured command, so they cannot give <code>3/3</code>. A stopped ticket's row reads the blocker:
+      <code>RED: gates red</code> for a <code>gate</code> source, <code>RED: gates not measured</code> for a
+      <code>process</code> one, and the recorded detail on the line below. A ticket with no accepted build reads
+      <code>not run</code>. The review line reads the accepted <code>shift-review</code> envelope and that phase's
+      <code>agent</code> row. It lists each finding once and counts <code>high</code> and <code>critical</code>
+      (<code>BLOCKING_SEVERITIES</code>) apart from the total.</p>
+
+      <h3>What the mockup showed that the readout does not</h3>
+      <p><strong>No relative age.</strong> &ldquo;Sealed 4h12m ago&rdquo; needs a clock read at display time, and
+      <code>AWAITING_OWNER</code> is not a sealed state. The readout prints
+      <code>Owner gate: AWAITING_OWNER since &lt;timestamp&gt;</code>, taken from the transition record.
+      <strong>No colour.</strong> No CLI output in this repository carries escape codes, so the red row is the word
+      <code>RED</code>. <strong>No preview line.</strong> That is task 15's. The ref line follows T12's handoff. It
+      reads the ref from Git and says when the ref is missing, names another commit, or cannot be read. It never
+      prints the name as if the ref existed.</p>
+
+      <h3>The INV-1 fence</h3>
+      <p><code>core/test/unit/meta/shift-owner-gate-fence.test.ts</code> scans an explicit list of every module W17
+      added, plus all of <code>core/src/workflow/shift/</code>. A scanned module fails if it calls
+      <code>transition(</code>, reaches <code>land.ts</code>, names <code>LANDING</code>, <code>LANDED</code>,
+      <code>L20</code> or <code>L21</code> as a literal, reads a clock, or arms a timer. It also asserts four things.
+      The manifest schema has no time-shaped key. L20 is the only edge into <code>LANDING</code>, human and
+      interactive, and refused non-interactively on every tier. L21 refuses every time-shaped reason source as
+      <code>NonDeterministicEvidence</code>. And <code>awsf land</code> refuses a non-interactive terminal before it
+      prompts, while <code>processOwnerTerminal</code> reports non-interactive off a TTY. A pattern scan was chosen
+      over an import-graph walk because what INV-1 forbids is an act, not a dependency.
+      <code>candidate-ref.ts</code> legitimately imports <code>task-machine.ts</code> for
+      <code>SEALED_STATES</code>.</p>
+
+      <h3>Evidence</h3>
+      <p><code>npx tsx --test core/test/unit/shift-readout.test.ts</code>: 5/5, with goldens for a clean five-ticket
+      shift and for one blocked at ticket 3. The fence is 7/7. With a <code>setTimeout</code> added to
+      <code>bind.ts</code>, an <code>"L20"</code> literal added to <code>shift-readout.ts</code> and a
+      <code>deadline</code> key added to the manifest, it went 5/7, naming exactly those three. It was 7/7 again after
+      the revert. <code>npx tsx --test core/test/journeys/shift-blocked.test.ts</code>: 2/2. It now also asserts
+      the readout on the real <code>awsf status</code> path: the red T03 row and T04 <code>not run</code> at the
+      block, and at the owner gate six <code>gates 1/1</code> rows, the review line and the ref at the tip.
+      <code>npm run test:unit</code>: 2191/2191 at base <code>e85f648</code> before any change, and
+      2203/2203 after (the twelve new cases). <code>npm run typecheck</code>: exit 0 across both projects. <code>npm run lint</code>:
+      0 warnings, 0 errors on 608 files.</p>
     </details>
 
   </section>
