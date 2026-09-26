@@ -1,4 +1,5 @@
 import { runSystemCommand } from "../../execution/transport-broker.ts";
+import { assertNoExecutionController } from "../../execution/operation-lease.ts";
 import { createHostController } from "../../execution/process-controller.ts";
 import type { TerminationReport } from "../../execution/launcher-barrier.ts";
 import { ceilingFor } from "../../state/tiers.ts";
@@ -25,10 +26,25 @@ function noTree(): TerminationReport {
   return { termSent: false, killSent: false, survivors: [], terminated: true, skipped: null };
 }
 
-async function terminateRecorded(status: AttemptStatus): Promise<TerminationReport> {
+/**
+ * The checkpoints a runner writes when it stops at a clean boundary and exits,
+ * leaving the attempt at RUNNING so a resume can continue from its prefix. Each
+ * is written only after the runner has settled every call and recorded no
+ * process, so the tree it would have to terminate is empty by record. A
+ * completed-phase or saved-reply checkpoint is written by a runner that is
+ * still going, and proves nothing about its tree.
+ */
+const PARKED_CHECKPOINTS: ReadonlySet<string> = new Set(["ticket-block", "ceiling-pause", "quota-pause"]);
+
+async function terminateRecorded(status: AttemptStatus, attemptDir: string): Promise<TerminationReport> {
   if (status.process === null) {
     if (status.lifecycleState === "RUNNING") {
-      throw new Error("RUNNING attempt has no recorded process identity; refusing to claim an empty survivor list");
+      const parked = status.recovery != null && PARKED_CHECKPOINTS.has(status.recovery.kind) && status.budget.callsReserved === 0;
+      if (!parked) throw new Error("RUNNING attempt has no recorded process identity; refusing to claim an empty survivor list");
+      // A resume re-measuring a blocked ticket runs host commands under the
+      // execution lease with no provider process recorded. The record alone
+      // cannot tell that apart from a parked stop; the lease can.
+      await assertNoExecutionController(attemptDir);
     }
     return noTree();
   }
@@ -70,7 +86,7 @@ export async function cancelCommand(options: CancelCommandOptions): Promise<{ st
   const confirmed = await options.terminal.confirm(`Cancel ${current.taskId} attempt ${current.attempt}?`);
   if (!confirmed) return { status: current, report: noTree() };
 
-  const report = await (options.terminate ?? terminateRecorded)(current);
+  const report = await (options.terminate ?? ((status) => terminateRecorded(status, options.attemptDir)))(current);
   if (current.lifecycleState === "RUNNING" && !report.terminated) {
     throw new Error(`cancellation incomplete; survivors [${report.survivors.join(", ")}]`);
   }

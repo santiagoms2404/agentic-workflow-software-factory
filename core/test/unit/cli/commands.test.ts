@@ -528,3 +528,28 @@ test("a registered boolean flag reads its value spelling instead of eating the t
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("cancel still refuses a RUNNING attempt with no process unless it is parked at a settled checkpoint", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-cli-cancel-running-"));
+  try {
+    const repo = repository(root);
+    const created = await newCommand({
+      stateRoot: join(root, "state"), project: "agentic-workflow-software-factory", taskId: "running-no-process",
+      repository: repo, request: "a runner that recorded no process", workflow: "build-review", tier: 2,
+    });
+    // RUNNING with no process and no parked checkpoint: nothing proves the tree
+    // is empty, so the survivor list cannot be claimed. A shift's ticket block
+    // is the admitted shape, exercised end to end in shift-adopt.test.ts.
+    const running = await persistAttempt(created.attemptDir, created.status.revision, {
+      kind: "attempt.updated",
+      next: nextRevision(created.status, { lifecycleState: "RUNNING", process: null, recovery: null }),
+    });
+    await assert.rejects(
+      cancelCommand({ attemptDir: created.attemptDir, terminal: yesTerminal }),
+      /RUNNING attempt has no recorded process identity; refusing to claim an empty survivor list/u,
+    );
+    assert.equal((await readAttempt(created.attemptDir)).revision, running.revision, "nothing was written");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

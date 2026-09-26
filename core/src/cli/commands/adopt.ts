@@ -18,7 +18,8 @@ import { writeSystemPromptFile } from "../../adapters/system-prompt-file.ts";
 import type { AwsfConfig } from "../../config/schema.ts";
 import { toConfigSnapshotJson } from "../../config/effective-config.ts";
 import type { EnvelopeBase } from "../../contracts/envelope-base.ts";
-import type { CandidateAdoptionEvidence } from "../../contracts/candidate-adoption.ts";
+import type { CandidateAdoptionEvidence, ShiftAdoptionSource } from "../../contracts/candidate-adoption.ts";
+import type { AcceptedPhase } from "../../contracts/phase-recovery.ts";
 import { parseEnvelope } from "../../contracts/parse-envelope.ts";
 import { TEST_OUTPUT_TAIL_MAX_CHARS, type TestOutput } from "../../contracts/test-output.ts";
 import { wrapEnvelope } from "../../contracts/stored-envelope.ts";
@@ -40,6 +41,8 @@ import { attemptDir as attemptDirectory } from "../../persistence/platform-paths
 import { transition, type EdgeId, type TaskState } from "../../state/task-machine.ts";
 import { ceilingFor, callCeilingsOf } from "../../state/tiers.ts";
 import type { WorkflowRecipe } from "../../workflow/compiler.ts";
+import { isCompiledWorkflowId } from "../../workflow/compiled-ids.ts";
+import { bindShiftRecipe, shiftPhaseRole, shiftTicketOf } from "../../workflow/shift/bind.ts";
 import { buildReviewWorkflow } from "../../workflow/recipes/build-review.ts";
 import { simpleSdlcWorkflow } from "../../workflow/recipes/simple-sdlc.ts";
 import type { OwnerTerminal } from "../tty.ts";
@@ -180,7 +183,12 @@ export interface AdoptCommandResult {
 interface SealedCandidate {
   readonly source: AttemptStatus;
   readonly evidence: readonly AttemptEvidence[];
+  /** The recipe the target runs: the source's own, or build-review for a shift. */
   readonly recipe: WorkflowRecipe;
+  /** The recipe that produced the candidate, whose writers the diff is revalidated against. */
+  readonly sourceRecipe: WorkflowRecipe;
+  /** Which of a source shift's tickets the candidate completes; null for a shipped source. */
+  readonly shift: ShiftAdoptionSource | null;
   readonly baseSha: string;
   readonly candidateSha: string;
   readonly workerProvider: string;
@@ -226,6 +234,66 @@ function safeFailure(error: unknown): Error {
 }
 
 /**
+ * The completed part of a sealed shift: the tickets, in run order, whose build
+ * was accepted and whose gate phase then accepted that build's commit, and the
+ * commit the last of them made.
+ *
+ * A shift's L7 comes only after its last ticket, so a shift stopped at ticket 5
+ * never records one, and the generic rule would call its first four tickets
+ * partial work. They are not: each accepted gate phase is the host's durable
+ * statement that the ticket's own commit passed the configured gates, which is
+ * what L7 states for a single builder. The first ticket without that statement
+ * ends the completed run, and its commit, if it made one, is not adopted.
+ */
+async function completedShift(source: AttemptStatus, evidence: readonly AttemptEvidence[]): Promise<{
+  readonly sourceRecipe: WorkflowRecipe;
+  readonly shift: ShiftAdoptionSource;
+  readonly candidateSha: string;
+}> {
+  const manifest = source.shift;
+  if (manifest == null) throw new CandidateAdoptionRejected(`source workflow ${JSON.stringify(source.workflow)} records no shift selection`);
+  let sourceRecipe: WorkflowRecipe;
+  try {
+    // Membership comes from the recipe the selection rebuilds, never from the
+    // shape of a phase id. The prompts shape no membership, so none are read.
+    sourceRecipe = await bindShiftRecipe(source.repository, manifest, { prompts: { builder: "", reviewer: "" } });
+  } catch (error) {
+    throw new CandidateAdoptionRejected(`the source shift cannot be rebuilt from its recorded selection: ${safeFailure(error).message}`);
+  }
+  const accepted = new Map<string, AcceptedPhase>();
+  for (const record of evidence) if (record.type === "phase-accepted") accepted.set(record.accepted.phaseKey, record.accepted);
+  const phases = sourceRecipe.phases;
+  const completedTickets: string[] = [];
+  let candidateSha: string | null = null;
+  for (const ticket of manifest.tickets) {
+    const own = phases.filter((phase) => shiftTicketOf(phases, phase.id) === ticket.id);
+    const build = own.find((phase) => shiftPhaseRole(phases, phase.id) === "builder");
+    const tests = own.find((phase) => shiftPhaseRole(phases, phase.id) === "tests");
+    const built = build === undefined ? undefined : accepted.get(build.id);
+    const measured = tests === undefined ? undefined : accepted.get(tests.id);
+    if (built?.candidateSha == null || measured === undefined) break;
+    if (measured.candidateSha !== built.candidateSha) {
+      throw new CandidateAdoptionRejected(`ticket ${ticket.id}'s gates accepted ${String(measured.candidateSha)}, not its build's commit ${built.candidateSha}`);
+    }
+    completedTickets.push(ticket.id);
+    candidateSha = built.candidateSha;
+  }
+  if (candidateSha === null) {
+    throw new CandidateAdoptionRejected("source shift completed no ticket; partial work is never adopted");
+  }
+  return {
+    sourceRecipe,
+    candidateSha,
+    shift: {
+      plan: manifest.plan,
+      milestones: [...manifest.milestones],
+      completedTickets,
+      remainingTickets: manifest.tickets.map((ticket) => ticket.id).slice(completedTickets.length),
+    },
+  };
+}
+
+/**
  * Read-only eligibility check. In particular, this never opens the cancelled
  * attempt's worktree: the status/journal prove completion and Git objects in
  * the canonical repository prove identity.
@@ -247,24 +315,30 @@ export async function inspectSealedCandidate(
   if (diagnostic.controller === "terminal-live-survivor" || diagnostic.controller === "live-process") {
     throw new CandidateAdoptionRejected(`source attempt still has live survivor pid ${String(diagnostic.pid)}`);
   }
-  if (diagnostic.candidateSha === null || source.baseSha === null) {
+  // A shift is admitted as a source, never as a target: its continuation is
+  // ordinary build-review work over the unrun tail. A shift target would have
+  // to reconcile the inherited diff with a compiled manifest, a second
+  // reconciliation surface for a case build-review already serves.
+  const compiled = isCompiledWorkflowId(source.workflow) ? await completedShift(source, evidence) : null;
+  const completedSha = compiled === null ? diagnostic.candidateSha : compiled.candidateSha;
+  if (completedSha === null || source.baseSha === null) {
     throw new CandidateAdoptionRejected("source records no completed candidate; partial work is never adopted");
   }
-  const recipe = SUPPORTED.get(source.workflow);
-  if (recipe === undefined || recipe.tier !== 2) {
+  const recipe = compiled === null ? SUPPORTED.get(source.workflow) : buildReviewWorkflow;
+  if (recipe === undefined || recipe.tier !== 2 || source.tier !== 2) {
     throw new CandidateAdoptionRejected(`source workflow ${JSON.stringify(source.workflow)} is not a tier-2 review workflow`);
   }
   if (config.project.slug !== source.project) throw new CandidateAdoptionRejected("source project and current config do not match");
   if (!config.workflows.enabled.includes(recipe.id)) {
-    throw new CandidateAdoptionRejected(`source workflow ${JSON.stringify(recipe.id)} is not enabled by the current config`);
+    throw new CandidateAdoptionRejected(`${compiled === null ? "source" : "continuation"} workflow ${JSON.stringify(recipe.id)} is not enabled by the current config`);
   }
 
   const git = systemGitRunner(source.repository);
   assertClean(source.repository, "before", git);
   const canonicalHead = runGit(git, ["rev-parse", "HEAD"]).trim();
   const baseSha = runGit(git, ["rev-parse", `${source.baseSha}^{commit}`]).trim();
-  const candidateSha = runGit(git, ["rev-parse", `${diagnostic.candidateSha}^{commit}`]).trim();
-  if (baseSha !== source.baseSha || candidateSha !== diagnostic.candidateSha) {
+  const candidateSha = runGit(git, ["rev-parse", `${completedSha}^{commit}`]).trim();
+  if (baseSha !== source.baseSha || candidateSha !== completedSha) {
     throw new CandidateAdoptionRejected("recorded base or candidate does not resolve to its exact 40-hex commit");
   }
   if (canonicalHead !== baseSha) {
@@ -294,6 +368,8 @@ export async function inspectSealedCandidate(
     source,
     evidence,
     recipe,
+    sourceRecipe: compiled?.sourceRecipe ?? recipe,
+    shift: compiled?.shift ?? null,
     baseSha,
     candidateSha,
     workerProvider: routes.worker.provider,
@@ -430,6 +506,7 @@ async function createTarget(
     baseSha: candidate.baseSha,
     candidateSha: candidate.candidateSha,
     workerProvider: candidate.workerProvider,
+    ...(candidate.shift === null ? {} : { shift: candidate.shift }),
     targetTaskId: options.targetTaskId,
     verifiedAt: now,
     sourceEvidenceCopied: false,
@@ -489,6 +566,11 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
   options.terminal.write(`Sealed source: ${candidate.source.project}/${candidate.source.taskId} attempt ${String(candidate.source.attempt)} (${candidate.source.lifecycleState})`);
   options.terminal.write(`Exact candidate: ${candidate.candidateSha} (base ${candidate.baseSha})`);
   options.terminal.write(`Summary: ${candidate.summary}`);
+  if (candidate.shift !== null) {
+    const { plan, milestones, completedTickets, remainingTickets } = candidate.shift;
+    options.terminal.write(`Shift ${plan} ${milestones.join(", ")}: completed ${completedTickets.join(", ")}; ` +
+      `not adopted ${remainingTickets.length === 0 ? "none" : remainingTickets.join(", ")} — name the tail in the fresh intent`);
+  }
   options.terminal.write(`Distinct target: ${candidate.source.project}/${options.targetTaskId}, continuing ${candidate.source.taskId}`);
   options.terminal.write(`Fresh route: ${route.adapterId} / ${route.model.provider}, opposite source builder provider ${candidate.workerProvider}`);
   options.terminal.write("No source request, attempt bytes, calls, gates, reviews, journeys, protected approvals, landing approval, or provider session transfer.");
@@ -648,7 +730,7 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
     // whole diff only to the builder rejects valid simple-sdlc documenter paths.
     const writesReport = writesWithinGlobs(
       changed,
-      candidateWriteGlobs(candidate.recipe, phases.review, options.config),
+      candidateWriteGlobs(candidate.sourceRecipe, reviewPhasesOf(candidate.sourceRecipe).review, options.config),
     );
     await persistGate(phaseId, writesReport);
 

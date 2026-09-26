@@ -106,7 +106,7 @@ pre.mermaid{background:transparent;border:0;padding:0;margin:0;font-family:var(-
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-09-15</dd>
-        <dt>modified</dt>     <dd>2026-09-15, 2026-09-15 (Questionables decided), 2026-09-20 (selection widened), 2026-09-24 (M1 closed), 2026-09-25 (task 5; G17 reordered after it), 2026-09-25 (task 6), 2026-09-25 (M2 closed), 2026-09-25 (task 8), 2026-09-25 (task 9; the shift binding pulled forward), 2026-09-25 (CLI wiring, owner-directed, outside the ticket set), 2026-09-25 (M3 closed: task 10), 2026-09-25 (task 11), 2026-09-25 (task 12), 2026-09-25 (M4 closed: task 13), 2026-09-25 (task 14), 2026-09-25 (task 15), 2026-09-26 (M5 closed: task 16)</dd>
+        <dt>modified</dt>     <dd>2026-09-15, 2026-09-15 (Questionables decided), 2026-09-20 (selection widened), 2026-09-24 (M1 closed), 2026-09-25 (task 5; G17 reordered after it), 2026-09-25 (task 6), 2026-09-25 (M2 closed), 2026-09-25 (task 8), 2026-09-25 (task 9; the shift binding pulled forward), 2026-09-25 (CLI wiring, owner-directed, outside the ticket set), 2026-09-25 (M3 closed: task 10), 2026-09-25 (task 11), 2026-09-25 (task 12), 2026-09-25 (M4 closed: task 13), 2026-09-25 (task 14), 2026-09-25 (task 15), 2026-09-26 (M5 closed: task 16), 2026-09-26 (task 17; cancel seals a parked shift, owner-directed)</dd>
         <dt>commits</dt>      <dd>M1 landed: a3d83ef (T01), 323bd0c (T02), d5b3b2c (T03). M2 landed: 16e6f47 (T04), c9bbcc2 (T05), c5c830b (T06), 060b698 (T07). M3 landed: 852b0a8 (T08), a66ccde (CLI wiring, owner-directed), 2a4e58d (T09), 185c462 (T10). M4 landed: d79a2c5 (T11), 7bc79bd (T12), e85f648 (T13). M5 landed: 0b1e151 (T14), 3ccd3b1 (T15), this commit (T16)</dd>
         <dt>agent name</dt>   <dd>Claude Opus 5, Claude Sonnet 5 (tasks 10-16)</dd>
         <dt>session id</dt>   <dd>not recorded — AGENTS.md invariant 1 keeps live session state out of every committed file in this repository</dd>
@@ -638,7 +638,7 @@ flowchart LR
     </div>
 
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone M6: Chaining, adoption, and closure <span class="wtag core">gated on <span class="gate">G17-M</span></span></h3>
+      <h3><code class="status">[wip]</code> Milestone M6: Chaining, adoption, and closure <span class="wtag core">gated on <span class="gate">G17-M</span></span></h3>
       <p>What makes the owner's record work across a whole deep plan, and what to do with a shift that held good work but could not finish. Both are mostly <em>recognition</em> rather than construction: the chaining mechanism already exists and is already rendered, and the recovery instrument already exists and only refuses a shift because of one hard-coded map.</p>
       <figure>
         <pre class="mermaid">
@@ -659,11 +659,11 @@ flowchart LR
       <p><strong>Chaining needs no new mechanism and this task must not build one.</strong> <code>awsf new --continues &lt;taskId&gt;</code> already validates that the continued task exists and records <code>continuesTask</code> on the attempt; <code>groupSessionStacks</code> in <code>dashboard/src/session-stacks.ts</code> already joins sessions over exactly two recorded relationships and compares task ids literally, never parsing a naming convention. The work here is to <em>use</em> it and to prove it holds for a chain of shifts.</p>
       <p><strong>Adoption is the partner for the case that matters most.</strong> A six-ticket shift that blocks at ticket 5 is exactly the sealed-attempt-holding-good-work case <code>awsf adopt</code> and seeded continuation were built for — and <code>adopt.ts:188</code> refuses it today, because <code>SUPPORTED</code> admits only <code>build-review</code> and <code>simple-sdlc</code> as a source.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> A journey chains three shifts with <code>--continues</code> and asserts <code>groupSessionStacks</code> returns <strong>one stack</strong> containing all three, in chronological order</li>
-        <li><code class="status">[]</code> No naming convention is introduced for shift task ids, and a test asserts the stack still forms when the ids share no prefix</li>
-        <li><code class="status">[]</code> <code>adopt.ts</code> admits a sealed shift as an adoption <strong>source</strong>. The <em>target</em> stays a shipped T2 review workflow — <code>validateInheritedSeed</code> already requires that, and a continuation for an unrun tail is ordinary work that does not need to be a shift</li>
-        <li><code class="status">[]</code> The adoption evidence records <strong>which tickets the source shift completed</strong>, so the continuation's owner intent can name the tail rather than restating the whole milestone</li>
-        <li><code class="status">[]</code> <strong>Declined deliberately:</strong> adopting <em>into</em> a shift. A shift's recipe is compiled from a selection, and a seeded shift would have to reconcile an inherited diff with a manifest — a second reconciliation surface bought for a case that adopting into <code>build-review</code> already serves</li>
+        <li><code class="status">[x]</code> A journey chains three shifts with <code>--continues</code> and asserts <code>groupSessionStacks</code> returns <strong>one stack</strong> containing all three, in chronological order</li>
+        <li><code class="status">[x]</code> No naming convention is introduced for shift task ids, and a test asserts the stack still forms when the ids share no prefix</li>
+        <li><code class="status">[x]</code> <code>adopt.ts</code> admits a sealed shift as an adoption <strong>source</strong>. The <em>target</em> is <code>build-review</code>, a shipped T2 review workflow, chosen by <code>adopt.ts</code> itself; on the seed path <code>validateInheritedSeed</code> already refuses a shift target by name. A continuation for an unrun tail is ordinary work that does not need to be a shift. <code>SUPPORTED</code> was not the only refusal: the adopted candidate is the last ticket whose gate phase accepted its commit, because a shift stopped mid-milestone never records L7, and <code>awsf cancel</code> now seals a shift parked at a ticket block (reworded 2026-09-26, see Amendments)</li>
+        <li><code class="status">[x]</code> The adoption evidence records <strong>which tickets the source shift completed</strong>, so the continuation's owner intent can name the tail rather than restating the whole milestone</li>
+        <li><code class="status">[x]</code> <strong>Declined deliberately:</strong> adopting <em>into</em> a shift. A shift's recipe is compiled from a selection, and a seeded shift would have to reconcile an inherited diff with a manifest — a second reconciliation surface bought for a case that adopting into <code>build-review</code> already serves</li>
       </ul>
 
       <h4>18. Testing Strategy, and the workstream's closing duties</h4>
@@ -1961,6 +1961,59 @@ flowchart LR
       2214/2214, <code>npm run test:contract</code> 149/149, <code>npm run test:sim</code> 98/98,
       <code>npm run test:journeys</code> 266/266, <code>npm run typecheck</code> exit 0, <code>npm run lint</code>
       0/0 on 611 files.</p>
+    </details>
+
+    <details open>
+      <summary>2026-09-26 — task 17 built: shifts chain into one stack, and a sealed shift is an adoption source</summary>
+
+      <p><strong>Markers:</strong> task 17's five rows move to <code class="status">[x]</code>. Row 3 is reworded.
+      Milestone M6 moves to <code class="status">[wip]</code> for task 18.</p>
+
+      <h3>Chaining: nothing built, one journey added</h3>
+      <p><code>core/test/journeys/shift-chain.test.ts</code> mints three shifts through <code>newCommand</code>,
+      each with <code>continuesTask</code> naming the one before. That is the value <code>awsf new --continues</code>
+      passes at <code>main.ts:476</code>. The test reads the sessions back through <code>GET /api/v1/sessions</code>
+      and asserts that <code>groupSessionStacks</code> returns one stack of the three, and that
+      <code>orderSessionStack</code> orders them by recorded start. It runs once with ids that share a prefix,
+      plus an unchained look-alike id that must stay apart, and once with ids that share no first character.</p>
+
+      <h3>Adoption: three refusals, not one</h3>
+      <p>The plan named <code>SUPPORTED</code> as the one refusal. The code held two more, and the adoption
+      journey hit both.</p>
+      <ul>
+        <li><strong>A blocked shift could not be sealed.</strong> A ticket block parks the shift at
+        <code>RUNNING</code> with <code>process: null</code>. <code>awsf cancel</code> threw
+        <code>RUNNING attempt has no recorded process identity</code> for that shape, so nothing could reach
+        <code>BLOCKED</code> or <code>CANCELLED</code>. The same applied to <code>ceiling-pause</code> and
+        <code>quota-pause</code>. By owner direction, <code>cancel.ts</code> now accepts those three checkpoints
+        when no call is reserved and <code>assertNoExecutionController</code> finds no runner holding the lease.
+        The lease check is what separates a parked stop from a resume that is re-measuring a ticket's gates.</li>
+        <li><strong>A shift stopped mid-milestone has no L7.</strong> <code>diagnoseRecovery</code> calls a
+        candidate complete only after L7, which a shift records only after its last ticket. For a shift source,
+        <code>adopt.ts</code> now walks the manifest in run order and takes each ticket whose build was accepted
+        and whose gate phase accepted that same commit. The candidate is the last such ticket's commit, so a red
+        ticket's commit is never adopted. A shift that completed no ticket is refused as partial work.</li>
+      </ul>
+      <p>The target is <code>build-review</code>, chosen in <code>adopt.ts</code>. The row said
+      <code>validateInheritedSeed</code> requires this. That function gates the seed path only, where it already
+      refuses a shift target by name. The adopted diff is revalidated against the writers of the shift's own
+      compiled recipe. The <code>candidate-adoption</code> evidence gains an optional <code>shift</code> object,
+      <code>{ plan, milestones, completedTickets, remainingTickets }</code>, and the confirmation prompt prints
+      both lists.</p>
+
+      <h3>The alternatives rejected</h3>
+      <p>Adopting the tip would hand the continuation the red ticket's commit as if it had passed. Injecting a
+      terminator in the test alone would have proven an adoption the real CLI could not reach. Adopting into a
+      shift stays declined, as row 5 says.</p>
+
+      <h3>Evidence</h3>
+      <p><code>npx tsx --test core/test/journeys/shift-chain.test.ts</code>: 2/2.
+      <code>npx tsx --test core/test/journeys/shift-adopt.test.ts</code>: 2/2. With <code>cancel.ts</code>
+      reverted to its base, both cases fail on the cancel refusal. The <code>candidate-adoption</code>,
+      <code>seeded-continuation</code>, <code>shift-blocked</code> and <code>shift-ceiling</code> journeys: 19/19.
+      <code>npm run test:unit</code>: 2214/2214 at base <code>d79a2c5</code> before any change, and 2216/2216
+      after. <code>npm run typecheck</code>: exit 0 across both projects. <code>npm run lint</code>: 0 warnings,
+      0 errors on 613 files.</p>
     </details>
 
   </section>
