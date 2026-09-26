@@ -231,7 +231,7 @@ export async function statusCommand(
     const ticket = status.recovery.ticket === undefined ? "" : `; next ticket ${status.recovery.ticket}`;
     lines.push(`Recovery: ${kind}; ${status.recovery.prefix.length} completed phase(s)${ticket}. Native interrupted-turn reconnect is not implied.`);
   }
-  lines.push(...await shiftReadout(status, records));
+  lines.push(...await shiftReadout(status, records, attemptDir));
   if (report !== null) {
     // Every command that moves the candidate, the verdict or the lifecycle
     // re-renders this. The stamp is the belt-and-braces: a writer that forgets

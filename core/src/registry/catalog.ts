@@ -122,6 +122,13 @@ function assertRepositoryPath(path: string, value: string): void {
 
 function assertRepositoryPaths(catalog: ProjectCatalog): void {
   assertRepositoryPath("plans.root", catalog.plans.root);
+  for (const [repositoryId, repository] of Object.entries(catalog.repositories)) {
+    const preview = repository.preview;
+    if (preview?.bundle !== undefined) assertRepositoryPath(`repositories.${repositoryId}.preview.bundle`, preview.bundle);
+    preview?.sources?.forEach((source, index) => {
+      assertRepositoryPath(`repositories.${repositoryId}.preview.sources[${index}]`, source);
+    });
+  }
   for (const contract of catalog.contracts ?? []) {
     assertRepositoryPath(`contracts.${contract.id}.producer.path`, contract.producer.path);
     contract.consumers.forEach((consumer, index) => {

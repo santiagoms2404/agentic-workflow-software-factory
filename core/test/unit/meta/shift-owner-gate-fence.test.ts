@@ -28,8 +28,10 @@ import { repoRoot, relRepo, walkFiles } from "./_walk.ts";
 // directory. A later W17 task that adds a module adds it to this list.
 
 const WORKSTREAM_MODULES = [
+  "core/src/cli/commands/preview.ts",
   "core/src/cli/commands/shift.ts",
   "core/src/cli/commands/shift-readout.ts",
+  "core/src/contracts/preview-record.ts",
   "core/src/contracts/shift-selection-record.ts",
   "core/src/git/candidate-ref.ts",
   "core/src/persistence/plan-ticket-body.ts",

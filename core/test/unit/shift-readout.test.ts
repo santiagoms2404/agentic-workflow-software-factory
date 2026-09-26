@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { AttemptStatus } from "../../src/cli/commands/attempt.ts";
 import { formatShiftReadout, type ShiftReadoutInput, type ShiftReadoutRef } from "../../src/cli/commands/shift-readout.ts";
+import type { PreviewRecord } from "../../src/contracts/preview-record.ts";
 import type { AcceptedPhase, PhaseRecovery } from "../../src/contracts/phase-recovery.ts";
 import type { ReviewFinding, ReviewOutput } from "../../src/contracts/review-output.ts";
 import { sealShiftManifest } from "../../src/contracts/shift-selection-record.ts";
@@ -143,6 +144,7 @@ test("golden: a clean five-ticket shift at the owner gate", () => {
     "  F1 medium core/src/quota/snapshot.ts:42 — The boundary snapshot drops the reset clock's zone",
     "  F2 high BLOCKING core/src/quota/readout.ts — Effective availability double-counts a paused scope",
     `Candidate ref: ${REF} at ${SHAS[4]!} — reach it with \`git log ${REF}\`; no worktree is needed`,
+    "Preview: not built — `awsf preview w07-m4-shift` builds the candidate fresh in the form its delivery posture declares",
     "Owner gate: AWAITING_OWNER since 2026-09-25T04:51:07.718Z — it waits for the owner; `awsf land w07-m4-shift` needs an interactive terminal",
   ]);
 });
@@ -200,4 +202,30 @@ test("a recipe that cannot be rebuilt is said, not guessed around; a non-shift a
   });
   assert.equal(lines[1], "  the recipe cannot be rebuilt from the recorded selection: ticket T12 changed since selection");
   assert.deepEqual(formatShiftReadout({ status: attempt({ shift: null }), phases, evidence: [], ref: { name: REF, commit: null } }), []);
+});
+
+test("the preview line reads what the preview recorded: where it serves, what it built and when, or why it built nothing", () => {
+  const { prefix, evidence } = run("shift-review");
+  const base: Omit<ShiftReadoutInput, "preview"> = {
+    status: attempt({ recovery: recovery("completed-phase", prefix) }), phases, evidence: [...evidence, AWAITING], ref: { name: REF, commit: SHAS[4]! },
+  };
+  const line = (preview: NonNullable<ShiftReadoutInput["preview"]>) => formatShiftReadout({ ...base, preview }).find((entry) => entry.startsWith("Preview:"));
+  const served: PreviewRecord = {
+    schema: "awsf.preview/v1", posture: "service", form: "serve", visual: true, reason: "1 changed path(s) are under this service's preview sources",
+    baseSha: BASE, candidateSha: SHAS[4]!, changedPaths: 3, visualPaths: ["dashboard/src/App.vue"], recordedAt: "2026-09-25T04:51:30.000Z",
+    build: { argv: ["npm", "run", "dash:build"], bundle: "dashboard/dist", files: 7 }, server: { url: "http://127.0.0.1:5173/", pid: 4242 },
+  };
+  assert.equal(line({ record: served, serving: true }),
+    "Preview: delivery service — built fresh 2026-09-25T04:51:30.000Z from e2c8d43 by `npm run dash:build` · serving at http://127.0.0.1:5173/ (pid 4242)");
+  assert.equal(line({ record: served, serving: false }),
+    "Preview: delivery service — built fresh 2026-09-25T04:51:30.000Z from e2c8d43 by `npm run dash:build` · not serving now — `awsf preview w07-m4-shift` builds and serves it again");
+  assert.equal(line({ record: { ...served, candidateSha: SHAS[3]! }, serving: true }),
+    "Preview: recorded for 77be9f1, not this candidate — run `awsf preview w07-m4-shift` again");
+  const mobile: PreviewRecord = { ...served, posture: "mobile", form: "named-not-built", reason: "an emulator is not a browser", build: null, server: null };
+  assert.equal(line({ record: mobile, serving: false }), "Preview: delivery mobile — named, not built (2026-09-25T04:51:30.000Z): an emulator is not a browser");
+  const docs: PreviewRecord = { ...mobile, posture: "docs", form: "diff-readout", visual: false, reason: "docs are read, not rendered" };
+  assert.equal(line({ record: docs, serving: false }), "Preview: delivery docs — diff readout only (2026-09-25T04:51:30.000Z): docs are read, not rendered");
+  // Only the owner gate has a candidate to preview.
+  assert.equal(formatShiftReadout({ ...base, status: attempt({ lifecycleState: "RUNNING" }), preview: { record: served, serving: true } })
+    .find((entry) => entry.startsWith("Preview:")), undefined);
 });

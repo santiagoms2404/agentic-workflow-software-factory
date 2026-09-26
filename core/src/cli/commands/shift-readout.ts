@@ -7,16 +7,19 @@
 // result off its accepted gate phase or the blocker that stopped it, the review
 // off its accepted envelope, and the ref off Git. Nothing is measured again,
 // nothing is started, and no clock is read: the owner gate is dated by the
-// transition that reached it, never by how long ago that was.
+// transition that reached it, never by how long ago that was. The preview line
+// reads what `awsf preview` recorded; the readout never builds or serves.
 import type { AcceptedPhase } from "../../contracts/phase-recovery.ts";
 import { BLOCKING_SEVERITIES, type ReviewOutput } from "../../contracts/review-output.ts";
 import type { TestOutput } from "../../contracts/test-output.ts";
 import { candidateRefName, readCandidateRef } from "../../git/candidate-ref.ts";
+import type { PreviewRecord } from "../../contracts/preview-record.ts";
 import type { AttemptEvidence } from "../../observability/attempt-evidence.ts";
 import type { PhaseDefinition } from "../../workflow/phase.ts";
 import { bindShiftRecipe, shiftPhaseRole, shiftTicketOf } from "../../workflow/shift/bind.ts";
 import type { ShiftBriefPhase } from "../../workflow/shift/compile.ts";
 import type { AttemptStatus } from "./attempt.ts";
+import { processAlive, readPreviewRecord } from "./preview.ts";
 
 /** What Git said about the attempt's candidate ref when the readout was gathered. */
 export type ShiftReadoutRef =
@@ -29,6 +32,8 @@ export interface ShiftReadoutInput {
   readonly phases: readonly PhaseDefinition[] | { readonly refused: string };
   readonly evidence: readonly AttemptEvidence[];
   readonly ref: ShiftReadoutRef;
+  /** What the last `awsf preview` recorded, and whether its server process is still alive. */
+  readonly preview?: { readonly record: PreviewRecord; readonly serving: boolean } | null;
 }
 
 const short = (sha: string): string => sha.slice(0, 7);
@@ -121,6 +126,27 @@ function refLine(input: ShiftReadoutInput): string {
   return `Candidate ref: ${ref.name} at ${ref.commit} — reach it with \`git log ${ref.name}\`; no worktree is needed`;
 }
 
+/** Printed at the owner gate only, where a preview can be built. The candidate a record names is checked, never assumed. */
+function previewLine(input: ShiftReadoutInput): string[] {
+  const { status, preview } = input;
+  if (status.lifecycleState !== "AWAITING_OWNER") return [];
+  const task = status.taskId;
+  if (preview == null) {
+    return [`Preview: not built — \`awsf preview ${task}\` builds the candidate fresh in the form its delivery posture declares`];
+  }
+  const { record, serving } = preview;
+  if (record.candidateSha !== status.candidateSha) {
+    return [`Preview: recorded for ${short(record.candidateSha)}, not this candidate — run \`awsf preview ${task}\` again`];
+  }
+  const head = `Preview: delivery ${record.posture}`;
+  if (record.form === "named-not-built") return [`${head} — named, not built (${record.recordedAt}): ${record.reason}`];
+  if (record.form === "diff-readout" || record.build === null) return [`${head} — diff readout only (${record.recordedAt}): ${record.reason}`];
+  const built = `${head} — built fresh ${record.recordedAt} from ${short(record.candidateSha)} by \`${record.build.argv.join(" ")}\``;
+  return [record.server !== null && serving
+    ? `${built} · serving at ${record.server.url} (pid ${String(record.server.pid)})`
+    : `${built} · not serving now — \`awsf preview ${task}\` builds and serves it again`];
+}
+
 /** Dated by the transition into AWAITING_OWNER. Nothing runs from that date: L20 is a human act at a TTY. */
 function ownerGateLine(input: ShiftReadoutInput): string[] {
   if (input.status.lifecycleState !== "AWAITING_OWNER") return [];
@@ -144,12 +170,16 @@ export function formatShiftReadout(input: ShiftReadoutInput): readonly string[] 
   } else {
     lines.push(...ticketRows(input, input.phases), ...reviewLines(input, input.phases));
   }
-  lines.push(refLine(input), ...ownerGateLine(input));
+  lines.push(refLine(input), ...previewLine(input), ...ownerGateLine(input));
   return Object.freeze(lines);
 }
 
-/** Gathers the readout's records for `awsf status`. Reads the ticket files and Git; writes and starts nothing. */
-export async function shiftReadout(status: AttemptStatus, evidence: readonly AttemptEvidence[]): Promise<readonly string[]> {
+/** Gathers the readout's records for `awsf status`. Reads the ticket files, Git and the preview record; writes and starts nothing. */
+export async function shiftReadout(
+  status: AttemptStatus,
+  evidence: readonly AttemptEvidence[],
+  attemptDir: string,
+): Promise<readonly string[]> {
   if (status.shift == null) return Object.freeze([]);
   let phases: ShiftReadoutInput["phases"];
   try {
@@ -165,5 +195,7 @@ export async function shiftReadout(status: AttemptStatus, evidence: readonly Att
   } catch (error) {
     ref = { name, unreadable: error instanceof Error ? error.message : String(error) };
   }
-  return formatShiftReadout({ status, phases, evidence, ref });
+  const record = await readPreviewRecord(attemptDir);
+  const preview = record === null ? null : { record, serving: record.server !== null && processAlive(record.server.pid) };
+  return formatShiftReadout({ status, phases, evidence, ref, preview });
 }

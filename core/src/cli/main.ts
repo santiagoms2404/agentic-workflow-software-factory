@@ -23,6 +23,7 @@ import { doctorCommand } from "./commands/doctor.ts";
 import { dashCommand, gcCommand, rebuildCommand } from "./commands/operator.ts";
 import { createDashboardProjection } from "./commands/dashboard-projection.ts";
 import { journeyCommand } from "./commands/journey.ts";
+import { previewCommand } from "./commands/preview.ts";
 import { initCommand } from "./commands/init.ts";
 import { listProjects, registerProject, showProject, verifyRegisteredProject } from "./commands/project.ts";
 import { landCommand } from "./commands/land.ts";
@@ -54,7 +55,7 @@ import { assertShiftAdmission, assessShiftAdmission, parseMilestoneSelection, sh
 
 /** The complete owner-facing command table; documentation reconciles against it. */
 export const CLI_COMMANDS = Object.freeze([
-  "init", "project", "new", "seed", "start", "run", "resume", "status", "watch", "rework", "review", "raise", "grant", "degrade-review", "journey", "land", "publish", "cancel", "retry",
+  "init", "project", "new", "seed", "start", "run", "resume", "status", "watch", "rework", "review", "raise", "grant", "degrade-review", "journey", "preview", "land", "publish", "cancel", "retry",
   "relate", "doctor", "gc", "dash", "routes", "db rebuild", "ticket", "backlog", "quota", "stage", "workflows", "shift plan", "group",
 ]);
 
@@ -695,6 +696,18 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
           return 1;
         }
         out(`journey recorded: ${result.status.nextAction}`);
+        return 0;
+      }
+      case "preview": {
+        // The owner's look at the candidate, in the form the repository's
+        // delivery posture declares. It builds fresh or refuses, and the one
+        // clock it records is read here, outside the workstream's modules.
+        const port = parsed.flags.port === undefined ? undefined : Number(parsed.flags.port);
+        if (port !== undefined && (!Number.isInteger(port) || port < 1 || port > 65_535)) throw new Error("--port must be an integer from 1 through 65535");
+        await previewCommand({
+          attemptDir: located.attemptDir, stateRoot, write: out, now: () => new Date().toISOString(),
+          ...(port === undefined ? {} : { port }),
+        });
         return 0;
       }
       case "land": {

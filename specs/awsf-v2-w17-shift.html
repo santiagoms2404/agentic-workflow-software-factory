@@ -614,11 +614,11 @@ flowchart LR
       <p class="sub">Serves <code class="serves">AC-6</code> · <code class="serves">INV-2</code> · <code class="serves">INV-3</code></p>
       <p>Two of the amendment's three live-drive findings land here. <strong>Gates never render a page</strong> — every check runs against source or a diff, which is exactly why a stale asset bundle once made a correct landing read as a total regression. With N tickets in one candidate, that failure mode multiplies. And <strong><code>PROJECT_DELIVERY_POSTURES</code> already declares the answer</strong> to which projects need a visual review and in what form; it has had no reader since it was added.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> The preview step <strong>builds the candidate fresh</strong> before showing it, and records what it built and when. A preview served from an existing bundle is refused rather than shown with a caveat</li>
-        <li><code class="status">[]</code> The form of the preview is derived from the project's declared <code>delivery</code> posture: <code>service</code> serves locally, <code>docs</code> and <code>none</code> render the diff readout alone, and <code>mobile</code> is <strong>named and not built</strong> — an emulator is not a browser and pretending otherwise is how this repository's shape gets baked into every project</li>
-        <li><code class="status">[]</code> Visual-review classification is <strong>derived from the candidate's own diff</strong> against the posture, not from a new ticket field. A derived answer cannot go stale the way a hand-set flag does, and it needs no schema change</li>
-        <li><code class="status">[]</code> <strong>INV-2 and INV-3 asserted:</strong> no route added by this workstream is anything but read-only, no file it adds imports <code>node:child_process</code>, and the <code>no-skill-in-stages</code> and publish fences stay green with no new exemption</li>
-        <li><code class="status">[]</code> Exactly one preview server is alive at a time, and the readout says where it is. A batch review that leaks a server per ticket is the multiplied version of a problem that is already annoying at N = 1</li>
+        <li><code class="status">[x]</code> The preview step <strong>builds the candidate fresh</strong> before showing it, and records what it built and when. A preview served from an existing bundle is refused rather than shown with a caveat</li>
+        <li><code class="status">[x]</code> The form of the preview is derived from the project's declared <code>delivery</code> posture: <code>service</code> serves locally, <code>docs</code> and <code>none</code> render the diff readout alone, and <code>mobile</code> is <strong>named and not built</strong> — an emulator is not a browser and pretending otherwise is how this repository's shape gets baked into every project</li>
+        <li><code class="status">[x]</code> Visual-review classification is <strong>derived from the candidate's own diff</strong> against the posture, not from a new ticket field. A derived answer cannot go stale the way a hand-set flag does, and it needs no ticket schema change. The paths that count as visual are the repository&rsquo;s optional <code>preview.sources</code> in the owner-authored catalog, and with none declared every change counts (reworded 2026-09-25, see Amendments)</li>
+        <li><code class="status">[x]</code> <strong>INV-2 and INV-3 asserted:</strong> no route added by this workstream is anything but read-only, no file it adds imports <code>node:child_process</code>, and the <code>no-skill-in-stages</code> and publish fences stay green with no new exemption</li>
+        <li><code class="status">[x]</code> Exactly one preview server is alive at a time, and the readout says where it is. A batch review that leaks a server per ticket is the multiplied version of a problem that is already annoying at N = 1</li>
       </ul>
 
       <h4>16. Testing Strategy</h4>
@@ -1827,6 +1827,59 @@ flowchart LR
       <code>npm run test:unit</code>: 2191/2191 at base <code>e85f648</code> before any change, and
       2203/2203 after (the twelve new cases). <code>npm run typecheck</code>: exit 0 across both projects. <code>npm run lint</code>:
       0 warnings, 0 errors on 608 files.</p>
+    </details>
+
+    <details open>
+      <summary>2026-09-25 — task 15 built: the preview builds fresh, and its form follows delivery</summary>
+
+      <p><strong>Markers:</strong> task 15's five rows move to <code class="status">[x]</code>. Row 3 is reworded:
+      the classification needs no <em>ticket</em> schema change, but the <code>service</code> form has to be told
+      what to build, so the catalog gained one optional per-repository declaration. Milestone M5 stays
+      <code class="status">[wip]</code> for task 16.</p>
+
+      <h3>What was built</h3>
+      <p><code>awsf preview &lt;task&gt;</code> (<code>core/src/cli/commands/preview.ts</code>) runs at
+      <code>AWAITING_OWNER</code> only. It reads the plan repository's <code>delivery</code> from
+      <code>awsf.project.yaml</code>, the field's first reader. The pure <code>planPreview</code> in
+      <code>core/src/contracts/preview-record.ts</code> maps posture and the candidate's own
+      <code>git diff --name-only base..candidate</code> to a form. <code>service</code> with a changed path under
+      <code>preview.sources</code> builds and serves. <code>mobile</code> with one is named and not built.
+      <code>docs</code> and <code>none</code> print the diff readout alone, as does <code>service</code> or
+      <code>mobile</code> when no changed path is under the sources. An undeclared posture is refused by name,
+      never defaulted. Every form prints the diff readout and records <code>preview.json</code> beside the
+      attempt.</p>
+      <p><strong>Fresh or refused.</strong> The build runs through <code>runSystemCommand</code>, the broker's
+      command boundary that gate commands use, in the managed worktree. The step first proves the worktree is
+      at the candidate and clean. It snapshots the bundle's newest file time before building. After the build,
+      every file still no newer than that time was left there, not built, and the step throws
+      <code>PreviewBundleStale</code>, naming the files. A build that writes nothing throws
+      <code>PreviewBundleMissing</code>, a separate class, so staleness is never reported as absence. The
+      server then serves only the set of files this build wrote. The comparison is file time against file time,
+      so no clock is read. The build time is the caller's <code>now</code>, supplied by <code>main.ts</code>.</p>
+      <p><strong>One server.</strong> A lease at <code>&lt;state root&gt;/preview-server.json</code> names the
+      live server's pid, task, candidate and URL. A second start is refused while that pid is alive, before it
+      builds anything, and the refusal says where the live one is. A released lease or a dead pid frees it.
+      Nothing is deleted and no other process is signalled. The shift readout gains a <code>Preview:</code> line
+      at the owner gate. It reads the record and whether its pid is alive, and prints where the preview is
+      served, what was built, by which command and when. It also says when the record names another candidate.
+      It never builds or serves anything itself.</p>
+
+      <h3>The alternatives rejected</h3>
+      <p>Hard-coding <code>npm run dash:build</code> and <code>dashboard/dist</code> would make this repository's
+      shape the default for every project. A <code>visual</code> ticket field goes stale. An entry-file timestamp
+      alone misses an old chunk the new build did not overwrite, and the partial-rewrite test covers that case.
+      Stopping the previous server by pid would signal whatever process has since reused the number, so a live
+      server is refused instead.</p>
+
+      <h3>Evidence</h3>
+      <p><code>node --experimental-strip-types --test core/test/unit/shift-preview.test.ts</code>: 8/8. With the
+      staleness check disabled, exactly the two staleness cases failed. <code>shift-readout.test.ts</code>: 6/6;
+      the clean golden gains the <code>Preview: not built</code> line. The child-process, publish, credential,
+      no-skill, no-destructive-paths, no-write-route, INV-1, cheatsheet and doc fences are green with no new
+      exemption. The INV-1 fence's module list now names <code>preview.ts</code> and
+      <code>preview-record.ts</code>. <code>npm run test:unit</code>: 2203/2203 at base <code>0b1e151</code> before
+      any change, and 2212/2212 after (the nine new cases). <code>npm run typecheck</code>: exit 0 across both
+      projects. <code>npm run lint</code>: 0 warnings, 0 errors on 611 files.</p>
     </details>
 
   </section>

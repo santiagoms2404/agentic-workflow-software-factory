@@ -57,6 +57,20 @@ const RepositorySchema = Type.Object(
       ),
     ),
     delivery: Type.Optional(stringUnion(PROJECT_DELIVERY_POSTURES)),
+    // How `awsf preview` builds a candidate of this repository for the owner:
+    // the command, the directory it writes, and the paths whose change makes a
+    // candidate one to look at rather than read. The posture above chooses the
+    // form; this only supplies what the `service` form needs to build.
+    preview: Type.Optional(
+      Type.Object(
+        {
+          build: Type.Optional(GateEntrySchema),
+          bundle: Type.Optional(NonEmptyString),
+          sources: Type.Optional(Type.Array(NonEmptyString, { minItems: 1 })),
+        },
+        { additionalProperties: false },
+      ),
+    ),
     // THE ALLOWLIST KEYS ON A REMOTE NAME because assertNoAbsolutePaths refuses
     // a bare-remote path outright, and a file:// URL would pass that check only
     // by smuggling a machine path past it.
