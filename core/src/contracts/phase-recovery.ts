@@ -21,7 +21,10 @@ export const PhaseRecoverySchema = Type.Object({
   // `ceiling-pause` is a shift stopping at a clean boundary before a ticket whose
   // declared correction round the task ceiling can no longer fund. Only an owner
   // `awsf raise` moves the ceiling; the shift never widens it (W17 INV-5).
-  kind: Type.Union([Type.Literal("completed-phase"), Type.Literal("quota-pause"), Type.Literal("result-ready"), Type.Literal("validating"), Type.Literal("ceiling-pause")]),
+  // `ticket-block` is a shift stopped at the ticket whose gate phase went red.
+  // The prefix ends at that ticket's accepted build, and a resume re-measures
+  // that ticket's gates without rebuilding it or starting the next ticket.
+  kind: Type.Union([Type.Literal("completed-phase"), Type.Literal("quota-pause"), Type.Literal("result-ready"), Type.Literal("validating"), Type.Literal("ceiling-pause"), Type.Literal("ticket-block")]),
   // The shift ticket whose phase is next after the accepted prefix, so a stop
   // names the ticket the owner wrote rather than only a compiled phase id.
   ticket: Type.Optional(Type.String({ pattern: "^[TW][0-9]{2}$" })),
@@ -58,6 +61,7 @@ export function assertPhaseRecovery(value: unknown): asserts value is PhaseRecov
     }
   }
   if ((value.kind === "quota-pause") !== (value.quota !== null)) throw new Error("recovery quota binding is inconsistent");
+  if (value.kind === "ticket-block" && (value.ticket === undefined || value.pending !== undefined)) throw new Error("a ticket block must name its ticket and hold no saved reply");
   if (value.prefix.some((entry, index) => entry.ordinal !== index + 1) || new Set(value.prefix.map(entry => entry.phaseKey)).size !== value.prefix.length) {
     throw new Error("accepted phase prefix is not contiguous");
   }

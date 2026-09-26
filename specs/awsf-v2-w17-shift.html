@@ -496,7 +496,7 @@ flowchart LR
     </div>
 
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone M4: Failure, durability, and the ref <span class="wtag core">gated on <span class="gate">G17-M</span></span></h3>
+      <h3><code class="status">[wip]</code> Milestone M4: Failure, durability, and the ref <span class="wtag core">gated on <span class="gate">G17-M</span></span></h3>
       <p>Two questions a night run must answer before it is trusted with one: what happens when ticket 3 of 6 fails, and where does the work live while everyone is asleep. <strong>This milestone may not start until <code>main</code> and <code>task3.5</code> are merged</strong> — the ref is written at seal time, which is inside <code>production-run.ts</code>, the most heavily diverged file in the pair.</p>
       <figure>
         <pre class="mermaid">
@@ -521,13 +521,13 @@ stateDiagram-v2
       <p><strong>Decision: a failing ticket blocks the whole shift at that ticket.</strong> Not skip, not continue. The reason is the selection's own dependency order — M1 selects in topological order over <code>depends_on</code>, so ticket 4 was chosen <em>because</em> it follows ticket 3. Continuing past a red ticket 3 builds ticket 4 on a tree the gates rejected, and the owner arrives to a candidate whose later half cannot be reviewed independently of its broken earlier half.</p>
       <p><strong>What it costs, stated rather than absorbed.</strong> A shift that blocks at ticket 3 of 6 leaves three tickets unrun and the night unspent. That cost is paid down by resumption, not by skipping: <code>awsf resume</code> already restarts from the accepted prefix, and <code>phase-recovery.ts</code> already validates saved replies without repeating a model call. The tail's calls were never reserved, so nothing was wasted — only deferred.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> A red <code>t&lt;NN&gt;-tests</code> phase blocks the attempt with a reason naming the <strong>ticket id</strong> and the failing gate, and the recovery checkpoint records the accepted prefix</li>
-        <li><code class="status">[]</code> No later ticket's phase reserves a call after the block — asserted against the ledger's <code>history()</code>, not against a log line</li>
-        <li><code class="status">[]</code> <code>awsf resume</code> re-runs only the blocked ticket's phases, and a journey test proves the earlier tickets' commits are still on the worktree head</li>
-        <li><code class="status">[]</code> <strong>Rework is not the recovery instrument, and the code is why.</strong> Every phase the rework path creates is <code>maxCorrections: 0</code>, and that path <em>rejects</em> provider output matching a credential pattern where a normal run scrubs it. A shift that blocks surfaces; it never retries itself into a corner. A meta-test asserts no shift module imports <code>rework.ts</code></li>
-        <li><code class="status">[]</code> The runner's <code>engineer</code> branch emits a shift brief's compiled <code>intent</code> (<code>ShiftBriefPhase.intent</code>), not <code>requestOutput(status)</code>. Today it ignores <code>phase.execute</code>, so every <code>t&lt;NN&gt;-brief</code> would carry the attempt's request instead of its ticket's prompt (added 2026-09-25, see Amendments)</li>
-        <li><code class="status">[]</code> <code>shift-review-context</code> composes the intent of <strong>every</strong> <code>t&lt;NN&gt;-brief</code>. Today review intent is <code>schemas.get("awsf.plan-output/v1")</code>, last wins, so the one review would judge N tickets' diff against the last ticket's brief only (added 2026-09-25, see Amendments)</li>
-        <li><code class="status">[]</code> An environmental failure — the case where the block might not be about that ticket at all — is <strong>distinguishable in the record</strong>: the blocker carries one of the six deterministic reason sources, and a <code>gate</code> source reads differently from a <code>process</code> one</li>
+        <li><code class="status">[x]</code> A red <code>t&lt;NN&gt;-tests</code> phase blocks the attempt with a reason naming the <strong>ticket id</strong> and the failing gate, and the recovery checkpoint records the accepted prefix. <em>Built as a <code>ticket-block</code> checkpoint at <code>RUNNING</code> with the blocker set, not as the lifecycle <code>BLOCKED</code> state, which is sealed and cannot resume (reworded 2026-09-25, see Amendments)</em></li>
+        <li><code class="status">[x]</code> No later ticket's phase reserves a call after the block — asserted against the ledger's <code>history()</code>, not against a log line</li>
+        <li><code class="status">[x]</code> <code>awsf resume</code> re-runs only the blocked ticket's phases, and a journey test proves the earlier tickets' commits are still on the worktree head. <em>The phase it re-runs is the blocked ticket's gate phase, against the same candidate; the ticket's accepted brief and build are its durable prefix and are not rebuilt (reworded 2026-09-25, see Amendments)</em></li>
+        <li><code class="status">[x]</code> <strong>Rework is not the recovery instrument, and the code is why.</strong> Every phase the rework path creates is <code>maxCorrections: 0</code>, and that path <em>rejects</em> provider output matching a credential pattern where a normal run scrubs it. A shift that blocks surfaces; it never retries itself into a corner. A meta-test asserts no shift module imports <code>rework.ts</code></li>
+        <li><code class="status">[x]</code> The runner's <code>engineer</code> branch emits a shift brief's compiled <code>intent</code> (<code>ShiftBriefPhase.intent</code>), not <code>requestOutput(status)</code>. Today it ignores <code>phase.execute</code>, so every <code>t&lt;NN&gt;-brief</code> would carry the attempt's request instead of its ticket's prompt (added 2026-09-25, see Amendments)</li>
+        <li><code class="status">[x]</code> <code>shift-review-context</code> composes the intent of <strong>every</strong> <code>t&lt;NN&gt;-brief</code>. Today review intent is <code>schemas.get("awsf.plan-output/v1")</code>, last wins, so the one review would judge N tickets' diff against the last ticket's brief only (added 2026-09-25, see Amendments)</li>
+        <li><code class="status">[x]</code> An environmental failure — the case where the block might not be about that ticket at all — is <strong>distinguishable in the record</strong>: the blocker carries one of the six deterministic reason sources, and a <code>gate</code> source reads differently from a <code>process</code> one</li>
       </ul>
 
       <h4>12. The ref at seal time, and the per-ticket candidate record</h4>
@@ -775,6 +775,99 @@ flowchart TD
       <p class="decided"><b>Decided (2026-09-15):</b> <strong>ships disabled; enabling it is a separate, explicit owner act.</strong> The owner directed that this plan’s own recommendation be applied to every Questionable; the reasoning below is the recommending session’s and is recorded in full rather than as a bare choice. See Amendments.</p>
       <p class="qa-answer"><strong>Why, and why the third option was not real.</strong> It follows W16’s precedent: the route was built, proved offline, and left for an owner act. <em>No config entry until M6 closes</em> was surfaced as probably not real, and it is — M2’s own tests need the id admitted to compile a shift at all, so <span class="gate">G17</span> lands before M2 either way. What the decision settles is that <code>workflows.enabled</code> gains <code>shift</code> and nothing is routed to it.</p>
       <p class="qa-answer"><code>workflows.enabled</code> lives in <code>awsf.config.yaml</code>, which <code>path-policy</code> protects: no agent can write it, and <code>adopt.ts</code> and the runner both refuse a workflow the effective config does not enable. So enabling <code>shift</code> is an owner-authored commit whichever way this goes — ordering gate <span class="gate">G17</span>. <em>Ships disabled</em> follows W16's precedent, where the route was built, proved offline, and left for a separate explicit owner act. <em>Ships enabled at T2</em> is simpler and removes a step the owner will take anyway. <em>No entry until M6 closes</em> would block M2's own tests, which need the id admitted to compile a shift at all — so this option is probably not real, and saying so is part of the answer.</p>
+    </details>
+
+    <details open>
+      <summary>2026-09-25 — task 11 built: a red ticket stops the shift at <code>RUNNING</code>, and resume re-measures it</summary>
+
+      <p><strong>Markers:</strong> task 11's seven rows move to <code class="status">[x]</code>. Rows 1 and 3 are
+      reworded to what was built, and the reason is below. M4 moves to <code class="status">[wip]</code>. Gate
+      <span class="gate">G17-M</span> was confirmed before any change: <code>task3.5</code> is an ancestor of
+      <code>main</code> at <code>185c462</code>.</p>
+
+      <h3>Why the block is not <code>BLOCKED</code></h3>
+      <p>The task asked for two things the lifecycle contract cannot give together. A red ticket must block the
+      attempt, and <code>awsf resume</code> must then re-run that ticket from the accepted prefix. But
+      <code>BLOCKED</code> is in <code>SEALED_STATES</code> and has no outgoing edge, and
+      <code>preflightRecovery</code> refuses anything but <code>RUNNING</code>, <code>GATING</code> or
+      <code>REVIEWING</code>. The M4 diagram's <code>BLOCKED --&gt; RESUME</code> arrow does not exist. So a shift
+      ticket whose gate phase goes red now stops the way task 9's ceiling stop does: at <code>RUNNING</code>, under a
+      new <code>ticket-block</code> recovery checkpoint whose prefix ends at that ticket's accepted build. The
+      attempt's <code>blocker</code> is set, with code <code>phase-abort</code>, a detail naming the ticket, the phase
+      and the failing gate, and one of the six deterministic reason sources. <code>awsf status</code> prints
+      <code>State: RUNNING; blocker phase-abort (gate): ticket T03 (t03-tests) blocked the shift: …</code> and
+      <code>Recovery: ticket-blocked</code>. No transition is written, and the journey asserts none reaches
+      <code>BLOCKED</code>.</p>
+      <p>Three alternatives were rejected. <strong>An edge out of <code>BLOCKED</code></strong> would change the
+      sealed-state contract every other attempt relies on. <strong><code>awsf retry</code></strong> mints a fresh
+      attempt at <code>DRAFT</code> with no prefix and no worktree, which is the loss the stop exists to avoid.
+      <strong><code>rework</code></strong> is fenced out, below.</p>
+
+      <h3>What a resume does, and what it does not</h3>
+      <p>A resume re-runs the blocked ticket's gate phase against the same candidate, then continues with the next
+      ticket, the review context and the one review. It does <strong>not</strong> rebuild the ticket. Its brief and
+      build were accepted, and re-running an accepted build in place would repeat a completed model turn, which resume
+      promises never to do. It would also collide with the immutable per-phase envelope and the unique process run id.
+      So the resume is the remedy when the cause was outside the ticket, which is what the record's source is for. A red
+      caused by the ticket's own code re-blocks on every resume, at no call. Rebuilding that ticket is a later decision
+      and is not taken here.</p>
+      <p>Two mechanisms make the re-measurement honest. The measurement round is the number of earlier
+      <code>ticket-block</code> records for that phase, so the command ledger dispatches the gate afresh instead of
+      restoring the red result it holds for round 0. The red run's gate rows and retained output keep their own round
+      and are never overwritten. And a red shift ticket writes no test envelope, because envelopes are immutable per
+      phase and the resumed measurement must write the one it accepts. The red measurement stays on the record as its
+      gate rows, its retained command output, the phase's <code>FAILED</code> row and the blocker. Recovery inspection
+      admits exactly one <code>FAILED</code> phase, at the frontier of a <code>ticket-block</code> checkpoint.</p>
+
+      <h3>A gate reads differently from a process</h3>
+      <p>The source is <code>gate</code> when every configured command exited and the candidate measured red, or when
+      <code>candidate_hygiene</code> failed. It is <code>process</code> when a command reported no exit status: it
+      was killed, timed out or never started, so the gate never judged the ticket. That is the host's own
+      <code>-1</code> mark in <code>measureCandidate</code>. The detail says so in words too: <code>gate commands_pass
+      is red on &lt;sha&gt;: test exited 1</code> against <code>test reported no exit status on &lt;sha&gt;, so the
+      host could not measure it and the cause may not be this ticket</code>. <code>AttemptBlocker</code> gained an
+      optional <code>source</code>, and a new <code>ticket-block</code> evidence row carries it into the journal and
+      the SQLite <code>events</code> table.</p>
+
+      <h3>What still blocks terminally</h3>
+      <p>The stop is taken only when the host can prove a clean boundary: a shift ticket's gate phase, no process, no
+      outstanding reservation, a clean tree whose HEAD is the ticket's candidate, and a checkpoint
+      <code>verifyRecoveryWorktree</code> accepts. Anything else blocks on L8 as before. That includes a measurement
+      that throws (a dirty tree, a moved candidate, a command-ledger refusal) and a red found inside the build itself.
+      A same-session builder measures its candidate in <code>verifyCandidate</code>, and when its correction round is
+      spent the build phase fails before any gate phase runs. Shipped recipes are unchanged.</p>
+
+      <h3>The review sees every ticket</h3>
+      <p><code>shift-review-context</code> now composes every accepted brief in phase order: all goals, all
+      acceptance criteria prefixed with their ticket id, and the distinct non-goals and test strategies. Shipped
+      recipes keep the last-wins intent byte for byte, so their stored review contexts still match on recovery. The
+      <code>engineer</code> row was built by task 9. This task flips it on the journey's evidence that each builder is
+      rendered its own <code>TASK Tnn.</code> line.</p>
+
+      <h3>Rework is fenced out</h3>
+      <p><code>core/test/unit/meta/shift-no-rework-import.test.ts</code> asserts that no shift module, and not the
+      runner, imports <code>rework.ts</code>. The reason is written in the fence. Every rework phase is
+      <code>maxCorrections: 0</code>, and that path rejects credential-shaped provider output
+      (<code>credentialSafeText</code>) where a normal run scrubs it. The fence was proved against a real module:
+      an import added to <code>core/src/workflow/shift/bind.ts</code> took it from 3/3 to 2/3 naming that file, and the
+      revert restored 3/3 with an empty <code>git diff</code>.</p>
+
+      <h3>Evidence</h3>
+      <p><code>core/test/journeys/shift-blocked.test.ts</code>, two cases. Six tickets at a T2 ceiling of ten, with a
+      cold builder and the gate verdict scripted through the runner's command seam for ticket 3's candidate only. The
+      gate case blocks at T03 with <code>[t01-brief … t03-build]</code> accepted. It has three launches, and its
+      ledger's <code>history()</code> holds three settled reservations, each traced through its spending process row to
+      <code>t01-build</code>, <code>t02-build</code> and <code>t03-build</code>. A resume before the fix re-measures
+      ticket 3 afresh and blocks again without opening a broker. After the fix the resume reaches
+      <code>AWAITING_OWNER</code>: seven launches, none twice, the resumed ledger paying four, six commits on one head
+      with the first three unchanged, and a review context whose goals name T01 to T06 in order. The process case
+      blocks at T03 with source <code>process</code> and a detail that does not say "is red". <code>npx tsx --test core/test/journeys/shift-blocked.test.ts</code>:
+      2/2. <code>npm run test:unit</code>: 2181/2181 at base <code>185c462</code> in a clean detached worktree, before any
+      change, and 2184/2184 after (the three new fence tests). <code>npm run typecheck</code>: exit 0 across both
+      projects. <code>npm run lint</code>: 0 warnings, 0 errors on 603 files. <code>npm run test:journeys</code>:
+      265/266. The one failure was <code>human-gate.test.ts</code>'s real-stdin refusal, whose child hit its 60 s
+      <code>spawnSync</code> timeout under the parallel suite. That test's own comment names this cold-start risk. It
+      exercises <code>awsf land</code>, which this task does not touch, and it passed 8/8 when run alone.</p>
     </details>
   </section>
 

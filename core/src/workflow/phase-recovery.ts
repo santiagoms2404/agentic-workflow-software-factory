@@ -140,6 +140,9 @@ export async function inspectPhaseRecovery(attemptDir: string) {
   }
   for (const phase of phases.values()) {
     if (phase.key === pending?.phaseKey && phase.ordinal === pending.ordinal && phase.status === "VALIDATING") continue;
+    // A ticket block keeps its red gate phase on the record as FAILED. It is
+    // the one phase a resume re-measures, and it is always the frontier.
+    if (checkpoint.kind === "ticket-block" && phase.ordinal === checkpoint.prefix.length + 1 && phase.status === "FAILED") continue;
     if (phase.ordinal > checkpoint.prefix.length && phase.status !== "QUEUED") throw new Error("recovery refused: a later phase has already started");
   }
   if (pending !== undefined && pendingEnvelope === null) throw new Error("saved reply envelope is missing");

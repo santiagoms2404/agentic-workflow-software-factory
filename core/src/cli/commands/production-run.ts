@@ -2816,6 +2816,51 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     return true;
   };
 
+  /**
+   * A shift ticket whose gate phase went red stops the shift at that ticket.
+   * Not skip and not continue: the next ticket was selected because it follows
+   * this one, and building it on a tree the gates rejected hands the owner a
+   * candidate whose later half cannot be reviewed apart from its broken part.
+   *
+   * It stops at RUNNING, like the ceiling pause, because BLOCKED is sealed and
+   * has no edge back, and a stop that throws away the accepted prefix would
+   * turn one red ticket into a lost night. The blocker still names the ticket,
+   * the failing gate and the reason source, and nothing after it has reserved
+   * a call. A resume re-measures this ticket's gates against the same
+   * candidate. It never rebuilds the ticket, never skips it, and never reaches
+   * for `rework` (the shift-no-rework-import fence records why). A boundary the
+   * host cannot prove clean blocks terminally, as every other failure does.
+   */
+  const ticketBlockAt = async (phase: (typeof compiled.phases)[number], source: "gate" | "process", detail: string): Promise<boolean> => {
+    const ticket = shiftTicketOf(recipe.phases, phase.id);
+    if (ticket === null || candidateSha === null || status.process !== null || budget.outstanding().length > 0) return false;
+    const git = systemGitRunner(status.worktree!);
+    if (runGit(git, ["status", "--porcelain"]).trim().length > 0 || runGit(git, ["rev-parse", "HEAD"]).trim() !== candidateSha) return false;
+    const checkpoint = await checkpointAt("ticket-block", null);
+    if (checkpoint === null) return false;
+    try {
+      await verifyRecoveryWorktree(status, checkpoint, await verifyCandidateLedgerVerdict(options.attemptDir, options.config, status, checkpoint));
+    } catch {
+      return false;
+    }
+    const reason = `ticket ${ticket} (${phase.id}) blocked the shift: ${detail}`;
+    await persist("attempt.updated", { recovery: checkpoint, phase: null, process: null, budget: budget.snapshot(),
+      blocker: { code: "phase-abort", detail: reason, ahead: null, behind: null, source },
+      lastActivity: reason, lastActivityAt: infra.now(),
+      nextAction: `ticket-blocked at ${ticket}; the owner fixes the cause, then runs \`awsf resume ${status.taskId} --reason "<why>"\` to re-measure ${ticket} against the same candidate` },
+      { type: "ticket-block", checkpoint, phaseKey: phase.id, source, detail: reason });
+    return true;
+  };
+
+  /**
+   * The measurement round for a gate phase. A resumed ticket block measures
+   * under a round of its own, so the command ledger dispatches afresh instead
+   * of restoring the red result it already holds, and the red run's gate rows
+   * and retained output are never overwritten.
+   */
+  const measurementRound = (phaseId: string): number => (recovery?.inspected.records ?? [])
+    .filter((record) => record.event.evidence?.type === "ticket-block" && record.event.evidence.phaseKey === phaseId).length;
+
   const quotaRoutesByAdapter = new Map(
     mapConfiguredQuotaRoutes(options.config).map((route) => [route.adapterId, route]),
   );
@@ -2966,6 +3011,25 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     return true;
   };
 
+  /**
+   * A shift's one review judges every ticket's diff, so it is judged against
+   * every accepted brief in phase order. `intent` is last-wins, and on its own
+   * would hold N tickets to the last ticket's words. Null for any recipe that
+   * is not a shift, which keeps its review evidence exactly as it was.
+   */
+  const shiftReviewIntent = () => {
+    const briefs = recipe.phases.flatMap((phase) => "ticketId" in phase ? [acceptedEnvelopes.get(phase.id) as PlanOutput | undefined] : [])
+      .filter((brief): brief is PlanOutput => brief !== undefined);
+    if (briefs.length === 0) return null;
+    const distinct = (values: readonly string[]): string[] => [...new Set(values)];
+    return {
+      goals: briefs.flatMap((brief) => brief.goals),
+      nonGoals: distinct(briefs.flatMap((brief) => brief.nonGoals)),
+      acceptanceCriteria: briefs.flatMap((brief) => brief.implementationSteps.flatMap((step) => step.acceptanceCriteria.map((criterion) => `${step.id}: ${criterion}`))),
+      testStrategy: distinct(briefs.flatMap((brief) => brief.testStrategy)),
+    };
+  };
+
   const composeReviewEvidence = async (phaseId: string): Promise<ReviewContext> => {
     if (candidateSha === null) throw new Error("review evidence requires a host-created candidate SHA");
     if (lastTestOutput === null) throw new Error("review evidence requires a completed code phase to carry");
@@ -2976,10 +3040,12 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       intent: {
         // The owner's own words, never a phase's restatement of them.
         request: composeOwnerAmendment(status.request, seed?.ownerAmendment ?? null).composedText + seedContext(status) + resumeInstructionContext(instructions),
-        goals: intent?.goals ?? [],
-        nonGoals: intent?.nonGoals ?? [],
-        acceptanceCriteria: (intent?.implementationSteps ?? []).flatMap((step) => step.acceptanceCriteria),
-        testStrategy: intent?.testStrategy ?? [],
+        ...(shiftReviewIntent() ?? {
+          goals: intent?.goals ?? [],
+          nonGoals: intent?.nonGoals ?? [],
+          acceptanceCriteria: (intent?.implementationSteps ?? []).flatMap((step) => step.acceptanceCriteria),
+          testStrategy: intent?.testStrategy ?? [],
+        }),
       },
       testOutput: lastTestOutput,
       // The FULL diff, host-private at 0600. The reviewer is never given a path
@@ -3005,7 +3071,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
 
   try {
     if (recovery !== undefined && (savedResult !== undefined || remainingCalls === 0 || compiled.phases[restartIndex]?.kind !== "agent" || isReviewPhase(compiled.phases[restartIndex]!))) {
-      await persist("attempt.updated", { activeOperation: operationId }, { type: "resume-activation", operationId, quotaReadings: recovery.quotaReadings,
+      await persist("attempt.updated", { activeOperation: operationId, blocker: null }, { type: "resume-activation", operationId, quotaReadings: recovery.quotaReadings,
         ...(recovery.instruction == null ? {} : { ownerInstruction: recovery.instruction }),
         checkpointId: recovery.inspected.checkpoint.id, reason: recovery.reason, reservationId: null, phase: null });
       activationPending = false;
@@ -3192,10 +3258,30 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       // host already gated would spend the wall clock twice to learn the same
       // thing, and two runs that disagreed would leave nothing to arbitrate.
       const retained = candidateMeasurements.get(candidateSha);
-      const measured = retained ?? await measureCandidate(phase.id, candidateSha, 0);
+      const measured = retained ?? await measureCandidate(phase.id, candidateSha, measurementRound(phase.id));
       if (retained !== undefined) {
         await persistGate(phase.id, measured.hygiene, candidateSha, 0, measured.hygiene.passed ? 0 : -1);
         await persistGate(phase.id, measured.aggregate, candidateSha, 0, measured.testOutput.passed ? 0 : -1);
+      }
+      // A red shift ticket writes no test envelope: envelopes are immutable per
+      // phase, and the resumed measurement must be able to write the one it
+      // accepts. The red measurement is kept as its gate rows and retained
+      // command output, and the blocker names it.
+      if (shiftTicketOf(recipe.phases, phase.id) !== null &&
+          (!measured.hygiene.passed || !measured.aggregate.passed || !measured.testOutput.passed)) {
+        const failure = measured.hygiene.passed ? new CommandPhaseFailure(measured.testOutput) : new PhaseGateFailure(phase.id, [measured.hygiene]);
+        await persistPhase(phase.id, "FAILED", failure);
+        // -1 is the host's own mark for a command that reported no exit status:
+        // it was killed, timed out or never started, so the gate never judged
+        // this ticket's candidate at all.
+        const unfinished = measured.testOutput.commands.filter((command) => command.exitCode === -1).map((command) => command.gateId);
+        const detail = !measured.hygiene.passed
+          ? `gate candidate_hygiene is red on ${candidateSha}`
+          : unfinished.length > 0
+            ? `${unfinished.join(", ")} reported no exit status on ${candidateSha}, so the host could not measure it and the cause may not be this ticket`
+            : `gate commands_pass is red on ${candidateSha}: ${measured.testOutput.failures.join("; ")}`;
+        if (await ticketBlockAt(phase, unfinished.length > 0 ? "process" : "gate", detail)) return status;
+        throw failure;
       }
       if (!measured.hygiene.passed) {
         const failure = new PhaseGateFailure(phase.id, [measured.hygiene]);
@@ -3452,6 +3538,12 @@ async function preflightRecovery(options: ProductionRunOptions): Promise<Recover
   if (checkpoint.kind === "quota-pause" || checkpoint.kind === "ceiling-pause") {
     const next = recipe.phases[checkpoint.prefix.length];
     if (status.lifecycleState !== "RUNNING" || next?.kind !== "agent" || isReviewPhase(next)) throw new Error(`${checkpoint.kind === "quota-pause" ? "quota" : "ceiling"} anchor does not name an unstarted ordinary agent phase`);
+  }
+  if (checkpoint.kind === "ticket-block") {
+    const next = recipe.phases[checkpoint.prefix.length];
+    if (status.lifecycleState !== "RUNNING" || next?.kind !== "code" || shiftTicketOf(recipe.phases, next.id) !== checkpoint.ticket) {
+      throw new Error("ticket block does not name its own ticket's gate phase");
+    }
   }
   await verifyRecoveryWorktree(status, checkpoint, await verifyCandidateLedgerVerdict(options.attemptDir, options.config, status, checkpoint));
   if (checkpoint.pending !== undefined) {

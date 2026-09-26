@@ -43,7 +43,7 @@ export function formatStatus(status: AttemptStatus): readonly string[] {
     : `, including ${granted} owner-granted by ${status.ceilingGrants.length} raise(s)`;
   const blocker = status.blocker === null
     ? ""
-    : `; blocker ${status.blocker.code}: ${status.blocker.detail}`;
+    : `; blocker ${status.blocker.code}${status.blocker.source === undefined ? "" : ` (${status.blocker.source})`}: ${status.blocker.detail}`;
   return Object.freeze([
     `State: ${status.lifecycleState}${blocker} — ${status.nextAction}`,
     phaseLine(status),
@@ -225,6 +225,7 @@ export async function statusCommand(
   if (status.recovery != null && status.process === null && status.budget.callsReserved === 0) {
     const kind = status.recovery.kind === "quota-pause" ? "quota-paused"
       : status.recovery.kind === "ceiling-pause" ? "ceiling-paused; the owner raises the ceiling, the shift never does"
+      : status.recovery.kind === "ticket-block" ? "ticket-blocked; the owner fixes the cause, the shift never retries itself"
       : status.recovery.kind === "result-ready" ? "saved reply awaiting host validation" : "saved accepted phase result";
     const ticket = status.recovery.ticket === undefined ? "" : `; next ticket ${status.recovery.ticket}`;
     lines.push(`Recovery: ${kind}; ${status.recovery.prefix.length} completed phase(s)${ticket}. Native interrupted-turn reconnect is not implied.`);

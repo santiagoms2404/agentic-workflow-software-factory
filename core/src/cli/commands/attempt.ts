@@ -21,6 +21,7 @@ import {
 import type { ModelResolutionProvenance } from "../../contracts/normalized-events.ts";
 import type { ProcessIdentity } from "../../execution/launcher-barrier.ts";
 import type { AttemptEvidence } from "../../observability/attempt-evidence.ts";
+import type { ReasonSource } from "../../state/errors.ts";
 import type { Tier } from "../../state/tiers.ts";
 import type { CandidateSeed } from "../../contracts/candidate-seed.ts";
 import type { PhaseRouteOverrides } from "../../workflow/route-flags.ts";
@@ -42,6 +43,12 @@ export interface AttemptBlocker {
   readonly detail: string;
   readonly ahead: number | null;
   readonly behind: number | null;
+  /**
+   * Which of the six deterministic sources produced it, when the host can say.
+   * A shift's ticket block always carries one, so a gate that measured the
+   * candidate red never reads like a command the host could not finish.
+   */
+  readonly source?: ReasonSource;
 }
 
 export interface LandingApproval {

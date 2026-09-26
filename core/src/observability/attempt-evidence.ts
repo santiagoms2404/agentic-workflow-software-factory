@@ -93,6 +93,13 @@ export type AttemptEvidence =
   | { readonly type: "phase-accepted"; readonly phase: PhaseEvidenceRecord; readonly accepted: import("../contracts/phase-recovery.ts").AcceptedPhase }
   | { readonly type: "quota-pause"; readonly checkpoint: import("../contracts/phase-recovery.ts").PhaseRecovery }
   | { readonly type: "ceiling-pause"; readonly checkpoint: import("../contracts/phase-recovery.ts").PhaseRecovery }
+  /**
+   * A shift stopped at the ticket whose gate phase went red. `source` is `gate`
+   * when every configured command exited and the candidate measured red, and
+   * `process` when a command never reported an exit status, so the record says
+   * whether the ticket or its environment is the likelier cause.
+   */
+  | { readonly type: "ticket-block"; readonly checkpoint: import("../contracts/phase-recovery.ts").PhaseRecovery; readonly phaseKey: string; readonly source: "gate" | "process"; readonly detail: string }
   | { readonly type: "resume-instruction-delivery"; readonly phaseId: string; readonly delivery: import("../contracts/owner-amendment.ts").OwnerAmendmentDelivery; readonly at: string }
   | { readonly type: "resume-activation"; readonly protectedConsumption?: import("../contracts/protected-grant.ts").ProtectedGrantConsumption; readonly ownerInstruction?: import("../contracts/resume-instruction.ts").ResumeInstruction | null; readonly quotaReadings?: readonly import("../contracts/phase-recovery.ts").BoundaryQuota[]; readonly operationId: string; readonly checkpointId: string; readonly reason: string; readonly reservationId: string | null; readonly phase: PhaseEvidenceRecord | null }
   | { readonly type: "candidate-seed"; readonly seed: CandidateSeed }
