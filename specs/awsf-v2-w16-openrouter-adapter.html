@@ -181,8 +181,8 @@ p.serves { margin:2px 0 10px; }
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-09-15</dd>
-        <dt>modified</dt>     <dd>2026-09-15, 2026-09-15</dd>
-        <dt>commits</dt>      <dd>none — authoring only; no implementation was written, no provider was called, no worktree was created, and no invariant was changed, none — owner review applied 2026-09-15; three Questionables decided, still uncommitted</dd>
+        <dt>modified</dt>     <dd>2026-09-15, 2026-09-15, 2026-09-26 (M1 landed through a W17 shift)</dd>
+        <dt>commits</dt>      <dd>none — authoring only; no implementation was written, no provider was called, no worktree was created, and no invariant was changed, none — owner review applied 2026-09-15; three Questionables decided, still uncommitted. M1 landed: 65e7abf (T01), 77e4619 (T02), b88be25 (T03), built by the W17 shift <code>w16-m1-shift-b</code> and landed by the owner</dd>
         <dt>agent name</dt>   <dd>claude-opus-5, claude-opus-5</dd>
         <dt>session id</dt>   <dd>not recorded — AGENTS.md invariant 1 keeps live session state out of every committed file in this repository</dd>
         <dt>back refs</dt>    <dd>./awsf-v2-plan.html (spine milestone M16, Shared Invariants, and the R1 overstatement discipline), ../AGENTS.md (invariants 1, 3, 7, 9, 11, 12), ../awsf.config.yaml (§ adapters, § routing, § agents), ../awsf.project.yaml (the plan source this file resolves through), core/src/adapters/pi-codex.ts (the reviewed adapter this one is shaped against and must not relax), core/src/adapters/pi-codex-stream.ts (the proven decoder this route reuses), core/src/adapters/interface.ts (ModelInfo, HarnessAdapter, ContinuityCapableAdapter), core/src/adapters/env.ts (ENV_ALLOWLIST — unchanged by this workstream), core/src/adapters/cost-display.ts and dashboard/src/display.ts (the two formatCost sites), core/src/adapters/catalog.ts (the second selector-refusal site), core/src/adapters/registry.ts and core/src/config/schema.ts (adapter kinds), core/src/workflow/review-routing.ts (providerPairFrom — the inversion collision), core/src/execution/call-budget.ts (the reservation ledger), core/src/contracts/normalized-events.ts (NOTICE_CODES), core/test/fixtures/providers/codex/PROVENANCE.md (the fixture-integrity rule this plan inherits), core/test/unit/meta/ticket-plan-sync.test.ts and core/src/registry/plan-source.ts (the grammar and the byte-identity fence this document is parsed by)</dd>
@@ -439,7 +439,7 @@ flowchart TD
 
     <!-- ================= M1 ================= -->
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone M1: Selector admission — both refusal sites</h3>
+      <h3><code class="status">[x]</code> Milestone M1: Selector admission — both refusal sites</h3>
       <p>The guard comes first because every later task needs a selector that survives the command line. It is also the task most likely to be done wrongly in a way nothing catches: widening the shared constant would admit OpenRouter ids <em>on the Codex route too</em>, where the slash still means a second provider. The fix is a second, route-owned pattern — not a wider shared one.</p>
       <figure>
         <pre class="mermaid">
@@ -458,35 +458,35 @@ flowchart LR
       <h4>1. The route-owned selector guard</h4>
       <p class="serves"><code class="serves">AC-2</code></p>
       <ul class="checklist">
-        <li><code class="status">[]</code> Read the comment above <code>SAFE_MODEL_SELECTOR</code> at <code>core/src/adapters/pi-codex.ts:118</code> in full before writing anything. Both refusals are deliberate; the reasoning is to be carried forward, not deleted</li>
-        <li><code class="status">[]</code> Declare <code>OPENROUTER_MODEL_SELECTOR</code> in the new adapter file — never in <code>pi-codex.ts</code>, never in a shared module both import</li>
-        <li><code class="status">[]</code> Admit exactly three id shapes: bare (<code>glm-5.2</code>), <code>vendor/model</code>, and a leading <code>~</code> marking OpenRouter's latest alias. One slash at most, and the <code>~</code> only in first position</li>
-        <li><code class="status">[]</code> Keep the total-length bound the Codex guard has, so a selector cannot grow unboundedly on a command line</li>
-        <li><code class="status">[]</code> <strong>Keep the colon refusal, and write down why in this file's own words:</strong> <code>pi --model</code> accepts an <code>id:&lt;thinking&gt;</code> shorthand, so a colon would set the thinking level from the model field and outrank the <code>--thinking</code> this adapter puts on the line from the agent's config</li>
-        <li><code class="status">[]</code> <strong>Write down why the slash refusal does NOT carry over, on this route only:</strong> on OpenRouter a slash is how a model is spelled, and <code>--provider openrouter</code> is still the only provider named on the line</li>
-        <li><code class="status">[]</code> Refuse an unrepresentable selector with <code>E_MODEL_UNRESOLVED</code>, the same code and the same message shape the Codex route uses — a refusal, never a sanitization</li>
+        <li><code class="status">[x]</code> Read the comment above <code>SAFE_MODEL_SELECTOR</code> at <code>core/src/adapters/pi-codex.ts:118</code> in full before writing anything. Both refusals are deliberate; the reasoning is to be carried forward, not deleted</li>
+        <li><code class="status">[x]</code> Declare <code>OPENROUTER_MODEL_SELECTOR</code> in the new adapter file — never in <code>pi-codex.ts</code>, never in a shared module both import</li>
+        <li><code class="status">[x]</code> Admit exactly three id shapes: bare (<code>glm-5.2</code>), <code>vendor/model</code>, and a leading <code>~</code> marking OpenRouter's latest alias. One slash at most, and the <code>~</code> only in first position</li>
+        <li><code class="status">[x]</code> Keep the total-length bound the Codex guard has, so a selector cannot grow unboundedly on a command line</li>
+        <li><code class="status">[x]</code> <strong>Keep the colon refusal, and write down why in this file's own words:</strong> <code>pi --model</code> accepts an <code>id:&lt;thinking&gt;</code> shorthand, so a colon would set the thinking level from the model field and outrank the <code>--thinking</code> this adapter puts on the line from the agent's config</li>
+        <li><code class="status">[x]</code> <strong>Write down why the slash refusal does NOT carry over, on this route only:</strong> on OpenRouter a slash is how a model is spelled, and <code>--provider openrouter</code> is still the only provider named on the line</li>
+        <li><code class="status">[x]</code> Refuse an unrepresentable selector with <code>E_MODEL_UNRESOLVED</code>, the same code and the same message shape the Codex route uses — a refusal, never a sanitization</li>
       </ul>
 
       <h4>2. The second refusal site in the catalog</h4>
       <p class="serves"><code class="serves">AC-2</code></p>
       <ul class="checklist">
-        <li><code class="status">[]</code> Confirm the finding before acting on it: <code>resolveSelector</code> in <code>core/src/adapters/catalog.ts</code> carries the same regex plus a single-colon rule, and its only caller in the tree is <code>core/test/unit/adapters/catalog-registry.test.ts</code></li>
-        <li><code class="status">[]</code> Move the model-name pattern onto <code>ModelFamily</code>, so each family admits its own shape and widening one cannot widen another</li>
-        <li><code class="status">[]</code> Add the <code>openrouter</code> family: alias <code>openrouter</code>, adapter kind <code>pi-openrouter</code>, provider <code>openrouter</code>, <code>contextWindow: null</code> — a made-up ceiling is worse than no ceiling</li>
-        <li><code class="status">[]</code> Keep the exactly-one-colon rule on the whole selector: <code>openrouter:~deepseek/deepseek-v4-flash-latest</code> has one colon and parses; anything with two still fails</li>
-        <li><code class="status">[]</code> Record in the file's header comment that this surface has no production caller today, so the next reader does not mistake a declaration for a gate</li>
+        <li><code class="status">[x]</code> Confirm the finding before acting on it: <code>resolveSelector</code> in <code>core/src/adapters/catalog.ts</code> carries the same regex plus a single-colon rule, and its only caller in the tree is <code>core/test/unit/adapters/catalog-registry.test.ts</code></li>
+        <li><code class="status">[x]</code> Move the model-name pattern onto <code>ModelFamily</code>, so each family admits its own shape and widening one cannot widen another</li>
+        <li><code class="status">[x]</code> Add the <code>openrouter</code> family: alias <code>openrouter</code>, adapter kind <code>pi-openrouter</code>, provider <code>openrouter</code>, <code>contextWindow: null</code> — a made-up ceiling is worse than no ceiling</li>
+        <li><code class="status">[x]</code> Keep the exactly-one-colon rule on the whole selector: <code>openrouter:~deepseek/deepseek-v4-flash-latest</code> has one colon and parses; anything with two still fails</li>
+        <li><code class="status">[x]</code> Record in the file's header comment that this surface has no production caller today, so the next reader does not mistake a declaration for a gate</li>
       </ul>
 
       <h4>3. Testing Strategy</h4>
       <p class="serves"><code class="serves">AC-2</code></p>
       <p>Pure unit tests over two regexes and one parser. No child, no fixture, no network. The half that matters is the <strong>over-fire control</strong>: a widened guard that silently widened its neighbour would pass every positive test in the suite, so the Codex refusals are re-asserted here rather than assumed to still hold.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>npm run test:unit</code> — the three admitted forms reach a command line on the OpenRouter route: <code>z-ai/glm-5.2</code>, <code>deepseek/deepseek-v4-flash-0731</code>, <code>~deepseek/deepseek-v4-flash-latest</code></li>
-        <li><code class="status">[]</code> <code>npm run test:unit</code> — <code>deepseek/deepseek-v4:high</code> is refused with <code>E_MODEL_UNRESOLVED</code>, proving the thinking-hijack refusal survived the widening</li>
-        <li><code class="status">[]</code> <code>npm run test:unit</code> — two slashes, a leading slash, a leading hyphen, a trailing <code>~</code>, and an over-length selector are each refused</li>
-        <li><code class="status">[]</code> <code>npm run test:unit</code> — <strong>over-fire control</strong>: all three OpenRouter forms are still refused by <code>selectorFor</code> on the Codex route, and <code>PI_PROVIDER</code> is asserted equal to <code>"openai-codex"</code> in the same test file</li>
-        <li><code class="status">[]</code> <code>npm run test:unit</code> — <code>resolveSelector("codex:z-ai/glm-5.2")</code> returns <code>null</code> while <code>resolveSelector("openrouter:z-ai/glm-5.2")</code> resolves, proving the per-family patterns are actually per-family</li>
-        <li><code class="status">[]</code> <code>npm run typecheck</code> and <code>npm run lint</code> — both exit 0</li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code> — the three admitted forms reach a command line on the OpenRouter route: <code>z-ai/glm-5.2</code>, <code>deepseek/deepseek-v4-flash-0731</code>, <code>~deepseek/deepseek-v4-flash-latest</code></li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code> — <code>deepseek/deepseek-v4:high</code> is refused with <code>E_MODEL_UNRESOLVED</code>, proving the thinking-hijack refusal survived the widening</li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code> — two slashes, a leading slash, a leading hyphen, a trailing <code>~</code>, and an over-length selector are each refused</li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code> — <strong>over-fire control</strong>: all three OpenRouter forms are still refused by <code>selectorFor</code> on the Codex route, and <code>PI_PROVIDER</code> is asserted equal to <code>"openai-codex"</code> in the same test file</li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code> — <code>resolveSelector("codex:z-ai/glm-5.2")</code> returns <code>null</code> while <code>resolveSelector("openrouter:z-ai/glm-5.2")</code> resolves, proving the per-family patterns are actually per-family</li>
+        <li><code class="status">[x]</code> <code>npm run typecheck</code> and <code>npm run lint</code> — both exit 0</li>
       </ul>
       <div class="loop">
         🔁 <strong>Do not exit this phase until every box above is checked.</strong>
@@ -884,6 +884,29 @@ flowchart LR
       <p><strong>For Q3, the dropped cap was checked against the code and costs nothing.</strong> The case it was meant to prevent — an OpenRouter builder reviewed by an OpenRouter reviewer — resolves to <em>one</em> distinct provider, and <code>providerPairFrom</code> refuses anything but exactly two. So a both-sides-from-one-pool review cannot be assembled with or without the cap. Task 11 gained a row requiring that be asserted rather than reasoned about.</p>
       <p><strong>One consequence the two verdicts create together, recorded as a risk rather than as a complaint.</strong> With <code>openrouter</code> now admissible on the reviewer side as well as the builder side, more recipes can reach three distinct providers across their agent phases — and every one of those is refused at preflight. The refusal is correct and stays. What changes is that making it <em>name the providers</em> rather than report a count stops being a nicety: it is now the thing that keeps these decisions usable in practice, which raises task 11 from tidy-up to load-bearing.</p>
       <p><strong>What changed in the document.</strong> All three Questionables carry a <code>DECIDED</code> block with the choice, the date and the reasoning, and each keeps its full option set. The Questionables diagram and its intro were rewritten for a plan with no open questions. The Solution table's inversion row, the M4 phase introduction, three rows of task 11's checklist, three rejected-approaches rows, one new Validation row, and the In Plain Language section were each revised, because every one of them described a plan with three open decisions. Section B of the build prompts and tickets T05 and T11 were regenerated for the same reason: each had instructed its session to wait on a verdict that now exists.</p>
+    </details>
+    <details>
+      <summary>2026-09-26 — Milestone M1 landed, built by a shift rather than by three sessions</summary>
+      <p><strong>Markers:</strong> M1's header and all eighteen of its rows move to <code class="status">[x]</code>, and
+      T01–T03 move to <code>done</code>, in one commit after the landing. No row is <code class="status">[f]</code>.</p>
+      <p>M1 was the bounded live drive of <code>awsf-v2-w17-shift.html</code>'s task 18. Its three tickets ran unattended as
+      one W17 shift, <code>w16-m1-shift-b</code>, on the shipped routes: builder <code>codex:gpt-6-sol</code>, reviewer
+      <code>claude:opus</code>. Each ticket is its own commit: T01 <code>65e7abf</code>, T02 <code>77e4619</code>, T03
+      <code>b88be25</code>. Each passed gates 3/3, and the one review accepted with 0 findings. The owner journeyed and landed
+      <code>b88be25</code>; L23 verified the canonical HEAD.</p>
+      <p><strong>Every row was checked against the landed code before it moved.</strong> <code>OPENROUTER_MODEL_SELECTOR</code>
+      lives in <code>core/src/adapters/pi-openrouter.ts</code>, with the colon and slash reasoning in the file's own words. Its
+      refusal uses <code>E_MODEL_UNRESOLVED</code> with the Codex route's exact message shape. <code>ModelFamily</code>
+      carries a per-family <code>modelNamePattern</code>. The <code>openrouter</code> family has <code>contextWindow: null</code>.
+      The one-colon rule stands, and the header records that <code>resolveSelector</code> has no production caller. The tests
+      name every input the Testing Strategy rows list, including the Codex over-fire control and <code>PI_PROVIDER</code>.
+      At <code>b88be25</code>: <code>npm run test:unit</code> 2221/2221, <code>npm run typecheck</code> exit 0, and the
+      candidate's own two test files 9/9.</p>
+      <p><strong>What the tickets asked for that the shift did not do.</strong> A shift builder may not write
+      <code>specs/</code>, so no M1 builder flipped a marker or wrote a Handoff; this entry and T04's Handoff do both. One
+      shape worth a reviewer's eye: the OpenRouter id pattern exists twice, once as the route's guard and once as the
+      catalog family's <code>modelNamePattern</code>. Task 1 forbids a shared module, so the two copies are the plan's own
+      shape, but they can drift, and nothing asserts that they agree.</p>
     </details>
   </section>
 

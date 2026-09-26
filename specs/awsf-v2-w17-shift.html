@@ -106,8 +106,8 @@ pre.mermaid{background:transparent;border:0;padding:0;margin:0;font-family:var(-
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-09-15</dd>
-        <dt>modified</dt>     <dd>2026-09-15, 2026-09-15 (Questionables decided), 2026-09-20 (selection widened), 2026-09-24 (M1 closed), 2026-09-25 (task 5; G17 reordered after it), 2026-09-25 (task 6), 2026-09-25 (M2 closed), 2026-09-25 (task 8), 2026-09-25 (task 9; the shift binding pulled forward), 2026-09-25 (CLI wiring, owner-directed, outside the ticket set), 2026-09-25 (M3 closed: task 10), 2026-09-25 (task 11), 2026-09-25 (task 12), 2026-09-25 (M4 closed: task 13), 2026-09-25 (task 14), 2026-09-25 (task 15), 2026-09-26 (M5 closed: task 16), 2026-09-26 (task 17; cancel seals a parked shift, owner-directed), 2026-09-26 (M6 closed: task 18, the live drive, and the workstream), 2026-09-26 (a shift can be journeyed, so it can land)</dd>
-        <dt>commits</dt>      <dd>M1 landed: a3d83ef (T01), 323bd0c (T02), d5b3b2c (T03). M2 landed: 16e6f47 (T04), c9bbcc2 (T05), c5c830b (T06), 060b698 (T07). M3 landed: 852b0a8 (T08), a66ccde (CLI wiring, owner-directed), 2a4e58d (T09), 185c462 (T10). M4 landed: d79a2c5 (T11), 7bc79bd (T12), e85f648 (T13). M5 landed: 0b1e151 (T14), 3ccd3b1 (T15), 98cb567 (T16). M6 landed: daa4bb0 (T17), the commit carrying this entry (T18)</dd>
+        <dt>modified</dt>     <dd>2026-09-15, 2026-09-15 (Questionables decided), 2026-09-20 (selection widened), 2026-09-24 (M1 closed), 2026-09-25 (task 5; G17 reordered after it), 2026-09-25 (task 6), 2026-09-25 (M2 closed), 2026-09-25 (task 8), 2026-09-25 (task 9; the shift binding pulled forward), 2026-09-25 (CLI wiring, owner-directed, outside the ticket set), 2026-09-25 (M3 closed: task 10), 2026-09-25 (task 11), 2026-09-25 (task 12), 2026-09-25 (M4 closed: task 13), 2026-09-25 (task 14), 2026-09-25 (task 15), 2026-09-26 (M5 closed: task 16), 2026-09-26 (task 17; cancel seals a parked shift, owner-directed), 2026-09-26 (M6 closed: task 18, the live drive, and the workstream), 2026-09-26 (a shift can be journeyed, so it can land), 2026-09-26 (the live drive's candidate landed)</dd>
+        <dt>commits</dt>      <dd>M1 landed: a3d83ef (T01), 323bd0c (T02), d5b3b2c (T03). M2 landed: 16e6f47 (T04), c9bbcc2 (T05), c5c830b (T06), 060b698 (T07). M3 landed: 852b0a8 (T08), a66ccde (CLI wiring, owner-directed), 2a4e58d (T09), 185c462 (T10). M4 landed: d79a2c5 (T11), 7bc79bd (T12), e85f648 (T13). M5 landed: 0b1e151 (T14), 3ccd3b1 (T15), 98cb567 (T16). M6 landed: daa4bb0 (T17), a053128 (T18), 51e2a4f (journey fix, after the close)</dd>
         <dt>agent name</dt>   <dd>Claude Opus 5, Claude Sonnet 5 (tasks 10-16), Claude Opus 5.5 (task 18)</dd>
         <dt>session id</dt>   <dd>not recorded — AGENTS.md invariant 1 keeps live session state out of every committed file in this repository</dd>
         <dt>back refs</dt>    <dd>./awsf-v2-plan.html (the v2 spine, § Milestone M17 → W17, and its 2026-09-03 amendment which this plan supersedes), ../AGENTS.md (the twelve invariants), ./awsf-v2-w04-project-registry.html (the <code>delivery</code> posture this plan reads), ./awsf-v2-w07-quota-telemetry.html (the L26 boundary stop a long shift will meet)</dd>
@@ -2168,6 +2168,19 @@ flowchart LR
       <code>JourneyNotApplicable</code>.</p>
       <p><strong>What a later workstream should take from it.</strong> A workflow that ends at the owner gate is proven only
       when a test carries it through the gate. Stopping at <code>AWAITING_OWNER</code> proves the run, not the landing.</p>
+    </details>
+
+    <details open>
+      <summary>2026-09-26 — the live drive's candidate landed</summary>
+      <p><strong>No marker moves.</strong> The M6-closing amendment says <code>b88be25</code> was not landed and would meter
+      one commit behind <code>main</code>. Both statements are now history. With the owner's go-ahead, local
+      <code>main</code> was moved back to <code>daa4bb0</code>. Neither W17 commit had been pushed, and neither touches a
+      file the candidate touches. The owner then ran <code>awsf journey w16-m1-shift-b</code> and <code>awsf land
+      w16-m1-shift-b</code> from a checkout of the journey fix. The meter read <code>ahead 0, behind 3</code>, and L23
+      verified the canonical HEAD at <code>b88be25</code>. The two W17 commits were cherry-picked back on top, as
+      <code>a053128</code> (T18) and <code>51e2a4f</code> (the journey fix). So one owner journey and one owner landing
+      carried three tickets, which is the one act instead of N that this workstream exists for. W16's M1 markers moved in
+      the commit that carries this entry.</p>
     </details>
 
   </section>
