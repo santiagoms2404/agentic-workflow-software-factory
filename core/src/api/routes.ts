@@ -302,6 +302,8 @@ export interface ApiRouterOptions {
   readonly config: AwsfConfig;
   /** Resolved catalog plans; the list response never receives paths or bodies. */
   readonly planSources?: readonly ResolvedPlanSource[];
+  /** Checkout whose catalog is re-resolved on each read when `planSources` is absent. */
+  readonly repository?: string;
   /** Defaults to the directory containing the projection database. */
   readonly stateRoot?: string;
   readonly open?: typeof openDatabase;
@@ -323,6 +325,29 @@ export function resolveTicketPlanSources(repository = process.cwd()): readonly R
   }
 }
 
+interface PlanCatalog {
+  readonly key: string;
+  readonly reader: PlanTicketReader;
+  readonly sessionPlans: readonly SessionPlan[];
+}
+
+function planCatalogKey(sources: readonly ResolvedPlanSource[]): string {
+  return sources.map((source) => `${source.planPath}\0${source.ticketsPath}`).join("\n");
+}
+
+function planCatalog(sources: readonly ResolvedPlanSource[]): PlanCatalog {
+  return Object.freeze({
+    key: planCatalogKey(sources),
+    reader: new PlanTicketReader(sources),
+    // Structural classification only: `classifyPlans` reads no plan HTML, so the
+    // sessions list stays a database read plus one resolved catalog.
+    sessionPlans: Object.freeze(classifyPlans(sources).map((plan) => ({
+      id: plan.id, name: plan.name, kind: plan.kind,
+      parentSpine: plan.parentSpine, parentSpineName: plan.parentSpineName,
+    }))),
+  });
+}
+
 function routeParams(routePath: string, segments: readonly string[]): Record<string, string> | null {
   const expected = routePath.split("/").slice(1);
   if (expected.length !== segments.length) return null;
@@ -340,14 +365,23 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
   const opener = options.open ?? openDatabase;
   const readDb = opener(options.dbPath, { readonly: true });
   const planningStateRoot = options.stateRoot ?? dirname(options.dbPath);
-  const planSources = options.planSources ?? resolveTicketPlanSources();
-  const ticketReader = new PlanTicketReader(planSources);
-  // Structural classification only: `classifyPlans` reads no plan HTML, so the
-  // sessions list stays a database read plus one already-resolved catalog.
-  const sessionPlans: readonly SessionPlan[] = classifyPlans(planSources).map((plan) => ({
-    id: plan.id, name: plan.name, kind: plan.kind,
-    parentSpine: plan.parentSpine, parentSpineName: plan.parentSpineName,
-  }));
+  // The catalog is re-resolved on every read rather than once at startup, so a
+  // plan authored while `awsf dash` is up reaches the backlog without a
+  // restart. The reader is rebuilt only when the resolved plan set changes,
+  // keeping its per-file cache across ordinary polls, and a catalog that fails
+  // to resolve mid-edit keeps serving the last good set.
+  let plans = planCatalog(options.planSources ?? resolveTicketPlanSources(options.repository));
+  const currentPlans = (): PlanCatalog => {
+    if (options.planSources !== undefined) return plans;
+    let sources: readonly ResolvedPlanSource[];
+    try {
+      sources = resolveTicketPlanSources(options.repository);
+    } catch {
+      return plans;
+    }
+    if (planCatalogKey(sources) !== plans.key) plans = planCatalog(sources);
+    return plans;
+  };
   let archiveDb: DatabaseSync | null = null;
 
   const handlers: Readonly<Record<ApiRouteName, ApiHandler>> = {
@@ -378,7 +412,7 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
       });
       return jsonResponse({
         sessions: rows.map((row) => card(readDb, row)),
-        plans: [...sessionPlans],
+        plans: [...currentPlans().sessionPlans],
       } satisfies SessionsResponse);
     }),
     session: safely(async (_request, params) => {
@@ -493,7 +527,7 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
         if (!/^[TW]\d\d$/u.test(ticket)) {
           throw new ApiRequestError(400, "invalid-query", "ticket must be a zero-padded Tnn or Wnn id");
         }
-        const source = await ticketReader.source(plan, ticket);
+        const source = await currentPlans().reader.source(plan, ticket);
         if (source === null) throw new ApiRequestError(404, "ticket-not-found", "ticket not found");
         const body = { uid: `${plan}/${ticket}`, plan, ticket, source } satisfies TicketSourceResponse;
         // Repository ticket text is intentionally verbatim. Running it through
@@ -503,7 +537,7 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
       }
 
       const backlog = await queryPlanBacklog(
-        ticketReader,
+        currentPlans().reader,
         backlogSessionCosts(readDb).map((row) => ({ taskId: row.task_id, estimatedCostUsd: row.estimated_cost_usd, costAuthority: row.cost_authority })),
       );
       return jsonResponse(backlog satisfies TicketsResponse);

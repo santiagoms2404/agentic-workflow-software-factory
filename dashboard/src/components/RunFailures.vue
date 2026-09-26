@@ -45,7 +45,7 @@ function rowKey(sessionId: string, ordinal: number): string {
          counting blocked runs would never show it. -->
     <div class="run-failures-bar">
       <h2 id="run-failures-title">Why runs stopped</h2>
-      <span class="run-failures-note">{{ failures.length }} failed phase(s), every run on this board</span>
+      <span class="run-failures-total" :title="`${failures.length} failed phase(s), every run on this board`" :aria-label="`${failures.length} failed phases`">{{ failures.length }}</span>
       <div class="run-failures-classes" role="group" aria-label="Failure kinds">
       <button
         v-for="failure in present"

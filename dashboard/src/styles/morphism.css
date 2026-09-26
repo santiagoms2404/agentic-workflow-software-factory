@@ -234,13 +234,29 @@
   gap: 12px;
   padding: 14px 18px;
 }
-.run-failures-note, .run-failures-meaning { margin: 0; color: var(--dim); font: 12px var(--mono); }
+.run-failures-meaning { margin: 0; color: var(--dim); font: 12px var(--mono); }
 /* One line: the title, what it counts, and the classes, with the chips taking
    the width the heading would otherwise leave empty. */
-.run-failures-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
-.run-failures-bar h2 { margin: 0; }
-.run-failures-classes { flex: 1 1 auto; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
-.run-failure-class { gap: 10px; }
+.run-failures-bar { display: flex; align-items: center; gap: 14px; }
+/* Same heading voice as the filter menus beside it, so it reads as one of them. */
+.run-failures-bar h2 { flex: none; margin: 0; color: var(--dim); font: 700 13px var(--mono); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
+.run-failures-total {
+  flex: none;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 8px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--neu-surface);
+  box-shadow: var(--neu-raised-soft);
+  color: var(--count);
+  font: 700 13px var(--mono);
+}
+.run-failures-classes { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+/* Compact chips so the title, the count and every class fit on one line. */
+.run-failures-classes .run-failure-class { min-height: 38px; gap: 8px; padding: 7px 12px; font-size: 12px; white-space: nowrap; }
+.run-failure-class .session-filter-count { padding-left: 8px; font-size: 11px; }
 .run-failures-codes { display: flex; flex-wrap: wrap; gap: 8px 14px; margin: 0; }
 .run-failure-code { display: inline-flex; align-items: center; gap: 7px; color: var(--dim); font-size: 12px; }
 /* Exactly three rows tall, then it scrolls: the list is for reading a pattern,
