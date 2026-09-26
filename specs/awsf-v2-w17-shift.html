@@ -106,9 +106,9 @@ pre.mermaid{background:transparent;border:0;padding:0;margin:0;font-family:var(-
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-09-15</dd>
-        <dt>modified</dt>     <dd>2026-09-15, 2026-09-15 (Questionables decided), 2026-09-20 (selection widened), 2026-09-24 (M1 closed), 2026-09-25 (task 5; G17 reordered after it), 2026-09-25 (task 6), 2026-09-25 (M2 closed), 2026-09-25 (task 8), 2026-09-25 (task 9; the shift binding pulled forward), 2026-09-25 (CLI wiring, owner-directed, outside the ticket set), 2026-09-25 (M3 closed: task 10), 2026-09-25 (task 11), 2026-09-25 (task 12), 2026-09-25 (M4 closed: task 13)</dd>
-        <dt>commits</dt>      <dd>M1 landed: a3d83ef (T01), 323bd0c (T02), d5b3b2c (T03). M2 landed: 16e6f47 (T04), c9bbcc2 (T05), c5c830b (T06), 060b698 (T07). M3 landed: 852b0a8 (T08), a66ccde (CLI wiring, owner-directed), 2a4e58d (T09), 185c462 (T10). M4 landed: d79a2c5 (T11), 7bc79bd (T12), this commit (T13)</dd>
-        <dt>agent name</dt>   <dd>Claude Opus 5, Claude Sonnet 5 (tasks 10-13)</dd>
+        <dt>modified</dt>     <dd>2026-09-15, 2026-09-15 (Questionables decided), 2026-09-20 (selection widened), 2026-09-24 (M1 closed), 2026-09-25 (task 5; G17 reordered after it), 2026-09-25 (task 6), 2026-09-25 (M2 closed), 2026-09-25 (task 8), 2026-09-25 (task 9; the shift binding pulled forward), 2026-09-25 (CLI wiring, owner-directed, outside the ticket set), 2026-09-25 (M3 closed: task 10), 2026-09-25 (task 11), 2026-09-25 (task 12), 2026-09-25 (M4 closed: task 13), 2026-09-25 (task 14), 2026-09-25 (task 15), 2026-09-26 (M5 closed: task 16)</dd>
+        <dt>commits</dt>      <dd>M1 landed: a3d83ef (T01), 323bd0c (T02), d5b3b2c (T03). M2 landed: 16e6f47 (T04), c9bbcc2 (T05), c5c830b (T06), 060b698 (T07). M3 landed: 852b0a8 (T08), a66ccde (CLI wiring, owner-directed), 2a4e58d (T09), 185c462 (T10). M4 landed: d79a2c5 (T11), 7bc79bd (T12), e85f648 (T13). M5 landed: 0b1e151 (T14), 3ccd3b1 (T15), this commit (T16)</dd>
+        <dt>agent name</dt>   <dd>Claude Opus 5, Claude Sonnet 5 (tasks 10-16)</dd>
         <dt>session id</dt>   <dd>not recorded — AGENTS.md invariant 1 keeps live session state out of every committed file in this repository</dd>
         <dt>back refs</dt>    <dd>./awsf-v2-plan.html (the v2 spine, § Milestone M17 → W17, and its 2026-09-03 amendment which this plan supersedes), ../AGENTS.md (the twelve invariants), ./awsf-v2-w04-project-registry.html (the <code>delivery</code> posture this plan reads), ./awsf-v2-w07-quota-telemetry.html (the L26 boundary stop a long shift will meet)</dd>
         <dt>forward refs</dt> <dd>./tickets/awsf-v2-w17-shift/ (the execution surface), ./awsf-v2-w17-shift-build-prompts.md (§ Section B, the prompt source the invariant-12 fence pairs against)</dd>
@@ -558,7 +558,7 @@ stateDiagram-v2
     </div>
 
     <div class="phase">
-      <h3><code class="status">[wip]</code> Milestone M5: The single owner gate <span class="wtag core">gated on <span class="gate">G17-M</span></span></h3>
+      <h3><code class="status">[x]</code> Milestone M5: The single owner gate <span class="wtag core">gated on <span class="gate">G17-M</span></span></h3>
       <p>Everything above exists so that this is one act instead of N. The shift reaches <code>AWAITING_OWNER</code> once, and what the owner reads there has to carry N tickets' worth of evidence without costing N sessions. <strong>This is where the batch's correctness is actually established</strong> — the amendment's third live-drive finding said the suite is not the acceptance bar, and batching multiplies exposure to exactly that gap.</p>
       <figure>
         <pre class="mermaid">
@@ -625,11 +625,11 @@ flowchart LR
       <p class="sub">Serves <code class="serves">AC-6</code> · <code class="serves">INV-1</code> · <code class="serves">INV-2</code> · <code class="serves">INV-3</code></p>
       <p>The readout is a pure projection of records, so it is tested as one against a fixture attempt directory — golden-text, no git and no server. The three invariants get meta-tests that are <strong>proven to bite</strong> before they are trusted. The preview's freshness is tested by making the bundle stale and watching the step refuse.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>npx tsx --test core/test/unit/shift-readout.test.ts</code> — golden readout for a clean five-ticket shift and for one blocked at ticket 3</li>
-        <li><code class="status">[]</code> <code>npx tsx --test core/test/unit/meta/</code> — the INV-1, INV-2 and INV-3 fences each go red when deliberately violated, then green again</li>
-        <li><code class="status">[]</code> A stale bundle makes the preview step <strong>refuse</strong> rather than serve, and the test asserts the refusal names staleness rather than a missing file</li>
-        <li><code class="status">[]</code> Each <code>delivery</code> posture selects its own preview form, including <code>mobile</code> selecting the named-not-built path</li>
-        <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code>, <code>npm run lint</code> — green, counts recorded</li>
+        <li><code class="status">[x]</code> <code>npx tsx --test core/test/unit/shift-readout.test.ts</code> — golden readout for a clean five-ticket shift and for one blocked at ticket 3 <em>(6/6: T15 added a fifth case for the ref-status wording and a sixth for the preview line; both goldens are named above and neither was rewritten)</em></li>
+        <li><code class="status">[x]</code> <code>npx tsx --test core/test/unit/meta/</code> — the INV-1, INV-2 and INV-3 fences each go red when deliberately violated, then green again <em>(INV-1 was already proven to bite by T14; this task adds the INV-2/INV-3 half to the same file, scoped to the existing WORKSTREAM_MODULES list, and reproves all three by hand: a `setTimeout` in `bind.ts`, a bare `node:child_process` import in `preview.ts`, and a `"push"`-token literal in `shift.ts` each turned exactly the fence naming that offence red, and the fence was green again after each revert)</em></li>
+        <li><code class="status">[x]</code> A stale bundle makes the preview step <strong>refuse</strong> rather than serve, and the test asserts the refusal names staleness rather than a missing file <em>(already closed by T15's `shift-preview.test.ts`, 8/8; verified, not rewritten)</em></li>
+        <li><code class="status">[x]</code> Each <code>delivery</code> posture selects its own preview form, including <code>mobile</code> selecting the named-not-built path <em>(already closed by T15's `shift-preview.test.ts`; verified, not rewritten)</em></li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code>, <code>npm run lint</code> — green, counts recorded</li>
       </ul>
       <div class="loop">
         🔁 <strong>Do not exit this phase until every box above is checked.</strong>
@@ -1880,6 +1880,87 @@ flowchart LR
       <code>preview-record.ts</code>. <code>npm run test:unit</code>: 2203/2203 at base <code>0b1e151</code> before
       any change, and 2212/2212 after (the nine new cases). <code>npm run typecheck</code>: exit 0 across both
       projects. <code>npm run lint</code>: 0 warnings, 0 errors on 611 files.</p>
+    </details>
+
+    <details open>
+      <summary>2026-09-26 — task 16 built, Milestone M5 closed: the single owner gate is observably true</summary>
+
+      <p><strong>Markers:</strong> task 16's five rows move to <code class="status">[x]</code>, two of them with
+      a note naming the earlier task that already closed them. Milestone M5's header moves to
+      <code class="status">[x]</code>.</p>
+
+      <h3>What M5 accomplished, in terms of what is now observably true</h3>
+      <p>A shift now reaches <code>AWAITING_OWNER</code> once and prints, in one screen, everything an owner needs
+      to sign off N tickets: each ticket's id, title, candidate SHA and gate result read straight off the manifest
+      and the accepted-phase records (task 14); one review over the accumulated diff, findings listed once with
+      the blocking count stated apart from the total (task 14); the candidate ref, so the owner reaches it with
+      ordinary git and no worktree (task 14); and a preview line that is built fresh immediately before it is
+      shown, in the form the repository's own <code>delivery</code> posture declares, never a hard-coded browser
+      step (task 15). Three invariants that could have quietly rotted into assumptions are instead fences that
+      have each been made to fail on a real, hand-introduced violation and pass again after the revert: INV-1
+      (landing stays human and at a TTY), INV-2 (no route this workstream adds is anything but read-only, and
+      nothing here spawns a process outside the transport broker), and INV-3 (no push path and no skill in the
+      execution path). A stale preview bundle is refused by name rather than served with a caveat, and each
+      delivery posture — <code>service</code>, <code>mobile</code>, <code>docs</code>, <code>none</code> — selects
+      its own preview form without a per-ticket flag anywhere.</p>
+
+      <h3>Every task in M5 and its final state</h3>
+      <ul>
+        <li><code>[x]</code> Task 14 — the owner readout and the INV-1 fence. Closed 2026-09-25.</li>
+        <li><code>[x]</code> Task 15 — the preview builds fresh, and its form follows <code>delivery</code>. Closed 2026-09-25.</li>
+        <li><code>[x]</code> Task 16 (this task) — the M5 testing strategy, and the INV-2/INV-3 fences. Closed
+        2026-09-26. No row was left <code>[f]</code>.</li>
+      </ul>
+
+      <h3>Friction, and what M6 must do differently because of it</h3>
+      <p>The Testing Strategy checklist as written asked for one fresh proof of each of three invariants under one
+      task heading, but T14 had already proven INV-1 to bite while writing task 14's own fence, and T15 had
+      already proven the preview-staleness and delivery-posture rows to bite while writing <code>shift-preview.test.ts</code>
+      — both recorded in this ticket's Handoff before this session opened it. Re-deriving coverage a predecessor
+      session already built and verified would have been waste, not rigor, so this task verified those three rows
+      against the existing suites rather than rewriting them, and confined its own new work to the two rows T15's
+      Handoff named as unabsorbed: the INV-2 and INV-3 halves of the fence. <strong>What M6 should take from
+      this:</strong> a milestone's closing task should expect its predecessor tasks' Handoffs to have already
+      closed some of its own checklist rows in passing, and should read them before assuming every row is its own
+      to build — the Handoff, not the checklist's literal wording, says what is actually left. The three-invariant
+      violate-and-revert exercise the plan's DO section asks for is real work worth budgeting time for on its own:
+      each of the three took a source edit, a scoped test run, and a revert-and-reconfirm-clean cycle, which is
+      three round trips through the full fence file rather than one.</p>
+
+      <h3>Decisions this task made that the plan did not already carry</h3>
+      <p>The INV-2/INV-3 fence bans three literal shapes across the same <code>WORKSTREAM_MODULES</code> scope
+      INV-1 already uses, rather than a fourth import-graph walk: a bare <code>child_process</code> import, the
+      quoted <code>"push"</code> token, and any reference to <code>API_ROUTE_TABLE</code>. The third stands in for
+      &ldquo;registers an API route&rdquo; because in this codebase route registration has exactly one honest
+      shape — an entry in <code>core/src/api/routes.ts</code>'s frozen array — and neither <code>preview.ts</code>
+      nor any shift CLI command is an API handler at all; a workstream module that so much as names that table has
+      wandered somewhere it should not be. The first two shapes are deliberately the same patterns
+      <code>child-process-fence.test.ts</code> and <code>publish-fence.test.ts</code> already enforce
+      repository-wide — this fence does not widen what is forbidden, it gives the workstream's own record of INV-2
+      and INV-3 a place to point at when someone asks whether this plan's invariants, specifically, have been
+      shown to hold.</p>
+
+      <h3>Evidence</h3>
+      <p><code>node --experimental-strip-types --test core/test/unit/shift-readout.test.ts</code>: 6/6.
+      <code>node --experimental-strip-types --test core/test/unit/meta/shift-owner-gate-fence.test.ts</code>: 9/9,
+      with a deliberate <code>setTimeout</code> in <code>bind.ts</code> (INV-1), a bare
+      <code>import "node:child_process"</code> in <code>preview.ts</code> (INV-2) and a quoted <code>"push"</code>
+      literal in <code>shift.ts</code> (INV-3) each turning exactly the case naming that offence red — the
+      child_process and push-token probes also turned <code>child-process-fence.test.ts</code> and
+      <code>publish-fence.test.ts</code> red at the same time, as expected — and 9/9 again after each revert.
+      <code>node --experimental-strip-types --test core/test/unit/shift-preview.test.ts</code>: 8/8, unmodified
+      from T15. <code>npm run test:unit</code>: 2214/2214 (a clean rerun at the session's base SHA showed one
+      unrelated flake at 2213/2214 that did not reproduce; the fixture is not part of this task's scope and is not
+      touched here). <code>npm run typecheck</code>: exit 0 across both projects. <code>npm run lint</code>: 0
+      warnings, 0 errors on 611 files. <code>npm test</code>: full suite in one invocation — unit 2214/2214,
+      contract 149/149, sim 98/98, journeys 266/266, exit 0 — <code>git status --porcelain</code> clean
+      afterward.</p>
+
+      <h3>Landing commit and suite counts at close</h3>
+      <p>This commit closes T16 and Milestone M5. Suite counts at close: <code>npm run test:unit</code>
+      2214/2214, <code>npm run test:contract</code> 149/149, <code>npm run test:sim</code> 98/98,
+      <code>npm run test:journeys</code> 266/266, <code>npm run typecheck</code> exit 0, <code>npm run lint</code>
+      0/0 on 611 files.</p>
     </details>
 
   </section>

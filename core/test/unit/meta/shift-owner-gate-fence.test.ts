@@ -135,6 +135,43 @@ test("`awsf land` refuses a non-interactive stdin before it asks anything, and t
   }
 });
 
+// W17 INV-2 and INV-3, over the same WORKSTREAM_MODULES scope INV-1 uses.
+// INV-2: the dashboard records intent; a human-started session compiles and
+// drains it. `node:child_process` stays out of every workstream module (AGENTS.md
+// invariant 3 bars it repository-wide; this is the workstream's own record of
+// it), and no route this workstream adds may be anything but read-only — which
+// this repository spells as "adds nothing to API_ROUTE_TABLE", since `preview.ts`
+// and the shift commands are CLI, never API handlers.
+// INV-3: no push path and no skill in the execution path. AGENTS.md invariant 8
+// confines the push token to `publish/argv.ts` repository-wide; this bars it from
+// the workstream's own modules the same way.
+//
+// `preview.ts` is the one W17 module that runs a process, and it does so through
+// `runSystemCommand` from `transport-broker.ts`, never `node:child_process`
+// directly — so this fence bans the import, not the broker.
+const FORBIDDEN_INV23: readonly (readonly [string, RegExp])[] = [
+  ["imports node:child_process", /(['"])(node:)?child_process\1/u],
+  ["names the push token", /(["'])push\1/u],
+  ["registers an API route", /\bAPI_ROUTE_TABLE\b/u],
+];
+
+function offencesInv23(source: string): string[] {
+  return FORBIDDEN_INV23.filter(([, pattern]) => pattern.test(source)).map(([what]) => what);
+}
+
+test("no workstream module imports child_process, names the push token, or registers an API route", () => {
+  const found = workstreamFiles().flatMap((file) =>
+    offencesInv23(readFileSync(join(repoRoot(), file), "utf8")).map((what) => `${file} ${what}`));
+  assert.deepEqual(found, []);
+});
+
+test("the INV-2/INV-3 detector sees each offence when one is added", () => {
+  assert.deepEqual(offencesInv23('const cp = require("node:child_process");'), ["imports node:child_process"]);
+  assert.deepEqual(offencesInv23('await git(["push", "origin", "main"]);'), ["names the push token"]);
+  assert.deepEqual(offencesInv23('API_ROUTE_TABLE.concat([{ method: "push", path: "/api/v1/preview", name: "preview" }]);'),
+    ["names the push token", "registers an API route"]);
+});
+
 function awaitingShift(repository: string): AttemptStatus {
   return {
     schema: "awsf/attempt-status/v1", sessionId: "inv1-session", project: "fixture", taskId: "fixture-shift", continuesTask: null,
