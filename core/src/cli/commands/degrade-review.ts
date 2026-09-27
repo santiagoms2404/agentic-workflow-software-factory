@@ -29,7 +29,6 @@
 
 import {
   isTerminalStatus,
-  nextActionFor,
   nextRevision,
   persistAttempt,
   readAttempt,
@@ -164,8 +163,10 @@ export async function degradeReviewCommand(
     reviewDegradation: grant,
     lastActivityAt: at,
     lastActivity: `owner allowed a same-provider review on this attempt: ${reason}`,
-    // The lifecycle did not move, so neither does the recommendation.
-    nextAction: nextActionFor(current.lifecycleState, current.taskId),
+    // The lifecycle did not move. Keep the attempt's specific instruction
+    // (including a pending adoption's exact repeat command), not a generic
+    // recommendation for its lifecycle state.
+    nextAction: current.nextAction,
   });
   const persisted = await persistAttempt(options.attemptDir, current.revision, {
     kind: "attempt.updated",

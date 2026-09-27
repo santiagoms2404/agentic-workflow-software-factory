@@ -12,6 +12,7 @@ import { landCommand } from "../../src/cli/commands/land.ts";
 import { createDashboardProjection } from "../../src/cli/commands/dashboard-projection.ts";
 import { toConfigSnapshotJson } from "../../src/config/effective-config.ts";
 import { sha256 } from "../../src/contracts/owner-amendment.ts";
+import { readAttemptEvidence } from "../../src/cli/commands/review-record.ts";
 import { seedFixture, git, SeedAdapter, fakeSeedBroker, INHERITED, AUTHORED } from "../fixtures/seeded-continuation.ts";
 
 async function buildTarget(instruction?: string) {
@@ -75,6 +76,43 @@ test("8C builds from the seed, attributes only target edits, reviews the full di
     assert.equal(landed.status.lifecycleState, "LANDED");
     assert.equal(git(world.repository, "rev-parse", "HEAD"), world.result.candidateSha);
   } finally { world.projection.close(); }
+});
+
+test("seeded target executes its explicit builder and reviewer routes end to end", async () => {
+  const world = await seedFixture();
+  const sourceBytes = readFileSync(join(world.sourceDir, "journal.jsonl"));
+  const created = await seedCommand({ ...world.seedOptions, routes: [
+    "builder=codex/openai-codex/seed-builder@high",
+    "reviewer=claude/anthropic/seed-reviewer@low",
+  ] });
+  const dir = created.attemptDir!;
+  assert.deepEqual(created.status?.routeOverrides, {
+    builder: { adapter: "codex", provider: "openai-codex", model: "seed-builder", effort: "high" },
+    reviewer: { adapter: "claude", provider: "anthropic", model: "seed-reviewer", effort: "low" },
+  });
+  await startCommand({ attemptDir: dir, configPath: world.configPath, worktreeRoot: join(world.root, "targets"),
+    preflight: () => ({ adapter: true, sandbox: true, observability: true }) });
+  const status = await runProductionCommand({ attemptDir: dir, stateRoot: world.stateRoot, config: world.config, configPath: world.configPath,
+    infrastructure: { adapterFor: (_entry, id) => new SeedAdapter(id, []), createBroker: fakeSeedBroker, sandboxProbe: () => false } });
+  assert.equal(status.lifecycleState, "AWAITING_OWNER", status.blocker?.detail);
+  assert.equal(status.budget.callsSpent, 2);
+  const evidence = await readAttemptEvidence(dir);
+  for (const [role, adapter, provider, model, effort] of [
+    ["builder", "codex", "openai-codex", "seed-builder", "high"],
+    ["reviewer", "claude", "anthropic", "seed-reviewer", "low"],
+  ] as const) {
+    const start = evidence.find((record) => record.type === "agent-start" && record.agent === role);
+    assert.equal(start?.type, "agent-start");
+    if (start?.type !== "agent-start") throw new Error(`missing ${role} launch`);
+    assert.equal(start.adapterId, adapter);
+    assert.equal(start.provider, provider);
+    assert.equal(start.requestedModel, model);
+    assert.equal(start.route?.requested.effort, effort);
+    assert.equal(start.route?.requested.sources.model, "attempt-override");
+    const resolved = evidence.find((record) => record.type === "agent" && record.agent === role);
+    assert.equal(resolved?.type === "agent" ? resolved.resolvedModel : null, model);
+  }
+  assert.deepEqual(readFileSync(join(world.sourceDir, "journal.jsonl")), sourceBytes);
 });
 
 test("8C refuses a base advance that is still an ancestor of the final candidate", async () => {

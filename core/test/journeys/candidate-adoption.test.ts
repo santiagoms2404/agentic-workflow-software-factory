@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { test } from "node:test";
+import { stringify } from "yaml";
 
 import {
   reservationIdOf,
@@ -15,6 +16,7 @@ import {
   type TransportBroker,
 } from "../../src/adapters/interface.ts";
 import { loadConfig } from "../../src/config/load.ts";
+import { main } from "../../src/cli/main.ts";
 import type { AwsfConfig } from "../../src/config/schema.ts";
 import type { NormalizedEvent } from "../../src/contracts/normalized-events.ts";
 import type { ReviewOutput } from "../../src/contracts/review-output.ts";
@@ -28,7 +30,6 @@ import {
 } from "../../src/cli/commands/adopt.ts";
 import { nextRevision, persistAttempt, readAttempt, type AttemptStatus } from "../../src/cli/commands/attempt.ts";
 import { journeyCommand } from "../../src/cli/commands/journey.ts";
-import { degradeReviewCommand } from "../../src/cli/commands/degrade-review.ts";
 import { landCommand } from "../../src/cli/commands/land.ts";
 import { journalFilePath, statusFilePath } from "../../src/persistence/platform-paths.ts";
 import type { OwnerTerminal } from "../../src/cli/tty.ts";
@@ -308,7 +309,11 @@ test("same-provider adoption waits live at zero calls for an owner grant, then r
     assert.equal(pending.status?.lifecycleState, "GATING");
     assert.equal(pending.status?.gatesPass, true);
     assert.equal(pending.status?.budget.callsSpent, 0);
+    assert.equal(pending.reusedTarget, false);
     assert.equal(pending.status?.reviewDegradation, null, "the source grant does not transfer");
+    const repeat = pending.status!.nextAction;
+    assert.match(repeat, /after `awsf degrade-review pending-target --reason "<why>"`, run `awsf retry 'generic-source' --attempt 1 --adopt-as 'pending-target'/);
+    assert.ok(repeat.includes("--route 'reviewer=codex/openai-codex/target-review@high'"));
     assert.deepEqual(pending.status?.routeOverrides, { reviewer: { adapter: "codex", provider: "openai-codex", model: "target-review", effort: "high" } });
     assert.equal(gates, 1);
     assert.equal([...adapters.values()].reduce((n, adapter) => n + adapter.launches, 0), 0);
@@ -316,14 +321,23 @@ test("same-provider adoption waits live at zero calls for an owner grant, then r
     await assert.rejects(adoptCommand({ ...options, routes: ["reviewer=claude/anthropic/different@high"] }), /already exists and is not this pending adoption/);
     assert.deepEqual(readFileSync(journalFilePath(pending.attemptDir!)), pendingBytes);
     assert.equal(gates, 1);
-    const granted = await degradeReviewCommand({ attemptDir: pending.attemptDir!, reason: "The owner accepts reduced independence for this candidate", terminal: terminalWithCount });
-    assert.equal(granted.confirmed, true);
+    // Exercise the real owner CLI output, not just the command result: it must
+    // retain the target-specific repeat instruction instead of a generic GATING action.
+    const cliConfig = join(root, "awsf.config.yaml");
+    writeFileSync(cliConfig, stringify(config));
+    const output: string[] = [];
+    assert.equal(await main({ cwd: fixture.repository, argv: ["degrade-review", "pending-target", "--reason", "The owner accepts reduced independence for this candidate", "--config", cliConfig, "--state-root", fixture.stateRoot],
+      terminal: terminalWithCount, writeOut: (line) => { output.push(line); }, writeError: (line) => { output.push(line); } }), 0);
+    const granted = await readAttempt(pending.attemptDir!);
+    assert.equal(granted.nextAction, repeat);
+    assert.ok(output.includes(repeat), "the CLI displays the exact repeat command after the grant");
     const resumed = await adoptCommand(options);
     assert.equal(resumed.attemptDir, pending.attemptDir);
+    assert.equal(resumed.reusedTarget, true);
     assert.equal(resumed.status?.sessionId, pending.status?.sessionId);
     assert.equal(resumed.status?.lifecycleState, "AWAITING_OWNER", resumed.status?.blocker?.detail);
     assert.equal(resumed.status?.budget.callsSpent, 1);
-    assert.equal(resumed.status?.reviewDegradation?.reason, granted.status.reviewDegradation?.reason);
+    assert.equal(resumed.status?.reviewDegradation?.reason, granted.reviewDegradation?.reason);
     assert.equal(gates, 1, "the same target reuses its immutable fresh gate measurement");
     assert.equal(adapters.get("codex")?.launches, 1);
     const targetJournal = readFileSync(journalFilePath(resumed.attemptDir!), "utf8");

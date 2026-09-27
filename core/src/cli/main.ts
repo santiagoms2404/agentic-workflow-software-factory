@@ -808,7 +808,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
             out("Adoption declined; no target was created and the source is unchanged.");
             return 1;
           }
-          out(`Created ${project}/${targetTaskId} continuing ${taskId} at exact candidate ${adopted.status.candidateSha}.`);
+          out(`${adopted.reusedTarget ? "Resumed existing" : "Created"} ${project}/${targetTaskId} continuing ${taskId} at exact candidate ${adopted.status.candidateSha}.`);
           out(`${adopted.status.lifecycleState}: ${adopted.status.nextAction}`);
           return adopted.status.lifecycleState === "AWAITING_OWNER" ? 0 : 1;
         }

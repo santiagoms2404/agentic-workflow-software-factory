@@ -183,6 +183,8 @@ export interface AdoptCommandResult {
   readonly status: AttemptStatus | null;
   readonly attemptDir: string | null;
   readonly confirmed: boolean;
+  /** True only when this invocation continued the already-granted target. */
+  readonly reusedTarget: boolean;
 }
 
 interface SealedCandidate {
@@ -217,6 +219,21 @@ function gateKind(gateId: GateId): "pure" | "filesystem" | "git" | "subprocess" 
   if (["head_advanced", "diff_matches_claims", "candidate_hygiene"].includes(gateId)) return "git";
   if (["artifacts_exist", "files_non_empty", "json_parses", "no_protected_paths", "writes_within_globs"].includes(gateId)) return "filesystem";
   return gateId === "journey_passes" ? "journey" : "pure";
+}
+
+function shellArg(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
+/** Replay every target-defining selection, not the source's original route. */
+function repeatAdoptionAction(options: AdoptCommandOptions, source: AttemptStatus): string {
+  const argv = ["awsf retry", shellArg(source.taskId), "--attempt", String(source.attempt), "--adopt-as", shellArg(options.targetTaskId),
+    "--request", shellArg(options.request.trim()), "--config", shellArg(options.configPath),
+    "--state-root", shellArg(options.stateRoot), "--worktree-root", shellArg(options.worktreeRoot),
+    ...(options.groupId === undefined ? [] : ["--group", shellArg(options.groupId)]),
+    ...(options.routes ?? []).flatMap((route) => ["--route", shellArg(route)]),
+  ];
+  return `run \`${argv.join(" ")}\``;
 }
 
 function bounded(value: string, maximum = 2_000): string {
@@ -608,7 +625,7 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
   const confirmed = await options.terminal.confirm(resumed === null
     ? `Adopt exact candidate ${candidate.candidateSha} into new task ${options.targetTaskId}?`
     : `Resume the exact adopted candidate ${candidate.candidateSha} in task ${options.targetTaskId}?`);
-  if (!confirmed) return { source: candidate.source, status: null, attemptDir: null, confirmed: false };
+  if (!confirmed) return { source: candidate.source, status: null, attemptDir: null, confirmed: false, reusedTarget: false };
 
   // Re-read every source fact after the human answer. No target exists until
   // this second exact validation succeeds.
@@ -992,7 +1009,7 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
       lastActivity: detail,
     });
     await writeRunReport(attemptDir, status, await readAttemptEvidence(attemptDir));
-    return { source: candidate.source, status, attemptDir, confirmed: true };
+    return { source: candidate.source, status, attemptDir, confirmed: true, reusedTarget: false };
   }
 
   await persist("attempt.updated", {
@@ -1003,11 +1020,11 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
     lastActivity: pendingGrant
       ? `fresh gates passed; awaiting explicit owner review-degradation grant for ${candidate.candidateSha}`
       : `fresh current gates passed against adopted candidate ${candidate.candidateSha}`,
-    ...(pendingGrant ? { nextAction: `run \`awsf degrade-review ${status.taskId} --reason "<why>"\`, then repeat adoption with the same routes` } : {}),
+    ...(pendingGrant ? { nextAction: `after \`awsf degrade-review ${status.taskId} --reason "<why>"\`, ${repeatAdoptionAction(options, candidate.source)}` } : {}),
   }, { type: "phase", phase: phase("SUCCEEDED") });
   if (pendingGrant) {
     await writeRunReport(attemptDir, status, await readAttemptEvidence(attemptDir));
-    return { source: candidate.source, status, attemptDir, confirmed: true };
+    return { source: candidate.source, status, attemptDir, confirmed: true, reusedTarget: false };
   }
   } else {
     assertCandidatePinned(candidate, status.worktree!, "before resumed review");
@@ -1063,7 +1080,7 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
       lastActivity: detail,
     });
     await writeRunReport(attemptDir, status, await readAttemptEvidence(attemptDir));
-    return { source: candidate.source, status, attemptDir, confirmed: true };
+    return { source: candidate.source, status, attemptDir, confirmed: true, reusedTarget: resumed !== null };
   }
 
   const reviewLabel = route.provenance.review.mode === "same-provider-degraded" ? "explicitly degraded same-provider" : "opposite-provider";
@@ -1197,7 +1214,7 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
   }
 
   await writeRunReport(attemptDir, status, await readAttemptEvidence(attemptDir));
-  return { source: candidate.source, status, attemptDir, confirmed: true };
+  return { source: candidate.source, status, attemptDir, confirmed: true, reusedTarget: resumed !== null };
 }
 
 export async function adoptCommand(options: AdoptCommandOptions): Promise<AdoptCommandResult> {
