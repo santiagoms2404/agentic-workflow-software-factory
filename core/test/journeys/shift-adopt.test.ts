@@ -242,6 +242,7 @@ test("a sealed shift is adopted into build-review at its last completed ticket, 
     const result = await adoptCommand({
       sourceAttemptDir: fixture.sourceDir, stateRoot: fixture.stateRoot, targetTaskId: "fixture-shift-m1-tail",
       request: "finish T03 and T04 of fixture-shift-adopt M1 on the adopted T01-T02 candidate",
+      routes: ["reviewer=claude/anthropic/shift-target-review@high"],
       worktreeRoot: join(fixture.root, "worktrees"), terminal, config: fixture.config, configPath: fixture.configPath,
       projectRecord: fixture.projection.project, assertAdvancement: fixture.projection.assertAdvancement,
       assertLaunchProjection: fixture.projection.assertLaunchPermitted,
@@ -252,6 +253,9 @@ test("a sealed shift is adopted into build-review at its last completed ticket, 
     const target = result.status!;
     assert.equal(target.lifecycleState, "AWAITING_OWNER", target.blocker?.detail ?? target.lastActivity);
     assert.equal(target.workflow, "build-review", "the continuation is ordinary review work, never a shift");
+    assert.deepEqual(target.routeOverrides, { reviewer: { adapter: "claude", provider: "anthropic", model: "shift-target-review", effort: "high" } });
+    const reviewStart = (await readAttemptEvidence(result.attemptDir!)).find((entry) => entry.type === "agent-start" && entry.purpose === "review");
+    assert.equal(reviewStart?.type === "agent-start" ? reviewStart.requestedModel : null, "shift-target-review");
     assert.equal(target.shift ?? null, null);
     assert.equal(target.continuesTask, fixture.source.taskId);
     assert.equal(target.candidateSha, completedTip, "the candidate is the last ticket whose gates accepted its commit");

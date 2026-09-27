@@ -13,6 +13,7 @@ import { CandidateSeedRejected, builderSeedBinding, inspectSeedSource, validateI
 import type { OwnerTerminal } from "../tty.ts";
 import { taskRoot, type AttemptProjector } from "./attempt.ts";
 import { newCommand } from "./new.ts";
+import { assertRoutesReachWorkflow, parseRouteFlags } from "../../workflow/route-flags.ts";
 
 export interface SeedCommandOptions {
   readonly stateRoot: string;
@@ -25,6 +26,7 @@ export interface SeedCommandOptions {
   readonly request: string;
   readonly workflow: string;
   readonly instruction?: string;
+  readonly routes?: readonly string[];
   readonly config: AwsfConfig;
   readonly configPath: string;
   readonly terminal: OwnerTerminal;
@@ -42,6 +44,8 @@ export async function seedCommand(options: SeedCommandOptions) {
   if (options.project !== options.config.project.slug) throw new CandidateSeedRejected("project/config mismatch");
   ownerText(options.request);
   if (options.instruction !== undefined) ownerText(options.instruction);
+  const routeOverrides = parseRouteFlags(options.routes ?? []);
+  assertRoutesReachWorkflow(routeOverrides, options.workflow);
   const sourceDir = join(taskRoot(options.stateRoot, options.project, options.sourceTaskId), String(options.sourceAttempt));
   const targetRoot = taskRoot(options.stateRoot, options.project, options.targetTaskId);
   const targetAbsent = () => {
@@ -100,7 +104,7 @@ export async function seedCommand(options: SeedCommandOptions) {
     const result = await newCommand({ stateRoot: options.stateRoot, project: options.project, taskId: options.targetTaskId,
       continuesTask: options.sourceTaskId, repository: options.repository, request: options.request, workflow: options.workflow, tier: 2,
       configSnapshotJson: configSnapshot, callCeilings: callCeilingsOf(currentConfig.risk.call_ceiling), allowance: currentConfig.risk.correction_allowance,
-      seed, sessionId: () => targetSession, now: () => confirmedAt,
+      seed, routeOverrides, sessionId: () => targetSession, now: () => confirmedAt,
       ...(options.projectRecord === undefined ? {} : { projectRecord: options.projectRecord }),
     });
     return { confirmed: true as const, ...result };

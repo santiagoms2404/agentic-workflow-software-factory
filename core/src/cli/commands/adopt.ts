@@ -3,11 +3,13 @@
 // The source is read-only throughout. The target is a different task and a new
 // managed worktree materialized directly from the recorded commit object. No
 // source envelope, gate row, approval, provider locator, or attempt-private
-// byte is copied. The target runs current gates, buys a cold opposite-provider
-// review, then requires a fresh owner journey and landing authorization. The
-// target carries freshly entered owner intent rather than the source request.
+// byte is copied. The target runs current gates, buys a cold review on its
+// explicit route (pausing for an owner grant if same-provider), then requires a
+// fresh owner journey and landing authorization. The target carries freshly
+// entered owner intent rather than the source request.
 
 import { randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import { argvDigest, gateConfigDigest, gatesConfigDigest, COMMAND_LEDGER_PROTOCOL_VERSION } from "../../contracts/command-ledger.ts";
 import { ledgerGovernanceFailure, planCommandRecovery } from "../../workflow/command-ledger.ts";
 import { occurrenceKeyForAdoption, readCommandLedger, retainedOutputDigest } from "../../workflow/command-ledger-store.ts";
@@ -44,6 +46,7 @@ import type { WorkflowRecipe } from "../../workflow/compiler.ts";
 import { isCompiledWorkflowId } from "../../workflow/compiled-ids.ts";
 import { bindShiftRecipe, shiftPhaseRole, shiftTicketOf } from "../../workflow/shift/bind.ts";
 import { buildReviewWorkflow } from "../../workflow/recipes/build-review.ts";
+import { assertRoutesReachWorkflow, parseRouteFlags, type PhaseRouteOverrides } from "../../workflow/route-flags.ts";
 import { simpleSdlcWorkflow } from "../../workflow/recipes/simple-sdlc.ts";
 import type { OwnerTerminal } from "../tty.ts";
 import {
@@ -62,6 +65,7 @@ import { requestOutput } from "./production-run.ts";
 import { readAttemptEvidence, recordedReviews, recordedRoutes } from "./review-record.ts";
 import {
   REVIEW_HEADROOM_CALLS,
+  lastTestOutputFrom,
   ReviewRecordMissing,
   createReviewRunState,
   prepareReview,
@@ -157,6 +161,7 @@ export interface AdoptCommandOptions {
   readonly targetTaskId: string;
   /** Fresh owner intent for the target. Source request bytes never transfer. */
   readonly request: string;
+  readonly routes?: readonly string[];
   /**
    * The driving session minting the TARGET. Not taken from the source: an
    * adopted task is a new task, created now, by whoever is adopting. Absent
@@ -430,6 +435,7 @@ async function createTarget(
   options: AdoptCommandOptions,
   candidate: SealedCandidate,
   infra: AdoptionCommandInfrastructure,
+  routeOverrides: PhaseRouteOverrides,
 ): Promise<{ attemptDir: string; status: AttemptStatus }> {
   if (options.targetTaskId === candidate.source.taskId) {
     throw new CandidateAdoptionRejected("the adoption target must be a distinct task");
@@ -477,15 +483,13 @@ async function createTarget(
     phase: null,
     budget,
     ceilingGrants: [],
-    // A continuation runs the routes its source was given: adopting a sealed
-    // candidate re-reviews that exact tree, and re-reviewing it on a route the
-    // owner did not choose would be a different experiment.
-    routeOverrides: candidate.source.routeOverrides,
+    // A new task takes only its own explicit route selections, never the source's.
+    routeOverrides,
     reviewDegradation: null,
     model: null,
     lastActivityAt: now,
     lastActivity: `created immutable continuation from sealed ${candidate.source.taskId} attempt ${String(candidate.source.attempt)} candidate ${candidate.candidateSha}`,
-    nextAction: `wait for fresh gates and opposite-provider review of ${candidate.candidateSha}`,
+    nextAction: `wait for fresh gates and review of ${candidate.candidateSha}`,
     gatesPass: false,
     requiredReviewPresent: false,
     journeyApproved: false,
@@ -540,9 +544,30 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
   if (options.targetTaskId === candidate.source.taskId) {
     throw new CandidateAdoptionRejected("the adoption target must be a distinct continuing task");
   }
+  const routeOverrides = parseRouteFlags(options.routes ?? []);
+  assertRoutesReachWorkflow(routeOverrides, candidate.recipe.id);
   const targetRoot = taskRoot(options.stateRoot, candidate.source.project, options.targetTaskId);
-  if (await latestAttemptNumber(targetRoot) !== null) {
-    throw new CandidateAdoptionRejected(`target ${candidate.source.project}/${options.targetTaskId} already exists`);
+  const existing = await latestAttemptNumber(targetRoot);
+  const resumeDir = existing === 1 ? attemptDirectory(options.stateRoot, candidate.source.project, options.targetTaskId, "1") : null;
+  const resumed = resumeDir === null ? null : await readAttempt(resumeDir);
+  if (existing !== null) {
+    const targetEvidence = resumeDir === null ? [] : await readAttemptEvidence(resumeDir);
+    const adoption = targetEvidence.find((record) => record.type === "candidate-adoption");
+    const grant = targetEvidence.find((record) => record.type === "review-degradation" &&
+      record.attempt === resumed?.attempt && record.at === resumed.reviewDegradation?.at &&
+      record.reason === resumed.reviewDegradation.reason);
+    if (resumed?.lifecycleState !== "GATING" || !resumed.gatesPass || resumed.reviewDegradation === null || grant === undefined ||
+        resumed.budget.callsSpent !== 0 || resumed.budget.callsReserved !== 0 || resumed.process !== null || resumed.phase !== null ||
+        resumed.candidateSha !== candidate.candidateSha || resumed.baseSha !== candidate.baseSha ||
+        resumed.continuesTask !== candidate.source.taskId || resumed.request !== options.request.trim() ||
+        resumed.configSnapshotJson !== toConfigSnapshotJson(options.config) ||
+        !isDeepStrictEqual(resumed.routeOverrides, routeOverrides) ||
+        adoption?.type !== "candidate-adoption" || adoption.adoption.sourceSessionId !== candidate.source.sessionId ||
+        adoption.adoption.sourceTaskId !== candidate.source.taskId || adoption.adoption.targetTaskId !== options.targetTaskId ||
+        adoption.adoption.sourceRevision !== candidate.source.revision || adoption.adoption.candidateSha !== candidate.candidateSha) {
+      throw new CandidateAdoptionRejected(`target ${candidate.source.project}/${options.targetTaskId} already exists and is not this pending adoption`);
+    }
+    assertCandidatePinned(candidate, resumed.worktree!, "before resuming review");
   }
 
   const phases = reviewPhasesOf(candidate.recipe);
@@ -553,9 +578,9 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
     recipe: candidate.recipe,
     reviewPhaseId: phases.review,
     workerProvider: candidate.workerProvider,
-    // The continuation inherits the source's routes and none of its grants: a
-    // degradation is scoped to the attempt whose owner granted it.
-    routeOverrides: candidate.source.routeOverrides,
+    routeOverrides,
+    pendingDegradation: resumed === null,
+    degraded: resumed?.reviewDegradation !== null && resumed?.reviewDegradation !== undefined,
   });
   const budgetShape = adoptionBudget(options.config);
   const remaining = ceilingFor(2, budgetShape.ceiling) - budgetShape.callsSpent;
@@ -572,10 +597,17 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
       `not adopted ${remainingTickets.length === 0 ? "none" : remainingTickets.join(", ")} — name the tail in the fresh intent`);
   }
   options.terminal.write(`Distinct target: ${candidate.source.project}/${options.targetTaskId}, continuing ${candidate.source.taskId}`);
-  options.terminal.write(`Fresh route: ${route.adapterId} / ${route.model.provider}, opposite source builder provider ${candidate.workerProvider}`);
+  const pendingGrant = resumed === null && route.model.provider === candidate.workerProvider &&
+    options.config.routing.review !== "same-provider-degraded";
+  options.terminal.write(`Fresh route: ${route.adapterId} / ${route.model.provider}, ${route.model.provider === candidate.workerProvider ? "same as" : "opposite"} source builder provider ${candidate.workerProvider}`);
+  if (pendingGrant) options.terminal.write(`The target will pause after fresh gates at zero calls. Grant it with awsf degrade-review ${options.targetTaskId} --reason "<why>", then repeat this exact adoption command.`);
   options.terminal.write("No source request, attempt bytes, calls, gates, reviews, journeys, protected approvals, landing approval, or provider session transfer.");
-  options.terminal.write("The target gets a new managed worktree at the exact commit, reruns current configured gates, and requires a fresh review, journey, and landing confirmation.");
-  const confirmed = await options.terminal.confirm(`Adopt exact candidate ${candidate.candidateSha} into new task ${options.targetTaskId}?`);
+  options.terminal.write(resumed === null
+    ? "The target gets a new managed worktree at the exact commit, reruns current configured gates, and requires a fresh review, journey, and landing confirmation."
+    : "The existing target retains its exact worktree and passing gates; it requires a fresh review, journey, and landing confirmation.");
+  const confirmed = await options.terminal.confirm(resumed === null
+    ? `Adopt exact candidate ${candidate.candidateSha} into new task ${options.targetTaskId}?`
+    : `Resume the exact adopted candidate ${candidate.candidateSha} in task ${options.targetTaskId}?`);
   if (!confirmed) return { source: candidate.source, status: null, attemptDir: null, confirmed: false };
 
   // Re-read every source fact after the human answer. No target exists until
@@ -602,9 +634,16 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
     throw new CandidateAdoptionRejected("review adapter/provider/model changed after confirmation");
   }
 
-  const created = await createTarget(options, candidate, infra);
-  let status = created.status;
-  const attemptDir = created.attemptDir;
+  if (resumed !== null) {
+    const current = await readAttempt(resumeDir!);
+    if (current.revision !== resumed.revision || current.reviewDegradation?.at !== resumed.reviewDegradation?.at) {
+      throw new CandidateAdoptionRejected("pending target changed after confirmation");
+    }
+    assertCandidatePinned(candidate, current.worktree!, "after resume confirmation");
+  }
+  const created = resumed === null ? await createTarget(options, candidate, infra, routeOverrides) : null;
+  let status = created?.status ?? resumed!;
+  const attemptDir = created?.attemptDir ?? resumeDir!;
   let writeQueue: Promise<void> = Promise.resolve();
   let transitionSeq = 0;
   const closeOccurrence = async (occurrenceKey: string, reason: string): Promise<void> => {
@@ -695,6 +734,8 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
     endedAt: ["SUCCEEDED", "FAILED"].includes(state) ? infra.now() : null,
     createdAt: phaseAt,
   });
+  let measurement: Measurement;
+  if (resumed === null) {
   await persist("attempt.updated", {}, { type: "phase", phase: phase("QUEUED") });
   await persist("attempt.updated", {
     phase: { name: "adoption tests", state: "RUNNING", round: 0, maximumRounds: 0 },
@@ -880,7 +921,6 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
     return { testOutput, reports, passed: reports.every((report) => report.passed) && testOutput.passed };
   };
 
-  let measurement: Measurement;
   try {
     measurement = await measure();
   } catch (error) {
@@ -960,8 +1000,20 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
     phase: null,
     protectedApprovalsValid: true,
     lastActivityAt: infra.now(),
-    lastActivity: `fresh current gates passed against adopted candidate ${candidate.candidateSha}`,
+    lastActivity: pendingGrant
+      ? `fresh gates passed; awaiting explicit owner review-degradation grant for ${candidate.candidateSha}`
+      : `fresh current gates passed against adopted candidate ${candidate.candidateSha}`,
+    ...(pendingGrant ? { nextAction: `run \`awsf degrade-review ${status.taskId} --reason "<why>"\`, then repeat adoption with the same routes` } : {}),
   }, { type: "phase", phase: phase("SUCCEEDED") });
+  if (pendingGrant) {
+    await writeRunReport(attemptDir, status, await readAttemptEvidence(attemptDir));
+    return { source: candidate.source, status, attemptDir, confirmed: true };
+  }
+  } else {
+    assertCandidatePinned(candidate, status.worktree!, "before resumed review");
+    const testOutput = lastTestOutputFrom(await readAttemptEvidence(attemptDir), candidate.candidateSha);
+    measurement = { testOutput, reports: [], passed: true };
+  }
 
   let prepared;
   try {
@@ -1014,6 +1066,7 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
     return { source: candidate.source, status, attemptDir, confirmed: true };
   }
 
+  const reviewLabel = route.provenance.review.mode === "same-provider-degraded" ? "explicitly degraded same-provider" : "opposite-provider";
   const budget = new CallBudget({
     taskId: status.taskId,
     tier: 2,
@@ -1037,7 +1090,7 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
   });
   const reviewState = createReviewRunState();
   const reviewPhaseId = `${status.sessionId}:${prepared.phaseKey}`;
-  await persistTransition("GATING", "REVIEWING", l11.result.edge, "gate", null, `held fresh opposite-provider review of adopted candidate ${candidate.candidateSha}`, true, {
+  await persistTransition("GATING", "REVIEWING", l11.result.edge, "gate", null, `held fresh ${reviewLabel} review of adopted candidate ${candidate.candidateSha}`, true, {
     budget: budget.snapshot(),
     requiredReviewPresent: false,
     journeyApproved: false,
@@ -1084,7 +1137,7 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
       process: null,
       phase: null,
       blocker: null,
-      lastActivity: `fresh opposite-provider review on ${route.model.provider} returned ${output.verdict} with ${String(output.findings.length)} finding(s)`,
+      lastActivity: `fresh ${reviewLabel} review on ${route.model.provider} returned ${output.verdict} with ${String(output.findings.length)} finding(s)`,
       nextAction: `run \`awsf journey ${status.taskId}\` at a TTY, then \`awsf land ${status.taskId}\` for fresh owner authorization`,
     });
   } catch (error) {

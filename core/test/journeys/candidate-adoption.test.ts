@@ -28,6 +28,7 @@ import {
 } from "../../src/cli/commands/adopt.ts";
 import { nextRevision, persistAttempt, readAttempt, type AttemptStatus } from "../../src/cli/commands/attempt.ts";
 import { journeyCommand } from "../../src/cli/commands/journey.ts";
+import { degradeReviewCommand } from "../../src/cli/commands/degrade-review.ts";
 import { landCommand } from "../../src/cli/commands/land.ts";
 import { journalFilePath, statusFilePath } from "../../src/persistence/platform-paths.ts";
 import type { OwnerTerminal } from "../../src/cli/tty.ts";
@@ -153,6 +154,7 @@ async function sourceFixture(
     readonly documentation?: boolean;
     readonly foreignIntermediateCommit?: boolean;
     readonly liveProcess?: Exclude<AttemptStatus["process"], null>;
+    readonly sourceRouting?: boolean;
   } = {},
 ): Promise<{
   readonly stateRoot: string;
@@ -199,7 +201,8 @@ async function sourceFixture(
       correctionsAuto: 0, correctionsOwner: 0, ownerReentries: 0,
       allowance: { auto: 1, owner: 1, ownerReentries: 1 }, ceiling: 5,
     },
-    ceilingGrants: [], routeOverrides: {}, reviewDegradation: null,
+    ceilingGrants: [], routeOverrides: options.sourceRouting === true ? { builder: { effort: "max" } } : {},
+    reviewDegradation: options.sourceRouting === true ? { reason: "source-only grant", attempt: 1, at: AT } : null,
     model: null, lastActivityAt: AT, lastActivity: "candidate completed",
     nextAction: "review", gatesPass: true, requiredReviewPresent: false, journeyApproved: false,
     protectedApprovalsValid: true, process: null, landingApproval: null, blocker: null,
@@ -255,6 +258,81 @@ async function sourceFixture(
   });
   return { stateRoot, sourceDir, repository, candidate, source };
 }
+
+test("adoption rejects duplicate and unreachable target routes without touching its source", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-adoption-routes-refused-"));
+  try {
+    const fixture = await sourceFixture(root);
+    const config = loadConfig(readFileSync(resolve("awsf.config.yaml"), "utf8"));
+    const sourceBytes = readFileSync(journalFilePath(fixture.sourceDir));
+    const options = { sourceAttemptDir: fixture.sourceDir, stateRoot: fixture.stateRoot,
+      targetTaskId: "route-refused", request: "fresh request", worktreeRoot: join(root, "worktrees"),
+      terminal: terminal([]), config, configPath: resolve("awsf.config.yaml"),
+      infrastructure: { pidIsLive: () => false } };
+    await assert.rejects(adoptCommand({ ...options, routes: ["reviewer=@high", "reviewer=@low"] }), /twice/);
+    await assert.rejects(adoptCommand({ ...options, routes: ["documenter=@high"] }), /never routes/);
+    assert.equal(existsSync(join(fixture.stateRoot, "projects", PROJECT, "tasks", "route-refused")), false);
+    assert.deepEqual(readFileSync(journalFilePath(fixture.sourceDir)), sourceBytes);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("same-provider adoption waits live at zero calls for an owner grant, then resumes the exact target and route", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-adoption-grant-"));
+  try {
+    const fixture = await sourceFixture(root, { sourceRouting: true });
+    const sourceBytes = readFileSync(journalFilePath(fixture.sourceDir));
+    const loaded = loadConfig(readFileSync(resolve("awsf.config.yaml"), "utf8"));
+    const config: AwsfConfig = { ...loaded, runtime: { ...loaded.runtime, seed_paths: [] },
+      gates: { test: { argv: ["fixture-test"], timeout_seconds: 1 } } };
+    config.agents = config.agents.map(agent => ({ ...agent, harness: { ...agent.harness, interrupted_turn: false } }));
+    const adapters = new Map<string, SuccessfulReviewAdapter>();
+    let gates = 0;
+    let confirmations = 0;
+    const terminalWithCount: OwnerTerminal = { interactive: true, write: () => {}, confirm: async () => { confirmations++; return true; } };
+    const options = {
+      sourceAttemptDir: fixture.sourceDir, stateRoot: fixture.stateRoot, targetTaskId: "pending-target",
+      request: "fresh same-provider candidate review", routes: ["reviewer=codex/openai-codex/target-review@high"],
+      worktreeRoot: join(root, "worktrees"), terminal: terminalWithCount, config,
+      configPath: resolve("awsf.config.yaml"), infrastructure: {
+        adapterFor: (_entry: unknown, id: string) => {
+          let adapter = adapters.get(id);
+          if (adapter === undefined) { adapter = new SuccessfulReviewAdapter(id, id === "claude" ? "anthropic" : "openai-codex", fixture.candidate); adapters.set(id, adapter); }
+          return adapter;
+        },
+        createBroker: fakeBroker, sandboxProbe: () => false, now: () => AT,
+        sessionId: () => "pending-session", pidIsLive: () => false,
+        runCommand: () => { gates++; return { status: 0, stdout: "pass", stderr: "", error: null }; },
+      },
+    };
+    const pending = await adoptCommand(options);
+    assert.equal(pending.status?.lifecycleState, "GATING");
+    assert.equal(pending.status?.gatesPass, true);
+    assert.equal(pending.status?.budget.callsSpent, 0);
+    assert.equal(pending.status?.reviewDegradation, null, "the source grant does not transfer");
+    assert.deepEqual(pending.status?.routeOverrides, { reviewer: { adapter: "codex", provider: "openai-codex", model: "target-review", effort: "high" } });
+    assert.equal(gates, 1);
+    assert.equal([...adapters.values()].reduce((n, adapter) => n + adapter.launches, 0), 0);
+    const pendingBytes = readFileSync(journalFilePath(pending.attemptDir!));
+    await assert.rejects(adoptCommand({ ...options, routes: ["reviewer=claude/anthropic/different@high"] }), /already exists and is not this pending adoption/);
+    assert.deepEqual(readFileSync(journalFilePath(pending.attemptDir!)), pendingBytes);
+    assert.equal(gates, 1);
+    const granted = await degradeReviewCommand({ attemptDir: pending.attemptDir!, reason: "The owner accepts reduced independence for this candidate", terminal: terminalWithCount });
+    assert.equal(granted.confirmed, true);
+    const resumed = await adoptCommand(options);
+    assert.equal(resumed.attemptDir, pending.attemptDir);
+    assert.equal(resumed.status?.sessionId, pending.status?.sessionId);
+    assert.equal(resumed.status?.lifecycleState, "AWAITING_OWNER", resumed.status?.blocker?.detail);
+    assert.equal(resumed.status?.budget.callsSpent, 1);
+    assert.equal(resumed.status?.reviewDegradation?.reason, granted.status.reviewDegradation?.reason);
+    assert.equal(gates, 1, "the same target reuses its immutable fresh gate measurement");
+    assert.equal(adapters.get("codex")?.launches, 1);
+    const targetJournal = readFileSync(journalFilePath(resumed.attemptDir!), "utf8");
+    assert.match(targetJournal, /"mode":"same-provider-degraded"/);
+    assert.match(targetJournal, /"requestedModel":"target-review"/);
+    assert.equal(confirmations, 3);
+    assert.deepEqual(readFileSync(journalFilePath(fixture.sourceDir)), sourceBytes);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
 
 test("a generic blocked candidate enters only a distinct continuation, fails fresh gates without provider spend, and leaves source bytes untouched", async () => {
   const root = mkdtempSync(join(tmpdir(), "awsf-adoption-"));

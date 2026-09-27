@@ -253,6 +253,26 @@ test("CLI seed creates only DRAFT and refuses transfer flags or duplicate select
   assert.ok(output.some((line) => line.includes("seeded from exact candidate")));
 });
 
+test("seed CLI records repeatable target routes, and refuses duplicates and unreachable phases before creation", async () => {
+  const world = await seedFixture();
+  const argv = ["seed", "target", "--from", "source", "--source-attempt", "1", "--sha", world.candidateSha,
+    "--request", "fresh target", "--config", world.configPath, "--state-root", world.stateRoot];
+  const common = { cwd: world.repository, terminal: world.seedOptions.terminal, writeOut: () => {}, writeError: () => {} };
+  const builder = "builder=codex/openai-codex/target-builder@high";
+  const reviewer = "reviewer=claude/anthropic/target-reviewer@low";
+  const before = readFileSync(join(world.sourceDir, "journal.jsonl"));
+  assert.equal(await main({ ...common, argv: [...argv, "--route", builder, "--route", builder] }), 1);
+  assert.equal(await main({ ...common, argv: [...argv, "--route", "documenter=@high"] }), 1);
+  absentTarget(world);
+  assert.equal(await main({ ...common, argv: [...argv, "--route", builder, `--route=${reviewer}`] }), 0);
+  const target = await readAttempt(join(world.stateRoot, "projects", world.config.project.slug, "tasks", "target", "1"));
+  assert.deepEqual(target.routeOverrides, {
+    builder: { adapter: "codex", provider: "openai-codex", model: "target-builder", effort: "high" },
+    reviewer: { adapter: "claude", provider: "anthropic", model: "target-reviewer", effort: "low" },
+  });
+  assert.deepEqual(readFileSync(join(world.sourceDir, "journal.jsonl")), before);
+});
+
 test("source selector cannot name a different task under the same directory", async () => {
   const world = await seedFixture();
   await assert.rejects(inspectSeedSource(world.sourceDir, world.repository, { project: world.config.project.slug, taskId: "other", attempt: 1, candidateSha: world.candidateSha }), /mismatch/);

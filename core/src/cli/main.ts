@@ -453,13 +453,13 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       const allowed = new Set(["from", "source-attempt", "sha", "request", "instruction", "workflow", "config", "project", "state-root"]);
       if (parsed.positionals.length !== 1 || parsed.repositories.length !== 0 || Object.keys(parsed.flags).some((key) => !allowed.has(key) || argv.filter((arg) => arg === `--${key}`).length > 1) ||
           parsed.flags.from === undefined || parsed.flags["source-attempt"] === undefined || parsed.flags.sha === undefined || parsed.flags.request === undefined) {
-        throw new Error('usage: awsf seed <new-task> --from <source-task> --source-attempt <n> --sha <full-SHA> --request "<fresh intent>" [--workflow <T2-workflow>] [--instruction "<supplement>"]');
+        throw new Error('usage: awsf seed <new-task> --from <source-task> --source-attempt <n> --sha <full-SHA> --request "<fresh intent>" [--workflow <T2-workflow>] [--instruction "<supplement>"] [--route <phase>=<adapter>/<provider>/<model>@<effort>]...');
       }
       const result = await seedCommand({ stateRoot, project, repository: cwd, targetTaskId: taskId,
         sourceTaskId: parsed.flags.from, sourceAttempt: Number(parsed.flags["source-attempt"]), candidateSha: parsed.flags.sha,
         request: parsed.flags.request, workflow: parsed.flags.workflow ?? "build-review",
         ...(parsed.flags.instruction === undefined ? {} : { instruction: parsed.flags.instruction }),
-        config, configPath, terminal: options.terminal ?? processOwnerTerminal(), projectRecord: projection.project,
+        routes: parsed.routes, config, configPath, terminal: options.terminal ?? processOwnerTerminal(), projectRecord: projection.project,
       });
       if (!result.confirmed) { out("Seed declined. No target created and no call spent."); return 1; }
       out(`Created ${project}/${taskId} in DRAFT, seeded from exact candidate ${result.status.seed!.seedCandidateSha}.`);
@@ -787,12 +787,14 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       }
       case "retry": {
         const targetTaskId = parsed.flags["adopt-as"];
+        if (targetTaskId === undefined && parsed.routes.length > 0) throw new Error("--route on retry requires --adopt-as");
         if (targetTaskId !== undefined) {
           const adopted = await adoptCommand({
             sourceAttemptDir: located.attemptDir,
             stateRoot,
             targetTaskId,
             request: parsed.flags.request ?? "",
+            routes: parsed.routes,
             ...(parsed.flags.group === undefined ? {} : { groupId: parsed.flags.group }),
             worktreeRoot: resolve(parsed.flags["worktree-root"] ?? env.AWSF_WORKTREE_ROOT ?? defaultWorktreeRoot(stateRoot)),
             terminal: adoptionTerminal(options.terminal),

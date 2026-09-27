@@ -468,6 +468,8 @@ export interface ResolveReviewRouteOptions {
    * the host has no path to set it from a quota or transport failure.
    */
   readonly degraded?: boolean;
+  /** Adoption preflight only: identify a same-provider route awaiting an owner grant, without authorizing a review. */
+  readonly pendingDegradation?: boolean;
 }
 
 /**
@@ -542,7 +544,7 @@ export async function resolveReviewRoute(options: ResolveReviewRouteOptions): Pr
           `the configured reviewer route resolves to ${JSON.stringify(model.provider)}`,
       );
     }
-  } else {
+  } else if (!(options.pendingDegradation === true && model.provider === workerProvider)) {
     const required = oppositeProvider(workerProvider, providerPairFrom(providers));
     if (model.provider !== required) {
       throw new InvalidReviewInversion(
