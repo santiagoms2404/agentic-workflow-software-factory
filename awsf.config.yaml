@@ -54,7 +54,7 @@ agents:
     prompt: { system: prompts/builder/system.md, user: prompts/builder/user.md }
     harness: { adapter: codex, continuity: none, interrupted_turn: false }
     tools: { profile: managed-worker, allow: [read, grep, find, ls, edit, write, exec] }
-    writes: ["core/src/**", "core/test/**", "dashboard/**", "prompts/**"]
+    writes: ["core/src/**", "core/test/**", "dashboard/**", "prompts/**", "docs/cheatsheet.html"]
 
   - name: reviewer
     model: claude:opus # inverted automatically when the builder runs on claude
