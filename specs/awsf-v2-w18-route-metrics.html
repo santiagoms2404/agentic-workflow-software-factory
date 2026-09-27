@@ -141,7 +141,7 @@ code.inv, code.ac, code.serves { color:var(--cyan); }
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-09-26</dd>
-        <dt>modified</dt>     <dd>2026-09-26 (authored, awaiting owner review), 2026-09-26 (owner review applied: Q1–Q8 decided; Q1 takes an owner-authored migration)</dd>
+        <dt>modified</dt>     <dd>2026-09-26 (authored, awaiting owner review), 2026-09-26 (owner review applied: Q1–Q8 decided; Q1 takes an owner-authored migration), 2026-09-27 (Q3 amended: owner acts are wired by the owner, gate G18-C)</dd>
         <dt>commits</dt>      <dd>none yet (authored uncommitted for owner review)</dd>
         <dt>agent name</dt>   <dd>claude-opus-5-5, claude-opus-5-5 (review applied)</dd>
         <dt>session id</dt>   <dd>not recorded (AGENTS.md invariant 1 keeps live session state out of every committed file)</dd>
@@ -382,7 +382,7 @@ flowchart LR
     <table>
       <thead><tr><th>Milestone</th><th>Tickets</th><th>Calls</th><th>Raise</th><th>Builder route</th><th>Before <code>awsf start</code></th></tr></thead>
       <tbody>
-        <tr><td>M1 facts</td><td>T01–T03</td><td>4 of 5</td><td>none (one correction spare)</td><td><code>claude/anthropic/claude:opus@xhigh</code></td><td><span class="gate">G18-M</span> and <span class="gate">G18-A</span> committed; <code>degrade-review</code>. After M1 lands: one <code>awsf db rebuild</code></td></tr>
+        <tr><td>M1 facts</td><td>T01–T03</td><td>4 of 5</td><td>none (one correction spare)</td><td><code>claude/anthropic/claude:opus@xhigh</code></td><td><span class="gate">G18-M</span> and <span class="gate">G18-A</span> committed; <code>degrade-review</code>. After M1 lands: one <code>awsf db rebuild</code> and <span class="gate">G18-C</span></td></tr>
         <tr><td>M2 query surface</td><td>T04–T06</td><td>4 of 5</td><td>none</td><td><code>claude/anthropic/claude:opus@high</code></td><td><code>degrade-review</code></td></tr>
         <tr><td>M3 the tab</td><td>T07–T10</td><td>5 of 5</td><td><code>awsf raise &lt;task&gt; --calls 2</code> (ceiling 7, two corrections)</td><td><code>claude/anthropic/claude:opus@high</code></td><td><code>degrade-review</code>, the raise, the visual-reference binding at <code>awsf start</code></td></tr>
         <tr><td>M4 proving ground</td><td>T11–T14</td><td>5 of 5</td><td><code>awsf raise &lt;task&gt; --calls 2</code></td><td><code>claude/anthropic/claude:opus@xhigh</code></td><td><code>degrade-review</code>, the raise</td></tr>
@@ -397,8 +397,8 @@ flowchart LR
       <tbody>
         <tr><td>Shift builder</td><td><code>core/src/**</code>, <code>core/test/**</code>, <code>dashboard/**</code>, <code>prompts/**</code>; after <span class="gate">G18-A</span> also <code>docs/cheatsheet.html</code></td><td><code>specs/**</code> (markers, ticket <code>state</code>, Handoff), <code>docs/driving/**</code>, <code>AGENTS.md</code>, <code>awsf.config.yaml</code>, <code>core/src/state/**</code>, <code>core/src/observability/migrations/**</code>, a root <code>.claude/</code></td></tr>
         <tr><td>Host</td><td>One commit per ticket on the shift's accumulating head; gates per ticket</td><td>Landing</td></tr>
-        <tr><td>Owner</td><td><span class="gate">G18-M</span>, <span class="gate">G18-A</span>, <span class="gate">G18-B</span>, <code>degrade-review</code>, raises, the visual binding, journeys, landing, and after each landing one bookkeeping commit: task markers, ticket <code>state</code>, Handoff entries and an Amendment (invariant 12)</td><td>—</td></tr>
-        <tr><td>Marimba</td><td>Nothing in the repository; prepares, reports, serves the dashboard, drafts the bookkeeping change for the owner</td><td>Owner acts (<code>attribute</code> and <code>prove</code> join the guard in <span class="gate">G18-A</span>)</td></tr>
+        <tr><td>Owner</td><td><span class="gate">G18-M</span>, <span class="gate">G18-A</span>, <span class="gate">G18-C</span>, <span class="gate">G18-B</span>, <code>degrade-review</code>, raises, the visual binding, journeys, landing, and after each landing one bookkeeping commit: task markers, ticket <code>state</code>, Handoff entries and an Amendment (invariant 12)</td><td>—</td></tr>
+        <tr><td>Marimba</td><td>Nothing in the repository; prepares, reports, serves the dashboard, drafts the bookkeeping change for the owner</td><td>Owner acts (<code>attribute</code> and <code>prove</code> join the guard when the owner wires them: <span class="gate">G18-C</span>, <span class="gate">G18-B</span>)</td></tr>
       </tbody>
     </table>
 
@@ -418,19 +418,17 @@ PRAGMA user_version = 7;</code></pre>
       <p>In the same commit, every assertion pinning the terminal version moves from 6 to 7: <code>core/test/unit/observability/sqlite.test.ts</code> (the title "lands on user_version 6" and its assertions at lines 34, 83, 114, 149 and 182) and <code>core/test/unit/observability/migration-0004.test.ts</code> (lines 126 and 173). <code>quota/snapshot-stop.test.ts</code> reads the live version and needs no change. The columns stay NULL until task 1's projector fills them; after M1 lands the owner runs <code>awsf db rebuild</code> once so every legacy phase gets its route. Run <code>npm run test:unit</code> at the resulting HEAD before M1, since a migration moves assertions a partial run can miss. It can share one commit with <span class="gate">G18-A</span>.</p>
     </div>
     <div class="card rule">
-      <h5><span class="gate">G18-A</span> — one owner commit before M1's shift starts (if Q2 and Q3 go as recommended)</h5>
-      <ol>
-        <li><code>awsf.config.yaml</code>: the <code>builder</code> agent's <code>writes</code> gains <code>"docs/cheatsheet.html"</code>.</li>
-        <li><code>docs/driving/marimba/delegation-guard.sh</code>: the <code>for verb in …; do</code> loop gains <code>attribute prove</code> after <code>grant</code>.</li>
-        <li><code>docs/driving/marimba/marimba-guard-rules.mts</code>: <code>OWNER_ACTS</code> gains <code>"attribute", "prove"</code> in the same order.</li>
-        <li><code>core/test/unit/meta/marimba-guard.test.ts</code>: its <code>OWNER_ACTS</code> constant gains the same two, in order.</li>
-        <li><code>docs/cheatsheet.html</code>: the <code>owner-acts</code> fact list gains <code>&lt;li&gt;&lt;code&gt;attribute&lt;/code&gt;&lt;/li&gt;</code> and <code>&lt;li&gt;&lt;code&gt;prove&lt;/code&gt;&lt;/li&gt;</code>.</li>
-      </ol>
-      <p>No test ties a guard verb to an existing CLI command (checked: <code>marimba-guard.test.ts</code> and <code>marimba-guard-pi.test.ts</code> compare the lists with each other only), so the verbs can precede the commands. Run <code>npm run test:unit</code> at the resulting HEAD before M1.</p>
+      <h5><span class="gate">G18-A</span> — one owner commit before M1's shift starts (Q2)</h5>
+      <p><code>awsf.config.yaml</code>: the <code>builder</code> agent's <code>writes</code> gains <code>"docs/cheatsheet.html"</code>, so T06 and T17 can add <code>awsf metrics</code> and <code>awsf metrics export</code> with their cheatsheet lines in one candidate.</p>
+      <p><strong>Corrected 2026-09-27.</strong> G18-A first also pre-committed the guard verbs <code>attribute</code> and <code>prove</code>. That turned the suite red: <code>boundary-claims.test.ts</code> derives the owner acts from the <code>main.ts</code> arms that construct <code>processOwnerTerminal()</code> and requires the guard's verbs to equal that set exactly. A verb therefore cannot precede its command, and a builder cannot add the command either, because the guard is under protected <code>docs/driving/**</code>. The guard half was withdrawn; the owner acts are wired by <span class="gate">G18-C</span> and <span class="gate">G18-B</span>.</p>
+    </div>
+    <div class="card rule">
+      <h5><span class="gate">G18-C</span> — one owner commit after M1 lands: wire <code>awsf attribute</code></h5>
+      <p>T03 builds <code>attributeCommand</code> in <code>core/src/cli/commands/attribute.ts</code> with its tests, unregistered. The owner wires it in one commit: its arm in <code>core/src/cli/main.ts</code> and its <code>CLI_COMMANDS</code> entry; the verb in <code>docs/driving/marimba/delegation-guard.sh</code>, <code>marimba-guard-rules.mts</code> and the <code>OWNER_ACTS</code> constant in <code>core/test/unit/meta/marimba-guard.test.ts</code>; the entry in both the <code>commands</code> and <code>owner-acts</code> lists of <code>docs/cheatsheet.html</code>; and the verb in every <code>docs/driving/</code> document whose owner-act list <code>boundary-claims.test.ts</code> names. Then <code>npm run test:unit</code>. Commit it before M2 starts; T09 in M3 composes this command.</p>
     </div>
     <div class="card rule">
       <h5><span class="gate">G18-B</span> — one owner commit after M4 lands, before the D3 suite</h5>
-      <p><code>awsf.config.yaml</code> <code>workflows.enabled</code> gains <code>prove</code>, and <code>docs/cheatsheet.html</code>'s <code>workflows-and-gates</code> list gains <code>&lt;li&gt;&lt;code&gt;workflow|prove&lt;/code&gt;&lt;/li&gt;</code> in the same commit (the fence reads the loaded config). It cannot come first: <code>load.ts</code> refuses an id the code does not know, which is why W17's G17 followed its T05.</p>
+      <p>T13 builds <code>proveCommand</code> unregistered, and the owner wires <code>awsf prove</code> exactly as <span class="gate">G18-C</span> wires <code>awsf attribute</code>. In the same commit, <code>awsf.config.yaml</code> <code>workflows.enabled</code> gains <code>prove</code>, and <code>docs/cheatsheet.html</code>'s <code>workflows-and-gates</code> list gains <code>&lt;li&gt;&lt;code&gt;workflow|prove&lt;/code&gt;&lt;/li&gt;</code> in the same commit (the fence reads the loaded config). It cannot come first: <code>load.ts</code> refuses an id the code does not know, which is why W17's G17 followed its T05.</p>
     </div>
 
     <h3>Fences that tie code to files outside the builder's boundary</h3>
@@ -438,8 +436,8 @@ PRAGMA user_version = 7;</code></pre>
       <thead><tr><th>Fence</th><th>Where W18 meets it</th><th>Resolution</th></tr></thead>
       <tbody>
         <tr><td>Protected <code>core/src/observability/migrations/**</code></td><td>Route and effort on each phase</td><td><span class="gate">G18-M</span>: the owner writes migration 0007 before M1; the builder writes only the projector (DD1, Q1)</td></tr>
-        <tr><td><code>cheatsheet-reconciliation</code>, <code>commands</code> class, both directions</td><td><code>attribute</code> (T03), <code>metrics</code> (T06), <code>prove</code> (T13), <code>metrics export</code> (T17)</td><td><span class="gate">G18-A</span> widens builder writes by one file (Q2)</td></tr>
-        <tr><td><code>owner-acts</code> class ↔ the guard (protected <code>docs/driving/**</code>)</td><td><code>attribute</code>, <code>prove</code></td><td><span class="gate">G18-A</span> pre-commits both verbs (Q3)</td></tr>
+        <tr><td><code>cheatsheet-reconciliation</code>, <code>commands</code> class, both directions</td><td><code>metrics</code> (T06), <code>metrics export</code> (T17)</td><td><span class="gate">G18-A</span> widens builder writes by one file (Q2)</td></tr>
+        <tr><td><code>boundary-claims</code>: the guard's verbs equal the <code>main.ts</code> arms that construct an owner terminal; the <code>owner-acts</code> class equals the guard (protected <code>docs/driving/**</code>)</td><td><code>attribute</code>, <code>prove</code></td><td>The builder builds each command unregistered; the owner wires it with its verb in one commit: <span class="gate">G18-C</span> after M1, <span class="gate">G18-B</span> after M4 (Q3, amended 2026-09-27)</td></tr>
         <tr><td><code>workflows-and-gates</code> class ↔ protected config</td><td>The <code>prove</code> workflow</td><td><span class="gate">G18-B</span> after M4</td></tr>
         <tr><td>Protected <code>docs/driving/**</code>; <code>CONTRACT.md</code> at 119 of 120 lines and 995 of 1100 words</td><td>Marimba's preflight block</td><td>Avoided: the advisory prints from <code>awsf shift plan</code> (DD6, Q4)</td></tr>
         <tr><td><code>no-write-route</code>: one POST (archive) and an exact route list</td><td>D4's "one click"; the new GET route</td><td>Avoided: the Run view composes the command (Q6). The GET route is added to the test's <code>EXPECTED</code> list in T05.</td></tr>
@@ -546,7 +544,7 @@ flowchart LR
         <li><code class="status">[]</code> The record (<code>awsf.attribution/v1</code>, TypeBox, registered like every contract) is appended to <code>attributions.jsonl</code> beside the task's attempt directories through <code>Journal</code>, exactly as <code>task-relations.ts</code> does (append-only; a torn tail refuses). The latest record for an attempt wins; earlier ones stay. No attempt directory is written, so a sealed attempt stays sealed</li>
         <li><code class="status">[]</code> <code>projectAttribution</code> in <code>projector.ts</code> inserts one session-level <code>events</code> row (type <code>attribution</code>, id derived from the record, <code>INSERT OR IGNORE</code>); the live command calls it through <code>createDashboardProjection</code> as <code>projectRelation</code> is called; <code>awsf db rebuild</code> replays every task's file</li>
         <li><code class="status">[]</code> Each row carries <code>attribution</code>, <code>attributionSource</code> (<code>owner</code> or <code>heuristic</code>) and the heuristic value beside any override</li>
-        <li><code class="status">[]</code> <code>CLI_COMMANDS</code> gains <code>attribute</code> and <code>docs/cheatsheet.html</code>'s <code>commands</code> list gains <code>&lt;li&gt;&lt;code&gt;attribute&lt;/code&gt;&lt;/li&gt;</code> in the same change (needs <span class="gate">G18-A</span>)</li>
+        <li><code class="status">[]</code> <code>core/src/cli/commands/attribute.ts</code> exports <code>attributeCommand</code>, tested with a fake owner terminal. It is <strong>not</strong> registered in <code>main.ts</code>, <code>CLI_COMMANDS</code> or the cheatsheet: an arm that constructs an owner terminal turns <code>boundary-claims.test.ts</code> red unless the protected guard changes in the same commit, so the owner wires it in <span class="gate">G18-C</span> after M1 lands</li>
         <li><code class="status">[]</code> <code>npm run test:unit</code> — green at the base SHA before any change, count recorded, and green after</li>
         <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/metrics-*.test.ts</code> — resolver, fold, sums, every definition and the heuristic table, each on its own fixture</li>
         <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/journeys/metrics-facts.test.ts</code> — four synthetic runs (a three-ticket shift with one correction, a build-review, a blocked run with <code>PermissionBreach</code>, a blocked run with <code>ExecutableNotFound</code>) projected live, read as rows, rebuilt from nothing and read again: identical rows; an override then flips <code>blocked here</code> and survives a second rebuild</li>
@@ -734,7 +732,7 @@ sequenceDiagram
       <p>The owner act that creates a replay, and the tagging that keeps replays apart from production everywhere a number is shown.</p>
       <ul class="checklist">
         <li><code class="status">[]</code> <code>awsf prove &lt;task&gt; --item &lt;id&gt; --arm "&lt;route spec&gt;" --rep &lt;n&gt; [--order &lt;k&gt;] --reason "&lt;why&gt;"</code>: an interactive owner terminal and a credential-free reason; refuses an unknown item, an arm route that does not reach the item's role, and a repeated (item, arm, repetition); creates the task with the replay record, prints the <code>awsf start</code> and <code>awsf cancel</code> commands, and spawns nothing</li>
-        <li><code class="status">[]</code> <code>CLI_COMMANDS</code> gains <code>prove</code> and the cheatsheet's <code>commands</code> list gains it in the same change; the guard already denies <code>awsf prove</code> (<span class="gate">G18-A</span>)</li>
+        <li><code class="status">[]</code> <code>core/src/cli/commands/prove.ts</code> exports <code>proveCommand</code>, tested with a fake owner terminal and not registered in <code>main.ts</code>: the owner wires <code>awsf prove</code> with its guard verb in <span class="gate">G18-B</span> after M4 lands</li>
         <li><code class="status">[]</code> The projector writes the replay record once as a session-level event; rows carry <code>source</code> (DD8) and the replay's item, arm, repetition and order</li>
         <li><code class="status">[]</code> Production statistics exclude proving-ground rows unless the Evidence source ladder selects them; the rail's proving-ground pill turns live with its count</li>
         <li><code class="status">[]</code> <code>awsf metrics --source proving-ground</code> prints the task 11 scores per item and arm</li>
@@ -873,6 +871,7 @@ flowchart LR
     <details data-review-options="Pre-commit both verbs in G18-A|Add each verb after its milestone lands|No guard verbs">
       <summary><span class="qdecided">DECIDED</span> Q3 — Guarding <code>awsf attribute</code> and <code>awsf prove</code> from Marimba <em>(T03, T13)</em></summary>
       <span class="decided"><b>Decided 2026-09-26: Pre-commit both verbs in G18-A.</b> As recommended.</span>
+      <span class="decided"><b>Amended 2026-09-27: not applicable as chosen.</b> The claim below that no test ties a guard verb to a command was wrong: <code>boundary-claims.test.ts</code> requires the guard's verbs to equal exactly the <code>main.ts</code> arms that construct an owner terminal, so a verb cannot precede its command, and a shift builder cannot add the command because the guard is protected. Each owner act is built unregistered and wired by the owner with its verb in one commit: <span class="gate">G18-C</span> after M1, <span class="gate">G18-B</span> after M4. Marimba stays denied both acts from the moment they exist.</span>
       <p class="qa-answer"><strong>Why it is open.</strong> Both are owner acts (D4, D3). Marimba is kept from owner acts by verb in <code>delegation-guard.sh</code> and <code>marimba-guard-rules.mts</code>, both under protected <code>docs/driving/**</code>, and the cheatsheet's <code>owner-acts</code> list must equal the guard's loop.</p>
       <p class="qa-answer"><strong>Pre-commit both verbs in <span class="gate">G18-A</span> (recommended).</strong> Checked: no test ties a guard verb to an existing command, so denying <code>awsf prove</code> before it exists is harmless and leaves no window. <strong>After each milestone lands</strong> leaves a window in which the command exists and Marimba is not denied it. <strong>No verbs</strong> relies on the interactive-terminal check, which the spine's D5 says is a terminal-shape test and not an authorization boundary.</p>
       <span class="rec"><b>If not the recommendation:</b> nothing in the tickets changes; only the timing of the owner's guard edit does.</span>
@@ -980,13 +979,13 @@ flowchart LR
 flowchart LR
   GM["G18-M"] --> M1["M1"]
   GA["G18-A"] --> M1
-  M1 --> M2["M2"] --> M3["M3"] --> M4["M4"]
+  M1 --> GC["G18-C"] --> M2["M2"] --> M3["M3"] --> M4["M4"]
   M4 --> GB["G18-B"] --> D3["D3 suite<br/>40 replays"]
   M4 --> M5["M5"]
   D3 -. "evidence for" .-> M5
   M5 --> CLOSE["spine M18 [x]<br/>owner, at landing"]
       </pre>
-      <figcaption>The whole drive. G18-M and G18-A precede any build and G18-B follows M4, all owner commits. The D3 suite can run before or after M5; the advisory reads whatever evidence exists when it is asked.</figcaption>
+      <figcaption>The whole drive. G18-M and G18-A precede any build, G18-C follows M1 and G18-B follows M4, all owner commits. The D3 suite can run before or after M5; the advisory reads whatever evidence exists when it is asked.</figcaption>
     </figure>
   </section>
 
@@ -999,6 +998,11 @@ flowchart LR
       <p>An exported <code>plan-sota-review v1</code> block (exported 2026-09-27T02:01Z, the owner's evening of 2026-09-26) carried <strong>8 verdicts, no proposed statuses and no annotations</strong>. No status marker moved and no code was written.</p>
       <p><strong>Q2–Q8 took the recommendation</strong>, so their tickets are unchanged: the builder may write <code>docs/cheatsheet.html</code> and the guard gains <code>attribute</code> and <code>prove</code> (<span class="gate">G18-A</span>); the advisory prints from <code>awsf shift plan</code>; <code>RouteEvaluation</code> is untouched; the Run view composes the attribution command; replays are refused at landing and cancelled by the owner; the builder plants the five defects and the owner approves them.</p>
       <p><strong>Q1 took the owner-authored migration 0007 over read-time resolution.</strong> Applied in the same pass: a new gate <span class="gate">G18-M</span> in Execution with the exact DDL (five nullable columns on <code>phases</code>, <code>user_version</code> 7) and the seven terminal-version pins it moves; DD1 rewritten; task 1 now has the projector fill the columns from the route event or the snapshot, moves the pure resolver to <code>core/src/observability/phase-route.ts</code> so the projector imports nothing from <code>core/src/metrics/</code>, and stops if 0007 is absent; the fence table, the Validation row, the M1 figure and the drive figure follow; risk R12 names the window in which the columns exist and are empty. Tickets T01's prompt, the build prompts' Section A and the ticket README were regenerated from the one source, so Section B and the tickets stay byte-identical.</p>
+    </details>
+    <details open>
+      <summary>2026-09-27 — G18-A's guard half withdrawn: owner acts are wired by the owner (G18-C, G18-B)</summary>
+      <p>G18-A was committed with the guard verbs <code>attribute</code> and <code>prove</code> pre-added, as Q3 decided. The full suite at that commit failed one test, <code>boundary-claims.test.ts</code> "the executable driving guard denies every CLI-derived owner act" (2229 of 2230): the test derives the owner acts from the <code>main.ts</code> arms that construct <code>processOwnerTerminal()</code> and requires the guard's verbs to equal that set exactly. The plan's check that "no test ties a guard verb to an existing command" had read only the two guard tests and missed this one.</p>
+      <p>Consequences, applied in this pass: a verb cannot precede its command, and a shift builder cannot add an owner-act command at all, because the arm and the protected guard must change in one commit. The guard half of G18-A was withdrawn in a follow-up owner commit; its builder-writes half stands. T03 and T13 now build <code>attributeCommand</code> and <code>proveCommand</code> unregistered and test them with a fake owner terminal. A new gate, <span class="gate">G18-C</span>, has the owner wire <code>awsf attribute</code> after M1 lands; <span class="gate">G18-B</span> now also wires <code>awsf prove</code> after M4. Q3 is marked amended. T03's and T13's prompts, Section A and the ticket README were regenerated from the one source. No marker moved and no code was written.</p>
     </details>
   </section>
 

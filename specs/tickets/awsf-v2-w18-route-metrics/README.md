@@ -34,11 +34,13 @@ Every milestone reviews on `claude/anthropic/claude:opus@high` and therefore nee
 - **G18-M** before M1 — the owner's migration 0007 (five nullable route columns on `phases`,
   `user_version` 7) and the seven terminal-version pins it moves. After M1 lands, one
   `awsf db rebuild` backfills legacy phases. Exact DDL in the plan's Execution section.
-- **G18-A** before M1 — builder writes gain `docs/cheatsheet.html`; guard verbs `attribute` and
-  `prove` in `delegation-guard.sh`, `marimba-guard-rules.mts`, `marimba-guard.test.ts` and the
-  cheatsheet's `owner-acts` list. Details in the plan's Execution section.
-- **G18-B** after M4 lands — `workflows.enabled` gains `prove`, and the cheatsheet gains
-  `workflow|prove`, in one commit.
+- **G18-A** before M1 — builder writes gain `docs/cheatsheet.html`.
+- **G18-C** after M1 lands — the owner wires `awsf attribute` (built unregistered by T03): its
+  `main.ts` arm, `CLI_COMMANDS`, the cheatsheet's `commands` and `owner-acts` lines, and the
+  guard verb in `delegation-guard.sh`, `marimba-guard-rules.mts` and `marimba-guard.test.ts`, in one
+  commit. `boundary-claims.test.ts` requires them together.
+- **G18-B** after M4 lands — the owner wires `awsf prove` the same way, and `workflows.enabled`
+  gains `prove` with the cheatsheet's `workflow|prove` line, in one commit.
 - **Visual references for M3** — the owner's private binding (absolute root) passed at
   `awsf start <task> --visual-references <binding>`, selecting all eleven frames for phases
   `t07-build`, `t08-build`, `t09-build`, `t10-build` and `shift-review`. The tracked index and

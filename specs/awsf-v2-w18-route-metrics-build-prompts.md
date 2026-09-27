@@ -26,19 +26,23 @@ plus `docs/cheatsheet.html` after gate G18-A. Never `specs/**`, `docs/driving/**
 `awsf.config.yaml`, `core/src/state/**`, `core/src/observability/migrations/**`, or a root
 `.claude/` directory.
 
-**Three owner gates.**
+**Four owner gates.**
 - **G18-M**, one owner commit before M1 (Q1, decided 2026-09-26): migration 0007
   (`core/src/observability/migrations/0007-phase-route.sql`) adds `route_adapter`,
   `route_provider`, `route_model`, `route_effort` and `effort_source` to `phases`, and the
   terminal-version pins in `sqlite.test.ts` and `migration-0004.test.ts` move to 7. T01's
   projector fills the columns; T01 stops if the migration is absent.
-- **G18-A**, one owner commit before M1 (it may share a commit with G18-M): builder `writes` gains `docs/cheatsheet.html`; the
-  Marimba guard (`delegation-guard.sh`, `marimba-guard-rules.mts`), the `OWNER_ACTS` constant in
-  `core/test/unit/meta/marimba-guard.test.ts` and the cheatsheet's `owner-acts` list gain
-  `attribute` and `prove`. Tickets T03, T06, T13 and T17 add a CLI command and its cheatsheet line
-  in one change, and stop if the gate is missing.
-- **G18-B**, one owner commit after M4 lands: `workflows.enabled` gains `prove` and the
-  cheatsheet's `workflows-and-gates` list gains `workflow|prove`.
+- **G18-A**, one owner commit before M1: builder `writes` gains `docs/cheatsheet.html`. Tickets
+  T06 and T17 add a CLI command and its cheatsheet line in one change, and stop if the gate is
+  missing.
+- **G18-C**, one owner commit after M1 lands: wire `awsf attribute`. A shift builder cannot add an
+  owner-act command: `boundary-claims.test.ts` requires the guard's verbs (protected
+  `docs/driving/**`) to equal exactly the `main.ts` arms that construct `processOwnerTerminal()`.
+  T03 builds `attributeCommand` unregistered; the owner adds its `main.ts` arm, `CLI_COMMANDS`
+  entry, cheatsheet `commands` and `owner-acts` lines, and guard verb in one commit.
+- **G18-B**, one owner commit after M4 lands: wire `awsf prove` the same way (T13 builds
+  `proveCommand` unregistered), and `workflows.enabled` gains `prove` with the cheatsheet's
+  `workflow|prove` line.
 
 **The never-do list**, with why each is tempting:
 - **Do not read `agent_sessions` token columns.** They hold the last call only (F8); sum the
@@ -300,10 +304,6 @@ EXECUTION
   write specs/** (plan markers, ticket state, Handoff), docs/driving/**, AGENTS.md,
   awsf.config.yaml, core/src/state/**, core/src/observability/migrations/**, or a .claude/
   directory at the repository root.
-  This ticket also edits docs/cheatsheet.html, which the builder may write only after the
-  owner's gate G18-A. Check agents[builder].writes in awsf.config.yaml first. If
-  docs/cheatsheet.html is not there, stop and report: the cheatsheet-reconciliation fence
-  will be red at this ticket's own tests gate.
   Manual: the same boundary. Commit only with the owner's explicit authorization.
   Unknown context: read only, and ask before any write.
 
@@ -324,8 +324,8 @@ READ FIRST
   core/src/cli/commands/dashboard-projection.ts - projectRelation; copy it for attributions
   core/src/observability/rebuild.ts and core/src/cli/commands/operator.ts - how awsf db rebuild
     walks task roots. Verify how relations survive a rebuild before writing the replay
-  core/src/cli/main.ts - CLI_COMMANDS and dispatch
-  core/test/unit/meta/cheatsheet-reconciliation.test.ts - the commands fact class
+  core/test/unit/meta/boundary-claims.test.ts - why this command stays unregistered: the guard's
+    verbs must equal exactly the main.ts arms that construct processOwnerTerminal()
 
 DO
   Add awsf attribute <task> --attempt <n> --cause <model|factory|environment|owner|unknown>
@@ -342,8 +342,9 @@ DO
     createDashboardProjection as relate calls projectRelation. awsf db rebuild replays every
     task's attributions file.
   Role-rows gain attribution, attributionSource (owner or heuristic) and heuristicAttribution.
-  Add "attribute" to CLI_COMMANDS and <li><code>attribute</code></li> to the commands list in
-    docs/cheatsheet.html, in this same change.
+  Do not register it. Export attributeCommand and test it with a fake owner terminal, as the
+    degrade-review tests do. The owner wires its main.ts arm, CLI_COMMANDS, the cheatsheet and
+    the guard verb together in gate G18-C after this milestone lands.
   Write core/test/journeys/metrics-facts.test.ts: four synthetic runs (a three-ticket shift with
     one correction, a build-review, a blocked run with PermissionBreach, a blocked run with
     ExecutableNotFound). Project them live, build rows, rebuild the database from nothing, build
@@ -354,18 +355,21 @@ DO NOT
   Write into any attempt directory, or reopen a sealed attempt.
   Add a POST route or any dashboard write. The dashboard only composes this command (T09).
   Accept a reason from a piped stdin; the terminal check comes before anything is written.
-  Edit docs/driving/**. The guard already denies awsf attribute (gate G18-A).
+  Add a main.ts arm, a CLI_COMMANDS entry or a cheatsheet line for attribute, or edit
+    docs/driving/**. Any one of them without the others turns boundary-claims or
+    cheatsheet-reconciliation red.
 
 BUILDER READY
   The journey test above passes, and so do unit tests for every refusal of awsf attribute.
-  cheatsheet-reconciliation passes with attribute in both CLI_COMMANDS and the cheatsheet.
+  boundary-claims and cheatsheet-reconciliation pass unchanged.
   npm run test:unit, npm run typecheck and npm run lint all pass.
 
 OWNER ACCEPTANCE (journey w18-m1)
-  On a scratch copy of the state root, run awsf attribute against one BLOCKED run at a real
-    terminal and answer its prompt; then awsf db rebuild --state-root <copy>; the attribution
-    event is present after the rebuild.
-  Refuse the same command from a pipe and see the named refusal.
+  Read the journey test's rebuild evidence in the returned notes: live rows equal rebuilt rows,
+    and the override survives a second rebuild.
+  After gate G18-C wires the command: on a scratch copy of the state root, run awsf attribute
+    against one BLOCKED run at a real terminal, rebuild the copy, see the attribution survive,
+    and see the same command refused from a pipe.
 
 COMMIT
   Managed: leave the tree for the host and put the proposed message in your envelope.
@@ -1307,10 +1311,6 @@ EXECUTION
   write specs/** (plan markers, ticket state, Handoff), docs/driving/**, AGENTS.md,
   awsf.config.yaml, core/src/state/**, core/src/observability/migrations/**, or a .claude/
   directory at the repository root.
-  This ticket also edits docs/cheatsheet.html, which the builder may write only after the
-  owner's gate G18-A. Check agents[builder].writes in awsf.config.yaml first. If
-  docs/cheatsheet.html is not there, stop and report: the cheatsheet-reconciliation fence
-  will be red at this ticket's own tests gate.
   Manual: the same boundary. Commit only with the owner's explicit authorization.
   Unknown context: read only, and ask before any write.
 
@@ -1334,8 +1334,9 @@ DO
     reason; refuse an unknown item, an arm route that does not reach the item's role, and a
     repeated (item, arm, repetition). It creates the task with the replay record, prints the
     awsf start and awsf cancel commands for it, and spawns nothing.
-  Add "prove" to CLI_COMMANDS and <li><code>prove</code></li> to the commands list in
-    docs/cheatsheet.html, in this same change.
+  Do not register it. Export proveCommand and test it with a fake owner terminal. The owner
+    wires its main.ts arm, CLI_COMMANDS, the cheatsheet and the guard verb together in gate
+    G18-B after this milestone lands (core/test/unit/meta/boundary-claims.test.ts is why).
   The projector writes the replay record once, as a session-level event. Role-rows gain source
     (proving-ground when the session's workflow is prove, production otherwise) and the replay's
     item, arm, repetition and order.
@@ -1345,13 +1346,14 @@ DO
 
 DO NOT
   Let a replay row enter a production statistic by default.
-  Edit docs/driving/**. The guard already denies awsf prove (gate G18-A).
+  Add a main.ts arm, a CLI_COMMANDS entry or a cheatsheet line for prove, or edit
+    docs/driving/**.
   Add a --yes or any non-interactive path to awsf prove.
 
 BUILDER READY
   Tests for every refusal of awsf prove, the source tag, the default exclusion, and the
     --source proving-ground readout on a synthetic database.
-  cheatsheet-reconciliation passes with prove in both lists.
+  boundary-claims and cheatsheet-reconciliation pass unchanged.
   npm run test:unit, npm run typecheck, npm run lint and npm run dash:build all pass.
 
 OWNER ACCEPTANCE
