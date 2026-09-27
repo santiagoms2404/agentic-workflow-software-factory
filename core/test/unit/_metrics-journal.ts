@@ -2,7 +2,10 @@
 // the projector's own `projectAttemptStatus`, live or through `awsf db
 // rebuild`; nothing here reads or copies the owner's database.
 
+import type { ProducerStatus } from "../../src/contracts/envelope-base.ts";
 import type { NormalizedEvent, TokenUsage } from "../../src/contracts/normalized-events.ts";
+import type { ReviewVerdict } from "../../src/contracts/review-output.ts";
+import type { GateId } from "../../src/gates/interface.ts";
 import type { RouteSelectionProvenance } from "../../src/contracts/route-selection.ts";
 import type { AttemptEvidence, PhaseEvidenceRecord } from "../../src/observability/attempt-evidence.ts";
 import {
@@ -12,6 +15,7 @@ import {
   type SessionInit,
 } from "../../src/observability/projector.ts";
 import type { DatabaseSync } from "../../src/observability/sqlite.ts";
+import type { TaskState } from "../../src/state/task-machine.ts";
 
 export const AT = "2026-09-26T10:00:00.000Z";
 
@@ -115,7 +119,11 @@ export function usage(input: number, output: number, cacheRead: number, cacheWri
 export class SyntheticAttempt {
   readonly init: SessionInit;
   readonly records: AttemptStatusProjection[] = [];
+  /** The lifecycle state every later record carries; `transition` moves it. */
+  lifecycleState: TaskState = "RUNNING";
+  ownerReentries = 0;
   #eventSeq = 0;
+  #transitionSeq = 0;
 
   constructor(init: SessionInit) {
     this.init = init;
@@ -125,14 +133,14 @@ export class SyntheticAttempt {
     const revision = this.records.length + 1;
     this.records.push({
       ...this.init,
-      lifecycleState: "RUNNING",
+      lifecycleState: this.lifecycleState,
       baseSha: null,
       candidateSha: null,
       callsSpent: 0,
       callsReserved: 0,
       correctionsAuto: 0,
       correctionsOwner: 0,
-      ownerReentries: 0,
+      ownerReentries: this.ownerReentries,
       workerModelResolved: null,
       updatedAt: AT,
       endedAt: null,
@@ -193,6 +201,48 @@ export class SyntheticAttempt {
       costAuthority: "unavailable",
       purpose: agent === "reviewer" ? "review" : "build",
       at: AT,
+    });
+  }
+
+  /** A host transition; the record that carries it already holds the new lifecycle state. */
+  transition(to: TaskState, reasonCode: string | null = null): this {
+    const from = this.lifecycleState;
+    this.lifecycleState = to;
+    this.#transitionSeq += 1;
+    return this.push({
+      type: "transition", id: `${this.init.sessionId}:transition:${this.#transitionSeq}`, seq: this.#transitionSeq,
+      from, to, actor: "host", edgeId: to === "BLOCKED" ? "L5" : "L4", reasonSource: "process",
+      reasonCode, reasonDetail: null, spawnSite: false, at: AT,
+    });
+  }
+
+  gate(phaseId: string, round: number, gateId: GateId, passed: boolean): this {
+    return this.push({
+      type: "gate", id: `${phaseId}:${round}:${gateId}`, phaseId, round, gateId, kind: "pure", candidateSha: null,
+      passed, exitCode: null, checks: [], violations: passed ? [] : [`${gateId} failed`], outputPath: null,
+      startedAt: AT, endedAt: AT,
+    });
+  }
+
+  envelope(phaseId: string, agent: string, round: number, producerStatus: ProducerStatus | null): this {
+    return this.push({
+      type: "envelope",
+      phaseId,
+      envelope: {
+        envelopeId: `${phaseId}:${round}`, sessionId: this.init.sessionId, phaseId, correctionRound: round, agent,
+        schemaId: "awsf.build-output/v1", valid: producerStatus !== null, createdAt: AT,
+        payload: producerStatus === null
+          ? null
+          : { schema: "awsf.build-output/v1", producerStatus, summary: "synthetic", artifacts: [], notesForNextPhase: "" },
+        violations: [], rawOutputPath: `raw/${phaseId}-${round}.txt`,
+      },
+    });
+  }
+
+  review(phaseId: string, verdict: ReviewVerdict): this {
+    return this.push({
+      type: "review", phaseId, adapterId: "claude", provider: "anthropic", verdict, reviewedSha: "0".repeat(40),
+      findingCount: 0, at: AT,
     });
   }
 
