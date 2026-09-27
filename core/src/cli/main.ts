@@ -36,8 +36,7 @@ import { grantCommand } from "./commands/grant.ts";
 import { raiseCommand } from "./commands/raise.ts";
 import { degradeReviewCommand } from "./commands/degrade-review.ts";
 import { routesListCommand } from "./commands/routes.ts";
-import { formatRouteOverride, parseRouteFlags, predictSameProviderReview } from "../workflow/route-flags.ts";
-import { workflowRecipe } from "../workflow/catalog.ts";
+import { assertRoutesReachWorkflow, formatRouteOverride, parseRouteFlags, predictSameProviderReviewFor } from "../workflow/route-flags.ts";
 import { quotaCommand } from "./commands/quota.ts";
 import { stageCommand } from "./commands/stage.ts";
 import { locateAttempt } from "./commands/attempt.ts";
@@ -496,6 +495,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         throw new Error(`--milestone selects a shift; workflow ${JSON.stringify(workflow)} takes none`);
       }
       const routeOverrides = parseRouteFlags(parsed.routes);
+      assertRoutesReachWorkflow(routeOverrides, workflow);
       const planRef = parsed.flags.plan === undefined
         ? undefined
         : await resolvePlanRef({ repository: cwd, stateRoot, project, stem: parsed.flags.plan });
@@ -531,8 +531,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       // The attempt is created either way. Refusing here would leave nothing
       // for `awsf degrade-review` to act on, so the notice names the act and
       // the run is what refuses until the owner has taken it.
-      const recipe = workflowRecipe(workflow);
-      const collapsed = recipe === null ? null : predictSameProviderReview(config, routeOverrides, recipe);
+      const collapsed = predictSameProviderReviewFor(config, routeOverrides, workflow);
       if (collapsed !== null && config.routing.review !== "same-provider-degraded") {
         out(
           `Review independence: ${collapsed.reviewPhaseId} and ${collapsed.workerPhaseId} both resolve to ` +

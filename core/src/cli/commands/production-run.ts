@@ -1390,8 +1390,8 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
         if (evidence?.type !== "agent-start") throw new InvalidReviewInversion("accepted phase has no recorded original provider");
         return evidence.provider;
       };
-      // A shift has one builder per ticket, and routes are keyed by phase id,
-      // so one override can move one builder. The worker is the one provider
+      // A shift has one builder per ticket. Each is routed as the builder role
+      // unless an exact phase-id entry names it. The worker is the one provider
       // every builder resolves to; builders on two providers are refused here
       // by name. This runs before the mode is read, so under
       // same-provider-degraded the builders must still agree and the reviewer

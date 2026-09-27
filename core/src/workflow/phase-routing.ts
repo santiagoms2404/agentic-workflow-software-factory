@@ -1,6 +1,7 @@
 import { isDeepStrictEqual } from "node:util";
 import type { ModelInfo } from "../adapters/interface.ts";
 import type { AgentDefinition, AwsfConfig } from "../config/schema.ts";
+import { AGENT_PHASE_IDS } from "../config/workflow-ids.ts";
 import type {
   EffectiveRouteProvenance,
   PhaseRouteSelection,
@@ -88,8 +89,15 @@ export function requestedPhaseRoute(
   role: AgentDefinition,
   attemptOverrides?: PhaseRouteOverrides,
 ): RequestedPhaseRoute {
-  const configured = config.routing.phase_routes?.[phaseId];
-  const attempted = attemptOverrides?.[phaseId];
+  // A shipped recipe names every agent phase in the routable vocabulary, so the
+  // phase id is the key. A compiled workflow names its phases per item
+  // (`t01-build`, `shift-review`), which no flag or config key can spell, so
+  // such a phase is routed as the role that owns it: `--route builder=` reaches
+  // every build in a shift. An entry under the exact phase id still wins.
+  const roleKey = (AGENT_PHASE_IDS as readonly string[]).includes(phaseId) ? null : role.name;
+  const configured = config.routing.phase_routes?.[phaseId] ??
+    (roleKey === null ? undefined : config.routing.phase_routes?.[roleKey]);
+  const attempted = attemptOverrides?.[phaseId] ?? (roleKey === null ? undefined : attemptOverrides?.[roleKey]);
   // Field by field, so `--route builder=@max` sharpens the effort of a route
   // the config already chose rather than discarding the rest of it.
   const override = layered(configured, attempted);

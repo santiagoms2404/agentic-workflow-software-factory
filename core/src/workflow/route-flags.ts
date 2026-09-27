@@ -19,6 +19,7 @@ import { ROUTE_EFFORT_LEVELS, type AwsfConfig } from "../config/schema.ts";
 import { BUILD_OUTPUT_SCHEMA_ID } from "../contracts/build-output.ts";
 import { REVIEW_OUTPUT_SCHEMA_ID } from "../contracts/review-output.ts";
 import type { PhaseRouteSelection, RouteEffort } from "../contracts/route-selection.ts";
+import { compiledWorkflow, workflowRecipe } from "./catalog.ts";
 import type { WorkflowRecipe } from "./compiler.ts";
 
 /** Selections the owner attached to one attempt, keyed by agent phase id. */
@@ -50,6 +51,21 @@ export class RouteFlagDuplicated extends Error {
     super(`--route names phase ${JSON.stringify(phaseId)} twice; one attempt gives each phase one route`);
     this.name = "RouteFlagDuplicated";
     this.phaseId = phaseId;
+  }
+}
+
+export class RouteFlagPhaseNotRouted extends Error {
+  readonly phaseId: string;
+  readonly workflow: string;
+
+  constructor(phaseId: string, workflow: string, routable: readonly string[]) {
+    super(
+      `--route names ${JSON.stringify(phaseId)}, which workflow ${JSON.stringify(workflow)} never routes; ` +
+        `it would be recorded and never applied. Routable here: ${routable.join(", ")}`,
+    );
+    this.name = "RouteFlagPhaseNotRouted";
+    this.phaseId = phaseId;
+    this.workflow = workflow;
   }
 }
 
@@ -132,6 +148,26 @@ export function parseRouteFlags(values: readonly string[]): PhaseRouteOverrides 
   return Object.freeze(overrides);
 }
 
+/**
+ * The keys a workflow's routes are read under: a shipped recipe's agent phase
+ * ids, or a compiled workflow's owning roles (its phases are named per item and
+ * routed as their role). Null for an id neither catalogue knows.
+ */
+export function routablePhaseIds(workflow: string): readonly string[] | null {
+  const recipe = workflowRecipe(workflow);
+  if (recipe !== null) return recipe.phases.filter((phase) => phase.kind === "agent").map((phase) => phase.id);
+  return compiledWorkflow(workflow)?.agentOwners ?? null;
+}
+
+/** Refuses, before the attempt exists, a route the workflow would record and never apply. */
+export function assertRoutesReachWorkflow(overrides: PhaseRouteOverrides, workflow: string): void {
+  const routable = routablePhaseIds(workflow);
+  if (routable === null) return;
+  for (const phaseId of Object.keys(overrides)) {
+    if (!routable.includes(phaseId)) throw new RouteFlagPhaseNotRouted(phaseId, workflow, routable);
+  }
+}
+
 /** How the attempt's own routes read back on a status line or in a refusal. */
 export function formatRouteOverride(phaseId: string, selection: PhaseRouteSelection): string {
   const route = selection.adapter === undefined
@@ -169,9 +205,37 @@ export function predictSameProviderReview(
   const explicitProvider = (phaseId: string): string | null =>
     overrides[phaseId]?.provider ?? config.routing.phase_routes?.[phaseId]?.provider ?? null;
 
-  const reviewProvider = explicitProvider(review.id);
-  const workerProvider = explicitProvider(worker.id);
+  return collapsedProviders(explicitProvider, review.id, worker.id);
+}
+
+/**
+ * The same courtesy for any workflow id. A compiled workflow has no recipe
+ * until an attempt binds one, and its phases are routed as their roles, so
+ * the prediction reads the `reviewer` and `builder` keys it will route by.
+ */
+export function predictSameProviderReviewFor(
+  config: AwsfConfig,
+  overrides: PhaseRouteOverrides,
+  workflow: string,
+): SameProviderPrediction | null {
+  const recipe = workflowRecipe(workflow);
+  if (recipe !== null) return predictSameProviderReview(config, overrides, recipe);
+  const compiled = compiledWorkflow(workflow);
+  if (compiled === null || !compiled.buysReview) return null;
+  if (!compiled.agentOwners.includes("reviewer") || !compiled.agentOwners.includes("builder")) return null;
+  const explicitProvider = (key: string): string | null =>
+    overrides[key]?.provider ?? config.routing.phase_routes?.[key]?.provider ?? null;
+  return collapsedProviders(explicitProvider, "reviewer", "builder");
+}
+
+function collapsedProviders(
+  explicitProvider: (key: string) => string | null,
+  reviewPhaseId: string,
+  workerPhaseId: string,
+): SameProviderPrediction | null {
+  const reviewProvider = explicitProvider(reviewPhaseId);
+  const workerProvider = explicitProvider(workerPhaseId);
   if (reviewProvider === null || workerProvider === null) return null;
   if (reviewProvider !== workerProvider) return null;
-  return Object.freeze({ reviewPhaseId: review.id, workerPhaseId: worker.id, provider: reviewProvider });
+  return Object.freeze({ reviewPhaseId, workerPhaseId, provider: reviewProvider });
 }

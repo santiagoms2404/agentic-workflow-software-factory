@@ -30,9 +30,13 @@ optional and the layers combine field by field, so `--route builder=@max`
 sharpens the effort of a route the configuration already chose and leaves the
 rest of it alone.
 
-Three refusals happen before an attempt exists, and each names what it read: a
-phase id that is not an agent phase, an adapter without its provider, and an
-effort outside the six levels.
+Four refusals happen before an attempt exists, and each names what it read: a
+phase id that is not an agent phase, a phase the chosen workflow never routes,
+an adapter without its provider, and an effort outside the six levels.
+
+A shift names its phases per ticket (`t01-build`, `shift-review`), so it is
+routed by role: `--route builder=` sets every build in the shift and
+`--route reviewer=` sets its review.
 
 The selection is recorded on the attempt, not folded into its configuration
 snapshot. That is what keeps `rework` and `review` available afterwards — both
