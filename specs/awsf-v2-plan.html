@@ -194,12 +194,12 @@ figcaption { color:var(--muted); font-size:12px; margin-top:10px; font-style:ita
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-08-20</dd>
-        <dt>modified</dt>     <dd>2026-08-20, 2026-08-21, 2026-08-27, 2026-09-15, 2026-09-15, 2026-09-24, 2026-09-26 (W17 closed by awsf-v2-w17-shift T18)</dd>
+        <dt>modified</dt>     <dd>2026-08-20, 2026-08-21, 2026-08-27, 2026-09-15, 2026-09-15, 2026-09-24, 2026-09-26 (W17 closed by awsf-v2-w17-shift T18), 2026-09-26 (W18 adopted and its deep plan authored), 2026-09-26 (W18's Questionables decided)</dd>
         <dt>commits</dt>      <dd>0c56e9e (the spine, its build prompts and its ticket set — authored 2026-08-20, four Questionables decided by owner review 2026-08-21, committed together as one deliverable)</dd>
-        <dt>agent name</dt>   <dd>claude-opus-5, claude-opus-5, claude-opus-5, claude-opus-5, claude-opus-5-5, claude-opus-5-5 (W17 close)</dd>
+        <dt>agent name</dt>   <dd>claude-opus-5, claude-opus-5, claude-opus-5, claude-opus-5, claude-opus-5-5, claude-opus-5-5 (W17 close), claude-opus-5-5 (W18 authoring)</dd>
         <dt>session id</dt>   <dd>not recorded — AGENTS.md invariant 1 keeps live session state out of every committed file in this repository</dd>
         <dt>back refs</dt>    <dd>./awsf-v2-intent.md (the approved intent; this plan's single input), ./awsf-v2-candidates-fuse-version.md (the only detail source: evidence, collisions, routes to strong, buildability), ./awsf-plan.html (v1 — history, not backlog), ../AGENTS.md (the twelve invariants), ./awsf-v2-candidates.md and ./awsf-v2-candidates-GPT-version.md (frozen records; both carry claims their own headers mark false — superseded by the fused version and deliberately not read while authoring this plan)</dd>
-        <dt>forward refs</dt> <dd>./awsf-v2-plan-build-prompts.md, ./tickets/awsf-v2-plan/ (W01–W14, one file per workstream), ./tickets/awsf-v2-plan/README.md, ./awsf-v2-w01-marimba-contract.html, ./awsf-v2-w02-evidence-readability.html, ./awsf-v2-w03-awsf-init.html, ./awsf-v2-w04-project-registry.html, ./awsf-v2-w05-design-to-plan.html, ./awsf-v2-w06-prompt-composition.html, ./awsf-v2-w07-quota-telemetry.html, ./awsf-v2-w08-publish.html, ./awsf-v2-w09-agy-adapter.html, ./awsf-v2-w10-mf-adapter.html, ./awsf-v2-w11-five-stage-ladder.html, ./awsf-v2-w12-cheatsheet.html, ./awsf-v2-w13-deploy.html, ./awsf-v2-w14-monitor.html (all fourteen: not yet authored), ./awsf-v2-w16-openrouter-adapter.html, ./awsf-v2-w17-shift.html and ./awsf-v2-w16-openrouter-adapter-build-prompts.md and ./tickets/awsf-v2-w16-openrouter-adapter/ (W16 — authored 2026-09-15, awaiting owner review)</dd>
+        <dt>forward refs</dt> <dd>./awsf-v2-plan-build-prompts.md, ./tickets/awsf-v2-plan/ (W01–W14, one file per workstream), ./tickets/awsf-v2-plan/README.md, ./awsf-v2-w01-marimba-contract.html, ./awsf-v2-w02-evidence-readability.html, ./awsf-v2-w03-awsf-init.html, ./awsf-v2-w04-project-registry.html, ./awsf-v2-w05-design-to-plan.html, ./awsf-v2-w06-prompt-composition.html, ./awsf-v2-w07-quota-telemetry.html, ./awsf-v2-w08-publish.html, ./awsf-v2-w09-agy-adapter.html, ./awsf-v2-w10-mf-adapter.html, ./awsf-v2-w11-five-stage-ladder.html, ./awsf-v2-w12-cheatsheet.html, ./awsf-v2-w13-deploy.html, ./awsf-v2-w14-monitor.html (all fourteen: not yet authored), ./awsf-v2-w16-openrouter-adapter.html, ./awsf-v2-w17-shift.html and ./awsf-v2-w16-openrouter-adapter-build-prompts.md and ./tickets/awsf-v2-w16-openrouter-adapter/ (W16 — authored 2026-09-15, awaiting owner review), ./awsf-v2-w18-route-metrics.html and ./awsf-v2-w18-route-metrics-build-prompts.md and ./tickets/awsf-v2-w18-route-metrics/ and ./design/awsf-v2-w18-route-metrics/ (W18 — authored 2026-09-26, awaiting owner review)</dd>
       </dl>
     </details>
   </header>
@@ -1002,6 +1002,38 @@ flowchart LR
       </ul>
       <div class="loop">🔁 <strong>The acceptance bar is one live drive, not the suite.</strong> This workstream exists to spend quota while nobody is watching, and the only way to know it is safe to do that is to watch it do it once.</div>
     </div>
+
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M18: W18 — Route Metrics <span class="wtag">adopted 2026-09-26</span></h3>
+      <p class="deep-plan"><a href="awsf-v2-w18-route-metrics.html">Deep plan: AWSF v2 W18 — Route Metrics</a> <span class="muted">authored 2026-09-26, awaiting owner review</span></p>
+      <p><em>Exists because the owner wants the factory's own runs, not leaderboards, to decide which route each role runs on, and because the journal already holds the evidence while every surface that shows it drops part of it.</em> Its deep plan was authored before any of its code was written, and it runs as five <code>shift</code> attempts, one per milestone.</p>
+      <h4>18. W18 — Route Metrics</h4>
+      <table class="taskmeta">
+        <tr><th>What it is</th><td>A dashboard tab, <code>metrics</code> (Matrix, Frontier, Ledger and Run views, plus a control on every run card), and the projection, query surface and proving ground behind it. It answers <strong>which route — adapter, model and effort — each role should run on</strong>, scoped to role, prompt revision, tool profile, task class and evidence source. <strong>It is never a global model score</strong>, which is why <code>core/src/adapters/evaluations.ts</code> refuses scores and still will.</td></tr>
+        <tr><th>What was measured, 2026-09-26</th><td>46 runs, 62 role-rows, 8 routes, 10 role-route cells, and no cell with a tight enough interval to rank. Effort is recoverable exactly for every phase: route provenance landed on 2026-09-06, per-attempt overrides on 2026-09-10, no agent phase ran between 2026-09-09 and 2026-09-25, and every config snapshot carries <code>agents[].thinking</code>. <strong>One finding the design did not have:</strong> <code>agent_sessions</code> token columns hold a role's last call only (17 of 17 multi-call role-rows), so every per-role figure must be summed from <code>usage</code> events.</td></tr>
+        <tr><th>The owner's decisions</th><td>D1–D6, all taken on 2026-09-26 and recorded in the deep plan: a labeled list-price equivalent that is never spend, a dated sourced rate card, a 40-run reviewer-first proving ground, an owner override on block attribution, advice that never routes, and a ticket task class.</td></tr>
+        <tr><th>v1 positions it revises</th><td>The model-catalogue stance (a dated price snapshot is added; <code>awsf routes list</code> stays catalogue-free), the <code>pricing</code> empty default (unchanged in config; the card is data in <code>dashboard/shared/</code>), and the subscription <code>$</code> refusal (kept for spend; a labeled equivalent is added). <code>RouteEvaluation</code>'s https-only sources are left unchanged unless the owner decides the deep plan's Q5 otherwise.</td></tr>
+        <tr><th>Fences it meets</th><td>The migrations directory, <code>docs/driving/**</code> and <code>awsf.config.yaml</code> are protected, and the cheatsheet must list every command and owner act. One is avoided by design: the advisory prints from <code>awsf shift plan</code>. Three need owner commits: <span class="gate">G18-M</span> (migration 0007, the owner's choice in the deep plan's Q1) and <span class="gate">G18-A</span> before M1, <span class="gate">G18-B</span> after M4.</td></tr>
+        <tr><th>Stop when</th><td>The tab is accepted by the owner in Chrome against the eleven frames, every number is reproducible by <code>awsf db rebuild</code>, replays exist only as owner acts and cannot land, and the advisory reaches Marimba's preflight without any runtime module reading it.</td></tr>
+      </table>
+      <div class="card rule">
+        <h5>Testing strategy — what the deep plan must be able to prove</h5>
+        Read-time facts equal after a rebuild from nothing. Parity to the digit between the pure module, the API and the CLI. Tokens, labels and accessibility across all seven palettes and both modes. One replay end to end on the fixture route, with landing refused by name. An import fence proving no runtime module reads a metric. All offline and synthetic, plus the owner's visual acceptance in Chrome and the D3 suite the owner funds.
+      </div>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Deep plan <code>awsf-v2-w18-route-metrics.html</code> authored with its build prompts, its <code>specs/tickets/awsf-v2-w18-route-metrics/</code> set and its tracked frame index, and approved by the owner</li>
+        <li><code class="status">[]</code> <span class="gate">G18-M</span>, <span class="gate">G18-A</span> and <span class="gate">G18-B</span> landed as owner-authored commits before the builds that need them</li>
+        <li><code class="status">[]</code> Every agent phase carries its route and effort, with a named source, in migration 0007's columns; only the projector writes them, and a rebuild reproduces every number</li>
+        <li><code class="status">[]</code> Per-role tokens are summed from usage events; no W18 module reads <code>agent_sessions</code> token columns</li>
+        <li><code class="status">[]</code> The attribution override is an owner act on a task-scoped record, denied to Marimba, and only model-attributed blocks count against a route</li>
+        <li><code class="status">[]</code> Every list-price equivalent is labeled as one, <code>cost-display.ts</code>'s refusal is unchanged, and the rate card carries a date and a source per price</li>
+        <li><code class="status">[]</code> The metrics tab is accepted by the owner in Chrome against the frames, in all seven palettes and both modes</li>
+        <li><code class="status">[]</code> Replays run only as owner acts and none can land; D3's 40-run reviewer suite has been run by the owner, or its deferral is recorded</li>
+        <li><code class="status">[]</code> The advisory appears in <code>awsf shift plan</code>, no runtime module imports a metric, and tickets may carry a task class the fence validates</li>
+        <li><code class="status">[]</code> The deep plan's own milestones all reach <code>[x]</code>, or the workstream is closed with its <code>[f]</code> rows recorded</li>
+      </ul>
+      <div class="loop">🔁 <strong>The acceptance bar is the owner's eye, not the suite.</strong> A tab that computes the right numbers and reads wrong in one palette, or that ranks routes the evidence cannot separate, fails its purpose.</div>
+    </div>
   </section>
 
   <!-- ===== GLOBAL VALIDATION ===== -->
@@ -1477,6 +1509,40 @@ stateDiagram-v2
       M1. The W17 commits were replayed on top as <code>a053128</code> and <code>51e2a4f</code>. W16's M1 moves to
       <code class="status">[x]</code> in its own plan. The spine's W16 marker is unchanged at <code class="status">[]</code>,
       because only W16's T12 writes it.</p>
+    </details>
+    <details open>
+      <summary>2026-09-26 — W18 Route Metrics adopted as a workstream and its deep plan authored; no build marker moved</summary>
+      <p><strong>This entry adopts a workstream and moves no build marker.</strong> Milestone <strong>M18 / W18</strong> is added to the Implementation Phases above with its own block, checklist and ticket (<code>specs/tickets/awsf-v2-plan/W18.md</code>, with its <code>### T18 — W18 · Route Metrics</code> block in the build prompts). Its deep plan, <code>specs/awsf-v2-w18-route-metrics.html</code>, was authored the same day with its build prompts, a seventeen-ticket set in five milestones and a tracked frame index. W18's marker is <code>[]</code> and stays <code>[]</code> until the landing of that plan's T17.</p>
+
+      <h3>What the owner decided on 2026-09-26</h3>
+      <ul>
+        <li><strong>D1</strong> — Show a list-price equivalent ("≈ list $") on subscription routes, labeled and never presented as spend. <code>cost-display.ts</code> keeps refusing a spend figure.</li>
+        <li><strong>D2</strong> — Commit a dated, sourced rate card, with a check date and a source URL per price.</li>
+        <li><strong>D3</strong> — Fund the proving ground, reviewers first: 5 seeded-defect diffs × 4 reviewer routes × 2 repetitions = 40 runs, after M1–M3 land.</li>
+        <li><strong>D4</strong> — An owner override on block attribution, journaled as an owner act. Only model-attributed blocks count against a route.</li>
+        <li><strong>D5</strong> — Recommendations stay advisory. Marimba shows them at preflight, the owner applies <code>--route</code>, and the runner never routes on them. This extends the intent's decision 5, "quota is a readout, never a router", to route evidence.</li>
+        <li><strong>D6</strong> — Tickets gain a task-class field so routes are compared within a class. The fence vocabulary is in-repo work; teaching plan-sota to emit the field is owner-side and stays out of the task graph.</li>
+      </ul>
+
+      <h3>The v1 positions this revises, and what it leaves alone</h3>
+      <ul>
+        <li><strong>"AWSF keeps no model catalogue."</strong> Revised narrowly: a dated price snapshot keyed by model id is committed as data. It offers no selectors, and <code>awsf routes list</code> still names each adapter's own enumeration command rather than a list.</li>
+        <li><strong>The "pricing empty" default.</strong> Revised in effect, not in configuration: <code>awsf.config.yaml</code> <code>pricing.models</code> stays <code>{}</code> (it is protected and nothing reads it), and the rate card lives in <code>dashboard/shared/</code>, where the API, the CLI and the tab read one copy.</li>
+        <li><strong>The subscription <code>$</code> refusal.</strong> Kept for spend. A separate value, always labeled "≈ list", is added for comparison, and a test holds the refusal.</li>
+        <li><strong><code>RouteEvaluation</code> sources.</strong> Unchanged unless the owner decides the deep plan's Q5 otherwise: W18 writes no evaluation and no <code>routing.phase_routes</code>, so https-only sources and the absent score keep their meaning. Admitting local run ids is rejected there, because it would put run identifiers into committed configuration.</li>
+        <li><strong>Unchanged:</strong> invariants 3 to 10, the protected paths, quota as a readout, landing as a human act at a terminal, and the rule that no module produces a global model score.</li>
+      </ul>
+
+      <h3>Gates and fences</h3>
+      <p>W18 needs <strong>no invariant amendment</strong>. It needs two protected-configuration and protected-document commits by the owner: <span class="gate">G18-A</span> before M1 (the builder may write <code>docs/cheatsheet.html</code>; the Marimba guard denies <code>attribute</code> and <code>prove</code>) and <span class="gate">G18-B</span> after M4 (<code>workflows.enabled</code> gains <code>prove</code>). Both follow <span class="gate">G2</span>. Two further fences are avoided by design: route and effort resolve at read time, so no migration touches the protected migrations directory, and the advisory prints from <code>awsf shift plan</code>, so Marimba's protected contract, at 119 of its 120 budgeted lines, is not edited. Eight Questionables in the deep plan are open for the owner, each with a recommendation the tickets are written against.</p>
+
+      <h3>A measurement the design did not contain</h3>
+      <p><code>agent_sessions</code> is keyed by session and agent, and the projector replaces its token columns on every call. On the owner's database, all 17 role-rows with more than one call store their last call's usage, not their sum. The dashboard's run cards read <code>sessions</code> totals and are correct; any per-role token figure read from <code>agent_sessions</code> would not be. W18 sums <code>usage</code> events instead and leaves the projector's semantics as they are.</p>
+    </details>
+    <details open>
+      <summary>2026-09-26 — W18's eight Questionables decided by owner review; Q1 takes a migration; no spine marker moved</summary>
+      <p>An exported <code>plan-sota-review v1</code> block against <code>awsf-v2-w18-route-metrics.html</code> carried eight verdicts, no proposed statuses and no annotations, and was applied to that plan in full. <strong>W18 is still <code>[]</code></strong>, as is every box in its checklist: a Questionable verdict is not a marker, and no code has been written.</p>
+      <p><strong>Seven took the recommendation.</strong> <strong>Q1 did not:</strong> route, effort and effort source become columns on <code>phases</code> through migration 0007, which the owner authors as a new gate, <span class="gate">G18-M</span>, before M1 (the migrations directory is protected, so no shift builder can write it). The projector fills the columns and <code>awsf db rebuild</code> backfills the history. This supersedes two statements in the adoption entry above, which is left as written: route and effort no longer resolve at read time, and W18 now needs three owner commits (<span class="gate">G18-M</span>, <span class="gate">G18-A</span>, <span class="gate">G18-B</span>), not two. Invariant 6 is unaffected: only the projector writes the new columns.</p>
     </details>
   </section>
 

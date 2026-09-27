@@ -1,0 +1,239 @@
+{
+  "version": 1,
+  "plan": "awsf-v2-w18-route-metrics",
+  "purpose": "Design authority for the W18 metrics tab. AWSF reads version, frames[].id, frames[].image and ticketFrames; every other field is provenance for people and is ignored by the host.",
+  "source": {
+    "artifact": "https://claude.ai/artifact/Ga29MRY2FCcHPJfvcJgcpW",
+    "artifactVersion": 2,
+    "prototype": "docs/design/route-metrics/route-metrics-prototype.html",
+    "prototypeSha256": "dc2dc0bcfc16bd23f8ebd6502fb0486391eefa4ce4285a7f73199c19d55580d8",
+    "tracked": false,
+    "why": "The prototype and every frame embed the owner's real run data (task names and run ids), so they stay in the ignored docs/design/ tree. Only this index and its digests are committed."
+  },
+  "viewport": {
+    "width": 1500,
+    "note": "Frames were captured 1500 px wide from the prototype's app frame. Heights differ by view."
+  },
+  "frames": [
+    {
+      "id": "rm-matrix-forest-dark",
+      "image": "docs/design/route-metrics/frames/rm-matrix-forest-dark.png",
+      "sha256": "fa2c4204a8324bdc2e8ac4440e3ef5297d1dd18463f15eb375462db8fe89f8ab",
+      "bytes": 342114,
+      "width": 1500,
+      "height": 1900,
+      "view": "matrix",
+      "prototypePalette": "forest",
+      "dashboardPalette": "forest",
+      "mode": "dark",
+      "prototypeQuery": "?frame=app&view=matrix&palette=forest&theme=dark"
+    },
+    {
+      "id": "rm-matrix-forest-light",
+      "image": "docs/design/route-metrics/frames/rm-matrix-forest-light.png",
+      "sha256": "9e24a3c4494746859b9f003e88dd747a106b52a4d246438e236830b2a38a07a6",
+      "bytes": 364356,
+      "width": 1500,
+      "height": 1900,
+      "view": "matrix",
+      "prototypePalette": "forest",
+      "dashboardPalette": "forest",
+      "mode": "light",
+      "prototypeQuery": "?frame=app&view=matrix&palette=forest&theme=light"
+    },
+    {
+      "id": "rm-matrix-navy-dark",
+      "image": "docs/design/route-metrics/frames/rm-matrix-navy-dark.png",
+      "sha256": "abde133f0f1924a6f87a2d6a13673824a703b4aab5d4e575511fe232422107f4",
+      "bytes": 352589,
+      "width": 1500,
+      "height": 1900,
+      "view": "matrix",
+      "prototypePalette": "navy",
+      "dashboardPalette": "navy-sky",
+      "mode": "dark",
+      "prototypeQuery": "?frame=app&view=matrix&palette=navy&theme=dark"
+    },
+    {
+      "id": "rm-matrix-navy-light",
+      "image": "docs/design/route-metrics/frames/rm-matrix-navy-light.png",
+      "sha256": "7c98eec116d2d1c54f85776c4b23fb2fe37001d3e2b418b12ad8eccfa00ed0bf",
+      "bytes": 363865,
+      "width": 1500,
+      "height": 1900,
+      "view": "matrix",
+      "prototypePalette": "navy",
+      "dashboardPalette": "navy-sky",
+      "mode": "light",
+      "prototypeQuery": "?frame=app&view=matrix&palette=navy&theme=light"
+    },
+    {
+      "id": "rm-matrix-rust-dark",
+      "image": "docs/design/route-metrics/frames/rm-matrix-rust-dark.png",
+      "sha256": "d6a79fdb42f72876a343489b628a0030079fc039b9e64be05cc7396e5ac73fdb",
+      "bytes": 343901,
+      "width": 1500,
+      "height": 1900,
+      "view": "matrix",
+      "prototypePalette": "rust",
+      "dashboardPalette": "warm-rust",
+      "mode": "dark",
+      "prototypeQuery": "?frame=app&view=matrix&palette=rust&theme=dark"
+    },
+    {
+      "id": "rm-frontier-forest-dark",
+      "image": "docs/design/route-metrics/frames/rm-frontier-forest-dark.png",
+      "sha256": "2b33f0d2cea278c6b1f255f9dcce7264e3a6e71aea5a746df2c0447a2a5d321d",
+      "bytes": 257514,
+      "width": 1500,
+      "height": 1500,
+      "view": "frontier",
+      "prototypePalette": "forest",
+      "dashboardPalette": "forest",
+      "mode": "dark",
+      "prototypeQuery": "?frame=app&view=frontier&palette=forest&theme=dark"
+    },
+    {
+      "id": "rm-frontier-forest-light",
+      "image": "docs/design/route-metrics/frames/rm-frontier-forest-light.png",
+      "sha256": "e34a99b8c89eeda19b59a5396ce7bb04616bc17586fe162fbce267315801870e",
+      "bytes": 272683,
+      "width": 1500,
+      "height": 1500,
+      "view": "frontier",
+      "prototypePalette": "forest",
+      "dashboardPalette": "forest",
+      "mode": "light",
+      "prototypeQuery": "?frame=app&view=frontier&palette=forest&theme=light"
+    },
+    {
+      "id": "rm-ledger-forest-dark",
+      "image": "docs/design/route-metrics/frames/rm-ledger-forest-dark.png",
+      "sha256": "38d62b1baac950a2f03809c32e5cfcef89b5e394121e22b9a12c2f89c38e3f2a",
+      "bytes": 260384,
+      "width": 1500,
+      "height": 1500,
+      "view": "ledger",
+      "prototypePalette": "forest",
+      "dashboardPalette": "forest",
+      "mode": "dark",
+      "prototypeQuery": "?frame=app&view=ledger&palette=forest&theme=dark"
+    },
+    {
+      "id": "rm-ledger-forest-light",
+      "image": "docs/design/route-metrics/frames/rm-ledger-forest-light.png",
+      "sha256": "798c9474c04c569fc5d0b6f72bfbeea64aad0251aad7c3e44526933de77b31b0",
+      "bytes": 276678,
+      "width": 1500,
+      "height": 1500,
+      "view": "ledger",
+      "prototypePalette": "forest",
+      "dashboardPalette": "forest",
+      "mode": "light",
+      "prototypeQuery": "?frame=app&view=ledger&palette=forest&theme=light"
+    },
+    {
+      "id": "rm-run-forest-dark",
+      "image": "docs/design/route-metrics/frames/rm-run-forest-dark.png",
+      "sha256": "719418cca752252eda7903ab6f0590ddfdacee0e3ddd95927571a9f28980ea81",
+      "bytes": 227522,
+      "width": 1500,
+      "height": 1300,
+      "view": "run",
+      "prototypePalette": "forest",
+      "dashboardPalette": "forest",
+      "mode": "dark",
+      "prototypeQuery": "?frame=app&view=run&palette=forest&theme=dark"
+    },
+    {
+      "id": "rm-run-forest-light",
+      "image": "docs/design/route-metrics/frames/rm-run-forest-light.png",
+      "sha256": "b11bf669fd32bc4e9ab2573e791bafb4efc388dbbab2ec418dcc336b9ad06d21",
+      "bytes": 240111,
+      "width": 1500,
+      "height": 1300,
+      "view": "run",
+      "prototypePalette": "forest",
+      "dashboardPalette": "forest",
+      "mode": "light",
+      "prototypeQuery": "?frame=app&view=run&palette=forest&theme=light"
+    }
+  ],
+  "ticketFrames": {
+    "T07": [
+      "rm-matrix-forest-dark",
+      "rm-matrix-forest-light",
+      "rm-run-forest-dark",
+      "rm-run-forest-light"
+    ],
+    "T08": [
+      "rm-matrix-forest-dark",
+      "rm-matrix-forest-light",
+      "rm-matrix-navy-dark",
+      "rm-matrix-navy-light",
+      "rm-matrix-rust-dark",
+      "rm-frontier-forest-dark",
+      "rm-frontier-forest-light"
+    ],
+    "T09": [
+      "rm-ledger-forest-dark",
+      "rm-ledger-forest-light",
+      "rm-run-forest-dark",
+      "rm-run-forest-light"
+    ],
+    "T10": [
+      "rm-matrix-forest-dark",
+      "rm-matrix-forest-light",
+      "rm-matrix-navy-dark",
+      "rm-matrix-navy-light",
+      "rm-matrix-rust-dark",
+      "rm-frontier-forest-dark",
+      "rm-frontier-forest-light",
+      "rm-ledger-forest-dark",
+      "rm-ledger-forest-light",
+      "rm-run-forest-dark",
+      "rm-run-forest-light"
+    ]
+  },
+  "comparison": [
+    "Geometry: rail left (about 236 px), board right; four summary stats in one row; matrix tiles about 100 x 94 px; frontier plot with its verdict cards beneath; ledger with sticky first column; run view with the card, the fact grid, the phase strip and the per-role table in that order.",
+    "Type: sans for prose and controls, monospace for numbers, labels and axis ticks, tabular numerals everywhere a number is compared.",
+    "Colour: only the dashboard's palette tokens. Role dots use the existing role colours. State colours: landed green, awaiting owner amber, in flight blue, cancelled faint, blocked red.",
+    "Hierarchy and depth: neumorphic wells for menus and panels, raised pills for pressed controls, tile depth raised / flat / sunk by evidence width exactly as the matrix legend states.",
+    "Interaction states: pressed pills, disabled proving-ground pill until M4, hover lift on tiles, focus-visible outline on every control, the flat-column dimming and its title text.",
+    "Numbers are not compared. The frames carry the owner's data as of 2026-09-26; the built tab renders whatever the projection holds."
+  ],
+  "overrides": [
+    {
+      "id": "O1",
+      "frames": "all",
+      "rule": "The palette picker in the frames' top bar is prototype chrome. The built tab uses the dashboard's existing palette and mode selection in Settings and adds no picker to the nav."
+    },
+    {
+      "id": "O2",
+      "frames": [
+        "rm-run-forest-dark",
+        "rm-run-forest-light"
+      ],
+      "rule": "The frames draw the archive control as a round icon button. The existing archive control keeps its current form and behaviour; only the metrics control is new, and it sits beside the archive control, outside the card's anchor."
+    },
+    {
+      "id": "O3",
+      "frames": [
+        "rm-run-forest-dark",
+        "rm-run-forest-light"
+      ],
+      "rule": "For a BLOCKED run the prototype toggles attribution in the browser. The dashboard may not write (no-write-route fence), so the Run view composes the exact awsf attribute command for the owner to run and shows the recorded override once it is projected. Decided by Q6."
+    },
+    {
+      "id": "O4",
+      "frames": "all",
+      "rule": "The count tile and the nav read the real projection. The frames' 46, 62 and 38 are the 2026-09-26 data, not targets."
+    },
+    {
+      "id": "O5",
+      "frames": "all",
+      "rule": "The frames show three palettes. The built tab supports all seven dashboard palettes in both modes (AWSF Classic stays dark only, as it does today)."
+    }
+  ]
+}

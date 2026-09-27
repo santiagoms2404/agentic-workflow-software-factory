@@ -1,0 +1,1260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plan: AWSF v2 W18 — Route Metrics</title>
+<style>
+/* Forest dark: the dashboard's default palette (dashboard/src/theme.ts) and the
+   design's default frame, so the plan, its mermaid diagrams and its mockup read
+   as the surface they describe. The review layer reuses --bg/--fg/--muted/--accent. */
+:root {
+  --bg:#051F20; --panel:#0B2B26; --panel-2:#163832; --border:#235347; --dim:#8EB69B; --text:#DAF1DE;
+  --accent:#ADB9EE; --cyan:#62C2AA; --green:#71D6A0; --red:#FF8278; --amber:#E4B75F; --blue:#74BDE8; --violet:#8AAFA4;
+  --fg:var(--text); --muted:var(--dim);
+  --border-soft:color-mix(in srgb, var(--border) 60%, transparent);
+  --well:color-mix(in srgb, var(--panel) 90%, var(--bg));
+  --surface:color-mix(in srgb, var(--panel-2) 94%, var(--text));
+  --neu-light:color-mix(in srgb, var(--text) 16%, transparent);
+  --neu-dark:color-mix(in srgb, #000 58%, transparent);
+  --raised:-3px -3px 9px var(--neu-light), 4px 4px 11px var(--neu-dark);
+  --raised-soft:-2px -2px 6px var(--neu-light), 3px 3px 8px var(--neu-dark);
+  --font-ui:"Segoe UI","Helvetica Neue",system-ui,sans-serif;
+  --font-mono:ui-monospace,"SFMono-Regular",Consolas,"Liberation Mono",monospace;
+  --maxw:1140px;
+}
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; background:var(--bg); }
+body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.65 var(--font-ui); -webkit-font-smoothing:antialiased; }
+main { max-width:var(--maxw); margin:0 auto; padding:48px 24px 160px; }
+h1,h2,h3,h4 { line-height:1.25; font-weight:650; }
+h1 { font-size:30px; margin:0 0 6px; }
+h2 { font:700 14px var(--font-mono); letter-spacing:.07em; text-transform:uppercase; color:var(--dim);
+  margin:56px 0 14px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+h3 { font-size:17px; margin:30px 0 8px; }
+h4 { font-size:14.5px; margin:26px 0 6px; color:var(--accent); }
+p { margin:0 0 14px; }
+a { color:var(--cyan); }
+strong { color:#fff; font-weight:650; }
+em { color:var(--dim); }
+small, .sub { color:var(--dim); font-size:13.5px; }
+.tagline { color:var(--dim); font-size:16px; max-width:80ch; }
+code { font-family:var(--font-mono); font-size:.86em; background:var(--panel); border:1px solid var(--border-soft);
+  border-radius:4px; padding:1px 5px; color:var(--text); }
+pre { background:var(--panel); border:1px solid var(--border-soft); border-left:3px solid var(--accent); border-radius:8px;
+  padding:14px 16px; overflow-x:auto; font:12.5px/1.6 var(--font-mono); color:var(--text); }
+pre code { background:none; border:none; padding:0; }
+table { width:100%; border-collapse:collapse; margin:14px 0 20px; font-size:13px; display:block; overflow-x:auto; }
+th,td { padding:7px 10px; border:1px solid var(--border-soft); text-align:left; vertical-align:top; }
+th { background:var(--panel); color:var(--dim); font:700 11px var(--font-mono); letter-spacing:.05em; text-transform:uppercase; white-space:nowrap; }
+td code { font-size:11.5px; }
+.meta { margin:14px 0 0; font-size:13px; }
+.meta summary { cursor:pointer; color:var(--dim); font:12px var(--font-mono); }
+.meta dl { display:grid; grid-template-columns:130px 1fr; gap:4px 14px; margin:12px 0 0; padding:14px;
+  background:var(--well); border:1px solid var(--border-soft); border-radius:12px; }
+.meta dt { color:var(--accent); font:11.5px var(--font-mono); }
+.meta dd { margin:0; color:var(--dim); font:11.5px var(--font-mono); overflow-wrap:anywhere; }
+figure { margin:26px 0; text-align:center; }
+figure svg, figure .mermaid { max-width:100%; height:auto; }
+figure .mermaid { background:var(--well); border:1px solid var(--border-soft); border-radius:14px; padding:20px 12px;
+  overflow-x:auto; color:var(--dim); font-size:12px; }
+figcaption { color:var(--dim); font-size:12.5px; margin-top:10px; font-style:italic; text-align:left; }
+.tag { display:inline-block; font:10px var(--font-mono); letter-spacing:.06em; text-transform:uppercase; padding:1px 6px;
+  border-radius:4px; margin-right:6px; vertical-align:1px; border:1px solid var(--border-soft); }
+.tag.existing { color:var(--dim); }
+.tag.new { color:var(--accent); border-color:color-mix(in srgb, var(--accent) 45%, transparent); }
+.files ul { list-style:none; padding:0; }
+.files li { padding:5px 0; border-bottom:1px solid var(--border-soft); font-size:13px; }
+.phase { border:1px solid var(--border-soft); border-radius:18px; padding:22px 24px; margin:30px 0; background:var(--well); }
+.phase > h3 { margin-top:0; }
+.phase > h3 .status, .checklist li .status { color:var(--accent); }
+.checklist { list-style:none; padding:0; margin:8px 0 16px; }
+.checklist li { padding:4px 0 4px 2px; font-size:13.5px; }
+.checklist li .status { margin-right:6px; }
+.loop { border:1px dashed var(--accent); border-radius:10px; padding:10px 14px; margin:16px 0 4px; font-size:13px;
+  background:color-mix(in srgb, var(--accent) 7%, transparent); }
+.card { border:1px solid var(--border-soft); border-left:3px solid var(--cyan); border-radius:10px; padding:12px 16px;
+  margin:14px 0; background:var(--panel); font-size:13.5px; }
+.card.warn { border-left-color:var(--red); } .card.rule { border-left-color:var(--accent); } .card.good { border-left-color:var(--green); }
+.card h5 { margin:0 0 6px; font:700 11px var(--font-mono); letter-spacing:.08em; text-transform:uppercase; color:var(--dim); }
+.taskmeta { font-size:12.5px; }
+.taskmeta th { width:150px; text-transform:none; letter-spacing:0; font-size:11.5px; white-space:normal; }
+.wtag { display:inline-block; font:10px var(--font-mono); letter-spacing:.06em; text-transform:uppercase; padding:1px 7px;
+  border-radius:4px; margin-left:8px; vertical-align:2px; border:1px solid var(--border-soft); color:var(--dim); }
+.wtag.route { color:var(--cyan); border-color:color-mix(in srgb, var(--cyan) 45%, transparent); }
+.wtag.raise { color:var(--amber); border-color:color-mix(in srgb, var(--amber) 45%, transparent); }
+.gate { font-family:var(--font-mono); color:var(--amber); }
+dl.spine dt { margin-top:10px; } dl.spine dd { margin:4px 0 0 0; font-size:13.5px; }
+code.inv, code.ac, code.serves { color:var(--cyan); }
+#questionables details, #amendments details { border:1px solid var(--border-soft); border-radius:10px; padding:10px 14px;
+  margin:10px 0; background:var(--panel); }
+#questionables summary, #amendments summary { cursor:pointer; font-weight:600; font-size:13.5px; }
+.qa-answer { margin:10px 0 2px; font-size:13px; color:var(--dim); }
+.qopen { color:var(--amber); font:10px var(--font-mono); letter-spacing:.06em; margin-right:6px; }
+.qdecided { color:var(--green); font:10px var(--font-mono); letter-spacing:.06em; margin-right:6px; }
+.decided { display:block; margin:8px 0 10px; padding:8px 12px; font-size:12.5px; border-left:3px solid var(--green);
+  background:color-mix(in srgb, var(--green) 7%, transparent); border-radius:0 6px 6px 0; color:var(--fg); }
+.decided b { color:var(--green); }
+.rec { display:block; margin:8px 0; padding:8px 12px; font-size:12.5px; border-left:3px solid var(--green);
+  background:color-mix(in srgb, var(--green) 7%, transparent); border-radius:0 6px 6px 0; color:var(--fg); }
+.rec b { color:var(--green); }
+
+/* Mockup frame: mirrors the TARGET surface, the dashboard's Forest dark tokens and neumorphic
+   treatment (dashboard/src/styles/morphism.css). Synthetic data only. */
+.mockup { margin:22px 0; }
+.mockup-frame { background:linear-gradient(180deg, var(--bg), color-mix(in srgb, var(--bg) 82%, var(--panel-2)));
+  border:1px solid var(--border-soft); border-radius:22px; padding:18px; text-align:left; font-size:13px; }
+.mk-row { display:flex; gap:18px; flex-wrap:wrap; align-items:flex-start; }
+.mk-wrap { position:relative; width:300px; }
+.mk-card { display:block; padding:14px 16px 16px; border-radius:18px; background:var(--surface); box-shadow:var(--raised);
+  color:var(--text); text-decoration:none; }
+.mk-id { font:12px var(--font-mono); color:var(--dim); display:block; }
+.mk-wf { font:700 13px var(--font-mono); color:var(--cyan); display:block; margin-top:4px; }
+.mk-req { display:block; margin-top:4px; }
+.mk-chip { display:inline-block; margin-top:8px; padding:2px 9px; border-radius:999px; font:700 11px var(--font-mono);
+  color:var(--red); border:1px solid color-mix(in srgb, var(--red) 45%, transparent); }
+.mk-controls { display:flex; gap:8px; margin-top:10px; }
+.mk-round { width:34px; height:34px; border-radius:50%; border:0; display:grid; place-items:center; background:var(--surface);
+  box-shadow:var(--raised-soft), 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent); color:var(--accent); }
+.mk-text { border:0; border-radius:999px; padding:7px 14px; background:var(--well); color:var(--dim); font:12px var(--font-ui);
+  box-shadow:var(--raised-soft); }
+.mk-note { font:11.5px var(--font-mono); color:var(--accent); margin-top:6px; }
+.mk-panel { flex:1; min-width:320px; padding:14px 16px; border-radius:18px; background:var(--well); border:1px solid var(--border-soft); }
+.mk-k { color:var(--dim); font:12px var(--font-mono); }
+.mk-pills { display:flex; flex-wrap:wrap; gap:8px; margin:8px 0; }
+.mk-pill { padding:6px 13px; border-radius:999px; background:var(--well); color:var(--dim); font-size:12.5px; border:0; }
+.mk-pill.on { background:var(--surface); color:var(--text); box-shadow:var(--raised); }
+.mk-cmd { font:12px var(--font-mono); background:var(--panel); border:1px solid var(--border-soft); border-radius:12px;
+  padding:9px 12px; color:var(--text); overflow-wrap:anywhere; }
+
+@media (max-width:720px) { main { padding:28px 14px 140px; } .meta dl { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<main>
+
+  <!-- ===== HEADER + UPDATABLE METADATA ===== -->
+  <header>
+    <h1>Plan: AWSF v2 W18 — Route Metrics</h1>
+    <p class="tagline">Which route — adapter, model and effort — each AWSF role should run on, measured on the factory's own runs, with public benchmarks as a cold-start prior and controlled replays for any move to a cheaper route. <strong>Advisory only:</strong> the owner applies <code>--route</code>, and the runner never routes on a metric.</p>
+    <details class="meta">
+      <summary>Metadata</summary>
+      <dl>
+        <dt>created</dt>      <dd>2026-09-26</dd>
+        <dt>modified</dt>     <dd>2026-09-26 (authored, awaiting owner review), 2026-09-26 (owner review applied: Q1–Q8 decided; Q1 takes an owner-authored migration)</dd>
+        <dt>commits</dt>      <dd>none yet (authored uncommitted for owner review)</dd>
+        <dt>agent name</dt>   <dd>claude-opus-5-5, claude-opus-5-5 (review applied)</dd>
+        <dt>session id</dt>   <dd>not recorded (AGENTS.md invariant 1 keeps live session state out of every committed file)</dd>
+        <dt>back refs</dt>    <dd>./awsf-v2-plan.html (§ Milestone M18 → W18, and its 2026-09-26 amendment adopting this workstream), ../AGENTS.md (the twelve invariants), ./awsf-v2-intent.md (decision 5: quota is a readout, never a router, the stance D5 extends to route evidence), ./awsf-v2-w17-shift.html (the execution this plan is written for), ./awsf-v2-w07-quota-telemetry.html (the readout discipline), the design artifact https://claude.ai/artifact/Ga29MRY2FCcHPJfvcJgcpW (private, version 2), ../docs/design/route-metrics/route-metrics-prototype.html (machine-local and ignored; sha256 dc2dc0bcfc16bd23f8ebd6502fb0486391eefa4ce4285a7f73199c19d55580d8)</dd>
+        <dt>forward refs</dt> <dd>./awsf-v2-w18-route-metrics-build-prompts.md (§ Section B, the prompt source the invariant-12 fence pairs against), ./tickets/awsf-v2-w18-route-metrics/ (T01–T17), ./design/awsf-v2-w18-route-metrics/frame-index.json and ./design/awsf-v2-w18-route-metrics/frame-digests.json (the tracked frame index and its digests)</dd>
+      </dl>
+    </details>
+  </header>
+
+  <figure>
+    <pre class="mermaid">
+flowchart LR
+  J["journal and<br/>task records"] --> P["projector"]
+  P --> DB[("awsf.db")]
+  DB --> R["role rows<br/>built at read time"]
+  RC["dated rate card<br/>and priors"] --> M
+  R --> M["one pure module"]
+  M --> API["GET /api/v1/metrics"] --> TAB["metrics tab"]
+  M --> CLI["awsf metrics"]
+  CLI --> ADV["advisory in<br/>awsf shift plan"]
+  ADV -. "owner types --route" .-> NEXT["next run"]
+  OA["owner acts:<br/>attribute, prove"] --> J
+    </pre>
+    <figcaption>One direction of flow. The journal stays the only evidence store; every number is either projected by the existing projector or computed at read time from what it projected. The advisory reaches a run only through the owner's own <code>--route</code>.</figcaption>
+  </figure>
+
+  <!-- ===== IN PLAIN LANGUAGE ===== -->
+  <section id="plain-language">
+    <h2>In Plain Language</h2>
+    <p>This section explains the whole plan without technical vocabulary. Everything after it says the same things precisely, for the people — and machines — building it.</p>
+
+    <h3>What this is about</h3>
+    <p>The owner runs a workshop where work passes through several kinds of worker: one plans it, one builds it, one checks it. For each kind of worker the owner chooses which hired machine does the job and how hard it is told to think. Today that choice rests on the scores machine makers publish about themselves, plus instinct. The workshop does keep a detailed diary of every job, but nobody reads it for this question, and the part of the diary everyone does read hides most of what a job really cost: it counts the new material a machine read and leaves out the far larger pile it re-read from its own notes.</p>
+
+    <h3>Why now</h3>
+    <p>The diary holds forty-six jobs, enough to see how thin the evidence is and not yet enough to rank anyone. A cheaper machine arrived this week, prices change every month, and the owner is about to start many more jobs. Choices made now by reputation get repeated hundreds of times, and the owner has already asked for the diary, not the leaderboards, to decide.</p>
+
+    <h3>What we are building</h3>
+    <p>Think of a team's statistics page, organised by position. For each position and each player it shows how many games they played, how often they finished cleanly on the first try, how often they claimed a win the referee then overturned, how often they honestly said they could not finish, what the game would have cost at the published price, and, most importantly, how sure anyone can be of each number. When a player has played twice, the page says so plainly instead of ranking them. A game lost to a broken pitch is not held against the player: the owner can record whose fault a failure was, and only the player's own failures count against them.</p>
+    <p>Beside the statistics page there is a practice pitch: a fixed set of exercises with mistakes planted in them on purpose, so a cheaper checker can be tried on exactly the same work as an expensive one before anyone trusts it. The owner starts every practice session personally. Finally, the assistant who prepares each job shows the owner a short note before it starts: what the evidence says about the workers chosen for it. The owner still makes the choice. Nothing in this plan lets the workshop pick its own workers.</p>
+
+    <h3>How we know it worked</h3>
+    <p>The owner opens a new tab on the workshop's dashboard and sees, for every position and every machine, the number of jobs, the first-time success rate with an honest range around it, and a list-price figure that is clearly labelled as a comparison and never as money spent. They can click through to a single job and see where its time and reading went. For a failed job they can record the cause and see it take effect. The practice pitch runs forty practice checks the owner starts, and the tab shows them apart from real work. The preparing assistant's note appears before each job. The tab looks like the approved drawings in all seven colour themes, light and dark. What is deliberately not part of this: automatic choice of workers, learning systems trained on the diary, and any dollar figure presented as what a subscription actually cost.</p>
+  </section>
+
+  <!-- ===== PURPOSE / PROBLEM / SOLUTION ===== -->
+  <section id="purpose">
+    <h2>Purpose</h2>
+    <p>W18 adds a dashboard tab, <code>metrics</code>, and the projection, query surface and controlled replays behind it. It answers one question per role — <strong>which route (adapter · model · effort) should this role run on?</strong> — from the factory's own journal. Every number is scoped to role, prompt revision, tool profile, task class and evidence source. None is a global model score, which is the reason <code>core/src/adapters/evaluations.ts</code> refuses scores today and still will after W18. Public benchmarks enter only as a cold-start prior shown beside local numbers, and any decision to move a role to a cheaper route is confirmed on paired replays of frozen tasks.</p>
+    <p>The owner took six decisions on 2026-09-26 (D1–D6, recorded in <a href="#decisions">Decisions already taken</a>). This plan implements them and does not reopen them. Its own design decisions are DD1–DD8 in <a href="#solution">Solution</a>. The eight choices in <a href="#questionables">Questionables</a> were decided by the owner on 2026-09-26: seven as recommended, and Q1 for an owner-authored migration.</p>
+  </section>
+
+  <section id="problem">
+    <h2>Problem</h2>
+    <p>The design's findings (F1–F7) were measured on 2026-09-26 from <code>~/.local/state/awsf/awsf.db</code> and are taken as given. This authoring session re-read the database read-only and added one finding (F8) that changes where every per-role token figure must come from.</p>
+    <table>
+      <thead><tr><th>Finding</th><th>What was measured</th><th>What it forces</th></tr></thead>
+      <tbody>
+        <tr><td><strong>F1</strong> no cell ranks</td><td>46 runs, 62 role-rows, 8 routes, 10 role-route cells. The busiest cell holds 23 rows. Separating two routes 15 points apart takes about 121 runs per route.</td><td>Insufficient evidence is the default state the tab must show honestly. Downgrades are decided on replays, not on production volume.</td></tr>
+        <tr><td><strong>F2</strong> effort is recoverable</td><td>Only 5 phases carry a <code>route_resolution</code> event. Route provenance was introduced on 2026-09-06 (<code>b47b2a7</code>) and <code>--route</code> overrides on 2026-09-10 (<code>a192160</code>); no agent phase ran between 2026-09-09 and 2026-09-25. All 46 <code>config_snapshot_json</code> carry <code>agents[].thinking</code>; none carries <code>routing.phase_routes</code>.</td><td>Every override ever given sits in a <code>route_resolution</code> event, so the projector can fill route and effort exactly for every phase: the event when present, the snapshot's agent default otherwise. <code>awsf db rebuild</code> backfills the history (DD1).</td></tr>
+        <tr><td><strong>F3</strong> effort buys tokens, not price</td><td>At list price, GPT-5.6 Sol builder rows are 55% cache reads, 26% input, 19% output. Claude reviewer rows are 35% cache reads, 33% cache writes, 32% output.</td><td>Cost is tokens by kind times a rate card, per landed run. There is no per-effort price.</td></tr>
+        <tr><td><strong>F4</strong> the run card hides the context</td><td><code>total_tokens</code> excludes cache traffic: builder rows read 18× more cached tokens than their total, reviewer rows 54×.</td><td>The tab shows tokens by kind.</td></tr>
+        <tr><td><strong>F5</strong> a block is not always the model's</td><td>Error-code heuristic over 23 blocked runs: 14 model, 6 factory, 2 environment, 1 unknown. Several "model" blocks are contract-shape failures, and one is the W17 live drive's PermissionBreach, which a ticket's own wording caused.</td><td>An owner override, journaled as an owner act (D4). Only model-attributed blocks count against a route.</td></tr>
+        <tr><td><strong>F6</strong> tool names differ</td><td>Measured names: <code>read</code> 1337, <code>bash</code> 712, <code>Read</code> 635, <code>grep</code> 626, <code>edit</code> 536, <code>Grep</code> 350, <code>Glob</code> 108, <code>find</code> 94, <code>write</code> 92, <code>Bash</code> 50, <code>ls</code> 48, <code>Edit</code> 2, <code>Write</code> 1.</td><td>Fold to read, search, edit, exec and other before any cross-harness comparison.</td></tr>
+        <tr><td><strong>F7</strong> false success is measurable</td><td>6 of 73 claims said success on a round where a claim gate failed; 2 phases reported failure themselves.</td><td>Refuted claims count against a route; honest stops count neither way (AA-Omniscience's rule).</td></tr>
+        <tr><td><strong>F8</strong> per-role tokens are the last call only <em>(new, 2026-09-26)</em></td><td><code>agent_sessions</code> is keyed by session and agent, and the projector's <code>agent</code> case <strong>replaces</strong> its token columns on every call. Read-only query of the owner's database: for <strong>17 of 17</strong> role-rows with <code>call_count &gt; 1</code>, the stored input tokens equal the last call's usage events, not their sum; one builder row stores 77,333 input tokens where its two calls summed to 424,755. <code>sessions</code> totals accumulate correctly.</td><td>Every per-phase and per-role token figure is summed from <code>usage</code> events (<code>payload_json → $.usage.*</code>). <code>agent_sessions</code> token columns are never read by W18. The projector's replace semantics are left as they are (they feed live context-occupancy displays) and named in Notes.</td></tr>
+      </tbody>
+    </table>
+    <p>Four v1 positions stand between the journal and an answer, and D1, D2 and D6 revise them: AWSF keeps no model catalogue and ships <code>pricing.models: {}</code>; <code>cost-display.ts</code> refuses any <code>$</code> on a subscription route; <code>RouteEvaluationSchema</code> has no score and admits only <code>https://</code> sources; tickets carry no task class, so a strong route that is handed the hard tickets looks worse than a weak one that is handed the easy ones.</p>
+    <figure>
+      <pre class="mermaid">
+flowchart TD
+  CARD["run card today"] --> T1["total_tokens<br/>no cache traffic"]
+  ROLE["agent_sessions row"] --> T2["last call only<br/>(F8)"]
+  PH["phase row"] --> T3["no route, no effort<br/>(F2)"]
+  BL["BLOCKED run"] --> T4["cause unknown<br/>(F5)"]
+  T1 --> Q{"which route<br/>per role?"}
+  T2 --> Q
+  T3 --> Q
+  T4 --> Q
+  Q --> NA["unanswerable<br/>from what is shown"]
+      </pre>
+      <figcaption>Every input the question needs exists in the journal. Each surface that shows it today drops a part: cache traffic, all but the last call, the effort, or the cause.</figcaption>
+    </figure>
+  </section>
+
+  <section id="solution">
+    <h2>Solution</h2>
+    <p><strong>Five milestones, each one AWSF <code>shift</code>.</strong> M1 turns the projection into per-phase facts and per-role rows and adds the attribution owner act. M2 adds one pure module for the statistics, the dated rate card, the API and the CLI readout. M3 builds the tab. M4 adds the proving ground: a frozen corpus, a <code>prove</code> compiled workflow and the seeded-defect reviewer suite D3 funds. M5 adds the ticket task class, the advisory that Marimba reads at preflight, and the export. The design decisions below are this plan's own; each names the alternative it rejects.</p>
+    <table>
+      <thead><tr><th>Decision</th><th>What</th><th>Why, and what it rejects</th></tr></thead>
+      <tbody>
+        <tr><td><strong>DD1</strong> route on the phase row</td><td>Migration 0007, authored by the owner (gate <span class="gate">G18-M</span>), adds five nullable columns to <code>phases</code>: <code>route_adapter</code>, <code>route_provider</code>, <code>route_model</code>, <code>route_effort</code>, <code>effort_source</code>. The projector fills them from the phase's <code>route_resolution</code> event, else from the config snapshot's agent whose name is the phase owner, and <code>awsf db rebuild</code> backfills every legacy phase.</td><td>Decided by the owner on 2026-09-26 (Q1) over read-time resolution, for columns the API and the CLI read directly. F2 proves the fill is exact for the whole journal. The migrations directory is protected, so the owner writes the DDL and the builder writes only the projector; invariant 6 holds because only the projector writes the columns.</td></tr>
+        <tr><td><strong>DD2</strong> tokens from usage events</td><td>Tokens by kind per phase = the sum of the phase's <code>usage</code> events.</td><td>F8. Rejects reading <code>agent_sessions</code> token columns.</td></tr>
+        <tr><td><strong>DD3</strong> one pure module, shared</td><td><code>dashboard/shared/route-metrics.ts</code> holds Wilson intervals, evidence depth, the frontier, verdicts, the recommendation rule and flat-column detection. Core (API, CLI) and the tab import the same file.</td><td>Core already imports runtime code from <code>dashboard/shared/</code> (<code>core/src/policy/redaction.ts</code> ← <code>credential-patterns.ts</code>). The lens recomputes client-side, as the prototype does. Rejects a server round-trip per lens click and a second copy of the statistics.</td></tr>
+        <tr><td><strong>DD4</strong> rate card as data</td><td><code>dashboard/shared/rate-card.ts</code>: a typed, frozen table per model id with <code>checkedAt</code> and an https source per price row.</td><td>D2 wants a dated, sourced card. <code>awsf.config.yaml</code> <code>pricing</code> is protected, has no reader anywhere in <code>core/src</code>, carries no cache prices, and would mix list equivalents into spend semantics D1 keeps refused. Rejects filling <code>pricing.models</code>.</td></tr>
+        <tr><td><strong>DD5</strong> attribution is a task record</td><td><code>awsf attribute</code> appends to <code>attributions.jsonl</code> beside the task's attempt directories, projected as <code>events</code> rows and replayed by <code>awsf db rebuild</code>.</td><td>Blocked attempts are sealed. <code>task-relations.ts</code> solved the same problem for <code>awsf relate</code> after half the history proved unwritable. Rejects reopening a sealed attempt and a dashboard write (Q6).</td></tr>
+        <tr><td><strong>DD6</strong> advisory through existing preflight</td><td><code>awsf metrics --advise</code> and a block appended to <code>awsf shift plan</code>'s readout.</td><td>The owner's drive handoff already has Marimba run <code>awsf shift plan</code> at preflight. <code>docs/driving/**</code> is protected and <code>CONTRACT.md</code> sits at 119 of 120 lines. Rejects a contract edit (Q4).</td></tr>
+        <tr><td><strong>DD7</strong> replays are compiled attempts</td><td><code>prove</code> joins <code>COMPILED_WORKFLOW_IDS</code>, as <code>shift</code> did. A review item's candidate is one host commit applying a committed seed patch at a pinned base; the review runs on the arm's explicit route with no inversion. A replay never lands.</td><td>Replays must pass through the same prompts, sandbox, gates and journal as production or they measure something else. Rejects a side runner outside the lifecycle.</td></tr>
+        <tr><td><strong>DD8</strong> evidence source is the workflow id</td><td>A row is <code>proving-ground</code> when its session's workflow is <code>prove</code>, <code>production</code> otherwise.</td><td>No new column, and it survives a rebuild by construction.</td></tr>
+      </tbody>
+    </table>
+    <figure>
+      <pre class="mermaid">
+flowchart LR
+  subgraph M1["M1 facts"]
+    F1["phase facts"] --> F2["role rows"]
+    AT["awsf attribute"] --> F2
+  end
+  subgraph M2["M2 query"]
+    F2 --> MOD["pure module"]
+    RC["rate card"] --> MOD
+    MOD --> API["API"]
+    MOD --> CLI["awsf metrics"]
+  end
+  subgraph M3["M3 tab"]
+    API --> V["Matrix · Frontier<br/>Ledger · Run"]
+  end
+  subgraph M4["M4 proving ground"]
+    PR["awsf prove"] --> PW["prove workflow"] --> F2
+  end
+  subgraph M5["M5 advisory"]
+    TC["task class"] --> MOD
+    CLI --> ADV["--advise and<br/>shift plan block"]
+  end
+      </pre>
+      <figcaption>Each milestone consumes the one before it and none reaches back. M4 feeds the same rows M1 builds, tagged by workflow, so the proving ground needs no second pipeline.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ===== DECISIONS ALREADY TAKEN ===== -->
+  <section id="decisions">
+    <h2>Decisions already taken</h2>
+    <p>Owner decisions of 2026-09-26, recorded as constraints. None is reopened here.</p>
+    <table>
+      <thead><tr><th>Decision</th><th>What the owner decided</th><th>Where this plan implements it</th></tr></thead>
+      <tbody>
+        <tr><td><strong>D1</strong></td><td>Show a list-price equivalent ("≈ list $") on subscription routes, labeled and never presented as spend. <code>cost-display.ts</code> keeps refusing a spend figure.</td><td>Task 5 (<code>formatListEquivalent</code>, the untouched refusal and its test), task 10 (no bare <code>$</code> in the tab), INV-3.</td></tr>
+        <tr><td><strong>D2</strong></td><td>Commit a dated, sourced rate card, with <code>checked_at</code> and a source URL per price. Revises the v1 "pricing empty" default.</td><td>Task 5, DD4. The card's Claude rows were cross-checked on 2026-09-26 against the Claude API reference (Fable 5.1 $10 / $50 with $0.25 cache reads; Opus 5.5 $4 / $20 with $0.20; Opus 5 $5 / $25; Sonnet 5 $2 / $10; Haiku 4.5 $1 / $5) and agree with the design's table.</td></tr>
+        <tr><td><strong>D3</strong></td><td>Fund the proving ground, reviewers first: 5 seeded-defect diffs × 4 reviewer routes × 2 repetitions = 40 runs, after M1–M3 land.</td><td>M4 builds the capability and the five items. The 40 runs are the owner's funded act after <span class="gate">G18-B</span>, recorded in the spine checklist.</td></tr>
+        <tr><td><strong>D4</strong></td><td>Owner override on block attribution, journaled as an owner act. Only model-attributed blocks count against a route.</td><td>Task 3 (<code>awsf attribute</code>), task 9 (the Run view composes the command), DD5, INV-6.</td></tr>
+        <tr><td><strong>D5</strong></td><td>Recommendations stay advisory. Marimba shows them at preflight, the owner applies <code>--route</code>, and the runner never routes on them.</td><td>Task 16 and its import fence, DD6, INV-2.</td></tr>
+        <tr><td><strong>D6</strong></td><td>Tickets gain a task-class field so routes are compared within a class. The fence vocabulary is in-repo work; teaching plan-sota to emit it is owner-side.</td><td>Task 15. Vocabulary: the prompt benchmark's three classes (<code>bounded-source-change</code>, <code>contract-envelope-change</code>, <code>evidence-heavy-defect-review</code>), as the design's D6 card proposes.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ===== RELEVANT FILES ===== -->
+  <section id="files" class="files">
+    <h2>Relevant Files</h2>
+
+    <h3>Existing Files</h3>
+    <ul>
+      <li><span class="tag existing">existing</span> <code>core/src/observability/projector.ts</code> — the only SQLite writer besides <code>sqlite.ts</code> and the migrations (invariant 6). Its <code>agent-start</code> case stores route provenance as a <code>route_resolution</code> event; its <code>agent</code> case replaces <code>agent_sessions</code> tokens per call (F8). Task 1 fills migration 0007's route columns; task 3 adds <code>projectAttribution</code>; task 13 projects a replay record.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/observability/queries.ts</code> — the read-only query pattern: it imports <code>type DatabaseSync</code> from <code>sqlite.ts</code>, never <code>node:sqlite</code>, which is what keeps <code>sqlite-write-fence.test.ts</code> green while calling <code>prepare</code>.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/observability/rebuild.ts</code>, <code>core/src/cli/commands/operator.ts</code> — <code>awsf db rebuild</code>. Must replay every task's attributions file.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/observability/migrations/</code> — six migrations, <code>user_version</code> 6, discovered from the directory by <code>sqlite.ts</code>. <strong>Protected</strong> (<code>policy.protected_paths</code>): gate <span class="gate">G18-M</span> adds 0007, owner-authored. The terminal-version pins it moves are in <code>core/test/unit/observability/sqlite.test.ts</code> (a test title and five assertions) and <code>migration-0004.test.ts</code> (two).</li>
+      <li><span class="tag existing">existing</span> <code>core/src/contracts/route-selection.ts</code> — <code>RouteSelectionProvenance</code>: requested, effective and observed route, with each value's source.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/contracts/normalized-events.ts</code> — <code>usage</code> and <code>tool.completed</code> (outcome, <code>durationMs</code>).</li>
+      <li><span class="tag existing">existing</span> <code>core/src/contracts/review-output.ts</code> — <code>ReviewFindingSchema</code>: <code>file</code> and a nullable <code>line</code>, what the seeded-defect scorer matches against.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/persistence/task-relations.ts</code>, <code>core/src/cli/commands/relate.ts</code> — the task-scoped JSONL record DD5 copies, and why it exists.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/cli/commands/degrade-review.ts</code>, <code>grant.ts</code>, <code>raise.ts</code>, <code>core/src/cli/tty.ts</code> — the owner-act shape: interactive terminal, written reason, credential scrub, refusal classes.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/cli/main.ts</code> — <code>CLI_COMMANDS</code>, the source of the cheatsheet's <code>commands</code> fact class.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/api/routes.ts</code>, <code>dashboard/shared/types.ts</code> — <code>API_ROUTE_TABLE</code> and response types.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/adapters/cost-display.ts</code> — the subscription refusal D1 keeps. <code>core/src/adapters/evaluations.ts</code> and <code>RouteEvaluationSchema</code> in <code>core/src/config/schema.ts</code> — no score, https only (Q5).</li>
+      <li><span class="tag existing">existing</span> <code>core/src/cli/commands/routes.ts</code> — "AWSF keeps no model catalogue on purpose". Stays true: the rate card prices dated model ids and offers no selectors.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/workflow/prompt-benchmark.ts</code> — arms, repetitions, order in pair, invalidation. Task 11 generalizes it to route arms without changing it.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/workflow/compiled-ids.ts</code>, <code>core/src/workflow/shift/</code> — the compiled-workflow precedent <code>prove</code> follows.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/cli/commands/production-run.ts</code> — review inversion (the block reading <code>reviewWorkerProvider</code>, <code>providerPairFrom</code> and <code>oppositeProvider</code>). Task 12 adds a <code>seeded</code> mode there.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/workflow/compiler.ts</code> — <code>reviewBuildPhaseId</code>. <code>core/src/cli/commands/start.ts</code> — the worktree base (<code>seed?.integrationBaseSha ?? HEAD</code>). <code>core/src/cli/commands/land.ts</code>, <code>journey.ts</code> — refuse a replay.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/cli/commands/shift.ts</code> — <code>shiftPlanReadout</code>, where task 16 appends the advisory.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/persistence/plan-tickets.ts</code>, <code>core/src/contracts/ticket.ts</code> — ticket frontmatter; unknown fields are ignored today (task 15).</li>
+      <li><span class="tag existing">existing</span> <code>dashboard/src/App.vue</code>, <code>components/TopNav.vue</code>, <code>components/SessionCard.vue</code>, <code>components/SessionFilterRow.vue</code>, <code>session-filters.ts</code>, <code>theme.ts</code> (seven palettes), <code>styles/morphism.css</code>, <code>styles/dashboard.css</code> — the tab's host, its filter-ladder grammar and its tokens.</li>
+      <li><span class="tag existing">existing</span> <code>core/test/unit/meta/</code> — <code>no-write-route</code> (exact route list), <code>cheatsheet-reconciliation</code>, <code>sqlite-write-fence</code>, <code>ticket-plan-sync</code>, <code>junk-drawer</code>, <code>dependency-allowlist</code>, <code>execution-isolation</code>, <code>marimba-guard</code>, <code>no-destructive-paths</code>, <code>shift-*</code>.</li>
+      <li><span class="tag existing">existing</span> <code>awsf.config.yaml</code> — <strong>protected.</strong> Builder <code>writes</code>, <code>protected_paths</code> (including <code>core/src/state/**</code>, <code>core/src/observability/migrations/**</code>, <code>docs/driving/**</code>), <code>workflows.enabled</code>, the T2 ceiling of 5, and <code>pricing</code>.</li>
+      <li><span class="tag existing">existing</span> <code>docs/cheatsheet.html</code>, <code>docs/driving/marimba/delegation-guard.sh</code>, <code>docs/driving/marimba/marimba-guard-rules.mts</code>, <code>docs/driving/marimba/CONTRACT.md</code> — the fenced documents <span class="gate">G18-A</span> and <span class="gate">G18-B</span> change.</li>
+    </ul>
+
+    <h3>New Files</h3>
+    <ul>
+      <li><span class="tag new">new</span> <code>core/src/observability/migrations/0007-phase-route.sql</code> — gate <span class="gate">G18-M</span>, the owner's commit before M1.</li>
+      <li><span class="tag new">new</span> <code>core/src/observability/phase-route.ts</code> (the pure resolver the projector calls), <code>core/src/metrics/tool-class.ts</code>, <code>core/src/metrics/phase-facts.ts</code> — task 1.</li>
+      <li><span class="tag new">new</span> <code>core/src/metrics/role-rows.ts</code>, <code>attribution.ts</code> — task 2.</li>
+      <li><span class="tag new">new</span> <code>core/src/contracts/attribution-record.ts</code>, <code>core/src/persistence/task-attributions.ts</code>, <code>core/src/cli/commands/attribute.ts</code> — task 3.</li>
+      <li><span class="tag new">new</span> <code>dashboard/shared/route-metrics.ts</code> — task 4.</li>
+      <li><span class="tag new">new</span> <code>dashboard/shared/rate-card.ts</code>, <code>dashboard/shared/benchmark-priors.ts</code>, <code>core/src/metrics/payload.ts</code> — task 5.</li>
+      <li><span class="tag new">new</span> <code>core/src/cli/commands/metrics.ts</code> — tasks 6, 16, 17.</li>
+      <li><span class="tag new">new</span> <code>dashboard/src/routes/metrics.vue</code>, <code>dashboard/src/components/Metrics*.vue</code>, <code>dashboard/src/metrics-lens.ts</code>, <code>metrics-chart.ts</code>, <code>metrics-ledger.ts</code>, <code>metrics-run.ts</code> — tasks 7–9.</li>
+      <li><span class="tag new">new</span> <code>core/src/contracts/proving-ground.ts</code>, <code>core/src/metrics/proving-ground/</code> (items and seed patches), <code>core/src/metrics/route-arm-score.ts</code> — task 11.</li>
+      <li><span class="tag new">new</span> <code>core/src/workflow/prove/compile.ts</code>, <code>bind.ts</code> — task 12. <code>core/src/cli/commands/prove.ts</code> — task 13.</li>
+      <li><span class="tag new">new</span> <code>core/src/metrics/export.ts</code> — task 17.</li>
+      <li><span class="tag new">new</span> <code>core/test/unit/metrics-*.test.ts</code>, <code>core/test/unit/dashboard-metrics-*.test.ts</code>, <code>core/test/unit/meta/metrics-advisory-fence.test.ts</code>, <code>core/test/journeys/metrics-*.test.ts</code>, <code>core/test/journeys/prove-replay.test.ts</code>, <code>core/test/fixtures/metrics/</code> (synthetic only).</li>
+      <li><span class="tag new">new</span> <code>specs/design/awsf-v2-w18-route-metrics/frame-index.json</code>, <code>frame-digests.json</code> — authored with this plan: the tracked index AWSF reads for visual references, plus provenance, comparison criteria and overrides O1–O5.</li>
+      <li><span class="tag new">new</span> <code>specs/awsf-v2-w18-route-metrics-build-prompts.md</code>, <code>specs/tickets/awsf-v2-w18-route-metrics/</code> — authored with this plan, from one generated source.</li>
+    </ul>
+  </section>
+
+  <!-- ===== IDENTIFIER SPINE ===== -->
+  <section id="spine">
+    <h2>Identifier Spine</h2>
+    <p>Identifiers are unique within this plan (the v2 spine's Q5). Every declaration is served by at least one task, and each ticket's <code>serves</code> mirrors its task's set; the invariant-12 fence compares them.</p>
+    <dl class="spine">
+      <dt><code class="inv">INV-1</code></dt>
+      <dd><strong>The journal is the only evidence store.</strong> Every metric is computed at read time from the projection or projected by the existing projector from a journaled record. Nothing W18 adds writes SQLite outside <code>projector.ts</code>, and <code>awsf db rebuild</code> reproduces every number (G1, invariant 6).</dd>
+      <dt><code class="inv">INV-2</code></dt>
+      <dd><strong>Advisory only.</strong> No module the runner, the review routing, the shift compiler or the prove compiler imports reads a metric. A recommendation reaches a run only as a <code>--route</code> the owner typed (D5).</dd>
+      <dt><code class="inv">INV-3</code></dt>
+      <dd><strong>Authority travels with the value.</strong> A list-price equivalent is never shown or exported as spend, a subscription's spend still renders "— subscription", and values with partial usage, route-attributed identity or degraded observability are badged and kept out of rankings (D1, G2).</dd>
+      <dt><code class="inv">INV-4</code></dt>
+      <dd><strong>Scoped comparisons only.</strong> Every statistic is keyed by role and route and compared only within one evidence source and, where tickets declare it, one task class. No module produces a global model score.</dd>
+      <dt><code class="inv">INV-5</code></dt>
+      <dd><strong>Counts, never thoughts, and no committed runtime data.</strong> Reasoning token counts only. Fixtures are synthetic. Exports live in the state root under names that never match <code>/manifest|receipt/i</code> (G4, G5, invariants 1 and 10).</dd>
+      <dt><code class="inv">INV-6</code></dt>
+      <dd><strong>Owner acts stay the owner's.</strong> The attribution override and every proving-ground replay are interactive owner acts, denied to Marimba by verb. A replay is measurement and never lands.</dd>
+      <dt><code class="ac">AC-1</code></dt>
+      <dd>Every agent phase resolves to a route (adapter, provider, model, effort) with a named effort source, and <code>awsf db rebuild</code> yields identical facts.</dd>
+      <dt><code class="ac">AC-2</code></dt>
+      <dd>Tokens by kind are summed per phase from usage events, so a role with N calls reports N calls' tokens, and tool calls fold into read, search, edit, exec and other across harnesses.</dd>
+      <dt><code class="ac">AC-3</code></dt>
+      <dd>Each role-row carries first pass, clean completion, refuted claims, honest stops, guardrail hits, recovery by correction and a block attribution whose journaled owner override wins over the heuristic.</dd>
+      <dt><code class="ac">AC-4</code></dt>
+      <dd>One pure module computes intervals, evidence depth, the frontier, verdicts, the recommendation rule and flat columns, and the API, the CLI and the tab agree to the digit on the same rows.</dd>
+      <dt><code class="ac">AC-5</code></dt>
+      <dd>≈ list $ is tokens by kind times a dated, sourced rate card, labeled as a list-price equivalent wherever it appears.</dd>
+      <dt><code class="ac">AC-6</code></dt>
+      <dd>The metrics tab (Matrix, Frontier, Ledger, Run) and the run-card control render in all seven palettes and both modes, meet the frame comparison criteria, and write nothing.</dd>
+      <dt><code class="ac">AC-7</code></dt>
+      <dd>A frozen corpus replays route arms at a pinned base, only as an owner act; replays score under the generalized benchmark rules, never land, and appear under the proving-ground evidence source.</dd>
+      <dt><code class="ac">AC-8</code></dt>
+      <dd>A ticket may declare a task class the fence validates; Marimba's preflight readout shows the advisory for the selection's roles and classes; <code>awsf metrics export</code> writes a versioned dataset to the state root only.</dd>
+    </dl>
+  </section>
+
+  <!-- ===== EXECUTION CONTRACT ===== -->
+  <section id="execution">
+    <h2>Execution: one shift per milestone</h2>
+    <p>The owner drives every milestone as one <code>shift</code> attempt from Marimba: <code>awsf new &lt;task&gt; "&lt;request&gt;" --workflow shift --plan awsf-v2-w18-route-metrics --milestone Mx --route builder=… --route reviewer=…</code>. A shift of N tickets costs N + 1 calls, and each correction another. The T2 ceiling is 5; <code>awsf raise</code> adds up to 5 calls per act, to 20 at most, and must happen before <code>awsf run</code>. <strong>A milestone must land before the next one starts</strong>: <code>awsf start</code> bases the worktree on HEAD, so a shift started while another waits at <code>AWAITING_OWNER</code> builds without its code.</p>
+    <table>
+      <thead><tr><th>Milestone</th><th>Tickets</th><th>Calls</th><th>Raise</th><th>Builder route</th><th>Before <code>awsf start</code></th></tr></thead>
+      <tbody>
+        <tr><td>M1 facts</td><td>T01–T03</td><td>4 of 5</td><td>none (one correction spare)</td><td><code>claude/anthropic/claude:opus@xhigh</code></td><td><span class="gate">G18-M</span> and <span class="gate">G18-A</span> committed; <code>degrade-review</code>. After M1 lands: one <code>awsf db rebuild</code></td></tr>
+        <tr><td>M2 query surface</td><td>T04–T06</td><td>4 of 5</td><td>none</td><td><code>claude/anthropic/claude:opus@high</code></td><td><code>degrade-review</code></td></tr>
+        <tr><td>M3 the tab</td><td>T07–T10</td><td>5 of 5</td><td><code>awsf raise &lt;task&gt; --calls 2</code> (ceiling 7, two corrections)</td><td><code>claude/anthropic/claude:opus@high</code></td><td><code>degrade-review</code>, the raise, the visual-reference binding at <code>awsf start</code></td></tr>
+        <tr><td>M4 proving ground</td><td>T11–T14</td><td>5 of 5</td><td><code>awsf raise &lt;task&gt; --calls 2</code></td><td><code>claude/anthropic/claude:opus@xhigh</code></td><td><code>degrade-review</code>, the raise</td></tr>
+        <tr><td>M5 advisory and export</td><td>T15–T17</td><td>4 of 5</td><td>none</td><td><code>claude/anthropic/claude:opus@high</code></td><td><code>degrade-review</code>; <span class="gate">G18-B</span> and the D3 suite may run before or after M5</td></tr>
+      </tbody>
+    </table>
+    <p><strong>Reviewer route, every milestone:</strong> <code>--route reviewer=claude/anthropic/claude:opus@high</code>. <code>claude:opus</code> resolves to Opus 5.5 on the owner's Claude Code as of 2026-09-26. No milestone is entirely mechanical, so none runs on Sonnet 5; none runs on Fable 5.1 or Haiku. M3 and M4 need four tickets because splitting either into two milestones adds a second testing ticket and a second owner gate without removing a dependency.</p>
+
+    <h3>Who writes what</h3>
+    <table>
+      <thead><tr><th>Actor</th><th>Writes</th><th>Never</th></tr></thead>
+      <tbody>
+        <tr><td>Shift builder</td><td><code>core/src/**</code>, <code>core/test/**</code>, <code>dashboard/**</code>, <code>prompts/**</code>; after <span class="gate">G18-A</span> also <code>docs/cheatsheet.html</code></td><td><code>specs/**</code> (markers, ticket <code>state</code>, Handoff), <code>docs/driving/**</code>, <code>AGENTS.md</code>, <code>awsf.config.yaml</code>, <code>core/src/state/**</code>, <code>core/src/observability/migrations/**</code>, a root <code>.claude/</code></td></tr>
+        <tr><td>Host</td><td>One commit per ticket on the shift's accumulating head; gates per ticket</td><td>Landing</td></tr>
+        <tr><td>Owner</td><td><span class="gate">G18-M</span>, <span class="gate">G18-A</span>, <span class="gate">G18-B</span>, <code>degrade-review</code>, raises, the visual binding, journeys, landing, and after each landing one bookkeeping commit: task markers, ticket <code>state</code>, Handoff entries and an Amendment (invariant 12)</td><td>—</td></tr>
+        <tr><td>Marimba</td><td>Nothing in the repository; prepares, reports, serves the dashboard, drafts the bookkeeping change for the owner</td><td>Owner acts (<code>attribute</code> and <code>prove</code> join the guard in <span class="gate">G18-A</span>)</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Owner gates</h3>
+    <div class="card rule">
+      <h5><span class="gate">G18-M</span> — migration 0007, one owner commit before M1's shift starts (Q1, decided 2026-09-26)</h5>
+      <p><code>core/src/observability/migrations/0007-phase-route.sql</code>, DDL only:</p>
+      <pre><code>ALTER TABLE phases ADD COLUMN route_adapter TEXT;
+ALTER TABLE phases ADD COLUMN route_provider TEXT;
+ALTER TABLE phases ADD COLUMN route_model TEXT;
+ALTER TABLE phases ADD COLUMN route_effort TEXT
+  CHECK (route_effort IS NULL OR route_effort IN ('none','low','medium','high','xhigh','max'));
+ALTER TABLE phases ADD COLUMN effort_source TEXT
+  CHECK (effort_source IS NULL OR effort_source IN ('journal','config-phase-route','config-agent','unknown'));
+
+PRAGMA user_version = 7;</code></pre>
+      <p>In the same commit, every assertion pinning the terminal version moves from 6 to 7: <code>core/test/unit/observability/sqlite.test.ts</code> (the title "lands on user_version 6" and its assertions at lines 34, 83, 114, 149 and 182) and <code>core/test/unit/observability/migration-0004.test.ts</code> (lines 126 and 173). <code>quota/snapshot-stop.test.ts</code> reads the live version and needs no change. The columns stay NULL until task 1's projector fills them; after M1 lands the owner runs <code>awsf db rebuild</code> once so every legacy phase gets its route. Run <code>npm run test:unit</code> at the resulting HEAD before M1, since a migration moves assertions a partial run can miss. It can share one commit with <span class="gate">G18-A</span>.</p>
+    </div>
+    <div class="card rule">
+      <h5><span class="gate">G18-A</span> — one owner commit before M1's shift starts (if Q2 and Q3 go as recommended)</h5>
+      <ol>
+        <li><code>awsf.config.yaml</code>: the <code>builder</code> agent's <code>writes</code> gains <code>"docs/cheatsheet.html"</code>.</li>
+        <li><code>docs/driving/marimba/delegation-guard.sh</code>: the <code>for verb in …; do</code> loop gains <code>attribute prove</code> after <code>grant</code>.</li>
+        <li><code>docs/driving/marimba/marimba-guard-rules.mts</code>: <code>OWNER_ACTS</code> gains <code>"attribute", "prove"</code> in the same order.</li>
+        <li><code>core/test/unit/meta/marimba-guard.test.ts</code>: its <code>OWNER_ACTS</code> constant gains the same two, in order.</li>
+        <li><code>docs/cheatsheet.html</code>: the <code>owner-acts</code> fact list gains <code>&lt;li&gt;&lt;code&gt;attribute&lt;/code&gt;&lt;/li&gt;</code> and <code>&lt;li&gt;&lt;code&gt;prove&lt;/code&gt;&lt;/li&gt;</code>.</li>
+      </ol>
+      <p>No test ties a guard verb to an existing CLI command (checked: <code>marimba-guard.test.ts</code> and <code>marimba-guard-pi.test.ts</code> compare the lists with each other only), so the verbs can precede the commands. Run <code>npm run test:unit</code> at the resulting HEAD before M1.</p>
+    </div>
+    <div class="card rule">
+      <h5><span class="gate">G18-B</span> — one owner commit after M4 lands, before the D3 suite</h5>
+      <p><code>awsf.config.yaml</code> <code>workflows.enabled</code> gains <code>prove</code>, and <code>docs/cheatsheet.html</code>'s <code>workflows-and-gates</code> list gains <code>&lt;li&gt;&lt;code&gt;workflow|prove&lt;/code&gt;&lt;/li&gt;</code> in the same commit (the fence reads the loaded config). It cannot come first: <code>load.ts</code> refuses an id the code does not know, which is why W17's G17 followed its T05.</p>
+    </div>
+
+    <h3>Fences that tie code to files outside the builder's boundary</h3>
+    <table>
+      <thead><tr><th>Fence</th><th>Where W18 meets it</th><th>Resolution</th></tr></thead>
+      <tbody>
+        <tr><td>Protected <code>core/src/observability/migrations/**</code></td><td>Route and effort on each phase</td><td><span class="gate">G18-M</span>: the owner writes migration 0007 before M1; the builder writes only the projector (DD1, Q1)</td></tr>
+        <tr><td><code>cheatsheet-reconciliation</code>, <code>commands</code> class, both directions</td><td><code>attribute</code> (T03), <code>metrics</code> (T06), <code>prove</code> (T13), <code>metrics export</code> (T17)</td><td><span class="gate">G18-A</span> widens builder writes by one file (Q2)</td></tr>
+        <tr><td><code>owner-acts</code> class ↔ the guard (protected <code>docs/driving/**</code>)</td><td><code>attribute</code>, <code>prove</code></td><td><span class="gate">G18-A</span> pre-commits both verbs (Q3)</td></tr>
+        <tr><td><code>workflows-and-gates</code> class ↔ protected config</td><td>The <code>prove</code> workflow</td><td><span class="gate">G18-B</span> after M4</td></tr>
+        <tr><td>Protected <code>docs/driving/**</code>; <code>CONTRACT.md</code> at 119 of 120 lines and 995 of 1100 words</td><td>Marimba's preflight block</td><td>Avoided: the advisory prints from <code>awsf shift plan</code> (DD6, Q4)</td></tr>
+        <tr><td><code>no-write-route</code>: one POST (archive) and an exact route list</td><td>D4's "one click"; the new GET route</td><td>Avoided: the Run view composes the command (Q6). The GET route is added to the test's <code>EXPECTED</code> list in T05.</td></tr>
+        <tr><td><code>sqlite-write-fence</code></td><td>The read modules</td><td>They import <code>type DatabaseSync</code> from <code>sqlite.ts</code>, never <code>node:sqlite</code></td></tr>
+        <tr><td><code>ticket-plan-sync</code> frontmatter vocabularies</td><td><code>task_class</code></td><td>In boundary (T15)</td></tr>
+        <tr><td><code>junk-drawer</code></td><td>Export names, new source files</td><td>No basename matches <code>/manifest|receipt/i</code></td></tr>
+        <tr><td><code>dependency-allowlist</code></td><td>Charts, icons</td><td>Hand-drawn SVG; icons from <code>lucide-vue-next</code> only</td></tr>
+        <tr><td><code>execution-isolation</code></td><td>Every ticket</td><td>No root <code>.claude/</code></td></tr>
+        <tr><td><code>no-destructive-paths</code>, <code>publish-fence</code>, <code>no-land-route</code></td><td>The pinned base; the replay's end</td><td><code>createWorktree</code> at the pinned SHA, no reset or force spelling; <code>land.ts</code> refuses a replay</td></tr>
+        <tr><td>Specs markers, ticket <code>state</code>, Handoff</td><td>Every ticket</td><td>Owner at landing; no prompt asks the builder to write them</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Visual references for M3</h3>
+    <p>The owner keeps the binding private (it holds an absolute root) and passes it at <code>awsf start &lt;task&gt; --visual-references &lt;binding&gt;</code>. Only <code>claude-code</code> opus and sonnet are admitted visual Claude routes, and both M3 routes are opus.</p>
+    <pre><code>schema: awsf.visual-reference-binding/v1
+root: /absolute/path/to/this/checkout
+index: specs/design/awsf-v2-w18-route-metrics/frame-index.json
+digests: specs/design/awsf-v2-w18-route-metrics/frame-digests.json
+selection:
+  frames: [rm-matrix-forest-dark, rm-matrix-forest-light, rm-matrix-navy-dark, rm-matrix-navy-light,
+           rm-matrix-rust-dark, rm-frontier-forest-dark, rm-frontier-forest-light, rm-ledger-forest-dark,
+           rm-ledger-forest-light, rm-run-forest-dark, rm-run-forest-light]
+phases: [t07-build, t08-build, t09-build, t10-build, shift-review]</code></pre>
+    <p>The index must be the committed blob at the root's HEAD, and the digests file names that blob's bytes (<code>indexSha256</code> <code>f8c53390…9436</code> for the file as authored). If either file changes before the owner commits it, regenerate the digests. The images stay in the ignored <code>docs/design/route-metrics/frames/</code>; they exist only in the owner's checkout, which is why the binding's root is that checkout.</p>
+
+    <figure>
+      <pre class="mermaid">
+sequenceDiagram
+  participant O as Owner
+  participant M as Marimba
+  participant A as AWSF
+  M->>A: suite at HEAD, shift plan, quota
+  M->>O: readout, advisory, exact commands
+  O->>A: awsf new (shift), degrade-review, raise
+  M->>A: awsf start, awsf run
+  A-->>M: AWAITING_OWNER, one candidate
+  M->>O: fresh build, Chrome beside frames (M3)
+  O->>A: journey, land
+  O->>O: bookkeeping commit
+  Note over O,A: next milestone starts from the new HEAD
+      </pre>
+      <figcaption>One milestone's loop. The owner performs every act the guard reserves; Marimba prepares and reports. The bookkeeping commit comes after landing, never while a candidate waits, because landing is a fast-forward.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ===== IMPLEMENTATION PHASES ===== -->
+  <section id="phases">
+    <h2>Implementation Phases</h2>
+    <p><strong>IMPORTANT:</strong> Execute every phase and task step by step, in order, top to bottom.</p>
+    <p>Status markers: <code>[]</code> idle · <code>[wip]</code> in progress · <code>[x]</code> complete · <code>[f]</code> failed. All start as <code>[]</code>. Inside a shift the builder writes none of them: the owner moves a task's rows and its ticket's <code>state</code> together in the bookkeeping commit after the milestone lands. Each milestone's journey (the T2 landing needs one) is its testing ticket's OWNER ACCEPTANCE list, recorded as <code>w18-m1</code> … <code>w18-m5</code>; task 17 also defines <code>w18-route-metrics</code> for the whole workstream.</p>
+
+    <!-- ================= M1 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M1: Facts per phase and per role <span class="wtag route">opus@xhigh</span></h3>
+      <p>Everything later reads what this milestone builds, so it is the one where a wrong definition is most expensive. The projector fills migration 0007's route columns (DD1; the migration itself is the owner's gate <span class="gate">G18-M</span>), tokens come from usage events (DD2), the owner's attribution record adds one event kind, and every outcome is a named pure function with its own test. Tests use synthetic journals only.</p>
+      <figure>
+        <pre class="mermaid">
+flowchart LR
+  RR["route_resolution<br/>event"] --> RES["resolver"]
+  SN["config snapshot<br/>agents[].thinking"] --> RES
+  RES --> PJ["projector"] --> PH["phases row<br/>route columns"]
+  PH --> F["phase facts"]
+  US["usage events"] --> F
+  TC["tool_call events"] --> FOLD["fold: read search<br/>edit exec other"] --> F
+  F --> ROW["role rows"]
+  G["gates, envelopes,<br/>transitions"] --> ROW
+  ATT["attributions.jsonl"] --> P["projector"] --> EV["attribution events"] --> ROW
+        </pre>
+        <figcaption>The projector writes the route columns and the attribution events, and <code>awsf db rebuild</code> replays both; everything else is assembled at read time.</figcaption>
+      </figure>
+
+      <h4>1. Per-phase facts: route, effort and its source, tokens by kind, and tool classes</h4>
+      <p class="sub">Serves <code class="serves">AC-1</code> · <code class="serves">AC-2</code> · <code class="serves">INV-1</code></p>
+      <p>The projector records on each agent phase the route it actually ran on, in migration 0007's columns, and one read module turns the projection into a fact record per agent phase: the route, its tokens by kind from usage events, its tool calls folded into five classes, and its minutes and turns.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>core/src/observability/phase-route.ts</code> (beside the projector, so the projector imports nothing from <code>core/src/metrics/</code>): pure <code>resolvePhaseRoute({ phase, routeEvent, configSnapshot })</code> returns adapter id, adapter kind, provider, model, effort and <code>effortSource</code>. <code>journal</code> when the phase has a <code>route_resolution</code> event (its <code>effective</code> block wins and <code>requested.sources.effort</code> is kept as <code>journalSource</code>); <code>config-phase-route</code> when the snapshot's <code>routing.phase_routes</code> names the phase; <code>config-agent</code> from the snapshot agent whose <code>name</code> equals the phase owner (a shift's <code>tNN-build</code> resolves through its owner <code>builder</code>); <code>unknown</code> otherwise, never a guess</li>
+        <li><code class="status">[]</code> Model identity is carried as two fields and never merged: the observed <code>resolvedModel</code> with its <code>modelProvenance</code> (<code>stream-authoritative</code> or <code>route-attributed</code>), and the requested selector</li>
+        <li><code class="status">[]</code> <code>core/src/metrics/tool-class.ts</code>: a frozen, case-insensitive table folding <code>read</code> → read; <code>grep</code>, <code>glob</code>, <code>find</code>, <code>ls</code> → search; <code>edit</code>, <code>write</code> → edit; <code>bash</code> → exec; anything else → other. A test covers each of the thirteen measured spellings in F6</li>
+        <li><code class="status">[]</code> Tokens by kind per phase are the sum of that phase's <code>usage</code> events (<code>payload_json</code> → <code>$.usage.inputTokens</code>, <code>outputTokens</code>, <code>cacheReadTokens</code>, <code>cacheWriteTokens</code>, <code>reasoningTokens</code>, <code>reasoningRelation</code>). <code>agent_sessions</code> token columns are not read (F8), and a test builds a two-call role whose second call is smaller and proves the sum</li>
+        <li><code class="status">[]</code> Turns per phase = the phase's <code>run.started</code> events; minutes = <code>ended_at − started_at</code> (null while open); tool errors = <code>tool_call</code> rows with status <code>error</code>; tool time = the sum of <code>$.durationMs</code></li>
+        <li><code class="status">[]</code> <code>core/src/metrics/phase-facts.ts</code>: <code>readPhaseFacts(db)</code> is read-only SQL that imports <code>type DatabaseSync</code> from <code>../observability/sqlite.ts</code> and never <code>node:sqlite</code>, so <code>sqlite-write-fence.test.ts</code> stays green</li>
+        <li><code class="status">[]</code> The projector fills <code>route_adapter</code>, <code>route_provider</code>, <code>route_model</code>, <code>route_effort</code> and <code>effort_source</code> on every agent phase: from the <code>route_resolution</code> event when one exists, else from the session's snapshot. A later route event replaces a snapshot-derived value and never the reverse. <code>awsf db rebuild</code> backfills legacy phases, and a test proves a rebuild from nothing fills both kinds and a second rebuild is identical</li>
+        <li><code class="status">[]</code> The migration is the owner's (<span class="gate">G18-M</span>): nothing under <code>core/src/observability/migrations/</code> changes in this task, and the task stops and reports if <code>0007-phase-route.sql</code> is absent at its base</li>
+      </ul>
+
+      <h4>2. Role-row outcomes and the block-attribution heuristic</h4>
+      <p class="sub">Serves <code class="serves">AC-3</code> · <code class="serves">INV-4</code></p>
+      <p>A role-row is one role in one run: every agent phase of that role in that session. Each outcome the design's metric catalog marks <em>have</em> or <em>derive</em> becomes a named pure function over phase facts, gate rows, envelopes and transitions.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>core/src/metrics/role-rows.ts</code>: <code>RoleRow</code> carries the prototype's row fields (route, effort, effort source, identity provenance, calls, phases, minutes, corrections, first pass, settled, failed here, tokens by kind, cost authority, tools by class, tool errors, gates <code>{ pass, total, firstRoundFail[] }</code>, guardrail hits, refuted claims, honest stops, claims, recovered, corrected) plus run fields (state group, workflow, tier, project, plan ref, review verdict, owner re-entries, rework phases, started and ended)</li>
+        <li><code class="status">[]</code> Definitions, one function and one test each. <strong>settled</strong>: every phase of the role is terminal and the run is not in flight. <strong>first pass</strong>: settled, every phase SUCCEEDED, each with <code>correction_count</code> 0. <strong>guardrail hit</strong>: a failed <code>writes_within_globs</code> or <code>no_protected_paths</code> gate on the role's phases, or a phase error code <code>PermissionBreach</code>. <strong>clean completion</strong>: first pass with zero guardrail hits</li>
+        <li><code class="status">[]</code> <strong>claim</strong>: an envelope round with a <code>producer_status</code>. <strong>refuted claim</strong>: <code>success</code> on a round where any claim gate failed; claim gates are every gate on that phase and round except <code>envelope_valid</code> and <code>json_parses</code> (contract adherence) and the two guardrail gates. <strong>honest stop</strong>: <code>failure</code>. <strong>recovered by correction</strong>: round-0 gates failed and the final round passed within <code>max_corrections</code>; <strong>corrected</strong>: <code>correction_count &gt; 0</code></li>
+        <li><code class="status">[]</code> <code>core/src/metrics/attribution.ts</code>: pure <code>heuristicAttribution(run)</code> over the blocking phase's <code>error_code</code> and owner and the BLOCKED transition's <code>reason_code</code>, as one frozen table: <code>CommandPhaseFailure</code> after a build, <code>PhaseGateFailure</code>, <code>EnvelopeValidationFailure</code>, <code>ReplacementReviewInconsistent</code>, <code>ReplacementReviewMalformed</code>, <code>PermissionBreach</code> → model; <code>AdapterError</code>, <code>OwnerReworkCredentialRejected</code>, a bare <code>Error</code> from a host phase → factory; <code>ExecutableNotFound</code> → environment; <code>phase-abort</code> or no code → unknown</li>
+        <li><code class="status">[]</code> <strong>failed here</strong>: the run is BLOCKED in one of this role's phases. <strong>blocked here</strong>: failed here and the effective attribution is <code>model</code>; only this counts against a route</li>
+        <li><code class="status">[]</code> Every function is pure and every fixture synthetic; nothing reads the owner's database</li>
+      </ul>
+
+      <h4>3. Testing Strategy for M1, and the owner's attribution override</h4>
+      <p class="sub">Serves <code class="serves">AC-1</code> · <code class="serves">AC-2</code> · <code class="serves">AC-3</code> · <code class="serves">INV-1</code> · <code class="serves">INV-6</code></p>
+      <p>The owner act that D4 asks for, and the end-to-end proof that live projection, rebuild and the row builder agree. Node's test runner over synthetic state roots; no provider, no network, no owner data.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>awsf attribute &lt;task&gt; --attempt &lt;n&gt; --cause &lt;model|factory|environment|owner|unknown&gt; --reason "&lt;why&gt;"</code>: requires an interactive owner terminal and a non-empty, credential-free reason, as <code>degrade-review.ts</code> does; refuses an attempt that is not BLOCKED and an unknown cause, each with a named error class</li>
+        <li><code class="status">[]</code> The record (<code>awsf.attribution/v1</code>, TypeBox, registered like every contract) is appended to <code>attributions.jsonl</code> beside the task's attempt directories through <code>Journal</code>, exactly as <code>task-relations.ts</code> does (append-only; a torn tail refuses). The latest record for an attempt wins; earlier ones stay. No attempt directory is written, so a sealed attempt stays sealed</li>
+        <li><code class="status">[]</code> <code>projectAttribution</code> in <code>projector.ts</code> inserts one session-level <code>events</code> row (type <code>attribution</code>, id derived from the record, <code>INSERT OR IGNORE</code>); the live command calls it through <code>createDashboardProjection</code> as <code>projectRelation</code> is called; <code>awsf db rebuild</code> replays every task's file</li>
+        <li><code class="status">[]</code> Each row carries <code>attribution</code>, <code>attributionSource</code> (<code>owner</code> or <code>heuristic</code>) and the heuristic value beside any override</li>
+        <li><code class="status">[]</code> <code>CLI_COMMANDS</code> gains <code>attribute</code> and <code>docs/cheatsheet.html</code>'s <code>commands</code> list gains <code>&lt;li&gt;&lt;code&gt;attribute&lt;/code&gt;&lt;/li&gt;</code> in the same change (needs <span class="gate">G18-A</span>)</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — green at the base SHA before any change, count recorded, and green after</li>
+        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/metrics-*.test.ts</code> — resolver, fold, sums, every definition and the heuristic table, each on its own fixture</li>
+        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/journeys/metrics-facts.test.ts</code> — four synthetic runs (a three-ticket shift with one correction, a build-review, a blocked run with <code>PermissionBreach</code>, a blocked run with <code>ExecutableNotFound</code>) projected live, read as rows, rebuilt from nothing and read again: identical rows; an override then flips <code>blocked here</code> and survives a second rebuild</li>
+        <li><code class="status">[]</code> <code>npm run typecheck</code> and <code>npm run lint</code> — exit 0</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass.
+      </div>
+    </div>
+
+    <!-- ================= M2 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M2: One query surface <span class="wtag route">opus@high</span></h3>
+      <p>One pure module computes every statistic, one dated rate card prices tokens, and the API and the CLI serve the same payload. The tab in M3 renders it; nothing in M3 recomputes a statistic of its own.</p>
+
+      <h4>4. The pure metrics module: intervals, depth, frontier, verdicts and the recommendation rule</h4>
+      <p class="sub">Serves <code class="serves">AC-4</code> · <code class="serves">INV-4</code></p>
+      <p>The prototype's algorithms are the specification. They move into <code>dashboard/shared/route-metrics.ts</code>: no DOM, no fetch, no Node API, importable by core and by the tab.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>wilson(k, n, z = 1.96)</code>; <code>depth</code> is <code>raised</code> when the interval's half-width is at most 0.15, <code>flat</code> when evidence exists but is wider, <code>sunk</code> with no rows</li>
+        <li><code class="status">[]</code> <code>stats(rows)</code> returns every aggregate the prototype's <code>stats()</code> computes (settled, runs, landed, first pass and clean completion with intervals, state counts, blocked here, corrections per row, rework, gates and the top first-round failure, median minutes, turns and tool calls per row, tool mix and error rate, tokens by kind, ≈ list $ total, per row and per landed run, authority, identity and effort-source tallies, recovered and corrected, landed per agent-hour)</li>
+        <li><code class="status">[]</code> <code>lens</code>: facets role, model, effort, terminal state, workflow, project and evidence source, plus a route focus; the facet list is data so task 15 adds task class without touching the filter</li>
+        <li><code class="status">[]</code> <code>frontier(rows, role, y, x)</code>: y is first pass, clean completion, not blocked here or run landed; x is ≈ list $ per row or median minutes; only routes with at least 5 settled rows shape the Pareto line</li>
+        <li><code class="status">[]</code> <code>verdicts</code>: insufficient evidence (n &lt; 5), underpowered (upper bound below the best route's lower bound), overkill candidate (costs at least 1.5× an eligible route whose interval overlaps; the text says to confirm on paired replays), frontier otherwise</li>
+        <li><code class="status">[]</code> <code>recommend(rows, role, taskClass?, source)</code>: the cheapest route whose first-pass interval overlaps the best route's; when no route has 5 settled rows it ranks by a Beta prior (mean from the role's mapped benchmark, strength 4) and labels the result <code>prior only</code>. Public numbers are never added into a local statistic</li>
+        <li><code class="status">[]</code> <code>flatColumns(groups, columns)</code>: a column identical across two or more groups is flat</li>
+        <li><code class="status">[]</code> No function in the module returns a score for a model outside a role and a route (INV-4)</li>
+      </ul>
+
+      <h4>5. The dated rate card, the list-price equivalent, and the metrics API</h4>
+      <p class="sub">Serves <code class="serves">AC-4</code> · <code class="serves">AC-5</code> · <code class="serves">INV-3</code></p>
+      <p>D1 and D2 in code: a sourced price snapshot, a labeled comparison unit that never reads as spend, and one read-only route.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>dashboard/shared/rate-card.ts</code>: the design's ten rows (Fable 5.1, Opus 5.5, Opus 5, Sonnet 5, Haiku 4.5, GPT-6 Astra, GPT-6 Sol, GPT-6 Luna, GPT-5.6 Sol, GPT-5.6 Terra) with input, cache write, cache read and output per 1M, tier, note, <code>checkedAt: "2026-09-26"</code> and https sources (Anthropic: <code>https://platform.claude.com/docs/en/about-claude/pricing</code>; OpenAI: <code>https://developers.openai.com/api/docs/pricing</code>), validated by a TypeBox schema in a test</li>
+        <li><code class="status">[]</code> Pricing keys on the observed <code>resolvedModel</code>; a selector prices only when it is itself a rate-card id; otherwise the row is <code>unpriced</code> with its reason. Never a guessed alias</li>
+        <li><code class="status">[]</code> <code>listEquivalentUsd(tokens, rate)</code>: input, cache read, cache write and output at their rates; reasoning added as output only when <code>reasoningRelation</code> is <code>additive</code>. The card states its limitations: cache writes at the 5-minute rate (a 1-hour write bills 2× input), OpenAI short-context rates</li>
+        <li><code class="status">[]</code> <code>dashboard/shared/benchmark-priors.ts</code>: the design's benchmark table with sources and <code>checkedAt</code>, and its role mapping; consumed only by <code>recommend</code>'s cold-start branch and the matrix's row labels</li>
+        <li><code class="status">[]</code> <code>formatListEquivalent(usd)</code> renders <code>≈ list $x.xx</code> and nothing shorter. <code>formatCost</code> in <code>cost-display.ts</code> is unchanged, and a new test asserts <code>formatCost("unavailable", 12.3)</code> is still <code>— subscription</code></li>
+        <li><code class="status">[]</code> <code>GET /api/v1/metrics</code> (route name <code>metrics</code>) returns <code>MetricsResponse</code> (<code>schema: "awsf.route-metrics/v1"</code>, <code>extractedAt</code>, runs with their phases, role-rows, the rate card, the priors and the untested routes) typed in <code>dashboard/shared/types.ts</code> and built by <code>core/src/metrics/payload.ts</code>; read-only</li>
+        <li><code class="status">[]</code> <code>no-write-route.test.ts</code>'s <code>EXPECTED</code> list gains <code>GET /api/v1/metrics</code>, and the route table still contains none of <code>land</code>, <code>approv</code>, <code>retry</code>, <code>cancel</code></li>
+      </ul>
+
+      <h4>6. Testing Strategy for M2, and the awsf metrics readout</h4>
+      <p class="sub">Serves <code class="serves">AC-4</code> · <code class="serves">AC-5</code> · <code class="serves">INV-3</code> · <code class="serves">INV-4</code></p>
+      <p>The CLI is the second reader of the same module, and the parity test is the milestone's proof that there is one statistics implementation.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>awsf metrics [--role R] [--source production|proving-ground] [--started-before ISO] [--json]</code>: role × route table with n, settled, first pass and its interval, depth, ≈ list $ per row and the verdict; <code>--json</code> prints the API payload byte for byte. It spawns nothing and writes nothing</li>
+        <li><code class="status">[]</code> <code>CLI_COMMANDS</code> gains <code>metrics</code> and the cheatsheet's <code>commands</code> list gains it in the same change</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — green at the base SHA and after</li>
+        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/metrics-module.test.ts</code> — Wilson on textbook values, depth edges (n 0, half-width exactly 0.15), frontier ties, each verdict, the prior branch, flat columns</li>
+        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/metrics-parity.test.ts</code> — one synthetic database: module stats = API payload stats = <code>awsf metrics --json</code> stats</li>
+        <li><code class="status">[]</code> <code>npm run typecheck</code> and <code>npm run lint</code> — exit 0</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass.
+      </div>
+    </div>
+
+    <!-- ================= M3 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M3: The metrics tab <span class="wtag route">opus@high</span> <span class="wtag raise">raise +2</span></h3>
+      <p>Four views over one payload, in the dashboard's own tokens: neumorphic wells and pills from <code>morphism.css</code>, all seven palettes, both modes. The frames in <code>specs/design/awsf-v2-w18-route-metrics/frame-index.json</code> are the authority for layout, type, colour and interaction; overrides O1–O5 in that file say where the build deliberately differs. Charts are hand-drawn SVG and icons come only from <code>lucide-vue-next</code> (invariant 7). The tab writes nothing.</p>
+      <figure class="mockup">
+        <div class="mockup-frame">
+          <div class="mk-row">
+            <div class="mk-wrap">
+              <a class="mk-card" href="#phases"><span class="mk-id">1a2b3c4d</span><span class="mk-wf">build-review</span><span class="mk-req">synthetic task · attempt 2</span><span class="mk-chip">BLOCKED</span></a>
+              <div class="mk-controls">
+                <button class="mk-round" type="button" aria-label="Open this run in metrics"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M8 17v-5"/><path d="M13 17V7"/><path d="M18 17v-9"/></svg></button>
+                <button class="mk-text" type="button">archive</button>
+              </div>
+              <div class="mk-note">metrics control: sibling of archive, outside the card's link</div>
+            </div>
+            <div class="mk-panel">
+              <div class="mk-k">Blocked in builder · PermissionBreach · heuristic: model</div>
+              <div class="mk-pills"><span class="mk-pill">model</span><span class="mk-pill on">factory</span><span class="mk-pill">environment</span><span class="mk-pill">owner</span><span class="mk-pill">unknown</span></div>
+              <div class="mk-k">Run this in a terminal. The dashboard records nothing itself.</div>
+              <div class="mk-cmd">awsf attribute synthetic-task --attempt 2 --cause factory --reason "&lt;why&gt;"</div>
+              <div class="mk-pills"><span class="mk-pill on">Copy command</span></div>
+            </div>
+          </div>
+        </div>
+        <figcaption>The two places the build departs from the frames, shown with synthetic data in the dashboard's Forest dark tokens: the metrics control beside the existing archive control and outside the card's link (O2), and the attribution panel that composes the owner's command instead of writing (O3, Q6). Everything else follows the frames.</figcaption>
+      </figure>
+
+      <h4>7. The metrics tab shell: routes, lens rail, summary and the run-card button</h4>
+      <p class="sub">Serves <code class="serves">AC-6</code></p>
+      <p>The frame around every view: routes, navigation, the lens rail in the existing filter-ladder grammar, the summary row, and the entry point from each run card.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Hash routes <code>#/metrics</code> and <code>#/metrics/run/&lt;sessionId&gt;</code> in <code>App.vue</code>'s <code>readRoute</code>; view and lens live in the hash query so Back restores them, as the canvas route does; <code>TopNav</code> lists metrics between canvas and settings</li>
+        <li><code class="status">[]</code> <code>dashboard/src/routes/metrics.vue</code> loads <code>/api/v1/metrics</code> through the existing <code>usePolling</code> modes</li>
+        <li><code class="status">[]</code> Lens rail: count tile (runs in lens, recorded, never reached an agent, "option counts are role-rows"); Evidence source (production live; proving ground disabled with the title "M4 adds controlled replays"); Role (role dots); Model (circle Anthropic, diamond OpenAI); Effort; Terminal state (state dots); Workflow; Project — each a well with its select-all / only… control built from <code>session-filters.ts</code> (<code>toggleFilterValue</code>, <code>selectAllState</code>, <code>toggleAllFilterValues</code>), reused rather than forked</li>
+        <li><code class="status">[]</code> Summary row: role-rows in lens; first-pass yield with its interval; runs landed with blocked-here model-attributed rows; ≈ list $ per landed run captioned "list-price equivalent, not spend"</li>
+        <li><code class="status">[]</code> View bar: Matrix, Frontier, Ledger, Run pills, the route-focus note and Reset lens</li>
+        <li><code class="status">[]</code> <code>SessionCard.vue</code> gains a metrics control (lucide <code>ChartColumn</code>, accessible name "Open run &lt;id&gt; in metrics", <code>href="#/metrics/run/&lt;sessionId&gt;"</code>) as a sibling of the archive button, after the card's closing <code>&lt;/a&gt;</code>. The archive control is unchanged (O2)</li>
+        <li><code class="status">[]</code> Lens state and URL encoding live in the pure <code>dashboard/src/metrics-lens.ts</code></li>
+      </ul>
+
+      <h4>8. The Matrix and Frontier views</h4>
+      <p class="sub">Serves <code class="serves">AC-6</code> · <code class="serves">INV-4</code></p>
+      <p>The two views that compare routes. Both are scoped to the lens, and the Frontier to one role at a time, so no mark ever compares routes across roles.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Matrix: role columns in the order intake, scout, planner, designer, architecture-reviewer, builder, reviewer, documenter (observed roles only); route rows tested first, then by provider, price and effort; row label "Model · effort" over "$in / $out · prior"</li>
+        <li><code class="status">[]</code> Tiles: an SVG ring of first-pass yield ("–" when unsettled), "n X · Y landed", "≈$z/row", a red badge for blocked-here model-attributed rows, depth raised / flat / sunk from the module; empty cells read "no runs"; "Show untested routes" adds the untested rows with their priors; the legend matches the frames</li>
+        <li><code class="status">[]</code> A tile click focuses its route, narrows the role lens and opens the Ledger grouped by run</li>
+        <li><code class="status">[]</code> Frontier: role pills; y pills First-pass yield, Clean completion, Not blocked here, Run landed; x pills ≈ list $ per role-row and Median minutes per role-row, one axis at a time; log-scale x with ticks; 95% Wilson whiskers; circle Anthropic, diamond OpenAI; hollow marks under 5 settled rows; the Pareto line in the accent colour; the two zone labels; a tooltip on hover and focus; verdict cards beneath with frontier, overkill? and underpowered tags</li>
+        <li><code class="status">[]</code> Scale, tick and label-collision helpers live in the pure <code>dashboard/src/metrics-chart.ts</code>; no chart library</li>
+      </ul>
+
+      <h4>9. The Ledger and Run views</h4>
+      <p class="sub">Serves <code class="serves">AC-6</code> · <code class="serves">AC-3</code> · <code class="serves">INV-6</code></p>
+      <p>The table behind every tile, and the view each run card opens. The Run view is also where D4's override is prepared, as a command the owner runs.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Ledger: group by Route, Role, Model, Effort, Workflow, Project or Run; column families Outcome, Verification, Work, Tokens, Cost, Provenance (Outcome, Verification, Work and Cost on by default); the terminal-state strip and one column per state; sortable headers with <code>aria-sort</code>; a flat column dimmed, marked "· flat" and titled; a sticky first column; grouped by run, a row opens the Run view</li>
+        <li><code class="status">[]</code> Run: the picker (the lens still applies), the mini card with its two controls, the fact grid (task and attempt, project, workflow and tier, terminal state, review verdict, wall time, owner rework, ≈ list $), the phase strip (width by minutes, at least 0.3, colour by status) with its legend, and the per-role table (role and identity provenance, route, turns, minutes, tool mix R·S·E·X·O, gates, first pass, cache read · output, ≈ list $, list $ by token kind)</li>
+        <li><code class="status">[]</code> For a BLOCKED run: the heuristic cause, the owner's recorded override with its reason and date, and five cause pills that compose <code>awsf attribute &lt;task&gt; --attempt &lt;n&gt; --cause &lt;c&gt; --reason "&lt;why&gt;"</code> in a read-only field with a copy button. Nothing is sent anywhere (O3)</li>
+        <li><code class="status">[]</code> Grouping, sorting, flat detection and the phase-strip layout live in the pure <code>metrics-ledger.ts</code> and <code>metrics-run.ts</code></li>
+      </ul>
+
+      <h4>10. Testing Strategy for M3: palettes, modes, accessibility and the visual record</h4>
+      <p class="sub">Serves <code class="serves">AC-6</code> · <code class="serves">INV-3</code></p>
+      <p>What the builder can prove inside its sandbox, and the record the owner's Chrome comparison works from. The builder cannot render a browser there, so the capture comparison is owner acceptance at <code>AWAITING_OWNER</code>, not a builder claim.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> A static test: every CSS custom property the metrics components use is defined for all seven palettes in both modes (AWSF Classic dark only), and no metrics file carries a literal hex colour outside the existing role-colour table</li>
+        <li><code class="status">[]</code> A static test: every <code>$</code> the metrics files render comes through <code>formatListEquivalent</code></li>
+        <li><code class="status">[]</code> A static test: the run card's metrics control sits outside the <code>&lt;a class="session-card"&gt;</code> element</li>
+        <li><code class="status">[]</code> Accessibility: every control is a button or link with an accessible name; pills carry <code>aria-pressed</code>; focus is visible; <code>prefers-reduced-motion</code> is honoured</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — green at the base SHA and after, including the view-helper tests over the synthetic <code>core/test/fixtures/metrics/payload.json</code></li>
+        <li><code class="status">[]</code> <code>npm run typecheck</code>, <code>npm run lint</code> and <code>npm run dash:build</code> — exit 0</li>
+        <li><code class="status">[]</code> The visual record: every bound frame opened through the image tool (the visual-inspection gate), and a deviation table per frame id returned in the envelope (O1–O5 and anything else found)</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass.
+      </div>
+    </div>
+
+    <!-- ================= M4 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M4: The proving ground <span class="wtag route">opus@xhigh</span> <span class="wtag raise">raise +2</span></h3>
+      <p>Controlled replays of frozen work across route arms, so a downgrade is decided on paired evidence rather than on production data that routes hard work to strong routes. D3 funds the reviewer suite first, and this milestone builds exactly what it needs: the corpus format, five seeded-defect items, the scorer, and a <code>prove</code> compiled workflow the owner starts. It touches <code>production-run.ts</code>, the largest blast radius in W18, in one narrow place.</p>
+      <figure>
+        <pre class="mermaid">
+sequenceDiagram
+  participant O as Owner
+  participant A as AWSF
+  participant R as Reviewer arm
+  O->>A: awsf prove (item, arm, rep)
+  A->>A: worktree at the pinned base
+  A->>A: seed phase: host commit of the planted defect
+  A->>R: review on the arm's explicit route
+  R-->>A: findings
+  A-->>O: AWAITING_OWNER, land refused
+  A->>A: rows tagged proving ground
+        </pre>
+        <figcaption>A review replay. No provider built the candidate, so there is no inversion to compute: the arm names the reviewer route, and the scorer compares the findings with the planted defect.</figcaption>
+      </figure>
+
+      <h4>11. The frozen corpus, the seeded-defect reviewer suite and the route-arm scorer</h4>
+      <p class="sub">Serves <code class="serves">AC-7</code> · <code class="serves">INV-4</code> · <code class="serves">INV-5</code></p>
+      <p>Pure definitions and data. The scorer generalizes <code>prompt-benchmark.ts</code> from prompt arms to route arms and leaves that file untouched.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>core/src/contracts/proving-ground.ts</code>: <code>awsf.proving-ground-item/v1</code> in TypeBox and registered: <code>id</code>, <code>kind</code> (<code>review</code> or <code>build</code>), <code>taskClass</code>, <code>role</code>, <code>baseSha</code> (40 hex, a commit on <code>main</code>), <code>request</code>; a review item adds <code>seed</code> (<code>patch</code> path, <code>defectClass</code>, <code>expected: [{ file, lineStart, lineEnd }]</code>); a build item adds the configured gate ids it must pass</li>
+        <li><code class="status">[]</code> Five review items under <code>core/src/metrics/proving-ground/</code>, one planted defect each, in five classes: an off-by-one at a boundary, a missing <code>await</code>, an inverted guard condition, a wrong key in a copy-pasted lookup, and a new write path that skips the credential scrub. Each patch is small, applies cleanly to its pinned <code>baseSha</code> (<code>git apply --check</code> at build time) and is authored for this suite, never copied from a run or an escape</li>
+        <li><code class="status">[]</code> <code>core/src/metrics/route-arm-score.ts</code>: arms are route specs (two or more), each repetition records its randomized order, and a pair is invalid when the observed provider or model differs from the arm, usage authority is <code>none</code>, the envelope stayed invalid, or the replay paused at a ceiling. A finding matches a planted defect when its <code>file</code> is equal and its <code>line</code> falls within the expected range ±3; a null-line finding on the right file is counted as <code>file-only</code>, apart from recall. Output per arm: recall, false alarms, file-only, invalid pairs; for build items, first pass on the item's gates</li>
+        <li><code class="status">[]</code> <code>prompt-benchmark.ts</code> and its tests are byte-unchanged</li>
+      </ul>
+
+      <h4>12. The prove workflow: a seeded candidate at a pinned base, reviewed on the arm's route</h4>
+      <p class="sub">Serves <code class="serves">AC-7</code> · <code class="serves">INV-6</code></p>
+      <p>A compiled workflow, as <code>shift</code> is, so a replay runs through the production prompts, sandbox, gates and journal. The one new runtime rule: a candidate built by the host from a committed patch has no builder provider, so its review is routed explicitly by the arm.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>COMPILED_WORKFLOW_IDS</code> gains <code>prove</code>; <code>WORKFLOW_RECIPES</code> gains no placeholder</li>
+        <li><code class="status">[]</code> <code>core/src/workflow/prove/compile.ts</code>: <code>compileProve(item, arm, config)</code>. A review item compiles to <code>seed</code> (code, host: one host commit applying the item's patch on the pinned base, emitting <code>awsf.build-output/v1</code>), <code>review-context</code> (code) and <code>reviewer</code> (agent, owner reviewer, <code>maxCorrections: 1</code>). A build item compiles to <code>brief</code> (host, the item's request), <code>build</code> (agent, builder) and <code>tests</code> (host, the item's gates), with no review tail</li>
+        <li><code class="status">[]</code> The review inversion block in <code>production-run.ts</code> gains mode <code>seeded</code>, taken only for a <code>prove</code> attempt whose build producer is the host seed phase: the reviewer route is the arm's explicit <code>--route reviewer=</code> and is required. <code>reviewBuildPhaseId</code> accepts the seed phase as the one build producer for <code>prove</code> only. Every shipped recipe compiles to its old value, and a review workflow with zero producers still throws its original error class</li>
+        <li><code class="status">[]</code> The attempt carries <code>replay: { itemId, itemDigest, arm, repetition, order, baseSha }</code>, and <code>start.ts</code> creates the worktree at <code>replay.baseSha</code> through <code>createWorktree</code>, the seam a seed's <code>integrationBaseSha</code> already uses; no reset, force or delete spelling is added</li>
+        <li><code class="status">[]</code> <code>awsf land</code> and <code>awsf journey</code> refuse a <code>prove</code> attempt by name: a replay is measurement, never delivery</li>
+        <li><code class="status">[]</code> <code>prove</code> is not enabled in <code>awsf.config.yaml</code>; that is <span class="gate">G18-B</span>, the owner's</li>
+      </ul>
+
+      <h4>13. awsf prove, and the proving-ground evidence source end to end</h4>
+      <p class="sub">Serves <code class="serves">AC-7</code> · <code class="serves">INV-6</code> · <code class="serves">INV-1</code></p>
+      <p>The owner act that creates a replay, and the tagging that keeps replays apart from production everywhere a number is shown.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>awsf prove &lt;task&gt; --item &lt;id&gt; --arm "&lt;route spec&gt;" --rep &lt;n&gt; [--order &lt;k&gt;] --reason "&lt;why&gt;"</code>: an interactive owner terminal and a credential-free reason; refuses an unknown item, an arm route that does not reach the item's role, and a repeated (item, arm, repetition); creates the task with the replay record, prints the <code>awsf start</code> and <code>awsf cancel</code> commands, and spawns nothing</li>
+        <li><code class="status">[]</code> <code>CLI_COMMANDS</code> gains <code>prove</code> and the cheatsheet's <code>commands</code> list gains it in the same change; the guard already denies <code>awsf prove</code> (<span class="gate">G18-A</span>)</li>
+        <li><code class="status">[]</code> The projector writes the replay record once as a session-level event; rows carry <code>source</code> (DD8) and the replay's item, arm, repetition and order</li>
+        <li><code class="status">[]</code> Production statistics exclude proving-ground rows unless the Evidence source ladder selects them; the rail's proving-ground pill turns live with its count</li>
+        <li><code class="status">[]</code> <code>awsf metrics --source proving-ground</code> prints the task 11 scores per item and arm</li>
+      </ul>
+
+      <h4>14. Testing Strategy for M4: one replay end to end, and replays never land</h4>
+      <p class="sub">Serves <code class="serves">AC-7</code> · <code class="serves">INV-1</code> · <code class="serves">INV-6</code></p>
+      <p>A journey on the fixture route over a throwaway repository with two commits, so the pinned base and the seed commit are real Git objects. No provider is called.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — green at the base SHA and after</li>
+        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/journeys/prove-replay.test.ts</code> — prove with a fake owner terminal, start at the pinned base, the seed commit, a fixture review, <code>AWAITING_OWNER</code>, <code>awsf land</code> refused by name, cancel, rows tagged proving ground, the scorer's recall read back</li>
+        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/metrics-route-arm-score.test.ts</code> — every invalidation reason, the ±3 window edges, file-only findings, randomized order recorded</li>
+        <li><code class="status">[]</code> Fences: no <code>prove</code> module imports <code>raise.ts</code> or <code>rework.ts</code>; nothing it adds can produce <code>L20</code>; the invariant-8 meta-tests pass with no exemption added</li>
+        <li><code class="status">[]</code> <code>npm run typecheck</code> and <code>npm run lint</code> — exit 0</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass.
+      </div>
+    </div>
+
+    <!-- ================= M5 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M5: Task class, the advisory, and the export <span class="wtag route">opus@high</span></h3>
+      <p>Comparisons move inside a task class (D6), the advisory reaches Marimba through the readout it already runs (D5, DD6), and the dataset leaves the factory only through the state root (G5). The last task closes the workstream.</p>
+      <figure>
+        <pre class="mermaid">
+flowchart LR
+  T["ticket task_class"] --> R["role rows"]
+  R --> REC["recommend within<br/>role and class"]
+  REC --> ADV["awsf metrics --advise"]
+  REC --> SP["awsf shift plan<br/>advisory block"]
+  SP --> MAR["Marimba preflight"]
+  MAR --> OWN["owner decides<br/>--route"]
+  R --> EX["awsf metrics export<br/>state root only"]
+  FENCE["import fence"] -. "no runner imports" .-> REC
+        </pre>
+        <figcaption>The advisory is printed, never applied. The fence in task 16 makes that a test rather than a promise.</figcaption>
+      </figure>
+
+      <h4>15. The ticket task class: field, fence vocabulary and comparisons within a class</h4>
+      <p class="sub">Serves <code class="serves">AC-8</code> · <code class="serves">INV-4</code></p>
+      <p>The field the design's second trap asks for: without it, a strong route that is handed the hard tickets looks worse than a weak one that is handed the easy ones.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Optional <code>task_class</code> in plan-ticket frontmatter; <code>TICKET_TASK_CLASSES</code> in <code>core/src/contracts/ticket.ts</code> is the prompt benchmark's three classes, one exported constant</li>
+        <li><code class="status">[]</code> <code>plan-tickets.ts</code> reads it and treats a value outside the vocabulary as it treats a bad tier; <code>ticket-plan-sync.test.ts</code>'s vocabulary test checks it; <code>TICKET_WORKFLOWS</code> and the shift fences are unchanged</li>
+        <li><code class="status">[]</code> The row builder joins a shift phase to its ticket through <code>shiftTicketOf</code> and reads that ticket's class; any other row is <code>unclassified</code>, a value of its own</li>
+        <li><code class="status">[]</code> The lens gains a Task class facet; <code>recommend</code> and the verdicts run within the selected class</li>
+        <li><code class="status">[]</code> No existing ticket is edited; classifying existing tickets and teaching plan-sota to emit the field are owner-side</li>
+      </ul>
+
+      <h4>16. The advisory: awsf metrics --advise and the route evidence in awsf shift plan</h4>
+      <p class="sub">Serves <code class="serves">AC-8</code> · <code class="serves">INV-2</code></p>
+      <p>What Marimba shows the owner before a run: the evidence for the roles the selection will use, and the exact <code>--route</code> spelling if the owner wants a different route. It changes nothing by itself.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>awsf metrics --advise [--plan &lt;stem&gt; --milestone &lt;Mx&gt;[,…]] [--role builder|reviewer]</code>: for each role the selection runs and each task class in it, the configured route, the recommendation with depth, n, interval and ≈ list $ per row, and its <code>--route role=adapter/provider/model@effort</code> spelling, or "insufficient evidence: keep the configured route"; every block ends "advisory: the runner never routes on this"</li>
+        <li><code class="status">[]</code> <code>shiftPlanReadout</code>'s caller in <code>awsf shift plan</code> prints the same block after the admission lines; the admission logic and its refusals are unchanged</li>
+        <li><code class="status">[]</code> <code>core/test/unit/meta/metrics-advisory-fence.test.ts</code>: no file under <code>core/src/workflow/</code> or <code>core/src/execution/</code>, and none of <code>production-run.ts</code>, <code>review-phase.ts</code>, <code>rework.ts</code>, <code>start.ts</code>, <code>new.ts</code>, imports <code>core/src/metrics/</code> or <code>dashboard/shared/route-metrics.ts</code>; its matcher is proven to bite on a specimen</li>
+        <li><code class="status">[]</code> <code>docs/driving/</code> and <code>CONTRACT.md</code> are untouched</li>
+      </ul>
+
+      <h4>17. Testing Strategy for M5, awsf metrics export, and the workstream's closing duties</h4>
+      <p class="sub">Serves <code class="serves">AC-1</code> · <code class="serves">AC-2</code> · <code class="serves">AC-3</code> · <code class="serves">AC-4</code> · <code class="serves">AC-5</code> · <code class="serves">AC-6</code> · <code class="serves">AC-7</code> · <code class="serves">AC-8</code> · <code class="serves">INV-1</code> · <code class="serves">INV-2</code> · <code class="serves">INV-3</code> · <code class="serves">INV-4</code> · <code class="serves">INV-5</code> · <code class="serves">INV-6</code></p>
+      <p>The export G5 and G6 ask for, one journey across the whole workstream, and the record the owner closes the spine with.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>awsf metrics export</code> writes <code>awsf.route-metrics/v1</code> JSON Lines (a header line with schema, <code>extractedAt</code>, the rate card's <code>checkedAt</code>, the row count and the rows' sha256, then one role-row per line) under <code>&lt;state root&gt;/exports/route-metrics/</code>; it refuses a path outside the state root and a name matching <code>/manifest|receipt/i</code>, and prints the path and digest</li>
+        <li><code class="status">[]</code> <code>CLI_COMMANDS</code> gains <code>metrics export</code> and the cheatsheet's <code>commands</code> list gains it in the same change</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — green at the base SHA and after</li>
+        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/journeys/metrics-workstream.test.ts</code> — one synthetic state root with a shift, a build-review, a blocked run and a replay: projection, an attribution, the API payload, the advisory, the export, and the export re-read equal to the API rows</li>
+        <li><code class="status">[]</code> <code>npm test</code> — all four layers green in one invocation, with <code>git status --porcelain</code> clean afterwards</li>
+        <li><code class="status">[]</code> The closing record is returned for the owner's bookkeeping commit: each task's final state and landing SHA, gate counts, frame deviations, Questionable outcomes, and the spine checklist evidence</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass.
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== GLOBAL VALIDATION ===== -->
+  <section id="validation">
+    <h2>Validation Commands</h2>
+    <p>Execute these commands to validate the entire plan is complete. Each runs offline against synthetic data unless it says otherwise.</p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> <code>npm run test:unit</code> — green at every milestone's base SHA and at the closing HEAD; the ticket/plan sync fence pairs this plan with <code>specs/tickets/awsf-v2-w18-route-metrics/</code> and checks ids, milestones, states, <code>depends_on</code>, <code>serves</code> and Section B byte-identity</li>
+      <li><code class="status">[]</code> <code>npm run typecheck</code> and <code>npm run lint</code> — exit 0</li>
+      <li><code class="status">[]</code> <code>npm run dash:build</code> — exit 0</li>
+      <li><code class="status">[]</code> <code>npm test</code> — unit, contract, simulation and journeys green in one invocation, <code>git status --porcelain</code> clean afterwards</li>
+      <li><code class="status">[]</code> <code>awsf shift plan awsf-v2-w18-route-metrics --milestone Mx</code> — admits each milestone at the calls and raises the Execution table states, before its shift starts</li>
+      <li><code class="status">[]</code> The builders' commits across W18 touch nothing under <code>core/src/state/</code>, <code>core/src/observability/migrations/</code>, <code>docs/driving/</code> or <code>AGENTS.md</code> (0007 is the owner's <span class="gate">G18-M</span>), and no tracked basename matches <code>/manifest|receipt/i</code></li>
+      <li><code class="status">[]</code> No task id, attempt id, session id or machine path appears in this plan, its build prompts, its tickets or the frame index (invariant 1)</li>
+      <li><code class="status">[]</code> <code>awsf metrics --started-before 2026-09-26T23:16:19Z</code> on the owner's database reproduces F1's 46 runs, 62 role-rows, 8 routes and 10 cells and F7's 6 refuted claims, or each difference is explained by a definition in task 2 (owner-run, read-only)</li>
+    </ul>
+    <div class="loop">
+      🔁 <strong>The plan is not complete until every box is checked and every command passes. If for some reason a step is not possible to complete, mark it with [f] and move on if possible.</strong>
+    </div>
+  </section>
+
+  <!-- ===== QUESTIONABLES ===== -->
+  <section id="questionables">
+    <h2>Questionables</h2>
+    <p>Eight choices, each the owner's, <strong>all decided on 2026-09-26</strong> through an exported <code>plan-sota-review v1</code> block (8 verdicts, no proposed statuses, no annotations): seven took the recommendation, and <strong>Q1 took the owner-authored migration</strong>, applied as gate <span class="gate">G18-M</span>, DD1 and task 1. Each entry keeps its full option set and reasoning, so the road not taken stays readable. None of them reopens D1–D6.</p>
+    <figure>
+      <pre class="mermaid">
+flowchart LR
+  B["builder boundary<br/>core, test, dashboard, prompts"]
+  B --> MIG["migrations dir<br/>protected"]
+  B --> CS["docs/cheatsheet.html"]
+  B --> DR["docs/driving<br/>protected"]
+  B --> CFG["awsf.config.yaml<br/>protected"]
+  MIG -. "Q1 owner commit" .-> GM["G18-M"]
+  CS -. "Q2 widen" .-> GA["G18-A"]
+  DR -. "Q3 verbs" .-> GA
+  DR -. "Q4 avoid" .-> OK2["shift plan readout"]
+  CFG -. "after M4" .-> GB["G18-B"]
+      </pre>
+      <figcaption>Where W18's code meets files the shift builder cannot write, and the resolution the owner chose for each. One fence is avoided by design; the others take one owner commit each.</figcaption>
+    </figure>
+
+    <details data-review-options="Read-time, no migration|Owner-authored migration 0007|Unprotect the migrations dir">
+      <summary><span class="qdecided">DECIDED</span> Q1 — Route, effort and effort source per phase: a migration, or read-time resolution? <em>(M1)</em></summary>
+      <span class="decided"><b>Decided 2026-09-26: Owner-authored migration 0007.</b> Not the recommendation. Applied as gate G18-M, DD1 and task 1.</span>
+      <p class="qa-answer"><strong>Why it is open.</strong> The design suggested migration 0007. <code>core/src/observability/migrations/**</code> is in <code>policy.protected_paths</code>, so the shift builder cannot write it, and <code>awsf grant</code> cannot help: it looks up an agent named after the phase key, and a shift's phase is <code>t01-build</code>, so it refuses every shift phase before any protected check.</p>
+      <p class="qa-answer"><strong>Read-time, no migration (recommended).</strong> F2 shows the resolution is exact for the whole journal: every override lives in a <code>route_resolution</code> event and every older phase resolves from its snapshot. The projector already chose events over columns for route provenance. Cost: JSON extraction at query time over a few hundred phases, trivial at today's scale. <strong>Owner-authored migration 0007</strong> before M1: three nullable columns on <code>phases</code>, <code>PRAGMA user_version = 7</code>, and the terminal-version assertions moved in the same commit (<code>core/test/unit/observability/sqlite.test.ts</code>: a test title and five assertions; <code>migration-0004.test.ts</code>: two. <code>quota/snapshot-stop.test.ts</code> reads the live version and needs no change); task 1 then writes the columns from the projector. It buys indexed columns and costs an owner commit plus a projector change. <strong>Unprotecting the directory</strong> weakens a boundary for every future run and is not recommended.</p>
+      <span class="rec"><b>Applied:</b> gate <span class="gate">G18-M</span> carries the DDL and the terminal-version pins; DD1 and task 1 now have the projector fill the columns and <code>awsf db rebuild</code> backfill them; M1's shift waits for that commit.</span>
+    </details>
+
+    <details data-review-options="Widen builder writes, keep it|Widen for W18, revert at close|Owner commit per command">
+      <summary><span class="qdecided">DECIDED</span> Q2 — How a new CLI command reaches <code>docs/cheatsheet.html</code> in the same candidate <em>(T03, T06, T13, T17)</em></summary>
+      <span class="decided"><b>Decided 2026-09-26: Widen builder writes, keep it.</b> As recommended; part of G18-A.</span>
+      <p class="qa-answer"><strong>Why it is open.</strong> The <code>commands</code> fact class must equal <code>CLI_COMMANDS</code> in both directions, so a candidate that adds a command without the cheatsheet line is red at its own tests gate. The builder's <code>writes</code> do not include <code>docs/</code>, and a shift has no documenter phase. Four W18 tickets add a command.</p>
+      <p class="qa-answer"><strong>Widen builder writes by <code>docs/cheatsheet.html</code> and keep it (recommended).</strong> One line in <span class="gate">G18-A</span>. The reconciliation fence keeps every builder edit to that file honest in both directions, and every later workstream that adds a command meets the same problem W17's G17 met. <strong>Widen for W18 and revert at close</strong> is the same with a second owner commit. <strong>An owner commit per command</strong> means the builder cannot register its own command, so the CLI is untestable end to end inside the shift, four times.</p>
+      <span class="rec"><b>If not the recommendation:</b> tasks 3, 6, 13 and 17 leave their command unregistered, and each milestone's landing gains an owner commit that registers it and edits the cheatsheet together.</span>
+    </details>
+
+    <details data-review-options="Pre-commit both verbs in G18-A|Add each verb after its milestone lands|No guard verbs">
+      <summary><span class="qdecided">DECIDED</span> Q3 — Guarding <code>awsf attribute</code> and <code>awsf prove</code> from Marimba <em>(T03, T13)</em></summary>
+      <span class="decided"><b>Decided 2026-09-26: Pre-commit both verbs in G18-A.</b> As recommended.</span>
+      <p class="qa-answer"><strong>Why it is open.</strong> Both are owner acts (D4, D3). Marimba is kept from owner acts by verb in <code>delegation-guard.sh</code> and <code>marimba-guard-rules.mts</code>, both under protected <code>docs/driving/**</code>, and the cheatsheet's <code>owner-acts</code> list must equal the guard's loop.</p>
+      <p class="qa-answer"><strong>Pre-commit both verbs in <span class="gate">G18-A</span> (recommended).</strong> Checked: no test ties a guard verb to an existing command, so denying <code>awsf prove</code> before it exists is harmless and leaves no window. <strong>After each milestone lands</strong> leaves a window in which the command exists and Marimba is not denied it. <strong>No verbs</strong> relies on the interactive-terminal check, which the spine's D5 says is a terminal-shape test and not an authorization boundary.</p>
+      <span class="rec"><b>If not the recommendation:</b> nothing in the tickets changes; only the timing of the owner's guard edit does.</span>
+    </details>
+
+    <details data-review-options="Print from awsf shift plan|Plus a one-line cookbook pointer|A CONTRACT.md section">
+      <summary><span class="qdecided">DECIDED</span> Q4 — Where Marimba's preflight advisory lives <em>(T16)</em></summary>
+      <span class="decided"><b>Decided 2026-09-26: Print from awsf shift plan.</b> As recommended; no docs/driving edit.</span>
+      <p class="qa-answer"><strong>Why it is open.</strong> The design put a preflight block in Marimba's surface. <code>docs/driving/**</code> is protected, and <code>CONTRACT.md</code> is at 119 of 120 lines and 995 of 1100 words under its budget meta-test.</p>
+      <p class="qa-answer"><strong>Print it from <code>awsf shift plan</code> (recommended).</strong> The owner's drive handoff already has Marimba run that command at preflight and report it, so the block reaches the owner with no documentation change. <strong>Plus a one-line pointer</strong> to <code>awsf metrics --advise</code> in <code>docs/driving/skills/awsf/cookbooks/select_a_route.md</code>, an owner commit after M5, helps non-shift tasks. <strong>A contract section</strong> would force cutting other contract text to fit.</p>
+      <span class="rec"><b>If not the recommendation:</b> task 16 is unchanged; the owner adds the documentation after M5 lands.</span>
+    </details>
+
+    <details data-review-options="Unchanged: metrics never write RouteEvaluation|Add a digest-cited observed-dataset source|Admit local run ids">
+      <summary><span class="qdecided">DECIDED</span> Q5 — Observed-run evidence in <code>RouteEvaluation</code> <em>(no task unless changed)</em></summary>
+      <span class="decided"><b>Decided 2026-09-26: Unchanged: metrics never write RouteEvaluation.</b> As recommended.</span>
+      <p class="qa-answer"><strong>Why it is open.</strong> <code>RouteEvaluationSourceSchema</code> already has <code>kind: "observed-run"</code> but requires an <code>https://</code> URL, and the schema has no score field. Local runs have no such URL.</p>
+      <p class="qa-answer"><strong>Unchanged (recommended).</strong> D5 keeps routing a per-attempt <code>--route</code> the owner types, so W18 never writes <code>routing.phase_routes</code> or an evaluation, and the schema keeps its meaning. <strong>A digest-cited source</strong> (<code>kind: "observed-dataset"</code>, the export's sha256 and schema version, no URL, no run id) would let the owner record a durable route with its evidence; it is a small schema change in M5 plus a test. <strong>Local run ids</strong> would put run identifiers into committed configuration, which invariant 1 is written to prevent.</p>
+      <span class="rec"><b>If not the recommendation:</b> task 17 gains the schema change and its tests; the ticket count is unchanged.</span>
+    </details>
+
+    <details data-review-options="Compose the command in the Run view|A second POST route">
+      <summary><span class="qdecided">DECIDED</span> Q6 — D4's "one click" when the dashboard may not write <em>(T09)</em></summary>
+      <span class="decided"><b>Decided 2026-09-26: Compose the command in the Run view.</b> As recommended.</span>
+      <p class="qa-answer"><strong>Why it is open.</strong> The design shows a one-click override. <code>no-write-route.test.ts</code> allows exactly one POST route, archive, and an owner act needs an interactive owner at a terminal, which a browser request cannot prove.</p>
+      <p class="qa-answer"><strong>Compose the command (recommended).</strong> The Run view shows the heuristic, the recorded override, and five pills that build the exact <code>awsf attribute</code> command with a copy button. It costs the owner one paste. <strong>A second POST route</strong> requires amending the fence, and a click would become an owner act with no owner check behind it.</p>
+      <span class="rec"><b>If not the recommendation:</b> task 9 gains a route and a fence amendment, and task 3's owner check needs a second, weaker path.</span>
+    </details>
+
+    <details data-review-options="Land refused, owner cancels each|Leave replays at AWAITING_OWNER|A bulk owner act">
+      <summary><span class="qdecided">DECIDED</span> Q7 — How a replay attempt ends <em>(T12, T13)</em></summary>
+      <span class="decided"><b>Decided 2026-09-26: Land refused, owner cancels each.</b> As recommended.</span>
+      <p class="qa-answer"><strong>Why it is open.</strong> A <code>prove</code> attempt reaches <code>AWAITING_OWNER</code> like any T2 attempt. The only human edges out are landing and cancelling, and the state machine is protected.</p>
+      <p class="qa-answer"><strong>Land refused, the owner cancels each (recommended).</strong> Uses the existing <code>awsf cancel</code>, and <code>awsf prove</code> prints the command. D3's suite is 40 cancels. <strong>Leaving them</strong> costs nothing now and clutters the owner queue, <code>awsf status</code> and <code>awsf gc</code> listings indefinitely. <strong>A bulk owner act</strong> (cancel every replay of one item under one confirmation) is a new owner act, a guard verb and a cheatsheet line.</p>
+      <span class="rec"><b>If not the recommendation:</b> task 13 either filters replays from the sessions queue or gains a bulk act with its own guard verb.</span>
+    </details>
+
+    <details data-review-options="Builder authors, owner approves at M4's gate|Owner authors the five defects|Mine them from real escapes later">
+      <summary><span class="qdecided">DECIDED</span> Q8 — Who plants the five seeded defects <em>(T11)</em></summary>
+      <span class="decided"><b>Decided 2026-09-26: Builder authors, owner approves at M4's gate.</b> As recommended.</span>
+      <p class="qa-answer"><strong>Why it is open.</strong> The suite measures reviewer routes, including Claude routes, and the M4 builder is Claude. A defect planted by the same model family may be easier, or harder, for that family to spot.</p>
+      <p class="qa-answer"><strong>The builder authors them to the five named classes and the owner approves them at M4's gate (recommended).</strong> The classes are fixed by this plan, each defect is small and reviewable, and the owner reads five patches before funding 40 runs. <strong>The owner authors them</strong>, removing the bias at an hour of owner time; task 11 then ships the format, the scorer and fixtures only. <strong>Mining real escapes</strong> needs escapes, and the journal has recorded none yet.</p>
+      <span class="rec"><b>If not the recommendation:</b> task 11 ships two synthetic fixture items only, and the five real items become an owner commit before the D3 suite.</span>
+    </details>
+  </section>
+
+  <!-- ===== NOTES ===== -->
+  <section id="notes">
+    <h2>Notes</h2>
+
+    <h3>The design, and what the build does not honour</h3>
+    <p>The prototype's sections are the specification: findings, metric catalog, benchmark mapping, method, governance G1–G6, learning roadmap L1–L5, milestones and decisions. Everything in the prototype's app frame is built, with five recorded departures (overrides O1–O5 in the frame index): no palette picker in the nav (the dashboard already has one in Settings); the archive control keeps its current form; the attribution override is a composed command, not a click (Q6); the frames' numbers are not targets; and seven palettes are supported where the frames show three. Two further items are named here rather than built:</p>
+    <ul>
+      <li><strong>Escapes</strong> ("a landed run later reworked or continued by a fix task") are marked <em>new</em> in the catalog and need a signal the journal does not carry cleanly yet. Continuations exist (<code>continues_task</code>), but nothing says a continuation was a fix. Not built; a later task class of <code>fix</code> would make it derivable.</li>
+      <li><strong>Handoff quality</strong> (build success downstream of a planner route with the builder held fixed) needs designed experiments, not production rows. Not built; the proving ground's build items can carry it later.</li>
+      <li><strong>L1–L5</strong> run outside the runtime on exported rows by the design's own statement. W18 ships the export (G5, G6) and nothing that trains or samples.</li>
+    </ul>
+
+    <h3>Risks</h3>
+    <table>
+      <thead><tr><th>Risk</th><th>Why it is real</th><th>What this plan does</th></tr></thead>
+      <tbody>
+        <tr><td><strong>R1</strong> reduced review independence</td><td>Every W18 build and review runs on Anthropic by the owner's decision, so each attempt needs <code>awsf degrade-review</code> and its review is same-provider.</td><td>Recorded on every attempt's journal by that act. The reviewer runs at Opus high with each ticket's DO NOT list; the owner reads each candidate at <code>AWAITING_OWNER</code>; M4's suite is the first evidence of which reviewer routes catch what.</td></tr>
+        <tr><td><strong>R2</strong> over-reading thin cells</td><td>F1: no cell ranks. A tidy table invites ranking anyway.</td><td>Depth, hollow marks, "insufficient evidence" verdicts, and a recommendation rule that needs overlap and five settled rows.</td></tr>
+        <tr><td><strong>R3</strong> sequencing</td><td>A shift started while another waits builds without its code; a commit on <code>main</code> while a candidate waits breaks the fast-forward.</td><td>The Execution section's loop: land, then bookkeeping, then the next milestone.</td></tr>
+        <tr><td><strong>R4</strong> a failed shift</td><td>Three tickets leave one correction; a retried shift carries its spent calls and cannot start.</td><td>Re-drive as a new task with <code>--continues</code>. M3 and M4 carry a raise of 2.</td></tr>
+        <tr><td><strong>R5</strong> quota exhaustion</td><td><code>routing.quota_stop</code> is not set, so an exhausted window fails a phase instead of pausing it.</td><td>Marimba reports <code>awsf quota</code> at every preflight. Not changed by W18.</td></tr>
+        <tr><td><strong>R6</strong> stale prices</td><td>Prices move (GPT-5.6 Sol went from $5 / $30 to $4 / $20 within weeks).</td><td><code>checkedAt</code> is shown beside every ≈ list $ total; updating the card is a one-file change.</td></tr>
+        <tr><td><strong>R7</strong> list price understates Claude caching</td><td>The card prices cache writes at the 5-minute rate; a 1-hour write bills 2× input, and usage events do not split the two.</td><td>Named on the card as a limitation. It biases ≈ list $ down for Claude rows only, so cross-provider comparisons carry a note.</td></tr>
+        <tr><td><strong>R8</strong> visual fidelity cannot be proven by the builder</td><td>The managed sandbox renders no browser.</td><td>The builder opens every frame (the gate checks it) and returns a deviation table; the owner compares in Chrome at <code>AWAITING_OWNER</code>, with Marimba serving a fresh build.</td></tr>
+        <tr><td><strong>R9</strong> <code>production-run.ts</code> blast radius</td><td>Task 12 adds a review mode to a file past 3,000 lines that every run passes through.</td><td>The mode is taken only for a <code>prove</code> attempt with a host seed producer; every existing refusal is re-asserted in tests; M4 runs at xhigh with a raise.</td></tr>
+        <tr><td><strong>R10</strong> seeded-defect bias</td><td>Q8.</td><td>The owner approves the five patches before funding the suite.</td></tr>
+        <tr><td><strong>R12</strong> the migration lands before its writer</td><td><span class="gate">G18-M</span> adds columns that stay NULL until M1's projector fills them and the owner rebuilds.</td><td>Every reader treats a NULL route as unresolved, never as a value; the owner runs <code>awsf db rebuild</code> once after M1 lands; the suite runs at G18-M's HEAD before M1.</td></tr>
+        <tr><td><strong>R11</strong> the owner's data in a frame</td><td>The prototype and frames embed real run ids and task names.</td><td>They stay ignored; the committed index carries hashes, paths and provenance only; fixtures are synthetic.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Measured in this authoring session, and how</h3>
+    <ul>
+      <li><strong>Baseline.</strong> <code>npm run test:unit</code> at <code>ccc03a8</code>: 2228 of 2228 passed, exit 0, 1487 s, before any file was written.</li>
+      <li><strong>F8.</strong> A read-only <code>node:sqlite</code> query of the owner's database compared each multi-call role's <code>agent_sessions.input_tokens</code> with its usage events per run: 17 of 17 equal the last run.</li>
+      <li><strong>F2's dates.</strong> <code>git log -S</code>: route provenance in <code>b47b2a7</code> (2026-09-06), per-attempt overrides in <code>a192160</code> (2026-09-10). Agent phases by day: none from 2026-09-09 to 2026-09-25; all five on 2026-09-26 carry a route event.</li>
+      <li><strong>Rate card.</strong> The design's Claude rows agree with the Claude API reference's pricing table; the OpenAI rows are carried from the design with their source URL and are the owner's to confirm.</li>
+      <li><strong>The four corpus-count tests</strong> named in the authoring prompt (<code>plan-kind</code>, <code>api/routes</code>, <code>backlog</code>, <code>dashboard-backlog-selection</code>) were already rewritten as property checks before this session ("Not a count …"), so adding this plan moves no literal.</li>
+    </ul>
+
+    <h3>Rejected while authoring</h3>
+    <ul>
+      <li><strong>A server-computed lens.</strong> Every rail click would be a request, and the statistics would exist twice. DD3 instead.</li>
+      <li><strong>Filling <code>awsf.config.yaml</code> <code>pricing.models</code>.</strong> Protected, unread, spend-shaped. DD4 instead.</li>
+      <li><strong>Pre-populating <code>task_class</code> on W18's own tickets.</strong> The vocabulary is task 15's to settle; classifying existing tickets stays owner-side (D6).</li>
+      <li><strong>A builder corpus seeded from the nine landed runs now.</strong> D3 funds reviewers first, and a corpus built from runs would copy the owner's run data into the repository. Build items are supported by the format and authored later from plan tickets and landing SHAs, not from runs.</li>
+      <li><strong>A runs-per-route power calculator in the tab.</strong> F1's figure is useful prose; a live number would invite the ranking R2 warns about.</li>
+    </ul>
+
+    <h3>What would change this plan</h3>
+    <ul>
+      <li>Reversing any Q1–Q8 decision changes the tasks that Questionable names.</li>
+      <li>A projector change that makes <code>agent_sessions</code> accumulate tokens would let task 1 read one row per role, but DD2 stays correct either way.</li>
+      <li>A shift documenter phase (a W17 follow-up) would make Q2's widening unnecessary for later workstreams.</li>
+    </ul>
+
+    <figure>
+      <pre class="mermaid">
+flowchart LR
+  GM["G18-M"] --> M1["M1"]
+  GA["G18-A"] --> M1
+  M1 --> M2["M2"] --> M3["M3"] --> M4["M4"]
+  M4 --> GB["G18-B"] --> D3["D3 suite<br/>40 replays"]
+  M4 --> M5["M5"]
+  D3 -. "evidence for" .-> M5
+  M5 --> CLOSE["spine M18 [x]<br/>owner, at landing"]
+      </pre>
+      <figcaption>The whole drive. G18-M and G18-A precede any build and G18-B follows M4, all owner commits. The D3 suite can run before or after M5; the advisory reads whatever evidence exists when it is asked.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ===== AMENDMENTS ===== -->
+  <section id="amendments">
+    <h2>Amendments</h2>
+    <p class="sub">Append-only history of changes made after this plan was first authored.</p>
+    <details open>
+      <summary>2026-09-26 — owner review applied: all eight Questionables decided; Q1 takes an owner-authored migration</summary>
+      <p>An exported <code>plan-sota-review v1</code> block (exported 2026-09-27T02:01Z, the owner's evening of 2026-09-26) carried <strong>8 verdicts, no proposed statuses and no annotations</strong>. No status marker moved and no code was written.</p>
+      <p><strong>Q2–Q8 took the recommendation</strong>, so their tickets are unchanged: the builder may write <code>docs/cheatsheet.html</code> and the guard gains <code>attribute</code> and <code>prove</code> (<span class="gate">G18-A</span>); the advisory prints from <code>awsf shift plan</code>; <code>RouteEvaluation</code> is untouched; the Run view composes the attribution command; replays are refused at landing and cancelled by the owner; the builder plants the five defects and the owner approves them.</p>
+      <p><strong>Q1 took the owner-authored migration 0007 over read-time resolution.</strong> Applied in the same pass: a new gate <span class="gate">G18-M</span> in Execution with the exact DDL (five nullable columns on <code>phases</code>, <code>user_version</code> 7) and the seven terminal-version pins it moves; DD1 rewritten; task 1 now has the projector fill the columns from the route event or the snapshot, moves the pure resolver to <code>core/src/observability/phase-route.ts</code> so the projector imports nothing from <code>core/src/metrics/</code>, and stops if 0007 is absent; the fence table, the Validation row, the M1 figure and the drive figure follow; risk R12 names the window in which the columns exist and are empty. Tickets T01's prompt, the build prompts' Section A and the ticket README were regenerated from the one source, so Section B and the tickets stay byte-identical.</p>
+    </details>
+  </section>
+
+</main>
+
+<!-- ===== PLAN-SOTA REVIEW LAYER v1 — FIXED MACHINERY, COPY VERBATIM =====
+     Not a placeholder: reproduce this <style> + <script> pair exactly in every plan.
+     Annotations, Questionable verdicts, and proposed phase statuses persist to
+     localStorage (key: plan filename). The browser NEVER writes this file; canonical
+     []/[wip]/[x]/[f] markers stay agent-owned. Export produces a `plan-sota-review v1`
+     block (clipboard + visible box) and, when running under Lavish Editor, queues it
+     once via window.lavish.queuePrompt(). -->
+<style>
+  .rv-btn { font: 600 11px/1 system-ui, sans-serif; padding: 3px 9px; border-radius: 999px;
+    border: 1px solid var(--muted, #8884); background: transparent; color: var(--fg, inherit);
+    cursor: pointer; opacity: .55; vertical-align: middle; margin-left: 8px; }
+  .rv-btn:hover { opacity: 1; border-color: var(--accent, #7c6cf0); }
+  .rv-btn.rv-on { opacity: 1; background: var(--accent, #7c6cf0); color: var(--bg, #fff); border-color: transparent; }
+  .rv-note-box { display: block; margin: 8px 0; padding: 8px 12px; border: 1px dashed var(--accent, #7c6cf0);
+    border-radius: 8px; font-size: 13px; min-height: 1.5em; background: color-mix(in srgb, var(--accent, #7c6cf0) 6%, transparent); outline: none; }
+  .rv-note-box:empty::before { content: attr(data-ph); opacity: .5; font-style: italic; }
+  .rv-note-box[hidden] { display: none; }
+  .rv-verdict { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 10px 0 2px; }
+  .rv-verdict-tag { font: 700 10px/1 system-ui, sans-serif; letter-spacing: .08em; opacity: .6; margin-right: 2px; }
+  .rv-status-chip { font: 600 11px/1 ui-monospace, monospace; margin-left: 10px; padding: 3px 9px;
+    border-radius: 999px; border: 1px dotted var(--muted, #8884); background: transparent;
+    color: var(--fg, inherit); cursor: pointer; opacity: .6; }
+  .rv-status-chip:hover { opacity: 1; }
+  .rv-status-chip.rv-on { opacity: 1; border-style: solid; border-color: var(--accent, #7c6cf0); color: var(--accent, #7c6cf0); }
+  #rv-drawer { position: fixed; right: 16px; bottom: 16px; z-index: 9999; font: 13px/1.45 system-ui, sans-serif;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  #rv-pill { font: 700 12px/1 system-ui, sans-serif; padding: 10px 16px; border-radius: 999px; border: none;
+    cursor: pointer; background: var(--accent, #7c6cf0); color: var(--bg, #fff); box-shadow: 0 4px 16px #0004; }
+  #rv-panel { width: min(420px, calc(100vw - 32px)); max-height: 60vh; overflow: auto; padding: 14px;
+    border-radius: 12px; border: 1px solid var(--muted, #8884); background: var(--bg, #fff);
+    color: var(--fg, inherit); box-shadow: 0 8px 32px #0005; }
+  #rv-panel h4 { margin: 0 0 8px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; opacity: .7; }
+  #rv-list { margin: 0 0 10px; padding: 0; list-style: none; font-size: 12px; }
+  #rv-list li { padding: 3px 0; border-bottom: 1px solid #8882; overflow-wrap: anywhere; }
+  #rv-out { width: 100%; min-height: 140px; margin-top: 10px; font: 11px/1.5 ui-monospace, monospace;
+    border: 1px solid var(--muted, #8884); border-radius: 8px; padding: 8px; background: transparent; color: inherit; }
+  #rv-msg { font-size: 11px; opacity: .75; margin-top: 6px; }
+  @media print { #rv-drawer { display: none; } }
+</style>
+<script>
+(function () {
+  'use strict';
+  var FILE = decodeURIComponent(location.pathname.split('/').pop() || 'plan.html');
+  var KEY = 'plan-sota-review:' + FILE;
+  var LEGACY_KEY = 'planf3-review:' + FILE; // pre-rename state; read once, never written
+  var PROPOSE = ['', '[]', '[wip]', '[x]', '[f]'];
+  var state = { a: {}, v: {}, s: {} }, persisted = true;
+  try { state = JSON.parse(localStorage.getItem(KEY) || localStorage.getItem(LEGACY_KEY) || 'null') || state; } catch (e) { persisted = false; }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); persisted = true; }
+    catch (e) { persisted = false; }
+    refresh();
+  }
+  function el(tag, cls, txt) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (txt) n.textContent = txt;
+    if (tag === 'button') { n.type = 'button'; n.setAttribute('data-lavish-action', ''); }
+    return n;
+  }
+  function clean(t) { return String(t || '').replace(/\|/g, '/').replace(/\s*\r?\n\s*/g, ' >> ').trim(); }
+  var registry = []; // {key, label, kind: 'section'|'phase'|'q'}
+
+  function noteBox(key, host, placeholder) {
+    var box = el('div', 'rv-note-box');
+    box.contentEditable = 'true';
+    box.setAttribute('data-ph', placeholder || 'Type your note for the agent…');
+    box.hidden = !(state.a[key]);
+    if (state.a[key]) box.textContent = state.a[key];
+    box.addEventListener('input', function () {
+      var t = box.textContent.trim();
+      if (t) state.a[key] = t; else delete state.a[key];
+      save();
+    });
+    host.appendChild(box);
+    return box;
+  }
+  function annotable(key, label, heading, host, kind) {
+    registry.push({ key: key, label: label, kind: kind });
+    var box = noteBox(key, host);
+    heading.insertAdjacentElement('afterend', box);
+    var btn = el('button', 'rv-btn' + (state.a[key] ? ' rv-on' : ''), '✎ note');
+    btn.addEventListener('click', function () {
+      box.hidden = !box.hidden;
+      if (!box.hidden) box.focus();
+    });
+    heading.appendChild(btn);
+    box.addEventListener('input', function () { btn.classList.toggle('rv-on', !!state.a[key]); });
+  }
+
+  // Sections
+  Array.prototype.forEach.call(document.querySelectorAll('main > section[id]'), function (sec) {
+    var h = sec.querySelector('h2'); if (!h) return;
+    annotable('#' + sec.id, h.textContent.trim(), h, sec, 'section');
+  });
+  // Phases: annotation + proposed-status chip
+  Array.prototype.forEach.call(document.querySelectorAll('#phases .phase'), function (ph, i) {
+    var h = ph.querySelector('h3'); if (!h) return;
+    var key = 'phase-' + (i + 1);
+    var label = h.textContent.replace(/^\s*\[[^\]]*\]\s*/, '').trim();
+    annotable(key, label, h, ph, 'phase');
+    var chip = el('button', 'rv-status-chip' + (state.s[key] ? ' rv-on' : ''));
+    chip.textContent = state.s[key] ? 'propose ' + state.s[key] : 'propose…';
+    chip.title = 'Cycle a PROPOSED status (exported as feedback — the file marker is only changed by the agent)';
+    chip.addEventListener('click', function () {
+      var next = PROPOSE[(PROPOSE.indexOf(state.s[key] || '') + 1) % PROPOSE.length];
+      if (next) state.s[key] = next; else delete state.s[key];
+      chip.textContent = next ? 'propose ' + next : 'propose…';
+      chip.classList.toggle('rv-on', !!next);
+      save();
+    });
+    h.appendChild(chip);
+  });
+  // Questionables: verdict / option buttons + note
+  Array.prototype.forEach.call(document.querySelectorAll('#questionables details'), function (d, i) {
+    var key = 'q-' + (i + 1);
+    var summary = d.querySelector('summary');
+    var label = summary ? summary.textContent.trim().slice(0, 120) : key;
+    registry.push({ key: key, label: label, kind: 'q' });
+    var opts = (d.getAttribute('data-review-options') || '').split('|').map(function (s) { return s.trim(); }).filter(Boolean);
+    if (!opts.length) opts = ['APPROVE', 'REJECT', 'REVISE', 'DEFER'];
+    var row = el('div', 'rv-verdict');
+    row.appendChild(el('span', 'rv-verdict-tag', 'YOUR CALL'));
+    opts.forEach(function (opt) {
+      var b = el('button', 'rv-btn' + ((state.v[key] || {}).c === opt ? ' rv-on' : ''), opt);
+      b.addEventListener('click', function () {
+        if ((state.v[key] || {}).c === opt) { delete state.v[key]; }
+        else { state.v[key] = { c: opt }; }
+        Array.prototype.forEach.call(row.querySelectorAll('.rv-btn'), function (x) {
+          x.classList.toggle('rv-on', x.textContent === ((state.v[key] || {}).c || null));
+        });
+        qbox.hidden = !state.v[key] && !state.a[key];
+        save();
+      });
+      row.appendChild(b);
+    });
+    d.appendChild(row);
+    var qbox = noteBox(key, d, 'Why / what to change instead…');
+    if (state.v[key]) qbox.hidden = false;
+  });
+
+  // Drawer
+  var drawer = el('div'); drawer.id = 'rv-drawer';
+  var panel = el('div'); panel.id = 'rv-panel'; panel.hidden = true;
+  var pill = el('button'); pill.id = 'rv-pill';
+  pill.addEventListener('click', function () { panel.hidden = !panel.hidden; });
+  var list = el('ul'); list.id = 'rv-list';
+  var actions = el('div');
+  var exportBtn = el('button', 'rv-btn rv-on', 'Export Feedback');
+  var clearBtn = el('button', 'rv-btn', 'Clear review');
+  var out = el('textarea'); out.id = 'rv-out'; out.readOnly = true; out.hidden = true;
+  var msg = el('div'); msg.id = 'rv-msg';
+  var head = el('h4', null, 'Review — pending feedback');
+  actions.appendChild(exportBtn); actions.appendChild(clearBtn);
+  panel.appendChild(head); panel.appendChild(list); panel.appendChild(actions);
+  panel.appendChild(out); panel.appendChild(msg);
+  drawer.appendChild(panel); drawer.appendChild(pill);
+  document.body.appendChild(drawer);
+
+  function findLabel(key) {
+    for (var i = 0; i < registry.length; i++) if (registry[i].key === key) return registry[i].label;
+    return key;
+  }
+  function refresh() {
+    var n = Object.keys(state.a).length + Object.keys(state.v).length + Object.keys(state.s).length;
+    pill.textContent = '✎ Review (' + n + ')';
+    list.textContent = '';
+    Object.keys(state.v).forEach(function (k) { list.appendChild(el('li', null, '[verdict] ' + findLabel(k) + ' → ' + state.v[k].c)); });
+    Object.keys(state.s).forEach(function (k) { list.appendChild(el('li', null, '[status] ' + findLabel(k) + ' → propose ' + state.s[k])); });
+    Object.keys(state.a).forEach(function (k) { list.appendChild(el('li', null, '[note] ' + findLabel(k) + ': ' + state.a[k].slice(0, 90))); });
+    if (!n) list.appendChild(el('li', null, 'Nothing yet — click ✎ note on any section, a verdict on a Questionable, or propose… on a phase.'));
+    if (!persisted) msg.textContent = '⚠ localStorage unavailable — review state lives only in this tab.';
+  }
+  function buildExport() {
+    var L = ['plan-sota-review v1', 'plan: ' + FILE, 'title: ' + clean(document.title), 'exported: ' + new Date().toISOString(), ''];
+    var vk = Object.keys(state.v), sk = Object.keys(state.s), ak = Object.keys(state.a);
+    L.push('## verdicts');
+    vk.length ? vk.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | ' + clean(state.v[k].c) + ' | note: ' + (clean(state.a[k]) || '-'));
+    }) : L.push('- (none)');
+    L.push('', '## statuses');
+    sk.length ? sk.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | propose ' + state.s[k]);
+    }) : L.push('- (none)');
+    L.push('', '## annotations');
+    var solo = ak.filter(function (k) { return !state.v[k]; });
+    solo.length ? solo.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | ' + clean(state.a[k]));
+    }) : L.push('- (none)');
+    return L.join('\n');
+  }
+  exportBtn.addEventListener('click', function () {
+    var text = buildExport();
+    out.hidden = false; out.value = text;
+    out.focus(); out.select();
+    function done(m) { msg.textContent = m; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done('Copied — paste it into your next agent session.'); },
+        function () { done('Clipboard blocked — copy from the box below.'); });
+    } else {
+      try { done(document.execCommand('copy') ? 'Copied — paste it into your next agent session.' : 'Clipboard blocked — copy from the box below.'); }
+      catch (e) { done('Clipboard blocked — copy from the box below.'); }
+    }
+    if (window.lavish && typeof window.lavish.queuePrompt === 'function') {
+      window.lavish.queuePrompt(text, { tag: 'plan-sota-review', queueKey: 'plan-sota-review' });
+      msg.textContent += ' Also queued to the agent via Lavish.';
+    }
+  });
+  clearBtn.addEventListener('click', function () {
+    if (!confirm('Clear all review state for this plan?')) return;
+    state = { a: {}, v: {}, s: {} };
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    location.reload();
+  });
+  refresh();
+})();
+</script>
+
+<!-- Mermaid runtime — renders every <pre class="mermaid"> block. The only external reference in the file. -->
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    // Mirrors the :root Forest dark palette so the diagrams share the plan's visual identity.
+    themeVariables: {
+      darkMode: true,
+      background: '#051F20',
+      primaryColor: '#163832',
+      primaryTextColor: '#DAF1DE',
+      primaryBorderColor: '#235347',
+      lineColor: '#8EB69B',
+      secondaryColor: '#0B2B26',
+      tertiaryColor: '#0B2B26',
+      clusterBkg: '#0B2B26',
+      clusterBorder: '#235347',
+      edgeLabelBackground: '#0B2B26',
+      actorBkg: '#163832',
+      actorBorder: '#ADB9EE',
+      actorTextColor: '#DAF1DE',
+      signalColor: '#8EB69B',
+      signalTextColor: '#DAF1DE',
+      noteBkgColor: '#0B2B26',
+      noteTextColor: '#DAF1DE',
+      noteBorderColor: '#ADB9EE',
+      labelBoxBkgColor: '#163832',
+      labelTextColor: '#DAF1DE',
+      loopTextColor: '#DAF1DE',
+      fontFamily: '"Segoe UI","Helvetica Neue",system-ui,sans-serif'
+    }
+  });
+</script>
+</body>
+</html>
