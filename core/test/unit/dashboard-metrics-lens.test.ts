@@ -62,9 +62,13 @@ test("an untouched lens has a clean URL, and every part of the state round-trips
     run: null,
     route: "claude/opus@high",
     off: { source: ["proving-ground"], role: ["planner", "designer"], effort: [NULL_TOKEN], project: ["a,b"] },
+    frontier: { role: "builder", y: "clean", x: "median-minutes" },
+    untested: true,
+    group: "run",
   };
   const hash = metricsRouteHash(state);
-  assert.equal(hash, "#/metrics?view=frontier&route=claude/opus@high&x.role=planner,designer&x.effort=~&x.project=a%2Cb");
+  assert.equal(hash, "#/metrics?view=frontier&route=claude/opus@high&x.role=planner,designer&x.effort=~&x.project=a%2Cb" +
+    "&group=run&f.role=builder&f.y=clean&f.x=median-minutes&untested=1");
   assert.deepEqual(parseMetricsRoute(hash), state);
 
   const run = withRun(DEFAULT_METRICS_ROUTE, "f1");

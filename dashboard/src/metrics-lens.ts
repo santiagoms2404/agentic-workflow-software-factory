@@ -1,6 +1,8 @@
 import type { MetricsResponse, MetricsRoleRow, MetricsRun, RateCardRow } from "../shared/types.ts";
 import {
   EVIDENCE_SOURCES,
+  FRONTIER_X,
+  FRONTIER_Y,
   LENS_FACETS,
   STATE_GROUPS,
   applyLens,
@@ -9,6 +11,8 @@ import {
   routeKey,
   stats,
   type FacetValue,
+  type FrontierX,
+  type FrontierY,
   type Lens,
   type LensFacet,
   type MetricsRow,
@@ -23,6 +27,7 @@ import type { SessionFilterEntry } from "./session-filters.ts";
  *
  * `#/metrics?view=frontier&route=claude/opus@high&x.role=planner,designer`
  * `#/metrics/run/<sessionId>?x.effort=low`
+ * `#/metrics?view=ledger&group=run&f.role=builder&f.y=clean&untested=1`
  *
  * A facet's parameter lists the values switched OFF, not the ones on. The
  * facets draw on open vocabularies (models, workflows, projects), and a value
@@ -72,6 +77,19 @@ export const STATE_TONE: Readonly<Record<StateGroup, string>> = {
   BLOCKED: "var(--red)",
 };
 
+/** How the Ledger groups its rows. Task 9 draws it; a Matrix tile opens it grouped by run. */
+export const LEDGER_GROUPS = ["route", "role", "model", "effort", "workflow", "project", "run"] as const;
+export type LedgerGroup = (typeof LEDGER_GROUPS)[number];
+
+/** The Frontier's pills. `role` is `null` until the owner picks one: the view then shows the lens's busiest role. */
+export interface FrontierState {
+  readonly role: string | null;
+  readonly y: FrontierY;
+  readonly x: FrontierX;
+}
+
+export const DEFAULT_FRONTIER: FrontierState = Object.freeze({ role: null, y: "first-pass", x: "list-per-row" });
+
 /** `null` facet values (an effort or a model nobody recorded) travel in the URL as this token. */
 export const NULL_TOKEN = "~";
 
@@ -97,12 +115,18 @@ export interface MetricsRouteState {
   readonly route: string | null;
   /** Values switched off, per facet, as URL tokens (`NULL_TOKEN` for `null`). */
   readonly off: Readonly<Partial<Record<FacetId, readonly string[]>>>;
+  readonly frontier: FrontierState;
+  /** The Matrix also lists routes offered but never run. */
+  readonly untested: boolean;
+  readonly group: LedgerGroup;
 }
 
 /** Production only: the proving ground is a separate evidence source (DD8), and M4 adds it. */
 export const DEFAULT_OFF: Readonly<Partial<Record<FacetId, readonly string[]>>> = Object.freeze({ source: ["proving-ground"] });
 
-export const DEFAULT_METRICS_ROUTE: MetricsRouteState = Object.freeze({ view: "matrix", run: null, route: null, off: DEFAULT_OFF });
+export const DEFAULT_METRICS_ROUTE: MetricsRouteState = Object.freeze({
+  view: "matrix", run: null, route: null, off: DEFAULT_OFF, frontier: DEFAULT_FRONTIER, untested: false, group: "route",
+});
 
 const FACET_IDS: readonly FacetId[] = [...RAIL_FACETS, "source"];
 
@@ -146,6 +170,12 @@ function readView(value: string | null): MetricsView {
   return (METRICS_VIEWS as readonly string[]).includes(value ?? "") ? value as MetricsView : "matrix";
 }
 
+/** A parameter from a closed vocabulary; anything else falls back rather than blanking the view. */
+function readOne<T extends string>(params: Map<string, string>, key: string, allowed: readonly T[], fallback: T): T {
+  const value = params.has(key) ? safeDecode(params.get(key)!) : null;
+  return (allowed as readonly string[]).includes(value ?? "") ? value as T : fallback;
+}
+
 export function parseMetricsRoute(hash: string): MetricsRouteState {
   const split = hash.includes("?") ? hash.indexOf("?") : hash.length;
   const path = hash.slice(0, split);
@@ -158,11 +188,19 @@ export function parseMetricsRoute(hash: string): MetricsRouteState {
     if (value !== undefined) off[id] = readList(value);
   }
   const route = params.has("route") ? safeDecode(params.get("route")!) : null;
+  const role = params.has("f.role") ? safeDecode(params.get("f.role")!) : null;
   return {
     view: run !== null ? "run" : readView(params.has("view") ? safeDecode(params.get("view")!) : null),
     run,
     route: route !== null && route.length > 0 ? route : null,
     off,
+    frontier: {
+      role: role !== null && role.length > 0 ? role : null,
+      y: readOne(params, "f.y", FRONTIER_Y, DEFAULT_FRONTIER.y),
+      x: readOne(params, "f.x", FRONTIER_X, DEFAULT_FRONTIER.x),
+    },
+    untested: params.get("untested") === "1",
+    group: readOne(params, "group", LEDGER_GROUPS, DEFAULT_METRICS_ROUTE.group),
   };
 }
 
@@ -183,6 +221,11 @@ export function metricsRouteHash(state: MetricsRouteState): string {
     const off = state.off[id] ?? [];
     if (!sameList(off, DEFAULT_OFF[id])) parts.push(`x.${id}=${off.map(encodeURIComponent).join(",")}`);
   }
+  if (state.group !== DEFAULT_METRICS_ROUTE.group) parts.push(`group=${state.group}`);
+  if (state.frontier.role !== null) parts.push(`f.role=${encodeURIComponent(state.frontier.role)}`);
+  if (state.frontier.y !== DEFAULT_FRONTIER.y) parts.push(`f.y=${state.frontier.y}`);
+  if (state.frontier.x !== DEFAULT_FRONTIER.x) parts.push(`f.x=${state.frontier.x}`);
+  if (state.untested) parts.push("untested=1");
   return parts.length === 0 ? path : `${path}?${parts.join("&")}`;
 }
 
@@ -231,6 +274,20 @@ export function withSelection(
   return { ...state, route: null, off: { ...state.off, [facet]: off } };
 }
 
+/**
+ * A Matrix tile's click: the role facet narrowed to the tile's role, then the
+ * tile's route focused (`withSelection` drops any focus, so it comes second),
+ * and the Ledger opened grouped by run.
+ */
+export function focusTile(state: MetricsRouteState, role: string, routeKey: string, roleValues: readonly string[]): MetricsRouteState {
+  const narrowed = withSelection(state, "role", roleValues, [role]);
+  return { ...withView({ ...narrowed, route: routeKey }, "ledger"), group: "run" };
+}
+
+export function withFrontier(state: MetricsRouteState, change: Partial<FrontierState>): MetricsRouteState {
+  return { ...state, frontier: { ...state.frontier, ...change } };
+}
+
 /** The module's `Lens` for the rows: every value they carry, minus the ones switched off. */
 export function lensOf(rows: readonly MetricsRow[], state: MetricsRouteState, facets: readonly LensFacet[] = METRICS_FACETS): Lens {
   return {
@@ -269,7 +326,8 @@ function modelOrder(rateCard: readonly RateCardRow[], rows: readonly MetricsRow[
 
 export type Provider = "anthropic" | "openai";
 
-function providerOf(stated: string | null): Provider | null {
+/** A stated provider (`anthropic`, `openai`, `openai-codex`) as the glyph's provider. */
+export function providerOf(stated: string | null): Provider | null {
   if (stated === null) return null;
   return stated.startsWith("openai") ? "openai" : stated.startsWith("anthropic") ? "anthropic" : null;
 }

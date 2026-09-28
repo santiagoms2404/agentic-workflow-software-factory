@@ -3,6 +3,8 @@ import { computed, ref } from "vue";
 import type { MetricsResponse } from "../../shared/types.ts";
 import { listPrice } from "../../shared/rate-card.ts";
 import { EVIDENCE_SOURCES } from "../../shared/route-metrics.ts";
+import MetricsFrontier from "../components/MetricsFrontier.vue";
+import MetricsMatrix from "../components/MetricsMatrix.vue";
 import SessionFilterRow from "../components/SessionFilterRow.vue";
 import { usePolling } from "../composables/usePolling.ts";
 import { shortSessionId } from "../display.ts";
@@ -12,20 +14,24 @@ import {
   VIEW_LABEL,
   countTile,
   facetOptions,
+  focusTile,
   metricsRouteHash,
   resetLens,
   routeFocusNote,
   rowsInLens,
   selectedValues,
   summaryStats,
+  withFrontier,
   withSelection,
   withView,
   type FacetId,
+  type FrontierState,
   type MetricsRouteState,
   type MetricsView,
   type RailFacet,
   type RailOption,
 } from "../metrics-lens.ts";
+import { buildMatrix } from "../metrics-matrix.ts";
 import { selectAllState, toggleFilterValue, type SessionFilterEntry } from "../session-filters.ts";
 
 const props = defineProps<{
@@ -87,6 +93,7 @@ const ladders = computed(() => RAIL_FACETS.map((id) => {
   const selected = selectedValues(props.route, id, values);
   return { id, title: RAIL_TITLE[id], options, values, selected, all: selectAllState(values, selected) };
 }));
+const matrix = computed(() => (payload.value === null ? null : buildMatrix(lensRows.value, payload.value, listPrice, props.route.untested)));
 const selectedRun = computed(() => payload.value?.runs.find((run) => run.sessionId === props.route.run) ?? null);
 
 function go(next: MetricsRouteState): void {
@@ -101,6 +108,13 @@ function toggleSource(value: string): void {
 }
 function showView(view: MetricsView): void {
   go(withView(props.route, view));
+}
+function openTile(role: string, routeKey: string): void {
+  const roles = ladders.value.find((ladder) => ladder.id === "role")?.values ?? [role];
+  go(focusTile(props.route, role, routeKey, roles));
+}
+function changeFrontier(change: Partial<FrontierState>): void {
+  go(withFrontier(props.route, change));
 }
 /** The slot hands back the ladder's own entry; these are the rail's, with their dot or glyph. */
 function option(entry: SessionFilterEntry): RailOption {
@@ -194,9 +208,26 @@ function option(entry: SessionFilterEntry): RailOption {
           <p v-else-if="route.run" class="metrics-note">Run {{ shortSessionId(route.run) }} is not in the projection.</p>
           <p class="metrics-note">The run card, fact grid, phase strip and per-role table arrive with task 9.</p>
         </template>
+        <MetricsMatrix
+          v-else-if="route.view === 'matrix' && matrix"
+          :matrix="matrix"
+          :show-untested="route.untested"
+          :role-colors="roleColors"
+          @open="openTile"
+          @toggle-untested="go({ ...route, untested: !route.untested })"
+        />
+        <MetricsFrontier
+          v-else-if="route.view === 'frontier'"
+          :rows="lensRows"
+          :rate-card="rateCard"
+          :prior-labels="payload.priors.modelLabels"
+          :state="route.frontier"
+          :role-colors="roleColors"
+          @change="changeFrontier"
+        />
         <template v-else>
-          <h2 class="metrics-view-title">{{ route.view === "matrix" ? "Route × role" : VIEW_LABEL[route.view] }}</h2>
-          <p class="metrics-note">{{ lensRows.length }} role-rows in the lens. This view arrives with task {{ route.view === "ledger" ? 9 : 8 }}.</p>
+          <h2 class="metrics-view-title">{{ VIEW_LABEL[route.view] }}</h2>
+          <p class="metrics-note">{{ lensRows.length }} role-rows in the lens. This view arrives with task 9.</p>
         </template>
       </section>
     </div>
