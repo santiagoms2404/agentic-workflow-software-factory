@@ -50,6 +50,8 @@ export interface MetricsTokens {
   readonly cacheReadTokens: number | null;
   readonly cacheWriteTokens: number | null;
   readonly reasoningTokens: number | null;
+  /** Whether reasoning is already inside output. Absent reads as `unknown`, which prices none of it. */
+  readonly reasoningRelation?: string;
 }
 
 /** What this module reads of a role-row. Core's `RoleRow` satisfies it structurally. */

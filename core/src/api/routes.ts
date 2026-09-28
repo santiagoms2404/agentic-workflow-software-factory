@@ -34,6 +34,7 @@ import {
   type SessionRow,
 } from "../observability/queries.ts";
 import { buildEffectiveConfig } from "../config/effective-config.ts";
+import { buildMetricsPayload } from "../metrics/payload.ts";
 import type { AwsfConfig } from "../config/schema.ts";
 import type {
   ActivityPoint,
@@ -48,6 +49,7 @@ import type {
   GateSummary,
   HealthResponse,
   LifecycleState,
+  MetricsResponse,
   PhaseDetailResponse,
   PhaseStatus,
   PhaseSummary,
@@ -77,6 +79,7 @@ export const API_ROUTE_TABLE = Object.freeze([
   { method: "GET", path: "/api/v1/adapters", name: "adapters" },
   { method: "GET", path: "/api/v1/tickets", name: "tickets" },
   { method: "GET", path: "/api/v1/groups", name: "groups" },
+  { method: "GET", path: "/api/v1/metrics", name: "metrics" },
   { method: "POST", path: "/api/v1/sessions/:id/archive", name: "archive" },
 ] as const);
 
@@ -567,6 +570,11 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
       // claim a session with no decisions rather than no session at all.
       if (tree.revision === 0) throw new ApiRequestError(404, "group-not-found", "group not found");
       return jsonResponse(tree satisfies GroupTree);
+    }),
+    metrics: safely((request) => {
+      // Read-only and unfiltered: the tab and the CLI apply their lenses to this one payload.
+      searchParams(request, []);
+      return jsonResponse(buildMetricsPayload(readDb, { extractedAt: new Date().toISOString() }) satisfies MetricsResponse);
     }),
     adapters: safely(() => {
       const adapters: AdapterHealth[] = Object.entries(options.config.adapters).map(([id, entry]) => {

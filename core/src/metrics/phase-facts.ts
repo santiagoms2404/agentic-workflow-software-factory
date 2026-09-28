@@ -168,7 +168,7 @@ function latestPayloadByPhase(db: DatabaseSync, type: string): Map<string, strin
   return new Map(rows.map((row) => [row.phase_id, row.payload_json]));
 }
 
-function minutesBetween(startedAt: string | null, endedAt: string | null): number | null {
+export function minutesBetween(startedAt: string | null, endedAt: string | null): number | null {
   if (startedAt === null || endedAt === null) return null;
   const ms = Date.parse(endedAt) - Date.parse(startedAt);
   return Number.isFinite(ms) ? ms / 60_000 : null;

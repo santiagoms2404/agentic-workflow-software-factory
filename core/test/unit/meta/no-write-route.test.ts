@@ -12,6 +12,7 @@ const EXPECTED = [
   "GET /api/v1/adapters",
   "GET /api/v1/tickets",
   "GET /api/v1/groups",
+  "GET /api/v1/metrics",
   "POST /api/v1/sessions/:id/archive",
 ];
 

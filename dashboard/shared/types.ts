@@ -1,3 +1,5 @@
+import type { MetricsRoute, MetricsRow, StateGroup, ToolClass } from "./route-metrics.ts";
+
 export type LifecycleState =
   | "DRAFT"
   | "PREPARED"
@@ -483,4 +485,186 @@ export interface TicketSourceResponse {
   readonly ticket: string;
   /** Complete UTF-8 markdown file, including frontmatter fences. */
   readonly source: string;
+}
+
+/* -------------------------------------------------------------------------
+   Route metrics (W18): GET /api/v1/metrics.
+
+   Built by `core/src/metrics/payload.ts`, which assigns core's `RoleRow` and
+   run facts to these shapes, so a drift is a typecheck failure. A role-row
+   extends `MetricsRow`, so the tab passes the payload's rows straight to the
+   statistics module. Rows the module keeps out of rankings (INV-3) are here,
+   unfiltered, so the ledger can badge them.
+   ------------------------------------------------------------------------- */
+
+export type MetricsAttribution = "model" | "factory" | "environment" | "owner" | "unknown";
+export type MetricsEffortSource = "journal" | "config-phase-route" | "config-agent" | "unknown";
+export type MetricsReasoningRelation = "included-in-output" | "additive" | "unknown";
+
+export interface MetricsRoleRowRoute {
+  readonly adapter: string | null;
+  readonly provider: string | null;
+  readonly model: string | null;
+  readonly effort: string | null;
+}
+
+export interface MetricsRoleRowTokens {
+  readonly inputTokens: number | null;
+  readonly outputTokens: number | null;
+  readonly cacheReadTokens: number | null;
+  readonly cacheWriteTokens: number | null;
+  readonly reasoningTokens: number | null;
+  readonly reasoningRelation: MetricsReasoningRelation;
+  readonly usageEvents: number;
+}
+
+export interface MetricsRoleRow extends MetricsRow {
+  readonly taskId: string;
+  readonly attempt: number;
+  readonly route: MetricsRoleRowRoute;
+  readonly effortSource: MetricsEffortSource | null;
+  readonly routeMixed: boolean;
+  readonly identityProvenance: "stream-authoritative" | "route-attributed" | null;
+  readonly phases: number;
+  readonly failedHere: boolean;
+  readonly attribution: MetricsAttribution | null;
+  readonly attributionSource: "owner" | "heuristic" | null;
+  readonly heuristicAttribution: Exclude<MetricsAttribution, "owner"> | null;
+  readonly tokens: MetricsRoleRowTokens;
+  readonly costAuthority: CostAuthority;
+  readonly tier: number;
+  readonly planRef: string | null;
+  readonly reviewVerdict: string | null;
+  readonly ownerReentries: number;
+  readonly usageAuthority: UsageAuthority;
+  readonly startedAt: string;
+  readonly endedAt: string | null;
+}
+
+/** What an agent phase adds to a run phase: its route, identity, usage and tools. */
+export interface MetricsAgentPhase {
+  readonly route: MetricsRoleRowRoute & { readonly effortSource: MetricsEffortSource | null };
+  readonly requestedModel: string | null;
+  readonly resolvedModel: string | null;
+  readonly modelProvenance: "stream-authoritative" | "route-attributed" | null;
+  readonly turns: number;
+  readonly tokens: MetricsRoleRowTokens;
+  readonly tools: {
+    readonly calls: number;
+    readonly byClass: Readonly<Record<ToolClass, number>>;
+    readonly errors: number;
+  };
+}
+
+/** Every phase of a run, host phases included, in ordinal order. */
+export interface MetricsRunPhase {
+  readonly phaseId: string;
+  readonly key: string;
+  readonly ordinal: number;
+  readonly kind: "agent" | "code" | "engineer";
+  readonly owner: string;
+  readonly status: PhaseStatus;
+  readonly correctionCount: number;
+  readonly maxCorrections: number;
+  readonly errorCode: string | null;
+  readonly startedAt: string | null;
+  readonly endedAt: string | null;
+  /** `null` while the phase is open or never started. */
+  readonly minutes: number | null;
+  /** `null` for a host phase. */
+  readonly agent: MetricsAgentPhase | null;
+}
+
+export interface MetricsRun {
+  readonly sessionId: string;
+  readonly project: string;
+  readonly taskId: string;
+  readonly attempt: number;
+  readonly workflow: string;
+  readonly tier: number;
+  readonly planRef: string | null;
+  readonly lifecycleState: LifecycleState;
+  readonly stateGroup: StateGroup;
+  readonly reviewVerdict: string | null;
+  readonly ownerReentries: number;
+  readonly observabilityDegraded: boolean;
+  readonly usageAuthority: UsageAuthority;
+  readonly startedAt: string;
+  readonly endedAt: string | null;
+  /** The owner's latest `awsf attribute` record for this attempt. */
+  readonly ownerAttribution: { readonly cause: MetricsAttribution; readonly reason: string; readonly at: string } | null;
+  readonly phases: readonly MetricsRunPhase[];
+}
+
+export interface RateCardRow {
+  /** The model id exactly as a provider reports it answering. */
+  readonly model: string;
+  readonly label: string;
+  readonly provider: "anthropic" | "openai";
+  readonly tier: "state of the art" | "workhorse" | "lightweight";
+  /** USD per 1M tokens. */
+  readonly input: number;
+  /** USD per 1M tokens, at the 5-minute rate; 0 where the provider charges none. */
+  readonly cacheWrite: number;
+  readonly cacheRead: number;
+  readonly output: number;
+  readonly note: string | null;
+  /** ISO date the price was read from `source`. */
+  readonly checkedAt: string;
+  /** The https page the price was read from. */
+  readonly source: string;
+}
+
+export interface RateCard {
+  readonly checkedAt: string;
+  readonly rows: readonly RateCardRow[];
+  readonly limitations: readonly string[];
+}
+
+export interface BenchmarkScore {
+  readonly model: string;
+  readonly score: number;
+  /** The effort the score was reported at, when the source names one. */
+  readonly effort: string | null;
+}
+
+export interface BenchmarkPrior {
+  readonly id: string;
+  readonly name: string;
+  readonly tests: string;
+  /** The design's own wording of what the benchmark informs. */
+  readonly informs: string;
+  /** Roles whose cold-start prior this benchmark supplies. */
+  readonly roles: readonly string[];
+  readonly transfer: "high" | "medium" | "low" | "none" | "high as a method";
+  /** Only a `percent` benchmark yields a prior mean; an Elo or an index yields none. */
+  readonly scale: "percent" | "elo" | "index";
+  readonly scores: readonly BenchmarkScore[];
+  readonly summary: string;
+  /** Pages or named sources the scores come from. */
+  readonly sources: readonly string[];
+  readonly checkedAt: string;
+}
+
+export interface BenchmarkPriors {
+  readonly checkedAt: string;
+  readonly benchmarks: readonly BenchmarkPrior[];
+  /** The matrix's row label per model id. */
+  readonly modelLabels: Readonly<Record<string, string>>;
+}
+
+/** A route offered but never run. It carries a public prior and no local evidence. */
+export interface UntestedRoute extends MetricsRoute {
+  readonly label: string;
+  readonly prior: string;
+}
+
+export interface MetricsResponse {
+  readonly schema: "awsf.route-metrics/v1";
+  readonly extractedAt: string;
+  readonly runs: readonly MetricsRun[];
+  readonly roleRows: readonly MetricsRoleRow[];
+  readonly rateCard: RateCard;
+  readonly priors: BenchmarkPriors;
+  readonly untestedRoutes: readonly UntestedRoute[];
 }
