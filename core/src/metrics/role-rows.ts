@@ -18,10 +18,14 @@ import type { ModelResolutionProvenance } from "../contracts/normalized-events.t
 import type { RouteEffort } from "../contracts/route-selection.ts";
 import { PHASE_TERMINAL_STATES } from "../state/phase-machine.ts";
 import {
+  ATTRIBUTIONS,
   blockedAgentPhase,
-  heuristicAttribution,
+  effectiveAttribution,
   type Attribution,
   type AttributionRun,
+  type AttributionSource,
+  type EffectiveAttribution,
+  type OwnerAttribution,
   type RunPhase,
   type RunTransition,
 } from "./attribution.ts";
@@ -70,6 +74,8 @@ export interface RunFacts extends AttributionRun {
   readonly agentPhases: readonly PhaseFacts[];
   readonly gates: readonly GateFact[];
   readonly envelopes: readonly EnvelopeFact[];
+  /** The owner's latest `awsf attribute` record for this attempt, or `null`. */
+  readonly ownerAttribution: OwnerAttribution | null;
 }
 
 export interface RoleRoute {
@@ -109,6 +115,11 @@ export interface RoleRow {
   readonly failedHere: boolean;
   /** Failed here, and the effective attribution is `model`. Only this counts against a route. */
   readonly blockedHere: boolean;
+  /** The run's attribution in force: the owner's override where recorded, else the heuristic. `null` unless BLOCKED. */
+  readonly attribution: Attribution | null;
+  readonly attributionSource: AttributionSource | null;
+  /** The heuristic's answer, carried beside any override. */
+  readonly heuristicAttribution: Exclude<Attribution, "owner"> | null;
   readonly tokens: PhaseTokens;
   readonly costAuthority: RoleSessionFacts["costAuthority"];
   readonly tools: Readonly<Record<ToolClass, number>>;
@@ -290,7 +301,7 @@ function sum(phases: readonly PhaseFacts[], value: (phase: PhaseFacts) => number
   return phases.reduce((total, phase) => total + value(phase), 0);
 }
 
-function roleRow(run: RunFacts, role: string, phases: readonly PhaseFacts[], attribution: Attribution | null): RoleRow {
+function roleRow(run: RunFacts, role: string, phases: readonly PhaseFacts[], attribution: EffectiveAttribution): RoleRow {
   const ids = new Set(phases.map((phase) => phase.phaseId));
   const gates = run.gates.filter((gate) => ids.has(gate.phaseId));
   const envelopes = run.envelopes.filter((envelope) => ids.has(envelope.phaseId));
@@ -316,7 +327,10 @@ function roleRow(run: RunFacts, role: string, phases: readonly PhaseFacts[], att
     firstPass: isFirstPass(phases, group),
     cleanCompletion: isCleanCompletion(phases, gates, group),
     failedHere: failed,
-    blockedHere: blockedHere(failed, attribution),
+    blockedHere: blockedHere(failed, attribution.attribution),
+    attribution: attribution.attribution,
+    attributionSource: attribution.source,
+    heuristicAttribution: attribution.heuristic,
     tokens: sumTokens(phases),
     costAuthority: session?.costAuthority ?? "unavailable",
     tools: Object.freeze(tools) as Readonly<Record<ToolClass, number>>,
@@ -353,8 +367,8 @@ export function buildRoleRows(runs: readonly RunFacts[]): RoleRow[] {
     for (const phase of [...run.agentPhases].sort((a, b) => a.ordinal - b.ordinal)) {
       if (phaseRan(phase)) append(byRole, phase.owner, phase);
     }
-    // T03's owner override takes precedence over the heuristic; until then the heuristic is effective.
-    const attribution = heuristicAttribution(run);
+    // The owner's journaled override takes precedence over the heuristic.
+    const attribution = effectiveAttribution(run, run.ownerAttribution);
     return [...byRole].map(([role, phases]) => roleRow(run, role, phases, attribution));
   });
 }
@@ -391,6 +405,27 @@ function groupBy<T extends { session_id: string }, R>(rows: readonly T[], map: (
   return grouped;
 }
 
+/**
+ * The latest owner attribution per session: `attribution` events rows in
+ * insertion order, which is the task file's order live and after a rebuild. A
+ * row whose cause is outside the vocabulary is skipped, never guessed at.
+ */
+function ownerAttributions(db: DatabaseSync): Map<string, OwnerAttribution> {
+  const rows = db.prepare(`SELECT session_id, payload_json FROM events
+    WHERE type = 'attribution' ORDER BY session_id, event_row`).all() as unknown as Array<{ session_id: string; payload_json: string }>;
+  const latest = new Map<string, OwnerAttribution>();
+  for (const row of rows) {
+    const payload = JSON.parse(row.payload_json) as { cause?: unknown; reason?: unknown; at?: unknown };
+    if (!(ATTRIBUTIONS as readonly unknown[]).includes(payload.cause)) continue;
+    latest.set(row.session_id, {
+      cause: payload.cause as Attribution,
+      reason: typeof payload.reason === "string" ? payload.reason : "",
+      at: typeof payload.at === "string" ? payload.at : "",
+    });
+  }
+  return latest;
+}
+
 /** Reads every run as `RunFacts`, sessions in start order. Read-only SQL on the caller's connection. */
 export function readRunFacts(db: DatabaseSync): RunFacts[] {
   const sessions = db.prepare(`SELECT session_id, project_slug, task_id, attempt, workflow_id, risk_tier, plan_ref,
@@ -414,6 +449,7 @@ export function readRunFacts(db: DatabaseSync): RunFacts[] {
       FROM envelopes ORDER BY session_id, phase_id, correction_round`).all() as unknown as Array<{
     session_id: string; phase_id: string; correction_round: number; producer_status: "success" | "failure" | null;
   }>, (row): EnvelopeFact => ({ phaseId: row.phase_id, round: row.correction_round, producerStatus: row.producer_status }));
+  const owners = ownerAttributions(db);
   const agentPhases = new Map<string, PhaseFacts[]>();
   for (const fact of readPhaseFacts(db)) append(agentPhases, fact.sessionId, fact);
 
@@ -436,6 +472,7 @@ export function readRunFacts(db: DatabaseSync): RunFacts[] {
     agentPhases: agentPhases.get(session.session_id) ?? [],
     gates: gates.get(session.session_id) ?? [],
     envelopes: envelopes.get(session.session_id) ?? [],
+    ownerAttribution: owners.get(session.session_id) ?? null,
   }));
 }
 

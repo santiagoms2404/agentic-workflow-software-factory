@@ -20,9 +20,11 @@ import { scanJournal } from "../persistence/replay.ts";
 import type { NormalizedEvent } from "../contracts/normalized-events.ts";
 import type { TaskState } from "../state/task-machine.ts";
 import { closeDatabase, integrityProblems, openDatabase, type DatabaseSync } from "./sqlite.ts";
+import type { AttributionRecord } from "../contracts/attribution-record.ts";
 import {
   createSession,
   projectAttemptStatus,
+  projectAttribution,
   projectEvent,
   type AttemptStatusProjection,
   type SessionInit,
@@ -120,6 +122,12 @@ export interface RebuildOptions {
   /** The live database path, e.g. `<state-root>/awsf.db`. */
   targetPath: string;
   sources: readonly RebuildSource[];
+  /**
+   * Every task's owner attributions, each task's in file order. They live
+   * beside the attempt journals rather than in one, so no source replays them;
+   * they are projected once every session exists.
+   */
+  attributions?: readonly AttributionRecord[];
   migrationsDir?: string;
   /** Injectable so the retained file's name is deterministic in tests. */
   stamp?: () => string;
@@ -305,6 +313,19 @@ export async function rebuildDatabase(options: RebuildOptions): Promise<RebuildR
         );
       }
       if (outcome.applied) projected += 1;
+    }
+    // After every journal, so every session an attribution names already
+    // exists. In file order, so the latest record for an attempt is still the
+    // latest row, as it was live.
+    for (const record of options.attributions ?? []) {
+      try {
+        projectAttribution(db, record);
+      } catch (error) {
+        return refuse(
+          `projection failed replaying the attribution of ${record.project}/${record.taskId} attempt ${record.attempt}: ` +
+            `${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
     }
 
     const problems = integrityProblems(db);

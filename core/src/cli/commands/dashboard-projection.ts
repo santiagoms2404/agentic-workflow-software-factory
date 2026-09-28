@@ -3,7 +3,8 @@ import {
   assertAdvancementPermitted,
   observabilityDegraded,
 } from "../../observability/rebuild.ts";
-import { projectAttemptStatus, projectTaskRelation } from "../../observability/projector.ts";
+import { projectAttemptStatus, projectAttribution, projectTaskRelation } from "../../observability/projector.ts";
+import type { AttributionRecord } from "../../contracts/attribution-record.ts";
 import { openDatabase, type DatabaseSync } from "../../observability/sqlite.ts";
 import type { AttemptAdvancementGuard, AttemptProjector } from "./attempt.ts";
 import { toAttemptStatusProjection } from "./attempt-projection.ts";
@@ -17,6 +18,8 @@ export interface DashboardProjection {
    * project step and no cursor to advance.
    */
   projectRelation(relation: { project: string; taskId: string; continuesTask: string; reason: string; at: string }): void;
+  /** Projects one owner attribution. Task-scoped storage like a relation, so it has no cursor either. */
+  projectAttribution(record: AttributionRecord): void;
   readonly assertAdvancement: AttemptAdvancementGuard;
   /** Barrier precondition: projection must acknowledge registration before GO. */
   assertLaunchPermitted(sessionId: string): void;
@@ -69,6 +72,15 @@ export function createDashboardProjection(
         // projection that cannot be written makes the screen stale, never the
         // record wrong, and `awsf db rebuild` reads the same file this did.
         notice(`sqlite-projection-failed: ${relation.project}/${relation.taskId} declared a continuation that is journaled but not projected; run \`awsf db rebuild\`.`);
+      }
+    },
+    projectAttribution(record): void {
+      try {
+        projectAttribution(database(), record);
+      } catch {
+        // Durable first, projected second, exactly as a relation: the record is
+        // in the task's own journal, and `awsf db rebuild` reads that file.
+        notice(`sqlite-projection-failed: ${record.project}/${record.taskId} attempt ${record.attempt} has an attribution that is journaled but not projected; run \`awsf db rebuild\`.`);
       }
     },
     assertAdvancement(sessionId, to): void {

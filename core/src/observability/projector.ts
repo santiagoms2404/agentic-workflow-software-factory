@@ -10,6 +10,7 @@ import { isPersistableKind } from "../contracts/normalized-events.ts";
 import type { DatabaseSync } from "./sqlite.ts";
 import type { AttemptEvidence, RecordedAgentPurpose } from "./attempt-evidence.ts";
 import type { RouteSelectionProvenance } from "../contracts/route-selection.ts";
+import { attributionRecordDigest, type AttributionRecord } from "../contracts/attribution-record.ts";
 import { resolvePhaseRoute } from "./phase-route.ts";
 import {
   scrubCredentialString,
@@ -224,6 +225,32 @@ export function projectTaskRelation(
       .run(`${row.session_id}:task-relation:${relation.at}`, row.session_id,
         stringifyRedacted({ taskId, continuesTask: relation.continuesTask, reason: relation.reason }), relation.at);
   }
+}
+
+/**
+ * Projects one owner attribution (`awsf attribute`) onto the session of the
+ * attempt it names: one session-level `events` row of type `attribution`.
+ *
+ * Like `projectTaskRelation`, it has no attempt journal behind it, so there is
+ * no `source_seq` to advance: the record lives in the task's
+ * `attributions.jsonl`, and `awsf db rebuild` replays that file through this
+ * same function. The row's id is derived from the record, so projecting it
+ * twice is a no-op and two different records never collide. The latest row
+ * for a session is the attribution in force; earlier rows stay.
+ *
+ * An attempt with no projected session gets no row. The record is still
+ * durable in the task's file, and the next rebuild places it.
+ */
+export function projectAttribution(db: DatabaseSync, record: AttributionRecord): void {
+  const row = db.prepare("SELECT session_id FROM sessions WHERE project_slug = ? AND task_id = ? AND attempt = ?")
+    .get(scrubCredentialString(record.project), scrubCredentialString(record.taskId), record.attempt) as
+    | { session_id: string } | undefined;
+  if (row === undefined) return;
+  db.prepare(`INSERT OR IGNORE INTO events
+    (event_id, session_id, phase_id, first_source_seq, last_source_seq, type, name,
+     payload_json, started_at) VALUES (?, ?, NULL, 1, 1, 'attribution', 'owner attribution recorded', ?, ?)`)
+    .run(`${row.session_id}:attribution:${attributionRecordDigest(record)}`, row.session_id,
+      stringifyRedacted({ attempt: record.attempt, cause: record.cause, reason: record.reason, at: record.at }), record.at);
 }
 
 export function createSession(db: DatabaseSync, init: SessionInit): void {

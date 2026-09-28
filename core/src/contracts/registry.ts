@@ -4,6 +4,7 @@ import {
   ARCHITECTURE_REVIEW_OUTPUT_SCHEMA_ID,
   type ArchitectureReviewOutput,
 } from "./architecture-review-output.ts";
+import { AttributionRecordSchema, ATTRIBUTION_RECORD_SCHEMA_ID } from "./attribution-record.ts";
 import { BuildOutputSchema, BUILD_OUTPUT_SCHEMA_ID, type BuildOutput } from "./build-output.ts";
 import { DesignContextSchema, DESIGN_CONTEXT_SCHEMA_ID, type DesignContext } from "./design-context.ts";
 import {
@@ -92,6 +93,7 @@ export const ENVELOPE_SCHEMA_IDS = Object.keys(ENVELOPE_SCHEMAS) as EnvelopeSche
  */
 export const RECORD_SCHEMAS = {
   [SHIFT_MANIFEST_SCHEMA_ID]: ShiftManifestSchema,
+  [ATTRIBUTION_RECORD_SCHEMA_ID]: AttributionRecordSchema,
 } as const;
 
 export class UnknownEnvelopeSchemaError extends Error {

@@ -10,6 +10,7 @@ import { discoverAttempts, rebuildDatabase, type RebuildReport, type RebuildSour
 import { prepareDatabaseForReadonly } from "../../observability/sqlite.ts";
 import { journalFilePath } from "../../persistence/platform-paths.ts";
 import { declaredContinuation } from "../../persistence/task-relations.ts";
+import { readTaskAttributions } from "../../persistence/task-attributions.ts";
 import { toAttemptStatusProjection } from "./attempt-projection.ts";
 import { readAttempt, withLegacyDefaults, type AttemptEvent } from "./attempt.ts";
 
@@ -67,7 +68,12 @@ export async function rebuildCommand(stateRoot: string): Promise<RebuildReport> 
       },
     };
   }));
-  return rebuildDatabase({ targetPath: join(stateRoot, "awsf.db"), sources });
+  // `awsf attribute` writes no attempt record either: the override is about a
+  // sealed attempt, so it lives beside the attempt directories. Every task that
+  // has a journaled attempt is read once, tasks in path order.
+  const taskRoots = [...new Set(dirs.map((dir) => join(dir, "..")))].sort();
+  const attributions = (await Promise.all(taskRoots.map(readTaskAttributions))).flat();
+  return rebuildDatabase({ targetPath: join(stateRoot, "awsf.db"), sources, attributions });
 }
 
 /** Candidates are deliberately only named. No delete operation exists in this module. */

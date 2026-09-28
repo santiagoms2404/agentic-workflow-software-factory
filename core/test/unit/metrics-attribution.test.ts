@@ -4,6 +4,7 @@ import {
   HEURISTIC_ATTRIBUTION_RULES,
   blockedAgentPhase,
   blockingPhase,
+  effectiveAttribution,
   heuristicAttribution,
   type Attribution,
   type AttributionRun,
@@ -182,4 +183,21 @@ test("the blocking phase is the last FAILED phase, and a host phase's block land
   const beforeAnyAgent = blocked([phase("t01-brief", 1, "engineer", "host", FAILED, "Error"), phase("t01-build", 2, "agent", "builder", "QUEUED")]);
   assert.equal(blockedAgentPhase(beforeAnyAgent), null);
   assert.equal(heuristicAttribution(beforeAnyAgent), "factory");
+});
+
+test("the owner's override wins over the heuristic, which stays beside it", () => {
+  const run = blocked([phase("t01-build", 1, "agent", "builder", FAILED, "PermissionBreach")]);
+  assert.deepEqual(effectiveAttribution(run, null), { attribution: "model", source: "heuristic", heuristic: "model" });
+  assert.deepEqual(
+    effectiveAttribution(run, { cause: "owner", reason: "the ticket asked for the protected path", at: "2026-09-28T10:00:00.000Z" }),
+    { attribution: "owner", source: "owner", heuristic: "model" },
+  );
+});
+
+test("a run that is not BLOCKED has no attribution, even with an override on record", () => {
+  const landed: AttributionRun = { lifecycleState: "LANDED", phases: [phase("t01-build", 1, "agent", "builder")], transitions: [] };
+  assert.deepEqual(
+    effectiveAttribution(landed, { cause: "model", reason: "stray", at: "2026-09-28T10:00:00.000Z" }),
+    { attribution: null, source: null, heuristic: null },
+  );
 });

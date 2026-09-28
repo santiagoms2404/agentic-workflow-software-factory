@@ -7,9 +7,11 @@
 // Only a `model` block counts against a route (W18 F5, D4). The owner's
 // journaled override takes precedence over this value where one exists.
 
-/** The effective attribution's vocabulary. The heuristic never answers `owner`; only the owner's override can. */
-export const ATTRIBUTIONS = ["model", "factory", "environment", "owner", "unknown"] as const;
-export type Attribution = (typeof ATTRIBUTIONS)[number];
+import { ATTRIBUTION_CAUSES, type AttributionCause } from "../contracts/attribution-record.ts";
+
+/** The effective attribution's vocabulary, which is the owner record's. The heuristic never answers `owner`; only the owner's override can. */
+export const ATTRIBUTIONS = ATTRIBUTION_CAUSES;
+export type Attribution = AttributionCause;
 
 /** One phase of the run, host phases included, as the projection holds it. */
 export interface RunPhase {
@@ -123,4 +125,34 @@ export function heuristicAttribution(run: AttributionRun): Exclude<Attribution, 
   if (code === null) return "unknown";
   const rule = HEURISTIC_ATTRIBUTION_RULES.find((candidate) => candidate.code === code);
   return rule !== undefined && applies(rule, run, blocking) ? rule.attribution : "unknown";
+}
+
+/** The owner's journaled override for one run (`awsf attribute`): the latest record for its attempt. */
+export interface OwnerAttribution {
+  readonly cause: Attribution;
+  readonly reason: string;
+  readonly at: string;
+}
+
+export type AttributionSource = "owner" | "heuristic";
+
+export interface EffectiveAttribution {
+  /** The attribution in force. `null` for a run that is not BLOCKED. */
+  readonly attribution: Attribution | null;
+  readonly source: AttributionSource | null;
+  /** The heuristic's answer, kept beside any override so the two can be compared. */
+  readonly heuristic: Exclude<Attribution, "owner"> | null;
+}
+
+/**
+ * The owner's override where one exists, else the heuristic. Only a BLOCKED
+ * run has a block to attribute, so an override on any other run is ignored
+ * rather than trusted: `awsf attribute` refuses to write one.
+ */
+export function effectiveAttribution(run: AttributionRun, owner: OwnerAttribution | null): EffectiveAttribution {
+  const heuristic = heuristicAttribution(run);
+  if (heuristic === null) return { attribution: null, source: null, heuristic: null };
+  return owner === null
+    ? { attribution: heuristic, source: "heuristic", heuristic }
+    : { attribution: owner.cause, source: "owner", heuristic };
 }
