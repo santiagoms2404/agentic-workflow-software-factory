@@ -804,12 +804,13 @@ The WSL2 column is closed. **No native-Windows write parity is claimed.**
 
 ## Governance
 
-[`AGENTS.md`](AGENTS.md) lists twelve invariants any agent session working *on*
+[`AGENTS.md`](AGENTS.md) lists thirteen invariants any agent session working *on*
 this repository must not break — no `node:child_process` outside the transport
 broker, no `shell: true` anywhere, no SQLite writer outside the projector and
 its migrations, no credential-shaped value committed anywhere, no commit that
 names an agent as author or co-author, no status marker flipped for work a
-session did not complete, and a plan that never disagrees with its ticket set.
+session did not complete, a plan that never disagrees with its ticket set, and
+no owner act taken by the Delegate except under an owner lease that names it.
 Most are mechanically enforced by the meta-tests under
 [`core/test/unit/meta/`](core/test/unit/meta).
 

@@ -145,8 +145,8 @@ code.inv, code.ac, code.serves { color:var(--cyan); }
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-09-28</dd>
-        <dt>modified</dt>     <dd>2026-09-28 (authored, awaiting owner review), 2026-09-28 (owner review applied: Q16–Q20 decided as recommended)</dd>
-        <dt>commits</dt>      <dd>none yet (authored uncommitted for owner review)</dd>
+        <dt>modified</dt>     <dd>2026-09-28 (authored, awaiting owner review), 2026-09-28 (owner review applied: Q16–Q20 decided as recommended), 2026-09-28 (gate G19-A committed)</dd>
+        <dt>commits</dt>      <dd>d71b6b4 (plan authored and adopted), the G19-A commit that adds invariant 13</dd>
         <dt>agent name</dt>   <dd>claude-opus-5-5, claude-opus-5-5 (review applied)</dd>
         <dt>session id</dt>   <dd>not recorded (AGENTS.md invariant 1 keeps live session state out of every committed file)</dd>
         <dt>back refs</dt>    <dd>./awsf-v2-plan.html (§ Milestone M19 → W19, and its 2026-09-28 amendment adopting this workstream), ../AGENTS.md (the twelve invariants and the proposed invariant 13), ./awsf-v2-intent.md (decisions 3 and 5, which this plan revises by owner decision), ./awsf-v2-w17-shift.html (the shift this plan keeps running), ./awsf-v2-w18-route-metrics.html (the tab and route columns M8 builds on), ./awsf-v2-w07-quota-telemetry.html (the quota readout and its fence), the reference repository ../../ten-levels-of-jev at 777adaf (machine-local clone, IndyDevDan's "10 Levels of Jev") and its transcript ../../10_levels_of_JEV_in_agentic_engineering_IndyDevDan_transcript.txt (machine-local)</dd>
@@ -1046,6 +1046,11 @@ flowchart LR
       <summary>2026-09-28 — owner review applied: Q16–Q20 decided as recommended; no marker moved</summary>
       <p>An exported <code>plan-sota-review v1</code> block carried five verdicts, no proposed statuses and no annotations, and was applied in full. Every verdict took the recommendation: Marimba may start <code>awsf run</code> on a leased task (Q16); agent phases reach Jev through the host socket (Q17); decision records keep redacted bodies up to 16 KiB, else digests (Q18); if task 19's claude-route proof fails, the Jev tools and guard stay on pi-route roles (Q19); AWSF ships no default notify command (Q20).</p>
       <p>No section, task or ticket changed: the tickets were written against these recommendations. Every marker is still <code>[]</code>; a verdict is not a marker. The plan now has no open Questionable, so execution waits only on the owner's commit of this plan and gate <span class="gate">G19-A</span>.</p>
+    </details>
+    <details open>
+      <summary>2026-09-28 — gate G19-A committed: AGENTS.md invariant 13; no marker moved</summary>
+      <p>The owner authorized the session to commit this plan (d71b6b4) and gate <span class="gate">G19-A</span>. Invariant 13 lands in <code>AGENTS.md</code> in the same commit as this entry, with the Execution section's proposed text plus two sentences. One records its adoption as this plan's G19-A. The other says the three fences it names land with tasks 1, 8 and 10, and that until then it binds by its text alone, so the file claims no enforcement that does not yet exist. <code>README.md</code>'s Governance paragraph now counts thirteen invariants and names the new one.</p>
+      <p>Every marker is still <code>[]</code>: a gate is a prerequisite, not a task. Execution can start at T01.</p>
     </details>
   </section>
 

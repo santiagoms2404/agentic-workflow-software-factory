@@ -68,3 +68,15 @@ not a judgement call. Several are mechanically enforced by meta-tests under
     task coverage, milestone grouping, `state` against both the milestone
     marker and the task's own checklist, prompt and title integrity,
     `depends_on` ordering, and the frontmatter vocabularies.
+13. **The Delegate acts only under an owner lease, and never as the owner.**
+    An owner act runs from the owner's interactive terminal, or under an
+    owner-granted, task-scoped, revocable lease that names it. Delegated acts
+    are journaled as `actor: delegate` with their lease and decision ids. The
+    Delegate never lands, publishes, attests a journey, grants protected
+    content, attributes, or grants its own lease. A Jev answer is never a
+    BLOCKED reason source and never moves lifecycle state by itself. Only
+    `core/src/decision/jev-transport.ts` calls the Jev endpoint, and no agent
+    phase receives its credential. Adopted by the owner on 2026-09-28 as gate
+    G19-A of `specs/awsf-v2-w19-jev-delegate.html`. Enforced by the
+    jev-transport, delegate-authority and quota fence meta-tests as W19 lands
+    them (its tasks 1, 8 and 10); until then it binds by this text alone.
