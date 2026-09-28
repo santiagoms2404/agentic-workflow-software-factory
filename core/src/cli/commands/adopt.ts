@@ -7,6 +7,11 @@
 // explicit route (pausing for an owner grant if same-provider), then requires a
 // fresh owner journey and landing authorization. The target carries freshly
 // entered owner intent rather than the source request.
+//
+// When canonical HEAD has advanced past the source base, the target is pinned
+// instead to canonical HEAD and a host-written two-parent merge of the exact
+// source candidate over it (git/integration.ts). The source pair stays recorded
+// beside that integration pair, and gates and review measure the merge's diff.
 
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
@@ -20,7 +25,7 @@ import { writeSystemPromptFile } from "../../adapters/system-prompt-file.ts";
 import type { AwsfConfig } from "../../config/schema.ts";
 import { toConfigSnapshotJson } from "../../config/effective-config.ts";
 import type { EnvelopeBase } from "../../contracts/envelope-base.ts";
-import type { CandidateAdoptionEvidence, ShiftAdoptionSource } from "../../contracts/candidate-adoption.ts";
+import type { CandidateAdoptionEvidence, CandidateIntegration, ShiftAdoptionSource } from "../../contracts/candidate-adoption.ts";
 import type { AcceptedPhase } from "../../contracts/phase-recovery.ts";
 import { parseEnvelope } from "../../contracts/parse-envelope.ts";
 import { TEST_OUTPUT_TAIL_MAX_CHARS, type TestOutput } from "../../contracts/test-output.ts";
@@ -34,6 +39,13 @@ import { noProtectedPaths, writesWithinGlobs } from "../../gates/git-diff.ts";
 import { GateReport, type GateId } from "../../gates/interface.ts";
 import { assertClean, runGit, systemGitRunner, type GitResult } from "../../git/changes.ts";
 import { HOST_AUTHOR } from "../../git/commit.ts";
+import {
+  IntegrationRefused,
+  planIntegration,
+  verifyIntegrationCommit,
+  writeIntegrationCommit,
+  type IntegrationPlan,
+} from "../../git/integration.ts";
 import { createWorktree, seedWorktreePaths } from "../../git/worktrees.ts";
 import { scrubCredentialString } from "../../policy/redaction.ts";
 import type { AttemptEvidence, PhaseEvidenceRecord } from "../../observability/attempt-evidence.ts";
@@ -196,10 +208,22 @@ interface SealedCandidate {
   readonly sourceRecipe: WorkflowRecipe;
   /** Which of a source shift's tickets the candidate completes; null for a shipped source. */
   readonly shift: ShiftAdoptionSource | null;
+  /** The source base. */
   readonly baseSha: string;
+  /** The exact source candidate. */
   readonly candidateSha: string;
+  /** Canonical HEAD when inspected: the source base, or the head an integration merges onto. */
+  readonly canonicalHead: string;
+  /** Null when canonical HEAD is the source base; otherwise the merge still to be written. */
+  readonly integration: IntegrationPlan | null;
   readonly workerProvider: string;
   readonly summary: string;
+}
+
+/** The exact pair a target is pinned to: the source pair, or canonical HEAD and the host merge. */
+interface TargetPair {
+  readonly baseSha: string;
+  readonly candidateSha: string;
 }
 
 const DEFAULT_INFRASTRUCTURE: AdoptionCommandInfrastructure = {
@@ -363,9 +387,6 @@ export async function inspectSealedCandidate(
   if (baseSha !== source.baseSha || candidateSha !== completedSha) {
     throw new CandidateAdoptionRejected("recorded base or candidate does not resolve to its exact 40-hex commit");
   }
-  if (canonicalHead !== baseSha) {
-    throw new CandidateAdoptionRejected(`canonical HEAD is ${canonicalHead}, not the source base ${baseSha}`);
-  }
   if (git(["merge-base", "--is-ancestor", baseSha, candidateSha]).status !== 0 || baseSha === candidateSha) {
     throw new CandidateAdoptionRejected("candidate is not a non-empty descendant of its recorded base");
   }
@@ -380,6 +401,17 @@ export async function inspectSealedCandidate(
   }
   const paths = candidatePathsBetween(source.repository, baseSha, candidateSha);
   if (paths.length === 0) throw new CandidateAdoptionRejected("candidate changes no tracked path");
+  let integration: IntegrationPlan | null = null;
+  if (canonicalHead !== baseSha) {
+    try {
+      integration = planIntegration(source.repository, {
+        sourceBaseSha: baseSha, sourceCandidateSha: candidateSha, integrationBaseSha: canonicalHead,
+      }, git);
+    } catch (error) {
+      if (!(error instanceof IntegrationRefused)) throw error;
+      throw new CandidateAdoptionRejected(`canonical HEAD is ${canonicalHead}, not the source base ${baseSha}, and cannot be integrated: ${error.message}`);
+    }
+  }
 
   const reviews = recordedReviews(evidence, source.sessionId);
   const routes = recordedRoutes(evidence, new Set(reviews.map((review) => review.phaseId)));
@@ -394,23 +426,47 @@ export async function inspectSealedCandidate(
     shift: compiled?.shift ?? null,
     baseSha,
     candidateSha,
+    canonicalHead,
+    integration,
     workerProvider: routes.worker.provider,
     summary: bounded(runGit(git, ["show", "--stat", "--oneline", "--format=%s", candidateSha]).trim()),
   });
 }
 
-function assertCandidatePinned(candidate: SealedCandidate, worktree: string, when: string): void {
+function assertCandidatePinned(candidate: SealedCandidate, pair: TargetPair, worktree: string, when: string): void {
   const canonical = systemGitRunner(candidate.source.repository);
   const adopted = systemGitRunner(worktree);
   assertClean(candidate.source.repository, "before", canonical);
   assertClean(worktree, "before", adopted);
   const canonicalHead = runGit(canonical, ["rev-parse", "HEAD"]).trim();
   const targetHead = runGit(adopted, ["rev-parse", "HEAD"]).trim();
-  if (canonicalHead !== candidate.baseSha || targetHead !== candidate.candidateSha) {
+  if (canonicalHead !== pair.baseSha || targetHead !== pair.candidateSha) {
     throw new CandidateAdoptionRejected(
-      `candidate moved ${when}: canonical/worktree are ${canonicalHead}/${targetHead}, expected ${candidate.baseSha}/${candidate.candidateSha}`,
+      `candidate moved ${when}: canonical/worktree are ${canonicalHead}/${targetHead}, expected ${pair.baseSha}/${pair.candidateSha}`,
     );
   }
+}
+
+/**
+ * The pair an existing target was created on, revalidated against the source
+ * and canonical HEAD as inspected now: the source pair, the integration base,
+ * and the exact bytes of the recorded merge. Null when it is not exactly this
+ * adoption; the caller refuses rather than guesses.
+ */
+function pendingPair(candidate: SealedCandidate, adoption: CandidateAdoptionEvidence): TargetPair | null {
+  if (adoption.baseSha !== candidate.baseSha || adoption.candidateSha !== candidate.candidateSha) return null;
+  const recorded = adoption.integration;
+  if (candidate.integration === null) {
+    return recorded === undefined ? { baseSha: candidate.baseSha, candidateSha: candidate.candidateSha } : null;
+  }
+  if (recorded === undefined) return null;
+  try {
+    verifyIntegrationCommit(candidate.source.repository, candidate.integration, recorded);
+  } catch (error) {
+    if (error instanceof IntegrationRefused) return null;
+    throw error;
+  }
+  return { baseSha: recorded.integrationBaseSha, candidateSha: recorded.integratedCandidateSha };
 }
 
 function candidateWriteGlobs(recipe: WorkflowRecipe, reviewPhaseId: string, config: AwsfConfig): readonly string[] {
@@ -448,12 +504,37 @@ function adoptionBudget(config: AwsfConfig): AttemptStatus["budget"] {
   };
 }
 
+/**
+ * Write the integration merge, if there is one, and prove canonical HEAD did
+ * not move while it was written. Until a target cites it the merge is an
+ * unreferenced object, so a refusal here leaves no target and moves no ref.
+ */
+function integrate(candidate: SealedCandidate, committedAt: string): { readonly pair: TargetPair; readonly integration: CandidateIntegration | null } {
+  if (candidate.integration === null) {
+    return { pair: { baseSha: candidate.baseSha, candidateSha: candidate.candidateSha }, integration: null };
+  }
+  let integration: CandidateIntegration;
+  try {
+    integration = writeIntegrationCommit(candidate.source.repository, candidate.integration, committedAt);
+  } catch (error) {
+    if (!(error instanceof IntegrationRefused)) throw error;
+    throw new CandidateAdoptionRejected(error.message);
+  }
+  const canonical = systemGitRunner(candidate.source.repository);
+  assertClean(candidate.source.repository, "before", canonical);
+  const head = runGit(canonical, ["rev-parse", "HEAD"]).trim();
+  if (head !== integration.integrationBaseSha) {
+    throw new CandidateAdoptionRejected(`canonical HEAD moved to ${head} while the integration onto ${integration.integrationBaseSha} was written`);
+  }
+  return { pair: { baseSha: integration.integrationBaseSha, candidateSha: integration.integratedCandidateSha }, integration };
+}
+
 async function createTarget(
   options: AdoptCommandOptions,
   candidate: SealedCandidate,
   infra: AdoptionCommandInfrastructure,
   routeOverrides: PhaseRouteOverrides,
-): Promise<{ attemptDir: string; status: AttemptStatus }> {
+): Promise<{ attemptDir: string; status: AttemptStatus; pair: TargetPair }> {
   if (options.targetTaskId === candidate.source.taskId) {
     throw new CandidateAdoptionRejected("the adoption target must be a distinct task");
   }
@@ -462,11 +543,13 @@ async function createTarget(
     throw new CandidateAdoptionRejected(`target ${candidate.source.project}/${options.targetTaskId} already exists`);
   }
   const sessionId = infra.sessionId();
+  const now = infra.now();
+  const { pair, integration } = integrate(candidate, now);
   const worktree = createWorktree({
     repository: candidate.source.repository,
     root: options.worktreeRoot,
     attemptId: sessionId,
-    baseSha: candidate.candidateSha,
+    baseSha: pair.candidateSha,
   });
   await seedWorktreePaths({
     repository: candidate.source.repository,
@@ -474,7 +557,6 @@ async function createTarget(
     seedPaths: options.config.runtime.seed_paths,
     protectedPaths: options.config.policy.protected_paths,
   });
-  const now = infra.now();
   const dir = attemptDirectory(options.stateRoot, candidate.source.project, options.targetTaskId, "1");
   const budget = adoptionBudget(options.config);
   const status: AttemptStatus = {
@@ -495,8 +577,8 @@ async function createTarget(
     request: options.request.trim(),
     configSnapshotJson: toConfigSnapshotJson(options.config),
     lifecycleState: "GATING",
-    baseSha: candidate.baseSha,
-    candidateSha: candidate.candidateSha,
+    baseSha: pair.baseSha,
+    candidateSha: pair.candidateSha,
     phase: null,
     budget,
     ceilingGrants: [],
@@ -505,8 +587,9 @@ async function createTarget(
     reviewDegradation: null,
     model: null,
     lastActivityAt: now,
-    lastActivity: `created immutable continuation from sealed ${candidate.source.taskId} attempt ${String(candidate.source.attempt)} candidate ${candidate.candidateSha}`,
-    nextAction: `wait for fresh gates and review of ${candidate.candidateSha}`,
+    lastActivity: `created immutable continuation from sealed ${candidate.source.taskId} attempt ${String(candidate.source.attempt)} candidate ${candidate.candidateSha}` +
+      (integration === null ? "" : `, integrated onto ${pair.baseSha} as ${pair.candidateSha}`),
+    nextAction: `wait for fresh gates and review of ${pair.candidateSha}`,
     gatesPass: false,
     requiredReviewPresent: false,
     journeyApproved: false,
@@ -528,6 +611,7 @@ async function createTarget(
     candidateSha: candidate.candidateSha,
     workerProvider: candidate.workerProvider,
     ...(candidate.shift === null ? {} : { shift: candidate.shift }),
+    ...(integration === null ? {} : { integration }),
     targetTaskId: options.targetTaskId,
     verifiedAt: now,
     sourceEvidenceCopied: false,
@@ -535,6 +619,7 @@ async function createTarget(
   };
   return {
     attemptDir: dir,
+    pair,
     status: await persistAttempt(dir, null, {
       kind: "attempt.created",
       next: status,
@@ -567,24 +652,26 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
   const existing = await latestAttemptNumber(targetRoot);
   const resumeDir = existing === 1 ? attemptDirectory(options.stateRoot, candidate.source.project, options.targetTaskId, "1") : null;
   const resumed = resumeDir === null ? null : await readAttempt(resumeDir);
+  let resumedPair: TargetPair | null = null;
   if (existing !== null) {
     const targetEvidence = resumeDir === null ? [] : await readAttemptEvidence(resumeDir);
     const adoption = targetEvidence.find((record) => record.type === "candidate-adoption");
     const grant = targetEvidence.find((record) => record.type === "review-degradation" &&
       record.attempt === resumed?.attempt && record.at === resumed.reviewDegradation?.at &&
       record.reason === resumed.reviewDegradation.reason);
+    resumedPair = adoption?.type === "candidate-adoption" ? pendingPair(candidate, adoption.adoption) : null;
     if (resumed?.lifecycleState !== "GATING" || !resumed.gatesPass || resumed.reviewDegradation === null || grant === undefined ||
         resumed.budget.callsSpent !== 0 || resumed.budget.callsReserved !== 0 || resumed.process !== null || resumed.phase !== null ||
-        resumed.candidateSha !== candidate.candidateSha || resumed.baseSha !== candidate.baseSha ||
+        resumedPair === null || resumed.candidateSha !== resumedPair.candidateSha || resumed.baseSha !== resumedPair.baseSha ||
         resumed.continuesTask !== candidate.source.taskId || resumed.request !== options.request.trim() ||
         resumed.configSnapshotJson !== toConfigSnapshotJson(options.config) ||
         !isDeepStrictEqual(resumed.routeOverrides, routeOverrides) ||
         adoption?.type !== "candidate-adoption" || adoption.adoption.sourceSessionId !== candidate.source.sessionId ||
         adoption.adoption.sourceTaskId !== candidate.source.taskId || adoption.adoption.targetTaskId !== options.targetTaskId ||
-        adoption.adoption.sourceRevision !== candidate.source.revision || adoption.adoption.candidateSha !== candidate.candidateSha) {
+        adoption.adoption.sourceRevision !== candidate.source.revision) {
       throw new CandidateAdoptionRejected(`target ${candidate.source.project}/${options.targetTaskId} already exists and is not this pending adoption`);
     }
-    assertCandidatePinned(candidate, resumed.worktree!, "before resuming review");
+    assertCandidatePinned(candidate, resumedPair, resumed.worktree!, "before resuming review");
   }
 
   const phases = reviewPhasesOf(candidate.recipe);
@@ -607,6 +694,12 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
 
   options.terminal.write(`Sealed source: ${candidate.source.project}/${candidate.source.taskId} attempt ${String(candidate.source.attempt)} (${candidate.source.lifecycleState})`);
   options.terminal.write(`Exact candidate: ${candidate.candidateSha} (base ${candidate.baseSha})`);
+  if (candidate.integration !== null) {
+    options.terminal.write(`Canonical HEAD advanced to ${candidate.canonicalHead}. ${resumed === null
+      ? `After confirmation the host writes one owner-attributed merge: parent 1 canonical HEAD, parent 2 the exact candidate, conflict-free tree ${candidate.integration.treeSha}`
+      : `The target holds the host merge ${resumedPair!.candidateSha} of the exact candidate onto it`}. ` +
+      "The target's base is canonical HEAD and its candidate is that merge; no source attempt, ref, or canonical checkout moves.");
+  }
   options.terminal.write(`Summary: ${candidate.summary}`);
   if (candidate.shift !== null) {
     const { plan, milestones, completedTickets, remainingTickets } = candidate.shift;
@@ -620,23 +713,29 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
   if (pendingGrant) options.terminal.write(`The target will pause after fresh gates at zero calls. Grant it with awsf degrade-review ${options.targetTaskId} --reason "<why>", then repeat this exact adoption command.`);
   options.terminal.write("No source request, attempt bytes, calls, gates, reviews, journeys, protected approvals, landing approval, or provider session transfer.");
   options.terminal.write(resumed === null
-    ? "The target gets a new managed worktree at the exact commit, reruns current configured gates, and requires a fresh review, journey, and landing confirmation."
+    ? `The target gets a new managed worktree at the exact ${candidate.integration === null ? "commit" : "merge"}, reruns current configured gates, and requires a fresh review, journey, and landing confirmation.`
     : "The existing target retains its exact worktree and passing gates; it requires a fresh review, journey, and landing confirmation.");
-  const confirmed = await options.terminal.confirm(resumed === null
-    ? `Adopt exact candidate ${candidate.candidateSha} into new task ${options.targetTaskId}?`
-    : `Resume the exact adopted candidate ${candidate.candidateSha} in task ${options.targetTaskId}?`);
+  const confirmed = await options.terminal.confirm(resumed !== null
+    ? `Resume the exact adopted candidate ${resumedPair!.candidateSha} in task ${options.targetTaskId}?`
+    : candidate.integration === null
+      ? `Adopt exact candidate ${candidate.candidateSha} into new task ${options.targetTaskId}?`
+      : `Integrate exact candidate ${candidate.candidateSha} onto canonical HEAD ${candidate.canonicalHead} and adopt the merge into new task ${options.targetTaskId}?`);
   if (!confirmed) return { source: candidate.source, status: null, attemptDir: null, confirmed: false, reusedTarget: false };
 
   // Re-read every source fact after the human answer. No target exists until
   // this second exact validation succeeds.
   const repeated = await inspectSealedCandidate(options.sourceAttemptDir, options.config, infra.pidIsLive);
   if (
+    repeated.source.sessionId !== candidate.source.sessionId ||
     repeated.source.revision !== candidate.source.revision ||
     repeated.baseSha !== candidate.baseSha ||
     repeated.candidateSha !== candidate.candidateSha ||
     repeated.workerProvider !== candidate.workerProvider
   ) {
     throw new CandidateAdoptionRejected("sealed source evidence changed after confirmation");
+  }
+  if (repeated.canonicalHead !== candidate.canonicalHead || repeated.integration?.treeSha !== candidate.integration?.treeSha) {
+    throw new CandidateAdoptionRejected(`canonical HEAD changed after confirmation: ${candidate.canonicalHead} became ${repeated.canonicalHead}`);
   }
   const available = await route.adapter.isAvailable();
   if (available.status !== "available") {
@@ -656,11 +755,13 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
     if (current.revision !== resumed.revision || current.reviewDegradation?.at !== resumed.reviewDegradation?.at) {
       throw new CandidateAdoptionRejected("pending target changed after confirmation");
     }
-    assertCandidatePinned(candidate, current.worktree!, "after resume confirmation");
+    assertCandidatePinned(candidate, resumedPair!, current.worktree!, "after resume confirmation");
   }
   const created = resumed === null ? await createTarget(options, candidate, infra, routeOverrides) : null;
   let status = created?.status ?? resumed!;
   const attemptDir = created?.attemptDir ?? resumeDir!;
+  // Everything below measures, reviews, and pins the target pair, never the source pair.
+  const pair: TargetPair = created?.pair ?? resumedPair!;
   let writeQueue: Promise<void> = Promise.resolve();
   let transitionSeq = 0;
   const closeOccurrence = async (occurrenceKey: string, reason: string): Promise<void> => {
@@ -721,7 +822,7 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
       round: 0,
       gateId: report.gateId,
       kind: gateKind(report.gateId),
-      candidateSha: candidate.candidateSha,
+      candidateSha: pair.candidateSha,
       passed: report.passed,
       exitCode,
       checks: report.checks,
@@ -741,7 +842,7 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
     name: "adoption tests",
     kind: "code",
     owner: "host",
-    description: `Run current configured gates against adopted candidate ${candidate.candidateSha}`,
+    description: `Run current configured gates against adopted candidate ${pair.candidateSha}`,
     status: state,
     correctionCount: 0,
     maxCorrections: 0,
@@ -757,20 +858,20 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
   await persist("attempt.updated", {
     phase: { name: "adoption tests", state: "RUNNING", round: 0, maximumRounds: 0 },
     lastActivityAt: phaseAt,
-    lastActivity: `running fresh configured gates against ${candidate.candidateSha}`,
+    lastActivity: `running fresh configured gates against ${pair.candidateSha}`,
   }, { type: "phase", phase: phase("RUNNING") });
 
   const measure = async (): Promise<Measurement> => {
-    assertCandidatePinned(candidate, status.worktree!, "before fresh gates");
+    assertCandidatePinned(candidate, pair, status.worktree!, "before fresh gates");
     const git = systemGitRunner(status.worktree!);
-    const hygieneResult = git(["diff", "--check", `${candidate.baseSha}..${candidate.candidateSha}`, "--"]);
+    const hygieneResult = git(["diff", "--check", `${pair.baseSha}..${pair.candidateSha}`, "--"]);
     // Read before this run's own hygiene record exists, so a dispatch point in
     // the snapshot belongs to an earlier run.
     const ledger = await ledgerStep("ledger read", () => readCommandLedger(attemptDir));
     const hygiene = candidateHygiene({
-      expectedBaseSha: candidate.baseSha,
-      observedBaseSha: runGit(git, ["rev-parse", `${candidate.baseSha}^{commit}`]).trim(),
-      expectedCandidateSha: candidate.candidateSha,
+      expectedBaseSha: pair.baseSha,
+      observedBaseSha: runGit(git, ["rev-parse", `${pair.baseSha}^{commit}`]).trim(),
+      expectedCandidateSha: pair.candidateSha,
       headBefore: runGit(git, ["rev-parse", "HEAD"]).trim(),
       headAfter: runGit(git, ["rev-parse", "HEAD"]).trim(),
       cleanBefore: runGit(git, ["status", "--porcelain"]).trim().length === 0,
@@ -779,7 +880,7 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
       output: `${hygieneResult.stdout}${hygieneResult.stderr}${hygieneResult.error ?? ""}`,
     });
     await persistGate(phaseId, hygiene, hygieneResult.status ?? -1);
-    const changed = candidatePathsBetween(status.worktree!, candidate.baseSha, candidate.candidateSha);
+    const changed = candidatePathsBetween(status.worktree!, pair.baseSha, pair.candidateSha);
     const protectedReport = noProtectedPaths(changed, options.config.policy.protected_paths);
     await persistGate(phaseId, protectedReport);
     // L7 proves the source recipe's producer phases passed their own per-phase
@@ -802,7 +903,7 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
     // an existing attempt another process could be driving. Two concurrent
     // adoptions of one source produce two distinct target attempts with
     // distinct directories, so neither can see the other's ledger.
-    const occurrenceKey = occurrenceKeyForAdoption(phaseId, candidate.candidateSha);
+    const occurrenceKey = occurrenceKeyForAdoption(phaseId, pair.candidateSha);
     // Decided before the opening is written; see the note at the same point in
     // production-run.ts. A refusal must not leave behind its own exculpation.
     const ungoverned = ledgerGovernanceFailure(ledger, ADOPT_DISPATCHER, occurrenceKey);
@@ -817,20 +918,20 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
       const worktreeRealPath = await realpath(status.worktree!);
       for (const [gateId, configured] of Object.entries(options.config.gates)) {
         try {
-          assertCandidatePinned(candidate, status.worktree!, `before ${gateId}`);
+          assertCandidatePinned(candidate, pair, status.worktree!, `before ${gateId}`);
         } catch (error) {
           await closeOccurrence(occurrenceKey, `the candidate moved before ${gateId} was dispatched`);
           throw error;
         }
         const started = Date.now();
-        const relative = join("raw", `command-adoption-tests-${candidate.candidateSha}-${gateId}-0.txt`);
+        const relative = join("raw", `command-adoption-tests-${pair.candidateSha}-${gateId}-0.txt`);
         const absolute = join(attemptDir, relative);
         const planned = planCommandRecovery(ledger, {
           dispatcherId: ADOPT_DISPATCHER, occurrenceKey, gateId, gateIds,
           argvDigest: argvDigest(configured.argv), gateConfigDigest: gateConfigDigest(configured),
           gatesConfigDigest: gatesDigest, cwd: status.worktree!, worktreeRealPath,
           timeoutMs: configured.timeout_seconds * 1_000, maxOutputBytes: options.config.runtime.max_output_bytes,
-          candidateSha: candidate.candidateSha, attempt: status.attempt, sessionId: status.sessionId,
+          candidateSha: pair.candidateSha, attempt: status.attempt, sessionId: status.sessionId,
         });
         if (planned.action === "refuse") throw new CommandLedgerRefusal(gateId, planned.reason);
         let output: string;
@@ -850,7 +951,7 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
           cwd: status.worktree!, worktreeRealPath, timeoutMs: configured.timeout_seconds * 1_000,
           maxOutputBytes: options.config.runtime.max_output_bytes,
           gateConfigDigest: gateConfigDigest(configured), gatesConfigDigest: gatesDigest,
-          candidateSha: candidate.candidateSha, headBefore: candidate.candidateSha, cleanBefore: true,
+          candidateSha: pair.candidateSha, headBefore: pair.candidateSha, cleanBefore: true,
           dispatchedAt: infra.now(),
         } }));
         const [executable, ...argv] = configured.argv;
@@ -865,11 +966,11 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
         try {
           output = credentialSafeGateOutput(raw);
         } catch (error) {
-          const withheldPins = observePins(status.worktree!, candidate.candidateSha);
+          const withheldPins = observePins(status.worktree!, pair.candidateSha);
           await persist("attempt.updated", {}, { type: "command-dispatch-result", result: {
             schema: "awsf.command-dispatch-result/v1", intentId, outcome: "withheld",
             exitCode, durationMs, outputRef: null, outputBytes: null, outputDigest: null,
-            headAfter: withheldPins.head ?? candidate.candidateSha, cleanAfter: withheldPins.clean,
+            headAfter: withheldPins.head ?? pair.candidateSha, cleanAfter: withheldPins.clean,
             descendantQuiescence: "unproved", settledAt: infra.now(),
           } });
           throw error;
@@ -881,13 +982,13 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
         await fsyncPath(dirname(absolute));
         // Observed, not assumed. Recording `cleanAfter: true` unread is how a
         // command that dirtied the tree becomes a restorable clean measurement.
-        const pins = observePins(status.worktree!, candidate.candidateSha);
+        const pins = observePins(status.worktree!, pair.candidateSha);
         await ledgerStep(`${gateId} result`, () => persist("attempt.updated", {}, { type: "command-dispatch-result", result: {
           schema: "awsf.command-dispatch-result/v1", intentId,
           outcome: result.status === null || pins.head === null ? "no-exit" : "exited",
           exitCode, durationMs, outputRef: relative,
           outputBytes: Buffer.byteLength(output), outputDigest: retainedOutputDigest(output),
-          headAfter: pins.head ?? candidate.candidateSha, cleanAfter: pins.clean,
+          headAfter: pins.head ?? pair.candidateSha, cleanAfter: pins.clean,
           descendantQuiescence: "unproved", settledAt: infra.now(),
         } }));
         }
@@ -895,7 +996,7 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
         sections.push(`### ${gateId} (exit ${String(exitCode)})\n${bounded(output, TEST_OUTPUT_TAIL_MAX_CHARS)}`);
         if (exitCode !== 0) failures.push(`${gateId} exited ${String(exitCode)}`);
         try {
-          assertCandidatePinned(candidate, status.worktree!, `after ${gateId}`);
+          assertCandidatePinned(candidate, pair, status.worktree!, `after ${gateId}`);
         } catch (error) {
           failures.push(`${gateId} moved or dirtied the candidate: ${safeFailure(error).message}`);
           // The remaining gates are withheld deliberately, not left undone.
@@ -918,7 +1019,7 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
       artifacts: [],
       notesForNextPhase: failures.length === 0 ? "compose fresh review evidence" : "adopted candidate retained blocked",
       passed: failures.length === 0,
-      candidateSha: candidate.candidateSha,
+      candidateSha: pair.candidateSha,
       commands,
       failures,
       outputTail: bounded(sections.join("\n\n"), TEST_OUTPUT_TAIL_MAX_CHARS),
@@ -926,7 +1027,7 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
     const aggregate = new GateReport("commands_pass");
     for (const [gateId, configured] of Object.entries(options.config.gates)) {
       const report = commandsPass(testOutput, { gateId, argv: configured.argv }, {
-        candidateSha: candidate.candidateSha,
+        candidateSha: pair.candidateSha,
         cleanBefore: true,
         cleanAfter: failures.every((failure) => !failure.startsWith(`${gateId} moved or dirtied`)),
       });
@@ -954,7 +1055,7 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
         artifacts: [],
         notesForNextPhase: "adopted candidate retained blocked",
         passed: false,
-        candidateSha: candidate.candidateSha,
+        candidateSha: pair.candidateSha,
         commands: [],
         failures: [failure.message],
         outputTail: "",
@@ -1018,8 +1119,8 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
     protectedApprovalsValid: true,
     lastActivityAt: infra.now(),
     lastActivity: pendingGrant
-      ? `fresh gates passed; awaiting explicit owner review-degradation grant for ${candidate.candidateSha}`
-      : `fresh current gates passed against adopted candidate ${candidate.candidateSha}`,
+      ? `fresh gates passed; awaiting explicit owner review-degradation grant for ${pair.candidateSha}`
+      : `fresh current gates passed against adopted candidate ${pair.candidateSha}`,
     ...(pendingGrant ? { nextAction: `after \`awsf degrade-review ${status.taskId} --reason "<why>"\`, ${repeatAdoptionAction(options, candidate.source)}` } : {}),
   }, { type: "phase", phase: phase("SUCCEEDED") });
   if (pendingGrant) {
@@ -1027,8 +1128,8 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
     return { source: candidate.source, status, attemptDir, confirmed: true, reusedTarget: false };
   }
   } else {
-    assertCandidatePinned(candidate, status.worktree!, "before resumed review");
-    const testOutput = lastTestOutputFrom(await readAttemptEvidence(attemptDir), candidate.candidateSha);
+    assertCandidatePinned(candidate, pair, status.worktree!, "before resumed review");
+    const testOutput = lastTestOutputFrom(await readAttemptEvidence(attemptDir), pair.candidateSha);
     measurement = { testOutput, reports: [], passed: true };
   }
 
@@ -1042,8 +1143,8 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
         sessionId: status.sessionId,
         repository: status.repository,
         worktree: status.worktree!,
-        baseSha: candidate.baseSha,
-        candidateSha: candidate.candidateSha,
+        baseSha: pair.baseSha,
+        candidateSha: pair.candidateSha,
       },
       config: options.config,
       infra,
@@ -1102,17 +1203,17 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
     actor: "host",
     reason: { source: "gate" },
     interactive: false,
-    evidence: { gatesPass: true, candidateSha: candidate.candidateSha },
+    evidence: { gatesPass: true, candidateSha: pair.candidateSha },
     spawn: { cost: 1 },
   });
   const reviewState = createReviewRunState();
   const reviewPhaseId = `${status.sessionId}:${prepared.phaseKey}`;
-  await persistTransition("GATING", "REVIEWING", l11.result.edge, "gate", null, `held fresh ${reviewLabel} review of adopted candidate ${candidate.candidateSha}`, true, {
+  await persistTransition("GATING", "REVIEWING", l11.result.edge, "gate", null, `held fresh ${reviewLabel} review of adopted candidate ${pair.candidateSha}`, true, {
     budget: budget.snapshot(),
     requiredReviewPresent: false,
     journeyApproved: false,
     landingApproval: null,
-    lastActivity: `L11 held one call for fresh ${route.model.provider} review of adopted candidate ${candidate.candidateSha}`,
+    lastActivity: `L11 held one call for fresh ${route.model.provider} review of adopted candidate ${pair.candidateSha}`,
   });
 
   try {
@@ -1124,8 +1225,8 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
       ordinal: 2,
       state: reviewState,
       persist,
-      assertBeforeGo: () => { assertCandidatePinned(candidate, status.worktree!, "between adoption validation and GO"); },
-      assertAfterAnswer: () => { assertCandidatePinned(candidate, status.worktree!, "between review answer and L15"); },
+      assertBeforeGo: () => { assertCandidatePinned(candidate, pair, status.worktree!, "between adoption validation and GO"); },
+      assertAfterAnswer: () => { assertCandidatePinned(candidate, pair, status.worktree!, "between review answer and L15"); },
       ...(options.assertLaunchProjection === undefined ? {} : { assertLaunchProjection: options.assertLaunchProjection }),
     });
     options.assertAdvancement?.(status.sessionId, "AWAITING_OWNER");
@@ -1139,12 +1240,12 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
       budget: budget.snapshot(),
       evidence: {
         gatesPass: true,
-        candidateSha: candidate.candidateSha,
+        candidateSha: pair.candidateSha,
         review: { verdict: output.verdict, reviewedSha: output.reviewedSha, findings: output.findings },
       },
     });
     await persistTransition("REVIEWING", "AWAITING_OWNER", l15.edge, "gate", null, `fresh adopted-candidate review returned ${output.verdict}`, false, {
-      candidateSha: candidate.candidateSha,
+      candidateSha: pair.candidateSha,
       budget: budget.snapshot(),
       gatesPass: true,
       requiredReviewPresent: true,

@@ -19,6 +19,22 @@ export const ShiftAdoptionSourceSchema = Type.Object({
 export type ShiftAdoptionSource = Static<typeof ShiftAdoptionSourceSchema>;
 
 /**
+ * The host's merge that carries the exact source candidate over a canonical
+ * HEAD that advanced past the source base. Its first parent is the integration
+ * base and its second the source candidate; the target is pinned to this pair.
+ */
+export const CandidateIntegrationSchema = Type.Object({
+  /** Canonical HEAD when the owner confirmed: the merge's first parent and the target's base. */
+  integrationBaseSha: Type.String({ pattern: SHA_PATTERN }),
+  /** The host merge: the target's candidate. */
+  integratedCandidateSha: Type.String({ pattern: SHA_PATTERN }),
+  /** The merge's author and committer date, so its exact bytes can be recomputed. */
+  committedAt: Type.String({ minLength: 1 }),
+}, { additionalProperties: false });
+
+export type CandidateIntegration = Static<typeof CandidateIntegrationSchema>;
+
+/**
  * Durable provenance for a candidate adopted from a sealed attempt.
  *
  * This is host evidence, not an agent envelope. The target journal records the
@@ -32,11 +48,15 @@ export const CandidateAdoptionEvidenceSchema = Type.Object({
   sourceSessionId: Type.String({ minLength: 1 }),
   sourceRevision: Type.Integer({ minimum: 1 }),
   sourceLifecycle: stringUnion(["BLOCKED", "CANCELLED"] as const),
+  /** The source base, always; the target's base only when `integration` is absent. */
   baseSha: Type.String({ pattern: SHA_PATTERN }),
+  /** The exact source candidate, always; the target's candidate only when `integration` is absent. */
   candidateSha: Type.String({ pattern: SHA_PATTERN }),
   workerProvider: Type.String({ minLength: 1 }),
   /** Present only when the source is a shift; a shipped source has no tickets to name. */
   shift: Type.Optional(ShiftAdoptionSourceSchema),
+  /** Present only when canonical HEAD had advanced past the source base. */
+  integration: Type.Optional(CandidateIntegrationSchema),
   targetTaskId: Type.String({ minLength: 1 }),
   verifiedAt: Type.String({ minLength: 1 }),
   sourceEvidenceCopied: Type.Literal(false),

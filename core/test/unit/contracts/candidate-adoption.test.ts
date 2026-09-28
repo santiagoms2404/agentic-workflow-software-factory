@@ -27,6 +27,15 @@ test("candidate-adoption evidence pins one sealed source and makes non-transfer 
   assert.equal(Value.Check(CandidateAdoptionEvidenceSchema, { ...evidence, extra: "not admitted" }), false);
 });
 
+test("an integrated adoption records its integration pair beside the unchanged source pair", () => {
+  const integration = { integrationBaseSha: "c".repeat(40), integratedCandidateSha: "d".repeat(40), committedAt: "2026-09-27T00:00:00.000Z" };
+  assert.equal(Value.Check(CandidateAdoptionEvidenceSchema, { ...evidence, integration }), true);
+  assert.equal(Value.Check(CandidateAdoptionEvidenceSchema, { ...evidence, integration: { ...integration, integratedCandidateSha: "HEAD" } }), false);
+  assert.equal(Value.Check(CandidateAdoptionEvidenceSchema, { ...evidence, integration: { ...integration, committedAt: "" } }), false);
+  assert.equal(Value.Check(CandidateAdoptionEvidenceSchema, { ...evidence, integration: { integrationBaseSha: integration.integrationBaseSha } }), false);
+  assert.equal(Value.Check(CandidateAdoptionEvidenceSchema, { ...evidence, integration: { ...integration, treeSha: "e".repeat(40) } }), false);
+});
+
 test("a shift source names its completed tickets and its tail, and a shipped source names none", () => {
   const shift = { plan: "awsf-v2-w17-shift", milestones: ["M4"], completedTickets: ["T11", "T12"], remainingTickets: ["T13"] };
   assert.equal(Value.Check(CandidateAdoptionEvidenceSchema, { ...evidence, shift }), true);
