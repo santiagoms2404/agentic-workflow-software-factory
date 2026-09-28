@@ -35,6 +35,7 @@ import { publishCommand } from "./commands/publish.ts";
 import { grantCommand } from "./commands/grant.ts";
 import { raiseCommand } from "./commands/raise.ts";
 import { degradeReviewCommand } from "./commands/degrade-review.ts";
+import { attributeCommand } from "./commands/attribute.ts";
 import { routesListCommand } from "./commands/routes.ts";
 import { assertRoutesReachWorkflow, formatRouteOverride, parseRouteFlags, predictSameProviderReviewFor } from "../workflow/route-flags.ts";
 import { quotaCommand } from "./commands/quota.ts";
@@ -55,7 +56,7 @@ import { assertShiftAdmission, assessShiftAdmission, parseMilestoneSelection, se
 
 /** The complete owner-facing command table; documentation reconciles against it. */
 export const CLI_COMMANDS = Object.freeze([
-  "init", "project", "new", "seed", "start", "run", "resume", "status", "watch", "rework", "review", "raise", "grant", "degrade-review", "journey", "preview", "land", "publish", "cancel", "retry",
+  "init", "project", "new", "seed", "start", "run", "resume", "status", "watch", "rework", "review", "raise", "grant", "degrade-review", "attribute", "journey", "preview", "land", "publish", "cancel", "retry",
   "relate", "doctor", "gc", "dash", "routes", "db rebuild", "ticket", "backlog", "quota", "stage", "workflows", "shift plan", "group",
 ]);
 
@@ -709,6 +710,26 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         }
         out(`${taskId} may now buy a same-provider review; the grant and your reason are journalled.`);
         out(result.status.nextAction);
+        return 0;
+      }
+      case "attribute": {
+        const cause = parsed.flags["cause"] ?? "";
+        const reason = parsed.flags["reason"] ?? "";
+        if (parsed.flags.attempt === undefined || cause.trim().length === 0 || reason.trim().length === 0) {
+          throw new Error('usage: awsf attribute <task> --attempt <n> --cause <model|factory|environment|owner|unknown> --reason "<why>"');
+        }
+        const attempt = Number(parsed.flags.attempt);
+        const result = await attributeCommand({
+          stateRoot, project, taskId, attempt, cause, reason,
+          terminal: options.terminal ?? processOwnerTerminal(),
+          projectAttribution: projection.projectAttribution,
+        });
+        if (!result.confirmed) {
+          out(`Attribution declined; ${taskId} attempt ${attempt} keeps the attribution it had and nothing was recorded.`);
+          return 1;
+        }
+        out(`${project}/${taskId} attempt ${attempt}'s block is attributed to ${cause}; the record and your reason are journalled.`);
+        out("Recorded on the task, not on the attempt, so the sealed attempt was not reopened.");
         return 0;
       }
       case "journey": {

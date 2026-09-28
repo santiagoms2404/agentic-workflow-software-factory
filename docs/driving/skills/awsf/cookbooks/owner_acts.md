@@ -1,7 +1,7 @@
 # Owner acts
 
-Ten commands are the owner's and not yours: `journey`, `land`, `cancel`,
-`rework`, `review`, `degrade-review`, `raise`, `publish`, `resume`, `grant`. This document
+Eleven commands are the owner's and not yours: `journey`, `land`, `cancel`,
+`rework`, `review`, `degrade-review`, `attribute`, `raise`, `publish`, `resume`, `grant`. This document
 is about **which one the evidence supports** and **what to hand the owner before
 they decide**. It is not a table
 of what each one costs, and the reason is at the bottom.
@@ -12,7 +12,7 @@ Prepare and explain. Never perform, and never recommend performing one without
 the evidence its edge requires.
 
 This is not merely a convention you could talk yourself out of — the lifecycle
-refuses a non-interactive invocation. Every one of the ten requires an
+refuses a non-interactive invocation. Every one of the eleven requires an
 interactive owner terminal, and a piped or redirected standard input is
 refused by its CLI guard or the normative machine *before* any process can receive a signal and
 before any call is reserved. That refusal is a terminal-shape check, not the
@@ -100,6 +100,17 @@ it: a quota error, a transport failure and an unavailable adapter each leave the
 review independent, by construction. `select_a_route.md` has the rest of the
 routing picture.
 
+**`attribute`** records whose fault one BLOCKED attempt was:
+`awsf attribute TASK --attempt N --cause model|factory|environment|owner|unknown --reason "WHY"`.
+The route metrics count a block against a route only when it is the model's, and
+the factory's heuristic reads that from the code the run blocked on, which the
+owner can know to be wrong (a ticket's own wording can cause a PermissionBreach).
+It is **task-scoped and repeatable**: the record goes beside the attempt
+directories, the sealed attempt is never reopened, the latest record for an
+attempt wins and the earlier ones stay. Prepare it by naming the attempt, the
+heuristic's cause, and the evidence that points elsewhere; never record one to
+make a route look better.
+
 **`review`** buys one replacement review, and only when the recorded review is
 genuinely unevidenced. Eligibility is determined by the host from the recorded
 evidence row, so a review that carried passing evidence is refused at zero cost
@@ -142,7 +153,7 @@ The same shape every time, and it is short:
 - the handle — task, attempt, lifecycle state, calls spent against the ceiling;
 - what the evidence says, with the phase's claim and the host's measurement kept
   distinct;
-- which of the ten the evidence supports, which it does not, and why;
+- which of the eleven the evidence supports, which it does not, and why;
 - what remains — calls, correction rounds, and the attempt-scoped owner re-entry
   allowance, which is what several of these draw on and which does not refresh
   within an attempt.
