@@ -37,6 +37,7 @@ import { raiseCommand } from "./commands/raise.ts";
 import { degradeReviewCommand } from "./commands/degrade-review.ts";
 import { attributeCommand } from "./commands/attribute.ts";
 import { routesListCommand } from "./commands/routes.ts";
+import { METRICS_USAGE, metricsCommand } from "./commands/metrics.ts";
 import { assertRoutesReachWorkflow, formatRouteOverride, parseRouteFlags, predictSameProviderReviewFor } from "../workflow/route-flags.ts";
 import { quotaCommand } from "./commands/quota.ts";
 import { stageCommand } from "./commands/stage.ts";
@@ -57,13 +58,13 @@ import { assertShiftAdmission, assessShiftAdmission, parseMilestoneSelection, se
 /** The complete owner-facing command table; documentation reconciles against it. */
 export const CLI_COMMANDS = Object.freeze([
   "init", "project", "new", "seed", "start", "run", "resume", "status", "watch", "rework", "review", "raise", "grant", "degrade-review", "attribute", "journey", "preview", "land", "publish", "cancel", "retry",
-  "relate", "doctor", "gc", "dash", "routes", "db rebuild", "ticket", "backlog", "quota", "stage", "workflows", "shift plan", "group",
+  "relate", "doctor", "gc", "dash", "routes", "metrics", "db rebuild", "ticket", "backlog", "quota", "stage", "workflows", "shift plan", "group",
 ]);
 
 const USAGE = `usage: awsf init [path] --project <slug>\n       awsf <${CLI_COMMANDS.join("|")}> [task] [options]`;
 
 /** Flags that take no value. Documentation reconciles against this too. */
-export const CLI_BOOLEAN_FLAGS: ReadonlySet<string> = new Set(["evidence"]);
+export const CLI_BOOLEAN_FLAGS: ReadonlySet<string> = new Set(["evidence", "json"]);
 
 interface ParsedArgs {
   readonly positionals: readonly string[];
@@ -411,6 +412,21 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       const configPath = resolve(parsed.flags.config ?? `${cwd}/awsf.config.yaml`);
       const config = loadConfig(await readFile(configPath, "utf8"));
       for (const line of await routesListCommand({ config })) out(line);
+      return 0;
+    }
+
+    if (command === "metrics") {
+      // Read-only: the projection opens read-only and nothing is spawned or written.
+      const unsupportedFlags = Object.keys(parsed.flags).filter((flag) => !["role", "source", "started-before", "json", "state-root"].includes(flag));
+      if (parsed.positionals.length !== 0 || unsupportedFlags.length !== 0) throw new Error(METRICS_USAGE);
+      for (const line of metricsCommand({
+        dbPath: resolve(stateRoot, "awsf.db"),
+        extractedAt: new Date().toISOString(),
+        json: parsed.flags.json === "true",
+        ...(parsed.flags.role === undefined ? {} : { role: parsed.flags.role }),
+        ...(parsed.flags.source === undefined ? {} : { source: parsed.flags.source }),
+        ...(parsed.flags["started-before"] === undefined ? {} : { startedBefore: parsed.flags["started-before"] }),
+      })) out(line);
       return 0;
     }
 

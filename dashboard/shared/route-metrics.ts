@@ -368,6 +368,61 @@ export function stats(rows: readonly MetricsRow[], price: RowPrice): Stats {
 }
 
 // ---------------------------------------------------------------------------
+// Cells and coverage.
+// ---------------------------------------------------------------------------
+
+export interface RouteCell {
+  readonly role: string;
+  readonly key: string;
+  /** The first row's route; the provider is the first one any row states. */
+  readonly route: MetricsRoute;
+  /** Every keyed row of the role on the route, rankable or not. */
+  readonly rows: readonly MetricsRow[];
+}
+
+/** Every row with a route key, grouped by role and route, in role then key order. Unrankable rows are kept and badged in `stats`. */
+export function routeCells(rows: readonly MetricsRow[]): RouteCell[] {
+  const groups = new Map<string, { role: string; key: string; rows: MetricsRow[] }>();
+  for (const row of rows) {
+    const key = routeKey(row.route);
+    if (key === null) continue;
+    const id = `${row.role}\u0000${key}`;
+    const group = groups.get(id);
+    if (group === undefined) groups.set(id, { role: row.role, key, rows: [row] });
+    else group.rows.push(row);
+  }
+  return [...groups.values()]
+    .sort((a, b) => (a.role < b.role ? -1 : a.role > b.role ? 1 : a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
+    .map((group) => ({ ...group, route: routeOfGroup(group.rows) }));
+}
+
+export interface Coverage {
+  /** Distinct route keys across every role. */
+  readonly routes: number;
+  /** Role × route cells. */
+  readonly cells: number;
+  /** Rows with no route key (route-mixed or unknown): they enter no cell. */
+  readonly unkeyed: number;
+}
+
+export function coverage(rows: readonly MetricsRow[]): Coverage {
+  const cells = routeCells(rows);
+  return {
+    routes: new Set(cells.map((cell) => cell.key)).size,
+    cells: cells.length,
+    unkeyed: rows.filter((row) => routeKey(row.route) === null).length,
+  };
+}
+
+/**
+ * Blocked runs per heuristic attribution. It reads runs, not role-rows: a run
+ * blocked before any agent phase ran has an attribution and no row.
+ */
+export function heuristicSplit(runs: readonly { readonly heuristicAttribution: string | null }[]): Record<string, number> {
+  return tally(runs.flatMap((run) => (run.heuristicAttribution === null ? [] : [run.heuristicAttribution])));
+}
+
+// ---------------------------------------------------------------------------
 // The lens.
 // ---------------------------------------------------------------------------
 

@@ -107,6 +107,8 @@ export const MetricsRunSchema = Type.Object({
   stateGroup: StateGroup, reviewVerdict: NStr, ownerReentries: Count, observabilityDegraded: Flag,
   usageAuthority: UsageAuthority, startedAt: Str, endedAt: NStr,
   ownerAttribution: Nullable(Type.Object({ cause: Attribution, reason: Str, at: Str }, { additionalProperties: false })),
+  attribution: Nullable(Attribution), attributionSource: Nullable(Literals(["owner", "heuristic"])),
+  heuristicAttribution: Nullable(Literals(["model", "factory", "environment", "unknown"])),
   phases: Type.Array(RunPhase),
 }, { additionalProperties: false });
 

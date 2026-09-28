@@ -593,6 +593,11 @@ export interface MetricsRun {
   readonly endedAt: string | null;
   /** The owner's latest `awsf attribute` record for this attempt. */
   readonly ownerAttribution: { readonly cause: MetricsAttribution; readonly reason: string; readonly at: string } | null;
+  /** The run's attribution in force: the owner's override where recorded, else the heuristic. `null` unless BLOCKED. */
+  readonly attribution: MetricsAttribution | null;
+  readonly attributionSource: "owner" | "heuristic" | null;
+  /** The heuristic's answer, beside any override. A run blocked before any agent phase has one and no role-row. */
+  readonly heuristicAttribution: Exclude<MetricsAttribution, "owner"> | null;
   readonly phases: readonly MetricsRunPhase[];
 }
 

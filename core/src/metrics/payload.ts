@@ -20,6 +20,7 @@ import type {
 } from "../../../dashboard/shared/types.ts";
 import { RATE_CARD } from "../../../dashboard/shared/rate-card.ts";
 import { BENCHMARK_PRIORS, UNTESTED_ROUTES } from "../../../dashboard/shared/benchmark-priors.ts";
+import { effectiveAttribution } from "./attribution.ts";
 import { minutesBetween, type PhaseFacts } from "./phase-facts.ts";
 import { buildRoleRows, readRunFacts, stateGroup, type RoleRow, type RunFacts } from "./role-rows.ts";
 
@@ -91,6 +92,7 @@ function readRunPhases(db: DatabaseSync, facts: readonly RunFacts[]): Map<string
 }
 
 function run(facts: RunFacts, phases: readonly MetricsRunPhase[]): MetricsRun {
+  const attribution = effectiveAttribution(facts, facts.ownerAttribution);
   return {
     sessionId: facts.sessionId,
     project: facts.projectSlug,
@@ -108,6 +110,9 @@ function run(facts: RunFacts, phases: readonly MetricsRunPhase[]): MetricsRun {
     startedAt: facts.startedAt,
     endedAt: facts.endedAt,
     ownerAttribution: facts.ownerAttribution,
+    attribution: attribution.attribution,
+    attributionSource: attribution.source,
+    heuristicAttribution: attribution.heuristic,
     phases,
   };
 }
