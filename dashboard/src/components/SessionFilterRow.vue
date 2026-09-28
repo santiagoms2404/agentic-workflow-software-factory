@@ -7,12 +7,16 @@ import {
   type SessionFilterEntry,
 } from "../session-filters.ts";
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   filterId: string;
   label: string;
   entries: readonly SessionFilterEntry[];
   selected: readonly string[];
-}>();
+  /** What a count counts; an empty string prints the number alone. */
+  countUnit?: string;
+  /** The select-all control's text, when it should say something other than the sessions board does. */
+  selectAllLabel?: string;
+}>(), { countUnit: "runs", selectAllLabel: "select all visible" });
 const emit = defineEmits<{
   "update:selected": [selected: readonly string[]];
 }>();
@@ -32,7 +36,7 @@ const allState = computed(() => selectAllState(entryValues.value, props.selected
         :aria-pressed="allState === 'some' ? 'mixed' : allState === 'all'"
         @click="emit('update:selected', toggleAllFilterValues(entryValues, selected))"
       >
-        select all visible
+        {{ selectAllLabel }}
       </button>
     </div>
     <div class="session-filter-options" role="group" :aria-label="`${label} choices`">
@@ -46,8 +50,8 @@ const allState = computed(() => selectAllState(entryValues.value, props.selected
         :aria-pressed="selected.includes(entry.value)"
         @click="emit('update:selected', toggleFilterValue(selected, entry.value))"
       >
-        <span>{{ entry.label ?? entry.value }}</span>
-        <span class="session-filter-count">{{ entry.count }} runs</span>
+        <span class="session-filter-label"><slot name="marker" :entry="entry" />{{ entry.label ?? entry.value }}</span>
+        <span class="session-filter-count">{{ countUnit ? `${entry.count} ${countUnit}` : entry.count }}</span>
       </button>
     </div>
   </section>

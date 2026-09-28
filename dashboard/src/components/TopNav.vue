@@ -10,6 +10,7 @@ defineProps<{
   backlog: boolean;
   groups: boolean;
   canvas: boolean;
+  metrics: boolean;
 }>();
 
 const paletteRoot = ref<HTMLElement | null>(null);
@@ -97,6 +98,9 @@ onUnmounted(() => {
       <template v-if="canvas">
         <span class="sep">›</span><span class="current">canvas</span>
       </template>
+      <template v-if="metrics">
+        <span class="sep">›</span><span class="current">metrics</span>
+      </template>
     </nav>
     <div ref="paletteRoot" class="palette-control">
       <button
@@ -166,6 +170,7 @@ onUnmounted(() => {
       </div>
     </div>
     <a v-if="!settings && !backlog && !groups" class="settings-link" href="#/settings">Settings</a>
+    <a v-if="!metrics" class="settings-link" href="#/metrics">Metrics</a>
     <a v-if="!canvas" class="settings-link" href="#/canvas">Canvas</a>
     <a v-if="!groups" class="settings-link" href="#/groups">Sessions log</a>
     <a v-if="!backlog" class="settings-link" href="#/backlog">Backlog</a>

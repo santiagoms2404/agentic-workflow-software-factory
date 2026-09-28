@@ -613,6 +613,14 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible, summary:focus-v
 .card-wrap:hover .archive-control, .card-wrap:focus-within .archive-control, .archive-control:focus-visible { opacity: 1; }
 .archive-control:hover { color: var(--text); border-color: var(--faint); }
 .archive-control:disabled { cursor: wait; }
+/* The card's own controls, beside its link and never inside it. The archive
+   control keeps its look; only its placement moves into this row. */
+.card-controls { position: absolute; z-index: 2; top: 14px; right: 14px; display: flex; align-items: center; gap: 8px; }
+.card-controls .archive-control { position: static; }
+.metrics-control { display: inline-grid; place-items: center; width: 30px; height: 30px; opacity: 0; border: 1px solid var(--border); border-radius: 999px; background: var(--panel-3); color: var(--dim); transition: opacity 160ms ease, color 160ms ease, border-color 160ms ease; }
+.card-wrap:hover .metrics-control, .card-wrap:focus-within .metrics-control, .metrics-control:focus-visible { opacity: 1; }
+.metrics-control:hover { color: var(--text); border-color: var(--faint); }
+.session-filter-label { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
 .card-action-error { position: absolute; z-index: 3; left: 12px; right: 12px; bottom: 12px; margin: 0; padding: 8px; border: 1px solid var(--red); border-radius: 7px; background: var(--panel-3); color: var(--error-text); }
 
 .session-route { padding-bottom: 20px; }
@@ -1240,7 +1248,7 @@ pre { max-height: 42vh; margin: 8px 0 0; padding: 12px 14px; overflow: auto; bor
   .run-strip { padding: 12px; }
   .session-stack { --session-stack-band-height: 66px; }
   .session-stack-peek, .session-stack-overflow { font-size: 10px; }
-  .archive-control { opacity: 1; }
+  .archive-control, .metrics-control { opacity: 1; }
   .waterfall-heading { align-items: flex-start; }
   .timeline-access { justify-content: flex-end; flex-wrap: wrap; }
   .timeline-access > span:first-child { flex-basis: 100%; text-align: right; }

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import { ChartColumn } from "lucide-vue-next";
 import type { ActivityPoint, AgentSummary, PhaseSummary, SessionCard as Session } from "../../shared/types.ts";
 import { axisTicks, costAuthorityLabel, formatCalls, formatCost, formatDate, formatDuration, formatTokens, formatUsage, shortSessionId, stateLabel, stateTone } from "../display.ts";
 import LaneIcon from "./LaneIcon.vue";
@@ -146,6 +147,16 @@ async function archiveSession(): Promise<void> {
       <div v-if="session.usage.costPartial" class="partial-metric"><dt>authority</dt><dd>partial total</dd></div>
     </dl>
   </a>
+  <!-- The run's own controls sit beside the card's link, never inside it: a
+       control nested in an <a> is invalid HTML and its click would also follow
+       the card. The archive control keeps its form and behaviour. -->
+  <div class="card-controls">
+  <a
+    class="metrics-control"
+    :href="`#/metrics/run/${encodeURIComponent(session.sessionId)}`"
+    :aria-label="`Open run ${shortSessionId(session.sessionId)} in metrics`"
+    title="Open this run in metrics"
+  ><ChartColumn :size="16" :stroke-width="2" aria-hidden="true" /></a>
   <button
     type="button"
     class="archive-control"
@@ -154,6 +165,7 @@ async function archiveSession(): Promise<void> {
     title="Archive from dashboard list; lifecycle, Git, and configuration are unchanged"
     @click="archiveSession"
   >{{ archiving ? "…" : "archive" }}</button>
+  </div>
   <p v-if="archiveError" class="card-action-error" role="alert">{{ archiveError }}</p>
   </div>
 </template>

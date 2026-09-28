@@ -1,0 +1,1516 @@
+{
+  "schema": "awsf.route-metrics/v1",
+  "extractedAt": "2026-09-27T12:00:00.000Z",
+  "runs": [
+    {
+      "sessionId": "f1",
+      "project": "awsf",
+      "taskId": "task-f1",
+      "attempt": 1,
+      "workflow": "shift",
+      "tier": 2,
+      "planRef": null,
+      "lifecycleState": "LANDED",
+      "stateGroup": "LANDED",
+      "reviewVerdict": "accept",
+      "ownerReentries": 0,
+      "observabilityDegraded": false,
+      "usageAuthority": "provider",
+      "startedAt": "2026-09-26T10:00:00.000Z",
+      "endedAt": null,
+      "ownerAttribution": null,
+      "attribution": null,
+      "attributionSource": null,
+      "heuristicAttribution": null,
+      "phases": [
+        {
+          "phaseId": "f1:builder",
+          "key": "builder",
+          "ordinal": 1,
+          "kind": "agent",
+          "owner": "builder",
+          "status": "SUCCEEDED",
+          "correctionCount": 0,
+          "maxCorrections": 1,
+          "errorCode": null,
+          "startedAt": "2026-09-26T10:00:00.000Z",
+          "endedAt": "2026-09-26T10:10:00.000Z",
+          "minutes": 10,
+          "agent": {
+            "route": {
+              "adapter": "codex",
+              "provider": "openai-codex",
+              "model": "codex:gpt-6-sol",
+              "effort": "xhigh",
+              "effortSource": "config-agent"
+            },
+            "requestedModel": "codex:gpt-6-sol",
+            "resolvedModel": "gpt-6-sol",
+            "modelProvenance": "stream-authoritative",
+            "turns": 1,
+            "tokens": {
+              "inputTokens": 100000,
+              "outputTokens": 10000,
+              "cacheReadTokens": 400000,
+              "cacheWriteTokens": 0,
+              "reasoningTokens": 2000,
+              "reasoningRelation": "included-in-output",
+              "usageEvents": 1
+            },
+            "tools": {
+              "calls": 0,
+              "byClass": {
+                "read": 0,
+                "search": 0,
+                "edit": 0,
+                "exec": 0,
+                "other": 0
+              },
+              "errors": 0
+            }
+          }
+        },
+        {
+          "phaseId": "f1:reviewer",
+          "key": "reviewer",
+          "ordinal": 2,
+          "kind": "agent",
+          "owner": "reviewer",
+          "status": "SUCCEEDED",
+          "correctionCount": 0,
+          "maxCorrections": 1,
+          "errorCode": null,
+          "startedAt": "2026-09-26T10:00:00.000Z",
+          "endedAt": "2026-09-26T10:12:00.000Z",
+          "minutes": 12,
+          "agent": {
+            "route": {
+              "adapter": "claude",
+              "provider": "anthropic",
+              "model": "opus",
+              "effort": "high",
+              "effortSource": "journal"
+            },
+            "requestedModel": "claude:opus",
+            "resolvedModel": null,
+            "modelProvenance": null,
+            "turns": 0,
+            "tokens": {
+              "inputTokens": 20000,
+              "outputTokens": 3000,
+              "cacheReadTokens": 50000,
+              "cacheWriteTokens": 10000,
+              "reasoningTokens": null,
+              "reasoningRelation": "included-in-output",
+              "usageEvents": 1
+            },
+            "tools": {
+              "calls": 0,
+              "byClass": {
+                "read": 0,
+                "search": 0,
+                "edit": 0,
+                "exec": 0,
+                "other": 0
+              },
+              "errors": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "sessionId": "f3",
+      "project": "awsf",
+      "taskId": "task-f3",
+      "attempt": 1,
+      "workflow": "shift",
+      "tier": 2,
+      "planRef": null,
+      "lifecycleState": "BLOCKED",
+      "stateGroup": "BLOCKED",
+      "reviewVerdict": null,
+      "ownerReentries": 0,
+      "observabilityDegraded": false,
+      "usageAuthority": "none",
+      "startedAt": "2026-09-26T10:00:00.000Z",
+      "endedAt": null,
+      "ownerAttribution": null,
+      "attribution": "model",
+      "attributionSource": "heuristic",
+      "heuristicAttribution": "model",
+      "phases": [
+        {
+          "phaseId": "f3:builder",
+          "key": "builder",
+          "ordinal": 1,
+          "kind": "agent",
+          "owner": "builder",
+          "status": "FAILED",
+          "correctionCount": 0,
+          "maxCorrections": 0,
+          "errorCode": "PermissionBreach",
+          "startedAt": "2026-09-26T10:00:00.000Z",
+          "endedAt": "2026-09-26T10:05:00.000Z",
+          "minutes": 5,
+          "agent": {
+            "route": {
+              "adapter": "codex",
+              "provider": "openai-codex",
+              "model": "codex:gpt-6-sol",
+              "effort": "xhigh",
+              "effortSource": "config-agent"
+            },
+            "requestedModel": "codex:gpt-6-sol",
+            "resolvedModel": null,
+            "modelProvenance": null,
+            "turns": 0,
+            "tokens": {
+              "inputTokens": 40000,
+              "outputTokens": 4000,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0,
+              "reasoningTokens": null,
+              "reasoningRelation": "included-in-output",
+              "usageEvents": 1
+            },
+            "tools": {
+              "calls": 0,
+              "byClass": {
+                "read": 0,
+                "search": 0,
+                "edit": 0,
+                "exec": 0,
+                "other": 0
+              },
+              "errors": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "sessionId": "f4",
+      "project": "awsf",
+      "taskId": "task-f4",
+      "attempt": 1,
+      "workflow": "shift",
+      "tier": 2,
+      "planRef": null,
+      "lifecycleState": "BLOCKED",
+      "stateGroup": "BLOCKED",
+      "reviewVerdict": null,
+      "ownerReentries": 0,
+      "observabilityDegraded": false,
+      "usageAuthority": "none",
+      "startedAt": "2026-09-26T10:00:00.000Z",
+      "endedAt": null,
+      "ownerAttribution": null,
+      "attribution": "factory",
+      "attributionSource": "heuristic",
+      "heuristicAttribution": "factory",
+      "phases": [
+        {
+          "phaseId": "f4:context",
+          "key": "context",
+          "ordinal": 1,
+          "kind": "code",
+          "owner": "host",
+          "status": "FAILED",
+          "correctionCount": 0,
+          "maxCorrections": 1,
+          "errorCode": "Error",
+          "startedAt": "2026-09-26T10:00:00.000Z",
+          "endedAt": "2026-09-26T10:01:00.000Z",
+          "minutes": 1,
+          "agent": null
+        },
+        {
+          "phaseId": "f4:builder",
+          "key": "builder",
+          "ordinal": 2,
+          "kind": "agent",
+          "owner": "builder",
+          "status": "QUEUED",
+          "correctionCount": 0,
+          "maxCorrections": 1,
+          "errorCode": null,
+          "startedAt": null,
+          "endedAt": null,
+          "minutes": null,
+          "agent": {
+            "route": {
+              "adapter": "codex",
+              "provider": "openai-codex",
+              "model": "codex:gpt-6-sol",
+              "effort": "xhigh",
+              "effortSource": "config-agent"
+            },
+            "requestedModel": "codex:gpt-6-sol",
+            "resolvedModel": null,
+            "modelProvenance": null,
+            "turns": 0,
+            "tokens": {
+              "inputTokens": null,
+              "outputTokens": null,
+              "cacheReadTokens": null,
+              "cacheWriteTokens": null,
+              "reasoningTokens": null,
+              "reasoningRelation": "unknown",
+              "usageEvents": 0
+            },
+            "tools": {
+              "calls": 0,
+              "byClass": {
+                "read": 0,
+                "search": 0,
+                "edit": 0,
+                "exec": 0,
+                "other": 0
+              },
+              "errors": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "sessionId": "f5",
+      "project": "awsf",
+      "taskId": "task-f5",
+      "attempt": 1,
+      "workflow": "prove",
+      "tier": 2,
+      "planRef": null,
+      "lifecycleState": "LANDED",
+      "stateGroup": "LANDED",
+      "reviewVerdict": "accept",
+      "ownerReentries": 0,
+      "observabilityDegraded": false,
+      "usageAuthority": "provider",
+      "startedAt": "2026-09-26T10:00:00.000Z",
+      "endedAt": null,
+      "ownerAttribution": null,
+      "attribution": null,
+      "attributionSource": null,
+      "heuristicAttribution": null,
+      "phases": [
+        {
+          "phaseId": "f5:builder",
+          "key": "builder",
+          "ordinal": 1,
+          "kind": "agent",
+          "owner": "builder",
+          "status": "SUCCEEDED",
+          "correctionCount": 0,
+          "maxCorrections": 1,
+          "errorCode": null,
+          "startedAt": "2026-09-26T10:00:00.000Z",
+          "endedAt": "2026-09-26T10:10:00.000Z",
+          "minutes": 10,
+          "agent": {
+            "route": {
+              "adapter": "codex",
+              "provider": "openai-codex",
+              "model": "codex:gpt-6-sol",
+              "effort": "xhigh",
+              "effortSource": "config-agent"
+            },
+            "requestedModel": "codex:gpt-6-sol",
+            "resolvedModel": "gpt-6-sol",
+            "modelProvenance": "stream-authoritative",
+            "turns": 1,
+            "tokens": {
+              "inputTokens": 100000,
+              "outputTokens": 10000,
+              "cacheReadTokens": 400000,
+              "cacheWriteTokens": 0,
+              "reasoningTokens": 2000,
+              "reasoningRelation": "included-in-output",
+              "usageEvents": 1
+            },
+            "tools": {
+              "calls": 0,
+              "byClass": {
+                "read": 0,
+                "search": 0,
+                "edit": 0,
+                "exec": 0,
+                "other": 0
+              },
+              "errors": 0
+            }
+          }
+        },
+        {
+          "phaseId": "f5:reviewer",
+          "key": "reviewer",
+          "ordinal": 2,
+          "kind": "agent",
+          "owner": "reviewer",
+          "status": "SUCCEEDED",
+          "correctionCount": 0,
+          "maxCorrections": 1,
+          "errorCode": null,
+          "startedAt": "2026-09-26T10:00:00.000Z",
+          "endedAt": "2026-09-26T10:12:00.000Z",
+          "minutes": 12,
+          "agent": {
+            "route": {
+              "adapter": "claude",
+              "provider": "anthropic",
+              "model": "opus",
+              "effort": "high",
+              "effortSource": "journal"
+            },
+            "requestedModel": "claude:opus",
+            "resolvedModel": null,
+            "modelProvenance": null,
+            "turns": 0,
+            "tokens": {
+              "inputTokens": 20000,
+              "outputTokens": 3000,
+              "cacheReadTokens": 50000,
+              "cacheWriteTokens": 10000,
+              "reasoningTokens": null,
+              "reasoningRelation": "included-in-output",
+              "usageEvents": 1
+            },
+            "tools": {
+              "calls": 0,
+              "byClass": {
+                "read": 0,
+                "search": 0,
+                "edit": 0,
+                "exec": 0,
+                "other": 0
+              },
+              "errors": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "sessionId": "f2",
+      "project": "fusion-harness",
+      "taskId": "task-f2",
+      "attempt": 1,
+      "workflow": "build-review",
+      "tier": 2,
+      "planRef": null,
+      "lifecycleState": "LANDED",
+      "stateGroup": "LANDED",
+      "reviewVerdict": "accept",
+      "ownerReentries": 0,
+      "observabilityDegraded": false,
+      "usageAuthority": "provider",
+      "startedAt": "2026-09-26T11:00:00.000Z",
+      "endedAt": null,
+      "ownerAttribution": null,
+      "attribution": null,
+      "attributionSource": null,
+      "heuristicAttribution": null,
+      "phases": [
+        {
+          "phaseId": "f2:builder",
+          "key": "builder",
+          "ordinal": 1,
+          "kind": "agent",
+          "owner": "builder",
+          "status": "SUCCEEDED",
+          "correctionCount": 0,
+          "maxCorrections": 1,
+          "errorCode": null,
+          "startedAt": "2026-09-26T10:00:00.000Z",
+          "endedAt": "2026-09-26T10:10:00.000Z",
+          "minutes": 10,
+          "agent": {
+            "route": {
+              "adapter": "codex",
+              "provider": "openai-codex",
+              "model": "codex:gpt-6-sol",
+              "effort": "xhigh",
+              "effortSource": "config-agent"
+            },
+            "requestedModel": "codex:gpt-6-sol",
+            "resolvedModel": "gpt-6-sol",
+            "modelProvenance": "stream-authoritative",
+            "turns": 1,
+            "tokens": {
+              "inputTokens": 100000,
+              "outputTokens": 10000,
+              "cacheReadTokens": 400000,
+              "cacheWriteTokens": 0,
+              "reasoningTokens": 2000,
+              "reasoningRelation": "included-in-output",
+              "usageEvents": 1
+            },
+            "tools": {
+              "calls": 0,
+              "byClass": {
+                "read": 0,
+                "search": 0,
+                "edit": 0,
+                "exec": 0,
+                "other": 0
+              },
+              "errors": 0
+            }
+          }
+        },
+        {
+          "phaseId": "f2:reviewer",
+          "key": "reviewer",
+          "ordinal": 2,
+          "kind": "agent",
+          "owner": "reviewer",
+          "status": "SUCCEEDED",
+          "correctionCount": 0,
+          "maxCorrections": 1,
+          "errorCode": null,
+          "startedAt": "2026-09-26T10:00:00.000Z",
+          "endedAt": "2026-09-26T10:12:00.000Z",
+          "minutes": 12,
+          "agent": {
+            "route": {
+              "adapter": "claude",
+              "provider": "anthropic",
+              "model": "opus",
+              "effort": "high",
+              "effortSource": "journal"
+            },
+            "requestedModel": "claude:opus",
+            "resolvedModel": null,
+            "modelProvenance": null,
+            "turns": 0,
+            "tokens": {
+              "inputTokens": 20000,
+              "outputTokens": 3000,
+              "cacheReadTokens": 50000,
+              "cacheWriteTokens": 10000,
+              "reasoningTokens": null,
+              "reasoningRelation": "included-in-output",
+              "usageEvents": 1
+            },
+            "tools": {
+              "calls": 0,
+              "byClass": {
+                "read": 0,
+                "search": 0,
+                "edit": 0,
+                "exec": 0,
+                "other": 0
+              },
+              "errors": 0
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "roleRows": [
+    {
+      "sessionId": "f1",
+      "taskId": "task-f1",
+      "attempt": 1,
+      "role": "builder",
+      "route": {
+        "adapter": "codex",
+        "provider": "openai-codex",
+        "model": "codex:gpt-6-sol",
+        "effort": "xhigh"
+      },
+      "effortSource": "config-agent",
+      "routeMixed": false,
+      "identityProvenance": "stream-authoritative",
+      "resolvedModel": "gpt-6-sol",
+      "calls": 1,
+      "turns": 1,
+      "phases": 1,
+      "minutes": 10,
+      "corrections": 0,
+      "settled": true,
+      "firstPass": true,
+      "cleanCompletion": true,
+      "failedHere": false,
+      "blockedHere": false,
+      "attribution": null,
+      "attributionSource": null,
+      "heuristicAttribution": null,
+      "tokens": {
+        "inputTokens": 100000,
+        "outputTokens": 10000,
+        "cacheReadTokens": 400000,
+        "cacheWriteTokens": 0,
+        "reasoningTokens": 2000,
+        "reasoningRelation": "included-in-output",
+        "usageEvents": 1
+      },
+      "costAuthority": "unavailable",
+      "tools": {
+        "read": 0,
+        "search": 0,
+        "edit": 0,
+        "exec": 0,
+        "other": 0
+      },
+      "toolErrors": 0,
+      "gates": {
+        "pass": 1,
+        "total": 1,
+        "firstRoundFail": []
+      },
+      "guardrailHits": 0,
+      "claims": 1,
+      "refuted": 0,
+      "honestStops": 0,
+      "recovered": 0,
+      "corrected": 0,
+      "stateGroup": "LANDED",
+      "workflow": "shift",
+      "tier": 2,
+      "project": "awsf",
+      "planRef": null,
+      "reviewVerdict": "accept",
+      "ownerReentries": 0,
+      "reworkPhases": 0,
+      "observabilityDegraded": false,
+      "usageAuthority": "provider",
+      "startedAt": "2026-09-26T10:00:00.000Z",
+      "endedAt": null
+    },
+    {
+      "sessionId": "f1",
+      "taskId": "task-f1",
+      "attempt": 1,
+      "role": "reviewer",
+      "route": {
+        "adapter": "claude",
+        "provider": "anthropic",
+        "model": "opus",
+        "effort": "high"
+      },
+      "effortSource": "journal",
+      "routeMixed": false,
+      "identityProvenance": null,
+      "resolvedModel": null,
+      "calls": 0,
+      "turns": 0,
+      "phases": 1,
+      "minutes": 12,
+      "corrections": 0,
+      "settled": true,
+      "firstPass": true,
+      "cleanCompletion": true,
+      "failedHere": false,
+      "blockedHere": false,
+      "attribution": null,
+      "attributionSource": null,
+      "heuristicAttribution": null,
+      "tokens": {
+        "inputTokens": 20000,
+        "outputTokens": 3000,
+        "cacheReadTokens": 50000,
+        "cacheWriteTokens": 10000,
+        "reasoningTokens": null,
+        "reasoningRelation": "included-in-output",
+        "usageEvents": 1
+      },
+      "costAuthority": "unavailable",
+      "tools": {
+        "read": 0,
+        "search": 0,
+        "edit": 0,
+        "exec": 0,
+        "other": 0
+      },
+      "toolErrors": 0,
+      "gates": {
+        "pass": 0,
+        "total": 0,
+        "firstRoundFail": []
+      },
+      "guardrailHits": 0,
+      "claims": 1,
+      "refuted": 0,
+      "honestStops": 0,
+      "recovered": 0,
+      "corrected": 0,
+      "stateGroup": "LANDED",
+      "workflow": "shift",
+      "tier": 2,
+      "project": "awsf",
+      "planRef": null,
+      "reviewVerdict": "accept",
+      "ownerReentries": 0,
+      "reworkPhases": 0,
+      "observabilityDegraded": false,
+      "usageAuthority": "provider",
+      "startedAt": "2026-09-26T10:00:00.000Z",
+      "endedAt": null
+    },
+    {
+      "sessionId": "f3",
+      "taskId": "task-f3",
+      "attempt": 1,
+      "role": "builder",
+      "route": {
+        "adapter": "codex",
+        "provider": "openai-codex",
+        "model": "codex:gpt-6-sol",
+        "effort": "xhigh"
+      },
+      "effortSource": "config-agent",
+      "routeMixed": false,
+      "identityProvenance": null,
+      "resolvedModel": null,
+      "calls": 0,
+      "turns": 0,
+      "phases": 1,
+      "minutes": 5,
+      "corrections": 0,
+      "settled": true,
+      "firstPass": false,
+      "cleanCompletion": false,
+      "failedHere": true,
+      "blockedHere": true,
+      "attribution": "model",
+      "attributionSource": "heuristic",
+      "heuristicAttribution": "model",
+      "tokens": {
+        "inputTokens": 40000,
+        "outputTokens": 4000,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "reasoningTokens": null,
+        "reasoningRelation": "included-in-output",
+        "usageEvents": 1
+      },
+      "costAuthority": "unavailable",
+      "tools": {
+        "read": 0,
+        "search": 0,
+        "edit": 0,
+        "exec": 0,
+        "other": 0
+      },
+      "toolErrors": 0,
+      "gates": {
+        "pass": 0,
+        "total": 1,
+        "firstRoundFail": [
+          "writes_within_globs"
+        ]
+      },
+      "guardrailHits": 1,
+      "claims": 1,
+      "refuted": 0,
+      "honestStops": 0,
+      "recovered": 0,
+      "corrected": 0,
+      "stateGroup": "BLOCKED",
+      "workflow": "shift",
+      "tier": 2,
+      "project": "awsf",
+      "planRef": null,
+      "reviewVerdict": null,
+      "ownerReentries": 0,
+      "reworkPhases": 0,
+      "observabilityDegraded": false,
+      "usageAuthority": "none",
+      "startedAt": "2026-09-26T10:00:00.000Z",
+      "endedAt": null
+    },
+    {
+      "sessionId": "f5",
+      "taskId": "task-f5",
+      "attempt": 1,
+      "role": "builder",
+      "route": {
+        "adapter": "codex",
+        "provider": "openai-codex",
+        "model": "codex:gpt-6-sol",
+        "effort": "xhigh"
+      },
+      "effortSource": "config-agent",
+      "routeMixed": false,
+      "identityProvenance": "stream-authoritative",
+      "resolvedModel": "gpt-6-sol",
+      "calls": 1,
+      "turns": 1,
+      "phases": 1,
+      "minutes": 10,
+      "corrections": 0,
+      "settled": true,
+      "firstPass": true,
+      "cleanCompletion": true,
+      "failedHere": false,
+      "blockedHere": false,
+      "attribution": null,
+      "attributionSource": null,
+      "heuristicAttribution": null,
+      "tokens": {
+        "inputTokens": 100000,
+        "outputTokens": 10000,
+        "cacheReadTokens": 400000,
+        "cacheWriteTokens": 0,
+        "reasoningTokens": 2000,
+        "reasoningRelation": "included-in-output",
+        "usageEvents": 1
+      },
+      "costAuthority": "unavailable",
+      "tools": {
+        "read": 0,
+        "search": 0,
+        "edit": 0,
+        "exec": 0,
+        "other": 0
+      },
+      "toolErrors": 0,
+      "gates": {
+        "pass": 1,
+        "total": 1,
+        "firstRoundFail": []
+      },
+      "guardrailHits": 0,
+      "claims": 1,
+      "refuted": 0,
+      "honestStops": 0,
+      "recovered": 0,
+      "corrected": 0,
+      "stateGroup": "LANDED",
+      "workflow": "prove",
+      "tier": 2,
+      "project": "awsf",
+      "planRef": null,
+      "reviewVerdict": "accept",
+      "ownerReentries": 0,
+      "reworkPhases": 0,
+      "observabilityDegraded": false,
+      "usageAuthority": "provider",
+      "startedAt": "2026-09-26T10:00:00.000Z",
+      "endedAt": null
+    },
+    {
+      "sessionId": "f5",
+      "taskId": "task-f5",
+      "attempt": 1,
+      "role": "reviewer",
+      "route": {
+        "adapter": "claude",
+        "provider": "anthropic",
+        "model": "opus",
+        "effort": "high"
+      },
+      "effortSource": "journal",
+      "routeMixed": false,
+      "identityProvenance": null,
+      "resolvedModel": null,
+      "calls": 0,
+      "turns": 0,
+      "phases": 1,
+      "minutes": 12,
+      "corrections": 0,
+      "settled": true,
+      "firstPass": true,
+      "cleanCompletion": true,
+      "failedHere": false,
+      "blockedHere": false,
+      "attribution": null,
+      "attributionSource": null,
+      "heuristicAttribution": null,
+      "tokens": {
+        "inputTokens": 20000,
+        "outputTokens": 3000,
+        "cacheReadTokens": 50000,
+        "cacheWriteTokens": 10000,
+        "reasoningTokens": null,
+        "reasoningRelation": "included-in-output",
+        "usageEvents": 1
+      },
+      "costAuthority": "unavailable",
+      "tools": {
+        "read": 0,
+        "search": 0,
+        "edit": 0,
+        "exec": 0,
+        "other": 0
+      },
+      "toolErrors": 0,
+      "gates": {
+        "pass": 0,
+        "total": 0,
+        "firstRoundFail": []
+      },
+      "guardrailHits": 0,
+      "claims": 1,
+      "refuted": 0,
+      "honestStops": 0,
+      "recovered": 0,
+      "corrected": 0,
+      "stateGroup": "LANDED",
+      "workflow": "prove",
+      "tier": 2,
+      "project": "awsf",
+      "planRef": null,
+      "reviewVerdict": "accept",
+      "ownerReentries": 0,
+      "reworkPhases": 0,
+      "observabilityDegraded": false,
+      "usageAuthority": "provider",
+      "startedAt": "2026-09-26T10:00:00.000Z",
+      "endedAt": null
+    },
+    {
+      "sessionId": "f2",
+      "taskId": "task-f2",
+      "attempt": 1,
+      "role": "builder",
+      "route": {
+        "adapter": "codex",
+        "provider": "openai-codex",
+        "model": "codex:gpt-6-sol",
+        "effort": "xhigh"
+      },
+      "effortSource": "config-agent",
+      "routeMixed": false,
+      "identityProvenance": "stream-authoritative",
+      "resolvedModel": "gpt-6-sol",
+      "calls": 1,
+      "turns": 1,
+      "phases": 1,
+      "minutes": 10,
+      "corrections": 0,
+      "settled": true,
+      "firstPass": true,
+      "cleanCompletion": true,
+      "failedHere": false,
+      "blockedHere": false,
+      "attribution": null,
+      "attributionSource": null,
+      "heuristicAttribution": null,
+      "tokens": {
+        "inputTokens": 100000,
+        "outputTokens": 10000,
+        "cacheReadTokens": 400000,
+        "cacheWriteTokens": 0,
+        "reasoningTokens": 2000,
+        "reasoningRelation": "included-in-output",
+        "usageEvents": 1
+      },
+      "costAuthority": "unavailable",
+      "tools": {
+        "read": 0,
+        "search": 0,
+        "edit": 0,
+        "exec": 0,
+        "other": 0
+      },
+      "toolErrors": 0,
+      "gates": {
+        "pass": 1,
+        "total": 1,
+        "firstRoundFail": []
+      },
+      "guardrailHits": 0,
+      "claims": 1,
+      "refuted": 0,
+      "honestStops": 0,
+      "recovered": 0,
+      "corrected": 0,
+      "stateGroup": "LANDED",
+      "workflow": "build-review",
+      "tier": 2,
+      "project": "fusion-harness",
+      "planRef": null,
+      "reviewVerdict": "accept",
+      "ownerReentries": 0,
+      "reworkPhases": 0,
+      "observabilityDegraded": false,
+      "usageAuthority": "provider",
+      "startedAt": "2026-09-26T11:00:00.000Z",
+      "endedAt": null
+    },
+    {
+      "sessionId": "f2",
+      "taskId": "task-f2",
+      "attempt": 1,
+      "role": "reviewer",
+      "route": {
+        "adapter": "claude",
+        "provider": "anthropic",
+        "model": "opus",
+        "effort": "high"
+      },
+      "effortSource": "journal",
+      "routeMixed": false,
+      "identityProvenance": null,
+      "resolvedModel": null,
+      "calls": 0,
+      "turns": 0,
+      "phases": 1,
+      "minutes": 12,
+      "corrections": 0,
+      "settled": true,
+      "firstPass": true,
+      "cleanCompletion": true,
+      "failedHere": false,
+      "blockedHere": false,
+      "attribution": null,
+      "attributionSource": null,
+      "heuristicAttribution": null,
+      "tokens": {
+        "inputTokens": 20000,
+        "outputTokens": 3000,
+        "cacheReadTokens": 50000,
+        "cacheWriteTokens": 10000,
+        "reasoningTokens": null,
+        "reasoningRelation": "included-in-output",
+        "usageEvents": 1
+      },
+      "costAuthority": "unavailable",
+      "tools": {
+        "read": 0,
+        "search": 0,
+        "edit": 0,
+        "exec": 0,
+        "other": 0
+      },
+      "toolErrors": 0,
+      "gates": {
+        "pass": 0,
+        "total": 0,
+        "firstRoundFail": []
+      },
+      "guardrailHits": 0,
+      "claims": 1,
+      "refuted": 0,
+      "honestStops": 0,
+      "recovered": 0,
+      "corrected": 0,
+      "stateGroup": "LANDED",
+      "workflow": "build-review",
+      "tier": 2,
+      "project": "fusion-harness",
+      "planRef": null,
+      "reviewVerdict": "accept",
+      "ownerReentries": 0,
+      "reworkPhases": 0,
+      "observabilityDegraded": false,
+      "usageAuthority": "provider",
+      "startedAt": "2026-09-26T11:00:00.000Z",
+      "endedAt": null
+    }
+  ],
+  "rateCard": {
+    "checkedAt": "2026-09-26",
+    "rows": [
+      {
+        "model": "claude-fable-5-1",
+        "label": "Fable 5.1",
+        "tier": "state of the art",
+        "input": 10,
+        "cacheWrite": 12.5,
+        "cacheRead": 0.25,
+        "output": 50,
+        "note": "credit-billed, explicit authorization only",
+        "provider": "anthropic",
+        "checkedAt": "2026-09-26",
+        "source": "https://platform.claude.com/docs/en/about-claude/pricing"
+      },
+      {
+        "model": "claude-opus-5-5",
+        "label": "Opus 5.5",
+        "tier": "state of the art",
+        "input": 4,
+        "cacheWrite": 5,
+        "cacheRead": 0.2,
+        "output": 20,
+        "note": "released 2026-09-22, default effort medium",
+        "provider": "anthropic",
+        "checkedAt": "2026-09-26",
+        "source": "https://platform.claude.com/docs/en/about-claude/pricing"
+      },
+      {
+        "model": "claude-opus-5",
+        "label": "Opus 5",
+        "tier": "workhorse",
+        "input": 5,
+        "cacheWrite": 6.25,
+        "cacheRead": 0.5,
+        "output": 25,
+        "note": null,
+        "provider": "anthropic",
+        "checkedAt": "2026-09-26",
+        "source": "https://platform.claude.com/docs/en/about-claude/pricing"
+      },
+      {
+        "model": "claude-sonnet-5",
+        "label": "Sonnet 5",
+        "tier": "workhorse",
+        "input": 2,
+        "cacheWrite": 2.5,
+        "cacheRead": 0.2,
+        "output": 10,
+        "note": "$2/$10 made permanent",
+        "provider": "anthropic",
+        "checkedAt": "2026-09-26",
+        "source": "https://platform.claude.com/docs/en/about-claude/pricing"
+      },
+      {
+        "model": "claude-haiku-4-5",
+        "label": "Haiku 4.5",
+        "tier": "lightweight",
+        "input": 1,
+        "cacheWrite": 1.25,
+        "cacheRead": 0.1,
+        "output": 5,
+        "note": null,
+        "provider": "anthropic",
+        "checkedAt": "2026-09-26",
+        "source": "https://platform.claude.com/docs/en/about-claude/pricing"
+      },
+      {
+        "model": "gpt-6-astra",
+        "label": "GPT-6 Astra",
+        "tier": "state of the art",
+        "input": 10,
+        "cacheWrite": 0,
+        "cacheRead": 1,
+        "output": 50,
+        "note": "released 2026-09-04",
+        "provider": "openai",
+        "checkedAt": "2026-09-26",
+        "source": "https://developers.openai.com/api/docs/pricing"
+      },
+      {
+        "model": "gpt-6-sol",
+        "label": "GPT-6 Sol",
+        "tier": "workhorse",
+        "input": 2,
+        "cacheWrite": 0,
+        "cacheRead": 0.2,
+        "output": 10,
+        "note": null,
+        "provider": "openai",
+        "checkedAt": "2026-09-26",
+        "source": "https://developers.openai.com/api/docs/pricing"
+      },
+      {
+        "model": "gpt-6-luna",
+        "label": "GPT-6 Luna",
+        "tier": "lightweight",
+        "input": 0.1,
+        "cacheWrite": 0,
+        "cacheRead": 0.01,
+        "output": 0.5,
+        "note": null,
+        "provider": "openai",
+        "checkedAt": "2026-09-26",
+        "source": "https://developers.openai.com/api/docs/pricing"
+      },
+      {
+        "model": "gpt-5.6-sol",
+        "label": "GPT-5.6 Sol",
+        "tier": "workhorse",
+        "input": 4,
+        "cacheWrite": 0,
+        "cacheRead": 0.4,
+        "output": 20,
+        "note": null,
+        "provider": "openai",
+        "checkedAt": "2026-09-26",
+        "source": "https://developers.openai.com/api/docs/pricing"
+      },
+      {
+        "model": "gpt-5.6-terra",
+        "label": "GPT-5.6 Terra",
+        "tier": "workhorse",
+        "input": 2,
+        "cacheWrite": 0,
+        "cacheRead": 0.2,
+        "output": 12,
+        "note": null,
+        "provider": "openai",
+        "checkedAt": "2026-09-26",
+        "source": "https://developers.openai.com/api/docs/pricing"
+      }
+    ],
+    "limitations": [
+      "Cache writes are priced at the 5-minute rate. A 1-hour write bills 2x input, and usage events do not split the two, so ≈ list $ runs low for Claude rows.",
+      "OpenAI rows are short-context rates.",
+      "OpenAI charges no cache write.",
+      "Reasoning tokens bill as output on both providers; they are added to output only when a usage event reports them as additive.",
+      "A list-price equivalent is a comparison unit, never spend. Subscription routes still show no spend figure."
+    ]
+  },
+  "priors": {
+    "checkedAt": "2026-09-26",
+    "benchmarks": [
+      {
+        "id": "terminal-bench-4",
+        "name": "Terminal-Bench 4.0",
+        "tests": "Long multi-step terminal tasks in containers, graded by tests, including error recovery.",
+        "informs": "builder, shift, host validation",
+        "roles": [
+          "builder"
+        ],
+        "transfer": "high",
+        "scale": "percent",
+        "scores": [
+          {
+            "model": "claude-opus-5-5",
+            "score": 66.4,
+            "effort": "xhigh"
+          },
+          {
+            "model": "gpt-6-astra",
+            "score": 57.9,
+            "effort": "high"
+          },
+          {
+            "model": "claude-fable-5-1",
+            "score": 55.8,
+            "effort": null
+          },
+          {
+            "model": "claude-opus-5",
+            "score": 52.3,
+            "effort": null
+          },
+          {
+            "model": "gpt-5.6-sol",
+            "score": 37.3,
+            "effort": null
+          }
+        ],
+        "summary": "Opus 5.5 66.4 (xhigh) · GPT-6 Astra 57.9 (high) · Fable 5.1 55.8 · Opus 5 52.3 · GPT-5.6 Sol 37.3",
+        "sources": [
+          "https://www.anthropic.com/news/claude-opus-5-5"
+        ],
+        "checkedAt": "2026-09-26"
+      },
+      {
+        "id": "swe-bench-pro",
+        "name": "SWE-bench Pro (Scale)",
+        "tests": "1,865 issue-resolution tasks across 41 professional repos, hidden tests, built to resist contamination.",
+        "informs": "builder on bounded source changes",
+        "roles": [],
+        "transfer": "medium",
+        "scale": "percent",
+        "scores": [],
+        "summary": "Harness dominates: aggregators report 89.9 and a standardized 61.5 for the top models",
+        "sources": [
+          "https://www.morphllm.com/swe-bench-pro"
+        ],
+        "checkedAt": "2026-09-26"
+      },
+      {
+        "id": "swe-bench-verified",
+        "name": "SWE-bench Verified",
+        "tests": "500 human-validated GitHub issues.",
+        "informs": "none",
+        "roles": [],
+        "transfer": "none",
+        "scale": "percent",
+        "scores": [],
+        "summary": "Archived as saturated by Vals AI on 2026-09-01",
+        "sources": [
+          "https://benchlm.ai/benchmarks/swe-bench-verified"
+        ],
+        "checkedAt": "2026-09-26"
+      },
+      {
+        "id": "cursorbench-4",
+        "name": "CursorBench 4.0",
+        "tests": "Tasks drawn from real editor sessions.",
+        "informs": "builder",
+        "roles": [],
+        "transfer": "medium",
+        "scale": "percent",
+        "scores": [
+          {
+            "model": "claude-opus-5-5",
+            "score": 57.8,
+            "effort": null
+          },
+          {
+            "model": "claude-fable-5-1",
+            "score": 51.8,
+            "effort": null
+          },
+          {
+            "model": "gpt-5.6-sol",
+            "score": 41.7,
+            "effort": null
+          }
+        ],
+        "summary": "Opus 5.5 57.8 · Fable 5.1 51.8 · GPT-5.6 Sol 41.7",
+        "sources": [
+          "https://www.anthropic.com/news/claude-opus-5-5"
+        ],
+        "checkedAt": "2026-09-26"
+      },
+      {
+        "id": "swe-atlas-qna",
+        "name": "SWE-Atlas-QnA",
+        "tests": "Answering questions about an unfamiliar codebase.",
+        "informs": "scout, reviewer reading",
+        "roles": [
+          "scout",
+          "reviewer"
+        ],
+        "transfer": "medium",
+        "scale": "percent",
+        "scores": [],
+        "summary": "In the Artificial Analysis coding index",
+        "sources": [
+          "https://artificialanalysis.ai/articles/benchmarking-gpt-6-astra"
+        ],
+        "checkedAt": "2026-09-26"
+      },
+      {
+        "id": "deepswe-1-1",
+        "name": "DeepSWE v1.1",
+        "tests": "Long-horizon software engineering from short, realistic prompts. Reports steps, output tokens and cost per task.",
+        "informs": "builder on multi-file work",
+        "roles": [],
+        "transfer": "high",
+        "scale": "index",
+        "scores": [],
+        "summary": "GPT-6 Astra first at about 30k output tokens and 29 steps (IndyDevDan's reading). AA: Astra 68 · GPT-5.6 Sol 72",
+        "sources": [
+          "IndyDevDan, \"top five benchmarks for agentic engineering\" (video transcript supplied by the owner)",
+          "https://artificialanalysis.ai/articles/benchmarking-gpt-6-astra"
+        ],
+        "checkedAt": "2026-09-26"
+      },
+      {
+        "id": "apex-agents",
+        "name": "APEX-Agents",
+        "tests": "Expert-vetted knowledge work in investment banking, consulting and law, run inside file workspaces.",
+        "informs": "planner, designer, documenter: a proxy for non-code domains such as Smart Health",
+        "roles": [],
+        "transfer": "medium",
+        "scale": "percent",
+        "scores": [],
+        "summary": "Near saturation at the top (80s). Publishes no cost or time",
+        "sources": [
+          "IndyDevDan, \"top five benchmarks for agentic engineering\" (video transcript supplied by the owner)"
+        ],
+        "checkedAt": "2026-09-26"
+      },
+      {
+        "id": "aa-omniscience",
+        "name": "AA-Omniscience",
+        "tests": "Factual reliability: correct, incorrect, partial or not attempted, with no penalty for declining.",
+        "informs": "every role: honest stops against false success claims",
+        "roles": [],
+        "transfer": "high as a method",
+        "scale": "index",
+        "scores": [],
+        "summary": "Anthropic and OpenAI flagships lead. Scores fall off sharply below them",
+        "sources": [
+          "IndyDevDan, \"top five benchmarks for agentic engineering\" (video transcript supplied by the owner)",
+          "https://artificialanalysis.ai/articles/benchmarking-gpt-6-astra"
+        ],
+        "checkedAt": "2026-09-26"
+      },
+      {
+        "id": "gdpval-aa-2-1",
+        "name": "GDPval-AA v2.1",
+        "tests": "Professional deliverables across 44 occupations, graded pairwise as Elo.",
+        "informs": "planner, designer, documenter",
+        "roles": [
+          "planner",
+          "designer",
+          "documenter"
+        ],
+        "transfer": "medium",
+        "scale": "elo",
+        "scores": [
+          {
+            "model": "claude-opus-5-5",
+            "score": 1846,
+            "effort": null
+          },
+          {
+            "model": "claude-fable-5-1",
+            "score": 1735,
+            "effort": null
+          },
+          {
+            "model": "claude-opus-5",
+            "score": 1708,
+            "effort": null
+          },
+          {
+            "model": "gpt-5.6-sol",
+            "score": 1588,
+            "effort": null
+          },
+          {
+            "model": "gpt-6-astra",
+            "score": 1542,
+            "effort": null
+          }
+        ],
+        "summary": "Opus 5.5 1846 · Fable 5.1 1735 · Opus 5 1708 · GPT-5.6 Sol 1588 · GPT-6 Astra 1542",
+        "sources": [
+          "https://www.anthropic.com/news/claude-opus-5-5"
+        ],
+        "checkedAt": "2026-09-26"
+      },
+      {
+        "id": "aa-briefcase",
+        "name": "AA-Briefcase",
+        "tests": "Long-horizon knowledge work over multi-week projects.",
+        "informs": "Marimba, the driving session",
+        "roles": [],
+        "transfer": "medium",
+        "scale": "elo",
+        "scores": [],
+        "summary": "GPT-6 Astra about 90 Elo above GPT-5.6 Sol",
+        "sources": [
+          "https://artificialanalysis.ai/models/releases/comparisons/gpt-6-sol-vs-gpt-6-astra"
+        ],
+        "checkedAt": "2026-09-26"
+      },
+      {
+        "id": "automationbench",
+        "name": "AutomationBench",
+        "tests": "600+ business tasks across six domains. A task fails if it trips a guardrail on the way.",
+        "informs": "every role that writes: completion without guardrail violations",
+        "roles": [],
+        "transfer": "high as a method",
+        "scale": "percent",
+        "scores": [
+          {
+            "model": "gpt-6-astra",
+            "score": 41.4,
+            "effort": null
+          },
+          {
+            "model": "claude-opus-5-5",
+            "score": 40,
+            "effort": null
+          }
+        ],
+        "summary": "GPT-6 Astra 41.4 · Opus 5.5 40.0 (Anthropic table)",
+        "sources": [
+          "https://www.anthropic.com/news/claude-opus-5-5",
+          "IndyDevDan, \"top five benchmarks for agentic engineering\" (video transcript supplied by the owner)"
+        ],
+        "checkedAt": "2026-09-26"
+      },
+      {
+        "id": "osworld-2",
+        "name": "OSWorld 2.0",
+        "tests": "Operating a desktop GUI.",
+        "informs": "journey and visual inspection only",
+        "roles": [],
+        "transfer": "low",
+        "scale": "percent",
+        "scores": [
+          {
+            "model": "claude-opus-5-5",
+            "score": 81.8,
+            "effort": null
+          },
+          {
+            "model": "claude-fable-5-1",
+            "score": 80.7,
+            "effort": null
+          }
+        ],
+        "summary": "Opus 5.5 81.8 · Fable 5.1 80.7",
+        "sources": [
+          "https://www.anthropic.com/news/claude-opus-5-5"
+        ],
+        "checkedAt": "2026-09-26"
+      },
+      {
+        "id": "humanitys-last-exam",
+        "name": "Humanity's Last Exam",
+        "tests": "Expert-level questions, with tools.",
+        "informs": "little: knowledge, not agency",
+        "roles": [],
+        "transfer": "low",
+        "scale": "percent",
+        "scores": [
+          {
+            "model": "claude-opus-5-5",
+            "score": 67.7,
+            "effort": null
+          },
+          {
+            "model": "gpt-6-astra",
+            "score": 57.2,
+            "effort": null
+          }
+        ],
+        "summary": "Opus 5.5 67.7 · GPT-6 Astra 57.2",
+        "sources": [
+          "https://www.anthropic.com/news/claude-opus-5-5"
+        ],
+        "checkedAt": "2026-09-26"
+      },
+      {
+        "id": "metr-time-horizon",
+        "name": "METR time horizon",
+        "tests": "Task length a model finishes at 50% success.",
+        "informs": "method for an AWSF horizon per route",
+        "roles": [],
+        "transfer": "high as a method",
+        "scale": "index",
+        "scores": [],
+        "summary": "Frontier 50% horizon above 16 h (May 2026). METR calls values past 16 h unreliable",
+        "sources": [
+          "https://metr.org/time-horizons/"
+        ],
+        "checkedAt": "2026-09-26"
+      }
+    ],
+    "modelLabels": {
+      "claude-opus-5": "TB 4.0 52.3",
+      "gpt-5.6-sol": "TB 4.0 37.3",
+      "claude-opus-5-5": "TB 4.0 66.4",
+      "gpt-6-sol": "AA index up to 48"
+    }
+  },
+  "untestedRoutes": [
+    {
+      "adapter": "claude",
+      "provider": "anthropic",
+      "model": "claude-opus-5-5",
+      "effort": "medium",
+      "label": "Opus 5.5 · medium",
+      "prior": "TB 4.0 66.4 at xhigh"
+    },
+    {
+      "adapter": "claude",
+      "provider": "anthropic",
+      "model": "claude-sonnet-5",
+      "effort": "medium",
+      "label": "Sonnet 5 · medium",
+      "prior": "$2 / $10"
+    },
+    {
+      "adapter": "codex",
+      "provider": "openai-codex",
+      "model": "gpt-6-sol",
+      "effort": "high",
+      "label": "GPT-6 Sol · high",
+      "prior": "AA index 28 to 48 by effort"
+    },
+    {
+      "adapter": "codex",
+      "provider": "openai-codex",
+      "model": "gpt-5.6-terra",
+      "effort": "medium",
+      "label": "GPT-5.6 Terra · medium",
+      "prior": "$2 / $12"
+    }
+  ]
+}

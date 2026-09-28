@@ -8,9 +8,11 @@ import SettingsRoute from "./components/SettingsRoute.vue";
 import BacklogRoute from "./routes/backlog.vue";
 import CanvasScreen from "./routes/canvas.vue";
 import GroupsRoute from "./routes/groups.vue";
+import MetricsScreen from "./routes/metrics.vue";
 import { usePolling, type PollMode } from "./composables/usePolling.ts";
 import { useNotifySound } from "./composables/useNotifySound.ts";
 import { isCanvasRoute, parseCanvasRoute, type CanvasRoute } from "./canvas-view.ts";
+import { DEFAULT_METRICS_ROUTE, isMetricsRoute, parseMetricsRoute, readRoleColors, type MetricsRouteState } from "./metrics-lens.ts";
 import { admitNewFilterValues, LIFECYCLE_STATES } from "./session-filters.ts";
 import { groupFilterValues } from "./session-groups.ts";
 import { PLAN_KINDS } from "./session-plans.ts";
@@ -34,6 +36,10 @@ const groupsRoute = ref(false);
 const canvasRoute = ref(false);
 /** Selection, camera and filters, all of them in the URL so Back restores them. */
 const canvasState = ref<CanvasRoute>({ kinds: ["run", "session", "plan"], selected: null, camera: null, opened: null });
+const metricsRoute = ref(false);
+/** The view, the run and the lens, in the URL for the same reason as the canvas's. */
+const metricsState = ref<MetricsRouteState>(DEFAULT_METRICS_ROUTE);
+const roleColors = computed(() => readRoleColors(settings.value));
 /** The plan a sessions-view card asked the backlog to open with. */
 const backlogPlan = ref<string | null>(null);
 /** The driving session whose tree the groups screen is showing. */
@@ -137,6 +143,10 @@ function readRoute(): void {
   // because Back has to restore the camera and the selection with it.
   canvasRoute.value = isCanvasRoute(location.hash);
   if (canvasRoute.value) canvasState.value = parseCanvasRoute(location.hash);
+  // `#/metrics/run/<sessionId>?x.role=…`: what a run card's metrics control
+  // opens, with the lens riding along in the query so Back restores it.
+  metricsRoute.value = isMetricsRoute(location.hash);
+  if (metricsRoute.value) metricsState.value = parseMetricsRoute(location.hash);
   const groupWithId = /^#\/groups\/([^/]+)$/.exec(location.hash);
   groupsRoute.value = location.hash === "#/groups" || groupWithId !== null;
   selectedGroup.value = groupWithId?.[1] ? decodeURIComponent(groupWithId[1]) : null;
@@ -153,7 +163,9 @@ const phaseName = computed(() => detail.value?.phases.find((phase) => phase.phas
 const mode = computed<PollMode>(() => health.value?.activeSessions ? "live" : sessions.value.sessions.length ? "grid" : "idle");
 
 async function load(): Promise<void> {
-  const dataRequest = settingsRoute.value
+  // The metrics tab polls its own payload; the shell needs only health here.
+  const dataRequest = metricsRoute.value ? Promise.resolve(null)
+    : settingsRoute.value
     ? fetch("/api/v1/adapters")
     : groupsRoute.value || canvasRoute.value ? fetch("/api/v1/sessions")
     : backlogRoute.value ? fetch("/api/v1/tickets")
@@ -168,7 +180,9 @@ async function load(): Promise<void> {
   ]);
   if (!nextHealth.ok) throw new Error("Dashboard data unavailable");
   health.value = await nextHealth.json() as HealthResponse;
-  if (settingsRoute.value) {
+  if (metricsRoute.value) {
+    detail.value = null;
+  } else if (settingsRoute.value) {
     const adaptersResponse = nextData as Response;
     if (!adaptersResponse.ok) throw new Error("Settings unavailable");
     adapters.value = await adaptersResponse.json() as AdaptersResponse;
@@ -211,9 +225,11 @@ const { enabled: soundEnabled, setEnabled: setSoundEnabled } = useNotifySound(co
     :backlog="backlogRoute"
     :groups="groupsRoute"
     :canvas="canvasRoute"
+    :metrics="metricsRoute"
   >
     <SettingsRoute v-if="settingsRoute" :settings="settings" :adapters="adapters.adapters" :health="health"
       :sound-enabled="soundEnabled" @update:sound-enabled="setSoundEnabled" />
+    <MetricsScreen v-else-if="metricsRoute" :route="metricsState" :role-colors="roleColors" />
     <CanvasScreen
       v-else-if="canvasRoute"
       :sessions="sessions.sessions"
