@@ -26,7 +26,6 @@ import type { AwsfConfig } from "../../config/schema.ts";
 import { toConfigSnapshotJson } from "../../config/effective-config.ts";
 import type { EnvelopeBase } from "../../contracts/envelope-base.ts";
 import type { CandidateAdoptionEvidence, CandidateIntegration, ShiftAdoptionSource } from "../../contracts/candidate-adoption.ts";
-import type { AcceptedPhase } from "../../contracts/phase-recovery.ts";
 import { parseEnvelope } from "../../contracts/parse-envelope.ts";
 import { TEST_OUTPUT_TAIL_MAX_CHARS, type TestOutput } from "../../contracts/test-output.ts";
 import { wrapEnvelope } from "../../contracts/stored-envelope.ts";
@@ -56,7 +55,6 @@ import { transition, type EdgeId, type TaskState } from "../../state/task-machin
 import { ceilingFor, callCeilingsOf } from "../../state/tiers.ts";
 import type { WorkflowRecipe } from "../../workflow/compiler.ts";
 import { isCompiledWorkflowId } from "../../workflow/compiled-ids.ts";
-import { bindShiftRecipe, shiftPhaseRole, shiftTicketOf } from "../../workflow/shift/bind.ts";
 import { buildReviewWorkflow } from "../../workflow/recipes/build-review.ts";
 import { assertRoutesReachWorkflow, parseRouteFlags, type PhaseRouteOverrides } from "../../workflow/route-flags.ts";
 import { simpleSdlcWorkflow } from "../../workflow/recipes/simple-sdlc.ts";
@@ -87,6 +85,7 @@ import {
   type ReviewPhaseInfrastructure,
 } from "./review-phase.ts";
 import { candidatePathsBetween } from "../../workflow/review-evidence.ts";
+import { completedShift } from "../../workflow/candidate-seed.ts";
 
 const { chmod, mkdir, open, readFile, realpath, writeFile } = fs;
 
@@ -280,66 +279,6 @@ function safeFailure(error: unknown): Error {
 }
 
 /**
- * The completed part of a sealed shift: the tickets, in run order, whose build
- * was accepted and whose gate phase then accepted that build's commit, and the
- * commit the last of them made.
- *
- * A shift's L7 comes only after its last ticket, so a shift stopped at ticket 5
- * never records one, and the generic rule would call its first four tickets
- * partial work. They are not: each accepted gate phase is the host's durable
- * statement that the ticket's own commit passed the configured gates, which is
- * what L7 states for a single builder. The first ticket without that statement
- * ends the completed run, and its commit, if it made one, is not adopted.
- */
-async function completedShift(source: AttemptStatus, evidence: readonly AttemptEvidence[]): Promise<{
-  readonly sourceRecipe: WorkflowRecipe;
-  readonly shift: ShiftAdoptionSource;
-  readonly candidateSha: string;
-}> {
-  const manifest = source.shift;
-  if (manifest == null) throw new CandidateAdoptionRejected(`source workflow ${JSON.stringify(source.workflow)} records no shift selection`);
-  let sourceRecipe: WorkflowRecipe;
-  try {
-    // Membership comes from the recipe the selection rebuilds, never from the
-    // shape of a phase id. The prompts shape no membership, so none are read.
-    sourceRecipe = await bindShiftRecipe(source.repository, manifest, { prompts: { builder: "", reviewer: "" } });
-  } catch (error) {
-    throw new CandidateAdoptionRejected(`the source shift cannot be rebuilt from its recorded selection: ${safeFailure(error).message}`);
-  }
-  const accepted = new Map<string, AcceptedPhase>();
-  for (const record of evidence) if (record.type === "phase-accepted") accepted.set(record.accepted.phaseKey, record.accepted);
-  const phases = sourceRecipe.phases;
-  const completedTickets: string[] = [];
-  let candidateSha: string | null = null;
-  for (const ticket of manifest.tickets) {
-    const own = phases.filter((phase) => shiftTicketOf(phases, phase.id) === ticket.id);
-    const build = own.find((phase) => shiftPhaseRole(phases, phase.id) === "builder");
-    const tests = own.find((phase) => shiftPhaseRole(phases, phase.id) === "tests");
-    const built = build === undefined ? undefined : accepted.get(build.id);
-    const measured = tests === undefined ? undefined : accepted.get(tests.id);
-    if (built?.candidateSha == null || measured === undefined) break;
-    if (measured.candidateSha !== built.candidateSha) {
-      throw new CandidateAdoptionRejected(`ticket ${ticket.id}'s gates accepted ${String(measured.candidateSha)}, not its build's commit ${built.candidateSha}`);
-    }
-    completedTickets.push(ticket.id);
-    candidateSha = built.candidateSha;
-  }
-  if (candidateSha === null) {
-    throw new CandidateAdoptionRejected("source shift completed no ticket; partial work is never adopted");
-  }
-  return {
-    sourceRecipe,
-    candidateSha,
-    shift: {
-      plan: manifest.plan,
-      milestones: [...manifest.milestones],
-      completedTickets,
-      remainingTickets: manifest.tickets.map((ticket) => ticket.id).slice(completedTickets.length),
-    },
-  };
-}
-
-/**
  * Read-only eligibility check. In particular, this never opens the cancelled
  * attempt's worktree: the status/journal prove completion and Git objects in
  * the canonical repository prove identity.
@@ -365,7 +304,9 @@ export async function inspectSealedCandidate(
   // ordinary build-review work over the unrun tail. A shift target would have
   // to reconcile the inherited diff with a compiled manifest, a second
   // reconciliation surface for a case build-review already serves.
-  const compiled = isCompiledWorkflowId(source.workflow) ? await completedShift(source, evidence) : null;
+  const compiled = isCompiledWorkflowId(source.workflow)
+    ? await completedShift(source, evidence, (detail) => new CandidateAdoptionRejected(detail))
+    : null;
   const completedSha = compiled === null ? diagnostic.candidateSha : compiled.candidateSha;
   if (completedSha === null || source.baseSha === null) {
     throw new CandidateAdoptionRejected("source records no completed candidate; partial work is never adopted");

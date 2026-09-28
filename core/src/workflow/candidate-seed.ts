@@ -5,8 +5,9 @@ import { Value } from "@sinclair/typebox/value";
 import type { AwsfConfig } from "../config/schema.ts";
 import { toConfigSnapshotJson } from "../config/effective-config.ts";
 import { assertCandidateSeed, type CandidateSeed } from "../contracts/candidate-seed.ts";
-import { CandidateAdoptionEvidenceSchema, type CandidateAdoptionEvidence } from "../contracts/candidate-adoption.ts";
+import { CandidateAdoptionEvidenceSchema, type CandidateAdoptionEvidence, type ShiftAdoptionSource } from "../contracts/candidate-adoption.ts";
 import { canonicalJson, sha256 } from "../contracts/owner-amendment.ts";
+import type { AcceptedPhase } from "../contracts/phase-recovery.ts";
 import type { ProcessIdentity } from "../execution/launcher-barrier.ts";
 import { groupMembers } from "../execution/process-controller.ts";
 import { noProtectedPaths, writesWithinGlobs } from "../gates/git-diff.ts";
@@ -14,11 +15,15 @@ import { riskTierSufficient } from "../gates/risk.ts";
 import { assertClean, runGit, systemGitRunner } from "../git/changes.ts";
 import { HOST_AUTHOR } from "../git/commit.ts";
 import { IntegrationRefused, planIntegration, verifyIntegrationCommit } from "../git/integration.ts";
+import type { AttemptEvidence } from "../observability/attempt-evidence.ts";
 import type { JournalRecord } from "../persistence/journal.ts";
 import { readAttempt, withLegacyDefaults, type AttemptEvent, type AttemptStatus } from "../cli/commands/attempt.ts";
 import { compiledWorkflow, workflowRecipe } from "./catalog.ts";
+import type { WorkflowRecipe } from "./compiler.ts";
+import { isCompiledWorkflowId } from "./compiled-ids.ts";
 import { composePromptBundle } from "./prompt-composition.ts";
 import { candidatePathsBetween } from "./review-evidence.ts";
+import { bindShiftRecipeAt, shiftPhaseRole, shiftTicketOf } from "./shift/bind.ts";
 
 export class CandidateSeedRejected extends Error {
   readonly detail: string;
@@ -107,10 +112,118 @@ function assertL7Binding(records: AttemptRecords, source: AttemptStatus, candida
   }
 }
 
+/**
+ * The completed part of a sealed shift: the tickets, in run order, whose build
+ * was accepted and whose gate phase then accepted that build's commit, and the
+ * commit the last of them made.
+ *
+ * A shift's L7 comes only after its last ticket, so a shift stopped at ticket 5
+ * never records one, and the generic rule would call its first four tickets
+ * partial work. They are not: each accepted gate phase is the host's durable
+ * statement that the ticket's own commit passed the configured gates, which is
+ * what L7 states for a single builder. The first ticket without that statement
+ * ends the completed run, and its commit, if it made one, is not adopted.
+ *
+ * The recipe is rebuilt from the ticket blobs of the source's recorded base,
+ * the bytes the run compiled from, so a ticket rewritten on canonical HEAD
+ * since then neither refuses a true prefix nor admits a changed one. Adoption
+ * admits a shift source by this rule and a seed through that adoption proves it
+ * again, so both hold one definition; `refuse` is the caller's own refusal.
+ */
+export async function completedShift(source: AttemptStatus, evidence: readonly AttemptEvidence[], refuse: (detail: string) => Error): Promise<{
+  readonly sourceRecipe: WorkflowRecipe;
+  readonly shift: ShiftAdoptionSource;
+  readonly candidateSha: string;
+}> {
+  const manifest = source.shift;
+  if (manifest == null) throw refuse(`source workflow ${JSON.stringify(source.workflow)} records no shift selection`);
+  if (source.baseSha === null) throw refuse("source shift records no base to rebuild its selection from");
+  let sourceRecipe: WorkflowRecipe;
+  try {
+    // Membership comes from the recipe the selection rebuilds, never from the
+    // shape of a phase id. The prompts shape no membership, so none are read.
+    sourceRecipe = bindShiftRecipeAt(source.repository, manifest, source.baseSha, { prompts: { builder: "", reviewer: "" } });
+  } catch (error) {
+    throw refuse(`the source shift cannot be rebuilt from its recorded selection at its base: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  const accepted = new Map<string, AcceptedPhase>();
+  for (const record of evidence) if (record.type === "phase-accepted") accepted.set(record.accepted.phaseKey, record.accepted);
+  const phases = sourceRecipe.phases;
+  const completedTickets: string[] = [];
+  let candidateSha: string | null = null;
+  for (const ticket of manifest.tickets) {
+    const own = phases.filter((phase) => shiftTicketOf(phases, phase.id) === ticket.id);
+    const build = own.find((phase) => shiftPhaseRole(phases, phase.id) === "builder");
+    const tests = own.find((phase) => shiftPhaseRole(phases, phase.id) === "tests");
+    const built = build === undefined ? undefined : accepted.get(build.id);
+    const measured = tests === undefined ? undefined : accepted.get(tests.id);
+    if (built?.candidateSha == null || measured === undefined) break;
+    if (measured.candidateSha !== built.candidateSha) {
+      throw refuse(`ticket ${ticket.id}'s gates accepted ${String(measured.candidateSha)}, not its build's commit ${built.candidateSha}`);
+    }
+    completedTickets.push(ticket.id);
+    candidateSha = built.candidateSha;
+  }
+  if (candidateSha === null) {
+    throw refuse("source shift completed no ticket; partial work is never adopted");
+  }
+  return {
+    sourceRecipe,
+    candidateSha,
+    shift: {
+      plan: manifest.plan,
+      milestones: [...manifest.milestones],
+      completedTickets,
+      remainingTickets: manifest.tickets.map((ticket) => ticket.id).slice(completedTickets.length),
+    },
+  };
+}
+
+/**
+ * The binding a sealed shift holds in place of L7: its completed ticket prefix,
+ * recomputed from its own accepted records, is exactly the run and commit the
+ * adoption recorded; every phase through that run's last gate phase was
+ * accepted in order, succeeded, and names its own phase and round; and a
+ * recorded process accounts for every call spent. A ticket whose gate
+ * acceptance is gone ends the run early, so the recorded pair no longer holds.
+ */
+async function assertShiftPrefixBinding(records: AttemptRecords, source: AttemptStatus, adoption: CandidateAdoptionEvidence,
+  processes: readonly ProcessEvidence[]): Promise<void> {
+  const evidence = records.flatMap((record) => record.event.evidence === undefined ? [] : [record.event.evidence]);
+  const completed = await completedShift(source, evidence, (detail) => new CandidateSeedRejected(detail));
+  if (completed.candidateSha !== adoption.candidateSha || canonicalJson(completed.shift) !== canonicalJson(adoption.shift ?? null)) {
+    throw new CandidateSeedRejected("the completed ticket prefix is not the exact one the adoption recorded");
+  }
+  const phases = completed.sourceRecipe.phases;
+  const lastTicket = completed.shift.completedTickets.at(-1);
+  const through = phases.findIndex((phase) => shiftTicketOf(phases, phase.id) === lastTicket && shiftPhaseRole(phases, phase.id) === "tests");
+  if (through < 0) throw new CandidateSeedRejected(`the rebuilt recipe has no gate phase for ticket ${String(lastTicket)}`);
+  const accepted = new Map<string, Extract<AttemptEvidence, { type: "phase-accepted" }>>();
+  for (const record of evidence) if (record.type === "phase-accepted") accepted.set(record.accepted.phaseKey, record);
+  for (const [index, phase] of phases.slice(0, through + 1).entries()) {
+    const entry = accepted.get(phase.id);
+    if (entry === undefined || entry.phase.key !== phase.id || entry.phase.ordinal !== index + 1 || entry.accepted.ordinal !== index + 1 ||
+        entry.phase.status !== "SUCCEEDED" || entry.accepted.round !== entry.phase.correctionCount) {
+      throw new CandidateSeedRejected(`accepted ticket binding is missing or inconsistent at ${phase.id}`);
+    }
+  }
+  if (processes.length === 0 || source.budget.callsSpent < settledCallsOf(processes)) {
+    throw new CandidateSeedRejected("missing completed builder or settled call evidence");
+  }
+}
+
+/**
+ * Every recorded process ended, is bound to a start identity, and has no live
+ * group member now. The census is the liveness proof; an exit status is not.
+ * The host records a turn whose stream failed or lost its terminal as FAILED
+ * with neither code nor signal, so those two may lack one. EXITED without
+ * either contradicts itself and refuses.
+ */
 function assertProcessesSettled(processes: readonly ProcessEvidence[], quiescence: ProcessQuiescence): void {
   for (const entry of processes) {
     if (!["EXITED", "FAILED", "CANCELLED"].includes(entry.status) || entry.endedAt === null ||
-        (entry.exitCode === null && entry.exitSignal === null) || entry.record.identity.startIdentity === null || quiescence(entry.record.identity) !== "quiescent") {
+        (entry.status === "EXITED" && entry.exitCode === null && entry.exitSignal === null) ||
+        entry.record.identity.startIdentity === null || quiescence(entry.record.identity) !== "quiescent") {
       throw new CandidateSeedRejected("source process is live or its settlement/survivors are unknown");
     }
   }
@@ -119,8 +232,9 @@ function assertProcessesSettled(processes: readonly ProcessEvidence[], quiescenc
 /**
  * The integrated target's own source as it stands now: the exact sealed
  * revision the adoption recorded, a sibling of the target, whose own
- * host-completed L7 still binds the recorded source pair. Its base is not
- * canonical HEAD, so no Git pin is read here; the merge carries that.
+ * host-completed L7 still binds the recorded source pair, or, for a shift,
+ * whose completed ticket prefix still does. Its base is not canonical HEAD, so
+ * no Git pin is read here; the merge carries that.
  */
 async function assertIntegrationSource(targetDir: string, adoption: CandidateAdoptionEvidence, repository: string, quiescence: ProcessQuiescence): Promise<void> {
   const tasks = dirname(dirname(targetDir));
@@ -134,7 +248,8 @@ async function assertIntegrationSource(targetDir: string, adoption: CandidateAdo
       throw new CandidateSeedRejected("not the exact sealed revision the adoption recorded");
     }
     const processes = processesOf(read.records);
-    assertL7Binding(read.records, source, adoption.candidateSha, processes);
+    if (isCompiledWorkflowId(source.workflow)) await assertShiftPrefixBinding(read.records, source, adoption, processes);
+    else assertL7Binding(read.records, source, adoption.candidateSha, processes);
     assertProcessesSettled(processes, quiescence);
   } catch (error) {
     if (!(error instanceof CandidateSeedRejected)) throw error;
@@ -148,8 +263,9 @@ async function assertIntegrationSource(targetDir: string, adoption: CandidateAdo
  * binding is that one atomic creation record, the pair held unchanged through
  * every later record, the host's recorded fresh gates passing on it, the merge
  * recomputed byte for byte from the recorded source pair, and that pair still
- * being the recorded source's own exact L7 binding. Neither the target's status
- * nor the merge's bytes admit it alone. An equal-base target carries its
+ * being the recorded source's own exact L7 binding, or its completed ticket
+ * prefix when the source is a shift. Neither the target's status nor the
+ * merge's bytes admit it alone. An equal-base target carries its
  * source's candidate unchanged, so its source is the seed source.
  */
 async function assertIntegratedAdoption(dir: string, target: AttemptStatus, records: AttemptRecords, candidateSha: string,

@@ -1,15 +1,19 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { seedCommand } from "../../../src/cli/commands/seed.ts";
 import { main } from "../../../src/cli/main.ts";
 import { startCommand } from "../../../src/cli/commands/start.ts";
 import { newCommand } from "../../../src/cli/commands/new.ts";
-import { readAttempt } from "../../../src/cli/commands/attempt.ts";
+import { readAttempt, type AttemptStatus } from "../../../src/cli/commands/attempt.ts";
 import { runProductionCommand } from "../../../src/cli/commands/production-run.ts";
-import { inspectSeedSource, readVerifiedAttempt, verifiedTargetSeed } from "../../../src/workflow/candidate-seed.ts";
+import { CandidateSeedRejected, completedShift, inspectSeedSource, readVerifiedAttempt, verifiedTargetSeed } from "../../../src/workflow/candidate-seed.ts";
 import { assertCandidateSeed } from "../../../src/contracts/candidate-seed.ts";
+import { sealShiftManifest } from "../../../src/contracts/shift-selection-record.ts";
+import type { AttemptEvidence } from "../../../src/observability/attempt-evidence.ts";
+import { ticketFileDigest } from "../../../src/persistence/plan-ticket-body.ts";
 import { seedFixture, git } from "../../fixtures/seeded-continuation.ts";
 
 for (const variant of ["accepted", "wrong-phase", "wrong-round", "not-succeeded"] as const) {
@@ -138,6 +142,33 @@ test("absent PID alone cannot settle a retained RUNNING process record", async (
   await assert.rejects(seedCommand({ ...world.seedOptions, quiescence: () => "quiescent" }), /settlement/);
   absentTarget(world);
 });
+
+// The host records a provider turn whose stream failed or lost its terminal as
+// FAILED with neither exit code nor signal. It settles on its end, its start
+// identity and a quiescent census; an EXITED record without either does not.
+for (const [name, patch, state, settles] of [
+  ["a FAILED turn without exit status, quiescent", { status: "FAILED", exitCode: null }, "quiescent", true],
+  ["a CANCELLED turn without exit status, quiescent", { status: "CANCELLED", exitCode: null }, "quiescent", true],
+  ["a FAILED turn without exit status, live", { status: "FAILED", exitCode: null }, "live", false],
+  ["a FAILED turn without exit status, unknown census", { status: "FAILED", exitCode: null }, "unknown", false],
+  ["a FAILED turn without exit status that never ended", { status: "FAILED", exitCode: null, endedAt: null }, "quiescent", false],
+  ["an EXITED turn without exit status", { status: "EXITED", exitCode: null }, "quiescent", false],
+] as const) {
+  test(`seed settlement: ${name} ${settles ? "settles" : "refuses"}`, async () => {
+    const world = await seedFixture();
+    const path = join(world.sourceDir, "journal.jsonl");
+    const rows = readFileSync(path, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+    Object.assign(rows.find((row) => row.event.evidence?.type === "process").event.evidence, patch);
+    writeFileSync(path, rows.map((row) => JSON.stringify(row)).join("\n") + "\n");
+    const before = readFileSync(path);
+    if (settles) assert.equal((await seedCommand({ ...world.seedOptions, quiescence: () => state })).confirmed, true);
+    else {
+      await assert.rejects(seedCommand({ ...world.seedOptions, quiescence: () => state }), /settlement\/survivors are unknown/);
+      absentTarget(world);
+    }
+    assert.deepEqual(readFileSync(path), before);
+  });
+}
 
 test("exact L7 candidate mismatch refuses even with matching final status and journal", async () => {
   const world = await seedFixture();
@@ -276,4 +307,56 @@ test("seed CLI records repeatable target routes, and refuses duplicates and unre
 test("source selector cannot name a different task under the same directory", async () => {
   const world = await seedFixture();
   await assert.rejects(inspectSeedSource(world.sourceDir, world.repository, { project: world.config.project.slug, taskId: "other", attempt: 1, candidateSha: world.candidateSha }), /mismatch/);
+});
+
+/**
+ * A sealed shift's status over three tickets committed at its base, after which
+ * canonical HEAD rewrote T01, as a handoff does.
+ */
+function shiftSource(): { root: string; status: AttemptStatus; baseSha: string; headSha: string } {
+  const root = mkdtempSync(join(tmpdir(), "awsf-seed-shift-"));
+  const plan = "fixture-seed-shift";
+  git(tmpdir(), "init", "--quiet", "-b", "main", root);
+  mkdirSync(join(root, "specs", "tickets", plan), { recursive: true });
+  const tickets = ["T01", "T02", "T03"].map((id) => {
+    const path = `specs/tickets/${plan}/${id}.md`;
+    writeFileSync(join(root, path), ["---", `id: ${id}`, `title: "Ticket ${id}"`, "milestone: M1", "state: todo", "depends_on: []", "---",
+      `# ${id} · Ticket ${id}`, "", "## Handoff", "", "_Empty._", "", "## Build prompt", "", "```", `TASK ${id}.`, "```", ""].join("\n"));
+    return { id, path, digest: ticketFileDigest(readFileSync(join(root, path))) };
+  });
+  git(root, "add", ".");
+  git(root, "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "test: select a shift's tickets");
+  const baseSha = git(root, "rev-parse", "HEAD");
+  const t01 = join(root, tickets[0]!.path);
+  writeFileSync(t01, readFileSync(t01, "utf8").replace("_Empty._", "T01 landed."));
+  git(root, "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false", "commit", "--quiet", "-am", "docs: hand T01's findings on");
+  const status = { workflow: "shift", repository: root, baseSha, shift: sealShiftManifest({ plan, milestones: ["M1"], tickets }) } as unknown as AttemptStatus;
+  return { root, status, baseSha, headSha: git(root, "rev-parse", "HEAD") };
+}
+
+const acceptedPhase = (phaseKey: string, candidateSha: string): AttemptEvidence =>
+  ({ type: "phase-accepted", accepted: { phaseKey, candidateSha } }) as unknown as AttemptEvidence;
+const seedRefusal = (detail: string) => new CandidateSeedRejected(detail);
+
+test("a shift's completed prefix is its contiguous run of tickets whose gates accepted their own build, rebuilt from its base's ticket blobs", async () => {
+  const { root, status, headSha } = shiftSource();
+  const [a, b, c] = ["a", "b", "c"].map((digit) => digit.repeat(40)) as [string, string, string];
+  try {
+    const run = [acceptedPhase("t01-build", a), acceptedPhase("t01-tests", a), acceptedPhase("t02-build", b), acceptedPhase("t02-tests", b), acceptedPhase("t03-build", c)];
+    const completed = await completedShift(status, run, seedRefusal);
+    assert.equal(completed.candidateSha, b, "the commit of a ticket whose gates never accepted it is not the candidate");
+    assert.deepEqual(completed.shift, { plan: "fixture-seed-shift", milestones: ["M1"], completedTickets: ["T01", "T02"], remainingTickets: ["T03"] });
+
+    await assert.rejects(completedShift(status, [...run.slice(0, 3), acceptedPhase("t02-tests", a)], seedRefusal),
+      (error: unknown) => error instanceof CandidateSeedRejected && /ticket T02's gates accepted a{40}, not its build's commit b{40}/u.test(error.message));
+    // A later ticket's acceptance never extends a run its predecessor's gate phase did not reach.
+    await assert.rejects(completedShift(status, [run[0]!, ...run.slice(2)], seedRefusal),
+      (error: unknown) => error instanceof CandidateSeedRejected && /completed no ticket; partial work is never adopted/u.test(error.message));
+    await assert.rejects(completedShift({ ...status, shift: null }, run, seedRefusal), /records no shift selection/u);
+    await assert.rejects(completedShift({ ...status, baseSha: null }, run, seedRefusal), /records no base/u);
+    // Read at HEAD rather than the recorded base, the rewritten T01 refuses by digest.
+    await assert.rejects(completedShift({ ...status, baseSha: headSha }, run, seedRefusal), /ticket T01 changed since selection/u);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

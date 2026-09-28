@@ -6,6 +6,7 @@ import { REVIEW_CONTEXT_SCHEMA_ID } from "../../contracts/review-context.ts";
 import { REVIEW_OUTPUT_SCHEMA_ID } from "../../contracts/review-output.ts";
 import { TEST_OUTPUT_SCHEMA_ID } from "../../contracts/test-output.ts";
 import type { ShiftManifest } from "../../contracts/shift-selection-record.ts";
+import { systemGitRunner, type GitRunner } from "../../git/changes.ts";
 import type { WorkflowRecipe } from "../compiler.ts";
 import type { PhaseDefinition } from "../phase.ts";
 import { compileShift, type ShiftCompileConfig } from "./compile.ts";
@@ -26,6 +27,32 @@ export async function bindShiftRecipe(
 ): Promise<WorkflowRecipe> {
   const bodies = new Map<string, Uint8Array>();
   for (const ticket of manifest.tickets) bodies.set(ticket.id, await readFile(join(repository, ticket.path)));
+  return compileShift(manifest, bodies, config);
+}
+
+/**
+ * Compiles the recipe a sealed attempt's recorded selection names from the
+ * ticket blobs of the attempt's recorded base, never from the checkout. A run
+ * compiles from canonical HEAD while HEAD is its base; a proof made after HEAD
+ * moves on (a handoff, a state flip) must read those same bytes, not today's.
+ * The manifest and per-ticket digest checks still refuse any other byte, and
+ * a blob that is not valid UTF-8 cannot round-trip Git's text output, so it
+ * refuses by digest too.
+ */
+export function bindShiftRecipeAt(
+  repository: string,
+  manifest: ShiftManifest,
+  baseSha: string,
+  config: ShiftCompileConfig,
+  runner: GitRunner = systemGitRunner(repository),
+): WorkflowRecipe {
+  if (!/^[a-f0-9]{40}$/u.test(baseSha)) throw new Error(`recorded base ${JSON.stringify(baseSha)} is not an exact 40-hex commit`);
+  const bodies = new Map<string, Uint8Array>();
+  for (const ticket of manifest.tickets) {
+    const blob = runner(["cat-file", "blob", `${baseSha}:${ticket.path}`]);
+    if (blob.status !== 0) throw new Error(`ticket ${ticket.id} has no blob at ${ticket.path} in the recorded base ${baseSha}`);
+    bodies.set(ticket.id, Buffer.from(blob.stdout, "utf8"));
+  }
   return compileShift(manifest, bodies, config);
 }
 
