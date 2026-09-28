@@ -7,8 +7,10 @@ import {
   STATE_GROUPS,
   TOOL_CLASSES,
   applyLens,
+  UNRANKABLE_REASONS,
   canonicalModel,
   depth,
+  isRankable,
   flatColumns,
   frontier,
   fullLens,
@@ -55,6 +57,7 @@ function row(input: RowInput = {}): MetricsRow & { readonly usd: number | null }
     route: OPUS_HIGH,
     effortSource: "journal",
     identityProvenance: "stream-authoritative",
+    resolvedModel: "claude-opus-5-5",
     calls: 3,
     turns: 3,
     minutes: 10,
@@ -75,6 +78,8 @@ function row(input: RowInput = {}): MetricsRow & { readonly usd: number | null }
     workflow: "build",
     project: "awsf",
     reworkPhases: 0,
+    observabilityDegraded: false,
+    usageAuthority: "provider",
     ...rest,
     tokens: { inputTokens: 100, outputTokens: 10, cacheReadTokens: 1000, cacheWriteTokens: 0, reasoningTokens: 5, ...tokens },
     tools: { read: 4, search: 2, edit: 1, exec: 3, other: 0, ...tools },
@@ -194,6 +199,8 @@ test("stats folds every aggregate the prototype computes", () => {
   assert.deepEqual(s.costAuthority, { "catalog-estimate": 1, unavailable: 3 });
   assert.deepEqual(s.identity, { "route-attributed": 1, "stream-authoritative": 3 });
   assert.deepEqual(s.effortSource, { none: 1, journal: 3 });
+  assert.equal(s.unrankable, 1);
+  assert.deepEqual(s.unrankableReasons, { "route-attributed": 1, "partial-usage": 0, degraded: 0 });
   assert.equal(s.guardrailHits, 1);
   assert.equal(s.claims, 4);
   assert.equal(s.recovered, 1);
@@ -369,4 +376,66 @@ test("flatColumns marks a column identical across two or more groups", () => {
   assert.deepEqual(flatColumns(groups, columns), ["runs", "rework"]);
   assert.deepEqual(flatColumns(groups.slice(0, 1), columns), []);
   assert.deepEqual(flatColumns([], columns), []);
+});
+
+test("INV-3: route-attributed, partial-usage and degraded rows are counted but kept out of every ranking", () => {
+  assert.deepEqual([...UNRANKABLE_REASONS], ["route-attributed", "partial-usage", "degraded"]);
+  const attributed = rows(6, 6, { route: SOL_HIGH, usd: 0.5, identityProvenance: "route-attributed" });
+  const partial = rows(6, 6, { route: LUNA_LOW, usd: 0.1, usageAuthority: "partial" });
+  const degraded = rows(6, 6, { route: SONNET_HIGH, usd: 0.2, observabilityDegraded: true });
+  const clean = rows(6, 5, { route: OPUS_HIGH, usd: 4 });
+  const data = [...attributed, ...partial, ...degraded, ...clean];
+  assert.equal(isRankable(clean[0]!), true);
+  assert.equal(isRankable(degraded[0]!), false);
+
+  const s = stats(data, PRICE);
+  assert.equal(s.n, 24);
+  assert.equal(s.unrankable, 18);
+  assert.deepEqual(s.unrankableReasons, { "route-attributed": 6, "partial-usage": 6, degraded: 6 });
+
+  const front = frontier(data, "builder", "first-pass", "list-per-row", PRICE);
+  assert.deepEqual(front.points.map((point) => point.key), ["claude/opus@high"]);
+  assert.equal(front.excluded, 18);
+  const advice = recommend(data, "builder", null, "production", { price: PRICE, prior: NO_PRIOR })!;
+  assert.deepEqual(advice.ranked.map((route) => route.key), ["claude/opus@high"]);
+});
+
+test("frontier names each route it could not place, and why", () => {
+  const data = [
+    ...rows(6, 6, { route: OPUS_HIGH, usd: 4 }),
+    ...rows(6, 6, { route: SONNET_HIGH, usd: null, minutes: null }),
+    ...rows(2, 0, { route: SOL_HIGH, settled: false, stateGroup: "OPEN", firstPass: false }),
+  ];
+  const byCost = frontier(data, "builder", "first-pass", "list-per-row", PRICE);
+  assert.deepEqual(byCost.points.map((point) => point.key), ["claude/opus@high"]);
+  assert.deepEqual(byCost.unplaced.map((route) => [route.key, route.reason]), [
+    ["claude/sonnet@high", "unpriced"],
+    ["codex/gpt-6-sol@high", "no-observation"],
+  ]);
+  const byMinutes = frontier(data, "builder", "first-pass", "median-minutes", PRICE);
+  assert.deepEqual(byMinutes.unplaced.map((route) => [route.key, route.reason]), [
+    ["claude/sonnet@high", "no-minutes"],
+    ["codex/gpt-6-sol@high", "no-observation"],
+  ]);
+});
+
+test("untested routes join only the prior-only ranking, with no local evidence", () => {
+  const prior: PriorLookup = (_role, route) => ({ opus: 0.6, "gpt-6-sol": 0.7 } as Record<string, number>)[canonicalModel(route) ?? ""] ?? null;
+  const untested: MetricsRoute[] = [SOL_HIGH, { ...OPUS_HIGH, model: "claude:opus" }, { adapter: null, provider: null, model: "x", effort: "high" }];
+  const cold = recommend(rows(2, 1, { route: OPUS_HIGH }), "builder", null, "production", { price: PRICE, prior, untested })!;
+  assert.equal(cold.basis, "prior only");
+  // opus is already observed, under its selector spelling too, so it is not added twice; a keyless route is dropped.
+  assert.deepEqual(cold.ranked.map((route) => [route.key, route.settled, route.priorScore]), [
+    ["codex/gpt-6-sol@high", 0, 0.7],
+    ["claude/opus@high", 2, (1 + 4 * 0.6) / 6],
+  ]);
+  assert.deepEqual(cold.ranked[0]!.firstPass, wilson(0, 0));
+
+  const empty = recommend([], "builder", null, "production", { price: PRICE, prior, untested: [SOL_HIGH] })!;
+  assert.equal(empty.choice.key, "codex/gpt-6-sol@high");
+  assert.equal(recommend([], "builder", null, "production", { price: PRICE, prior }), null);
+
+  const warm = recommend(rows(6, 6, { route: OPUS_HIGH }), "builder", null, "production", { price: PRICE, prior, untested })!;
+  assert.equal(warm.basis, "local");
+  assert.deepEqual(warm.ranked.map((route) => route.key), ["claude/opus@high"]);
 });

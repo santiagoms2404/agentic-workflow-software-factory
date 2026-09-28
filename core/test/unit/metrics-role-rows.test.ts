@@ -333,6 +333,27 @@ test("a blocked shift: the builder's row sums both tickets, carries the model bl
   assert.equal(builder!.refuted, 1, "t02 said success while its diff_matches_claims failed");
   assert.deepEqual(builder!.gates, { pass: 1, total: 2, firstRoundFail: ["diff_matches_claims"] });
   assert.equal(builder!.reworkPhases, 0);
+  assert.equal(builder!.usageAuthority, "provider");
+});
+
+test("a row carries the model observed answering only when every phase that observed one agrees", () => {
+  const observedBy = (models: readonly string[]) => {
+    const run = new SyntheticAttempt(session(`s-${models.join("-")}`));
+    models.forEach((model, index) => {
+      const key = `t0${index + 1}-build`;
+      run.phase(phase(key, "builder", { ordinal: index + 1 }));
+      run.start(`phase-${key}`, "builder", "claude", "anthropic", "claude:opus", route(
+        key, { adapterId: "claude", adapterKind: "claude-code", provider: "anthropic", model: "opus", effort: "high" },
+        "attempt-override", "claude:opus",
+      ));
+      run.call(`phase-${key}`, "builder", "claude", "anthropic", "claude:opus", model, usage(1, 1, 0, 0, null));
+      run.phase(phase(key, "builder", { ordinal: index + 1, status: "SUCCEEDED", endedAt: AT }));
+    });
+    run.transition("AWAITING_OWNER");
+    return rowsOf(run)[0]!.resolvedModel;
+  };
+  assert.equal(observedBy(["claude-opus-5-5", "claude-opus-5-5"]), "claude-opus-5-5");
+  assert.equal(observedBy(["claude-opus-5-5", "claude-opus-5"]), null);
 });
 
 test("a block the heuristic gives to the environment fails here but is not blocked here", () => {
@@ -344,6 +365,8 @@ test("a block the heuristic gives to the environment fails here but is not block
   assert.equal(builder!.blockedHere, false);
   assert.equal(builder!.calls, 0);
   assert.equal(builder!.costAuthority, "unavailable");
+  assert.equal(builder!.resolvedModel, null, "no call observed a model");
+  assert.equal(builder!.usageAuthority, "none");
 });
 
 test("a role whose phases ran on two routes is marked mixed, with no route to rank under", () => {

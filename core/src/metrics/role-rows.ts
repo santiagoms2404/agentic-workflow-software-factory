@@ -68,6 +68,8 @@ export interface RunFacts extends AttributionRun {
   readonly reviewVerdict: string | null;
   readonly ownerReentries: number;
   readonly observabilityDegraded: boolean;
+  /** The run's `sessions.usage_authority`: `partial` when its calls disagreed. `agent_sessions` carries none per role. */
+  readonly usageAuthority: UsageAuthority;
   readonly startedAt: string;
   readonly endedAt: string | null;
   /** The run's agent phases in ordinal order, as T01 reads them. */
@@ -77,6 +79,8 @@ export interface RunFacts extends AttributionRun {
   /** The owner's latest `awsf attribute` record for this attempt, or `null`. */
   readonly ownerAttribution: OwnerAttribution | null;
 }
+
+export type UsageAuthority = "provider" | "partial" | "none";
 
 export interface RoleRoute {
   readonly adapter: string | null;
@@ -104,6 +108,8 @@ export interface RoleRow {
   readonly routeMixed: boolean;
   /** `stream-authoritative` only when every phase is; `route-attributed` when any phase is. */
   readonly identityProvenance: ModelResolutionProvenance | null;
+  /** The model observed answering, when every phase that observed one agrees; `null` otherwise. Prices key on it. */
+  readonly resolvedModel: string | null;
   readonly calls: number;
   readonly turns: number;
   readonly phases: number;
@@ -142,6 +148,7 @@ export interface RoleRow {
   readonly ownerReentries: number;
   readonly reworkPhases: number;
   readonly observabilityDegraded: boolean;
+  readonly usageAuthority: UsageAuthority;
   readonly startedAt: string;
   readonly endedAt: string | null;
 }
@@ -297,6 +304,12 @@ function provenanceOf(phases: readonly PhaseFacts[]): ModelResolutionProvenance 
   return values.every((value) => value === "stream-authoritative") ? "stream-authoritative" : null;
 }
 
+function resolvedModelOf(phases: readonly PhaseFacts[]): string | null {
+  const models = new Set(phases.map((phase) => phase.identity.resolvedModel).filter((model): model is string => model !== null));
+  const [model] = models;
+  return models.size === 1 && model !== undefined ? model : null;
+}
+
 function sum(phases: readonly PhaseFacts[], value: (phase: PhaseFacts) => number): number {
   return phases.reduce((total, phase) => total + value(phase), 0);
 }
@@ -318,6 +331,7 @@ function roleRow(run: RunFacts, role: string, phases: readonly PhaseFacts[], att
     role,
     ...routeOf(phases),
     identityProvenance: provenanceOf(phases),
+    resolvedModel: resolvedModelOf(phases),
     calls: session?.callCount ?? sum(phases, (phase) => phase.turns),
     turns: sum(phases, (phase) => phase.turns),
     phases: phases.length,
@@ -355,6 +369,7 @@ function roleRow(run: RunFacts, role: string, phases: readonly PhaseFacts[], att
     ownerReentries: run.ownerReentries,
     reworkPhases: run.phases.filter((phase) => phase.kind === "agent" && phase.key.startsWith("owner-rework-")).length,
     observabilityDegraded: run.observabilityDegraded,
+    usageAuthority: run.usageAuthority,
     startedAt: run.startedAt,
     endedAt: run.endedAt,
   };
@@ -389,6 +404,7 @@ interface SessionQueryRow {
   review_verdict: string | null;
   owner_reentries: number;
   observability_degraded: number;
+  usage_authority: UsageAuthority;
   started_at: string;
   ended_at: string | null;
 }
@@ -429,7 +445,7 @@ function ownerAttributions(db: DatabaseSync): Map<string, OwnerAttribution> {
 /** Reads every run as `RunFacts`, sessions in start order. Read-only SQL on the caller's connection. */
 export function readRunFacts(db: DatabaseSync): RunFacts[] {
   const sessions = db.prepare(`SELECT session_id, project_slug, task_id, attempt, workflow_id, risk_tier, plan_ref,
-      lifecycle_state, review_verdict, owner_reentries, observability_degraded, started_at, ended_at
+      lifecycle_state, review_verdict, owner_reentries, observability_degraded, usage_authority, started_at, ended_at
     FROM sessions ORDER BY started_at, session_id`).all() as unknown as SessionQueryRow[];
   const phases = groupBy(db.prepare(`SELECT session_id, phase_key, ordinal, kind, owner, status, error_code
       FROM phases ORDER BY session_id, ordinal`).all() as unknown as Array<{
@@ -465,6 +481,7 @@ export function readRunFacts(db: DatabaseSync): RunFacts[] {
     reviewVerdict: session.review_verdict,
     ownerReentries: session.owner_reentries,
     observabilityDegraded: session.observability_degraded === 1,
+    usageAuthority: session.usage_authority,
     startedAt: session.started_at,
     endedAt: session.ended_at,
     phases: phases.get(session.session_id) ?? [],
