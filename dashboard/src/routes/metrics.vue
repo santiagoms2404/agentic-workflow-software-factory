@@ -4,7 +4,9 @@ import type { MetricsResponse } from "../../shared/types.ts";
 import { listPrice } from "../../shared/rate-card.ts";
 import { EVIDENCE_SOURCES } from "../../shared/route-metrics.ts";
 import MetricsFrontier from "../components/MetricsFrontier.vue";
+import MetricsLedger from "../components/MetricsLedger.vue";
 import MetricsMatrix from "../components/MetricsMatrix.vue";
+import MetricsRun from "../components/MetricsRun.vue";
 import SessionFilterRow from "../components/SessionFilterRow.vue";
 import { usePolling } from "../composables/usePolling.ts";
 import { shortSessionId } from "../display.ts";
@@ -21,17 +23,25 @@ import {
   rowsInLens,
   selectedValues,
   summaryStats,
+  withFamily,
   withFrontier,
+  withGroup,
+  withRun,
   withSelection,
+  withSort,
   withView,
+  type ColumnFamily,
   type FacetId,
   type FrontierState,
+  type LedgerGroup,
   type MetricsRouteState,
   type MetricsView,
   type RailFacet,
   type RailOption,
 } from "../metrics-lens.ts";
+import { buildLedger } from "../metrics-ledger.ts";
 import { buildMatrix } from "../metrics-matrix.ts";
+import { attributionPanel, phaseStrip, roleLines, runFacts, runPicker } from "../metrics-run.ts";
 import { selectAllState, toggleFilterValue, type SessionFilterEntry } from "../session-filters.ts";
 
 const props = defineProps<{
@@ -94,7 +104,22 @@ const ladders = computed(() => RAIL_FACETS.map((id) => {
   return { id, title: RAIL_TITLE[id], options, values, selected, all: selectAllState(values, selected) };
 }));
 const matrix = computed(() => (payload.value === null ? null : buildMatrix(lensRows.value, payload.value, listPrice, props.route.untested)));
-const selectedRun = computed(() => payload.value?.runs.find((run) => run.sessionId === props.route.run) ?? null);
+const ledgerContext = computed(() => ({ ...context.value, priorLabels: payload.value?.priors.modelLabels ?? {} }));
+const ledger = computed(() => buildLedger(lensRows.value, props.route, listPrice, ledgerContext.value));
+const picker = computed(() => (payload.value === null ? null : runPicker(payload.value, props.route)));
+/** The shown run's own role-rows, every one of them: the lens chooses the run, not its rows. */
+const runRows = computed(() => rows.value.filter((row) => row.sessionId === picker.value?.selected?.sessionId));
+const runView = computed(() => {
+  const run = picker.value?.selected ?? null;
+  if (run === null) return null;
+  return {
+    run,
+    facts: runFacts(run, runRows.value, listPrice),
+    strip: phaseStrip(run.phases),
+    lines: roleLines(runRows.value, listPrice, { ...ledgerContext.value, allRows: rows.value }),
+    panel: attributionPanel(run),
+  };
+});
 
 function go(next: MetricsRouteState): void {
   location.hash = metricsRouteHash(next);
@@ -115,6 +140,12 @@ function openTile(role: string, routeKey: string): void {
 }
 function changeFrontier(change: Partial<FrontierState>): void {
   go(withFrontier(props.route, change));
+}
+function openRun(sessionId: string): void {
+  go(withRun(props.route, sessionId));
+}
+function runHref(sessionId: string): string {
+  return metricsRouteHash(withRun(props.route, sessionId));
 }
 /** The slot hands back the ladder's own entry; these are the rail's, with their dot or glyph. */
 function option(entry: SessionFilterEntry): RailOption {
@@ -203,10 +234,21 @@ function option(entry: SessionFilterEntry): RailOption {
         <p v-if="!payload && failed" class="metrics-note" role="alert">Metrics unavailable. The tab retries on its own.</p>
         <p v-else-if="!payload" class="metrics-note">Reading the projection…</p>
         <template v-else-if="route.view === 'run'">
-          <h2 class="metrics-view-title">One run</h2>
-          <p v-if="route.run && selectedRun" class="metrics-note">Run {{ shortSessionId(selectedRun.sessionId) }} · {{ selectedRun.taskId }} · attempt {{ selectedRun.attempt }} · {{ selectedRun.workflow }}</p>
-          <p v-else-if="route.run" class="metrics-note">Run {{ shortSessionId(route.run) }} is not in the projection.</p>
-          <p class="metrics-note">The run card, fact grid, phase strip and per-role table arrive with task 9.</p>
+          <MetricsRun
+            v-if="picker && runView"
+            :runs="picker.runs"
+            :run="runView.run"
+            :facts="runView.facts"
+            :strip="runView.strip"
+            :lines="runView.lines"
+            :panel="runView.panel"
+            @pick="openRun"
+          />
+          <template v-else>
+            <h2 class="metrics-view-title">One run</h2>
+            <p v-if="picker?.missing" class="metrics-note">Run {{ shortSessionId(picker.missing) }} is not in the projection.</p>
+            <p v-else class="metrics-note">No run has a role-row in this lens.</p>
+          </template>
         </template>
         <MetricsMatrix
           v-else-if="route.view === 'matrix' && matrix"
@@ -225,10 +267,16 @@ function option(entry: SessionFilterEntry): RailOption {
           :role-colors="roleColors"
           @change="changeFrontier"
         />
-        <template v-else>
-          <h2 class="metrics-view-title">{{ VIEW_LABEL[route.view] }}</h2>
-          <p class="metrics-note">{{ lensRows.length }} role-rows in the lens. This view arrives with task 9.</p>
-        </template>
+        <MetricsLedger
+          v-else-if="route.view === 'ledger'"
+          :ledger="ledger"
+          :families="route.families"
+          :run-href="runHref"
+          @group="(group: LedgerGroup) => go(withGroup(route, group))"
+          @family="(family: ColumnFamily) => go(withFamily(route, family))"
+          @sort="(column: string) => go(withSort(route, column))"
+          @open="openRun"
+        />
       </section>
     </div>
   </main>

@@ -232,6 +232,10 @@ const VIEW_FILES = [
   "dashboard/src/metrics-chart.ts",
   "dashboard/src/metrics-matrix.ts",
   "dashboard/src/metrics-frontier.ts",
+  "dashboard/src/components/MetricsLedger.vue",
+  "dashboard/src/components/MetricsRun.vue",
+  "dashboard/src/metrics-ledger.ts",
+  "dashboard/src/metrics-run.ts",
   "dashboard/src/styles/metrics.css",
 ];
 
@@ -251,7 +255,8 @@ test("the views import no chart library and take icons only from lucide-vue-next
 });
 
 test("no statistic is computed in a component: Wilson, depth and stats are the module's", () => {
-  for (const file of ["dashboard/src/components/MetricsMatrix.vue", "dashboard/src/components/MetricsFrontier.vue"]) {
+  for (const file of ["dashboard/src/components/MetricsMatrix.vue", "dashboard/src/components/MetricsFrontier.vue",
+    "dashboard/src/components/MetricsLedger.vue", "dashboard/src/components/MetricsRun.vue"]) {
     const text = source(file);
     assert.doesNotMatch(text, /\bwilson\(|\bstats\(|\bdepth\(|Math\.sqrt|\.reduce\(/, file);
   }

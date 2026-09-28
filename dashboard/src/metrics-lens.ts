@@ -28,6 +28,7 @@ import type { SessionFilterEntry } from "./session-filters.ts";
  * `#/metrics?view=frontier&route=claude/opus@high&x.role=planner,designer`
  * `#/metrics/run/<sessionId>?x.effort=low`
  * `#/metrics?view=ledger&group=run&f.role=builder&f.y=clean&untested=1`
+ * `#/metrics?view=ledger&cols=outcome,tokens&sort=fp&dir=asc`
  *
  * A facet's parameter lists the values switched OFF, not the ones on. The
  * facets draw on open vocabularies (models, workflows, projects), and a value
@@ -81,6 +82,23 @@ export const STATE_TONE: Readonly<Record<StateGroup, string>> = {
 export const LEDGER_GROUPS = ["route", "role", "model", "effort", "workflow", "project", "run"] as const;
 export type LedgerGroup = (typeof LEDGER_GROUPS)[number];
 
+/** The Ledger's column families, in the order the column pills list them. */
+export const COLUMN_FAMILIES = ["outcome", "verification", "work", "tokens", "cost", "provenance"] as const;
+export type ColumnFamily = (typeof COLUMN_FAMILIES)[number];
+export const DEFAULT_FAMILIES: readonly ColumnFamily[] = Object.freeze(["outcome", "verification", "work", "cost"]);
+
+/**
+ * The Ledger's sort: a column id and a direction. `n`, the first column's
+ * role-row count, is the default. A column the Ledger does not show falls back
+ * to `n` when it sorts, so the hash may carry any id without blanking the view.
+ */
+export interface LedgerSort {
+  readonly column: string;
+  readonly dir: "asc" | "desc";
+}
+
+export const DEFAULT_SORT: LedgerSort = Object.freeze({ column: "n", dir: "desc" });
+
 /** The Frontier's pills. `role` is `null` until the owner picks one: the view then shows the lens's busiest role. */
 export interface FrontierState {
   readonly role: string | null;
@@ -119,6 +137,9 @@ export interface MetricsRouteState {
   /** The Matrix also lists routes offered but never run. */
   readonly untested: boolean;
   readonly group: LedgerGroup;
+  /** The Ledger's column families switched on, in `COLUMN_FAMILIES` order. */
+  readonly families: readonly ColumnFamily[];
+  readonly sort: LedgerSort;
 }
 
 /** Production only: the proving ground is a separate evidence source (DD8), and M4 adds it. */
@@ -126,6 +147,7 @@ export const DEFAULT_OFF: Readonly<Partial<Record<FacetId, readonly string[]>>> 
 
 export const DEFAULT_METRICS_ROUTE: MetricsRouteState = Object.freeze({
   view: "matrix", run: null, route: null, off: DEFAULT_OFF, frontier: DEFAULT_FRONTIER, untested: false, group: "route",
+  families: DEFAULT_FAMILIES, sort: DEFAULT_SORT,
 });
 
 const FACET_IDS: readonly FacetId[] = [...RAIL_FACETS, "source"];
@@ -201,7 +223,17 @@ export function parseMetricsRoute(hash: string): MetricsRouteState {
     },
     untested: params.get("untested") === "1",
     group: readOne(params, "group", LEDGER_GROUPS, DEFAULT_METRICS_ROUTE.group),
+    families: params.has("cols") ? orderFamilies(readList(params.get("cols")!)) : DEFAULT_FAMILIES,
+    sort: {
+      column: params.has("sort") && safeDecode(params.get("sort")!).length > 0 ? safeDecode(params.get("sort")!) : DEFAULT_SORT.column,
+      dir: readOne(params, "dir", ["asc", "desc"] as const, DEFAULT_SORT.dir),
+    },
   };
+}
+
+/** Known families only, in the pills' order; an empty list is a Ledger with its first column alone. */
+function orderFamilies(values: readonly string[]): ColumnFamily[] {
+  return COLUMN_FAMILIES.filter((family) => values.includes(family));
 }
 
 function sameList(a: readonly string[] = [], b: readonly string[] = []): boolean {
@@ -222,6 +254,9 @@ export function metricsRouteHash(state: MetricsRouteState): string {
     if (!sameList(off, DEFAULT_OFF[id])) parts.push(`x.${id}=${off.map(encodeURIComponent).join(",")}`);
   }
   if (state.group !== DEFAULT_METRICS_ROUTE.group) parts.push(`group=${state.group}`);
+  if (!sameList(state.families, DEFAULT_FAMILIES)) parts.push(`cols=${orderFamilies(state.families).join(",")}`);
+  if (state.sort.column !== DEFAULT_SORT.column) parts.push(`sort=${encodeURIComponent(state.sort.column)}`);
+  if (state.sort.dir !== DEFAULT_SORT.dir) parts.push(`dir=${state.sort.dir}`);
   if (state.frontier.role !== null) parts.push(`f.role=${encodeURIComponent(state.frontier.role)}`);
   if (state.frontier.y !== DEFAULT_FRONTIER.y) parts.push(`f.y=${state.frontier.y}`);
   if (state.frontier.x !== DEFAULT_FRONTIER.x) parts.push(`f.x=${state.frontier.x}`);
@@ -282,6 +317,22 @@ export function withSelection(
 export function focusTile(state: MetricsRouteState, role: string, routeKey: string, roleValues: readonly string[]): MetricsRouteState {
   const narrowed = withSelection(state, "role", roleValues, [role]);
   return { ...withView({ ...narrowed, route: routeKey }, "ledger"), group: "run" };
+}
+
+/** A column family pill: on becomes off and off becomes on, kept in the pills' order. */
+export function withFamily(state: MetricsRouteState, family: ColumnFamily): MetricsRouteState {
+  const on = state.families.includes(family) ? state.families.filter((value) => value !== family) : [...state.families, family];
+  return { ...state, families: orderFamilies(on) };
+}
+
+/** A header click: the same column flips direction; a new column starts descending, largest first. */
+export function withSort(state: MetricsRouteState, column: string): MetricsRouteState {
+  const dir = state.sort.column === column && state.sort.dir === "desc" ? "asc" : "desc";
+  return { ...state, sort: { column, dir } };
+}
+
+export function withGroup(state: MetricsRouteState, group: LedgerGroup): MetricsRouteState {
+  return { ...state, group };
 }
 
 export function withFrontier(state: MetricsRouteState, change: Partial<FrontierState>): MetricsRouteState {

@@ -65,10 +65,12 @@ test("an untouched lens has a clean URL, and every part of the state round-trips
     frontier: { role: "builder", y: "clean", x: "median-minutes" },
     untested: true,
     group: "run",
+    families: ["outcome", "tokens"],
+    sort: { column: "fp", dir: "asc" },
   };
   const hash = metricsRouteHash(state);
   assert.equal(hash, "#/metrics?view=frontier&route=claude/opus@high&x.role=planner,designer&x.effort=~&x.project=a%2Cb" +
-    "&group=run&f.role=builder&f.y=clean&f.x=median-minutes&untested=1");
+    "&group=run&cols=outcome,tokens&sort=fp&dir=asc&f.role=builder&f.y=clean&f.x=median-minutes&untested=1");
   assert.deepEqual(parseMetricsRoute(hash), state);
 
   const run = withRun(DEFAULT_METRICS_ROUTE, "f1");
