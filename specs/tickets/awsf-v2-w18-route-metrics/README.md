@@ -8,6 +8,15 @@ The plan is the authority for content and status. Spine: [`../../awsf-v2-plan.ht
 
 ## Execution
 
+> **Amended 2026-09-28.** The owner executes the remaining tickets **manually, one ticket per
+> session**, outside AWSF attempts, using each prompt's `Manual:` lanes (ROUTING, EXECUTION, COMMIT);
+> Section B is unchanged. Gates, the write boundary and the never-do list still apply. Bookkeeping
+> follows each delivered and verified ticket: its plan rows, its `state`, the Handoff entries it
+> returns and a dated Amendment, in one owner commit (invariant 12). A milestone stays `[wip]`
+> until every task in it is `[x]`. The shift-specific text below (one shift per milestone, host
+> commits, sizing, raises, `degrade-review`) is kept as the original contract. See the plan's
+> 2026-09-28 Amendment.
+
 - **One AWSF `shift` per milestone**, started by the owner from Marimba. A milestone lands before the
   next one starts: `awsf start` bases the worktree on HEAD, so a shift started while another waits
   at `AWAITING_OWNER` builds without its code.
@@ -99,4 +108,4 @@ adds it; classifying these tickets afterwards is owner-side (D6).
 After each milestone lands, the owner (with Marimba drafting) makes one commit: the milestone's
 task rows and header in the plan, the tickets' `state`, the Handoff entries the builders returned,
 and a dated Amendment. Only T17's landing moves the spine's Milestone M18 / W18 marker and
-`../awsf-v2-plan/W18.md`, in that same commit. Current plan-aligned states: **T01–T17 `todo`.**
+`../awsf-v2-plan/W18.md`, in that same commit. Current plan-aligned states: **T01–T02 `done`; T03–T17 `todo`** (M1 `[wip]`).
