@@ -1,0 +1,1308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plan: AWSF v2 W19 — Jev and the Delegate</title>
+<style>
+/* Forest dark: the dashboard's default palette (dashboard/src/theme.ts) and the
+   design's default frame, so the plan, its mermaid diagrams and its mockup read
+   as the surface they describe. The review layer reuses --bg/--fg/--muted/--accent. */
+:root {
+  --bg:#051F20; --panel:#0B2B26; --panel-2:#163832; --border:#235347; --dim:#8EB69B; --text:#DAF1DE;
+  --accent:#ADB9EE; --cyan:#62C2AA; --green:#71D6A0; --red:#FF8278; --amber:#E4B75F; --blue:#74BDE8; --violet:#8AAFA4;
+  --fg:var(--text); --muted:var(--dim);
+  --border-soft:color-mix(in srgb, var(--border) 60%, transparent);
+  --well:color-mix(in srgb, var(--panel) 90%, var(--bg));
+  --surface:color-mix(in srgb, var(--panel-2) 94%, var(--text));
+  --neu-light:color-mix(in srgb, var(--text) 16%, transparent);
+  --neu-dark:color-mix(in srgb, #000 58%, transparent);
+  --raised:-3px -3px 9px var(--neu-light), 4px 4px 11px var(--neu-dark);
+  --raised-soft:-2px -2px 6px var(--neu-light), 3px 3px 8px var(--neu-dark);
+  --font-ui:"Segoe UI","Helvetica Neue",system-ui,sans-serif;
+  --font-mono:ui-monospace,"SFMono-Regular",Consolas,"Liberation Mono",monospace;
+  --maxw:1140px;
+}
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; background:var(--bg); }
+body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.65 var(--font-ui); -webkit-font-smoothing:antialiased; }
+main { max-width:var(--maxw); margin:0 auto; padding:48px 24px 160px; }
+h1,h2,h3,h4 { line-height:1.25; font-weight:650; }
+h1 { font-size:30px; margin:0 0 6px; }
+h2 { font:700 14px var(--font-mono); letter-spacing:.07em; text-transform:uppercase; color:var(--dim);
+  margin:56px 0 14px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+h3 { font-size:17px; margin:30px 0 8px; }
+h4 { font-size:14.5px; margin:26px 0 6px; color:var(--accent); }
+p { margin:0 0 14px; }
+a { color:var(--cyan); }
+strong { color:#fff; font-weight:650; }
+em { color:var(--dim); }
+small, .sub { color:var(--dim); font-size:13.5px; }
+.tagline { color:var(--dim); font-size:16px; max-width:80ch; }
+code { font-family:var(--font-mono); font-size:.86em; background:var(--panel); border:1px solid var(--border-soft);
+  border-radius:4px; padding:1px 5px; color:var(--text); }
+pre { background:var(--panel); border:1px solid var(--border-soft); border-left:3px solid var(--accent); border-radius:8px;
+  padding:14px 16px; overflow-x:auto; font:12.5px/1.6 var(--font-mono); color:var(--text); }
+pre code { background:none; border:none; padding:0; }
+table { width:100%; border-collapse:collapse; margin:14px 0 20px; font-size:13px; display:block; overflow-x:auto; }
+th,td { padding:7px 10px; border:1px solid var(--border-soft); text-align:left; vertical-align:top; }
+th { background:var(--panel); color:var(--dim); font:700 11px var(--font-mono); letter-spacing:.05em; text-transform:uppercase; white-space:nowrap; }
+td code { font-size:11.5px; }
+.meta { margin:14px 0 0; font-size:13px; }
+.meta summary { cursor:pointer; color:var(--dim); font:12px var(--font-mono); }
+.meta dl { display:grid; grid-template-columns:130px 1fr; gap:4px 14px; margin:12px 0 0; padding:14px;
+  background:var(--well); border:1px solid var(--border-soft); border-radius:12px; }
+.meta dt { color:var(--accent); font:11.5px var(--font-mono); }
+.meta dd { margin:0; color:var(--dim); font:11.5px var(--font-mono); overflow-wrap:anywhere; }
+figure { margin:26px 0; text-align:center; }
+figure svg, figure .mermaid { max-width:100%; height:auto; }
+figure .mermaid { background:var(--well); border:1px solid var(--border-soft); border-radius:14px; padding:20px 12px;
+  overflow-x:auto; color:var(--dim); font-size:12px; }
+figcaption { color:var(--dim); font-size:12.5px; margin-top:10px; font-style:italic; text-align:left; }
+.tag { display:inline-block; font:10px var(--font-mono); letter-spacing:.06em; text-transform:uppercase; padding:1px 6px;
+  border-radius:4px; margin-right:6px; vertical-align:1px; border:1px solid var(--border-soft); }
+.tag.existing { color:var(--dim); }
+.tag.new { color:var(--accent); border-color:color-mix(in srgb, var(--accent) 45%, transparent); }
+.files ul { list-style:none; padding:0; }
+.files li { padding:5px 0; border-bottom:1px solid var(--border-soft); font-size:13px; }
+.phase { border:1px solid var(--border-soft); border-radius:18px; padding:22px 24px; margin:30px 0; background:var(--well); }
+.phase > h3 { margin-top:0; }
+.phase > h3 .status, .checklist li .status { color:var(--accent); }
+.checklist { list-style:none; padding:0; margin:8px 0 16px; }
+.checklist li { padding:4px 0 4px 2px; font-size:13.5px; }
+.checklist li .status { margin-right:6px; }
+.loop { border:1px dashed var(--accent); border-radius:10px; padding:10px 14px; margin:16px 0 4px; font-size:13px;
+  background:color-mix(in srgb, var(--accent) 7%, transparent); }
+.card { border:1px solid var(--border-soft); border-left:3px solid var(--cyan); border-radius:10px; padding:12px 16px;
+  margin:14px 0; background:var(--panel); font-size:13.5px; }
+.card.warn { border-left-color:var(--red); } .card.rule { border-left-color:var(--accent); } .card.good { border-left-color:var(--green); }
+.card h5 { margin:0 0 6px; font:700 11px var(--font-mono); letter-spacing:.08em; text-transform:uppercase; color:var(--dim); }
+.taskmeta { font-size:12.5px; }
+.taskmeta th { width:150px; text-transform:none; letter-spacing:0; font-size:11.5px; white-space:normal; }
+.wtag { display:inline-block; font:10px var(--font-mono); letter-spacing:.06em; text-transform:uppercase; padding:1px 7px;
+  border-radius:4px; margin-left:8px; vertical-align:2px; border:1px solid var(--border-soft); color:var(--dim); }
+.wtag.route { color:var(--cyan); border-color:color-mix(in srgb, var(--cyan) 45%, transparent); }
+.wtag.raise { color:var(--amber); border-color:color-mix(in srgb, var(--amber) 45%, transparent); }
+.gate { font-family:var(--font-mono); color:var(--amber); }
+dl.spine dt { margin-top:10px; } dl.spine dd { margin:4px 0 0 0; font-size:13.5px; }
+code.inv, code.ac, code.serves { color:var(--cyan); }
+#questionables details, #amendments details { border:1px solid var(--border-soft); border-radius:10px; padding:10px 14px;
+  margin:10px 0; background:var(--panel); }
+#questionables summary, #amendments summary { cursor:pointer; font-weight:600; font-size:13.5px; }
+.qa-answer { margin:10px 0 2px; font-size:13px; color:var(--dim); }
+.qopen { color:var(--amber); font:10px var(--font-mono); letter-spacing:.06em; margin-right:6px; }
+.qdecided { color:var(--green); font:10px var(--font-mono); letter-spacing:.06em; margin-right:6px; }
+.decided { display:block; margin:8px 0 10px; padding:8px 12px; font-size:12.5px; border-left:3px solid var(--green);
+  background:color-mix(in srgb, var(--green) 7%, transparent); border-radius:0 6px 6px 0; color:var(--fg); }
+.decided b { color:var(--green); }
+.rec { display:block; margin:8px 0; padding:8px 12px; font-size:12.5px; border-left:3px solid var(--green);
+  background:color-mix(in srgb, var(--green) 7%, transparent); border-radius:0 6px 6px 0; color:var(--fg); }
+.rec b { color:var(--green); }
+
+/* Mockup frame: mirrors the TARGET surface, the dashboard's Forest dark tokens and neumorphic
+   treatment (dashboard/src/styles/morphism.css). Synthetic data only. */
+.mockup { margin:22px 0; }
+.mockup-frame { background:linear-gradient(180deg, var(--bg), color-mix(in srgb, var(--bg) 82%, var(--panel-2)));
+  border:1px solid var(--border-soft); border-radius:22px; padding:18px; text-align:left; font-size:13px; }
+.mk-row { display:flex; gap:18px; flex-wrap:wrap; align-items:flex-start; }
+.mk-wrap { position:relative; width:300px; }
+.mk-card { display:block; padding:14px 16px 16px; border-radius:18px; background:var(--surface); box-shadow:var(--raised);
+  color:var(--text); text-decoration:none; }
+.mk-id { font:12px var(--font-mono); color:var(--dim); display:block; }
+.mk-wf { font:700 13px var(--font-mono); color:var(--cyan); display:block; margin-top:4px; }
+.mk-req { display:block; margin-top:4px; }
+.mk-chip { display:inline-block; margin-top:8px; padding:2px 9px; border-radius:999px; font:700 11px var(--font-mono);
+  color:var(--red); border:1px solid color-mix(in srgb, var(--red) 45%, transparent); }
+.mk-controls { display:flex; gap:8px; margin-top:10px; }
+.mk-round { width:34px; height:34px; border-radius:50%; border:0; display:grid; place-items:center; background:var(--surface);
+  box-shadow:var(--raised-soft), 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent); color:var(--accent); }
+.mk-text { border:0; border-radius:999px; padding:7px 14px; background:var(--well); color:var(--dim); font:12px var(--font-ui);
+  box-shadow:var(--raised-soft); }
+.mk-note { font:11.5px var(--font-mono); color:var(--accent); margin-top:6px; }
+.mk-panel { flex:1; min-width:320px; padding:14px 16px; border-radius:18px; background:var(--well); border:1px solid var(--border-soft); }
+.mk-k { color:var(--dim); font:12px var(--font-mono); }
+.mk-pills { display:flex; flex-wrap:wrap; gap:8px; margin:8px 0; }
+.mk-pill { padding:6px 13px; border-radius:999px; background:var(--well); color:var(--dim); font-size:12.5px; border:0; }
+.mk-pill.on { background:var(--surface); color:var(--text); box-shadow:var(--raised); }
+.mk-cmd { font:12px var(--font-mono); background:var(--panel); border:1px solid var(--border-soft); border-radius:12px;
+  padding:9px 12px; color:var(--text); overflow-wrap:anywhere; }
+
+@media (max-width:720px) { main { padding:28px 14px 140px; } .meta dl { grid-template-columns:1fr; } }
+
+/* W19 additions: the Delegate view's tiles in the mockup. */
+.mk-tiles .mk-panel { min-width:170px; }
+.mk-big { font:700 26px var(--font-mono); color:var(--text); margin:6px 0 2px; }
+</style>
+</head>
+<body>
+<main>
+
+  <!-- ===== HEADER + UPDATABLE METADATA ===== -->
+  <header>
+    <h1>Plan: AWSF v2 W19 — Jev and the Delegate</h1>
+    <p class="tagline">A cheap, fast classifier answers the factory's small judgment calls, and a <strong>Delegate</strong> the owner switches on for one task at a time takes a closed set of owner acts while the owner is away, so a night's shift keeps going instead of waiting at the first stop. <strong>Jev supplies facts and code decides:</strong> nothing a model says moves a task by itself, the Delegate never lands, and every act it takes is recorded as its own.</p>
+    <details class="meta">
+      <summary>Metadata</summary>
+      <dl>
+        <dt>created</dt>      <dd>2026-09-28</dd>
+        <dt>modified</dt>     <dd>2026-09-28 (authored, awaiting owner review), 2026-09-28 (owner review applied: Q16–Q20 decided as recommended)</dd>
+        <dt>commits</dt>      <dd>none yet (authored uncommitted for owner review)</dd>
+        <dt>agent name</dt>   <dd>claude-opus-5-5, claude-opus-5-5 (review applied)</dd>
+        <dt>session id</dt>   <dd>not recorded (AGENTS.md invariant 1 keeps live session state out of every committed file)</dd>
+        <dt>back refs</dt>    <dd>./awsf-v2-plan.html (§ Milestone M19 → W19, and its 2026-09-28 amendment adopting this workstream), ../AGENTS.md (the twelve invariants and the proposed invariant 13), ./awsf-v2-intent.md (decisions 3 and 5, which this plan revises by owner decision), ./awsf-v2-w17-shift.html (the shift this plan keeps running), ./awsf-v2-w18-route-metrics.html (the tab and route columns M8 builds on), ./awsf-v2-w07-quota-telemetry.html (the quota readout and its fence), the reference repository ../../ten-levels-of-jev at 777adaf (machine-local clone, IndyDevDan's "10 Levels of Jev") and its transcript ../../10_levels_of_JEV_in_agentic_engineering_IndyDevDan_transcript.txt (machine-local)</dd>
+        <dt>forward refs</dt> <dd>./awsf-v2-w19-jev-delegate-build-prompts.md (§ Section B, the prompt source the invariant-12 fence pairs against), ./tickets/awsf-v2-w19-jev-delegate/ (T01–T28)</dd>
+      </dl>
+    </details>
+  </header>
+
+  <figure>
+    <pre class="mermaid">
+flowchart LR
+  S["a run stops"] --> F["stop facts<br/>host-built"]
+  F --> J["Jev<br/>typed answers"]
+  F --> P["policy table<br/>numbers first"]
+  J --> P
+  P --> L{"owner's lease<br/>allows it?"}
+  L -- yes --> A["Delegate acts<br/>actor: delegate"]
+  L -- no --> H["hand back<br/>to the owner"]
+  A --> R["run continues"]
+  A --> JR[("journal")]
+  H --> JR
+  JR --> M["metrics tab"]
+    </pre>
+    <figcaption>One stop, end to end. Jev answers bounded questions about host-built facts; a pure policy table and the owner's lease decide; the journal keeps every proposal, decision, act and handback, and the metrics tab reads it back.</figcaption>
+  </figure>
+
+  <!-- ===== IN PLAIN LANGUAGE ===== -->
+  <section id="plain-language">
+    <h2>In Plain Language</h2>
+    <p>This section explains the whole plan without technical vocabulary. Everything after it says the same things precisely, for the people — and machines — building it.</p>
+
+    <h3>What this is about</h3>
+    <p>The owner runs a workshop where automated workers build software overnight. Several times a night the work reaches a point where only the owner may decide what happens next: the job has used the budget it was given, the monthly allowance of the hired machines has run low for a few hours, a checker asked for changes, or a step failed. Today the workshop simply stops at that point and waits. If the owner is asleep or away, nothing happens until they return, even when the right answer was obvious and the owner would have given it in five seconds.</p>
+
+    <h3>Why now</h3>
+    <p>The workshop now runs long, multi-part jobs by itself, and the owner plans to run many more of them while away. A new kind of tool has also appeared: a very small, very cheap judge that answers yes-or-no and pick-one questions in about a second for a tiny fraction of a cent. It cannot write or do anything; it only answers. The owner tried it once on the kind of question the workshop stops on, and it gave a sensible, cautious answer for three thousandths of a cent.</p>
+
+    <h3>What we are building</h3>
+    <p>Think of a trusted house-sitter with a written note from the owner. Before leaving, the owner writes the note for one job only: "you may add up to this much budget, you may wait for the allowance to refill and then continue, you may send work back once for a fix, you may start a follow-up job twice, and you may stop the job if it is going in circles." The house-sitter checks the facts at each stop, asks the cheap judge a few quick questions, follows fixed rules, and does only what the note allows. They never sign anything in the owner's name: every action is written in the logbook as "done by the house-sitter, under note number such-and-such". They can never hand the finished work over for release, never vouch that it works, and never write themselves a new note. For the first weeks the house-sitter mostly watches and writes down what they would have done, so the owner can compare it with what they actually did; an action becomes routine once it has matched the owner's own choice seven times out of eight, unless the owner says "do it all, on my responsibility". The same cheap judge also helps the workers themselves: it warns before a dangerous command, flags text that tries to give the workers orders, tells the owner's assistant when to tidy its memory, and answers questions about files so workers do not have to read them in full.</p>
+
+    <h3>How we know it worked</h3>
+    <p>A job left running overnight is still moving in the morning instead of parked at its first stop; the logbook shows every stop, what the house-sitter proposed, what it did and why, and nothing it did is recorded as the owner's; the owner can switch it off for a job at any moment and it stops before its next action; and a page in the workshop's dashboard shows, over weeks, how many hours of waiting it saved, how often it agreed with the owner, how often the owner had to undo it, and what the cheap judge cost. Deliberately not part of this: releasing work, vouching for work, fixing code, or anything the note does not name.</p>
+  </section>
+
+  <!-- ===== PURPOSE / PROBLEM / SOLUTION ===== -->
+  <section id="purpose">
+    <h2>Purpose</h2>
+    <p>W19 adds two things to AWSF. The first is a <strong>decision service</strong>: one host-side transport to Jev, TypeSafe's System One classifier reached through OpenRouter, with versioned question sets, pure policies and one journaled record per call. The second is the <strong>Delegate</strong>: host code that, under an owner-granted lease scoped to one task, takes a closed set of owner acts at the stops a run makes, so a shift keeps running while the owner is away. Around them it builds the rest of the ladder the owner asked for (J1–J9): guardrail signals inside agent phases, a compaction judgment for Marimba, cheap-read tools that answer questions about files without reading them into an agent's context, and a metrics view that shows over time whether any of it helps.</p>
+    <p>The line the factory has always drawn holds: <strong>the host advances lifecycle state, models supply structured facts, and a human authorises anything that lands.</strong> Jev is a model supplying facts. The Delegate is host code acting on the owner's written, revocable authority. Neither lands, publishes or attests anything.</p>
+  </section>
+
+  <section id="problem">
+    <h2>Problem</h2>
+    <p>An overnight shift can stop at five kinds of point, and every one of them waits for an owner act that the guard denies to Marimba by verb (<code>OWNER_ACTS</code> in <code>docs/driving/marimba/marimba-guard-rules.mts</code>: land, cancel, rework, review, degrade-review, attribute, journey, raise, publish, resume, grant). <code>awsf seed</code> also requires an interactive owner terminal. Measured and read on 2026-09-28:</p>
+    <table>
+      <thead><tr><th>Stop</th><th>Where it is written</th><th>What unblocks it today</th></tr></thead>
+      <tbody>
+        <tr><td><code>ceiling-pause</code> checkpoint</td><td><code>production-run.ts</code>, before the next ticket</td><td>The owner's <code>awsf raise</code> (≤ 5 calls per act, ceiling ≤ 20), then <code>awsf resume</code></td></tr>
+        <tr><td><code>quota-pause</code> checkpoint and the L26 quota stop</td><td>the phase-boundary quota snapshot</td><td><code>awsf resume</code> after the window refills. <strong><code>routing.quota_stop</code> is not set in <code>awsf.config.yaml</code></strong>, so today a spent window fails the phase instead of parking it</td></tr>
+        <tr><td><code>ticket-block</code> checkpoint</td><td>a shift ticket's gate fails</td><td>"The owner fixes the cause, the shift never retries itself" (<code>status.ts</code>), then <code>awsf resume</code></td></tr>
+        <tr><td><code>AWAITING_OWNER</code> after gating or review (L12, L15)</td><td>the task machine</td><td><code>rework</code> (L19), replacement <code>review</code> (L25), <code>cancel</code> (L22), <code>land</code> (L20)</td></tr>
+        <tr><td><code>BLOCKED</code></td><td>any blocker edge, sealed</td><td>A new task with <code>--continues</code>, optionally <code>awsf seed</code> from the BLOCKED candidate</td></tr>
+      </tbody>
+    </table>
+    <p>Five facts shape the design:</p>
+    <ul>
+      <li><strong>Jev is a classifier, not an agent.</strong> One live call on 2026-09-28 (the owner's authorized smoke, synthetic state, through the reference repository's own client): <code>POST https://openrouter.ai/api/alpha/decisions</code>, <code>~typesafe/jev-latest</code> resolved to <code>typesafe/jev-1.13-20260917</code>, 1,172 ms cold, 670 input and 88 output tokens, reported cost $0.00002814, which is exactly $0.042 per million input tokens with output free. Asked about a ceiling stop in a passing shift, it picked <code>raise</code> at 0.75 with confidence 0.68 and scored risk 0.97 of 2 — a pick a 0.85 bar turns into "wait". It cannot write text, run commands or hold an identity.</li>
+      <li><strong>The quota arithmetic already exists as numbers.</strong> <code>quota-axi</code> 0.1.29 reports, per provider, a <code>five_hour</code> and a <code>seven_day</code> window with <code>resetsAt</code>, <code>percentRemaining</code> and a pace reserve (Claude at 21:34Z: 31% of the five-hour window, resetting 22:20Z; 61% of the week). This is what the owner reads by hand before resuming, and it belongs in code, not in Jev.</li>
+      <li><strong>No model output may move a task.</strong> <code>DETERMINISTIC_REASON_SOURCES</code> in <code>core/src/state/errors.ts</code> admits six sources for a BLOCKED reason — process, exit code, git, gate, record, human — "no seventh". <code>AWAITING_OWNER</code> has no timeout by design.</li>
+      <li><strong>Most roles are not on pi.</strong> <code>awsf.config.yaml</code> runs planner, reviewer, documenter and scout on the <code>claude</code> adapter and the builder on <code>codex</code> (pi). pi children run with <code>--no-extensions</code>, which the adapter documents as essential. Nothing in <code>core/src</code> calls <code>fetch</code> today, and the adapter fence forbids it in adapters.</li>
+      <li><strong>The reference code needs changes before AWSF can use it.</strong> Its <code>jev-guard.ts</code> catches every error and lets the call through; its <code>ask_jev</code> runs commands with <code>exec</code> and a shell string (invariants 3 and 4); its write gate was bypassed in a live run by a bash heredoc (its own README); its direct TypeSafe transport is untested. Its thresholds are labeled demonstrations.</li>
+    </ul>
+    <figure>
+      <pre class="mermaid">
+flowchart LR
+  N["overnight shift"] --> C["ceiling-pause"]
+  N --> Q["quota-pause"]
+  N --> T["ticket-block"]
+  N --> A["AWAITING_OWNER"]
+  N --> B["BLOCKED"]
+  C --> W["waits for<br/>the owner"]
+  Q --> W
+  T --> W
+  A --> W
+  B --> W
+  W --> Z["no work<br/>until morning"]
+      </pre>
+      <figcaption>Every stop a shift can make ends at the same place today: an owner act at a terminal, which an absent owner cannot give.</figcaption>
+    </figure>
+  </section>
+
+  <section id="solution">
+    <h2>Solution</h2>
+    <p>Seventeen design decisions, each owned by one task. Authority grows in one direction only: <strong>a Jev answer can always make the factory stop or ask; it can make the factory do more only under an owner lease.</strong></p>
+    <table>
+      <thead><tr><th>DD</th><th>Decision</th><th>Task</th></tr></thead>
+      <tbody>
+        <tr><td>DD1</td><td>One transport, <code>core/src/decision/jev-transport.ts</code>: OpenRouter only, the moving alias <code>~typesafe/jev-latest</code> with the resolved model recorded on every call (Q7), strict response validation ported from the reference client, redaction before egress, a per-project switch, and a fence that keeps it the only <code>fetch</code> in <code>core/src</code>.</td><td>1</td></tr>
+        <tr><td>DD2</td><td>Every question is a versioned question set: questions, thresholds and a pure policy in one file, as the reference repository keeps them. Jev never does arithmetic.</td><td>2</td></tr>
+        <tr><td>DD3</td><td>Every call appends one <code>awsf.decision/v1</code> record to the task's <code>decisions.jsonl</code>, projected as an <code>events</code> row. No migration; a rebuild reproduces it.</td><td>2</td></tr>
+        <tr><td>DD4</td><td>At every stop the host builds one fact record from the status and the journal. No prose except the reviewer's verbatim findings.</td><td>4</td></tr>
+        <tr><td>DD5</td><td>The shadow owner is always on: every stop journals the proposal the Delegate would make, with or without a lease. Numbers decide first; Jev only refines judgment.</td><td>5</td></tr>
+        <tr><td>DD6</td><td>Agreement is computed at read time by pairing each proposal with the next act on that attempt. Code-decided acts are live from the first lease; judgment acts unlock at 7 of their last 8 proposals matched; the owner's <code>autonomy all</code> switch unlocks everything for one lease and is labeled owner-all (Q8).</td><td>6</td></tr>
+        <tr><td>DD7</td><td>One authority type for every delegable command: <code>owner</code> (the interactive terminal, unchanged) or <code>delegate</code> (a lease check). The <code>delegate</code> actor is added only to the task-machine edges the delegable acts are traced to.</td><td>8</td></tr>
+        <tr><td>DD8</td><td>The lease is a task-scoped, append-only record granted at the owner's terminal: acts, caps, autonomy, fallback routes, an optional end time. Continuations inherit it. Revocation is one command.</td><td>9</td></tr>
+        <tr><td>DD9</td><td>The quota plan is arithmetic over the five-hour and weekly windows and an expected draw from past boundary snapshots, labeled planning-only and never shown as a task's cost.</td><td>10</td></tr>
+        <tr><td>DD10</td><td>With a lease, <code>awsf run</code> hands each stop to the Delegate in the same foreground process instead of exiting. It waits in-process for a reset (Q3a), recovers from the journal when restarted, and hands back everything it may not do. A notify hook runs an owner-configured argv through the broker (Q10).</td><td>11</td></tr>
+        <tr><td>DD11</td><td>Judgment acts: rework with a finding Jev picks and code copies verbatim (one per attempt); replacement review only on host eligibility; degrade-review only when the lease names it.</td><td>13</td></tr>
+        <tr><td>DD12</td><td>Route fallback (Q3c): a leased route per role, applied as a journaled override the resolver reads like <code>--route</code>. The resolver never reads quota; the quota fence stays true.</td><td>14</td></tr>
+        <tr><td>DD13</td><td>Continuation: from a ticket block or an admitted BLOCKED code, Jev classifies the failure, a code table decides, and the Delegate starts a seeded follow-up task. The shift still never retries itself.</td><td>15</td></tr>
+        <tr><td>DD14</td><td>Agent phases reach Jev only through a host socket, so the key never enters an agent's environment and every call is journaled by the host.</td><td>17</td></tr>
+        <tr><td>DD15</td><td>Guard signals are extra: when Jev is unavailable, today's fences stay the control and the phase continues (Q11). The reference's secret write gate is dropped because redaction removes what it would judge.</td><td>18</td></tr>
+        <tr><td>DD16</td><td>Marimba's compaction judgment runs in the owner's own pi session and calls the transport directly; it is not an AWSF phase.</td><td>21</td></tr>
+        <tr><td>DD17</td><td>Every metric is read-time over the journal, carries the resolved Jev model and question-set version, and labels estimates as estimates.</td><td>26</td></tr>
+      </tbody>
+    </table>
+    <figure>
+      <pre class="mermaid">
+flowchart LR
+  R["record<br/>J1"] --> G["deny-only signals<br/>J2 J3"]
+  G --> T["agent tools<br/>J4 J5"]
+  T --> S["shadow owner<br/>J6"]
+  S --> D["leased acts<br/>J7 J8"]
+  D --> M["measured over time<br/>J9"]
+      </pre>
+      <figcaption>The ladder ordered by authority, not by technique. Every rung left of "leased acts" can only add information or stop something; only the lease lets an answer make the factory do more.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ===== DECISIONS ===== -->
+  <section id="decisions">
+    <h2>Decisions already taken</h2>
+    <p>The owner's decisions of 2026-09-28, from the brainstorm that produced this plan, recorded as constraints. None is reopened here.</p>
+    <table>
+      <thead><tr><th>Decision</th><th>What the owner decided</th><th>Where this plan implements it</th></tr></thead>
+      <tbody>
+        <tr><td><strong>D1</strong></td><td>AWSF's rules may change for this, including a timed <code>resume</code> that reads the five-hour and weekly windows and the time to reset, as the owner does by hand.</td><td>Gate G19-A (invariant 13), tasks 10–11, the spine amendment that revises intent decision 5.</td></tr>
+        <tr><td><strong>D2</strong></td><td>Code and diffs may be sent to Jev, Smart Health included.</td><td>Task 1 (redaction still runs; the project switch can turn Jev off).</td></tr>
+        <tr><td><strong>D3</strong></td><td>Every act is recorded as done by the Delegate, never by the owner.</td><td>Task 8, INV-1, the delegate-authority fence.</td></tr>
+        <tr><td><strong>Q1</strong></td><td>First lease: raise, resume, cancel, replacement review, rework, continuation; degrade-review only when named; land in watch-only mode.</td><td>Tasks 5, 9, 13, 15.</td></tr>
+        <tr><td><strong>Q2</strong></td><td>Redact before sending, prefer host facts over agent text, and a per-project switch on by default.</td><td>Tasks 1, 4, 18.</td></tr>
+        <tr><td><strong>Q3a</strong></td><td>Wait for a reset in the foreground process, with the wake time journaled.</td><td>Task 11.</td></tr>
+        <tr><td><strong>Q3b</strong></td><td>Resume only when the next phase's expected draw fits both windows with room; stop when the weekly window limits and resets more than 6 h away.</td><td>Task 10.</td></tr>
+        <tr><td><strong>Q3c</strong></td><td><em>The alternative:</em> a lease may declare a fallback route per role for when a provider's window is spent.</td><td>Task 14; the spine amendment revises intent decision 5's "never a router".</td></tr>
+        <tr><td><strong>Q4</strong></td><td>A Delegate view inside W18's metrics tab, built after W18; journal events from the first milestone.</td><td>M8, gate G19-W, task 2.</td></tr>
+        <tr><td><strong>Q5</strong></td><td>One module calls Jev, enforced by a fence.</td><td>Task 1.</td></tr>
+        <tr><td><strong>Q6</strong></td><td>The key comes from <code>OPENROUTER_API_KEY</code>.</td><td>Tasks 1, 3.</td></tr>
+        <tr><td><strong>Q7</strong></td><td><em>The alternative:</em> use the moving <code>jev-latest</code> alias, and add a filter by Jev model version so versions can be compared.</td><td>Tasks 1, 2, 26, 27.</td></tr>
+        <tr><td><strong>Q8</strong></td><td>Default: code-decided acts live, judgment acts earned at 7 of 8. The owner can switch any lease to "everything runs immediately, on my responsibility", and back.</td><td>Tasks 6, 9, 13.</td></tr>
+        <tr><td><strong>Q9</strong></td><td>A lease is granted per task at the owner's terminal, with caps, and revocable.</td><td>Task 9.</td></tr>
+        <tr><td><strong>Q10</strong></td><td>A one-way notification command the owner configures on their machine.</td><td>Task 11.</td></tr>
+        <tr><td><strong>Q11</strong></td><td>Extra checks fall back to today's fences; Delegate acts fall back to waiting.</td><td>Tasks 11, 17, 18, INV-5.</td></tr>
+        <tr><td><strong>Q12</strong></td><td>pi routes first; claude routes after a proof.</td><td>Tasks 18, 19.</td></tr>
+        <tr><td><strong>Q13</strong></td><td><em>The alternative:</em> give the Jev tools to all roles at once. Four of five configured roles run on the claude adapter, so "all roles" reaches them only if task 19's proof succeeds.</td><td>Tasks 19, 23, 24, gate G19-T.</td></tr>
+        <tr><td><strong>Q14</strong></td><td>Continue only from the admitted failure codes, at most twice per lease.</td><td>Task 15.</td></tr>
+        <tr><td><strong>Q15</strong></td><td>One deep plan in the order P1–P8; the first three milestones manual, the rest as shifts under W19's own Delegate.</td><td>Execution.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ===== RELEVANT FILES ===== -->
+  <section id="files" class="files">
+    <h2>Relevant Files</h2>
+
+    <h3>Existing Files</h3>
+    <ul>
+      <li><span class="tag existing">existing</span> <code>core/src/state/task-machine.ts</code>, <code>guards.ts</code>, <code>errors.ts</code> — edges, actors and the six reason sources. <strong>Protected</strong>; task 8's change is gate G19-S.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/cli/commands/production-run.ts</code> — the phase loop, the <code>ceiling-pause</code>, <code>quota-pause</code> and <code>ticket-block</code> checkpoints, the boundary quota snapshot and <code>resumeProductionCommand</code>. Tasks 5 and 11 hook it.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/cli/commands/raise.ts</code>, <code>cancel.ts</code>, <code>rework.ts</code>, <code>review.ts</code>, <code>degrade-review.ts</code>, <code>seed.ts</code>, <code>new.ts</code>, <code>start.ts</code>, <code>shift.ts</code>, <code>status.ts</code> — the acts the Delegate may take, and the readouts that show its lease.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/cli/tty.ts</code> — <code>OwnerTerminal</code>; the owner branch keeps it unchanged.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/cli/main.ts</code> — <code>CLI_COMMANDS</code> and the arms <code>boundary-claims.test.ts</code> reads; G19-C adds <code>delegate</code>.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/quota/parse.ts</code>, <code>readout.ts</code>, <code>probe.ts</code> — the readout the quota plan consumes.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/workflow/phase-routing.ts</code>, <code>phase-recovery.ts</code> — overrides and the recovery binding task 14 extends.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/workflow/candidate-seed.ts</code> — seeds need a BLOCKED or CANCELLED source (task 15).</li>
+      <li><span class="tag existing">existing</span> <code>core/src/persistence/journal.ts</code>, <code>task-attributions.ts</code> — the append-only, task-scoped record pattern the decision, proposal and lease records copy.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/observability/projector.ts</code>, <code>rebuild.ts</code> — the only SQLite writer (invariant 6) and the replay.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/policy/redaction.ts</code>, <code>sandbox-broker.ts</code> — <strong>protected</strong>; read and imported, never edited.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/adapters/pi-codex.ts</code>, <code>claude-code.ts</code>, <code>env.ts</code> — the reviewed argv and the environment filter tasks 17–19 touch.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/registry/catalog-schema.ts</code>, <code>placement.ts</code> — the project switch (committed catalog) and the notify argv (machine-local placement).</li>
+      <li><span class="tag existing">existing</span> <code>core/test/unit/meta/adapter-fence.test.ts</code>, <code>quota-fence.test.ts</code>, <code>boundary-claims.test.ts</code>, <code>marimba-guard.test.ts</code>, <code>cheatsheet-reconciliation.test.ts</code>, <code>execution-isolation.test.ts</code>, <code>ticket-plan-sync.test.ts</code>, <code>junk-drawer.test.ts</code>, <code>dependency-allowlist.test.ts</code> — the fences this plan meets.</li>
+      <li><span class="tag existing">existing</span> <code>dashboard/shared/route-metrics.ts</code>, <code>core/src/metrics/payload.ts</code>, <code>dashboard/src/routes/metrics.vue</code> — W18's module, API and tab (M8).</li>
+      <li><span class="tag existing">existing</span> <code>docs/driving/marimba/marimba-guard-rules.mts</code>, <code>delegation-guard.sh</code>, <code>compaction/</code>, <code>docs/cheatsheet.html</code> — protected documents G19-C and G19-D change.</li>
+      <li><span class="tag existing">existing</span> <code>awsf.config.yaml</code> — <strong>protected</strong>; G19-Q (<code>routing.quota_stop</code>) and G19-T (<code>tools.allow</code>).</li>
+    </ul>
+
+    <h3>New Files</h3>
+    <ul>
+      <li><span class="tag new">new</span> <code>core/src/decision/jev-transport.ts</code>, <code>core/test/unit/meta/jev-transport-fence.test.ts</code> — task 1.</li>
+      <li><span class="tag new">new</span> <code>core/src/decision/question-set.ts</code>, <code>decide.ts</code>, <code>question-sets/*.ts</code>, <code>core/src/contracts/decision-record.ts</code> — task 2; later sets in tasks 13, 15, 18, 21.</li>
+      <li><span class="tag new">new</span> <code>core/src/delegate/stop-facts.ts</code>, <code>policy.ts</code>, <code>agreement.ts</code>, <code>autonomy.ts</code> — tasks 4–6.</li>
+      <li><span class="tag new">new</span> <code>core/src/delegate/authority.ts</code>, <code>core/test/unit/meta/delegate-authority-fence.test.ts</code> — task 8.</li>
+      <li><span class="tag new">new</span> <code>core/src/contracts/delegate-lease.ts</code>, <code>core/src/delegate/lease-check.ts</code>, <code>core/src/cli/commands/delegate.ts</code> — tasks 7 and 9.</li>
+      <li><span class="tag new">new</span> <code>core/src/delegate/quota-plan.ts</code>, <code>drive.ts</code> — tasks 10–11. <code>core/src/contracts/delegate-route-override.ts</code> — task 14. <code>core/src/delegate/continuation.ts</code> — task 15.</li>
+      <li><span class="tag new">new</span> <code>core/src/decision/socket.ts</code>, <code>core/src/decision/pi/jev-guard.pi.ts</code>, <code>jev-tools.pi.ts</code>, <code>jev-compact.pi.ts</code> — tasks 17, 18, 21, 23, 24. <code>core/src/decision/claude/</code> — task 19, only if its proof holds.</li>
+      <li><span class="tag new">new</span> <code>core/src/metrics/delegate-rows.ts</code>, <code>dashboard/src/components/MetricsDelegate.vue</code>, <code>dashboard/src/metrics-delegate.ts</code> — tasks 26–27.</li>
+      <li><span class="tag new">new</span> <code>core/test/unit/decision-*.test.ts</code>, <code>delegate-*.test.ts</code>, <code>core/test/journeys/delegate-*.test.ts</code>, <code>core/test/fixtures/delegate/</code> (synthetic only).</li>
+      <li><span class="tag new">new</span> Runtime records, never committed: per task <code>decisions.jsonl</code>, <code>delegate.jsonl</code>, <code>delegate-leases.jsonl</code>; in the state root <code>delegate/replays.jsonl</code>.</li>
+      <li><span class="tag new">new</span> <code>specs/awsf-v2-w19-jev-delegate-build-prompts.md</code>, <code>specs/tickets/awsf-v2-w19-jev-delegate/</code> — authored with this plan, from one generated source.</li>
+    </ul>
+  </section>
+
+  <!-- ===== IDENTIFIER SPINE ===== -->
+  <section id="spine">
+    <h2>Identifier Spine</h2>
+    <p>Identifiers are unique within this plan. Every declaration is served by at least one task, and each ticket's <code>serves</code> mirrors its task's set; the invariant-12 fence compares them.</p>
+    <dl class="spine">
+      <dt><code class="inv">INV-1</code></dt>
+      <dd><strong>Authority, never identity.</strong> Every Delegate act is journaled with <code>actor: delegate</code>, its lease id, its decision ids and its autonomy basis. No record written under delegate authority names the owner or a human, and commit identities are unchanged (invariant 11).</dd>
+      <dt><code class="inv">INV-2</code></dt>
+      <dd><strong>Jev supplies facts; code decides.</strong> A Jev answer never moves lifecycle state by itself and is never a BLOCKED reason source. Every act passes a pure policy table whose numbers come from code, then the lease check.</dd>
+      <dt><code class="inv">INV-3</code></dt>
+      <dd><strong>A closed act set.</strong> The Delegate can never land, publish, attest a journey, grant protected content, attribute, or grant or extend its own lease. The authority type cannot express those acts, and a fence proves the commands that perform them never accept it.</dd>
+      <dt><code class="inv">INV-4</code></dt>
+      <dd><strong>One transport, no credential in a phase.</strong> Only <code>core/src/decision/jev-transport.ts</code> calls the Jev endpoint; redaction runs before egress; agent phases reach Jev through the host socket and never receive the key; a project switch turns it off.</dd>
+      <dt><code class="inv">INV-5</code></dt>
+      <dd><strong>Safe by direction.</strong> When Jev or quota data is unavailable, extra signals fall back to today's fences and the phase continues, and Delegate acts fall back to handing the stop to the owner.</dd>
+      <dt><code class="inv">INV-6</code></dt>
+      <dd><strong>Lease-bounded.</strong> Every Delegate act is inside one owner-granted, task-scoped, revocable lease with caps (ceiling ≤ 20, continuations ≤ 2, reworks ≤ 1, a Jev spend cap). The lease is re-read before every act and after every wait, and it ends when its task lands, is cancelled, or hits a stop it does not cover.</dd>
+      <dt><code class="inv">INV-7</code></dt>
+      <dd><strong>The journal is the only evidence store.</strong> Decision, proposal, lease and act records are journaled and projected by the existing projector; every metric is computed at read time; fixtures are synthetic; no committed file holds runtime data or matches <code>/manifest|receipt/i</code>.</dd>
+      <dt><code class="ac">AC-1</code></dt>
+      <dd>A typed Jev call goes through one fenced transport with redaction, a project switch, strict validation, the resolved model and a cost with its source, and leaves one journaled decision record that a rebuild reproduces.</dd>
+      <dt><code class="ac">AC-2</code></dt>
+      <dd>Every stop a run makes journals a shadow proposal built from host facts, and a replay seeds the record from the owner's past stops.</dd>
+      <dt><code class="ac">AC-3</code></dt>
+      <dd>Agreement with the owner is computed at read time; judgment acts unlock at 7 of 8 matched; the owner can switch a lease to owner-all and back, and every act names its basis.</dd>
+      <dt><code class="ac">AC-4</code></dt>
+      <dd>An owner grants, inspects and revokes a lease at their terminal; under it a run raises and resumes at a ceiling, waits for and resumes after a quota reset per the quota plan, cancels a looping attempt, notifies the owner, and hands back everything else.</dd>
+      <dt><code class="ac">AC-5</code></dt>
+      <dd>Under a lease, rework with a verbatim finding, replacement review on host eligibility, degrade-review when named, and a leased fallback route all run only with earned or owner-all autonomy, and the resolver never reads quota.</dd>
+      <dt><code class="ac">AC-6</code></dt>
+      <dd>A ticket block or an admitted BLOCKED code becomes at most two seeded continuation tasks under the same lease; any other code hands back.</dd>
+      <dt><code class="ac">AC-7</code></dt>
+      <dd>pi-route phases get a bash gate, a result screen and a reviewer-injection row through the host socket; claude-route phases get the same if the proof holds; every failure falls back to today's fences.</dd>
+      <dt><code class="ac">AC-8</code></dt>
+      <dd>Marimba's pi session gets a compaction judgment with tiers and a cut point, and the owner's pilot is recorded against the 2026-09-24 baseline.</dd>
+      <dt><code class="ac">AC-9</code></dt>
+      <dd>Every configured role the tool path reaches can ask Jev about files and about its own state, paths and a screened argv command, without the content entering its context.</dd>
+      <dt><code class="ac">AC-10</code></dt>
+      <dd>The metrics tab gains a Delegate view with waiting avoided, agreement, reversals, stops by kind, Jev spend and bytes not read, filterable by Jev model version.</dd>
+    </dl>
+  </section>
+
+  <!-- ===== EXECUTION CONTRACT ===== -->
+  <section id="execution">
+    <h2>Execution: manual first, then shifts under W19's own Delegate</h2>
+    <p><strong>M1 to M3 run manually, one ticket per session</strong>, as W18 does since 2026-09-28. They build the authority every later shift runs under, and T08 and T09 write protected paths as owner gates, which no shift builder can reach. After each delivered and verified ticket the owner makes one bookkeeping commit: its plan rows, its ticket <code>state</code>, the Handoff entries it returned, and a dated Amendment (invariant 12).</p>
+    <p><strong>M4 to M8 run as one AWSF <code>shift</code> per milestone</strong>, normally under a lease the owner grants before leaving, so W19 is the first real user of what it builds. A milestone lands before the next starts: <code>awsf start</code> bases the worktree on HEAD. A shift of N tickets costs N + 1 calls against the T2 ceiling of 5.</p>
+    <table>
+      <thead><tr><th>Milestone</th><th>Tickets</th><th>How</th><th>Calls</th><th>Before it starts</th></tr></thead>
+      <tbody>
+        <tr><td>M1 decision service</td><td>T01–T03</td><td>manual</td><td>—</td><td><span class="gate">G19-A</span></td></tr>
+        <tr><td>M2 shadow owner</td><td>T04–T07</td><td>manual</td><td>—</td><td>M1 delivered</td></tr>
+        <tr><td>M3 lease and code-decided acts</td><td>T08–T12</td><td>manual</td><td>—</td><td><span class="gate">G19-S</span> with T08, <span class="gate">G19-C</span> with T09, <span class="gate">G19-Q</span> before T12's live drive</td></tr>
+        <tr><td>M4 judgment acts, fallback, continuation</td><td>T13–T16</td><td>shift</td><td>5 of 5</td><td>M3 landed; a raise of 2 or a lease with raise</td></tr>
+        <tr><td>M5 guardrail signals</td><td>T17–T20</td><td>shift</td><td>5 of 5</td><td>the same</td></tr>
+        <tr><td>M6 Marimba compaction</td><td>T21–T22</td><td>shift</td><td>3 of 5</td><td><span class="gate">G19-D</span> before the pilot</td></tr>
+        <tr><td>M7 cheap reads and ask_jev</td><td>T23–T25</td><td>shift</td><td>4 of 5</td><td><span class="gate">G19-T</span></td></tr>
+        <tr><td>M8 metrics view</td><td>T26–T28</td><td>shift</td><td>4 of 5</td><td><span class="gate">G19-W</span></td></tr>
+      </tbody>
+    </table>
+
+    <h3>Who writes what</h3>
+    <table>
+      <thead><tr><th>Actor</th><th>Writes</th><th>Never</th></tr></thead>
+      <tbody>
+        <tr><td>Builder (manual session or shift)</td><td><code>core/src/**</code>, <code>core/test/**</code>, <code>dashboard/**</code>, <code>prompts/**</code>, <code>docs/cheatsheet.html</code>; in a manual session, a protected path the ticket names as an owner gate, with the owner's authorization</td><td><code>specs/**</code>, <code>AGENTS.md</code>, <code>awsf.config.yaml</code>, <code>awsf.project.yaml</code>, other protected paths, a root <code>.claude/</code></td></tr>
+        <tr><td>Host</td><td>One commit per ticket on a shift's head; gates per ticket; from M3 on, the Delegate's journaled acts under a lease</td><td>Landing</td></tr>
+        <tr><td>Owner</td><td>Every gate, every lease, landing, journeys, and the bookkeeping commit after each ticket or milestone</td><td>—</td></tr>
+        <tr><td>Marimba</td><td>Nothing in the repository; prepares, reports, starts <code>awsf run</code> (a leased run then continues through stops on its own, Q16)</td><td>Any <code>awsf delegate</code> verb, and every other owner act</td></tr>
+        <tr><td>Delegate</td><td>Journal records under its lease: proposals, decisions, acts, waits, handbacks, route overrides, continuation tasks</td><td>Land, publish, journey, grant, attribute, its own lease, any repository file</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Owner gates</h3>
+    <div class="card rule">
+      <h5><span class="gate">G19-A</span> — AGENTS.md invariant 13, one owner commit before M1</h5>
+      <p>Proposed text, for the owner to edit before committing:</p>
+      <pre><code>13. **The Delegate acts only under an owner lease, and never as the owner.** An owner act
+    runs from the owner's interactive terminal, or under an owner-granted, task-scoped,
+    revocable lease that names it. Delegated acts are journaled as `actor: delegate` with
+    their lease and decision ids. The Delegate never lands, publishes, attests a journey,
+    grants protected content, attributes, or grants its own lease. A Jev answer is never a
+    BLOCKED reason source and never moves lifecycle state by itself. Only
+    `core/src/decision/jev-transport.ts` calls the Jev endpoint, and no agent phase
+    receives its credential. Enforced by the jev-transport, delegate-authority and quota
+    fence meta-tests.</code></pre>
+      <p>It revises nothing in invariants 1–12. It names fences that land in T01, T08 and T10, so until those tickets are delivered the text is a commitment the suite does not yet check.</p>
+    </div>
+    <div class="card rule">
+      <h5><span class="gate">G19-S</span> — the <code>delegate</code> actor, with T08</h5>
+      <p><code>core/src/state/**</code> is protected. T08 traces each delegable act to its edges, adds <code>delegate</code> to exactly those edges' actors with <code>interactive: false</code>, and lists them in its report. The manual session writes it only with the owner's authorization; the commit is the owner's.</p>
+    </div>
+    <div class="card rule">
+      <h5><span class="gate">G19-C</span> — wire <code>awsf delegate</code>, with T09</h5>
+      <p><code>boundary-claims.test.ts</code> requires the guard's verbs to equal the <code>main.ts</code> arms that construct an owner terminal, so the arm, <code>CLI_COMMANDS</code>, the cheatsheet's <code>commands</code> and <code>owner-acts</code> lines, and the verb in <code>delegation-guard.sh</code>, <code>marimba-guard-rules.mts</code> and <code>marimba-guard.test.ts</code> change in one commit, as W18's G18-C did for <code>awsf attribute</code>. T07 builds <code>awsf delegate replay</code> unregistered for the same reason.</p>
+    </div>
+    <div class="card rule">
+      <h5><span class="gate">G19-Q</span> — <code>routing.quota_stop</code>, before T12's live drive</h5>
+      <p>Without it a spent window fails a phase instead of parking it in <code>quota-pause</code>, and there is nothing for the Delegate to resume. The owner picks <code>default.minutes</code> and <code>probe_timeout_ms</code> (and any <code>by_adapter</code> entries) from <code>awsf quota</code>'s readout.</p>
+    </div>
+    <div class="card rule">
+      <h5><span class="gate">G19-D</span> — Marimba's compaction profile, before M6's pilot</h5>
+      <p><code>docs/driving/marimba/compaction/</code> names <code>core/src/decision/pi/jev-compact.pi.ts</code>, and the owner's machine-local pi settings load it. The settings change is owner-side and outside the task graph.</p>
+    </div>
+    <div class="card rule">
+      <h5><span class="gate">G19-T</span> — tool allowlists, before M7's shifts</h5>
+      <p>Every role's <code>tools.allow</code> in <code>awsf.config.yaml</code> names the Jev tools (the schema warns that an unlisted extension tool is silently filtered). For claude-route roles this applies only if T19's proof held.</p>
+    </div>
+    <div class="card rule">
+      <h5><span class="gate">G19-W</span> — W18 complete, before M8</h5>
+      <p>M8 adds a view to W18's tab and a block to its API, so it starts after W18's T17 lands.</p>
+    </div>
+
+    <h3>Fences this plan meets</h3>
+    <table>
+      <thead><tr><th>Fence</th><th>Where W19 meets it</th><th>Resolution</th></tr></thead>
+      <tbody>
+        <tr><td>Invariant 3 and <code>no-shell-true</code></td><td>The notify hook; <code>ask_jev</code>'s command</td><td>Both run argv arrays through the transport broker, never a shell (the reference used <code>exec</code>)</td></tr>
+        <tr><td><code>adapter-fence</code> and the new <code>jev-transport-fence</code></td><td>The only <code>fetch</code> in <code>core/src</code></td><td>One module in <code>core/src/decision/</code>, outside the adapters</td></tr>
+        <tr><td><code>quota-fence</code></td><td>The quota plan and route fallback</td><td>Both live in <code>core/src/delegate/</code>; the fence gains the rule that <code>core/src/workflow/**</code> and the resolver reach neither quota nor Delegate modules</td></tr>
+        <tr><td><code>errors.ts</code> reason sources</td><td>Every Delegate handback</td><td>Handbacks are journal records, not transitions; Jev is never a reason source</td></tr>
+        <tr><td><code>boundary-claims</code>, <code>marimba-guard</code>, <code>cheatsheet-reconciliation</code></td><td><code>awsf delegate</code></td><td><span class="gate">G19-C</span></td></tr>
+        <tr><td>Protected <code>core/src/state/**</code></td><td>The <code>delegate</code> actor</td><td><span class="gate">G19-S</span></td></tr>
+        <tr><td><code>execution-isolation</code></td><td>The claude-route proof</td><td>Settings and MCP config come from the attempt's private directory on the command line; no <code>.claude/</code> anywhere</td></tr>
+        <tr><td>pi's clean-room flags</td><td>The guard and tool extensions</td><td><code>--no-extensions</code> stays; the extension is an explicit <code>-e</code> in the reviewed argv, verified first (T18)</td></tr>
+        <tr><td><code>sqlite-write-fence</code>, invariant 6</td><td>Decision and Delegate rows</td><td>Projected by <code>projector.ts</code> into <code>events</code>; read modules import <code>type DatabaseSync</code> only</td></tr>
+        <tr><td><code>dependency-allowlist</code></td><td>Transport, socket, view</td><td>Native <code>fetch</code>, <code>node:net</code>, hand-drawn SVG; no package</td></tr>
+        <tr><td><code>junk-drawer</code></td><td>Runtime records</td><td>None matches <code>/manifest|receipt/i</code>, and none is committed</td></tr>
+        <tr><td><code>no-agent-coauthor</code>, invariant 11</td><td>Every commit</td><td>Unchanged; the Delegate never commits</td></tr>
+      </tbody>
+    </table>
+
+    <figure>
+      <pre class="mermaid">
+sequenceDiagram
+  participant O as Owner
+  participant R as awsf run
+  participant D as Delegate
+  participant J as Jev
+  O->>R: awsf delegate grant (at the terminal)
+  O-->>O: leaves
+  R->>D: ceiling-pause
+  D->>J: stop-judgment
+  J-->>D: progressing 0.92
+  D->>R: raise, resume (actor: delegate)
+  R->>D: quota-pause
+  D->>D: quota plan: wait until reset
+  D->>R: resume
+  R->>D: ticket-block
+  D->>R: continuation task
+  R-->>O: AWAITING_OWNER, notify
+      </pre>
+      <figcaption>One leased night. Every arrow from the Delegate is a journaled act under the lease; Jev only answers the questions in between.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ===== IMPLEMENTATION PHASES ===== -->
+  <section id="phases">
+    <h2>Implementation Phases</h2>
+    <p><strong>IMPORTANT:</strong> Execute every phase and task step by step, in order, top to bottom.</p>
+    <p>Status markers: <code>[]</code> idle · <code>[wip]</code> in progress · <code>[x]</code> complete · <code>[f]</code> failed. All start as <code>[]</code>. No builder writes them: the owner moves a task's rows and its ticket's <code>state</code> together in the bookkeeping commit after the ticket is delivered (M1–M3) or its milestone lands (M4–M8). A milestone stays <code>[wip]</code> until every task in it is <code>[x]</code>. Each milestone's owner journey is its testing ticket's OWNER ACCEPTANCE list, recorded as <code>w19-m1</code> … <code>w19-m8</code>; task 28 also defines <code>w19-jev-delegate</code> for the whole workstream.</p>
+
+    <!-- ================= M1 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M1: The decision service (J1) <span class="wtag">manual</span></h3>
+      <p>One fenced way to ask Jev anything, one versioned home for every question, and one journaled record per call. Nothing acts on an answer yet. Everything later calls <code>decide()</code>.</p>
+
+      <h4>1. The Jev transport, its fence and the project switch</h4>
+      <p class="sub">Serves <code class="serves">AC-1</code> · <code class="serves">INV-4</code> · <code class="serves">INV-5</code></p>
+      <p>A port of the reference client's transport and validation, cut to one provider and bound to AWSF's rules.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>core/src/decision/jev-transport.ts</code>: OpenRouter's decisions endpoint, <code>~typesafe/jev-latest</code> by default with the resolved model returned (Q7), <code>OPENROUTER_API_KEY</code> read once (Q6), <code>redirect: "error"</code>, 30 s total deadline, at most 3 attempts on 429/502/503/529 with jittered backoff capped at 8 s</li>
+        <li><code class="status">[]</code> Request and strict response validation ported from the reference client; an invalid response is a <code>ContractError</code>, never a partial answer</li>
+        <li><code class="status">[]</code> Cost as <code>{ amount, source }</code>: reported, estimated ($0.042 per million input tokens, measured 2026-09-28) or unknown, never zero for unknown</li>
+        <li><code class="status">[]</code> Redaction through <code>core/src/policy/redaction.ts</code> before serialization; whether it changed anything is recorded, what it removed is not</li>
+        <li><code class="status">[]</code> The catalog's optional <code>decision: { jev: on | off }</code>, default on; off yields a typed <code>refused-by-switch</code> result; a missing key yields a typed <code>unavailable</code> result</li>
+        <li><code class="status">[]</code> <code>core/test/unit/meta/jev-transport-fence.test.ts</code>: no other file in <code>core/src</code> calls <code>fetch</code> or names the endpoint, and the fence proves it catches both spellings</li>
+      </ul>
+
+      <h4>2. Versioned question sets and the journaled decision record</h4>
+      <p class="sub">Serves <code class="serves">AC-1</code> · <code class="serves">INV-2</code> · <code class="serves">INV-7</code></p>
+      <p>Questions, thresholds and the pure policy that reads the answers live together in one file per set, as in the reference repository. Every call is journaled.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>core/src/decision/question-set.ts</code>: <code>{ id, version, questions, thresholds, policy }</code> and a registry that refuses a duplicate <code>id@version</code></li>
+        <li><code class="status">[]</code> <code>stop-judgment</code> v1 (progressing, next_act, risk); the 2026-09-28 smoke answer is its fixture for a correct "wait"</li>
+        <li><code class="status">[]</code> <code>awsf.decision/v1</code> record (TypeBox, registered) with outcome, answers, usage, cost, resolved model, caller, and redacted bodies up to 16 KiB else their digests (Q18)</li>
+        <li><code class="status">[]</code> <code>decide()</code> appends to the task's <code>decisions.jsonl</code>; the projector writes one <code>events</code> row of type <code>decision</code>; <code>awsf db rebuild</code> replays the file; no migration</li>
+      </ul>
+
+      <h4>3. Testing Strategy for M1, and the doctor row</h4>
+      <p class="sub">Serves <code class="serves">AC-1</code> · <code class="serves">INV-4</code></p>
+      <p>Offline, stubbed transport; no live call in any test.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>awsf doctor</code> reports the switch, whether the key is set (never its value or length), the requested model and the fence, with no network call</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — green at the base SHA before any change, count recorded, and green after</li>
+        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/decision-*.test.ts</code> — every outcome, retry, contract and redaction case</li>
+        <li><code class="status">[]</code> A journey over <code>decide()</code>: one record per call, projected rows, identical after a rebuild from nothing</li>
+        <li><code class="status">[]</code> <code>npm run typecheck</code> and <code>npm run lint</code> — exit 0</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass.
+      </div>
+    </div>
+
+    <!-- ================= M2 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M2: The shadow owner (J6) <span class="wtag">manual</span></h3>
+      <p>At every stop the Delegate writes down what it would do. Nothing acts. The record it builds is both the calibration data the reference repository says every threshold needs and the evidence that decides which acts earn autonomy.</p>
+      <figure>
+        <pre class="mermaid">
+flowchart LR
+  S["stop"] --> F["stop facts"]
+  F --> P["proposal"]
+  P --> JR[("delegate.jsonl")]
+  OA["owner's next act"] --> JR
+  JR --> A["agreement<br/>at read time"]
+  A --> U["autonomy per act"]
+  RP["replay of<br/>past stops"] --> A
+        </pre>
+        <figcaption>Nothing is written when the owner acts: agreement pairs records that already exist.</figcaption>
+      </figure>
+
+      <h4>4. Stop facts: one host-built record for every stop</h4>
+      <p class="sub">Serves <code class="serves">AC-2</code></p>
+      <p>The facts the owner reads at each stop, gathered by code from the status and the journal.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>core/src/delegate/stop-facts.ts</code>: pure <code>buildStopFacts</code> for ceiling-pause, quota-pause, ticket-block, AWAITING_OWNER after L12, L15 and L26, and BLOCKED on any edge</li>
+        <li><code class="status">[]</code> Fields: lifecycle, stop kind, edge, reason code, calls spent, ceiling, next phase and route, tickets done and remaining, corrections, the last round's gate rows, the review verdict and findings, and the latest journaled quota rows</li>
+        <li><code class="status">[]</code> No field is inferred, and nothing calls a provider or a live probe</li>
+      </ul>
+
+      <h4>5. The shadow policy and its journaled proposals</h4>
+      <p class="sub">Serves <code class="serves">AC-2</code> · <code class="serves">INV-2</code></p>
+      <p>A closed table from facts and answers to one proposed act. Numbers decide first; Jev refines only judgment.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>core/src/delegate/policy.ts</code>: raise, resume, wait-until, cancel, replacement-review, rework, degrade-review, route-fallback, continue, land-shadow, wait-for-owner, each with a rationale code</li>
+        <li><code class="status">[]</code> A ceiling-pause proposes <code>raiseActsNeeded</code>'s calls; progressing below 0.7 or a next_act below 0.85 confidence becomes wait-for-owner</li>
+        <li><code class="status">[]</code> land-shadow is proposed after an approving review and cannot become executable under any input</li>
+        <li><code class="status">[]</code> The runner appends a <code>delegate.proposal</code> at every stop, lease or not; an unavailable decision records wait-for-owner with reason <code>jev-unavailable</code></li>
+      </ul>
+
+      <h4>6. Agreement and earned autonomy, computed at read time</h4>
+      <p class="sub">Serves <code class="serves">AC-3</code></p>
+      <p>The owner's decision Q8, as two pure functions.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>agreement.ts</code>: each proposal paired with the next act on that attempt by any actor: match, mismatch or none</li>
+        <li><code class="status">[]</code> <code>autonomy.ts</code>: raise, resume, wait-until and cancel live from the first lease; judgment acts unlock at 7 of their last 8 matched (live and replay pairs, source kept); land-shadow never</li>
+        <li><code class="status">[]</code> A lease's <code>autonomy all</code> unlocks every judgment act and is reported as owner-all, never as earned</li>
+      </ul>
+
+      <h4>7. Testing Strategy for M2, and the historical replay</h4>
+      <p class="sub">Serves <code class="serves">AC-2</code> · <code class="serves">INV-7</code></p>
+      <p>The replay turns the owner's past stops into agreement data before any lease exists.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>awsf delegate replay [--project P] [--live]</code>, built unregistered until <span class="gate">G19-C</span>: numbers-only without <code>--live</code>, one <code>stop-judgment</code> call per stop with it; output to the state root's <code>delegate/replays.jsonl</code> only</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — green at the base SHA and after, counts recorded</li>
+        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/delegate-*.test.ts</code> — nine stop kinds, every rationale code, the 7-of-8 boundary, owner-all, land-shadow never unlocking</li>
+        <li><code class="status">[]</code> A replay journey: five synthetic stops and the owner's acts become five pairs with the expected agreement</li>
+        <li><code class="status">[]</code> <code>npm run typecheck</code> and <code>npm run lint</code> — exit 0</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass.
+      </div>
+    </div>
+
+    <!-- ================= M3 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M3: The lease and the code-decided acts (J7, first half) <span class="wtag">manual</span> <span class="wtag raise">gates G19-S, G19-C, G19-Q</span></h3>
+      <p>The first milestone that gives an answer authority. The owner grants a lease at the terminal; under it a run stops exiting at the stops arithmetic can settle: a spent call ceiling, a spent quota window, a job going in circles.</p>
+
+      <h4>8. The Delegate actor: authority type, task-machine edges and the invariant</h4>
+      <p class="sub">Serves <code class="serves">INV-1</code> · <code class="serves">INV-3</code></p>
+      <p>Gate <span class="gate">G19-S</span>. The owner branch of every act is untouched; a delegate branch is added beside it.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> The exact edge of each delegable act traced from the code and listed in the report; <code>delegate</code> added to those edges' actors only, with <code>interactive: false</code></li>
+        <li><code class="status">[]</code> <code>core/src/delegate/authority.ts</code>: <code>ActAuthority = owner | delegate</code>; raise, resume, cancel, rework, review, degrade-review and seed accept it and record <code>actor: delegate</code> with the lease id</li>
+        <li><code class="status">[]</code> <code>delegate-authority-fence.test.ts</code>: no edge into LANDING or PUBLISHED names <code>delegate</code>; <code>land.ts</code>, <code>publish.ts</code>, <code>journey.ts</code>, <code>grant.ts</code> and <code>attribute.ts</code> never import the type; no delegate record names a human</li>
+        <li><code class="status">[]</code> <code>errors.ts</code> keeps exactly six reason sources</li>
+      </ul>
+
+      <h4>9. The lease: grant, revoke, autonomy, and its record</h4>
+      <p class="sub">Serves <code class="serves">AC-3</code> · <code class="serves">AC-4</code> · <code class="serves">INV-3</code> · <code class="serves">INV-6</code></p>
+      <p>Gate <span class="gate">G19-C</span>. The owner's written, revocable note.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>awsf.delegate-lease/v1</code> in the task's <code>delegate-leases.jsonl</code>: acts, caps (ceiling ≤ 20, continuations ≤ 2, reworks ≤ 1, Jev $), autonomy, degrade-review flag, fallback routes, optional end time, reason; later records revoke or change autonomy</li>
+        <li><code class="status">[]</code> <code>awsf delegate grant</code> with the Q1 defaults, a confirmation screen listing every act and cap, an interactive terminal and a credential-free reason; <code>revoke</code> and <code>autonomy earned|all</code> the same way</li>
+        <li><code class="status">[]</code> <code>lease-check.ts</code>: allowed with its autonomy basis, or refused as not granted, revoked, expired, cap reached, task ended, never delegable or not earned</li>
+        <li><code class="status">[]</code> <span class="gate">G19-C</span>: the <code>delegate</code> arm, <code>CLI_COMMANDS</code>, the cheatsheet's two lists and the guard verb in one commit; <code>awsf status</code> shows the active lease</li>
+      </ul>
+
+      <h4>10. The quota plan: when to resume, when to wait, when to stop</h4>
+      <p class="sub">Serves <code class="serves">AC-4</code> · <code class="serves">INV-5</code></p>
+      <p>The owner's by-hand method (D1, Q3b) as one pure function.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>core/src/delegate/quota-plan.ts</code>: resume when the five-hour window holds the expected draw + 10 points and the week ≥ 15%; wait until the limiting reset + 5 minutes when that is the five-hour window, or the week resetting within 6 h; otherwise stop</li>
+        <li><code class="status">[]</code> Expected draw: the median percent drop between boundary snapshots around past phases on that route, 15 points below 3 samples; labeled planning-only and never shown or stored as a task's cost</li>
+        <li><code class="status">[]</code> Unknown or stale quota stops; the defaults live in <code>config.delegate.quota</code></li>
+        <li><code class="status">[]</code> <code>quota-fence.test.ts</code> extended: <code>core/src/workflow/**</code> and the resolver reach neither quota nor Delegate modules</li>
+      </ul>
+
+      <h4>11. The runner hands stops to the Delegate: raise, resume, wait, cancel, notify</h4>
+      <p class="sub">Serves <code class="serves">AC-4</code> · <code class="serves">INV-1</code> · <code class="serves">INV-2</code> · <code class="serves">INV-5</code> · <code class="serves">INV-6</code></p>
+      <p>With a lease, <code>awsf run</code> keeps going in the same foreground process (Q3a).</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>core/src/delegate/drive.ts</code>: at each stop, facts, proposal, lease check, then ceiling-pause → raise (one or more acts) → resume; quota-pause and L26 → the quota plan → resume, journaled <code>delegate.wait</code>, or handback; cancel when proposed</li>
+        <li><code class="status">[]</code> <code>awsf run</code> on a parked, leased attempt continues from the checkpoint, so a restart recovers from the journal</li>
+        <li><code class="status">[]</code> Everything else journals <code>delegate.handback</code> and exits as today; the lease is re-read before every act and after every wait</li>
+        <li><code class="status">[]</code> The notify hook: the placement layer's <code>delegate.notify.argv</code> run through the broker with a one-line summary on stdin, 10 s, failures journaled and never blocking (Q10)</li>
+      </ul>
+
+      <h4>12. Testing Strategy for M3: a leased shift through ceiling and quota stops</h4>
+      <p class="sub">Serves <code class="serves">AC-4</code> · <code class="serves">INV-1</code> · <code class="serves">INV-6</code></p>
+      <p>Stub routes and a fake clock offline; then the owner's first real night.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> A journey: a leased three-ticket shift through a ceiling-pause, a quota-pause and a ticket-block (handed back), with the whole story in the journal and no record claiming the owner</li>
+        <li><code class="status">[]</code> A meta-test: every <code>delegate.act</code> names a lease that allowed it at that time</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — green at the base SHA and after; <code>npm run typecheck</code> and <code>npm run lint</code> exit 0</li>
+        <li><code class="status">[]</code> <code>w19-m3</code>: after <span class="gate">G19-Q</span>, the owner leaves one real, small leased shift overnight and confirms each act in the morning</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        The acceptance bar is one real night, not the suite.
+      </div>
+    </div>
+
+    <!-- ================= M4 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M4: Judgment acts, route fallback and continuation (J7 second half, J8) <span class="wtag route">shift</span> <span class="wtag raise">raise +2</span></h3>
+      <p>The acts that need judgment, each gated by earned or owner-all autonomy, and the follow-up task that replaces the owner's manual <code>--continues</code> after a failure.</p>
+
+      <h4>13. Rework, replacement review and degrade-review under the lease</h4>
+      <p class="sub">Serves <code class="serves">AC-3</code> · <code class="serves">AC-5</code> · <code class="serves">INV-3</code></p>
+      <p>Jev picks; code copies; the lease and autonomy decide.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>finding-pick</code> v1: a choice over the review's findings plus none, at confidence ≥ 0.85; the defect is the finding's text, file and line, copied verbatim; one delegated rework per attempt</li>
+        <li><code class="status">[]</code> Replacement review only on the host's L25 eligibility, with no Jev question</li>
+        <li><code class="status">[]</code> degrade-review only when leased, before a continuation's start or after a fallback collapses the provider pair</li>
+        <li><code class="status">[]</code> A locked act hands back with <code>autonomy-not-earned</code>; a credential-aborted rework is never retried</li>
+      </ul>
+
+      <h4>14. Route fallback when a provider's window is spent</h4>
+      <p class="sub">Serves <code class="serves">AC-5</code> · <code class="serves">INV-5</code></p>
+      <p>The owner's Q3c: a leased route per role when the quota plan would stop.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>awsf.delegate-route-override/v1</code> record (role, route, lease, the quota facts), then resume</li>
+        <li><code class="status">[]</code> The resolver applies it like an owner's <code>--route</code> and never reads quota; the quota fence stays green</li>
+        <li><code class="status">[]</code> The recovery binding admits a journaled Delegate override and still refuses any other route change</li>
+        <li><code class="status">[]</code> A collapsed builder/reviewer provider pair without the degrade-review flag hands back</li>
+      </ul>
+
+      <h4>15. Continuation after a ticket block or a BLOCKED attempt</h4>
+      <p class="sub">Serves <code class="serves">AC-6</code> · <code class="serves">INV-2</code> · <code class="serves">INV-6</code></p>
+      <p>The owner's Q14. The shift still never retries itself: a continuation is a new task.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>failure-kind</code> v1 over at most 8 KiB of gate output and envelope error: code_bug, wrong_test, environment, provider_fault, other</li>
+        <li><code class="status">[]</code> Admitted: ticket-block, and BLOCKED with correction-budget-exhausted, review-unavailable, review-malformed, silence or crash. Never: permission-breach, preflight-failed, L21 or L24 codes, quota-exhausted, budget-exhausted</li>
+        <li><code class="status">[]</code> Cancel if parked, <code>awsf new --continues</code> with a code-composed request, seed from the candidate, degrade-review if needed and leased, start, run under the same lease; at most 2</li>
+        <li><code class="status">[]</code> Whether a shift can select from a given ticket is verified and reported; the continuation uses whichever holds</li>
+      </ul>
+
+      <h4>16. Testing Strategy for M4</h4>
+      <p class="sub">Serves <code class="serves">AC-3</code> · <code class="serves">AC-5</code> · <code class="serves">AC-6</code> · <code class="serves">INV-3</code></p>
+      <p>One journey across all three behaviors, and one proof of what the Delegate can never do.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> A leased two-milestone shift meets a change request, a spent week with a leased fallback, and a ticket block, and ends at AWAITING_OWNER with land-shadow proposed and not taken</li>
+        <li><code class="status">[]</code> A meta-test: no input sequence makes the Delegate land, publish, journey, grant or attribute</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — green at the base SHA and after; <code>npm run typecheck</code> and <code>npm run lint</code> exit 0</li>
+        <li><code class="status">[]</code> <code>w19-m4</code>: the owner reads one real leased night that took a judgment act or a continuation and confirms the choice</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass.
+      </div>
+    </div>
+
+    <!-- ================= M5 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M5: Guardrail signals (J2) <span class="wtag route">shift</span> <span class="wtag raise">raise +2</span></h3>
+      <p>Level 6 of the reference ladder inside AWSF's agent phases, as signals on top of the fences that already hold. Phases reach Jev only through the host.</p>
+
+      <h4>17. The decision socket: the host answers typed questions for its phases</h4>
+      <p class="sub">Serves <code class="serves">AC-7</code> · <code class="serves">INV-4</code> · <code class="serves">INV-5</code></p>
+      <p>The key stays in the host process (Q17).</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> The sandbox is first shown to let a phase connect to a socket in the attempt's private directory; if not, the task stops and reports</li>
+        <li><code class="status">[]</code> <code>core/src/decision/socket.ts</code> over <code>node:net</code>: registered sets or validated raw blocks in, <code>{ answers, recordId }</code> out, redaction and journaling by the host</li>
+        <li><code class="status">[]</code> <code>AWSF_DECISION_SOCKET</code> joins <code>filterEnv</code>'s allowlist; no credential does</li>
+        <li><code class="status">[]</code> Caps: 300 calls per phase and the lease's Jev spend</li>
+      </ul>
+
+      <h4>18. jev-guard for pi roles: bash gate, result screen, reviewer-injection screen</h4>
+      <p class="sub">Serves <code class="serves">AC-7</code> · <code class="serves">INV-5</code></p>
+      <p>The reference's guard, failing to today's fences instead of failing open silently.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> pi is first shown to load an explicit <code>-e</code> with <code>--no-extensions</code> still in the argv; if not, the task stops and reports</li>
+        <li><code class="status">[]</code> <code>core/src/decision/pi/jev-guard.pi.ts</code>: <code>bash-gate</code> v1 blocks irreversible ≥ 0.6 or destructive ≥ 0.7 with a final-block notice; <code>result-screen</code> v1 banners ≥ 0.7; any failure allows and journals <code>unavailable</code></li>
+        <li><code class="status">[]</code> <code>reviewer-screen</code> v1: an advisory gate row <code>jev_reviewer_screen</code> before review, never failing it</li>
+        <li><code class="status">[]</code> The reference's secret write gate is not ported; the pi argv stays asserted exactly, with the <code>-e</code> pair in its reviewed place when the switch is on</li>
+      </ul>
+
+      <h4>19. Claude-route hooks and tools: prove the path, then wire it</h4>
+      <p class="sub">Serves <code class="serves">AC-7</code></p>
+      <p>Four of five configured roles run on the claude adapter. This task may close <code>[f]</code>, and that is a legitimate result (Q19).</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Proven from the installed CLI whether a phase can take hooks from a settings file and tools from an MCP config passed on the command line from the attempt's private directory, with nothing discovered from the worktree</li>
+        <li><code class="status">[]</code> If both hold: a hook script and a stdio MCP server under <code>core/src/decision/claude/</code> talking to the socket, carrying the pi route's guard and (for M7) tools</li>
+        <li><code class="status">[]</code> If either fails: no adapter change, and the evidence recorded for the owner's <code>[f]</code></li>
+      </ul>
+
+      <h4>20. Testing Strategy for M5</h4>
+      <p class="sub">Serves <code class="serves">AC-7</code> · <code class="serves">INV-5</code></p>
+      <p>Stub routes; the socket stopped mid-journey proves the fallback.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> A builder phase's destructive command is blocked and a planted instruction is bannered, both journaled; with the socket stopped the same phase completes on today's fences</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — green at the base SHA and after; <code>npm run typecheck</code> and <code>npm run lint</code> exit 0</li>
+        <li><code class="status">[]</code> <code>w19-m5</code>: the owner reads guard decisions on one real shift's builder and sees none that stopped legitimate work</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass.
+      </div>
+    </div>
+
+    <!-- ================= M6 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M6: Marimba's compaction judgment (J3) <span class="wtag route">shift</span></h3>
+      <p>Level 7 of the reference ladder for the session the owner drives the factory from. It adds a judgment to the self-compact extension already piloted; it replaces nothing.</p>
+
+      <h4>21. The compaction question set, tiers and cut point for Marimba</h4>
+      <p class="sub">Serves <code class="serves">AC-8</code></p>
+      <p>Marimba is the owner's own session, so it calls the transport directly rather than through a phase socket (DD16).</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>compaction</code> v1 and <code>cut-point</code> v1 with the reference's pure tier policy, using the Marimba profile's own token lines</li>
+        <li><code class="status">[]</code> <code>core/src/decision/pi/jev-compact.pi.ts</code>: turn_end judgment, a tier message only when not silent, the cut point folded into compaction instructions, each decision kept as a pi session entry</li>
+        <li><code class="status">[]</code> Nothing under <code>docs/driving/**</code> changes in this task (<span class="gate">G19-D</span>)</li>
+      </ul>
+
+      <h4>22. Testing Strategy for M6, and the Marimba pilot</h4>
+      <p class="sub">Serves <code class="serves">AC-8</code></p>
+      <p>Offline simulation, then the owner's pilot against the 2026-09-24 baseline (572k tokens, 23 turns, 1 compaction on four read-only prompts).</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> A simulated four-prompt session with a gear change at the third yields the expected tiers and one cut point</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — green at the base SHA and after; <code>npm run typecheck</code> and <code>npm run lint</code> exit 0</li>
+        <li><code class="status">[]</code> <code>w19-m6</code>: after <span class="gate">G19-D</span>, the owner's pilot on the same four prompts, recording tokens, turns, compactions and any lost live work</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass.
+      </div>
+    </div>
+
+    <!-- ================= M7 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M7: Cheap reads and ask_jev (J4, J5) <span class="wtag route">shift</span> <span class="wtag raise">gate G19-T</span></h3>
+      <p>Levels 8 to 10 of the reference ladder: an agent asks about files, and about anything it holds, and gets typed answers without the content entering its context. The owner chose all roles at once (Q13), which reaches claude-route roles only through task 19's path.</p>
+
+      <h4>23. ask_jev_file and ask_jev_files for every configured role</h4>
+      <p class="sub">Serves <code class="serves">AC-9</code></p>
+      <p>One file with flat parameters, or many files with one question block, answered in parallel.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>jev-tools.pi.ts</code>: <code>ask_jev_file_bool</code>, <code>_choice</code> (an <code>other</code> option added when missing), <code>_score</code>, and <code>ask_jev_files</code> with expansion, pruning, the 255-file cap and at most 16 in flight</li>
+        <li><code class="status">[]</code> Files are read inside the worktree only; a path escape is refused before any call; the agent receives answers, never content</li>
+        <li><code class="status">[]</code> Each record carries the judged files' byte counts for M8</li>
+      </ul>
+
+      <h4>24. ask_jev over state, paths and an argv command</h4>
+      <p class="sub">Serves <code class="serves">AC-9</code> · <code class="serves">INV-4</code></p>
+      <p>The agent writes its own question block. The command runs on the host, never in the agent's process.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>ask_jev</code>: short state, up to 20 paths, an argv command and <code>questions_json</code>, assembled within the budget or refused with a split</li>
+        <li><code class="status">[]</code> The command goes to the host, is screened by <code>bash-gate</code>, and runs through the broker only when read_only at ≥ 0.8, with a 60 s limit and a 200 KB cap; its output reaches Jev and not the agent</li>
+        <li><code class="status">[]</code> The reference's tool description carried as the teaching</li>
+      </ul>
+
+      <h4>25. Testing Strategy for M7, and the token comparison</h4>
+      <p class="sub">Serves <code class="serves">AC-9</code></p>
+      <p>A journey offline, then the owner's first measured pair.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> A builder phase answers a relevance question over a fixture tree, opens only the picked file, and the journal shows the bytes not read</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — green at the base SHA and after; <code>npm run typecheck</code> and <code>npm run lint</code> exit 0</li>
+        <li><code class="status">[]</code> <code>w19-m7</code>: the owner runs one small ticket twice on the same route, tools off then on, and records tokens, calls, time and outcome</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        A saving is a measured pair, never a stub.
+      </div>
+    </div>
+
+    <!-- ================= M8 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M8: The Delegate in the metrics tab (J9) <span class="wtag route">shift</span> <span class="wtag raise">gate G19-W</span></h3>
+      <p>The owner's question — is each new tool actually making the factory better? — answered from the journal, in W18's tab, with Jev versions comparable side by side (Q7).</p>
+      <figure class="mockup">
+        <div class="mockup-frame">
+          <div class="mk-k">metrics › Delegate · synthetic data</div>
+          <div class="mk-pills">
+            <span class="mk-pill on">Delegate</span><span class="mk-pill">Matrix</span><span class="mk-pill">Frontier</span><span class="mk-pill">Ledger</span><span class="mk-pill">Run</span>
+            <span class="mk-pill">jevModel: jev-1.13-20260917</span>
+          </div>
+          <div class="mk-row mk-tiles">
+            <div class="mk-panel"><span class="mk-k">waiting avoided</span><div class="mk-big">≤ 41 h</div><span class="mk-note">upper bound · 9 nights</span></div>
+            <div class="mk-panel"><span class="mk-k">agreement</span><div class="mk-big">27 / 31</div><span class="mk-note">raise 12/12 · rework 5/8</span></div>
+            <div class="mk-panel"><span class="mk-k">reversed by owner</span><div class="mk-big">1</div><span class="mk-note">a resume, then cancel</span></div>
+            <div class="mk-panel"><span class="mk-k">Jev spend</span><div class="mk-big">$0.004</div><span class="mk-note">reported · 142 calls</span></div>
+          </div>
+          <div class="mk-panel" style="margin-top:14px">
+            <span class="mk-k">stops per week, by kind</span>
+            <svg viewBox="0 0 420 90" width="100%" height="90" aria-hidden="true">
+              <g fill="none" stroke-width="2">
+                <polyline points="10,20 110,30 210,52 310,60 410,70" style="stroke:var(--amber)"/>
+                <polyline points="10,40 110,44 210,50 310,62 410,66" style="stroke:var(--cyan)"/>
+                <polyline points="10,70 110,66 210,74 310,72 410,78" style="stroke:var(--accent)"/>
+              </g>
+            </svg>
+            <span class="mk-note">ceiling · quota · ticket-block — lower is better once the Delegate handles them</span>
+          </div>
+        </div>
+        <figcaption>Proposed Delegate view in the tab's Forest dark tokens. Synthetic numbers; every figure carries its label (an upper bound, reported spend), as W18's INV-3 requires.</figcaption>
+      </figure>
+
+      <h4>26. The Delegate and Jev read model</h4>
+      <p class="sub">Serves <code class="serves">AC-10</code> · <code class="serves">INV-7</code></p>
+      <p>Read-time rows over the journal, served by W18's API.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>core/src/metrics/delegate-rows.ts</code>: waiting avoided (capped at 24 h per act, labeled an upper bound), agreement per act, reversals from a closed table, stops by kind per week, Jev spend by cost source, bytes judged instead of read with a labeled list-price equivalent</li>
+        <li><code class="status">[]</code> Every row carries the resolved Jev model and question-set version</li>
+        <li><code class="status">[]</code> <code>GET /api/v1/metrics</code> gains a <code>delegate</code> block and stays read-only</li>
+      </ul>
+
+      <h4>27. The Delegate view in the metrics tab, with the Jev model facet</h4>
+      <p class="sub">Serves <code class="serves">AC-10</code></p>
+      <p>A fifth view in W18's tab, in its own tokens.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Act tiles, the waiting series, stops by kind per week, and an act table with evidence links</li>
+        <li><code class="status">[]</code> Lens facets <code>jevModel</code> and <code>questionSet</code></li>
+        <li><code class="status">[]</code> Hand-drawn SVG, all seven palettes and both modes, no write</li>
+      </ul>
+
+      <h4>28. Testing Strategy for M8, and the workstream's closing duties</h4>
+      <p class="sub">Serves <code class="serves">AC-10</code> · <code class="serves">INV-7</code></p>
+      <p>Parity, then the closing record for the spine.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> The API block, the view and <code>awsf metrics</code> agree on one synthetic database</li>
+        <li><code class="status">[]</code> The closing record: each task's final state, every gate's commit, <code>w19-m3</code> to <code>w19-m7</code>'s measured results, and AC-1 to AC-10 with evidence or <code>[f]</code></li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code> — green at the base SHA and after; <code>npm run typecheck</code> and <code>npm run lint</code> exit 0</li>
+        <li><code class="status">[]</code> <code>w19-jev-delegate</code>: the owner opens the view in Chrome on their own data, in two palettes and both modes, and accepts or returns it</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        The acceptance bar is the owner reading their own weeks of data, not the suite.
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== GLOBAL VALIDATION ===== -->
+  <section id="validation">
+    <h2>Validation Commands</h2>
+    <p>Execute these commands to validate the entire plan is complete. Every row but the last three runs offline and spends no quota.</p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> <code>npm run test:unit</code> — the invariant-12 fence pairs <code>specs/tickets/awsf-v2-w19-jev-delegate/</code> with this plan (contiguous ids, milestones, state against markers and checklists, byte-identical prompts, backward dependencies, the identifier spine), and every other meta-test stays green</li>
+      <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/jev-transport-fence.test.ts core/test/unit/meta/delegate-authority-fence.test.ts core/test/unit/meta/quota-fence.test.ts</code> — one transport, a closed act set, and no workflow or resolver path to quota or Delegate code</li>
+      <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/journeys/delegate-*.test.ts</code> — the M3, M4, M5 and M7 journeys on stub routes</li>
+      <li><code class="status">[]</code> <code>npm run typecheck</code> and <code>npm run lint</code> — exit 0</li>
+      <li><code class="status">[]</code> <code>git ls-files | grep -iE 'manifest|receipt'</code> — no new match; no runtime record is tracked</li>
+      <li><code class="status">[]</code> <code>w19-m3</code> and <code>w19-m4</code> — real leased nights, read and confirmed by the owner</li>
+      <li><code class="status">[]</code> <code>w19-m6</code> and <code>w19-m7</code> — the Marimba pilot and the token pair, recorded</li>
+      <li><code class="status">[]</code> <code>w19-jev-delegate</code> — the Delegate view accepted by the owner in Chrome</li>
+    </ul>
+    <div class="loop">
+      🔁 <strong>The plan is not complete until every box is checked and every command passes. If for some reason a step is not possible to complete, mark it with [f] and move on if possible.</strong>
+    </div>
+  </section>
+
+  <!-- ===== QUESTIONABLES ===== -->
+  <section id="questionables">
+    <h2>Questionables</h2>
+    <p>The owner decided Q1–Q15 on 2026-09-28 (Decisions already taken). Authoring surfaced five more, numbered on from there. <strong>All five were decided on 2026-09-28 by owner review, each as recommended</strong>, so the tickets, which were written against those recommendations, stand unchanged.</p>
+    <figure>
+      <pre class="mermaid">
+flowchart LR
+  K["OPENROUTER_API_KEY"] --> H["host process"]
+  H --> T["jev-transport"]
+  P["agent phase"] -- "socket, no key" --> H
+  M["Marimba session"] --> T
+      </pre>
+      <figcaption>Q17 in one picture: the key lives in the host and in the owner's own Marimba session, and never in an agent phase.</figcaption>
+    </figure>
+
+    <details data-review-options="Marimba may start a leased run (recommended)|Only the owner starts a leased run">
+      <summary><span class="qdecided">DECIDED</span>Q16 — May Marimba start <code>awsf run</code> on a task that has a lease?</summary>
+      <p class="qa-answer"><span class="decided"><b>Decided 2026-09-28:</b> Marimba may start a leased run, as recommended. No note.</span><b>Recommendation: yes.</b> The lease is the authority, and the owner granted it at their terminal; who presses start adds nothing to it. It also means a crashed run can be restarted by Marimba and recover from the journal (task 11). Marimba stays denied every <code>awsf delegate</code> verb, so it can never create, widen or switch a lease. <b>Alternative:</b> only the owner starts a leased run. Safer on paper, but a crash overnight then waits for the owner, which is the problem this plan exists to fix.</p>
+    </details>
+    <details data-review-options="Host socket (recommended)|A low-credit key in the phase environment">
+      <summary><span class="qdecided">DECIDED</span>Q17 — How do agent phases reach Jev?</summary>
+      <p class="qa-answer"><span class="decided"><b>Decided 2026-09-28:</b> the host socket, as recommended. No note.</span><b>Recommendation: the host socket (task 17).</b> The key never enters an agent's environment, every call is redacted and journaled in one place, and the lease's spend cap is enforced where the money is spent. Cost: a small <code>node:net</code> server per phase and a sandbox check. <b>Alternative:</b> a separate OpenRouter key with a small credit limit in each phase's environment. Simpler, but the reference repository records an agent printing its environment in a live run, and a printed credential-shaped string aborts AWSF's rework path.</p>
+    </details>
+    <details data-review-options="Redacted bodies up to 16 KiB (recommended)|Digests only|Full bodies in a separate state-root file">
+      <summary><span class="qdecided">DECIDED</span>Q18 — How much of each Jev request and response does the decision record keep?</summary>
+      <p class="qa-answer"><span class="decided"><b>Decided 2026-09-28:</b> redacted bodies up to 16 KiB, else digests, as recommended. No note.</span><b>Recommendation: the redacted bodies when together under 16 KiB, else their sha256 digests.</b> A stop decision is about 700 tokens, so most records keep everything needed to reproduce and audit the answer, and a large file judgment keeps a digest. <b>Alternatives:</b> digests only (smallest journal, no audit of what Jev saw), or full bodies in a separate state-root file (complete audit, a second evidence store beside the journal that invariant 10's spirit discourages).</p>
+    </details>
+    <details data-review-options="Tools stay pi-only (recommended)|Move scout and reviewer to pi routes|Hold M7 until a claude path exists">
+      <summary><span class="qdecided">DECIDED</span>Q19 — If task 19's claude-route proof fails, what do "all roles" get?</summary>
+      <p class="qa-answer"><span class="decided"><b>Decided 2026-09-28:</b> tools stay pi-only, as recommended. No note.</span><b>Recommendation: the Jev tools and guard stay on pi-route roles</b> (today the builder), task 19 closes <code>[f]</code> with its evidence, and W18's metrics decide separately whether any role should move to a pi route. <b>Alternatives:</b> move scout and reviewer to pi routes now so they get the tools (changes W18's comparisons and the review inversion's provider pairing), or hold M7 until a claude path exists (delays the token savings with no date).</p>
+    </details>
+    <details data-review-options="No default; the owner supplies an argv (recommended)|Ship a documented example in the cheatsheet">
+      <summary><span class="qdecided">DECIDED</span>Q20 — Does AWSF ship a default notify command?</summary>
+      <p class="qa-answer"><span class="decided"><b>Decided 2026-09-28:</b> no default; the owner supplies an argv, as recommended. No note.</span><b>Recommendation: no default.</b> The placement layer takes any argv the owner chooses, and AWSF never picks a third-party service or sends a message by default. <b>Alternative:</b> a documented example (for instance a push-notification CLI) in the cheatsheet: faster setup, but it reads as an endorsement and needs a network service the factory does not otherwise use.</p>
+    </details>
+  </section>
+
+  <!-- ===== NOTES ===== -->
+  <section id="notes">
+    <h2>Notes</h2>
+
+    <h3>The ladder, mapped to the reference and to this plan</h3>
+    <table>
+      <thead><tr><th>AWSF rung</th><th>Reference levels</th><th>What it is here</th><th>Tasks</th></tr></thead>
+      <tbody>
+        <tr><td>J1 record</td><td>1–3 (single decisions, multiple choice, composite scoring)</td><td>The transport, question sets and the decision record</td><td>1–3</td></tr>
+        <tr><td>J2 deny-only signals</td><td>4, 6 (confidence gating, guardrail hooks)</td><td>Bash gate, result screen, reviewer screen</td><td>17–20</td></tr>
+        <tr><td>J3 context care</td><td>7 (should I compact)</td><td>Marimba's compaction judgment and cut point</td><td>21–22</td></tr>
+        <tr><td>J4 cheap reads</td><td>8, 9 (cheap reads, files at scale)</td><td><code>ask_jev_file</code>, <code>ask_jev_files</code></td><td>23</td></tr>
+        <tr><td>J5 agent-authored questions</td><td>10 (agentic Jev)</td><td><code>ask_jev</code> over state, paths and a screened argv command</td><td>24</td></tr>
+        <tr><td>J6 shadow owner</td><td>— (new)</td><td>Proposals at every stop, agreement, replay</td><td>4–7</td></tr>
+        <tr><td>J7 leased Delegate</td><td>5 (routing), as a policy, not a router</td><td>The lease and the delegated acts</td><td>8–14</td></tr>
+        <tr><td>J8 continuation</td><td>10A (triage a failure)</td><td>A seeded follow-up task after a failure</td><td>15</td></tr>
+        <tr><td>J9 factory learning</td><td>10C (the spend ledger), widened</td><td>The Delegate view, by Jev version</td><td>26–28</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Ideas carried from the reference, and how</h3>
+    <ul>
+      <li><strong>Numbers in code, judgment in Jev.</strong> Quota, ceilings, counts and dates never go to Jev (tasks 5, 10).</li>
+      <li><strong>Confidence is a second axis.</strong> Every policy has a floor and a bar; below the bar the Delegate hands back (tasks 5, 13, 15).</li>
+      <li><strong>Give the model an exit.</strong> Every choice has <code>other</code>, <code>none</code> or <code>wait_for_owner</code>.</li>
+      <li><strong>Describe situations, not degrees.</strong> Score levels in every set are observable situations.</li>
+      <li><strong>Fan out.</strong> A stop asks all its questions in one call.</li>
+      <li><strong>A cheap filter before a strong model.</strong> <code>ask_jev_files</code> narrows, the agent reads only what survives (task 23).</li>
+      <li><strong>A model inside a model.</strong> The compaction judgment watches Marimba's own context (task 21).</li>
+      <li><strong>Think in "and", not "or".</strong> Jev adds to the fences, the review and the owner; it replaces none of them.</li>
+      <li><strong>The only benchmark that matters is your own.</strong> Shadow agreement and the W18 tab, not the reference's demo thresholds.</li>
+    </ul>
+
+    <h3>Rejected while authoring</h3>
+    <ul>
+      <li><strong>Jev as a phase in every run.</strong> A phase is an agent turn with an envelope; Jev writes nothing. It is a host service called at stops and hooks.</li>
+      <li><strong>Jev taking the owner's identity.</strong> Authority, yes, under a lease; identity, never (invariant 11, INV-1).</li>
+      <li><strong>An outside agent in another session fixing code mid-run.</strong> It would bypass every gate and the delegation fence. The in-factory form is the continuation task (task 15).</li>
+      <li><strong>Marimba holding the lease authority.</strong> An agent that can be talked round would hold owner acts; the guard design exists to prevent exactly that.</li>
+      <li><strong>A background daemon or OS scheduler to wake for a reset.</strong> The foreground run waits; a restart recovers from the journal (Q3a).</li>
+      <li><strong>The reference's secret write gate.</strong> Redaction removes what it would judge; the credential-pattern fence already covers it.</li>
+      <li><strong>A TypeSafe direct transport.</strong> Untested in the reference, and one provider keeps one fence simple.</li>
+      <li><strong>Delegated landing.</strong> Watch-only (land-shadow). The owner wants to see a candidate before it lands, and "a human authorises anything that lands" is unchanged.</li>
+    </ul>
+
+    <h3>Positions this plan revises, by owner decision</h3>
+    <ul>
+      <li><strong>Intent decision 5, "no timer, no automatic resume".</strong> Replaced within a lease by a journaled, lease-bound wait (task 11). Replacement guarantee: no wait without a lease, the lease is re-read after every wait, and a revoked lease ends the wait.</li>
+      <li><strong>Intent decision 5, "quota is never a router".</strong> Replaced within a lease by a leased fallback route (task 14). Replacement guarantee: the resolver still never reads quota; the quota fence proves it.</li>
+      <li><strong>Intent decision 5, "no per-task cost from an account-wide percentage".</strong> Kept for display and storage; the expected draw is planning-only (task 10).</li>
+      <li><strong>W17: "rework is not the unattended recovery instrument; the shift never retries itself".</strong> One delegated rework per attempt, never retried after a credential abort; continuation is a new task, so the shift still never retries itself.</li>
+    </ul>
+
+    <h3>Risks</h3>
+    <ul>
+      <li><strong>R1 Confidently wrong.</strong> Several answers about one state share a model and correlate. Mitigation: numbers first, bars, earned autonomy, and owner-all labeled on every act it enables.</li>
+      <li><strong>R2 Data leaving the machine.</strong> Approved (D2). Mitigation: redaction before egress and a per-project switch.</li>
+      <li><strong>R3 The moving alias.</strong> Chosen (Q7). Mitigation: the resolved model on every record and the <code>jevModel</code> facet.</li>
+      <li><strong>R4 Steering through prose.</strong> A builder's text could try to talk the Delegate into an act. Mitigation: stop facts are host facts; the only prose is verbatim review findings, and the policy table, not Jev, decides.</li>
+      <li><strong>R5 The lease becoming the default.</strong> Mitigation: one task at a time, no "remember", caps, and every act journaled.</li>
+      <li><strong>R6 The machine sleeping.</strong> A foreground wait dies with the laptop. Mitigation: the journal records the wait, and a restarted run continues from it.</li>
+    </ul>
+
+    <h3>Measured in this authoring session, and how</h3>
+    <ul>
+      <li>The live smoke: one call through the reference client (<code>node</code> on a scratch script, key read from the owner's pi credential store and never printed), results in Problem.</li>
+      <li>The quota windows: <code>quota-axi --provider claude,codex --json</code>, schema 5.</li>
+      <li>Stops and acts: <code>core/src/contracts/phase-recovery.ts</code>, <code>production-run.ts</code>, <code>status.ts</code>, <code>cancel.ts</code>, <code>raise.ts</code>, <code>seed.ts</code>, <code>marimba-guard-rules.mts</code>, <code>errors.ts</code>; no <code>fetch</code> in <code>core/src</code> by <code>grep -rlE</code>.</li>
+    </ul>
+
+    <h3>What would change this plan</h3>
+    <ul>
+      <li>pi refusing <code>-e</code> beside <code>--no-extensions</code> (task 18) or the sandbox refusing the socket (task 17): M5 and M7 need another path, and the plan is amended.</li>
+      <li>Shadow agreement staying low after weeks: judgment acts stay locked by design, and the owner decides whether to change a question set's version.</li>
+      <li>OpenRouter withdrawing or repricing the decisions endpoint: the transport is one file, and every record says what it cost.</li>
+    </ul>
+  </section>
+
+  <!-- ===== AMENDMENTS ===== -->
+  <section id="amendments">
+    <h2>Amendments</h2>
+    <p class="sub">Append-only, newest at the bottom.</p>
+    <details open>
+      <summary>2026-09-28 — owner review applied: Q16–Q20 decided as recommended; no marker moved</summary>
+      <p>An exported <code>plan-sota-review v1</code> block carried five verdicts, no proposed statuses and no annotations, and was applied in full. Every verdict took the recommendation: Marimba may start <code>awsf run</code> on a leased task (Q16); agent phases reach Jev through the host socket (Q17); decision records keep redacted bodies up to 16 KiB, else digests (Q18); if task 19's claude-route proof fails, the Jev tools and guard stay on pi-route roles (Q19); AWSF ships no default notify command (Q20).</p>
+      <p>No section, task or ticket changed: the tickets were written against these recommendations. Every marker is still <code>[]</code>; a verdict is not a marker. The plan now has no open Questionable, so execution waits only on the owner's commit of this plan and gate <span class="gate">G19-A</span>.</p>
+    </details>
+  </section>
+
+</main>
+
+
+<!-- ===== PLAN-SOTA REVIEW LAYER v1 — FIXED MACHINERY, COPY VERBATIM =====
+     Not a placeholder: reproduce this <style> + <script> pair exactly in every plan.
+     Annotations, Questionable verdicts, and proposed phase statuses persist to
+     localStorage (key: plan filename). The browser NEVER writes this file; canonical
+     []/[wip]/[x]/[f] markers stay agent-owned. Export produces a `plan-sota-review v1`
+     block (clipboard + visible box) and, when running under Lavish Editor, queues it
+     once via window.lavish.queuePrompt(). -->
+<style>
+  .rv-btn { font: 600 11px/1 system-ui, sans-serif; padding: 3px 9px; border-radius: 999px;
+    border: 1px solid var(--muted, #8884); background: transparent; color: var(--fg, inherit);
+    cursor: pointer; opacity: .55; vertical-align: middle; margin-left: 8px; }
+  .rv-btn:hover { opacity: 1; border-color: var(--accent, #7c6cf0); }
+  .rv-btn.rv-on { opacity: 1; background: var(--accent, #7c6cf0); color: var(--bg, #fff); border-color: transparent; }
+  .rv-note-box { display: block; margin: 8px 0; padding: 8px 12px; border: 1px dashed var(--accent, #7c6cf0);
+    border-radius: 8px; font-size: 13px; min-height: 1.5em; background: color-mix(in srgb, var(--accent, #7c6cf0) 6%, transparent); outline: none; }
+  .rv-note-box:empty::before { content: attr(data-ph); opacity: .5; font-style: italic; }
+  .rv-note-box[hidden] { display: none; }
+  .rv-verdict { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 10px 0 2px; }
+  .rv-verdict-tag { font: 700 10px/1 system-ui, sans-serif; letter-spacing: .08em; opacity: .6; margin-right: 2px; }
+  .rv-status-chip { font: 600 11px/1 ui-monospace, monospace; margin-left: 10px; padding: 3px 9px;
+    border-radius: 999px; border: 1px dotted var(--muted, #8884); background: transparent;
+    color: var(--fg, inherit); cursor: pointer; opacity: .6; }
+  .rv-status-chip:hover { opacity: 1; }
+  .rv-status-chip.rv-on { opacity: 1; border-style: solid; border-color: var(--accent, #7c6cf0); color: var(--accent, #7c6cf0); }
+  #rv-drawer { position: fixed; right: 16px; bottom: 16px; z-index: 9999; font: 13px/1.45 system-ui, sans-serif;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  #rv-pill { font: 700 12px/1 system-ui, sans-serif; padding: 10px 16px; border-radius: 999px; border: none;
+    cursor: pointer; background: var(--accent, #7c6cf0); color: var(--bg, #fff); box-shadow: 0 4px 16px #0004; }
+  #rv-panel { width: min(420px, calc(100vw - 32px)); max-height: 60vh; overflow: auto; padding: 14px;
+    border-radius: 12px; border: 1px solid var(--muted, #8884); background: var(--bg, #fff);
+    color: var(--fg, inherit); box-shadow: 0 8px 32px #0005; }
+  #rv-panel h4 { margin: 0 0 8px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; opacity: .7; }
+  #rv-list { margin: 0 0 10px; padding: 0; list-style: none; font-size: 12px; }
+  #rv-list li { padding: 3px 0; border-bottom: 1px solid #8882; overflow-wrap: anywhere; }
+  #rv-out { width: 100%; min-height: 140px; margin-top: 10px; font: 11px/1.5 ui-monospace, monospace;
+    border: 1px solid var(--muted, #8884); border-radius: 8px; padding: 8px; background: transparent; color: inherit; }
+  #rv-msg { font-size: 11px; opacity: .75; margin-top: 6px; }
+  @media print { #rv-drawer { display: none; } }
+</style>
+<script>
+(function () {
+  'use strict';
+  var FILE = decodeURIComponent(location.pathname.split('/').pop() || 'plan.html');
+  var KEY = 'plan-sota-review:' + FILE;
+  var LEGACY_KEY = 'planf3-review:' + FILE; // pre-rename state; read once, never written
+  var PROPOSE = ['', '[]', '[wip]', '[x]', '[f]'];
+  var state = { a: {}, v: {}, s: {} }, persisted = true;
+  try { state = JSON.parse(localStorage.getItem(KEY) || localStorage.getItem(LEGACY_KEY) || 'null') || state; } catch (e) { persisted = false; }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); persisted = true; }
+    catch (e) { persisted = false; }
+    refresh();
+  }
+  function el(tag, cls, txt) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (txt) n.textContent = txt;
+    if (tag === 'button') { n.type = 'button'; n.setAttribute('data-lavish-action', ''); }
+    return n;
+  }
+  function clean(t) { return String(t || '').replace(/\|/g, '/').replace(/\s*\r?\n\s*/g, ' >> ').trim(); }
+  var registry = []; // {key, label, kind: 'section'|'phase'|'q'}
+
+  function noteBox(key, host, placeholder) {
+    var box = el('div', 'rv-note-box');
+    box.contentEditable = 'true';
+    box.setAttribute('data-ph', placeholder || 'Type your note for the agent…');
+    box.hidden = !(state.a[key]);
+    if (state.a[key]) box.textContent = state.a[key];
+    box.addEventListener('input', function () {
+      var t = box.textContent.trim();
+      if (t) state.a[key] = t; else delete state.a[key];
+      save();
+    });
+    host.appendChild(box);
+    return box;
+  }
+  function annotable(key, label, heading, host, kind) {
+    registry.push({ key: key, label: label, kind: kind });
+    var box = noteBox(key, host);
+    heading.insertAdjacentElement('afterend', box);
+    var btn = el('button', 'rv-btn' + (state.a[key] ? ' rv-on' : ''), '✎ note');
+    btn.addEventListener('click', function () {
+      box.hidden = !box.hidden;
+      if (!box.hidden) box.focus();
+    });
+    heading.appendChild(btn);
+    box.addEventListener('input', function () { btn.classList.toggle('rv-on', !!state.a[key]); });
+  }
+
+  // Sections
+  Array.prototype.forEach.call(document.querySelectorAll('main > section[id]'), function (sec) {
+    var h = sec.querySelector('h2'); if (!h) return;
+    annotable('#' + sec.id, h.textContent.trim(), h, sec, 'section');
+  });
+  // Phases: annotation + proposed-status chip
+  Array.prototype.forEach.call(document.querySelectorAll('#phases .phase'), function (ph, i) {
+    var h = ph.querySelector('h3'); if (!h) return;
+    var key = 'phase-' + (i + 1);
+    var label = h.textContent.replace(/^\s*\[[^\]]*\]\s*/, '').trim();
+    annotable(key, label, h, ph, 'phase');
+    var chip = el('button', 'rv-status-chip' + (state.s[key] ? ' rv-on' : ''));
+    chip.textContent = state.s[key] ? 'propose ' + state.s[key] : 'propose…';
+    chip.title = 'Cycle a PROPOSED status (exported as feedback — the file marker is only changed by the agent)';
+    chip.addEventListener('click', function () {
+      var next = PROPOSE[(PROPOSE.indexOf(state.s[key] || '') + 1) % PROPOSE.length];
+      if (next) state.s[key] = next; else delete state.s[key];
+      chip.textContent = next ? 'propose ' + next : 'propose…';
+      chip.classList.toggle('rv-on', !!next);
+      save();
+    });
+    h.appendChild(chip);
+  });
+  // Questionables: verdict / option buttons + note
+  Array.prototype.forEach.call(document.querySelectorAll('#questionables details'), function (d, i) {
+    var key = 'q-' + (i + 1);
+    var summary = d.querySelector('summary');
+    var label = summary ? summary.textContent.trim().slice(0, 120) : key;
+    registry.push({ key: key, label: label, kind: 'q' });
+    var opts = (d.getAttribute('data-review-options') || '').split('|').map(function (s) { return s.trim(); }).filter(Boolean);
+    if (!opts.length) opts = ['APPROVE', 'REJECT', 'REVISE', 'DEFER'];
+    var row = el('div', 'rv-verdict');
+    row.appendChild(el('span', 'rv-verdict-tag', 'YOUR CALL'));
+    opts.forEach(function (opt) {
+      var b = el('button', 'rv-btn' + ((state.v[key] || {}).c === opt ? ' rv-on' : ''), opt);
+      b.addEventListener('click', function () {
+        if ((state.v[key] || {}).c === opt) { delete state.v[key]; }
+        else { state.v[key] = { c: opt }; }
+        Array.prototype.forEach.call(row.querySelectorAll('.rv-btn'), function (x) {
+          x.classList.toggle('rv-on', x.textContent === ((state.v[key] || {}).c || null));
+        });
+        qbox.hidden = !state.v[key] && !state.a[key];
+        save();
+      });
+      row.appendChild(b);
+    });
+    d.appendChild(row);
+    var qbox = noteBox(key, d, 'Why / what to change instead…');
+    if (state.v[key]) qbox.hidden = false;
+  });
+
+  // Drawer
+  var drawer = el('div'); drawer.id = 'rv-drawer';
+  var panel = el('div'); panel.id = 'rv-panel'; panel.hidden = true;
+  var pill = el('button'); pill.id = 'rv-pill';
+  pill.addEventListener('click', function () { panel.hidden = !panel.hidden; });
+  var list = el('ul'); list.id = 'rv-list';
+  var actions = el('div');
+  var exportBtn = el('button', 'rv-btn rv-on', 'Export Feedback');
+  var clearBtn = el('button', 'rv-btn', 'Clear review');
+  var out = el('textarea'); out.id = 'rv-out'; out.readOnly = true; out.hidden = true;
+  var msg = el('div'); msg.id = 'rv-msg';
+  var head = el('h4', null, 'Review — pending feedback');
+  actions.appendChild(exportBtn); actions.appendChild(clearBtn);
+  panel.appendChild(head); panel.appendChild(list); panel.appendChild(actions);
+  panel.appendChild(out); panel.appendChild(msg);
+  drawer.appendChild(panel); drawer.appendChild(pill);
+  document.body.appendChild(drawer);
+
+  function findLabel(key) {
+    for (var i = 0; i < registry.length; i++) if (registry[i].key === key) return registry[i].label;
+    return key;
+  }
+  function refresh() {
+    var n = Object.keys(state.a).length + Object.keys(state.v).length + Object.keys(state.s).length;
+    pill.textContent = '✎ Review (' + n + ')';
+    list.textContent = '';
+    Object.keys(state.v).forEach(function (k) { list.appendChild(el('li', null, '[verdict] ' + findLabel(k) + ' → ' + state.v[k].c)); });
+    Object.keys(state.s).forEach(function (k) { list.appendChild(el('li', null, '[status] ' + findLabel(k) + ' → propose ' + state.s[k])); });
+    Object.keys(state.a).forEach(function (k) { list.appendChild(el('li', null, '[note] ' + findLabel(k) + ': ' + state.a[k].slice(0, 90))); });
+    if (!n) list.appendChild(el('li', null, 'Nothing yet — click ✎ note on any section, a verdict on a Questionable, or propose… on a phase.'));
+    if (!persisted) msg.textContent = '⚠ localStorage unavailable — review state lives only in this tab.';
+  }
+  function buildExport() {
+    var L = ['plan-sota-review v1', 'plan: ' + FILE, 'title: ' + clean(document.title), 'exported: ' + new Date().toISOString(), ''];
+    var vk = Object.keys(state.v), sk = Object.keys(state.s), ak = Object.keys(state.a);
+    L.push('## verdicts');
+    vk.length ? vk.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | ' + clean(state.v[k].c) + ' | note: ' + (clean(state.a[k]) || '-'));
+    }) : L.push('- (none)');
+    L.push('', '## statuses');
+    sk.length ? sk.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | propose ' + state.s[k]);
+    }) : L.push('- (none)');
+    L.push('', '## annotations');
+    var solo = ak.filter(function (k) { return !state.v[k]; });
+    solo.length ? solo.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | ' + clean(state.a[k]));
+    }) : L.push('- (none)');
+    return L.join('\n');
+  }
+  exportBtn.addEventListener('click', function () {
+    var text = buildExport();
+    out.hidden = false; out.value = text;
+    out.focus(); out.select();
+    function done(m) { msg.textContent = m; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done('Copied — paste it into your next agent session.'); },
+        function () { done('Clipboard blocked — copy from the box below.'); });
+    } else {
+      try { done(document.execCommand('copy') ? 'Copied — paste it into your next agent session.' : 'Clipboard blocked — copy from the box below.'); }
+      catch (e) { done('Clipboard blocked — copy from the box below.'); }
+    }
+    if (window.lavish && typeof window.lavish.queuePrompt === 'function') {
+      window.lavish.queuePrompt(text, { tag: 'plan-sota-review', queueKey: 'plan-sota-review' });
+      msg.textContent += ' Also queued to the agent via Lavish.';
+    }
+  });
+  clearBtn.addEventListener('click', function () {
+    if (!confirm('Clear all review state for this plan?')) return;
+    state = { a: {}, v: {}, s: {} };
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    location.reload();
+  });
+  refresh();
+})();
+</script>
+
+<!-- Mermaid runtime — renders every <pre class="mermaid"> block. The only external reference in the file. -->
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    // Mirrors the :root Forest dark palette so the diagrams share the plan's visual identity.
+    themeVariables: {
+      darkMode: true,
+      background: '#051F20',
+      primaryColor: '#163832',
+      primaryTextColor: '#DAF1DE',
+      primaryBorderColor: '#235347',
+      lineColor: '#8EB69B',
+      secondaryColor: '#0B2B26',
+      tertiaryColor: '#0B2B26',
+      clusterBkg: '#0B2B26',
+      clusterBorder: '#235347',
+      edgeLabelBackground: '#0B2B26',
+      actorBkg: '#163832',
+      actorBorder: '#ADB9EE',
+      actorTextColor: '#DAF1DE',
+      signalColor: '#8EB69B',
+      signalTextColor: '#DAF1DE',
+      noteBkgColor: '#0B2B26',
+      noteTextColor: '#DAF1DE',
+      noteBorderColor: '#ADB9EE',
+      labelBoxBkgColor: '#163832',
+      labelTextColor: '#DAF1DE',
+      loopTextColor: '#DAF1DE',
+      fontFamily: '"Segoe UI","Helvetica Neue",system-ui,sans-serif'
+    }
+  });
+</script>
+</body>
+</html>
