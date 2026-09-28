@@ -10,6 +10,7 @@ import { isPersistableKind } from "../contracts/normalized-events.ts";
 import type { DatabaseSync } from "./sqlite.ts";
 import type { AttemptEvidence, RecordedAgentPurpose } from "./attempt-evidence.ts";
 import type { RouteSelectionProvenance } from "../contracts/route-selection.ts";
+import { resolvePhaseRoute } from "./phase-route.ts";
 import {
   scrubCredentialString,
   scrubCredentials,
@@ -320,6 +321,35 @@ function phaseProjectionPosition(
   return { ordinal, relocated: ordinal !== requestedOrdinal };
 }
 
+/**
+ * Fills migration 0007's route columns on one agent phase: from the phase's
+ * latest `route_resolution` event when it has one, else from the session's
+ * config snapshot. A snapshot-derived value never replaces a journal-derived
+ * one, so a phase record journaled after its route event cannot demote it.
+ * Both inputs are already scrubbed where they are stored.
+ */
+function projectPhaseRoute(db: DatabaseSync, sessionId: string, phaseId: string): void {
+  const phase = db.prepare("SELECT phase_key, owner FROM phases WHERE phase_id = ? AND kind = 'agent'").get(phaseId) as
+    | { phase_key: string; owner: string }
+    | undefined;
+  if (phase === undefined) return;
+  const event = db.prepare(`SELECT payload_json FROM events
+      WHERE session_id = ? AND phase_id = ? AND type = 'route_resolution'
+      ORDER BY event_row DESC LIMIT 1`).get(sessionId, phaseId) as { payload_json: string } | undefined;
+  const session = db.prepare("SELECT config_snapshot_json FROM sessions WHERE session_id = ?").get(sessionId) as
+    | { config_snapshot_json: string }
+    | undefined;
+  const route = resolvePhaseRoute({
+    phase: { key: phase.phase_key, owner: phase.owner },
+    routeEvent: event === undefined ? null : JSON.parse(event.payload_json) as RouteSelectionProvenance,
+    configSnapshot: session === undefined ? null : JSON.parse(session.config_snapshot_json) as unknown,
+  });
+  db.prepare(`UPDATE phases SET route_adapter = ?, route_provider = ?, route_model = ?, route_effort = ?, effort_source = ?
+      WHERE phase_id = ? AND (? = 'journal' OR effort_source IS NULL OR effort_source <> 'journal')`).run(
+    route.adapterId, route.provider, route.model, route.effort, route.effortSource, phaseId, route.effortSource,
+  );
+}
+
 function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: number, evidence: AttemptEvidence): void {
   switch (evidence.type) {
     case "phase-accepted":
@@ -428,6 +458,7 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
         .run(phase.phaseId, sessionId, position.ordinal, phase.key, phase.name, phase.kind, phase.owner,
           phase.description, phase.status, phase.correctionCount, phase.maxCorrections, phase.errorCode,
           phase.errorMessage, phase.startedAt, phase.endedAt, phase.createdAt);
+      projectPhaseRoute(db, sessionId, phase.phaseId);
       if (position.relocated) {
         // Keep the phase row's identity and content intact. A deterministic
         // notice in the existing events projection exposes both positions
@@ -544,6 +575,8 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
           stringifyRedacted(route),
           evidence.at,
         );
+        // The launch's own effective route now outranks whatever the snapshot said.
+        projectPhaseRoute(db, sessionId, evidence.phaseId);
       }
       // The worker columns belong to the phase the review is inverted against.
       // A review call reaching them would overwrite the very fact the inversion
