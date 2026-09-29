@@ -322,5 +322,8 @@ button.matrix-tile:hover { box-shadow: var(--neu-hover); transform: translateY(-
   .metrics-pill, .metrics-pill:hover { transition: none; transform: none; }
   button.matrix-tile, button.matrix-tile:hover { transition: none; transform: none; }
   .frontier-mark path, .frontier-mark circle, .frontier-mark rect { transition: none; }
-  .run-card-controls .metrics-control, .run-card-controls .archive-control { transition: none; transform: none; }
+  /* The metrics control on every run card, not only the Run view's miniature:
+     its fade and its lift come from dashboard.css and morphism.css. */
+  .metrics-control, .metrics-control:hover { transition: none; transform: none; }
+  .run-card-controls .archive-control, .run-card-controls .archive-control:hover { transition: none; transform: none; }
 }
