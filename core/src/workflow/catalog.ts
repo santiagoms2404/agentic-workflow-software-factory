@@ -10,6 +10,7 @@ import { planWorkflow } from "./recipes/plan.ts";
 import { planBuildTestWorkflow } from "./recipes/plan-build-test.ts";
 import { scoutWorkflow } from "./recipes/scout.ts";
 import { simpleSdlcWorkflow } from "./recipes/simple-sdlc.ts";
+import { compileProve, PROVE_TIER_FLOOR, PROVE_WORKFLOW_ID } from "./prove/compile.ts";
 import { compileShift, SHIFT_TIER_FLOOR, SHIFT_WORKFLOW_ID } from "./shift/compile.ts";
 
 /** The shipped recipe catalogue. Configuration can enable a subset, never invent another recipe. */
@@ -38,11 +39,14 @@ export interface CompiledWorkflow {
   readonly id: CompiledWorkflowId;
   /** The least tier a compilation carries. A selection may raise it, never lower it. */
   readonly tierFloor: Tier;
-  /** The agents every compilation routes to, in first-use order. */
+  /**
+   * The agents a compilation may route to, in first-use order: every one of
+   * them for a shift, and the one its item measures for a prove replay.
+   */
   readonly agentOwners: readonly string[];
   /** Whether every compilation ends in a review phase. */
   readonly buysReview: boolean;
-  readonly compile: typeof compileShift;
+  readonly compile: typeof compileShift | typeof compileProve;
 }
 
 /** The compiler registry. A compiled id is resolved here, never through WORKFLOW_RECIPES. */
@@ -53,6 +57,15 @@ export const COMPILED_WORKFLOWS: readonly CompiledWorkflow[] = Object.freeze([
     agentOwners: Object.freeze(["builder", "reviewer"]),
     buysReview: true,
     compile: compileShift,
+  }),
+  // A review item compiles a reviewer and a build item a builder, so a prove
+  // replay buys a review only sometimes and never a journey (Q7).
+  Object.freeze({
+    id: PROVE_WORKFLOW_ID,
+    tierFloor: PROVE_TIER_FLOOR,
+    agentOwners: Object.freeze(["builder", "reviewer"]),
+    buysReview: false,
+    compile: compileProve,
   }),
 ]);
 

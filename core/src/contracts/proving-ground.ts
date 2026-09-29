@@ -1,6 +1,8 @@
+import { createHash } from "node:crypto";
 import { Type, type Static } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 import { WorktreeRelativePath } from "./envelope-base.ts";
+import { canonicalJson } from "./owner-amendment.ts";
 import { SHA_PATTERN } from "./test-output.ts";
 import { stringUnion } from "./typebox.ts";
 
@@ -105,5 +107,42 @@ export function assertProvingGroundItem(value: unknown): asserts value is Provin
     if (backwards !== undefined) {
       throw new Error(`invalid ${PROVING_GROUND_ITEM_SCHEMA_ID} item ${value.id}: ${backwards.file} ends at line ${backwards.lineEnd}, before it starts at ${backwards.lineStart}`);
     }
+  }
+}
+
+/**
+ * The digest a replay records for its item: the item's canonical JSON together
+ * with the bytes of the patch it names. The item names its patch only by path,
+ * so a digest of the item alone would let the planted change move under an
+ * unchanged digest. A build item has no patch, and says so.
+ */
+export function provingGroundItemDigest(item: ProvingGroundItem, patch: Uint8Array | null): string {
+  const patchDigest = patch === null ? null : createHash("sha256").update(patch).digest("hex");
+  return createHash("sha256").update(canonicalJson({ item, patch: patchDigest }), "utf8").digest("hex");
+}
+
+/**
+ * What a replay attempt records at creation (W18 DD7, task 12): which item, at
+ * which digest, on which arm, at which repetition and place in its order, and
+ * the base its worktree starts at. `arm` is a full route spec, parsed by
+ * `parseRouteArm`; the schema only bounds it.
+ */
+export const ReplayRecordSchema = Type.Object(
+  {
+    itemId: slug,
+    itemDigest: Type.String({ pattern: "^[0-9a-f]{64}$" }),
+    arm: Type.String({ minLength: 1, maxLength: 256 }),
+    repetition: Type.Integer({ minimum: 1 }),
+    order: Type.Integer({ minimum: 1 }),
+    baseSha: Type.String({ pattern: SHA_PATTERN }),
+  },
+  { additionalProperties: false },
+);
+export type ReplayRecord = Static<typeof ReplayRecordSchema>;
+
+export function assertReplayRecord(value: unknown): asserts value is ReplayRecord {
+  if (!Value.Check(ReplayRecordSchema, value)) {
+    const first = [...Value.Errors(ReplayRecordSchema, value)][0];
+    throw new Error(`invalid replay record${first === undefined ? "" : ` at ${first.path}: ${first.message}`}`);
   }
 }

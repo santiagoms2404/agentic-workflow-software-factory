@@ -14,8 +14,7 @@ import { PlanTicketReader } from "../persistence/plan-tickets.ts";
 import { callCeilingsOf, type Tier } from "../state/tiers.ts";
 import { resolveTicketPlanSources } from "../api/routes.ts";
 import { selectShiftTickets, type ShiftSelection } from "../workflow/shift/select.ts";
-import { isCompiledWorkflowId } from "../workflow/compiled-ids.ts";
-import { SHIFT_TIER_FLOOR } from "../workflow/shift/compile.ts";
+import { SHIFT_TIER_FLOOR, SHIFT_WORKFLOW_ID } from "../workflow/shift/compile.ts";
 import { processOwnerTerminal, type OwnerTerminal } from "./tty.ts";
 import { adoptCommand } from "./commands/adopt.ts";
 import { backlogCommand } from "./commands/backlog.ts";
@@ -498,7 +497,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       // the selected tickets, so a `--tier` that disagrees is refused before
       // the attempt exists rather than when `awsf start` compiles it.
       let shift: Awaited<ReturnType<typeof sealShiftSelection>> | undefined;
-      if (isCompiledWorkflowId(workflow)) {
+      if (workflow === SHIFT_WORKFLOW_ID) {
         if (parsed.flags.plan === undefined || parsed.milestones.length === 0) {
           throw new Error(`workflow ${JSON.stringify(workflow)} requires --plan <stem> and --milestone <Mx>[,<My>,...]`);
         }

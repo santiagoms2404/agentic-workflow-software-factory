@@ -9,6 +9,13 @@ import type {
 /** Runtime schemas live in config/schema.ts so deterministic `awsf init` gains no workflow dependency. */
 export type RouteEffort = (typeof ROUTE_EFFORT_LEVELS)[number];
 export type ReviewRouteMode = (typeof REVIEW_ROUTE_MODES)[number];
+/**
+ * How one review actually ran. `seeded` is a prove replay's review of a
+ * host-committed candidate: no provider built it, so there is nothing to
+ * invert against and the replay's arm names the route. It is never a
+ * configurable mode, which is why `REVIEW_ROUTE_MODES` does not carry it.
+ */
+export type ReviewRunMode = ReviewRouteMode | "seeded";
 export type RouteEvaluation = Static<typeof RouteEvaluationSchema>;
 export type PhaseRouteSelection = Static<typeof PhaseRouteSelectionSchema>;
 
@@ -64,7 +71,7 @@ export interface RouteSelectionProvenance {
   readonly effective: EffectiveRouteProvenance;
   readonly observed: ObservedRouteProvenance | null;
   readonly review: {
-    readonly mode: ReviewRouteMode | "not-review";
+    readonly mode: ReviewRunMode | "not-review";
     readonly degraded: boolean;
     readonly detail: string | null;
   };

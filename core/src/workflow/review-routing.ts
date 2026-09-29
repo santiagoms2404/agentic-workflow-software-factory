@@ -1,4 +1,4 @@
-import type { ReviewRouteMode } from "../contracts/route-selection.ts";
+import type { ReviewRunMode } from "../contracts/route-selection.ts";
 
 export class InvalidReviewInversion extends Error {
   constructor(detail: string) {
@@ -10,7 +10,7 @@ export class InvalidReviewInversion extends Error {
 export class MandatoryReviewUnavailable extends Error {
   readonly workerProvider: string;
   readonly reviewProvider: string;
-  readonly reviewMode: ReviewRouteMode;
+  readonly reviewMode: ReviewRunMode;
   readonly attemptedProviders: readonly string[];
   readonly transportRetries = 1;
   readonly substituteAttempted = false;
@@ -21,11 +21,13 @@ export class MandatoryReviewUnavailable extends Error {
     reviewProvider: string,
     attempts: readonly string[],
     cause: unknown,
-    reviewMode: ReviewRouteMode = "invert-provider",
+    reviewMode: ReviewRunMode = "invert-provider",
   ) {
     const description = reviewMode === "same-provider-degraded"
       ? "explicit degraded same-provider review"
-      : "mandatory opposite-provider review";
+      : reviewMode === "seeded"
+        ? "seeded review on the replay arm's explicit route"
+        : "mandatory opposite-provider review";
     super(
       `${description} on ${JSON.stringify(reviewProvider)} remained unavailable ` +
         "after one transport retry; no substitute was attempted",
@@ -77,8 +79,14 @@ export interface MandatoryReviewOptions<T> {
   readonly workerProvider: string;
   /** Required by the default inversion route; not consulted by explicit degraded mode. */
   readonly providers?: readonly [string, string];
-  /** Omission is the safe default. The degraded mode can only be named explicitly. */
-  readonly mode?: ReviewRouteMode;
+  /** Omission is the safe default. The degraded and seeded modes can only be named explicitly. */
+  readonly mode?: ReviewRunMode;
+  /**
+   * Required by seeded mode and consulted by no other: the replay arm's own
+   * provider. A seeded candidate has no builder provider, so the review route
+   * is named, never derived.
+   */
+  readonly reviewProvider?: string;
   /** Called at most twice, always with the one provider selected by inversion. */
   execute(reviewProvider: string, attempt: 1 | 2): Promise<T>;
   isTransportFailure(error: unknown): boolean;
@@ -111,7 +119,9 @@ export interface MandatoryReviewOptions<T> {
  */
 export async function runMandatoryReview<T>(options: MandatoryReviewOptions<T>): Promise<T> {
   const mode = options.mode ?? "invert-provider";
-  const reviewProvider = mode === "same-provider-degraded"
+  const reviewProvider = mode === "seeded"
+    ? options.reviewProvider ?? (() => { throw new InvalidReviewInversion("a seeded review names its provider explicitly"); })()
+    : mode === "same-provider-degraded"
     ? options.workerProvider
     : oppositeProvider(
         options.workerProvider,

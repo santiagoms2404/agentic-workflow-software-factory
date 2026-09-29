@@ -10,6 +10,7 @@ import { journeyPasses } from "../../gates/journey.ts";
 import { runGit, systemGitRunner } from "../../git/changes.ts";
 import { buildReviewWorkflow } from "../../workflow/recipes/build-review.ts";
 import { isCompiledWorkflowId } from "../../workflow/compiled-ids.ts";
+import { PROVE_WORKFLOW_ID, ReplayNotDeliverable } from "../../workflow/prove/compile.ts";
 import { simpleSdlcWorkflow } from "../../workflow/recipes/simple-sdlc.ts";
 import type { OwnerTerminal } from "../tty.ts";
 import { readAttemptEvidence } from "./review-record.ts";
@@ -27,8 +28,9 @@ import {
  * reason the `request` phase is: both are content a human supplied rather than a
  * provider. The known phase counts guard which workflows may append it, and a
  * compiled workflow such as `shift` may too: its phase list is fixed by its own
- * sealed selection, and it reaches the same T2 owner gate. The ordinal follows
- * every phase the attempt journal has already recorded.
+ * sealed selection, and it reaches the same T2 owner gate. A `prove` replay is
+ * the one compiled workflow refused, before anything else is read. The ordinal
+ * follows every phase the attempt journal has already recorded.
  */
 const WORKFLOW_PHASE_COUNTS = new Map<string, number>([
   [buildReviewWorkflow.id, buildReviewWorkflow.phases.length],
@@ -69,6 +71,8 @@ export interface JourneyCommandResult {
 
 export async function journeyCommand(options: JourneyCommandOptions): Promise<JourneyCommandResult> {
   const status = await readAttempt(options.attemptDir);
+  // A journey attests delivery to an end user, and a replay delivers nothing.
+  if (status.workflow === PROVE_WORKFLOW_ID) throw new ReplayNotDeliverable(status.taskId, "journey");
   if (status.tier < 2) {
     throw new JourneyNotApplicable(`tier ${status.tier} never buys an end-user journey; only T2 landings require one`);
   }

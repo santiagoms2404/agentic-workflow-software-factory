@@ -6,8 +6,11 @@
 // `catalog.ts` asserts at module load that each id here has a compiler whose
 // own id is the same string.
 
-/** Workflows whose phase list is compiled per selection rather than shipped. */
-export const COMPILED_WORKFLOW_IDS = Object.freeze(["shift"] as const);
+/**
+ * Workflows whose phase list is compiled per selection rather than shipped: a
+ * shift from its sealed ticket manifest, a prove replay from its frozen item.
+ */
+export const COMPILED_WORKFLOW_IDS = Object.freeze(["shift", "prove"] as const);
 
 export type CompiledWorkflowId = (typeof COMPILED_WORKFLOW_IDS)[number];
 

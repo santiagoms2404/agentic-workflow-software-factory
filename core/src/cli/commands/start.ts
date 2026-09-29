@@ -14,6 +14,8 @@ import {
   workflowRecipe,
 } from "../../workflow/catalog.ts";
 import { composePromptBundle } from "../../workflow/prompt-composition.ts";
+import { bindProveRecipe } from "../../workflow/prove/bind.ts";
+import { PROVE_WORKFLOW_ID } from "../../workflow/prove/compile.ts";
 import { bindShiftRecipe } from "../../workflow/shift/bind.ts";
 import { correctionHeadroom } from "./workflows.ts";
 import { verifiedTargetSeed, validateSeedStartup } from "../../workflow/candidate-seed.ts";
@@ -161,10 +163,16 @@ export async function startCommand(options: StartCommandOptions): Promise<Attemp
   if (recipe === null) {
     const compiled = compiledWorkflow(current.workflow);
     if (compiled === null) throw new Error(`workflow ${JSON.stringify(current.workflow)} has no shipped recipe`);
-    if (current.shift == null) throw new CompiledWorkflowUnbound(compiled.id, `task ${current.taskId}`);
     // Start reads only the phase list's shape (its count, owners and tier),
     // which no prompt moves; the runner compiles again with the real ones.
-    recipe = await bindShiftRecipe(current.repository, current.shift, { prompts: { builder: "", reviewer: "" } });
+    const prompts = { builder: "", reviewer: "" };
+    if (compiled.id === PROVE_WORKFLOW_ID) {
+      if (current.replay == null) throw new CompiledWorkflowUnbound(compiled.id, `task ${current.taskId}`);
+      recipe = await bindProveRecipe(current, { prompts, gates: Object.keys(config.gates) });
+    } else {
+      if (current.shift == null) throw new CompiledWorkflowUnbound(compiled.id, `task ${current.taskId}`);
+      recipe = await bindShiftRecipe(current.repository, current.shift, { prompts });
+    }
   }
   // Zero cost, and deliberately BEFORE the worktree and BEFORE any adapter is
   // contacted. It also deliberately does NOT block the DRAFT: `awsf raise` is
@@ -223,7 +231,11 @@ export async function startCommand(options: StartCommandOptions): Promise<Attemp
 
   const seed = await verifiedTargetSeed(options.attemptDir, current);
   if (seed !== null) await validateSeedStartup(seed, current, config, configPath, options.attemptDir);
-  const baseSha = seed?.integrationBaseSha ?? runGit(systemGitRunner(current.repository), ["rev-parse", "HEAD"]).trim();
+  // A replay starts at its item's pinned base, through the same seam a seed's
+  // integration base uses: a new detached worktree at that commit, and nothing
+  // that moves or discards any other tree or ref.
+  const baseSha = current.replay?.baseSha ?? seed?.integrationBaseSha ??
+    runGit(systemGitRunner(current.repository), ["rev-parse", "HEAD"]).trim();
   const managed = createWorktree({
     repository: current.repository,
     root: resolve(options.worktreeRoot),

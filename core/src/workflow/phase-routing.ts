@@ -6,7 +6,7 @@ import type {
   EffectiveRouteProvenance,
   PhaseRouteSelection,
   RequestedRouteProvenance,
-  ReviewRouteMode,
+  ReviewRunMode,
   RouteSelectionProvenance,
   RouteValueSource,
 } from "../contracts/route-selection.ts";
@@ -174,7 +174,7 @@ export function effectivePhaseRoute(
 export function routeSelectionProvenance(input: {
   readonly requested: RequestedRouteProvenance;
   readonly effective: EffectiveRouteProvenance;
-  readonly reviewMode?: ReviewRouteMode;
+  readonly reviewMode?: ReviewRunMode;
 }): RouteSelectionProvenance {
   const reviewMode = input.reviewMode ?? "not-review";
   const degraded = reviewMode === "same-provider-degraded";

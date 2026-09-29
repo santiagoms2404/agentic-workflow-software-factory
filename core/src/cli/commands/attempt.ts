@@ -126,6 +126,13 @@ export interface AttemptStatus {
    * from it and the ticket files it names, and refuses when a byte moved.
    */
   readonly shift?: import("../../contracts/shift-selection-record.ts").ShiftManifest | null;
+  /**
+   * The proving-ground replay this attempt measures, recorded once at creation
+   * and absent on every other workflow. Its worktree starts at `baseSha`, and
+   * recovery recompiles from it and the item it names, refusing when a byte of
+   * the item moved. A replay is measurement, never delivery.
+   */
+  readonly replay?: import("../../contracts/proving-ground.ts").ReplayRecord | null;
   readonly phase: PhaseMeter | null;
   /** `budget.ceiling` is this task's effective ceiling, grants included. */
   readonly budget: BudgetState;

@@ -34,7 +34,7 @@ import type { SavedPhaseResult } from "../../contracts/saved-phase-result.ts";
 import { composeResumeInstruction, resumeInstructionContext } from "../../workflow/resume-instruction.ts";
 import { seedContext, assertSeedTarget, verifiedTargetSeed, validateSeedStartup } from "../../workflow/candidate-seed.ts";
 import type { AwsfConfig, AgentDefinition, AdapterEntry } from "../../config/schema.ts";
-import type { RouteSelectionProvenance } from "../../contracts/route-selection.ts";
+import type { ReviewRunMode, RouteSelectionProvenance } from "../../contracts/route-selection.ts";
 import { BUILD_OUTPUT_SCHEMA_ID, type BuildOutput } from "../../contracts/build-output.ts";
 import type { EnvelopeBase } from "../../contracts/envelope-base.ts";
 import type { IntakeOutput } from "../../contracts/intake-output.ts";
@@ -74,7 +74,7 @@ import { commitProtectedAsHost, type ProtectedCommitIntent } from "../../git/pro
 import { completeProtectedPublication, inspectProtectedPublication, retainedLockWitness, unfinishedProtectedEffect } from "../../git/protected-reconcile.ts";
 import { protectedWriteContext } from "../../contracts/protected-capability.ts";
 import { stageOrdinal, type HostValidationProgress, type HostValidationStage } from "../../contracts/host-validation.ts";
-import { HOST_AUTHOR } from "../../git/commit.ts";
+import { commitAsHost, HOST_AUTHOR } from "../../git/commit.ts";
 import { hostCommitContentDigest, reconcileHostCommit } from "../../git/commit-reconcile.ts";
 import type { HostCommitAdoption } from "../../workflow/engine.ts";
 import { diffMatchesClaims, headAdvanced, noProtectedPaths, writesWithinGlobs } from "../../gates/git-diff.ts";
@@ -147,7 +147,7 @@ import { openPermissionSession, type PermissionSession, type SandboxProbe } from
 import { transition, SEALED_STATES, type EdgeId, type TaskState } from "../../state/task-machine.ts";
 import { CallCeilingExceeded } from "../../state/errors.ts";
 import { createCompiledPhaseLaunchVerifier } from "../../workflow/phase-launch-authorization.ts";
-import { compileWorkflow, compileWorkflowStructure, reviewWorkerProvider, type WorkflowRecipe } from "../../workflow/compiler.ts";
+import { compileWorkflow, compileWorkflowStructure, reviewWorkerProvider, seededReviewProducer, type WorkflowRecipe } from "../../workflow/compiler.ts";
 import { composePromptBundle, type PromptBundle } from "../../workflow/prompt-composition.ts";
 import type { CompiledAgentPhase } from "../../workflow/phase.ts";
 import { outputOwnershipCheck } from "../../workflow/output-ownership.ts";
@@ -171,6 +171,8 @@ import type { PhaseState } from "../../state/phase-machine.ts";
 import { WORKFLOW_RECIPES } from "../../workflow/catalog.ts";
 import { SHIFT_WORKFLOW_ID, type ShiftBriefPhase } from "../../workflow/shift/compile.ts";
 import { bindShiftRecipe, shiftPhaseRole, shiftTicketOf } from "../../workflow/shift/bind.ts";
+import { assertReplayArmRoute, PROVE_WORKFLOW_ID, type ProveRecipe, type ProveSeedPhase } from "../../workflow/prove/compile.ts";
+import { bindProveRecipe } from "../../workflow/prove/bind.ts";
 import {
   nextActionFor,
   nextRevision,
@@ -279,24 +281,30 @@ const SUPPORTED = new Map<string, WorkflowRecipe>(
   WORKFLOW_RECIPES.map((recipe) => [recipe.id, recipe]),
 );
 
-const SUPPORTED_NAMES = [...SUPPORTED.keys(), SHIFT_WORKFLOW_ID].join(", ");
+const SUPPORTED_NAMES = [...SUPPORTED.keys(), SHIFT_WORKFLOW_ID, PROVE_WORKFLOW_ID].join(", ");
 
 /**
- * The recipe this attempt runs: a shipped one by id, or a shift compiled from
- * the selection bound to the attempt at `awsf new`. The first run, the
- * recovery binding and every resume entry resolve through here, so they can
- * never compile two different phase lists for one attempt.
+ * The recipe this attempt runs: a shipped one by id, a shift compiled from the
+ * selection bound to the attempt at `awsf new`, or a prove replay compiled
+ * from the item its replay record names. The first run, the recovery binding
+ * and every resume entry resolve through here, so they can never compile two
+ * different phase lists for one attempt.
  */
 async function attemptRecipe(options: Pick<ProductionRunOptions, "config" | "configPath">, status: AttemptStatus): Promise<WorkflowRecipe | undefined> {
   const shipped = SUPPORTED.get(status.workflow);
-  if (shipped !== undefined || status.workflow !== SHIFT_WORKFLOW_ID || status.shift == null) return shipped;
+  if (shipped !== undefined) return shipped;
+  const bindsShift = status.workflow === SHIFT_WORKFLOW_ID && status.shift != null;
+  const bindsReplay = status.workflow === PROVE_WORKFLOW_ID && status.replay != null;
+  if (!bindsShift && !bindsReplay) return undefined;
   const userPrompt = async (name: string): Promise<string> => {
     const agent = options.config.agents.find((candidate) => candidate.name === name);
     if (agent === undefined) throw new ProductionRouteUnavailable(name, "no explicit agent definition exists");
     return (await readProductionPromptPair(options.configPath, agent)).userPrompt;
   };
-  return bindShiftRecipe(status.repository, status.shift,
-    { prompts: { builder: await userPrompt("builder"), reviewer: await userPrompt("reviewer") } });
+  const prompts = { builder: await userPrompt("builder"), reviewer: await userPrompt("reviewer") };
+  return bindsShift
+    ? bindShiftRecipe(status.repository, status.shift!, { prompts })
+    : bindProveRecipe(status, { prompts, gates: Object.keys(options.config.gates) });
 }
 const READ_ONLY_RESULT_SCHEMA_BY_WORKFLOW: ReadonlyMap<string, "awsf.scout-output/v1" | "awsf.plan-output/v1"> = new Map([
   ["scout", "awsf.scout-output/v1"],
@@ -1147,6 +1155,9 @@ export async function productionRecoveryBinding(options: Pick<ProductionRunOptio
     // The manifest digest covers each ticket's byte digest, and the recipe
     // above was compiled only because the bytes on disk still match them.
     ...(status.shift == null ? {} : { shift: status.shift.manifestDigest }),
+    // Present only for a replay, on the same argument: its item digest covers
+    // the item and its patch, and the recipe compiled only because they match.
+    ...(status.replay == null ? {} : { replay: status.replay }),
     routeOverrides: status.routeOverrides, reviewDegradation: status.reviewDegradation, prompts, sources,
     phases: recipe.phases.map(phase => ({ id: phase.id, kind: phase.kind, owner: phase.owner, schema: phase.schemaId,
       maxCorrections: phase.maxCorrections, gates: phase.gates.map(gate => gate.id) })) });
@@ -1240,11 +1251,14 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
   const routes = new Map<string, Route>();
   // The project's durable mode, relaxed only by this attempt's own owner grant.
   // Read once so the inversion check, the provenance and the phase description
-  // can never disagree about which review this run bought.
-  const reviewMode: AwsfConfig["routing"]["review"] =
-    status.reviewDegradation === null ? options.config.routing.review : "same-provider-degraded";
+  // can never disagree about which review this run bought. A prove replay whose
+  // one build producer is the host seed is `seeded` instead: no provider built
+  // its candidate, so there is nothing to invert against (W18 DD7).
+  const reviewMode: ReviewRunMode = seededReviewProducer(compiled) !== null
+    ? "seeded"
+    : status.reviewDegradation === null ? options.config.routing.review : "same-provider-degraded";
   let inversion: {
-    readonly mode: AwsfConfig["routing"]["review"];
+    readonly mode: ReviewRunMode;
     readonly workerProvider: string;
     readonly reviewProvider: string;
     readonly pair?: readonly [string, string];
@@ -1256,6 +1270,9 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
   let visualBound: VisualReferencesBound | null = null;
   let visualBinding: VisualReferenceBinding | null = null;
   try {
+    // A replay measures its arm, so the arm must be the attempt's own route
+    // for the phase it measures, whole, before any adapter is asked anything.
+    if (status.workflow === PROVE_WORKFLOW_ID) assertReplayArmRoute(recipe as ProveRecipe, status.routeOverrides);
     if (recovery === undefined) await validatePreparedRepository(status);
     else await verifyRecoveryWorktree(status, recovery.inspected.checkpoint, await verifyCandidateLedgerVerdict(options.attemptDir, options.config, status, recovery.inspected.checkpoint));
     const boundRecord = (await readAttemptEvidence(options.attemptDir)).findLast((evidence) => evidence.type === "visual-references-bound");
@@ -1390,37 +1407,45 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
         if (evidence?.type !== "agent-start") throw new InvalidReviewInversion("accepted phase has no recorded original provider");
         return evidence.provider;
       };
-      // A shift has one builder per ticket. Each is routed as the builder role
-      // unless an exact phase-id entry names it. The worker is the one provider
-      // every builder resolves to; builders on two providers are refused here
-      // by name. This runs before the mode is read, so under
-      // same-provider-degraded the builders must still agree and the reviewer
-      // must join them: a degraded shift runs on one provider end to end.
-      const workerProvider = reviewWorkerProvider(compiled, providerFor);
-      const configured = providerFor(reviewPhase.id);
-      if (reviewMode === "same-provider-degraded") {
-        if (configured !== workerProvider) {
-          throw new InvalidReviewInversion(
-            `explicit same-provider-degraded mode requires reviewer and builder on ${JSON.stringify(workerProvider)}; ` +
-              `the configured reviewer route resolves to ${JSON.stringify(configured)}`,
-          );
-        }
-        inversion = {
-          mode: "same-provider-degraded",
-          workerProvider,
-          reviewProvider: configured,
-          reviewPhaseId: reviewPhase.id,
-        };
+      // A seeded review has no worker provider and no pair to invert across.
+      // Its route is the replay arm, already required above to be the
+      // attempt's explicit reviewer route, and the adapter's preflight answer
+      // was checked against the arm's provider like any explicit provider.
+      if (reviewMode === "seeded") {
+        inversion = { mode: "seeded", workerProvider: "host", reviewProvider: providerFor(reviewPhase.id), reviewPhaseId: reviewPhase.id };
       } else {
-        const pair = providerPairFrom(compiled.phases.filter(phase => phase.kind === "agent").map(phase => providerFor(phase.id)));
-        const required = oppositeProvider(workerProvider, pair);
-        if (configured !== required) {
-          throw new InvalidReviewInversion(
-            `worker runs on ${JSON.stringify(workerProvider)}, so the review must run on ${JSON.stringify(required)}; ` +
-              `the configured reviewer route resolves to ${JSON.stringify(configured)}`,
-          );
+        // A shift has one builder per ticket. Each is routed as the builder role
+        // unless an exact phase-id entry names it. The worker is the one provider
+        // every builder resolves to; builders on two providers are refused here
+        // by name. This runs before the mode is read, so under
+        // same-provider-degraded the builders must still agree and the reviewer
+        // must join them: a degraded shift runs on one provider end to end.
+        const workerProvider = reviewWorkerProvider(compiled, providerFor);
+        const configured = providerFor(reviewPhase.id);
+        if (reviewMode === "same-provider-degraded") {
+          if (configured !== workerProvider) {
+            throw new InvalidReviewInversion(
+              `explicit same-provider-degraded mode requires reviewer and builder on ${JSON.stringify(workerProvider)}; ` +
+                `the configured reviewer route resolves to ${JSON.stringify(configured)}`,
+            );
+          }
+          inversion = {
+            mode: "same-provider-degraded",
+            workerProvider,
+            reviewProvider: configured,
+            reviewPhaseId: reviewPhase.id,
+          };
+        } else {
+          const pair = providerPairFrom(compiled.phases.filter(phase => phase.kind === "agent").map(phase => providerFor(phase.id)));
+          const required = oppositeProvider(workerProvider, pair);
+          if (configured !== required) {
+            throw new InvalidReviewInversion(
+              `worker runs on ${JSON.stringify(workerProvider)}, so the review must run on ${JSON.stringify(required)}; ` +
+                `the configured reviewer route resolves to ${JSON.stringify(configured)}`,
+            );
+          }
+          inversion = { mode: "invert-provider", workerProvider, reviewProvider: required, pair, reviewPhaseId: reviewPhase.id };
         }
-        inversion = { mode: "invert-provider", workerProvider, reviewProvider: required, pair, reviewPhaseId: reviewPhase.id };
       }
     }
   } catch (error) {
@@ -1551,6 +1576,16 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
   await persistTransition("PREPARED", "RUNNING", l4.result.edge, "process", null, "compiled workflow and held first call", true, {
     activeOperation: operationId, budget: budget.snapshot(), blocker: null, lastActivity: "L4 durable; first provider call held",
   });
+  }
+  // A seeded review runs no provider in RUNNING: the host seeds and gates the
+  // candidate, and L11 holds the review's own call. The call L4 held would
+  // launch nothing, so it goes back now rather than stay outstanding through
+  // RUNNING, where it would also withhold every recovery checkpoint.
+  if (firstReservation !== null && reviewMode === "seeded") {
+    budget.releaseOnRegistrationFailure(firstReservation.id);
+    firstReservation = null;
+    await persist("attempt.updated", { budget: budget.snapshot(), lastActivityAt: infra.now(),
+      lastActivity: "seeded review: no provider runs before the review, so the call L4 held was released unspent" });
   }
 
   // The private conversation ledger. Loaded rather than created blind so a
@@ -2690,6 +2725,36 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     }
   };
 
+  /**
+   * A prove replay's seed: one host commit of the item's frozen patch on the
+   * pinned base. Byte for byte, with no three-way merge and no whitespace
+   * repair, because the item's expected ranges are post-image line numbers and
+   * any other edit would move them (T11 C2).
+   */
+  const seedCandidate = async (phase: ProveSeedPhase): Promise<{ readonly candidateSha: string; readonly output: BuildOutput }> => {
+    const worktree = status.worktree!;
+    const git = systemGitRunner(worktree);
+    assertClean(worktree, "before", git);
+    const head = runGit(git, ["rev-parse", "HEAD"]).trim();
+    if (head !== status.baseSha) throw new Error(`the seed applies only at the pinned base ${status.baseSha!}; the worktree is at ${head}`);
+    // Host-private, outside the worktree the reviewer reads.
+    const patchPath = join(options.attemptDir, "private", `${phase.id}.patch`);
+    await mkdir(dirname(patchPath), { recursive: true });
+    await writeFile(patchPath, phase.seed.patch, { mode: 0o600 });
+    runGit(git, ["apply", "--whitespace=nowarn", patchPath]);
+    const committed = commitAsHost({ repository: worktree, message: phase.seed.message }, git);
+    return {
+      candidateSha: committed,
+      output: {
+        schema: "awsf.build-output/v1", producerStatus: "success",
+        summary: "The host committed the item's patch on its pinned base; no provider built this candidate",
+        artifacts: [], notesForNextPhase: "Gate the candidate, then review it on the arm's route",
+        changedFiles: [...changesSinceBase(worktree, status.baseSha!, git)], implementationNotes: [], commandsRun: [],
+        proposedCommitMessage: phase.seed.message,
+      },
+    };
+  };
+
   const persistHostEnvelope = async (phaseId: string, payload: EnvelopeBase): Promise<void> => {
     const parsed = parseEnvelope(JSON.stringify(payload), payload.schema);
     const envelope = wrapEnvelope({
@@ -3235,6 +3300,26 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
         }
         continue;
       }
+      // Only the prove compiler emits a seed, and the compiler accepts it as a
+      // review's producer for prove alone.
+      if ("seed" in phase) {
+        try {
+          const seeded = await seedCandidate(phase as ProveSeedPhase);
+          candidateSha = seeded.candidateSha;
+          await persist("attempt.updated", {
+            candidateSha,
+            lastActivityAt: infra.now(),
+            lastActivity: `${phase.id}: host committed the item's patch on ${status.baseSha!} as ${candidateSha}`,
+          });
+          previous = seeded.output;
+          await persistHostEnvelope(phase.id, seeded.output);
+          await persistPhase(phase.id, "SUCCEEDED");
+        } catch (error) {
+          await persistPhase(phase.id, "FAILED", error as Error);
+          throw error;
+        }
+        continue;
+      }
       // The evidence phase is a code phase that runs no command: it reads Git
       // and the phases that already ran, and everything it produces is checked
       // for fitness here — BEFORE the review's call is held — so a review that
@@ -3384,7 +3469,9 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     });
     const heldReviewDescription = inversion!.mode === "same-provider-degraded"
       ? `EXPLICIT DEGRADED same-provider ${inversion!.reviewProvider} review`
-      : `mandatory opposite-provider ${inversion!.reviewProvider} review`;
+      : inversion!.mode === "seeded"
+        ? `seeded ${inversion!.reviewProvider} review on the replay arm's route`
+        : `mandatory opposite-provider ${inversion!.reviewProvider} review`;
     await persistTransition("GATING", "REVIEWING", l11.result.edge, "gate", null, `held one call for the ${heldReviewDescription}`, true, {
       candidateSha: reviewed, budget: budget.snapshot(),
       lastActivity: `L11 held one call for the ${heldReviewDescription} of ${reviewed}`,
@@ -3408,6 +3495,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       workerProvider: inversion!.workerProvider,
       mode: inversion!.mode,
       ...(inversion!.pair === undefined ? {} : { providers: inversion!.pair }),
+      ...(inversion!.mode === "seeded" ? { reviewProvider: inversion!.reviewProvider } : {}),
       isTransportFailure: (error) => {
         // An uncertain amended submission cannot be sent again as a transport retry.
         const transport = instructionFor(reviewPhase!.phase.id) === null && isReviewTransportFailure(error);
@@ -3443,13 +3531,18 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     // `awsf journey` is the only thing that records it.
     const reviewDescription = inversion!.mode === "same-provider-degraded"
       ? `DEGRADED same-provider review on ${inversion!.reviewProvider}`
-      : `opposite-provider review on ${inversion!.reviewProvider}`;
+      : inversion!.mode === "seeded"
+        ? `seeded review on ${inversion!.reviewProvider}`
+        : `opposite-provider review on ${inversion!.reviewProvider}`;
     await persistTransition("REVIEWING", "AWAITING_OWNER", l15.edge, "gate", null, `${reviewDescription} returned ${reviewOutput.verdict}`, false, {
       candidateSha: reviewed, budget: budget.snapshot(), gatesPass: true,
       requiredReviewPresent: true, journeyApproved: false, protectedApprovalsValid: true, blocker: null,
       phase: null,
       lastActivity: `${reviewDescription} returned ${reviewOutput.verdict} with ${reviewOutput.findings.length} finding(s)`,
-      nextAction: `run \`awsf journey ${status.taskId}\` at a TTY, then \`awsf land ${status.taskId}\``,
+      // A replay is measurement, never delivery (Q7): its one way out is cancel.
+      nextAction: status.workflow === PROVE_WORKFLOW_ID
+        ? `read the replay's findings, then run \`awsf cancel ${status.taskId}\`; a replay never lands`
+        : `run \`awsf journey ${status.taskId}\` at a TTY, then \`awsf land ${status.taskId}\``,
     });
     return status;
   } catch (error) {

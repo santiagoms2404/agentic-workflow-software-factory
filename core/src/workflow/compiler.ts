@@ -8,6 +8,7 @@ import { REVIEW_OUTPUT_SCHEMA_ID } from "../contracts/review-output.ts";
 import { schemaForId } from "../contracts/registry.ts";
 import { admitWorkflow } from "../execution/call-budget.ts";
 import type { ResolvedCeiling, Tier } from "../state/tiers.ts";
+import type { CompiledWorkflowId } from "./compiled-ids.ts";
 import type {
   AgentPhaseDefinition,
   CompiledAgentPhase,
@@ -166,8 +167,15 @@ export class ReviewBuildProvidersDisagree extends InvalidReviewInversion {
  * on one provider, even on different models of that provider, because
  * inversion is by provider. The count check alone is "at least one", which is
  * why the provider half is not optional.
+ *
+ * One exception, for `prove` alone: a replay's candidate is committed by the
+ * host from a frozen patch, so its one build producer is a host code phase and
+ * no provider built anything. The runner reads that shape as seeded mode and
+ * routes the review by the replay's arm instead of by inversion. Every other
+ * workflow still counts agent producers only, so a host phase emitting a build
+ * envelope never satisfies their review.
  */
-function reviewBuildPhaseIds(phases: readonly PhaseDefinition[]): readonly string[] {
+function reviewBuildPhaseIds(workflowId: string, phases: readonly PhaseDefinition[]): readonly string[] {
   const hasReview = phases.some(
     (phase) => phase.kind === "agent" && phase.schemaId === REVIEW_OUTPUT_SCHEMA_ID,
   );
@@ -176,8 +184,33 @@ function reviewBuildPhaseIds(phases: readonly PhaseDefinition[]): readonly strin
   const buildPhaseIds = phases
     .filter((phase) => phase.kind === "agent" && phase.schemaId === BUILD_OUTPUT_SCHEMA_ID)
     .map((phase) => phase.id);
-  if (buildPhaseIds.length === 0) throw new InvalidReviewBuildProducerCount(buildPhaseIds);
+  if (buildPhaseIds.length === 0) {
+    const seeds = workflowId === SEEDED_REVIEW_WORKFLOW ? seedPhaseIds(phases) : [];
+    if (seeds.length === 1) return Object.freeze(seeds);
+    throw new InvalidReviewBuildProducerCount(buildPhaseIds);
+  }
   return Object.freeze(buildPhaseIds);
+}
+
+/** The one workflow whose review may be of a host-seeded candidate. */
+const SEEDED_REVIEW_WORKFLOW: CompiledWorkflowId = "prove";
+
+/** Host phases that commit a build envelope's candidate themselves. */
+function seedPhaseIds(phases: readonly Pick<PhaseDefinition, "id" | "kind" | "owner" | "schemaId">[]): string[] {
+  return phases
+    .filter((phase) => phase.kind === "code" && phase.owner === "host" && phase.schemaId === BUILD_OUTPUT_SCHEMA_ID)
+    .map((phase) => phase.id);
+}
+
+/**
+ * The host seed a review of this compiled workflow judges, or null when its
+ * producers are agents. Seeded mode in the runner is taken on this and on
+ * nothing else, so it can never reach a workflow whose builder ran on a provider.
+ */
+export function seededReviewProducer(compiled: Pick<CompiledWorkflow, "id" | "reviewBuildPhaseIds" | "phases">): string | null {
+  if (compiled.id !== SEEDED_REVIEW_WORKFLOW || compiled.reviewBuildPhaseIds.length !== 1) return null;
+  const [producer] = compiled.reviewBuildPhaseIds;
+  return seedPhaseIds(compiled.phases).includes(producer!) ? producer! : null;
 }
 
 /**
@@ -236,7 +269,7 @@ export function compileWorkflowStructure(workflow: WorkflowDefinition): Compiled
     ids.add(phase.id);
   }
   const minimumCalls = workflow.phases.filter((phase) => phase.kind === "agent").length;
-  const buildPhaseIds = reviewBuildPhaseIds(workflow.phases);
+  const buildPhaseIds = reviewBuildPhaseIds(workflow.id, workflow.phases);
   return Object.freeze({
     id: workflow.id,
     minimumCalls,

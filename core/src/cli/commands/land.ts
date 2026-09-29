@@ -33,6 +33,7 @@ import {
 import { readAttemptEvidence, recordedReviews, supersededReviewLines } from "./review-record.ts";
 import { writeRunReport } from "../../observability/run-report.ts";
 import { verifiedTargetSeed } from "../../workflow/candidate-seed.ts";
+import { PROVE_WORKFLOW_ID, ReplayNotDeliverable } from "../../workflow/prove/compile.ts";
 import { resumeInstructionLines } from "../../workflow/resume-instruction.ts";
 
 export interface LandCommandOptions {
@@ -245,6 +246,9 @@ export async function landCommand(options: LandCommandOptions): Promise<LandComm
 
 async function landUnderLease(options: LandCommandOptions): Promise<LandCommandResult> {
   const current = await readAttempt(options.attemptDir);
+  // Before every other check, and whatever the state: no path from a replay
+  // reaches LANDING, so no replay's candidate can become canonical (Q7).
+  if (current.workflow === PROVE_WORKFLOW_ID) throw new ReplayNotDeliverable(current.taskId, "land");
   if (current.lifecycleState === "LANDING") {
     // Approval is already durable. Re-prompting would create two human gates;
     // recovery instead proves the one approved SHA or blocks.

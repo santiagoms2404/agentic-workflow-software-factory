@@ -54,8 +54,8 @@ test("every shipped recipe still resolves to its own module, and no shipped id i
   }
 });
 
-test("shift is the one compiled id, resolved through its compiler and never through the recipe list", () => {
-  assert.deepEqual([...COMPILED_WORKFLOW_IDS], ["shift"]);
+test("shift and prove are the compiled ids, each resolved through its compiler and never through the recipe list", () => {
+  assert.deepEqual([...COMPILED_WORKFLOW_IDS], ["shift", "prove"]);
   assert.equal(workflowRecipe("shift"), null);
   assert.equal(compiledWorkflow("shift")?.compile, compileShift);
   assert.equal(compiledWorkflow("nothing"), null);
