@@ -145,8 +145,8 @@ code.inv, code.ac, code.serves { color:var(--cyan); }
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-09-28</dd>
-        <dt>modified</dt>     <dd>2026-09-28 (authored, awaiting owner review), 2026-09-28 (owner review applied: Q16–Q20 decided as recommended), 2026-09-28 (gate G19-A committed), 2026-09-29 (T01 delivered, M1 [wip]), 2026-09-29 (T02 delivered, M1 [wip])</dd>
-        <dt>commits</dt>      <dd>d71b6b4 (plan authored and adopted), the G19-A commit that adds invariant 13, ed7e71c 6b1751d 56a8101 (T01), 07e43d8 3417e81 6d85dba 0371f2d (T02)</dd>
+        <dt>modified</dt>     <dd>2026-09-28 (authored, awaiting owner review), 2026-09-28 (owner review applied: Q16–Q20 decided as recommended), 2026-09-28 (gate G19-A committed), 2026-09-29 (T01 delivered, M1 [wip]), 2026-09-29 (T02 delivered, M1 [wip]), 2026-09-29 (T03 delivered, M1 [x])</dd>
+        <dt>commits</dt>      <dd>d71b6b4 (plan authored and adopted), the G19-A commit that adds invariant 13, ed7e71c 6b1751d 56a8101 (T01), 07e43d8 3417e81 6d85dba 0371f2d (T02), 5915c87 1ac91ae (T03)</dd>
         <dt>agent name</dt>   <dd>claude-opus-5-5, claude-opus-5-5 (review applied)</dd>
         <dt>session id</dt>   <dd>not recorded (AGENTS.md invariant 1 keeps live session state out of every committed file)</dd>
         <dt>back refs</dt>    <dd>./awsf-v2-plan.html (§ Milestone M19 → W19, and its 2026-09-28 amendment adopting this workstream), ../AGENTS.md (the twelve invariants and the proposed invariant 13), ./awsf-v2-intent.md (decisions 3 and 5, which this plan revises by owner decision), ./awsf-v2-w17-shift.html (the shift this plan keeps running), ./awsf-v2-w18-route-metrics.html (the tab and route columns M8 builds on), ./awsf-v2-w07-quota-telemetry.html (the quota readout and its fence), the reference repository ../../ten-levels-of-jev at 777adaf (machine-local clone, IndyDevDan's "10 Levels of Jev") and its transcript ../../10_levels_of_JEV_in_agentic_engineering_IndyDevDan_transcript.txt (machine-local)</dd>
@@ -512,7 +512,7 @@ sequenceDiagram
 
     <!-- ================= M1 ================= -->
     <div class="phase">
-      <h3><code class="status">[wip]</code> Milestone M1: The decision service (J1) <span class="wtag">manual</span></h3>
+      <h3><code class="status">[x]</code> Milestone M1: The decision service (J1) <span class="wtag">manual</span></h3>
       <p>One fenced way to ask Jev anything, one versioned home for every question, and one journaled record per call. Nothing acts on an answer yet. Everything later calls <code>decide()</code>.</p>
 
       <h4>1. The Jev transport, its fence and the project switch</h4>
@@ -541,11 +541,11 @@ sequenceDiagram
       <p class="sub">Serves <code class="serves">AC-1</code> · <code class="serves">INV-4</code></p>
       <p>Offline, stubbed transport; no live call in any test.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>awsf doctor</code> reports the switch, whether the key is set (never its value or length), the requested model and the fence, with no network call</li>
-        <li><code class="status">[]</code> <code>npm run test:unit</code> — green at the base SHA before any change, count recorded, and green after</li>
-        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/decision-*.test.ts</code> — every outcome, retry, contract and redaction case</li>
-        <li><code class="status">[]</code> A journey over <code>decide()</code>: one record per call, projected rows, identical after a rebuild from nothing</li>
-        <li><code class="status">[]</code> <code>npm run typecheck</code> and <code>npm run lint</code> — exit 0</li>
+        <li><code class="status">[x]</code> <code>awsf doctor</code> reports the switch, whether the key is set (never its value or length), the requested model and the fence, with no network call</li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code> — green at the base SHA before any change, count recorded, and green after</li>
+        <li><code class="status">[x]</code> <code>node --experimental-strip-types --test core/test/unit/decision-*.test.ts</code> — every outcome, retry, contract and redaction case (the files live in <code>core/test/unit/decision/</code>, so <code>core/test/unit/decision/*.test.ts</code> is the command that ran; the prefix glob matches nothing)</li>
+        <li><code class="status">[x]</code> A journey over <code>decide()</code>: one record per call, projected rows, identical after a rebuild from nothing</li>
+        <li><code class="status">[x]</code> <code>npm run typecheck</code> and <code>npm run lint</code> — exit 0</li>
       </ul>
       <div class="loop">
         🔁 <strong>Do not exit this phase until every box above is checked.</strong>
@@ -1067,6 +1067,15 @@ flowchart LR
       <p><strong>Decided in the session.</strong> (1) A set's <code>questions</code> is a pure function of the call's parameters, with <code>sampleParams</code> the registry validates at registration, because <code>next_act</code> offers the acts a stop allows, always with <code>wait_for_owner</code> and <code>other</code>. (2) <code>stop-judgment</code> v1 waits below 0.7 <code>progressing</code> or 0.85 pick confidence (both inclusive), or on <code>wait_for_owner</code>, <code>other</code> or a disallowed act. It asks <code>risk</code> but does not read it; reading it would be v2. The smoke answer is a wait for <code>low-confidence</code>. (3) The record carries <code>project</code>, <code>taskId</code> and an <code>attempt</code> that is null for a task-level call, projected onto the task's newest attempt. It holds no policy result, which reproduces from the answers in code (INV-2). (4) Bodies are kept inline when their UTF-8 bytes together are under 16 KiB, else both as sha256 digests with the byte count, never one of each. The provider's response is scrubbed before it is recorded (T01 C4). (5) Answers are recorded as the contract declares them; provider extras stay only in the body. (6) A request that could never be valid throws before anything is journaled (T01 C2).</p>
       <p><strong>Verified.</strong> In WSL on node v22.23.1, on <code>91dc117</code> plus T02: <code>npm run test:unit</code> 2476/2476, 13 more than the 2463 at the base, all 13 in <code>core/test/unit/decision/question-set.test.ts</code> and <code>decide.test.ts</code>. <code>npm run typecheck</code> and <code>npm run lint</code> exit 0. A synthetic task with three decision records projects three <code>decision</code> rows, and a rebuild with no database yields the same rows. No live call was made. Contract, sim and journey layers were not rerun; T02 touches none of their subjects.</p>
       <p><strong>Carried forward</strong> as Handoff entries in T03 (C1–C3), T05 (C1–C4), T08 (C1–C2), T17 (C1–C3) and T21 (C1–C3), committed as <code>2c8cf65</code>. T21 C1 from T01 (Marimba and <code>decision.jev: off</code>) is still the owner's open decision.</p>
+      <p>Completion metadata: built and verified in a manual session.</p>
+    </details>
+    <details open>
+      <summary>2026-09-29 — T03 delivered; Milestone M1 complete</summary>
+      <p><strong>T03 delivered</strong> on base <code>608e34c</code>, in a manual session on branch <code>w19-jev-delegate</code>, as two commits. <code>5915c87</code>: <code>awsf doctor</code> gains one Jev row, built by <code>jevDoctorRow</code> in <code>core/src/decision/jev-doctor.ts</code> and merged by <code>withJevRow</code> in <code>core/src/cli/commands/doctor.ts</code>. <code>1ac91ae</code>: <code>core/test/journeys/decision-service.test.ts</code>, the decision service end to end on a stubbed fetch.</p>
+      <p><strong>Decided in the session.</strong> (1) The row reads <code>jev: switch on|off (catalog|default|default, no catalog); OPENROUTER_API_KEY set|unset; requested model …; fence intact|breached|unchecked (…); no network call made</code>. The key is only ever tested for being nonblank. (2) An unset key is not a finding, because it is Jev's documented fallback. A breached fence or an invalid catalog is a finding and makes doctor exit 1. (3) Fence status re-runs the fence's two patterns over the installed <code>core/src</code>, written so doctor's own source matches neither. (4) <code>doctorCommand</code> keeps its single state-root argument, which <code>state-root-containment.test.ts</code> pins, so the row is composed in <code>main.ts</code>. (5) The check row naming <code>core/test/unit/decision-*.test.ts</code> is ticked against <code>core/test/unit/decision/*.test.ts</code>, where T01 put the tests. The prefix glob matches nothing, and the row now says so.</p>
+      <p><strong>Verified.</strong> In WSL on node v22.23.1: <code>npm run test:unit</code> 2476/2476 at the base (the T02 tree, measured before its commits) and 2481/2481 after, the 5 new tests in <code>core/test/unit/decision/jev-doctor.test.ts</code>. <code>core/test/unit/decision/*.test.ts</code> with the fence, state-root containment and operator tests: 60/60. The journey (2 tests) and <code>core/test/simulation/doctor.test.ts</code>: 3/3. In the journey, answered, contract-error, unavailable (HTTP 401) and refused-by-switch each leave one record and one <code>decision</code> row, and <code>awsf db rebuild</code> from no database yields the same rows. <code>npm run typecheck</code> and <code>npm run lint</code> exit 0. <code>awsf doctor</code> on this checkout printed the row with the fence intact over 263 files and stayed healthy. No live call was made. The full journeys, sim and contract layers were not rerun.</p>
+      <p><strong>Milestone M1 complete.</strong> Tasks 1–3 are <code>[x]</code>, and AC-1's evidence is T01's transport and fence, T02's record and rebuild, and this journey. The owner's acceptance for T03, running <code>awsf doctor</code> on their own machine and seeing the key reported as set or unset, remains the owner's act. T21 C1 (Marimba and <code>decision.jev: off</code>) is still open.</p>
+      <p><strong>Carried forward</strong> as Handoff entries in T07 (C1–C4), committed as <code>c6870cd</code>.</p>
       <p>Completion metadata: built and verified in a manual session.</p>
     </details>
   </section>
