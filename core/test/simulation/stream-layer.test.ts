@@ -51,7 +51,11 @@ test("a run cancelled while its stream is being read still delivers exactly one 
     );
     assert.equal(terminals[0], events[events.length - 1], "and it is the last event of the run");
     assert.deepEqual(validateEventSequence(events), []);
-    assert.equal(isRunning(run.transport.identity.pid), false);
+    assert.equal(
+      await within(5_000, () => !isRunning(run.transport.identity.pid)),
+      true,
+      "the provider outlived its own cancellation",
+    );
   } finally {
     await run.end();
   }
