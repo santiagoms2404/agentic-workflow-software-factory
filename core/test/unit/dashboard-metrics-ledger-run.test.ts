@@ -318,19 +318,26 @@ test("the attribution panel shows only for a BLOCKED run, with the heuristic and
   assert.equal(panel.heuristic, "model", "the heuristic stays beside the override");
 });
 
-test("the composed command is the CLI's exact form, quoted so a shell passes the reason through untouched", () => {
+test("the composed command is the CLI's exact form through the root script, quoted so a shell passes the reason through untouched", () => {
   assert.deepEqual([...ATTRIBUTION_CAUSES], [...CORE_CAUSES], "the pills are the contract's causes");
   const run = runOf("f3");
   assert.equal(attributeCommand(run, "factory", "the ticket's own wording"),
-    `awsf attribute task-f3 --project ${run.project} --attempt 1 --cause factory --reason "the ticket's own wording"`);
-  assert.equal(attributeCommand(run, null, "  "), `awsf attribute task-f3 --project ${run.project} --attempt 1 --cause <cause> --reason "<why>"`);
+    `npm run awsf -- attribute task-f3 --project ${run.project} --attempt 1 --cause factory --reason "the ticket's own wording"`);
+  assert.equal(attributeCommand(run, null, "  "), `npm run awsf -- attribute task-f3 --project ${run.project} --attempt 1 --cause <cause> --reason "<why>"`);
+  // npm keeps every option before a bare "--" for itself, so each flag must come after it.
+  const composed = attributeCommand(run, "model", "why");
+  const separator = composed.indexOf(" -- ");
+  assert.ok(composed.startsWith("npm run awsf -- attribute ") && separator > 0);
+  assert.ok(["--project", "--attempt", "--cause", "--reason"].every((flag) => composed.indexOf(flag) > separator), "every flag follows the separator");
+  const scripts = JSON.parse(source("package.json")).scripts as Record<string, string>;
+  assert.match(scripts["awsf"] ?? "", /core\/src\/cli\/main\.ts$/, "the root script is the CLI");
   assert.equal(quoteReason("said \"done\" at $HOME"), `'said "done" at $HOME'`);
   assert.equal(quoteReason("it's `rm` and \\n!"), `'it'\\''s \`rm\` and \\n!'`);
   assert.equal(quoteReason("two\nlines\t here "), `"two lines here"`);
   assert.equal(commandReady(null, "why"), false);
   assert.equal(commandReady("model", " "), false, "the CLI refuses an empty reason, so the copy waits for one");
   assert.equal(commandReady("model", "why"), true);
-  assert.equal(ATTRIBUTION_NOTE, "Run this in a terminal. The dashboard records nothing itself.");
+  assert.equal(ATTRIBUTION_NOTE, "Run this in a terminal at the AWSF checkout. The dashboard records nothing itself.");
 });
 
 // ---------------------------------------------------------------------------

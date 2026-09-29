@@ -141,7 +141,7 @@ code.inv, code.ac, code.serves { color:var(--cyan); }
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-09-26</dd>
-        <dt>modified</dt>     <dd>2026-09-26 (authored, awaiting owner review), 2026-09-26 (owner review applied: Q1–Q8 decided; Q1 takes an owner-authored migration), 2026-09-27 (Q3 amended: owner acts are wired by the owner, gate G18-C), 2026-09-28 (execution changed to manual ticket by ticket; T01 and T02 delivered, M1 [wip]), 2026-09-28 (T03 delivered, M1 [x]), 2026-09-28 (T04 delivered, M2 [wip]), 2026-09-28 (T05 delivered), 2026-09-28 (T06 delivered, M2 [x]), 2026-09-28 (T07 delivered, M3 [wip]), 2026-09-28 (T08 delivered), 2026-09-28 (T09 delivered), 2026-09-28 (T10 delivered, M3 [x])</dd>
+        <dt>modified</dt>     <dd>2026-09-26 (authored, awaiting owner review), 2026-09-26 (owner review applied: Q1–Q8 decided; Q1 takes an owner-authored migration), 2026-09-27 (Q3 amended: owner acts are wired by the owner, gate G18-C), 2026-09-28 (execution changed to manual ticket by ticket; T01 and T02 delivered, M1 [wip]), 2026-09-28 (T03 delivered, M1 [x]), 2026-09-28 (T04 delivered, M2 [wip]), 2026-09-28 (T05 delivered), 2026-09-28 (T06 delivered, M2 [x]), 2026-09-28 (T07 delivered, M3 [wip]), 2026-09-28 (T08 delivered), 2026-09-28 (T09 delivered), 2026-09-28 (T10 delivered, M3 [x]), 2026-09-28 (the composed command runs through the root script)</dd>
         <dt>commits</dt>      <dd>none yet (authored uncommitted for owner review)</dd>
         <dt>agent name</dt>   <dd>claude-opus-5-5, claude-opus-5-5 (review applied)</dd>
         <dt>session id</dt>   <dd>not recorded (AGENTS.md invariant 1 keeps live session state out of every committed file)</dd>
@@ -663,7 +663,7 @@ flowchart LR
       <ul class="checklist">
         <li><code class="status">[x]</code> Ledger: group by Route, Role, Model, Effort, Workflow, Project or Run; column families Outcome, Verification, Work, Tokens, Cost, Provenance (Outcome, Verification, Work and Cost on by default); the terminal-state strip and one column per state; sortable headers with <code>aria-sort</code>; a flat column dimmed, marked "· flat" and titled; a sticky first column; grouped by run, a row opens the Run view</li>
         <li><code class="status">[x]</code> Run: the picker (the lens still applies), the mini card with its two controls, the fact grid (task and attempt, project, workflow and tier, terminal state, review verdict, wall time, owner rework, list equivalent), the phase strip (width by minutes, at least 0.3, colour by status) with its legend, and the per-role table (role and identity provenance, route, turns, minutes, tool mix R·S·E·X·O, gates, first pass, cache read · output, list equivalent, list equivalent by token kind as bars)</li>
-        <li><code class="status">[x]</code> For a BLOCKED run: the blocking phase, the heuristic cause, the owner's recorded override with its reason and date, and five cause pills and a reason field that compose <code>awsf attribute &lt;task&gt; --project &lt;slug&gt; --attempt &lt;n&gt; --cause &lt;c&gt; --reason "&lt;why&gt;"</code> in a read-only field with a copy button, enabled once a cause and a reason are given. Nothing is sent anywhere (O3)</li>
+        <li><code class="status">[x]</code> For a BLOCKED run: the blocking phase, the heuristic cause, the owner's recorded override with its reason and date, and five cause pills and a reason field that compose <code>npm run awsf -- attribute &lt;task&gt; --project &lt;slug&gt; --attempt &lt;n&gt; --cause &lt;c&gt; --reason "&lt;why&gt;"</code> in a read-only field with a copy button, enabled once a cause and a reason are given. Nothing is sent anywhere (O3)</li>
         <li><code class="status">[x]</code> Grouping, sorting, flat detection and the phase-strip layout live in the pure <code>metrics-ledger.ts</code> and <code>metrics-run.ts</code></li>
       </ul>
 
@@ -1082,6 +1082,11 @@ flowchart LR
       <p><strong>Owner acceptance still open</strong> (journey w18-m3): the Chrome comparison at 1500 px beside each frame, the run card's metrics control, and copying a BLOCKED run's composed command.</p>
       <p><strong>Carried forward</strong> as Handoff entries in T13, T15 and T17.</p>
       <p>Completion metadata: built and verified by claude-code:claude-opus-5-5 on <code>claude/anthropic/claude:opus@high</code>.</p>
+    </details>
+    <details open>
+      <summary>2026-09-28 — the composed attribution command runs through the root script</summary>
+      <p><strong>Found in the owner's w18-m3 acceptance.</strong> <code>awsf</code> is the package's bin and is not on the owner's PATH, so the Run view's <code>awsf attribute …</code> could not be pasted as is. Run as <code>npm run awsf attribute …</code>, npm took <code>--project</code>, <code>--attempt</code>, <code>--cause</code> and <code>--reason</code> as its own options and passed only their values, and the CLI answered with its usage error. Nothing was recorded.</p>
+      <p><strong>Changed.</strong> <code>attributeCommand</code> in <code>dashboard/src/metrics-run.ts</code> now composes <code>npm run awsf -- attribute &lt;task&gt; --project &lt;slug&gt; --attempt &lt;n&gt; --cause &lt;c&gt; --reason "&lt;why&gt;"</code> (<code>AWSF_INVOCATION</code>). The panel's note says to run it at the AWSF checkout. Task 9's third row is reworded to match, and it keeps its <code>[x]</code>. An npm probe showed the exact argv arriving past the separator, including a reason that holds <code>'</code>, <code>"</code>, <code>$HOME</code>, a backtick and <code>!</code>. Without the separator, the probe reproduced the stripped flags. The ledger-run test asserts the form, asserts that every flag follows the separator, and checks that the root <code>awsf</code> script is the CLI.</p>
     </details>
   </section>
 

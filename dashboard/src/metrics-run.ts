@@ -255,7 +255,7 @@ export function roleLines(rows: readonly MetricsRoleRow[], price: RowPrice, cont
 /** `ATTRIBUTION_CAUSES` in `core/src/contracts/attribution-record.ts`, which the dashboard cannot import. */
 export const ATTRIBUTION_CAUSES = ["model", "factory", "environment", "owner", "unknown"] as const satisfies readonly MetricsAttribution[];
 
-export const ATTRIBUTION_NOTE = "Run this in a terminal. The dashboard records nothing itself.";
+export const ATTRIBUTION_NOTE = "Run this in a terminal at the AWSF checkout. The dashboard records nothing itself.";
 
 export interface BlockedAt {
   /** The failed phase's owner (a role or a host phase), or `null` when no phase failed. */
@@ -298,7 +298,15 @@ export const REASON_PLACEHOLDER = "<why>";
 export const CAUSE_PLACEHOLDER = "<cause>";
 
 /**
- * `awsf attribute <task> --project <slug> --attempt <n> --cause <c> --reason "<why>"`.
+ * How a pasted command reaches the CLI. `awsf` is the package's bin, not a
+ * command on the owner's PATH, so the command runs through the root script.
+ * The `--` is required: without it npm takes `--project`, `--attempt`,
+ * `--cause` and `--reason` as its own options and passes only their values.
+ */
+export const AWSF_INVOCATION = "npm run awsf --";
+
+/**
+ * `npm run awsf -- attribute <task> --project <slug> --attempt <n> --cause <c> --reason "<why>"`.
  * `--project` is always written: the state root is global, and without it the
  * CLI reads the project from the terminal's `awsf.config.yaml`, which names
  * another project's attempt whenever the run is not that project's.
@@ -309,7 +317,7 @@ export function attributeCommand(
   reason: string,
 ): string {
   const why = reason.trim().length === 0 ? `"${REASON_PLACEHOLDER}"` : quoteReason(reason);
-  return `awsf attribute ${run.taskId} --project ${run.project} --attempt ${run.attempt} --cause ${cause ?? CAUSE_PLACEHOLDER} --reason ${why}`;
+  return `${AWSF_INVOCATION} attribute ${run.taskId} --project ${run.project} --attempt ${run.attempt} --cause ${cause ?? CAUSE_PLACEHOLDER} --reason ${why}`;
 }
 
 /** The command is ready to paste once a cause is picked and a reason written. */
