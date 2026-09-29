@@ -145,8 +145,8 @@ code.inv, code.ac, code.serves { color:var(--cyan); }
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-09-28</dd>
-        <dt>modified</dt>     <dd>2026-09-28 (authored, awaiting owner review), 2026-09-28 (owner review applied: Q16–Q20 decided as recommended), 2026-09-28 (gate G19-A committed), 2026-09-29 (T01 delivered, M1 [wip]), 2026-09-29 (T02 delivered, M1 [wip]), 2026-09-29 (T03 delivered, M1 [x])</dd>
-        <dt>commits</dt>      <dd>d71b6b4 (plan authored and adopted), the G19-A commit that adds invariant 13, ed7e71c 6b1751d 56a8101 (T01), 07e43d8 3417e81 6d85dba 0371f2d (T02), 5915c87 1ac91ae (T03)</dd>
+        <dt>modified</dt>     <dd>2026-09-28 (authored, awaiting owner review), 2026-09-28 (owner review applied: Q16–Q20 decided as recommended), 2026-09-28 (gate G19-A committed), 2026-09-29 (T01 delivered, M1 [wip]), 2026-09-29 (T02 delivered, M1 [wip]), 2026-09-29 (T03 delivered, M1 [x]), 2026-09-29 (T04 delivered, M2 [wip])</dd>
+        <dt>commits</dt>      <dd>d71b6b4 (plan authored and adopted), the G19-A commit that adds invariant 13, ed7e71c 6b1751d 56a8101 (T01), 07e43d8 3417e81 6d85dba 0371f2d (T02), 5915c87 1ac91ae (T03), 777f8a6 (T04)</dd>
         <dt>agent name</dt>   <dd>claude-opus-5-5, claude-opus-5-5 (review applied)</dd>
         <dt>session id</dt>   <dd>not recorded (AGENTS.md invariant 1 keeps live session state out of every committed file)</dd>
         <dt>back refs</dt>    <dd>./awsf-v2-plan.html (§ Milestone M19 → W19, and its 2026-09-28 amendment adopting this workstream), ../AGENTS.md (the twelve invariants and the proposed invariant 13), ./awsf-v2-intent.md (decisions 3 and 5, which this plan revises by owner decision), ./awsf-v2-w17-shift.html (the shift this plan keeps running), ./awsf-v2-w18-route-metrics.html (the tab and route columns M8 builds on), ./awsf-v2-w07-quota-telemetry.html (the quota readout and its fence), the reference repository ../../ten-levels-of-jev at 777adaf (machine-local clone, IndyDevDan's "10 Levels of Jev") and its transcript ../../10_levels_of_JEV_in_agentic_engineering_IndyDevDan_transcript.txt (machine-local)</dd>
@@ -555,7 +555,7 @@ sequenceDiagram
 
     <!-- ================= M2 ================= -->
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone M2: The shadow owner (J6) <span class="wtag">manual</span></h3>
+      <h3><code class="status">[wip]</code> Milestone M2: The shadow owner (J6) <span class="wtag">manual</span></h3>
       <p>At every stop the Delegate writes down what it would do. Nothing acts. The record it builds is both the calibration data the reference repository says every threshold needs and the evidence that decides which acts earn autonomy.</p>
       <figure>
         <pre class="mermaid">
@@ -575,9 +575,9 @@ flowchart LR
       <p class="sub">Serves <code class="serves">AC-2</code></p>
       <p>The facts the owner reads at each stop, gathered by code from the status and the journal.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>core/src/delegate/stop-facts.ts</code>: pure <code>buildStopFacts</code> for ceiling-pause, quota-pause, ticket-block, AWAITING_OWNER after L12, L15 and L26, and BLOCKED on any edge</li>
-        <li><code class="status">[]</code> Fields: lifecycle, stop kind, edge, reason code, calls spent, ceiling, next phase and route, tickets done and remaining, corrections, the last round's gate rows, the review verdict and findings, and the latest journaled quota rows</li>
-        <li><code class="status">[]</code> No field is inferred, and nothing calls a provider or a live probe</li>
+        <li><code class="status">[x]</code> <code>core/src/delegate/stop-facts.ts</code>: pure <code>buildStopFacts</code> for ceiling-pause, quota-pause, ticket-block, AWAITING_OWNER after L12, L15 and L26, and BLOCKED on any edge</li>
+        <li><code class="status">[x]</code> Fields: lifecycle, stop kind, edge, reason code, calls spent, ceiling, next phase and route, tickets done and remaining, corrections, the last round's gate rows, the review verdict and findings, and the latest journaled quota rows (the journal holds no resets-at instant or pace reserve, so the quota fact carries minutes to reset and the snapshot's journal time)</li>
+        <li><code class="status">[x]</code> No field is inferred, and nothing calls a provider or a live probe</li>
       </ul>
 
       <h4>5. The shadow policy and its journaled proposals</h4>
@@ -1076,6 +1076,15 @@ flowchart LR
       <p><strong>Verified.</strong> In WSL on node v22.23.1: <code>npm run test:unit</code> 2476/2476 at the base (the T02 tree, measured before its commits) and 2481/2481 after, the 5 new tests in <code>core/test/unit/decision/jev-doctor.test.ts</code>. <code>core/test/unit/decision/*.test.ts</code> with the fence, state-root containment and operator tests: 60/60. The journey (2 tests) and <code>core/test/simulation/doctor.test.ts</code>: 3/3. In the journey, answered, contract-error, unavailable (HTTP 401) and refused-by-switch each leave one record and one <code>decision</code> row, and <code>awsf db rebuild</code> from no database yields the same rows. <code>npm run typecheck</code> and <code>npm run lint</code> exit 0. <code>awsf doctor</code> on this checkout printed the row with the fence intact over 263 files and stayed healthy. No live call was made. The full journeys, sim and contract layers were not rerun.</p>
       <p><strong>Milestone M1 complete.</strong> Tasks 1–3 are <code>[x]</code>, and AC-1's evidence is T01's transport and fence, T02's record and rebuild, and this journey. The owner's acceptance for T03, running <code>awsf doctor</code> on their own machine and seeing the key reported as set or unset, remains the owner's act. T21 C1 (Marimba and <code>decision.jev: off</code>) is still open.</p>
       <p><strong>Carried forward</strong> as Handoff entries in T07 (C1–C4), committed as <code>c6870cd</code>.</p>
+      <p>Completion metadata: built and verified in a manual session.</p>
+    </details>
+    <details open>
+      <summary>2026-09-29 — T04 delivered; Milestone M2 in progress</summary>
+      <p><strong>T04 delivered</strong> on base <code>fe8a970</code>, in a manual session on branch <code>w19-jev-delegate</code>, as <code>777f8a6</code>. It adds <code>core/src/delegate/stop-facts.ts</code>, whose pure <code>buildStopFacts(status, records, config)</code> returns one <code>awsf.stop-facts/v1</code> record per stop, and <code>core/test/unit/delegate/stop-facts.test.ts</code>.</p>
+      <p><strong>Decided in the session.</strong> (1) Seven stop kinds: <code>ceiling-pause</code>, <code>quota-pause</code>, <code>ticket-block</code>, <code>gating-hold</code> (L12), <code>review-hold</code> (L15), <code>quota-stop</code> (L26) and <code>blocked</code>. The parked checkpoints carry no edge. (2) <code>config</code> is the compiled phase list, <code>{ id, ticket, route }</code> per phase, which gives the next phase's route and ticket progress. (3) The journal records no resets-at instant and no pace reserve anywhere, so the quota fact carries the newest <code>quota-snapshot</code> row with its journal time. Provider, window and threshold come only from a quota-pause checkpoint's binding. "Nothing is inferred" wins over the prompt's field list. (4) Review findings are copied verbatim as <code>{ id, severity, file, line, title, text }</code>, and are null when no valid review envelope is journaled. The status, blocker and transition sentences are never carried. (5) A hold or block with no journaled transition throws rather than guessing. (6) The nine fixtures are the three parked checkpoints, the three holds, and BLOCKED on L8, L13 and L17.</p>
+      <p><strong>Verified.</strong> In WSL on node v22.23.1: <code>npm run test:unit</code> 2481/2481 at the base (the T03 tree, measured before its commits; the only commits since touched <code>specs/**</code>) and 2493/2493 after, the 12 new tests in <code>core/test/unit/delegate/stop-facts.test.ts</code>. That file together with <code>core/test/unit/meta/*.test.ts</code>: 246/246. <code>npm run typecheck</code> and <code>npm run lint</code> exit 0. No journeys, sim or contract layer was rerun. None of them import the new module.</p>
+      <p><strong>Milestone M2 in progress.</strong> Task 4 is <code>[x]</code>, and tasks 5–6 remain. T04 has no owner acceptance of its own.</p>
+      <p><strong>Carried forward</strong> as Handoff entries in T05 (C5–C8) and T10 (C1–C4), committed as <code>779c6c7</code>.</p>
       <p>Completion metadata: built and verified in a manual session.</p>
     </details>
   </section>
