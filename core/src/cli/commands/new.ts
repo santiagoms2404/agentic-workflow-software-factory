@@ -63,6 +63,12 @@ export interface NewCommandOptions {
    */
   readonly callCeilings?: CallCeilings;
   readonly allowance?: { auto: number; owner: number; ownerReentries?: number };
+  /**
+   * What the creation record says happened. `awsf prove` records the owner's
+   * reason here, in the journal's first record. Omitted, it says only that the
+   * attempt exists with no worktree or provider yet.
+   */
+  readonly lastActivity?: string;
   readonly projectRecord?: AttemptProjector;
   readonly now?: () => string;
   readonly sessionId?: () => string;
@@ -147,7 +153,7 @@ export async function newCommand(options: NewCommandOptions): Promise<{ attemptD
     reviewDegradation: null,
     model: null,
     lastActivityAt: now,
-    lastActivity: "attempt recorded; no worktree or provider exists yet",
+    lastActivity: options.lastActivity ?? "attempt recorded; no worktree or provider exists yet",
     nextAction: nextActionFor("DRAFT", options.taskId),
     gatesPass: false,
     requiredReviewPresent: false,

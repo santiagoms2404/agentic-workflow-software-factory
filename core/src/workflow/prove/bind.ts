@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { assertProvingGroundItem, assertReplayRecord } from "../../contracts/proving-ground.ts";
 import { runGit, systemGitRunner } from "../../git/changes.ts";
 import { compileProve, ProveItemInvalid, type ProveCompileConfig, type ProveRecipe } from "./compile.ts";
+import { PROVING_GROUND_DIR } from "./corpus.ts";
 
 // The binding between a replay attempt and its frozen item. `compile.ts` stays
 // pure; this is the one place a replay's item and patch bytes are read, so the
@@ -11,8 +12,7 @@ import { compileProve, ProveItemInvalid, type ProveCompileConfig, type ProveReci
 // worktree: that worktree starts at the item's pinned base, which predates the
 // corpus, so it holds neither the item nor its answer key (T11 C1).
 
-/** Where the frozen items live in the canonical repository. An item's file is named by its id. */
-export const PROVING_GROUND_DIR = "core/src/metrics/proving-ground";
+export { PROVING_GROUND_DIR };
 
 /** The replay record, its item and its attempt no longer describe one replay. Nothing is compiled. */
 export class ReplayBindingRefused extends Error {

@@ -86,6 +86,8 @@ export const RoleRowSchema = Type.Object({
   stateGroup: StateGroup, workflow: Str, tier: Count, project: Str, planRef: NStr, reviewVerdict: NStr,
   ownerReentries: Count, reworkPhases: Count, observabilityDegraded: Flag, usageAuthority: UsageAuthority,
   startedAt: Str, endedAt: NStr,
+  source: Literals(["production", "proving-ground"]), itemId: NStr, arm: NStr,
+  repetition: Nullable(Type.Integer({ minimum: 1 })), order: Nullable(Type.Integer({ minimum: 1 })),
 }, { additionalProperties: false });
 
 const AgentPhase = Type.Object({

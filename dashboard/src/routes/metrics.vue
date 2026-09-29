@@ -84,7 +84,7 @@ const lensRows = computed(() => rowsInLens(rows.value, props.route));
 const tile = computed(() => countTile(payload.value?.runs ?? [], rows.value, props.route));
 const summary = computed(() => summaryStats(lensRows.value, listPrice));
 const focusNote = computed(() => routeFocusNote(props.route, rows.value, rateCard.value));
-/** Both sources are always listed; the proving ground stays disabled until M4 records replays. */
+/** Both sources are always listed. The proving ground is off by default and joins the statistics only when selected (DD8). */
 const sourcePills = computed(() => {
   const options = facetOptions(rows.value, props.route, "source", context.value);
   const selected = selectedValues(props.route, "source", [...EVIDENCE_SOURCES]);
@@ -92,9 +92,8 @@ const sourcePills = computed(() => {
     value,
     label: value === "production" ? "production" : "proving ground",
     count: options.find((entry) => entry.value === value)?.count ?? 0,
-    live: value === "production",
-    title: value === "production" ? "Evidence from the factory's own runs" : "M4 adds controlled replays",
-    selected: value === "production" && selected.includes(value),
+    title: value === "production" ? "Evidence from the factory's own runs" : "Controlled replays of the frozen corpus, from awsf prove",
+    selected: selected.includes(value),
   }));
 });
 const ladders = computed(() => RAIL_FACETS.map((id) => {
@@ -163,7 +162,7 @@ function option(entry: SessionFilterEntry): RailOption {
         <span>option counts are role-rows</span>
       </div>
 
-      <!-- One live value until M4, so no select-all: it could only empty the lens. -->
+      <!-- Two values toggled one at a time: production is on by default, and the proving ground joins only when selected. -->
       <section class="session-filter-row filter-ladder metrics-ladder" aria-labelledby="metrics-source-title">
         <div class="session-filter-heading">
           <h2 id="metrics-source-title">Evidence source</h2>
@@ -175,7 +174,6 @@ function option(entry: SessionFilterEntry): RailOption {
             type="button"
             class="session-filter-option"
             :class="{ selected: pill.selected }"
-            :disabled="!pill.live"
             :aria-pressed="pill.selected"
             :title="pill.title"
             @click="toggleSource(pill.value)"

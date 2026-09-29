@@ -3,6 +3,7 @@
 // rebuild`; nothing here reads or copies the owner's database.
 
 import type { ProducerStatus } from "../../src/contracts/envelope-base.ts";
+import type { ReplayRecord } from "../../src/contracts/proving-ground.ts";
 import type { NormalizedEvent, TokenUsage } from "../../src/contracts/normalized-events.ts";
 import type { ReviewVerdict } from "../../src/contracts/review-output.ts";
 import type { GateId } from "../../src/gates/interface.ts";
@@ -122,6 +123,8 @@ export class SyntheticAttempt {
   /** The lifecycle state every later record carries; `transition` moves it. */
   lifecycleState: TaskState = "RUNNING";
   ownerReentries = 0;
+  /** The replay record every later record carries, as a `prove` attempt's status does. */
+  replay: ReplayRecord | null = null;
   #eventSeq = 0;
   #transitionSeq = 0;
 
@@ -146,6 +149,7 @@ export class SyntheticAttempt {
       endedAt: null,
       stateRevision: revision,
       evidence,
+      ...(this.replay === null ? {} : { replay: this.replay }),
     });
     return this;
   }

@@ -15,6 +15,7 @@ import { publicApiValue } from "../../../src/api/responses.ts";
 import { buildMetricsPayload } from "../../../src/metrics/payload.ts";
 import { openDatabase } from "../../../src/observability/sqlite.ts";
 import type { MetricsResponse } from "../../../../dashboard/shared/types.ts";
+import type { ReplayRecord } from "../../../src/contracts/proving-ground.ts";
 import { OPUS_HIGH, SyntheticAttempt, phase, session, usage } from "../../unit/_metrics-journal.ts";
 
 export const PAYLOAD_PATH = fileURLToPath(new URL("./payload.json", import.meta.url));
@@ -28,9 +29,16 @@ interface RunShape {
   readonly startedAt?: string;
 }
 
+/** The record `awsf prove` gives a replay: its rows carry the item, arm, repetition and order. */
+const REPLAY: ReplayRecord = {
+  itemId: "review-01", itemDigest: "0".repeat(64), arm: "claude/anthropic/claude:opus@high", repetition: 1, order: 2,
+  baseSha: "69711fd879706a8a8da48de2c407285b9ef440c4",
+};
+
 /** A landed run: a codex builder observed as gpt-6-sol, and a claude reviewer that never reported a model. */
 function landed(sessionId: string, shape: RunShape = {}): SyntheticAttempt {
   const run = new SyntheticAttempt({ ...session(sessionId), ...shape });
+  if (shape.workflowId === "prove") run.replay = REPLAY;
   // Phase and run ids are global keys; real ones are session-prefixed too.
   const build = `${sessionId}:builder`, review = `${sessionId}:reviewer`;
   run.phase(phase("builder", "builder", { phaseId: build, ordinal: 1 }));

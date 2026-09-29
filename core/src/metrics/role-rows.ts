@@ -31,6 +31,8 @@ import {
 } from "./attribution.ts";
 import { readPhaseFacts, type PhaseFacts, type PhaseTokens, type RoleSessionFacts } from "./phase-facts.ts";
 import { TOOL_CLASSES, type ToolClass } from "./tool-class.ts";
+import { assertReplayRecord, type ReplayRecord } from "../contracts/proving-ground.ts";
+import { evidenceSource, type EvidenceSource } from "../../../dashboard/shared/route-metrics.ts";
 
 export const STATE_GROUPS = ["LANDED", "AWAITING_OWNER", "OPEN", "CANCELLED", "BLOCKED"] as const;
 export type StateGroup = (typeof STATE_GROUPS)[number];
@@ -53,6 +55,9 @@ export interface EnvelopeFact {
   readonly round: number;
   readonly producerStatus: "success" | "failure" | null;
 }
+
+/** What a row carries of the replay its run measured (`awsf prove`). */
+export type RunReplay = Pick<ReplayRecord, "itemId" | "arm" | "repetition" | "order">;
 
 /** What the outcome definitions read of a phase. */
 export type OutcomePhase = Pick<PhaseFacts, "phaseId" | "status" | "correctionCount" | "maxCorrections" | "errorCode">;
@@ -78,6 +83,8 @@ export interface RunFacts extends AttributionRun {
   readonly envelopes: readonly EnvelopeFact[];
   /** The owner's latest `awsf attribute` record for this attempt, or `null`. */
   readonly ownerAttribution: OwnerAttribution | null;
+  /** The replay record the projector wrote for a `prove` session, or `null`. */
+  readonly replay: RunReplay | null;
 }
 
 export type UsageAuthority = "provider" | "partial" | "none";
@@ -141,6 +148,13 @@ export interface RoleRow {
   readonly corrected: number;
   readonly stateGroup: StateGroup;
   readonly workflow: string;
+  /** DD8: `proving-ground` when the run's workflow is `prove`, `production` otherwise. Always `evidenceSource(row)`. */
+  readonly source: EvidenceSource;
+  /** The replay this row measured; all four are `null` on a row with no replay record. */
+  readonly itemId: string | null;
+  readonly arm: string | null;
+  readonly repetition: number | null;
+  readonly order: number | null;
   readonly tier: number;
   readonly project: string;
   readonly planRef: string | null;
@@ -362,6 +376,11 @@ function roleRow(run: RunFacts, role: string, phases: readonly PhaseFacts[], att
     corrected: phases.filter(isCorrected).length,
     stateGroup: group,
     workflow: run.workflowId,
+    source: evidenceSource({ workflow: run.workflowId }),
+    itemId: run.replay?.itemId ?? null,
+    arm: run.replay?.arm ?? null,
+    repetition: run.replay?.repetition ?? null,
+    order: run.replay?.order ?? null,
     tier: run.tier,
     project: run.projectSlug,
     planRef: run.planRef,
@@ -442,6 +461,27 @@ function ownerAttributions(db: DatabaseSync): Map<string, OwnerAttribution> {
   return latest;
 }
 
+/**
+ * The replay record per session: the one `replay` events row the projector
+ * writes for a `prove` session. A payload that is not a replay record is
+ * skipped, never guessed at.
+ */
+function replays(db: DatabaseSync): Map<string, RunReplay> {
+  const rows = db.prepare(`SELECT session_id, payload_json FROM events
+    WHERE type = 'replay' ORDER BY session_id, event_row`).all() as unknown as Array<{ session_id: string; payload_json: string }>;
+  const bySession = new Map<string, RunReplay>();
+  for (const row of rows) {
+    const payload: unknown = JSON.parse(row.payload_json);
+    try {
+      assertReplayRecord(payload);
+    } catch {
+      continue;
+    }
+    bySession.set(row.session_id, { itemId: payload.itemId, arm: payload.arm, repetition: payload.repetition, order: payload.order });
+  }
+  return bySession;
+}
+
 /** Reads every run as `RunFacts`, sessions in start order. Read-only SQL on the caller's connection. */
 export function readRunFacts(db: DatabaseSync): RunFacts[] {
   const sessions = db.prepare(`SELECT session_id, project_slug, task_id, attempt, workflow_id, risk_tier, plan_ref,
@@ -466,6 +506,7 @@ export function readRunFacts(db: DatabaseSync): RunFacts[] {
     session_id: string; phase_id: string; correction_round: number; producer_status: "success" | "failure" | null;
   }>, (row): EnvelopeFact => ({ phaseId: row.phase_id, round: row.correction_round, producerStatus: row.producer_status }));
   const owners = ownerAttributions(db);
+  const recorded = replays(db);
   const agentPhases = new Map<string, PhaseFacts[]>();
   for (const fact of readPhaseFacts(db)) append(agentPhases, fact.sessionId, fact);
 
@@ -490,6 +531,7 @@ export function readRunFacts(db: DatabaseSync): RunFacts[] {
     gates: gates.get(session.session_id) ?? [],
     envelopes: envelopes.get(session.session_id) ?? [],
     ownerAttribution: owners.get(session.session_id) ?? null,
+    replay: recorded.get(session.session_id) ?? null,
   }));
 }
 

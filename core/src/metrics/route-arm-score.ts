@@ -69,7 +69,7 @@ function canonicalModel(adapter: string, model: string): string {
 }
 
 /** One key per route, so two spellings of the same arm are one arm. */
-function armKey(arm: RouteArm): string {
+export function armKey(arm: RouteArm): string {
   return `${arm.adapter}/${arm.provider}/${canonicalModel(arm.adapter, arm.model)}@${arm.effort}`;
 }
 

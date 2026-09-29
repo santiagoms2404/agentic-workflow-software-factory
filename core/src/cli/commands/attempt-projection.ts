@@ -48,6 +48,7 @@ export function toAttemptStatusProjection(
     updatedAt: status.lastActivityAt,
     endedAt: isTerminalStatus(status) ? status.lastActivityAt : null,
     stateRevision: status.revision,
+    replay: status.replay ?? null,
     ...(event?.evidence === undefined ? {} : { evidence: event.evidence }),
   };
 }

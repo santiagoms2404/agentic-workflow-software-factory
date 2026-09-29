@@ -12,11 +12,19 @@
 // rows the table reads; `--json` prints the unfiltered API payload through the
 // route's own serializer, so it is byte for byte what the route sends for the
 // same `extractedAt`.
+//
+// `--source proving-ground` adds the route-arm scores (W18 task 13): the
+// replays in scope, scored by `route-arm-score.ts` against the frozen corpus.
 
 import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { publicApiValue } from "../../api/responses.ts";
+import type { ProvingGroundItem } from "../../contracts/proving-ground.ts";
 import { buildMetricsPayload } from "../../metrics/payload.ts";
-import { openDatabase } from "../../observability/sqlite.ts";
+import { readReplayOutcomes, routeArmProtocol, routeArmReplays, type ReplayOutcome } from "../../metrics/route-arm-replays.ts";
+import { LINE_WINDOW, scoreRouteArms, type RouteArmScore } from "../../metrics/route-arm-score.ts";
+import { openDatabase, type DatabaseSync } from "../../observability/sqlite.ts";
+import { readProvingGroundCorpus } from "../../workflow/prove/corpus.ts";
 import type { MetricsResponse, MetricsRoleRow, MetricsRun } from "../../../../dashboard/shared/types.ts";
 import { formatListEquivalent, listPrice } from "../../../../dashboard/shared/rate-card.ts";
 import {
@@ -49,7 +57,17 @@ export interface MetricsCommandOptions {
   readonly role?: string;
   readonly source?: string;
   readonly startedBefore?: string;
+  /** The checkout whose corpus scores the replays. Defaults to the checkout this CLI belongs to, which holds the corpus. */
+  readonly repository?: string;
 }
+
+/** What the proving-ground readout scores the rows with: each replay session's outcome, and the corpus. */
+export interface ProvingGroundEvidence {
+  readonly outcomes: ReadonlyMap<string, ReplayOutcome>;
+  readonly corpus: readonly ProvingGroundItem[];
+}
+
+const CHECKOUT = fileURLToPath(new URL("../../../../", import.meta.url));
 
 export const METRICS_USAGE =
   "usage: awsf metrics [--role R] [--source production|proving-ground] [--started-before ISO] [--json] [--state-root PATH]";
@@ -67,15 +85,19 @@ export function metricsFilter(options: Pick<MetricsCommandOptions, "role" | "sou
   return { role: options.role ?? null, source: source as EvidenceSource, startedBefore: options.startedBefore ?? null };
 }
 
-/** The payload exactly as the route serves it: built from a read-only connection, then through `publicApiValue`. */
-export function readMetricsPayload(dbPath: string, extractedAt: string): MetricsResponse {
+function readProjection<T>(dbPath: string, read: (db: DatabaseSync) => T): T {
   if (!existsSync(dbPath)) throw new Error(`no projection at ${dbPath}; awsf db rebuild creates it from the journals`);
   const db = openDatabase(dbPath, { readonly: true });
   try {
-    return publicApiValue(buildMetricsPayload(db, { extractedAt }));
+    return read(db);
   } finally {
     db.close();
   }
+}
+
+/** The payload exactly as the route serves it: built from a read-only connection, then through `publicApiValue`. */
+export function readMetricsPayload(dbPath: string, extractedAt: string): MetricsResponse {
+  return readProjection(dbPath, (db) => publicApiValue(buildMetricsPayload(db, { extractedAt })));
 }
 
 export function metricsCommand(options: MetricsCommandOptions): readonly string[] {
@@ -84,9 +106,16 @@ export function metricsCommand(options: MetricsCommandOptions): readonly string[
     throw new Error("--json prints the unfiltered API payload; --role, --source and --started-before narrow the table only");
   }
   const filter = metricsFilter(options);
-  const payload = readMetricsPayload(options.dbPath, options.extractedAt);
-  if (options.json === true) return [JSON.stringify(payload)];
-  return metricsReadout(payload, filter);
+  if (filter.source !== "proving-ground") {
+    const payload = readMetricsPayload(options.dbPath, options.extractedAt);
+    return options.json === true ? [JSON.stringify(payload)] : metricsReadout(payload, filter);
+  }
+  // One read of the projection, so the rows and the outcomes they are scored with agree.
+  const { payload, outcomes } = readProjection(options.dbPath, (db) => ({
+    payload: publicApiValue(buildMetricsPayload(db, { extractedAt: options.extractedAt })),
+    outcomes: readReplayOutcomes(db),
+  }));
+  return metricsReadout(payload, filter, { outcomes, corpus: readProvingGroundCorpus(options.repository ?? CHECKOUT) });
 }
 
 function inScope(item: Pick<MetricsRun, "workflow" | "startedAt">, filter: MetricsFilter): boolean {
@@ -128,8 +157,12 @@ function table(rows: readonly (readonly string[])[]): string[] {
   return rows.map((row) => `  ${row.map((cell, column) => column === row.length - 1 ? cell : cell.padEnd(widths[column]!)).join("  ")}`.trimEnd());
 }
 
-/** The role × route table over the filtered rows, headed by the counts the owner reconciles against. */
-export function metricsReadout(payload: MetricsResponse, filter: MetricsFilter): string[] {
+/**
+ * The role × route table over the filtered rows, headed by the counts the
+ * owner reconciles against. Over proving-ground rows, given the evidence, the
+ * route-arm scores follow it.
+ */
+export function metricsReadout(payload: MetricsResponse, filter: MetricsFilter, provingGround?: ProvingGroundEvidence): string[] {
   const runs = filterRuns(payload.runs, filter);
   const rows = filterRows(payload.roleRows, filter);
   const all = stats(rows, listPrice);
@@ -175,5 +208,54 @@ export function metricsReadout(payload: MetricsResponse, filter: MetricsFilter):
   lines.push("");
   lines.push("Verdicts rank first-pass yield against ≈ list per row over rankable rows only, and a route needs 5 settled rows to shape them.");
   lines.push("A route key names the selector, so a cell pools every model it resolved to; each row prices on the model observed answering.");
+  if (filter.source === "proving-ground" && provingGround !== undefined) lines.push(...routeArmReadout(rows, provingGround));
+  return lines;
+}
+
+function armTable(kind: ProvingGroundItem["kind"], arms: readonly RouteArmScore[]): string[] {
+  if (kind === "build") {
+    return table([["arm", "replays", "first pass [95% CI]", "invalid pairs"],
+      ...arms.map((arm) => [arm.arm, String(arm.build.replays), firstPassCell(arm.build.interval), String(arm.invalidPairs)])]);
+  }
+  return table([["arm", "replays", "located", "recall [95% CI]", "file-only", "false alarms", "invalid pairs"],
+    ...arms.map((arm) => [arm.arm, String(arm.review.replays), String(arm.review.located), firstPassCell(arm.review.recall),
+      String(arm.review.fileOnly), String(arm.review.falseAlarms), String(arm.invalidPairs)])]);
+}
+
+/** T11's route-arm scores over the replays in scope: per item and arm, then per role and task class. */
+export function routeArmReadout(rows: readonly MetricsRoleRow[], evidence: ProvingGroundEvidence): string[] {
+  const replays = routeArmReplays(rows, evidence.outcomes, evidence.corpus);
+  const lines = ["", `Route arms · ${replays.length} replay(s) in scope`];
+  const unrecorded = rows.filter((row) => row.itemId === null).length;
+  if (unrecorded > 0) lines.push(`${unrecorded} proving-ground role-row(s) carry no replay record and are not scored.`);
+  const protocol = routeArmProtocol(replays, evidence.corpus);
+  if (protocol === null) {
+    lines.push("No comparison: the replays in scope name fewer than two arms.");
+    return lines;
+  }
+  const suite = scoreRouteArms(protocol, replays);
+  const kinds = new Map(protocol.items.map((item) => [item.id, item.kind]));
+  lines.push(`${suite.arms.length} arms · ${protocol.repetitions} repetition(s) · ${protocol.items.length} item(s) · ` +
+    `${suite.pairs.filter((pair) => pair.valid).length} of ${suite.pairs.length} pairs valid${suite.complete ? " · complete" : ""}`);
+  for (const item of suite.byItem) {
+    lines.push("", `${item.itemId} · ${item.kind} · ${item.role} · ${item.taskClass}`, ...armTable(item.kind, item.arms));
+  }
+  for (const scope of suite.byScope) {
+    lines.push("", `${scope.role} · ${scope.taskClass} · ${scope.items.length} item(s) · ${scope.invalidPairs} invalid pair(s)`,
+      ...armTable(kinds.get(scope.items[0]!) ?? "review", scope.arms));
+  }
+  const invalid = suite.pairs.filter((pair) => !pair.valid);
+  if (invalid.length > 0) {
+    lines.push("", "Invalid pairs score no arm:");
+    for (const pair of invalid) {
+      lines.push(`  ${pair.itemId} repetition ${pair.repetition}: ` +
+        pair.reasons.map((reason) => `${reason.reason}${reason.arm === null ? "" : ` on ${reason.arm}`} (${reason.detail})`).join("; "));
+    }
+  }
+  if (suite.stray.length > 0) {
+    lines.push("", "Replays outside the corpus or the arms, never scored:");
+    for (const stray of suite.stray) lines.push(`  ${stray.itemId} on ${stray.arm}, repetition ${stray.repetition}`);
+  }
+  lines.push("", `A finding locates the planted defect on its file within ${LINE_WINDOW} lines of the expected range. A whole-file finding on that file is file-only, apart from recall.`);
   return lines;
 }

@@ -52,7 +52,7 @@ export const VIEW_LABEL: Readonly<Record<MetricsView, string>> = {
   run: "Run",
 };
 
-/** The rail's order, top to bottom. Evidence source is drawn apart: one live value until M4. */
+/** The rail's order, top to bottom. Evidence source is drawn apart, as two pills with no select-all. */
 export const RAIL_FACETS = ["role", "model", "effort", "state", "workflow", "project"] as const;
 export type RailFacet = (typeof RAIL_FACETS)[number];
 export type FacetId = RailFacet | "source";
@@ -142,7 +142,7 @@ export interface MetricsRouteState {
   readonly sort: LedgerSort;
 }
 
-/** Production only: the proving ground is a separate evidence source (DD8), and M4 adds it. */
+/** Production only: the proving ground is a separate evidence source (DD8) and joins only when the ladder selects it. */
 export const DEFAULT_OFF: Readonly<Partial<Record<FacetId, readonly string[]>>> = Object.freeze({ source: ["proving-ground"] });
 
 export const DEFAULT_METRICS_ROUTE: MetricsRouteState = Object.freeze({

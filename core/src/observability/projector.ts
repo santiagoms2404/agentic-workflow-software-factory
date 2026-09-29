@@ -11,6 +11,7 @@ import type { DatabaseSync } from "./sqlite.ts";
 import type { AttemptEvidence, RecordedAgentPurpose } from "./attempt-evidence.ts";
 import type { RouteSelectionProvenance } from "../contracts/route-selection.ts";
 import { attributionRecordDigest, type AttributionRecord } from "../contracts/attribution-record.ts";
+import type { ReplayRecord } from "../contracts/proving-ground.ts";
 import { resolvePhaseRoute } from "./phase-route.ts";
 import {
   scrubCredentialString,
@@ -88,6 +89,8 @@ export interface AttemptStatusProjection extends SessionInit {
   endedAt: string | null;
   stateRevision: number;
   evidence?: AttemptEvidence;
+  /** The proving-ground replay the attempt measures (`awsf prove`); absent or `null` on every other attempt. */
+  replay?: ReplayRecord | null;
 }
 
 /**
@@ -142,6 +145,7 @@ export function projectAttemptStatus(
     db.exec("BEGIN IMMEDIATE");
     try {
       if (status.evidence !== undefined) applyAttemptEvidence(db, status.sessionId, sourceSeq, status.evidence);
+      if (status.replay != null) projectReplay(db, status.sessionId, sourceSeq, status.replay, status.updatedAt);
       // `call_ceiling` is written on every record, not only at session creation:
       // an owner raise moves it mid-attempt, and a column that only ever held
       // the creation-time number would make the dashboard's `spent/ceiling`
@@ -251,6 +255,23 @@ export function projectAttribution(db: DatabaseSync, record: AttributionRecord):
      payload_json, started_at) VALUES (?, ?, NULL, 1, 1, 'attribution', 'owner attribution recorded', ?, ?)`)
     .run(`${row.session_id}:attribution:${attributionRecordDigest(record)}`, row.session_id,
       stringifyRedacted({ attempt: record.attempt, cause: record.cause, reason: record.reason, at: record.at }), record.at);
+}
+
+/**
+ * The replay an attempt measures, as one session-level `events` row of type
+ * `replay` (W18 task 13). Every record of a replay attempt carries the same
+ * record and the row's id is the session's, so the first record writes it and
+ * every later one, live or in a rebuild, is a no-op. The role-rows read it back
+ * for the replay's item, arm, repetition and order.
+ */
+function projectReplay(db: DatabaseSync, sessionId: string, sourceSeq: number, replay: ReplayRecord, at: string): void {
+  db.prepare(`INSERT OR IGNORE INTO events
+    (event_id, session_id, phase_id, first_source_seq, last_source_seq, type, name,
+     payload_json, started_at) VALUES (?, ?, NULL, ?, ?, 'replay', 'proving-ground replay recorded', ?, ?)`)
+    .run(`${sessionId}:replay`, sessionId, sourceSeq, sourceSeq, stringifyRedacted({
+      itemId: replay.itemId, itemDigest: replay.itemDigest, arm: replay.arm, repetition: replay.repetition,
+      order: replay.order, baseSha: replay.baseSha,
+    }), at);
 }
 
 export function createSession(db: DatabaseSync, init: SessionInit): void {

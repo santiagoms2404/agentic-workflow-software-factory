@@ -1,4 +1,4 @@
-import type { MetricsRoute, MetricsRow, StateGroup, ToolClass } from "./route-metrics.ts";
+import type { EvidenceSource, MetricsRoute, MetricsRow, StateGroup, ToolClass } from "./route-metrics.ts";
 
 export type LifecycleState =
   | "DRAFT"
@@ -532,6 +532,13 @@ export interface MetricsRoleRow extends MetricsRow {
   readonly heuristicAttribution: Exclude<MetricsAttribution, "owner"> | null;
   readonly tokens: MetricsRoleRowTokens;
   readonly costAuthority: CostAuthority;
+  /** DD8: `proving-ground` when the run's workflow is `prove`. Always equal to `evidenceSource(row)`. */
+  readonly source: EvidenceSource;
+  /** The replay this row measured (`awsf prove`); all four are `null` on a row with no replay record. */
+  readonly itemId: string | null;
+  readonly arm: string | null;
+  readonly repetition: number | null;
+  readonly order: number | null;
   readonly tier: number;
   readonly planRef: string | null;
   readonly reviewVerdict: string | null;
