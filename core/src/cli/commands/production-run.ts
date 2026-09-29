@@ -309,6 +309,37 @@ async function attemptRecipe(options: Pick<ProductionRunOptions, "config" | "con
     ? bindShiftRecipe(status.repository, status.shift!, { prompts })
     : bindProveRecipe(status, { prompts, gates: Object.keys(options.config.gates) });
 }
+/**
+ * The attempt's phases as the Delegate's stop facts and shadow policy read
+ * them (W19 tasks 4-5): id, shift ticket, the adapter each agent phase is
+ * routed to (host-only phases have none), and each agent phase's role. Read-only:
+ * it resolves routes the way the run does, with this attempt's overrides, and
+ * launches nothing. A route that no longer resolves is reported as null.
+ */
+export async function stopFactsPhases(
+  options: Pick<ProductionRunOptions, "config" | "configPath">,
+  status: AttemptStatus,
+): Promise<{ phases: { id: string; ticket: string | null; route: string | null }[]; roles: Record<string, string> }> {
+  const recipe = await attemptRecipe(options, status);
+  if (recipe === undefined) return { phases: [], roles: {} };
+  const agents = new Map(options.config.agents.map((agent) => [agent.name, agent]));
+  const roles: Record<string, string> = {};
+  const phases = recipe.phases.map((phase) => {
+    let route: string | null = null;
+    if (phase.kind === "agent") {
+      roles[phase.id] = phase.owner;
+      const role = agents.get(phase.owner);
+      try {
+        route = role === undefined ? null : requestedPhaseRoute(options.config, phase.id, role, status.routeOverrides).agent.harness.adapter;
+      } catch {
+        route = null;
+      }
+    }
+    return { id: phase.id, ticket: shiftTicketOf(recipe.phases, phase.id), route };
+  });
+  return { phases, roles };
+}
+
 const READ_ONLY_RESULT_SCHEMA_BY_WORKFLOW: ReadonlyMap<string, "awsf.scout-output/v1" | "awsf.plan-output/v1"> = new Map([
   ["scout", "awsf.scout-output/v1"],
   ["plan", "awsf.plan-output/v1"],

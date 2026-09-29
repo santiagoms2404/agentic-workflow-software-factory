@@ -44,13 +44,14 @@ import { advisoryRole, metricsAdviceCommand } from "./commands/metrics-advisory.
 import { assertRoutesReachWorkflow, formatRouteOverride, parseRouteFlags, predictSameProviderReviewFor } from "../workflow/route-flags.ts";
 import { quotaCommand } from "./commands/quota.ts";
 import { stageCommand } from "./commands/stage.ts";
-import { locateAttempt } from "./commands/attempt.ts";
+import { locateAttempt, readAttempt } from "./commands/attempt.ts";
+import { recordShadowProposal } from "../delegate/shadow.ts";
 import { retryCommand } from "./commands/retry.ts";
 import { seedCommand } from "./commands/seed.ts";
 import { reviewCommand } from "./commands/review.ts";
 import { reworkCommand } from "./commands/rework.ts";
 import { runStubCommand } from "./commands/run.ts";
-import { runProductionCommand, resumeProductionCommand } from "./commands/production-run.ts";
+import { runProductionCommand, resumeProductionCommand, stopFactsPhases } from "./commands/production-run.ts";
 import { defaultWorktreeRoot, startCommand } from "./commands/start.ts";
 import { statusCommand } from "./commands/status.ts";
 import { intakeRequest, listTickets, showTicket, ticketStoreFor, ticketStoreForPlan } from "./commands/ticket.ts";
@@ -203,6 +204,34 @@ export interface CliMainOptions {
   readonly terminal?: OwnerTerminal;
   readonly writeOut?: (line: string) => void;
   readonly writeError?: (line: string) => void;
+}
+
+/**
+ * The shadow owner (W19 task 5): after a run or resume returns, record what
+ * the Delegate would propose at the stop it reached. It never changes the
+ * command's result or output. Under the test runner (NODE_TEST_CONTEXT) the key
+ * is withheld, so no test run can make a live Jev call; the proposal records
+ * jev-unavailable instead.
+ */
+async function shadowStop(
+  attemptDir: string,
+  config: Parameters<typeof stopFactsPhases>[0]["config"],
+  configPath: string,
+  env: Readonly<Record<string, string | undefined>>,
+): Promise<void> {
+  try {
+    const jevEnv = env.NODE_TEST_CONTEXT === undefined ? env : { ...env, OPENROUTER_API_KEY: undefined };
+    await recordShadowProposal({
+      attemptDir,
+      env: jevEnv,
+      phases: async () => {
+        const { phases, roles } = await stopFactsPhases({ config, configPath }, await readAttempt(attemptDir));
+        return { config: { phases }, roles };
+      },
+    });
+  } catch {
+    // The shadow owner only observes. A failure here leaves the run exactly as it returned.
+  }
 }
 
 export async function main(options: CliMainOptions = {}): Promise<number> {
@@ -358,6 +387,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
           assertAdvancement: projection.assertAdvancement,
           assertLaunchProjection: projection.assertLaunchPermitted,
         });
+        await shadowStop(created.attemptDir, config, configPath, env);
         out(`${status.lifecycleState}: ${status.nextAction}`);
         out(`Validated intake candidate for ${id}; inspect it, then run awsf land ${taskId}.`);
         return status.lifecycleState === "AWAITING_OWNER" ? 0 : 1;
@@ -674,15 +704,23 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
           out(`${status.lifecycleState}: ${status.nextAction}`);
           return 0;
         }
-        const status = await runProductionCommand({
-          attemptDir: located.attemptDir,
-          stateRoot,
-          config,
-          configPath,
-          projectRecord: projection.project,
-          assertAdvancement: projection.assertAdvancement,
-          assertLaunchProjection: projection.assertLaunchPermitted,
-        });
+        let status;
+        try {
+          status = await runProductionCommand({
+            attemptDir: located.attemptDir,
+            stateRoot,
+            config,
+            configPath,
+            projectRecord: projection.project,
+            assertAdvancement: projection.assertAdvancement,
+            assertLaunchProjection: projection.assertLaunchPermitted,
+          });
+        } catch (error) {
+          // A run that seals the attempt and then reports it by throwing still stopped.
+          await shadowStop(located.attemptDir, config, configPath, env);
+          throw error;
+        }
+        await shadowStop(located.attemptDir, config, configPath, env);
         out(`${status.lifecycleState}: ${status.nextAction}`);
         const reportLine = (await statusCommand(located.attemptDir)).find((line) => line.startsWith("Run report:"));
         if (reportLine !== undefined) out(reportLine);
@@ -695,6 +733,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
           terminal: options.terminal ?? processOwnerTerminal(),
           projectRecord: projection.project, assertAdvancement: projection.assertAdvancement,
           assertLaunchProjection: projection.assertLaunchPermitted });
+        if (result.confirmed) await shadowStop(located.attemptDir, config, configPath, env);
         out(`${result.status.lifecycleState}: ${result.status.nextAction}`);
         return result.confirmed && result.status.lifecycleState === "AWAITING_OWNER" ? 0 : 1;
       }
