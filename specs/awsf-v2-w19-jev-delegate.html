@@ -145,8 +145,8 @@ code.inv, code.ac, code.serves { color:var(--cyan); }
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-09-28</dd>
-        <dt>modified</dt>     <dd>2026-09-28 (authored, awaiting owner review), 2026-09-28 (owner review applied: Q16–Q20 decided as recommended), 2026-09-28 (gate G19-A committed), 2026-09-29 (T01 delivered, M1 [wip])</dd>
-        <dt>commits</dt>      <dd>d71b6b4 (plan authored and adopted), the G19-A commit that adds invariant 13, ed7e71c 6b1751d 56a8101 (T01)</dd>
+        <dt>modified</dt>     <dd>2026-09-28 (authored, awaiting owner review), 2026-09-28 (owner review applied: Q16–Q20 decided as recommended), 2026-09-28 (gate G19-A committed), 2026-09-29 (T01 delivered, M1 [wip]), 2026-09-29 (T02 delivered, M1 [wip])</dd>
+        <dt>commits</dt>      <dd>d71b6b4 (plan authored and adopted), the G19-A commit that adds invariant 13, ed7e71c 6b1751d 56a8101 (T01), 07e43d8 3417e81 6d85dba 0371f2d (T02)</dd>
         <dt>agent name</dt>   <dd>claude-opus-5-5, claude-opus-5-5 (review applied)</dd>
         <dt>session id</dt>   <dd>not recorded (AGENTS.md invariant 1 keeps live session state out of every committed file)</dd>
         <dt>back refs</dt>    <dd>./awsf-v2-plan.html (§ Milestone M19 → W19, and its 2026-09-28 amendment adopting this workstream), ../AGENTS.md (the twelve invariants and the proposed invariant 13), ./awsf-v2-intent.md (decisions 3 and 5, which this plan revises by owner decision), ./awsf-v2-w17-shift.html (the shift this plan keeps running), ./awsf-v2-w18-route-metrics.html (the tab and route columns M8 builds on), ./awsf-v2-w07-quota-telemetry.html (the quota readout and its fence), the reference repository ../../ten-levels-of-jev at 777adaf (machine-local clone, IndyDevDan's "10 Levels of Jev") and its transcript ../../10_levels_of_JEV_in_agentic_engineering_IndyDevDan_transcript.txt (machine-local)</dd>
@@ -531,10 +531,10 @@ sequenceDiagram
       <p class="sub">Serves <code class="serves">AC-1</code> · <code class="serves">INV-2</code> · <code class="serves">INV-7</code></p>
       <p>Questions, thresholds and the pure policy that reads the answers live together in one file per set, as in the reference repository. Every call is journaled.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>core/src/decision/question-set.ts</code>: <code>{ id, version, questions, thresholds, policy }</code> and a registry that refuses a duplicate <code>id@version</code></li>
-        <li><code class="status">[]</code> <code>stop-judgment</code> v1 (progressing, next_act, risk); the 2026-09-28 smoke answer is its fixture for a correct "wait"</li>
-        <li><code class="status">[]</code> <code>awsf.decision/v1</code> record (TypeBox, registered) with outcome, answers, usage, cost, resolved model, caller, and redacted bodies up to 16 KiB else their digests (Q18)</li>
-        <li><code class="status">[]</code> <code>decide()</code> appends to the task's <code>decisions.jsonl</code>; the projector writes one <code>events</code> row of type <code>decision</code>; <code>awsf db rebuild</code> replays the file; no migration</li>
+        <li><code class="status">[x]</code> <code>core/src/decision/question-set.ts</code>: <code>{ id, version, questions, thresholds, policy }</code> and a registry that refuses a duplicate <code>id@version</code></li>
+        <li><code class="status">[x]</code> <code>stop-judgment</code> v1 (progressing, next_act, risk); the 2026-09-28 smoke answer is its fixture for a correct "wait"</li>
+        <li><code class="status">[x]</code> <code>awsf.decision/v1</code> record (TypeBox, registered) with outcome, answers, usage, cost, resolved model, caller, and redacted bodies up to 16 KiB else their digests (Q18)</li>
+        <li><code class="status">[x]</code> <code>decide()</code> appends to the task's <code>decisions.jsonl</code>; the projector writes one <code>events</code> row of type <code>decision</code>; <code>awsf db rebuild</code> replays the file; no migration</li>
       </ul>
 
       <h4>3. Testing Strategy for M1, and the doctor row</h4>
@@ -1060,6 +1060,14 @@ flowchart LR
       <p><strong>Owner decision open</strong> (T21 C1): whether Marimba's compaction judgment obeys this project's <code>decision.jev: off</code>, by reading AWSF's own catalog, or always runs as <code>on</code>.</p>
       <p><strong>Carried forward</strong> as Handoff entries in T02 (C1–C5), T03 (C1–C4) and T21 (C1–C4), committed as <code>4c06963</code>.</p>
       <p>Completion metadata: built and verified by claude-code:claude-opus in a manual session.</p>
+    </details>
+    <details open>
+      <summary>2026-09-29 — T02 delivered; M1 in progress</summary>
+      <p><strong>T02 delivered</strong> on base <code>91dc117</code>, in a manual session on branch <code>w19-jev-delegate</code>, as four commits. <code>07e43d8</code>: the <code>awsf.decision/v1</code> record in <code>core/src/contracts/decision-record.ts</code>, registered in <code>RECORD_SCHEMAS</code> and never as a wire envelope. <code>3417e81</code>: <code>core/src/decision/question-set.ts</code> and its registry, and <code>stop-judgment</code> v1 in <code>core/src/decision/question-sets/stop-judgment.ts</code>. <code>6d85dba</code>: <code>decide()</code> in <code>core/src/decision/decide.ts</code> and the task's <code>decisions.jsonl</code> in <code>core/src/persistence/task-decisions.ts</code>. <code>0371f2d</code>: <code>projectDecision</code> in the projector, <code>decisions</code> replayed by <code>awsf db rebuild</code>, and <code>DashboardProjection.projectDecision</code>, with no migration.</p>
+      <p><strong>Decided in the session.</strong> (1) A set's <code>questions</code> is a pure function of the call's parameters, with <code>sampleParams</code> the registry validates at registration, because <code>next_act</code> offers the acts a stop allows, always with <code>wait_for_owner</code> and <code>other</code>. (2) <code>stop-judgment</code> v1 waits below 0.7 <code>progressing</code> or 0.85 pick confidence (both inclusive), or on <code>wait_for_owner</code>, <code>other</code> or a disallowed act. It asks <code>risk</code> but does not read it; reading it would be v2. The smoke answer is a wait for <code>low-confidence</code>. (3) The record carries <code>project</code>, <code>taskId</code> and an <code>attempt</code> that is null for a task-level call, projected onto the task's newest attempt. It holds no policy result, which reproduces from the answers in code (INV-2). (4) Bodies are kept inline when their UTF-8 bytes together are under 16 KiB, else both as sha256 digests with the byte count, never one of each. The provider's response is scrubbed before it is recorded (T01 C4). (5) Answers are recorded as the contract declares them; provider extras stay only in the body. (6) A request that could never be valid throws before anything is journaled (T01 C2).</p>
+      <p><strong>Verified.</strong> In WSL on node v22.23.1, on <code>91dc117</code> plus T02: <code>npm run test:unit</code> 2476/2476, 13 more than the 2463 at the base, all 13 in <code>core/test/unit/decision/question-set.test.ts</code> and <code>decide.test.ts</code>. <code>npm run typecheck</code> and <code>npm run lint</code> exit 0. A synthetic task with three decision records projects three <code>decision</code> rows, and a rebuild with no database yields the same rows. No live call was made. Contract, sim and journey layers were not rerun; T02 touches none of their subjects.</p>
+      <p><strong>Carried forward</strong> as Handoff entries in T03 (C1–C3), T05 (C1–C4), T08 (C1–C2), T17 (C1–C3) and T21 (C1–C3), committed as <code>2c8cf65</code>. T21 C1 from T01 (Marimba and <code>decision.jev: off</code>) is still the owner's open decision.</p>
+      <p>Completion metadata: built and verified in a manual session.</p>
     </details>
   </section>
 

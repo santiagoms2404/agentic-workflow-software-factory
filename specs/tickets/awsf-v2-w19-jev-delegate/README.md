@@ -92,4 +92,4 @@ After each delivered ticket (M1 to M3) or landed milestone (M4 to M8), the owner
 commit: the task rows and milestone header in the plan, the tickets' `state`, the Handoff
 entries the builders returned, and a dated Amendment. Only T28's landing moves the spine's
 Milestone M19 / W19 marker and `../awsf-v2-plan/W19.md`, in that same commit. Current
-plan-aligned states: **T01 `done`; T02–T28 `todo`** (M1 `[wip]`, M2–M8 `[]`).
+plan-aligned states: **T01–T02 `done`; T03–T28 `todo`** (M1 `[wip]`, M2–M8 `[]`).
