@@ -10,10 +10,10 @@
 //
 // It is the OWNER'S, with the shape `degrade-review` and `attribute` use: an
 // interactive terminal first, then a written reason that is never
-// credential-shaped, both checked before anything is read or persisted. It is
-// not registered in `main.ts`. The owner wires it with its guard verb in gate
-// G18-B, because `boundary-claims.test.ts` requires the guard's verbs to equal
-// the arms that construct an owner terminal.
+// credential-shaped, both checked before anything is read or persisted. Gate
+// G18-B registered it in `main.ts` with its guard verb in the same commit,
+// because `boundary-claims.test.ts` requires the guard's verbs to equal the
+// arms that construct an owner terminal.
 //
 // What `awsf start` would refuse about the item and the arm is refused here,
 // before the owner confirms: an unknown or invalid item, an arm short of four

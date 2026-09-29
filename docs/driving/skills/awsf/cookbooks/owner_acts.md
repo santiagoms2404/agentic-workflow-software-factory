@@ -1,7 +1,7 @@
 # Owner acts
 
-Eleven commands are the owner's and not yours: `journey`, `land`, `cancel`,
-`rework`, `review`, `degrade-review`, `attribute`, `raise`, `publish`, `resume`, `grant`. This document
+Twelve commands are the owner's and not yours: `journey`, `land`, `cancel`,
+`rework`, `review`, `degrade-review`, `attribute`, `prove`, `raise`, `publish`, `resume`, `grant`. This document
 is about **which one the evidence supports** and **what to hand the owner before
 they decide**. It is not a table
 of what each one costs, and the reason is at the bottom.
@@ -12,7 +12,7 @@ Prepare and explain. Never perform, and never recommend performing one without
 the evidence its edge requires.
 
 This is not merely a convention you could talk yourself out of — the lifecycle
-refuses a non-interactive invocation. Every one of the eleven requires an
+refuses a non-interactive invocation. Every one of the twelve requires an
 interactive owner terminal, and a piped or redirected standard input is
 refused by its CLI guard or the normative machine *before* any process can receive a signal and
 before any call is reserved. That refusal is a terminal-shape check, not the
@@ -111,6 +111,17 @@ attempt wins and the earlier ones stay. Prepare it by naming the attempt, the
 heuristic's cause, and the evidence that points elsewhere; never record one to
 make a route look better.
 
+**`prove`** creates one proving-ground replay:
+`awsf prove TASK --item ID --arm "ADAPTER/PROVIDER/MODEL@EFFORT" --rep N [--order K] --reason "WHY"`.
+It measures one route arm on one frozen corpus item, at the item's pinned base,
+and creates the task in DRAFT without spawning anything. It prints the start and
+cancel commands. A replay is **measurement, never delivery**: `awsf land` and
+`awsf journey` refuse it by name, and it ends by `awsf cancel` once its evidence
+is read. Prepare it by naming the item, the arm, the repetition and its place in
+the order, and what the replay costs: every review replay runs the configured
+gates and then one review call. Never name a task after the defect it seeds;
+`awsf prove` refuses a task id that names a seeded defect class.
+
 **`review`** buys one replacement review, and only when the recorded review is
 genuinely unevidenced. Eligibility is determined by the host from the recorded
 evidence row, so a review that carried passing evidence is refused at zero cost
@@ -153,7 +164,7 @@ The same shape every time, and it is short:
 - the handle — task, attempt, lifecycle state, calls spent against the ceiling;
 - what the evidence says, with the phase's claim and the host's measurement kept
   distinct;
-- which of the eleven the evidence supports, which it does not, and why;
+- which of the twelve the evidence supports, which it does not, and why;
 - what remains — calls, correction rounds, and the attempt-scoped owner re-entry
   allowance, which is what several of these draw on and which does not refresh
   within an attempt.

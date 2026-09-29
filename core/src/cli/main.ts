@@ -35,6 +35,7 @@ import { grantCommand } from "./commands/grant.ts";
 import { raiseCommand } from "./commands/raise.ts";
 import { degradeReviewCommand } from "./commands/degrade-review.ts";
 import { attributeCommand } from "./commands/attribute.ts";
+import { proveCommand } from "./commands/prove.ts";
 import { routesListCommand } from "./commands/routes.ts";
 import { METRICS_USAGE, metricsCommand } from "./commands/metrics.ts";
 import { assertRoutesReachWorkflow, formatRouteOverride, parseRouteFlags, predictSameProviderReviewFor } from "../workflow/route-flags.ts";
@@ -56,7 +57,7 @@ import { assertShiftAdmission, assessShiftAdmission, parseMilestoneSelection, se
 
 /** The complete owner-facing command table; documentation reconciles against it. */
 export const CLI_COMMANDS = Object.freeze([
-  "init", "project", "new", "seed", "start", "run", "resume", "status", "watch", "rework", "review", "raise", "grant", "degrade-review", "attribute", "journey", "preview", "land", "publish", "cancel", "retry",
+  "init", "project", "new", "seed", "start", "run", "resume", "status", "watch", "rework", "review", "raise", "grant", "degrade-review", "attribute", "prove", "journey", "preview", "land", "publish", "cancel", "retry",
   "relate", "doctor", "gc", "dash", "routes", "metrics", "db rebuild", "ticket", "backlog", "quota", "stage", "workflows", "shift plan", "group",
 ]);
 
@@ -576,6 +577,31 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       out(`${project}/${taskId} continues ${project}/${related.continuesTask}; the declaration and your reason are journalled.`);
       out(`Recorded on the task, not on an attempt, so it applies to all ${related.attempts} attempt(s) and reopened none of them.`);
       return 0;
+    }
+
+    switch (command) {
+      // An owner act that creates its task, so it runs before an attempt is
+      // located. It is a `case` arm like every other owner act, because the
+      // owner acts are derived from the arms that construct an owner terminal.
+      case "prove": {
+        const itemId = parsed.flags["item"] ?? "";
+        const arm = parsed.flags["arm"] ?? "";
+        const reason = parsed.flags["reason"] ?? "";
+        if (itemId.trim().length === 0 || arm.trim().length === 0 || parsed.flags.rep === undefined || reason.trim().length === 0) {
+          throw new Error('usage: awsf prove <task> --item <id> --arm "<adapter>/<provider>/<model>@<effort>" --rep <n> [--order <k>] --reason "<why>"');
+        }
+        // The command writes what it created and the start and cancel commands to the owner's terminal.
+        const result = await proveCommand({
+          stateRoot, project, taskId, repository: cwd, itemId, arm, repetition: Number(parsed.flags.rep),
+          ...(parsed.flags.order === undefined ? {} : { order: Number(parsed.flags.order) }),
+          reason, terminal: options.terminal ?? processOwnerTerminal(), config, projectRecord: projection.project,
+        });
+        if (!result.confirmed) {
+          out(`Replay declined; ${project}/${taskId} was not created and nothing was recorded.`);
+          return 1;
+        }
+        return 0;
+      }
     }
 
     const located = await locateAttempt(stateRoot, project, taskId, selectedAttempt);

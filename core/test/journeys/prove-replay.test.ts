@@ -10,7 +10,6 @@ import { createDashboardProjection, type DashboardProjection } from "../../src/c
 import { landCommand } from "../../src/cli/commands/land.ts";
 import { metricsCommand } from "../../src/cli/commands/metrics.ts";
 import { runProductionCommand } from "../../src/cli/commands/production-run.ts";
-import { proveCommand } from "../../src/cli/commands/prove.ts";
 import { readAttemptEvidence } from "../../src/cli/commands/review-record.ts";
 import type { OwnerTerminal } from "../../src/cli/tty.ts";
 import { runSystemCommand } from "../../src/execution/transport-broker.ts";
@@ -23,11 +22,12 @@ import { ReplayNotDeliverable } from "../../src/workflow/prove/compile.ts";
 import { PROVING_GROUND_DIR, readProvingGroundCorpus } from "../../src/workflow/prove/corpus.ts";
 import { countingBroker, git, ITEM_ID, REQUEST, ReviewAdapter, world, type World } from "../unit/_prove-replay.ts";
 
-// W18 M4 task 14: one replay end to end, and replays never land. `awsf prove`
-// (driven with a fake owner terminal until gate G18-B registers it) creates two
-// replays of one synthetic item on two fixture arms. Each starts through the
-// start command `awsf prove` printed, at the item's pinned base in a throwaway
-// two-commit repository, so the base and the seed commit are real Git objects.
+// W18 M4 task 14: one replay end to end, and replays never land. `awsf prove`,
+// run through the CLI with a fake owner terminal since gate G18-B registered
+// it, creates two replays of one synthetic item on two fixture arms. Each
+// starts through the start command `awsf prove` printed, at the item's pinned
+// base in a throwaway two-commit repository, so the base and the seed commit
+// are real Git objects.
 // The host seeds one commit, the arm reviews it once, the replay waits at
 // AWAITING_OWNER, `awsf land` refuses it by name, and the owner cancels it
 // through the cancel command `awsf prove` printed.
@@ -56,10 +56,24 @@ const REPLAYS = [
   { taskId: "replay-sol", arm: SOL, order: 2, launch: "review:codex:codex:gpt-6-sol:xhigh", findings: [finding(null, "medium")] },
 ] as const;
 
-/** The owner at a terminal, confirming everything asked and recording what was asked. */
-function ownerTerminal(): OwnerTerminal & { readonly prompts: string[] } {
+/** The owner at a terminal, confirming everything asked and recording what was shown and asked. */
+function ownerTerminal(): OwnerTerminal & { readonly lines: string[]; readonly prompts: string[] } {
+  const lines: string[] = [];
   const prompts: string[] = [];
-  return { interactive: true, prompts, write: () => undefined, confirm: async (prompt) => { prompts.push(prompt); return true; } };
+  return {
+    interactive: true, lines, prompts,
+    write: (line) => { lines.push(line); },
+    confirm: async (prompt) => { prompts.push(prompt); return true; },
+  };
+}
+
+/** The argv of a command `awsf prove` printed after `label`, without the root-script prefix. */
+function printedArgv(lines: readonly string[], label: string): string[] {
+  const line = lines.find((candidate) => candidate.startsWith(label));
+  assert.ok(line !== undefined, `no line starts ${JSON.stringify(label)}: ${lines.join("\n")}`);
+  const printed = line.slice(label.length);
+  assert.ok(printed.startsWith(AWSF_INVOCATION), printed);
+  return printed.slice(AWSF_INVOCATION.length).split(" ");
 }
 
 /** One projection writer per act, closed before the next opens: each CLI invocation opens its own. */
@@ -73,9 +87,8 @@ async function projected<T>(stateRoot: string, act: (projection: DashboardProjec
 }
 
 /** The real CLI, on the fixture's state root and config, with the owner's terminal where an act needs one. */
-async function cli(fixture: World, printed: string, flags: readonly string[], terminal?: OwnerTerminal): Promise<{ code: number; out: string[]; err: string[] }> {
-  assert.ok(printed.startsWith(AWSF_INVOCATION), printed);
-  const argv = [...printed.slice(AWSF_INVOCATION.length).split(" "), ...flags, "--state-root", fixture.stateRoot, "--config", fixture.configPath];
+async function cli(fixture: World, command: readonly string[], terminal?: OwnerTerminal): Promise<{ code: number; out: string[]; err: string[] }> {
+  const argv = [...command, "--state-root", fixture.stateRoot, "--config", fixture.configPath];
   const out: string[] = [];
   const err: string[] = [];
   const code = await main({
@@ -97,22 +110,22 @@ test("awsf prove creates a replay that runs from its pinned base to AWAITING_OWN
     for (const { taskId, arm, order, launch, findings } of REPLAYS) {
       // The owner's act: a DRAFT task with the replay record and the arm as its route, and nothing else.
       const owner = ownerTerminal();
-      const created = await projected(fixture.stateRoot, (projection) => proveCommand({
-        stateRoot: fixture.stateRoot, project, taskId, repository: fixture.canonical, itemId: ITEM_ID, arm,
-        repetition: 1, order, reason: REASON, terminal: owner, config: fixture.config, projectRecord: projection.project,
-      }));
-      assert.equal(created.confirmed, true);
+      const proved = await cli(fixture, ["prove", taskId, "--project", project, "--item", ITEM_ID, "--arm", arm, "--rep", "1",
+        "--order", String(order), "--reason", REASON], owner);
+      assert.equal(proved.code, 0, proved.err.join("\n"));
+      assert.deepEqual(proved.err, [], "the projection took every record");
       assert.deepEqual(owner.prompts, [`Create replay ${taskId}: ${ITEM_ID} on ${arm}, repetition 1, place ${String(order)}?`]);
+      const attemptDir = attemptDirectory(fixture.stateRoot, project, taskId, "1");
+      const created = await readAttempt(attemptDir);
       assert.deepEqual(created.replay, { ...fixture.replay, arm, order });
-      assert.equal(created.status?.lifecycleState, "DRAFT");
-      assert.equal(created.status?.worktree, null);
+      assert.equal(created.lifecycleState, "DRAFT");
+      assert.equal(created.worktree, null);
 
       // Started through the command it printed, at the item's pinned base, not the canonical HEAD that holds the corpus.
-      const started = await cli(fixture, created.commands!.start, ["--stub", "true", "--worktree-root", fixture.worktreeRoot]);
+      const started = await cli(fixture, [...printedArgv(owner.lines, "Start it: "), "--stub", "true", "--worktree-root", fixture.worktreeRoot]);
       assert.equal(started.code, 0, started.err.join("\n"));
       assert.deepEqual(started.err, [], "the projection took every record");
       assert.equal(started.out[0], `Prepared ${taskId} at ${fixture.baseSha}.`);
-      const attemptDir = attemptDirectory(fixture.stateRoot, project, taskId, "1");
       const prepared = await readAttempt(attemptDir);
       assert.equal(prepared.lifecycleState, "PREPARED");
       assert.equal(prepared.baseSha, fixture.baseSha);
@@ -156,12 +169,11 @@ test("awsf prove creates a replay that runs from its pinned base to AWAITING_OWN
       assert.equal(owner.prompts.length, 1, "land asked nothing");
 
       // Cancelled through the command it printed, and land still refuses by name.
-      const cancelled = await cli(fixture, created.commands!.cancel, [], owner);
+      const cancelled = await cli(fixture, printedArgv(owner.lines, "Cancel it once its evidence is read: "), owner);
       assert.equal(cancelled.code, 0, cancelled.err.join("\n"));
       assert.deepEqual(cancelled.out, ["CANCELLED: survivors []"]);
       assert.equal((await readAttempt(attemptDir)).lifecycleState, "CANCELLED");
-      const land = `${AWSF_INVOCATION}land ${taskId} --project ${project}`;
-      const after = await cli(fixture, land, [], owner);
+      const after = await cli(fixture, ["land", taskId, "--project", project], owner);
       assert.equal(after.code, 1);
       assert.match(after.err.join("\n"), new RegExp(`^ReplayNotDeliverable: task ${taskId} is a proving-ground replay`, "u"));
       assert.equal(owner.prompts.length, 2, "cancel asked once, and land never");

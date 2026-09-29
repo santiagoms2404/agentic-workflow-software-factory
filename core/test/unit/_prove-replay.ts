@@ -24,9 +24,9 @@ import { PROVING_GROUND_DIR } from "../../src/workflow/prove/bind.ts";
 // The W18 replay harness, shared by the task 12 runner tests
 // (`prove-run.test.ts`) and the task 14 journey (`journeys/prove-replay.test.ts`):
 // a two-commit canonical repository whose corpus postdates its base, the
-// shipped config with `prove` enabled and cut to one offline gate, a review
-// adapter that is the only route a replay launches, and a broker that spends on
-// GO. No provider is called.
+// shipped config (which enables `prove` since gate G18-B) cut to one offline
+// gate, a review adapter that is the only route a replay launches, and a broker
+// that spends on GO. No provider is called.
 
 const OWNER = ["-c", "user.name=Santiago Marin", "-c", "user.email=santiagomarinsuarez@me.com"];
 export const ITEM_ID = "probe-01";
@@ -38,12 +38,11 @@ export function git(repository: string, ...argv: string[]): string {
   return execFileSync("git", ["-C", repository, ...argv], { encoding: "utf8" }).trim();
 }
 
-/** The shipped config with prove enabled, cut to one offline gate. */
+/** The shipped config, cut to one offline gate. */
 function configText(): string {
   return readFileSync(resolve("awsf.config.yaml"), "utf8")
     .replaceAll("interrupted_turn: true", "interrupted_turn: false")
     .replace("  seed_paths: [node_modules]", "  seed_paths: []")
-    .replace(/(\n {4}enabled: \[[^\]]*)\]/u, "$1, prove]")
     .replace("test: { argv: [npm, run, test:unit], timeout_seconds: 600 }", `test: { argv: [node, ${GATE[0]}, ${GATE[1]}], timeout_seconds: 10 }`)
     .replace("  typecheck: { argv: [npm, run, typecheck], timeout_seconds: 300 }\n", "")
     .replace("  lint: { argv: [npm, run, lint], timeout_seconds: 300 }\n", "");
@@ -74,7 +73,7 @@ export function world(label: string) {
   const configPath = join(root, "awsf.config.yaml");
   writeFileSync(configPath, configText());
   const config = loadConfig(configText());
-  assert.ok(config.workflows.enabled.includes("prove"), "the fixture config enables prove; the committed one does not");
+  assert.ok(config.workflows.enabled.includes("prove"), "the committed config enables prove (gate G18-B)");
   for (const agent of config.agents) {
     for (const promptPath of [agent.prompt.system, agent.prompt.user]) {
       mkdirSync(resolve(join(root, promptPath), ".."), { recursive: true });

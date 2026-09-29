@@ -136,11 +136,11 @@ formality.
 ### 8. Piped standard input refuses every owner act
 
 **Symptom.** `awsf land`, `cancel`, `journey`, `rework`, `review`,
-`degrade-review`, `attribute`, `raise`, `publish`, `resume` or `grant` refuses when run from a script,
+`degrade-review`, `attribute`, `prove`, `raise`, `publish`, `resume` or `grant` refuses when run from a script,
 a pipe, or any non-terminal context.
 
-**Cause.** All eleven — `land`, `cancel`, `journey`, `rework`, `review`,
-`degrade-review`, `attribute`, `raise`, `publish`, `resume`, `grant` — require an interactive owner
+**Cause.** All twelve — `land`, `cancel`, `journey`, `rework`, `review`,
+`degrade-review`, `attribute`, `prove`, `raise`, `publish`, `resume`, `grant` — require an interactive owner
 terminal, and the refusal comes from the
 normative machine *before* any process can receive a signal and before any
 call is reserved. The check is a terminal-shape test (`process.stdin.isTTY`),

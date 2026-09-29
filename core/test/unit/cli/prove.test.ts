@@ -6,8 +6,8 @@
 // repetition) and a place already taken in its order, each by name and before
 // the owner is asked; it creates a DRAFT task that `awsf start`'s binding
 // accepts, prints the start and cancel commands, and spawns nothing. It is
-// driven with a fake owner terminal because it is not registered in `main.ts`
-// until gate G18-B.
+// driven with a fake owner terminal; `journeys/prove-replay.test.ts` drives the
+// `awsf prove` arm gate G18-B registered in `main.ts`.
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -48,9 +48,9 @@ function git(repository: string, ...argv: string[]): string {
   return execFileSync("git", ["-C", repository, ...argv], { encoding: "utf8" }).trim();
 }
 
-/** The committed config, with `prove` enabled as gate G18-B will enable it. */
+/** The committed config, which enables `prove` since gate G18-B. */
 function enabledConfig(): AwsfConfig {
-  return loadConfig(readFileSync(resolve("awsf.config.yaml"), "utf8").replace(/(\n {4}enabled: \[[^\]]*)\]/u, "$1, prove]"));
+  return loadConfig(readFileSync(resolve("awsf.config.yaml"), "utf8"));
 }
 
 function item(id: string, baseSha: string, role = "reviewer"): ReviewItem {
@@ -138,11 +138,12 @@ test("the reason is required and never credential-shaped, and --rep and --order 
   } finally { w.close(); }
 });
 
-test("prove is refused until the config enables it, as gate G18-B will", async () => {
+test("prove is refused by a config that does not enable it", async () => {
   const w = world("disabled");
   try {
-    const committed = loadConfig(readFileSync(resolve("awsf.config.yaml"), "utf8"));
-    await assert.rejects(proveCommand(options(w, { config: committed })), /workflow "prove" is not enabled/);
+    assert.ok(w.config.workflows.enabled.includes("prove"), "the committed config enables prove (gate G18-B)");
+    const disabled = { ...w.config, workflows: { enabled: w.config.workflows.enabled.filter((id) => id !== "prove") } };
+    await assert.rejects(proveCommand(options(w, { config: disabled })), /workflow "prove" is not enabled/);
     assert.equal(written(w, "replay-a"), false);
   } finally { w.close(); }
 });
