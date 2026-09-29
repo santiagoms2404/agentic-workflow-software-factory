@@ -108,4 +108,4 @@ adds it; classifying these tickets afterwards is owner-side (D6).
 After each milestone lands, the owner (with Marimba drafting) makes one commit: the milestone's
 task rows and header in the plan, the tickets' `state`, the Handoff entries the builders returned,
 and a dated Amendment. Only T17's landing moves the spine's Milestone M18 / W18 marker and
-`../awsf-v2-plan/W18.md`, in that same commit. Current plan-aligned states: **T01–T10 `done`; T11–T17 `todo`** (M1 `[x]`, M2 `[x]`, M3 `[x]`).
+`../awsf-v2-plan/W18.md`, in that same commit. Current plan-aligned states: **T01–T11 `done`; T12–T17 `todo`** (M1 `[x]`, M2 `[x]`, M3 `[x]`, M4 `[wip]`).
