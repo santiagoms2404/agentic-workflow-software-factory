@@ -19,7 +19,8 @@ import { processOwnerTerminal, type OwnerTerminal } from "./tty.ts";
 import { adoptCommand } from "./commands/adopt.ts";
 import { backlogCommand } from "./commands/backlog.ts";
 import { cancelCommand } from "./commands/cancel.ts";
-import { doctorCommand } from "./commands/doctor.ts";
+import { doctorCommand, withJevRow } from "./commands/doctor.ts";
+import { jevDoctorRow } from "../decision/jev-doctor.ts";
 import { dashCommand, gcCommand, rebuildCommand } from "./commands/operator.ts";
 import { createDashboardProjection } from "./commands/dashboard-projection.ts";
 import { journeyCommand } from "./commands/journey.ts";
@@ -227,7 +228,10 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       return 0;
     }
     if (command === "doctor") {
-      const report = await doctorCommand(stateRoot);
+      const report = withJevRow(
+        await doctorCommand(stateRoot),
+        await jevDoctorRow({ catalogPath: resolve(cwd, "awsf.project.yaml"), env }),
+      );
       for (const line of report.lines) out(line);
       return report.healthy ? 0 : 1;
     }

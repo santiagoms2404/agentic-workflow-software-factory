@@ -86,3 +86,19 @@ export async function doctorCommand(stateRoot: string): Promise<DoctorReport> {
   else lines.push(...findings.map((finding) => `finding: ${finding}`));
   return { healthy: findings.length === 0, lines: Object.freeze(lines) };
 }
+
+/**
+ * Adds the Jev row (W19 task 3) to a report. Kept apart from `doctorCommand`,
+ * whose one argument is the state root, because the row reads the repository's
+ * catalog and the environment, not the state root. The row goes before the
+ * summary lines; a Jev finding makes the report unhealthy like any other.
+ */
+export function withJevRow(report: DoctorReport, row: { readonly line: string; readonly finding: string | null }): DoctorReport {
+  const lines = [...report.lines];
+  const summary = lines.findIndex((line) => line.startsWith("matrix: "));
+  lines.splice(summary === -1 ? lines.length : summary, 0, row.line);
+  if (row.finding === null) return { healthy: report.healthy, lines: Object.freeze(lines) };
+  const kept = lines.filter((line) => !line.startsWith("healthy: "));
+  kept.push(`finding: ${row.finding}`);
+  return { healthy: false, lines: Object.freeze(kept) };
+}
