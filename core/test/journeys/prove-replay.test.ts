@@ -20,7 +20,7 @@ import { openDatabase } from "../../src/observability/sqlite.ts";
 import { attemptDir as attemptDirectory } from "../../src/persistence/platform-paths.ts";
 import { ReplayNotDeliverable } from "../../src/workflow/prove/compile.ts";
 import { PROVING_GROUND_DIR, readProvingGroundCorpus } from "../../src/workflow/prove/corpus.ts";
-import { countingBroker, git, ITEM_ID, REQUEST, ReviewAdapter, world, type World } from "../unit/_prove-replay.ts";
+import { assertConfinedLaunch, countingBroker, git, hasBwrap, ITEM_ID, REQUEST, ReviewAdapter, world, type World } from "../unit/_prove-replay.ts";
 
 // W18 M4 task 14: one replay end to end, and replays never land. `awsf prove`,
 // run through the CLI with a fake owner terminal since gate G18-B registered
@@ -134,18 +134,21 @@ test("awsf prove creates a replay that runs from its pinned base to AWAITING_OWN
       // The seed and the fixture review, on the arm's own route.
       const launches: string[] = [];
       const brokered: string[] = [];
+      const commands: (readonly string[])[] = [];
       const done = await projected(fixture.stateRoot, (projection) => runProductionCommand({
         attemptDir, stateRoot: fixture.stateRoot, config: fixture.config, configPath: fixture.configPath,
         projectRecord: projection.project, assertAdvancement: projection.assertAdvancement,
         assertLaunchProjection: projection.assertLaunchPermitted,
         infrastructure: {
           adapterFor: (_entry: AdapterEntry, id: string) => new ReviewAdapter(id, () => prepared.worktree!, launches, findings),
-          createBroker: countingBroker(brokered), runCommand: runSystemCommand, sandboxProbe: () => false,
+          createBroker: countingBroker(brokered, commands), runCommand: runSystemCommand, sandboxProbe: hasBwrap,
         },
       }));
       assert.equal(done.lifecycleState, "AWAITING_OWNER", done.blocker?.detail ?? done.lastActivity);
       assert.deepEqual(launches, [launch]);
       assert.deepEqual(brokered, ["edge L11"]);
+      assert.equal(commands.length, 1);
+      assertConfinedLaunch(commands[0]!, fixture.canonical, fixture.stateRoot);
       assert.equal(done.budget.callsSpent, 1);
       assert.equal(done.budget.callsReserved, 0);
 

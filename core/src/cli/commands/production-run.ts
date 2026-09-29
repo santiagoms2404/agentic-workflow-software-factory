@@ -21,6 +21,7 @@ import type {
   PhaseCorrectionProcessRegistration,
   ProcessRegistration,
   ProcessTransport,
+  SandboxConfinement,
   TransportBroker,
 } from "../../adapters/interface.ts";
 import { AdapterError, isContinuityCapable } from "../../adapters/interface.ts";
@@ -143,7 +144,7 @@ import {
   type VisualDelivery,
 } from "../../workflow/visual-references.ts";
 import { PermissionBreach } from "../../policy/path-policy.ts";
-import { openPermissionSession, type PermissionSession, type SandboxProbe } from "../../policy/sandbox-broker.ts";
+import { grantSandbox, openPermissionSession, type PermissionSession, type SandboxProbe } from "../../policy/sandbox-broker.ts";
 import { transition, SEALED_STATES, type EdgeId, type TaskState } from "../../state/task-machine.ts";
 import { CallCeilingExceeded } from "../../state/errors.ts";
 import { createCompiledPhaseLaunchVerifier } from "../../workflow/phase-launch-authorization.ts";
@@ -171,7 +172,9 @@ import type { PhaseState } from "../../state/phase-machine.ts";
 import { WORKFLOW_RECIPES } from "../../workflow/catalog.ts";
 import { SHIFT_WORKFLOW_ID, type ShiftBriefPhase } from "../../workflow/shift/compile.ts";
 import { bindShiftRecipe, shiftPhaseRole, shiftTicketOf } from "../../workflow/shift/bind.ts";
-import { assertReplayArmRoute, PROVE_WORKFLOW_ID, type ProveRecipe, type ProveSeedPhase } from "../../workflow/prove/compile.ts";
+import {
+  assertReplayArmRoute, PROVE_WORKFLOW_ID, ReplayConfinementUnavailable, type ProveRecipe, type ProveSeedPhase,
+} from "../../workflow/prove/compile.ts";
 import { bindProveRecipe } from "../../workflow/prove/bind.ts";
 import {
   nextActionFor,
@@ -1269,6 +1272,10 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
   // before any call rather than letting a visual attempt run text-only.
   let visualBound: VisualReferencesBound | null = null;
   let visualBinding: VisualReferenceBinding | null = null;
+  // W18 task 18: a replay's agent phases see their worktree and nothing else
+  // of the host, so the corpus, the plan and every other checkout are absent.
+  // Every other workflow keeps the host-wide read-only root, byte for byte.
+  const confinement: SandboxConfinement = status.workflow === PROVE_WORKFLOW_ID ? "worktree" : "host";
   try {
     // A replay measures its arm, so the arm must be the attempt's own route
     // for the phase it measures, whole, before any adapter is asked anything.
@@ -1368,6 +1375,21 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
         tools: agent.tools.allow,
       };
       adapter.buildSpec(preflightRequest);
+      // The confined grant is taken once here, on the preflight descriptor, so
+      // a host without bwrap, or a CLI the namespace cannot reach, blocks the
+      // replay with no call held rather than at its launch.
+      if (confinement === "worktree") {
+        try {
+          grantSandbox(adapter.buildSpec(preflightRequest), {
+            canonicalRepository: status.repository, worktree: status.worktree, stateRoot: options.stateRoot,
+            sessionRuntime: join(options.attemptDir, "private", phase.id), writes: agent.writes, confinement,
+            providerReadableRoots: adapter.providerReadableRoots?.(HOST.process.env) ?? [],
+            providerWritableRoots: adapter.providerWritableRoots?.(HOST.process.env, confinement) ?? [],
+          }, infra.sandboxProbe);
+        } catch (error) {
+          throw new ReplayConfinementUnavailable(phase.id, error instanceof Error ? error.message : String(error));
+        }
+      }
       if (continuous || phasePersistenceMode(agent, adapter) === "interrupted-turn-retention") {
         const capable = adapter as ContinuityCapableAdapter;
         const storeDir = capable.continuityStoreDir(join(options.attemptDir, "private", phase.id));
@@ -2118,7 +2140,10 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       writes: route.agent.writes,
       protectedPaths: options.config.policy.protected_paths,
       ...(visualDelivery === null ? {} : { readOnlyRoots: [visualDelivery.directory] }),
-      providerWritableRoots: route.adapter.providerWritableRoots?.(HOST.process.env) ?? [],
+      ...(confinement === "host"
+        ? { providerWritableRoots: route.adapter.providerWritableRoots?.(HOST.process.env) ?? [] }
+        : { confinement, providerReadableRoots: route.adapter.providerReadableRoots?.(HOST.process.env) ?? [],
+          providerWritableRoots: route.adapter.providerWritableRoots?.(HOST.process.env, confinement) ?? [] }),
       ...(protectedCapability === undefined ? {} : { protectedCapability }),
       ...(infra.sandboxProbe === undefined ? {} : { sandboxProbe: infra.sandboxProbe }),
     });

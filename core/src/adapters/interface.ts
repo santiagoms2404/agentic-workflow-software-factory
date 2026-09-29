@@ -436,6 +436,15 @@ export interface TransportBroker {
 // The adapter itself.
 // ---------------------------------------------------------------------------
 
+/**
+ * How much of the host a phase's OS sandbox shows. `host` binds the whole
+ * filesystem read-only and masks AWSF's state root. `worktree` binds no host
+ * root: system directories, the CLI's install, its declared start and auth
+ * files, the worktree and the phase's runtime. `policy/sandbox-broker.ts`
+ * builds both.
+ */
+export type SandboxConfinement = "host" | "worktree";
+
 export interface HarnessAdapter {
   readonly id: string;
   isAvailable(signal?: AbortSignal): Promise<Availability>;
@@ -459,8 +468,22 @@ export interface HarnessAdapter {
    * — its own lock and credential refresh — given the child's environment.
    * Pure: it names paths and touches nothing. Omitted means none. The OS
    * sandbox binds exactly these writable and nothing more of the host.
+   *
+   * Under `worktree` confinement the home directory is a fresh tmpfs, so a
+   * lock beside a file needs no host directory. The answer there is the exact
+   * FILES whose writes must reach the host, never a directory that also holds
+   * the CLI's sessions.
    */
-  providerWritableRoots?(env: Readonly<Record<string, string | undefined>>): readonly string[];
+  providerWritableRoots?(env: Readonly<Record<string, string | undefined>>, confinement?: SandboxConfinement): readonly string[];
+  /**
+   * The exact FILES the provider CLI reads to start and authenticate, given the
+   * child's environment. Pure, like `providerWritableRoots`. Bound read-only
+   * under `worktree` confinement only, where nothing else of the home
+   * directory exists; under `host` the whole host is already readable. Never
+   * a session, transcript, history, project or memory store. Omitted means
+   * none.
+   */
+  providerReadableRoots?(env: Readonly<Record<string, string | undefined>>): readonly string[];
   execute(
     request: ModelRequest,
     broker: TransportBroker,

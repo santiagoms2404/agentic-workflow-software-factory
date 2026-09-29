@@ -1,8 +1,8 @@
 import { assertProtectedOutput } from "../workflow/protected-grants.ts";
 import { protectedWriteContext, type ProtectedFilesCapability } from "../contracts/protected-capability.ts";
-import { existsSync, realpathSync } from "node:fs";
-import { isAbsolute, relative, resolve } from "node:path";
-import type { ProcessSpec } from "../adapters/interface.ts";
+import { existsSync, lstatSync, readlinkSync, realpathSync, statSync, type Stats } from "node:fs";
+import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import type { ProcessSpec, SandboxConfinement } from "../adapters/interface.ts";
 import {
   assertClean,
   captureChangeSet,
@@ -11,7 +11,7 @@ import {
   type ChangeSetFingerprint,
   type GitRunner,
 } from "../git/changes.ts";
-import { runSystemCommand } from "../execution/transport-broker.ts";
+import { ExecutableNotFound, resolveExecutable, runSystemCommand } from "../execution/transport-broker.ts";
 import {
   resolvePermissionProfile,
   type PermissionProfile,
@@ -57,10 +57,39 @@ export interface SandboxRequest {
    * the state root, so it can never unmask another attempt.
    */
   readonly providerWritableRoots?: readonly string[];
+  /**
+   * The provider CLI's exact start and auth files
+   * (`HarnessAdapter.providerReadableRoots`), bound read-only under `worktree`
+   * confinement and only when they exist. Ignored under `host`, where the
+   * whole host is already readable and the argv must not move.
+   */
+  readonly providerReadableRoots?: readonly string[];
+  /**
+   * `host` (the default) binds the whole filesystem read-only and masks the
+   * state root. `worktree` binds no host root, so the canonical checkout, other
+   * worktrees and every CLI transcript store are absent rather than merely
+   * unwritable. A prove replay's agent runs under it (W18 task 18). It has no
+   * tool-policy fallback: without bwrap the grant refuses.
+   */
+  readonly confinement?: SandboxConfinement;
   readonly platform?: NodeJS.Platform;
 }
 
 export type SandboxProbe = (executable: string) => boolean;
+
+/**
+ * `worktree` confinement asked for where no OS sandbox exists. A tool policy
+ * cannot stand in: the T12 C7 probes read the corpus by absolute path through
+ * both adapters' policies, and what a CLI's policy allows depends on the home
+ * directory it starts in.
+ */
+export class WorktreeConfinementUnavailable extends Error {
+  constructor(platform: NodeJS.Platform) {
+    super(`worktree confinement needs the Linux bwrap sandbox, and this ${platform} host has none; ` +
+      "no tool policy can stand in for it");
+    this.name = "WorktreeConfinementUnavailable";
+  }
+}
 
 function hostProbe(executable: string): boolean {
   const result = runSystemCommand(executable, ["--version"], 5_000);
@@ -100,12 +129,14 @@ export function assertSandboxRoots(request: Omit<SandboxRequest, "writes" | "pla
     throw new Error("session runtime may not make part of the canonical repository writable");
   }
   const canonicalState = physical(request.stateRoot);
-  for (const root of request.providerWritableRoots ?? []) {
-    if (!isAbsolute(root)) throw new Error("provider state roots must be absolute machine-local paths");
-    const provider = physical(root);
-    for (const [name, other] of [["managed worktree", worktree], ["canonical repository", canonical], ["state root", canonicalState]] as const) {
-      if (inside(other, provider) || inside(provider, other)) {
-        throw new Error(`a provider state root may not overlap the ${name}`);
+  for (const [label, roots] of [["provider state root", request.providerWritableRoots], ["provider start file", request.providerReadableRoots]] as const) {
+    for (const root of roots ?? []) {
+      if (!isAbsolute(root)) throw new Error(`${label}s must be absolute machine-local paths`);
+      const provider = physical(root);
+      for (const [name, other] of [["managed worktree", worktree], ["canonical repository", canonical], ["state root", canonicalState]] as const) {
+        if (inside(other, provider) || inside(provider, other)) {
+          throw new Error(`a ${label} may not overlap the ${name}`);
+        }
       }
     }
   }
@@ -164,6 +195,171 @@ function bwrapSpec(spec: ProcessSpec, request: SandboxRequest): ProcessSpec {
   };
 }
 
+/** System directories a confined phase reads, in bind order; each only when it exists. */
+export const CONFINED_SYSTEM_ROOTS: readonly string[] = Object.freeze(["/usr", "/bin", "/sbin", "/lib", "/lib64", "/etc"]);
+
+/**
+ * System files that may be symlinks out of the directories above. WSL points
+ * the resolver at `/mnt/wsl/resolv.conf` and systemd at `/run/...`; without the
+ * target the namespace has no DNS and no CLI reaches its provider.
+ */
+const CONFINED_SYSTEM_LINKS: readonly string[] = Object.freeze(["/etc/resolv.conf"]);
+
+/** The most symlink hops an executable's PATH entry may take to its file. */
+const MAXIMUM_LINK_HOPS = 40;
+
+function lstatOrNull(path: string): Stats | null {
+  try {
+    return lstatSync(path);
+  } catch {
+    return null;
+  }
+}
+
+function insideAny(roots: readonly string[], path: string): boolean {
+  return roots.some((root) => inside(root, path));
+}
+
+/**
+ * The npm package holding `file`, when it is inside one. A native CLI shipped
+ * in a package still reads its vendored tools beside itself, and a bundled
+ * script imports its chunks, so the package is the install; a bare file is
+ * its own.
+ */
+function packageRoot(file: string): string | null {
+  const parts = file.split(sep);
+  const at = parts.lastIndexOf("node_modules");
+  if (at === -1) return null;
+  const end = at + (parts[at + 1]?.startsWith("@") === true ? 3 : 2);
+  return end < parts.length ? parts.slice(0, end).join(sep) : null;
+}
+
+/**
+ * How the confined namespace reaches one executable by the same PATH lookup
+ * the host makes: each symlink on the way recreated as a link, and the install
+ * it lands in bound read-only. Anything already inside a bound system
+ * directory is there and is skipped. A path that turns through a directory
+ * symlink is refused rather than approximated, because the link chain alone
+ * would not reproduce it.
+ */
+function executableMounts(executable: string, env: Readonly<Record<string, string>>, system: readonly string[]): string[] {
+  const found = resolveExecutable(executable, env);
+  const argv: string[] = [];
+  let current = found;
+  for (let hop = 0; lstatOrNull(current)?.isSymbolicLink() === true; hop += 1) {
+    if (hop === MAXIMUM_LINK_HOPS) throw new Error(`worktree confinement cannot follow ${found}: more than ${String(MAXIMUM_LINK_HOPS)} symlinks`);
+    const target = readlinkSync(current);
+    if (!insideAny(system, current)) argv.push("--symlink", target, current);
+    current = resolve(dirname(current), target);
+  }
+  const real = realpathSync.native(found);
+  if (real !== current) {
+    throw new Error(`worktree confinement cannot reach ${executable}: ${found} resolves through a directory symlink to ${real}`);
+  }
+  const install = packageRoot(real) ?? real;
+  if (!insideAny(system, install)) argv.push("--ro-bind", install, install);
+  return argv;
+}
+
+/**
+ * The provider's declared files that exist. A directory is refused: under
+ * `worktree` a provider root is an exact file, so no declaration can bind a
+ * whole CLI state directory and the sessions inside it.
+ */
+function providerFiles(roots: readonly string[] | undefined): readonly string[] {
+  return (roots ?? []).filter((root) => {
+    let stat: Stats;
+    try {
+      stat = statSync(root);
+    } catch {
+      return false;
+    }
+    if (!stat.isFile()) throw new Error(`worktree confinement binds provider files, never directories: ${root} is not a regular file`);
+    return true;
+  });
+}
+
+/**
+ * `worktree` confinement: the namespace starts empty and gains only what the
+ * work needs, in this fixed order. System directories come first, then the
+ * fresh `/tmp` and home tmpfs mounts, so every later bind under either is laid
+ * on top of them and survives. No `/`, canonical repository, `.git` or state
+ * root is ever bound; the worktree's `.git` file therefore names an object
+ * store that is not there, and Git inside the namespace finds no repository.
+ */
+function confinedSpec(spec: ProcessSpec, request: SandboxRequest): ProcessSpec {
+  const home = spec.env["HOME"];
+  if (home !== undefined && (!isAbsolute(home) || resolve(home) === "/")) {
+    throw new Error(`worktree confinement needs an absolute home directory below /, not ${JSON.stringify(home)}`);
+  }
+  const system: string[] = [];
+  const systemMounts: string[] = [];
+  for (const root of CONFINED_SYSTEM_ROOTS) {
+    const stat = lstatOrNull(root);
+    if (stat === null) continue;
+    if (stat.isSymbolicLink()) {
+      systemMounts.push("--symlink", readlinkSync(root), root);
+    } else {
+      systemMounts.push("--ro-bind", root, root);
+      system.push(root);
+    }
+  }
+  const linkTargets = CONFINED_SYSTEM_LINKS.flatMap((link) => {
+    if (lstatOrNull(link)?.isSymbolicLink() !== true || !existsSync(link)) return [];
+    const target = realpathSync.native(link);
+    return insideAny(system, target) ? [] : ["--ro-bind", target, target];
+  });
+  let node: string[] = [];
+  try {
+    node = executableMounts("node", spec.env, system);
+  } catch (error) {
+    // No node on the child's PATH is only a problem for a CLI that needs one,
+    // and that CLI would fail the same way on the host.
+    if (!(error instanceof ExecutableNotFound)) throw error;
+  }
+  const executable = executableMounts(spec.executable, spec.env, system);
+  const seen = new Set<string>();
+  const installs: string[] = [];
+  for (const mounts of [executable, node]) {
+    for (let at = 0; at < mounts.length; at += 3) {
+      const [operation, source, destination] = mounts.slice(at, at + 3) as [string, string, string];
+      if (seen.has(destination)) continue;
+      seen.add(destination);
+      installs.push(operation, source, destination);
+    }
+  }
+  const worktreeBind = request.writes.length === 0 ? "--ro-bind" : "--bind";
+  return {
+    executable: "bwrap",
+    argv: [
+      "--die-with-parent",
+      "--new-session",
+      "--unshare-all",
+      "--share-net",
+      ...systemMounts,
+      "--proc", "/proc",
+      "--dev", "/dev",
+      "--tmpfs", "/tmp",
+      ...(home === undefined ? [] : ["--tmpfs", home]),
+      ...linkTargets,
+      ...installs,
+      ...providerFiles(request.providerReadableRoots).flatMap((file) => ["--ro-bind", file, file]),
+      worktreeBind, request.worktree, request.worktree,
+      "--bind", request.sessionRuntime, request.sessionRuntime,
+      ...(request.readOnlyRoots ?? []).flatMap((root) => ["--ro-bind", root, root]),
+      ...providerFiles(request.providerWritableRoots).flatMap((file) => ["--bind", file, file]),
+      "--chdir", spec.cwd,
+      "--",
+      spec.executable,
+      ...spec.argv,
+    ],
+    cwd: request.worktree,
+    env: { ...spec.env, TMPDIR: request.sessionRuntime },
+    stdin: spec.stdin,
+    shell: false,
+  };
+}
+
 /**
  * Produces the launch descriptor and the exact tri-state surfaced later by
  * SandboxBadge. Darwin is deliberately not guessed from Linux; T27 verifies
@@ -176,6 +372,7 @@ export function grantSandbox(
 ): SandboxGrant {
   assertSandboxRoots(request);
   const platform = request.platform ?? process.platform;
+  const confined = request.confinement === "worktree";
   if (platform === "linux" && probe("bwrap")) {
     return Object.freeze({
       badge: "os-enforced",
@@ -183,11 +380,12 @@ export function grantSandbox(
       writableRoots: Object.freeze([
         ...(request.writes.length === 0 ? [] : [physical(request.worktree)]),
         physical(request.sessionRuntime),
-        ...providerRoots(request).map(physical),
+        ...(confined ? providerFiles(request.providerWritableRoots) : providerRoots(request)).map(physical),
       ]),
-      spec: bwrapSpec(spec, request),
+      spec: confined ? confinedSpec(spec, request) : bwrapSpec(spec, request),
     });
   }
+  if (confined) throw new WorktreeConfinementUnavailable(platform);
   const toolPolicy = platform === "linux";
   return Object.freeze({
     badge: toolPolicy ? "tool-policy" : "unavailable",
@@ -234,6 +432,9 @@ export class PermissionSession {
     const linux = request.platform === "linux" || (request.platform === undefined && process.platform === "linux");
     this.#osEnforced = linux && (request.sandboxProbe ?? hostProbe)("bwrap");
     this.sandboxBadge = linux ? (this.#osEnforced ? "os-enforced" : "tool-policy") : "unavailable";
+    if (request.confinement === "worktree" && !this.#osEnforced) {
+      throw new WorktreeConfinementUnavailable(request.platform ?? process.platform);
+    }
     if (request.protectedCapability !== undefined) {
       const proof = protectedWriteContext(request.protectedCapability);
       if (this.sandboxBadge !== "os-enforced" || proof?.grant.subject.worktree !== physical(request.worktree) ||

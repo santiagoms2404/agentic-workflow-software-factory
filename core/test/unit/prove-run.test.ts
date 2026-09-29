@@ -17,7 +17,8 @@ import { runSystemCommand } from "../../src/execution/transport-broker.ts";
 import { callCeilingsOf } from "../../src/state/tiers.ts";
 import { PROVING_GROUND_DIR } from "../../src/workflow/prove/bind.ts";
 import { ReplayNotDeliverable } from "../../src/workflow/prove/compile.ts";
-import { countingBroker, git, REQUEST, ReviewAdapter, world, type World } from "./_prove-replay.ts";
+import type { SandboxProbe } from "../../src/policy/sandbox-broker.ts";
+import { assertConfinedLaunch, countingBroker, git, hasBwrap, REQUEST, ReviewAdapter, world, type World } from "./_prove-replay.ts";
 
 // W18 task 12, the runner half: one review replay from DRAFT to AWAITING_OWNER
 // on the fixture route over a two-commit repository, so the pinned base and
@@ -30,7 +31,8 @@ const ARM_ROUTE = { adapter: "claude", provider: "anthropic", model: "claude:opu
 const terminal: OwnerTerminal = { interactive: true, write: () => undefined, confirm: async () => true };
 
 /** `awsf new` for a replay, as `awsf prove` will call it (T13), then `awsf start` and the runner. */
-async function runReplay(fixture: World, taskId: string, routeOverrides: Readonly<Record<string, PhaseRouteSelection>>) {
+async function runReplay(fixture: World, taskId: string, routeOverrides: Readonly<Record<string, PhaseRouteSelection>>,
+  sandboxProbe: SandboxProbe = hasBwrap) {
   const created = await newCommand({
     stateRoot: fixture.stateRoot, project: fixture.config.project.slug, taskId, repository: fixture.canonical,
     request: REQUEST, workflow: "prove", tier: 2, replay: fixture.replay, routeOverrides,
@@ -43,19 +45,20 @@ async function runReplay(fixture: World, taskId: string, routeOverrides: Readonl
   });
   const launches: string[] = [];
   const brokered: string[] = [];
+  const commands: (readonly string[])[] = [];
   const done = await runProductionCommand({
     attemptDir: created.attemptDir, stateRoot: fixture.stateRoot, config: fixture.config, configPath: fixture.configPath,
     infrastructure: {
       adapterFor: (_entry: AdapterEntry, id: string) => new ReviewAdapter(id, () => prepared.worktree!, launches),
-      createBroker: countingBroker(brokered), runCommand: runSystemCommand, sandboxProbe: () => false,
+      createBroker: countingBroker(brokered, commands), runCommand: runSystemCommand, sandboxProbe,
     },
   });
-  return { attemptDir: created.attemptDir, prepared, done, launches, brokered };
+  return { attemptDir: created.attemptDir, prepared, done, launches, brokered, commands };
 }
 
 test("a review replay starts at its pinned base, seeds one host commit, and is reviewed once on the arm's route", async () => {
   const fixture = world("prove-run");
-  const { attemptDir, prepared, done, launches, brokered } = await runReplay(fixture, "replay-probe", { reviewer: ARM_ROUTE });
+  const { attemptDir, prepared, done, launches, brokered, commands } = await runReplay(fixture, "replay-probe", { reviewer: ARM_ROUTE });
 
   // The worktree starts at the item's base, not at the canonical HEAD that holds the corpus.
   assert.equal(prepared.baseSha, fixture.baseSha);
@@ -76,6 +79,9 @@ test("a review replay starts at its pinned base, seeds one host commit, and is r
   // One call: the review, on the arm's own route, through L11 and no other edge.
   assert.deepEqual(launches, ["review:claude:claude:opus:high"]);
   assert.deepEqual(brokered, ["edge L11"]);
+  // The review ran confined to its worktree (task 18).
+  assert.equal(commands.length, 1);
+  assertConfinedLaunch(commands[0]!, fixture.canonical, fixture.stateRoot);
   assert.equal(done.budget.callsSpent, 1);
   assert.equal(done.budget.callsReserved, 0);
   assert.match(done.nextAction, /awsf cancel replay-probe/);
@@ -112,6 +118,20 @@ test("seeded mode refuses a replay whose reviewer route is not the arm, before a
   assert.equal(partial.done.lifecycleState, "BLOCKED");
   assert.match(partial.done.blocker?.detail ?? "", /ReplayArmNotRouted: .*differs in effort/);
   assert.equal(partial.done.budget.callsSpent, 0);
+});
+
+test("a replay on a host without bwrap blocks as ReplayConfinementUnavailable before any call", async () => {
+  const fixture = world("prove-run");
+  const refused = await runReplay(fixture, "replay-unconfined", { reviewer: ARM_ROUTE }, () => false);
+  assert.equal(refused.done.lifecycleState, "BLOCKED");
+  assert.equal(refused.done.blocker?.code, "phase-abort");
+  assert.match(refused.done.blocker?.detail ?? "", /^ReplayConfinementUnavailable: replay phase "reviewer" cannot run confined to its worktree: .*needs the Linux bwrap sandbox/);
+  assert.deepEqual(refused.launches, []);
+  assert.deepEqual(refused.brokered, []);
+  assert.equal(refused.done.budget.callsSpent, 0);
+  assert.equal(refused.done.budget.callsReserved, 0);
+  const evidence = await readAttemptEvidence(refused.attemptDir);
+  assert.equal(evidence.some((entry) => entry.type === "phase-accepted"), false, "not even the host seed ran");
 });
 
 test("a prove task is created only with a replay record, and no other workflow carries one", async () => {

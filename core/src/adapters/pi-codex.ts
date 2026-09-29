@@ -57,6 +57,7 @@ import {
   type BrokerProcessRegistration,
   type ProcessSpec,
   type ProcessTransport,
+  type SandboxConfinement,
   type TransportBroker,
 } from "./interface.ts";
 import { filterEnv } from "./env.ts";
@@ -530,10 +531,18 @@ export class PiCodexAdapter implements ContinuityCapableAdapter {
    * `EROFS … auth.json.lock`, measured under bwrap on 2026-09-23. The directory
    * is the one pi resolves from the child's HOME — AWSF passes no
    * `PI_CODING_AGENT_DIR` — and it is the only host path this route needs.
+   *
+   * Under `worktree` confinement the home is a fresh tmpfs, so the lock
+   * directories land there and the agent directory is not bound: its
+   * `sessions/` holds every other pi conversation on the machine. Only
+   * `auth.json` is bound, writable, because pi rewrites it in place when it
+   * refreshes the OAuth token, and a refresh that could not reach the host
+   * would leave the host holding a token the provider has already rotated.
    */
-  providerWritableRoots(env: Readonly<Record<string, string | undefined>>): readonly string[] {
+  providerWritableRoots(env: Readonly<Record<string, string | undefined>>, confinement: SandboxConfinement = "host"): readonly string[] {
     const home = env["HOME"];
-    return home === undefined || home.length === 0 ? [] : [join(home, ".pi", "agent")];
+    if (home === undefined || home.length === 0) return [];
+    return confinement === "worktree" ? [join(home, ".pi", "agent", "auth.json")] : [join(home, ".pi", "agent")];
   }
 
   /** pi has `--session-dir`, so its transcript stays inside the attempt. */

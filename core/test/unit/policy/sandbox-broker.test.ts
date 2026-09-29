@@ -1,13 +1,17 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  CONFINED_SYSTEM_ROOTS,
   PermissionSession,
+  WorktreeConfinementUnavailable,
   assertSandboxRoots,
   grantSandbox,
 } from "../../../src/policy/sandbox-broker.ts";
+import { ExecutableNotFound } from "../../../src/execution/transport-broker.ts";
+import type { HarnessAdapter } from "../../../src/adapters/interface.ts";
 import { PermissionBreach } from "../../../src/policy/path-policy.ts";
 import type { GitRunner } from "../../../src/git/changes.ts";
 
@@ -246,6 +250,226 @@ test("a provider's own state directory is bound writable only when it exists, an
 test("a provider state root overlapping the worktree, the canonical checkout or the state root is refused", () => {
   for (const root of [ROOTS.worktree, `${ROOTS.worktree}/x`, ROOTS.canonicalRepository, `${ROOTS.stateRoot}/other-attempt`, "/srv", "relative/agent"]) {
     assert.throws(() => assertSandboxRoots({ ...ROOTS, providerWritableRoots: [root] }), /provider state root/, root);
+  }
+});
+
+test("every host-confinement argv is the reviewed one, byte for byte, for each adapter, profile and optional root", async () => {
+  // W18 task 18 adds `worktree` beside `host`. This pins the whole `host`
+  // argv as it stood before, so the new confinement cannot move a byte of any
+  // other workflow's launch: omitted and explicit `host` must both produce it.
+  const { PiCodexAdapter } = await import("../../../src/adapters/pi-codex.ts");
+  const { ClaudeCodeAdapter } = await import("../../../src/adapters/claude-code.ts");
+  const home = mkdtempSync(join(tmpdir(), "awsf-host-argv-"));
+  try {
+    const agentDir = join(home, ".pi", "agent");
+    mkdirSync(agentDir, { recursive: true });
+    const references = "/srv/awsf-state/sessions/s1/attempts/1-refs";
+    const adapters = [new ClaudeCodeAdapter(), new PiCodexAdapter()];
+    const profiles = [
+      { profile: "readonly", tools: ["read", "grep", "find", "ls"], writes: [] as string[] },
+      { profile: "managed-worker", tools: ["read", "grep", "find", "ls", "edit", "write"], writes: ["src/**"] },
+      { profile: "no-tools", tools: [] as string[], writes: [] as string[] },
+    ];
+    for (const adapter of adapters) {
+      for (const { profile, tools, writes } of profiles) {
+        const spec = adapter.buildSpec({ model: adapter.id === "claude-code" ? "claude:opus" : "codex:gpt-6-sol", prompt: "p",
+          cwd: ROOTS.worktree, env: { PATH: "/usr/bin", HOME: home }, profile, tools });
+        for (const optional of [{}, { readOnlyRoots: [references], providerWritableRoots: [agentDir] }]) {
+          const request = { ...ROOTS, writes, platform: "linux" as const, ...optional };
+          const expected = [
+            "--die-with-parent", "--new-session", "--unshare-all", "--share-net",
+            "--ro-bind", "/", "/",
+            "--tmpfs", ROOTS.stateRoot,
+            "--proc", "/proc",
+            "--dev", "/dev",
+            writes.length === 0 ? "--ro-bind" : "--bind", ROOTS.worktree, ROOTS.worktree,
+            "--bind", ROOTS.sessionRuntime, ROOTS.sessionRuntime,
+            "--ro-bind", ROOTS.canonicalRepository, ROOTS.canonicalRepository,
+            ...("readOnlyRoots" in optional ? ["--ro-bind", references, references, "--bind", agentDir, agentDir] : []),
+            "--chdir", ROOTS.worktree,
+            "--",
+            spec.executable,
+            ...spec.argv,
+          ];
+          const label = `${adapter.id} ${profile} ${JSON.stringify(optional)}`;
+          assert.deepEqual(grantSandbox(spec, request, () => true).spec.argv, expected, label);
+          assert.deepEqual(grantSandbox(spec, { ...request, confinement: "host" }, () => true).spec.argv, expected, label);
+          assert.deepEqual(grantSandbox(spec, { ...request, confinement: "host", providerReadableRoots: [join(home, "x")] }, () => true).spec.argv,
+            expected, `${label}: readable roots are ignored under host`);
+        }
+      }
+    }
+  } finally { rmSync(home, { recursive: true, force: true }); }
+});
+
+/**
+ * A machine in miniature for `worktree` confinement: a CLI installed as an npm
+ * package behind a relative PATH symlink, a node binary beside it, and the
+ * provider's files under a home directory. Resolution is real, so the argv is
+ * the one this layout produces on any machine.
+ */
+function confinedWorld() {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "awsf-confined-")));
+  const home = join(root, "home");
+  const prefix = join(home, "prefix");
+  const pkg = join(prefix, "lib", "node_modules", "@acme", "fake-cli");
+  mkdirSync(join(pkg, "bin"), { recursive: true });
+  mkdirSync(join(prefix, "bin"), { recursive: true });
+  writeFileSync(join(pkg, "bin", "cli.js"), "#!/usr/bin/env node\n", { mode: 0o755 });
+  symlinkSync("../lib/node_modules/@acme/fake-cli/bin/cli.js", join(prefix, "bin", "fakecli"));
+  writeFileSync(join(prefix, "bin", "node"), "", { mode: 0o755 });
+  const provider = join(home, ".fake");
+  mkdirSync(join(provider, "sessions"), { recursive: true });
+  for (const file of ["auth.json", "settings.json"]) writeFileSync(join(provider, file), "{}\n");
+  const roots = {
+    canonicalRepository: join(root, "canonical"),
+    worktree: join(root, "worktrees", "attempt-1"),
+    sessionRuntime: join(root, "state", "attempts", "1", "private", "reviewer"),
+    stateRoot: join(root, "state"),
+  };
+  const spec = {
+    executable: "fakecli", argv: ["--mode", "json"], cwd: roots.worktree,
+    env: { PATH: join(prefix, "bin"), HOME: home }, stdin: "private prompt on stdin", shell: false as const,
+  };
+  return { root, home, prefix, pkg, provider, roots, spec };
+}
+
+/** The argv's bind operations as [op, source, destination] triples, `--chdir` excluded. */
+function mounts(argv: readonly string[]): string[][] {
+  const out: string[][] = [];
+  for (let at = 0; at < argv.length && argv[at] !== "--"; at += 1) {
+    const op = argv[at]!;
+    if (["--ro-bind", "--bind", "--symlink"].includes(op)) { out.push([op, argv[at + 1]!, argv[at + 2]!]); at += 2; }
+    else if (["--tmpfs", "--proc", "--dev"].includes(op)) { out.push([op, argv[at + 1]!]); at += 1; }
+  }
+  return out;
+}
+
+test("worktree confinement binds no host root and lays every declared root down in a fixed order", () => {
+  const world = confinedWorld();
+  try {
+    const { home, prefix, pkg, provider, roots, spec } = world;
+    const references = join(roots.stateRoot, "attempts", "1", "refs");
+    const grant = grantSandbox(spec, {
+      ...roots, writes: [], platform: "linux", confinement: "worktree", readOnlyRoots: [references],
+      providerReadableRoots: [join(provider, "settings.json"), join(provider, "absent.json")],
+      providerWritableRoots: [join(provider, "auth.json")],
+    }, () => true);
+    assert.equal(grant.badge, "os-enforced");
+    assert.equal(grant.spec.executable, "bwrap");
+    assert.equal(grant.spec.env["TMPDIR"], roots.sessionRuntime);
+    assert.deepEqual(grant.writableRoots, [roots.sessionRuntime, join(provider, "auth.json")]);
+    const argv = grant.spec.argv;
+
+    // The system prefix: only the declared system roots, in their order, as
+    // read-only binds or as the symlinks they are on this machine.
+    const systemEnd = argv.indexOf("--proc");
+    assert.deepEqual(argv.slice(0, 4), ["--die-with-parent", "--new-session", "--unshare-all", "--share-net"]);
+    const system = mounts(argv.slice(4, systemEnd));
+    assert.deepEqual(system.map((mount) => mount[2]), CONFINED_SYSTEM_ROOTS.filter((path) => {
+      try { lstatSync(path); return true; } catch { return false; }
+    }));
+    for (const [op, source, destination] of system) {
+      assert.ok(op === "--symlink" || (op === "--ro-bind" && source === destination), `${op} ${source} ${destination}`);
+    }
+
+    // Everything after it, exactly. The resolver's target is this machine's.
+    let resolver: string[] = [];
+    if (lstatSync("/etc/resolv.conf", { throwIfNoEntry: false })?.isSymbolicLink() === true && existsSync("/etc/resolv.conf")) {
+      const target = realpathSync("/etc/resolv.conf");
+      if (!["/usr", "/etc"].some((dir) => target.startsWith(`${dir}/`))) resolver = ["--ro-bind", target, target];
+    }
+    assert.deepEqual(argv.slice(systemEnd), [
+      "--proc", "/proc",
+      "--dev", "/dev",
+      "--tmpfs", "/tmp",
+      "--tmpfs", home,
+      ...resolver,
+      "--symlink", "../lib/node_modules/@acme/fake-cli/bin/cli.js", join(prefix, "bin", "fakecli"),
+      "--ro-bind", pkg, pkg,
+      "--ro-bind", join(prefix, "bin", "node"), join(prefix, "bin", "node"),
+      "--ro-bind", join(provider, "settings.json"), join(provider, "settings.json"),
+      "--ro-bind", roots.worktree, roots.worktree,
+      "--bind", roots.sessionRuntime, roots.sessionRuntime,
+      "--ro-bind", references, references,
+      "--bind", join(provider, "auth.json"), join(provider, "auth.json"),
+      "--chdir", roots.worktree,
+      "--",
+      "fakecli", "--mode", "json",
+    ]);
+
+    // What is never bound: the host root, the canonical checkout or its .git,
+    // the state root or anything above it, and the provider's own directory.
+    for (const mount of mounts(argv).filter(([op]) => op === "--ro-bind" || op === "--bind" || op === "--symlink")) {
+      const source = mount[0] === "--symlink" ? mount[2]! : mount[1]!;
+      assert.notEqual(source, "/", `${mount.join(" ")} binds the host root`);
+      assert.ok(!source.startsWith(roots.canonicalRepository), `${mount.join(" ")} reaches the canonical checkout`);
+      assert.ok(!`${roots.stateRoot}/`.startsWith(`${source}/`), `${mount.join(" ")} exposes the state root`);
+      assert.ok(source !== provider && !source.startsWith(join(provider, "sessions")), `${mount.join(" ")} binds a provider store`);
+    }
+    assert.ok(!argv.includes(spec.stdin), "the prompt stays on stdin");
+    assert.ok(argv.indexOf(home) < argv.indexOf(pkg), "the home tmpfs is laid down before anything under it is bound back");
+  } finally { rmSync(world.root, { recursive: true, force: true }); }
+});
+
+test("a write-capable confined grant binds the worktree writable and nothing else of the host", () => {
+  const world = confinedWorld();
+  try {
+    const grant = grantSandbox(world.spec, { ...world.roots, writes: ["src/**"], platform: "linux", confinement: "worktree" }, () => true);
+    const worktree = grant.spec.argv.indexOf(world.roots.worktree);
+    assert.equal(grant.spec.argv[worktree - 1], "--bind");
+    assert.deepEqual(grant.writableRoots, [world.roots.worktree, world.roots.sessionRuntime]);
+  } finally { rmSync(world.root, { recursive: true, force: true }); }
+});
+
+test("worktree confinement refuses without bwrap, where host confinement falls back to tool policy", () => {
+  const world = confinedWorld();
+  try {
+    const request = { ...world.roots, writes: [] as string[], platform: "linux" as const };
+    assert.throws(() => grantSandbox(world.spec, { ...request, confinement: "worktree" }, () => false), WorktreeConfinementUnavailable);
+    assert.throws(() => grantSandbox(world.spec, { ...request, platform: "darwin", confinement: "worktree" }, () => true), WorktreeConfinementUnavailable);
+    assert.equal(grantSandbox(world.spec, request, () => false).badge, "tool-policy");
+    const git = gitRunner({ "status --porcelain": [""], "diff HEAD --numstat --no-renames -z": [""], "ls-files --others --exclude-standard -z": [""] });
+    assert.throws(() => new PermissionSession({ ...request, confinement: "worktree", profile: "readonly",
+      tools: ["read"], protectedPaths: [], sandboxProbe: () => false, git }), WorktreeConfinementUnavailable);
+  } finally { rmSync(world.root, { recursive: true, force: true }); }
+});
+
+test("worktree confinement binds provider files only, and refuses a directory or an unreachable executable", () => {
+  const world = confinedWorld();
+  try {
+    const request = { ...world.roots, writes: [] as string[], platform: "linux" as const, confinement: "worktree" as const };
+    for (const roots of [{ providerReadableRoots: [world.provider] }, { providerWritableRoots: [join(world.provider, "sessions")] }]) {
+      assert.throws(() => grantSandbox(world.spec, { ...request, ...roots }, () => true), /provider files, never directories/, JSON.stringify(roots));
+    }
+    assert.throws(() => grantSandbox({ ...world.spec, executable: "absent-cli" }, request, () => true), ExecutableNotFound);
+    // A PATH entry that is itself a directory symlink cannot be reproduced by
+    // recreating the file's link chain, so it is refused rather than guessed.
+    symlinkSync(join(world.prefix, "bin"), join(world.home, "linked-bin"));
+    const linked = { ...world.spec, env: { ...world.spec.env, PATH: join(world.home, "linked-bin") } };
+    assert.throws(() => grantSandbox(linked, request, () => true), /resolves through a directory symlink/);
+    assert.throws(() => grantSandbox({ ...world.spec, env: { ...world.spec.env, HOME: "/" } }, request, () => true), /absolute home directory below \//);
+    assert.throws(() => assertSandboxRoots({ ...world.roots, providerReadableRoots: [join(world.roots.worktree, "x")] }), /provider start file may not overlap the managed worktree/);
+  } finally { rmSync(world.root, { recursive: true, force: true }); }
+});
+
+test("pi narrows to its auth file under worktree confinement, and Claude declares only its credentials", async () => {
+  const { PiCodexAdapter } = await import("../../../src/adapters/pi-codex.ts");
+  const { ClaudeCodeAdapter } = await import("../../../src/adapters/claude-code.ts");
+  const env = { HOME: "/home/owner" };
+  assert.deepEqual(new PiCodexAdapter().providerWritableRoots(env, "host"), ["/home/owner/.pi/agent"]);
+  assert.deepEqual(new PiCodexAdapter().providerWritableRoots(env, "worktree"), ["/home/owner/.pi/agent/auth.json"]);
+  assert.deepEqual(new PiCodexAdapter().providerWritableRoots({}, "worktree"), []);
+  assert.deepEqual(new ClaudeCodeAdapter().providerReadableRoots(env), ["/home/owner/.claude/.credentials.json"]);
+  assert.deepEqual(new ClaudeCodeAdapter().providerReadableRoots({}), []);
+  // No declared root is a session, transcript, history, project or memory store.
+  const declared = [new PiCodexAdapter(), new ClaudeCodeAdapter()].flatMap((adapter: HarnessAdapter) => [
+    ...(adapter.providerWritableRoots?.(env, "worktree") ?? []),
+    ...(adapter.providerReadableRoots?.(env) ?? []),
+  ]);
+  for (const path of declared) {
+    assert.doesNotMatch(path, /sessions|projects|history|file-history|memory|transcript/, path);
+    assert.ok(![join(env.HOME, ".claude"), join(env.HOME, ".pi", "agent"), join(env.HOME, ".claude.json")].includes(path), path);
   }
 });
 

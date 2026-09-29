@@ -27,6 +27,29 @@ import { PROVING_GROUND_DIR } from "../../src/workflow/prove/bind.ts";
 // shipped config (which enables `prove` since gate G18-B) cut to one offline
 // gate, a review adapter that is the only route a replay launches, and a broker
 // that spends on GO. No provider is called.
+//
+// A replay's agent runs only under worktree confinement (task 18), so the
+// runners pass `hasBwrap` as their sandbox probe and the descriptor the fixture
+// broker records is the confined one; nothing is spawned.
+
+/** The sandbox probe of a host with bwrap. */
+export const hasBwrap = (executable: string): boolean => executable === "bwrap";
+
+/**
+ * Asserts a recorded launch is `worktree`-confined: bwrap with no bind of the
+ * host root, the canonical checkout or the state root.
+ */
+export function assertConfinedLaunch(command: readonly string[], canonical: string, stateRoot: string): void {
+  assert.equal(command[0], "bwrap");
+  const argv = command.slice(1, command.indexOf("--"));
+  for (let at = 0; at < argv.length; at += 1) {
+    if (argv[at] !== "--ro-bind" && argv[at] !== "--bind") continue;
+    const source = argv[at + 1]!;
+    assert.notEqual(source, "/", "the host root is bound");
+    assert.ok(!source.startsWith(canonical), `the canonical checkout is bound: ${source}`);
+    assert.ok(!`${stateRoot}/`.startsWith(`${source}/`), `the state root is exposed by ${source}`);
+  }
+}
 
 const OWNER = ["-c", "user.name=Santiago Marin", "-c", "user.email=santiagomarinsuarez@me.com"];
 export const ITEM_ID = "probe-01";
@@ -139,8 +162,8 @@ export class ReviewAdapter implements HarnessAdapter {
   }
 }
 
-/** Spends on GO like the real broker, and records every edge it is asked to start. */
-export function countingBroker(started: string[]) {
+/** Spends on GO like the real broker, and records every edge it is asked to start and, if asked, its command. */
+export function countingBroker(started: string[], commands: (readonly string[])[] = []) {
   return (options: BrokerOptions): TransportBroker => ({
     async startProcess(registration, spec) {
       const record = {
@@ -152,6 +175,7 @@ export function countingBroker(started: string[]) {
       };
       if (registration.kind === "agent-phase") options.phaseLaunchVerifier?.verify(registration);
       started.push(isTaskEdgeRegistration(registration) ? `edge ${registration.edge}` : registration.kind);
+      commands.push(record.command);
       await options.register(record);
       const reservation = options.ledger.spendOnGo(reservationIdOf(registration));
       await options.onSpent?.(record, reservation);

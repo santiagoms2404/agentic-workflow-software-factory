@@ -101,6 +101,21 @@ export class ReplayArmNotRouted extends Error {
   }
 }
 
+/**
+ * A replay's agent cannot be confined to its worktree, so it does not run
+ * (W18 task 18). A reviewer that can read the corpus, this plan or another
+ * checkout could read the answer key, and its score would measure nothing.
+ */
+export class ReplayConfinementUnavailable extends Error {
+  readonly phaseId: string;
+
+  constructor(phaseId: string, detail: string) {
+    super(`replay phase ${JSON.stringify(phaseId)} cannot run confined to its worktree: ${detail}`);
+    this.name = "ReplayConfinementUnavailable";
+    this.phaseId = phaseId;
+  }
+}
+
 /** A replay is measurement, never delivery (Q7). The owner cancels each one. */
 export class ReplayNotDeliverable extends Error {
   readonly taskId: string;

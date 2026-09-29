@@ -28,6 +28,7 @@
 //     host mints `t1, t2, …`.
 // ---------------------------------------------------------------------------
 
+import { join } from "node:path";
 import {
   AdapterError,
   type Availability,
@@ -374,6 +375,18 @@ export class ClaudeCodeAdapter implements ContinuityCapableAdapter {
       usageAuthority: "provider",
       costAuthority: "unavailable",
     };
+  }
+
+  /**
+   * The one file this CLI reads to authenticate, for `worktree` confinement,
+   * where the home directory is otherwise an empty tmpfs. Read-only, as the
+   * whole home already is under `host`. Never `~/.claude` whole: its
+   * `projects/`, `sessions/`, `history.jsonl` and `file-history/` hold every
+   * other Claude conversation on the machine.
+   */
+  providerReadableRoots(env: Readonly<Record<string, string | undefined>>): readonly string[] {
+    const home = env["HOME"];
+    return home === undefined || home.length === 0 ? [] : [join(home, ".claude", ".credentials.json")];
   }
 
   /**
