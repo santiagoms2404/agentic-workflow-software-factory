@@ -15,6 +15,7 @@ import { ENVELOPE_SCHEMAS, RECORD_SCHEMAS } from "../../src/contracts/registry.t
 import {
   LINE_WINDOW,
   parseRouteArm,
+  ROUTE_ARM_INVALIDATIONS,
   RouteArmSpecInvalid,
   scoreReviewFindings,
   scoreRouteArms,
@@ -240,6 +241,28 @@ test("every invalidation is named with its arm, and an invalid replay removes th
     assert.equal(sol!.invalidPairs, 0, `${reason} is not charged to the arm that ran cleanly`);
     assert.equal(sol!.review.replays, 0, `${reason}: the clean arm is not scored on an unpaired replay`);
   }
+});
+
+test("every invalidation the scorer declares is produced by name, one item each, in one suite", () => {
+  const produces: Readonly<Record<string, (item: string) => RouteArmReplay[]>> = {
+    "provider-mismatch": (item) => [{ ...review(item, OPUS, 1, 1, [21]), observed: { provider: "openai", model: "opus" } }, review(item, SOL, 1, 2, [21])],
+    "model-mismatch": (item) => [{ ...review(item, OPUS, 1, 1, [21]), observed: { provider: "anthropic", model: "sonnet" } }, review(item, SOL, 1, 2, [21])],
+    "usage-authority-none": (item) => [{ ...review(item, OPUS, 1, 1, [21]), usageAuthority: "none" }, review(item, SOL, 1, 2, [21])],
+    "envelope-invalid": (item) => [{ ...review(item, OPUS, 1, 1, [21]), envelopeValid: false, outcome: null }, review(item, SOL, 1, 2, [21])],
+    "paused-at-ceiling": (item) => [{ ...review(item, OPUS, 1, 1, [21]), pausedAtCeiling: true, outcome: null }, review(item, SOL, 1, 2, [21])],
+    "outcome-missing": (item) => [{ ...review(item, OPUS, 1, 1, [21]), outcome: null }, review(item, SOL, 1, 2, [21])],
+    "replay-missing": (item) => [review(item, OPUS, 1, 1, [21])],
+    "replay-duplicated": (item) => [review(item, OPUS, 1, 1, [21]), review(item, OPUS, 1, 1, [21]), review(item, SOL, 1, 2, [21])],
+    "order-invalid": (item) => [review(item, OPUS, 1, 1, [21]), review(item, SOL, 1, 1, [21])],
+  };
+  assert.deepEqual(Object.keys(produces).sort(), [...ROUTE_ARM_INVALIDATIONS].sort(), "one case per declared reason, no more and no less");
+  const reasons = Object.keys(produces);
+  const score = scoreRouteArms({ arms: [OPUS, SOL], repetitions: 1, items: reasons.map((reason) => reviewItem(reason)) },
+    reasons.flatMap((reason) => produces[reason]!(reason)));
+  assert.deepEqual(score.pairs.map((pair) => [pair.itemId, pair.valid, pair.reasons.map((entry) => entry.reason)]),
+    reasons.map((reason) => [reason, false, [reason]]));
+  assert.deepEqual(score.stray, []);
+  assert.equal(score.complete, false);
 });
 
 test("a partial usage authority and the adapter-prefixed model spelling both still count", () => {

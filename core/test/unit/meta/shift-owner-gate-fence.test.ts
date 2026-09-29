@@ -3,12 +3,14 @@ import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { persistAttempt, type AttemptStatus } from "../../../src/cli/commands/attempt.ts";
+import { persistAttempt, readAttempt, type AttemptStatus } from "../../../src/cli/commands/attempt.ts";
 import { landCommand } from "../../../src/cli/commands/land.ts";
 import { processOwnerTerminal } from "../../../src/cli/tty.ts";
+import { ReplayRecordSchema } from "../../../src/contracts/proving-ground.ts";
 import { ShiftManifestSchema, ShiftManifestTicketSchema } from "../../../src/contracts/shift-selection-record.ts";
 import { DETERMINISTIC_REASON_SOURCES, InteractiveOwnerRequired, NonDeterministicEvidence } from "../../../src/state/errors.ts";
 import { LEGAL_EDGES, transition, type BudgetState } from "../../../src/state/task-machine.ts";
+import { ReplayNotDeliverable } from "../../../src/workflow/prove/compile.ts";
 import { repoRoot, relRepo, walkFiles } from "./_walk.ts";
 
 // W17 INV-1: landing stays human and at a TTY. No module this workstream adds
@@ -39,6 +41,19 @@ const WORKSTREAM_MODULES = [
 ] as const;
 const SHIFT_DIRECTORY = join(repoRoot(), "core", "src", "workflow", "shift");
 
+// W18 task 14 (INV-6): a replay is measurement, never delivery. The modules
+// W18 M4 added take the same scans, so nothing in the proving ground can
+// decide L20, reach `awsf land`, name a landing state, read a clock, run a
+// process directly, or name the push token. The one place a replay meets
+// landing is `awsf land`'s own refusal, proved at the end of this file.
+const PROVING_GROUND_MODULES = [
+  "core/src/cli/commands/prove.ts",
+  "core/src/contracts/proving-ground.ts",
+  "core/src/metrics/route-arm-replays.ts",
+  "core/src/metrics/route-arm-score.ts",
+] as const;
+const PROVE_DIRECTORY = join(repoRoot(), "core", "src", "workflow", "prove");
+
 /** What a module would need to produce L20, or to hand a timer something that turns into L21. */
 const FORBIDDEN: readonly (readonly [string, RegExp])[] = [
   ["decides a lifecycle transition", /\btransition\s*\(/u],
@@ -49,7 +64,10 @@ const FORBIDDEN: readonly (readonly [string, RegExp])[] = [
 ];
 
 function workstreamFiles(): string[] {
-  return [...new Set([...WORKSTREAM_MODULES, ...walkFiles(SHIFT_DIRECTORY).map(relRepo)])].sort();
+  return [...new Set([
+    ...WORKSTREAM_MODULES, ...walkFiles(SHIFT_DIRECTORY).map(relRepo),
+    ...PROVING_GROUND_MODULES, ...walkFiles(PROVE_DIRECTORY).map(relRepo),
+  ])].sort();
 }
 
 function offences(source: string): string[] {
@@ -57,8 +75,9 @@ function offences(source: string): string[] {
 }
 
 test("every named workstream module exists, so the fence cannot shrink by a rename", () => {
-  for (const file of WORKSTREAM_MODULES) assert.ok(existsSync(join(repoRoot(), file)), `${file} is gone; update the INV-1 scope`);
+  for (const file of [...WORKSTREAM_MODULES, ...PROVING_GROUND_MODULES]) assert.ok(existsSync(join(repoRoot(), file)), `${file} is gone; update the INV-1 scope`);
   assert.ok(walkFiles(SHIFT_DIRECTORY).length >= 3, "the shift directory is in scope and not empty");
+  assert.ok(walkFiles(PROVE_DIRECTORY).length >= 3, "the prove directory is in scope and not empty");
 });
 
 test("no module this workstream adds can decide L20, reach `awsf land`, or read a clock", () => {
@@ -77,8 +96,8 @@ test("the detector sees each offence when one is added", () => {
   assert.deepEqual(offences('const edge = "L21";'), ["names a landing state or edge"]);
 });
 
-test("nothing a shift records carries a time a timer could act on", () => {
-  const keys = [ShiftManifestSchema, ShiftManifestTicketSchema].flatMap((schema) => Object.keys(schema.properties));
+test("nothing a shift or a replay records carries a time a timer could act on", () => {
+  const keys = [ShiftManifestSchema, ShiftManifestTicketSchema, ReplayRecordSchema].flatMap((schema) => Object.keys(schema.properties));
   assert.deepEqual(keys.filter((key) => /deadline|expir|timeout|ttl|until|due|time|At$/u.test(key)), []);
 });
 
@@ -171,6 +190,35 @@ test("the INV-2/INV-3 detector sees each offence when one is added", () => {
   assert.deepEqual(offencesInv23('API_ROUTE_TABLE.concat([{ method: "push", path: "/api/v1/preview", name: "preview" }]);'),
     ["names the push token", "registers an API route"]);
 });
+
+test("`awsf land` refuses a replay by name at an owner's terminal before it asks anything, whatever its state", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-inv6-land-"));
+  try {
+    // LANDING too: a replay record that claims it cannot reach the recovery that would finish a landing.
+    for (const lifecycleState of ["AWAITING_OWNER", "LANDING", "CANCELLED"] as const) {
+      const status = awaitingReplay(root, lifecycleState);
+      const attemptDir = join(root, "state", "projects", "fixture", "tasks", status.taskId, "1");
+      await persistAttempt(attemptDir, null, { kind: "attempt.created", next: status });
+      let prompts = 0;
+      await assert.rejects(landCommand({
+        attemptDir, terminal: { interactive: true, write: () => {}, confirm: async () => { prompts += 1; return true; } },
+      }), (error: unknown) => error instanceof ReplayNotDeliverable && error.message.includes(`awsf cancel ${status.taskId}`), lifecycleState);
+      assert.equal(prompts, 0, `${lifecycleState}: the refusal comes before any confirmation`);
+      const after = await readAttempt(attemptDir);
+      assert.deepEqual([after.lifecycleState, after.revision], [lifecycleState, status.revision], `${lifecycleState}: the refusal wrote nothing`);
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+function awaitingReplay(repository: string, lifecycleState: "AWAITING_OWNER" | "LANDING" | "CANCELLED"): AttemptStatus {
+  return {
+    ...awaitingShift(repository), taskId: `fixture-replay-${lifecycleState.toLowerCase().replace("_", "-")}`, workflow: "prove",
+    request: "Report the probe's second line.", lifecycleState, nextAction: "cancel",
+    replay: { itemId: "probe-01", itemDigest: "0".repeat(64), arm: "claude/anthropic/claude:opus@high", repetition: 1, order: 1, baseSha: "0".repeat(40) },
+  };
+}
 
 function awaitingShift(repository: string): AttemptStatus {
   return {
