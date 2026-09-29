@@ -6,6 +6,9 @@ export const PROJECT_CATALOG_VERSION = "awsf.project/v1" as const;
 export const PROJECT_REPOSITORY_ROLES = ["plan", "service", "application", "library", "source"] as const;
 export const PROJECT_DELIVERY_POSTURES = ["service", "mobile", "docs", "none"] as const;
 export const PROJECT_PLAN_FORMATS = ["awsf-plan-html/v1"] as const;
+/** The per-project Jev switch (W19 DD1). Absent means on. */
+export const JEV_SWITCH_STATES = ["on", "off"] as const;
+export type JevSwitch = (typeof JEV_SWITCH_STATES)[number];
 
 const NonEmptyString = Type.String({ minLength: 1 });
 const GitRemoteNameSchema = Type.String({
@@ -122,11 +125,24 @@ export const ProjectCatalogSchema = Type.Object(
         ),
       ),
     ),
+    // Whether this project may send state to Jev at all. Only the Jev
+    // transport reads it; off is a typed refusal there, never an exception.
+    decision: Type.Optional(
+      Type.Object(
+        { jev: Type.Optional(stringUnion(JEV_SWITCH_STATES)) },
+        { additionalProperties: false },
+      ),
+    ),
   },
   { additionalProperties: false, $id: PROJECT_CATALOG_VERSION, title: "ProjectCatalog" },
 );
 
 export type ProjectCatalog = Static<typeof ProjectCatalogSchema>;
+
+/** The project's Jev switch, defaulting to on when the catalog is silent. */
+export function jevSwitchOf(catalog: Pick<ProjectCatalog, "decision">): JevSwitch {
+  return catalog.decision?.jev ?? "on";
+}
 
 /** The JSON Schema emission of ProjectCatalogSchema; never a hand-maintained copy. */
 export function emitProjectCatalogJsonSchema(): Record<string, unknown> {
