@@ -111,4 +111,4 @@ After each milestone lands, the owner (with Marimba drafting) makes one commit: 
 task rows and header in the plan, the tickets' `state`, the Handoff entries the builders returned,
 and a dated Amendment. Only T17's landing moves the spine's Milestone M18 / W18 marker and
 `../awsf-v2-plan/W18.md`, in that same commit, and only once M6 is `[x]` too (added 2026-09-29). If M6 lands after M5, the spine
-marker moves with M6's bookkeeping commit instead. Current plan-aligned states: **T01–T14 `done`; T15–T18 `todo`** (M1 `[x]`, M2 `[x]`, M3 `[x]`, M4 `[x]`, M5 `[]`, M6 `[]`).
+marker moves with M6's bookkeeping commit instead. Current plan-aligned states: **T01–T14 and T18 `done`; T15–T17 `todo`** (M1 `[x]`, M2 `[x]`, M3 `[x]`, M4 `[x]`, M5 `[]`, M6 `[x]`).
