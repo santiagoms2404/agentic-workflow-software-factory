@@ -145,8 +145,8 @@ code.inv, code.ac, code.serves { color:var(--cyan); }
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-09-28</dd>
-        <dt>modified</dt>     <dd>2026-09-28 (authored, awaiting owner review), 2026-09-28 (owner review applied: Q16–Q20 decided as recommended), 2026-09-28 (gate G19-A committed)</dd>
-        <dt>commits</dt>      <dd>d71b6b4 (plan authored and adopted), the G19-A commit that adds invariant 13</dd>
+        <dt>modified</dt>     <dd>2026-09-28 (authored, awaiting owner review), 2026-09-28 (owner review applied: Q16–Q20 decided as recommended), 2026-09-28 (gate G19-A committed), 2026-09-29 (T01 delivered, M1 [wip])</dd>
+        <dt>commits</dt>      <dd>d71b6b4 (plan authored and adopted), the G19-A commit that adds invariant 13, ed7e71c 6b1751d 56a8101 (T01)</dd>
         <dt>agent name</dt>   <dd>claude-opus-5-5, claude-opus-5-5 (review applied)</dd>
         <dt>session id</dt>   <dd>not recorded (AGENTS.md invariant 1 keeps live session state out of every committed file)</dd>
         <dt>back refs</dt>    <dd>./awsf-v2-plan.html (§ Milestone M19 → W19, and its 2026-09-28 amendment adopting this workstream), ../AGENTS.md (the twelve invariants and the proposed invariant 13), ./awsf-v2-intent.md (decisions 3 and 5, which this plan revises by owner decision), ./awsf-v2-w17-shift.html (the shift this plan keeps running), ./awsf-v2-w18-route-metrics.html (the tab and route columns M8 builds on), ./awsf-v2-w07-quota-telemetry.html (the quota readout and its fence), the reference repository ../../ten-levels-of-jev at 777adaf (machine-local clone, IndyDevDan's "10 Levels of Jev") and its transcript ../../10_levels_of_JEV_in_agentic_engineering_IndyDevDan_transcript.txt (machine-local)</dd>
@@ -512,19 +512,19 @@ sequenceDiagram
 
     <!-- ================= M1 ================= -->
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone M1: The decision service (J1) <span class="wtag">manual</span></h3>
+      <h3><code class="status">[wip]</code> Milestone M1: The decision service (J1) <span class="wtag">manual</span></h3>
       <p>One fenced way to ask Jev anything, one versioned home for every question, and one journaled record per call. Nothing acts on an answer yet. Everything later calls <code>decide()</code>.</p>
 
       <h4>1. The Jev transport, its fence and the project switch</h4>
       <p class="sub">Serves <code class="serves">AC-1</code> · <code class="serves">INV-4</code> · <code class="serves">INV-5</code></p>
       <p>A port of the reference client's transport and validation, cut to one provider and bound to AWSF's rules.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>core/src/decision/jev-transport.ts</code>: OpenRouter's decisions endpoint, <code>~typesafe/jev-latest</code> by default with the resolved model returned (Q7), <code>OPENROUTER_API_KEY</code> read once (Q6), <code>redirect: "error"</code>, 30 s total deadline, at most 3 attempts on 429/502/503/529 with jittered backoff capped at 8 s</li>
-        <li><code class="status">[]</code> Request and strict response validation ported from the reference client; an invalid response is a <code>ContractError</code>, never a partial answer</li>
-        <li><code class="status">[]</code> Cost as <code>{ amount, source }</code>: reported, estimated ($0.042 per million input tokens, measured 2026-09-28) or unknown, never zero for unknown</li>
-        <li><code class="status">[]</code> Redaction through <code>core/src/policy/redaction.ts</code> before serialization; whether it changed anything is recorded, what it removed is not</li>
-        <li><code class="status">[]</code> The catalog's optional <code>decision: { jev: on | off }</code>, default on; off yields a typed <code>refused-by-switch</code> result; a missing key yields a typed <code>unavailable</code> result</li>
-        <li><code class="status">[]</code> <code>core/test/unit/meta/jev-transport-fence.test.ts</code>: no other file in <code>core/src</code> calls <code>fetch</code> or names the endpoint, and the fence proves it catches both spellings</li>
+        <li><code class="status">[x]</code> <code>core/src/decision/jev-transport.ts</code>: OpenRouter's decisions endpoint, <code>~typesafe/jev-latest</code> by default with the resolved model returned (Q7), <code>OPENROUTER_API_KEY</code> read once (Q6), <code>redirect: "error"</code>, 30 s total deadline, at most 3 attempts on 429/502/503/529 with jittered backoff capped at 8 s</li>
+        <li><code class="status">[x]</code> Request and strict response validation ported from the reference client; an invalid response is a <code>ContractError</code>, never a partial answer</li>
+        <li><code class="status">[x]</code> Cost as <code>{ amount, source }</code>: reported, estimated ($0.042 per million input tokens, measured 2026-09-28) or unknown, never zero for unknown</li>
+        <li><code class="status">[x]</code> Redaction through <code>core/src/policy/redaction.ts</code> before serialization; whether it changed anything is recorded, what it removed is not</li>
+        <li><code class="status">[x]</code> The catalog's optional <code>decision: { jev: on | off }</code>, default on; off yields a typed <code>refused-by-switch</code> result; a missing key yields a typed <code>unavailable</code> result</li>
+        <li><code class="status">[x]</code> <code>core/test/unit/meta/jev-transport-fence.test.ts</code>: no other file in <code>core/src</code> calls <code>fetch</code> or names the endpoint, and the fence proves it catches both spellings</li>
       </ul>
 
       <h4>2. Versioned question sets and the journaled decision record</h4>
@@ -1051,6 +1051,15 @@ flowchart LR
       <summary>2026-09-28 — gate G19-A committed: AGENTS.md invariant 13; no marker moved</summary>
       <p>The owner authorized the session to commit this plan (d71b6b4) and gate <span class="gate">G19-A</span>. Invariant 13 lands in <code>AGENTS.md</code> in the same commit as this entry, with the Execution section's proposed text plus two sentences. One records its adoption as this plan's G19-A. The other says the three fences it names land with tasks 1, 8 and 10, and that until then it binds by its text alone, so the file claims no enforcement that does not yet exist. <code>README.md</code>'s Governance paragraph now counts thirteen invariants and names the new one.</p>
       <p>Every marker is still <code>[]</code>: a gate is a prerequisite, not a task. Execution can start at T01.</p>
+    </details>
+    <details open>
+      <summary>2026-09-29 — T01 delivered; M1 in progress</summary>
+      <p><strong>T01 delivered</strong> on base <code>ebd85d9</code>, in a manual session on branch <code>w19-jev-delegate</code>, kept apart from W18's work in progress on main, as three commits. <code>ed7e71c</code>: the catalog gains the optional <code>decision: { jev: on | off }</code> in <code>core/src/registry/catalog-schema.ts</code>, and <code>jevSwitchOf()</code> reads it, defaulting to on. <code>6b1751d</code>: <code>core/src/decision/jev-transport.ts</code>, the single transport, with its offline tests. <code>56a8101</code>: <code>core/test/unit/meta/jev-transport-fence.test.ts</code>, the first of the three fences invariant 13 names.</p>
+      <p><strong>Decided in the session.</strong> (1) Every ending of a call is a typed outcome, <code>answered</code>, <code>contract-error</code>, <code>unavailable</code> (with a reason: <code>missing-key</code>, <code>http-status</code>, <code>retries-exhausted</code>, <code>network</code>, <code>redirect</code>, <code>timeout</code>, <code>aborted</code>) or <code>refused-by-switch</code>, matching task 2's record outcomes. (2) Only a request that could never be valid throws (<code>QuestionValidationError</code>), before anything is sent: a malformed question set is a code defect, not a runtime condition. (3) <code>projectSwitch</code> is a required constructor option, so no caller defaults past the switch. The switch is checked first, then the request, then redaction, then the key. (4) Redaction covers the questions as well as the state. The result keeps the redacted request text and a <code>redacted</code> boolean, never what was removed. The provider's response text is returned unredacted, and task 2 must scrub it before recording (T02 C4). (5) Cost is <code>reported</code> when <code>usage.cost</code> is a finite non-negative number, else <code>estimated</code> at the one configured rate (<code>JEV_RATE</code>, $0.042 per million input tokens, output free, measured 2026-09-28), else <code>unknown</code> with a null amount. (6) No injected fetch port: tests stub global <code>fetch</code>. The fence forbids the adapter fence's FETCH pattern and the path <code>api/alpha/decisions</code> in every <code>core/src</code> file but the transport, and proves itself on a planted scratch tree.</p>
+      <p><strong>Verified.</strong> At <code>4c06963</code> (the three commits plus the handoff commit) in WSL on node v22.23.1: <code>npm run test:unit</code> 2463/2463, 29 more than the 2434 recorded at <code>72101ea</code>, all 29 in the two new test files. <code>npm run test:contract</code> 149/149, <code>npm run test:sim</code> 98/98. <code>npm run typecheck</code> (both projects) and <code>npm run lint</code> exit 0. On Windows node the same 124 POSIX- and CRLF-dependent tests fail before and after T01, and nothing else does. The fence turned red on a fetch planted in <code>core/src/workflow/</code>. No live call was made.</p>
+      <p><strong>Owner decision open</strong> (T21 C1): whether Marimba's compaction judgment obeys this project's <code>decision.jev: off</code>, by reading AWSF's own catalog, or always runs as <code>on</code>.</p>
+      <p><strong>Carried forward</strong> as Handoff entries in T02 (C1–C5), T03 (C1–C4) and T21 (C1–C4), committed as <code>4c06963</code>.</p>
+      <p>Completion metadata: built and verified by claude-code:claude-opus in a manual session.</p>
     </details>
   </section>
 
