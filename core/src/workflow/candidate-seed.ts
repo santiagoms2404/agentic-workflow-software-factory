@@ -87,7 +87,9 @@ function settledCallsOf(processes: readonly ProcessEvidence[]): number {
 /**
  * The host-completed L7 binding: the last L7 is the host's RUNNING to GATING on
  * exactly `candidateSha` over the attempt's base, every builder phase before it
- * succeeded, and a recorded process accounts for every call spent.
+ * succeeded, and no process record names more calls than the attempt has
+ * spent. The converse does not hold: `callsSpent` carries a retry's spend from
+ * earlier attempts, whose processes are in their own journals.
  */
 function assertL7Binding(records: AttemptRecords, source: AttemptStatus, candidateSha: string, processes: readonly ProcessEvidence[]): void {
   const l7 = records.filter((record) => record.event.evidence?.type === "transition" && record.event.evidence.edgeId === "L7").at(-1);
@@ -183,9 +185,12 @@ export async function completedShift(source: AttemptStatus, evidence: readonly A
  * The binding a sealed shift holds in place of L7: its completed ticket prefix,
  * recomputed from its own accepted records, is exactly the run and commit the
  * adoption recorded; every phase through that run's last gate phase was
- * accepted in order, succeeded, and names its own phase and round; and a
- * recorded process accounts for every call spent. A ticket whose gate
- * acceptance is gone ends the run early, so the recorded pair no longer holds.
+ * accepted in order, succeeded, names its own phase and round, and was left
+ * SUCCEEDED by its last recorded state; and no process record names more calls
+ * than the attempt has spent. The converse does not hold: `callsSpent` carries
+ * a retry's spend from earlier attempts, whose processes are in their own
+ * journals. A ticket whose gate acceptance is gone ends the run early, so the
+ * recorded pair no longer holds.
  */
 async function assertShiftPrefixBinding(records: AttemptRecords, source: AttemptStatus, adoption: CandidateAdoptionEvidence,
   processes: readonly ProcessEvidence[]): Promise<void> {
@@ -206,6 +211,18 @@ async function assertShiftPrefixBinding(records: AttemptRecords, source: Attempt
         entry.phase.status !== "SUCCEEDED" || entry.accepted.round !== entry.phase.correctionCount) {
       throw new CandidateSeedRejected(`accepted ticket binding is missing or inconsistent at ${phase.id}`);
     }
+  }
+  // An acceptance is not the phase's last word. A later record that leaves a
+  // phase in the run anything but SUCCEEDED unbinds it, as a builder phase that
+  // did not end SUCCEEDED unbinds L7.
+  const lastState = new Map<string, string>();
+  for (const record of evidence) {
+    if ((record.type === "phase" || record.type === "phase-accepted" || record.type === "resume-activation") && record.phase != null) {
+      lastState.set(record.phase.key, record.phase.status);
+    }
+  }
+  for (const phase of phases.slice(0, through + 1)) {
+    if (lastState.get(phase.id) !== "SUCCEEDED") throw new CandidateSeedRejected(`phase ${phase.id} did not stay SUCCEEDED after its acceptance`);
   }
   if (processes.length === 0 || source.budget.callsSpent < settledCallsOf(processes)) {
     throw new CandidateSeedRejected("missing completed builder or settled call evidence");

@@ -170,6 +170,20 @@ for (const [name, patch, state, settles] of [
   });
 }
 
+test("an L7 source with more recorded process calls than it spent refuses", async () => {
+  const world = await seedFixture();
+  const path = join(world.sourceDir, "journal.jsonl");
+  const rows = readFileSync(path, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+  rows.at(-1).event.next.budget.callsSpent = 0;
+  writeFileSync(path, rows.map((row) => JSON.stringify(row)).join("\n") + "\n");
+  const statusPath = join(world.sourceDir, "status.json");
+  const status = JSON.parse(readFileSync(statusPath, "utf8"));
+  status.budget.callsSpent = 0;
+  writeFileSync(statusPath, JSON.stringify(status));
+  await assert.rejects(seedCommand({ ...world.seedOptions, quiescence: () => "quiescent" }), /missing completed builder or settled call evidence/);
+  absentTarget(world);
+});
+
 test("exact L7 candidate mismatch refuses even with matching final status and journal", async () => {
   const world = await seedFixture();
   const path = join(world.sourceDir, "journal.jsonl");
@@ -313,15 +327,16 @@ test("source selector cannot name a different task under the same directory", as
  * A sealed shift's status over three tickets committed at its base, after which
  * canonical HEAD rewrote T01, as a handoff does.
  */
-function shiftSource(): { root: string; status: AttemptStatus; baseSha: string; headSha: string } {
+function shiftSource(t01Tail: Uint8Array = new Uint8Array()): { root: string; status: AttemptStatus; baseSha: string; headSha: string } {
   const root = mkdtempSync(join(tmpdir(), "awsf-seed-shift-"));
   const plan = "fixture-seed-shift";
   git(tmpdir(), "init", "--quiet", "-b", "main", root);
   mkdirSync(join(root, "specs", "tickets", plan), { recursive: true });
   const tickets = ["T01", "T02", "T03"].map((id) => {
     const path = `specs/tickets/${plan}/${id}.md`;
-    writeFileSync(join(root, path), ["---", `id: ${id}`, `title: "Ticket ${id}"`, "milestone: M1", "state: todo", "depends_on: []", "---",
-      `# ${id} · Ticket ${id}`, "", "## Handoff", "", "_Empty._", "", "## Build prompt", "", "```", `TASK ${id}.`, "```", ""].join("\n"));
+    writeFileSync(join(root, path), Buffer.concat([Buffer.from(["---", `id: ${id}`, `title: "Ticket ${id}"`, "milestone: M1", "state: todo", "depends_on: []", "---",
+      `# ${id} · Ticket ${id}`, "", "## Handoff", "", "_Empty._", "", "## Build prompt", "", "```", `TASK ${id}.`, "```", ""].join("\n")),
+      id === "T01" ? t01Tail : new Uint8Array()]));
     return { id, path, digest: ticketFileDigest(readFileSync(join(root, path))) };
   });
   git(root, "add", ".");
@@ -356,6 +371,17 @@ test("a shift's completed prefix is its contiguous run of tickets whose gates ac
     await assert.rejects(completedShift({ ...status, baseSha: null }, run, seedRefusal), /records no base/u);
     // Read at HEAD rather than the recorded base, the rewritten T01 refuses by digest.
     await assert.rejects(completedShift({ ...status, baseSha: headSha }, run, seedRefusal), /ticket T01 changed since selection/u);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a ticket blob that is not UTF-8 refuses by digest rather than binding other bytes", async () => {
+  const { root, status } = shiftSource(Uint8Array.from([0xff, 0xfe, 0x0a]));
+  try {
+    const run = [acceptedPhase("t01-build", "a".repeat(40)), acceptedPhase("t01-tests", "a".repeat(40))];
+    await assert.rejects(completedShift(status, run, seedRefusal),
+      (error: unknown) => error instanceof CandidateSeedRejected && /cannot be rebuilt from its recorded selection at its base: ticket T01 changed since selection/u.test(error.message));
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

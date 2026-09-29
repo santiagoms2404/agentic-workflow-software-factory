@@ -363,6 +363,24 @@ function rewriteSelection(attemptDir: string, change: (manifest: ShiftManifest) 
   return () => { restoreJournal(); writeFileSync(statusPath, status); };
 }
 
+/** Set the source's spent calls in its final revision and its status alike, so only the spend itself can refuse. */
+function rewriteSpent(attemptDir: string, callsSpent: number): () => void {
+  const statusPath = statusFilePath(attemptDir);
+  const status = readFileSync(statusPath);
+  const restoreJournal = rewriteJournal(attemptDir, (records) => {
+    (records.at(-1)!.event.next["budget"] as { callsSpent: number }).callsSpent = callsSpent;
+  });
+  const next = JSON.parse(status.toString("utf8")) as { budget: { callsSpent: number } };
+  next.budget.callsSpent = callsSpent;
+  writeFileSync(statusPath, JSON.stringify(next));
+  return () => { restoreJournal(); writeFileSync(statusPath, status); };
+}
+
+/** The accepted record's own phase and acceptance, for one compiled phase. */
+function acceptedOf(records: JournalLine[], phaseKey: string): { phase: { key: string; ordinal: number; status: string }; accepted: { ordinal: number; candidateSha: string } } {
+  return acceptedRecord(records, phaseKey).event.evidence as never;
+}
+
 /** The shift's accepted record for one compiled phase, such as `t02-tests`. */
 function acceptedRecord(records: JournalLine[], phaseKey: string): JournalLine {
   const record = records.find((line) => line.event.evidence?.["type"] === "phase-accepted" &&
@@ -479,6 +497,41 @@ const SHIFT_SEED_REFUSALS: readonly ShiftSeedRefusal[] = [
       (acceptedRecord(records, "t01-build").event.evidence!["accepted"] as { round: number }).round += 1;
     }),
     expected: source("accepted ticket binding is missing or inconsistent at t01-build") },
+  { name: "accepted ticket builds and gates that agree on a commit the adoption never recorded",
+    apply: (world) => rewriteJournal(world.sourceDir, (records) => {
+      acceptedOf(records, "t02-build").accepted.candidateSha = world.first;
+      acceptedOf(records, "t02-tests").accepted.candidateSha = world.first;
+    }),
+    expected: source("the completed ticket prefix is not the exact one the adoption recorded") },
+  { name: "an accepted gate phase that names another phase",
+    apply: (world) => rewriteJournal(world.sourceDir, (records) => { acceptedOf(records, "t01-tests").phase.key = "t01-other"; }),
+    expected: source("accepted ticket binding is missing or inconsistent at t01-tests") },
+  { name: "an accepted gate phase whose phase ordinal is out of order",
+    apply: (world) => rewriteJournal(world.sourceDir, (records) => { acceptedOf(records, "t01-tests").phase.ordinal += 1; }),
+    expected: source("accepted ticket binding is missing or inconsistent at t01-tests") },
+  { name: "an accepted gate phase whose acceptance ordinal is out of order",
+    apply: (world) => rewriteJournal(world.sourceDir, (records) => { acceptedOf(records, "t01-tests").accepted.ordinal += 1; }),
+    expected: source("accepted ticket binding is missing or inconsistent at t01-tests") },
+  { name: "an accepted gate phase that never succeeded",
+    apply: (world) => rewriteJournal(world.sourceDir, (records) => { acceptedOf(records, "t01-tests").phase.status = "VALIDATING"; }),
+    expected: source("accepted ticket binding is missing or inconsistent at t01-tests") },
+  { name: "an accepted ticket build a later record left FAILED",
+    apply: (world) => rewriteJournal(world.sourceDir, (records) => {
+      const at = records.indexOf(acceptedRecord(records, "t01-build"));
+      const later = records.slice(at + 1).find((line) => line.event.evidence?.["type"] === "phase" &&
+        (line.event.evidence["phase"] as { key: string }).key === "t01-build");
+      assert.ok(later !== undefined, "the host recorded t01-build's state after accepting it");
+      (later.event.evidence!["phase"] as { status: string }).status = "FAILED";
+    }),
+    expected: source("phase t01-build did not stay SUCCEEDED after its acceptance") },
+  { name: "more recorded process calls than the source spent",
+    apply: (world) => rewriteSpent(world.sourceDir, 0),
+    expected: source("missing completed builder or settled call evidence") },
+  { name: "a source that recorded no process",
+    apply: (world) => rewriteJournal(world.sourceDir, (records) => {
+      for (const record of records) if (record.event.evidence?.["type"] === "process") delete record.event.evidence;
+    }),
+    expected: source("missing completed builder or settled call evidence") },
   { name: "a recorded ticket run the source never completed",
     apply: (world) => rewriteJournal(world.tailDir, (records) => {
       const adoption = records[0]!.event.evidence!["adoption"] as CandidateAdoptionEvidence;
