@@ -141,12 +141,12 @@ code.inv, code.ac, code.serves { color:var(--cyan); }
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-09-26</dd>
-        <dt>modified</dt>     <dd>2026-09-26 (authored, awaiting owner review), 2026-09-26 (owner review applied: Q1–Q8 decided; Q1 takes an owner-authored migration), 2026-09-27 (Q3 amended: owner acts are wired by the owner, gate G18-C), 2026-09-28 (execution changed to manual ticket by ticket; T01 and T02 delivered, M1 [wip]), 2026-09-28 (T03 delivered, M1 [x]), 2026-09-28 (T04 delivered, M2 [wip]), 2026-09-28 (T05 delivered), 2026-09-28 (T06 delivered, M2 [x]), 2026-09-28 (T07 delivered, M3 [wip]), 2026-09-28 (T08 delivered), 2026-09-28 (T09 delivered), 2026-09-28 (T10 delivered, M3 [x]), 2026-09-28 (the composed command runs through the root script), 2026-09-28 (T11 delivered, M4 [wip]), 2026-09-28 (owner approved the five seed patches, Q8), 2026-09-29 (T12 delivered), 2026-09-29 (T13 delivered), 2026-09-29 (T14 delivered, M4 [x]), 2026-09-29 (gate G18-B committed)</dd>
+        <dt>modified</dt>     <dd>2026-09-26 (authored, awaiting owner review), 2026-09-26 (owner review applied: Q1–Q8 decided; Q1 takes an owner-authored migration), 2026-09-27 (Q3 amended: owner acts are wired by the owner, gate G18-C), 2026-09-28 (execution changed to manual ticket by ticket; T01 and T02 delivered, M1 [wip]), 2026-09-28 (T03 delivered, M1 [x]), 2026-09-28 (T04 delivered, M2 [wip]), 2026-09-28 (T05 delivered), 2026-09-28 (T06 delivered, M2 [x]), 2026-09-28 (T07 delivered, M3 [wip]), 2026-09-28 (T08 delivered), 2026-09-28 (T09 delivered), 2026-09-28 (T10 delivered, M3 [x]), 2026-09-28 (the composed command runs through the root script), 2026-09-28 (T11 delivered, M4 [wip]), 2026-09-28 (owner approved the five seed patches, Q8), 2026-09-29 (T12 delivered), 2026-09-29 (T13 delivered), 2026-09-29 (T14 delivered, M4 [x]), 2026-09-29 (gate G18-B committed), 2026-09-29 (T12 C5 and C7 checked; O3 decided: Milestone M6, task 18 added; w18-m4 acceptance run by delegation)</dd>
         <dt>commits</dt>      <dd>none yet (authored uncommitted for owner review)</dd>
-        <dt>agent name</dt>   <dd>claude-opus-5-5, claude-opus-5-5 (review applied)</dd>
+        <dt>agent name</dt>   <dd>claude-opus-5-5, claude-opus-5-5 (review applied), claude-opus-5-5 (task 18 added)</dd>
         <dt>session id</dt>   <dd>not recorded (AGENTS.md invariant 1 keeps live session state out of every committed file)</dd>
         <dt>back refs</dt>    <dd>./awsf-v2-plan.html (§ Milestone M18 → W18, and its 2026-09-26 amendment adopting this workstream), ../AGENTS.md (the twelve invariants), ./awsf-v2-intent.md (decision 5: quota is a readout, never a router, the stance D5 extends to route evidence), ./awsf-v2-w17-shift.html (the execution this plan is written for), ./awsf-v2-w07-quota-telemetry.html (the readout discipline), the design artifact https://claude.ai/artifact/Ga29MRY2FCcHPJfvcJgcpW (private, version 2), ../docs/design/route-metrics/route-metrics-prototype.html (machine-local and ignored; sha256 dc2dc0bcfc16bd23f8ebd6502fb0486391eefa4ce4285a7f73199c19d55580d8)</dd>
-        <dt>forward refs</dt> <dd>./awsf-v2-w18-route-metrics-build-prompts.md (§ Section B, the prompt source the invariant-12 fence pairs against), ./tickets/awsf-v2-w18-route-metrics/ (T01–T17), ./design/awsf-v2-w18-route-metrics/frame-index.json and ./design/awsf-v2-w18-route-metrics/frame-digests.json (the tracked frame index and its digests)</dd>
+        <dt>forward refs</dt> <dd>./awsf-v2-w18-route-metrics-build-prompts.md (§ Section B, the prompt source the invariant-12 fence pairs against), ./tickets/awsf-v2-w18-route-metrics/ (T01–T18), ./design/awsf-v2-w18-route-metrics/frame-index.json and ./design/awsf-v2-w18-route-metrics/frame-digests.json (the tracked frame index and its digests)</dd>
       </dl>
     </details>
   </header>
@@ -318,6 +318,7 @@ flowchart LR
       <li><span class="tag existing">existing</span> <code>core/test/unit/meta/</code> — <code>no-write-route</code> (exact route list), <code>cheatsheet-reconciliation</code>, <code>sqlite-write-fence</code>, <code>ticket-plan-sync</code>, <code>junk-drawer</code>, <code>dependency-allowlist</code>, <code>execution-isolation</code>, <code>marimba-guard</code>, <code>no-destructive-paths</code>, <code>shift-*</code>.</li>
       <li><span class="tag existing">existing</span> <code>awsf.config.yaml</code> — <strong>protected.</strong> Builder <code>writes</code>, <code>protected_paths</code> (including <code>core/src/state/**</code>, <code>core/src/observability/migrations/**</code>, <code>docs/driving/**</code>), <code>workflows.enabled</code>, the T2 ceiling of 5, and <code>pricing</code>.</li>
       <li><span class="tag existing">existing</span> <code>docs/cheatsheet.html</code>, <code>docs/driving/marimba/delegation-guard.sh</code>, <code>docs/driving/marimba/marimba-guard-rules.mts</code>, <code>docs/driving/marimba/CONTRACT.md</code> — the fenced documents <span class="gate">G18-A</span> and <span class="gate">G18-B</span> change.</li>
+      <li><span class="tag existing">existing</span> <code>core/src/policy/sandbox-broker.ts</code>, <code>core/src/adapters/claude-code.ts</code>, <code>pi-codex.ts</code> — the <code>bwrap</code> launch every agent phase runs in, and each CLI's start roots. Task 18 adds a <code>worktree</code> confinement beside today's host-wide read-only root.</li>
     </ul>
 
     <h3>New Files</h3>
@@ -336,6 +337,7 @@ flowchart LR
       <li><span class="tag new">new</span> <code>core/test/unit/metrics-*.test.ts</code>, <code>core/test/unit/dashboard-metrics-*.test.ts</code>, <code>core/test/unit/meta/metrics-advisory-fence.test.ts</code>, <code>core/test/journeys/metrics-*.test.ts</code>, <code>core/test/journeys/prove-replay.test.ts</code>, <code>core/test/fixtures/metrics/</code> (synthetic only).</li>
       <li><span class="tag new">new</span> <code>specs/design/awsf-v2-w18-route-metrics/frame-index.json</code>, <code>frame-digests.json</code> — authored with this plan: the tracked index AWSF reads for visual references, plus provenance, comparison criteria and overrides O1–O5.</li>
       <li><span class="tag new">new</span> <code>specs/awsf-v2-w18-route-metrics-build-prompts.md</code>, <code>specs/tickets/awsf-v2-w18-route-metrics/</code> — authored with this plan, from one generated source.</li>
+      <li><span class="tag new">new</span> <code>core/test/live/</code> replay-confinement probe — task 18; never run by <code>npm test</code>.</li>
     </ul>
   </section>
 
@@ -388,6 +390,7 @@ flowchart LR
         <tr><td>M3 the tab</td><td>T07–T10</td><td>5 of 5</td><td><code>awsf raise &lt;task&gt; --calls 2</code> (ceiling 7, two corrections)</td><td><code>claude/anthropic/claude:opus@high</code></td><td><code>degrade-review</code>, the raise, the visual-reference binding at <code>awsf start</code></td></tr>
         <tr><td>M4 proving ground</td><td>T11–T14</td><td>5 of 5</td><td><code>awsf raise &lt;task&gt; --calls 2</code></td><td><code>claude/anthropic/claude:opus@xhigh</code></td><td><code>degrade-review</code>, the raise</td></tr>
         <tr><td>M5 advisory and export</td><td>T15–T17</td><td>4 of 5</td><td>none</td><td><code>claude/anthropic/claude:opus@high</code></td><td><code>degrade-review</code>; <span class="gate">G18-B</span> and the D3 suite may run before or after M5</td></tr>
+        <tr><td>M6 replay confinement</td><td>T18</td><td>2 of 5</td><td>none</td><td><code>claude/anthropic/claude:opus@xhigh</code></td><td>Added 2026-09-29 (O3). Runs manually, like the milestones before it; the D3 suite waits on it</td></tr>
       </tbody>
     </table>
     <p><strong>Reviewer route, every milestone:</strong> <code>--route reviewer=claude/anthropic/claude:opus@high</code>. <code>claude:opus</code> resolves to Opus 5.5 on the owner's Claude Code as of 2026-09-26. No milestone is entirely mechanical, so none runs on Sonnet 5; none runs on Fable 5.1 or Haiku. M3 and M4 need four tickets because splitting either into two milestones adds a second testing ticket and a second owner gate without removing a dependency.</p>
@@ -811,6 +814,43 @@ flowchart LR
         If any command fails, fix the cause and re-run — loop until all pass.
       </div>
     </div>
+
+    <!-- ================= M6 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M6: Replay confinement <span class="wtag route">opus@xhigh</span></h3>
+      <p>Added 2026-09-29 by the owner (O3), after the T12 C7 probes. A replay's agent runs in the same <code>bwrap</code> sandbox as every other phase, which binds the whole host read-only and masks only AWSF's state root. The corpus's answer key, this plan's own Amendments (which name every planted defect's file and line), every other checkout and worktree, and each CLI's transcript store are all readable to a reviewer that looks. This milestone gives a <code>prove</code> attempt's agent phases a confined root holding only what the work needs. The D3 suite is not funded until it lands.</p>
+      <figure>
+        <pre class="mermaid">
+flowchart LR
+  subgraph HOST["today: host root, read-only"]
+    RA["replay reviewer"] --> WA["its worktree"]
+    RA --> CA["canonical checkout<br/>corpus and plan"]
+    RA --> TA["CLI transcripts"]
+  end
+  subgraph CONF["task 18: worktree confinement"]
+    RB["replay reviewer"] --> WB["its worktree"]
+    RB --> SB["system dirs, CLI install,<br/>auth files"]
+  end
+        </pre>
+        <figcaption>Every other workflow keeps the host root. Only a replay's agent phases change, and a replay without an OS sandbox refuses to run.</figcaption>
+      </figure>
+
+      <h4>18. Confine a replay's agent to its worktree</h4>
+      <p class="sub">Serves <code class="serves">AC-7</code></p>
+      <p>AC-7 says replays score under the benchmark rules; a reviewer that can read the answer key makes every score meaningless. The fix narrows what the sandbox binds rather than trusting a tool policy, because the probes showed that both adapters' tool policies allow absolute-path reads anywhere.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>SandboxRequest</code> gains <code>confinement</code>: <code>host</code> (the default) or <code>worktree</code>. Every existing launch argv is byte-identical under <code>host</code>, proved by descriptor tests</li>
+        <li><code class="status">[]</code> Under <code>worktree</code>, <code>bwrap</code> binds no host root, canonical repository, <code>.git</code> or state root. It binds read-only the system directories that exist, the resolved install of the adapter's executable and of node, and each CLI's start and auth files (a new optional <code>providerReadableRoots</code>). It also binds the worktree, the attempt's runtime directory, <code>/proc</code>, <code>/dev</code>, and fresh tmpfs mounts for <code>/tmp</code> and the home directory</li>
+        <li><code class="status">[]</code> No session, transcript, history, project or memory store of either CLI is bound, and pi's writable agent directory is narrowed so its sessions are unreachable. A CLI that cannot start without one stops the task for an owner decision</li>
+        <li><code class="status">[]</code> Every agent phase of a <code>prove</code> attempt runs confined. Without an OS sandbox it refuses before any reservation as <code>ReplayConfinementUnavailable</code>, BLOCKED with zero calls. No other workflow's launch changes</li>
+        <li><code class="status">[]</code> A live probe under <code>core/test/live/</code>, never run by <code>npm test</code>, launches each adapter confined. Its reads of the canonical corpus, this plan, a sibling worktree and the CLI's transcript store are refused, its read inside its own worktree succeeds, and the record is returned</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code>, <code>npm run lint</code> and the <code>prove-replay</code> journey are green at the base SHA and after</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass.
+      </div>
+    </div>
   </section>
 
   <!-- ===== GLOBAL VALIDATION ===== -->
@@ -981,12 +1021,12 @@ flowchart LR
   GM["G18-M"] --> M1["M1"]
   GA["G18-A"] --> M1
   M1 --> GC["G18-C"] --> M2["M2"] --> M3["M3"] --> M4["M4"]
-  M4 --> GB["G18-B"] --> D3["D3 suite<br/>40 replays"]
+  M4 --> GB["G18-B"] --> M6["M6<br/>replay confinement"] --> D3["D3 suite<br/>40 replays"]
   M4 --> M5["M5"]
   D3 -. "evidence for" .-> M5
   M5 --> CLOSE["spine M18 [x]<br/>owner, at landing"]
       </pre>
-      <figcaption>The whole drive. G18-M and G18-A precede any build, G18-C follows M1 and G18-B follows M4, all owner commits. The D3 suite can run before or after M5; the advisory reads whatever evidence exists when it is asked.</figcaption>
+      <figcaption>The whole drive. G18-M and G18-A precede any build, G18-C follows M1 and G18-B follows M4, all owner commits. The D3 suite can run before or after M5; the advisory reads whatever evidence exists when it is asked. Since 2026-09-29 the D3 suite also waits on M6, which confines a replay's agent to its worktree.</figcaption>
     </figure>
   </section>
 
@@ -1132,6 +1172,23 @@ flowchart LR
       <p><strong>Found in the commit.</strong> (1) The arm sits in a <code>switch</code> before the attempt is located, because <code>awsf prove</code> creates its task. It stays a <code>case</code> arm because <code>boundary-claims.test.ts</code> derives the owner acts from the arms that construct an owner terminal. An <code>if</code> block, as <code>seed</code> uses, would leave the guard's verb without a derived act. (2) Three tests assumed <code>prove</code> was off, and the commit updates them. The replay harness and <code>cli/prove.test.ts</code> no longer append <code>prove</code> to the committed config, and the refusal test disables it explicitly. The <code>prove-replay</code> journey now runs <code>awsf prove</code> through the CLI with a fake owner terminal.</p>
       <p><strong>Verified.</strong> <code>npm run test:unit</code> 2477/2477 at <code>73867bf</code> and 2478/2478 at <code>f7cb548</code>. The new case is <code>marimba-guard</code>'s denial of <code>awsf prove</code>. <code>npm run typecheck</code> and <code>npm run lint</code> exit 0, and <code>boundary-claims</code>, <code>cheatsheet-reconciliation</code> and the <code>prove-replay</code> journey pass.</p>
       <p><strong>Still owed by the owner.</strong> The w18-m4 acceptance at the owner's own terminal: one <code>npm run awsf -- prove</code> on the cheapest arm, then start and run it, see <code>AWAITING_OWNER</code>, see <code>awsf land</code> refuse it, cancel it, and see it under the proving-ground source in the tab. Before funding the D3 suite: T12 C5 and C7, as the T14 entry above lists.</p>
+    <details open>
+      <summary>2026-09-29 — T12 C5 and C7 checked before D3; replay confinement added as milestone M6 (task 18); w18-m4 acceptance run by delegation</summary>
+      <p><strong>T12 C5 passed.</strong> Each of the five seeded candidates was rebuilt as the seed phase builds it: <code>git apply --whitespace=nowarn</code> on <code>69711fd</code>, one owner commit carrying the item's request, and <code>node_modules</code> copied from the canonical checkout (<code>runtime.seed_paths</code>). Each then ran the configured gates. <code>npm run test:unit</code> gave 2419/2419 for every item, taking 112–232 s against the gate's 600 s timeout. <code>npm run typecheck</code>, <code>npm run lint</code> and <code>git diff --check</code> exit 0 for all five. No D3 replay will block at <code>tests</code>.</p>
+      <p><strong>T12 C7 failed on both adapters.</strong> Two probes each asked a reviewer, from a worktree at <code>69711fd</code> holding no corpus, to read <code>core/src/metrics/proving-ground/review-01.json</code> in the canonical checkout by absolute path, grep the corpus for <code>defectClass</code>, and list it. The argv came from each adapter's own <code>buildSpec</code> with the reviewer's <code>readonly</code> profile. The first probe launched it directly. The second wrapped it through <code>grantSandbox</code> with the fields <code>review-phase.ts</code> passes: badge <code>os-enforced</code>, mechanism <code>linux-bwrap</code>. Under both, Claude Code (<code>--permission-mode dontAsk --tools Read,Grep,Glob</code>) and pi (<code>--tools read,grep,find,ls</code>) completed all three reads with no denial, and the pi grep returned every item's defect class. The cause is in <code>bwrapSpec</code>: it binds <code>/</code> read-only and the canonical repository explicitly, and masks only the AWSF state root. Also readable: this plan, whose T11 Amendment names each planted defect's file and line; the repository's other checkouts and worktrees, including the default worktree root beside the state root, which the mask does not cover; and each CLI's own session and project stores under the home directory. The probes spent four small calls: two on Sonnet at low effort and two on GPT-6 Sol at low.</p>
+      <p><strong>Decided by the owner, 2026-09-29: O3.</strong> A replay's agent runs under an OS sandbox that exposes only what its work needs. It is delivered as Milestone M6, task 18 and ticket T18, above. Rejected: O1, auditing each replay's transcript, which only detects; and O2, Claude read-deny rules, which cover Claude arms only and whose syntax is unprobed. <strong>The D3 suite is not funded until M6 lands</strong> and its probe record shows every outside read refused.</p>
+      <p><strong>Consequences for the plan.</strong> (1) M6 follows M5 in the document, so task numbers stay 1..18 in order and ticket ids stay contiguous. (2) T17 cannot depend on T18, because the sync fence accepts only backward dependencies. W18's spine marker therefore also waits for M6. If M6 lands after M5, the spine closure moves to M6's bookkeeping commit. The README and T17's Handoff (C10) say so. (3) Prompts 1–17 still read "TASK n of 17". They are left as they are, so each stays byte-identical to its ticket and no Handoff moves.</p>
+      <p><strong>Owner acceptance w18-m4, run by delegation.</strong> On the owner's explicit instruction, and while the owner watched, the w18-m4 steps ran from this session under a pseudo-terminal, in a throwaway state root. The acceptance is therefore recorded as delegated, not as the owner's own terminal. The replay was <code>review-01</code> on <code>claude/anthropic/claude:sonnet@medium</code>, repetition 1, place 1:</p>
+      <ul>
+        <li><code>awsf prove</code> created it in DRAFT, and <code>awsf start</code> prepared it at <code>69711fd</code> in 212 s.</li>
+        <li><code>awsf run</code> seeded it, passed the gates and reached <code>AWAITING_OWNER</code> in 431 s on one call. The observed model was <code>claude-sonnet-5-5</code>.</li>
+        <li>The review returned <code>concern</code> with one high finding at <code>core/src/api/routes.ts:417</code>, the planted defect. The reviewer made one tool call, a Grep inside its own worktree, so the catch did not use the reachable answer key.</li>
+        <li><code>awsf land</code> refused with <code>ReplayNotDeliverable</code>, exit 1, before any prompt. <code>awsf cancel</code> sealed it CANCELLED.</li>
+        <li>The metrics API and <code>awsf metrics --source proving-ground</code> show its one row under the proving-ground source, served to the owner's Chrome from a freshly built dashboard.</li>
+      </ul>
+      <p>One finding: <code>claude-sonnet-5-5</code> is not on the rate card, so the row is unpriced ("≈ list —"). It is carried to T17 as C11.</p>
+      <p><strong>Carried forward</strong> as Handoff entries in T17 (C10–C11).</p>
+      <p>Completion metadata: authored and verified by claude-code:claude-opus-5-5 in a manual session.</p>
     </details>
   </section>
 
