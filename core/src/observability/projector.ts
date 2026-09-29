@@ -12,6 +12,7 @@ import type { AttemptEvidence, RecordedAgentPurpose } from "./attempt-evidence.t
 import type { RouteSelectionProvenance } from "../contracts/route-selection.ts";
 import { attributionRecordDigest, type AttributionRecord } from "../contracts/attribution-record.ts";
 import type { ReplayRecord } from "../contracts/proving-ground.ts";
+import type { DecisionRecord } from "../contracts/decision-record.ts";
 import { resolvePhaseRoute } from "./phase-route.ts";
 import {
   scrubCredentialString,
@@ -272,6 +273,35 @@ function projectReplay(db: DatabaseSync, sessionId: string, sourceSeq: number, r
       itemId: replay.itemId, itemDigest: replay.itemDigest, arm: replay.arm, repetition: replay.repetition,
       order: replay.order, baseSha: replay.baseSha,
     }), at);
+}
+
+/**
+ * Projects one Jev decision record (W19 DD3) as one session-level `events` row
+ * of type `decision`. Task-scoped storage like an attribution: the record lives
+ * in the task's `decisions.jsonl`, `awsf db rebuild` replays that file through
+ * this same function, and the row id is the record's id, so projecting it twice
+ * is a no-op. No migration: decisions ride the existing events table.
+ *
+ * The row goes on the session of the attempt the record names; a task-level
+ * record (attempt null) goes on the task's newest attempt. A task with no
+ * projected session gets no row; the record is still durable, and the next
+ * rebuild places it.
+ */
+export function projectDecision(db: DatabaseSync, record: DecisionRecord): void {
+  const project = scrubCredentialString(record.project);
+  const taskId = scrubCredentialString(record.taskId);
+  const row = (record.attempt === null
+    ? db.prepare("SELECT session_id FROM sessions WHERE project_slug = ? AND task_id = ? ORDER BY attempt DESC LIMIT 1")
+      .get(project, taskId)
+    : db.prepare("SELECT session_id FROM sessions WHERE project_slug = ? AND task_id = ? AND attempt = ?")
+      .get(project, taskId, record.attempt)) as { session_id: string } | undefined;
+  if (row === undefined) return;
+  db.prepare(`INSERT OR IGNORE INTO events
+    (event_id, session_id, phase_id, first_source_seq, last_source_seq, type, name,
+     payload_json, started_at) VALUES (?, ?, NULL, 1, 1, 'decision', ?, ?, ?)`)
+    .run(`${row.session_id}:decision:${scrubCredentialString(record.id)}`, row.session_id,
+      `${record.questionSet.id}@${String(record.questionSet.version)} ${record.outcome}`,
+      stringifyRedacted(record), record.at);
 }
 
 export function createSession(db: DatabaseSync, init: SessionInit): void {

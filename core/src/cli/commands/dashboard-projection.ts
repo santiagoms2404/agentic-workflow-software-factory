@@ -3,8 +3,9 @@ import {
   assertAdvancementPermitted,
   observabilityDegraded,
 } from "../../observability/rebuild.ts";
-import { projectAttemptStatus, projectAttribution, projectTaskRelation } from "../../observability/projector.ts";
+import { projectAttemptStatus, projectAttribution, projectDecision, projectTaskRelation } from "../../observability/projector.ts";
 import type { AttributionRecord } from "../../contracts/attribution-record.ts";
+import type { DecisionRecord } from "../../contracts/decision-record.ts";
 import { openDatabase, type DatabaseSync } from "../../observability/sqlite.ts";
 import type { AttemptAdvancementGuard, AttemptProjector } from "./attempt.ts";
 import { toAttemptStatusProjection } from "./attempt-projection.ts";
@@ -20,6 +21,8 @@ export interface DashboardProjection {
   projectRelation(relation: { project: string; taskId: string; continuesTask: string; reason: string; at: string }): void;
   /** Projects one owner attribution. Task-scoped storage like a relation, so it has no cursor either. */
   projectAttribution(record: AttributionRecord): void;
+  /** Projects one Jev decision record (W19 DD3). Task-scoped like an attribution, so no cursor. */
+  projectDecision(record: DecisionRecord): void;
   readonly assertAdvancement: AttemptAdvancementGuard;
   /** Barrier precondition: projection must acknowledge registration before GO. */
   assertLaunchPermitted(sessionId: string): void;
@@ -81,6 +84,14 @@ export function createDashboardProjection(
         // Durable first, projected second, exactly as a relation: the record is
         // in the task's own journal, and `awsf db rebuild` reads that file.
         notice(`sqlite-projection-failed: ${record.project}/${record.taskId} attempt ${record.attempt} has an attribution that is journaled but not projected; run \`awsf db rebuild\`.`);
+      }
+    },
+    projectDecision(record): void {
+      try {
+        projectDecision(database(), record);
+      } catch {
+        // Durable first, projected second: the record is in the task's decisions.jsonl.
+        notice(`sqlite-projection-failed: ${record.project}/${record.taskId} has decision ${record.id} journaled but not projected; run \`awsf db rebuild\`.`);
       }
     },
     assertAdvancement(sessionId, to): void {

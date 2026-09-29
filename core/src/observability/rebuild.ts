@@ -21,10 +21,12 @@ import type { NormalizedEvent } from "../contracts/normalized-events.ts";
 import type { TaskState } from "../state/task-machine.ts";
 import { closeDatabase, integrityProblems, openDatabase, type DatabaseSync } from "./sqlite.ts";
 import type { AttributionRecord } from "../contracts/attribution-record.ts";
+import type { DecisionRecord } from "../contracts/decision-record.ts";
 import {
   createSession,
   projectAttemptStatus,
   projectAttribution,
+  projectDecision,
   projectEvent,
   type AttemptStatusProjection,
   type SessionInit,
@@ -128,6 +130,11 @@ export interface RebuildOptions {
    * they are projected once every session exists.
    */
   attributions?: readonly AttributionRecord[];
+  /**
+   * Every task's Jev decision records, each task's in file order (W19 DD3).
+   * Task-scoped like attributions, and projected after them.
+   */
+  decisions?: readonly DecisionRecord[];
   migrationsDir?: string;
   /** Injectable so the retained file's name is deterministic in tests. */
   stamp?: () => string;
@@ -323,6 +330,16 @@ export async function rebuildDatabase(options: RebuildOptions): Promise<RebuildR
       } catch (error) {
         return refuse(
           `projection failed replaying the attribution of ${record.project}/${record.taskId} attempt ${record.attempt}: ` +
+            `${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+    for (const record of options.decisions ?? []) {
+      try {
+        projectDecision(db, record);
+      } catch (error) {
+        return refuse(
+          `projection failed replaying decision ${record.id} of ${record.project}/${record.taskId}: ` +
             `${error instanceof Error ? error.message : String(error)}`,
         );
       }

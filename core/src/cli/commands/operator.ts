@@ -11,6 +11,7 @@ import { prepareDatabaseForReadonly } from "../../observability/sqlite.ts";
 import { journalFilePath } from "../../persistence/platform-paths.ts";
 import { declaredContinuation } from "../../persistence/task-relations.ts";
 import { readTaskAttributions } from "../../persistence/task-attributions.ts";
+import { readTaskDecisions } from "../../persistence/task-decisions.ts";
 import { toAttemptStatusProjection } from "./attempt-projection.ts";
 import { readAttempt, withLegacyDefaults, type AttemptEvent } from "./attempt.ts";
 
@@ -73,7 +74,9 @@ export async function rebuildCommand(stateRoot: string): Promise<RebuildReport> 
   // has a journaled attempt is read once, tasks in path order.
   const taskRoots = [...new Set(dirs.map((dir) => join(dir, "..")))].sort();
   const attributions = (await Promise.all(taskRoots.map(readTaskAttributions))).flat();
-  return rebuildDatabase({ targetPath: join(stateRoot, "awsf.db"), sources, attributions });
+  // Jev decision records (W19 DD3) sit beside the attempts in the same way.
+  const decisions = (await Promise.all(taskRoots.map(readTaskDecisions))).flat();
+  return rebuildDatabase({ targetPath: join(stateRoot, "awsf.db"), sources, attributions, decisions });
 }
 
 /** Candidates are deliberately only named. No delete operation exists in this module. */
