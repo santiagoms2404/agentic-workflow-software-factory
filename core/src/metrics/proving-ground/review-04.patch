@@ -1,0 +1,34 @@
+diff --git a/dashboard/shared/rate-card.ts b/dashboard/shared/rate-card.ts
+index 273c093..f6fc6f1 100644
+--- a/dashboard/shared/rate-card.ts
++++ b/dashboard/shared/rate-card.ts
+@@ -77,6 +77,29 @@ export function listEquivalentUsd(tokens: MetricsTokens, rate: RateCardRow): num
+     ((tokens.outputTokens ?? 0) + reasoning) * rate.output) / 1_000_000;
+ }
+ 
++/** One row's list-price equivalent by token kind, in USD. */
++export interface ListEquivalentParts {
++  readonly input: number;
++  readonly cacheRead: number;
++  readonly cacheWrite: number;
++  /** Output, with reasoning added under the same rule as `listEquivalentUsd`. */
++  readonly output: number;
++}
++
++/**
++ * `listEquivalentUsd` split by token kind, so a row can show which kind drives
++ * its figure. The four parts sum to `listEquivalentUsd`, up to rounding.
++ */
++export function listEquivalentParts(tokens: MetricsTokens, rate: RateCardRow): ListEquivalentParts {
++  const reasoning = tokens.reasoningRelation === "additive" ? tokens.reasoningTokens ?? 0 : 0;
++  return {
++    input: (tokens.inputTokens ?? 0) * rate.input / 1_000_000,
++    cacheRead: (tokens.cacheReadTokens ?? 0) * rate.cacheRead / 1_000_000,
++    cacheWrite: (tokens.cacheWriteTokens ?? 0) * rate.cacheRead / 1_000_000,
++    output: ((tokens.outputTokens ?? 0) + reasoning) * rate.output / 1_000_000,
++  };
++}
++
+ export const UNPRICED_REASONS = ["off-card", "unresolved-selector", "no-usage"] as const;
+ export type UnpricedReason = (typeof UNPRICED_REASONS)[number];
+ 

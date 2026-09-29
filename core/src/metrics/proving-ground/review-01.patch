@@ -1,0 +1,65 @@
+diff --git a/core/src/api/routes.ts b/core/src/api/routes.ts
+index 52ff9f5..6c6f323 100644
+--- a/core/src/api/routes.ts
++++ b/core/src/api/routes.ts
+@@ -407,15 +407,19 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
+       if (archivedRaw !== null && archivedRaw !== "true" && archivedRaw !== "false") {
+         throw new ApiRequestError(400, "invalid-query", "archived must be true or false");
+       }
++      // One row past the page says whether an older page exists without a count query.
+       const rows = listSessions(readDb, {
+-        limit,
++        limit: limit + 1,
+         ...(before === undefined ? {} : { before }),
+         ...(state === undefined ? {} : { state }),
+         archived: archivedRaw === "true",
+       });
++      const hasMore = rows.length >= limit;
++      const page = hasMore ? rows.slice(0, limit) : rows;
+       return jsonResponse({
+-        sessions: rows.map((row) => card(readDb, row)),
++        sessions: page.map((row) => card(readDb, row)),
+         plans: [...currentPlans().sessionPlans],
++        hasMore,
+       } satisfies SessionsResponse);
+     }),
+     session: safely(async (_request, params) => {
+diff --git a/core/test/unit/cli/operator.test.ts b/core/test/unit/cli/operator.test.ts
+index bfb0b2b..0d9872b 100644
+--- a/core/test/unit/cli/operator.test.ts
++++ b/core/test/unit/cli/operator.test.ts
+@@ -183,7 +183,7 @@ test("dash initializes an absent disposable projection before listening", async
+     // A fresh projection in a directory that registers no plans: both lists are
+     // empty, and `plans` is present rather than absent, so the sessions view
+     // reads "no registered plan" instead of undefined.
+-    assert.deepEqual(JSON.parse(response.body), { sessions: [], plans: [] });
++    assert.deepEqual(JSON.parse(response.body), { sessions: [], plans: [], hasMore: false });
+   } finally {
+     if (server?.listening) await new Promise<void>((done) => server?.close(() => done()));
+     rmSync(root, { recursive: true, force: true });
+diff --git a/dashboard/shared/types.ts b/dashboard/shared/types.ts
+index b058002..64d532f 100644
+--- a/dashboard/shared/types.ts
++++ b/dashboard/shared/types.ts
+@@ -274,6 +274,8 @@ export interface SessionsResponse {
+   sessions: SessionCard[];
+   /** The catalog's registered plans, so a run can be shown as spine or deep. */
+   plans: SessionPlan[];
++  /** More sessions match the query than this page holds. */
++  hasMore: boolean;
+ }
+ 
+ export interface TransitionSummary {
+diff --git a/dashboard/src/App.vue b/dashboard/src/App.vue
+index d4aa1bd..541e3cd 100644
+--- a/dashboard/src/App.vue
++++ b/dashboard/src/App.vue
+@@ -18,7 +18,7 @@ import { groupFilterValues } from "./session-groups.ts";
+ import { PLAN_KINDS } from "./session-plans.ts";
+ 
+ const health = ref<HealthResponse | null>(null);
+-const sessions = ref<SessionsResponse>({ sessions: [], plans: [] });
++const sessions = ref<SessionsResponse>({ sessions: [], plans: [], hasMore: false });
+ const configuredWorkflows = ref<readonly string[]>([]);
+ const selectedWorkflows = ref<readonly string[]>([]);
+ const selectedLifecycleStates = ref<readonly string[]>([]);

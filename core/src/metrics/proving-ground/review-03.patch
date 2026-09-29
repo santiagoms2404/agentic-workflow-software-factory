@@ -1,0 +1,26 @@
+diff --git a/core/src/cli/commands/raise.ts b/core/src/cli/commands/raise.ts
+index a49c766..a870094 100644
+--- a/core/src/cli/commands/raise.ts
++++ b/core/src/cli/commands/raise.ts
+@@ -126,6 +126,11 @@ export interface RaiseCommandOptions {
+   readonly terminal: OwnerTerminal;
+   readonly projectRecord?: AttemptProjector;
+   readonly now?: () => string;
++  /**
++   * The ceiling the owner read before asking, from `awsf status`. When given,
++   * a ceiling that has since moved is refused before anything is shown.
++   */
++  readonly expectedCeiling?: number;
+ }
+ 
+ export interface RaiseCommandResult {
+@@ -173,6 +178,9 @@ export async function raiseCommand(options: RaiseCommandOptions): Promise<RaiseC
+   if (isTerminalStatus(status)) throw new CeilingRaiseAttemptNotLive(status.lifecycleState, status.taskId);
+ 
+   const from = effectiveCeiling(status);
++  if (options.expectedCeiling !== undefined && options.expectedCeiling === from) {
++    throw new CeilingRaiseRaced(options.expectedCeiling, from);
++  }
+   if (from + calls > MAX_CALL_CEILING) throw new CeilingRaiseBeyondBound(from, calls, status.taskId);
+   const to = assertCeiling(from + calls, `${status.project}/${status.taskId}`);
+   const committed = status.budget.callsSpent + status.budget.callsReserved;

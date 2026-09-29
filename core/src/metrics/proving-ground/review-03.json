@@ -1,0 +1,20 @@
+{
+  "schema": "awsf.proving-ground-item/v1",
+  "id": "review-03",
+  "kind": "review",
+  "taskClass": "evidence-heavy-defect-review",
+  "role": "reviewer",
+  "baseSha": "69711fd879706a8a8da48de2c407285b9ef440c4",
+  "request": "Let raiseCommand take an optional expectedCeiling, the ceiling the owner read in awsf status, and refuse with CeilingRaiseRaced before anything is shown when the attempt's ceiling is no longer that number. The CLI flag is wired separately.",
+  "seed": {
+    "patch": "core/src/metrics/proving-ground/review-03.patch",
+    "defectClass": "inverted-guard",
+    "expected": [
+      {
+        "file": "core/src/cli/commands/raise.ts",
+        "lineStart": 181,
+        "lineEnd": 183
+      }
+    ]
+  }
+}

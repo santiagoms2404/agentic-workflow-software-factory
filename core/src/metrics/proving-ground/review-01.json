@@ -1,0 +1,20 @@
+{
+  "schema": "awsf.proving-ground-item/v1",
+  "id": "review-01",
+  "kind": "review",
+  "taskClass": "evidence-heavy-defect-review",
+  "role": "reviewer",
+  "baseSha": "69711fd879706a8a8da48de2c407285b9ef440c4",
+  "request": "Add a hasMore flag to GET /api/v1/sessions so the dashboard can tell whether more sessions match than the page holds, the way the events endpoint already reports it.",
+  "seed": {
+    "patch": "core/src/metrics/proving-ground/review-01.patch",
+    "defectClass": "off-by-one",
+    "expected": [
+      {
+        "file": "core/src/api/routes.ts",
+        "lineStart": 417,
+        "lineEnd": 417
+      }
+    ]
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "schema": "awsf.proving-ground-item/v1",
+  "id": "review-04",
+  "kind": "review",
+  "taskClass": "evidence-heavy-defect-review",
+  "role": "reviewer",
+  "baseSha": "69711fd879706a8a8da48de2c407285b9ef440c4",
+  "request": "Add listEquivalentParts to dashboard/shared/rate-card.ts: a row's list-price equivalent split into input, cache read, cache write and output under the rules listEquivalentUsd applies, so the metrics tab can show which token kind drives a figure.",
+  "seed": {
+    "patch": "core/src/metrics/proving-ground/review-04.patch",
+    "defectClass": "wrong-lookup-key",
+    "expected": [
+      {
+        "file": "dashboard/shared/rate-card.ts",
+        "lineStart": 98,
+        "lineEnd": 98
+      }
+    ]
+  }
+}

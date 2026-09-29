@@ -1,0 +1,20 @@
+{
+  "schema": "awsf.proving-ground-item/v1",
+  "id": "review-05",
+  "kind": "review",
+  "taskClass": "evidence-heavy-defect-review",
+  "role": "reviewer",
+  "baseSha": "69711fd879706a8a8da48de2c407285b9ef440c4",
+  "request": "Add Journal.appendAll(events) to core/src/persistence/journal.ts: append several canonical events under one fsync and return their stamped records in order, with the guarantees append gives a single event.",
+  "seed": {
+    "patch": "core/src/metrics/proving-ground/review-05.patch",
+    "defectClass": "unscrubbed-write",
+    "expected": [
+      {
+        "file": "core/src/persistence/journal.ts",
+        "lineStart": 122,
+        "lineEnd": 124
+      }
+    ]
+  }
+}

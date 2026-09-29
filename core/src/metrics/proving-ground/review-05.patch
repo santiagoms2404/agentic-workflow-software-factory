@@ -1,0 +1,30 @@
+diff --git a/core/src/persistence/journal.ts b/core/src/persistence/journal.ts
+index 395a60b..ea82cc7 100644
+--- a/core/src/persistence/journal.ts
++++ b/core/src/persistence/journal.ts
+@@ -107,6 +107,25 @@ export class Journal<T = unknown> {
+     return record;
+   }
+ 
++  /**
++   * Appends several canonical events under one fsync and returns their stamped
++   * records, in order. The sequence advances only once the write has returned,
++   * exactly as `append` advances it.
++   */
++  async appendAll(events: readonly T[]): Promise<JournalRecord<T>[]> {
++    if (events.length === 0) return [];
++    const first = await this.ensureNextSeq();
++    const recorded_at = new Date().toISOString();
++    const records = events.map((event, index): JournalRecord<T> => ({
++      source_seq: first + index,
++      recorded_at,
++      event,
++    }));
++    await this.log.appendLine(records.map((record) => JSON.stringify(record)).join("\n"));
++    this.nextSeq = first + records.length;
++    return records;
++  }
++
+   async close(): Promise<void> {
+     await this.log.close();
+   }

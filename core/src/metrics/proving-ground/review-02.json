@@ -1,0 +1,20 @@
+{
+  "schema": "awsf.proving-ground-item/v1",
+  "id": "review-02",
+  "kind": "review",
+  "taskClass": "evidence-heavy-defect-review",
+  "role": "reviewer",
+  "baseSha": "69711fd879706a8a8da48de2c407285b9ef440c4",
+  "request": "Add isLockHeld(lockPath) beside readLockHolder in core/src/persistence/attempt-lock.ts: true when the lock file names a holder, false when it is missing or names nobody. awsf status will use it to show an attempt as busy.",
+  "seed": {
+    "patch": "core/src/metrics/proving-ground/review-02.patch",
+    "defectClass": "missing-await",
+    "expected": [
+      {
+        "file": "core/src/persistence/attempt-lock.ts",
+        "lineStart": 60,
+        "lineEnd": 61
+      }
+    ]
+  }
+}

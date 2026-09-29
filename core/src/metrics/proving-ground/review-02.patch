@@ -1,0 +1,21 @@
+diff --git a/core/src/persistence/attempt-lock.ts b/core/src/persistence/attempt-lock.ts
+index dabe7a8..3e2356f 100644
+--- a/core/src/persistence/attempt-lock.ts
++++ b/core/src/persistence/attempt-lock.ts
+@@ -51,6 +51,16 @@ export async function readLockHolder(lockPath: string): Promise<LockHolder | nul
+   }
+ }
+ 
++/**
++ * Whether a lock file names a holder. `awsf status` asks this to say an attempt
++ * is busy without printing who holds it, and an unnamed or missing lock is not
++ * held.
++ */
++export async function isLockHeld(lockPath: string): Promise<boolean> {
++  const holder = readLockHolder(lockPath);
++  return holder !== null;
++}
++
+ /** Thrown when a reclaim is asked to remove a lock that a different holder now owns. */
+ export class LockHolderChanged extends Error {
+   constructor(lockPath: string, expected: LockHolder, found: LockHolder | null) {
