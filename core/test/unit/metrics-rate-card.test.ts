@@ -35,9 +35,11 @@ const DESIGN: Readonly<Record<string, readonly [number, number, number, number]>
   "claude-fable-5-1": [10, 12.5, 0.25, 50],
   "claude-opus-5-5": [4, 5, 0.2, 20],
   "claude-opus-5": [5, 6.25, 0.5, 25],
+  "claude-sonnet-5-5": [2, 2.5, 0.2, 10],
   "claude-sonnet-5": [2, 2.5, 0.2, 10],
   "claude-haiku-4-5": [1, 1.25, 0.1, 5],
   "gpt-6-astra": [10, 0, 1, 50],
+  "gpt-6.1-sol": [2, 0, 0.1, 10],
   "gpt-6-sol": [2, 0, 0.2, 10],
   "gpt-6-luna": [0.1, 0, 0.01, 0.5],
   "gpt-5.6-sol": [4, 0, 0.4, 20],
@@ -56,13 +58,13 @@ const tokens = (overrides: Partial<MetricsTokens> = {}): MetricsTokens => ({
 const OPUS_SELECTOR: MetricsRoute = { adapter: "claude", provider: "anthropic", model: "claude:opus", effort: "high" };
 const SOL_SELECTOR: MetricsRoute = { adapter: "codex", provider: "openai-codex", model: "codex:gpt-5.6-sol", effort: "xhigh" };
 
-test("the rate card validates against its schema and carries the design's ten rows exactly", () => {
+test("the rate card validates against its schema and carries its twelve rows exactly, all checked 2026-09-30", () => {
   assert.equal(Value.Check(RateCardSchema, RATE_CARD), true, JSON.stringify([...Value.Errors(RateCardSchema, RATE_CARD)]));
-  assert.equal(RATE_CARD.checkedAt, "2026-09-26");
+  assert.equal(RATE_CARD.checkedAt, "2026-09-30");
   assert.deepEqual(RATE_CARD_ROWS.map((row) => row.model), Object.keys(DESIGN));
   for (const row of RATE_CARD_ROWS) {
     assert.deepEqual([row.input, row.cacheWrite, row.cacheRead, row.output], DESIGN[row.model], row.model);
-    assert.equal(row.checkedAt, "2026-09-26");
+    assert.equal(row.checkedAt, "2026-09-30");
     assert.equal(row.source, row.provider === "anthropic" ? ANTHROPIC_PRICING_SOURCE : OPENAI_PRICING_SOURCE);
     assert.equal(row.model.startsWith("claude-"), row.provider === "anthropic");
     if (row.provider === "openai") assert.equal(row.cacheWrite, 0, "OpenAI charges no cache write");

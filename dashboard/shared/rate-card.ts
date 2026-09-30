@@ -18,7 +18,7 @@
 import type { RateCard, RateCardRow } from "./types.ts";
 import { canonicalModel, type MetricsRow, type MetricsTokens, type RowPrice } from "./route-metrics.ts";
 
-export const RATE_CARD_CHECKED_AT = "2026-09-26";
+export const RATE_CARD_CHECKED_AT = "2026-09-30";
 export const ANTHROPIC_PRICING_SOURCE = "https://platform.claude.com/docs/en/about-claude/pricing";
 export const OPENAI_PRICING_SOURCE = "https://developers.openai.com/api/docs/pricing";
 
@@ -35,9 +35,11 @@ export const RATE_CARD_ROWS: readonly RateCardRow[] = Object.freeze([
   anthropic({ model: "claude-fable-5-1", label: "Fable 5.1", tier: "state of the art", input: 10, cacheWrite: 12.5, cacheRead: 0.25, output: 50, note: "credit-billed, explicit authorization only" }),
   anthropic({ model: "claude-opus-5-5", label: "Opus 5.5", tier: "state of the art", input: 4, cacheWrite: 5, cacheRead: 0.2, output: 20, note: "released 2026-09-22, default effort medium" }),
   anthropic({ model: "claude-opus-5", label: "Opus 5", tier: "workhorse", input: 5, cacheWrite: 6.25, cacheRead: 0.5, output: 25, note: null }),
+  anthropic({ model: "claude-sonnet-5-5", label: "Sonnet 5.5", tier: "workhorse", input: 2, cacheWrite: 2.5, cacheRead: 0.2, output: 10, note: null }),
   anthropic({ model: "claude-sonnet-5", label: "Sonnet 5", tier: "workhorse", input: 2, cacheWrite: 2.5, cacheRead: 0.2, output: 10, note: "$2/$10 made permanent" }),
   anthropic({ model: "claude-haiku-4-5", label: "Haiku 4.5", tier: "lightweight", input: 1, cacheWrite: 1.25, cacheRead: 0.1, output: 5, note: null }),
   openai({ model: "gpt-6-astra", label: "GPT-6 Astra", tier: "state of the art", input: 10, cacheWrite: 0, cacheRead: 1, output: 50, note: "released 2026-09-04" }),
+  openai({ model: "gpt-6.1-sol", label: "GPT-6.1 Sol", tier: "workhorse", input: 2, cacheWrite: 0, cacheRead: 0.1, output: 10, note: "released 2026-09-30; cached input half of GPT-6 Sol's" }),
   openai({ model: "gpt-6-sol", label: "GPT-6 Sol", tier: "workhorse", input: 2, cacheWrite: 0, cacheRead: 0.2, output: 10, note: null }),
   openai({ model: "gpt-6-luna", label: "GPT-6 Luna", tier: "lightweight", input: 0.1, cacheWrite: 0, cacheRead: 0.01, output: 0.5, note: null }),
   openai({ model: "gpt-5.6-sol", label: "GPT-5.6 Sol", tier: "workhorse", input: 4, cacheWrite: 0, cacheRead: 0.4, output: 20, note: null }),
