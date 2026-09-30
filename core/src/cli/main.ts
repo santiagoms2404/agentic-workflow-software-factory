@@ -38,6 +38,7 @@ import { attributeCommand } from "./commands/attribute.ts";
 import { proveCommand } from "./commands/prove.ts";
 import { routesListCommand } from "./commands/routes.ts";
 import { METRICS_USAGE, metricsCommand } from "./commands/metrics.ts";
+import { METRICS_EXPORT_USAGE, metricsExportCommand } from "./commands/metrics-export.ts";
 import { advisoryRole, metricsAdviceCommand } from "./commands/metrics-advisory.ts";
 import { assertRoutesReachWorkflow, formatRouteOverride, parseRouteFlags, predictSameProviderReviewFor } from "../workflow/route-flags.ts";
 import { quotaCommand } from "./commands/quota.ts";
@@ -59,7 +60,7 @@ import { assertShiftAdmission, assessShiftAdmission, parseMilestoneSelection, se
 /** The complete owner-facing command table; documentation reconciles against it. */
 export const CLI_COMMANDS = Object.freeze([
   "init", "project", "new", "seed", "start", "run", "resume", "status", "watch", "rework", "review", "raise", "grant", "degrade-review", "attribute", "prove", "journey", "preview", "land", "publish", "cancel", "retry",
-  "relate", "doctor", "gc", "dash", "routes", "metrics", "db rebuild", "ticket", "backlog", "quota", "stage", "workflows", "shift plan", "group",
+  "relate", "doctor", "gc", "dash", "routes", "metrics", "metrics export", "db rebuild", "ticket", "backlog", "quota", "stage", "workflows", "shift plan", "group",
 ]);
 
 const USAGE = `usage: awsf init [path] --project <slug>\n       awsf <${CLI_COMMANDS.join("|")}> [task] [options]`;
@@ -422,6 +423,16 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
 
     if (command === "metrics") {
       // Read-only: projection and sealed ticket blobs only; no agent starts or state changes.
+      if (parsed.positionals[0] === "export") {
+        if (parsed.positionals.length !== 1 || parsed.milestones.length !== 0 || parsed.repositories.length !== 0 ||
+            Object.keys(parsed.flags).some((flag) => !["output", "state-root"].includes(flag))) {
+          throw new Error(METRICS_EXPORT_USAGE);
+        }
+        for (const line of metricsExportCommand({ stateRoot, extractedAt: new Date().toISOString(), repository: cwd,
+          ...(parsed.flags.output === undefined ? {} : { output: parsed.flags.output }),
+        })) out(line);
+        return 0;
+      }
       const advise = parsed.flags.advise === "true";
       const allowedFlags = advise
         ? ["advise", "plan", "role", "config", "state-root"]
