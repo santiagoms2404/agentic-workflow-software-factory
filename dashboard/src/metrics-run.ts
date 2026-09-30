@@ -191,6 +191,7 @@ export function listByKind(row: Pick<MetricsRoleRow, "route" | "resolvedModel" |
 
 export interface RoleLine {
   readonly role: string;
+  readonly taskClass: string;
   readonly dot: string;
   readonly provenance: string;
   readonly route: string;
@@ -232,6 +233,7 @@ export function roleLines(rows: readonly MetricsRoleRow[], price: RowPrice, cont
       const named = routeTitle(row.route, [row], context.rateCard, context.priorLabels);
       return {
         role: row.role,
+        taskClass: row.taskClass ?? "unclassified",
         dot: context.roleColors[row.role] ?? "var(--faint)",
         provenance: row.identityProvenance ?? "no identity",
         route: row.routeMixed ? "more than one route" : named.title,

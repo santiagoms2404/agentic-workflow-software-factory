@@ -53,7 +53,7 @@ export const VIEW_LABEL: Readonly<Record<MetricsView, string>> = {
 };
 
 /** The rail's order, top to bottom. Evidence source is drawn apart, as two pills with no select-all. */
-export const RAIL_FACETS = ["role", "model", "effort", "state", "workflow", "project"] as const;
+export const RAIL_FACETS = ["role", "model", "effort", "state", "workflow", "project", "taskClass"] as const;
 export type RailFacet = (typeof RAIL_FACETS)[number];
 export type FacetId = RailFacet | "source";
 
@@ -79,7 +79,7 @@ export const STATE_TONE: Readonly<Record<StateGroup, string>> = {
 };
 
 /** How the Ledger groups its rows. Task 9 draws it; a Matrix tile opens it grouped by run. */
-export const LEDGER_GROUPS = ["route", "role", "model", "effort", "workflow", "project", "run"] as const;
+export const LEDGER_GROUPS = ["route", "role", "model", "effort", "workflow", "project", "taskClass", "run"] as const;
 export type LedgerGroup = (typeof LEDGER_GROUPS)[number];
 
 /** The Ledger's column families, in the order the column pills list them. */

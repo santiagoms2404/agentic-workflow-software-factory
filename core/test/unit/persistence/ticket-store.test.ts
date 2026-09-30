@@ -33,7 +33,9 @@ test("Ticket is one TypeBox source for runtime validation, static type, and JSON
   assert.equal(Value.Check(TicketSchema, { ...valid, extra: true }), false);
   const emitted = emitTicketJsonSchema();
   assert.equal(emitted["$id"], "awsf.ticket/v1");
-  assert.deepEqual(emitted.required, Object.keys(TicketSchema.properties));
+  assert.deepEqual(emitted.required, Object.keys(TicketSchema.properties).filter((key) => key !== "task_class"));
+  assert.equal(Value.Check(TicketSchema, { ...valid, task_class: "bounded-source-change" }), true);
+  assert.equal(Value.Check(TicketSchema, { ...valid, task_class: "other" }), false);
 });
 
 test("the ticket corpus validates", async () => {

@@ -210,10 +210,10 @@ function kindWidth(share: number): string {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="line in lines" :key="line.role">
+          <tr v-for="line in lines" :key="`${line.role}:${line.taskClass}`">
             <th scope="row" class="ledger-key">
               <span class="ledger-key-title"><i class="metrics-dot" :style="{ background: line.dot }" aria-hidden="true" />{{ line.role }}</span>
-              <small>{{ line.provenance }}</small>
+              <small>{{ line.taskClass }} · {{ line.provenance }}</small>
             </th>
             <td class="run-route">
               <svg v-if="line.provider === 'openai'" class="metrics-glyph" viewBox="0 0 10 10" aria-hidden="true"><path d="M5 0.6 9.4 5 5 9.4 0.6 5Z" /></svg>

@@ -1,6 +1,5 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import * as planTickets from "../../src/persistence/plan-tickets.ts";
@@ -17,11 +16,6 @@ const ROOT = join(import.meta.dirname, "..", "..", "..");
 const FIXTURES = join(ROOT, "core", "test", "fixtures", "plan-ticket-body");
 const TICKETS = join(ROOT, "specs", "tickets");
 const W17_T01 = join(TICKETS, "awsf-v2-w17-shift", "T01.md");
-
-// plan-tickets.ts's bytes at the W17 base (bc0af41). The body reader is a new
-// file precisely so the frontmatter path keeps its cost and its cache; a change
-// here means that decision was undone, not that this pin needs refreshing.
-const PLAN_TICKETS_SHA256 = "ccb52c2dcdb5b508358ae864f7076d8529bc303c23a90397166bf36e3e22aa42";
 
 function refusal(code: string) {
   return (error: unknown) => error instanceof PlanTicketBodyError && error.code === code;
@@ -98,10 +92,14 @@ test("the identity reader returns the frontmatter id and title only", () => {
   assert.equal(parsePlanTicketIdentity("no frontmatter"), null);
 });
 
-test("plan-tickets.ts keeps its bytes and its exported shape", () => {
-  const bytes = readFileSync(join(ROOT, "core", "src", "persistence", "plan-tickets.ts"));
-  assert.equal(createHash("sha256").update(bytes).digest("hex"), PLAN_TICKETS_SHA256);
-  assert.deepEqual(Object.keys(planTickets).sort(), ["PlanTicketReader"]);
+test("the frontmatter reader keeps body parsing separate and its stat-keyed cache", () => {
+  // W18 T15 intentionally extends frontmatter validation, so a whole-file
+  // hash is no longer the invariant. Keep W17's separation and cache instead.
+  const source = readFileSync(join(ROOT, "core", "src", "persistence", "plan-tickets.ts"), "utf8");
+  assert.doesNotMatch(source, /import.*plan-ticket-body|parsePlanTicketBody\(|parsePlanTicketHandoff\(/);
+  assert.match(source, /cached\?\.fingerprint === fingerprint/);
+  assert.deepEqual(Object.keys(planTickets).sort(), ["PlanTicketReader", "parsePlanTicketData"]);
+  assert.ok(!Object.hasOwn(planTickets.parsePlanTicketData(readFileSync(W17_T01, "utf8"))!, "prompt"));
   assert.deepEqual(
     Object.getOwnPropertyNames(planTickets.PlanTicketReader.prototype).sort(),
     ["constructor", "load", "source"],

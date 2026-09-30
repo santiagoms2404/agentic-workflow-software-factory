@@ -416,14 +416,15 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
     }
 
     if (command === "metrics") {
-      // Read-only: the projection opens read-only and nothing is spawned or written.
-      const unsupportedFlags = Object.keys(parsed.flags).filter((flag) => !["role", "source", "started-before", "json", "state-root"].includes(flag));
+      // Read-only: projection and sealed ticket blobs only; no agent starts or state changes.
+      const unsupportedFlags = Object.keys(parsed.flags).filter((flag) => !["role", "task-class", "source", "started-before", "json", "state-root"].includes(flag));
       if (parsed.positionals.length !== 0 || unsupportedFlags.length !== 0) throw new Error(METRICS_USAGE);
       for (const line of metricsCommand({
         dbPath: resolve(stateRoot, "awsf.db"),
         extractedAt: new Date().toISOString(),
         json: parsed.flags.json === "true",
         ...(parsed.flags.role === undefined ? {} : { role: parsed.flags.role }),
+        ...(parsed.flags["task-class"] === undefined ? {} : { taskClass: parsed.flags["task-class"] }),
         ...(parsed.flags.source === undefined ? {} : { source: parsed.flags.source }),
         ...(parsed.flags["started-before"] === undefined ? {} : { startedBefore: parsed.flags["started-before"] }),
       })) out(line);

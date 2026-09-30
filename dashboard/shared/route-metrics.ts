@@ -437,6 +437,11 @@ export function heuristicSplit(runs: readonly { readonly heuristicAttribution: s
 // The lens.
 // ---------------------------------------------------------------------------
 
+/** Missing ticket metadata is an explicit comparison class, never a wildcard. */
+export function taskClassOf(row: Pick<MetricsRow, "taskClass">): string {
+  return row.taskClass ?? "unclassified";
+}
+
 export type FacetValue = string | null;
 
 export interface LensFacet {
@@ -453,6 +458,7 @@ export const LENS_FACETS: readonly LensFacet[] = Object.freeze([
   { id: "state", title: "Terminal state", value: (row: MetricsRow) => row.stateGroup },
   { id: "workflow", title: "Workflow", value: (row: MetricsRow) => row.workflow },
   { id: "project", title: "Project", value: (row: MetricsRow) => row.project },
+  { id: "taskClass", title: "Task class", value: taskClassOf },
   { id: "source", title: "Evidence source", value: (row: MetricsRow) => evidenceSource(row) },
 ]);
 
@@ -574,6 +580,10 @@ function dominates(q: { x: number; interval: Interval }, p: { x: number; interva
  * line; the rest come back hollow. Routes that tie exactly are both on the line.
  */
 export function frontier(rows: readonly MetricsRow[], role: string, y: FrontierY, x: FrontierX, price: RowPrice): Frontier {
+  // A multi-select lens may show multiple classes, but no verdict may pool them.
+  if (new Set(rows.filter((row) => row.role === role).map(taskClassOf)).size > 1) {
+    return { role, y, x, points: [], line: [], unplaced: [], excluded: 0 };
+  }
   const candidates = [...byRoute(rows, role)].map(([key, group]) => {
     const s = stats(group, price);
     const { interval, n } = yInterval(group, s, y);
@@ -722,7 +732,8 @@ function byCost(a: RouteEvidence, b: RouteEvidence): number {
 /**
  * The cheapest route whose first-pass interval overlaps the best route's,
  * among the role's routes with at least 5 settled rankable rows in one
- * evidence source and, when given, one task class. When no route has 5 settled
+ * evidence source and one task class. A null class admits a single observed
+ * class, but refuses mixed classes rather than comparing them. When no route has 5 settled
  * rows, routes rank by the posterior mean of a Beta prior of strength 4 whose
  * mean the caller supplies, and the result is labelled `prior only`; the
  * untested routes join that ranking with no local evidence, and routes with no
@@ -735,7 +746,8 @@ export function recommend(
   source: EvidenceSource,
   options: RecommendOptions,
 ): Recommendation | null {
-  const scoped = rows.filter((row) => evidenceSource(row) === source && (taskClass === null || row.taskClass === taskClass));
+  const scoped = rows.filter((row) => evidenceSource(row) === source && (taskClass === null || taskClassOf(row) === taskClass));
+  if (new Set(scoped.filter((row) => row.role === role).map(taskClassOf)).size > 1) return null;
   const evidence = [...byRoute(scoped, role)].map(([key, group]): RouteEvidence => {
     const s = stats(group, options.price);
     const route = routeOfGroup(group);

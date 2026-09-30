@@ -2,7 +2,7 @@
 import { computed, ref } from "vue";
 import type { MetricsRoleRow, RateCardRow } from "../../shared/types.ts";
 import { listPrice } from "../../shared/rate-card.ts";
-import { frontier, verdicts, type FrontierX, type FrontierY } from "../../shared/route-metrics.ts";
+import { frontier, taskClassOf, verdicts, type FrontierX, type FrontierY } from "../../shared/route-metrics.ts";
 import {
   X_PILLS,
   Y_PILLS,
@@ -29,6 +29,7 @@ const emit = defineEmits<{ change: [change: Partial<FrontierState>] }>();
 
 const roles = computed(() => frontierRoles(props.rows));
 const role = computed(() => frontierRole(props.state.role, props.rows));
+const mixedClasses = computed(() => new Set(props.rows.filter((row) => row.role === role.value).map(taskClassOf)).size > 1);
 const names = computed(() => routeNames(props.rows, props.rateCard, props.priorLabels));
 const front = computed(() => (role.value === null ? null : frontier(props.rows, role.value, props.state.y, props.state.x, listPrice)));
 const plot = computed(() => (front.value === null || front.value.points.length === 0 ? null : frontierPlot(front.value, names.value)));
@@ -117,7 +118,8 @@ function diamond(mark: FrontierMark): string {
         >{{ pill.label }}</button>
       </div>
 
-      <p v-if="plot === null" class="metrics-note">
+      <p v-if="mixedClasses" class="metrics-note">Select one Task class for {{ role }} to compare routes. Verdicts never pool classes.</p>
+      <p v-else-if="plot === null" class="metrics-note">
         {{ state.x === "list-per-row" ? "No priced, settled rows" : "No settled rows with minutes" }} for {{ role }} in the lens.
       </p>
       <div v-else class="frontier-plot">

@@ -1,4 +1,4 @@
-// One row per role per run: every agent phase of one role in one session,
+// One row per role and task class per run: every agent phase in that scope,
 // folded into the outcomes the W18 metric catalog defines. Each outcome is a
 // named pure function over that role's phases, gate rows and envelope rounds.
 // `readRunFacts` is the only function here that queries SQLite, and it only
@@ -12,6 +12,8 @@
 // carried as the verdict the run recorded and never read as evidence of
 // quality: a reviewer that misses defects produces the same clean review.
 
+import { readShiftTaskClasses } from "./task-class.ts";
+import type { TicketTaskClass } from "../contracts/ticket.ts";
 import type { DatabaseSync } from "../observability/sqlite.ts";
 import type { EffortSource } from "../observability/phase-route.ts";
 import type { ModelResolutionProvenance } from "../contracts/normalized-events.ts";
@@ -85,6 +87,8 @@ export interface RunFacts extends AttributionRun {
   readonly ownerAttribution: OwnerAttribution | null;
   /** The replay record the projector wrote for a `prove` session, or `null`. */
   readonly replay: RunReplay | null;
+  /** Validated ticket metadata joined through the compiled shift recipe. */
+  readonly taskClasses?: ReadonlyMap<string, TicketTaskClass>;
 }
 
 export type UsageAuthority = "provider" | "partial" | "none";
@@ -108,6 +112,7 @@ export interface RoleRow {
   readonly taskId: string;
   readonly attempt: number;
   readonly role: string;
+  readonly taskClass: TicketTaskClass | "unclassified";
   /** All null when `routeMixed`: a row keyed to one route must have run on one. */
   readonly route: RoleRoute;
   /** `null` when the phases' effort sources disagree, or on rows projected before migration 0007. */
@@ -328,13 +333,15 @@ function sum(phases: readonly PhaseFacts[], value: (phase: PhaseFacts) => number
   return phases.reduce((total, phase) => total + value(phase), 0);
 }
 
-function roleRow(run: RunFacts, role: string, phases: readonly PhaseFacts[], attribution: EffectiveAttribution): RoleRow {
+function roleRow(run: RunFacts, role: string, phases: readonly PhaseFacts[], attribution: EffectiveAttribution,
+  taskClass: RoleRow["taskClass"], split: boolean): RoleRow {
   const ids = new Set(phases.map((phase) => phase.phaseId));
   const gates = run.gates.filter((gate) => ids.has(gate.phaseId));
   const envelopes = run.envelopes.filter((envelope) => ids.has(envelope.phaseId));
   const group = stateGroup(run.lifecycleState);
   const minutes = phases.map((phase) => phase.minutes).filter((value): value is number => value !== null);
-  const failed = failedHere(run, role);
+  const blocked = blockedAgentPhase(run);
+  const failed = failedHere(run, role) && blocked !== null && phases.some((phase) => phase.phaseKey === blocked.key);
   const tools = Object.fromEntries(TOOL_CLASSES.map((name) => [name, sum(phases, (phase) => phase.tools.byClass[name])]));
   // `agent_sessions` is keyed by session and role, so every phase of the role shares one row.
   const session = phases[0]!.role;
@@ -343,10 +350,11 @@ function roleRow(run: RunFacts, role: string, phases: readonly PhaseFacts[], att
     taskId: run.taskId,
     attempt: run.attempt,
     role,
+    taskClass,
     ...routeOf(phases),
     identityProvenance: provenanceOf(phases),
     resolvedModel: resolvedModelOf(phases),
-    calls: session?.callCount ?? sum(phases, (phase) => phase.turns),
+    calls: split ? sum(phases, (phase) => phase.turns) : session?.callCount ?? sum(phases, (phase) => phase.turns),
     turns: sum(phases, (phase) => phase.turns),
     phases: phases.length,
     minutes: minutes.length === 0 ? null : minutes.reduce((total, value) => total + value, 0),
@@ -394,16 +402,22 @@ function roleRow(run: RunFacts, role: string, phases: readonly PhaseFacts[], att
   };
 }
 
-/** One row per role that ran in each run, roles in the order their first phase ran. A role that never ran has no row. */
+/** One row per role/class that ran, in first-phase order. A role that never ran has no row. */
 export function buildRoleRows(runs: readonly RunFacts[]): RoleRow[] {
   return runs.flatMap((run) => {
     const byRole = new Map<string, PhaseFacts[]>();
+    const taskClassOf = (phase: PhaseFacts): RoleRow["taskClass"] =>
+      run.workflowId === "shift" ? run.taskClasses?.get(phase.phaseKey) ?? "unclassified" : "unclassified";
     for (const phase of [...run.agentPhases].sort((a, b) => a.ordinal - b.ordinal)) {
-      if (phaseRan(phase)) append(byRole, phase.owner, phase);
+      if (phaseRan(phase)) append(byRole, `${phase.owner}\u0000${taskClassOf(phase)}`, phase);
     }
-    // The owner's journaled override takes precedence over the heuristic.
+    // Different classes must not be folded into one row, even in one shift.
     const attribution = effectiveAttribution(run, run.ownerAttribution);
-    return [...byRole].map(([role, phases]) => roleRow(run, role, phases, attribution));
+    return [...byRole.values()].map((phases) => {
+      const role = phases[0]!.owner;
+      const split = [...byRole.values()].filter((group) => group[0]!.owner === role).length > 1;
+      return roleRow(run, role, phases, attribution, taskClassOf(phases[0]!), split);
+    });
   });
 }
 
@@ -426,6 +440,7 @@ interface SessionQueryRow {
   usage_authority: UsageAuthority;
   started_at: string;
   ended_at: string | null;
+  journal_path: string;
 }
 
 function append<T>(grouped: Map<string, T[]>, key: string, value: T): void {
@@ -485,7 +500,7 @@ function replays(db: DatabaseSync): Map<string, RunReplay> {
 /** Reads every run as `RunFacts`, sessions in start order. Read-only SQL on the caller's connection. */
 export function readRunFacts(db: DatabaseSync): RunFacts[] {
   const sessions = db.prepare(`SELECT session_id, project_slug, task_id, attempt, workflow_id, risk_tier, plan_ref,
-      lifecycle_state, review_verdict, owner_reentries, observability_degraded, usage_authority, started_at, ended_at
+      lifecycle_state, review_verdict, owner_reentries, observability_degraded, usage_authority, started_at, ended_at, journal_path
     FROM sessions ORDER BY started_at, session_id`).all() as unknown as SessionQueryRow[];
   const phases = groupBy(db.prepare(`SELECT session_id, phase_key, ordinal, kind, owner, status, error_code
       FROM phases ORDER BY session_id, ordinal`).all() as unknown as Array<{
@@ -532,6 +547,7 @@ export function readRunFacts(db: DatabaseSync): RunFacts[] {
     envelopes: envelopes.get(session.session_id) ?? [],
     ownerAttribution: owners.get(session.session_id) ?? null,
     replay: recorded.get(session.session_id) ?? null,
+    taskClasses: session.workflow_id === "shift" ? readShiftTaskClasses(session.journal_path) : new Map(),
   }));
 }
 

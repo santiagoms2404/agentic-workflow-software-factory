@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { parse } from "yaml";
+import { TICKET_TASK_CLASSES } from "../../../src/contracts/ticket.ts";
 import { loadCatalog } from "../../../src/registry/catalog.ts";
 import { isPlanIdentifierClaim, spineCoverage } from "../../../src/registry/plan-spine.ts";
 import {
@@ -102,6 +103,7 @@ interface Ticket {
   state: string;
   depends_on: string[];
   workflow: string | undefined;
+  task_class: unknown;
   serves: string[] | undefined;
   prompt: string;
 }
@@ -131,6 +133,7 @@ function tickets(set: PlanSet): Ticket[] {
         state: String(fm.state),
         depends_on: (fm.depends_on as string[]) ?? [],
         workflow: fm.workflow === undefined ? undefined : String(fm.workflow),
+        task_class: fm.task_class,
         serves: fm.serves === undefined ? undefined : (fm.serves as string[]),
         prompt: (split[1] ?? "").replace(/\n+$/, ""),
       };
@@ -287,6 +290,18 @@ test("a done ticket never waits on unfinished work except at the declared G1 inv
   }
 });
 
+function validTaskClass(value: unknown): boolean {
+  return value === undefined || (typeof value === "string" && (TICKET_TASK_CLASSES as readonly string[]).includes(value));
+}
+
+test("the task-class fence rejects unknown and non-string values without coercion", () => {
+  for (const value of TICKET_TASK_CLASSES) assert.equal(validTaskClass(value), true);
+  assert.equal(validTaskClass(undefined), true);
+  for (const value of ["unclassified", "unknown", "", null, 1, [TICKET_TASK_CLASSES[0]]]) {
+    assert.equal(validTaskClass(value), false, JSON.stringify(value));
+  }
+});
+
 test("frontmatter values stay inside their vocabularies", () => {
   for (const set of planSets()) {
     const offenders: string[] = [];
@@ -303,6 +318,9 @@ test("frontmatter values stay inside their vocabularies", () => {
       }
       if (ticket.workflow !== undefined && !WORKFLOWS.includes(ticket.workflow)) {
         offenders.push(`${set.label}/${ticket.id}: workflow "${ticket.workflow}"`);
+      }
+      if (!validTaskClass(ticket.task_class)) {
+        offenders.push(`${set.label}/${ticket.id}: task_class ${JSON.stringify(ticket.task_class)}`);
       }
       if (
         ticket.serves !== undefined

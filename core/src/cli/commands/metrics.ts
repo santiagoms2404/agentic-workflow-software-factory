@@ -2,8 +2,9 @@
 // payload `GET /api/v1/metrics` serves (W18 task 6).
 //
 // It spends nothing and writes nothing: it opens the projection read-only,
-// builds the payload through `core/src/metrics/payload.ts`, and prints. No
-// process is started, no phase runs and no call is reserved.
+// builds the payload through `core/src/metrics/payload.ts`, and prints. Shift
+// classes read sealed ticket blobs with Git; no agent starts, no phase runs
+// and no provider call is reserved.
 //
 // It computes no statistic of its own. Grouping, counts, intervals, depth and
 // verdicts come from `dashboard/shared/route-metrics.ts`, and every price from
@@ -19,6 +20,7 @@
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { publicApiValue } from "../../api/responses.ts";
+import { TICKET_TASK_CLASSES } from "../../contracts/ticket.ts";
 import type { ProvingGroundItem } from "../../contracts/proving-ground.ts";
 import { buildMetricsPayload } from "../../metrics/payload.ts";
 import { readReplayOutcomes, routeArmProtocol, routeArmReplays, type ReplayOutcome } from "../../metrics/route-arm-replays.ts";
@@ -36,6 +38,7 @@ import {
   heuristicSplit,
   routeCells,
   stats,
+  taskClassOf,
   verdicts,
   type EvidenceSource,
   type Interval,
@@ -44,6 +47,7 @@ import {
 
 export interface MetricsFilter {
   readonly role: string | null;
+  readonly taskClass?: string | null;
   readonly source: EvidenceSource;
   /** Keeps runs that started strictly before this instant. */
   readonly startedBefore: string | null;
@@ -55,6 +59,7 @@ export interface MetricsCommandOptions {
   readonly extractedAt: string;
   readonly json?: boolean;
   readonly role?: string;
+  readonly taskClass?: string;
   readonly source?: string;
   readonly startedBefore?: string;
   /** The checkout whose corpus scores the replays. Defaults to the checkout this CLI belongs to, which holds the corpus. */
@@ -70,10 +75,10 @@ export interface ProvingGroundEvidence {
 const CHECKOUT = fileURLToPath(new URL("../../../../", import.meta.url));
 
 export const METRICS_USAGE =
-  "usage: awsf metrics [--role R] [--source production|proving-ground] [--started-before ISO] [--json] [--state-root PATH]";
+  "usage: awsf metrics [--role R] [--task-class CLASS] [--source production|proving-ground] [--started-before ISO] [--json] [--state-root PATH]";
 
 /** The filter the flags spell. Statistics compare within one evidence source, so `production` is the default. */
-export function metricsFilter(options: Pick<MetricsCommandOptions, "role" | "source" | "startedBefore">): MetricsFilter {
+export function metricsFilter(options: Pick<MetricsCommandOptions, "role" | "taskClass" | "source" | "startedBefore">): MetricsFilter {
   const source = options.source ?? "production";
   if (!(EVIDENCE_SOURCES as readonly string[]).includes(source)) {
     throw new Error(`--source must be one of ${EVIDENCE_SOURCES.join(", ")}; got ${JSON.stringify(source)}`);
@@ -82,7 +87,10 @@ export function metricsFilter(options: Pick<MetricsCommandOptions, "role" | "sou
     throw new Error(`--started-before must be an ISO 8601 instant; got ${JSON.stringify(options.startedBefore)}`);
   }
   if (options.role !== undefined && options.role.length === 0) throw new Error("--role must name a role");
-  return { role: options.role ?? null, source: source as EvidenceSource, startedBefore: options.startedBefore ?? null };
+  if (options.taskClass !== undefined && ![...TICKET_TASK_CLASSES, "unclassified"].includes(options.taskClass)) {
+    throw new Error(`--task-class must be one of ${[...TICKET_TASK_CLASSES, "unclassified"].join(", ")}`);
+  }
+  return { role: options.role ?? null, taskClass: options.taskClass ?? null, source: source as EvidenceSource, startedBefore: options.startedBefore ?? null };
 }
 
 function readProjection<T>(dbPath: string, read: (db: DatabaseSync) => T): T {
@@ -101,9 +109,9 @@ export function readMetricsPayload(dbPath: string, extractedAt: string): Metrics
 }
 
 export function metricsCommand(options: MetricsCommandOptions): readonly string[] {
-  const filtered = options.role !== undefined || options.source !== undefined || options.startedBefore !== undefined;
+  const filtered = options.role !== undefined || options.taskClass !== undefined || options.source !== undefined || options.startedBefore !== undefined;
   if (options.json === true && filtered) {
-    throw new Error("--json prints the unfiltered API payload; --role, --source and --started-before narrow the table only");
+    throw new Error("--json prints the unfiltered API payload; --role, --task-class, --source and --started-before narrow the table only");
   }
   const filter = metricsFilter(options);
   if (filter.source !== "proving-ground") {
@@ -130,7 +138,8 @@ export function filterRuns(runs: readonly MetricsRun[], filter: MetricsFilter): 
 
 /** The rows the table reads. A filter narrows rows and never alters one. */
 export function filterRows(rows: readonly MetricsRoleRow[], filter: MetricsFilter): MetricsRoleRow[] {
-  return rows.filter((row) => (filter.role === null || row.role === filter.role) && inScope(row, filter));
+  return rows.filter((row) => (filter.role === null || row.role === filter.role) &&
+    (filter.taskClass == null || taskClassOf(row) === filter.taskClass) && inScope(row, filter));
 }
 
 function percent(value: number | null): string {
@@ -171,6 +180,7 @@ export function metricsReadout(payload: MetricsResponse, filter: MetricsFilter, 
   lines.push(`Route metrics · ${payload.schema} · extracted ${payload.extractedAt} · rate card ${payload.rateCard.checkedAt}`);
   lines.push(`Scope: ${filter.role === null ? "every role" : `role ${filter.role}`} · ${filter.source} evidence · ` +
     `${filter.startedBefore === null ? "every run" : `runs started before ${filter.startedBefore}`}`);
+  if (filter.taskClass != null) lines.push(`Task class: ${filter.taskClass}`);
   lines.push(`${runs.length} runs (${all.runs} with role-rows) · ${all.n} role-rows · ${cover.routes} routes · ` +
     `${cover.cells} cells · ${all.refuted} refuted of ${all.claims} claims`);
   lines.push(`Blocked runs by heuristic attribution: ${tallyText(heuristicSplit(runs))}`);
@@ -180,32 +190,36 @@ export function metricsReadout(payload: MetricsResponse, filter: MetricsFilter, 
     return lines;
   }
 
-  const cells = routeCells(rows);
-  for (const role of new Set(cells.map((cell) => cell.role))) {
-    const front = frontier(rows, role, "first-pass", "list-per-row", listPrice);
-    const said = new Map(verdicts(front).map((verdict) => [verdict.key, verdict.text]));
-    const unplaced = new Map(front.unplaced.map((item) => [item.key, UNPLACED_TEXT[item.reason]]));
-    lines.push("");
-    lines.push(role);
-    const body = cells.filter((cell) => cell.role === role).map((cell) => {
-      const s = stats(cell.rows, listPrice);
-      return [
-        cell.key,
-        String(s.n),
-        String(s.settled),
-        firstPassCell(s.firstPass),
-        depth(s.firstPass, s.settled),
-        formatListEquivalent(s.listPerRow),
-        said.get(cell.key) ?? unplaced.get(cell.key) ?? "No verdict: every row is kept out of ranking.",
-      ];
-    });
-    lines.push(...table([["route", "n", "settled", "first pass [95% CI]", "depth", "per row", "verdict"], ...body]));
-    const kept = stats(cells.filter((cell) => cell.role === role).flatMap((cell) => cell.rows), listPrice);
-    if (kept.unconfirmed > 0) {
-      lines.push(`  ${kept.unconfirmed} row(s) ranked with unconfirmed identity (route-attributed): each counts as the model its route requested.`);
-    }
-    if (kept.unrankable > 0) {
-      lines.push(`  ${kept.unrankable} row(s) counted above but kept out of the verdicts: ${tallyText(kept.unrankableReasons)}.`);
+  const classes = [...new Set(rows.map(taskClassOf))].sort();
+  for (const taskClass of classes) {
+    const classRows = rows.filter((row) => taskClassOf(row) === taskClass);
+    const cells = routeCells(classRows);
+    for (const role of new Set(cells.map((cell) => cell.role))) {
+      const front = frontier(classRows, role, "first-pass", "list-per-row", listPrice);
+      const said = new Map(verdicts(front).map((verdict) => [verdict.key, verdict.text]));
+      const unplaced = new Map(front.unplaced.map((item) => [item.key, UNPLACED_TEXT[item.reason]]));
+      lines.push("");
+      lines.push(taskClass === "unclassified" && classes.length === 1 ? role : `${role} · ${taskClass}`);
+      const body = cells.filter((cell) => cell.role === role).map((cell) => {
+        const s = stats(cell.rows, listPrice);
+        return [
+          cell.key,
+          String(s.n),
+          String(s.settled),
+          firstPassCell(s.firstPass),
+          depth(s.firstPass, s.settled),
+          formatListEquivalent(s.listPerRow),
+          said.get(cell.key) ?? unplaced.get(cell.key) ?? "No verdict: every row is kept out of ranking.",
+        ];
+      });
+      lines.push(...table([["route", "n", "settled", "first pass [95% CI]", "depth", "per row", "verdict"], ...body]));
+      const kept = stats(cells.filter((cell) => cell.role === role).flatMap((cell) => cell.rows), listPrice);
+      if (kept.unconfirmed > 0) {
+        lines.push(`  ${kept.unconfirmed} row(s) ranked with unconfirmed identity (route-attributed): each counts as the model its route requested.`);
+      }
+      if (kept.unrankable > 0) {
+        lines.push(`  ${kept.unrankable} row(s) counted above but kept out of the verdicts: ${tallyText(kept.unrankableReasons)}.`);
+      }
     }
   }
   lines.push("");

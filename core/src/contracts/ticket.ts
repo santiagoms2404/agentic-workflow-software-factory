@@ -18,6 +18,13 @@ export const TICKET_WORKFLOWS = [
 ] as const;
 export type TicketWorkflow = UnionOf<typeof TICKET_WORKFLOWS>;
 
+export const TICKET_TASK_CLASSES = [
+  "bounded-source-change",
+  "contract-envelope-change",
+  "evidence-heavy-defect-review",
+] as const;
+export type TicketTaskClass = UnionOf<typeof TICKET_TASK_CLASSES>;
+
 const TicketId = Type.String({ pattern: "^T[0-9]{2}$" });
 const TicketText = Type.String({ minLength: 1 });
 
@@ -30,6 +37,7 @@ export const TicketSchema = Type.Object(
     state: stringUnion(TICKET_STATES),
     depends_on: Type.Array(TicketId),
     workflow: stringUnion(TICKET_WORKFLOWS),
+    task_class: Type.Optional(stringUnion(TICKET_TASK_CLASSES)),
     outcome: TicketText,
     context: Type.Array(TicketText),
     acceptance: Type.Array(TicketText),

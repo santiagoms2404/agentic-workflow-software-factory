@@ -3,6 +3,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { TICKET_TASK_CLASSES } from "../../../src/contracts/ticket.ts";
 import { PlanTicketReader } from "../../../src/persistence/plan-tickets.ts";
 import type { ResolvedPlanSource } from "../../../src/registry/plan-source.ts";
 
@@ -42,6 +43,26 @@ test("the plan reader reuses unchanged parsed records and reparses only a change
     assert.notEqual(third[1]?.records[0], first[1]?.records[0]);
     assert.equal(third[1]?.records[0]?.ticket.title, "Deep changed and longer");
     assert.equal(Object.hasOwn(third[1]?.records[0] ?? {}, "source"), false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("the reader loads valid optional task classes and refuses unreadable class values", async () => {
+  const root = await mkdtemp(join(tmpdir(), "awsf-plan-class-"));
+  const resolved = source(root, "foo-plan");
+  try {
+    await mkdir(resolved.ticketsPath, { recursive: true });
+    const path = join(resolved.ticketsPath, "T01.md");
+    const reader = new PlanTicketReader([resolved]);
+    for (const taskClass of TICKET_TASK_CLASSES) {
+      await writeFile(path, ticket("T01", "Classified").replace("state: done", `state: done\ntask_class: ${taskClass}`));
+      assert.equal((await reader.load())[0]?.records[0]?.ticket.task_class, taskClass);
+    }
+    for (const value of ["other", "null", "0", "[bounded-source-change]"]) {
+      await writeFile(path, ticket("T01", "Invalid").replace("state: done", `state: done\ntask_class: ${value}`));
+      assert.deepEqual((await reader.load())[0]?.records, []);
+    }
   } finally {
     await rm(root, { recursive: true, force: true });
   }

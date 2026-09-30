@@ -1,5 +1,5 @@
 import type { MetricsRoleRow, RateCardRow } from "../shared/types.ts";
-import { STATE_GROUPS, TOOL_CLASSES, routeKey, stats, type FacetValue, type RowPrice, type StateGroup, type Stats } from "../shared/route-metrics.ts";
+import { STATE_GROUPS, TOOL_CLASSES, routeKey, stats, taskClassOf, type FacetValue, type RowPrice, type StateGroup, type Stats } from "../shared/route-metrics.ts";
 import { formatListEquivalent } from "../shared/rate-card.ts";
 import { formatTokens, shortSessionId } from "./display.ts";
 import {
@@ -34,6 +34,7 @@ export const GROUP_LABEL: Readonly<Record<LedgerGroup, string>> = {
   effort: "Effort",
   workflow: "Workflow",
   project: "Project",
+  taskClass: "Task class",
   run: "Run",
 };
 
@@ -211,6 +212,7 @@ export function groupValue(row: MetricsRoleRow, group: LedgerGroup): FacetValue 
   switch (group) {
     case "route": return routeKey(row.route);
     case "role": return row.role;
+    case "taskClass": return taskClassOf(row);
     case "model": return observedModel(row);
     case "effort": return row.route.effort;
     case "workflow": return row.workflow;

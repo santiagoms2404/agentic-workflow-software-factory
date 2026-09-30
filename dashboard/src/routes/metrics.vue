@@ -75,6 +75,7 @@ const RAIL_TITLE: Readonly<Record<RailFacet, string>> = {
   state: "Terminal state",
   workflow: "Workflow",
   project: "Project",
+  taskClass: "Task class",
 };
 
 const rows = computed(() => payload.value?.roleRows ?? []);

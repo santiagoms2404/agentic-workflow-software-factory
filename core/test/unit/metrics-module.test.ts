@@ -233,7 +233,7 @@ test("the lens filters by facet and route focus, and a new facet is one more ent
     row({ role: "reviewer", route: SOL_HIGH, workflow: "prove" }),
     row({ role: "builder", route: SOL_HIGH, stateGroup: "BLOCKED", taskClass: "ui" }),
   ];
-  assert.deepEqual(LENS_FACETS.map((facet) => facet.id), ["role", "model", "effort", "state", "workflow", "project", "source"]);
+  assert.deepEqual(LENS_FACETS.map((facet) => facet.id), ["role", "model", "effort", "state", "workflow", "project", "taskClass", "source"]);
   const all = fullLens(data);
   assert.equal(applyLens(data, all).length, 3);
   assert.deepEqual(applyLens(data, { ...all, facets: { ...all.facets, role: new Set(["builder"]) } }), [data[0], data[2]]);
@@ -344,7 +344,10 @@ test("recommend scopes to a declared task class", () => {
   ];
   const ui = recommend(data, "builder", "ui", "production", { price: PRICE, prior: NO_PRIOR })!;
   assert.deepEqual(ui.ranked.map((route) => route.key), ["claude/opus@high"]);
-  assert.equal(recommend(data, "builder", null, "production", { price: PRICE, prior: NO_PRIOR })!.choice.key, "claude/sonnet@high");
+  assert.equal(recommend(data, "builder", null, "production", { price: PRICE, prior: NO_PRIOR }), null,
+    "an unspecified class cannot pool classified rows");
+  assert.deepEqual(frontier(data, "builder", "first-pass", "list-per-row", PRICE).points, [],
+    "multi-class verdicts are refused");
 });
 
 test("recommend with no route at 5 settled rows ranks by a Beta prior of strength 4 and says prior only", () => {

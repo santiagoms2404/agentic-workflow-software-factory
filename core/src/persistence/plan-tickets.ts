@@ -1,7 +1,7 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { parseDocument } from "yaml";
-import { TICKET_WORKFLOWS, type TicketState, type TicketWorkflow } from "../contracts/ticket.ts";
+import { TICKET_TASK_CLASSES, TICKET_WORKFLOWS, type TicketTaskClass, type TicketState, type TicketWorkflow } from "../contracts/ticket.ts";
 import { classifyPlans, type PlanIdentity } from "../registry/plan-kind.ts";
 import type { ResolvedPlanSource } from "../registry/plan-source.ts";
 
@@ -13,6 +13,7 @@ export interface PlanTicketData {
   readonly depends_on: readonly string[];
   readonly tier?: 0 | 1 | 2;
   readonly workflow?: TicketWorkflow;
+  readonly task_class?: TicketTaskClass;
 }
 
 export interface PlanTicketRecord {
@@ -40,7 +41,7 @@ interface CacheEntry {
 const STATES = new Set<TicketState>(["todo", "wip", "done", "failed"]);
 const WORKFLOWS = new Set<TicketWorkflow>(TICKET_WORKFLOWS);
 
-function ticketData(source: string): PlanTicketData | null {
+export function parsePlanTicketData(source: string): PlanTicketData | null {
   const split = /^---\r?\n([\s\S]*?)\r?\n---\r?\n/u.exec(source);
   if (split === null) return null;
   const document = parseDocument(split[1] ?? "");
@@ -62,6 +63,7 @@ function ticketData(source: string): PlanTicketData | null {
   }
   if (value.tier !== undefined && value.tier !== 0 && value.tier !== 1 && value.tier !== 2) return null;
   if (value.workflow !== undefined && (typeof value.workflow !== "string" || !WORKFLOWS.has(value.workflow as TicketWorkflow))) return null;
+  if (value.task_class !== undefined && (typeof value.task_class !== "string" || !(TICKET_TASK_CLASSES as readonly string[]).includes(value.task_class))) return null;
   return Object.freeze({
     id: value.id,
     title: value.title,
@@ -70,6 +72,7 @@ function ticketData(source: string): PlanTicketData | null {
     depends_on: Object.freeze([...value.depends_on] as string[]),
     ...(value.tier === undefined ? {} : { tier: value.tier }),
     ...(value.workflow === undefined ? {} : { workflow: value.workflow as TicketWorkflow }),
+    ...(value.task_class === undefined ? {} : { task_class: value.task_class as TicketTaskClass }),
   });
 }
 
@@ -119,7 +122,7 @@ export class PlanTicketReader {
         const cached = this.cache.get(path);
         if (cached?.fingerprint === fingerprint) return cached.record;
 
-        const parsed = ticketData(await readFile(path, "utf8"));
+        const parsed = parsePlanTicketData(await readFile(path, "utf8"));
         const record = parsed === null ? null : Object.freeze({
           uid: `${plan.identity.id}/${parsed.id}`,
           plan: plan.identity.id,

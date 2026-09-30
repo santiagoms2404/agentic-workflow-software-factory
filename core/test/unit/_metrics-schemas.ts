@@ -73,7 +73,7 @@ const Tokens = Type.Object({
 }, { additionalProperties: false });
 
 export const RoleRowSchema = Type.Object({
-  sessionId: Str, taskId: Str, attempt: Count, role: Str,
+  sessionId: Str, taskId: Str, attempt: Count, role: Str, taskClass: Type.Optional(Str),
   route: Route, effortSource: EffortSource, routeMixed: Flag, identityProvenance: Provenance, resolvedModel: NStr,
   calls: Count, turns: Count, phases: Count, minutes: Nullable(Type.Number({ minimum: 0 })), corrections: Count,
   settled: Flag, firstPass: Flag, cleanCompletion: Flag, failedHere: Flag, blockedHere: Flag,
