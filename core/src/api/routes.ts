@@ -406,11 +406,15 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
       return jsonResponse({ ok: true, project: options.config.project.slug, ...status } satisfies HealthResponse);
     }),
     sessions: safely((request) => {
-      const params = searchParams(request, ["limit", "before", "state", "archived"]);
+      const params = searchParams(request, ["limit", "before", "beforeId", "state", "archived"]);
       const limit = boundedInteger(params, "limit", 50, 1, 100);
       const before = params.get("before") ?? undefined;
       if (before !== undefined && (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/.test(before) || Number.isNaN(Date.parse(before)))) {
         throw new ApiRequestError(400, "invalid-query", "before must be an ISO timestamp");
+      }
+      const beforeId = params.get("beforeId") ?? undefined;
+      if (beforeId !== undefined && (before === undefined || beforeId.length === 0 || beforeId.length > 256)) {
+        throw new ApiRequestError(400, "invalid-query", "beforeId requires before and a nonempty session id of at most 256 characters");
       }
       const state = params.get("state") ?? undefined;
       if (state !== undefined && !(LIFECYCLE_STATES as readonly string[]).includes(state)) {
@@ -423,6 +427,7 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
       const rows = listSessions(readDb, {
         limit,
         ...(before === undefined ? {} : { before }),
+        ...(beforeId === undefined ? {} : { beforeId }),
         ...(state === undefined ? {} : { state }),
         archived: archivedRaw === "true",
       });

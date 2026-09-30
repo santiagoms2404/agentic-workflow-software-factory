@@ -44,6 +44,8 @@ const VERTICAL_CENTRING = 2.1;
 const MIN_SEPARATION = 62;
 const DAMPING = 0.82;
 const STEP = 0.55;
+const REPLAY_ORBIT_LIMIT = 1.4;
+const REGION_GAP = 120;
 
 /** FNV-1a over the id: a stable number per node, and never a random one. */
 function hash(id: string): number {
@@ -90,24 +92,46 @@ export function initialPositions(graph: CanvasGraph): ReadonlyMap<string, Point>
     const angle = (hash(node.id) / 0x1_0000_0000) * Math.PI * 2 + index * 2.399_963;
     positions.set(node.id, { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius });
   });
-  // Seed disjoint pair neighbourhoods beside the ordinary graph. The hubs and
-  // pairs are formation anchors; replay runs still repel and settle around
-  // their own pair. Ordinary runs keep their original seeds and forces.
-  const spacing = Math.max(330, ...families.map((family) => familyRadius(family.runs.length) * 2 + 150));
-  // Measure where the unchanged ordinary simulation settles, so the new
-  // region sits beside that drawing rather than covering some of its dots.
-  const ordinaryBounds = families.length === 0 || ordinary.length === 0 ? null : settle({
-    ...graph, nodes: ordinary, edges: graph.edges.filter((edge) => !replayIds.has(edge.from) && !replayIds.has(edge.to)),
-  }, positions).bounds;
-  let left = ordinaryBounds === null ? 0 : ordinaryBounds.maxX + spacing;
-  for (const region of [...new Set(families.map((family) => family.region))].sort()) {
-    const pairs = families.filter((family) => family.region === region);
-    const columns = Math.ceil(Math.sqrt(pairs.length));
-    const width = (columns - 1) * spacing;
+  seedReplayPositions(positions, families, ordinary.length === 0 ? null : boundsOf(positions));
+  return positions;
+}
+
+/** Pack disjoint pair neighbourhoods without widening an already-wide drawing. */
+function seedReplayPositions(
+  positions: Map<string, Point>,
+  families: readonly ReplayFamily[],
+  ordinary: CanvasLayout["bounds"] | null,
+): void {
+  if (families.length === 0) return;
+  // Leave forty units between the largest settled run orbits, rather than a
+  // whole extra orbit. The same limit is enforced by the replay simulation.
+  const extent = Math.max(...families.map((family) => familyRadius(family.runs.length))) * REPLAY_ORBIT_LIMIT;
+  const spacing = extent * 2 + 40;
+  const keys = [...new Set(families.map((family) => family.region))].sort();
+  const ordinaryWidth = ordinary === null ? 0 : ordinary.maxX - ordinary.minX;
+  const below = ordinary !== null && ordinaryWidth >= ordinary.maxY - ordinary.minY;
+  const availableWidth = (ordinaryWidth - REGION_GAP * (keys.length - 1)) / keys.length;
+  const regions = keys.map((key) => {
+    const pairs = families.filter((family) => family.region === key);
+    // Below a wide drawing, use its existing width to avoid unnecessary rows.
+    const columns = Math.min(pairs.length, Math.max(Math.ceil(Math.sqrt(pairs.length)),
+      below ? Math.floor((availableWidth - extent * 2) / spacing) + 1 : 0));
     const hub = pairs[0]!.hub;
-    if (hub !== null) positions.set(hub, { x: left + width / 2, y: -spacing * 0.65 });
-    pairs.forEach((family, index) => {
-      const centre = { x: left + (index % columns) * spacing, y: Math.floor(index / columns) * spacing };
+    const minY = Math.min(-extent, hub === null ? 0 : -spacing * 0.65);
+    return { pairs, columns, hub, minY, width: (columns - 1) * spacing + extent * 2,
+      height: (Math.ceil(pairs.length / columns) - 1) * spacing + extent - minY };
+  });
+  const width = regions.reduce((sum, region) => sum + region.width, 0) + REGION_GAP * (regions.length - 1);
+  const height = Math.max(...regions.map((region) => region.height));
+  let left = ordinary === null ? 0 : below ? (ordinary.minX + ordinary.maxX - width) / 2 : ordinary.maxX + REGION_GAP;
+  const top = ordinary === null ? 0 : below ? ordinary.maxY + REGION_GAP : (ordinary.minY + ordinary.maxY - height) / 2;
+  for (const region of regions) {
+    const origin = { x: left + extent, y: top - region.minY };
+    if (region.hub !== null) positions.set(region.hub, {
+      x: origin.x + (region.columns - 1) * spacing / 2, y: origin.y - spacing * 0.65,
+    });
+    region.pairs.forEach((family, index) => {
+      const centre = { x: origin.x + (index % region.columns) * spacing, y: origin.y + Math.floor(index / region.columns) * spacing };
       positions.set(family.pair, centre);
       family.runs.forEach((id, run) => {
         const angle = run * Math.PI * 2 / family.runs.length + hash(family.pair) / 0x1_0000_0000 * Math.PI * 2;
@@ -115,9 +139,8 @@ export function initialPositions(graph: CanvasGraph): ReadonlyMap<string, Point>
         positions.set(id, { x: centre.x + Math.cos(angle) * radius, y: centre.y + Math.sin(angle) * radius });
       });
     });
-    left += width + spacing * 2;
+    left += region.width + REGION_GAP;
   }
-  return positions;
 }
 
 interface Body {
@@ -210,7 +233,7 @@ function stepReplayFamilies(families: readonly ReplayFamily[], bodies: Map<strin
     // Staying inside half the nearest pair distance makes the own-pair
     // relation true geometrically, rather than hoping a spring settles there.
     const nearest = Math.min(...pairs.filter((other) => other !== pair).map((other) => Math.hypot(other.x - pair.x, other.y - pair.y)));
-    const limit = Math.min(radius * 1.4, nearest * 0.49);
+    const limit = Math.min(radius * REPLAY_ORBIT_LIMIT, nearest * 0.49);
     for (const id of family.runs) {
       const body = bodies.get(id);
       if (body === undefined || body.pinned) continue;
@@ -296,7 +319,21 @@ export interface LayoutOptions {
 
 /** Settle the graph from its deterministic start. Same input, same picture. */
 export function layoutGraph(graph: CanvasGraph, options: LayoutOptions = {}): CanvasLayout {
-  return settle(graph, initialPositions(graph), options);
+  const families = replayFamilies(graph);
+  if (families.length === 0) return settle(graph, initialPositions(graph), options);
+  const replayIds = new Set(families.flatMap((family) => [...(family.hub === null ? [] : [family.hub]), family.pair, ...family.runs]));
+  const ordinaryGraph = { ...graph, nodes: graph.nodes.filter((node) => !replayIds.has(node.id)),
+    edges: graph.edges.filter((edge) => !replayIds.has(edge.from) && !replayIds.has(edge.to)) };
+  // Settle the ordinary drawing once and keep that result byte for byte. Its
+  // measured extent decides where the replay formation starts, including pins.
+  const ordinary = settle(ordinaryGraph, initialPositions(ordinaryGraph), options);
+  const replayGraph = { ...graph, nodes: graph.nodes.filter((node) => replayIds.has(node.id)),
+    edges: graph.edges.filter((edge) => replayIds.has(edge.from) && replayIds.has(edge.to)) };
+  const seeds = new Map<string, Point>();
+  seedReplayPositions(seeds, families, ordinary.positions.size === 0 ? null : ordinary.bounds);
+  const replays = settle(replayGraph, seeds, options);
+  const positions = new Map(graph.nodes.map((node) => [node.id, (ordinary.positions.get(node.id) ?? replays.positions.get(node.id))!]));
+  return { positions, bounds: boundsOf(positions) };
 }
 
 /**

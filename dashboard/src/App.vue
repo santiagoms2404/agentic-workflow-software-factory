@@ -12,6 +12,7 @@ import MetricsScreen from "./routes/metrics.vue";
 import { usePolling, type PollMode } from "./composables/usePolling.ts";
 import { useNotifySound } from "./composables/useNotifySound.ts";
 import { isCanvasRoute, parseCanvasRoute, type CanvasRoute } from "./canvas-view.ts";
+import { loadCanvasSessions } from "./canvas-sessions.ts";
 import { DEFAULT_METRICS_ROUTE, isMetricsRoute, parseMetricsRoute, readRoleColors, type MetricsRouteState } from "./metrics-lens.ts";
 import { admitNewFilterValues, LIFECYCLE_STATES } from "./session-filters.ts";
 import { groupFilterValues } from "./session-groups.ts";
@@ -163,11 +164,15 @@ const phaseName = computed(() => detail.value?.phases.find((phase) => phase.phas
 const mode = computed<PollMode>(() => health.value?.activeSessions ? "live" : sessions.value.sessions.length ? "grid" : "idle");
 
 async function load(): Promise<void> {
+  // A paged canvas read publishes only a complete projection, and is discarded
+  // if the reader leaves the canvas while its later pages are loading.
+  const canvasRead = canvasRoute.value;
   // The metrics tab polls its own payload; the shell needs only health here.
   const dataRequest = metricsRoute.value ? Promise.resolve(null)
     : settingsRoute.value
     ? fetch("/api/v1/adapters")
-    : groupsRoute.value || canvasRoute.value ? fetch("/api/v1/sessions")
+    : canvasRead ? loadCanvasSessions()
+    : groupsRoute.value ? fetch("/api/v1/sessions")
     : backlogRoute.value ? fetch("/api/v1/tickets")
     : selectedId.value
       ? fetch(`/api/v1/sessions/${encodeURIComponent(selectedId.value)}`)
@@ -178,6 +183,7 @@ async function load(): Promise<void> {
     loadSettingsOnce(),
     loadGroupsOnce(),
   ]);
+  if (canvasRead !== canvasRoute.value) return;
   if (!nextHealth.ok) throw new Error("Dashboard data unavailable");
   health.value = await nextHealth.json() as HealthResponse;
   if (metricsRoute.value) {
@@ -191,6 +197,9 @@ async function load(): Promise<void> {
     const response = nextData as Response;
     if (!response.ok) throw new Error("Backlog unavailable");
     backlog.value = await response.json() as TicketsResponse;
+    detail.value = null;
+  } else if (canvasRead) {
+    sessions.value = nextData as SessionsResponse;
     detail.value = null;
   } else {
     const response = nextData as Response;

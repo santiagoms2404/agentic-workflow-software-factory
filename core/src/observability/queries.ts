@@ -72,6 +72,8 @@ export interface ListSessionsOptions {
   archived?: boolean;
   limit?: number;
   before?: string;
+  /** Tie-breaker for a page ending among sessions with the same start time. */
+  beforeId?: string;
   state?: string;
 }
 
@@ -79,8 +81,13 @@ export function listSessions(db: DatabaseSync, opts: ListSessionsOptions = {}): 
   const clauses = ["archived = ?"];
   const params: Array<string | number> = [opts.archived === true ? 1 : 0];
   if (opts.before !== undefined) {
-    clauses.push("started_at < ?");
-    params.push(opts.before);
+    if (opts.beforeId === undefined) {
+      clauses.push("started_at < ?");
+      params.push(opts.before);
+    } else {
+      clauses.push("(started_at < ? OR (started_at = ? AND session_id > ?))");
+      params.push(opts.before, opts.before, opts.beforeId);
+    }
   }
   if (opts.state !== undefined) {
     clauses.push("lifecycle_state = ?");

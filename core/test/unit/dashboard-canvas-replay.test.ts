@@ -4,7 +4,7 @@ import { test } from "node:test";
 import type { SessionPlan, SessionsResponse } from "../../../dashboard/shared/types.ts";
 import { buildCanvasGraph, pairNodeId, provingGroundNodeId, runNodeId } from "../../../dashboard/src/canvas-graph.ts";
 import { initialPositions, layoutGraph, settle, type Point } from "../../../dashboard/src/canvas-layout.ts";
-import { CANVAS_KINDS, filterGraph, openHref, parseCanvasRoute } from "../../../dashboard/src/canvas-view.ts";
+import { CANVAS_KINDS, filterGraph, fitCamera, MIN_ZOOM, nodeRadius, openHref, parseCanvasRoute, screenPoint } from "../../../dashboard/src/canvas-view.ts";
 import { parseMetricsRoute } from "../../../dashboard/src/metrics-lens.ts";
 import { createApiRouter } from "../../src/api/routes.ts";
 import { createSession } from "../../src/observability/projector.ts";
@@ -78,7 +78,10 @@ test("a projection without a replay keeps the original graph byte for byte", () 
   const after = layoutGraph(combined).positions;
   for (const [id, point] of before) assert.deepEqual(after.get(id), point);
   const region = combined.clusters[0]!.nodeIds.map((id) => after.get(id)!);
-  assert.ok(Math.max(...[...before.values()].map((point) => point.x)) < Math.min(...region.map((point) => point.x)), "the replay formation is beside the unchanged ordinary drawing");
+  const ordinaryPoints = [...before.values()];
+  assert.ok(Math.max(...ordinaryPoints.map((point) => point.x)) < Math.min(...region.map((point) => point.x))
+    || Math.max(...ordinaryPoints.map((point) => point.y)) < Math.min(...region.map((point) => point.y)),
+  "the replay formation is beside or below the unchanged ordinary drawing");
 });
 
 test("two projects with the same items and repetitions draw separate regions", () => {
@@ -103,6 +106,65 @@ test("replay positions settle deterministically, nearest their own pair, also at
   for (let left = 0; left < points.length; left += 1) {
     for (let right = left + 1; right < points.length; right += 1) assert.ok(gap(points[left]!, points[right]!) > 40, "dots remain distinct");
   }
+});
+
+test("a wide ordinary drawing and eighty replays fit at or above MIN_ZOOM without clipping any replay node", () => {
+  const ordinary = canvasReplays("wide-ordinary", 4, 2, 8).map((session) => ({ ...session, replay: null }));
+  const pinned = new Map(ordinary.map((session, index) => [runNodeId([session.sessionId]), {
+    x: -1740 + 3480 * (index % 8) / 7, y: -1100 + 2200 * Math.floor(index / 8) / 7,
+  }]));
+  const before = layoutGraph(buildCanvasGraph(ordinary, [], []), { pinned });
+  const viewport = { width: 1200, height: 950 };
+  for (const projects of [canvasReplays("wide-replays", 5, 2, 8),
+    [...canvasReplays("wide-replays", 5, 2, 8), ...canvasReplays("second-wide-project", 5, 2, 8)]]) {
+    const projection = buildCanvasGraph([...ordinary, ...projects], [], []);
+    const layout = layoutGraph(projection, { pinned });
+    for (const [id, point] of before.positions) assert.deepEqual(layout.positions.get(id), point, "ordinary positions are unchanged");
+    const required = Math.min((viewport.width - 180) / (layout.bounds.maxX - layout.bounds.minX),
+      (viewport.height - 180) / (layout.bounds.maxY - layout.bounds.minY));
+    assert.ok(required >= MIN_ZOOM, `the drawing fits without clamping: ${required}`);
+    const camera = fitCamera(layout, viewport);
+    assert.equal(camera.zoom, required);
+    for (const node of projection.nodes) {
+      const point = layout.positions.get(node.id)!;
+      if (!pinned.has(node.id)) assert.ok(point.y > before.bounds.maxY, "every replay node is below the wide drawing");
+      const onScreen = screenPoint(point, camera);
+      const radius = nodeRadius(node.weight) * camera.zoom;
+      assert.ok(onScreen.x - radius >= 0 && onScreen.x + radius <= viewport.width, `${node.id} fits horizontally`);
+      assert.ok(onScreen.y - radius >= 0 && onScreen.y + radius <= viewport.height, `${node.id} fits vertically`);
+    }
+    if (projects.length === 80) {
+      const rows = new Set(projection.nodes.filter((node) => node.kind === "pair").map((node) => layout.positions.get(node.id)!.y));
+      assert.equal(rows.size, 1, "the ten pairs use existing width instead of adding three rows");
+    }
+    assert.deepEqual([...layoutGraph(projection, { pinned }).positions], [...layout.positions]);
+  }
+});
+
+test("a tall ordinary drawing gets a replay region beside it, using its actual pinned extent", () => {
+  const ordinary = sessions.map((session) => ({ ...session, project: "tall", sessionId: `tall-${session.sessionId}`, replay: null }));
+  const pinned = new Map(ordinary.map((session, index) => [runNodeId([session.sessionId]), { x: index % 2 * 800, y: index * 140 }]));
+  const projection = buildCanvasGraph([...ordinary, ...sessions], [], []);
+  const layout = layoutGraph(projection, { pinned });
+  for (const id of projection.clusters[0]!.nodeIds) assert.ok(layout.positions.get(id)!.x > 800);
+  for (const [id, point] of pinned) assert.deepEqual(layout.positions.get(id), point);
+});
+
+test("initial seeding is cheap and a mixed layout settles the ordinary graph only once", () => {
+  const ordinary = buildCanvasGraph(canvasReplays("single-settle").map((session) => ({ ...session, replay: null })), [], []);
+  let reads = 0;
+  const countedNodes = ordinary.nodes.map((node) => ({ ...node, get id() { reads += 1; return node.id; } }));
+  const counted = { ...ordinary, nodes: countedNodes };
+  initialPositions(counted);
+  assert.ok(reads < ordinary.nodes.length * 10, "seeding must not run a force simulation");
+  reads = 0;
+  const before = layoutGraph(counted);
+  const standaloneReads = reads;
+  reads = 0;
+  const mixed = buildCanvasGraph([...canvasReplays("single-settle").map((session) => ({ ...session, replay: null })), ...sessions], [], []);
+  const after = layoutGraph({ ...mixed, nodes: mixed.nodes.map((node) => countedNodes.find((ordinaryNode) => ordinaryNode.id === node.id) ?? node) });
+  assert.ok(reads < standaloneReads * 1.2, `ordinary node accesses stay near one settle (${reads} vs ${standaloneReads}), not two`);
+  for (const [id, point] of before.positions) assert.deepEqual(after.positions.get(id), point);
 });
 
 test("replay dragging keeps pins and settling respects the nearest-pair boundary", () => {
