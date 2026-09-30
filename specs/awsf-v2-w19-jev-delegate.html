@@ -145,8 +145,8 @@ code.inv, code.ac, code.serves { color:var(--cyan); }
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-09-28</dd>
-        <dt>modified</dt>     <dd>2026-09-28 (authored, awaiting owner review), 2026-09-28 (owner review applied: Q16–Q20 decided as recommended), 2026-09-28 (gate G19-A committed), 2026-09-29 (T01 delivered, M1 [wip]), 2026-09-29 (T02 delivered, M1 [wip]), 2026-09-29 (T03 delivered, M1 [x]), 2026-09-29 (T04 delivered, M2 [wip]), 2026-09-29 (T05 delivered, M2 [wip]), 2026-09-29 (T06 delivered, M2 [wip])</dd>
-        <dt>commits</dt>      <dd>d71b6b4 (plan authored and adopted), the G19-A commit that adds invariant 13, ed7e71c 6b1751d 56a8101 (T01), 07e43d8 3417e81 6d85dba 0371f2d (T02), 5915c87 1ac91ae (T03), 777f8a6 (T04), 364f15d (T05), d28e0aa (T06)</dd>
+        <dt>modified</dt>     <dd>2026-09-28 (authored, awaiting owner review), 2026-09-28 (owner review applied: Q16–Q20 decided as recommended), 2026-09-28 (gate G19-A committed), 2026-09-29 (T01 delivered, M1 [wip]), 2026-09-29 (T02 delivered, M1 [wip]), 2026-09-29 (T03 delivered, M1 [x]), 2026-09-29 (T04 delivered, M2 [wip]), 2026-09-29 (T05 delivered, M2 [wip]), 2026-09-29 (T06 delivered, M2 [wip]), 2026-09-29 (T07 delivered, M2 [x])</dd>
+        <dt>commits</dt>      <dd>d71b6b4 (plan authored and adopted), the G19-A commit that adds invariant 13, ed7e71c 6b1751d 56a8101 (T01), 07e43d8 3417e81 6d85dba 0371f2d (T02), 5915c87 1ac91ae (T03), 777f8a6 (T04), 364f15d (T05), d28e0aa (T06), 34c5c1b (T07)</dd>
         <dt>agent name</dt>   <dd>claude-opus-5-5, claude-opus-5-5 (review applied)</dd>
         <dt>session id</dt>   <dd>not recorded (AGENTS.md invariant 1 keeps live session state out of every committed file)</dd>
         <dt>back refs</dt>    <dd>./awsf-v2-plan.html (§ Milestone M19 → W19, and its 2026-09-28 amendment adopting this workstream), ../AGENTS.md (the twelve invariants and the proposed invariant 13), ./awsf-v2-intent.md (decisions 3 and 5, which this plan revises by owner decision), ./awsf-v2-w17-shift.html (the shift this plan keeps running), ./awsf-v2-w18-route-metrics.html (the tab and route columns M8 builds on), ./awsf-v2-w07-quota-telemetry.html (the quota readout and its fence), the reference repository ../../ten-levels-of-jev at 777adaf (machine-local clone, IndyDevDan's "10 Levels of Jev") and its transcript ../../10_levels_of_JEV_in_agentic_engineering_IndyDevDan_transcript.txt (machine-local)</dd>
@@ -555,7 +555,7 @@ sequenceDiagram
 
     <!-- ================= M2 ================= -->
     <div class="phase">
-      <h3><code class="status">[wip]</code> Milestone M2: The shadow owner (J6) <span class="wtag">manual</span></h3>
+      <h3><code class="status">[x]</code> Milestone M2: The shadow owner (J6) <span class="wtag">manual</span></h3>
       <p>At every stop the Delegate writes down what it would do. Nothing acts. The record it builds is both the calibration data the reference repository says every threshold needs and the evidence that decides which acts earn autonomy.</p>
       <figure>
         <pre class="mermaid">
@@ -603,11 +603,11 @@ flowchart LR
       <p class="sub">Serves <code class="serves">AC-2</code> · <code class="serves">INV-7</code></p>
       <p>The replay turns the owner's past stops into agreement data before any lease exists.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>awsf delegate replay [--project P] [--live]</code>, built unregistered until <span class="gate">G19-C</span>: numbers-only without <code>--live</code>, one <code>stop-judgment</code> call per stop with it; output to the state root's <code>delegate/replays.jsonl</code> only</li>
-        <li><code class="status">[]</code> <code>npm run test:unit</code> — green at the base SHA and after, counts recorded</li>
-        <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/delegate-*.test.ts</code> — nine stop kinds, every rationale code, the 7-of-8 boundary, owner-all, land-shadow never unlocking</li>
-        <li><code class="status">[]</code> A replay journey: five synthetic stops and the owner's acts become five pairs with the expected agreement</li>
-        <li><code class="status">[]</code> <code>npm run typecheck</code> and <code>npm run lint</code> — exit 0</li>
+        <li><code class="status">[x]</code> <code>awsf delegate replay [--project P] [--live]</code>, built unregistered until <span class="gate">G19-C</span>: numbers-only without <code>--live</code>, one <code>stop-judgment</code> call per stop with it; output to the state root's <code>delegate/replays.jsonl</code> only</li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code> — green at the base SHA and after, counts recorded</li>
+        <li><code class="status">[x]</code> <code>node --experimental-strip-types --test core/test/unit/delegate-*.test.ts</code> — nine stop kinds, every rationale code, the 7-of-8 boundary, owner-all, land-shadow never unlocking (the files live in <code>core/test/unit/delegate/</code>, so <code>core/test/unit/delegate/*.test.ts</code> is the command that ran; the prefix glob matches nothing)</li>
+        <li><code class="status">[x]</code> A replay journey: five synthetic stops and the owner's acts become five pairs with the expected agreement</li>
+        <li><code class="status">[x]</code> <code>npm run typecheck</code> and <code>npm run lint</code> — exit 0</li>
       </ul>
       <div class="loop">
         🔁 <strong>Do not exit this phase until every box above is checked.</strong>
@@ -1103,6 +1103,15 @@ flowchart LR
       <p><strong>Verified.</strong> In WSL on node v22.23.1: <code>npm run test:unit</code> 2526/2526 at the base (the T05 tree) and 2538/2538 after, the 12 new tests in <code>core/test/unit/delegate/agreement.test.ts</code>. <code>core/test/unit/delegate/*.test.ts</code>, <code>core/test/unit/decision/*.test.ts</code> and <code>core/test/unit/meta/*.test.ts</code>: 333/333. <code>npm run typecheck</code> and <code>npm run lint</code> exit 0. The sim, contract and journey layers were not rerun, because T06 adds pure modules that no runtime path imports.</p>
       <p><strong>Milestone M2 in progress.</strong> Tasks 4–6 are <code>[x]</code>, and task 7 (M2's Testing Strategy and the historical replay) remains. Continuation, wait-until and route-fallback are not yet journaled on an attempt (tasks 11, 14 and 15), so their proposals pair as none until those records exist.</p>
       <p><strong>Carried forward</strong> as Handoff entries in T07 (C9–C11), T09 (C1–C4) and T11 (C6–C7), committed as <code>6b3e01f</code>.</p>
+      <p>Completion metadata: built and verified in a manual session.</p>
+    </details>
+    <details open>
+      <summary>2026-09-29 — T07 delivered; Milestone M2 complete</summary>
+      <p><strong>T07 delivered</strong> on base <code>799b099</code>, in a manual session on branch <code>w19-jev-delegate</code>, as <code>34c5c1b</code>. <code>delegateReplayCommand</code> in <code>core/src/cli/commands/delegate-replay.ts</code> is unregistered in <code>main.ts</code> until G19-C. It adds <code>core/src/delegate/replay.ts</code> (the <code>delegate.replay</code> record, <code>awsf.delegate-replay/v1</code>) and <code>core/src/persistence/delegate-replays.ts</code>. <code>readReplayPairs</code> goes in <code>pairs.ts</code>, and the policy gains a numbers-only judgment.</p>
+      <p><strong>Decided in the session.</strong> (1) A historical stop is a journal record carrying a ceiling-pause, quota-pause or ticket-block checkpoint, or a transition into AWAITING_OWNER or BLOCKED. The facts are rebuilt from that record's <code>event.next</code> and the journal up to it. (2) Numbers-only is its own judgment input: code-decided rows stand, and judgment rows wait with the new rationale <code>numbers-only</code>. The live rule that an unavailable decision records wait-for-owner is unchanged (T07 C5). (3) The phases come from the journal's QUEUED phase records and <code>agent-start</code> routes. An agent phase that never started is <code>unrecorded</code>, and tickets are not journaled on phases, so a replay's ticket progress is empty. (4) Each record is stamped with its stop's journal time (T07 C10). A stop with a live proposal, or one already replayed in the same or a stronger mode, is skipped, and a live replay wins over a numbers-only one. (5) <code>--live</code> asks stop-judgment once per stop only after the owner confirms at an interactive terminal. Its decision records go to <code>&lt;state-root&gt;/delegate/decisions.jsonl</code> with caller kind <code>replay</code>, so no replay writes into any task.</p>
+      <p><strong>Verified.</strong> In WSL on node v22.23.1: <code>npm run test:unit</code> 2538/2538 at the base (the T06 tree) and 2545/2545 after, with 7 new tests: 4 in <code>core/test/unit/delegate/replay.test.ts</code> and 3 numbers-only rows in <code>policy.test.ts</code>. <code>core/test/journeys/delegate-replay.test.ts</code> passes 1/1 offline, with global fetch stubbed to throw. Five synthetic stops become five pairs: raise match, raise mismatch, land-shadow match, and two wait-for-owner none. Nothing under the attempt directories changes, and a rerun adds nothing. <code>core/test/unit/delegate/*.test.ts</code> with the decision tests, the meta tests and that journey: 341/341. <code>npm run typecheck</code> and <code>npm run lint</code> exit 0.</p>
+      <p><strong>Milestone M2 complete.</strong> Tasks 4–7 are <code>[x]</code>. AC-2's evidence is the stop facts, the shadow policy with its proposal at every stop, and this replay. AC-3's pure half is agreement and autonomy. The owner's acceptance for T07 remains the owner's act: after G19-C, run <code>awsf delegate replay</code> on the real state root, offline and then with <code>--live</code>, and read the per-act agreement.</p>
+      <p><strong>Carried forward</strong> as Handoff entries in T12 (C1–C3) and T26 (C1–C3), committed as <code>58b3601</code>.</p>
       <p>Completion metadata: built and verified in a manual session.</p>
     </details>
   </section>
