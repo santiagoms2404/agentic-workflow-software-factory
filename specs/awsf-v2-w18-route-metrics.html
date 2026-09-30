@@ -141,12 +141,12 @@ code.inv, code.ac, code.serves { color:var(--cyan); }
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-09-26</dd>
-        <dt>modified</dt>     <dd>2026-09-26 (authored, awaiting owner review), 2026-09-26 (owner review applied: Q1–Q8 decided; Q1 takes an owner-authored migration), 2026-09-27 (Q3 amended: owner acts are wired by the owner, gate G18-C), 2026-09-28 (execution changed to manual ticket by ticket; T01 and T02 delivered, M1 [wip]), 2026-09-28 (T03 delivered, M1 [x]), 2026-09-28 (T04 delivered, M2 [wip]), 2026-09-28 (T05 delivered), 2026-09-28 (T06 delivered, M2 [x]), 2026-09-28 (T07 delivered, M3 [wip]), 2026-09-28 (T08 delivered), 2026-09-28 (T09 delivered), 2026-09-28 (T10 delivered, M3 [x]), 2026-09-28 (the composed command runs through the root script), 2026-09-28 (T11 delivered, M4 [wip]), 2026-09-28 (owner approved the five seed patches, Q8), 2026-09-29 (T12 delivered), 2026-09-29 (T13 delivered), 2026-09-29 (T14 delivered, M4 [x]), 2026-09-29 (gate G18-B committed), 2026-09-29 (T12 C5 and C7 checked; O3 decided: Milestone M6, task 18 added; w18-m4 acceptance run by delegation), 2026-09-29 (T18 delivered, M6 [x]; w18-m6 acceptance run by delegation), 2026-09-30 (D3 suite named and funded as two rounds of four reviewer arms; Milestone M7, task 19 added), 2026-09-30 (T19 delivered, M7 [x]; D3 round 1 complete)</dd>
+        <dt>modified</dt>     <dd>2026-09-26 (authored, awaiting owner review), 2026-09-26 (owner review applied: Q1–Q8 decided; Q1 takes an owner-authored migration), 2026-09-27 (Q3 amended: owner acts are wired by the owner, gate G18-C), 2026-09-28 (execution changed to manual ticket by ticket; T01 and T02 delivered, M1 [wip]), 2026-09-28 (T03 delivered, M1 [x]), 2026-09-28 (T04 delivered, M2 [wip]), 2026-09-28 (T05 delivered), 2026-09-28 (T06 delivered, M2 [x]), 2026-09-28 (T07 delivered, M3 [wip]), 2026-09-28 (T08 delivered), 2026-09-28 (T09 delivered), 2026-09-28 (T10 delivered, M3 [x]), 2026-09-28 (the composed command runs through the root script), 2026-09-28 (T11 delivered, M4 [wip]), 2026-09-28 (owner approved the five seed patches, Q8), 2026-09-29 (T12 delivered), 2026-09-29 (T13 delivered), 2026-09-29 (T14 delivered, M4 [x]), 2026-09-29 (gate G18-B committed), 2026-09-29 (T12 C5 and C7 checked; O3 decided: Milestone M6, task 18 added; w18-m4 acceptance run by delegation), 2026-09-29 (T18 delivered, M6 [x]; w18-m6 acceptance run by delegation), 2026-09-30 (D3 suite named and funded as two rounds of four reviewer arms; Milestone M7, task 19 added), 2026-09-30 (T19 delivered, M7 [x]; D3 round 1 complete), 2026-09-30 (the sessions board reads every session; Sonnet 5.5 and GPT-6.1 Sol priced; Milestone M8, task 20 added)</dd>
         <dt>commits</dt>      <dd>none yet (authored uncommitted for owner review)</dd>
-        <dt>agent name</dt>   <dd>claude-opus-5-5, claude-opus-5-5 (review applied), claude-opus-5-5 (task 18 added), claude-opus-5-5 (T18 delivered), claude-opus-5-5 (task 19 added), claude-opus-5-5 (T19 reviewed and landed)</dd>
+        <dt>agent name</dt>   <dd>claude-opus-5-5, claude-opus-5-5 (review applied), claude-opus-5-5 (task 18 added), claude-opus-5-5 (T18 delivered), claude-opus-5-5 (task 19 added), claude-opus-5-5 (T19 reviewed and landed), claude-opus-5-5 (task 20 added)</dd>
         <dt>session id</dt>   <dd>not recorded (AGENTS.md invariant 1 keeps live session state out of every committed file)</dd>
         <dt>back refs</dt>    <dd>./awsf-v2-plan.html (§ Milestone M18 → W18, and its 2026-09-26 amendment adopting this workstream), ../AGENTS.md (the twelve invariants), ./awsf-v2-intent.md (decision 5: quota is a readout, never a router, the stance D5 extends to route evidence), ./awsf-v2-w17-shift.html (the execution this plan is written for), ./awsf-v2-w07-quota-telemetry.html (the readout discipline), the design artifact https://claude.ai/artifact/Ga29MRY2FCcHPJfvcJgcpW (private, version 2), ../docs/design/route-metrics/route-metrics-prototype.html (machine-local and ignored; sha256 dc2dc0bcfc16bd23f8ebd6502fb0486391eefa4ce4285a7f73199c19d55580d8)</dd>
-        <dt>forward refs</dt> <dd>./awsf-v2-w18-route-metrics-build-prompts.md (§ Section B, the prompt source the invariant-12 fence pairs against), ./tickets/awsf-v2-w18-route-metrics/ (T01–T19), ./design/awsf-v2-w18-route-metrics/frame-index.json and ./design/awsf-v2-w18-route-metrics/frame-digests.json (the tracked frame index and its digests)</dd>
+        <dt>forward refs</dt> <dd>./awsf-v2-w18-route-metrics-build-prompts.md (§ Section B, the prompt source the invariant-12 fence pairs against), ./tickets/awsf-v2-w18-route-metrics/ (T01–T20), ./design/awsf-v2-w18-route-metrics/frame-index.json and ./design/awsf-v2-w18-route-metrics/frame-digests.json (the tracked frame index and its digests)</dd>
       </dl>
     </details>
   </header>
@@ -320,6 +320,7 @@ flowchart LR
       <li><span class="tag existing">existing</span> <code>docs/cheatsheet.html</code>, <code>docs/driving/marimba/delegation-guard.sh</code>, <code>docs/driving/marimba/marimba-guard-rules.mts</code>, <code>docs/driving/marimba/CONTRACT.md</code> — the fenced documents <span class="gate">G18-A</span> and <span class="gate">G18-B</span> change.</li>
       <li><span class="tag existing">existing</span> <code>core/src/policy/sandbox-broker.ts</code>, <code>core/src/adapters/claude-code.ts</code>, <code>pi-codex.ts</code> — the <code>bwrap</code> launch every agent phase runs in, and each CLI's start roots. Task 18 adds a <code>worktree</code> confinement beside today's host-wide read-only root.</li>
       <li><span class="tag existing">existing</span> <code>dashboard/src/canvas-graph.ts</code>, <code>canvas-layout.ts</code>, <code>components/CanvasMap.vue</code>, <code>core/src/api/routes.ts</code> — the canvas's execution graph and the <code>SessionCard</code> it is built from. Task 19 adds proving-ground and pair nodes, their edges and one region per project, from the replay record the projector already writes.</li>
+      <li><span class="tag existing">existing</span> <code>dashboard/shared/route-metrics.ts</code>, <code>dashboard/src/components/MetricsFrontier.vue</code> — the Frontier. Task 20 plots route-attributed routes on it as badged marks that no ranking reads.</li>
     </ul>
 
     <h3>New Files</h3>
@@ -394,6 +395,7 @@ flowchart LR
         <tr><td>M5 advisory and export</td><td>T15–T17</td><td>4 of 5</td><td>none</td><td><code>claude/anthropic/claude:opus@high</code></td><td><code>degrade-review</code>; <span class="gate">G18-B</span> and the D3 suite may run before or after M5</td></tr>
         <tr><td>M6 replay confinement</td><td>T18</td><td>2 of 5</td><td>none</td><td><code>claude/anthropic/claude:opus@xhigh</code></td><td>Added 2026-09-29 (O3). Runs manually, like the milestones before it; the D3 suite waits on it</td></tr>
         <tr><td>M7 replay clusters</td><td>T19</td><td>2 of 5</td><td>none</td><td>the owner's Codex route</td><td>Added 2026-09-30. Built manually by the owner with Codex, never in a checkout a replay batch is running from</td></tr>
+        <tr><td>M8 unconfirmed routes</td><td>T20</td><td>2 of 5</td><td>none</td><td>the owner's Codex route</td><td>Added 2026-09-30 (O1). Built manually by the owner with Codex</td></tr>
       </tbody>
     </table>
     <p><strong>Reviewer route, every milestone:</strong> <code>--route reviewer=claude/anthropic/claude:opus@high</code>. <code>claude:opus</code> resolves to Opus 5.5 on the owner's Claude Code as of 2026-09-26. No milestone is entirely mechanical, so none runs on Sonnet 5; none runs on Fable 5.1 or Haiku. M3 and M4 need four tickets because splitting either into two milestones adds a second testing ticket and a second owner gate without removing a dependency.</p>
@@ -927,6 +929,27 @@ flowchart TD
         If any command fails, fix the cause and re-run — loop until all pass.
       </div>
     </div>
+
+    <!-- ================= M8 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M8: Unconfirmed routes on the Frontier <span class="wtag route">codex</span></h3>
+      <p>Added 2026-09-30 by the owner (O1), after D3 round 1. Every GPT row is route-attributed: pi echoes the model it was asked for and never reads the API's answer back, so the host cannot confirm which model answered. INV-3 keeps such rows out of rankings, and the Frontier builds its marks from rankable rows only, so it never shows a GPT route, although round 1 measured two. INV-3 asks that such values be "badged and kept out of rankings". A mark that is plotted, labelled as unconfirmed and never ranked does both.</p>
+
+      <h4>20. Plot route-attributed routes on the Frontier as badged marks, never ranked</h4>
+      <p class="sub">Serves <code class="serves">AC-6</code> · <code class="serves">INV-3</code></p>
+      <p>AC-6 says the Frontier renders every route the lens selects; INV-3 says an unconfirmed identity is badged and never ranked. Today the second rule silently defeats the first for every GPT route. This task separates plotting from ranking, so the chart shows every measured route and the rankings stay exactly as they are.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>frontier()</code> returns a badged list: one point per route key whose rows are unrankable only for route-attributed identity, with the same x and y as a ranked point. A route that also has rankable rows stays one ranked point, and partial-usage or degraded rows are not plotted</li>
+        <li><code class="status">[]</code> Badged points never join the points, the Pareto line, verdicts, <code>recommend</code>, the advisory or the Matrix's rankings, and <code>verdicts()</code> and the <code>awsf metrics</code> readout are byte-identical to today's</li>
+        <li><code class="status">[]</code> <code>MetricsFrontier</code> draws badged points as dashed hollow marks labelled "identity unconfirmed", in every palette and both modes, with a note counting the routes plotted but not ranked</li>
+        <li><code class="status">[]</code> The x axis includes badged points, and a value below its floor is kept at the floor with a marker, never dropped</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code>, <code>npm run lint</code> and <code>npm run dash:build</code> pass, with a headless capture of the reviewer Frontier showing the four round 1 arms</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass.
+      </div>
+    </div>
   </section>
 
   <!-- ===== GLOBAL VALIDATION ===== -->
@@ -1100,10 +1123,11 @@ flowchart LR
   M4 --> GB["G18-B"] --> M6["M6<br/>replay confinement"] --> D3["D3 suite<br/>40 replays"]
   M4 --> M5["M5"]
   M4 --> M7["M7<br/>replay clusters"]
+  M3 --> M8["M8<br/>unconfirmed routes"]
   D3 -. "evidence for" .-> M5
   M5 --> CLOSE["spine M18 [x]<br/>owner, at landing"]
       </pre>
-      <figcaption>The whole drive. G18-M and G18-A precede any build, G18-C follows M1 and G18-B follows M4, all owner commits. The D3 suite can run before or after M5; the advisory reads whatever evidence exists when it is asked. Since 2026-09-29 the D3 suite also waits on M6, which confines a replay's agent to its worktree. Since 2026-09-30 M7 draws replays on the canvas; it needs M4 only, and the spine closure waits for it too.</figcaption>
+      <figcaption>The whole drive. G18-M and G18-A precede any build, G18-C follows M1 and G18-B follows M4, all owner commits. The D3 suite can run before or after M5; the advisory reads whatever evidence exists when it is asked. Since 2026-09-29 the D3 suite also waits on M6, which confines a replay's agent to its worktree. Since 2026-09-30 M7 draws replays on the canvas; it needs M4 only, and the spine closure waits for it too. M8, added the same day, plots unconfirmed routes on the Frontier; it needs M3 only, and the closure waits for it as well.</figcaption>
     </figure>
   </section>
 
@@ -1309,6 +1333,15 @@ flowchart LR
       <p><strong>D3 round 1 complete.</strong> Forty replays, one call each, all confined to their worktrees, and ten of ten pairs valid. Every arm located all ten planted defects: recall 100%, with a 95% interval of 72–100%. False alarms: <code>claude:opus@medium</code> 5, <code>claude:sonnet@medium</code> 1, <code>codex:gpt-6-luna@xhigh</code> 0 and <code>codex:gpt-6-sol@medium</code> 0. A host failure interrupted the round with two replays to go. The interrupted replay had been prepared, but its run had not started and no call was reserved, so it continued on the same attempt with no retry and its pair stayed valid. Round 2 has not run.</p>
       <p><strong>Carried forward</strong> as Handoff entries in T17 (C17–C18).</p>
       <p>Completion metadata: reviewed, verified and landed by claude-code:claude-opus-5-5 in a manual session; built by the owner with Codex.</p>
+    </details>
+    <details open>
+      <summary>2026-09-30 — the sessions board reads every session; Sonnet 5.5 and GPT-6.1 Sol priced; unconfirmed routes on the Frontier added as milestone M8 (task 20)</summary>
+      <p><strong>Correction to the T19 Amendment.</strong> It says the sessions board still reads one page. Since <code>560767e</code> the board and the groups view use the same all-pages reader as the canvas, and the board reads 93 of 93 sessions where it read 50. Each poll now publishes nothing if the view changed while its pages loaded, which also closes a race that read a run's detail response as the sessions list. <code>npm run test:unit</code> 2503/2503.</p>
+      <p><strong>Rate card, checked 2026-09-30</strong> (<code>e5a3361</code>). Sonnet 5.5 (<code>claude-sonnet-5-5</code>): $2 input, $2.50 5-minute cache write, $0.20 cache read and $10 output per 1M tokens, from the Anthropic pricing page. GPT-6.1 Sol (<code>gpt-6.1-sol</code>), released 2026-09-30: $2 input, $0.10 cached input and $10 output per 1M tokens, from the OpenAI pricing page. Every existing row was re-read from the same pages the same day and still matches, so the card and every row carry that date. This resolves T17 C11. GPT-6.1 Sol runs through the pi route as <code>codex:gpt-6.1-sol</code> with no adapter change: pi lists it, and the adapter's selector, argv and model info accept it. The benchmark priors, checked 2026-09-26, name neither model; adding them needs sourced benchmark scores.</p>
+      <p><strong>Found after D3 round 1: the Frontier shows no GPT route.</strong> With the proving-ground source on, the reviewer Frontier places only the two Opus routes. Its note reads "20 role-rows kept out of the ranking": the round's twenty GPT reviews. Every GPT row is route-attributed by design (<code>pi-codex-stream.ts</code>), and INV-3 keeps such rows out of rankings, which <code>frontier()</code> applies by building its marks from rankable rows only.</p>
+      <p><strong>Decided by the owner, 2026-09-30: O1.</strong> Plot route-attributed routes as badged marks that are never ranked. It is delivered as Milestone M8, task 20 and ticket T20, above, built manually by the owner with Codex. Rejected: O2, marking pi rows stream-authoritative, which would present an unconfirmed identity as a confirmed one, the failure INV-3 exists to prevent.</p>
+      <p><strong>Consequences for the plan.</strong> (1) M8 follows M7, so task numbers stay 1..20 in order and ticket ids stay contiguous. (2) T17 cannot depend on T20, so W18's spine closure also waits for M8. The README and T17's Handoff (C19–C21) say so. (3) No existing prompt changes.</p>
+      <p>Completion metadata: authored by claude-code:claude-opus-5-5 in a manual session.</p>
     </details>
   </section>
 
