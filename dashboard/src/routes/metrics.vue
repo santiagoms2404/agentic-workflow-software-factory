@@ -224,7 +224,7 @@ function option(entry: SessionFilterEntry): RailOption {
           <span class="metrics-stat-label">{{ stat.label }}</span>
           <strong class="metrics-stat-value">{{ stat.value }}</strong>
           <span class="metrics-stat-caption">{{ stat.caption }}</span>
-          <span v-if="stat.id === 'list-per-landed' && payload" class="metrics-stat-caption">rate card checked {{ payload.rateCard.checkedAt }}</span>
+          <span v-if="stat.id === 'list-per-landed' && payload" class="metrics-stat-caption">rate card {{ payload.rateCard.checkedAt }}</span>
         </div>
       </section>
 

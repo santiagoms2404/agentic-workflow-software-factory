@@ -133,6 +133,9 @@ test("the summary names the list equivalent as not spend, and the tab never says
   const list = summary.find((stat) => stat.id === "list-per-landed")!;
   assert.equal(list.caption, "list-price equivalent, not spend");
   assert.match(list.value, /^≈ list (\$\d+\.\d{2}|—)$/);
+  const total = summary.find((stat) => stat.id === "list-total")!;
+  assert.match(total.caption, / · not spend$/);
+  assert.match(total.value, /^≈ list (\$\d+\.\d{2}|—)$/);
   for (const text of renderedStrings().general) {
     assert.doesNotMatch(text, /\b(spent|spend|cost)\b[^,]*\$\d/i, `${JSON.stringify(text)} presents a figure as spend`);
   }

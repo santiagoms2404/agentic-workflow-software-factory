@@ -7,6 +7,7 @@ import {
   STATE_GROUPS,
   TOOL_CLASSES,
   applyLens,
+  UNCONFIRMED_TEXT,
   UNRANKABLE_REASONS,
   canonicalModel,
   depth,
@@ -14,6 +15,7 @@ import {
   flatColumns,
   frontier,
   fullLens,
+  identityUnconfirmed,
   recommend,
   routeKey,
   stats,
@@ -199,8 +201,9 @@ test("stats folds every aggregate the prototype computes", () => {
   assert.deepEqual(s.costAuthority, { "catalog-estimate": 1, unavailable: 3 });
   assert.deepEqual(s.identity, { "route-attributed": 1, "stream-authoritative": 3 });
   assert.deepEqual(s.effortSource, { none: 1, journal: 3 });
-  assert.equal(s.unrankable, 1);
-  assert.deepEqual(s.unrankableReasons, { "route-attributed": 1, "partial-usage": 0, degraded: 0 });
+  assert.equal(s.unrankable, 0);
+  assert.deepEqual(s.unrankableReasons, { "partial-usage": 0, degraded: 0 });
+  assert.equal(s.unconfirmed, 1);
   assert.equal(s.guardrailHits, 1);
   assert.equal(s.claims, 4);
   assert.equal(s.recovered, 1);
@@ -378,78 +381,105 @@ test("flatColumns marks a column identical across two or more groups", () => {
   assert.deepEqual(flatColumns([], columns), []);
 });
 
-test("INV-3: route-attributed, partial-usage and degraded rows are counted but kept out of every ranking", () => {
-  assert.deepEqual([...UNRANKABLE_REASONS], ["route-attributed", "partial-usage", "degraded"]);
+test("INV-3 as amended: partial-usage and degraded rows are kept out of every ranking, route-attributed rows rank badged", () => {
+  assert.deepEqual([...UNRANKABLE_REASONS], ["partial-usage", "degraded"]);
   const attributed = rows(6, 6, { route: SOL_HIGH, usd: 0.5, identityProvenance: "route-attributed" });
   const partial = rows(6, 6, { route: LUNA_LOW, usd: 0.1, usageAuthority: "partial" });
   const degraded = rows(6, 6, { route: SONNET_HIGH, usd: 0.2, observabilityDegraded: true });
   const clean = rows(6, 5, { route: OPUS_HIGH, usd: 4 });
   const data = [...attributed, ...partial, ...degraded, ...clean];
   assert.equal(isRankable(clean[0]!), true);
+  assert.equal(isRankable(attributed[0]!), true);
+  assert.equal(identityUnconfirmed(attributed[0]!), true);
+  assert.equal(identityUnconfirmed(clean[0]!), false);
   assert.equal(isRankable(degraded[0]!), false);
 
   const s = stats(data, PRICE);
   assert.equal(s.n, 24);
-  assert.equal(s.unrankable, 18);
-  assert.deepEqual(s.unrankableReasons, { "route-attributed": 6, "partial-usage": 6, degraded: 6 });
+  assert.equal(s.unrankable, 12);
+  assert.deepEqual(s.unrankableReasons, { "partial-usage": 6, degraded: 6 });
+  assert.equal(s.unconfirmed, 6);
 
   const front = frontier(data, "builder", "first-pass", "list-per-row", PRICE);
-  assert.deepEqual(front.points.map((point) => point.key), ["claude/opus@high"]);
+  assert.deepEqual(front.points.map((point) => [point.key, point.unconfirmed]), [["codex/gpt-6-sol@high", true], ["claude/opus@high", false]]);
   assert.equal(front.excluded, 12);
-  assert.deepEqual(front.badged.map((point) => point.key), ["codex/gpt-6-sol@high"]);
   const advice = recommend(data, "builder", null, "production", { price: PRICE, prior: NO_PRIOR })!;
-  assert.deepEqual(advice.ranked.map((route) => route.key), ["claude/opus@high"]);
+  assert.deepEqual(advice.ranked.map((route) => [route.key, route.unconfirmed]), [["codex/gpt-6-sol@high", true], ["claude/opus@high", false]]);
+  assert.equal(advice.choice.key, "codex/gpt-6-sol@high");
 });
 
-test("identity-only routes are badged with the ranked geometry but never change points, line, verdicts or advice", () => {
+test("route-attributed routes rank exactly as the same rows would confirmed, and every ranked place is badged", () => {
   const clean = [...rows(6, 5, { route: OPUS_HIGH, usd: 4 }), ...rows(6, 4, { route: SONNET_HIGH, usd: 1 })];
   const attributed = rows(6, 6, { route: SOL_HIGH, usd: 0.5, minutes: 0.1, identityProvenance: "route-attributed" });
-  const data = [...clean, ...attributed];
+  const confirmed = attributed.map((row) => ({ ...row, identityProvenance: "stream-authoritative" }));
   for (const y of ["first-pass", "clean", "not-blocked", "landed"] as const) {
     for (const x of ["list-per-row", "median-minutes"] as const) {
-      const before = frontier(clean, "builder", y, x, PRICE);
-      const after = frontier(data, "builder", y, x, PRICE);
-      assert.deepEqual(after.points, before.points);
-      assert.deepEqual(after.line, before.line);
-      assert.equal(JSON.stringify(verdicts(after)), JSON.stringify(verdicts(before)));
-      assert.equal(after.excluded, 0);
-      assert.equal(after.badged.length, 1);
-      const badged = after.badged[0]!;
-      const confirmed = frontier(attributed.map((row) => ({ ...row, identityProvenance: "stream-authoritative" })), "builder", y, x, PRICE).points[0]!;
-      assert.deepEqual([badged.x, badged.interval, badged.n, badged.stats], [confirmed.x, confirmed.interval, confirmed.n, stats(attributed, PRICE)]);
-      assert.equal(badged.hollow, true);
-      assert.equal(badged.onFrontier, false);
+      const ranked = frontier([...clean, ...attributed], "builder", y, x, PRICE);
+      const baseline = frontier([...clean, ...confirmed], "builder", y, x, PRICE);
+      const shape = (front: typeof ranked) => front.points.map((point) =>
+        [point.key, point.x, point.interval, point.n, point.hollow, point.onFrontier]);
+      assert.deepEqual(shape(ranked), shape(baseline));
+      assert.deepEqual(ranked.line.map((point) => point.key), baseline.line.map((point) => point.key));
+      assert.deepEqual(ranked.points.map((point) => [point.key, point.unconfirmed]),
+        baseline.points.map((point) => [point.key, point.key === "codex/gpt-6-sol@high"]));
+      const judged = verdicts(ranked), plain = verdicts(baseline);
+      assert.deepEqual(judged.map((verdict) => [verdict.key, verdict.tag, verdict.against, verdict.ratio]),
+        plain.map((verdict) => [verdict.key, verdict.tag, verdict.against, verdict.ratio]));
+      for (const [index, verdict] of judged.entries()) {
+        const before = plain[index]!.text;
+        if (verdict.key === "codex/gpt-6-sol@high") {
+          assert.ok(verdict.text.endsWith(` ${UNCONFIRMED_TEXT}`), verdict.text);
+          assert.equal(verdict.text.slice(0, -UNCONFIRMED_TEXT.length - 1), before);
+        } else {
+          assert.equal(verdict.text, before.replace("gpt-6-sol · high", "gpt-6-sol · high (identity unconfirmed)"), verdict.text);
+        }
+      }
     }
   }
-  assert.deepEqual(recommend(data, "builder", null, "production", { price: PRICE, prior: NO_PRIOR }),
-    recommend(clean, "builder", null, "production", { price: PRICE, prior: NO_PRIOR }));
+  const advice = recommend([...clean, ...attributed], "builder", null, "production", { price: PRICE, prior: NO_PRIOR })!;
+  const plainAdvice = recommend([...clean, ...confirmed], "builder", null, "production", { price: PRICE, prior: NO_PRIOR })!;
+  assert.deepEqual(advice.ranked.map((route) => route.key), plainAdvice.ranked.map((route) => route.key));
+  assert.deepEqual(advice.ranked.map((route) => route.unconfirmed), advice.ranked.map((route) => route.key === "codex/gpt-6-sol@high"));
 });
 
-test("a route with any rankable row is only a ranked candidate, even when that candidate is unplaced", () => {
+test("an overkill verdict against an unconfirmed route names it as unconfirmed; verdicts between confirmed routes are unchanged", () => {
+  const confirmedOnly = [...rows(6, 6, { route: OPUS_HIGH, usd: 4 }), ...rows(6, 6, { route: SONNET_HIGH, usd: 1 })];
+  const cheap = rows(6, 6, { route: SOL_HIGH, usd: 0.1, identityProvenance: "route-attributed" });
+  const before = verdicts(frontier(confirmedOnly, "builder", "first-pass", "list-per-row", PRICE));
+  assert.equal(before.find((verdict) => verdict.key === "claude/opus@high")!.text,
+    "Overkill candidate: sonnet · high costs 4.0× less with an overlapping interval. Confirm on paired replays before switching.");
+  const after = verdicts(frontier([...confirmedOnly, ...cheap], "builder", "first-pass", "list-per-row", PRICE));
+  assert.equal(after.find((verdict) => verdict.key === "claude/opus@high")!.text,
+    "Overkill candidate: gpt-6-sol · high (identity unconfirmed) costs 40.0× less with an overlapping interval. Confirm on paired replays before switching.");
+  assert.equal(after.find((verdict) => verdict.key === "codex/gpt-6-sol@high")!.text,
+    `On or near the frontier for builder: 100% first-pass yield. ${UNCONFIRMED_TEXT}`);
+});
+
+test("a route with confirmed and attributed rows is one ranked point, badged", () => {
   const clean = rows(2, 1, { route: SOL_HIGH, usd: 3 });
   const attributed = rows(6, 6, { route: SOL_HIGH, usd: 0.1, identityProvenance: "route-attributed" });
   const front = frontier([...attributed, ...clean], "builder", "first-pass", "list-per-row", PRICE);
-  assert.deepEqual(front.points, frontier(clean, "builder", "first-pass", "list-per-row", PRICE).points);
-  assert.deepEqual(front.badged, []);
-  const unplaced = frontier([...attributed, ...clean.map((row) => ({ ...row, usd: null }))], "builder", "first-pass", "list-per-row", PRICE);
-  assert.deepEqual(unplaced.badged, []);
-  assert.equal(unplaced.unplaced[0]!.reason, "unpriced");
+  assert.equal(front.points.length, 1);
+  assert.equal(front.points[0]!.stats.n, 8);
+  assert.equal(front.points[0]!.stats.unconfirmed, 6);
+  assert.equal(front.points[0]!.unconfirmed, true);
+  assert.equal(frontier(clean, "builder", "first-pass", "list-per-row", PRICE).points[0]!.unconfirmed, false);
 });
 
-test("partial or degraded attributed rows are excluded, and never contaminate a badged point", () => {
+test("partial or degraded attributed rows stay excluded, and never contaminate a ranked point", () => {
   const identity = row({ route: SOL_HIGH, usd: 0.5, identityProvenance: "route-attributed" });
   const partial = row({ route: SOL_HIGH, usd: 100, minutes: 100, identityProvenance: "route-attributed", usageAuthority: "partial" });
   const degraded = row({ route: SOL_HIGH, usd: 100, identityProvenance: "route-attributed", observabilityDegraded: true });
   const both = row({ route: LUNA_LOW, identityProvenance: "route-attributed", usageAuthority: "partial", observabilityDegraded: true });
   const front = frontier([identity, partial, degraded, both], "builder", "first-pass", "list-per-row", PRICE);
   assert.equal(front.excluded, 3, "a multiply excluded row is counted once");
-  assert.equal(front.badged.length, 1);
-  assert.equal(front.badged[0]!.x, 0.5);
-  assert.equal(front.badged[0]!.stats.n, 1);
-  assert.deepEqual(frontier([partial, degraded, both], "builder", "first-pass", "list-per-row", PRICE).badged, []);
+  assert.equal(front.points.length, 1);
+  assert.equal(front.points[0]!.x, 0.5);
+  assert.equal(front.points[0]!.stats.n, 1);
+  assert.deepEqual(frontier([partial, degraded, both], "builder", "first-pass", "list-per-row", PRICE).points, []);
 });
 
-test("badged routes need observed axes, stay role/key scoped, and keep a zero x", () => {
+test("unconfirmed routes need observed axes, stay role/key scoped, and keep a zero x", () => {
   const identity = { identityProvenance: "route-attributed" };
   const data = [
     row({ ...identity, route: SOL_HIGH, usd: 0 }),
@@ -459,12 +489,11 @@ test("badged routes need observed axes, stay role/key scoped, and keep a zero x"
     row({ ...identity, route: { ...OPUS_HIGH, effort: null } }),
   ];
   const front = frontier(data, "builder", "first-pass", "list-per-row", PRICE);
-  assert.deepEqual(front.badged.map((point) => [point.key, point.x]), [["codex/gpt-6-sol@high", 0]]);
-  assert.deepEqual(front.points, []);
-  assert.deepEqual(front.line, []);
-  assert.deepEqual(front.unplaced, []);
-  assert.deepEqual(verdicts(front), []);
-  assert.equal(frontier(data, "builder", "first-pass", "median-minutes", PRICE).badged.length, 1);
+  assert.deepEqual(front.points.map((point) => [point.key, point.x, point.unconfirmed]), [["codex/gpt-6-sol@high", 0, true]]);
+  assert.deepEqual(front.unplaced.map((route) => [route.key, route.reason]),
+    [["claude/sonnet@high", "no-observation"], ["codex/gpt-6-luna@low", "unpriced"]]);
+  assert.deepEqual(verdicts(front).map((verdict) => verdict.tag), ["insufficient"]);
+  assert.equal(frontier(data, "builder", "first-pass", "median-minutes", PRICE).points.length, 1);
 });
 
 test("frontier names each route it could not place, and why", () => {

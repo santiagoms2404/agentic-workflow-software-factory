@@ -201,6 +201,9 @@ export function metricsReadout(payload: MetricsResponse, filter: MetricsFilter, 
     });
     lines.push(...table([["route", "n", "settled", "first pass [95% CI]", "depth", "per row", "verdict"], ...body]));
     const kept = stats(cells.filter((cell) => cell.role === role).flatMap((cell) => cell.rows), listPrice);
+    if (kept.unconfirmed > 0) {
+      lines.push(`  ${kept.unconfirmed} row(s) ranked with unconfirmed identity (route-attributed): each counts as the model its route requested.`);
+    }
     if (kept.unrankable > 0) {
       lines.push(`  ${kept.unrankable} row(s) counted above but kept out of the verdicts: ${tallyText(kept.unrankableReasons)}.`);
     }

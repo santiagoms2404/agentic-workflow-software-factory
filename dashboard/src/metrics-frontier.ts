@@ -101,7 +101,8 @@ export interface FrontierMark {
   readonly title: string;
   readonly provider: Provider | null;
   readonly hollow: boolean;
-  readonly badged: boolean;
+  /** Ranked on the model its route requested: drawn dashed, labelled "identity unconfirmed". */
+  readonly unconfirmed: boolean;
   /** The actual x is below the log domain's lower end, so the mark is pinned there. */
   readonly belowFloor: boolean;
   readonly onFrontier: boolean;
@@ -133,42 +134,38 @@ export interface FrontierPlot {
 
 export const PLOT_SIZE = Object.freeze({ width: 960, height: 520, left: 86, right: 24, top: 22, bottom: 62 });
 const MARK_RADIUS = 9;
-const LABEL_FONT = Object.freeze({ charWidth: 7.8, lineHeight: 18, gap: 16 });
+const LABEL_FONT = Object.freeze({ charWidth: 9, lineHeight: 20, gap: 16 });
 
 export function frontierPlot(front: Frontier, names: ReadonlyMap<string, RouteName>): FrontierPlot {
   const { width, height, left, right, top, bottom } = PLOT_SIZE;
   const plot: Rect = { x: left, y: top, width: width - left - right, height: height - top - bottom };
-  const plotted = [...front.points, ...front.badged];
-  const domain = logDomain(plotted.map((point) => point.x));
+  const domain = logDomain(front.points.map((point) => point.x));
   const sx = logScale(domain, [plot.x, plot.x + plot.width]);
   const sy = linearScale([0, 1], [plot.y + plot.height, plot.y]);
   const yLabel = Y_PILLS.find((pill) => pill.id === front.y)!.label;
   const unit = front.y === "landed" ? "runs" : "settled rows";
 
-  const badgedKeys = new Set(front.badged.map((point) => point.key));
-  const base = plotted.map((point) => {
+  const base = front.points.map((point) => {
     const name = names.get(point.key) ?? { title: point.key, provider: null };
-    const badged = badgedKeys.has(point.key);
     const belowFloor = point.x < domain[0];
     const tooltip = [
       name.title,
       `${yLabel} ${pct(point.interval.p)} · 95% CI ${pct(point.interval.lo)} to ${pct(point.interval.hi)}`,
       `n ${point.n} ${unit}`,
       formatX(point.x, front.x),
-      ...(badged ? ["Identity unconfirmed: route-attributed, plotted but not ranked"]
-        : point.hollow ? [`Hollow: fewer than ${MIN_SETTLED}, so it does not shape the line`] : []),
+      ...(point.hollow ? [`Hollow: fewer than ${MIN_SETTLED}, so it does not shape the line`] : []),
+      ...(point.unconfirmed ? ["Identity unconfirmed: route-attributed, ranked on the model its route requested"] : []),
       ...(belowFloor ? [`At axis floor ${formatX(domain[0], front.x)}; actual value shown above`] : []),
       ...(point.onFrontier ? ["On the Pareto line"] : []),
     ];
     const labelLines = [
       `${name.title} · n${point.n}`,
-      ...(badged ? ["identity unconfirmed"] : []),
+      ...(point.unconfirmed ? ["identity unconfirmed"] : []),
       ...(belowFloor ? ["↓ at axis floor"] : []),
     ];
     return {
       point,
       name,
-      badged,
       belowFloor,
       cx: sx(point.x),
       cy: sy(point.interval.p!),
@@ -196,7 +193,7 @@ export function frontierPlot(front: Frontier, names: ReadonlyMap<string, RouteNa
     title: mark.name.title,
     provider: mark.name.provider,
     hollow: mark.point.hollow,
-    badged: mark.badged,
+    unconfirmed: mark.point.unconfirmed,
     belowFloor: mark.belowFloor,
     onFrontier: mark.point.onFrontier,
     cx: mark.cx,
@@ -241,6 +238,8 @@ export interface VerdictCard {
   readonly provider: Provider | null;
   readonly tag: VerdictTag;
   readonly tagText: string | null;
+  /** Ranked on the model its route requested; the card carries the badge. */
+  readonly unconfirmed: boolean;
   readonly text: string;
   /** The point's x with its unit. */
   readonly value: string;
@@ -257,6 +256,7 @@ export function verdictCards(front: Frontier, verdicts: readonly Verdict[], name
       provider: name.provider,
       tag: verdict.tag,
       tagText: TAG_TEXT[verdict.tag],
+      unconfirmed: point.unconfirmed,
       text: verdict.text,
       value: formatX(point.x, front.x),
     };

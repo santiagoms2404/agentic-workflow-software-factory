@@ -14,10 +14,12 @@
 // phase after it then blocked the run with a model attribution; that block is
 // what `not-blocked` measures, so first-pass yield does not drop those rows.
 //
-// Authority travels with the value (W18 INV-3). A row with route-attributed
-// identity, partial usage or degraded observability is counted and badged in
+// Authority travels with the value (W18 INV-3, amended by the owner's O4). A
+// row with partial usage or degraded observability is counted and badged in
 // `stats` but kept out of every ranking: the frontier, its verdicts and the
-// recommendation read only rankable rows.
+// recommendation read only rankable rows. A row with route-attributed identity
+// is ranked on the model its route requested, and every point, verdict and
+// recommendation entry it reaches says that identity is unconfirmed.
 
 export const STATE_GROUPS = ["LANDED", "AWAITING_OWNER", "OPEN", "CANCELLED", "BLOCKED"] as const;
 export type StateGroup = (typeof STATE_GROUPS)[number];
@@ -172,22 +174,28 @@ export function evidenceSource(row: Pick<MetricsRow, "workflow">): EvidenceSourc
   return row.workflow === "prove" ? "proving-ground" : "production";
 }
 
-export const UNRANKABLE_REASONS = ["route-attributed", "partial-usage", "degraded"] as const;
+export const UNRANKABLE_REASONS = ["partial-usage", "degraded"] as const;
 export type UnrankableReason = (typeof UNRANKABLE_REASONS)[number];
 
 /** Why a row is kept out of rankings (INV-3); empty when it is rankable. */
-export function unrankableReasons(
-  row: Pick<MetricsRow, "identityProvenance" | "usageAuthority" | "observabilityDegraded">,
-): UnrankableReason[] {
+export function unrankableReasons(row: Pick<MetricsRow, "usageAuthority" | "observabilityDegraded">): UnrankableReason[] {
   const reasons: UnrankableReason[] = [];
-  if (row.identityProvenance === "route-attributed") reasons.push("route-attributed");
   if (row.usageAuthority === "partial") reasons.push("partial-usage");
   if (row.observabilityDegraded) reasons.push("degraded");
   return reasons;
 }
 
-export function isRankable(row: Pick<MetricsRow, "identityProvenance" | "usageAuthority" | "observabilityDegraded">): boolean {
+export function isRankable(row: Pick<MetricsRow, "usageAuthority" | "observabilityDegraded">): boolean {
   return unrankableReasons(row).length === 0;
+}
+
+/**
+ * The row's model is the one its route requested, never read back from the
+ * provider (pi on the codex route). It is ranked on that model, and badged
+ * wherever a ranking shows it (INV-3, amended by O4).
+ */
+export function identityUnconfirmed(row: Pick<MetricsRow, "identityProvenance">): boolean {
+  return row.identityProvenance === "route-attributed";
 }
 
 // ---------------------------------------------------------------------------
@@ -250,6 +258,8 @@ export interface Stats {
   /** Rows kept out of rankings, and how many carry each reason (a row may carry several). */
   readonly unrankable: number;
   readonly unrankableReasons: Readonly<Record<UnrankableReason, number>>;
+  /** Rows with route-attributed identity: ranked on the requested model, and badged. */
+  readonly unconfirmed: number;
   readonly guardrailHits: number;
   readonly claims: number;
   readonly refuted: number;
@@ -356,6 +366,7 @@ export function stats(rows: readonly MetricsRow[], price: RowPrice): Stats {
     unrankable: rows.filter((row) => !isRankable(row)).length,
     unrankableReasons: Object.fromEntries(UNRANKABLE_REASONS.map((reason) =>
       [reason, rows.filter((row) => unrankableReasons(row).includes(reason)).length])) as Record<UnrankableReason, number>,
+    unconfirmed: rows.filter(identityUnconfirmed).length,
     guardrailHits: total(rows.map((row) => row.guardrailHits)),
     claims: total(rows.map((row) => row.claims)),
     refuted: total(rows.map((row) => row.refuted)),
@@ -492,12 +503,8 @@ export interface RoutePoint {
   /** Fewer than 5 in `n`: drawn, but never shapes the line. */
   readonly hollow: boolean;
   readonly onFrontier: boolean;
-}
-
-/** A plotted route whose only identity evidence is attributed, never a ranking candidate. */
-export interface BadgedRoutePoint extends Omit<RoutePoint, "hollow" | "onFrontier"> {
-  readonly hollow: true;
-  readonly onFrontier: false;
+  /** Some row's identity is route-attributed: ranked on the requested model, and badged. */
+  readonly unconfirmed: boolean;
 }
 
 /** Why a route with rankable rows is not placed: no x value on this axis, or no observation of the y metric. */
@@ -514,8 +521,6 @@ export interface Frontier {
   readonly y: FrontierY;
   readonly x: FrontierX;
   readonly points: readonly RoutePoint[];
-  /** Identity-only unrankable routes, plotted but never ranked; a rankable route is never repeated here. */
-  readonly badged: readonly BadgedRoutePoint[];
   /** The Pareto line, cheapest first. */
   readonly line: readonly RoutePoint[];
   /** Routes of the role with rankable rows that could not be placed, in key order. */
@@ -562,38 +567,29 @@ function dominates(q: { x: number; interval: Interval }, p: { x: number; interva
 }
 
 /**
- * One role's ranked routes on y against x, plus identity-only unrankable
- * routes in `badged` for plotting alone. A ranked route with no x value or no
- * y observation is returned as unplaced, with the reason. Only ranked routes
- * with at least 5 in the interval's denominator shape the Pareto line;
- * the rest come back hollow. Routes that tie exactly are both on the line.
+ * One role's routes on y against x, over rankable rows only; a route with
+ * route-attributed rows is ranked and comes back `unconfirmed`. A route with
+ * no x value or no y observation is returned as unplaced, with the reason.
+ * Only routes with at least 5 in the interval's denominator shape the Pareto
+ * line; the rest come back hollow. Routes that tie exactly are both on the line.
  */
 export function frontier(rows: readonly MetricsRow[], role: string, y: FrontierY, x: FrontierX, price: RowPrice): Frontier {
-  const ranked = byRoute(rows, role);
-  const attributed = routeCells(rows.filter((row) => {
-    const reasons = unrankableReasons(row);
-    return row.role === role && reasons.length === 1 && reasons[0] === "route-attributed";
-  })).filter((cell) => !ranked.has(cell.key));
-  const candidate = (key: string, group: readonly MetricsRow[]) => {
+  const candidates = [...byRoute(rows, role)].map(([key, group]) => {
     const s = stats(group, price);
     const { interval, n } = yInterval(group, s, y);
-    return { key, route: routeOfGroup(group), stats: s, interval, n, x: x === "list-per-row" ? s.listPerRow : s.medianMinutes };
-  };
-  const candidates = [...ranked].map(([key, group]) => candidate(key, group));
-  const isPlaced = (point: ReturnType<typeof candidate>): point is typeof point & { x: number } =>
+    return { key, route: routeOfGroup(group), stats: s, interval, n, x: x === "list-per-row" ? s.listPerRow : s.medianMinutes,
+      unconfirmed: s.unconfirmed > 0 };
+  });
+  const isPlaced = (point: (typeof candidates)[number]): point is typeof point & { x: number } =>
     point.x !== null && point.interval.p !== null;
   const placed = candidates.filter(isPlaced);
-  const badged = attributed.map((cell) => candidate(cell.key, cell.rows)).filter(isPlaced)
-    .map((point): BadgedRoutePoint => ({ role, ...point, hollow: true, onFrontier: false }))
-    .sort((a, b) => a.x - b.x || (a.key < b.key ? -1 : 1));
   const unplaced = candidates.filter((point) => !isPlaced(point))
     .map((point): UnplacedRoute => ({
       key: point.key,
       route: point.route,
       reason: point.interval.p === null ? "no-observation" : x === "list-per-row" ? "unpriced" : "no-minutes",
     })).sort((a, b) => (a.key < b.key ? -1 : 1));
-  const excluded = rows.filter((row) => row.role === role && routeKey(row.route) !== null &&
-    (row.usageAuthority === "partial" || row.observabilityDegraded)).length;
+  const excluded = rows.filter((row) => row.role === role && routeKey(row.route) !== null && !isRankable(row)).length;
   const solid = placed.filter((point) => point.n >= MIN_SETTLED);
   const points = placed.map((point): RoutePoint => ({
     role,
@@ -601,7 +597,7 @@ export function frontier(rows: readonly MetricsRow[], role: string, y: FrontierY
     hollow: point.n < MIN_SETTLED,
     onFrontier: point.n >= MIN_SETTLED && !solid.some((other) => other !== point && dominates(other, point)),
   })).sort((a, b) => a.x - b.x || (a.key < b.key ? -1 : 1));
-  return { role, y, x, points, badged, line: points.filter((point) => point.onFrontier), unplaced, excluded };
+  return { role, y, x, points, line: points.filter((point) => point.onFrontier), unplaced, excluded };
 }
 
 export type VerdictTag = "insufficient" | "underpowered" | "overkill" | "frontier";
@@ -633,36 +629,47 @@ function bestOf<T extends { key: string; interval: Interval; x: number | null }>
     (a.key < b.key ? -1 : 1))[0];
 }
 
+/** The sentence a verdict on an unconfirmed route ends with. */
+export const UNCONFIRMED_TEXT = "Identity unconfirmed: ranked on the model its route requested.";
+
+/** A route as a verdict names it; an unconfirmed one says so. */
+function verdictLabel(point: Pick<RoutePoint, "route" | "unconfirmed">): string {
+  return point.unconfirmed ? `${routeLabel(point.route)} (identity unconfirmed)` : routeLabel(point.route);
+}
+
 /**
  * The recommendation rule, stated per route. Insufficient under 5 in `n`;
  * underpowered when the upper bound sits below the best eligible route's lower
  * bound; an overkill candidate when an eligible route whose interval overlaps
- * costs at most 1/1.5 of it; on the frontier otherwise.
+ * costs at most 1/1.5 of it; on the frontier otherwise. A verdict on an
+ * unconfirmed route ends with `UNCONFIRMED_TEXT`, and one that names an
+ * unconfirmed route marks it; between confirmed routes the text is unchanged.
  */
 export function verdicts(front: Frontier): Verdict[] {
   const eligible = front.points.filter((point) => !point.hollow);
   const best = bestOf(eligible);
   const cheaperWord = front.x === "list-per-row" ? "costs" : "runs";
   const lessWord = front.x === "list-per-row" ? "less" : "faster";
+  const stated = (point: RoutePoint, text: string) => (point.unconfirmed ? `${text} ${UNCONFIRMED_TEXT}` : text);
   return front.points.map((point): Verdict => {
     const { interval } = point;
     if (point.hollow) {
       return { key: point.key, tag: "insufficient", against: null, ratio: null,
-        text: `Insufficient evidence: n ${point.n}, 95% CI ${pct(interval.lo)} to ${pct(interval.hi)}.` };
+        text: stated(point, `Insufficient evidence: n ${point.n}, 95% CI ${pct(interval.lo)} to ${pct(interval.hi)}.`) };
     }
     if (best !== undefined && best !== point && interval.hi < best.interval.lo) {
       return { key: point.key, tag: "underpowered", against: best.key, ratio: null,
-        text: `Underpowered next to ${routeLabel(best.route)}: upper bound ${pct(interval.hi)} is below its lower bound ${pct(best.interval.lo)}.` };
+        text: stated(point, `Underpowered next to ${verdictLabel(best)}: upper bound ${pct(interval.hi)} is below its lower bound ${pct(best.interval.lo)}.`) };
     }
     const cheaper = eligible.filter((other) => other !== point && other.x * OVERKILL_RATIO <= point.x && overlaps(other.interval, interval))
       .sort((a, b) => a.x - b.x || (a.key < b.key ? -1 : 1))[0];
     if (cheaper !== undefined) {
       const ratio = point.x / cheaper.x;
       return { key: point.key, tag: "overkill", against: cheaper.key, ratio,
-        text: `Overkill candidate: ${routeLabel(cheaper.route)} ${cheaperWord} ${ratio.toFixed(1)}× ${lessWord} with an overlapping interval. Confirm on paired replays before switching.` };
+        text: stated(point, `Overkill candidate: ${verdictLabel(cheaper)} ${cheaperWord} ${ratio.toFixed(1)}× ${lessWord} with an overlapping interval. Confirm on paired replays before switching.`) };
     }
     return { key: point.key, tag: "frontier", against: null, ratio: null,
-      text: `On or near the frontier for ${front.role}: ${pct(interval.p)} ${Y_LABEL[front.y]}.` };
+      text: stated(point, `On or near the frontier for ${front.role}: ${pct(interval.p)} ${Y_LABEL[front.y]}.`) };
   });
 }
 
@@ -683,6 +690,8 @@ export interface RouteEvidence {
   readonly prior: number | null;
   /** Prior-only branch: the Beta posterior mean used to rank. `null` on the local branch or with no prior. */
   readonly priorScore: number | null;
+  /** Some local row's identity is route-attributed: ranked on the requested model, and badged. */
+  readonly unconfirmed: boolean;
 }
 
 export interface Recommendation {
@@ -739,6 +748,7 @@ export function recommend(
       listPerRow: s.listPerRow,
       prior: options.prior(role, route),
       priorScore: null,
+      unconfirmed: s.unconfirmed > 0,
     };
   });
   const eligible = evidence.filter((route) => route.settled >= MIN_SETTLED);
@@ -755,7 +765,8 @@ export function recommend(
     const key = routeKey(route);
     if (key === null || seen.has(key)) return [];
     seen.add(key);
-    return [{ key, route, settled: 0, firstPasses: 0, firstPass: wilson(0, 0), listPerRow: null, prior: options.prior(role, route), priorScore: null }];
+    return [{ key, route, settled: 0, firstPasses: 0, firstPass: wilson(0, 0), listPerRow: null, prior: options.prior(role, route), priorScore: null,
+      unconfirmed: false }];
   });
   if (evidence.length === 0 && untested.length === 0) return null;
   const ranked = [...evidence, ...untested].map((route): RouteEvidence => {

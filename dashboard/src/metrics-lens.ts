@@ -500,7 +500,7 @@ export function countTile(runs: readonly MetricsRun[], rows: readonly MetricsRow
 }
 
 export interface SummaryStat {
-  readonly id: "rows" | "first-pass" | "landed" | "list-per-landed";
+  readonly id: "rows" | "first-pass" | "landed" | "list-per-landed" | "list-total";
   readonly label: string;
   readonly value: string;
   readonly caption: string;
@@ -510,7 +510,7 @@ function pct(value: number | null): string {
   return value === null ? "–" : `${Math.round(value * 100)}%`;
 }
 
-/** The four figures over the rows in the lens, every one the module's. */
+/** The five figures over the rows in the lens, every one the module's. */
 export function summaryStats(rows: readonly MetricsRow[], price: RowPrice): SummaryStat[] {
   const s = stats(rows, price);
   return [
@@ -525,6 +525,8 @@ export function summaryStats(rows: readonly MetricsRow[], price: RowPrice): Summ
     // The label carries no "$": every dollar sign on the tab comes through
     // `formatListEquivalent`, and the value already reads "≈ list $x.xx".
     { id: "list-per-landed", label: "List equivalent per landed run", value: formatListEquivalent(s.listPerLanded), caption: "list-price equivalent, not spend" },
+    // Every priced role-row in the lens, landed or not: what the factory's work adds up to at list price.
+    { id: "list-total", label: "Total list equivalent", value: formatListEquivalent(s.listTotal), caption: `${s.priced} of ${s.n} role-rows priced · not spend` },
   ];
 }
 

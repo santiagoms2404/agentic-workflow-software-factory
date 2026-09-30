@@ -150,9 +150,8 @@ test("module stats, API payload stats and awsf metrics --json stats agree to the
     assert.deepEqual(derived(printed), expected, "awsf metrics --json");
     const proving = built.roleRows.filter((row) => row.workflow === "prove");
     const front = frontier(proving, "builder", "first-pass", "list-per-row", listPrice);
-    assert.equal(front.badged.length, 1, "the API/CLI/tab parity includes a route-attributed replay");
-    assert.deepEqual(front.points, []);
-    assert.deepEqual(verdicts(front), []);
+    assert.deepEqual(front.points.map((point) => point.unconfirmed), [true], "the API/CLI/tab parity includes a ranked route-attributed replay");
+    assert.equal(verdicts(front).length, 1);
 
     // Beyond the statistics: the three payloads are one payload, but for the read instant.
     const unstamped = (payload: MetricsResponse): unknown => plain({ ...payload, extractedAt: null });
@@ -217,14 +216,17 @@ test("the table prints the module's numbers, scoped by the flags, with every pri
   assert.ok(proving.includes("1 runs (1 with role-rows) · 2 role-rows"), proving);
 });
 
-test("the readout stays byte-identical when identity-only routes become plotted but never ranked", () => {
+test("the readout ranks route-attributed routes with their badge, and is byte-identical where no row is attributed", () => {
   const payload = JSON.parse(readFileSync(PAYLOAD_PATH, "utf8")) as MetricsResponse;
+  // Measured on the task's unmodified base: b87889f, metricsReadout(...).join("\\n").
+  const plain = metricsReadout(payload, metricsFilter({})).join("\n");
+  assert.equal(createHash("sha256").update(plain).digest("hex"), "00a81de3e355222f70eba922ddba5bc8708e6870cdf562af0aa3dda46f3cd880");
   const attributed = { ...payload, roleRows: payload.roleRows.map((row) => ({ ...row,
     identityProvenance: row.route.adapter === "codex" ? "route-attributed" : row.identityProvenance })) };
-  // Measured on the task's unmodified base: b45fa5d, metricsReadout(...).join("\\n").
   const text = metricsReadout(attributed, metricsFilter({})).join("\n");
-  assert.equal(createHash("sha256").update(text).digest("hex"), "0a42643e7d7dd559bbf0b3025ed2bf874ddc74ca462e823b1b67992746ed29d5");
-  assert.match(text, /kept out of the verdicts: route-attributed 3/);
+  assert.match(text, /codex\/gpt-6-sol@xhigh .+ Insufficient evidence: n 3, 95% CI 21% to 94%\. Identity unconfirmed: ranked on the model its route requested\./);
+  assert.match(text, /\n  3 row\(s\) ranked with unconfirmed identity \(route-attributed\): each counts as the model its route requested\.\n/);
+  assert.doesNotMatch(text, /kept out of the verdicts|No verdict: every row is kept out of ranking/);
 });
 
 test("awsf metrics refuses a filtered --json, an unknown source and a malformed instant", async () => {

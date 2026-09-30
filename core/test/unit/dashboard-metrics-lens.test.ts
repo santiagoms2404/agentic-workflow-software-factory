@@ -182,18 +182,20 @@ test("the summary row is the module's stats over the lens, and every dollar come
   const inLens = rowsInLens(rows, DEFAULT_METRICS_ROUTE);
   const s = stats(inLens, listPrice);
   const summary = summaryStats(inLens, listPrice);
-  assert.deepEqual(summary.map((stat) => stat.id), ["rows", "first-pass", "landed", "list-per-landed"]);
+  assert.deepEqual(summary.map((stat) => stat.id), ["rows", "first-pass", "landed", "list-per-landed", "list-total"]);
   assert.deepEqual(summary[0], { id: "rows", label: "Role-rows in lens", value: "5", caption: "3 runs · 5 settled" });
   assert.equal(summary[1]!.value, `${Math.round(s.firstPass.p! * 100)}%`);
   assert.equal(summary[1]!.caption, `95% CI ${Math.round(s.firstPass.lo * 100)}% to ${Math.round(s.firstPass.hi * 100)}%`);
   assert.deepEqual([summary[2]!.value, summary[2]!.caption], ["2/3", "1 role-rows blocked here, model-attributed"]);
   assert.equal(summary[3]!.value, formatListEquivalent(s.listPerLanded));
   assert.equal(summary[3]!.caption, "list-price equivalent, not spend");
+  assert.equal(summary[4]!.value, formatListEquivalent(s.listTotal));
+  assert.equal(summary[4]!.caption, `${s.priced} of 5 role-rows priced · not spend`);
   for (const stat of summary) {
     for (const text of [stat.label, stat.caption]) assert.doesNotMatch(text, /\$/, `${stat.id}: a bare $ outside the formatter`);
   }
   const empty = summaryStats([], listPrice);
-  assert.deepEqual(empty.map((stat) => stat.value), ["0", "–", "0/0", "≈ list —"]);
+  assert.deepEqual(empty.map((stat) => stat.value), ["0", "–", "0/0", "≈ list —", "≈ list —"]);
   assert.equal(empty[1]!.caption, "no settled rows");
 });
 

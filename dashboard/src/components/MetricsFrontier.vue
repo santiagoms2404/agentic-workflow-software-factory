@@ -31,7 +31,8 @@ const roles = computed(() => frontierRoles(props.rows));
 const role = computed(() => frontierRole(props.state.role, props.rows));
 const names = computed(() => routeNames(props.rows, props.rateCard, props.priorLabels));
 const front = computed(() => (role.value === null ? null : frontier(props.rows, role.value, props.state.y, props.state.x, listPrice)));
-const plot = computed(() => (front.value === null || (front.value.points.length === 0 && front.value.badged.length === 0) ? null : frontierPlot(front.value, names.value)));
+const plot = computed(() => (front.value === null || front.value.points.length === 0 ? null : frontierPlot(front.value, names.value)));
+const unconfirmed = computed(() => front.value?.points.filter((point) => point.unconfirmed).length ?? 0);
 const cards = computed(() => (front.value === null ? [] : verdictCards(front.value, verdicts(front.value), names.value)));
 const unplaced = computed(() => (front.value?.unplaced ?? []).map((entry) => ({
   key: entry.key,
@@ -77,7 +78,7 @@ function diamond(mark: FrontierMark): string {
   <div class="frontier-view">
     <header class="metrics-view-head">
       <h2 class="metrics-view-title">Cost against success, per role</h2>
-      <p class="metrics-view-lede">Each mark is a route. Whiskers are 95% Wilson intervals. The line joins routes no other route beats on both axes. Hollow marks have fewer than 5 settled rows and do not shape the line. Dashed hollow marks have unconfirmed identity and are never ranked. Performance, cost and speed are read together, one axis pair at a time. Circle: Anthropic. Diamond: OpenAI.</p>
+      <p class="metrics-view-lede">Each mark is a route. Whiskers are 95% Wilson intervals. The line joins routes no other route beats on both axes. Hollow marks have fewer than 5 settled rows and do not shape the line. Dashed marks have unconfirmed identity: they are ranked on the model their route requested. Performance, cost and speed are read together, one axis pair at a time. Circle: Anthropic. Diamond: OpenAI.</p>
     </header>
 
     <p v-if="roles.length === 0" class="metrics-note">No role-row in the lens ran on a single route.</p>
@@ -149,13 +150,13 @@ function diamond(mark: FrontierMark): string {
               :x="mark.label!.x"
               :y="mark.label!.y"
               :text-anchor="mark.label!.anchor"
-            ><tspan v-for="(line, index) in mark.labelLines" :key="index" :x="mark.label!.x" :dy="index === 0 ? 0 : 18">{{ line }}</tspan></text>
+            ><tspan v-for="(line, index) in mark.labelLines" :key="index" :x="mark.label!.x" :dy="index === 0 ? 0 : 20">{{ line }}</tspan></text>
           </g>
           <g
             v-for="mark in plot.marks"
             :key="mark.key"
             class="frontier-mark"
-            :class="{ hollow: mark.hollow, badged: mark.badged, active: active?.key === mark.key }"
+            :class="{ hollow: mark.hollow, unconfirmed: mark.unconfirmed, active: active?.key === mark.key }"
             tabindex="0"
             role="img"
             :aria-label="mark.ariaLabel"
@@ -177,7 +178,7 @@ function diamond(mark: FrontierMark): string {
       </div>
 
       <p v-if="unplaced.length > 0" class="metrics-note">Not placed: {{ unplaced.map((entry) => entry.text).join(" · ") }}.</p>
-      <p v-if="front && front.badged.length > 0" class="metrics-note">{{ front.badged.length }} {{ front.badged.length === 1 ? "route plotted" : "routes plotted" }} but not ranked: identity unconfirmed (route-attributed).</p>
+      <p v-if="unconfirmed > 0" class="metrics-note">{{ unconfirmed }} {{ unconfirmed === 1 ? "route is" : "routes are" }} ranked with unconfirmed identity: route-attributed, ranked on the model the route requested.</p>
       <p v-if="front && front.excluded > 0" class="metrics-note">{{ front.excluded }} role-rows kept out of the ranking and not plotted: partial usage or degraded observability.</p>
 
       <ul v-if="cards.length > 0" class="frontier-cards" aria-label="Verdicts">
@@ -187,6 +188,7 @@ function diamond(mark: FrontierMark): string {
             <svg v-else-if="card.provider === 'anthropic'" class="metrics-glyph" viewBox="0 0 10 10" aria-hidden="true"><circle cx="5" cy="5" r="4" /></svg>
             <strong>{{ card.title }}</strong>
             <span v-if="card.tagText" class="frontier-tag" :class="`tag-${card.tag}`">{{ card.tagText }}</span>
+            <span v-if="card.unconfirmed" class="frontier-tag tag-unconfirmed">identity unconfirmed</span>
           </span>
           <span class="frontier-card-text">{{ card.text }}</span>
           <span class="frontier-card-value">{{ card.value }}</span>
