@@ -26,7 +26,7 @@ function phase(key: string, ordinal: number, status: string, code: string | null
 
 function run(sessionId: string, state: string, phases: readonly PhaseSummary[]): SessionCard {
   return {
-    sessionId, taskId: `task-${sessionId}`, workflowId: "build-review", state, phases,
+    sessionId, taskId: `task-${sessionId}`, workflowId: "build-review", state, phases, replay: null,
   } as unknown as SessionCard;
 }
 

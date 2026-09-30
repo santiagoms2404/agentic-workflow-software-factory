@@ -201,6 +201,8 @@ function onPointerUp(event: PointerEvent): void {
     const now = Date.now();
     const second = finished.id === lastRelease.id && now - lastRelease.at < 350;
     lastRelease = { id: finished.id, at: now };
+    const node = props.graph.nodes.find((candidate) => candidate.id === finished.id);
+    if (node?.kind === "proving-ground") { open(node); return; }
     if (!second) emit("update:selected", props.selected === finished.id ? null : finished.id);
     return;
   }

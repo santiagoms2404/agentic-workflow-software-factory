@@ -109,6 +109,8 @@ export interface SessionCard {
   groupId: string | null;
   /** The registered plan this run belongs to; null when none was named. */
   planRef: string | null;
+  /** Read-only identity from the validated projected replay record. */
+  replay: { itemId: string; arm: string; repetition: number; order: number } | null;
   attempt: number;
   workflowId: string;
   riskTier: 0 | 1 | 2;

@@ -875,12 +875,14 @@ pre { max-height: 42vh; margin: 8px 0 0; padding: 12px 14px; overflow: auto; bor
 .board-group-expand-count, .board-group-expand-action { font: 12px var(--mono); }
 
 /* --- Canvas: the execution map --------------------------------------------- */
-/* Three hues so a reader tells a run from a session from a plan without
+/* Distinct hues so a reader tells the node kinds apart without
    hovering anything. Colour here is information, not decoration, which is why
    it is spent on the dots and on nothing else in this view. */
 .canvas-kind-run .canvas-kind-dot, .canvas-dot-run { background: var(--cyan); }
 .canvas-kind-session .canvas-kind-dot, .canvas-dot-session { background: var(--violet); }
 .canvas-kind-plan .canvas-kind-dot, .canvas-dot-plan { background: var(--amber); }
+.canvas-kind-proving-ground .canvas-kind-dot, .canvas-dot-proving-ground { background: var(--green); }
+.canvas-kind-pair .canvas-kind-dot, .canvas-dot-pair { background: var(--blue); }
 /* Shape as well as hue, because hue alone cannot carry this in every palette:
    Forest is monochromatic by design, and its cyan and violet sit a few steps
    apart. A circle, a squircle and a rounded square separate at a glance on any
@@ -889,6 +891,8 @@ pre { max-height: 42vh; margin: 8px 0 0; padding: 12px 14px; overflow: auto; bor
 .canvas-dot-run, .canvas-kind-run .canvas-kind-dot { border-radius: 50%; }
 .canvas-dot-session, .canvas-kind-session .canvas-kind-dot { border-radius: 32%; }
 .canvas-dot-plan, .canvas-kind-plan .canvas-kind-dot { border-radius: 14%; }
+.canvas-dot-proving-ground, .canvas-kind-proving-ground .canvas-kind-dot { border-radius: 50% 14% 50% 14%; }
+.canvas-dot-pair, .canvas-kind-pair .canvas-kind-dot { border-radius: 0; }
 .canvas-head p { margin: 0; }
 .canvas-head h1 { margin: 3px 0 0; font-size: 28px; }
 .canvas-head-note { margin-top: 6px; color: var(--dim); font: 12px var(--mono); }
@@ -904,6 +908,7 @@ pre { max-height: 42vh; margin: 8px 0 0; padding: 12px 14px; overflow: auto; bor
    from a plan is dashed. A line nobody recorded would look like none of them. */
 .canvas-edge.edge-continuation { stroke: var(--accent); stroke-width: 2.2; }
 .canvas-edge.edge-plan { stroke-dasharray: 5 5; stroke: color-mix(in srgb, var(--amber) 50%, transparent); }
+.canvas-edge.edge-replay { stroke: color-mix(in srgb, var(--blue) 58%, transparent); }
 .canvas-edge.dimmed { opacity: .2; }
 .canvas-edge.lit { opacity: 1; }
 .canvas-label {

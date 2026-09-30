@@ -51,7 +51,7 @@ function run(
 ): CanvasSession {
   return {
     sessionId, project: "p", taskId, continuesTask: null, attempt, groupId, startedAt,
-    state: "LANDED", planRef: null, ...patch,
+    state: "LANDED", planRef: null, replay: null, ...patch,
   };
 }
 

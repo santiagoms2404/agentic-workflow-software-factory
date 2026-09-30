@@ -32,7 +32,7 @@ function run(sessionId: string, taskId: string, patch: Partial<CanvasSession> = 
   return {
     sessionId, project: "p", taskId, continuesTask: null, attempt: 1,
     groupId: "drive-a", startedAt: "2026-09-08T10:00:00.000Z", state: "LANDED", planRef: "awsf-v2-plan",
-    ...patch,
+    replay: null, ...patch,
   };
 }
 

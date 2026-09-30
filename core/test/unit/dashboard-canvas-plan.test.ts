@@ -20,7 +20,7 @@ function ticket(id: string, milestone: string, state: BacklogTicket["state"], pa
 }
 
 function run(sessionId: string, planRef: string | null): SessionCard {
-  return { sessionId, planRef, taskId: `task-${sessionId}` } as unknown as SessionCard;
+  return { sessionId, planRef, replay: null, taskId: `task-${sessionId}` } as unknown as SessionCard;
 }
 
 const tickets: readonly BacklogTicket[] = [

@@ -18,7 +18,7 @@ import { groupSessionStacks } from "./session-stacks.ts";
  * says nothing about which ticket, so no ticket edge is drawn.
  */
 
-export type CanvasNodeKind = "run" | "session" | "plan";
+export type CanvasNodeKind = "run" | "session" | "plan" | "proving-ground" | "pair";
 
 /**
  * `continuation` is the owner's connection string: the two edges of a deck
@@ -27,7 +27,7 @@ export type CanvasNodeKind = "run" | "session" | "plan";
  * is the work that made the connection — a direct line beside these two would
  * draw a triangle over one relationship.
  */
-export type CanvasEdgeKind = "continuation" | "membership" | "plan";
+export type CanvasEdgeKind = "continuation" | "membership" | "plan" | "replay";
 
 export interface CanvasNode {
   readonly id: string;
@@ -50,7 +50,7 @@ export interface CanvasEdge {
 
 export interface CanvasCluster {
   readonly key: string;
-  /** Session node ids the region is drawn behind. */
+  /** Node ids the region is drawn behind. */
   readonly nodeIds: readonly string[];
 }
 
@@ -82,7 +82,7 @@ export interface CanvasGraph {
   readonly unplaced: readonly CanvasNode[];
 }
 
-export type CanvasSession = GroupableSession & Pick<SessionCard, "planRef" | "taskId">;
+export type CanvasSession = GroupableSession & Pick<SessionCard, "planRef" | "taskId" | "replay">;
 
 export function runNodeId(sessionIds: readonly string[]): string {
   // The smallest session id, not the first: a deck's key follows the order the
@@ -97,6 +97,14 @@ export function sessionNodeId(group: string): string {
 
 export function planNodeId(plan: string): string {
   return `plan:${plan}`;
+}
+
+export function provingGroundNodeId(project: string): string {
+  return `proving-ground:${project}`;
+}
+
+export function pairNodeId(project: string, item: string, repetition: number): string {
+  return `pair:${JSON.stringify([project, item, repetition])}`;
 }
 
 /**
@@ -154,6 +162,8 @@ export function buildCanvasGraph(
   const planIds = new Set(plans.map((plan) => plan.id));
   const groupWeight = new Map<string, number>();
   const planWeight = new Map<string, number>();
+  const replayProjects = new Map<string, { runs: number; pairs: Set<string>; nodes: Set<string> }>();
+  const replayPairs = new Map<string, { project: string; label: string; weight: number }>();
 
   for (const stack of groupSessionStacks(sessions)) {
     const ordered = orderedDeck(stack.sessions);
@@ -163,11 +173,33 @@ export function buildCanvasGraph(
     nodes.push({
       id,
       kind: "run",
-      label: [...new Set(ordered.map((session) => session.taskId))].join(" → "),
+      label: [
+        [...new Set(ordered.map((session) => session.taskId))].join(" → "),
+        ...new Set(ordered.flatMap((session) => session.replay === null ? [] : [
+          `${session.replay.itemId} · rep ${session.replay.repetition} · ${session.replay.arm} · place ${session.replay.order}`,
+        ])),
+      ].join(" · "),
       weight: ordered.length,
       sessionIds: ordered.map((session) => session.sessionId),
       ref: null,
     });
+    const deckPairs = new Set<string>();
+    for (const session of ordered) {
+      if (session.replay === null) continue;
+      const { itemId, repetition } = session.replay;
+      const pair = pairNodeId(session.project, itemId, repetition);
+      const project = replayProjects.get(session.project) ?? { runs: 0, pairs: new Set<string>(), nodes: new Set<string>() };
+      project.runs += 1;
+      project.pairs.add(pair);
+      project.nodes.add(id);
+      project.nodes.add(pair);
+      project.nodes.add(provingGroundNodeId(session.project));
+      replayProjects.set(session.project, project);
+      const prior = replayPairs.get(pair);
+      replayPairs.set(pair, { project: session.project, label: `${itemId} · rep ${repetition}`, weight: (prior?.weight ?? 0) + 1 });
+      deckPairs.add(pair);
+    }
+    for (const pair of deckPairs) edges.push({ from: id, to: pair, kind: "replay" });
     // A deck naming two sessions IS the connection between them, so both of its
     // edges take the connection treatment rather than the faint membership one.
     const kind: CanvasEdgeKind = groups.length > 1 ? "continuation" : "membership";
@@ -210,6 +242,18 @@ export function buildCanvasGraph(
     });
   }
 
+  for (const [id, pair] of replayPairs) {
+    nodes.push({ id, kind: "pair", label: pair.label, weight: pair.weight, sessionIds: [], ref: null });
+    edges.push({ from: id, to: provingGroundNodeId(pair.project), kind: "replay" });
+  }
+  for (const [project, replay] of replayProjects) {
+    nodes.push({
+      id: provingGroundNodeId(project), kind: "proving-ground",
+      label: `${project} · proving ground · ${replay.runs} replays · ${replay.pairs.size} pairs`,
+      weight: replay.runs, sessionIds: [], ref: project,
+    });
+  }
+
   const connections = groupConnections(sessions);
   const clusterOf = clusterKeys(namedGroups.slice().sort(), connections);
   const grouped = new Map<string, string[]>();
@@ -221,6 +265,9 @@ export function buildCanvasGraph(
     // in a cluster of its own is a dot, not a dot inside a box.
     .filter(([, nodeIds]) => nodeIds.length > 1)
     .map(([key, nodeIds]) => ({ key, nodeIds: nodeIds.slice().sort() }))
+    .concat([...replayProjects].map(([project, replay]) => ({
+      key: provingGroundNodeId(project), nodeIds: [...replay.nodes].sort(),
+    })))
     .sort((left, right) => left.key.localeCompare(right.key));
 
   // Sorted, so the simulation below starts every node from the same place on

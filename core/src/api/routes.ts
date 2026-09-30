@@ -35,6 +35,7 @@ import {
 } from "../observability/queries.ts";
 import { buildEffectiveConfig } from "../config/effective-config.ts";
 import { buildMetricsPayload } from "../metrics/payload.ts";
+import { assertReplayRecord } from "../contracts/proving-ground.ts";
 import type { AwsfConfig } from "../config/schema.ts";
 import type {
   ActivityPoint,
@@ -176,6 +177,17 @@ function activity(db: DatabaseSync, sessionId: string, phases: readonly PhaseSum
     .slice(-96);
 }
 
+function replay(db: DatabaseSync, sessionId: string): SessionCard["replay"] {
+  const rows = db.prepare(`SELECT payload_json FROM events
+    WHERE session_id = ? AND type = 'replay' ORDER BY event_row DESC`).all(sessionId) as unknown as Array<{ payload_json: string }>;
+  for (const row of rows) {
+    const payload = parseJson(row.payload_json);
+    try { assertReplayRecord(payload); } catch { continue; }
+    return { itemId: payload.itemId, arm: payload.arm, repetition: payload.repetition, order: payload.order };
+  }
+  return null;
+}
+
 function card(db: DatabaseSync, row: SessionRow): SessionCard {
   const phases = phasesForSession(db, row.session_id).map(phase);
   return {
@@ -185,6 +197,7 @@ function card(db: DatabaseSync, row: SessionRow): SessionCard {
     continuesTask: row.continues_task,
     groupId: row.group_id,
     planRef: row.plan_ref,
+    replay: replay(db, row.session_id),
     attempt: row.attempt,
     workflowId: row.workflow_id,
     riskTier: row.risk_tier,

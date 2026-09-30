@@ -1,5 +1,6 @@
 import type { CanvasGraph, CanvasNodeKind } from "./canvas-graph.ts";
 import type { CanvasLayout, Point } from "./canvas-layout.ts";
+import { DEFAULT_METRICS_ROUTE, metricsRouteHash } from "./metrics-lens.ts";
 
 /**
  * What the canvas screen holds that is not geometry: which kinds are shown,
@@ -10,12 +11,14 @@ import type { CanvasLayout, Point } from "./canvas-layout.ts";
  * argument that put the plan in `#/backlog/<plan>`.
  */
 
-export const CANVAS_KINDS = ["run", "session", "plan"] as const;
+export const CANVAS_KINDS = ["run", "session", "plan", "proving-ground", "pair"] as const;
 
 export const KIND_LABEL: Readonly<Record<CanvasNodeKind, string>> = {
   run: "runs",
   session: "driving sessions",
   plan: "plans",
+  "proving-ground": "proving grounds",
+  pair: "replay pairs",
 };
 
 export interface Camera {
@@ -198,6 +201,10 @@ export function openHref(
   node: { readonly kind: CanvasNodeKind; readonly id?: string; readonly ref: string | null; readonly sessionIds: readonly string[]; readonly weight?: number },
   route?: CanvasRoute,
 ): string | null {
+  if (node.kind === "pair") return null;
+  if (node.kind === "proving-ground") {
+    return metricsRouteHash({ ...DEFAULT_METRICS_ROUTE, off: { ...DEFAULT_METRICS_ROUTE.off, source: [] } });
+  }
   // Every kind now opens its own view on the canvas and carries the map's
   // state with it, so leaving returns to the map exactly as it was. Away from
   // the canvas — anywhere that has no route to carry — each still points at

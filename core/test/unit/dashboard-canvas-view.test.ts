@@ -36,7 +36,7 @@ const plans: readonly SessionPlan[] = [
 function run(sessionId: string, groupId: string | null, planRef: string | null): CanvasSession {
   return {
     sessionId, project: "p", taskId: `task-${sessionId}`, continuesTask: null, attempt: 1,
-    groupId, startedAt: "2026-09-08T10:00:00.000Z", state: "LANDED", planRef,
+    groupId, startedAt: "2026-09-08T10:00:00.000Z", state: "LANDED", planRef, replay: null,
   };
 }
 
@@ -82,7 +82,7 @@ test("an unreadable or empty URL means every kind, never an empty map", () => {
 });
 
 test("switching off a kind removes its dots and every line that ended on one", () => {
-  assert.deepEqual(kindCounts(graph), new Map([["run", 2], ["session", 1], ["plan", 1]]));
+  assert.deepEqual(kindCounts(graph), new Map([["run", 2], ["session", 1], ["plan", 1], ["proving-ground", 0], ["pair", 0]]));
   const withoutPlans = filterGraph(graph, ["run", "session"]);
   assert.deepEqual(withoutPlans.nodes.map((node) => node.kind), ["run", "run", "session"]);
   assert.equal(withoutPlans.edges.some((edge) => edge.kind === "plan"), false);

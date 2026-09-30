@@ -55,21 +55,68 @@ function hash(id: string): number {
   return value;
 }
 
-/**
- * A phyllotaxis spiral, turned by the node's own hash.
- *
- * The spiral spaces nodes evenly from the centre so the simulation starts
- * spread out rather than exploding out of a single point, and the hash keeps a
- * node's starting angle its own — so adding one node does not re-seat every
- * other node and redraw a map the reader had learned.
- */
+interface ReplayFamily {
+  readonly region: string;
+  readonly hub: string | null;
+  readonly pair: string;
+  readonly runs: readonly string[];
+}
+
+/** Relations only: no grouping information is recovered from node names. */
+function replayFamilies(graph: CanvasGraph): ReplayFamily[] {
+  const kinds = new Map(graph.nodes.map((node) => [node.id, node.kind]));
+  return graph.nodes.filter((node) => node.kind === "pair")
+    .map((node) => ({
+      region: graph.clusters.find((cluster) => cluster.nodeIds.includes(node.id))?.key ?? node.id,
+      hub: graph.edges.find((edge) => edge.kind === "replay" && edge.from === node.id && kinds.get(edge.to) === "proving-ground")?.to ?? null,
+      pair: node.id,
+      runs: graph.edges.filter((edge) => edge.kind === "replay" && edge.to === node.id && kinds.get(edge.from) === "run")
+        .map((edge) => edge.from).sort(),
+    })).sort((left, right) => left.pair.localeCompare(right.pair));
+}
+
+function familyRadius(count: number): number {
+  return Math.max(90, count * MIN_SEPARATION / (2 * Math.PI));
+}
+
+/** Ordinary nodes keep their hashed spiral; replay pairs start in disjoint neighbourhoods. */
 export function initialPositions(graph: CanvasGraph): ReadonlyMap<string, Point> {
   const positions = new Map<string, Point>();
-  graph.nodes.forEach((node, index) => {
+  const families = replayFamilies(graph);
+  const replayIds = new Set(families.flatMap((family) => [...(family.hub === null ? [] : [family.hub]), family.pair, ...family.runs]));
+  const ordinary = graph.nodes.filter((node) => !replayIds.has(node.id));
+  ordinary.forEach((node, index) => {
     const radius = 34 * Math.sqrt(index + 1);
     const angle = (hash(node.id) / 0x1_0000_0000) * Math.PI * 2 + index * 2.399_963;
     positions.set(node.id, { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius });
   });
+  // Seed disjoint pair neighbourhoods beside the ordinary graph. The hubs and
+  // pairs are formation anchors; replay runs still repel and settle around
+  // their own pair. Ordinary runs keep their original seeds and forces.
+  const spacing = Math.max(330, ...families.map((family) => familyRadius(family.runs.length) * 2 + 150));
+  // Measure where the unchanged ordinary simulation settles, so the new
+  // region sits beside that drawing rather than covering some of its dots.
+  const ordinaryBounds = families.length === 0 || ordinary.length === 0 ? null : settle({
+    ...graph, nodes: ordinary, edges: graph.edges.filter((edge) => !replayIds.has(edge.from) && !replayIds.has(edge.to)),
+  }, positions).bounds;
+  let left = ordinaryBounds === null ? 0 : ordinaryBounds.maxX + spacing;
+  for (const region of [...new Set(families.map((family) => family.region))].sort()) {
+    const pairs = families.filter((family) => family.region === region);
+    const columns = Math.ceil(Math.sqrt(pairs.length));
+    const width = (columns - 1) * spacing;
+    const hub = pairs[0]!.hub;
+    if (hub !== null) positions.set(hub, { x: left + width / 2, y: -spacing * 0.65 });
+    pairs.forEach((family, index) => {
+      const centre = { x: left + (index % columns) * spacing, y: Math.floor(index / columns) * spacing };
+      positions.set(family.pair, centre);
+      family.runs.forEach((id, run) => {
+        const angle = run * Math.PI * 2 / family.runs.length + hash(family.pair) / 0x1_0000_0000 * Math.PI * 2;
+        const radius = familyRadius(family.runs.length);
+        positions.set(id, { x: centre.x + Math.cos(angle) * radius, y: centre.y + Math.sin(angle) * radius });
+      });
+    });
+    left += width + spacing * 2;
+  }
   return positions;
 }
 
@@ -94,7 +141,10 @@ interface Body {
  * rest of the graph arranges itself around it.
  */
 export function stepSimulation(graph: CanvasGraph, bodies: Map<string, Body>): void {
-  const ids = graph.nodes.map((node) => node.id);
+  const families = replayFamilies(graph);
+  const replayIds = new Set(families.flatMap((family) => [...(family.hub === null ? [] : [family.hub]), family.pair, ...family.runs]));
+  stepReplayFamilies(families, bodies);
+  const ids = graph.nodes.map((node) => node.id).filter((id) => !replayIds.has(id));
   for (let left = 0; left < ids.length; left += 1) {
     for (let right = left + 1; right < ids.length; right += 1) {
       const one = bodies.get(ids[left]!);
@@ -126,6 +176,7 @@ export function stepSimulation(graph: CanvasGraph, bodies: Map<string, Body>): v
   }
 
   for (const edge of graph.edges) {
+    if (replayIds.has(edge.from) || replayIds.has(edge.to)) continue;
     const from = bodies.get(edge.from);
     const to = bodies.get(edge.to);
     if (from === undefined || to === undefined) continue;
@@ -146,6 +197,58 @@ export function stepSimulation(graph: CanvasGraph, bodies: Map<string, Body>): v
     body.vy = (body.vy - body.y * CENTRING * VERTICAL_CENTRING) * DAMPING;
     body.x += body.vx * STEP;
     body.y += body.vy * STEP;
+  }
+}
+
+/** Local physics inside each pair's neighbourhood, independent of ordinary runs. */
+function stepReplayFamilies(families: readonly ReplayFamily[], bodies: Map<string, Body>): void {
+  const pairs = families.map((family) => bodies.get(family.pair)).filter((body): body is Body => body !== undefined);
+  for (const family of families) {
+    const pair = bodies.get(family.pair);
+    if (pair === undefined) continue;
+    const radius = familyRadius(family.runs.length);
+    // Staying inside half the nearest pair distance makes the own-pair
+    // relation true geometrically, rather than hoping a spring settles there.
+    const nearest = Math.min(...pairs.filter((other) => other !== pair).map((other) => Math.hypot(other.x - pair.x, other.y - pair.y)));
+    const limit = Math.min(radius * 1.4, nearest * 0.49);
+    for (const id of family.runs) {
+      const body = bodies.get(id);
+      if (body === undefined || body.pinned) continue;
+      let dx = body.x - pair.x;
+      let dy = body.y - pair.y;
+      let distance = Math.hypot(dx, dy);
+      if (distance < 0.01) {
+        const angle = hash(id) / 0x1_0000_0000 * Math.PI * 2;
+        dx = Math.cos(angle) * 0.01;
+        dy = Math.sin(angle) * 0.01;
+        distance = 0.01;
+      }
+      body.vx -= dx / distance * (distance - radius) * SPRING;
+      body.vy -= dy / distance * (distance - radius) * SPRING;
+      for (const otherId of family.runs) {
+        if (id === otherId) continue;
+        const other = bodies.get(otherId);
+        if (other === undefined) continue;
+        const ox = body.x - other.x;
+        const oy = body.y - other.y;
+        const gap = Math.max(1, Math.hypot(ox, oy));
+        body.vx += ox / gap * REPULSION / (gap * gap);
+        body.vy += oy / gap * REPULSION / (gap * gap);
+      }
+      body.vx *= DAMPING;
+      body.vy *= DAMPING;
+      body.x += body.vx * STEP;
+      body.y += body.vy * STEP;
+      dx = body.x - pair.x;
+      dy = body.y - pair.y;
+      distance = Math.hypot(dx, dy);
+      if (distance > limit) {
+        body.x = pair.x + dx / distance * limit;
+        body.y = pair.y + dy / distance * limit;
+        body.vx = 0;
+        body.vy = 0;
+      }
+    }
   }
 }
 

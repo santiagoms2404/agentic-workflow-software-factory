@@ -24,7 +24,7 @@ function code(path: string): string {
 }
 
 function run(sessionId: string, state: string): SessionCard {
-  return { sessionId, state, taskId: `task-${sessionId}` } as unknown as SessionCard;
+  return { sessionId, state, replay: null, taskId: `task-${sessionId}` } as unknown as SessionCard;
 }
 
 function memoryStore(): PreferenceStore & { readonly seen: Map<string, string> } {
