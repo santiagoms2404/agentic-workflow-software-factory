@@ -141,12 +141,12 @@ code.inv, code.ac, code.serves { color:var(--cyan); }
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-09-26</dd>
-        <dt>modified</dt>     <dd>2026-09-26 (authored, awaiting owner review), 2026-09-26 (owner review applied: Q1–Q8 decided; Q1 takes an owner-authored migration), 2026-09-27 (Q3 amended: owner acts are wired by the owner, gate G18-C), 2026-09-28 (execution changed to manual ticket by ticket; T01 and T02 delivered, M1 [wip]), 2026-09-28 (T03 delivered, M1 [x]), 2026-09-28 (T04 delivered, M2 [wip]), 2026-09-28 (T05 delivered), 2026-09-28 (T06 delivered, M2 [x]), 2026-09-28 (T07 delivered, M3 [wip]), 2026-09-28 (T08 delivered), 2026-09-28 (T09 delivered), 2026-09-28 (T10 delivered, M3 [x]), 2026-09-28 (the composed command runs through the root script), 2026-09-28 (T11 delivered, M4 [wip]), 2026-09-28 (owner approved the five seed patches, Q8), 2026-09-29 (T12 delivered), 2026-09-29 (T13 delivered), 2026-09-29 (T14 delivered, M4 [x]), 2026-09-29 (gate G18-B committed), 2026-09-29 (T12 C5 and C7 checked; O3 decided: Milestone M6, task 18 added; w18-m4 acceptance run by delegation), 2026-09-29 (T18 delivered, M6 [x]; w18-m6 acceptance run by delegation)</dd>
+        <dt>modified</dt>     <dd>2026-09-26 (authored, awaiting owner review), 2026-09-26 (owner review applied: Q1–Q8 decided; Q1 takes an owner-authored migration), 2026-09-27 (Q3 amended: owner acts are wired by the owner, gate G18-C), 2026-09-28 (execution changed to manual ticket by ticket; T01 and T02 delivered, M1 [wip]), 2026-09-28 (T03 delivered, M1 [x]), 2026-09-28 (T04 delivered, M2 [wip]), 2026-09-28 (T05 delivered), 2026-09-28 (T06 delivered, M2 [x]), 2026-09-28 (T07 delivered, M3 [wip]), 2026-09-28 (T08 delivered), 2026-09-28 (T09 delivered), 2026-09-28 (T10 delivered, M3 [x]), 2026-09-28 (the composed command runs through the root script), 2026-09-28 (T11 delivered, M4 [wip]), 2026-09-28 (owner approved the five seed patches, Q8), 2026-09-29 (T12 delivered), 2026-09-29 (T13 delivered), 2026-09-29 (T14 delivered, M4 [x]), 2026-09-29 (gate G18-B committed), 2026-09-29 (T12 C5 and C7 checked; O3 decided: Milestone M6, task 18 added; w18-m4 acceptance run by delegation), 2026-09-29 (T18 delivered, M6 [x]; w18-m6 acceptance run by delegation), 2026-09-30 (D3 suite named and funded as two rounds of four reviewer arms; Milestone M7, task 19 added)</dd>
         <dt>commits</dt>      <dd>none yet (authored uncommitted for owner review)</dd>
-        <dt>agent name</dt>   <dd>claude-opus-5-5, claude-opus-5-5 (review applied), claude-opus-5-5 (task 18 added), claude-opus-5-5 (T18 delivered)</dd>
+        <dt>agent name</dt>   <dd>claude-opus-5-5, claude-opus-5-5 (review applied), claude-opus-5-5 (task 18 added), claude-opus-5-5 (T18 delivered), claude-opus-5-5 (task 19 added)</dd>
         <dt>session id</dt>   <dd>not recorded (AGENTS.md invariant 1 keeps live session state out of every committed file)</dd>
         <dt>back refs</dt>    <dd>./awsf-v2-plan.html (§ Milestone M18 → W18, and its 2026-09-26 amendment adopting this workstream), ../AGENTS.md (the twelve invariants), ./awsf-v2-intent.md (decision 5: quota is a readout, never a router, the stance D5 extends to route evidence), ./awsf-v2-w17-shift.html (the execution this plan is written for), ./awsf-v2-w07-quota-telemetry.html (the readout discipline), the design artifact https://claude.ai/artifact/Ga29MRY2FCcHPJfvcJgcpW (private, version 2), ../docs/design/route-metrics/route-metrics-prototype.html (machine-local and ignored; sha256 dc2dc0bcfc16bd23f8ebd6502fb0486391eefa4ce4285a7f73199c19d55580d8)</dd>
-        <dt>forward refs</dt> <dd>./awsf-v2-w18-route-metrics-build-prompts.md (§ Section B, the prompt source the invariant-12 fence pairs against), ./tickets/awsf-v2-w18-route-metrics/ (T01–T18), ./design/awsf-v2-w18-route-metrics/frame-index.json and ./design/awsf-v2-w18-route-metrics/frame-digests.json (the tracked frame index and its digests)</dd>
+        <dt>forward refs</dt> <dd>./awsf-v2-w18-route-metrics-build-prompts.md (§ Section B, the prompt source the invariant-12 fence pairs against), ./tickets/awsf-v2-w18-route-metrics/ (T01–T19), ./design/awsf-v2-w18-route-metrics/frame-index.json and ./design/awsf-v2-w18-route-metrics/frame-digests.json (the tracked frame index and its digests)</dd>
       </dl>
     </details>
   </header>
@@ -319,6 +319,7 @@ flowchart LR
       <li><span class="tag existing">existing</span> <code>awsf.config.yaml</code> — <strong>protected.</strong> Builder <code>writes</code>, <code>protected_paths</code> (including <code>core/src/state/**</code>, <code>core/src/observability/migrations/**</code>, <code>docs/driving/**</code>), <code>workflows.enabled</code>, the T2 ceiling of 5, and <code>pricing</code>.</li>
       <li><span class="tag existing">existing</span> <code>docs/cheatsheet.html</code>, <code>docs/driving/marimba/delegation-guard.sh</code>, <code>docs/driving/marimba/marimba-guard-rules.mts</code>, <code>docs/driving/marimba/CONTRACT.md</code> — the fenced documents <span class="gate">G18-A</span> and <span class="gate">G18-B</span> change.</li>
       <li><span class="tag existing">existing</span> <code>core/src/policy/sandbox-broker.ts</code>, <code>core/src/adapters/claude-code.ts</code>, <code>pi-codex.ts</code> — the <code>bwrap</code> launch every agent phase runs in, and each CLI's start roots. Task 18 adds a <code>worktree</code> confinement beside today's host-wide read-only root.</li>
+      <li><span class="tag existing">existing</span> <code>dashboard/src/canvas-graph.ts</code>, <code>canvas-layout.ts</code>, <code>components/CanvasMap.vue</code>, <code>core/src/api/routes.ts</code> — the canvas's execution graph and the <code>SessionCard</code> it is built from. Task 19 adds proving-ground and pair nodes, their edges and one region per project, from the replay record the projector already writes.</li>
     </ul>
 
     <h3>New Files</h3>
@@ -338,6 +339,7 @@ flowchart LR
       <li><span class="tag new">new</span> <code>specs/design/awsf-v2-w18-route-metrics/frame-index.json</code>, <code>frame-digests.json</code> — authored with this plan: the tracked index AWSF reads for visual references, plus provenance, comparison criteria and overrides O1–O5.</li>
       <li><span class="tag new">new</span> <code>specs/awsf-v2-w18-route-metrics-build-prompts.md</code>, <code>specs/tickets/awsf-v2-w18-route-metrics/</code> — authored with this plan, from one generated source.</li>
       <li><span class="tag new">new</span> <code>core/test/live/</code> replay-confinement probe — task 18; never run by <code>npm test</code>.</li>
+      <li><span class="tag new">new</span> <code>core/test/unit/dashboard-canvas-replay.test.ts</code> — task 19's graph, layout and API tests, on a synthetic projection.</li>
     </ul>
   </section>
 
@@ -391,6 +393,7 @@ flowchart LR
         <tr><td>M4 proving ground</td><td>T11–T14</td><td>5 of 5</td><td><code>awsf raise &lt;task&gt; --calls 2</code></td><td><code>claude/anthropic/claude:opus@xhigh</code></td><td><code>degrade-review</code>, the raise</td></tr>
         <tr><td>M5 advisory and export</td><td>T15–T17</td><td>4 of 5</td><td>none</td><td><code>claude/anthropic/claude:opus@high</code></td><td><code>degrade-review</code>; <span class="gate">G18-B</span> and the D3 suite may run before or after M5</td></tr>
         <tr><td>M6 replay confinement</td><td>T18</td><td>2 of 5</td><td>none</td><td><code>claude/anthropic/claude:opus@xhigh</code></td><td>Added 2026-09-29 (O3). Runs manually, like the milestones before it; the D3 suite waits on it</td></tr>
+        <tr><td>M7 replay clusters</td><td>T19</td><td>2 of 5</td><td>none</td><td>the owner's Codex route</td><td>Added 2026-09-30. Built manually by the owner with Codex, never in a checkout a replay batch is running from</td></tr>
       </tbody>
     </table>
     <p><strong>Reviewer route, every milestone:</strong> <code>--route reviewer=claude/anthropic/claude:opus@high</code>. <code>claude:opus</code> resolves to Opus 5.5 on the owner's Claude Code as of 2026-09-26. No milestone is entirely mechanical, so none runs on Sonnet 5; none runs on Fable 5.1 or Haiku. M3 and M4 need four tickets because splitting either into two milestones adds a second testing ticket and a second owner gate without removing a dependency.</p>
@@ -851,6 +854,79 @@ flowchart LR
         If any command fails, fix the cause and re-run — loop until all pass.
       </div>
     </div>
+
+    <!-- ================= M7 ================= -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone M7: Replay clusters on the canvas <span class="wtag route">codex</span></h3>
+      <p>Added 2026-09-30 by the owner, during D3 round 1. A replay names no driving session and no plan, so the canvas draws each one as a loose run in the no-session region, and the forty replays of a round read as forty unrelated runs. Each replay's record already says how they relate: its item, repetition, arm and place in the pair's order, projected once per session by task 13. The scorer groups replays by item and repetition when it is read. This milestone draws the same grouping on the canvas from the same record and stores nothing, so every replay run before it lands clusters as soon as it does.</p>
+      <figure>
+        <pre class="mermaid">
+flowchart TD
+  PG["proving ground<br/>one per project"] --- P1["review-01 · rep 1"]
+  PG --- P2["review-02 · rep 1"]
+  P1 --- A1["arm, place 1"]
+  P1 --- A2["arm, place 2"]
+  P1 --- A3["arm, place 3"]
+  P1 --- A4["arm, place 4"]
+  P2 --- B1["one run per arm"]
+        </pre>
+        <figcaption>One region per project: its proving-ground node, one pair node per item and repetition, and each replay's run beside its pair. Rounds and task-id prefixes are not recorded, so they draw nothing of their own.</figcaption>
+      </figure>
+      <figure class="mockup">
+        <div class="mockup-frame">
+          <svg viewBox="0 0 560 220" width="100%" role="img" aria-label="A proving-ground region holding two pair groups of four replay runs" style="font-family:var(--font-mono)">
+            <rect x="8" y="8" width="544" height="204" rx="26" fill="none" stroke="var(--border)" stroke-width="1.5" stroke-dasharray="6 5"/>
+            <text x="28" y="34" fill="var(--dim)" font-size="12">proving ground · 8 replays · 2 pairs</text>
+            <line x1="280" y1="66" x2="150" y2="128" stroke="var(--dim)" stroke-width="1.5"/>
+            <line x1="280" y1="66" x2="410" y2="128" stroke="var(--dim)" stroke-width="1.5"/>
+            <circle cx="280" cy="66" r="13" fill="var(--amber)"/>
+            <g stroke="var(--dim)" stroke-width="1">
+              <line x1="150" y1="128" x2="96" y2="104"/><line x1="150" y1="128" x2="204" y2="104"/>
+              <line x1="150" y1="128" x2="96" y2="156"/><line x1="150" y1="128" x2="204" y2="156"/>
+              <line x1="410" y1="128" x2="356" y2="104"/><line x1="410" y1="128" x2="464" y2="104"/>
+              <line x1="410" y1="128" x2="356" y2="156"/><line x1="410" y1="128" x2="464" y2="156"/>
+            </g>
+            <rect x="136" y="114" width="28" height="28" rx="7" fill="var(--bg)" stroke="var(--blue)" stroke-width="2"/>
+            <rect x="396" y="114" width="28" height="28" rx="7" fill="var(--bg)" stroke="var(--blue)" stroke-width="2"/>
+            <g font-size="10" text-anchor="middle" fill="var(--bg)">
+              <circle cx="96" cy="104" r="10" fill="var(--green)"/><text x="96" y="108">1</text>
+              <circle cx="204" cy="104" r="10" fill="var(--accent)"/><text x="204" y="108">2</text>
+              <circle cx="96" cy="156" r="10" fill="var(--accent)"/><text x="96" y="160">3</text>
+              <circle cx="204" cy="156" r="10" fill="var(--green)"/><text x="204" y="160">4</text>
+              <circle cx="356" cy="104" r="10" fill="var(--green)"/><text x="356" y="108">1</text>
+              <circle cx="464" cy="104" r="10" fill="var(--accent)"/><text x="464" y="108">2</text>
+              <circle cx="356" cy="156" r="10" fill="var(--green)"/><text x="356" y="160">3</text>
+              <circle cx="464" cy="156" r="10" fill="var(--accent)"/><text x="464" y="160">4</text>
+            </g>
+            <g font-size="11" fill="var(--text)" text-anchor="middle">
+              <text x="150" y="192">review-01 · rep 1</text>
+              <text x="410" y="192">review-02 · rep 1</text>
+            </g>
+            <g font-size="10" fill="var(--dim)">
+              <circle cx="300" cy="30" r="5" fill="var(--accent)"/><text x="310" y="34">claude arm</text>
+              <circle cx="400" cy="30" r="5" fill="var(--green)"/><text x="410" y="34">codex arm</text>
+            </g>
+          </svg>
+        </div>
+        <figcaption>The proposed formation, with synthetic data in the plan's Forest dark tokens: one dashed region per project, the proving-ground node, one square per item and repetition, and one dot per arm replayed on it, numbered by its place in the pair's order. Hovering a dot reads its item, repetition, arm and place. The builder draws the kinds with the dashboard's own tokens, not these colors.</figcaption>
+      </figure>
+
+      <h4>19. Cluster proving-ground replays on the canvas by their replay record</h4>
+      <p class="sub">Serves <code class="serves">AC-7</code> · <code class="serves">INV-1</code></p>
+      <p>AC-7 says replays appear under the proving-ground evidence source, and INV-1 that every number is computed at read time from the projection. The canvas can honor both: the replay record is already projected, so reading it adds no store, no write and no migration, and a projection with no replay draws exactly what it draws today.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>SessionCard</code> gains <code>replay</code> (<code>{ itemId, arm, repetition, order }</code> or <code>null</code>), read by <code>card()</code> from the session's projected replay record, read-only. A malformed record reads as <code>null</code>. No migration, no projector change, no write</li>
+        <li><code class="status">[]</code> <code>buildCanvasGraph</code> adds one proving-ground node per project that has a replay and one pair node per item and repetition. Each replay's run links to its pair node, and each pair node to its proving-ground node, through a new edge kind</li>
+        <li><code class="status">[]</code> One region per project encloses its proving-ground node, pair nodes and replay runs. Positions are deterministic, each replay run settles nearest its own pair node, and a projection with no replay builds a byte-identical graph</li>
+        <li><code class="status">[]</code> <code>CanvasMap</code> draws both kinds from existing tokens in all seven palettes and both modes. A replay run's hover reads its item, repetition, arm and place, and the proving-ground node opens <code>#/metrics</code> with the proving-ground source on</li>
+        <li><code class="status">[]</code> Nothing groups by a task id's prefix, and rounds draw nothing of their own: every replay of a project shares its one region</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code>, <code>npm run lint</code> and <code>npm run dash:build</code> pass, with a headless capture of the canvas on a synthetic projection in both modes</li>
+      </ul>
+      <div class="loop">
+        🔁 <strong>Do not exit this phase until every box above is checked.</strong>
+        If any command fails, fix the cause and re-run — loop until all pass.
+      </div>
+    </div>
   </section>
 
   <!-- ===== GLOBAL VALIDATION ===== -->
@@ -1023,10 +1099,11 @@ flowchart LR
   M1 --> GC["G18-C"] --> M2["M2"] --> M3["M3"] --> M4["M4"]
   M4 --> GB["G18-B"] --> M6["M6<br/>replay confinement"] --> D3["D3 suite<br/>40 replays"]
   M4 --> M5["M5"]
+  M4 --> M7["M7<br/>replay clusters"]
   D3 -. "evidence for" .-> M5
   M5 --> CLOSE["spine M18 [x]<br/>owner, at landing"]
       </pre>
-      <figcaption>The whole drive. G18-M and G18-A precede any build, G18-C follows M1 and G18-B follows M4, all owner commits. The D3 suite can run before or after M5; the advisory reads whatever evidence exists when it is asked. Since 2026-09-29 the D3 suite also waits on M6, which confines a replay's agent to its worktree.</figcaption>
+      <figcaption>The whole drive. G18-M and G18-A precede any build, G18-C follows M1 and G18-B follows M4, all owner commits. The D3 suite can run before or after M5; the advisory reads whatever evidence exists when it is asked. Since 2026-09-29 the D3 suite also waits on M6, which confines a replay's agent to its worktree. Since 2026-09-30 M7 draws replays on the canvas; it needs M4 only, and the spine closure waits for it too.</figcaption>
     </figure>
   </section>
 
@@ -1214,6 +1291,14 @@ flowchart LR
       <p><strong>Still owed by the owner.</strong> Name the D3 suite's four reviewer arms and fund it. The spine's Milestone M18 / W18 marker moves with T17's landing, since M6 is now <code>[x]</code>.</p>
       <p><strong>Carried forward</strong> as Handoff entries in T17 (C12–C14).</p>
       <p>Completion metadata: built and verified by claude-code:claude-opus-5-5 in a manual session.</p>
+    </details>
+    <details open>
+      <summary>2026-09-30 — D3 suite named and funded by the owner; replay clusters on the canvas added as milestone M7 (task 19)</summary>
+      <p><strong>Decided by the owner, 2026-09-29 and 2026-09-30: the D3 suite.</strong> Eight reviewer arms in two rounds of four, each round five items at two repetitions (40 replays), run in the owner's real state root so the results reach the metrics tab. Round 1: <code>claude:sonnet@medium</code>, <code>claude:opus@medium</code>, <code>codex:gpt-6-luna@xhigh</code> and <code>codex:gpt-6-sol@medium</code>. Round 2: <code>claude:sonnet@high</code>, <code>claude:opus@high</code>, <code>codex:gpt-6-sol@high</code> and <code>codex:gpt-6-sol@xhigh</code>. This supersedes D3's four routes and 40 runs: 80 replays in all. The rounds share no arm. The scorer derives its protocol from every replay in scope, so after round 2 it compares all eight arms on each item and repetition. Each pair runs its arms in a randomly drawn order, passed as <code>--order</code>. A replay that fails is not retried, because a retry voids its pair for every arm.</p>
+      <p><strong>Found during round 1.</strong> A replay records no driving session and no plan, so the canvas draws every replay as a loose run with no connection to the rest of its round. The replay record already groups them: item, repetition, arm and place, projected once per session.</p>
+      <p><strong>Decided by the owner, 2026-09-30: O3.</strong> The canvas clusters replays by that record. It is delivered as Milestone M7, task 19 and ticket T19, above, built manually by the owner with Codex. Rejected: O1, a <code>--group</code> flag on <code>awsf prove</code>, which would group round 2 only, because a group is recorded when a task is created and never backfilled; and O2, pausing round 1 to add that flag, which would split round 1 and change the code between its replays.</p>
+      <p><strong>Consequences for the plan.</strong> (1) M7 follows M6, so task numbers stay 1..19 in order and ticket ids stay contiguous. (2) T17 cannot depend on T19, for the same reason as T18, so W18's spine closure also waits for M7. The README and T17's Handoff (C15) say so. (3) No existing prompt changes.</p>
+      <p>Completion metadata: authored by claude-code:claude-opus-5-5 in a manual session.</p>
     </details>
   </section>
 

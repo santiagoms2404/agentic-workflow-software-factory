@@ -35,6 +35,7 @@ The plan is the authority for content and status. Spine: [`../../awsf-v2-plan.ht
 | M4 | T11–T14 | 5 | `awsf raise <task> --calls 2` before `awsf run` | `claude/anthropic/claude:opus@xhigh` |
 | M5 | T15–T17 | 4 | fits | `claude/anthropic/claude:opus@high` |
 | M6 | T18 | 2 | fits | `claude/anthropic/claude:opus@xhigh` |
+| M7 | T19 | 2 | fits | the owner's Codex route, manual |
 
 Every milestone reviews on `claude/anthropic/claude:opus@high` and therefore needs the owner's
 `awsf degrade-review <task> --reason "…"` before `awsf start`.
@@ -104,11 +105,12 @@ adds it; classifying these tickets afterwards is owner-side (D6).
 | `T16` | M5 | `T06`, `T15` | The advisory: awsf metrics --advise and the route evidence in awsf shift plan |
 | `T17` | M5 | `T03`, `T06`, `T10`, `T14`, `T15`, `T16` | Testing Strategy for M5, awsf metrics export, and the workstream's closing duties |
 | `T18` | M6 | `T12`, `T13`, `T14` | Confine a replay's agent to its worktree |
+| `T19` | M7 | `T07`, `T13` | Cluster proving-ground replays on the canvas by their replay record |
 
 ## Post-landing responsibilities
 
 After each milestone lands, the owner (with Marimba drafting) makes one commit: the milestone's
 task rows and header in the plan, the tickets' `state`, the Handoff entries the builders returned,
 and a dated Amendment. Only T17's landing moves the spine's Milestone M18 / W18 marker and
-`../awsf-v2-plan/W18.md`, in that same commit, and only once M6 is `[x]` too (added 2026-09-29). If M6 lands after M5, the spine
-marker moves with M6's bookkeeping commit instead. Current plan-aligned states: **T01–T14 and T18 `done`; T15–T17 `todo`** (M1 `[x]`, M2 `[x]`, M3 `[x]`, M4 `[x]`, M5 `[]`, M6 `[x]`).
+`../awsf-v2-plan/W18.md`, in that same commit, and only once M6 and M7 are `[x]` too (added 2026-09-29 and 2026-09-30). If M6 or M7 lands after M5,
+the spine marker moves with the last of their bookkeeping commits instead. Current plan-aligned states: **T01–T14 and T18 `done`; T15–T17 and T19 `todo`** (M1 `[x]`, M2 `[x]`, M3 `[x]`, M4 `[x]`, M5 `[]`, M6 `[x]`, M7 `[]`).
