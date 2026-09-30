@@ -2025,3 +2025,194 @@ HANDOFF
   wins, and why), moved or renamed files, scope it can skip or must absorb. The owner copies
   them into its ## Handoff at landing. Edit no ticket file.
 ```
+
+### T21 — Rank route-attributed routes, badged as identity unconfirmed
+
+```
+ROUTING
+  Manual (the owner's choice for this ticket): the session that authored it builds it, on the
+  owner's Claude route, together with T22. This is pure-module and dashboard work.
+  Managed: one AWSF shift runs milestone M9. The owner's --route flags set its builder and
+  review routes. The host owns routing. Do not change it.
+
+TASK 21 of 22. Plan: specs/awsf-v2-w18-route-metrics.html, milestone M9, task 21.
+REPOSITORY: this checkout (AWSF). One repository.
+
+EXECUTION
+  Managed (shift): write only inside core/src/**, core/test/**, dashboard/**, prompts/**.
+  The host commits this ticket and runs its gates. Never write specs/** (plan markers, ticket
+  state, Handoff), docs/driving/**, AGENTS.md, awsf.config.yaml, core/src/state/**,
+  core/src/observability/migrations/**, or a .claude/ directory at the repository root.
+  Manual: the same boundary. Commit only with the owner's explicit authorization.
+  Unknown context: read only, and ask before any write.
+
+PREDECESSORS
+  T04 (the pure module), T08 (the Frontier view) and T20 (unconfirmed routes plotted), all
+  landed.
+
+BASELINE
+  A manual session runs npm run test:unit first and records the count.
+  Never edit this checkout while a D3 replay batch runs from it: every replay loads the
+  checkout's current source when it launches. Build in a separate worktree, or wait.
+
+READ FIRST
+  specs/awsf-v2-w18-route-metrics.html - task 21, INV-3 as amended, and the 2026-09-30 Amendments
+  dashboard/shared/route-metrics.ts - unrankableReasons, frontier, verdicts, recommend
+  dashboard/src/metrics-frontier.ts, dashboard/src/components/MetricsFrontier.vue - T20's marks
+  core/src/cli/commands/metrics.ts - the readout's verdicts and its kept-out line
+  core/src/adapters/pi-codex-stream.ts - why every pi row is route-attributed
+
+WHY
+  Every GPT row is route-attributed: pi echoes the model it was asked for and never reads the
+  API's answer back, so the host cannot confirm who answered. INV-3 kept such rows out of
+  rankings, and T20 plots them without ranking them. D3's two rounds measured six GPT reviewer
+  arms. Every one located all ten planted defects with no false alarm, at the lowest list-price
+  equivalents, and none gets a verdict. The owner decided on 2026-09-30 (O4) to rank them on
+  the model requested: the owner names every route, and the journal records the model and
+  effort each run asked for. The badge stays wherever they are ranked, so an unconfirmed
+  identity is never presented as a confirmed one.
+
+DO
+  Rank route-attributed rows. unrankableReasons keeps partial usage and degraded observability
+    only, and a route-attributed row joins the points, the Pareto line, the verdicts and
+    recommend like any other row.
+  Badge it wherever it is ranked. Stats counts route-attributed rows, and RoutePoint and
+    RouteEvidence say whether any of their rows is one. A verdict on such a route, or one that
+    names such a route as its comparison, says "identity unconfirmed". A verdict between
+    confirmed routes reads exactly as today.
+  Retire T20's badged list: every plotted point is now a ranked point. MetricsFrontier draws a
+    route with unconfirmed identity with a dashed outline, filled or hollow by its evidence like
+    any other mark, with "identity unconfirmed" in its label and tooltip. Its verdict card
+    carries the badge, and the note below the chart counts the ranked routes with unconfirmed
+    identity.
+  The readout prints, per role, how many rows are ranked with unconfirmed identity, beside the
+    count still kept out for partial usage or degraded observability.
+  Keep the sub-floor marker, every palette, both modes and the chart's geometry.
+
+DO NOT
+  Mark pi rows stream-authoritative, or change how any adapter sets provenance.
+  Rank a row with partial usage or degraded observability.
+  Drop the badge from any place a route-attributed route is ranked or shown.
+  Add a dependency or a dashboard write.
+
+BUILDER READY
+  Module tests: route-attributed rows rank like confirmed ones (the same points, line and
+    verdict tags as the same rows marked stream-authoritative), with every such point, verdict
+    and recommendation entry badged; a route with confirmed and attributed rows is one badged
+    point; partial-usage and degraded rows stay out; verdicts between confirmed routes are
+    unchanged.
+  The parity test still holds: the API, the CLI and the tab agree on the same rows.
+  A headless capture of the reviewer Frontier with the proving-ground source on, dark and
+    light, showing the ten D3 arms ranked, returned in the envelope (manual: session report).
+  npm run test:unit, npm run typecheck, npm run lint and npm run dash:build pass.
+
+OWNER ACCEPTANCE (journey w18-m9)
+  Open the metrics tab's Frontier for the reviewer with the proving-ground source on. See the
+  GPT arms ranked, dashed and labelled identity unconfirmed, with verdicts that say so. Run
+  awsf metrics --source proving-ground --role reviewer and read the same verdicts.
+
+COMMIT
+  Managed: leave the tree for the host and put the proposed message in your envelope.
+  Manual: commit only when the owner says so, as the owner, with no trailer.
+  Proposed: feat(metrics): rank route-attributed routes, badged as identity unconfirmed
+  Body: what changed and why, the test counts, the capture, anything unresolved.
+  Never name an agent, model or tool in an identity, a message or a trailer.
+
+MARKERS
+  Owner-side, after the milestone lands: task 21's rows in specs/awsf-v2-w18-route-metrics.html
+  and this ticket's state move together in one commit (invariant 12). Milestone M9's header
+  moves with them once task 22 is done too.
+  Return the evidence. Edit neither file.
+
+HANDOFF
+  In your envelope's notes, give dated findings for T17: contradictions with its prompt (which
+  wins, and why), moved or renamed files, scope it can skip or must absorb. The owner copies
+  them into its ## Handoff at landing. Edit no ticket file.
+```
+
+### T22 — Make the metrics tab easier to read: larger type, a wider Matrix and the total list equivalent
+
+```
+ROUTING
+  Manual (the owner's choice for this ticket): the session that authored it builds it, on the
+  owner's Claude route, together with T21. This is dashboard styling and one summary figure.
+  Managed: one AWSF shift runs milestone M9. The owner's --route flags set its builder and
+  review routes. The host owns routing. Do not change it.
+
+TASK 22 of 22. Plan: specs/awsf-v2-w18-route-metrics.html, milestone M9, task 22.
+REPOSITORY: this checkout (AWSF). One repository.
+
+EXECUTION
+  Managed (shift): write only inside core/src/**, core/test/**, dashboard/**, prompts/**.
+  The host commits this ticket and runs its gates. Never write specs/** (plan markers, ticket
+  state, Handoff), docs/driving/**, AGENTS.md, awsf.config.yaml, core/src/state/**,
+  core/src/observability/migrations/**, or a .claude/ directory at the repository root.
+  Manual: the same boundary. Commit only with the owner's explicit authorization.
+  Unknown context: read only, and ask before any write.
+
+PREDECESSORS
+  T07 (the tab shell and its summary), T08 (the Matrix and Frontier views) and T09 (the Ledger
+  and Run views), all landed.
+
+BASELINE
+  A manual session runs npm run test:unit first and records the count.
+  Never edit this checkout while a D3 replay batch runs from it: every replay loads the
+  checkout's current source when it launches. Build in a separate worktree, or wait.
+
+READ FIRST
+  specs/awsf-v2-w18-route-metrics.html - task 22 and the 2026-09-30 Amendments
+  dashboard/src/styles/metrics.css - every size on the tab
+  dashboard/src/components/MetricsMatrix.vue - the Matrix grid and its tiles
+  dashboard/src/metrics-lens.ts - summaryStats
+  dashboard/src/metrics-frontier.ts - the label font the placement measures
+
+WHY
+  The owner reads the tab on a wide screen and asked for larger type across it. The Matrix gives
+  every role column a fixed 108px and the route column the rest, so on a wide board the tiles sit
+  at the right edge with empty space between them and the route names. The summary shows the
+  list equivalent per landed run but no total, and the owner wants the whole: every priced
+  role-row in the lens added up, still labelled as a list-price equivalent, never as spend.
+
+DO
+  Raise every font size on the tab by one step, about 2px, the Frontier's SVG text included,
+    and keep the label placement's measured font in step with the label size.
+  Make the pills and the Matrix's tiles, rings and badges larger. The Matrix's role columns
+    share the board's width and the route column stops growing, so the tiles fill the board.
+  Add a fifth summary figure: the total list equivalent of the rows in the lens, through
+    formatListEquivalent, with how many rows are priced and "not spend" in its caption.
+  Keep every palette token, both modes and the narrow-screen breakpoints.
+
+DO NOT
+  Present the total as spend, or print a dollar sign outside formatListEquivalent.
+  Change a statistic: the total is Stats.listTotal, which the module already computes.
+  Add a dependency or a dashboard write.
+
+BUILDER READY
+  The summary test lists five figures and pins the total's value and caption; the label test
+    keeps every dollar inside the formatter.
+  Headless captures of the Matrix, the Frontier and the Ledger at 1600px wide, in dark and
+    light, returned in the envelope (manual: session report).
+  npm run test:unit, npm run typecheck, npm run lint and npm run dash:build pass.
+
+OWNER ACCEPTANCE (journey w18-m9)
+  Open the metrics tab. The type is larger in every view, the Matrix's tiles fill the board,
+  and the summary shows the total list equivalent beside the per-landed-run figure.
+
+COMMIT
+  Managed: leave the tree for the host and put the proposed message in your envelope.
+  Manual: commit only when the owner says so, as the owner, with no trailer.
+  Proposed: feat(dashboard): larger metrics type, a wider Matrix and the total list equivalent
+  Body: what changed and why, the test counts, the captures, anything unresolved.
+  Never name an agent, model or tool in an identity, a message or a trailer.
+
+MARKERS
+  Owner-side, after the milestone lands: task 22's rows in specs/awsf-v2-w18-route-metrics.html,
+  this ticket's state and Milestone M9's header move together in one commit (invariant 12),
+  once task 21 is done too, because the two close the milestone.
+  Return the evidence. Edit neither file.
+
+HANDOFF
+  In your envelope's notes, give dated findings for T17: contradictions with its prompt (which
+  wins, and why), moved or renamed files, scope it can skip or must absorb. The owner copies
+  them into its ## Handoff at landing. Edit no ticket file.
+```
