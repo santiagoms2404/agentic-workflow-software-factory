@@ -121,6 +121,11 @@ const TABLE: readonly Row[] = [
   { name: "review concern, leased degrade", facts: facts("review-hold", { review: CONCERN }), judgment: picked("degrade-review"),
     extra: { lease: { acts: ["degrade-review"], fallbackRoutes: {} } }, act: "degrade-review", rationale: "lease-names-degrade" },
   { name: "review concern, Jev unavailable", facts: facts("review-hold", { review: CONCERN }), judgment: { outcome: "refused-by-switch", result: null }, act: "wait-for-owner", rationale: "jev-unavailable" },
+  // numbers-only (the offline replay): code-decided rows stand, judgment rows wait.
+  { name: "ceiling short, numbers only", facts: facts("ceiling-pause"), judgment: { outcome: "numbers-only", result: null }, act: "raise", rationale: "ceiling-short",
+    detail: { calls: 5 } },
+  { name: "ticket-block, numbers only", facts: facts("ticket-block"), judgment: { outcome: "numbers-only", result: null }, act: "wait-for-owner", rationale: "numbers-only" },
+  { name: "review concern, numbers only", facts: facts("review-hold", { review: CONCERN }), judgment: { outcome: "numbers-only", result: null }, act: "wait-for-owner", rationale: "numbers-only" },
   // blocked: sealed; continuation is task 15's.
   { name: "blocked", facts: facts("blocked", { reasonCode: "silence" }), judgment: picked("continue"), act: "wait-for-owner", rationale: "blocked-needs-owner" },
 ];
@@ -152,7 +157,7 @@ test("policy: every judgment-refined act becomes wait-for-owner (jev-unavailable
 
 test("policy: land-shadow is never executable, whatever the judgment, quota plan or lease", () => {
   const judgments: JudgmentInput[] = [
-    UNAVAILABLE, picked("land"), picked("land-shadow"), picked("rework"), picked("cancel", 1), waited("chose-wait"),
+    UNAVAILABLE, { outcome: "numbers-only", result: null }, picked("land"), picked("land-shadow"), picked("rework"), picked("cancel", 1), waited("chose-wait"),
     { outcome: "answered", result: { kind: "act", act: "land-shadow", confidence: 1 } },
   ];
   const plans: (QuotaPlan | undefined)[] = [undefined, { kind: "resume-now" }, spentWeek];

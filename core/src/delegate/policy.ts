@@ -65,13 +65,20 @@ export const RATIONALE_CODES = [
   "chose-wait",
   "chose-other",
   "act-not-allowed",
+  // Replay without Jev (task 7): a judgment act waits, a code-decided one stands.
+  "numbers-only",
 ] as const;
 export type RationaleCode = (typeof RATIONALE_CODES)[number];
 
 /** The stop-judgment call as the policy sees it. */
 export interface JudgmentInput {
-  /** `answered`, or why there is no answer. */
-  readonly outcome: "answered" | "unavailable" | "refused-by-switch" | "contract-error";
+  /**
+   * `answered`, or why there is no answer. `numbers-only` is a replay run
+   * without Jev on purpose: rows numbers decide stand as numbers decided them,
+   * and every judgment row waits (`numbers-only`). It is not "unavailable",
+   * which at a live stop turns even a code-decided raise into wait-for-owner.
+   */
+  readonly outcome: "answered" | "unavailable" | "refused-by-switch" | "contract-error" | "numbers-only";
   /** stop-judgment's own policy result; null unless answered. */
   readonly result: StopJudgmentResult | null;
 }
@@ -186,7 +193,11 @@ function waitReason(reason: StopJudgmentWaitReason): RationaleCode {
 function refine(
   judgment: JudgmentInput,
   build: (act: string) => Proposal | null,
+  numbersAct?: string,
 ): Proposal {
+  if (judgment.outcome === "numbers-only") {
+    return (numbersAct === undefined ? null : build(numbersAct)) ?? proposal(WAIT, "numbers-only");
+  }
   if (judgment.outcome !== "answered" || judgment.result === null) return proposal(WAIT, "jev-unavailable");
   const result = judgment.result;
   if (result.kind === "wait") return proposal(WAIT, waitReason(result.reason));
@@ -213,7 +224,7 @@ function ceilingPause(input: PolicyInput): Proposal {
     }
     if (act === "cancel") return proposal({ act: "cancel" }, "jev-picked");
     return null;
-  });
+  }, "raise");
 }
 
 function quotaStop(input: PolicyInput): Proposal {
