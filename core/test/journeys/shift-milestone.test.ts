@@ -231,13 +231,15 @@ test("one milestone runs from selection to AWAITING_OWNER once, with the readout
     // AC-1 · AC-2: the pre-flight readout, at zero cost.
     const plan = await cli(fixture.canonical, ["shift", "plan", PLAN, "--milestone", "M1", "--config", fixture.configPath]);
     assert.equal(plan.code, 0, plan.err.join("\n"));
-    assert.deepEqual(plan.out, [
+    assert.deepEqual(plan.out.slice(0, 7), [
       `shift plan ${PLAN} --milestone M1`,
       ...SELECTED.map((id) => `  ${id}  Ticket ${id} adds its own widget`),
       "minimumCalls = 3 + 1 = 4",
       "ceiling: T2 = 5",
       "remaining headroom: 1 call(s)",
     ]);
+    assert.match(plan.out.slice(7).join("\n"), /Route advisory · builder · unclassified/);
+    assert.match(plan.out.slice(7).join("\n"), /advisory: the runner never routes on this/);
     // AC-2 · INV-5: a ceiling that cannot fit is refused by name, before any
     // attempt, worktree or process exists, and names the raise act it needs.
     const tight = await cli(fixture.canonical, ["shift", "plan", PLAN, "--milestone", "M1", "--config", fixture.tightConfigPath]);

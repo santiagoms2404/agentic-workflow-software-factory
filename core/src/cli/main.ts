@@ -38,6 +38,7 @@ import { attributeCommand } from "./commands/attribute.ts";
 import { proveCommand } from "./commands/prove.ts";
 import { routesListCommand } from "./commands/routes.ts";
 import { METRICS_USAGE, metricsCommand } from "./commands/metrics.ts";
+import { advisoryRole, metricsAdviceCommand } from "./commands/metrics-advisory.ts";
 import { assertRoutesReachWorkflow, formatRouteOverride, parseRouteFlags, predictSameProviderReviewFor } from "../workflow/route-flags.ts";
 import { quotaCommand } from "./commands/quota.ts";
 import { stageCommand } from "./commands/stage.ts";
@@ -64,7 +65,7 @@ export const CLI_COMMANDS = Object.freeze([
 const USAGE = `usage: awsf init [path] --project <slug>\n       awsf <${CLI_COMMANDS.join("|")}> [task] [options]`;
 
 /** Flags that take no value. Documentation reconciles against this too. */
-export const CLI_BOOLEAN_FLAGS: ReadonlySet<string> = new Set(["evidence", "json"]);
+export const CLI_BOOLEAN_FLAGS: ReadonlySet<string> = new Set(["evidence", "json", "advise"]);
 
 interface ParsedArgs {
   readonly positionals: readonly string[];
@@ -399,6 +400,10 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         tickets: selection.tickets.map((record) => ({ id: record.ticket.id, title: record.ticket.title })),
         admission,
       })) out(line);
+      for (const line of await metricsAdviceCommand({
+        dbPath: resolve(stateRoot, "awsf.db"), extractedAt: new Date().toISOString(),
+        config, selection, allowUnavailableProjection: true,
+      })) out(line);
       assertShiftAdmission(admission, `shift plan ${stem} --milestone ${milestones.join(",")}`);
       return 0;
     }
@@ -417,8 +422,29 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
 
     if (command === "metrics") {
       // Read-only: projection and sealed ticket blobs only; no agent starts or state changes.
-      const unsupportedFlags = Object.keys(parsed.flags).filter((flag) => !["role", "task-class", "source", "started-before", "json", "state-root"].includes(flag));
+      const advise = parsed.flags.advise === "true";
+      const allowedFlags = advise
+        ? ["advise", "plan", "role", "config", "state-root"]
+        : ["role", "task-class", "source", "started-before", "json", "state-root", "advise"];
+      const unsupportedFlags = Object.keys(parsed.flags).filter((flag) => !allowedFlags.includes(flag));
+      if (advise && parsed.flags.json !== undefined) throw new Error("--advise cannot be combined with --json");
       if (parsed.positionals.length !== 0 || unsupportedFlags.length !== 0) throw new Error(METRICS_USAGE);
+      if (advise) {
+        const role = advisoryRole(parsed.flags.role);
+        const milestones = parseMilestoneSelection(parsed.milestones);
+        if ((parsed.flags.plan === undefined) !== (milestones.length === 0)) {
+          throw new Error("--advise selection requires both --plan <stem> and --milestone <Mx>[,...]");
+        }
+        const selected = parsed.flags.plan === undefined ? undefined : await shiftSelectionFor(cwd, parsed.flags.plan, milestones);
+        const config = loadConfig(await readFile(resolve(parsed.flags.config ?? `${cwd}/awsf.config.yaml`), "utf8"));
+        for (const line of await metricsAdviceCommand({
+          dbPath: resolve(stateRoot, "awsf.db"), extractedAt: new Date().toISOString(), config,
+          ...(role === undefined ? {} : { role }),
+          ...(selected === undefined ? {} : { selection: selected.selection }),
+        })) out(line);
+        return 0;
+      }
+      if (parsed.milestones.length !== 0) throw new Error("--milestone requires --advise and --plan");
       for (const line of metricsCommand({
         dbPath: resolve(stateRoot, "awsf.db"),
         extractedAt: new Date().toISOString(),

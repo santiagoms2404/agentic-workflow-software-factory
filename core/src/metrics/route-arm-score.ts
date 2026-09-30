@@ -11,10 +11,10 @@
 // and the module reads findings and gate results only: counts, never thoughts
 // (INV-5). Pure: no I/O and no clock.
 
-import { ROUTE_EFFORT_LEVELS } from "../config/schema.ts";
+import { parseRouteArm, RouteArmSpecInvalid, type RouteArm } from "../contracts/route-arm.ts";
+export { parseRouteArm, RouteArmSpecInvalid, type RouteArm } from "../contracts/route-arm.ts";
 import type { ProvingGroundItem, SeededDefectRange } from "../contracts/proving-ground.ts";
 import type { ReviewFinding } from "../contracts/review-output.ts";
-import type { RouteEffort } from "../contracts/route-selection.ts";
 import { wilson, type Interval } from "../../../dashboard/shared/route-metrics.ts";
 
 /** A finding locates a planted defect when its line lies this many lines either side of the expected range, or inside it. */
@@ -23,45 +23,6 @@ export const LINE_WINDOW = 3;
 // ---------------------------------------------------------------------------
 // Arms.
 // ---------------------------------------------------------------------------
-
-/** One route arm: an explicit `<adapter>/<provider>/<model>@<effort>`, every part named. */
-export interface RouteArm {
-  readonly spec: string;
-  readonly adapter: string;
-  readonly provider: string;
-  readonly model: string;
-  readonly effort: RouteEffort;
-}
-
-export class RouteArmSpecInvalid extends Error {
-  readonly spec: string;
-
-  constructor(spec: string, detail: string) {
-    super(`route arm ${JSON.stringify(spec)} is invalid: ${detail}`);
-    this.name = "RouteArmSpecInvalid";
-    this.spec = spec;
-  }
-}
-
-/**
- * Parses an arm. Unlike a `--route` override, an arm leaves nothing to the
- * configured default: the replay measures the route the arm names, so a part
- * left for config to fill would measure whatever config held that day.
- */
-export function parseRouteArm(spec: string): RouteArm {
-  const at = spec.lastIndexOf("@");
-  if (at < 0) throw new RouteArmSpecInvalid(spec, "expected <adapter>/<provider>/<model>@<effort>");
-  const segments = spec.slice(0, at).split("/");
-  const effort = spec.slice(at + 1);
-  if (segments.length !== 3 || segments.some((segment) => segment.length === 0)) {
-    throw new RouteArmSpecInvalid(spec, "an arm names its adapter, provider and model, each non-empty");
-  }
-  if (!(ROUTE_EFFORT_LEVELS as readonly string[]).includes(effort)) {
-    throw new RouteArmSpecInvalid(spec, `no effort level named ${JSON.stringify(effort)}; expected one of ${ROUTE_EFFORT_LEVELS.join(", ")}`);
-  }
-  const [adapter, provider, model] = segments as [string, string, string];
-  return Object.freeze({ spec, adapter, provider, model, effort: effort as RouteEffort });
-}
 
 /** A model without the adapter's `family:` prefix: `claude:opus` and `opus` name one model on the claude adapter. */
 function canonicalModel(adapter: string, model: string): string {

@@ -75,7 +75,7 @@ export interface ProvingGroundEvidence {
 const CHECKOUT = fileURLToPath(new URL("../../../../", import.meta.url));
 
 export const METRICS_USAGE =
-  "usage: awsf metrics [--role R] [--task-class CLASS] [--source production|proving-ground] [--started-before ISO] [--json] [--state-root PATH]";
+  "usage: awsf metrics [--role R] [--task-class CLASS] [--source production|proving-ground] [--started-before ISO] [--json] [--state-root PATH] | awsf metrics --advise [--plan STEM --milestone Mx[,...]] [--role builder|reviewer] [--config PATH] [--state-root PATH]";
 
 /** The filter the flags spell. Statistics compare within one evidence source, so `production` is the default. */
 export function metricsFilter(options: Pick<MetricsCommandOptions, "role" | "taskClass" | "source" | "startedBefore">): MetricsFilter {

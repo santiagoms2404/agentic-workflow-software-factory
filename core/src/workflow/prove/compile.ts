@@ -10,7 +10,7 @@ import { ReviewContextSchema } from "../../contracts/review-context.ts";
 import { ReviewOutputSchema } from "../../contracts/review-output.ts";
 import type { PhaseRouteSelection } from "../../contracts/route-selection.ts";
 import { TestOutputSchema } from "../../contracts/test-output.ts";
-import { parseRouteArm, type RouteArm } from "../../metrics/route-arm-score.ts";
+import { parseRouteArm, type RouteArm } from "../../contracts/route-arm.ts";
 import type { Tier } from "../../state/tiers.ts";
 import { assertEarnedDescription, type WorkflowRecipe } from "../compiler.ts";
 import type { LocalPhaseDefinition, PhaseDefinition } from "../phase.ts";
