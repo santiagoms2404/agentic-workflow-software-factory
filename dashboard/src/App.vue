@@ -12,7 +12,7 @@ import MetricsScreen from "./routes/metrics.vue";
 import { usePolling, type PollMode } from "./composables/usePolling.ts";
 import { useNotifySound } from "./composables/useNotifySound.ts";
 import { isCanvasRoute, parseCanvasRoute, type CanvasRoute } from "./canvas-view.ts";
-import { loadCanvasSessions } from "./canvas-sessions.ts";
+import { loadAllSessions } from "./session-pages.ts";
 import { DEFAULT_METRICS_ROUTE, isMetricsRoute, parseMetricsRoute, readRoleColors, type MetricsRouteState } from "./metrics-lens.ts";
 import { admitNewFilterValues, LIFECYCLE_STATES } from "./session-filters.ts";
 import { groupFilterValues } from "./session-groups.ts";
@@ -163,52 +163,59 @@ onUnmounted(() => removeEventListener("hashchange", onHashChange));
 const phaseName = computed(() => detail.value?.phases.find((phase) => phase.phaseId === selectedPhaseId.value || phase.key === selectedPhaseId.value)?.name ?? null);
 const mode = computed<PollMode>(() => health.value?.activeSessions ? "live" : sessions.value.sessions.length ? "grid" : "idle");
 
+/**
+ * The read a poll issues. The sessions board, the groups view and the canvas
+ * all read every session; one run's page reads that run.
+ */
+type ReadKind = "metrics" | "settings" | "backlog" | "sessions" | `session:${string}`;
+
+function readKind(): ReadKind {
+  if (metricsRoute.value) return "metrics";
+  if (settingsRoute.value) return "settings";
+  if (canvasRoute.value || groupsRoute.value) return "sessions";
+  if (backlogRoute.value) return "backlog";
+  return selectedId.value ? `session:${selectedId.value}` : "sessions";
+}
+
 async function load(): Promise<void> {
-  // A paged canvas read publishes only a complete projection, and is discarded
-  // if the reader leaves the canvas while its later pages are loading.
-  const canvasRead = canvasRoute.value;
+  // A paged read publishes only a complete projection. The kind is taken again
+  // after the awaits, and a poll whose view changed while it loaded publishes
+  // nothing, so one view's response is never read as another's.
+  const kind = readKind();
   // The metrics tab polls its own payload; the shell needs only health here.
-  const dataRequest = metricsRoute.value ? Promise.resolve(null)
-    : settingsRoute.value
-    ? fetch("/api/v1/adapters")
-    : canvasRead ? loadCanvasSessions()
-    : groupsRoute.value ? fetch("/api/v1/sessions")
-    : backlogRoute.value ? fetch("/api/v1/tickets")
-    : selectedId.value
-      ? fetch(`/api/v1/sessions/${encodeURIComponent(selectedId.value)}`)
-      : fetch("/api/v1/sessions");
+  const dataRequest = kind === "metrics" ? Promise.resolve(null)
+    : kind === "settings" ? fetch("/api/v1/adapters")
+    : kind === "backlog" ? fetch("/api/v1/tickets")
+    : kind === "sessions" ? loadAllSessions()
+    : fetch(`/api/v1/sessions/${encodeURIComponent(kind.slice("session:".length))}`);
   const [nextHealth, nextData] = await Promise.all([
     fetch("/api/v1/health"),
     dataRequest,
     loadSettingsOnce(),
     loadGroupsOnce(),
   ]);
-  if (canvasRead !== canvasRoute.value) return;
+  if (kind !== readKind()) return;
   if (!nextHealth.ok) throw new Error("Dashboard data unavailable");
   health.value = await nextHealth.json() as HealthResponse;
-  if (metricsRoute.value) {
+  if (kind === "metrics") {
     detail.value = null;
-  } else if (settingsRoute.value) {
+  } else if (kind === "settings") {
     const adaptersResponse = nextData as Response;
     if (!adaptersResponse.ok) throw new Error("Settings unavailable");
     adapters.value = await adaptersResponse.json() as AdaptersResponse;
     detail.value = null;
-  } else if (backlogRoute.value) {
+  } else if (kind === "backlog") {
     const response = nextData as Response;
     if (!response.ok) throw new Error("Backlog unavailable");
     backlog.value = await response.json() as TicketsResponse;
     detail.value = null;
-  } else if (canvasRead) {
+  } else if (kind === "sessions") {
     sessions.value = nextData as SessionsResponse;
     detail.value = null;
   } else {
     const response = nextData as Response;
     if (!response.ok) throw new Error("Dashboard data unavailable");
-    if (selectedId.value) detail.value = await response.json() as SessionDetailResponse;
-    else {
-      sessions.value = await response.json() as SessionsResponse;
-      detail.value = null;
-    }
+    detail.value = await response.json() as SessionDetailResponse;
   }
 }
 const { lastPollAt, pollMs } = usePolling(load, () => mode.value);

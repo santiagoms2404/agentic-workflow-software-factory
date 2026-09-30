@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import type { SessionCard, SessionsResponse } from "../../../dashboard/shared/types.ts";
-import { loadCanvasSessions } from "../../../dashboard/src/canvas-sessions.ts";
+import { loadAllSessions } from "../../../dashboard/src/session-pages.ts";
 import { buildCanvasGraph } from "../../../dashboard/src/canvas-graph.ts";
 import { createApiRouter } from "../../src/api/routes.ts";
 import { createSession } from "../../src/observability/projector.ts";
@@ -13,7 +13,7 @@ const at = "2026-01-01T00:00:00.000Z";
 const card = (index: number): SessionCard => ({ sessionId: `s-${String(index).padStart(3, "0")}`, startedAt: at, replay: null }) as SessionCard;
 const response = (sessions: SessionCard[]): Response => new Response(JSON.stringify({ sessions, plans: [] }));
 
-test("the canvas pages through eighty replays plus ordinary runs, including a shared-timestamp page boundary", async () => {
+test("every session is read, eighty replays plus ordinary runs, across a shared-timestamp page boundary", async () => {
   const fixture = apiFixture();
   const router = createApiRouter({ dbPath: fixture.path, config: fixture.config, planSources: fixture.planSources });
   try {
@@ -41,7 +41,7 @@ test("the canvas pages through eighty replays plus ordinary runs, including a sh
       const result = await router.dispatch({ method: "GET", url, headers: { host: "127.0.0.1:4600" } });
       return new Response(JSON.stringify(result.body), { status: result.status });
     };
-    const all = await loadCanvasSessions(request);
+    const all = await loadAllSessions(request);
     assert.equal(all.sessions.length, 206);
     assert.equal(new Set(all.sessions.map((session) => session.sessionId)).size, 206);
     assert.equal(all.sessions.filter((session) => session.replay !== null).length, 80);
@@ -67,39 +67,43 @@ test("the canvas pages through eighty replays plus ordinary runs, including a sh
 
 test("an exact full page reads through the terminal empty page", async () => {
   const urls: string[] = [];
-  const result = await loadCanvasSessions(async (url) => {
+  const result = await loadAllSessions(async (url) => {
     urls.push(url);
     return response(urls.length === 1 ? Array.from({ length: 100 }, (_, index) => card(index)) : []);
   });
   assert.equal(result.sessions.length, 100);
   assert.equal(urls.length, 2);
   assert.equal(new URL(urls[1]!, "http://localhost").searchParams.get("beforeId"), "s-099");
-  assert.deepEqual(await loadCanvasSessions(async () => response([])), { sessions: [], plans: [] });
+  assert.deepEqual(await loadAllSessions(async () => response([])), { sessions: [], plans: [] });
 });
 
-test("a failed later page rejects the whole canvas read rather than publishing a partial formation", async () => {
+test("a failed later page rejects the whole read rather than publishing a partial projection", async () => {
   let calls = 0;
-  await assert.rejects(loadCanvasSessions(async () => {
+  await assert.rejects(loadAllSessions(async () => {
     calls += 1;
     return calls === 1 ? response(Array.from({ length: 100 }, (_, index) => card(index))) : new Response("unavailable", { status: 503 });
-  }), /Canvas sessions unavailable/);
+  }), /Sessions unavailable/);
   assert.equal(calls, 2);
 });
 
 test("a non-advancing cursor fails instead of requesting the same page forever", async () => {
   let calls = 0;
-  await assert.rejects(loadCanvasSessions(async () => {
+  await assert.rejects(loadAllSessions(async () => {
     calls += 1;
     return response(Array.from({ length: 100 }, (_, index) => card(index)));
   }), /pagination did not advance/);
   assert.equal(calls, 2);
 });
 
-test("only the canvas uses the all-pages reader and leaving it discards an outstanding canvas read", () => {
+test("every list view reads all sessions, and a poll whose view changed publishes nothing", () => {
+  // The sessions board once read the API's first page alone and showed "50 of
+  // 50 runs" with more recorded. The board, the groups view and the canvas all
+  // count the whole projection, so all three take the all-pages reader.
   const app = readFileSync(new URL("../../../dashboard/src/App.vue", import.meta.url), "utf8");
-  assert.match(app, /: canvasRead \? loadCanvasSessions\(\)/);
-  assert.match(app, /: groupsRoute\.value \? fetch\("\/api\/v1\/sessions"\)/);
-  assert.match(app, /: fetch\("\/api\/v1\/sessions"\);/);
-  assert.match(app, /if \(canvasRead !== canvasRoute\.value\) return;/);
-  assert.match(app, /else if \(canvasRead\) \{\s*sessions\.value = nextData as SessionsResponse;/);
+  assert.match(app, /if \(canvasRoute\.value \|\| groupsRoute\.value\) return "sessions";/);
+  assert.match(app, /return selectedId\.value \? `session:\$\{selectedId\.value\}` : "sessions";/);
+  assert.match(app, /: kind === "sessions" \? loadAllSessions\(\)/);
+  assert.doesNotMatch(app, /fetch\("\/api\/v1\/sessions"\)/, "no view reads one page of sessions");
+  assert.match(app, /if \(kind !== readKind\(\)\) return;/);
+  assert.match(app, /else if \(kind === "sessions"\) \{\s*sessions\.value = nextData as SessionsResponse;/);
 });
