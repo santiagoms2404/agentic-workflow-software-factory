@@ -202,6 +202,59 @@ test("the plot places the module's points: log x, percentage y, Wilson whiskers,
   assert.deepEqual(zoneLabels("median-minutes"), { good: "fast and strong", bad: "slow and weak" });
 });
 
+test("badged routes expand the log axis, carry provider shapes and identity labels, and never get verdict cards", () => {
+  const attributed = row("builder", "gpt-6-luna", "codex", "openai-codex", "xhigh", true, 100,
+    { identityProvenance: "route-attributed" });
+  const data = [...builders, attributed];
+  const names = routeNames(data, RATE_CARD.rows, payload.priors.modelLabels);
+  const before = frontier(builders, "builder", "first-pass", "list-per-row", listPrice);
+  const after = frontier(data, "builder", "first-pass", "list-per-row", listPrice);
+  const beforePlot = frontierPlot(before, names);
+  const plot = frontierPlot(after, names);
+  assert.equal(plot.marks.length, after.points.length + after.badged.length);
+  assert.ok(Number(plot.xTicks[0]!.text) < Number(beforePlot.xTicks[0]!.text), "the near-zero list equivalent expands the axis");
+  const mark = plot.marks.find((mark) => mark.badged)!;
+  assert.equal(mark.provider, "openai");
+  assert.equal(mark.hollow, true);
+  assert.equal(mark.onFrontier, false);
+  assert.match(mark.labelText, /GPT-6 Luna · xhigh.*identity unconfirmed/);
+  assert.notEqual(mark.label, null);
+  assert.match(mark.ariaLabel, /Identity unconfirmed: route-attributed, plotted but not ranked/);
+  assert.doesNotMatch(mark.ariaLabel, /Hollow: fewer than|On the Pareto line/);
+  assert.deepEqual(verdictCards(after, verdicts(after), names), verdictCards(before, verdicts(before), names));
+  assert.equal(plot.line.split(" ").length, after.line.length);
+  const point = after.badged[0]!;
+  assert.equal(mark.cy, plot.plot.y + plot.plot.height - point.interval.p! * plot.plot.height);
+});
+
+test("a sub-floor x stays at the axis floor and is flagged in the mark, label and tooltip", () => {
+  const zero = row("builder", "gpt-6-luna", "codex", "openai-codex", "xhigh", true, 0,
+    { identityProvenance: "route-attributed", tokens: { ...template.tokens, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0 } });
+  const front = frontier([zero], "builder", "first-pass", "list-per-row", listPrice);
+  assert.equal(front.badged[0]!.x, 0);
+  const plot = frontierPlot(front, routeNames([zero], RATE_CARD.rows, {}));
+  assert.equal(plot.marks.length, 1, "a badged-only Frontier is drawable");
+  const mark = plot.marks[0]!;
+  assert.equal(mark.cx, plot.plot.x);
+  assert.equal(mark.belowFloor, true);
+  assert.match(mark.labelText, /↓ at axis floor/);
+  assert.match(mark.ariaLabel, /≈ list \$0.00 per row.*At axis floor/);
+  assert.notEqual(mark.label, null);
+  assert.equal(plot.line, "");
+  assert.deepEqual(verdictCards(front, verdicts(front), new Map()), []);
+});
+
+test("the Frontier component draws badged-only charts, dashed hollow marks, floor markers and separate exclusion notes", () => {
+  const view = source("dashboard/src/components/MetricsFrontier.vue");
+  const css = source("dashboard/src/styles/metrics.css");
+  assert.match(view, /front\.value\.points\.length === 0 && front\.value\.badged\.length === 0/);
+  assert.match(view, /hollow: mark\.hollow, badged: mark\.badged/);
+  assert.match(view, /mark\.belowFloor.*frontier-floor-marker/);
+  assert.match(view, /routes plotted.*but not ranked: identity unconfirmed/);
+  assert.match(view, /not plotted: partial usage or degraded observability/);
+  assert.match(css, /\.frontier-mark\.badged[^\n]+stroke-dasharray: 4 3/);
+});
+
 test("verdict cards carry the module's verdicts word for word, dearest first, with the x value through formatListEquivalent", () => {
   const front = frontier(builders, "builder", "first-pass", "list-per-row", listPrice);
   const names = routeNames(builders, RATE_CARD.rows, payload.priors.modelLabels);

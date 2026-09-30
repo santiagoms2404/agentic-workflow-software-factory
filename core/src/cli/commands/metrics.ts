@@ -201,8 +201,8 @@ export function metricsReadout(payload: MetricsResponse, filter: MetricsFilter, 
     });
     lines.push(...table([["route", "n", "settled", "first pass [95% CI]", "depth", "per row", "verdict"], ...body]));
     const kept = stats(cells.filter((cell) => cell.role === role).flatMap((cell) => cell.rows), listPrice);
-    if (front.excluded > 0) {
-      lines.push(`  ${front.excluded} row(s) counted above but kept out of the verdicts: ${tallyText(kept.unrankableReasons)}.`);
+    if (kept.unrankable > 0) {
+      lines.push(`  ${kept.unrankable} row(s) counted above but kept out of the verdicts: ${tallyText(kept.unrankableReasons)}.`);
     }
   }
   lines.push("");

@@ -117,6 +117,19 @@ test("labels never overlap one another or an avoided mark; the higher priority k
   assert.deepEqual(placed.map((label) => label?.id ?? null).filter((id) => id !== null).length, boxes.length);
 });
 
+test("multiline badge labels reserve their full height, including at the upper axis edge", () => {
+  const requests = [
+    { id: "ranked", x: 100, y: 0, text: "ranked route", priority: 10 },
+    { id: "badged", x: 100, y: 0, text: "identity unconfirmed", lines: 2, priority: 1 },
+  ];
+  const placed = placeLabels(requests, bounds, font);
+  assert.ok(placed.every((label) => label !== null));
+  assert.equal(placed[0]!.box.height, 18);
+  assert.equal(placed[1]!.box.height, 36);
+  assert.equal(intersects(placed[0]!.box, placed[1]!.box), false);
+  assert.ok(placed[1]!.box.y >= bounds.y);
+});
+
 test("a label with no free spot is left out rather than drawn over another", () => {
   const tiny: Rect = { x: 0, y: 0, width: 120, height: 26 };
   const placed = placeLabels([

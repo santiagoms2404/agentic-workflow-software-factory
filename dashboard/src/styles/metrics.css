@@ -178,6 +178,8 @@ button.matrix-tile:hover { box-shadow: var(--neu-hover); transform: translateY(-
 .frontier-mark { cursor: default; outline: none; }
 .frontier-mark path, .frontier-mark circle, .frontier-mark rect { fill: var(--count); stroke: var(--neu-well); stroke-width: 2; transition: transform 170ms ease; transform-box: fill-box; transform-origin: center; }
 .frontier-mark.hollow path, .frontier-mark.hollow circle, .frontier-mark.hollow rect { fill: var(--neu-well); stroke: var(--text); stroke-width: 2.2; }
+.frontier-mark.badged path, .frontier-mark.badged circle, .frontier-mark.badged rect { stroke-dasharray: 4 3; }
+.frontier-floor-marker { fill: var(--text); font: 14px var(--mono); }
 .frontier-mark.active path, .frontier-mark.active circle, .frontier-mark.active rect { transform: scale(1.2); }
 .frontier-mark:focus-visible path, .frontier-mark:focus-visible circle, .frontier-mark:focus-visible rect { stroke: var(--accent); stroke-width: 3; }
 .frontier-tooltip {

@@ -101,6 +101,9 @@ export interface FrontierMark {
   readonly title: string;
   readonly provider: Provider | null;
   readonly hollow: boolean;
+  readonly badged: boolean;
+  /** The actual x is below the log domain's lower end, so the mark is pinned there. */
+  readonly belowFloor: boolean;
   readonly onFrontier: boolean;
   readonly cx: number;
   readonly cy: number;
@@ -109,6 +112,7 @@ export interface FrontierMark {
   readonly whiskerBottom: number;
   readonly label: PlacedLabel | null;
   readonly labelText: string;
+  readonly labelLines: readonly string[];
   readonly tooltip: readonly string[];
   readonly ariaLabel: string;
 }
@@ -134,29 +138,43 @@ const LABEL_FONT = Object.freeze({ charWidth: 7.8, lineHeight: 18, gap: 16 });
 export function frontierPlot(front: Frontier, names: ReadonlyMap<string, RouteName>): FrontierPlot {
   const { width, height, left, right, top, bottom } = PLOT_SIZE;
   const plot: Rect = { x: left, y: top, width: width - left - right, height: height - top - bottom };
-  const domain = logDomain(front.points.map((point) => point.x));
+  const plotted = [...front.points, ...front.badged];
+  const domain = logDomain(plotted.map((point) => point.x));
   const sx = logScale(domain, [plot.x, plot.x + plot.width]);
   const sy = linearScale([0, 1], [plot.y + plot.height, plot.y]);
   const yLabel = Y_PILLS.find((pill) => pill.id === front.y)!.label;
   const unit = front.y === "landed" ? "runs" : "settled rows";
 
-  const base = front.points.map((point) => {
+  const badgedKeys = new Set(front.badged.map((point) => point.key));
+  const base = plotted.map((point) => {
     const name = names.get(point.key) ?? { title: point.key, provider: null };
+    const badged = badgedKeys.has(point.key);
+    const belowFloor = point.x < domain[0];
     const tooltip = [
       name.title,
       `${yLabel} ${pct(point.interval.p)} · 95% CI ${pct(point.interval.lo)} to ${pct(point.interval.hi)}`,
       `n ${point.n} ${unit}`,
       formatX(point.x, front.x),
-      ...(point.hollow ? [`Hollow: fewer than ${MIN_SETTLED}, so it does not shape the line`] : []),
+      ...(badged ? ["Identity unconfirmed: route-attributed, plotted but not ranked"]
+        : point.hollow ? [`Hollow: fewer than ${MIN_SETTLED}, so it does not shape the line`] : []),
+      ...(belowFloor ? [`At axis floor ${formatX(domain[0], front.x)}; actual value shown above`] : []),
       ...(point.onFrontier ? ["On the Pareto line"] : []),
+    ];
+    const labelLines = [
+      `${name.title} · n${point.n}`,
+      ...(badged ? ["identity unconfirmed"] : []),
+      ...(belowFloor ? ["↓ at axis floor"] : []),
     ];
     return {
       point,
       name,
+      badged,
+      belowFloor,
       cx: sx(point.x),
       cy: sy(point.interval.p!),
       tooltip,
-      labelText: `${name.title} · n${point.n}`,
+      labelLines,
+      labelText: labelLines.join(" · "),
     };
   });
   const avoid = base.map((mark) => ({ x: mark.cx - MARK_RADIUS, y: mark.cy - MARK_RADIUS, width: MARK_RADIUS * 2, height: MARK_RADIUS * 2 }));
@@ -165,7 +183,8 @@ export function frontierPlot(front: Frontier, names: ReadonlyMap<string, RouteNa
       id: mark.point.key,
       x: mark.cx,
       y: mark.cy,
-      text: mark.labelText,
+      text: [...mark.labelLines].sort((a, b) => b.length - a.length)[0]!,
+      lines: mark.labelLines.length,
       // The line's routes name themselves first, then the better-evidenced.
       priority: (mark.point.onFrontier ? 10_000 : 0) + mark.point.n,
     })),
@@ -177,6 +196,8 @@ export function frontierPlot(front: Frontier, names: ReadonlyMap<string, RouteNa
     title: mark.name.title,
     provider: mark.name.provider,
     hollow: mark.point.hollow,
+    badged: mark.badged,
+    belowFloor: mark.belowFloor,
     onFrontier: mark.point.onFrontier,
     cx: mark.cx,
     cy: mark.cy,
@@ -184,6 +205,7 @@ export function frontierPlot(front: Frontier, names: ReadonlyMap<string, RouteNa
     whiskerBottom: sy(mark.point.interval.lo),
     label: labels[index] ?? null,
     labelText: mark.labelText,
+    labelLines: mark.labelLines,
     tooltip: mark.tooltip,
     ariaLabel: mark.tooltip.join(". "),
   }));

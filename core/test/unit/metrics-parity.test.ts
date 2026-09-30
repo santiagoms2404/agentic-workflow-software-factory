@@ -17,6 +17,8 @@ import { openDatabase } from "../../src/observability/sqlite.ts";
 import type { MetricsResponse } from "../../../dashboard/shared/types.ts";
 import { formatListEquivalent, listPrice } from "../../../dashboard/shared/rate-card.ts";
 import { coverage, frontier, heuristicSplit, routeCells, stats, verdicts } from "../../../dashboard/shared/route-metrics.ts";
+import { frontierPlot, routeNames } from "../../../dashboard/src/metrics-frontier.ts";
+import { PAYLOAD_PATH } from "../fixtures/metrics/synthetic-payload.ts";
 import { validConfig } from "./config/fixture.ts";
 import { OPUS_HIGH, SyntheticAttempt, phase, session, usage } from "./_metrics-journal.ts";
 
@@ -25,7 +27,7 @@ const CODEX = ["codex", "openai-codex", "codex:gpt-6-sol"] as const;
 const LATER = "2026-09-27T10:00:00.000Z";
 
 /** A landed shift: a codex builder observed as gpt-6-sol, and a claude reviewer that never reported a model. */
-function landed(sessionId: string, workflowId = "shift", startedAt?: string): SyntheticAttempt {
+function landed(sessionId: string, workflowId = "shift", startedAt?: string, provenance: "stream-authoritative" | "route-attributed" = "stream-authoritative"): SyntheticAttempt {
   const run = new SyntheticAttempt({ ...session(sessionId), workflowId, ...(startedAt === undefined ? {} : { startedAt }) });
   // Phase and run ids are global keys; real ones are session-prefixed too.
   const build = `${sessionId}:builder`, review = `${sessionId}:reviewer`;
@@ -34,7 +36,7 @@ function landed(sessionId: string, workflowId = "shift", startedAt?: string): Sy
   run.event(build, `${sessionId}-run-1`, { kind: "run.started", adapter: "pi-codex", requestedModel: "gpt-6-sol" });
   run.event(build, `${sessionId}-run-1`, {
     kind: "model.resolved", adapter: "pi-codex", provider: "openai-codex", requestedModel: "gpt-6-sol",
-    resolvedModel: "gpt-6-sol", provenance: "stream-authoritative",
+    resolvedModel: "gpt-6-sol", provenance,
   });
   run.event(build, `${sessionId}-run-1`, { kind: "usage", usage: usage(100_000, 10_000, 400_000, 0, 2_000) });
   run.call(build, "builder", ...CODEX, "gpt-6-sol", usage(100_000, 10_000, 400_000, 0, 2_000));
@@ -95,7 +97,7 @@ function fixture(): Fixture {
     landed("p2", "shift", LATER).project(writer);
     blocked("p3").project(writer);
     hostBlocked("p5").project(writer);
-    landed("p4", "prove").project(writer);
+    landed("p4", "prove", undefined, "route-attributed").project(writer);
   } finally {
     writer.close();
   }
@@ -108,14 +110,18 @@ function plain<T>(value: T): T {
 }
 
 /** Everything the module derives from a set of rows, per role and per cell as well as over all of them. */
-function derived({ runs, roleRows: rows }: Pick<MetricsResponse, "runs" | "roleRows">): unknown {
+function derived({ runs, roleRows: rows, rateCard, priors }: MetricsResponse): unknown {
   const roles = [...new Set(rows.map((row) => row.role))].sort();
   return plain({
     stats: stats(rows, listPrice),
     coverage: coverage(rows),
     heuristic: heuristicSplit(runs),
     cells: routeCells(rows).map((cell) => ({ role: cell.role, key: cell.key, stats: stats(cell.rows, listPrice) })),
-    verdicts: roles.map((role) => verdicts(frontier(rows, role, "first-pass", "list-per-row", listPrice))),
+    frontiers: ["production", "proving-ground"].flatMap((source) => roles.map((role) => {
+      const scoped = rows.filter((row) => (row.workflow === "prove" ? "proving-ground" : "production") === source);
+      const front = frontier(scoped, role, "first-pass", "list-per-row", listPrice);
+      return { source, front, verdicts: verdicts(front), tab: frontierPlot(front, routeNames(scoped, rateCard.rows, priors.modelLabels)) };
+    })),
   });
 }
 
@@ -142,6 +148,11 @@ test("module stats, API payload stats and awsf metrics --json stats agree to the
     const expected = derived(built);
     assert.deepEqual(derived(served), expected, "API payload");
     assert.deepEqual(derived(printed), expected, "awsf metrics --json");
+    const proving = built.roleRows.filter((row) => row.workflow === "prove");
+    const front = frontier(proving, "builder", "first-pass", "list-per-row", listPrice);
+    assert.equal(front.badged.length, 1, "the API/CLI/tab parity includes a route-attributed replay");
+    assert.deepEqual(front.points, []);
+    assert.deepEqual(verdicts(front), []);
 
     // Beyond the statistics: the three payloads are one payload, but for the read instant.
     const unstamped = (payload: MetricsResponse): unknown => plain({ ...payload, extractedAt: null });
@@ -204,6 +215,16 @@ test("the table prints the module's numbers, scoped by the flags, with every pri
   assert.ok(earlier.includes("3 runs (2 with role-rows) · 3 role-rows"), earlier);
   const proving = metricsReadout(payload, metricsFilter({ source: "proving-ground" })).join("\n");
   assert.ok(proving.includes("1 runs (1 with role-rows) · 2 role-rows"), proving);
+});
+
+test("the readout stays byte-identical when identity-only routes become plotted but never ranked", () => {
+  const payload = JSON.parse(readFileSync(PAYLOAD_PATH, "utf8")) as MetricsResponse;
+  const attributed = { ...payload, roleRows: payload.roleRows.map((row) => ({ ...row,
+    identityProvenance: row.route.adapter === "codex" ? "route-attributed" : row.identityProvenance })) };
+  // Measured on the task's unmodified base: b45fa5d, metricsReadout(...).join("\\n").
+  const text = metricsReadout(attributed, metricsFilter({})).join("\n");
+  assert.equal(createHash("sha256").update(text).digest("hex"), "0a42643e7d7dd559bbf0b3025ed2bf874ddc74ca462e823b1b67992746ed29d5");
+  assert.match(text, /kept out of the verdicts: route-attributed 3/);
 });
 
 test("awsf metrics refuses a filtered --json, an unknown source and a malformed instant", async () => {

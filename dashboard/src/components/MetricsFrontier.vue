@@ -31,7 +31,7 @@ const roles = computed(() => frontierRoles(props.rows));
 const role = computed(() => frontierRole(props.state.role, props.rows));
 const names = computed(() => routeNames(props.rows, props.rateCard, props.priorLabels));
 const front = computed(() => (role.value === null ? null : frontier(props.rows, role.value, props.state.y, props.state.x, listPrice)));
-const plot = computed(() => (front.value === null || front.value.points.length === 0 ? null : frontierPlot(front.value, names.value)));
+const plot = computed(() => (front.value === null || (front.value.points.length === 0 && front.value.badged.length === 0) ? null : frontierPlot(front.value, names.value)));
 const cards = computed(() => (front.value === null ? [] : verdictCards(front.value, verdicts(front.value), names.value)));
 const unplaced = computed(() => (front.value?.unplaced ?? []).map((entry) => ({
   key: entry.key,
@@ -77,7 +77,7 @@ function diamond(mark: FrontierMark): string {
   <div class="frontier-view">
     <header class="metrics-view-head">
       <h2 class="metrics-view-title">Cost against success, per role</h2>
-      <p class="metrics-view-lede">Each mark is a route. Whiskers are 95% Wilson intervals. The line joins routes no other route beats on both axes. Hollow marks have fewer than 5 settled rows and do not shape the line. Performance, cost and speed are read together, one axis pair at a time. Circle: Anthropic. Diamond: OpenAI.</p>
+      <p class="metrics-view-lede">Each mark is a route. Whiskers are 95% Wilson intervals. The line joins routes no other route beats on both axes. Hollow marks have fewer than 5 settled rows and do not shape the line. Dashed hollow marks have unconfirmed identity and are never ranked. Performance, cost and speed are read together, one axis pair at a time. Circle: Anthropic. Diamond: OpenAI.</p>
     </header>
 
     <p v-if="roles.length === 0" class="metrics-note">No role-row in the lens ran on a single route.</p>
@@ -149,13 +149,13 @@ function diamond(mark: FrontierMark): string {
               :x="mark.label!.x"
               :y="mark.label!.y"
               :text-anchor="mark.label!.anchor"
-            >{{ mark.labelText }}</text>
+            ><tspan v-for="(line, index) in mark.labelLines" :key="index" :x="mark.label!.x" :dy="index === 0 ? 0 : 18">{{ line }}</tspan></text>
           </g>
           <g
             v-for="mark in plot.marks"
             :key="mark.key"
             class="frontier-mark"
-            :class="{ hollow: mark.hollow, active: active?.key === mark.key }"
+            :class="{ hollow: mark.hollow, badged: mark.badged, active: active?.key === mark.key }"
             tabindex="0"
             role="img"
             :aria-label="mark.ariaLabel"
@@ -167,6 +167,7 @@ function diamond(mark: FrontierMark): string {
             <path v-if="mark.provider === 'openai'" :d="diamond(mark)" />
             <circle v-else-if="mark.provider === 'anthropic'" :cx="mark.cx" :cy="mark.cy" r="9" />
             <rect v-else :x="mark.cx - 8" :y="mark.cy - 8" width="16" height="16" rx="2" />
+            <text v-if="mark.belowFloor" class="frontier-floor-marker" :x="mark.cx" :y="mark.cy + 26" text-anchor="middle" aria-hidden="true">↓</text>
           </g>
         </svg>
         <div v-if="active" class="frontier-tooltip" :style="tooltipStyle" role="tooltip">
@@ -176,7 +177,8 @@ function diamond(mark: FrontierMark): string {
       </div>
 
       <p v-if="unplaced.length > 0" class="metrics-note">Not placed: {{ unplaced.map((entry) => entry.text).join(" · ") }}.</p>
-      <p v-if="front && front.excluded > 0" class="metrics-note">{{ front.excluded }} role-rows kept out of the ranking: route-attributed identity, partial usage or degraded observability.</p>
+      <p v-if="front && front.badged.length > 0" class="metrics-note">{{ front.badged.length }} {{ front.badged.length === 1 ? "route plotted" : "routes plotted" }} but not ranked: identity unconfirmed (route-attributed).</p>
+      <p v-if="front && front.excluded > 0" class="metrics-note">{{ front.excluded }} role-rows kept out of the ranking and not plotted: partial usage or degraded observability.</p>
 
       <ul v-if="cards.length > 0" class="frontier-cards" aria-label="Verdicts">
         <li v-for="card in cards" :key="card.key" class="frontier-card">

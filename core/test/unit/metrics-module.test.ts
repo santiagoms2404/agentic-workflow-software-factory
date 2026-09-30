@@ -395,9 +395,76 @@ test("INV-3: route-attributed, partial-usage and degraded rows are counted but k
 
   const front = frontier(data, "builder", "first-pass", "list-per-row", PRICE);
   assert.deepEqual(front.points.map((point) => point.key), ["claude/opus@high"]);
-  assert.equal(front.excluded, 18);
+  assert.equal(front.excluded, 12);
+  assert.deepEqual(front.badged.map((point) => point.key), ["codex/gpt-6-sol@high"]);
   const advice = recommend(data, "builder", null, "production", { price: PRICE, prior: NO_PRIOR })!;
   assert.deepEqual(advice.ranked.map((route) => route.key), ["claude/opus@high"]);
+});
+
+test("identity-only routes are badged with the ranked geometry but never change points, line, verdicts or advice", () => {
+  const clean = [...rows(6, 5, { route: OPUS_HIGH, usd: 4 }), ...rows(6, 4, { route: SONNET_HIGH, usd: 1 })];
+  const attributed = rows(6, 6, { route: SOL_HIGH, usd: 0.5, minutes: 0.1, identityProvenance: "route-attributed" });
+  const data = [...clean, ...attributed];
+  for (const y of ["first-pass", "clean", "not-blocked", "landed"] as const) {
+    for (const x of ["list-per-row", "median-minutes"] as const) {
+      const before = frontier(clean, "builder", y, x, PRICE);
+      const after = frontier(data, "builder", y, x, PRICE);
+      assert.deepEqual(after.points, before.points);
+      assert.deepEqual(after.line, before.line);
+      assert.equal(JSON.stringify(verdicts(after)), JSON.stringify(verdicts(before)));
+      assert.equal(after.excluded, 0);
+      assert.equal(after.badged.length, 1);
+      const badged = after.badged[0]!;
+      const confirmed = frontier(attributed.map((row) => ({ ...row, identityProvenance: "stream-authoritative" })), "builder", y, x, PRICE).points[0]!;
+      assert.deepEqual([badged.x, badged.interval, badged.n, badged.stats], [confirmed.x, confirmed.interval, confirmed.n, stats(attributed, PRICE)]);
+      assert.equal(badged.hollow, true);
+      assert.equal(badged.onFrontier, false);
+    }
+  }
+  assert.deepEqual(recommend(data, "builder", null, "production", { price: PRICE, prior: NO_PRIOR }),
+    recommend(clean, "builder", null, "production", { price: PRICE, prior: NO_PRIOR }));
+});
+
+test("a route with any rankable row is only a ranked candidate, even when that candidate is unplaced", () => {
+  const clean = rows(2, 1, { route: SOL_HIGH, usd: 3 });
+  const attributed = rows(6, 6, { route: SOL_HIGH, usd: 0.1, identityProvenance: "route-attributed" });
+  const front = frontier([...attributed, ...clean], "builder", "first-pass", "list-per-row", PRICE);
+  assert.deepEqual(front.points, frontier(clean, "builder", "first-pass", "list-per-row", PRICE).points);
+  assert.deepEqual(front.badged, []);
+  const unplaced = frontier([...attributed, ...clean.map((row) => ({ ...row, usd: null }))], "builder", "first-pass", "list-per-row", PRICE);
+  assert.deepEqual(unplaced.badged, []);
+  assert.equal(unplaced.unplaced[0]!.reason, "unpriced");
+});
+
+test("partial or degraded attributed rows are excluded, and never contaminate a badged point", () => {
+  const identity = row({ route: SOL_HIGH, usd: 0.5, identityProvenance: "route-attributed" });
+  const partial = row({ route: SOL_HIGH, usd: 100, minutes: 100, identityProvenance: "route-attributed", usageAuthority: "partial" });
+  const degraded = row({ route: SOL_HIGH, usd: 100, identityProvenance: "route-attributed", observabilityDegraded: true });
+  const both = row({ route: LUNA_LOW, identityProvenance: "route-attributed", usageAuthority: "partial", observabilityDegraded: true });
+  const front = frontier([identity, partial, degraded, both], "builder", "first-pass", "list-per-row", PRICE);
+  assert.equal(front.excluded, 3, "a multiply excluded row is counted once");
+  assert.equal(front.badged.length, 1);
+  assert.equal(front.badged[0]!.x, 0.5);
+  assert.equal(front.badged[0]!.stats.n, 1);
+  assert.deepEqual(frontier([partial, degraded, both], "builder", "first-pass", "list-per-row", PRICE).badged, []);
+});
+
+test("badged routes need observed axes, stay role/key scoped, and keep a zero x", () => {
+  const identity = { identityProvenance: "route-attributed" };
+  const data = [
+    row({ ...identity, route: SOL_HIGH, usd: 0 }),
+    row({ ...identity, route: LUNA_LOW, usd: null, minutes: null }),
+    row({ ...identity, route: SONNET_HIGH, settled: false, stateGroup: "OPEN" }),
+    row({ ...identity, route: OPUS_HIGH, role: "reviewer" }),
+    row({ ...identity, route: { ...OPUS_HIGH, effort: null } }),
+  ];
+  const front = frontier(data, "builder", "first-pass", "list-per-row", PRICE);
+  assert.deepEqual(front.badged.map((point) => [point.key, point.x]), [["codex/gpt-6-sol@high", 0]]);
+  assert.deepEqual(front.points, []);
+  assert.deepEqual(front.line, []);
+  assert.deepEqual(front.unplaced, []);
+  assert.deepEqual(verdicts(front), []);
+  assert.equal(frontier(data, "builder", "first-pass", "median-minutes", PRICE).badged.length, 1);
 });
 
 test("frontier names each route it could not place, and why", () => {

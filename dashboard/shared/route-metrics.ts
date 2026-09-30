@@ -494,6 +494,12 @@ export interface RoutePoint {
   readonly onFrontier: boolean;
 }
 
+/** A plotted route whose only identity evidence is attributed, never a ranking candidate. */
+export interface BadgedRoutePoint extends Omit<RoutePoint, "hollow" | "onFrontier"> {
+  readonly hollow: true;
+  readonly onFrontier: false;
+}
+
 /** Why a route with rankable rows is not placed: no x value on this axis, or no observation of the y metric. */
 export type UnplacedReason = "unpriced" | "no-minutes" | "no-observation";
 
@@ -508,11 +514,13 @@ export interface Frontier {
   readonly y: FrontierY;
   readonly x: FrontierX;
   readonly points: readonly RoutePoint[];
+  /** Identity-only unrankable routes, plotted but never ranked; a rankable route is never repeated here. */
+  readonly badged: readonly BadgedRoutePoint[];
   /** The Pareto line, cheapest first. */
   readonly line: readonly RoutePoint[];
   /** Routes of the role with rankable rows that could not be placed, in key order. */
   readonly unplaced: readonly UnplacedRoute[];
-  /** The role's keyed rows kept out because they are not rankable (INV-3). */
+  /** The role's keyed rows not plotted because usage is partial or observability degraded (INV-3). */
   readonly excluded: number;
 }
 
@@ -554,27 +562,38 @@ function dominates(q: { x: number; interval: Interval }, p: { x: number; interva
 }
 
 /**
- * One role's routes on y against x, over rankable rows only. A route with no x
- * value or no y observation is returned as unplaced, with the reason. Only
- * routes with at least 5 in the interval's denominator shape the Pareto line;
+ * One role's ranked routes on y against x, plus identity-only unrankable
+ * routes in `badged` for plotting alone. A ranked route with no x value or no
+ * y observation is returned as unplaced, with the reason. Only ranked routes
+ * with at least 5 in the interval's denominator shape the Pareto line;
  * the rest come back hollow. Routes that tie exactly are both on the line.
  */
 export function frontier(rows: readonly MetricsRow[], role: string, y: FrontierY, x: FrontierX, price: RowPrice): Frontier {
-  const candidates = [...byRoute(rows, role)].map(([key, group]) => {
+  const ranked = byRoute(rows, role);
+  const attributed = routeCells(rows.filter((row) => {
+    const reasons = unrankableReasons(row);
+    return row.role === role && reasons.length === 1 && reasons[0] === "route-attributed";
+  })).filter((cell) => !ranked.has(cell.key));
+  const candidate = (key: string, group: readonly MetricsRow[]) => {
     const s = stats(group, price);
     const { interval, n } = yInterval(group, s, y);
     return { key, route: routeOfGroup(group), stats: s, interval, n, x: x === "list-per-row" ? s.listPerRow : s.medianMinutes };
-  });
-  const isPlaced = (point: (typeof candidates)[number]): point is typeof point & { x: number } =>
+  };
+  const candidates = [...ranked].map(([key, group]) => candidate(key, group));
+  const isPlaced = (point: ReturnType<typeof candidate>): point is typeof point & { x: number } =>
     point.x !== null && point.interval.p !== null;
   const placed = candidates.filter(isPlaced);
+  const badged = attributed.map((cell) => candidate(cell.key, cell.rows)).filter(isPlaced)
+    .map((point): BadgedRoutePoint => ({ role, ...point, hollow: true, onFrontier: false }))
+    .sort((a, b) => a.x - b.x || (a.key < b.key ? -1 : 1));
   const unplaced = candidates.filter((point) => !isPlaced(point))
     .map((point): UnplacedRoute => ({
       key: point.key,
       route: point.route,
       reason: point.interval.p === null ? "no-observation" : x === "list-per-row" ? "unpriced" : "no-minutes",
     })).sort((a, b) => (a.key < b.key ? -1 : 1));
-  const excluded = rows.filter((row) => row.role === role && routeKey(row.route) !== null && !isRankable(row)).length;
+  const excluded = rows.filter((row) => row.role === role && routeKey(row.route) !== null &&
+    (row.usageAuthority === "partial" || row.observabilityDegraded)).length;
   const solid = placed.filter((point) => point.n >= MIN_SETTLED);
   const points = placed.map((point): RoutePoint => ({
     role,
@@ -582,7 +601,7 @@ export function frontier(rows: readonly MetricsRow[], role: string, y: FrontierY
     hollow: point.n < MIN_SETTLED,
     onFrontier: point.n >= MIN_SETTLED && !solid.some((other) => other !== point && dominates(other, point)),
   })).sort((a, b) => a.x - b.x || (a.key < b.key ? -1 : 1));
-  return { role, y, x, points, line: points.filter((point) => point.onFrontier), unplaced, excluded };
+  return { role, y, x, points, badged, line: points.filter((point) => point.onFrontier), unplaced, excluded };
 }
 
 export type VerdictTag = "insufficient" | "underpowered" | "overkill" | "frontier";

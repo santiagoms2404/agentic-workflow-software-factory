@@ -145,7 +145,10 @@ export interface LabelRequest {
   /** The mark the label names, in plot coordinates. */
   readonly x: number;
   readonly y: number;
+  /** The longest line, used to measure width. */
   readonly text: string;
+  /** Number of lines; one unless specified. */
+  readonly lines?: number;
   /** Higher places first and so wins a contested spot. */
   readonly priority: number;
 }
@@ -196,14 +199,15 @@ export function placeLabels(
   const order = [...requests].sort((a, b) => b.priority - a.priority || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   for (const request of order) {
     const width = request.text.length * charWidth;
+    const height = lineHeight * (request.lines ?? 1);
     const ascent = lineHeight * 0.72;
-    const shifts = [0, -lineHeight, lineHeight];
+    const shifts = [0, -height, height, -height * 2, height * 2, -height * 3, height * 3];
     const candidates: PlacedLabel[] = [];
     for (const shift of shifts) {
       for (const anchor of ["start", "end"] as const) {
         const x = anchor === "start" ? request.x + gap : request.x - gap;
         const y = request.y + lineHeight * 0.34 + shift;
-        const box = { x: anchor === "start" ? x : x - width, y: y - ascent, width, height: lineHeight };
+        const box = { x: anchor === "start" ? x : x - width, y: y - ascent, width, height };
         candidates.push({ id: request.id, x, y, anchor, box });
       }
     }
