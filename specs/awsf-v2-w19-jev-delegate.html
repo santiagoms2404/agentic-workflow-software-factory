@@ -145,8 +145,8 @@ code.inv, code.ac, code.serves { color:var(--cyan); }
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-09-28</dd>
-        <dt>modified</dt>     <dd>2026-09-28 (authored, awaiting owner review), 2026-09-28 (owner review applied: Q16–Q20 decided as recommended), 2026-09-28 (gate G19-A committed), 2026-09-29 (T01 delivered, M1 [wip]), 2026-09-29 (T02 delivered, M1 [wip]), 2026-09-29 (T03 delivered, M1 [x]), 2026-09-29 (T04 delivered, M2 [wip]), 2026-09-29 (T05 delivered, M2 [wip])</dd>
-        <dt>commits</dt>      <dd>d71b6b4 (plan authored and adopted), the G19-A commit that adds invariant 13, ed7e71c 6b1751d 56a8101 (T01), 07e43d8 3417e81 6d85dba 0371f2d (T02), 5915c87 1ac91ae (T03), 777f8a6 (T04), 364f15d (T05)</dd>
+        <dt>modified</dt>     <dd>2026-09-28 (authored, awaiting owner review), 2026-09-28 (owner review applied: Q16–Q20 decided as recommended), 2026-09-28 (gate G19-A committed), 2026-09-29 (T01 delivered, M1 [wip]), 2026-09-29 (T02 delivered, M1 [wip]), 2026-09-29 (T03 delivered, M1 [x]), 2026-09-29 (T04 delivered, M2 [wip]), 2026-09-29 (T05 delivered, M2 [wip]), 2026-09-29 (T06 delivered, M2 [wip])</dd>
+        <dt>commits</dt>      <dd>d71b6b4 (plan authored and adopted), the G19-A commit that adds invariant 13, ed7e71c 6b1751d 56a8101 (T01), 07e43d8 3417e81 6d85dba 0371f2d (T02), 5915c87 1ac91ae (T03), 777f8a6 (T04), 364f15d (T05), d28e0aa (T06)</dd>
         <dt>agent name</dt>   <dd>claude-opus-5-5, claude-opus-5-5 (review applied)</dd>
         <dt>session id</dt>   <dd>not recorded (AGENTS.md invariant 1 keeps live session state out of every committed file)</dd>
         <dt>back refs</dt>    <dd>./awsf-v2-plan.html (§ Milestone M19 → W19, and its 2026-09-28 amendment adopting this workstream), ../AGENTS.md (the twelve invariants and the proposed invariant 13), ./awsf-v2-intent.md (decisions 3 and 5, which this plan revises by owner decision), ./awsf-v2-w17-shift.html (the shift this plan keeps running), ./awsf-v2-w18-route-metrics.html (the tab and route columns M8 builds on), ./awsf-v2-w07-quota-telemetry.html (the quota readout and its fence), the reference repository ../../ten-levels-of-jev at 777adaf (machine-local clone, IndyDevDan's "10 Levels of Jev") and its transcript ../../10_levels_of_JEV_in_agentic_engineering_IndyDevDan_transcript.txt (machine-local)</dd>
@@ -594,9 +594,9 @@ flowchart LR
       <p class="sub">Serves <code class="serves">AC-3</code></p>
       <p>The owner's decision Q8, as two pure functions.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>agreement.ts</code>: each proposal paired with the next act on that attempt by any actor: match, mismatch or none</li>
-        <li><code class="status">[]</code> <code>autonomy.ts</code>: raise, resume, wait-until and cancel live from the first lease; judgment acts unlock at 7 of their last 8 matched (live and replay pairs, source kept); land-shadow never</li>
-        <li><code class="status">[]</code> A lease's <code>autonomy all</code> unlocks every judgment act and is reported as owner-all, never as earned</li>
+        <li><code class="status">[x]</code> <code>agreement.ts</code>: each proposal paired with the next act on that attempt by any actor: match, mismatch or none</li>
+        <li><code class="status">[x]</code> <code>autonomy.ts</code>: raise, resume, wait-until and cancel live from the first lease; judgment acts unlock at 7 of their last 8 matched (live and replay pairs, source kept); land-shadow never (a full window of 8 is required, so 7 of 7 does not unlock)</li>
+        <li><code class="status">[x]</code> A lease's <code>autonomy all</code> unlocks every judgment act and is reported as owner-all, never as earned</li>
       </ul>
 
       <h4>7. Testing Strategy for M2, and the historical replay</h4>
@@ -1094,6 +1094,15 @@ flowchart LR
       <p><strong>Verified.</strong> In WSL on node v22.23.1: <code>npm run test:unit</code> 2493/2493 at the base (the T04 tree) and 2526/2526 after, with 33 new tests in <code>core/test/unit/delegate/policy.test.ts</code> and <code>shadow.test.ts</code>. <code>test:sim</code> 98/98, <code>test:contract</code> 149/149, and the production-runner and decision-service journeys 105/105. <code>npm run typecheck</code> and <code>npm run lint</code> exit 0. The rest of <code>test:journeys</code> was not rerun, because no other journey file drives <code>run</code>, <code>resume</code> or <code>intake</code>. No live call was made.</p>
       <p><strong>Milestone M2 in progress.</strong> Tasks 4–5 are <code>[x]</code>, and task 6 remains. <code>awsf rework</code> and <code>awsf review</code> do not yet record a proposal at the stop they reach.</p>
       <p><strong>Carried forward</strong> as Handoff entries in T06 (C1–C4), T07 (C5–C8) and T11 (C1–C5), committed as <code>4953ac4</code>.</p>
+      <p>Completion metadata: built and verified in a manual session.</p>
+    </details>
+    <details open>
+      <summary>2026-09-29 — T06 delivered; Milestone M2 in progress</summary>
+      <p><strong>T06 delivered</strong> on base <code>d3c4517</code>, in a manual session on branch <code>w19-jev-delegate</code>, as <code>d28e0aa</code>. It adds <code>core/src/delegate/agreement.ts</code>, <code>autonomy.ts</code> and <code>pairs.ts</code>, and <code>core/test/unit/delegate/agreement.test.ts</code>.</p>
+      <p><strong>Decided in the session.</strong> (1) A proposal's stop is found by its session and status revision against each journal record's <code>event.next</code>. Its outcome is the first act after that stop and before the next proposal's stop, so no act is credited twice. (2) The act mapping is closed: <code>ceiling-grant</code> is raise, <code>resume-activation</code> is resume, <code>review-degradation</code> is degrade-review, a transition into CANCELLED is cancel, and L19, L25 and L20 are rework, replacement-review and land. land-shadow matches only land. (3) wait-for-owner proposes no act and always pairs as none. None pairs never enter the earning window. (4) Earning needs a full window: 7 or more matches among the act's last 8 paired proposals, ordered by proposal time. 7 of 7 does not unlock. (5) Nothing is live without a lease. The owner's <code>all</code> is reported as owner-all even where the window would have earned the act. land-shadow and wait-for-owner are never live. (6) Nothing is stored. <code>readLivePairs</code> rereads <code>delegate.jsonl</code> and the attempt journals on every call.</p>
+      <p><strong>Verified.</strong> In WSL on node v22.23.1: <code>npm run test:unit</code> 2526/2526 at the base (the T05 tree) and 2538/2538 after, the 12 new tests in <code>core/test/unit/delegate/agreement.test.ts</code>. <code>core/test/unit/delegate/*.test.ts</code>, <code>core/test/unit/decision/*.test.ts</code> and <code>core/test/unit/meta/*.test.ts</code>: 333/333. <code>npm run typecheck</code> and <code>npm run lint</code> exit 0. The sim, contract and journey layers were not rerun, because T06 adds pure modules that no runtime path imports.</p>
+      <p><strong>Milestone M2 in progress.</strong> Tasks 4–6 are <code>[x]</code>, and task 7 (M2's Testing Strategy and the historical replay) remains. Continuation, wait-until and route-fallback are not yet journaled on an attempt (tasks 11, 14 and 15), so their proposals pair as none until those records exist.</p>
+      <p><strong>Carried forward</strong> as Handoff entries in T07 (C9–C11), T09 (C1–C4) and T11 (C6–C7), committed as <code>6b3e01f</code>.</p>
       <p>Completion metadata: built and verified in a manual session.</p>
     </details>
   </section>
