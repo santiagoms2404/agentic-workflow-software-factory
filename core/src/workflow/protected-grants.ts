@@ -1,5 +1,5 @@
 import { lstatSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { deriveAttemptStatus, type AttemptEvent, type AttemptStatus } from "../cli/commands/attempt.ts";
 import type { JournalRecord } from "../persistence/journal.ts";
@@ -14,6 +14,7 @@ import { protectedTreeDelta, protectedContentDeltas } from "../git/protected-del
 import { matchesPathGlob } from "../policy/path-policy.ts";
 import { captureProtectedBaselines, verifyProtectedFilesystem, treeFile, protectedReadOnlyGit, protectedBlobId, readProtectedContent } from "./protected-files.ts";
 import type { AwsfConfig } from "../config/schema.ts";
+import { resolveExecutable } from "../execution/transport-broker.ts";
 
 export interface ProtectedState {
   status: AttemptStatus;
@@ -144,15 +145,28 @@ export function assertProtectedOutput(capability: ProtectedFilesCapability, work
   if (runGit(systemGitRunner(worktree), ["rev-parse", "--path-format=absolute", "--git-common-dir"]).trim() !== context.grant.subject.commonGitDir) throw new Error("protected common Git directory changed");
   if (runGit(systemGitRunner(worktree), ["rev-parse", "HEAD"]).trim() !== context.grant.subject.preWriteHeadSha) throw new Error("protected phase changed HEAD before host publication");
 }
+function matchesHostBwrap(executable: string | undefined): boolean {
+  // This is a consistency guard, not a reconstruction of the launch-time PATH.
+  // Historical authority comes from the private host journal's sandbox attestation
+  // and identical spent/completed broker record below. The verifier's trusted host
+  // PATH must still resolve bwrap to that exact recorded path: PATH/install drift
+  // fails closed, rather than accepting a basename or guessing the old environment.
+  // Like the broker, compare lexical paths (including symlink installations), not
+  // realpaths. Neither resolver authenticates binary bytes against same-user tampering.
+  if (executable === undefined || !isAbsolute(executable)) return false;
+  try { return executable === resolveExecutable("bwrap", { PATH: process.env["PATH"] ?? "" }); }
+  catch { return false; }
+}
 export function assertProtectedExecutionProof(state: ProtectedState, consumption: ProtectedGrantConsumption): void {
   const phaseId = `${state.status.sessionId}:${consumption.phaseKey}`;
   const evidence = state.records.map(record => record.event.evidence);
   const completion = evidence.findLast(event => event?.type === "process" && event.record.reservationId === consumption.reservationId);
   const launch = evidence.findLast(event => event?.type === "agent-start" && event.phaseId === phaseId);
-  const spent = evidence.find(event => event?.type === "process" && event.record.reservationId === consumption.reservationId && event.phaseId === phaseId && event.status === "RUNNING" && event.releasedAt !== null);
-  if (completion?.type !== "process" || completion.phaseId !== phaseId || completion.status !== "EXITED" || completion.exitCode !== 0 || completion.endedAt === null ||
-      completion.record.command[0] !== "bwrap" || launch?.type !== "agent-start" || launch.sandboxBadge !== "os-enforced" || launch.sandboxMechanism !== "linux-bwrap" ||
-      spent?.type !== "process" || spent.record.runId !== completion.record.runId) throw new Error("protected candidate lacks its original spent OS-enforced execution proof");
+  const spent = evidence.find(event => event?.type === "process" && event.record.reservationId === consumption.reservationId && event.phaseId === phaseId && event.status === "RUNNING" && typeof event.releasedAt === "string" && event.releasedAt.length > 0);
+  if (completion?.type !== "process" || completion.phaseId !== phaseId || completion.status !== "EXITED" || completion.exitCode !== 0 || completion.exitSignal !== null ||
+      typeof completion.endedAt !== "string" || completion.endedAt.length === 0 || typeof completion.record.runId !== "string" || completion.record.runId.length === 0 ||
+      !matchesHostBwrap(completion.record.command[0]) || launch?.type !== "agent-start" || launch.sandboxBadge !== "os-enforced" || launch.sandboxMechanism !== "linux-bwrap" ||
+      spent?.type !== "process" || spent.record.runId !== completion.record.runId || recoveryDigest(spent.record) !== recoveryDigest(completion.record)) throw new Error("protected candidate lacks its original spent OS-enforced execution proof");
 }
 
 export function inspectProtectedCandidate(attemptDir: string, candidateSha: string, pendingConsumptionId?: string) {
