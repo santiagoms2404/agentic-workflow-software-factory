@@ -113,15 +113,59 @@ test("selected role/class blocks are identical in metrics --advise and shift pla
     const start = plan.out.findIndex((line) => line.startsWith("Route advisory"));
     assert.ok(start > plan.out.findIndex((line) => line.startsWith("remaining headroom")));
     assert.deepEqual(plan.out.slice(start), advice.out);
-    assert.equal(advice.out.filter((line) => line === ADVISORY_END).length, 6);
-    for (const role of ["builder", "reviewer"]) {
-      for (const taskClass of [...TICKET_TASK_CLASSES.slice(0, 2), "unclassified"]) {
-        assert.ok(advice.out.includes(`Route advisory · ${role} · ${taskClass} · production evidence`));
-      }
+    assert.equal(advice.out.filter((line) => line === ADVISORY_END).length, 4);
+    for (const taskClass of [...TICKET_TASK_CLASSES.slice(0, 2), "unclassified"]) {
+      assert.ok(advice.out.includes(`Route advisory · builder · ${taskClass} · production evidence`));
     }
+    assert.ok(advice.out.includes("Route advisory · reviewer · unclassified · production evidence"));
     const selected = await cli(f, ["metrics", "--advise", "--plan", "fixture", "--milestone", "M1", "--role", "reviewer"]);
-    assert.equal(selected.out.filter((line) => line === ADVISORY_END).length, 3);
+    assert.equal(selected.out.filter((line) => line === ADVISORY_END).length, 1);
     assert.doesNotMatch(selected.out.join("\n"), /Route advisory · builder/);
+  } finally { rmSync(f.root, { recursive: true, force: true }); }
+});
+
+test("fully classified selections use unclassified production reviewer evidence without pooling builder classes or replay rows", async () => {
+  const f = fixture();
+  try {
+    // The selection now contains only classified builder tickets; reviewer phases
+    // never inherit those classes from the sealed shift selection.
+    rmSync(join(f.root, "specs/tickets/fixture/T01.md"));
+    const payload = readMetricsPayload(f.dbPath, AT);
+    const reviewerRows = payload.roleRows.filter((row) => row.role === "reviewer" &&
+      row.taskClass === "unclassified" && row.source === "production");
+    assert.equal(reviewerRows.length, 5);
+    assert.ok(reviewerRows.every((row) => row.settled));
+    const rec = recommend(payload.roleRows, "reviewer", "unclassified", "production", { price: listPrice,
+      prior: priorLookup(observedModels(payload.roleRows)), untested: payload.untestedRoutes })!;
+    assert.equal(rec.basis, "local");
+    const s = stats(reviewerRows, listPrice);
+    const flags = ["--plan", "fixture", "--milestone", "M1"];
+    const advice = await cli(f, ["metrics", "--advise", ...flags]);
+    const plan = await cli(f, ["shift", "plan", "fixture", "--milestone", "M1"]);
+    const selected = await cli(f, ["metrics", "--advise", ...flags, "--role", "reviewer"]);
+    for (const result of [advice, plan, selected]) assert.equal(result.code, 0, result.err.join("\n"));
+    const start = plan.out.findIndex((line) => line.startsWith("Route advisory"));
+    assert.ok(start > plan.out.findIndex((line) => line.startsWith("remaining headroom")));
+    assert.deepEqual(plan.out.slice(start), advice.out);
+    assert.deepEqual(advice.out.filter((line) => line.startsWith("Route advisory")), [
+      ...TICKET_TASK_CLASSES.slice(0, 2).map((taskClass) => `Route advisory · builder · ${taskClass} · production evidence`),
+      "Route advisory · reviewer · unclassified · production evidence",
+    ]);
+    const reviewerStart = advice.out.findIndex((line) => line.startsWith("Route advisory · reviewer"));
+    assert.deepEqual(selected.out, advice.out.slice(reviewerStart));
+    assert.equal(selected.out.filter((line) => line === ADVISORY_END).length, 1);
+    const text = selected.out.join("\n");
+    assert.ok(text.includes(`depth ${depth(rec.choice.firstPass, rec.choice.settled)} · n ${s.n} · settled ${rec.choice.settled}`), text);
+    assert.ok(text.includes(`${formatListEquivalent(rec.choice.listPerRow)} per row`), text);
+    assert.match(text, /first pass 100% \[95% CI 57%–100%\]/);
+    assert.match(text, /recommendation basis: local/);
+    assert.ok(text.includes(`recommendation: claude/anthropic/opus@high (identity unconfirmed) · ${rec.basis}`), text);
+    assert.ok(selected.out.includes("  --route reviewer=claude/anthropic/opus@high"));
+    assert.equal(selected.out.at(-1), ADVISORY_END);
+    assert.doesNotMatch(text, /Route advisory · builder|n 6/);
+    const builderText = advice.out.slice(0, reviewerStart).join("\n");
+    assert.doesNotMatch(builderText, /recommendation basis: local|· n 5|unclassified/);
+    assert.equal(advice.out.slice(0, reviewerStart).filter((line) => line === "  recommendation basis: prior only").length, 2);
   } finally { rmSync(f.root, { recursive: true, force: true }); }
 });
 
@@ -137,8 +181,8 @@ test("empty evidence keeps configured routes; priors are explicitly prior only a
     const selection = selectShiftTickets("fixture", ["M1"], (await reader.load()).flatMap((group) => group.records));
     const empty = { ...payload, roleRows: [], untestedRoutes: [] };
     const kept = await metricsAdvisoryReadout(empty, { config: f.config, selection });
-    assert.equal(kept.filter((line) => line.trim() === KEEP_CONFIGURED).length, 6);
-    assert.equal(kept.filter((line) => line === ADVISORY_END).length, 6);
+    assert.equal(kept.filter((line) => line.trim() === KEEP_CONFIGURED).length, 4);
+    assert.equal(kept.filter((line) => line === ADVISORY_END).length, 4);
     const prior = await metricsAdvisoryReadout({ ...payload, roleRows: [] }, { config: f.config, role: "builder" });
     assert.ok(prior.includes("  recommendation basis: prior only"));
     assert.ok(prior.some((line) => line.startsWith("  --route builder=")));
@@ -175,8 +219,8 @@ test("missing metrics and evidence cannot alter the ceiling refusal or admit a s
     assert.equal(result.code, 1);
     assert.match(result.err.join("\n"), /CallCeilingExceeded.*needs 1 awsf raise act\(s\)/);
     assert.match(result.out.join("\n"), /evidence unavailable: no projection/);
-    assert.equal(result.out.filter((line) => line === ADVISORY_END).length, 6);
-    assert.equal(result.out.filter((line) => line.trim() === KEEP_CONFIGURED).length, 6);
+    assert.equal(result.out.filter((line) => line === ADVISORY_END).length, 4);
+    assert.equal(result.out.filter((line) => line.trim() === KEEP_CONFIGURED).length, 4);
     const normal = { ...f.config, risk: { ...f.config.risk, call_ceiling: { T0: 1, T1: 3, T2: 5 } } };
     writeFileSync(f.configPath, JSON.stringify(normal));
     assert.equal((await cli(f, ["shift", "plan", "fixture", "--milestone", "M1"])).code, 0);

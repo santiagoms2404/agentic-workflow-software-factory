@@ -382,10 +382,11 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
     }
 
     if (command === "shift") {
-      // Read-only pre-flight: it reads the catalog, the tickets and the
-      // config, and prints. It spawns nothing, reserves nothing and writes no
-      // manifest: `awsf new --workflow shift` seals the same selection and
-      // binds it to the attempt it creates.
+      // Read-only pre-flight: it reads the catalog, tickets, config and metrics.
+      // The task-class join reads sealed status metadata and may launch Git to
+      // read ticket blobs at the recorded base. No agent phase runs, no call is
+      // reserved and no manifest is written: `awsf new --workflow shift` seals
+      // the same selection and binds it to the attempt it creates.
       if (parsed.positionals[0] !== "plan" || parsed.positionals.length !== 2) {
         throw new Error("usage: awsf shift plan <stem> --milestone <Mx>[,<My>,...] [--config PATH]");
       }

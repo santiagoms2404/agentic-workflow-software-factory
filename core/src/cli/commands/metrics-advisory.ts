@@ -70,7 +70,10 @@ export async function metricsAdvisoryReadout(
   const lines: string[] = [];
   for (const role of roles) {
     const configured = await configuredRoute(options.config, role);
-    const classes = selectionClasses ?? [...new Set(rows.filter((row) => row.role === role && row.source === "production").map(taskClassOf))].sort();
+    // Only shift builder phases inherit a ticket class; reviewers remain unclassified.
+    const classes = selectionClasses === null
+      ? [...new Set(rows.filter((row) => row.role === role && row.source === "production").map(taskClassOf))].sort()
+      : role === "builder" ? selectionClasses : ["unclassified"];
     for (const taskClass of classes.length === 0 ? ["unclassified"] : classes) {
       lines.push(`Route advisory · ${role} · ${taskClass} · production evidence`);
       lines.push(`  configured route: ${configured}`);

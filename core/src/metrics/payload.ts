@@ -5,8 +5,10 @@
 // `dashboard/shared/route-metrics.ts`, so the API, the CLI and the tab cannot
 // disagree about a number.
 //
-// Read-only: it queries the caller's connection and writes nothing. It imports
-// the `DatabaseSync` type, never `node:sqlite` (invariant 6).
+// Read-only: it queries the caller's connection and writes nothing. The shift
+// task-class join also reads sealed status metadata and ticket bytes, using Git
+// blobs at the recorded base when available. It imports the `DatabaseSync` type,
+// never `node:sqlite` (invariant 6).
 
 import type { DatabaseSync } from "../observability/sqlite.ts";
 import type {
@@ -117,7 +119,7 @@ function run(facts: RunFacts, phases: readonly MetricsRunPhase[]): MetricsRun {
   };
 }
 
-/** The whole payload, from one read of the projection. */
+/** The whole payload, from projection facts and the read-only shift task-class join. */
 export function buildMetricsPayload(db: DatabaseSync, options: MetricsPayloadOptions): MetricsResponse {
   const facts = readRunFacts(db);
   const phases = readRunPhases(db, facts);
