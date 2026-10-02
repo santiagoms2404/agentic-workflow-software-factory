@@ -1,0 +1,1237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plan: AWSF v3 — The Spine</title>
+<style>
+/* AWSF dashboard "Forest" palette, mirrored from dashboard/src/styles/dashboard.css
+   and dashboard/src/theme.ts so the plan reads as part of the product it plans.
+   Dark is the default; light follows the reader's colour scheme. The review layer
+   reuses --bg / --fg / --muted / --accent. Mermaid mirrors the same hex values. */
+:root {
+  --bg:#051F20; --panel:#0B2B26; --panel-2:#163832; --border:#235347;
+  --dim:#8EB69B; --text:#DAF1DE;
+  --green:#71D6A0; --red:#FF8278; --blue:#74BDE8; --amber:#E4B75F;
+  --cyan:#62C2AA; --purple:#A8C7B5; --violet:#8AAFA4; --accent:#ADB9EE; --select-all:#C9A6DD;
+
+  --panel-3:color-mix(in srgb, var(--bg) 64%, var(--panel));
+  --border-soft:color-mix(in srgb, var(--border) 34%, transparent);
+  --surface:linear-gradient(180deg, color-mix(in srgb, var(--panel) 96%, var(--panel-2)),
+            color-mix(in srgb, var(--panel-3) 98%, var(--bg)));
+
+  --sans:"Segoe UI", "Helvetica Neue", system-ui, sans-serif;
+  --mono:ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --radius:16px;
+
+  /* aliases the review layer reads */
+  --fg:var(--text); --muted:var(--dim);
+  --maxw:1120px;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg:#DAF1DE; --panel:#EAF7EE; --panel-2:#C6E4CF; --border:#8EB69B;
+    --dim:#235347; --text:#051F20;
+    --green:#16683F; --red:#A3332F; --blue:#1D5E86; --amber:#714907;
+    --cyan:#176E66; --purple:#5B4768; --violet:#4F6574; --accent:#454A87; --select-all:#6B4A86;
+  }
+}
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body { margin:0; background:var(--bg); color:var(--text); font-family:var(--sans);
+  font-size:17px; line-height:1.6; -webkit-font-smoothing:antialiased; }
+main { max-width:var(--maxw); margin:0 auto; padding:44px 16px 160px; }
+h1,h2,h3,h4,h5 { line-height:1.25; font-weight:650; letter-spacing:-.01em; }
+h1 { font-size:32px; margin:0 0 8px; }
+h2 { font-size:23px; margin:56px 0 14px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+h3 { font-size:19px; margin:32px 0 8px; }
+h4 { font-size:16px; margin:22px 0 8px; color:var(--accent); }
+h5 { font-size:12px; margin:0 0 6px; letter-spacing:.08em; text-transform:uppercase; color:var(--dim); }
+p { margin:0 0 14px; }
+a { color:var(--accent); }
+::selection { background:color-mix(in srgb, var(--accent) 35%, transparent); }
+strong { font-weight:650; }
+em { color:var(--dim); }
+small, .muted { color:var(--dim); }
+
+code { font-family:var(--mono); font-size:.84em; background:var(--panel-2); border:1px solid var(--border-soft);
+  border-radius:6px; padding:1px 5px; }
+pre { background:var(--panel); border:1px solid var(--border-soft); border-radius:12px; padding:14px 16px;
+  overflow-x:auto; font-family:var(--mono); font-size:13px; line-height:1.55; }
+pre code { background:none; border:none; padding:0; }
+
+table { width:100%; border-collapse:collapse; margin:12px 0 18px; font-size:14px; display:block; overflow-x:auto; }
+th, td { padding:8px 10px; border:1px solid var(--border-soft); text-align:left; vertical-align:top; }
+th { background:var(--panel-2); color:var(--dim); font-weight:600; font-size:12px; letter-spacing:.04em; text-transform:uppercase; }
+td.num { font-variant-numeric:tabular-nums; text-align:right; white-space:nowrap; }
+
+.sub { color:var(--dim); margin:0 0 6px; }
+.meta { margin:14px 0 0; font-size:14px; }
+.meta summary { cursor:pointer; color:var(--dim); font-family:var(--mono); font-size:13px; }
+.meta dl { display:grid; grid-template-columns:130px 1fr; gap:6px 14px; margin:12px 0 0; padding:14px;
+  background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--radius); }
+.meta dt { color:var(--accent); font-family:var(--mono); font-size:12px; }
+.meta dd { margin:0; color:var(--dim); font-family:var(--mono); font-size:12px; overflow-wrap:anywhere; }
+
+figure { margin:26px 0; text-align:center; }
+figure svg, figure .mermaid { max-width:100%; height:auto; }
+figure .mermaid { background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--radius);
+  padding:18px 12px; overflow-x:auto; color:var(--dim); font-size:13px; }
+figcaption { color:var(--dim); font-size:14px; margin-top:10px; }
+
+.card { background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--radius);
+  padding:14px 18px; margin:14px 0; font-size:15px; }
+.card.rule { border-left:3px solid var(--accent); }
+.card.warn { border-left:3px solid var(--amber); }
+
+.tag { display:inline-block; font-family:var(--mono); font-size:11px; letter-spacing:.05em; text-transform:uppercase;
+  padding:1px 7px; border-radius:999px; margin-right:6px; border:1px solid var(--border); color:var(--dim); }
+.tag.new { color:var(--accent); border-color:color-mix(in srgb, var(--accent) 45%, transparent); }
+.files ul { list-style:none; padding:0; }
+.files li { padding:5px 0; border-bottom:1px solid var(--border-soft); font-size:15px; }
+
+/* Phase chips: free hues only, never a status colour. */
+.chip { display:inline-block; font-family:var(--mono); font-size:11px; letter-spacing:.06em; text-transform:uppercase;
+  padding:2px 9px; border-radius:999px; margin-left:8px; vertical-align:2px; border:1px solid currentColor; }
+.chip.pa { color:var(--cyan); } .chip.pb { color:var(--purple); }
+.chip.pc { color:var(--violet); } .chip.pd { color:var(--accent); }
+.xlabel { font-family:var(--mono); font-size:12px; color:var(--dim); margin-left:6px; vertical-align:2px; }
+
+.phase { background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--radius);
+  padding:22px 22px 16px; margin:28px 0; }
+.phase > h3 { margin-top:0; }
+.status { color:var(--dim); }
+.deep-plan { margin:2px 0 12px; font-size:14px; font-family:var(--mono); }
+.deep-plan a { text-decoration:none; border-bottom:1px dotted var(--accent); }
+.deep-plan .muted { font-family:var(--sans); font-style:italic; }
+.taskmeta { font-size:14px; }
+.taskmeta th { width:150px; text-transform:none; letter-spacing:0; font-size:13px; }
+.checklist { list-style:none; padding:0; margin:8px 0 14px; }
+.checklist li { padding:4px 0; font-size:15px; }
+.checklist li .status { margin-right:6px; }
+.loop { border:1px dashed var(--border); border-radius:12px; padding:10px 14px; margin:14px 0 4px; font-size:14px; }
+.gate { font-family:var(--mono); color:var(--accent); }
+.waiting { color:var(--amber); font-family:var(--mono); font-size:11px; letter-spacing:.06em; margin-right:6px; }
+
+#questionables details, #amendments details { background:var(--surface); border:1px solid var(--border-soft);
+  border-radius:12px; padding:10px 14px; margin:10px 0; }
+#questionables summary, #amendments summary { cursor:pointer; font-weight:600; font-size:15px; }
+.qa-answer { margin:10px 0 2px; font-size:15px; color:var(--dim); }
+.qdecided { color:var(--green); font-family:var(--mono); font-size:11px; letter-spacing:.06em; margin-right:6px; }
+.decided { margin:10px 0 0; padding:8px 12px; font-size:15px; border-left:3px solid var(--green); border-radius:0 8px 8px 0; background:color-mix(in srgb, var(--green) 8%, transparent); }
+.qa-answer.rec { color:var(--text); border-left:3px solid var(--accent); padding-left:10px; }
+
+@media (max-width:720px) {
+  .meta dl { grid-template-columns:1fr; }
+  h1 { font-size:26px; }
+  .phase { padding:16px 14px 10px; }
+}
+</style>
+</head>
+<body>
+<main>
+
+  <!-- ===== HEADER + UPDATABLE METADATA ===== -->
+  <header>
+    <h1>Plan: AWSF v3 — The Spine</h1>
+    <p class="sub">v1 built a factory that can build this repository. v2 made it a factory the owner can point at any of their projects. <strong>v3 makes it a factory that drives itself between the owner's decisions:</strong> the procedure is code, judgment runs on the owner's subscriptions, every stop is explained, and every landing is the owner's.</p>
+    <p class="sub"><strong>This is a spine plan.</strong> Each of its fifteen workstreams gets its own deep plan before any of its code is written. This document holds the workstream list, the phases, the dependencies, the shared invariants, the amendments and the open Questionables. Authoring it wrote no code, called no provider, created no worktree, changed no invariant and moved no marker.</p>
+    <details class="meta">
+      <summary>Metadata</summary>
+      <dl>
+        <dt>created</dt>      <dd>2026-10-02</dd>
+        <dt>modified</dt>     <dd>2026-10-02, 2026-10-02 (recommendations added to every Questionable), 2026-10-02 (all thirteen Questionables decided by owner review)</dd>
+        <dt>commits</dt>      <dd>none yet: authored on main at b5e8ffa and left uncommitted for owner review</dd>
+        <dt>agent name</dt>   <dd>claude-opus-5-5</dd>
+        <dt>session id</dt>   <dd>not recorded: AGENTS.md invariant 1 keeps live session state out of every committed file</dd>
+        <dt>back refs</dt>    <dd>./awsf-v3-intent.md (the approved intent and this plan's single input), ./awsf-v3-assessment-and-direction.md (the only detail document: grade, measurements, Q1–Q16), ./awsf-v2-plan.html (the v2 spine this one succeeds), ./awsf-v2-w19-jev-delegate.html (carried as W05), ../AGENTS.md (the thirteen invariants)</dd>
+        <dt>forward refs</dt> <dd>./awsf-v3-plan-build-prompts.md, ./tickets/awsf-v3-plan/README.md, ./tickets/awsf-v3-plan/ (W01–W15), ./awsf-v3-w01-driver-checks.html, ./awsf-v3-w02-trap-suite.html, ./awsf-v3-w03-ticket-closure.html, ./awsf-v3-w04-session-record.html, ./awsf-v3-w06-routing.html, ./awsf-v3-w07-user-testing-validator.html, ./awsf-v3-w08-marimba-harness.html, ./awsf-v3-w09-context-engine.html, ./awsf-v3-w10-local-model.html, ./awsf-v3-w11-agent-readiness.html, ./awsf-v3-w12-mac-host.html, ./awsf-v3-w13-deploy.html, ./awsf-v3-w14-monitor-signals.html, ./awsf-v3-w15-surfaces.html (fourteen, all not yet authored); W05's deep plan is ./awsf-v2-w19-jev-delegate.html, re-cut by W05's prompt</dd>
+      </dl>
+    </details>
+  </header>
+
+  <figure>
+    <pre class="mermaid">
+flowchart LR
+  A["Phase A<br/>reliability and record<br/>W01–W04"] --> GR{"GR<br/>every known trap refused"}
+  GR --> B["Phase B<br/>autonomy within subscriptions<br/>W05–W08"]
+  B --> C["Phase C<br/>always improving<br/>W09–W11"]
+  C --> D["Phase D<br/>the whole loop and reach<br/>W12–W15"]
+  O(["Owner"]) -. lands every candidate .-> D
+    </pre>
+    <figcaption>Four phases, one gate. Nothing that widens what runs without the owner lands before W02's trap suite refuses every known trap (decision 13). Landing stays the owner's act in every phase.</figcaption>
+  </figure>
+
+  <!-- ===== IN PLAIN LANGUAGE ===== -->
+  <section id="plain-language">
+    <h2>In Plain Language</h2>
+    <p>This section explains the whole plan without technical vocabulary. Everything after it says the same things precisely, for the people and machines building it.</p>
+
+    <h3>What this is about</h3>
+    <p>The owner has built a software factory: a set of software assistants that plan, write, check and hand over changes to the owner's projects, with the owner approving every change that goes in. It is good at checking work and at staying inside its rules. It is poor at running on its own. Only about 8 of every 100 changes to the factory's own code went through the factory. Every finished change still needs the owner at least twice. The assistant that steers the factory keeps its procedure in its head, forgets steps, and rereads a very large amount of text on every turn. Of 27 jobs that stopped, 8 stopped for reasons a simple checklist would have caught, and almost no stop has a written reason.</p>
+
+    <h3>Why now</h3>
+    <p>The second version of the factory has reached what it set out to do. What remains of it was planned before the owner decided to run everything on the subscriptions they already pay for, before a dedicated steering program was on the table, and before a local model was. Two old rules also need restating: the factory may now choose which model runs a job, within limits the owner sets, and it may run a program the owner starts and watches, but never one that runs unattended. A new laptop is coming, and the owner's priority project, a health app, needs readiness checks and a test release channel. Writing the third version's map now keeps the remaining work pointed at one goal.</p>
+
+    <h3>What we are building</h3>
+    <p>Think of the factory as a kitchen and the steering assistant as a head chef who works from memory. This plan moves the recipes onto the wall. First, the kitchen gets a checklist at the door that refuses an order missing an ingredient, a binder of every past mistake that is tested daily, a way to cross dishes off the menu once they are served, and a recording of every shift. Only after the binder refuses every known mistake does the kitchen get more freedom: a deputy who may handle routine calls while the owner is away, a rule for which cook takes which order, a taster who tries each dish the way a customer would, and a new head chef who reads the wall instead of remembering it. Then the kitchen learns: it keeps a short index instead of rereading every cookbook, trains a small local cook on its own records, and checks how well each project's kitchen is laid out. Last, it moves to the new building, sends dishes to a tasting room before they reach customers, listens to how they were received, and gets a desk app and phone alerts. The owner still signs off every dish that leaves.</p>
+
+    <h3>How we will know it worked</h3>
+    <p>At least half of the factory's own changes go through the factory, up from 8 in 100. At least 7 of 10 jobs finish and are accepted, up from 1 in 4. Each accepted change needs the owner once. No job stops for a known, checkable mistake. Every stop and every cancellation says why. The steering program rereads less than a twentieth of what it rereads today. Every request the owner makes is captured. A taster checks behaviour before the owner does. A small local model has been compared fairly against the paid one on the same tests. The health app has readiness checks and a test release channel. Some things are deliberately not part of this: the factory never approves its own changes, never releases to real users without the owner, never runs unattended in the background, never learns from the paid models' own writing, and is not built for other people to use.</p>
+  </section>
+
+  <!-- ===== PURPOSE ===== -->
+  <section id="purpose">
+    <h2>Purpose</h2>
+    <p>Move the driving procedure from a model's memory into the host, so the factory runs between the owner's decisions and each of those decisions is one act. The line v1 and v2 drew holds unchanged: <strong>the host advances lifecycle state, models supply structured facts, and a human authorises anything that lands.</strong> v3 extends that line to the driver. The ceiling is the intent's eight items, measured by the acceptance targets below, for AWSF and for Smart Health.</p>
+    <table>
+      <thead><tr><th>Measure (from the assessment, 2026-10-01)</th><th>Baseline</th><th>v3 target</th><th>Moved mainly by</th></tr></thead>
+      <tbody>
+        <tr><td>Factory share of AWSF code commits</td><td class="num">8%</td><td class="num">≥ 50%</td><td>W03, W04, W08, decision 7</td></tr>
+        <tr><td>Land rate</td><td class="num">25%</td><td class="num">≥ 70%</td><td>W01, W02, W07</td></tr>
+        <tr><td>Owner acts per landing</td><td class="num">≥ 2</td><td class="num">1</td><td>W05, W07</td></tr>
+        <tr><td>Driver-preventable stops</td><td class="num">8 of 27</td><td class="num">0 on known traps</td><td>W01, W02</td></tr>
+        <tr><td>Driver prompt tokens per turn (median)</td><td class="num">168k</td><td class="num">&lt; 10k</td><td>W09, W06, W08</td></tr>
+        <tr><td>Owner asks captured</td><td class="num">41%</td><td class="num">100%</td><td>W04, W08</td></tr>
+        <tr><td>Stops and cancels with a cause</td><td class="num">1 of 36</td><td class="num">all</td><td>W01</td></tr>
+        <tr><td>Validation share of phase time</td><td class="num">20%</td><td class="num">about 35%</td><td>W07</td></tr>
+      </tbody>
+    </table>
+    <p>Each target is measured with <code>awsf metrics</code> and the session record, never asserted. The first number is the one to judge v3 by: most of the others move when it does.</p>
+  </section>
+
+  <!-- ===== PROBLEM ===== -->
+  <section id="problem">
+    <h2>Problem</h2>
+    <p><strong>The procedure lives in the driver's memory, and that is where it fails.</strong> The assessment graded AWSF 53/100 against the three pillars of a software factory. Verification and governance score near the top. What holds the grade down is autonomy, and every autonomy gap traces back to the driver.</p>
+    <ul>
+      <li><strong>The driver skips checks.</strong> In a draft review of 27 blocked runs, 8 were stops a mechanical check would have refused: a red base, a write boundary that missed a named path, a missing grant, storage on the Windows mount. The checks exist only as prose the driver must remember.</li>
+      <li><strong>Stops are unexplained.</strong> 1 of 36 stops carries a recorded cause. 9 cancels carry none, because <code>awsf cancel</code> records the fixed detail "explicit CLI cancellation" (<code>core/src/cli/commands/cancel.ts:98</code>) and the attribution vocabulary has no <code>driver</code> cause (<code>core/src/contracts/attribution-record.ts:15</code>).</li>
+      <li><strong>The legal next step is prose.</strong> <code>LEGAL_EDGES</code> in <code>core/src/state/task-machine.ts</code> knows every legal move and who may make it, while the CLI prints a prose <code>nextAction</code> the driver must interpret.</li>
+      <li><strong>The guard has a spelling gap.</strong> The owner-act matcher catches <code>awsf land</code> but not <code>npm run awsf --silent -- land</code>, the documented spelling (F17). The lifecycle matcher in the same file already reads the npm form, so the gap is known and narrow.</li>
+      <li><strong>Gates do not cover every layer.</strong> Commit 07b20f9 broke 31 protected-grant journeys and landed anyway, because <code>awsf.project.yaml</code> gates run unit tests, typecheck and lint, never the journeys layer. 7bc48b5 fixed the fake broker the same day.</li>
+      <li><strong>Plans drift from code.</strong> No role can write <code>specs/*.html</code>, so no run closes its own markers. W18 M5's code is on <code>main</code> while its markers still say open.</li>
+      <li><strong>The driver is the most expensive part.</strong> A driver turn re-sends a median of 168k prompt tokens. 41% of owner asks are captured.</li>
+      <li><strong>The owner is the only black-box tester,</strong> and validation is 20% of phase time against the talk's 37%.</li>
+    </ul>
+    <figure>
+      <pre class="mermaid">
+flowchart LR
+  R["Owner request"] --> M["Driver memory<br/>prose checklist"]
+  M -->|"step skipped"| S["Blocked run<br/>8 of 27 preventable"]
+  M -->|"cancel"| C["No cause<br/>35 of 36 stops"]
+  M -->|"every turn"| T["168k tokens re-sent"]
+  S --> O["Owner diagnoses by hand"]
+  C --> O
+      </pre>
+      <figcaption>Today every check, cause and next step passes through the driver's memory. Each failure lands on the owner.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ===== SOLUTION ===== -->
+  <section id="solution">
+    <h2>Solution</h2>
+    <p><strong>Four driving layers, each owning what it is best at.</strong> L1 is AWSF code: the lifecycle, preflight refusals and the legal next steps. L2 is decisions: W19's decision service picks among legal steps at routine stops. L3 is the conversational driver: it talks with the owner, captures asks and fills command arguments, with Sol first and a local fine-tune later if it earns the role. L4 is frontier models through their official CLIs, for planning and diagnosis.</p>
+    <p><strong>Five driver checks hold the layers to that split.</strong> K1: the DRAFT→PREPARED step refuses without a driver preflight record. K2: <code>awsf next --json</code> returns the legal next steps and who may take each. K3: the driver's output must match a schema of legal driver steps only. K4: read-only actions run freely, one confirmation card covers <code>new</code>, <code>start</code> and <code>run</code>, and owner acts are only ever prepared. K5: the trap suite. K1, K2 and K5 are Phase A. K3 and K4 arrive with the harness in Phase B.</p>
+    <p><strong>Reliability comes before autonomy.</strong> Phase A makes skipped checks impossible and records everything. Phase B widens what runs without the owner, inside the owner's subscriptions. Phase C makes the factory cheaper and smarter from its own data. Phase D closes the loop from staging release back to intake and reaches the Mac and the phone.</p>
+    <figure>
+      <pre class="mermaid">
+flowchart TB
+  O(["Owner<br/>decides and lands"]) <--> L3["L3 conversational driver<br/>K3 schema · K4 card"]
+  L3 --> L1["L1 AWSF code<br/>K1 preflight · K2 next · K5 traps"]
+  L1 <--> L2["L2 decisions<br/>leases · shadow owner"]
+  L3 -. plan, diagnose .-> L4["L4 frontier CLIs"]
+      </pre>
+      <figcaption>The procedure moves into L1. The driver fills arguments for legal steps it is shown, and never emits an owner act (decision 14).</figcaption>
+    </figure>
+  </section>
+
+  <!-- ===== CONSTRAINTS ===== -->
+  <section id="constraints">
+    <h2>Shared Invariants and Constraints</h2>
+
+    <h3>The thirteen invariants hold unless an amendment lands first</h3>
+    <p>AGENTS.md's invariants bind every workstream. Several are enforced by meta-tests, so a deep plan that assumes otherwise fails its own gates. The ones v3 presses hardest: <strong>1</strong> (no live task state in any committed file), <strong>2</strong> (markers are earned), <strong>3</strong> and <strong>4</strong> (one child-process module, no shell), <strong>5</strong> (pure state), <strong>6</strong> (SQLite written only by the projector, <code>sqlite.ts</code> and migrations), <strong>7</strong> (the dependency allowlist), <strong>8</strong> (no push before LANDED, no force, no auto-delete), <strong>11</strong> (no agent identity in any commit), <strong>12</strong> (a plan and its tickets never disagree) and <strong>13</strong> (the Delegate acts only under an owner lease, and never as the owner).</p>
+
+    <h3>Decisions already taken</h3>
+    <p>The intent's fourteen decisions are constraints, not questions. The ones that shape this spine most: subscriptions first, with API and paid compute as budgeted exceptions (1); no frontier output in training data (2); the MacBook Pro M5 Pro with 64 GB as the planning baseline, AWSF in a Linux VM there, WSL until it arrives (3); landing human-only through v3 (4); routing as an owner-approved policy, superseding v2 intent decision 5 (5); no unattended daemon (6); the factory builds AWSF by default with direct sessions as a logged exception (7); a light planning tier, closed v2 specs out of the priming path (8); the harness's surface, confirmation policy and intents (9); scripted validator checks first (10); W19 rebased with M5→W07, M6–M7→W09, M8→W10 (11); a staging channel for Smart Health with production as an owner act (12); reliability before autonomy (13); no model emits an owner act (14).</p>
+
+    <h3>Gates this spine cannot resequence</h3>
+    <div class="card rule">
+      <h5>GR: the reliability gate (decision 13)</h5>
+      No workstream that widens what runs without the owner lands any of that widening before W02 is <code>[x]</code>, which means its trap suite refuses every known trap. The workstreams it binds are W05, W06, W07 (its agent-driven half), W08, W10, W13 and W14. Each lists W02 in <code>depends_on</code>, so the sync fence refuses a <code>done</code> ticket for any of them while W02 is open. The fence enforces completion order. The landing-level rule is stricter, and each of those deep plans carries GR as a gate in front of its first widening build.
+    </div>
+    <div class="card rule">
+      <h5>GA: the amendment gate</h5>
+      Every invariant or protected-path change is proposed one at a time, names what it blocks with evidence, the replacement guarantee in a still-checkable form, its cost and the alternative that avoids it, and lands as an owner-authored commit before the build that depends on it. No workstream invents a mechanism that lets an agent write <code>AGENTS.md</code>, <code>awsf.config.yaml</code>, <code>awsf.project.yaml</code> or any other protected path.
+    </div>
+    <div class="card warn">
+      <h5>GM: deep plans are authored manually until W03 lands</h5>
+      Decision 7 makes managed execution the default for deep plans, but no factory role can write <code>specs/*.html</code> today (the v2 W15 finding, still true at b5e8ffa). So every deep-plan authoring session in this spine is a <strong>manual, logged exception</strong> until W03 lands a closure path. Each authoring session records itself as a direct-session exception under Q11's rule (decided 2026-10-02). Implementation work inside each deep plan defaults to the factory.
+    </div>
+
+    <h3>Preconditions outside this spine</h3>
+    <ul>
+      <li><span class="waiting">PENDING</span><strong>W18 M5 bookkeeping.</strong> M5's code is on <code>main</code>, but M5, its T15–T17 and the v2 spine's M18 are still open. Invariant 2 keeps that flip with the owner. This spine was written with it pending and does not depend on its outcome.</li>
+      <li><strong>The W19 rebase (decision 11)</strong> is done: <code>main</code> includes <code>w19-jev-delegate</code> at b5e8ffa with M1–M2 (tasks 1–7) complete. Pre-rebase SHAs that W19's documents cite live at the local ref <code>backup/w19-jev-delegate-pre-rebase-6d6b79d</code>.</li>
+      <li><strong>The suite is green at b5e8ffa:</strong> unit 2645, contract 149, sim 98, journeys 347.</li>
+    </ul>
+
+    <h3>Owner-side work, named and deliberately not ticketed</h3>
+    <p>None of this can land from a managed worktree, so none of it becomes a task in any deep plan: the W18 M5 bookkeeping commit; every invariant and protected-path amendment under GA; installing the guard fix into the owner's driving setup; backfilling stop and cancel causes with <code>awsf attribute</code>, which is an owner act; buying the Mac, installing its Linux VM and moving the state root; provider CLI logins and Sol, Jev and Decisions API credentials; creating the harness repository and its machine-local placement; browser installation for the validator; model downloads, LoRA training runs and any rented GPU or hosted-teacher budget; Smart Health's staging-channel accounts and CI secrets; Apple developer and notification-service accounts.</p>
+  </section>
+
+  <!-- ===== RELEVANT FILES ===== -->
+  <section id="files" class="files">
+    <h2>Relevant Files</h2>
+    <h3>Existing Files</h3>
+    <ul>
+      <li><span class="tag">existing</span> <code>specs/awsf-v3-intent.md</code> — the single input; every decision and Questionable here traces to it</li>
+      <li><span class="tag">existing</span> <code>specs/awsf-v3-assessment-and-direction.md</code> — the only detail document: grade, measurements, Q1–Q16 with alternatives</li>
+      <li><span class="tag">existing</span> <code>specs/awsf-v2-plan.html</code> — the v2 spine; its W09, W10, W13–W16 and W19 are parked, carried or reshaped here, and its amendment is owner work</li>
+      <li><span class="tag">existing</span> <code>specs/awsf-v2-w19-jev-delegate.html</code> and its ticket set — W05's deep plan, re-cut by W05's prompt</li>
+      <li><span class="tag">existing</span> <code>specs/awsf-v2-w16-openrouter-adapter.html</code> — M1 done; reshaped into W10's local provider</li>
+      <li><span class="tag">existing</span> <code>specs/awsf-v2-w18-route-metrics.html</code> — the route metrics W06's policy reads</li>
+      <li><span class="tag">existing</span> <code>core/src/state/task-machine.ts</code> — <code>LEGAL_EDGES</code> and edge L1 (DRAFT→PREPARED, actor host), the source for K1 and K2; protected</li>
+      <li><span class="tag">existing</span> <code>core/src/cli/commands/cancel.ts</code>, <code>attribute.ts</code>, <code>core/src/contracts/attribution-record.ts</code> — cancel reasons and the attribution vocabulary W01 extends</li>
+      <li><span class="tag">existing</span> <code>core/src/cli/commands/doctor.ts</code> — read-only diagnosis W02 extends with environment checks</li>
+      <li><span class="tag">existing</span> <code>docs/driving/marimba/marimba-guard-rules.mts</code> — <code>OWNER_ACTS</code> and the matcher with the F17 gap; protected</li>
+      <li><span class="tag">existing</span> <code>awsf.project.yaml</code> — the project's landing gates and preview surface; protected</li>
+      <li><span class="tag">existing</span> <code>awsf.config.yaml</code> — <code>policy.protected_paths</code>, <code>routing.no_fallback: true</code>, role routes; protected</li>
+      <li><span class="tag">existing</span> <code>core/src/registry/plan-source.ts</code>, <code>core/test/unit/meta/ticket-plan-sync.test.ts</code> — the grammar and the fence this spine and every deep plan must pass</li>
+      <li><span class="tag">existing</span> <code>core/test/journeys/</code> — the layer the 07b20f9 regression went through; candidate home for traps</li>
+      <li><span class="tag">existing</span> <code>dashboard/src/styles/dashboard.css</code>, <code>dashboard/src/theme.ts</code> — the Forest palette this page mirrors</li>
+    </ul>
+    <h3>New Files</h3>
+    <ul>
+      <li><span class="tag new">new</span> <code>specs/awsf-v3-plan.html</code> — this spine</li>
+      <li><span class="tag new">new</span> <code>specs/awsf-v3-plan-build-prompts.md</code> — Section B, one meta-prompt per workstream</li>
+      <li><span class="tag new">new</span> <code>specs/tickets/awsf-v3-plan/README.md</code> and <code>W01.md</code>–<code>W15.md</code> — the spine's ticket set, prompts byte-identical to Section B</li>
+      <li><span class="tag new">new</span> <code>specs/awsf-v3-wNN-&lt;slug&gt;.html</code>, its <code>-build-prompts.md</code> and <code>specs/tickets/awsf-v3-wNN-&lt;slug&gt;/</code> — fourteen deep plans, each written by its own ticket's session, none by this one</li>
+    </ul>
+  </section>
+
+  <!-- ===== WORKSTREAMS ===== -->
+  <div id="phases">
+    <h2>Workstreams</h2>
+    <p><strong>IMPORTANT:</strong> each workstream below is a whole workstream, not a task. Its deep plan is authored first, by its own <code>plan-sota</code> session, and stops at the owner-review gate. No implementation code is written from this document.</p>
+    <p>Status markers: <code>[]</code> idle · <code>[wip]</code> in progress · <code>[x]</code> complete · <code>[f]</code> failed. <strong>All fifteen start <code>[]</code>, and nothing in this session earned otherwise.</strong> A workstream's marker moves to <code>[wip]</code> when the owner approves its deep plan, and to <code>[x]</code> only when that deep plan's final milestone lands, in the owner's bookkeeping commit with the ticket's <code>state</code>.</p>
+    <div class="card rule">
+      <h5>What every deep plan owes, without exception</h5>
+      <strong>(a)</strong> Ordered milestones, each with a testing strategy and offline validation commands. <strong>(b)</strong> Resolution of the Questionables this spine assigns to it, in its own Questionables section. <strong>(c)</strong> For every claim carrying a decision, its evidence and the cheapest unused upgrade that would strengthen it. <strong>(d)</strong> For every mechanism it calls a boundary, what that mechanism does not cover. <strong>(e)</strong> Each amendment it needs, written for GA and landed before its build, never as one of its own tasks. <strong>(f)</strong> One writable repository per milestone. <strong>(g)</strong> A trap for every new stop kind it introduces, in W02's format once W02 lands. <strong>(h)</strong> Its own build prompts and <code>specs/tickets/&lt;stem&gt;/</code> set, which the sync fence pairs against it. <strong>(i)</strong> No skill in the execution path: no gate depends on a document having been read.
+    </div>
+
+    <!-- ================= W01 ================= -->
+    <section class="phase">
+      <h3><code class="status">[]</code> Milestone M1: W01 — Driver checks <span class="chip pa">Phase A</span><span class="xlabel">X1</span></h3>
+      <p class="deep-plan"><a href="awsf-v3-w01-driver-checks.html">Deep plan: AWSF v3 W01 — Driver checks</a> <span class="muted">not yet authored</span></p>
+      <p><em>Exists because 8 of 27 blocked runs were stops a mechanical check would have refused, and 35 of 36 stops carry no cause.</em> It moves the driver's preflight and its next-step reasoning into L1.</p>
+      <h4>1. W01 — Driver checks</h4>
+      <table class="taskmeta">
+        <tr><th>Scope</th><td><strong>K1:</strong> edge L1 (DRAFT→PREPARED) refuses without a driver preflight record covering a green suite at HEAD, a write boundary that covers the named paths, a grant for protected paths, native Git storage, no duplicate task, the four-line request with named paths confirmed, and prior attempts consulted. <strong>K2:</strong> <code>awsf next --json</code> returns the legal next steps and who may take each, derived from <code>LEGAL_EDGES</code> and <code>OWNER_ACTS</code>, and the prose <code>nextAction</code> is derived from it. <strong>The guard fix (A10):</strong> the owner-act matcher also matches <code>npm run awsf [--silent] -- &lt;owner act&gt;</code>, with a test per spelling. <strong>Causes (A12):</strong> a <code>driver</code> attribution cause, a required reason on <code>awsf cancel</code>, and a cause on every cancelled attempt.</td></tr>
+        <tr><th>Evidence</th><td>The 8-of-27 and 9-cancel counts come from a draft forensics review that is machine-local and not owner-confirmed. <code>cancel.ts:98</code> records a fixed detail. <code>ATTRIBUTION_CAUSES</code> is model, factory, environment, owner, unknown. L1's only actor is the host (<code>task-machine.ts:96</code>). The guard's lifecycle matcher reads <code>npm run awsf … --</code> while its owner-act matcher does not, and no Marimba-marked session has used that spelling yet. <strong>Cheapest unused upgrade:</strong> the owner confirms the forensics draft's causes before K1's field list freezes, so K1 is cut to measured stops rather than a draft.</td></tr>
+        <tr><th>Amendments and owner-side work</th><td><code>docs/driving/**</code> is protected, so the guard fix lands as an owner commit under GA. If K1 changes edge L1 inside <code>core/src/state/**</code>, that is a second owner commit; the alternative that avoids it is enforcing K1 in the command that fires L1, leaving the machine untouched. Any new projection column for causes is a migration, which is protected. Backfilling causes from the forensics draft is an owner act per attempt.</td></tr>
+        <tr><th>Questionables</th><td>Q1, decided 2026-10-02: the host measures every observable field; only the confirmed request is attested, checked by the owner's recorded confirmation.</td></tr>
+        <tr><th>What it does not cover</th><td>K1 refuses known-shaped omissions. It cannot judge whether a request is the right one, and an attested field is only as good as the check behind it.</td></tr>
+        <tr><th>Stop when</th><td>A task with a missing or stale preflight record cannot leave DRAFT, <code>awsf next --json</code> lists every legal edge with its actor, the guard denies every documented owner-act spelling, and every new stop and cancel carries a cause.</td></tr>
+      </table>
+      <div class="card rule">
+        <h5>Testing strategy the deep plan must be able to prove</h5>
+        A refusal per K1 field on the stub adapter with zero reserved calls. K2 output equal to the machine's edge table for every state, by a property test rather than a snapshot. One guard test per owner act per spelling. A cancel with no reason refused. All offline.
+      </div>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Deep plan <code>awsf-v3-w01-driver-checks.html</code> authored with its build prompts and ticket set, and approved by the owner</li>
+        <li><code class="status">[]</code> The guard fix and any state-machine change landed as owner commits before the builds that need them</li>
+        <li><code class="status">[]</code> K1 refuses DRAFT→PREPARED without a valid preflight record, with each measured field checked by the host</li>
+        <li><code class="status">[]</code> K2 is the single source of the next step, and the prose <code>nextAction</code> is derived from it</li>
+        <li><code class="status">[]</code> Every cancel and stop carries a cause, including <code>driver</code></li>
+        <li><code class="status">[]</code> The deep plan's own milestones all reach <code>[x]</code></li>
+      </ul>
+      <div class="loop">🔁 <strong>The acceptance bar is the forensics list.</strong> Every confirmed driver-preventable stop from the review must be refused by K1 or recorded as out of K1's reach with its reason.</div>
+    </section>
+
+    <!-- ================= W02 ================= -->
+    <section class="phase">
+      <h3><code class="status">[]</code> Milestone M2: W02 — Trap suite <span class="chip pa">Phase A</span><span class="xlabel">X2</span></h3>
+      <p class="deep-plan"><a href="awsf-v3-w02-trap-suite.html">Deep plan: AWSF v3 W02 — Trap suite</a> <span class="muted">not yet authored</span></p>
+      <p><em>Exists because every past stop should become a refusal with a test, and because a regression can land through a layer no gate runs.</em> Its completion is gate GR.</p>
+      <h4>2. W02 — Trap suite</h4>
+      <table class="taskmeta">
+        <tr><th>Scope</th><td><strong>K5:</strong> a trap suite on the stub adapter. Each trap reproduces a recorded stop's preconditions and asserts the factory refuses it before any provider call. It is seeded from every past stop and the live gotchas, and a new stop's cause record either names its trap or says why none is possible. <strong><code>awsf doctor</code> checks</strong> for Git storage on a native filesystem, provider CLIs present and logged in, quota windows, stale branches and worktrees, and open markers on landed work. Doctor stays read-only, with no repair path.</td></tr>
+        <tr><th>Evidence</th><td><strong>07b20f9 (2026-10-01)</strong> made the protected execution proof require the resolved <code>bwrap</code> path the real broker records. The journeys' fake broker recorded a bare <code>bwrap</code>, so all 31 protected-grant journeys stopped BLOCKED. It landed because this project's gates (<code>test:unit</code>, <code>typecheck</code>, <code>lint</code>) never run the journeys layer. <strong>7bc48b5</strong> fixed the fake, and 68 protected journeys pass. Today <code>doctor</code> checks locks, orphans, live PIDs, degraded sessions and the projection only. On 2026-10-02 the checkout had 22 local branches and 226 linked worktrees, 153 of them under the factory's worktree root. <strong>Cheapest unused upgrade:</strong> replay the forensics list's stops against the stub adapter before designing the trap format, so the format is shaped by real stops.</td></tr>
+        <tr><th>Amendments and owner-side work</th><td>Making journeys, or a trap layer, a landing gate edits <code>awsf.project.yaml</code>, a protected path, so it is an owner commit. Doctor's provider-CLI and quota probes spawn processes, so they go through <code>transport-broker.ts</code> (invariant 3).</td></tr>
+        <tr><th>Questionables</th><td>Q2 and Q13, decided 2026-10-02: a separate <code>test:traps</code> layer fed by cause records that name their trap, and <code>test:journeys</code> as a full landing gate.</td></tr>
+        <tr><th>What it does not cover</th><td>A trap refuses a known shape. A stop of a new kind is unprotected until its trap lands, which is why the cause record must name one.</td></tr>
+        <tr><th>Stop when</th><td>Every trap in the catalogue, seeded up to a dated cut, is refused before any provider call, every stop since the cut has a trap or a recorded reason, and doctor reports each environment check by name.</td></tr>
+      </table>
+      <div class="card rule">
+        <h5>Testing strategy the deep plan must be able to prove</h5>
+        Each trap fails when its refusal is removed (a mutation check, not just a green run). Zero reserved provider calls per trap. Doctor checks run against fixture Git storage, a missing CLI and a stale branch. The full suite, journeys included, stays green.
+      </div>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Deep plan <code>awsf-v3-w02-trap-suite.html</code> authored with its build prompts and ticket set, and approved by the owner</li>
+        <li><code class="status">[]</code> Q2 and Q13 applied as decided, and the journeys gate landed as an owner commit</li>
+        <li><code class="status">[]</code> Every catalogued trap is refused before any provider call, and a removed refusal turns its trap red</li>
+        <li><code class="status">[]</code> <code>awsf doctor</code> reports Git storage, provider CLIs, quota, stale branches and open markers on landed work</li>
+        <li><code class="status">[]</code> The deep plan's own milestones all reach <code>[x]</code>, which opens gate GR</li>
+      </ul>
+      <div class="loop">🔁 <strong>GR opens here and nowhere else.</strong> Seven workstreams wait on this marker, so it must mean what decision 13 says.</div>
+    </section>
+
+    <!-- ================= W03 ================= -->
+    <section class="phase">
+      <h3><code class="status">[]</code> Milestone M3: W03 — Ticket closure <span class="chip pa">Phase A</span><span class="xlabel">X3 · v2 W15</span></h3>
+      <p class="deep-plan"><a href="awsf-v3-w03-ticket-closure.html">Deep plan: AWSF v3 W03 — Ticket closure</a> <span class="muted">not yet authored</span></p>
+      <p><em>Exists because no role can close a marker, so plans drift from code, and because the factory cannot author its own deep plans until it can.</em> Promoted from v2's declared W15. Closes gate GM.</p>
+      <h4>3. W03 — Ticket closure</h4>
+      <table class="taskmeta">
+        <tr><th>Scope</th><td>A run closes its own markers and ticket states through an <strong>owner-confirmed act</strong>, in the same commit, as invariant 12 requires. It also carries decision 8's <strong>light tier</strong>: a task with no deep plan, closed by the same path. The property fixed regardless of design: <strong>whatever closes a ticket cannot change what that ticket asked for.</strong></td></tr>
+        <tr><th>Evidence</th><td>v2 W15's contradiction still holds at b5e8ffa: every prompt requires the plan marker and ticket state to flip together, no role can write <code>specs/*.html</code>, and nothing in <code>core/src</code> flips either. <code>specs/*.html</code> is still absent from <code>policy.protected_paths</code>. W18 M5's code is on <code>main</code> with its markers open. Specs total 92,828 lines against 56,352 in <code>core/src</code>.</td></tr>
+        <tr><th>Amendments and owner-side work</th><td>v2 W15's fixed first task is carried: an owner commit adding <code>specs/*.html</code> to <code>policy.protected_paths</code>, landed before any closure mechanism is designed. A widened write glob into <code>specs/</code> is not the answer at any width, because the sync fence checks that plan and tickets agree, never that either is unchanged.</td></tr>
+        <tr><th>Questionables</th><td>None assigned. v2 W15's choice between host-owned closure and closure that stays manual is answered by decision 7 in favour of closure the factory can perform under owner confirmation.</td></tr>
+        <tr><th>What it does not cover</th><td>Closure records a landing. It never decides that work is done, and never moves a marker for work not landed.</td></tr>
+        <tr><th>Stop when</th><td>A landed task's markers and ticket state close in one owner-confirmed commit, a closure that alters an acceptance row, prompt byte or declaration is refused, and a light-tier task closes by the same path.</td></tr>
+      </table>
+      <div class="card rule">
+        <h5>Testing strategy the deep plan must be able to prove</h5>
+        Closure of a fixture plan passes the sync fence. A closure diff that touches anything but markers and states is refused. The protected-path amendment refuses a builder write to <code>specs/*.html</code>. Offline.
+      </div>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Deep plan <code>awsf-v3-w03-ticket-closure.html</code> authored with its build prompts and ticket set, and approved by the owner</li>
+        <li><code class="status">[]</code> <code>specs/*.html</code> is a protected path, by owner commit, before any closure mechanism is built</li>
+        <li><code class="status">[]</code> Closure is an owner-confirmed act that changes markers and states only, and a fence proves it</li>
+        <li><code class="status">[]</code> The light tier closes through the same path</li>
+        <li><code class="status">[]</code> The deep plan's own milestones all reach <code>[x]</code>, which retires gate GM</li>
+      </ul>
+      <div class="loop">🔁 <strong>Closure must be boring.</strong> If the design lets a closing commit say anything new, it is the wrong design.</div>
+    </section>
+
+    <!-- ================= W04 ================= -->
+    <section class="phase">
+      <h3><code class="status">[]</code> Milestone M4: W04 — Session record <span class="chip pa">Phase A</span><span class="xlabel">X4</span></h3>
+      <p class="deep-plan"><a href="awsf-v3-w04-session-record.html">Deep plan: AWSF v3 W04 — Session record</a> <span class="muted">not yet authored</span></p>
+      <p><em>Exists because complete records feed metrics, evals and training, and today the driving record lives outside AWSF.</em></p>
+      <h4>4. W04 — Session record</h4>
+      <table class="taskmeta">
+        <tr><th>Scope</th><td>The driving-session archive moves into the state root, is scrubbed with AWSF's credential patterns, and is projected so the dashboard shows each driving session cycle by cycle across compactions (A14). It counts owner asks captured, and it logs and counts direct-session exceptions (decision 7).</td></tr>
+        <tr><th>Evidence</th><td>The archive and its report live in a separate machine-local lab outside AWSF's state root, so nothing AWSF scrubs or projects reaches them. 41% of owner asks are captured. Invariant 6 means any new table is a migration.</td></tr>
+        <tr><th>Amendments and owner-side work</th><td>Migrations are protected: each is an owner commit under GA. Invariant 7 only if a runtime dependency is needed; Node built-ins are the default. Moving the existing archive into the state root is owner-side.</td></tr>
+        <tr><th>Questionables</th><td>Q4 and Q11, decided 2026-10-02: the archiver lives in AWSF core, and direct sessions are derived from git and the journal, each with a journaled reason.</td></tr>
+        <tr><th>What it does not cover</th><td>A record says what happened. It is not a label. Training labels come from owner confirmations in W10.</td></tr>
+        <tr><th>Stop when</th><td>A driving session that compacted twice reads as three cycles in the dashboard, its record survives <code>awsf db rebuild</code>, credential-shaped text is scrubbed, and the direct-session share is a number <code>awsf metrics</code> prints.</td></tr>
+      </table>
+      <div class="card rule">
+        <h5>Testing strategy the deep plan must be able to prove</h5>
+        Rebuild-from-nothing equality. Scrubbing against <code>dashboard/shared/credential-patterns.ts</code>. A multi-compaction fixture session. Asks-captured computed from a fixture with known misses.
+      </div>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Deep plan <code>awsf-v3-w04-session-record.html</code> authored with its build prompts and ticket set, and approved by the owner</li>
+        <li><code class="status">[]</code> Q4 and Q11 applied as decided, and each migration landed as an owner commit</li>
+        <li><code class="status">[]</code> The dashboard shows driving sessions cycle by cycle, reproducible by a rebuild</li>
+        <li><code class="status">[]</code> Asks captured and direct-session share are measured, not asserted</li>
+        <li><code class="status">[]</code> The deep plan's own milestones all reach <code>[x]</code></li>
+      </ul>
+      <div class="loop">🔁 <strong>Complete means across compactions.</strong> A record that loses the turns before a compaction fails the ceiling's third item.</div>
+    </section>
+
+    <!-- ================= W05 ================= -->
+    <section class="phase">
+      <h3><code class="status">[]</code> Milestone M5: W05 — Authority <span class="chip pb">Phase B</span><span class="xlabel">X5 · carries v2 W19</span></h3>
+      <p class="deep-plan"><a href="awsf-v2-w19-jev-delegate.html">Deep plan: AWSF v2 W19 — Jev and the Delegate, carried as v3 W05</a> <span class="muted">authored 2026-09-28; M1–M2 complete; the v3 re-cut not yet authored</span></p>
+      <p><em>Exists because every landing needs the owner at least twice, and W19 already designed the decision service, the shadow owner and the lease that cut that number.</em> The mapped stem <code>awsf-v3-w05-authority</code> is reserved and not created: re-homing W19 under a new stem would orphan its 28-ticket set and the SHAs its records cite.</p>
+      <h4>5. W05 — Authority</h4>
+      <table class="taskmeta">
+        <tr><th>Scope</th><td>W19 carried: the decision service (M1) and the shadow owner (M2), both complete; the lease and code-decided acts (M3); judgment acts, route fallback and continuation (M4). The re-cut moves M5 (guardrail signals) to W07, M6 (compaction judgment) and M7 (cheap reads) to W09, and M8 (the Delegate in the metrics tab) to W10, and adds a milestone running the <strong>OpenAI Decisions API as a shadow backend</strong> beside Jev.</td></tr>
+        <tr><th>Evidence</th><td>W19 tasks 1–7 are <code>[x]</code> on <code>main</code> at b5e8ffa. Land rate is 25% (12 of 48), and every landing takes at least two owner acts. The Decisions API had no published price or docs when W19 was written (assessment D1), which is why it enters as a shadow only.</td></tr>
+        <tr><th>Amendments and owner-side work</th><td><strong>Invariant 13</strong>: a second decision provider needs its own single transport module and the same rule that no agent phase receives its credential. W19's own gates continue: G19-S, G19-C, G19-Q, G19-D, G19-T and G19-W. The Decisions API's budget is an exception under decision 1, stated before its first call.</td></tr>
+        <tr><th>Gate GR</th><td>Leases widen what runs without the owner. This spine's reading of decisions 11 and 13 together: M3–M4 finish under W19's plan and gates as decision 11 says, and <strong>no lease is granted for a live night until W02 is <code>[x]</code></strong>. See Notes; the owner confirms this reading.</td></tr>
+        <tr><th>Questionables</th><td>None of the intent's. W19's own Q1–Q20 are decided and stay decided.</td></tr>
+        <tr><th>Stop when</th><td>For this ticket: the owner approves the re-cut W19 plan. For the workstream: W19's M1–M4 and the shadow milestone are <code>[x]</code>.</td></tr>
+      </table>
+      <div class="card rule">
+        <h5>Testing strategy the deep plan must be able to prove</h5>
+        W19's own strategy, unchanged for M3–M4. For the shadow milestone: a transport fence per provider, proposals from both backends journaled side by side and compared at read time, and neither able to move lifecycle state.
+      </div>
+      <ul class="checklist">
+        <li><code class="status">[]</code> W19's plan re-cut (M5→W07, M6–M7→W09, M8→W10, plus the Decisions API shadow milestone) with its ticket set kept in sync, and approved by the owner</li>
+        <li><code class="status">[]</code> The invariant 13 amendment for a second provider landed as an owner commit before the shadow milestone's build</li>
+        <li><code class="status">[]</code> W19's M3–M4 complete under their own gates, with no live lease before GR</li>
+        <li><code class="status">[]</code> Jev and the Decisions API answer side by side, and only the journal records either</li>
+        <li><code class="status">[]</code> The carried milestones all reach <code>[x]</code></li>
+      </ul>
+      <div class="loop">🔁 <strong>The acceptance bar is still a real night, read in the morning,</strong> and that night happens after GR.</div>
+    </section>
+
+    <!-- ================= W06 ================= -->
+    <section class="phase">
+      <h3><code class="status">[]</code> Milestone M6: W06 — Routing within subscriptions <span class="chip pb">Phase B</span><span class="xlabel">X6</span></h3>
+      <p class="deep-plan"><a href="awsf-v3-w06-routing.html">Deep plan: AWSF v3 W06 — Routing within subscriptions</a> <span class="muted">not yet authored</span></p>
+      <p><em>Exists because quota is the binding limit, and routing is the main throughput lever for a subscription-bound owner.</em></p>
+      <h4>6. W06 — Routing within subscriptions</h4>
+      <table class="taskmeta">
+        <tr><th>Scope</th><td>Task class, W18's route metrics and quota windows feed a <strong>route policy the owner approves</strong>. It chooses within approved bounds, journals every choice, fails closed, and never spends on an API outside a lease (decision 5). Provider failover. Lean delegation profiles. Cache-stable prompt prefixes.</td></tr>
+        <tr><th>Evidence</th><td><code>awsf.config.yaml</code> sets <code>routing.no_fallback: true</code>. v2 intent decision 5 ("quota is a readout, never a router") is superseded by v3 decision 5. A minimal <code>claude -p</code> profile kept the subscription login and cut loaded context from 20,897 to 1,215 tokens (F15). W18's metrics tab and advisory are on <code>main</code>. W19 M4 already adds a leased fallback route per role.</td></tr>
+        <tr><th>Amendments and owner-side work</th><td>The policy lives in <code>awsf.config.yaml</code>, a protected path: the owner writes it under GA. The v2 spine amendment recording decision 5's supersession is owner work (Notes).</td></tr>
+        <tr><th>Questionables</th><td>Q3, decided 2026-10-02: bounds per task class per provider window plus a daily ceiling; the stricter of policy and lease wins.</td></tr>
+        <tr><th>What it does not cover</th><td>A policy is only as good as the metrics it reads. W18 found no cell tight enough to rank on 2026-09-26, so early choices will often be the owner's bound rather than a measured best.</td></tr>
+        <tr><th>Stop when</th><td>Every route choice is journaled with the policy version and inputs that made it, a choice outside bounds is refused, a spent window fails over or stops, and no API call happens outside a lease.</td></tr>
+      </table>
+      <div class="card rule">
+        <h5>Testing strategy the deep plan must be able to prove</h5>
+        Policy decisions as a pure function over recorded inputs. Fail-closed on missing quota. Failover on a stub provider whose window is spent. A fence that no runtime path reaches an API route without a lease. Token counts for the lean profile measured, not estimated.
+      </div>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Deep plan <code>awsf-v3-w06-routing.html</code> authored with its build prompts and ticket set, and approved by the owner</li>
+        <li><code class="status">[]</code> Q3 applied as decided, and the route policy written by the owner into <code>awsf.config.yaml</code></li>
+        <li><code class="status">[]</code> GR honoured: no policy-chosen route runs before W02 is <code>[x]</code></li>
+        <li><code class="status">[]</code> Every choice journaled, fail-closed, and leased for any API spend</li>
+        <li><code class="status">[]</code> The deep plan's own milestones all reach <code>[x]</code></li>
+      </ul>
+      <div class="loop">🔁 <strong>The router may choose, never improvise.</strong> Every choice must be reproducible from the journal.</div>
+    </section>
+
+    <!-- ================= W07 ================= -->
+    <section class="phase">
+      <h3><code class="status">[]</code> Milestone M7: W07 — User-testing validator <span class="chip pb">Phase B</span><span class="xlabel">X7</span></h3>
+      <p class="deep-plan"><a href="awsf-v3-w07-user-testing-validator.html">Deep plan: AWSF v3 W07 — User-testing validator</a> <span class="muted">not yet authored</span></p>
+      <p><em>Exists because the owner is the only black-box tester, and validation is 20% of phase time against the talk's 37%.</em></p>
+      <h4>7. W07 — User-testing validator</h4>
+      <table class="taskmeta">
+        <tr><th>Scope</th><td>First, <strong>scripted browser checks generated from acceptance-criterion ids</strong> and run against the preview build before the owner's journey. Second, agent-driven exploration that never saw the code, reports gaps and never fixes them (decision 10). Carries W19 M5: the decision socket, the guard for pi roles and the Claude-route hooks.</td></tr>
+        <tr><th>Evidence</th><td>AC ids already thread from design to gates (v2 W05). <code>awsf.project.yaml</code> declares a preview build (<code>dash:build</code> into <code>dashboard/dist</code>). From WSL, headless Chrome's one-shot <code>--screenshot</code> works and its remote-debugging protocol does not, so scripted interaction needs a driver that works on this host.</td></tr>
+        <tr><th>Amendments and owner-side work</th><td>Invariant 7 only if a runtime dependency enters AWSF. The zero-dependency path is the default: Node built-ins, the browser's own CLI, or tooling in an agent phase or the harness repository. Browser installation is owner-side.</td></tr>
+        <tr><th>Gate GR</th><td>The agent-driven half runs without the owner and waits for GR. The scripted half does not widen autonomy.</td></tr>
+        <tr><th>Questionables</th><td>Q7, decided 2026-10-02: a browser-automation tool with its own Linux browser, outside AWSF's dependency graph, invoked as an argv gate.</td></tr>
+        <tr><th>Stop when</th><td>Every AC id on a preview-bearing task has a generated check that runs before the journey, a failing check stops the run with the AC id as its cause, and the exploration report reaches the owner without editing the candidate.</td></tr>
+      </table>
+      <div class="card rule">
+        <h5>Testing strategy the deep plan must be able to prove</h5>
+        Check generation as a pure function of the AC set. A seeded defect caught by its check. The validator's write set empty, by fence. Validation share of phase time measured on real runs.
+      </div>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Deep plan <code>awsf-v3-w07-user-testing-validator.html</code> authored with its build prompts and ticket set, and approved by the owner</li>
+        <li><code class="status">[]</code> Q7 applied as decided, with AWSF's dependency allowlist unchanged</li>
+        <li><code class="status">[]</code> Scripted checks generated from AC ids run on the preview build before the journey</li>
+        <li><code class="status">[]</code> Agent-driven exploration lands after GR, read-only, reporting without fixing</li>
+        <li><code class="status">[]</code> W19 M5's tasks carried and complete</li>
+        <li><code class="status">[]</code> The deep plan's own milestones all reach <code>[x]</code></li>
+      </ul>
+      <div class="loop">🔁 <strong>A validator that fixes is a builder.</strong> It reports gaps and stops there.</div>
+    </section>
+
+    <!-- ================= W08 ================= -->
+    <section class="phase">
+      <h3><code class="status">[]</code> Milestone M8: W08 — Marimba harness v1 <span class="chip pb">Phase B</span><span class="xlabel">X8</span></h3>
+      <p class="deep-plan"><a href="awsf-v3-w08-marimba-harness.html">Deep plan: AWSF v3 W08 — Marimba harness v1</a> <span class="muted">not yet authored</span></p>
+      <p><em>Exists because the driver is the most expensive and least reliable part of the factory.</em></p>
+      <h4>8. W08 — Marimba harness v1</h4>
+      <table class="taskmeta">
+        <tr><th>Scope</th><td>A <strong>separate repository</strong>, registered as an AWSF project and built through the factory. L1–L4 with Sol in L3. <strong>K3</strong>: each turn's output must match a schema of legal driver steps, with owner acts absent in every spelling (decision 14). <strong>K4</strong>: read-only actions run freely, one card per run covers <code>new</code>, <code>start</code> and <code>run</code> with the route and estimated calls, and owner acts are only ever prepared. The intents of decision 9. Native session capture in W04's format. The guard rules reused. The first surface is a text panel in the AWSF dashboard, launched and kept in the foreground like <code>awsf dash</code>.</td></tr>
+        <tr><th>Evidence</th><td>Median driver turn: 168k prompt tokens. 41% of asks captured. 8 of 27 blocks driver-preventable. The guard's rules already live as one shared module for two harnesses (<code>marimba-guard-rules.mts</code>).</td></tr>
+        <tr><th>Amendments and owner-side work</th><td>Creating the repository, its placement and Sol's login are owner-side. The dashboard panel is AWSF work and the harness is harness-repository work, so their milestones are separate (one repository each). No daemon (decision 6).</td></tr>
+        <tr><th>Questionables</th><td>Q5, decided 2026-10-02: <code>marimba-harness</code> on the WSL filesystem, TypeScript on Node like AWSF. Q4 (AWSF core owns the session format) binds it too.</td></tr>
+        <tr><th>What it does not cover</th><td>K3 bounds what the driver may emit, not whether its arguments are right. Wrong arguments are caught by K1 and the traps.</td></tr>
+        <tr><th>Stop when</th><td>The owner drives a real AWSF task from request to an <code>AWAITING_OWNER</code> candidate through the panel with one card, every turn validates against K3, and no turn emitted or executed an owner act.</td></tr>
+      </table>
+      <div class="card rule">
+        <h5>Testing strategy the deep plan must be able to prove</h5>
+        K3 schema refuses every owner act in every spelling, by property test. K4 card contents equal to the planned calls. An intent suite over recorded owner messages. A driven run end to end on the stub adapter. Token per turn measured.
+      </div>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Deep plan <code>awsf-v3-w08-marimba-harness.html</code> authored with its build prompts and ticket set, and approved by the owner</li>
+        <li><code class="status">[]</code> Q5 applied as decided, and the repository created and registered by the owner</li>
+        <li><code class="status">[]</code> GR honoured: no harness-launched run before W02 is <code>[x]</code></li>
+        <li><code class="status">[]</code> K3 and K4 enforced by code, owner acts absent from every action schema</li>
+        <li><code class="status">[]</code> The deep plan's own milestones all reach <code>[x]</code></li>
+      </ul>
+      <div class="loop">🔁 <strong>The acceptance bar is one real drive through the panel.</strong> A harness that passes its suite and needs the terminal to finish fails its purpose.</div>
+    </section>
+
+    <!-- ================= W09 ================= -->
+    <section class="phase">
+      <h3><code class="status">[]</code> Milestone M9: W09 — Context engine <span class="chip pc">Phase C</span><span class="xlabel">X9</span></h3>
+      <p class="deep-plan"><a href="awsf-v3-w09-context-engine.html">Deep plan: AWSF v3 W09 — Context engine</a> <span class="muted">not yet authored</span></p>
+      <p><em>Exists because a driver turn re-sends a median of 168k prompt tokens.</em></p>
+      <h4>9. W09 — Context engine</h4>
+      <table class="taskmeta">
+        <tr><th>Scope</th><td>A <strong>capability index</strong> the driver reads first, with detail on demand. W19 M6 (compaction judgment) and M7 (cheap reads and <code>ask_jev</code>) folded in. Reference docs generated from code where they can be. Closed v2 specs out of the priming path (decision 8).</td></tr>
+        <tr><th>Evidence</th><td>Priming was already cut by 95%, yet turns stay at 168k. Specs total 92,828 lines against 56,352 in <code>core/src</code>. W19 M6–M7 were designed against the Marimba driver and are re-aimed at the harness.</td></tr>
+        <tr><th>Amendments and owner-side work</th><td>Marimba's driving documents are protected (<code>docs/driving/**</code>); W19's G19-D and G19-T carry over with M6–M7. The owner's machine-local priming setup is owner-side.</td></tr>
+        <tr><th>Questionables</th><td>None of the intent's.</td></tr>
+        <tr><th>Stop when</th><td>The median driver turn is under 10k prompt tokens on real sessions, measured from W04's record, with no drop in the intent suite's score.</td></tr>
+      </table>
+      <div class="card rule">
+        <h5>Testing strategy the deep plan must be able to prove</h5>
+        Generated docs equal to the code they describe, by a drift test. A closed spec absent from the priming set. Token per turn before and after on the same recorded sessions.
+      </div>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Deep plan <code>awsf-v3-w09-context-engine.html</code> authored with its build prompts and ticket set, and approved by the owner</li>
+        <li><code class="status">[]</code> W19 M6–M7 carried and complete</li>
+        <li><code class="status">[]</code> Median driver prompt tokens per turn under 10k, measured</li>
+        <li><code class="status">[]</code> The deep plan's own milestones all reach <code>[x]</code></li>
+      </ul>
+      <div class="loop">🔁 <strong>Cheaper must not mean blinder.</strong> The intent suite's score is the floor.</div>
+    </section>
+
+    <!-- ================= W10 ================= -->
+    <section class="phase">
+      <h3><code class="status">[]</code> Milestone M10: W10 — Data loop and local model <span class="chip pc">Phase C</span><span class="xlabel">X10 · reshapes v2 W16</span></h3>
+      <p class="deep-plan"><a href="awsf-v3-w10-local-model.html">Deep plan: AWSF v3 W10 — Data loop and local model</a> <span class="muted">not yet authored</span></p>
+      <p><em>Exists because a local model must earn L3 on measured suites, not on taste.</em></p>
+      <h4>10. W10 — Data loop and local model</h4>
+      <table class="taskmeta">
+        <tr><th>Scope</th><td>Labels from owner confirmations and attributions. The intent and trap suites as evals. A local provider through pi (v2 W16 reshaped; OpenRouter stays the paid exception). A LoRA fine-tune on the Mac. An A/B against Sol on the same suites. Carries W19 M8 (the Delegate in the metrics tab).</td></tr>
+        <tr><th>Evidence</th><td>Decision 2: training uses owner messages, tool results, owner confirmations, stub-adapter episodes and an open-weights teacher, never frontier output. The owner's current laptop cannot host a local 9B model. W16 M1 (selector admission) is done.</td></tr>
+        <tr><th>Amendments and owner-side work</th><td>The Mac, model downloads, training runs and any rented GPU or hosted teacher are owner-side, each with a stated budget. A local provider adapter must keep invariants 3 and 4.</td></tr>
+        <tr><th>Gate GR</th><td>A local model taking L3 widens what runs without the owner, so promotion waits on GR and on the A/B.</td></tr>
+        <tr><th>Questionables</th><td>Q6, decided 2026-10-02: all three bases measured untuned, 9B fine-tuned first, 35B-A3B as challenger, MLX-based serving.</td></tr>
+        <tr><th>Stop when</th><td>Every training record carries provenance that proves it holds no frontier output, and the local model's scores on the intent and trap suites sit beside Sol's, with the owner deciding promotion.</td></tr>
+      </table>
+      <div class="card rule">
+        <h5>Testing strategy the deep plan must be able to prove</h5>
+        A provenance fence that rejects a record containing model-authored text. Suites runnable against any provider. The A/B reported with intervals, not a single score.
+      </div>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Deep plan <code>awsf-v3-w10-local-model.html</code> authored with its build prompts and ticket set, and approved by the owner</li>
+        <li><code class="status">[]</code> Q6 applied as decided, with the untuned baseline measured on the trap and intent suites</li>
+        <li><code class="status">[]</code> No frontier output in any training record, by fence</li>
+        <li><code class="status">[]</code> The local model measured against Sol on the same suites</li>
+        <li><code class="status">[]</code> W19 M8 carried and complete</li>
+        <li><code class="status">[]</code> The deep plan's own milestones all reach <code>[x]</code></li>
+      </ul>
+      <div class="loop">🔁 <strong>Measured, then promoted.</strong> Losing the A/B is a legitimate result, recorded as one.</div>
+    </section>
+
+    <!-- ================= W11 ================= -->
+    <section class="phase">
+      <h3><code class="status">[]</code> Milestone M11: W11 — Agent readiness <span class="chip pc">Phase C</span><span class="xlabel">X11</span></h3>
+      <p class="deep-plan"><a href="awsf-v3-w11-agent-readiness.html">Deep plan: AWSF v3 W11 — Agent readiness for registered projects</a> <span class="muted">not yet authored</span></p>
+      <p><em>Exists because a project's structure decides how agents perform in it.</em></p>
+      <h4>11. W11 — Agent readiness</h4>
+      <table class="taskmeta">
+        <tr><th>Scope</th><td>Readiness checks for registered projects in eight categories: style, build, testing, docs, dev environment, observability, security and task discovery. A score and recommended actions per project. Smart Health first. Readiness reads a project and never writes it; recommended actions become backlog items.</td></tr>
+        <tr><th>Evidence</th><td>Smart Health has no readiness checks. Its recorded gate traps include a lint command that edits <code>package.json</code> and suites that time out on the Windows mount. AWSF's weakest readiness area is its dev environment.</td></tr>
+        <tr><th>Amendments and owner-side work</th><td>None expected. Reading another repository uses its machine-local placement.</td></tr>
+        <tr><th>Questionables</th><td>Q12, decided 2026-10-02: pass/fail per check rolled up per category, no total, stored in the journal and projection.</td></tr>
+        <tr><th>Stop when</th><td>Smart Health and AWSF each have a score per category, every check names its evidence, and each recommendation is a backlog item the owner can accept.</td></tr>
+      </table>
+      <div class="card rule">
+        <h5>Testing strategy the deep plan must be able to prove</h5>
+        Each check against a fixture project that passes and one that fails. Scores reproducible from the same tree. No write to the scored repository.
+      </div>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Deep plan <code>awsf-v3-w11-agent-readiness.html</code> authored with its build prompts and ticket set, and approved by the owner</li>
+        <li><code class="status">[]</code> Q12 applied as decided</li>
+        <li><code class="status">[]</code> Smart Health scored first, AWSF second, each check with its evidence</li>
+        <li><code class="status">[]</code> The deep plan's own milestones all reach <code>[x]</code></li>
+      </ul>
+      <div class="loop">🔁 <strong>A score without a recommended action is decoration.</strong></div>
+    </section>
+
+    <!-- ================= W12 ================= -->
+    <section class="phase">
+      <h3><code class="status">[]</code> Milestone M12: W12 — Mac host <span class="chip pd">Phase D</span><span class="xlabel">X12</span></h3>
+      <p class="deep-plan"><a href="awsf-v3-w12-mac-host.html">Deep plan: AWSF v3 W12 — Mac host</a> <span class="muted">not yet authored</span></p>
+      <p><em>Exists because the sandbox is bwrap-only and the Windows mount caused stops.</em></p>
+      <h4>12. W12 — Mac host</h4>
+      <table class="taskmeta">
+        <tr><th>Scope</th><td>AWSF runs in a Linux VM on the Mac, keeping the bwrap sandbox. A Seatbelt port only if the VM gets in the way, and then as its own decision with its own security proof.</td></tr>
+        <tr><th>Evidence</th><td>The transport broker is bwrap-only (R6). DrvFs reports 0777 for every inode, so permission checks pass in temp-directory fixtures and refuse on the owner's real worktrees. Stops on the Windows mount appear in the forensics list.</td></tr>
+        <tr><th>Amendments and owner-side work</th><td>Mostly owner-side: the purchase, the VM, provider logins and moving the state root. The task graph holds only what lands from a worktree: host detection, doctor checks and traps for the VM host.</td></tr>
+        <tr><th>Questionables</th><td>None of the intent's. Decision 3 settles the VM.</td></tr>
+        <tr><th>Stop when</th><td>The full suite and the trap suite pass inside the VM, doctor reports native Git storage there, and a real run lands from it.</td></tr>
+      </table>
+      <div class="card rule">
+        <h5>Testing strategy the deep plan must be able to prove</h5>
+        The suite inside the VM, journeys included. Doctor and the traps on the VM's filesystem. A permission check that refuses on a fixture that reports wrong modes.
+      </div>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Deep plan <code>awsf-v3-w12-mac-host.html</code> authored with its build prompts and ticket set, and approved by the owner</li>
+        <li><code class="status">[]</code> The Mac and its VM set up by the owner</li>
+        <li><code class="status">[]</code> Full suite and trap suite green inside the VM</li>
+        <li><code class="status">[]</code> The deep plan's own milestones all reach <code>[x]</code></li>
+      </ul>
+      <div class="loop">🔁 <strong>A smaller deep plan is the right outcome here.</strong> Most of this workstream is the owner's.</div>
+    </section>
+
+    <!-- ================= W13 ================= -->
+    <section class="phase">
+      <h3><code class="status">[]</code> Milestone M13: W13 — Deploy <span class="chip pd">Phase D</span><span class="xlabel">X13 · v2 W13</span></h3>
+      <p class="deep-plan"><a href="awsf-v3-w13-deploy.html">Deep plan: AWSF v3 W13 — Deploy</a> <span class="muted">not yet authored</span></p>
+      <p><em>Exists because the loop stops at publish.</em> Carried from v2's declared W13.</p>
+      <h4>13. W13 — Deploy</h4>
+      <table class="taskmeta">
+        <tr><th>Scope</th><td>For Smart Health: the factory builds reproducibly and publishes to a <strong>staging channel</strong>. Release to production is an owner act (decision 12).</td></tr>
+        <tr><th>Evidence</th><td>v2 declared deploy and built only publish. <code>policy.protected_operations</code> already names <code>external-mutation</code> and <code>release-cutover</code>. Invariant 8 covers push only, and its publish half is a pure truth table plus a single argv constructor.</td></tr>
+        <tr><th>Amendments and owner-side work</th><td>A staging publish is an external mutation that invariant 8 does not describe. The expected amendment gives it the same shape: a pure authorization table, one argv constructor, and no path from a pre-LANDED state. The alternative that avoids it is a staging publish the owner runs by hand from a landed revision. Store or staging accounts and CI secrets are owner-side.</td></tr>
+        <tr><th>Gate GR</th><td>A factory-run staging publish widens what runs without the owner and waits for GR.</td></tr>
+        <tr><th>Questionables</th><td>Q8, decided 2026-10-02: a store test track, after the deep plan confirms no separately released backend.</td></tr>
+        <tr><th>Stop when</th><td>A landed Smart Health revision reaches staging through the factory with evidence, the same revision reproduces the same build, and production has no path except the owner's act.</td></tr>
+      </table>
+      <div class="card rule">
+        <h5>Testing strategy the deep plan must be able to prove</h5>
+        The authorization table's rows as a pure test. No staging path from a pre-LANDED state, by fence. A reproducibility check on two builds of one revision.
+      </div>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Deep plan <code>awsf-v3-w13-deploy.html</code> authored with its build prompts and ticket set, and approved by the owner</li>
+        <li><code class="status">[]</code> Q8 applied as decided, and the deploy amendment landed as an owner commit</li>
+        <li><code class="status">[]</code> GR honoured, and production release reachable only as an owner act</li>
+        <li><code class="status">[]</code> The deep plan's own milestones all reach <code>[x]</code></li>
+      </ul>
+      <div class="loop">🔁 <strong>Staging is the factory's. Production is the owner's.</strong></div>
+    </section>
+
+    <!-- ================= W14 ================= -->
+    <section class="phase">
+      <h3><code class="status">[]</code> Milestone M14: W14 — Monitor and signals <span class="chip pd">Phase D</span><span class="xlabel">X14 · v2 W14</span></h3>
+      <p class="deep-plan"><a href="awsf-v3-w14-monitor-signals.html">Deep plan: AWSF v3 W14 — Monitor and signals</a> <span class="muted">not yet authored</span></p>
+      <p><em>Exists because signals start the loop, and no daemon is allowed.</em> Carried from v2's declared W14.</p>
+      <h4>14. W14 — Monitor and signals</h4>
+      <table class="taskmeta">
+        <tr><th>Scope</th><td>Signals pulled when the harness opens or by external CI, then fed to intake and the backlog. Nothing resident and unattended (decision 6).</td></tr>
+        <tr><th>Evidence</th><td>v2's Q3 asked whether monitoring could exist without a resident process. Decision 6 answers its shape, and Q9 (decided 2026-10-02) starts with pulls on open.</td></tr>
+        <tr><th>Amendments and owner-side work</th><td>CI accounts and secrets for Smart Health are owner-side. A signal source that needs credentials gets its own single transport module, the same rule invariant 13 states for Jev.</td></tr>
+        <tr><th>Gate GR</th><td>A signal that creates backlog work without the owner widens autonomy and waits for GR.</td></tr>
+        <tr><th>Questionables</th><td>Q9, decided 2026-10-02: pull when the harness opens; external CI only once a source needs a schedule. The deep plan lists the sources.</td></tr>
+        <tr><th>Stop when</th><td>Opening the harness pulls Smart Health's staging signals, each becomes a backlog item with its source, and no process outlives the owner's session.</td></tr>
+      </table>
+      <div class="card rule">
+        <h5>Testing strategy the deep plan must be able to prove</h5>
+        Pull on open against fixture sources. A fence that no AWSF code registers a timer, service or background process. Deduplication of a repeated signal.
+      </div>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Deep plan <code>awsf-v3-w14-monitor-signals.html</code> authored with its build prompts and ticket set, and approved by the owner</li>
+        <li><code class="status">[]</code> Q9 applied as decided</li>
+        <li><code class="status">[]</code> GR honoured, and no resident process introduced, by fence</li>
+        <li><code class="status">[]</code> The deep plan's own milestones all reach <code>[x]</code></li>
+      </ul>
+      <div class="loop">🔁 <strong>History pulled on demand is monitoring here.</strong> A timer is the daemon by another name.</div>
+    </section>
+
+    <!-- ================= W15 ================= -->
+    <section class="phase">
+      <h3><code class="status">[]</code> Milestone M15: W15 — Surfaces <span class="chip pd">Phase D</span><span class="xlabel">X15</span></h3>
+      <p class="deep-plan"><a href="awsf-v3-w15-surfaces.html">Deep plan: AWSF v3 W15 — Surfaces</a> <span class="muted">not yet authored</span></p>
+      <p><em>Exists because the owner works away from the terminal, and only after W08 proves the harness.</em></p>
+      <h4>15. W15 — Surfaces</h4>
+      <table class="taskmeta">
+        <tr><th>Scope</th><td>The native macOS app (orb, hotkey, local Spanish and English speech) and phone notifications. The same harness behind them, with the same K3 and K4.</td></tr>
+        <tr><th>Evidence</th><td>Decision 9 orders text first, speech with the native app. Decision 6 rules out a resident daemon, so notifications are sent by a session the owner started or by external CI.</td></tr>
+        <tr><th>Amendments and owner-side work</th><td>Apple developer and notification-service accounts, and speech-model downloads, are owner-side. The app lives outside AWSF, in the harness repository or its own.</td></tr>
+        <tr><th>Questionables</th><td>None of the intent's.</td></tr>
+        <tr><th>Stop when</th><td>The owner captures an ask by voice in Spanish and in English, receives a stop on the phone, and no surface can execute an owner act.</td></tr>
+      </table>
+      <div class="card rule">
+        <h5>Testing strategy the deep plan must be able to prove</h5>
+        The surfaces share the harness's K3 schema, proven by a single schema source. Speech transcripts scored against recorded asks. A notification sent only from an owner-started session.
+      </div>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Deep plan <code>awsf-v3-w15-surfaces.html</code> authored with its build prompts and ticket set, and approved by the owner</li>
+        <li><code class="status">[]</code> No surface executes an owner act, by fence</li>
+        <li><code class="status">[]</code> The deep plan's own milestones all reach <code>[x]</code></li>
+      </ul>
+      <div class="loop">🔁 <strong>A new surface is a new door, not a new key.</strong></div>
+    </section>
+  </div>
+
+  <!-- ===== GLOBAL VALIDATION ===== -->
+  <section id="validation">
+    <h2>Validation Commands</h2>
+    <p>A spine's validation is thin on purpose: the deep plans prove v3. This document owes that it and its tickets agree, that authoring broke nothing, and that every workstream got a plan. Every row runs offline and spends no quota.</p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/ticket-plan-sync.test.ts</code> — <code>specs/tickets/awsf-v3-plan/</code> pairs with this file: contiguous ids, milestone agreement, state against markers and checklists, backward <code>depends_on</code>, prompts byte-identical to Section B</li>
+      <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/junk-drawer.test.ts core/test/unit/meta/no-credentials-in-fixtures.test.ts</code> — no tracked name matches <code>/manifest/i</code> or <code>/receipt/i</code>, and no credential-shaped text</li>
+      <li><code class="status">[]</code> <code>npm run test:unit</code> — every meta-test still green</li>
+      <li><code class="status">[]</code> <code>npm test</code> — all four layers, leaving <code>git status --porcelain</code> clean</li>
+      <li><code class="status">[]</code> Fourteen deep plans exist at the forward-reference filenames, each paired with its own ticket set, and W05's re-cut of W19's plan keeps that set in sync</li>
+      <li><code class="status">[]</code> GR held: no autonomy-widening build landed before W02 was <code>[x]</code>, checked against landing dates in the journal</li>
+      <li><code class="status">[]</code> Every amendment landed as an owner commit before the build that needed it, recorded in the Amendments of the plan that needed it</li>
+      <li><code class="status">[]</code> The eight acceptance targets measured with <code>awsf metrics</code> and the session record</li>
+      <li><code class="status">[]</code> No task id, attempt id, session id or machine path in this plan, its prompts or its tickets (invariant 1)</li>
+    </ul>
+    <div class="loop">🔁 <strong>The spine is not complete until every box is checked.</strong> If a row is genuinely impossible as written, mark it <code>[f]</code> with the correction. Never fabricate evidence.</div>
+  </section>
+
+  <!-- ===== QUESTIONABLES ===== -->
+  <section id="questionables">
+    <h2>Questionables</h2>
+    <p>Twelve come from the intent and one comes from the 07b20f9 episode. <strong>All thirteen were decided by the owner on 2026-10-02</strong>, each as recommended, through an exported <code>plan-sota-review v1</code> block. A decided Questionable is a constraint its workstream's deep plan applies and records, never one it reopens. Each entry keeps its options and reasoning so the roads not taken stay readable.</p>
+    <figure>
+      <pre class="mermaid">
+flowchart LR
+  Q1["Q1 K1 evidence"] --> W01["W01"]
+  Q2["Q2 trap home"] --> W02["W02"]
+  Q13["Q13 journeys gate"] --> W02
+  Q4["Q4 archiver"] --> W04["W04"]
+  Q11["Q11 direct sessions"] --> W04
+  Q3["Q3 route policy"] --> W06["W06"]
+  Q7["Q7 validator tooling"] --> W07["W07"]
+  Q5["Q5 harness repo"] --> W08["W08"]
+  Q10["Q10 stacking"] --> U["out of v3"]
+  Q6["Q6 local base"] --> W10["W10"]
+  Q12["Q12 readiness score"] --> W11["W11"]
+  Q8["Q8 staging"] --> W13["W13"]
+  Q9["Q9 signals"] --> W14["W14"]
+      </pre>
+      <figcaption>Where each decision is applied. Q10 is out of v3, so no workstream carries it.</figcaption>
+    </figure>
+
+    <details data-review-options="Host measures everything checkable; driver attests only the request confirmation (recommended)|Host measures the repository facts; driver attests intent-level fields with a quoted source|Driver attests all fields; host spot-checks a sample">
+      <summary><span class="qdecided">DECIDED</span> Q1 — Which K1 evidence fields does the host measure, which does the driver attest, and how is an attested field checked? <em>(W01)</em></summary>
+      <p class="decided"><b>Decided 2026-10-02:</b> the host measures every field it can observe, including prior attempts consulted (the record cites each prior attempt id, checked against the journal); the only attested field is the confirmed four-line request, checked by the owner's recorded confirmation. Owner verdict via an exported <code>plan-sota-review v1</code> block, taking the recommendation.</p>
+      <p class="qa-answer rec"><strong>Recommendation (taken):</strong> Measure every field the host can observe: suite at HEAD, write-boundary coverage, grants, Git storage and duplicate tasks. Make <em>prior attempts consulted</em> measurable too, by requiring the record to cite each prior attempt id, which the host checks against the journal. That leaves one attested field, the confirmed four-line request, and it is checked by requiring the owner's confirmation to be on record before L1 fires (W08's card records it later). One attested field with a named check is easier to defend than several with a sampled check, and every measured field runs offline in seconds except the suite, whose result the host can reuse when HEAD has not moved.</p>
+      <p class="qa-answer">Suite at HEAD, write-boundary coverage, grants, Git storage and duplicate tasks are host-observable. The confirmed four-line request and "prior attempts consulted" are not, unless the confirmation is recorded where the host can read it. An attested field is a claim; the deep plan states for each one what refuses a false attestation, or names it as unchecked. Measuring more costs suite time at every start, which the deep plan prices.</p>
+    </details>
+
+    <details data-review-options="A new trap test layer with its own npm script (recommended)|Inside the journeys layer|Inside the simulation layer">
+      <summary><span class="qdecided">DECIDED</span> Q2 — Where do traps live, and how does a stop become a trap? <em>(W02)</em></summary>
+      <p class="decided"><b>Decided 2026-10-02:</b> a separate <code>test:traps</code> layer on the stub adapter; every cause record names a trap id or the reason none is possible, and a cause naming a missing trap is a red test. Owner verdict via an exported <code>plan-sota-review v1</code> block, taking the recommendation.</p>
+      <p class="qa-answer rec"><strong>Recommendation (taken):</strong> A separate <code>test:traps</code> layer on the stub adapter. It can be a landing gate on its own, its count is the number GR reads, and it does not inherit the journeys layer's 20-minute runtime. A stop becomes a trap through W01's cause record: every cause names a trap id or the reason none is possible, and a cause naming a trap that does not exist is a red test. Traps that need the full production runner may still live in journeys and be referenced from the catalogue.</p>
+      <p class="qa-answer">A new layer is easy to gate and count, and adds a fifth script. The journeys layer already drives the production runner on stub routes and already holds the 07b20f9 lesson. The simulation layer is fastest and furthest from the runner. The second half is a process question: W01's cause record can name the trap a stop needs, which makes "new stop, no trap" a visible gap rather than a forgotten one.</p>
+    </details>
+
+    <details data-review-options="Per task class per provider window, with a daily ceiling (recommended)|Per provider window only|Per day only">
+      <summary><span class="qdecided">DECIDED</span> Q3 — What are the route policy's units and bounds, and how does it compose with W19 leases? <em>(W06)</em></summary>
+      <p class="decided"><b>Decided 2026-10-02:</b> bounds per task class per provider window, plus a daily ceiling; the stricter of policy and lease wins, and only a lease authorises API spend. Owner verdict via an exported <code>plan-sota-review v1</code> block, taking the recommendation.</p>
+      <p class="qa-answer rec"><strong>Recommendation (taken):</strong> Task class is the only unit W18's metrics can separate routes on, provider windows are where quota actually binds, and a daily ceiling caps the worst case if a classifier misfires. When the policy and a lease disagree, the stricter one wins, and the policy never authorises API spend; only a lease does. This keeps the policy a chooser among subscription routes, which is all decision 5 asks of it.</p>
+      <p class="qa-answer">Task class is where W18's metrics separate routes, provider windows are where quota actually binds, and a daily ceiling bounds the worst case. Composition with leases: a lease authorises acts and any API spend; the policy chooses among subscription routes. The deep plan must state which wins when they disagree, and the safe default is the stricter of the two.</p>
+    </details>
+
+    <details data-review-options="AWSF core (X4) (recommended)|The harness repository (X8)">
+      <summary><span class="qdecided">DECIDED</span> Q4 — Does the session archiver live in AWSF core or in the harness repository? <em>(W04, with W08)</em></summary>
+      <p class="decided"><b>Decided 2026-10-02:</b> AWSF core; the harness writes the core format, at the cost of one owner-authored migration. Owner verdict via an exported <code>plan-sota-review v1</code> block, taking the recommendation.</p>
+      <p class="qa-answer rec"><strong>Recommendation (taken):</strong> AWSF core, as the assessment leans. The dashboard reads the record, AWSF's credential scrubbing and <code>awsf db rebuild</code> apply only inside core, and W10 needs the same record for labels. The harness writes sessions in the core format, so W08 depends on W04's format rather than owning it. The cost is one owner-authored migration under GA.</p>
+      <p class="qa-answer">The assessment leans toward AWSF core: the dashboard reads the record, and AWSF's scrubbing and projection apply only there. The harness repository would keep capture next to the code that produces sessions and away from AWSF's protected migrations. Whichever is chosen, the other side reads one format.</p>
+    </details>
+
+    <details>
+      <summary><span class="qdecided">DECIDED</span> Q5 — What is the harness repository's name, its location on the WSL filesystem, and its stack? <em>(W08)</em></summary>
+      <p class="decided"><b>Decided 2026-10-02:</b> <code>marimba-harness</code>, under the WSL home directory on the Linux filesystem; TypeScript on Node with type stripping and the built-in test runner; shared code copied under a byte-equality fence. Owner verdict via an exported <code>plan-sota-review v1</code> block, taking the recommendation.</p>
+      <p class="qa-answer rec"><strong>Recommendation (taken):</strong> A repository named <code>marimba-harness</code>, under the WSL home directory on the Linux filesystem, never under the Windows mount. Stack: TypeScript on Node with type stripping and the built-in test runner, the same as AWSF, so the guard rules, schemas and test conventions can be reused by copy with a byte-equality fence rather than by a package dependency between repositories. The exact path stays machine-local placement and never appears in a committed AWSF file.</p>
+      <p class="qa-answer">Location must be on the WSL filesystem, never the Windows mount, for the reasons W12 exists. The stack decides how much of AWSF's guard module, schemas and test conventions can be reused without a dependency between repositories. The name and path are owner choices; the deep plan records them and never writes them into a committed AWSF file.</p>
+    </details>
+
+    <details data-review-options="9B (recommended)|27B|35B-A3B">
+      <summary><span class="qdecided">DECIDED</span> Q6 — Which base does the local model use, and what serves it on the Mac? <em>(W10)</em></summary>
+      <p class="decided"><b>Decided 2026-10-02:</b> run all three bases untuned on the suites first, then fine-tune 9B first with 35B-A3B as the challenger, served by an MLX-based stack on the Mac. Owner verdict via an exported <code>plan-sota-review v1</code> block, taking the recommendation.</p>
+      <p class="qa-answer rec"><strong>Recommendation (taken):</strong> Fine-tune 9B first, with 35B-A3B as the challenger. Run all three bases untuned on the trap and intent suites before any training, which costs no training budget. L3's job is intent recognition and argument filling inside K3's schema, which suits a small model, and a 9B LoRA fits the 64 GB baseline with room for speech. Promote to a larger base only if 9B fails the suites. Serve with an MLX-based stack on the Mac, chosen with the base. This is the most uncertain recommendation here: the suites decide, not this paragraph.</p>
+      <p class="qa-answer">Chosen by the trap and intent suites, not by size. On the 64 GB baseline, the smaller bases leave room for LoRA training and speech; the larger bases score higher on general benchmarks and may not on these suites. The serving stack is chosen with the base, on the Mac, by the owner.</p>
+    </details>
+
+    <details data-review-options="A browser automation library inside an agent phase or the harness repository (recommended)|Scripted checks through the browser's own CLI and Node built-ins|A browser automation library inside AWSF, by invariant 7 amendment">
+      <summary><span class="qdecided">DECIDED</span> Q7 — What tooling does the user-testing validator use, within the dependency allowlist? <em>(W07)</em></summary>
+      <p class="decided"><b>Decided 2026-10-02:</b> a browser-automation tool that ships its own Linux browser inside WSL, kept in the harness repository or its own package and invoked by the host as an argv gate; AWSF's allowlist unchanged. Owner verdict via an exported <code>plan-sota-review v1</code> block, taking the recommendation.</p>
+      <p class="qa-answer rec"><strong>Recommendation (taken):</strong> Keep AWSF's dependency allowlist unchanged and run the browser driver outside AWSF's runtime graph: a validator package in the harness repository (or its own), invoked by the host as an argv gate like any other. Use a driver that ships its own Linux browser inside WSL, which sidesteps the Windows Chrome remote-debugging failure measured on this host. The browser's own CLI cannot click or type, so it cannot run AC checks, and admitting a runtime dependency into AWSF costs an invariant 7 amendment that this route avoids.</p>
+      <p class="qa-answer">The browser's CLI is zero-dependency, and from WSL its one-shot screenshot works while its remote-debugging protocol does not, so interaction is limited. Tooling inside an agent phase or the harness repository keeps AWSF's runtime surface unchanged. An amendment admits a runtime dependency and must name the alternative it rejected.</p>
+    </details>
+
+    <details data-review-options="A store test track (recommended)|A staging backend|Both">
+      <summary><span class="qdecided">DECIDED</span> Q8 — What, concretely, is Smart Health's staging channel? <em>(W13)</em></summary>
+      <p class="decided"><b>Decided 2026-10-02:</b> a store test track; the deep plan confirms Smart Health has no separately released backend before the deploy amendment is written. Owner verdict via an exported <code>plan-sota-review v1</code> block, taking the recommendation.</p>
+      <p class="qa-answer rec"><strong>Recommendation (taken):</strong> A store test track for the app, because Smart Health is a mobile app and a test track is where the owner tests on a real device. Add a staging backend only if the deep plan finds a backend that releases separately from the app. I have not read Smart Health's deployment setup, so the deep plan confirms this before the deploy amendment is written.</p>
+      <p class="qa-answer">A store test track reaches real devices and has its own review cycle. A staging backend is fully under the owner's control and reaches no device on its own. The answer fixes what the deploy amendment must authorise and which accounts the owner sets up.</p>
+    </details>
+
+    <details data-review-options="Pulled when the harness opens (recommended)|External CI on a schedule, read on open|Both">
+      <summary><span class="qdecided">DECIDED</span> Q9 — Which signal sources does Monitor read, and what triggers a pull without a daemon? <em>(W14)</em></summary>
+      <p class="decided"><b>Decided 2026-10-02:</b> pull when the harness opens; external CI only once a source proves it needs a schedule. Owner verdict via an exported <code>plan-sota-review v1</code> block, taking the recommendation.</p>
+      <p class="qa-answer rec"><strong>Recommendation (taken):</strong> Pull on open for v3's first milestone: it keeps everything inside an owner-started session and needs no new account. Add external CI only for a source that is useless unless checked on a schedule, and only once a real source shows that need. Starting with both doubles the setup before any signal has proved useful.</p>
+      <p class="qa-answer">Pull-on-open keeps everything inside an owner-started session and sees nothing while the owner is away. External CI runs outside the machine, so it is not an AWSF daemon, and its results wait to be read. Sources (crash reports, store reviews, staging logs, CI results) are listed by the deep plan with what each costs to read.</p>
+    </details>
+
+    <details data-review-options="Out of v3 (recommended)|Fold into W05 (W19 M4 continuation)|A new workstream, added by spine amendment">
+      <summary><span class="qdecided">DECIDED</span> Q10 — Candidate stacking or a merge queue, so a run can build on an unlanded candidate: in which workstream, if any? <em>(unassigned)</em></summary>
+      <p class="decided"><b>Decided 2026-10-02:</b> out of v3; revisit by spine amendment if W04's record shows waiting to land holds the factory share down. Owner verdict via an exported <code>plan-sota-review v1</code> block, taking the recommendation.</p>
+      <p class="qa-answer rec"><strong>Recommendation (taken):</strong> Out of v3. Shift already carries several milestones through one attempt in one worktree, which covers the overnight case, and stacking creates candidate chains that land or fail together against a local fast-forward landing model. Revisit with evidence: if W04's record shows runs waiting on landing are what holds the factory share down, add a workstream by spine amendment.</p>
+      <p class="qa-answer">Today a run bases on HEAD and cannot build on a waiting candidate, so an overnight shift runs one milestone at a time. Stacking raises throughput and creates a chain of candidates that land or fail together. Folding it into W05 joins it to continuation, the nearest existing design. A new workstream keeps W05's scope as W19 drew it. Leaving it out of v3 keeps the land-rate target reachable through reliability alone.</p>
+    </details>
+
+    <details data-review-options="A journaled exception record with a reason, counted by awsf metrics (recommended)|A commit trailer the metrics read|A session-record flag set at session start">
+      <summary><span class="qdecided">DECIDED</span> Q11 — How is a direct-session exception logged and counted? <em>(W04)</em></summary>
+      <p class="decided"><b>Decided 2026-10-02:</b> derive direct sessions from git and the journal; each needs a journaled reason record, and one without shows as unexplained in <code>awsf metrics</code>. Owner verdict via an exported <code>plan-sota-review v1</code> block, taking the recommendation.</p>
+      <p class="qa-answer rec"><strong>Recommendation (taken):</strong> Derive the count instead of trusting a declaration: any code commit on <code>main</code> that no factory landing produced is a direct session, which git and the journal already show. Then require a journaled exception record with a reason for each one; a direct commit with no record shows as unexplained in <code>awsf metrics</code>. This needs no commit convention and cannot be skipped by forgetting to declare.</p>
+      <p class="qa-answer">The count is the denominator of the factory-share target. A journal record is checkable and needs no commit convention. A commit trailer is visible in history and must not name an agent (invariant 11). A session flag is cheapest and depends on the session declaring itself. Until this is decided, GM's manual deep-plan sessions record themselves in the plan's Amendments.</p>
+    </details>
+
+    <details data-review-options="Pass/fail per check, scored per category (recommended)|A weighted 0–100 score|Category grades only, no total">
+      <summary><span class="qdecided">DECIDED</span> Q12 — What does a readiness score measure for a project, and where do scores live? <em>(W11)</em></summary>
+      <p class="decided"><b>Decided 2026-10-02:</b> pass/fail per check, rolled up per category, no single total; results live in the journal and projection. Owner verdict via an exported <code>plan-sota-review v1</code> block, taking the recommendation.</p>
+      <p class="qa-answer rec"><strong>Recommendation (taken):</strong> Pass/fail per check, rolled up per category, with no single total. Each failed check is a recommended action, which is the point of readiness. Results live in the journal and projection, never in a committed file (invariant 10).</p>
+      <p class="qa-answer">Per-check results are reproducible and point at actions. A single number is easy to track and easy to game. Where scores live matters for invariant 10: a committed score file is a runtime artefact in the repository, so the natural home is the journal and projection.</p>
+    </details>
+
+    <details data-review-options="Add test:journeys as a landing gate in awsf.project.yaml (recommended)|Gate on journeys only when a candidate touches the paths journeys exercise|Keep the gates; run journeys in the trap suite and in doctor">
+      <summary><span class="qdecided">DECIDED</span> Q13 — Should the journeys layer become a landing gate? <em>(W02, from 07b20f9)</em></summary>
+      <p class="decided"><b>Decided 2026-10-02:</b> <code>test:journeys</code> becomes a full landing gate with a timeout of at least 1,800 s, by owner commit to <code>awsf.project.yaml</code>; the commit need not wait for W02's deep plan. Owner verdict via an exported <code>plan-sota-review v1</code> block, taking the recommendation.</p>
+      <p class="qa-answer rec"><strong>Recommendation (taken):</strong> Add journeys as a full landing gate. Its cost is machine time, measured at 1,220 s on this host, not quota and not owner time, and gates run before the candidate reaches the owner. The path-scoped option saves time with a mapping that can itself drift, which is the 07b20f9 failure in another form. The gate needs a timeout of at least 1,800 s on this host, set by the owner in <code>awsf.project.yaml</code>.</p>
+      <p class="qa-answer">07b20f9 broke 31 protected-grant journeys and landed, because the gates run <code>test:unit</code>, <code>typecheck</code> and <code>lint</code> only. A full gate closes that hole at the cost of the layer's runtime on every landing (measured on 2026-10-02; see Notes). A path-scoped gate is cheaper and needs a mapping that can itself drift. Keeping the gates as they are relies on the trap suite and on a session remembering to run journeys, which is the failure this spine exists to remove. Any gate change edits a protected file and is an owner commit.</p>
+    </details>
+  </section>
+
+  <!-- ===== NOTES ===== -->
+  <section id="notes">
+    <h2>Notes</h2>
+
+    <h3>Dependencies, derived</h3>
+    <p><code>depends_on</code> in this spine's tickets orders deep-plan authoring and, because the sync fence refuses a <code>done</code> ticket whose dependency is not <code>done</code>, completion too. Edges are real and backward, never a chain.</p>
+    <table>
+      <thead><tr><th>Ticket</th><th>Depends on</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>W01, W03, W04</td><td>—</td><td>three independent starts in Phase A</td></tr>
+        <tr><td>W02</td><td>W01</td><td>traps assert K1's refusals, and W01's cause record names the trap a stop needs</td></tr>
+        <tr><td>W05</td><td>W01, W02</td><td>Delegate acts are expressed in K2's actor model; GR</td></tr>
+        <tr><td>W06</td><td>W02, W05</td><td>the policy composes with leases and W19 M4's fallback route; GR</td></tr>
+        <tr><td>W07</td><td>W02, W05</td><td>W05's re-cut hands it W19 M5; GR for the agent-driven half</td></tr>
+        <tr><td>W08</td><td>W01, W02, W04</td><td>K3 is built on K2; native capture uses W04's format; GR</td></tr>
+        <tr><td>W09</td><td>W03, W05, W08</td><td>closed specs are known once closure works; W19 M6–M7 via W05; the harness is the driver the index serves</td></tr>
+        <tr><td>W10</td><td>W01, W02, W04, W05, W08</td><td>labels from attributions, records and K4 confirmations; suites from W02 and W08; W19 M8 via W05; GR</td></tr>
+        <tr><td>W11</td><td>W02</td><td>the dev-environment category reuses doctor's environment checks</td></tr>
+        <tr><td>W12</td><td>W02</td><td>the VM host is accepted by doctor and the trap suite</td></tr>
+        <tr><td>W13</td><td>W02, W07, W11</td><td>staging receives builds the validator passed, on a project readiness has scored; GR</td></tr>
+        <tr><td>W14</td><td>W02, W08, W13</td><td>pulled when the harness opens, watching what deploy published; GR</td></tr>
+        <tr><td>W15</td><td>W08, W12</td><td>only after the harness is proven, and the native app needs the Mac</td></tr>
+      </tbody>
+    </table>
+    <figure>
+      <pre class="mermaid">
+flowchart LR
+  W01 --> W02
+  W01 --> W05
+  W02 --> W05
+  W02 --> W06
+  W05 --> W06
+  W02 --> W07
+  W05 --> W07
+  W01 --> W08
+  W02 --> W08
+  W04 --> W08
+  W03 --> W09
+  W05 --> W09
+  W08 --> W09
+  W08 --> W10
+  W05 --> W10
+  W04 --> W10
+  W02 --> W11
+  W02 --> W12
+  W07 --> W13
+  W11 --> W13
+  W08 --> W14
+  W13 --> W14
+  W08 --> W15
+  W12 --> W15
+      </pre>
+      <figcaption>Edges a longer path already implies are left out for readability: W10's edges to W01 and W02, and W13's edge to W02. The longest path is W01 → W02 → W05 → W07 → W13 → W14, six deep.</figcaption>
+    </figure>
+
+    <h3>Reading decisions 11 and 13 together</h3>
+    <p>Decision 11 says finish W19's M3–M4 as planned. Decision 13 says no workstream that widens what runs without the owner lands before W02's trap suite refuses every known trap. M3–M4 build the lease and the Delegate's acts, which widen autonomy. <strong>This spine's reading:</strong> M3–M4's code may land under W19's own plan and gates, because a lease does nothing until the owner grants one; no lease is granted for a live night until W02 is <code>[x]</code>. W19's planned live drives with a lease (its M3 testing strategy) therefore wait for GR. If the owner reads decision 13 as binding on landing the code itself, M3–M4 wait for W02 instead, and W05's prompt says so. This is a reading for the owner to confirm, not a new Questionable.</p>
+
+    <h3>The v2 spine amendment the owner should approve</h3>
+    <p>This session edited no v2 file. The owner's amendment to <code>specs/awsf-v2-plan.html</code>, landed with this spine or after it, should record:</p>
+    <ul>
+      <li><strong>W09 (agy) and W10 (mf) parked.</strong> Fusion is revisited after v3 W07 as parallel candidates a validator chooses between. Their markers stay as they are.</li>
+      <li><strong>W13 and W14 carried</strong> as v3 W13 and W14. <strong>W15 carried</strong> and promoted to v3 W03.</li>
+      <li><strong>W16 reshaped</strong> into v3 W10's local provider; M1 stays done, and OpenRouter stays the paid exception.</li>
+      <li><strong>W19 carried</strong> into v3 W05, with M5 to W07, M6–M7 to W09 and M8 to W10.</li>
+      <li><strong>Intent decision 5 superseded</strong> by v3 decision 5. "No resident background process" restated by v3 decision 6.</li>
+      <li><strong>W18 M5</strong> closes in v2 by the owner's bookkeeping commit, which is still pending.</li>
+    </ul>
+
+    <h3>Measured while authoring</h3>
+    <ul>
+      <li><code>git branch</code>: 22 local branches. <code>git worktree list</code>: 226 linked worktrees, 153 under the factory's worktree root (2026-10-02). Doctor reports neither.</li>
+      <li><code>npm run test:journeys</code> at b5e8ffa on this WSL host: 347/347 passed, exit 0, 1,220 s wall time (about 20 minutes, with other work running beside it). This is the per-landing cost of the journeys gate Q13 adopted.</li>
+      <li><code>routing.no_fallback: true</code> in <code>awsf.config.yaml</code>, and <code>specs/*.html</code> absent from <code>policy.protected_paths</code>.</li>
+      <li>There is no <code>awsf next</code> command; the CLI prints <code>status.nextAction</code> as prose (<code>core/src/cli/main.ts</code>).</li>
+    </ul>
+
+    <h3>Risks this spine carries knowingly</h3>
+    <table>
+      <thead><tr><th>Risk</th><th>Why it is real</th><th>What this plan does</th></tr></thead>
+      <tbody>
+        <tr><td><strong>R1: the baseline is a draft</strong></td><td>The 8-of-27 figure comes from an unconfirmed forensics review.</td><td>W01's cheapest upgrade is the owner's confirmation, before K1's fields freeze.</td></tr>
+        <tr><td><strong>R2: GR never opens</strong></td><td>"Every known trap" moves as new stops arrive.</td><td>W02's done is defined against a dated catalogue cut plus a trap-or-reason rule for every later stop.</td></tr>
+        <tr><td><strong>R3: the factory share stalls</strong></td><td>Deep plans are manual until W03 (GM), and the factory cannot build on unlanded candidates (Q10, out of v3).</td><td>W03 is in Phase A, and Q10 names the evidence that would bring stacking back.</td></tr>
+        <tr><td><strong>R4: hardware-bound work blocks the spine</strong></td><td>W10, W12 and W15 need the Mac.</td><td>Their hardware steps are owner-side, and nothing in Phases A–B waits on them.</td></tr>
+        <tr><td><strong>R5: two repositories drift</strong></td><td>W08 and W15 live outside AWSF and reuse its guard and schemas.</td><td>One writable repository per milestone, and a single schema source the surfaces read.</td></tr>
+        <tr><td><strong>R6: v2 and v3 disagree on paper</strong></td><td>v2's spine still shows W09, W10 and W13–W16 as open.</td><td>The v2 amendment above, owned by the owner.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Rejected while authoring</h3>
+    <ul>
+      <li><strong>Chaining each workstream to the previous one.</strong> It reads cleanly and serialises fifteen planning sessions behind work they do not need.</li>
+      <li><strong>Grouping workstreams into four milestones, one per phase.</strong> A workstream's roll-up marker has to move on its own, and the fence's marker and checklist checks stay satisfiable only at one workstream per milestone.</li>
+      <li><strong>Re-homing W19 under <code>awsf-v3-w05-authority</code>.</strong> It would orphan a 28-ticket set with seven tickets done.</li>
+      <li><strong>Deciding the Questionables while authoring.</strong> The intent asked for them surfaced. Each carries a recommendation, and none is settled until the owner picks.</li>
+    </ul>
+
+    <figure>
+      <pre class="mermaid">
+stateDiagram-v2
+  [*] --> Declared
+  Declared --> Authored: deep plan written, stops at owner gate
+  Authored --> Approved: owner review, marker to wip
+  Approved --> Building: amendments land first
+  Building --> Complete: final milestone lands, marker to x
+  Building --> Failed: recorded with its reason
+      </pre>
+      <figcaption>A workstream's life in this spine. Only the owner's bookkeeping commit moves its marker.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ===== AMENDMENTS ===== -->
+  <section id="amendments">
+    <h2>Amendments</h2>
+    <details>
+      <summary>2026-10-02 — Owner review applied: all thirteen Questionables decided as recommended</summary>
+      <p>An exported <code>plan-sota-review v1</code> block carried 13 verdicts, no proposed statuses and no annotations. Q1–Q4 and Q6–Q13 took the option marked recommended, and Q5 was approved as recommended. Headlines: a separate <code>test:traps</code> layer (Q2), <code>test:journeys</code> as a full landing gate (Q13), the archiver in AWSF core (Q4), direct sessions derived from git and the journal (Q11), and candidate stacking out of v3 (Q10). Each workstream block, its checklist and its Section B prompt now hand the decision over as a constraint to apply. No marker moved. Before this review the same day, recommendations were added to every Questionable and <code>core/test/unit/registry/plan-kind.test.ts</code> was rewritten as a rule, because its hardcoded spine list failed once this spine existed.</p>
+    </details>
+  </section>
+
+</main>
+
+<!-- ===== PLAN-SOTA REVIEW LAYER v1 — FIXED MACHINERY, COPY VERBATIM =====
+     Not a placeholder: reproduce this <style> + <script> pair exactly in every plan.
+     Annotations, Questionable verdicts, and proposed phase statuses persist to
+     localStorage (key: plan filename). The browser NEVER writes this file; canonical
+     []/[wip]/[x]/[f] markers stay agent-owned. Export produces a `plan-sota-review v1`
+     block (clipboard + visible box) and, when running under Lavish Editor, queues it
+     once via window.lavish.queuePrompt(). -->
+<style>
+  .rv-btn { font: 600 11px/1 system-ui, sans-serif; padding: 3px 9px; border-radius: 999px;
+    border: 1px solid var(--muted, #8884); background: transparent; color: var(--fg, inherit);
+    cursor: pointer; opacity: .55; vertical-align: middle; margin-left: 8px; }
+  .rv-btn:hover { opacity: 1; border-color: var(--accent, #7c6cf0); }
+  .rv-btn.rv-on { opacity: 1; background: var(--accent, #7c6cf0); color: var(--bg, #fff); border-color: transparent; }
+  .rv-note-box { display: block; margin: 8px 0; padding: 8px 12px; border: 1px dashed var(--accent, #7c6cf0);
+    border-radius: 8px; font-size: 13px; min-height: 1.5em; background: color-mix(in srgb, var(--accent, #7c6cf0) 6%, transparent); outline: none; }
+  .rv-note-box:empty::before { content: attr(data-ph); opacity: .5; font-style: italic; }
+  .rv-note-box[hidden] { display: none; }
+  .rv-verdict { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 10px 0 2px; }
+  .rv-verdict-tag { font: 700 10px/1 system-ui, sans-serif; letter-spacing: .08em; opacity: .6; margin-right: 2px; }
+  .rv-status-chip { font: 600 11px/1 ui-monospace, monospace; margin-left: 10px; padding: 3px 9px;
+    border-radius: 999px; border: 1px dotted var(--muted, #8884); background: transparent;
+    color: var(--fg, inherit); cursor: pointer; opacity: .6; }
+  .rv-status-chip:hover { opacity: 1; }
+  .rv-status-chip.rv-on { opacity: 1; border-style: solid; border-color: var(--accent, #7c6cf0); color: var(--accent, #7c6cf0); }
+  #rv-drawer { position: fixed; right: 16px; bottom: 16px; z-index: 9999; font: 13px/1.45 system-ui, sans-serif;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  #rv-pill { font: 700 12px/1 system-ui, sans-serif; padding: 10px 16px; border-radius: 999px; border: none;
+    cursor: pointer; background: var(--accent, #7c6cf0); color: var(--bg, #fff); box-shadow: 0 4px 16px #0004; }
+  #rv-panel { width: min(420px, calc(100vw - 32px)); max-height: 60vh; overflow: auto; padding: 14px;
+    border-radius: 12px; border: 1px solid var(--muted, #8884); background: var(--bg, #fff);
+    color: var(--fg, inherit); box-shadow: 0 8px 32px #0005; }
+  #rv-panel h4 { margin: 0 0 8px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; opacity: .7; }
+  #rv-list { margin: 0 0 10px; padding: 0; list-style: none; font-size: 12px; }
+  #rv-list li { padding: 3px 0; border-bottom: 1px solid #8882; overflow-wrap: anywhere; }
+  #rv-out { width: 100%; min-height: 140px; margin-top: 10px; font: 11px/1.5 ui-monospace, monospace;
+    border: 1px solid var(--muted, #8884); border-radius: 8px; padding: 8px; background: transparent; color: inherit; }
+  #rv-msg { font-size: 11px; opacity: .75; margin-top: 6px; }
+  @media print { #rv-drawer { display: none; } }
+</style>
+<script>
+(function () {
+  'use strict';
+  var FILE = decodeURIComponent(location.pathname.split('/').pop() || 'plan.html');
+  var KEY = 'plan-sota-review:' + FILE;
+  var LEGACY_KEY = 'planf3-review:' + FILE; // pre-rename state; read once, never written
+  var PROPOSE = ['', '[]', '[wip]', '[x]', '[f]'];
+  var state = { a: {}, v: {}, s: {} }, persisted = true;
+  try { state = JSON.parse(localStorage.getItem(KEY) || localStorage.getItem(LEGACY_KEY) || 'null') || state; } catch (e) { persisted = false; }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); persisted = true; }
+    catch (e) { persisted = false; }
+    refresh();
+  }
+  function el(tag, cls, txt) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (txt) n.textContent = txt;
+    if (tag === 'button') { n.type = 'button'; n.setAttribute('data-lavish-action', ''); }
+    return n;
+  }
+  function clean(t) { return String(t || '').replace(/\|/g, '/').replace(/\s*\r?\n\s*/g, ' >> ').trim(); }
+  var registry = []; // {key, label, kind: 'section'|'phase'|'q'}
+
+  function noteBox(key, host, placeholder) {
+    var box = el('div', 'rv-note-box');
+    box.contentEditable = 'true';
+    box.setAttribute('data-ph', placeholder || 'Type your note for the agent…');
+    box.hidden = !(state.a[key]);
+    if (state.a[key]) box.textContent = state.a[key];
+    box.addEventListener('input', function () {
+      var t = box.textContent.trim();
+      if (t) state.a[key] = t; else delete state.a[key];
+      save();
+    });
+    host.appendChild(box);
+    return box;
+  }
+  function annotable(key, label, heading, host, kind) {
+    registry.push({ key: key, label: label, kind: kind });
+    var box = noteBox(key, host);
+    heading.insertAdjacentElement('afterend', box);
+    var btn = el('button', 'rv-btn' + (state.a[key] ? ' rv-on' : ''), '✎ note');
+    btn.addEventListener('click', function () {
+      box.hidden = !box.hidden;
+      if (!box.hidden) box.focus();
+    });
+    heading.appendChild(btn);
+    box.addEventListener('input', function () { btn.classList.toggle('rv-on', !!state.a[key]); });
+  }
+
+  // Sections
+  Array.prototype.forEach.call(document.querySelectorAll('main > section[id]'), function (sec) {
+    var h = sec.querySelector('h2'); if (!h) return;
+    annotable('#' + sec.id, h.textContent.trim(), h, sec, 'section');
+  });
+  // Phases: annotation + proposed-status chip
+  Array.prototype.forEach.call(document.querySelectorAll('#phases .phase'), function (ph, i) {
+    var h = ph.querySelector('h3'); if (!h) return;
+    var key = 'phase-' + (i + 1);
+    var label = h.textContent.replace(/^\s*\[[^\]]*\]\s*/, '').trim();
+    annotable(key, label, h, ph, 'phase');
+    var chip = el('button', 'rv-status-chip' + (state.s[key] ? ' rv-on' : ''));
+    chip.textContent = state.s[key] ? 'propose ' + state.s[key] : 'propose…';
+    chip.title = 'Cycle a PROPOSED status (exported as feedback — the file marker is only changed by the agent)';
+    chip.addEventListener('click', function () {
+      var next = PROPOSE[(PROPOSE.indexOf(state.s[key] || '') + 1) % PROPOSE.length];
+      if (next) state.s[key] = next; else delete state.s[key];
+      chip.textContent = next ? 'propose ' + next : 'propose…';
+      chip.classList.toggle('rv-on', !!next);
+      save();
+    });
+    h.appendChild(chip);
+  });
+  // Questionables: verdict / option buttons + note
+  Array.prototype.forEach.call(document.querySelectorAll('#questionables details'), function (d, i) {
+    var key = 'q-' + (i + 1);
+    var summary = d.querySelector('summary');
+    var label = summary ? summary.textContent.trim().slice(0, 120) : key;
+    registry.push({ key: key, label: label, kind: 'q' });
+    var opts = (d.getAttribute('data-review-options') || '').split('|').map(function (s) { return s.trim(); }).filter(Boolean);
+    if (!opts.length) opts = ['APPROVE', 'REJECT', 'REVISE', 'DEFER'];
+    var row = el('div', 'rv-verdict');
+    row.appendChild(el('span', 'rv-verdict-tag', 'YOUR CALL'));
+    opts.forEach(function (opt) {
+      var b = el('button', 'rv-btn' + ((state.v[key] || {}).c === opt ? ' rv-on' : ''), opt);
+      b.addEventListener('click', function () {
+        if ((state.v[key] || {}).c === opt) { delete state.v[key]; }
+        else { state.v[key] = { c: opt }; }
+        Array.prototype.forEach.call(row.querySelectorAll('.rv-btn'), function (x) {
+          x.classList.toggle('rv-on', x.textContent === ((state.v[key] || {}).c || null));
+        });
+        qbox.hidden = !state.v[key] && !state.a[key];
+        save();
+      });
+      row.appendChild(b);
+    });
+    d.appendChild(row);
+    var qbox = noteBox(key, d, 'Why / what to change instead…');
+    if (state.v[key]) qbox.hidden = false;
+  });
+
+  // Drawer
+  var drawer = el('div'); drawer.id = 'rv-drawer';
+  var panel = el('div'); panel.id = 'rv-panel'; panel.hidden = true;
+  var pill = el('button'); pill.id = 'rv-pill';
+  pill.addEventListener('click', function () { panel.hidden = !panel.hidden; });
+  var list = el('ul'); list.id = 'rv-list';
+  var actions = el('div');
+  var exportBtn = el('button', 'rv-btn rv-on', 'Export Feedback');
+  var clearBtn = el('button', 'rv-btn', 'Clear review');
+  var out = el('textarea'); out.id = 'rv-out'; out.readOnly = true; out.hidden = true;
+  var msg = el('div'); msg.id = 'rv-msg';
+  var head = el('h4', null, 'Review — pending feedback');
+  actions.appendChild(exportBtn); actions.appendChild(clearBtn);
+  panel.appendChild(head); panel.appendChild(list); panel.appendChild(actions);
+  panel.appendChild(out); panel.appendChild(msg);
+  drawer.appendChild(panel); drawer.appendChild(pill);
+  document.body.appendChild(drawer);
+
+  function findLabel(key) {
+    for (var i = 0; i < registry.length; i++) if (registry[i].key === key) return registry[i].label;
+    return key;
+  }
+  function refresh() {
+    var n = Object.keys(state.a).length + Object.keys(state.v).length + Object.keys(state.s).length;
+    pill.textContent = '✎ Review (' + n + ')';
+    list.textContent = '';
+    Object.keys(state.v).forEach(function (k) { list.appendChild(el('li', null, '[verdict] ' + findLabel(k) + ' → ' + state.v[k].c)); });
+    Object.keys(state.s).forEach(function (k) { list.appendChild(el('li', null, '[status] ' + findLabel(k) + ' → propose ' + state.s[k])); });
+    Object.keys(state.a).forEach(function (k) { list.appendChild(el('li', null, '[note] ' + findLabel(k) + ': ' + state.a[k].slice(0, 90))); });
+    if (!n) list.appendChild(el('li', null, 'Nothing yet — click ✎ note on any section, a verdict on a Questionable, or propose… on a phase.'));
+    if (!persisted) msg.textContent = '⚠ localStorage unavailable — review state lives only in this tab.';
+  }
+  function buildExport() {
+    var L = ['plan-sota-review v1', 'plan: ' + FILE, 'title: ' + clean(document.title), 'exported: ' + new Date().toISOString(), ''];
+    var vk = Object.keys(state.v), sk = Object.keys(state.s), ak = Object.keys(state.a);
+    L.push('## verdicts');
+    vk.length ? vk.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | ' + clean(state.v[k].c) + ' | note: ' + (clean(state.a[k]) || '-'));
+    }) : L.push('- (none)');
+    L.push('', '## statuses');
+    sk.length ? sk.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | propose ' + state.s[k]);
+    }) : L.push('- (none)');
+    L.push('', '## annotations');
+    var solo = ak.filter(function (k) { return !state.v[k]; });
+    solo.length ? solo.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | ' + clean(state.a[k]));
+    }) : L.push('- (none)');
+    return L.join('\n');
+  }
+  exportBtn.addEventListener('click', function () {
+    var text = buildExport();
+    out.hidden = false; out.value = text;
+    out.focus(); out.select();
+    function done(m) { msg.textContent = m; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done('Copied — paste it into your next agent session.'); },
+        function () { done('Clipboard blocked — copy from the box below.'); });
+    } else {
+      try { done(document.execCommand('copy') ? 'Copied — paste it into your next agent session.' : 'Clipboard blocked — copy from the box below.'); }
+      catch (e) { done('Clipboard blocked — copy from the box below.'); }
+    }
+    if (window.lavish && typeof window.lavish.queuePrompt === 'function') {
+      window.lavish.queuePrompt(text, { tag: 'plan-sota-review', queueKey: 'plan-sota-review' });
+      msg.textContent += ' Also queued to the agent via Lavish.';
+    }
+  });
+  clearBtn.addEventListener('click', function () {
+    if (!confirm('Clear all review state for this plan?')) return;
+    state = { a: {}, v: {}, s: {} };
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    location.reload();
+  });
+  refresh();
+})();
+</script>
+
+<!-- Mermaid runtime — renders every <pre class="mermaid"> block. Only external reference in the file. -->
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  // Mirrors the :root palette: Forest dark by default, Forest light when the reader prefers it.
+  const light = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+  const p = light
+    ? { bg: '#DAF1DE', panel: '#EAF7EE', panel2: '#C6E4CF', border: '#8EB69B', dim: '#235347', text: '#051F20' }
+    : { bg: '#051F20', panel: '#0B2B26', panel2: '#163832', border: '#235347', dim: '#8EB69B', text: '#DAF1DE' };
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      background: p.bg,
+      primaryColor: p.panel2,
+      primaryBorderColor: p.border,
+      primaryTextColor: p.text,
+      textColor: p.text,
+      lineColor: p.dim,
+      secondaryColor: p.panel,
+      tertiaryColor: p.panel,
+      fontFamily: '"Segoe UI", "Helvetica Neue", system-ui, sans-serif'
+    }
+  });
+</script>
+</body>
+</html>
