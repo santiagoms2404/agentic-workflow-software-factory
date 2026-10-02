@@ -108,7 +108,7 @@ Graded against the talk's own three pillars, AWSF scores **53/100 today**. It wo
 - **N7** A run can't close its own plan markers (that's what W15 was declared for), so plans drift from code. W18 M5 landed on 10-01, but its markers and T15–T17 still say open. Specs total 92,828 lines vs 56,352 in `core/src`, and 175 of the 530 commits since 08-11 are docs.
 - **N8** The lifecycle stops at publish.
 - **N9** The dev environment is the weakest readiness area. The Windows-mounted drive caused stops, and the sandbox only works on Linux.
-- **N10** Branches drift: W19 is 29 commits ahead of `main` and 28 behind it, and there are more than a dozen side branches.
+- **N10** Branches drift: W19 is 28 commits ahead of `main` and 29 behind it, and there are more than a dozen side branches.
 
 ### Limits on scaling, and fixes
 
@@ -195,7 +195,7 @@ New:
 - **Q12** For the user-testing validator: scripted browser checks generated from the acceptance criteria first, and an agent driving the app second?
 - **Q13** Should AWSF's own code changes go through the factory by default, with direct sessions as the logged exception?
 - **Q14** A light planning tier for small changes, and closed v2 specs archived out of the priming path?
-- **Q15** Rebase W19 now and finish M3–M4? I recommend yes. The 29/28 drift only grows.
+- **Q15** Rebase W19 now and finish M3–M4? I recommend yes. The drift (28 ahead, 29 behind) only grows.
 - **Q16** What counts as "deployed" for Smart Health, and who presses the button?
 
 Judge v3 first by the share of your own code that ships through AWSF. That number is 8% today, and most of the other KPIs above improve when it does.
