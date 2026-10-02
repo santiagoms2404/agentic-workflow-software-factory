@@ -14,10 +14,11 @@ reach: **the model supplies structured facts, the host advances state, and a
 human authorises anything that becomes permanent.**
 
 > **Status: pre-alpha, single operator, actively built.** v1 is complete —
-> M0–M11, 38 tasks, both adoption pilots landed on real work. **v2 is the
-> current workstream**: seventeen workstreams on a spine plan, nine landed, each
+> M0–M11, 38 tasks, both adoption pilots landed on real work. **v2 has reached
+> its ceiling**: nineteen workstreams on a spine plan, eleven complete, each
 > milestone carrying its own deep plan with its own tickets, amendments and
-> validation. The factory has driven 40 real sessions on this repository and
+> validation. **v3 is the next spine**: fifteen workstreams in four phases,
+> authored on 2026-10-02, with no deep plan written yet. The factory has driven 40 real sessions on this repository and
 > landed 7 of them. No native-Windows write parity is claimed. Every number on
 > this page is reproduced by a command in
 > [Verifying these claims](#verifying-these-claims).
@@ -49,13 +50,13 @@ a fixture.
 | Phase submachine | 8 states, with a same-session correction loop | [`core/src/state/phase-machine.ts`](core/src/state/phase-machine.ts) |
 | Postcondition gates | 21 | [`core/src/gates/interface.ts`](core/src/gates/interface.ts) |
 | Tests | 2,622 across 4 layers — unit 2,112 · contract 149 · simulation 98 · journeys 263 | `core/test/` |
-| Architecture fences | 33 meta-tests that fail the build when a boundary is crossed | [`core/test/unit/meta/`](core/test/unit/meta) |
+| Architecture fences | 39 meta-tests that fail the build when a boundary is crossed | [`core/test/unit/meta/`](core/test/unit/meta) |
 | Owner CLI | 31 commands | `CLI_COMMANDS` in [`core/src/cli/main.ts`](core/src/cli/main.ts) |
 | Workflows | 8 recipes | [`core/src/workflow/recipes/`](core/src/workflow/recipes) |
 | Provider adapters | 3 real + 1 fixture stub | [`core/src/adapters/catalog.ts`](core/src/adapters/catalog.ts) |
 | Process supervision | 1 port, 3 OS implementations, 1 shared contract suite | [`core/src/execution/platform/`](core/src/execution/platform) |
 | HTTP API | 9 reads + 1 archive write | [`core/src/api/routes.ts`](core/src/api/routes.ts) |
-| Plans | 16 plan documents carrying **190 dated amendment entries** | [`specs/`](specs) |
+| Plans | 19 plan documents carrying **255 dated amendment entries** | [`specs/`](specs) |
 | Real runs on this repo | 40 sessions · 125 transitions · 212 phases · 459 gate results · 7.44M tokens · 78 provider calls | the journal and its projection |
 
 ## What this is
@@ -609,8 +610,9 @@ journalled, and none can be reached by a model.
 The plan is the unit of work, and it nests two levels deep.
 
 1. **A spine plan** declares the workstreams and sequences them, with the
-   ordering gates that cannot be resequenced. `specs/awsf-v2-plan.html` is the
-   current one: seventeen workstreams, each a milestone.
+   ordering gates that cannot be resequenced. `specs/awsf-v3-plan.html` is the
+   current one: fifteen workstreams in four phases, each a milestone.
+   `specs/awsf-v2-plan.html` is its predecessor.
 2. **A deep plan** is authored per workstream, with its own milestones, tasks,
    Questionables and validation commands — `specs/awsf-v2-w17-shift.html` and
    its siblings.
@@ -618,7 +620,7 @@ The plan is the unit of work, and it nests two levels deep.
    A meta-test asserts a plan and its tickets can never disagree.
 4. **An amendments log** at the end of every plan records what changed after
    authoring — each entry dated, each naming what moved and what deliberately
-   did not. There are **190 such entries** across 16 plan documents, and they
+   did not. There are **255 such entries** across 19 plan documents, and they
    are where the project's real history lives: the corrections, the questions
    the owner answered against a recommendation, and the findings that only a
    live drive could produce.
@@ -679,10 +681,10 @@ Do not take a green unit suite as evidence about process trees or Git landing �
 
 | Layer | Tests | What only this layer can prove |
 |---|---|---|
-| `unit` | 2,112 | Pure logic: the transition matrix, gate arithmetic, contract parsing, and the 33 architecture fences |
+| `unit` | 2,645 | Pure logic: the transition matrix, gate arithmetic, contract parsing, and the 39 architecture fences |
 | `contract` | 149 | That all three `ProcessSupervisor` implementations satisfy one shared behavioural contract |
 | `simulation` | 98 | Crash safety: SIGKILL injected at every step of the launch sequence, torn journal lines, orphan reaping, rebuild identity |
-| `journeys` | 263 | End-to-end owner paths — correction, rework, review inversion, permission breach, human gate, publish — against captured provider fixtures |
+| `journeys` | 347 | End-to-end owner paths — correction, rework, review inversion, permission breach, human gate, publish — against captured provider fixtures |
 
 The journey suite spends no provider quota.
 
@@ -699,7 +701,8 @@ awsf.project.yaml         this project's own catalog entry: repositories, gates,
 AGENTS.md                 invariants an agent session working ON this repo must not break
 specs/                    the planning artifacts — read these first
   awsf-plan.html             the v1 spine: M0–M11, 38 tasks, 75 amendments
-  awsf-v2-plan.html          the v2 spine: 17 workstreams, 9 landed
+  awsf-v2-plan.html          the v2 spine: 19 workstreams, 11 complete
+  awsf-v3-plan.html          the v3 spine: 15 workstreams in phases A–D, none started
   awsf-v2-w*.html            one deep plan per workstream, each with its own amendments
   awsf-architecture-proposal.md   the accepted design authority the plans implement
   tickets/<plan>/            one ticket per task, kept in sync with the plan by meta-test
@@ -838,7 +841,7 @@ All 38 v1 tickets are `state: done`. Pilot 1 was a T1 read-only survey; pilot 2
 a T2 task whose opposite-provider review returned `concern` with four findings
 and was landed with those findings on the record.
 
-### v2 — the current workstream
+### v2 — reaching its ceiling
 
 v1 built a factory that can build *this* repository. v2 makes it one the owner
 can point at **any** project and carry from an idea to published source with the
@@ -860,31 +863,56 @@ into an adjacent workstream by accident.
 | W09 | agy adapter | optional | `[ ]` |
 | W10 | mf adapter | optional | `[ ]` |
 | W11 | The five-stage ladder | v2 core | `[x]` |
-| W12 | The cheatsheet | v2 core | `[ ]` |
+| W12 | The cheatsheet | v2 core | `[x]` |
 | W13 | Deploy | declared, not built | `[ ]` |
 | W14 | Monitor | declared, not built | `[ ]` |
 | W15 | Ticket closure | declared, not built | `[ ]` |
 | W16 | The pi/OpenRouter adapter | optional | `[ ]` |
-| W17 | `shift` — a milestone as one attempt | v2 core | `[ ]` |
+| W17 | `shift` — a milestone as one attempt | v2 core | `[x]` |
+| W18 | Route Metrics | adopted 2026-09-26 | `[ ]` |
+| W19 | Jev and the Delegate | adopted 2026-09-28 | `[ ]` |
 
-W12 is worth reading even unfinished: its sixteen amendments are the record of
+W12 is worth reading: its sixteen amendments are the record of
 driving the factory against real work for a week — every enabled route
 exercised, four hidden seams induced and removed, a review's fifteen findings
 closed or refused in code, and two structural traps in the rework path found the
 only way they could be found.
 
-W17 is the newest and the most ambitious: a workflow whose phase list is
+W17 is the most ambitious: a workflow whose phase list is
 *compiled from selected tickets*, so one milestone becomes one attempt with one
 owner gate. It exists because the obvious alternative does not work — a queue of
 independent unattended runs halts on ticket one and waits for a person, since
 `L20` is human-only and no timer can produce a lifecycle transition.
 
+### v3 — the factory drives itself between the owner's decisions
+
+v2 left the driving procedure in a model's memory, and that is where it fails:
+in a draft review of 27 blocked runs, 8 were stops a mechanical check would have
+refused, and only 1 of 36 stops carries a recorded cause. v3 moves the procedure
+into the host. Judgment runs on the owner's subscriptions, every stop is
+explained, and **every landing stays the owner's**.
+
+| Phase | Workstreams | Purpose |
+|---|---|---|
+| A — reliability and record | W01 driver checks · W02 trap suite · W03 ticket closure · W04 session record | Make skipped checks impossible and record every session |
+| B — autonomy within subscriptions | W05 authority (carries v2 W19) · W06 routing · W07 user-testing validator · W08 Marimba harness | Widen what runs without the owner |
+| C — always improving | W09 context engine · W10 data loop and local model · W11 agent readiness | Cheaper turns, a measured local model, project readiness |
+| D — the whole loop and reach | W12 Mac host · W13 deploy · W14 monitor and signals · W15 surfaces | Staging deploy, signals back to intake, desktop and phone |
+
+One gate cannot be resequenced: **nothing that widens what runs without the
+owner lands before W02's trap suite refuses every known trap.** The headline
+target is the share of AWSF's own code commits that land through the factory:
+8% at the assessment on 2026-10-01, at least 50% for v3.
+
 ## Planning artifacts
 
-- [`specs/awsf-v2-plan.html`](specs/awsf-v2-plan.html) — the current spine.
+- [`specs/awsf-v3-plan.html`](specs/awsf-v3-plan.html) — the current spine, with
+  its build prompts and ticket set.
+- [`specs/awsf-v2-plan.html`](specs/awsf-v2-plan.html) — the v2 spine.
 - [`specs/awsf-plan.html`](specs/awsf-plan.html) — the v1 plan: every milestone,
   task, architectural table and Q&A.
-- `specs/awsf-v2-w*.html` — one deep plan per workstream.
+- `specs/awsf-v2-w*.html` — one deep plan per v2 workstream. v3's are written
+  one at a time, as `specs/awsf-v3-w*.html`.
 - [`specs/awsf-architecture-proposal.md`](specs/awsf-architecture-proposal.md) —
   the accepted design authority the plans implement.
 - [`specs/awsf-plan-acceptance.md`](specs/awsf-plan-acceptance.md) — every claim
