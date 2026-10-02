@@ -243,17 +243,16 @@ DO
        that spawn go through core/src/execution/transport-broker.ts (invariant 3).
   Use the 07b20f9 episode in the rationale: a new bwrap check needed the resolved path the real
   broker records, the journeys' fake broker recorded a bare bwrap, 31 protected-grant journeys
-  went BLOCKED, and it landed because the gates do not run journeys.
+  went BLOCKED, and it landed because the gates did not run journeys then.
 
 DECIDED 2026-10-02 - APPLY, DO NOT REOPEN
   Q2 - a separate test:traps layer on the stub adapter. Every cause record names a trap id or
        the reason none is possible, and a cause naming a missing trap is a red test.
-  Q13 - test:journeys becomes a full landing gate, timeout 2,400 s. Make landing it this deep
-        plan's first task. A trial on 2026-10-02 failed 74 journeys and 2 unit tests: the
-        journey harness's fake runner answers only test, typecheck and lint, the loader's
-        KNOWN_GATE_IDS and the cheatsheet know only those three, and a prove replay binds every
-        configured gate. Fix those, then the owner commits the gate to awsf.config.yaml's gates
-        (recorded in awsf.project.yaml).
+  Q13 - test:journeys is a full landing gate, timeout 2,400 s. It landed on 2026-10-02, before
+        this deep plan: journeys is in KNOWN_GATE_IDS and the cheatsheet, awsf.config.yaml's
+        gates run it (recorded in awsf.project.yaml), and every test config that copies the
+        shipped gates deletes it. Keep it green; a new test config that copies the shipped
+        gates deletes it the same way.
 
 AMENDMENTS AND OWNER-SIDE WORK
   Any further gate, the trap layer included, edits awsf.config.yaml's gates and its record in
@@ -502,9 +501,9 @@ DO
   side and compared at read time, and no path to lifecycle state. If the API still has no
   published docs or price, declare the milestone with that precondition rather than design
   against guesses.
-  Apply GR: no lease is granted for a live night, and no leased live drive runs, until W02 is
-  [x]. If the owner instead reads decision 13 as binding on landing M3-M4's code, M3-M4 wait for
-  W02, and the plan says so.
+  Apply GR as the owner confirmed it on 2026-10-02: M3-M4's code may land, but no lease is
+  granted for a live night, and no leased live drive runs, until W02 is [x]. M3's acceptance is
+  its w19-m3 real night, so M3's marker also waits for W02.
   Write the carried tasks' content as dated findings into the Handoff sections of W07.md,
   W09.md and W10.md in specs/tickets/awsf-v3-plan/, above their Build prompt.
 

@@ -145,7 +145,7 @@ code.inv, code.ac, code.serves { color:var(--cyan); }
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-09-28</dd>
-        <dt>modified</dt>     <dd>2026-09-28 (authored, awaiting owner review), 2026-09-28 (owner review applied: Q16–Q20 decided as recommended), 2026-09-28 (gate G19-A committed), 2026-09-29 (T01 delivered, M1 [wip]), 2026-09-29 (T02 delivered, M1 [wip]), 2026-09-29 (T03 delivered, M1 [x]), 2026-09-29 (T04 delivered, M2 [wip]), 2026-09-29 (T05 delivered, M2 [wip]), 2026-09-29 (T06 delivered, M2 [wip]), 2026-09-29 (T07 delivered, M2 [x])</dd>
+        <dt>modified</dt>     <dd>2026-09-28 (authored, awaiting owner review), 2026-09-28 (owner review applied: Q16–Q20 decided as recommended), 2026-09-28 (gate G19-A committed), 2026-09-29 (T01 delivered, M1 [wip]), 2026-09-29 (T02 delivered, M1 [wip]), 2026-09-29 (T03 delivered, M1 [x]), 2026-09-29 (T04 delivered, M2 [wip]), 2026-09-29 (T05 delivered, M2 [wip]), 2026-09-29 (T06 delivered, M2 [wip]), 2026-09-29 (T07 delivered, M2 [x]), 2026-10-02 (carried into v3 as W05; gate GR recorded)</dd>
         <dt>commits</dt>      <dd>d71b6b4 (plan authored and adopted), the G19-A commit that adds invariant 13, ed7e71c 6b1751d 56a8101 (T01), 07e43d8 3417e81 6d85dba 0371f2d (T02), 5915c87 1ac91ae (T03), 777f8a6 (T04), 364f15d (T05), d28e0aa (T06), 34c5c1b (T07)</dd>
         <dt>agent name</dt>   <dd>claude-opus-5-5, claude-opus-5-5 (review applied)</dd>
         <dt>session id</dt>   <dd>not recorded (AGENTS.md invariant 1 keeps live session state out of every committed file)</dd>
@@ -1113,6 +1113,12 @@ flowchart LR
       <p><strong>Milestone M2 complete.</strong> Tasks 4–7 are <code>[x]</code>. AC-2's evidence is the stop facts, the shadow policy with its proposal at every stop, and this replay. AC-3's pure half is agreement and autonomy. The owner's acceptance for T07 remains the owner's act: after G19-C, run <code>awsf delegate replay</code> on the real state root, offline and then with <code>--live</code>, and read the per-act agreement.</p>
       <p><strong>Carried forward</strong> as Handoff entries in T12 (C1–C3) and T26 (C1–C3), committed as <code>58b3601</code>.</p>
       <p>Completion metadata: built and verified in a manual session.</p>
+    </details>
+    <details open>
+      <summary>2026-10-02 — Carried into AWSF v3 as W05; gate GR binds M3's live night</summary>
+      <p><strong>Carried.</strong> The v3 spine, <code>awsf-v3-plan.html</code>, carries this plan as its W05 and keeps it as W05's deep plan. W05's ticket re-cuts it: M5 moves to v3 W07, M6–M7 to v3 W09 and M8 to v3 W10, and a Decisions API shadow milestone follows M4. Do not start M5–M8 here.</p>
+      <p><strong>Gate GR, confirmed by the owner on 2026-10-02.</strong> M3–M4's code may land under this plan's own gates. No lease is granted for a live night, and no leased live drive runs, until v3 W02 is <code>[x]</code>. Task 12's <code>w19-m3</code> real night therefore waits for W02, and so does M3's marker. Offline work, including task 12's journey on stub routes with a fake clock, is not affected.</p>
+      <p>No task, ticket or marker changed.</p>
     </details>
   </section>
 
