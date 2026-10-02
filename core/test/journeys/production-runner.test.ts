@@ -27,7 +27,7 @@ import type {
   TransportBroker,
 } from "../../src/adapters/interface.ts";
 import { AdapterError, isTaskEdgeRegistration, reservationIdOf } from "../../src/adapters/interface.ts";
-import { ProcessTransportBroker, runSystemCommand, type BrokerOptions } from "../../src/execution/transport-broker.ts";
+import { ProcessTransportBroker, resolveExecutable, runSystemCommand, type BrokerOptions } from "../../src/execution/transport-broker.ts";
 import { createDashboardProjection } from "../../src/cli/commands/dashboard-projection.ts";
 import { newCommand } from "../../src/cli/commands/new.ts";
 import { main as cliMain } from "../../src/cli/main.ts";
@@ -721,11 +721,16 @@ class CapturedPiAdapter extends PiCodexAdapter {
 function fakeBroker(options: BrokerOptions): TransportBroker {
   return {
     async startProcess(registration, spec) {
+      // The real broker records the executable it resolved, and the protected
+      // execution proof compares that path with the host's own resolution of
+      // bwrap. Record bwrap the same way. Every other executable stays as the
+      // descriptor named it, so these journeys need no other host binary.
+      const executable = spec.executable === "bwrap" ? resolveExecutable(spec.executable, spec.env) : spec.executable;
       const record = {
         identity: { pid: 4242, pgid: 4242, startIdentity: "fixture:4242", startIdentitySource: "fixture" },
         runId: registration.runId, edge: isTaskEdgeRegistration(registration) ? registration.edge : null,
         ...(registration.kind === "agent-phase" ? { phase: { taskSessionId: registration.taskSessionId, workflowId: registration.workflowId, phaseId: registration.phaseId, phaseOrdinal: registration.phaseOrdinal, adapterId: registration.adapterId, role: registration.role } } : {}),
-        reservationId: reservationIdOf(registration), command: [spec.executable, ...spec.argv], cwd: spec.cwd,
+        reservationId: reservationIdOf(registration), command: [executable, ...spec.argv], cwd: spec.cwd,
       };
       if (registration.kind === "agent-phase") options.phaseLaunchVerifier?.verify(registration);
       await options.register(record);
