@@ -34,8 +34,7 @@ prompt would be the same prompt written twice. Section B is the whole file.
    session in this file is a manual, logged exception until W03 lands a closure path. Implementation
    inside each deep plan defaults to managed execution through the factory (decision 7).
 
-The owner's W18 M5 bookkeeping commit is still pending. No prompt here depends on it, and no session
-flips it.
+W18 closed on 2026-10-02 in the owner's bookkeeping commit. No prompt here depends on it.
 
 ---
 
@@ -230,7 +229,7 @@ READ FIRST
   core/src/cli/commands/doctor.ts - what it checks today, and that it has no repair path
   core/test/journeys/ - how the production runner is driven on stub routes
   git show 07b20f9 7bc48b5 - the regression and its fix
-  awsf.project.yaml - the landing gates
+  awsf.config.yaml - gates (what the runner runs), recorded in awsf.project.yaml
 
 DO
   Invoke /plan-sota with QUESTIONABLE true to author specs/awsf-v3-w02-trap-suite.html, its
@@ -249,11 +248,16 @@ DO
 DECIDED 2026-10-02 - APPLY, DO NOT REOPEN
   Q2 - a separate test:traps layer on the stub adapter. Every cause record names a trap id or
        the reason none is possible, and a cause naming a missing trap is a red test.
-  Q13 - test:journeys becomes a full landing gate (timeout at least 1,800 s on this host), by
-       owner commit to awsf.project.yaml. That commit may land before this deep plan.
+  Q13 - test:journeys becomes a full landing gate, timeout 2,400 s. Make landing it this deep
+        plan's first task. A trial on 2026-10-02 failed 74 journeys and 2 unit tests: the
+        journey harness's fake runner answers only test, typecheck and lint, the loader's
+        KNOWN_GATE_IDS and the cheatsheet know only those three, and a prove replay binds every
+        configured gate. Fix those, then the owner commits the gate to awsf.config.yaml's gates
+        (recorded in awsf.project.yaml).
 
 AMENDMENTS AND OWNER-SIDE WORK
-  The journeys gate (Q13) edits awsf.project.yaml, a protected path: an owner commit under GA.
+  Any further gate, the trap layer included, edits awsf.config.yaml's gates and its record in
+  awsf.project.yaml, both protected: an owner commit under GA.
   Confirming the seed list from the forensics draft is the owner's.
   CHEAPEST UNUSED UPGRADE: replay the forensics list's stops on the stub adapter before fixing
   the trap format.
@@ -322,7 +326,8 @@ READ FIRST
 THE CONTRADICTION THIS WORKSTREAM RESOLVES
   Every ticket prompt requires the plan marker and ticket state to flip in one commit. No role
   can write specs/*.html. Nothing in core/src flips either. So no factory task closes its own
-  ticket, and plans drift from code (W18 M5 is on main with its markers open).
+  ticket, and plans drift from code (W18 M5 sat on main with its markers open until a manual
+  bookkeeping commit on 2026-10-02).
 
 DO
   Before anything: confirm no role's writes was widened into specs/ since v2 W15 was declared.
@@ -461,7 +466,7 @@ THE DEEP PLAN FOR THIS WORKSTREAM IS ALREADY AUTHORED.
 specs/awsf-v2-w19-jev-delegate.html was written on 2026-09-28 with its build prompts and a
 twenty-eight-ticket set at specs/tickets/awsf-v2-w19-jev-delegate/. M1-M2 (tasks 1-7) are [x]
 on main. Do not author a second plan, and do not re-home it under awsf-v3-w05-authority: that
-would orphan its ticket set and the SHAs its records cite.
+would orphan its ticket set and the SHAs its records cite. The owner confirmed this on 2026-10-02.
 
 TASK 5 of 15. Plan: specs/awsf-v3-plan.html. Milestone: M5.
 WORKSTREAM: W05 - Authority (intent X5, Phase B; carries v2 W19).

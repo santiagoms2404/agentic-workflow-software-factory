@@ -15,7 +15,7 @@ human authorises anything that becomes permanent.**
 
 > **Status: pre-alpha, single operator, actively built.** v1 is complete —
 > M0–M11, 38 tasks, both adoption pilots landed on real work. **v2 has reached
-> its ceiling**: nineteen workstreams on a spine plan, eleven complete, each
+> its ceiling**: nineteen workstreams on a spine plan, twelve complete, each
 > milestone carrying its own deep plan with its own tickets, amendments and
 > validation. **v3 is the next spine**: fifteen workstreams in four phases,
 > authored on 2026-10-02, with no deep plan written yet. The factory has driven 40 real sessions on this repository and
@@ -56,7 +56,7 @@ a fixture.
 | Provider adapters | 3 real + 1 fixture stub | [`core/src/adapters/catalog.ts`](core/src/adapters/catalog.ts) |
 | Process supervision | 1 port, 3 OS implementations, 1 shared contract suite | [`core/src/execution/platform/`](core/src/execution/platform) |
 | HTTP API | 9 reads + 1 archive write | [`core/src/api/routes.ts`](core/src/api/routes.ts) |
-| Plans | 19 plan documents carrying **255 dated amendment entries** | [`specs/`](specs) |
+| Plans | 19 plan documents carrying **258 dated amendment entries** | [`specs/`](specs) |
 | Real runs on this repo | 40 sessions · 125 transitions · 212 phases · 459 gate results · 7.44M tokens · 78 provider calls | the journal and its projection |
 
 ## What this is
@@ -620,7 +620,7 @@ The plan is the unit of work, and it nests two levels deep.
    A meta-test asserts a plan and its tickets can never disagree.
 4. **An amendments log** at the end of every plan records what changed after
    authoring — each entry dated, each naming what moved and what deliberately
-   did not. There are **255 such entries** across 19 plan documents, and they
+   did not. There are **258 such entries** across 19 plan documents, and they
    are where the project's real history lives: the corrections, the questions
    the owner answered against a recommendation, and the findings that only a
    live drive could produce.
@@ -701,7 +701,7 @@ awsf.project.yaml         this project's own catalog entry: repositories, gates,
 AGENTS.md                 invariants an agent session working ON this repo must not break
 specs/                    the planning artifacts — read these first
   awsf-plan.html             the v1 spine: M0–M11, 38 tasks, 75 amendments
-  awsf-v2-plan.html          the v2 spine: 19 workstreams, 11 complete
+  awsf-v2-plan.html          the v2 spine: 19 workstreams, 12 complete
   awsf-v3-plan.html          the v3 spine: 15 workstreams in phases A–D, none started
   awsf-v2-w*.html            one deep plan per workstream, each with its own amendments
   awsf-architecture-proposal.md   the accepted design authority the plans implement
@@ -869,7 +869,7 @@ into an adjacent workstream by accident.
 | W15 | Ticket closure | declared, not built | `[ ]` |
 | W16 | The pi/OpenRouter adapter | optional | `[ ]` |
 | W17 | `shift` — a milestone as one attempt | v2 core | `[x]` |
-| W18 | Route Metrics | adopted 2026-09-26 | `[ ]` |
+| W18 | Route Metrics | adopted 2026-09-26 | `[x]` |
 | W19 | Jev and the Delegate | adopted 2026-09-28 | `[ ]` |
 
 W12 is worth reading: its sixteen amendments are the record of
