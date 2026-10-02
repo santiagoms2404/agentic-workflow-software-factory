@@ -194,7 +194,8 @@ async function startedShift() {
     .replace("  seed_paths: [node_modules]", "  seed_paths: []")
     .replace("test: { argv: [npm, run, test:unit], timeout_seconds: 600 }", `test: { argv: [node, ${GATE[0]}, ${GATE[1]}], timeout_seconds: 10 }`)
     .replace("  typecheck: { argv: [npm, run, typecheck], timeout_seconds: 300 }\n", "")
-    .replace("  lint: { argv: [npm, run, lint], timeout_seconds: 300 }\n", "");
+    .replace("  lint: { argv: [npm, run, lint], timeout_seconds: 300 }\n", "")
+    .replace("  journeys: { argv: [npm, run, test:journeys], timeout_seconds: 2400 }\n", "");
   const config = loadConfig(configText);
   assert.equal(config.risk.call_ceiling.T2, 10);
   assert.ok(config.workflows.enabled.includes("build-review"));

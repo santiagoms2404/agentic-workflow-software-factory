@@ -359,7 +359,8 @@ function configText(): string {
       "test: { argv: [node, check.mjs], timeout_seconds: 60 }",
     )
     .replace("  typecheck: { argv: [npm, run, typecheck], timeout_seconds: 300 }\n", "")
-    .replace("  lint: { argv: [npm, run, lint], timeout_seconds: 300 }\n", "");
+    .replace("  lint: { argv: [npm, run, lint], timeout_seconds: 300 }\n", "")
+    .replace("  journeys: { argv: [npm, run, test:journeys], timeout_seconds: 2400 }\n", "");
 }
 
 /**

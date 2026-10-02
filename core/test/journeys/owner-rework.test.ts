@@ -71,7 +71,8 @@ function configText(commandExit = 0): string {
     .replace("  seed_paths: [node_modules]", "  seed_paths: []")
     .replace("test: { argv: [npm, run, test:unit], timeout_seconds: 600 }", `test: { argv: [node, -e, process.exit(${commandExit})], timeout_seconds: 10 }`)
     .replace("  typecheck: { argv: [npm, run, typecheck], timeout_seconds: 300 }\n", "")
-    .replace("  lint: { argv: [npm, run, lint], timeout_seconds: 300 }\n", "");
+    .replace("  lint: { argv: [npm, run, lint], timeout_seconds: 300 }\n", "")
+    .replace("  journeys: { argv: [npm, run, test:journeys], timeout_seconds: 2400 }\n", "");
 }
 
 interface World {

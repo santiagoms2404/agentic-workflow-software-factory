@@ -26,7 +26,7 @@ export const KNOWN_WORKFLOW_IDS = WORKFLOW_IDS;
 // artifact/diff/write/hygiene checks, review verdict, journey) are
 // structural and take no configuration. This set is loader-checked, not
 // schema-closed, so a later task can extend it without touching schema.ts.
-export const KNOWN_GATE_IDS = ["test", "typecheck", "lint"] as const;
+export const KNOWN_GATE_IDS = ["test", "typecheck", "lint", "journeys"] as const;
 export const KNOWN_RISK_TIERS = ["T0", "T1", "T2"] as const;
 // Per the Ownership section and the Envelope & Gate Contract: `protected` is
 // orthogonal to risk tier — credential access, external mutation, deletion,

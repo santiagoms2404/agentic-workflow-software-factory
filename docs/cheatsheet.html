@@ -444,7 +444,7 @@ git status --porcelain</pre>
 npm run test:unit
 npm run lint
 npm run typecheck</pre>
-    <p>Those are the worker&rsquo;s claim. The measurement is separate: the host then ran this project&rsquo;s three configured gates against the candidate itself, and all three exited 0. Which three, and why that sentence is worth exactly those three, is <a href="#reference-workflows-and-gates">Workflows and gates</a>.</p>
+    <p>Those are the worker&rsquo;s claim. The measurement is separate: the host then ran the three gates this project configured at the time against the candidate itself, and all three exited 0. Which gates are configured now, and why that sentence is worth exactly those, is <a href="#reference-workflows-and-gates">Workflows and gates</a>.</p>
   </div>
 </section>
 
@@ -853,6 +853,7 @@ npm run awsf -- land TASK</pre>
     <li><code>gate|test</code></li>
     <li><code>gate|typecheck</code></li>
     <li><code>gate|lint</code></li>
+    <li><code>gate|journeys</code></li>
   </ul>
 
   <h3>A workflow is the route</h3>
@@ -869,8 +870,8 @@ npm run awsf -- land TASK</pre>
   </ul>
 
   <h3>A gate is a check this project runs against the candidate</h3>
-  <p>Three are configured here: <code>test</code> runs the project&rsquo;s own suite, <code>typecheck</code> runs its typechecker, and <code>lint</code> runs its linter. Each has a command and a timeout, and the host runs all of them against the candidate rather than trusting the worker&rsquo;s account of having run them.</p>
-  <p class="warnnote"><strong>This list is what leg 4&rsquo;s green sentence is worth.</strong> &ldquo;All configured commands passed&rdquo; is a statement about exactly these three, and a project that configures none gets the same sentence with nothing at all behind it. The list is the thing to read; the sentence only reports on it.</p>
+  <p>Four are configured here: <code>test</code> runs the project&rsquo;s unit suite, <code>typecheck</code> runs its typechecker, <code>lint</code> runs its linter, and <code>journeys</code> runs its end-to-end journeys, which take about twenty minutes. Each has a command and a timeout, and the host runs all of them against the candidate rather than trusting the worker&rsquo;s account of having run them.</p>
+  <p class="warnnote"><strong>This list is what leg 4&rsquo;s green sentence is worth.</strong> &ldquo;All configured commands passed&rdquo; is a statement about exactly these four, and a project that configures none gets the same sentence with nothing at all behind it. The list is the thing to read; the sentence only reports on it.</p>
 </section>
 
 <section id="reference-risk-tiers">
