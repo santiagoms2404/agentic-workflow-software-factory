@@ -23,17 +23,25 @@ function source(root: string, stem: string): ResolvedPlanSource {
   };
 }
 
-test("repository plan kinds are structural and every deep plan names the v2 spine", () => {
+test("repository plan kinds are structural and every deep plan names its own spine", () => {
+  // A rule, not a list. The list of spine ids turned red every time a spine was
+  // authored, the same way the old deep-plan count did.
   const plans = classifyPlans(repositorySources());
-  assert.deepEqual(plans.filter((plan) => plan.kind === "spine").map((plan) => plan.id), [
-    "awsf-plan",
-    "awsf-v2-plan",
-  ]);
+  const spines = plans.filter((plan) => plan.kind === "spine");
   const deep = plans.filter((plan) => plan.kind === "deep");
-  // Not a count. The count was only ever here so the `every` below could not
-  // pass on an empty array, and it turned red every time a plan was authored.
-  assert.ok(deep.length > 0, "the corpus must contain deep plans or the check below is vacuous");
-  assert.ok(deep.every((plan) => plan.parentSpine === "awsf-v2-plan"));
+  assert.ok(spines.length > 0 && deep.length > 0, "the corpus must contain both kinds or the checks below are vacuous");
+
+  const spineIds = new Set(spines.map((plan) => plan.id));
+  const offenders: string[] = [];
+  for (const plan of plans) {
+    const prefix = /^(.+)-w\d\d-/u.exec(plan.id)?.[1];
+    if (prefix === undefined) {
+      if (plan.kind !== "spine" || !plan.id.endsWith("-plan")) offenders.push(`${plan.id}: no -wNN- segment, so it must be a <prefix>-plan spine`);
+    } else if (plan.kind !== "deep" || plan.parentSpine !== `${prefix}-plan` || !spineIds.has(plan.parentSpine)) {
+      offenders.push(`${plan.id}: a -wNN- plan must be deep under the resolved spine ${prefix}-plan, got ${plan.kind} under ${String(plan.parentSpine)}`);
+    }
+  }
+  assert.deepEqual(offenders, []);
 });
 
 test("an AWSF-rendered generic workstream is deep without prose in its HTML", () => {
