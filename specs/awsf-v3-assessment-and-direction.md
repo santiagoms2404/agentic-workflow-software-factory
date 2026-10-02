@@ -5,16 +5,13 @@ marker, ticket or registered plan. It is evidence for a future
 `specs/awsf-v3-intent.md`.
 
 - **Date:** 2026-10-01
-- **Source talk:** Tereza Tížková (Factory), "What it takes to build a software
-  factory". The transcript and 16 slide screenshots are machine-local and not
-  committed.
 - **Measured at:** `main` 07b20f9. `npm run test:unit` passed 2,534/2,534.
   Factory figures come from the machine-local state root and the Marimba
   session archive.
 
 ---
 
-## ELI version (explain it like I'm 14)
+## ELI version
 
 - **What a software factory is.** A team of AI workers that does the whole job
   of making software. It listens to what users need, picks what matters, builds
