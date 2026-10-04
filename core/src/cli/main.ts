@@ -839,7 +839,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         const cause = parsed.flags["cause"] ?? "";
         const reason = parsed.flags["reason"] ?? "";
         if (parsed.flags.attempt === undefined || cause.trim().length === 0 || reason.trim().length === 0) {
-          throw new Error('usage: awsf attribute <task> --attempt <n> --cause <model|factory|environment|owner|unknown> --reason "<why>"');
+          throw new Error('usage: awsf attribute <task> --attempt <n> --cause <model|factory|environment|driver|owner|unknown> --reason "<why>"');
         }
         const attempt = Number(parsed.flags.attempt);
         const result = await attributeCommand({
@@ -851,7 +851,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
           out(`Attribution declined; ${taskId} attempt ${attempt} keeps the attribution it had and nothing was recorded.`);
           return 1;
         }
-        out(`${project}/${taskId} attempt ${attempt}'s block is attributed to ${cause}; the record and your reason are journalled.`);
+        out(`${project}/${taskId} attempt ${attempt} is attributed to ${cause}; the record and your reason are journalled.`);
         out("Recorded on the task, not on the attempt, so the sealed attempt was not reopened.");
         return 0;
       }

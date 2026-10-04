@@ -1,5 +1,5 @@
-// `awsf attribute <task> --attempt <n> --cause <model|factory|environment|owner|unknown> --reason "<why>"`
-// — the owner's override of whose fault one BLOCKED attempt was (W18 D4).
+// `awsf attribute <task> --attempt <n> --cause <model|factory|environment|driver|owner|unknown> --reason "<why>"`
+// — the owner's cause record for a BLOCKED or CANCELLED attempt (W18 D4).
 //
 // The metrics count a block against a route only when it is the model's. The
 // heuristic in `metrics/attribution.ts` decides that from the code the run
@@ -15,7 +15,7 @@
 // registered in `main.ts` at all.
 //
 // It is stored TASK-SCOPED, as `awsf relate` is and for the same reason. Only
-// a BLOCKED attempt can be attributed, and a BLOCKED attempt is sealed: writing
+// a BLOCKED or CANCELLED attempt can be attributed, and both are sealed: writing
 // into it would reopen sealed bytes. So the record goes in `attributions.jsonl`
 // beside the task's attempt directories, and `awsf db rebuild` replays it.
 //
@@ -50,14 +50,14 @@ export class AttributeNotInteractive extends Error {
 
 export class AttributeUnknownCause extends Error {
   constructor(cause: string) {
-    super(`--cause read ${JSON.stringify(cause)}; a block is attributed to one of ${ATTRIBUTION_CAUSES.join(", ")}`);
+    super(`--cause read ${JSON.stringify(cause)}; an attempt is attributed to one of ${ATTRIBUTION_CAUSES.join(", ")}`);
     this.name = "AttributeUnknownCause";
   }
 }
 
 export class AttributeReasonRequired extends Error {
   constructor() {
-    super("awsf attribute requires --reason naming why this block is attributed so; it is a record, never a key");
+    super("awsf attribute requires --reason naming why this attempt is attributed so; it is a record, never a key");
     this.name = "AttributeReasonRequired";
   }
 }
@@ -76,12 +76,10 @@ export class AttributeAttemptMissing extends Error {
   }
 }
 
-export class AttributeAttemptNotBlocked extends Error {
+export class AttributeAttemptNotAttributable extends Error {
   constructor(project: string, taskId: string, attempt: number, state: string) {
-    super(
-      `${project}/${taskId} attempt ${attempt} is ${state}, not BLOCKED: only a blocked attempt has a block to attribute`,
-    );
-    this.name = "AttributeAttemptNotBlocked";
+    super(`${project}/${taskId} attempt ${attempt} is ${state}: only BLOCKED or CANCELLED attempts can be attributed`);
+    this.name = "AttributeAttemptNotAttributable";
   }
 }
 
@@ -106,7 +104,7 @@ export interface AttributeCommandResult {
   readonly previous: AttributionRecord | null;
 }
 
-/** The owner's written record of why this block is attributed so. */
+/** The owner's written record of why this attempt is attributed so. */
 export function assertAttributeReason(reason: string): string {
   const normalized = reason.trim().replace(/\s+/gu, " ");
   if (normalized.length === 0) throw new AttributeReasonRequired();
@@ -140,21 +138,23 @@ export async function attributeCommand(options: AttributeCommandOptions): Promis
 
   const root = taskRoot(options.stateRoot, project, taskId);
   const status = await readNamedAttempt(options, root);
-  // BLOCKED is terminal, so the state read here cannot move before the write.
-  if (status.lifecycleState !== "BLOCKED") {
-    throw new AttributeAttemptNotBlocked(project, taskId, attempt, status.lifecycleState);
+  // Both admissible states are terminal, so the state cannot move before the write.
+  if (status.lifecycleState !== "BLOCKED" && status.lifecycleState !== "CANCELLED") {
+    throw new AttributeAttemptNotAttributable(project, taskId, attempt, status.lifecycleState);
   }
   const previous = await attemptAttribution(root, attempt);
 
-  options.terminal.write(`Task: ${project}/${taskId} attempt ${attempt}, T${status.tier}, ${status.workflow}, BLOCKED`);
+  options.terminal.write(`Task: ${project}/${taskId} attempt ${attempt}, T${status.tier}, ${status.workflow}, ${status.lifecycleState}`);
   options.terminal.write(`Last activity: ${status.lastActivity}`);
   options.terminal.write(previous === null
-    ? "No owner attribution is on record; the metrics use the heuristic."
+    ? status.lifecycleState === "BLOCKED"
+      ? "No owner attribution is on record; the metrics use the heuristic."
+      : "No owner attribution is on record; a cancelled attempt has no heuristic cause."
     : `On record: ${previous.cause} (${previous.at}): ${previous.reason}`);
   options.terminal.write(`New attribution: ${cause}`);
   options.terminal.write(`Reason on record: ${reason}`);
-  options.terminal.write("Only a model-attributed block counts against the route that ran it. This record overrides the heuristic for this attempt alone; the attempt itself is not reopened, and any earlier record stays on file.");
-  const confirmed = await options.terminal.confirm(`Attribute ${taskId} attempt ${attempt}'s block to ${cause}?`);
+  options.terminal.write("Only a model-attributed block counts against the route that ran it. This record gives this attempt its cause; the attempt itself is not reopened, and any earlier record stays on file.");
+  const confirmed = await options.terminal.confirm(`Attribute ${taskId} attempt ${attempt} (${status.lifecycleState}) to ${cause}?`);
   if (!confirmed) return { confirmed: false, record: null, previous };
 
   const at = (options.now ?? ((): string => new Date().toISOString()))();

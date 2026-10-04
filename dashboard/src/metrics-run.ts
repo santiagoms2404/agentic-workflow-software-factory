@@ -255,7 +255,16 @@ export function roleLines(rows: readonly MetricsRoleRow[], price: RowPrice, cont
 // ---------------------------------------------------------------------------
 
 /** `ATTRIBUTION_CAUSES` in `core/src/contracts/attribution-record.ts`, which the dashboard cannot import. */
-export const ATTRIBUTION_CAUSES = ["model", "factory", "environment", "owner", "unknown"] as const satisfies readonly MetricsAttribution[];
+export const ATTRIBUTION_CAUSES = ["model", "factory", "environment", "driver", "owner", "unknown"] as const satisfies readonly MetricsAttribution[];
+
+export const ATTRIBUTION_LABELS: Readonly<Record<MetricsAttribution, string>> = {
+  model: "model",
+  factory: "factory",
+  environment: "environment",
+  driver: "driver (pre-call check)",
+  owner: "owner",
+  unknown: "unknown",
+};
 
 export const ATTRIBUTION_NOTE = "Run this in a terminal at the AWSF checkout. The dashboard records nothing itself.";
 

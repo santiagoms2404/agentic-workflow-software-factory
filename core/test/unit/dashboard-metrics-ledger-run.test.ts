@@ -38,6 +38,7 @@ import {
 } from "../../../dashboard/src/metrics-ledger.ts";
 import {
   ATTRIBUTION_CAUSES,
+  ATTRIBUTION_LABELS,
   ATTRIBUTION_NOTE,
   MIN_PHASE_WIDTH,
   attributeCommand,
@@ -320,6 +321,8 @@ test("the attribution panel shows only for a BLOCKED run, with the heuristic and
 
 test("the composed command is the CLI's exact form through the root script, quoted so a shell passes the reason through untouched", () => {
   assert.deepEqual([...ATTRIBUTION_CAUSES], [...CORE_CAUSES], "the pills are the contract's causes");
+  assert.equal(ATTRIBUTION_LABELS.driver, "driver (pre-call check)");
+  assert.match(source("dashboard/src/components/MetricsRun.vue"), /ATTRIBUTION_LABELS\[value\]/u);
   const run = runOf("f3");
   assert.equal(attributeCommand(run, "factory", "the ticket's own wording"),
     `npm run awsf -- attribute task-f3 --project ${run.project} --attempt 1 --cause factory --reason "the ticket's own wording"`);

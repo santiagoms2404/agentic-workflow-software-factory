@@ -6,6 +6,7 @@ import { formatListEquivalent } from "../../shared/rate-card.ts";
 import { shortSessionId, stateLabel, stateTone } from "../display.ts";
 import {
   ATTRIBUTION_CAUSES,
+  ATTRIBUTION_LABELS,
   ATTRIBUTION_NOTE,
   PHASE_LEGEND,
   PHASE_TONE,
@@ -145,7 +146,7 @@ function kindWidth(share: number): string {
               class="metrics-pill"
               :aria-pressed="cause === value"
               @click="pickCause(value)"
-            >{{ value }}</button>
+            >{{ ATTRIBUTION_LABELS[value] }}</button>
           </div>
           <label class="run-reason">
             <span class="ledger-bar-label">reason</span>

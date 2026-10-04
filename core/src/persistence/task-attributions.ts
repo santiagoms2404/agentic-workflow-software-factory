@@ -1,8 +1,8 @@
-// The owner's block attributions for a task's attempts, stored where the task
+// The owner's BLOCKED or CANCELLED attributions for a task's attempts, stored where the task
 // is, not inside one of its attempts.
 //
-// An attribution is only ever made about a BLOCKED attempt, and a BLOCKED
-// attempt is sealed. Writing the override into it would mean reopening sealed
+// An attribution is only ever made about a BLOCKED or CANCELLED attempt, and
+// both are sealed. Writing the override into it would mean reopening sealed
 // bytes after the fact, which is the exact wall `task-relations.ts` ran into
 // for `awsf relate`. So the record sits beside the attempt directories, as the
 // relation does: it touches no sealed bytes, it needs no attempt to be

@@ -233,8 +233,8 @@ export function projectTaskRelation(
 }
 
 /**
- * Projects one owner attribution (`awsf attribute`) onto the session of the
- * attempt it names: one session-level `events` row of type `attribution`.
+ * Projects one owner attribution (`awsf attribute`) of a BLOCKED or CANCELLED
+ * attempt onto its session: one session-level `events` row of type `attribution`.
  *
  * Like `projectTaskRelation`, it has no attempt journal behind it, so there is
  * no `source_seq` to advance: the record lives in the task's

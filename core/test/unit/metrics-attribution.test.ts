@@ -124,6 +124,7 @@ test("the table is frozen, holds each code once, and every row has its own case 
   );
   const attributions: readonly Attribution[] = HEURISTIC_ATTRIBUTION_RULES.map((rule) => rule.attribution);
   assert.ok(!attributions.includes("owner"), "only the owner's override says owner");
+  assert.ok(!attributions.includes("driver"), "only an owner record says driver; the heuristic table stays unchanged");
 });
 
 test("an unknown code is unknown, from the phase or from the transition", () => {

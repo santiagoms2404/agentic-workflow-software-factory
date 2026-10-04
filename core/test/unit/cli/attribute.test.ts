@@ -1,8 +1,8 @@
-// `awsf attribute` — the owner's override of whose fault a BLOCKED attempt was.
+// `awsf attribute` — the owner's cause record for a BLOCKED or CANCELLED attempt.
 //
 // Under test: it is the owner's (an interactive terminal and a written,
 // credential-free reason, both before anything is written), it only attributes
-// a BLOCKED attempt, it never reopens that sealed attempt, its record is
+// a BLOCKED or CANCELLED attempt, it never reopens that sealed attempt, its record is
 // append-only with the latest winning, and `awsf db rebuild` replays it.
 // Every refusal is a named class, and each is shown to write nothing.
 
@@ -13,7 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   AttributeAttemptMissing,
-  AttributeAttemptNotBlocked,
+  AttributeAttemptNotAttributable,
   AttributeCredentialRejected,
   AttributeNotInteractive,
   AttributeReasonRequired,
@@ -28,6 +28,7 @@ import {
   readAttempt,
   taskRoot,
   type AttemptProjector,
+  type AttemptStatus,
 } from "../../../src/cli/commands/attempt.ts";
 import { newCommand } from "../../../src/cli/commands/new.ts";
 import { rebuildCommand } from "../../../src/cli/commands/operator.ts";
@@ -35,6 +36,7 @@ import { ENVELOPE_SCHEMAS, RECORD_SCHEMAS } from "../../../src/contracts/registr
 import {
   ATTRIBUTION_RECORD_SCHEMA_ID,
   AttributionRecordSchema,
+  assertAttributionRecord,
 } from "../../../src/contracts/attribution-record.ts";
 import { SealedAttempt } from "../../../src/persistence/attempt-lock.ts";
 import {
@@ -57,21 +59,22 @@ function sandbox(label: string): { root: string; stateRoot: string; close: () =>
   return { root, stateRoot: join(root, "state"), close: () => rmSync(root, { recursive: true, force: true }) };
 }
 
-/** One attempt of `taskId`, BLOCKED unless `blocked` is false. */
+/** One attempt of `taskId`, BLOCKED by default. */
 async function attempt(
   box: { root: string; stateRoot: string },
   taskId: string,
-  options: { blocked?: boolean; projectRecord?: AttemptProjector } = {},
+  options: { state?: AttemptStatus["lifecycleState"]; projectRecord?: AttemptProjector } = {},
 ): Promise<string> {
   const created = await newCommand({
     stateRoot: box.stateRoot, project: PROJECT, taskId, repository: box.root,
     request: `open ${taskId}`, workflow: "build", tier: 1, sessionId: () => `${taskId}-session`,
     ...(options.projectRecord === undefined ? {} : { projectRecord: options.projectRecord }),
   });
-  if (options.blocked !== false) {
+  const state = options.state ?? "BLOCKED";
+  if (state !== "DRAFT") {
     await persistAttempt(created.attemptDir, created.status.revision, {
       kind: "attempt.updated",
-      next: nextRevision(created.status, { lifecycleState: "BLOCKED", lastActivity: "blocked by the test harness" }),
+      next: nextRevision(created.status, { lifecycleState: state, lastActivity: `${state} by the test harness` }),
     }, options.projectRecord);
   }
   return created.attemptDir;
@@ -96,6 +99,10 @@ test("the record is registered as a host record and never as a wire envelope", (
   assert.equal(RECORD_SCHEMAS[ATTRIBUTION_RECORD_SCHEMA_ID], AttributionRecordSchema);
   assert.equal(Object.hasOwn(ENVELOPE_SCHEMAS, ATTRIBUTION_RECORD_SCHEMA_ID), false);
   assert.equal(AttributionRecordSchema.$id, "awsf.attribution/v1");
+  const base = { schema: ATTRIBUTION_RECORD_SCHEMA_ID, project: PROJECT, taskId: "legacy", attempt: 1,
+    reason: REASON, at: "2026-09-28T10:00:00.000Z" };
+  assert.doesNotThrow(() => assertAttributionRecord({ ...base, cause: "model" }), "old records remain valid");
+  assert.doesNotThrow(() => assertAttributionRecord({ ...base, cause: "driver" }));
 });
 
 test("a piped stdin cannot take the act, and the terminal is checked before anything else", async () => {
@@ -119,7 +126,7 @@ test("an unknown cause is refused by name", async () => {
     await assert.rejects(
       attributeCommand(options(box, "cause-task", { cause: "provider" })),
       (error: unknown) => error instanceof AttributeUnknownCause &&
-        /--cause read "provider"; a block is attributed to one of model, factory, environment, owner, unknown/u.test(error.message),
+        /--cause read "provider"; an attempt is attributed to one of model, factory, environment, driver, owner, unknown/u.test(error.message),
     );
     nothingWritten(box, "cause-task");
   } finally { box.close(); }
@@ -149,18 +156,27 @@ test("an attempt that does not exist is refused by name", async () => {
   } finally { box.close(); }
 });
 
-test("an attempt that is not BLOCKED is refused by name", async () => {
-  const box = sandbox("live");
-  try {
-    await attempt(box, "live-task", { blocked: false });
-    await assert.rejects(
-      attributeCommand(options(box, "live-task")),
-      (error: unknown) => error instanceof AttributeAttemptNotBlocked &&
-        /attempt 1 is DRAFT, not BLOCKED: only a blocked attempt has a block to attribute/u.test(error.message),
-    );
-    nothingWritten(box, "live-task");
-  } finally { box.close(); }
-});
+for (const state of ["DRAFT", "RUNNING", "LANDED"] as const) {
+  test(`a ${state} attempt is refused with no record or projected event`, async () => {
+    const box = sandbox(`refuse-${state}`);
+    const projection = createDashboardProjection(box.stateRoot);
+    try {
+      const dir = await attempt(box, "live-task", { state, projectRecord: projection.project });
+      const before = await readAttempt(dir);
+      await assert.rejects(
+        attributeCommand(options(box, "live-task", { projectAttribution: projection.projectAttribution })),
+        (error: unknown) => error instanceof AttributeAttemptNotAttributable &&
+          error.message.includes(`attempt 1 is ${state}: only BLOCKED or CANCELLED attempts can be attributed`),
+      );
+      nothingWritten(box, "live-task");
+      assert.deepEqual(await readAttempt(dir), before);
+      const db = openDatabase(join(box.stateRoot, "awsf.db"), { readonly: true });
+      try {
+        assert.equal((db.prepare("SELECT count(*) AS count FROM events WHERE type = 'attribution'").get() as { count: number }).count, 0);
+      } finally { db.close(); }
+    } finally { projection.close(); box.close(); }
+  });
+}
 
 test("an owner who declines writes nothing", async () => {
   const box = sandbox("declined");
@@ -232,6 +248,47 @@ test("a torn tail refuses rather than dropping the last record, and nothing is a
     await assert.rejects(readTaskAttributions(taskRoot(box.stateRoot, PROJECT, "torn-task")), /interrupted task attribution append/u);
     await assert.rejects(attributeCommand(options(box, "torn-task", { cause: "model" })), /interrupted task attribution append/u);
   } finally { box.close(); }
+});
+
+test("a driver attribution of a CANCELLED attempt writes one record and event, and db rebuild replays it", async () => {
+  const box = sandbox("cancelled");
+  const projection = createDashboardProjection(box.stateRoot);
+  const rows = (): Array<{ session_id: string; name: string; payload_json: string }> => {
+    const db = openDatabase(join(box.stateRoot, "awsf.db"), { readonly: true });
+    try {
+      return db.prepare("SELECT session_id, name, payload_json FROM events WHERE type = 'attribution' ORDER BY event_row")
+        .all() as Array<{ session_id: string; name: string; payload_json: string }>;
+    } finally { db.close(); }
+  };
+  try {
+    const dir = await attempt(box, "cancelled-task", { state: "CANCELLED", projectRecord: projection.project });
+    const before = await readAttempt(dir);
+    const filesBefore = readdirSync(dir).sort();
+    const lines: string[] = [];
+    let question = "";
+    const ownerTerminal: OwnerTerminal = {
+      interactive: true,
+      write: (line) => { lines.push(line); },
+      confirm: async (prompt) => { question = prompt; return true; },
+    };
+    const result = await attributeCommand(options(box, "cancelled-task", {
+      cause: "driver", terminal: ownerTerminal, projectAttribution: projection.projectAttribution,
+    }));
+    assert.match(question, /CANCELLED/u);
+    assert.equal(result.record?.cause, "driver");
+    assert.ok(lines.some((line) => line.includes("CANCELLED")));
+    assert.ok(lines.some((line) => line.includes("no heuristic cause")));
+    assert.deepEqual(await readTaskAttributions(taskRoot(box.stateRoot, PROJECT, "cancelled-task")), [result.record]);
+    assert.deepEqual(await readAttempt(dir), before);
+    assert.deepEqual(readdirSync(dir).sort(), filesBefore);
+    const live = rows();
+    assert.equal(live.length, 1);
+    assert.equal(live[0]!.session_id, "cancelled-task-session");
+    assert.equal(JSON.parse(live[0]!.payload_json).cause, "driver");
+    const report = await rebuildCommand(box.stateRoot);
+    assert.equal(report.ok, true, report.ok ? undefined : report.reason);
+    assert.deepEqual(rows(), live);
+  } finally { projection.close(); box.close(); }
 });
 
 test("the live projection writes one attribution events row, and awsf db rebuild replays it", async () => {

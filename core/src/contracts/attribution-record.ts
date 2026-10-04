@@ -4,15 +4,17 @@ import { Value } from "@sinclair/typebox/value";
 import { canonicalJson } from "./owner-amendment.ts";
 import { stringUnion } from "./typebox.ts";
 
-// The owner's record of whose fault one BLOCKED attempt was (W18 D4, DD5).
+// The owner's record of the cause of one BLOCKED or CANCELLED attempt (W18 D4, DD5).
 // Host-written by `awsf attribute` and never parsed out of provider output, so
 // it is registered as a record and never as a wire envelope. It is task-scoped
 // storage for an attempt-scoped fact: the attempt it names is sealed, and the
 // record sits beside it rather than inside it.
 export const ATTRIBUTION_RECORD_SCHEMA_ID = "awsf.attribution/v1";
 
-/** Whose fault a block was. The heuristic never answers `owner`; only this record can. */
-export const ATTRIBUTION_CAUSES = ["model", "factory", "environment", "owner", "unknown"] as const;
+/** Causes for a block or cancel. `driver` means a check before the first provider call
+ * would have refused this run, had it existed or been run; it is not a verdict
+ * on the model that drove it. The heuristic never answers `driver` or `owner`. */
+export const ATTRIBUTION_CAUSES = ["model", "factory", "environment", "driver", "owner", "unknown"] as const;
 export type AttributionCause = (typeof ATTRIBUTION_CAUSES)[number];
 
 const id = Type.String({ minLength: 1 });

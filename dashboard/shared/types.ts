@@ -499,7 +499,7 @@ export interface TicketSourceResponse {
    unfiltered, so the ledger can badge them.
    ------------------------------------------------------------------------- */
 
-export type MetricsAttribution = "model" | "factory" | "environment" | "owner" | "unknown";
+export type MetricsAttribution = "model" | "factory" | "environment" | "driver" | "owner" | "unknown";
 export type MetricsEffortSource = "journal" | "config-phase-route" | "config-agent" | "unknown";
 export type MetricsReasoningRelation = "included-in-output" | "additive" | "unknown";
 
