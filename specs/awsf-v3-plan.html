@@ -140,7 +140,7 @@ figcaption { color:var(--dim); font-size:14px; margin-top:10px; }
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-10-02</dd>
-        <dt>modified</dt>     <dd>2026-10-02, 2026-10-02 (recommendations added to every Questionable), 2026-10-02 (all thirteen Questionables decided by owner review), 2026-10-02 (W05 reuse confirmed; Q13 tried, reverted and moved to W02's first task; W18 closed), 2026-10-02 (decisions 11 and 13 reading confirmed; v2 spine amendment and journeys gate landed), 2026-10-03 (W08 links the v3 design baseline frame index)</dd>
+        <dt>modified</dt>     <dd>2026-10-02, 2026-10-02 (recommendations added to every Questionable), 2026-10-02 (all thirteen Questionables decided by owner review), 2026-10-02 (W05 reuse confirmed; Q13 tried, reverted and moved to W02's first task; W18 closed), 2026-10-02 (decisions 11 and 13 reading confirmed; v2 spine amendment and journeys gate landed), 2026-10-03 (W08 links the v3 design baseline frame index), 2026-10-03 (W08's prompt and ticket read the design baseline)</dd>
         <dt>commits</dt>      <dd>none yet: authored on main at b5e8ffa and left uncommitted for owner review</dd>
         <dt>agent name</dt>   <dd>claude-opus-5-5</dd>
         <dt>session id</dt>   <dd>not recorded: AGENTS.md invariant 1 keeps live session state out of every committed file</dd>
@@ -1003,6 +1003,10 @@ stateDiagram-v2
     <details open>
       <summary>2026-10-03 — The design baseline is linked from W08</summary>
       <p>The owner reviewed and iterated a design canvas for the Marimba panel and every surface this spine plans, in Smart Health's Mind design language (<a href="https://claude.ai/artifact/KG8KPMBCPma35268R5yP6M">claude.ai/artifact/KG8KPMBCPma35268R5yP6M</a>, version 14). Its 19 frames were captured and pinned by <code>specs/design/awsf-v3-plan/frame-index.json</code> and its digests in <code>e6e28b1</code>. Its <code>workstreamFrames</code> map gives every workstream, W01–W15, at least one frame. W08's block now links the index beside its deep plan. Each deep plan adds <code>ticketFrames</code> when it authors its tickets. The index's overrides list what is not compared: proposed command names, placeholder values and illustrative run data. No marker, ticket or prompt changed.</p>
+    </details>
+    <details open>
+      <summary>2026-10-03 — W08's prompt and ticket read the design baseline</summary>
+      <p>T08 in <code>awsf-v3-plan-build-prompts.md</code> and <code>tickets/awsf-v3-plan/W08.md</code> gain one READ FIRST entry, byte-identical in both: <code>specs/design/awsf-v3-plan/frame-index.json</code>, whose <code>workstreamFrames.W08</code> names this workstream's frames. Nothing else in the prompt changed, and no marker or ticket state moved.</p>
     </details>
   </section>
 
