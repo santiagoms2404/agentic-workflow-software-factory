@@ -140,12 +140,12 @@ figcaption { color:var(--dim); font-size:14px; margin-top:10px; }
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-10-02</dd>
-        <dt>modified</dt>     <dd>2026-10-02, 2026-10-02 (recommendations added to every Questionable), 2026-10-02 (all thirteen Questionables decided by owner review), 2026-10-02 (W05 reuse confirmed; Q13 tried, reverted and moved to W02's first task; W18 closed), 2026-10-02 (decisions 11 and 13 reading confirmed; v2 spine amendment and journeys gate landed)</dd>
+        <dt>modified</dt>     <dd>2026-10-02, 2026-10-02 (recommendations added to every Questionable), 2026-10-02 (all thirteen Questionables decided by owner review), 2026-10-02 (W05 reuse confirmed; Q13 tried, reverted and moved to W02's first task; W18 closed), 2026-10-02 (decisions 11 and 13 reading confirmed; v2 spine amendment and journeys gate landed), 2026-10-03 (W08 links the v3 design baseline frame index)</dd>
         <dt>commits</dt>      <dd>none yet: authored on main at b5e8ffa and left uncommitted for owner review</dd>
         <dt>agent name</dt>   <dd>claude-opus-5-5</dd>
         <dt>session id</dt>   <dd>not recorded: AGENTS.md invariant 1 keeps live session state out of every committed file</dd>
         <dt>back refs</dt>    <dd>./awsf-v3-intent.md (the approved intent and this plan's single input), ./awsf-v3-assessment-and-direction.md (the only detail document: grade, measurements, Q1–Q16), ./awsf-v2-plan.html (the v2 spine this one succeeds), ./awsf-v2-w19-jev-delegate.html (carried as W05), ../AGENTS.md (the thirteen invariants)</dd>
-        <dt>forward refs</dt> <dd>./awsf-v3-plan-build-prompts.md, ./tickets/awsf-v3-plan/README.md, ./tickets/awsf-v3-plan/ (W01–W15), ./awsf-v3-w01-driver-checks.html, ./awsf-v3-w02-trap-suite.html, ./awsf-v3-w03-ticket-closure.html, ./awsf-v3-w04-session-record.html, ./awsf-v3-w06-routing.html, ./awsf-v3-w07-user-testing-validator.html, ./awsf-v3-w08-marimba-harness.html, ./awsf-v3-w09-context-engine.html, ./awsf-v3-w10-local-model.html, ./awsf-v3-w11-agent-readiness.html, ./awsf-v3-w12-mac-host.html, ./awsf-v3-w13-deploy.html, ./awsf-v3-w14-monitor-signals.html, ./awsf-v3-w15-surfaces.html (fourteen, all not yet authored); W05's deep plan is ./awsf-v2-w19-jev-delegate.html, re-cut by W05's prompt</dd>
+        <dt>forward refs</dt> <dd>./awsf-v3-plan-build-prompts.md, ./tickets/awsf-v3-plan/README.md, ./tickets/awsf-v3-plan/ (W01–W15), ./awsf-v3-w01-driver-checks.html, ./awsf-v3-w02-trap-suite.html, ./awsf-v3-w03-ticket-closure.html, ./awsf-v3-w04-session-record.html, ./awsf-v3-w06-routing.html, ./awsf-v3-w07-user-testing-validator.html, ./awsf-v3-w08-marimba-harness.html, ./awsf-v3-w09-context-engine.html, ./awsf-v3-w10-local-model.html, ./awsf-v3-w11-agent-readiness.html, ./awsf-v3-w12-mac-host.html, ./awsf-v3-w13-deploy.html, ./awsf-v3-w14-monitor-signals.html, ./awsf-v3-w15-surfaces.html (fourteen, all not yet authored); W05's deep plan is ./awsf-v2-w19-jev-delegate.html, re-cut by W05's prompt, ./design/awsf-v3-plan/frame-index.json (the design baseline, 19 frames across W01–W15)</dd>
       </dl>
     </details>
   </header>
@@ -523,6 +523,7 @@ flowchart TB
     <section class="phase">
       <h3><code class="status">[]</code> Milestone M8: W08 — Marimba harness v1 <span class="chip pb">Phase B</span><span class="xlabel">X8</span></h3>
       <p class="deep-plan"><a href="awsf-v3-w08-marimba-harness.html">Deep plan: AWSF v3 W08 — Marimba harness v1</a> <span class="muted">not yet authored</span></p>
+      <p class="deep-plan"><a href="design/awsf-v3-plan/frame-index.json">Design baseline: the Marimba panel and every v3 surface, 19 frames</a> <span class="muted">captured 2026-10-03 from canvas version 14; the frames live in the ignored docs/design/marimba-panel/</span></p>
       <p><em>Exists because the driver is the most expensive and least reliable part of the factory.</em></p>
       <h4>8. W08 — Marimba harness v1</h4>
       <table class="taskmeta">
@@ -998,6 +999,10 @@ stateDiagram-v2
       <p><strong>Reading confirmed.</strong> The owner confirmed the Notes reading of decisions 11 and 13: W19's M3–M4 code may land under W19's plan and gates, and no lease is granted for a live night until W02 is <code>[x]</code>. M3's acceptance is one real leased night (<code>w19-m3</code>), so M3's marker also waits for W02. W19's plan records this in a dated Amendment, because the sessions building its M3 read that plan rather than this one. W05's prompt now states the reading as decided.</p>
       <p><strong>v2 spine amendment landed.</strong> On the owner's authorization, <code>specs/awsf-v2-plan.html</code> records the Notes list as a dated Amendment. No v2 marker moved.</p>
       <p><strong>Journeys gate landed.</strong> The previous entry's diagnosis was wrong in one part: no journey has a fake runner keyed on gate names. Twelve test configs, eleven journeys and the prove-replay harness, copy <code>awsf.config.yaml</code> and delete the gates they cannot run. An undeleted <code>journeys</code> gate therefore ran the real <code>npm run test:journeys</code> inside a fixture repository and failed. The fix adds one deletion line to each of the twelve, <code>journeys</code> to <code>KNOWN_GATE_IDS</code>, <code>gate|journeys</code> and its prose to <code>docs/cheatsheet.html</code>, and the gate to <code>awsf.config.yaml</code> (recorded in <code>awsf.project.yaml</code>), with a 2,400 s timeout. <code>npm test</code> on the change exited 0 in 1,876 s (unit 2645, contract 149, simulation 98, journeys 347), and typecheck and lint exited 0. W02's prompt now treats Q13 as landed. W02's checklist row for Q2 and Q13 stays <code>[]</code>, because Q2 is W02's work.</p>
+    </details>
+    <details open>
+      <summary>2026-10-03 — The design baseline is linked from W08</summary>
+      <p>The owner reviewed and iterated a design canvas for the Marimba panel and every surface this spine plans, in Smart Health's Mind design language (<a href="https://claude.ai/artifact/KG8KPMBCPma35268R5yP6M">claude.ai/artifact/KG8KPMBCPma35268R5yP6M</a>, version 14). Its 19 frames were captured and pinned by <code>specs/design/awsf-v3-plan/frame-index.json</code> and its digests in <code>e6e28b1</code>. Its <code>workstreamFrames</code> map gives every workstream, W01–W15, at least one frame. W08's block now links the index beside its deep plan. Each deep plan adds <code>ticketFrames</code> when it authors its tickets. The index's overrides list what is not compared: proposed command names, placeholder values and illustrative run data. No marker, ticket or prompt changed.</p>
     </details>
   </section>
 
