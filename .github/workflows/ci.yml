@@ -40,6 +40,12 @@ jobs:
       - name: Install
         run: npm ci
 
+      # The protected-grant journeys record bwrap by its resolved host path,
+      # as the real broker does (7bc48b5), so the host must have bwrap even
+      # though no journey spawns it. Every Linux host AWSF runs on has it.
+      - name: Install bubblewrap
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap
+
       - name: Lint
         run: npm run lint
 
