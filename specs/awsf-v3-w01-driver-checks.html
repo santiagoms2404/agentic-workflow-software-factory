@@ -149,8 +149,8 @@ section.phase .sub { font-size:13px; }
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-10-03</dd>
-        <dt>modified</dt>     <dd>2026-10-03 (authored, awaiting owner review), 2026-10-04 (owner review applied: W01-Q1–Q7 decided)</dd>
-        <dt>commits</dt>      <dd>none yet: authored on main at 0da3640 and left uncommitted for owner review</dd>
+        <dt>modified</dt>     <dd>2026-10-03 (authored, awaiting owner review), 2026-10-04 (owner review applied: W01-Q1–Q7 decided; deep plan approved)</dd>
+        <dt>commits</dt>      <dd>authoring: e1507e2; owner approval: recorded by this dated Amendment and its commit</dd>
         <dt>agent name</dt>   <dd>claude-opus-5-5</dd>
         <dt>session id</dt>   <dd>not recorded: AGENTS.md invariant 1 keeps live session state out of every committed file</dd>
         <dt>back refs</dt>    <dd>./awsf-v3-plan.html (§ Workstreams → Milestone M1 → W01, Questionable Q1, Notes), ./tickets/awsf-v3-plan/W01.md (the meta-prompt this plan answers), ./awsf-v3-intent.md (Terms K1 and K2, decisions 13 and 14), ./awsf-v3-assessment-and-direction.md (N3, F17, A10, A12), ../AGENTS.md (the thirteen invariants), ./design/awsf-v3-plan/frame-index.json (workstreamFrames.W01: mp-s2, mp-s3, mp-s4, mp-s5), the machine-local forensics draft ~/marimba-lab/forensics/2026-10-01-stops.md (not committed)</dd>
@@ -807,6 +807,10 @@ flowchart LR
   <!-- ===== AMENDMENTS ===== -->
   <section id="amendments">
     <h2>Amendments</h2>
+    <details open>
+      <summary>2026-10-04 — Owner approval of the deep plan and factory-managed implementation</summary>
+      <p>The owner approved this deep plan, its build prompts and its ticket set. W01-Q1–Q7 remain decided as recommended. The spine's W01 marker and ticket state move together to <code>[wip]</code> and <code>wip</code> in the approval commit. No implementation checklist row is marked complete by approval. Factory-managed implementation follows the Execution section, including its milestone-shift option and the separate owner gates G01-F, G01-G and G01-C.</p>
+    </details>
     <details open>
       <summary>2026-10-03 — Authored in a direct session, a logged exception under gate GM</summary>
       <p>No factory role can write <code>specs/*.html</code> until W03 lands, so this deep plan, its build prompts and its ticket set were authored in a manual session on <code>main</code> at 0da3640 (spine gate GM, Q11's direct-session rule). It wrote only new files under <code>specs/</code>, called no provider and moved no marker. Its implementation tasks default to managed execution. Seven Questionables (W01-Q1–W01-Q7) await the owner. Built on: anthropic:claude-opus-5-5.</p>

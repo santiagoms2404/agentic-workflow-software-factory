@@ -145,7 +145,7 @@ figcaption { color:var(--dim); font-size:14px; margin-top:10px; }
         <dt>agent name</dt>   <dd>claude-opus-5-5</dd>
         <dt>session id</dt>   <dd>not recorded: AGENTS.md invariant 1 keeps live session state out of every committed file</dd>
         <dt>back refs</dt>    <dd>./awsf-v3-intent.md (the approved intent and this plan's single input), ./awsf-v3-assessment-and-direction.md (the only detail document: grade, measurements, Q1–Q16), ./awsf-v2-plan.html (the v2 spine this one succeeds), ./awsf-v2-w19-jev-delegate.html (carried as W05), ../AGENTS.md (the thirteen invariants)</dd>
-        <dt>forward refs</dt> <dd>./awsf-v3-plan-build-prompts.md, ./tickets/awsf-v3-plan/README.md, ./tickets/awsf-v3-plan/ (W01–W15), ./awsf-v3-w01-driver-checks.html, ./awsf-v3-w02-trap-suite.html, ./awsf-v3-w03-ticket-closure.html, ./awsf-v3-w04-session-record.html, ./awsf-v3-w06-routing.html, ./awsf-v3-w07-user-testing-validator.html, ./awsf-v3-w08-marimba-harness.html, ./awsf-v3-w09-context-engine.html, ./awsf-v3-w10-local-model.html, ./awsf-v3-w11-agent-readiness.html, ./awsf-v3-w12-mac-host.html, ./awsf-v3-w13-deploy.html, ./awsf-v3-w14-monitor-signals.html, ./awsf-v3-w15-surfaces.html (fourteen, all not yet authored); W05's deep plan is ./awsf-v2-w19-jev-delegate.html, re-cut by W05's prompt, ./design/awsf-v3-plan/frame-index.json (the design baseline, 19 frames across W01–W15)</dd>
+        <dt>forward refs</dt> <dd>./awsf-v3-plan-build-prompts.md, ./tickets/awsf-v3-plan/README.md, ./tickets/awsf-v3-plan/ (W01–W15), ./awsf-v3-w01-driver-checks.html, ./awsf-v3-w02-trap-suite.html, ./awsf-v3-w03-ticket-closure.html, ./awsf-v3-w04-session-record.html, ./awsf-v3-w06-routing.html, ./awsf-v3-w07-user-testing-validator.html, ./awsf-v3-w08-marimba-harness.html, ./awsf-v3-w09-context-engine.html, ./awsf-v3-w10-local-model.html, ./awsf-v3-w11-agent-readiness.html, ./awsf-v3-w12-mac-host.html, ./awsf-v3-w13-deploy.html, ./awsf-v3-w14-monitor-signals.html, ./awsf-v3-w15-surfaces.html (fourteen planned stems; W01 authored and approved, the others not yet authored); W05's deep plan is ./awsf-v2-w19-jev-delegate.html, re-cut by W05's prompt, ./design/awsf-v3-plan/frame-index.json (the design baseline, 19 frames across W01–W15)</dd>
       </dl>
     </details>
   </header>
@@ -323,8 +323,8 @@ flowchart TB
 
     <!-- ================= W01 ================= -->
     <section class="phase">
-      <h3><code class="status">[]</code> Milestone M1: W01 — Driver checks <span class="chip pa">Phase A</span><span class="xlabel">X1</span></h3>
-      <p class="deep-plan"><a href="awsf-v3-w01-driver-checks.html">Deep plan: AWSF v3 W01 — Driver checks</a> <span class="muted">not yet authored</span></p>
+      <h3><code class="status">[wip]</code> Milestone M1: W01 — Driver checks <span class="chip pa">Phase A</span><span class="xlabel">X1</span></h3>
+      <p class="deep-plan"><a href="awsf-v3-w01-driver-checks.html">Deep plan: AWSF v3 W01 — Driver checks</a> <span class="muted">authored and approved by the owner, 2026-10-04</span></p>
       <p><em>Exists because 8 of 27 blocked runs were stops a mechanical check would have refused, and 35 of 36 stops carry no cause.</em> It moves the driver's preflight and its next-step reasoning into L1.</p>
       <h4>1. W01 — Driver checks</h4>
       <table class="taskmeta">
@@ -340,7 +340,7 @@ flowchart TB
         A refusal per K1 field on the stub adapter with zero reserved calls. K2 output equal to the machine's edge table for every state, by a property test rather than a snapshot. One guard test per owner act per spelling. A cancel with no reason refused. All offline.
       </div>
       <ul class="checklist">
-        <li><code class="status">[]</code> Deep plan <code>awsf-v3-w01-driver-checks.html</code> authored with its build prompts and ticket set, and approved by the owner</li>
+        <li><code class="status">[x]</code> Deep plan <code>awsf-v3-w01-driver-checks.html</code> authored with its build prompts and ticket set, and approved by the owner</li>
         <li><code class="status">[]</code> The guard fix and any state-machine change landed as owner commits before the builds that need them</li>
         <li><code class="status">[]</code> K1 refuses DRAFT→PREPARED without a valid preflight record, with each measured field checked by the host</li>
         <li><code class="status">[]</code> K2 is the single source of the next step, and the prose <code>nextAction</code> is derived from it</li>
@@ -984,6 +984,10 @@ stateDiagram-v2
   <!-- ===== AMENDMENTS ===== -->
   <section id="amendments">
     <h2>Amendments</h2>
+    <details open>
+      <summary>2026-10-04 — W01 deep plan approved</summary>
+      <p>The owner approved <code>awsf-v3-w01-driver-checks.html</code>, its build prompts and its thirteen-ticket set. Its seven Questionables remain decided as recorded on 2026-10-04. W01 moves to <code>[wip]</code>, with its spine ticket moving to <code>wip</code> in this same commit. Only the authored-and-approved checklist row is complete; no implementation acceptance is claimed. Implementation remains factory-managed by default, subject to the deep plan's owner gates.</p>
+    </details>
     <details>
       <summary>2026-10-02 — Owner review applied: all thirteen Questionables decided as recommended</summary>
       <p>An exported <code>plan-sota-review v1</code> block carried 13 verdicts, no proposed statuses and no annotations. Q1–Q4 and Q6–Q13 took the option marked recommended, and Q5 was approved as recommended. Headlines: a separate <code>test:traps</code> layer (Q2), <code>test:journeys</code> as a full landing gate (Q13), the archiver in AWSF core (Q4), direct sessions derived from git and the journal (Q11), and candidate stacking out of v3 (Q10). Each workstream block, its checklist and its Section B prompt now hand the decision over as a constraint to apply. No marker moved. Before this review the same day, recommendations were added to every Questionable and <code>core/test/unit/registry/plan-kind.test.ts</code> was rewritten as a rule, because its hardcoded spine list failed once this spine existed.</p>
