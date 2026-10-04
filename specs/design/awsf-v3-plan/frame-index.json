@@ -1,0 +1,418 @@
+{
+  "version": 1,
+  "plan": "awsf-v3-plan",
+  "purpose": "Design baseline for AWSF v3: the Marimba panel and every surface the v3 spine plans, W01-W15, drawn before any of it is built so the built product can be compared against it. AWSF reads version, frames[].id, frames[].image and ticketFrames; every other field is provenance for people and is ignored by the host.",
+  "source": {
+    "artifact": "https://claude.ai/artifact/KG8KPMBCPma35268R5yP6M",
+    "artifactVersion": 14,
+    "artifactVersionId": "1791072122-330b",
+    "canvas": "docs/design/marimba-panel/source/canvas.json",
+    "pages": "docs/design/marimba-panel/pages/",
+    "tracked": false,
+    "why": "Frames, pages and the canvas copy sit beside W18's in the ignored docs/design/ tree. The canvas artifact is the durable source, and these digests prove that a later capture is byte-identical to the baseline."
+  },
+  "capture": {
+    "date": "2026-10-03",
+    "tool": "chrome-headless-shell 1243 (Playwright), one-shot --screenshot, --force-device-scale-factor=1, --virtual-time-budget=10000",
+    "method": "Each artboard's static markup was lifted out of the Design runtime into a plain HTML page and captured at its canvas frame size (w x h). The artboards hold no script-built content, so the conversion changes nothing visible.",
+    "viewport": "1440 px wide for the dashboard screens and the Mac app; 430 x 884 for the phone frame."
+  },
+  "workstreamFrames": {
+    "W01": [
+      "mp-s2-owner-review",
+      "mp-s3-blocked",
+      "mp-s4-runs",
+      "mp-s5-checks"
+    ],
+    "W02": [
+      "mp-s3-blocked",
+      "mp-s5-checks"
+    ],
+    "W03": [
+      "mp-s8-closure"
+    ],
+    "W04": [
+      "mp-s4-runs",
+      "mp-s9-session"
+    ],
+    "W05": [
+      "mp-s6-routes",
+      "mp-s7-lease"
+    ],
+    "W06": [
+      "mp-s6-routes"
+    ],
+    "W07": [
+      "mp-s10-validator"
+    ],
+    "W08": [
+      "mp-s0-rest",
+      "mp-s1-drive",
+      "mp-s2-owner-review",
+      "mp-s3-blocked",
+      "mp-s4-runs",
+      "mp-s5-checks",
+      "mp-s6-routes"
+    ],
+    "W09": [
+      "mp-s11-context"
+    ],
+    "W10": [
+      "mp-s6-routes",
+      "mp-s12-data-loop"
+    ],
+    "W11": [
+      "mp-s13-readiness"
+    ],
+    "W12": [
+      "mp-s5b-doctor-vm"
+    ],
+    "W13": [
+      "mp-s14-deploy"
+    ],
+    "W14": [
+      "mp-s15-signals"
+    ],
+    "W15": [
+      "mp-s16a-orb",
+      "mp-s16b-phone"
+    ]
+  },
+  "comparison": [
+    "Glass: about 42 soft dots of 46-53 px at 14% opacity and 4 brighter dots at 17%, under a 165-degree tint and a 118-degree sheen with a 1 px top highlight. No constellation lines.",
+    "Layout: the dashboard tab bar with Marimba active, then one centred column about 760-880 px wide. The header is a title, a mono status line and icon links. No side rail.",
+    "Type: Archivo for prose, headings and controls; JetBrains Mono for ids, commands, numbers and status lines.",
+    "Colour: the Forest palette with one accent, #F26A1B. Orange marks only the action that spends, an owner-review or blocked state, and warnings.",
+    "Voice: the owner's messages are bubbles; Marimba's replies are bare text on the glass.",
+    "Owner acts: always terminal lines with a copy icon, never a button, on every surface. The phone and the Mac app show none as runnable.",
+    "Numbers are not compared. Bracketed values are placeholders and the run data is illustrative."
+  ],
+  "overrides": [
+    {
+      "id": "O1",
+      "frames": [
+        "mp-s7-lease",
+        "mp-s8-closure",
+        "mp-s14-deploy"
+      ],
+      "rule": "awsf lease grant, awsf close and awsf release are proposed command names. The deep plans of W05, W03 and W13 decide the real names; the built screens show whatever those plans adopt."
+    },
+    {
+      "id": "O2",
+      "frames": "all",
+      "rule": "Bracketed values such as [N], [REV], [TRAP-ID] and [USED %] are placeholders for data only built v3 has. Measured facts in the frames are as of 2026-10-02/03: 168k median prompt tokens per v2 driver turn, 22 stale branches, 226 linked worktrees, 2645 unit tests at 4de5ff0, Jev at $0.042 per million input tokens."
+    },
+    {
+      "id": "O3",
+      "frames": "all",
+      "rule": "Task names, candidate SHAs other than 4de5ff0, decision ids and times are illustrative, not records."
+    },
+    {
+      "id": "O4",
+      "frames": "all",
+      "rule": "The tab bar's links outside Marimba are stubs. The built panel lives in the existing dashboard nav."
+    },
+    {
+      "id": "O5",
+      "frames": "all",
+      "rule": "The frames show Forest dark only. The built panel supports the dashboard's palettes and modes like every other tab."
+    }
+  ],
+  "frames": [
+    {
+      "id": "mp-s0-rest",
+      "image": "docs/design/marimba-panel/frames/mp-s0-rest.png",
+      "sha256": "308f72efa71b970b2609602141e81c1c4f5eed8a6d9b63c2071681f8fa32e1b6",
+      "bytes": 546378,
+      "width": 1440,
+      "height": 1060,
+      "screen": "S0",
+      "title": "At rest: write to the factory",
+      "workstreams": [
+        "W08"
+      ],
+      "artboard": "project/Rest.dc.html",
+      "page": "docs/design/marimba-panel/pages/Rest.html"
+    },
+    {
+      "id": "mp-s1-drive",
+      "image": "docs/design/marimba-panel/frames/mp-s1-drive.png",
+      "sha256": "48bd8d0abc73d563e79ae15ce92fe0801bb74dfd3aa6708773c4e7c22296406e",
+      "bytes": 591867,
+      "width": 1440,
+      "height": 1060,
+      "screen": "S1",
+      "title": "Drive a run: one confirmation card (K4)",
+      "workstreams": [
+        "W08"
+      ],
+      "artboard": "project/Main.dc.html",
+      "page": "docs/design/marimba-panel/pages/Main.html"
+    },
+    {
+      "id": "mp-s2-owner-review",
+      "image": "docs/design/marimba-panel/frames/mp-s2-owner-review.png",
+      "sha256": "4baa050aac978fc7ca7db40f7c1abbc00e001dba1318378b67ac671286183b16",
+      "bytes": 573959,
+      "width": 1440,
+      "height": 1060,
+      "screen": "S2",
+      "title": "Awaiting owner: owner acts prepared as terminal lines, never run",
+      "workstreams": [
+        "W08",
+        "W01"
+      ],
+      "artboard": "project/OwnerAct.dc.html",
+      "page": "docs/design/marimba-panel/pages/OwnerAct.html"
+    },
+    {
+      "id": "mp-s3-blocked",
+      "image": "docs/design/marimba-panel/frames/mp-s3-blocked.png",
+      "sha256": "8dcab0ec1e3127f44e25fefd1c4748700345ce610aac3694979538652c272b43",
+      "bytes": 580482,
+      "width": 1440,
+      "height": 1060,
+      "screen": "S3",
+      "title": "Blocked: cause record, recovery, and a turn refused by K3",
+      "workstreams": [
+        "W08",
+        "W01",
+        "W02"
+      ],
+      "artboard": "project/Blocked.dc.html",
+      "page": "docs/design/marimba-panel/pages/Blocked.html"
+    },
+    {
+      "id": "mp-s4-runs",
+      "image": "docs/design/marimba-panel/frames/mp-s4-runs.png",
+      "sha256": "a0abb614f25cadf5beb9a7e6a0d55f9c5748e5a89fcbb409c6fdd8e304579049",
+      "bytes": 665590,
+      "width": 1440,
+      "height": 1300,
+      "screen": "S4",
+      "title": "Runs: one promoted card, the rest degrade; cancel causes; direct sessions",
+      "workstreams": [
+        "W08",
+        "W01",
+        "W04"
+      ],
+      "artboard": "project/Runs.dc.html",
+      "page": "docs/design/marimba-panel/pages/Runs.html"
+    },
+    {
+      "id": "mp-s5-checks",
+      "image": "docs/design/marimba-panel/frames/mp-s5-checks.png",
+      "sha256": "fe979a1df7c0cc6398226451473c6049836aec300d0c9015d84e2be58bbcf1a5",
+      "bytes": 774402,
+      "width": 1440,
+      "height": 1500,
+      "screen": "S5",
+      "title": "Driver checks K1-K5 and doctor",
+      "workstreams": [
+        "W08",
+        "W01",
+        "W02"
+      ],
+      "artboard": "project/Checks.dc.html",
+      "page": "docs/design/marimba-panel/pages/Checks.html"
+    },
+    {
+      "id": "mp-s6-routes",
+      "image": "docs/design/marimba-panel/frames/mp-s6-routes.png",
+      "sha256": "51513fcf974b92fe03597547704a76575ff7b31447d37b619ef4200d31ef6bc1",
+      "bytes": 853488,
+      "width": 1440,
+      "height": 1700,
+      "screen": "S6",
+      "title": "Routes: who answers at L1-L4, and the route policy",
+      "workstreams": [
+        "W08",
+        "W05",
+        "W06",
+        "W10"
+      ],
+      "artboard": "project/Routes.dc.html",
+      "page": "docs/design/marimba-panel/pages/Routes.html"
+    },
+    {
+      "id": "mp-s5b-doctor-vm",
+      "image": "docs/design/marimba-panel/frames/mp-s5b-doctor-vm.png",
+      "sha256": "17752cd44a2296e50b20ee9a1cb5aa99027ff3e2a360193b151b1868fe43fc9c",
+      "bytes": 569116,
+      "width": 1440,
+      "height": 1000,
+      "screen": "S5b",
+      "title": "Doctor reporting from inside the Mac VM",
+      "workstreams": [
+        "W12"
+      ],
+      "artboard": "project/ChecksVM.dc.html",
+      "page": "docs/design/marimba-panel/pages/ChecksVM.html"
+    },
+    {
+      "id": "mp-s7-lease",
+      "image": "docs/design/marimba-panel/frames/mp-s7-lease.png",
+      "sha256": "e860fb393c0388af146b7b66aa140027ee23bb86ebeaaecd78fc9e6ff475623c",
+      "bytes": 749957,
+      "width": 1440,
+      "height": 1500,
+      "screen": "S7",
+      "title": "Lease and the Delegate: morning review and a prepared lease",
+      "workstreams": [
+        "W05"
+      ],
+      "artboard": "project/Lease.dc.html",
+      "page": "docs/design/marimba-panel/pages/Lease.html"
+    },
+    {
+      "id": "mp-s8-closure",
+      "image": "docs/design/marimba-panel/frames/mp-s8-closure.png",
+      "sha256": "7a809d11592ac69f788fd06cf7e25b47d5f0aff71c89f94095a0565cc14138ea",
+      "bytes": 674841,
+      "width": 1440,
+      "height": 1300,
+      "screen": "S8",
+      "title": "Ticket closure: markers and states in one commit",
+      "workstreams": [
+        "W03"
+      ],
+      "artboard": "project/Closure.dc.html",
+      "page": "docs/design/marimba-panel/pages/Closure.html"
+    },
+    {
+      "id": "mp-s10-validator",
+      "image": "docs/design/marimba-panel/frames/mp-s10-validator.png",
+      "sha256": "7cd1d12f3db5b3127b8ab3cc6a5775445edd94aa57ab1647b0ee0262ba7c8c97",
+      "bytes": 712777,
+      "width": 1440,
+      "height": 1500,
+      "screen": "S10",
+      "title": "User-testing validator: AC checks and exploration",
+      "workstreams": [
+        "W07"
+      ],
+      "artboard": "project/Validator.dc.html",
+      "page": "docs/design/marimba-panel/pages/Validator.html"
+    },
+    {
+      "id": "mp-s9-session",
+      "image": "docs/design/marimba-panel/frames/mp-s9-session.png",
+      "sha256": "96eb85a70f30f5ebd731907f7c4279df49cf37ce964ebac9dd503a92a78396c4",
+      "bytes": 712266,
+      "width": 1440,
+      "height": 1400,
+      "screen": "S9",
+      "title": "Session record: cycles across compactions",
+      "workstreams": [
+        "W04"
+      ],
+      "artboard": "project/Session.dc.html",
+      "page": "docs/design/marimba-panel/pages/Session.html"
+    },
+    {
+      "id": "mp-s11-context",
+      "image": "docs/design/marimba-panel/frames/mp-s11-context.png",
+      "sha256": "a6a144094dd38b54244a6e313cbd35c245d5ba6bb277eddaffa6115f643e64bd",
+      "bytes": 666289,
+      "width": 1440,
+      "height": 1300,
+      "screen": "S11",
+      "title": "Context engine: tokens per turn toward 10k",
+      "workstreams": [
+        "W09"
+      ],
+      "artboard": "project/Context.dc.html",
+      "page": "docs/design/marimba-panel/pages/Context.html"
+    },
+    {
+      "id": "mp-s12-data-loop",
+      "image": "docs/design/marimba-panel/frames/mp-s12-data-loop.png",
+      "sha256": "ead789118b5658eec1391dc71f9c942a5e4c9e42bcd1ecc786bd0a1238a680b4",
+      "bytes": 713063,
+      "width": 1440,
+      "height": 1500,
+      "screen": "S12",
+      "title": "Data loop: provenance, A/B against Sol, promotion as a diff",
+      "workstreams": [
+        "W10"
+      ],
+      "artboard": "project/DataLoop.dc.html",
+      "page": "docs/design/marimba-panel/pages/DataLoop.html"
+    },
+    {
+      "id": "mp-s13-readiness",
+      "image": "docs/design/marimba-panel/frames/mp-s13-readiness.png",
+      "sha256": "172be9938b435e3fdad07025e3b8c11937cb79f0a4428f534deadae6af223084",
+      "bytes": 701854,
+      "width": 1440,
+      "height": 1400,
+      "screen": "S13",
+      "title": "Agent readiness: eight categories and recommendations",
+      "workstreams": [
+        "W11"
+      ],
+      "artboard": "project/Readiness.dc.html",
+      "page": "docs/design/marimba-panel/pages/Readiness.html"
+    },
+    {
+      "id": "mp-s14-deploy",
+      "image": "docs/design/marimba-panel/frames/mp-s14-deploy.png",
+      "sha256": "3da7ce7c91a96a461cd3f1253321d365035ad32c34be8881c2d8dcb4ff6c366d",
+      "bytes": 646282,
+      "width": 1440,
+      "height": 1300,
+      "screen": "S14",
+      "title": "Deploy: reproducible build to staging; production is the owner's",
+      "workstreams": [
+        "W13"
+      ],
+      "artboard": "project/Deploy.dc.html",
+      "page": "docs/design/marimba-panel/pages/Deploy.html"
+    },
+    {
+      "id": "mp-s15-signals",
+      "image": "docs/design/marimba-panel/frames/mp-s15-signals.png",
+      "sha256": "c2ef74e2bf7536bd65357ed241a7fada89c596f6de05e610dd627b452bd1b45a",
+      "bytes": 629865,
+      "width": 1440,
+      "height": 1200,
+      "screen": "S15",
+      "title": "Signals pulled on open, each a backlog item",
+      "workstreams": [
+        "W14"
+      ],
+      "artboard": "project/Signals.dc.html",
+      "page": "docs/design/marimba-panel/pages/Signals.html"
+    },
+    {
+      "id": "mp-s16a-orb",
+      "image": "docs/design/marimba-panel/frames/mp-s16a-orb.png",
+      "sha256": "1e54f7c3d8e68e77fdca7fe522be7913108325abbdfccdba7b445f4a24609193",
+      "bytes": 534088,
+      "width": 1440,
+      "height": 900,
+      "screen": "S16a",
+      "title": "The Mac app: the orb listening in Spanish",
+      "workstreams": [
+        "W15"
+      ],
+      "artboard": "project/Orb.dc.html",
+      "page": "docs/design/marimba-panel/pages/Orb.html"
+    },
+    {
+      "id": "mp-s16b-phone",
+      "image": "docs/design/marimba-panel/frames/mp-s16b-phone.png",
+      "sha256": "d073d5bb0c4d28cd4e583fa5f0227f0c6d4e82407e83cb6f624dc0d08ee8cf87",
+      "bytes": 157162,
+      "width": 430,
+      "height": 884,
+      "screen": "S16b",
+      "title": "A stop on the phone; no owner act from any surface",
+      "workstreams": [
+        "W15"
+      ],
+      "artboard": "project/Phone.dc.html",
+      "page": "docs/design/marimba-panel/pages/Phone.html"
+    }
+  ]
+}
