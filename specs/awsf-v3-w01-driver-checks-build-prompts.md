@@ -15,13 +15,14 @@ Solution, K1's fields, Identifier Spine and Execution in full, then the task's o
 `specs/tickets/awsf-v3-w01-driver-checks/README.md`.
 
 **What W01 is, in one line.** K1: `awsf start` refuses DRAFT→PREPARED until the host has measured
-seven fields and the owner has confirmed the request. K2: `awsf next --json` lists the legal next
-steps and whose each is. The guard denies owner acts in every documented spelling. Every cancel and
+seven fields and the owner has confirmed the request. K2: `awsf next --json` inventories every legal
+edge, separating implemented CLI steps, implemented host waits and explicitly unavailable edges. The guard denies owner acts in every documented spelling. Every cancel and
 stop carries a cause.
 
 **Execution.** Managed by default (spine decision 7): one `build-review` attempt per ticket, tier
-derived by `awsf new`. A ticket starts after its `depends_on` tickets have landed, because every
-attempt bases on HEAD. Manual execution is a logged exception for a factory that cannot carry the
+derived by `awsf new`. External prerequisites must have landed. In an owner-approved accumulating
+shift, selected predecessors need host-committed, gate-passing heads in that worktree, not separate
+canonical landings or marker changes mid-shift. Manual execution is a logged exception for a factory that cannot carry the
 work. From T11's landing on, every task, these included, is prepared through `awsf preflight` and
 the owner's `awsf confirm`.
 
@@ -42,6 +43,14 @@ the owner's `awsf confirm`.
   document that enumerates owner acts).
 - **G01-S** is not taken: the owner decided W01-Q2 for `awsf start` on 2026-10-04, so L1's guard stays
   unchanged.
+
+**K2's availability contract.** The edge ids in `steps + waits + unavailable` partition
+`LEGAL_EDGES` filtered by the current state, exactly once. A CLI step or host wait needs an actual
+task-transition invocation, directly or through `CallBudget.authorize()`. A phase correction is
+not such an invocation. Unavailable entries retain the machine's actors and an explanation but
+have no verb, argv or executable who; neither the renderer, a lease nor a later panel may turn
+that explanation into an action. L10 and L16 currently require this classification. Implementing
+those edges is separate scope, not permission granted by T05.
 
 **K1's field ids**, used by every M4 ticket: `suite`, `write-boundary`, `protected-paths`,
 `git-storage`, `duplicate`, `request-shape`, `prior-attempts` (measured) and `confirmation`
@@ -416,21 +425,27 @@ READ FIRST
   core/src/cli/main.ts - the command arms; an owner act is an arm that constructs
     processOwnerTerminal()
   core/test/unit/meta/boundary-claims.test.ts - how the owner acts are derived from main.ts
-  Every module in core/src/cli/commands/ that calls transition(), to trace which verb requests
-    which edge
+  Every module in core/src/cli/commands/ that calls transition() or CallBudget.authorize(), to
+    trace the actual task-transition invocation, plus core/src/workflow/engine.ts to distinguish
+    intra-phase corrections from lifecycle transitions
 
 DO
   Create core/src/lifecycle/next-steps.ts, outside core/src/state:
-    EDGE_INVOCATIONS: for every edge in LEGAL_EDGES, the CLI verb that requests it, or
-      host-internal when only the runner requests it inside run or resume. Trace each to the
-      module that calls transition() for it; do not infer from names. Total over LEGAL_EDGES.
+    EDGE_INVOCATIONS: exactly one tagged classification per LEGAL_EDGES entry: an implemented
+      CLI invocation, an implemented host-internal invocation, or unavailable. Trace positive
+      provenance to the module and call site requesting the task transition, directly or through
+      CallBudget.authorize(); do not infer from names. An unavailable entry explains the missing
+      implementation without inventing a caller. L10 and L16 currently have none: rework's human
+      actor is not their host/owner actor, and phase corrections do not request task transitions.
     OWNER_ACT_COMMANDS: the verbs whose arms construct an owner terminal today.
     NON_TRANSITION_ACTS: raise, grant, journey and attribute with the lifecycle states each is
       legal in, read from each command's own checks, and the read-only status and watch.
     nextSteps(input): pure. Input is the attempt's state, identity and revision. Output is
       awsf.next/v1: steps (kind edge, act or read; edge, to, verb, argv, who, interactive,
-      spendsCalls, requires) and waits (host-internal edges, who host). who is owner when the
-      verb is an owner act, driver otherwise. requires is an empty list until T11 fills it.
+      spendsCalls, requires), waits (implemented host-internal edges, who host), and unavailable
+      (edge, to, actors from LEGAL_EDGES, reason not-implemented, non-empty detail). Unavailable
+      entries have no verb, argv or who, and authorize nothing. who on CLI steps is owner when
+      the verb is an owner act, driver otherwise. requires is empty until T11 fills it.
   Create core/src/contracts/next-steps.ts: the TypeBox schema, registered as the other record
     schemas are, and a validator.
 
@@ -439,12 +454,15 @@ DO NOT
   Add anything under core/src/state/**.
   Import docs/driving/** from core/src. The guard list is compared in a test (T07), not read at
     runtime.
-  Change any command's behaviour. This ticket adds a model and changes no output yet.
+  Change any command's behaviour or implement L10/L16. This ticket adds a model and changes no
+    output yet. Never put an unavailable edge in steps or waits to make coverage pass.
 
 BUILDER READY
-  Tests: nextSteps over every TASK_STATES value returns edges whose ids equal LEGAL_EDGES
-    filtered by from; every output validates against the schema; EDGE_INVOCATIONS has exactly
-    one entry per edge; OWNER_ACT_COMMANDS equals the set boundary-claims derives from main.ts.
+  Tests: nextSteps over every TASK_STATES value returns edge ids across steps, waits and
+    unavailable equal to LEGAL_EDGES filtered by from, exactly once each; every output validates
+    against the schema; EDGE_INVOCATIONS has exactly one entry per edge; OWNER_ACT_COMMANDS
+    equals the set boundary-claims derives from main.ts. L10/L16 are unavailable, preserve their
+    machine actors, and cannot validate with a verb, argv or who.
   npm run test:unit passes; npm run typecheck and npm run lint exit 0.
 
 OWNER ACCEPTANCE
@@ -484,7 +502,8 @@ EXECUTION
   Unknown context: read only, and ask before any write.
 
 PREDECESSORS
-  T05 landed: nextSteps and awsf.next/v1 exist.
+  T05 landed, or host-committed and gate-passing earlier in the approved accumulating shift:
+  nextSteps and awsf.next/v1 exist.
 
 BASELINE
   Run npm run test:unit at your base SHA before any change and record the count. A red base is
@@ -502,7 +521,9 @@ READ FIRST
 DO
   Add core/src/cli/commands/next.ts and its arm: awsf next <task> [--attempt n] [--json].
     It locates and reads the attempt, writes nothing, and takes no owner terminal. --json
-    prints the awsf.next/v1 object; without it, the rendered sentence and one line per step.
+    prints the awsf.next/v1 object; without it, the rendered sentence and one line per step,
+    wait and unavailable edge. Label unavailable entries with their explanation, never as a
+    command, automatic wait or recommended next action.
   Add next to CLI_COMMANDS and to the cheatsheet's commands list and command reference.
   Replace nextActionFor with renderNextAction(nextSteps(...)) in every caller under
     core/src/cli/commands/. Keep the persisted nextAction field; it is now rendered.
@@ -513,11 +534,13 @@ DO NOT
   Make next an owner act or give it a side effect.
   Keep a hand-written step sentence anywhere outside the renderer.
   Rewrite nextAction in existing attempt records. Old records keep their old text.
+  Recommend an unavailable edge or supply it with a command. Render its explanation separately.
 
 BUILDER READY
   Tests: awsf next and awsf next --json on one stub attempt per reachable state; the JSON
     validates against the schema; the text output equals the persisted nextAction after each
-    transition.
+    transition. GATING/REVIEWING outputs explicitly label L10/L16 unavailable, and neither the
+    rendered action nor waits claim they have an implemented invocation.
   cheatsheet-reconciliation and doc-reconciliation pass with the new command.
   npm run test:unit and npm run test:journeys pass; npm run typecheck and npm run lint exit 0.
 
@@ -558,7 +581,8 @@ EXECUTION
   Unknown context: read only, and ask before any write.
 
 PREDECESSORS
-  T05 and T06 landed.
+  T05 and T06 landed, or host-committed and gate-passing earlier in the approved accumulating
+  shift.
 
 BASELINE
   Run npm run test:unit at your base SHA before any change and record the count. A red base is
@@ -568,14 +592,20 @@ READ FIRST
   AGENTS.md; Section A of specs/awsf-v3-w01-driver-checks-build-prompts.md
   specs/awsf-v3-w01-driver-checks.html - M3, task 7, INV-4 and INV-5
   core/src/lifecycle/next-steps.ts, core/src/cli/commands/next.ts
-  core/test/unit/meta/boundary-claims.test.ts - ownerActsIn(), which the parity test reuses
+  core/test/unit/meta/boundary-claims.test.ts - reuse ownerActsIn()'s derivation approach; it is
+    local and unexported, not an importable helper or a reason to maintain a second verb list
   docs/driving/marimba/marimba-guard-rules.mts - OWNER_ACTS (protected; tests may import it,
     as core/test/unit/cli/relate.test.ts does)
 
 DO
-  A property test: for every state in TASK_STATES, the edge ids in steps plus waits equal
-    LEGAL_EDGES filtered by from, and each step's who follows from its edge's actors and
-    OWNER_ACT_COMMANDS. A planted extra edge in a copy of the table must turn it red.
+  A property test: for every state in TASK_STATES, the edge ids in steps plus waits plus
+    unavailable equal LEGAL_EDGES filtered by from, exactly once each. Implemented entries' who
+    follows from the invocation and OWNER_ACT_COMMANDS; unavailable actors equal the machine's
+    actors and have no who. Planted missing, extra or duplicate edges turn it red.
+  Availability tests: L10/L16 appear only in unavailable with reason not-implemented and a
+    non-empty explanation. Planted fake commands, fake host waits or changed unavailable actors
+    fail. Schema validation rejects verb, argv or who on an unavailable entry. A renderer test
+    refuses to recommend either unavailable edge; the text exposes their explanations.
   A parity test: OWNER_ACT_COMMANDS equals the main.ts-derived owner-act set and the guard's
     OWNER_ACTS, as sets.
   A fence: no source file under core/src/cli outside the renderer holds a literal next-step
@@ -587,14 +617,17 @@ DO NOT
     reason, not for a diff.
 
 BUILDER READY
-  The three tests above are green and each has a planted-defect case that fails.
+  The property, availability, parity, fence and schema tests are green. Each property,
+    availability, parity and fence check has a planted-defect case that fails.
   npm run test:unit (count against the base), npm run test:journeys, npm run typecheck and
     npm run lint pass.
 
 OWNER ACCEPTANCE
   Journey w01-m3: run awsf next --json on a stub attempt at DRAFT and at AWAITING_OWNER; check
   that every step the CLI would accept is listed with the right owner, and that land, journey,
-  rework, review and cancel show who: owner.
+  rework, review and cancel show who: owner. Also inspect pure synthetic GATING and REVIEWING
+  outputs: L10/L16 are visible as unavailable with the machine's actors and an explanation, no
+  command or who, and never a recommended action. Do not move a live attempt to create fixtures.
 
 COMMIT
   Managed: leave the tree for the host and put the proposed message in your envelope.

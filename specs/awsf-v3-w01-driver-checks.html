@@ -149,9 +149,9 @@ section.phase .sub { font-size:13px; }
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-10-03</dd>
-        <dt>modified</dt>     <dd>2026-10-03 (authored, awaiting owner review), 2026-10-04 (owner review applied: W01-Q1–Q7 decided; deep plan approved), 2026-10-05 (M1 delivered; owner-side markers and returned handoffs recorded)</dd>
+        <dt>modified</dt>     <dd>2026-10-03 (authored, awaiting owner review), 2026-10-04 (owner review applied: W01-Q1–Q7 decided; deep plan approved), 2026-10-05 (M1 delivered; owner-side markers and returned handoffs recorded), 2026-10-05 (K2 distinguishes implemented invocations from unavailable machine edges)</dd>
         <dt>commits</dt>      <dd>authoring: e1507e2; owner approval: recorded by this dated Amendment and its commit; approval SHA: dca882d; M1 delivery: T01 e074fe2, T02 58784ed, T03 4c75e11</dd>
-        <dt>agent name</dt>   <dd>claude-opus-5-5; marimba (owner-side bookkeeping preparation only)</dd>
+        <dt>agent name</dt>   <dd>claude-opus-5-5; marimba (owner-side bookkeeping preparation only), marimba (K2 amendment preparation only)</dd>
         <dt>session id</dt>   <dd>not recorded: AGENTS.md invariant 1 keeps live session state out of every committed file</dd>
         <dt>back refs</dt>    <dd>./awsf-v3-plan.html (§ Workstreams → Milestone M1 → W01, Questionable Q1, Notes), ./tickets/awsf-v3-plan/W01.md (the meta-prompt this plan answers), ./awsf-v3-intent.md (Terms K1 and K2, decisions 13 and 14), ./awsf-v3-assessment-and-direction.md (N3, F17, A10, A12), ../AGENTS.md (the thirteen invariants), ./design/awsf-v3-plan/frame-index.json (workstreamFrames.W01: mp-s2, mp-s3, mp-s4, mp-s5), the machine-local forensics draft ~/marimba-lab/forensics/2026-10-01-stops.md (not committed)</dd>
         <dt>forward refs</dt> <dd>./awsf-v3-w01-driver-checks-build-prompts.md (§ Section B, the prompt source the invariant-12 fence pairs against), ./tickets/awsf-v3-w01-driver-checks/ (README, T01–T13), ./awsf-v3-w02-trap-suite.html (not yet authored; receives this plan's handoff)</dd>
@@ -185,10 +185,10 @@ flowchart LR
     <p>Everything later in this version of the factory assumes two things: that a badly prepared job is refused before it costs anything, and that every stopped job says why. The next piece of work builds a collection of past mistakes out of exactly these refusals and reasons, and the new steering program planned after that reads the list of allowed next moves this plan creates. Doing this first gives the later work something firm to stand on.</p>
 
     <h3>What we are building</h3>
-    <p>Think of an aircraft before take-off. Today the pilot runs the checklist from memory. This plan builds the checklist into the aircraft. The plane reads its own fuel, doors and instruments, and will not leave the gate until each reading is right. One thing the plane cannot read is whether the flight plan matches what the passenger asked for, so the passenger signs the flight plan and the signature is kept. The cockpit also gets a panel listing every move allowed from where the plane is now, and who may make it, so nobody has to guess. The lock on the owner's controls is fixed so it holds however the command is typed. And every aborted flight is logged with its reason, including "a check was skipped".</p>
+    <p>Think of an aircraft before take-off. Today the pilot runs the checklist from memory. This plan builds the checklist into the aircraft. The plane reads its own fuel, doors and instruments, and will not leave the gate until each reading is right. One thing the plane cannot read is whether the flight plan matches what the passenger asked for, so the passenger signs the flight plan and the signature is kept. The cockpit also gets a panel listing every move allowed from where the plane is now, and who may make it, so nobody has to guess. A move the rules allow but the aircraft has no control for is labelled unavailable, never shown as a button that works. The lock on the owner's controls is fixed so it holds however the command is typed. And every aborted flight is logged with its reason, including "a check was skipped".</p>
 
     <h3>How we will know it worked</h3>
-    <p>A job missing any check cannot start, the refusal names the check, and it costs nothing. Asking the factory what can happen next returns exactly the moves its own rules allow, at every stage. The assistant is refused the owner's decisions in every documented way of typing them. Every cancellation records why, and the factory's report counts any stop that still has no reason. The final test is the review itself: each confirmed avoidable stop is either refused by the new checks or listed as out of their reach, with the reason and the later piece of work that takes it. Some things are deliberately not part of this: judging whether a request is the right one, checking at run time that the tools are installed and that allowance remains (the next piece of work does that), and the steering program itself. One cost is accepted on purpose: until the steering program arrives, the owner signs each job's flight plan as a separate step.</p>
+    <p>A job missing any check cannot start, the refusal names the check, and it costs nothing. Asking the factory what can happen next returns exactly the moves its own rules allow, at every stage, distinguishing available controls, work handled inside the factory, and allowed moves that have not been built. The assistant is refused the owner's decisions in every documented way of typing them. Every cancellation records why, and the factory's report counts any stop that still has no reason. The final test is the review itself: each confirmed avoidable stop is either refused by the new checks or listed as out of their reach, with the reason and the later piece of work that takes it. Some things are deliberately not part of this: judging whether a request is the right one, checking at run time that the tools are installed and that allowance remains (the next piece of work does that), and the steering program itself. One cost is accepted on purpose: until the steering program arrives, the owner signs each job's flight plan as a separate step.</p>
   </section>
 
   <!-- ===== PURPOSE ===== -->
@@ -345,7 +345,7 @@ sequenceDiagram
       <dt><code class="inv">INV-3</code></dt>
       <dd><strong>No task writes a protected path.</strong> The guard, <code>awsf confirm</code>'s wiring and any change to <code>core/src/state/**</code> land as owner commits under GA. No task edits <code>docs/driving/**</code>, <code>core/src/state/**</code>, a migration or <code>awsf.config.yaml</code>.</dd>
       <dt><code class="inv">INV-4</code></dt>
-      <dd><strong>One source for the next step.</strong> K2 derives every lifecycle step from <code>LEGAL_EDGES</code> and every owner act from the CLI's owner-terminal set. The prose <code>nextAction</code> is rendered from K2, and no hand-written step list remains.</dd>
+      <dd><strong>One source for the next step.</strong> K2 derives every lifecycle edge from <code>LEGAL_EDGES</code> and every owner act from the CLI's owner-terminal set. Implemented CLI invocations appear in <code>steps</code>, implemented host-internal invocations in <code>waits</code>, and declared edges without an implementation in <code>unavailable</code>. The three edge buckets partition the table without omissions or duplicates. The prose <code>nextAction</code> is rendered from K2, and no hand-written step list remains.</dd>
       <dt><code class="inv">INV-5</code></dt>
       <dd><strong>No owner act in any documented spelling (decision 14).</strong> The guard denies every owner act in every spelling the matrix holds, in both harnesses, and the K2 owner set, the guard list and the <code>main.ts</code> owner-terminal arms are equal.</dd>
       <dt><code class="inv">INV-6</code></dt>
@@ -357,7 +357,7 @@ sequenceDiagram
       <dt><code class="ac">AC-3</code></dt>
       <dd>The guard denies every owner act in every spelling of the matrix, in the pi rules and in the shell hook alike.</dd>
       <dt><code class="ac">AC-4</code></dt>
-      <dd><code>awsf next --json</code> lists, for every lifecycle state, exactly the legal edges out of it, each with its command and who may take it, and the prose is rendered from that list.</dd>
+      <dd><code>awsf next --json</code> lists, for every lifecycle state, exactly the legal edges out of it across <code>steps</code>, <code>waits</code> and <code>unavailable</code>. Only implemented CLI steps carry commands; host waits require an implemented caller; unavailable edges carry their machine-declared actors and an explanation, never a command or an executable <code>who</code>. The prose is rendered from this model and never recommends an unavailable edge.</dd>
       <dt><code class="ac">AC-5</code></dt>
       <dd><code>awsf preflight</code> measures every measured field and journals one record, and <code>awsf confirm</code> journals the owner's confirmation of the request and its paths.</dd>
       <dt><code class="ac">AC-6</code></dt>
@@ -370,7 +370,7 @@ sequenceDiagram
   <!-- ===== EXECUTION ===== -->
   <section id="execution">
     <h2>Execution, owner gates and fences</h2>
-    <p><strong>Managed by default (decision 7).</strong> Each ticket runs as one <code>build-review</code> attempt, so a provider other than the builder's reviews it. <code>awsf new</code> derives the tier from the paths. A ticket starts after its <code>depends_on</code> tickets have landed, because every attempt bases on HEAD and AWSF cannot build on an unlanded candidate. The owner may run a milestone as one <code>shift</code> where its tickets touch no protected path and the sizing fits; nothing here depends on it. Manual execution is the logged exception, for a factory that cannot carry the work.</p>
+    <p><strong>Managed by default (decision 7).</strong> Each ticket runs as one <code>build-review</code> attempt, so a provider other than the builder's reviews it. <code>awsf new</code> derives the tier from the paths. External prerequisites must have landed. In an owner-approved accumulating <code>shift</code>, a selected predecessor is satisfied by its host-committed, gate-passing head in the same managed worktree; it needs neither a separate canonical landing nor a marker change mid-shift. The owner may run a milestone as one <code>shift</code> where its tickets touch no protected path and the sizing fits; nothing here grants execution permission. Manual execution is the logged exception, for a factory that cannot carry the work.</p>
     <p><strong>K1 binds the factory from task 11 on.</strong> Once task 11 lands, tasks 12 and 13 are the first tasks prepared under K1, through <code>awsf preflight</code> and <code>awsf confirm</code>. If a K1 defect wrongly refuses every start, the factory cannot build its own fix, and the fix is a direct session logged as a decision-7 exception. No bypass flag is built for that case (INV-2).</p>
     <table>
       <thead><tr><th>Milestone</th><th>Tickets</th><th>How</th><th>Before it starts</th></tr></thead>
@@ -503,7 +503,7 @@ sequenceDiagram
         <pre class="mermaid">
 flowchart LR
   E["LEGAL_EDGES<br/>27 edges"] --> F["nextSteps()"]
-  I["edge invocations<br/>command or host-internal"] --> F
+  I["edge classification<br/>CLI, host, unavailable"] --> F
   A["owner-act table<br/>= main.ts = guard"] --> F
   F --> J["awsf next --json<br/>awsf.next/v1"]
   F --> P["nextAction prose"]
@@ -514,9 +514,9 @@ flowchart LR
       <h4>5. The next-steps model</h4>
       <p class="sub">Serves <code class="serves">AC-4</code> · <code class="serves">INV-4</code> · <code class="serves">INV-5</code></p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>core/src/lifecycle/next-steps.ts</code>: <code>EDGE_INVOCATIONS</code>, total over <code>LEGAL_EDGES</code>, maps each edge to the CLI verb that requests it or to <code>host-internal</code>, each traced to the module that requests it</li>
+        <li><code class="status">[]</code> <code>core/src/lifecycle/next-steps.ts</code>: <code>EDGE_INVOCATIONS</code>, total over <code>LEGAL_EDGES</code>, classifies each edge as an implemented CLI invocation, an implemented <code>host-internal</code> invocation, or <code>unavailable</code>. Positive invocation provenance names the module and call site requesting the task transition, directly or through <code>CallBudget.authorize()</code>; an unavailable entry explains the missing implementation without inventing a caller. L10 and L16 currently have no implemented invocation; an intra-phase correction is not a task transition</li>
         <li><code class="status">[]</code> <code>OWNER_ACT_COMMANDS</code>: the CLI verbs that construct an owner terminal, and a table of non-transition acts with the lifecycle states they are legal in (<code>raise</code>, <code>grant</code>, <code>journey</code>, <code>attribute</code>, the read-only <code>status</code> and <code>watch</code>)</li>
-        <li><code class="status">[]</code> Pure <code>nextSteps(input)</code> returns <code>awsf.next/v1</code>: <code>steps</code> with <code>kind</code>, <code>edge</code>, <code>to</code>, <code>verb</code>, <code>argv</code>, <code>who</code> (<code>driver</code> or <code>owner</code>), <code>interactive</code>, <code>spendsCalls</code> and <code>requires</code>, plus <code>waits</code> for host-internal edges (<code>who: host</code>)</li>
+        <li><code class="status">[]</code> Pure <code>nextSteps(input)</code> returns <code>awsf.next/v1</code>: <code>steps</code> with <code>kind</code>, <code>edge</code>, <code>to</code>, <code>verb</code>, <code>argv</code>, <code>who</code> (<code>driver</code> or <code>owner</code>), <code>interactive</code>, <code>spendsCalls</code> and <code>requires</code>, plus <code>waits</code> for implemented host-internal edges (<code>who: host</code>) and <code>unavailable</code> entries with <code>edge</code>, <code>to</code>, <code>actors</code> (from the machine), <code>reason: not-implemented</code> and <code>detail</code>. Unavailable entries have no <code>verb</code>, <code>argv</code> or <code>who</code>; they authorize nothing</li>
         <li><code class="status">[]</code> <code>core/src/contracts/next-steps.ts</code>: the TypeBox schema, registered like the other records</li>
       </ul>
 
@@ -525,13 +525,13 @@ flowchart LR
       <ul class="checklist">
         <li><code class="status">[]</code> <code>awsf next &lt;task&gt; [--attempt n] [--json]</code>: reads the attempt, writes nothing, takes no owner terminal; registered in <code>CLI_COMMANDS</code> and the cheatsheet</li>
         <li><code class="status">[]</code> <code>nextActionFor</code> is replaced by a renderer over <code>nextSteps</code>; every caller in <code>core/src/cli/commands/</code> uses it; the persisted <code>nextAction</code> field stays and is now rendered</li>
-        <li><code class="status">[]</code> Tests that pinned the old sentences assert the rendered text; the rendered AWAITING_OWNER line names <code>review</code> and <code>journey</code>, which the old one omitted</li>
+        <li><code class="status">[]</code> Tests that pinned the old sentences assert the rendered text; the rendered AWAITING_OWNER line names <code>review</code> and <code>journey</code>, which the old one omitted. Text output labels unavailable edges and their explanations separately; neither the rendered next action nor a wait recommends taking them</li>
       </ul>
 
       <h4>7. Testing Strategy for M3</h4>
       <p class="sub">Serves <code class="serves">AC-4</code> · <code class="serves">INV-4</code> · <code class="serves">INV-5</code></p>
       <ul class="checklist">
-        <li><code class="status">[]</code> Property test: for every state in <code>TASK_STATES</code>, the edge ids in <code>steps</code> plus <code>waits</code> equal <code>LEGAL_EDGES</code> filtered by <code>from</code>, and each edge's <code>who</code> follows from its actors and the owner-act table</li>
+        <li><code class="status">[]</code> Property test: for every state in <code>TASK_STATES</code>, the edge ids in <code>steps</code> plus <code>waits</code> plus <code>unavailable</code> equal <code>LEGAL_EDGES</code> filtered by <code>from</code>, exactly once each. Implemented entries' <code>who</code> follows from the invocation and owner-act table; unavailable entries retain the machine's actors without assigning <code>who</code>. Planted missing, extra or duplicate edges fail, as do fake commands or waits for L10/L16 and actor drift on an unavailable entry</li>
         <li><code class="status">[]</code> Parity: <code>OWNER_ACT_COMMANDS</code> equals the <code>main.ts</code>-derived owner-act set and the guard's <code>OWNER_ACTS</code></li>
         <li><code class="status">[]</code> No hand-written step sentence remains: a fence fails on a literal <code>run `awsf</code> sentence outside the renderer</li>
         <li><code class="status">[]</code> Every <code>awsf next --json</code> output validates against the schema, in a test over one stub attempt per state</li>
@@ -723,7 +723,7 @@ flowchart LR
     </table>
     <p>K1 refuses three of the eight, one of them partly. Five are out of its reach, each because the fact is decided at run time, and all five go to W02. The suspected red bases (#1, #15, trap T6) fall to <code>suite</code>, and the Marimba-admitted duplicate (T7) to <code>duplicate</code>.</p>
 
-    <h3>Handoff findings, dated 2026-10-03</h3>
+    <h3>Handoff findings, dated 2026-10-03; K2 availability clarified 2026-10-05</h3>
     <p>For the owner to persist in those tickets' Handoff sections.</p>
     <h4>For W02 (trap suite)</h4>
     <ul>
@@ -734,13 +734,13 @@ flowchart LR
     </ul>
     <h4>For W05 (authority)</h4>
     <ul>
-      <li><strong>K2's actor model:</strong> <code>who</code> is <code>driver</code>, <code>owner</code> or <code>host</code>. The Delegate adds <code>delegate</code> as a <code>who</code> on the owner steps its lease covers, read from <code>OWNER_ACT_COMMANDS</code>.</li>
+      <li><strong>K2's actor model:</strong> <code>who</code> is <code>driver</code>, <code>owner</code> or <code>host</code>. The Delegate adds <code>delegate</code> as a <code>who</code> on the implemented owner steps its lease covers, read from <code>OWNER_ACT_COMMANDS</code>. An unavailable entry's <code>actors</code> are machine vocabulary, not execution authority; neither a lease nor an actor label supplies its missing implementation.</li>
       <li><strong><code>confirm</code> is an attestation.</strong> It belongs in W19 INV-3's closed set beside <code>journey</code>: the Delegate never confirms a request.</li>
     </ul>
     <h4>For W08 (Marimba harness)</h4>
     <ul>
       <li><strong>The K1 field list</strong> above, with the two record schemas, is what frame mp-s5-checks shows. Its "Four-line request confirmed · turn 8" assumes the card. In W01 the confirmation is the owner's <code>awsf confirm</code>. W08's card must write an equivalent <code>awsf.request-confirmation/v1</code> record through a path the driver cannot take, or leave <code>awsf confirm</code> as the owner's step.</li>
-      <li><strong>The K2 shape</strong> below is the panel's legal-steps list (mp-s2-owner-review), and K3's schema is K2's steps where <code>who</code> is <code>driver</code>.</li>
+      <li><strong>The K2 shape</strong> below is the panel's legal-steps list (mp-s2-owner-review), and K3's schema is K2's steps where <code>who</code> is <code>driver</code>. Unavailable edges are informational, labelled separately, and cannot become buttons or runnable driver steps.</li>
       <li><strong>Causes</strong> render on the Blocked and Runs frames (mp-s3, mp-s4) from the attribution records.</li>
     </ul>
     <h4>For W10 (data loop)</h4>
@@ -761,8 +761,10 @@ flowchart LR
     { "kind": "act",  "verb": "journey", "who": "owner", "interactive": true, "spendsCalls": false, "requires": [] },
     { "kind": "read", "verb": "status",  "who": "driver" }
   ],
-  "waits": [ { "edge": "L21", "to": "BLOCKED", "who": "host" } ]
+  "waits": [ { "edge": "L21", "to": "BLOCKED", "who": "host" } ],
+  "unavailable": []
 }</code></pre>
+    <p>At GATING, L10 is represented in <code>unavailable</code> as <code>{ "edge": "L10", "to": "RUNNING", "actors": ["host", "owner"], "reason": "not-implemented", "detail": "No implemented task-transition invocation; intra-phase corrections do not invoke this edge." }</code>. At REVIEWING, L16 likewise retains <code>["owner"]</code>. The machine's <code>human</code> and <code>owner</code> actors are distinct: <code>rework.ts</code>'s human caller cannot stand in for either edge. These are explanations, not instructions or permission to implement the edges in T05.</p>
     <p>At DRAFT after task 11, the L1 step reads <code>{ "edge": "L1", "verb": "start", "who": "driver", "requires": [{ "check": "K1", "field": "confirmation", "status": "missing" }] }</code>. The prose renderer turns the same list into one sentence. The values are illustrative. The schema is task 5's.</p>
 
     <h3>Corrections for the spine, not applied here</h3>
@@ -826,6 +828,12 @@ flowchart LR
       <p>The owner exercise confirmed that missing cancel input refuses before prompting, and that a confirmed cancel leaves a durable reason and exactly one owner attribution without spending a provider call. The original exercise checker read attribution journal wrappers incorrectly; this was a preparation defect, not a missing cancellation cause. Read-only verification of the already-recorded evidence corrected the check. The cancellation was not rerun or reattributed.</p>
       <p>Returned findings are persisted above the canonical prompts in T02, T03, T13 and W02. Two accepted, non-blocking review findings remain explicit: the unfiltered JSON cause ledger includes proving-ground replays while default text is production-scoped, and the dashboard attribution-panel comment names a removed refusal class and a former BLOCKED-only CLI rule. Other returned follow-ups include flag-incomplete cancel advice, protected driving-document examples requiring owner updates, and the dashboard panel's still-BLOCKED-only command composer. This bookkeeping fixes none of those code or protected-document findings, performs no historical attribution backfill, and changes no build prompt.</p>
       <p>Implementation provenance: three builder results were route-attributed to <code>gpt-6-sol</code> at extra-high effort, not provider-stream-confirmed identities. The accepted independent review was stream-authoritative <code>claude-opus-5-5</code> at high effort. The first review stream ended with <code>E_TERMINAL_MISSING</code>; the host's single permitted review retry produced acceptance. No provider root cause is inferred. Reviewers did not run Git or the suite themselves; gate counts and commit identities were checked from host evidence and Git separately. W01-Q1–Q7 and G01-F, G01-G and G01-C are unchanged by this delivery.</p>
+    </details>
+    <details open>
+      <summary>2026-10-05 — K2 distinguishes implemented invocations from unavailable machine edges</summary>
+      <p>This owner-side amendment clarifies INV-4 and AC-4 without changing the machine or guards, adding lifecycle invocations or widening owner authority. The edge inventory remains total: implemented CLI edges appear in steps, implemented host-internal edges in waits, and declared edges with no implementation in unavailable. The property test covers their union exactly once. An unavailable entry retains the machine's actors and a not-implemented explanation, but has no verb, argv or executable who. The renderer exposes that explanation and never recommends it as an action or a wait.</p>
+      <p>The motivating source mismatch is L10 (GATING to RUNNING, host or owner) and L16 (REVIEWING to RUNNING, owner), declared in core/src/state/task-machine.ts. core/src/cli/commands/rework.ts requests RUNNING as human; the machine rejects that actor on these edges. core/src/workflow/engine.ts corrects phase state internally, not either task edge. T05 must not invent rework provenance or claim those phase corrections are lifecycle invocations. Implementing either task edge requires a separate, authorized scope.</p>
+      <p>The plan, shared execution conventions, canonical T05–T07 prompts and their ticket copies change together. External prerequisites still require landing; an approved accumulating shift may satisfy selected predecessors with host-committed, gate-passing heads in its own worktree. W05 and W08 inherit the unavailable/non-executable distinction through the handoff notes. No marker, ticket state, dependency, protected-path grant or completion gate changes; G01-F, G01-G and G01-C remain separate owner gates.</p>
     </details>
   </section>
 

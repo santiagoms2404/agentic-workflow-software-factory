@@ -10,7 +10,9 @@ and status. Spine: [`../../awsf-v3-plan.html`](../../awsf-v3-plan.html) § Works
 
 - **Managed by default** (spine decision 7): one `build-review` attempt per ticket, so a provider
   other than the builder's reviews it. `awsf new` derives the tier from the paths. A ticket starts
-  after its `depends_on` tickets have landed, because every attempt bases on HEAD.
+  after external `depends_on` tickets have landed. In an owner-approved accumulating shift,
+  selected predecessors instead need host-committed, gate-passing heads in that worktree; no
+  separate canonical landing or marker change is required mid-shift.
 - **Manual is a logged exception**, for a factory that cannot carry the work. A manual session
   uses the prompt's `Manual:` lines and commits only with the owner's authorization.
 - **From T11's landing on, K1 binds every start**, T12 and T13 included: the driver runs
@@ -69,6 +71,16 @@ disagreed would be refused.
 | `T13` | M4 | `T03`, `T04`, `T07`, `T11`, `T12` | G01-G landed | Testing Strategy for M4, the forensics map, and the workstream's closing duties |
 
 M1, M2 and M3 have no dependency on each other and can run in any order. M4 waits for G01-F.
+
+## K2 availability
+
+The edge ids in `steps + waits + unavailable` partition `LEGAL_EDGES` filtered by state,
+exactly once. CLI steps and host waits require implemented task-transition invocations.
+Declared edges without one retain their machine actors and a `not-implemented` explanation in
+`unavailable`, with no verb, argv or executable who. L10/L16 currently need this classification:
+`rework` uses `human`, not their permitted actors, and phase corrections do not invoke task edges.
+T05 does not implement those edges. T06 labels their explanations separately and never recommends
+them. T07 tests completeness, uniqueness, actor preservation and non-executability.
 
 ## Design references
 
