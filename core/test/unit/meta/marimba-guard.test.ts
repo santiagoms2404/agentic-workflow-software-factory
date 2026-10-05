@@ -1,11 +1,12 @@
 import { after, test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { accessSync, chmodSync, constants, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { accessSync, chmodSync, constants, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { relRepo } from "./_walk.ts";
 import { drivingDir } from "./_driving.ts";
+import { OWNER_ACT_ROWS } from "./_owner-act-spellings.ts";
 
 // ---------------------------------------------------------------------------
 // The offline behaviour matrix for marimba's two installed scripts. It runs the
@@ -113,9 +114,6 @@ writeFileSync(join(STUB_BIN, "python3"), "#!/bin/sh\nexit 127\n");
 chmodSync(join(STUB_BIN, "python3"), 0o755);
 after(() => rmSync(STUB_BIN, { recursive: true, force: true }));
 
-/** The owner acts that construct a terminal, in the guard's own order. */
-const OWNER_ACTS = ["land", "cancel", "rework", "review", "degrade-review", "attribute", "prove", "journey", "raise", "publish", "resume", "grant"] as const;
-
 const GUARD_ROWS: readonly GuardRow[] = [
   // --- fence 2: owner acts in Bash command text ---------------------------
   {
@@ -142,13 +140,15 @@ const GUARD_ROWS: readonly GuardRow[] = [
     payload: bash("awsf retry T01"),
     expect: "allow",
   },
-  ...OWNER_ACTS.map(
-    (act): GuardRow => ({
-      id: `bash · awsf ${act}`,
-      why: "an act reserved for the owner; each has a row so none can be dropped from the guard unnoticed",
-      payload: bash(`awsf ${act} T01`),
-      expect: "deny",
-      mentions: [new RegExp(`\\b${act}\\b`)],
+  ...OWNER_ACT_ROWS.map(
+    (row): GuardRow => ({
+      id: `owner-act shell matrix · ${row.label}`,
+      why: row.expected === null
+        ? "KNOWN GAP F17: G01-G must fix the protected guard and flip this row to deny"
+        : "an imported owner act in a W01-Q7 spelling must be denied",
+      payload: bash(row.command),
+      expect: row.expected === null ? "allow" : "deny",
+      mentions: row.expected === null ? [] : [new RegExp(`\\b${row.act}\\b`)],
     }),
   ),
   {
@@ -356,28 +356,46 @@ test("the table asserts allows as hard as denies", () => {
   assert.ok(allows >= 15, `only ${allows} allow rows; the deny-only failure mode is what this table exists to avoid`);
 });
 
+function assertGuardRow(row: GuardRow, result: RunResult): void {
+  const seen = `exit ${result.code}, stdout ${JSON.stringify(result.stdout)}, stderr ${JSON.stringify(result.stderr)}`;
+  if (row.expect === "allow") {
+    assert.equal(result.code, 0, `${row.why} — ${seen}`);
+    assert.equal(result.stdout, "", `an allowed call must produce no output at all — ${seen}`);
+    assert.equal(result.stderr, "", `an allowed call must produce no output at all — ${seen}`);
+    return;
+  }
+  // The deny protocol, all three parts.
+  assert.equal(result.code, 2, `${row.why} — ${seen}`);
+  assert.equal(result.stdout, "", `the deny protocol puts NOTHING on stdout — ${seen}`);
+  assert.ok(result.stderr.trim().length > 0, `a deny with no reason on stderr tells the session nothing — ${seen}`);
+  for (const mention of row.mentions ?? []) {
+    assert.match(result.stderr, mention, `the reason must name what it refused — ${seen}`);
+  }
+}
+
 for (const row of GUARD_ROWS) {
   test(`guard ${row.expect === "deny" ? "denies" : "allows"}: ${row.id}`, () => {
     const result = guardResults.get(row.id);
     assert.ok(result, `no result captured for ${row.id}`);
-    const seen = `exit ${result.code}, stdout ${JSON.stringify(result.stdout)}, stderr ${JSON.stringify(result.stderr)}`;
-
-    if (row.expect === "allow") {
-      assert.equal(result.code, 0, `${row.why} — ${seen}`);
-      assert.equal(result.stdout, "", `an allowed call must produce no output at all — ${seen}`);
-      assert.equal(result.stderr, "", `an allowed call must produce no output at all — ${seen}`);
-      return;
-    }
-
-    // The deny protocol, all three parts.
-    assert.equal(result.code, 2, `${row.why} — ${seen}`);
-    assert.equal(result.stdout, "", `the deny protocol puts NOTHING on stdout — ${seen}`);
-    assert.ok(result.stderr.trim().length > 0, `a deny with no reason on stderr tells the session nothing — ${seen}`);
-    for (const mention of row.mentions ?? []) {
-      assert.match(result.stderr, mention, `the reason must name what it refused — ${seen}`);
-    }
+    assertGuardRow(row, result);
   });
 }
+
+test("shell matrix catches a planted removed owner-act case without editing the protected guard", async () => {
+  const original = readFileSync(GUARD, "utf8");
+  const mutant = original.replace('*"awsf $verb"*)', '*"planted-never-an-owner-act $verb"*)');
+  assert.notEqual(mutant, original, "the planted mutation must reach the real case arm");
+  const script = join(STUB_BIN, "mutant-owner-guard.sh");
+  writeFileSync(script, mutant);
+  chmodSync(script, 0o755);
+  const rows = GUARD_ROWS.filter((row) => row.id.startsWith("owner-act shell matrix") && row.expect === "deny");
+  assert.ok(rows.length > 0);
+  await Promise.all(rows.map(async (row) => {
+    const result = await run(script, row.payload);
+    assert.equal(result.code, 0, "the planted defect must actually admit the owner act");
+    assert.throws(() => assertGuardRow(row, result), assert.AssertionError, row.id);
+  }));
+});
 
 test("banner: exits 0 and confirms the guard when the guard is there", () => {
   assert.equal(bannerWithGuard.code, 0, "a SessionStart hook that fails is a new way to break a session for nothing");

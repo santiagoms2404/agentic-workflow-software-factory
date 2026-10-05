@@ -25,6 +25,7 @@ import { test } from "node:test";
 import { runInNewContext } from "node:vm";
 
 import { drivingDir } from "./_driving.ts";
+import { OWNER_ACT_ROWS } from "./_owner-act-spellings.ts";
 import {
   ALLOWED_WHOLE_NAMES,
   DELEGATION_STEMS,
@@ -51,14 +52,17 @@ function shellList(variable: string): readonly string[] {
 // repository dependency. Only its tool-name type predicate is substituted. The
 // policy functions below are the same shared functions used in production.
 type Handler = (event: Record<string, unknown>, context: { ui: Record<string, unknown> }) => Promise<{ block: boolean; reason?: string } | void>;
-function bindingHandlers(environment: Readonly<Record<string, string>> = {}): Map<string, Handler> {
+function bindingHandlers(
+  environment: Readonly<Record<string, string>> = {},
+  ownerRule: typeof ownerActViolation = ownerActViolation,
+): Map<string, Handler> {
   const source = stripTypeScriptTypes(PI_GUARD)
     .replace(/import \{ isToolCallEventType \} from "@mariozechner\/pi-coding-agent";/u, "")
     .replace(/import\s*\{[^}]*\}\s*from "\.\/marimba-guard-rules\.mts";/u, "")
     .replace("export default function", "function registerGuard");
   const register = runInNewContext(`${source}\nregisterGuard`, {
     isToolCallEventType: (name: string, event: { toolName: string }) => event.toolName === name,
-    OWNER_ACTS, DELEGATION_STEMS, ownerActViolation, delegationViolation,
+    OWNER_ACTS, DELEGATION_STEMS, ownerActViolation: ownerRule, delegationViolation,
     TIMEOUT_GUARDED_LIFECYCLE_COMMANDS, lifecycleTimeoutViolation,
     process: { env: environment },
   }) as (api: { on: (name: string, handler: Handler) => void }) => void;
@@ -160,10 +164,34 @@ test("the pi binding delegates to the shared rules rather than restating them", 
 //    it carries that this cannot are named rather than dropped.
 // ---------------------------------------------------------------------------
 
-test("fence 2 denies every owner act, through a wrapper, padded, or under a PTY", () => {
-  for (const act of OWNER_ACTS) {
-    assert.equal(ownerActViolation(`awsf ${act} T01`), act, act);
+for (const row of OWNER_ACT_ROWS) {
+  test(`owner-act rules matrix: ${row.label}`, () => {
+    assert.equal(ownerActViolation(row.command), row.expected);
+  });
+  test(`owner-act pi binding matrix: ${row.label}`, async () => {
+    const result = await bindingHandlers().get("tool_call")!(
+      { toolName: "bash", input: { command: row.command } }, { ui: {} },
+    );
+    assert.equal(result?.block, row.expected !== null);
+    if (row.expected !== null) assert.ok(result?.reason?.includes(row.act), "denial must name the act");
+  });
+}
+
+test("owner-act matrix catches a planted removed owner-rule match through rules and pi binding", async () => {
+  const source = stripTypeScriptTypes(readFileSync(join(MARIMBA_DIR, "marimba-guard-rules.mts"), "utf8"))
+    .replace(/\bexport /gu, "")
+    .replace("normalized.includes(`awsf ${act}`)", "false");
+  const mutant = runInNewContext(`${source}\nownerActViolation`) as typeof ownerActViolation;
+  const handler = bindingHandlers({}, mutant).get("tool_call")!;
+  for (const row of OWNER_ACT_ROWS.filter((candidate) => candidate.expected !== null)) {
+    assert.equal(mutant(row.command), null, "planted defect must actually remove the refusal");
+    assert.throws(() => assert.equal(mutant(row.command), row.expected), assert.AssertionError, row.label);
+    const result = await handler({ toolName: "bash", input: { command: row.command } }, { ui: {} });
+    assert.throws(() => assert.equal(result?.block, true), assert.AssertionError, row.label);
   }
+});
+
+test("fence 2 denies through a wrapper, padded, or under a PTY", () => {
   assert.equal(ownerActViolation("just awsf rework T01"), "rework", "a task runner in front does not hide it");
   assert.equal(ownerActViolation("awsf   land   T01"), "land", "whitespace is normalised before matching");
   assert.equal(ownerActViolation('script -qec "awsf land T01"'), "land", "the PTY bypass this fence exists for");
