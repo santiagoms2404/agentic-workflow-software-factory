@@ -59,7 +59,7 @@ const Count = Type.Integer({ minimum: 0 });
 const NCount = Nullable(Type.Integer({ minimum: 0 }));
 const Flag = Type.Boolean();
 const Literals = (values: readonly string[]) => Type.Union(values.map((value) => Type.Literal(value)));
-const Attribution = Literals(["model", "factory", "environment", "owner", "unknown"]);
+const Attribution = Literals(["model", "factory", "environment", "driver", "owner", "unknown"]);
 const EffortSource = Nullable(Literals(["journal", "config-phase-route", "config-agent", "unknown"]));
 const Provenance = Nullable(Literals(["stream-authoritative", "route-attributed"]));
 const UsageAuthority = Literals(["provider", "partial", "none"]);
@@ -118,11 +118,23 @@ export const UntestedRouteSchema = Type.Object({
   adapter: Str, provider: Str, model: Str, effort: Str, label: Type.String({ minLength: 1 }), prior: Type.String({ minLength: 1 }),
 }, { additionalProperties: false });
 
+const CauseBucket = Type.Object({
+  total: Count,
+  byCause: Type.Partial(Type.Object({ model: Count, factory: Count, environment: Count, driver: Count, owner: Count }, { additionalProperties: false })),
+}, { additionalProperties: false });
+
 export const MetricsResponseSchema = Type.Object({
   schema: Type.Literal("awsf.route-metrics/v1"),
   extractedAt: Type.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$" }),
   runs: Type.Array(MetricsRunSchema),
   roleRows: Type.Array(RoleRowSchema),
+  causes: Type.Object({
+    stops: CauseBucket,
+    cancels: CauseBucket,
+    withoutCause: Type.Array(Type.Object({
+      project: Str, taskId: Str, attempt: Count, lifecycleState: Literals(["BLOCKED", "CANCELLED"]),
+    }, { additionalProperties: false })),
+  }, { additionalProperties: false }),
   rateCard: RateCardSchema,
   priors: BenchmarkPriorsSchema,
   untestedRoutes: Type.Array(UntestedRouteSchema),

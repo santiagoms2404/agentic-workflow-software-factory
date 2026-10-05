@@ -23,6 +23,7 @@ import type {
 import { RATE_CARD } from "../../../dashboard/shared/rate-card.ts";
 import { BENCHMARK_PRIORS, UNTESTED_ROUTES } from "../../../dashboard/shared/benchmark-priors.ts";
 import { effectiveAttribution } from "./attribution.ts";
+import { summarizeCauses } from "./causes.ts";
 import { minutesBetween, type PhaseFacts } from "./phase-facts.ts";
 import { buildRoleRows, readRunFacts, stateGroup, type RoleRow, type RunFacts } from "./role-rows.ts";
 
@@ -125,11 +126,13 @@ export function buildMetricsPayload(db: DatabaseSync, options: MetricsPayloadOpt
   const phases = readRunPhases(db, facts);
   // Assigned, not cast: this compiles only while core's `RoleRow` satisfies the payload's row type.
   const roleRows: readonly MetricsRoleRow[] = buildRoleRows(facts) satisfies readonly RoleRow[];
+  const runs = facts.map((item) => run(item, phases.get(item.sessionId) ?? []));
   return {
     schema: METRICS_SCHEMA,
     extractedAt: options.extractedAt,
-    runs: facts.map((item) => run(item, phases.get(item.sessionId) ?? [])),
+    runs,
     roleRows,
+    causes: summarizeCauses(runs),
     rateCard: RATE_CARD,
     priors: BENCHMARK_PRIORS,
     untestedRoutes: UNTESTED_ROUTES,

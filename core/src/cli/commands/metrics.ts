@@ -6,8 +6,9 @@
 // classes read sealed ticket blobs with Git; no agent starts, no phase runs
 // and no provider call is reserved.
 //
-// It computes no statistic of its own. Grouping, counts, intervals, depth and
-// verdicts come from `dashboard/shared/route-metrics.ts`, and every price from
+// Route grouping, counts, intervals, depth and verdicts come from
+// `dashboard/shared/route-metrics.ts`; the cause ledger comes from the same
+// projected runs as the API payload. Every price comes from
 // `dashboard/shared/rate-card.ts` through `formatListEquivalent`, so the CLI,
 // the API and the tab cannot disagree about a number. The flags narrow the
 // rows the table reads; `--json` prints the unfiltered API payload through the
@@ -23,11 +24,12 @@ import { publicApiValue } from "../../api/responses.ts";
 import { TICKET_TASK_CLASSES } from "../../contracts/ticket.ts";
 import type { ProvingGroundItem } from "../../contracts/proving-ground.ts";
 import { buildMetricsPayload } from "../../metrics/payload.ts";
+import { summarizeCauses } from "../../metrics/causes.ts";
 import { readReplayOutcomes, routeArmProtocol, routeArmReplays, type ReplayOutcome } from "../../metrics/route-arm-replays.ts";
 import { LINE_WINDOW, scoreRouteArms, type RouteArmScore } from "../../metrics/route-arm-score.ts";
 import { openDatabase, type DatabaseSync } from "../../observability/sqlite.ts";
 import { readProvingGroundCorpus } from "../../workflow/prove/corpus.ts";
-import type { MetricsResponse, MetricsRoleRow, MetricsRun } from "../../../../dashboard/shared/types.ts";
+import type { MetricsCauseSummary, MetricsResponse, MetricsRoleRow, MetricsRun } from "../../../../dashboard/shared/types.ts";
 import { formatListEquivalent, listPrice } from "../../../../dashboard/shared/rate-card.ts";
 import {
   EVIDENCE_SOURCES,
@@ -150,9 +152,23 @@ function firstPassCell(interval: Interval): string {
   return interval.p === null ? "–" : `${percent(interval.p)} [${percent(interval.lo)}–${percent(interval.hi)}]`;
 }
 
-function tallyText(counts: Readonly<Record<string, number>>): string {
-  const entries = Object.entries(counts).filter(([, count]) => count > 0).sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1));
+function tallyText(counts: Readonly<Record<string, number | undefined>>): string {
+  const entries = Object.entries(counts).filter((entry): entry is [string, number] => entry[1] !== undefined && entry[1] > 0)
+    .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1));
   return entries.length === 0 ? "none" : entries.map(([key, count]) => `${key} ${count}`).join(" · ");
+}
+
+function causeReadout(runs: readonly MetricsRun[]): string[] {
+  const { stops, cancels, withoutCause } = summarizeCauses(runs);
+  const count = (bucket: MetricsCauseSummary["stops"]): number =>
+    bucket.total - Object.values(bucket.byCause).reduce((total, n) => total + n, 0);
+  return [
+    `Stops (BLOCKED) by cause: ${tallyText(stops.byCause)} · ${stops.total} total · ${count(stops)} without a cause`,
+    `Cancels (CANCELLED) by cause: ${tallyText(cancels.byCause)} · ${cancels.total} total · ${count(cancels)} without a cause`,
+    "Without a cause:",
+    ...(withoutCause.length === 0 ? ["  none"] : withoutCause.map((run) =>
+      `  ${run.project}/${run.taskId} attempt ${run.attempt} (${run.lifecycleState})`)),
+  ];
 }
 
 const UNPLACED_TEXT: Readonly<Record<UnplacedReason, string>> = {
@@ -184,6 +200,7 @@ export function metricsReadout(payload: MetricsResponse, filter: MetricsFilter, 
   lines.push(`${runs.length} runs (${all.runs} with role-rows) · ${all.n} role-rows · ${cover.routes} routes · ` +
     `${cover.cells} cells · ${all.refuted} refuted of ${all.claims} claims`);
   lines.push(`Blocked runs by heuristic attribution: ${tallyText(heuristicSplit(runs))}`);
+  lines.push(...causeReadout(runs));
   if (cover.unkeyed > 0) lines.push(`${cover.unkeyed} role-row(s) have no route key (route-mixed or unknown) and enter no cell.`);
   if (all.n === 0) {
     lines.push("No role-rows in this scope.");

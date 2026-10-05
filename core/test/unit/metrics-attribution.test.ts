@@ -195,7 +195,16 @@ test("the owner's override wins over the heuristic, which stays beside it", () =
   );
 });
 
-test("a run that is not BLOCKED has no attribution, even with an override on record", () => {
+test("CANCELLED has no heuristic, but its owner record (including unknown) is effective", () => {
+  const run: AttributionRun = { lifecycleState: "CANCELLED", phases: [], transitions: [] };
+  assert.deepEqual(effectiveAttribution(run, null), { attribution: null, source: null, heuristic: null });
+  for (const cause of ["owner", "unknown"] as const) {
+    assert.deepEqual(effectiveAttribution(run, { cause, reason: "synthetic reason", at: "2026-09-28T10:00:00.000Z" }),
+      { attribution: cause, source: "owner", heuristic: null });
+  }
+});
+
+test("a run outside BLOCKED and CANCELLED has no attribution, even with an override on record", () => {
   const landed: AttributionRun = { lifecycleState: "LANDED", phases: [phase("t01-build", 1, "agent", "builder")], transitions: [] };
   assert.deepEqual(
     effectiveAttribution(landed, { cause: "model", reason: "stray", at: "2026-09-28T10:00:00.000Z" }),

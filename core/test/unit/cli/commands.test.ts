@@ -8,6 +8,7 @@ import { main } from "../../../src/cli/main.ts";
 import { toConfigSnapshotJson } from "../../../src/config/effective-config.ts";
 import { loadConfig } from "../../../src/config/load.ts";
 import { cancelCommand } from "../../../src/cli/commands/cancel.ts";
+import { metricsCommand } from "../../../src/cli/commands/metrics.ts";
 import { createDashboardProjection } from "../../../src/cli/commands/dashboard-projection.ts";
 import { openDatabase } from "../../../src/observability/sqlite.ts";
 import { readTaskAttributions, attributionsFilePath } from "../../../src/persistence/task-attributions.ts";
@@ -612,6 +613,11 @@ test("confirmed CLI cancel projects exactly one attribution event after the tran
       assert.equal(JSON.parse(events[0]!.payload_json).reason, "No longer required");
       assert.equal((await readTaskAttributions(taskRoot(stateRoot, created.status.project, created.status.taskId))).length, 1);
     } finally { db.close(); }
+    const text = metricsCommand({ dbPath: join(stateRoot, "awsf.db"), extractedAt: "2026-10-04T00:00:00.000Z" }).join("\n");
+    assert.match(text, /Cancels \(CANCELLED\) by cause: owner 1 · 1 total · 0 without a cause/);
+    assert.match(text, /Without a cause:\n  none/);
+    const [json] = metricsCommand({ dbPath: join(stateRoot, "awsf.db"), extractedAt: "2026-10-04T00:00:00.000Z", json: true });
+    assert.deepEqual(JSON.parse(json!).causes.cancels, { total: 1, byCause: { owner: 1 } });
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 

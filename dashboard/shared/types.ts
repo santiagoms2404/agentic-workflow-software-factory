@@ -602,7 +602,7 @@ export interface MetricsRun {
   readonly endedAt: string | null;
   /** The owner's latest `awsf attribute` record for this attempt. */
   readonly ownerAttribution: { readonly cause: MetricsAttribution; readonly reason: string; readonly at: string } | null;
-  /** The run's attribution in force: the owner's override where recorded, else the heuristic. `null` unless BLOCKED. */
+  /** The run's attribution in force: owner record before the BLOCKED heuristic; CANCELLED has no heuristic. */
   readonly attribution: MetricsAttribution | null;
   readonly attributionSource: "owner" | "heuristic" | null;
   /** The heuristic's answer, beside any override. A run blocked before any agent phase has one and no role-row. */
@@ -673,11 +673,25 @@ export interface UntestedRoute extends MetricsRoute {
   readonly prior: string;
 }
 
+export interface MetricsCauseSummary {
+  /** Counts exclude unknown; a recorded unknown remains without a cause. */
+  readonly stops: { readonly total: number; readonly byCause: Partial<Record<Exclude<MetricsAttribution, "unknown">, number>> };
+  readonly cancels: { readonly total: number; readonly byCause: Partial<Record<Exclude<MetricsAttribution, "unknown">, number>> };
+  readonly withoutCause: readonly {
+    readonly project: string;
+    readonly taskId: string;
+    readonly attempt: number;
+    readonly lifecycleState: "BLOCKED" | "CANCELLED";
+  }[];
+}
+
 export interface MetricsResponse {
   readonly schema: "awsf.route-metrics/v1";
   readonly extractedAt: string;
   readonly runs: readonly MetricsRun[];
   readonly roleRows: readonly MetricsRoleRow[];
+  /** All projected runs; the CLI's text readout scopes these using the existing table window. */
+  readonly causes: MetricsCauseSummary;
   readonly rateCard: RateCard;
   readonly priors: BenchmarkPriors;
   readonly untestedRoutes: readonly UntestedRoute[];

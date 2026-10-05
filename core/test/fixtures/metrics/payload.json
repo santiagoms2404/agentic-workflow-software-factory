@@ -1045,6 +1045,20 @@
       "endedAt": null
     }
   ],
+  "causes": {
+    "stops": {
+      "total": 2,
+      "byCause": {
+        "model": 1,
+        "factory": 1
+      }
+    },
+    "cancels": {
+      "total": 0,
+      "byCause": {}
+    },
+    "withoutCause": []
+  },
   "rateCard": {
     "checkedAt": "2026-09-30",
     "rows": [

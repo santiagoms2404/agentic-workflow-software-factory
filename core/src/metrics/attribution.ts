@@ -137,7 +137,7 @@ export interface OwnerAttribution {
 export type AttributionSource = "owner" | "heuristic";
 
 export interface EffectiveAttribution {
-  /** The attribution in force. `null` for a run that is not BLOCKED. */
+  /** The attribution in force. `null` unless BLOCKED or an owner-attributed CANCELLED run. */
   readonly attribution: Attribution | null;
   readonly source: AttributionSource | null;
   /** The heuristic's answer, kept beside any override so the two can be compared. */
@@ -145,12 +145,15 @@ export interface EffectiveAttribution {
 }
 
 /**
- * The owner's override where one exists, else the heuristic. Only a BLOCKED
- * run has a block to attribute, so an override on any other run is ignored
- * rather than trusted: `awsf attribute` refuses to write one.
+ * The owner's record wins over the BLOCKED heuristic. CANCELLED runs have no
+ * heuristic; only a projected owner record can attribute one. Records on any
+ * other state are ignored rather than trusted.
  */
 export function effectiveAttribution(run: AttributionRun, owner: OwnerAttribution | null): EffectiveAttribution {
   const heuristic = heuristicAttribution(run);
+  if (run.lifecycleState === "CANCELLED") return owner === null
+    ? { attribution: null, source: null, heuristic: null }
+    : { attribution: owner.cause, source: "owner", heuristic: null };
   if (heuristic === null) return { attribution: null, source: null, heuristic: null };
   return owner === null
     ? { attribution: heuristic, source: "heuristic", heuristic }

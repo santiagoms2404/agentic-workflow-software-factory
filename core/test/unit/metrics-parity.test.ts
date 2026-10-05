@@ -220,7 +220,7 @@ test("the readout ranks route-attributed routes with their badge, and is byte-id
   const payload = JSON.parse(readFileSync(PAYLOAD_PATH, "utf8")) as MetricsResponse;
   // Measured on the task's unmodified base: b87889f, metricsReadout(...).join("\\n").
   const plain = metricsReadout(payload, metricsFilter({})).join("\n");
-  assert.equal(createHash("sha256").update(plain).digest("hex"), "00a81de3e355222f70eba922ddba5bc8708e6870cdf562af0aa3dda46f3cd880");
+  assert.equal(createHash("sha256").update(plain).digest("hex"), "ddecb6720d7544a802cdf6f03954188e558224bfeab4e90931ceffc9bc297a98");
   const attributed = { ...payload, roleRows: payload.roleRows.map((row) => ({ ...row,
     identityProvenance: row.route.adapter === "codex" ? "route-attributed" : row.identityProvenance })) };
   const text = metricsReadout(attributed, metricsFilter({})).join("\n");
