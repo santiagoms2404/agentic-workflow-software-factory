@@ -149,9 +149,9 @@ section.phase .sub { font-size:13px; }
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-10-03</dd>
-        <dt>modified</dt>     <dd>2026-10-03 (authored, awaiting owner review), 2026-10-04 (owner review applied: W01-Q1–Q7 decided; deep plan approved)</dd>
-        <dt>commits</dt>      <dd>authoring: e1507e2; owner approval: recorded by this dated Amendment and its commit</dd>
-        <dt>agent name</dt>   <dd>claude-opus-5-5</dd>
+        <dt>modified</dt>     <dd>2026-10-03 (authored, awaiting owner review), 2026-10-04 (owner review applied: W01-Q1–Q7 decided; deep plan approved), 2026-10-05 (M1 delivered; owner-side markers and returned handoffs recorded)</dd>
+        <dt>commits</dt>      <dd>authoring: e1507e2; owner approval: recorded by this dated Amendment and its commit; approval SHA: dca882d; M1 delivery: T01 e074fe2, T02 58784ed, T03 4c75e11</dd>
+        <dt>agent name</dt>   <dd>claude-opus-5-5; marimba (owner-side bookkeeping preparation only)</dd>
         <dt>session id</dt>   <dd>not recorded: AGENTS.md invariant 1 keeps live session state out of every committed file</dd>
         <dt>back refs</dt>    <dd>./awsf-v3-plan.html (§ Workstreams → Milestone M1 → W01, Questionable Q1, Notes), ./tickets/awsf-v3-plan/W01.md (the meta-prompt this plan answers), ./awsf-v3-intent.md (Terms K1 and K2, decisions 13 and 14), ./awsf-v3-assessment-and-direction.md (N3, F17, A10, A12), ../AGENTS.md (the thirteen invariants), ./design/awsf-v3-plan/frame-index.json (workstreamFrames.W01: mp-s2, mp-s3, mp-s4, mp-s5), the machine-local forensics draft ~/marimba-lab/forensics/2026-10-01-stops.md (not committed)</dd>
         <dt>forward refs</dt> <dd>./awsf-v3-w01-driver-checks-build-prompts.md (§ Section B, the prompt source the invariant-12 fence pairs against), ./tickets/awsf-v3-w01-driver-checks/ (README, T01–T13), ./awsf-v3-w02-trap-suite.html (not yet authored; receives this plan's handoff)</dd>
@@ -439,39 +439,39 @@ sequenceDiagram
 
     <!-- ================= M1 ================= -->
     <section class="phase">
-      <h3><code class="status">[]</code> Milestone M1: Causes (A12) <span class="wtag">managed</span></h3>
+      <h3><code class="status">[x]</code> Milestone M1: Causes (A12) <span class="wtag">managed</span></h3>
       <p>Every cancel says why, a block or a cancel can be the driver's, and the metrics count what still has no cause.</p>
 
       <h4>1. The driver cause, and attributing a cancelled attempt</h4>
       <p class="sub">Serves <code class="serves">AC-1</code> · <code class="serves">INV-6</code></p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>ATTRIBUTION_CAUSES</code> gains <code>driver</code>, defined in the contract's comment as "a check before the first provider call would have refused this run, had it existed or been run; not a verdict on the model that drove it"</li>
-        <li><code class="status">[]</code> The heuristic table in <code>core/src/metrics/attribution.ts</code> is unchanged, and a test pins that it never answers <code>driver</code> or <code>owner</code></li>
-        <li><code class="status">[]</code> <code>awsf attribute</code> accepts a CANCELLED attempt as well as a BLOCKED one; any other state is still refused, with the error naming both</li>
-        <li><code class="status">[]</code> <code>dashboard/src/metrics-run.ts</code>'s mirrored vocabulary and the metrics view's labels gain <code>driver</code></li>
-        <li><code class="status">[]</code> <code>awsf db rebuild</code> replays a <code>driver</code> attribution of a cancelled attempt to the same <code>events</code> row the live projection wrote</li>
-        <li><code class="status">[]</code> The usage string in <code>main.ts</code> and the cheatsheet name the six causes</li>
+        <li><code class="status">[x]</code> <code>ATTRIBUTION_CAUSES</code> gains <code>driver</code>, defined in the contract's comment as "a check before the first provider call would have refused this run, had it existed or been run; not a verdict on the model that drove it"</li>
+        <li><code class="status">[x]</code> The heuristic table in <code>core/src/metrics/attribution.ts</code> is unchanged, and a test pins that it never answers <code>driver</code> or <code>owner</code></li>
+        <li><code class="status">[x]</code> <code>awsf attribute</code> accepts a CANCELLED attempt as well as a BLOCKED one; any other state is still refused, with the error naming both</li>
+        <li><code class="status">[x]</code> <code>dashboard/src/metrics-run.ts</code>'s mirrored vocabulary and the metrics view's labels gain <code>driver</code></li>
+        <li><code class="status">[x]</code> <code>awsf db rebuild</code> replays a <code>driver</code> attribution of a cancelled attempt to the same <code>events</code> row the live projection wrote</li>
+        <li><code class="status">[x]</code> The usage string in <code>main.ts</code> and the cheatsheet name the six causes</li>
       </ul>
 
       <h4>2. <code>awsf cancel</code> requires a reason and a cause</h4>
       <p class="sub">Serves <code class="serves">AC-1</code> · <code class="serves">INV-6</code></p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>awsf cancel &lt;task&gt; --cause &lt;cause&gt; --reason "&lt;why&gt;"</code>: a missing, unknown or credential-shaped value is refused before the confirmation prompt and before any process is signalled</li>
-        <li><code class="status">[]</code> The prompt shows the cause and reason with the existing write-off lines</li>
-        <li><code class="status">[]</code> A confirmed cancel records the reason as the transition's detail in place of "explicit CLI cancellation", then appends one attribution record for the attempt and projects it</li>
-        <li><code class="status">[]</code> A declined cancel writes nothing</li>
-        <li><code class="status">[]</code> Every journey and test that cancels passes both flags; the cheatsheet shows them</li>
+        <li><code class="status">[x]</code> <code>awsf cancel &lt;task&gt; --cause &lt;cause&gt; --reason "&lt;why&gt;"</code>: a missing, unknown or credential-shaped value is refused before the confirmation prompt and before any process is signalled</li>
+        <li><code class="status">[x]</code> The prompt shows the cause and reason with the existing write-off lines</li>
+        <li><code class="status">[x]</code> A confirmed cancel records the reason as the transition's detail in place of "explicit CLI cancellation", then appends one attribution record for the attempt and projects it</li>
+        <li><code class="status">[x]</code> A declined cancel writes nothing</li>
+        <li><code class="status">[x]</code> Every journey and test that cancels passes both flags; the cheatsheet shows them</li>
       </ul>
 
       <h4>3. Testing Strategy for M1, and the cause readout</h4>
       <p class="sub">Serves <code class="serves">AC-1</code> · <code class="serves">AC-2</code> · <code class="serves">INV-6</code></p>
       <p>Offline, on the stub adapter and synthetic fixtures. The readout makes A12's target measurable.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>awsf metrics</code> reports stops and cancels by cause (an owner record wins over the heuristic) and lists each one without a cause: a BLOCKED attempt with no record and an <code>unknown</code> heuristic, or a CANCELLED attempt with no record</li>
-        <li><code class="status">[]</code> <code>npm run test:unit</code> green at the base SHA before any change, count recorded, and green after</li>
-        <li><code class="status">[]</code> Tests: a cancel with no reason, no cause, an unknown cause or a credential-shaped reason is refused with nothing written and no signal sent</li>
-        <li><code class="status">[]</code> <code>npm run test:journeys</code> green, including every journey that cancels</li>
-        <li><code class="status">[]</code> <code>npm run typecheck</code> and <code>npm run lint</code> exit 0</li>
+        <li><code class="status">[x]</code> <code>awsf metrics</code> reports stops and cancels by cause (an owner record wins over the heuristic) and lists each one without a cause: a BLOCKED attempt with no record and an <code>unknown</code> heuristic, or a CANCELLED attempt with no record</li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code> green at the base SHA before any change, count recorded, and green after</li>
+        <li><code class="status">[x]</code> Tests: a cancel with no reason, no cause, an unknown cause or a credential-shaped reason is refused with nothing written and no signal sent</li>
+        <li><code class="status">[x]</code> <code>npm run test:journeys</code> green, including every journey that cancels</li>
+        <li><code class="status">[x]</code> <code>npm run typecheck</code> and <code>npm run lint</code> exit 0</li>
       </ul>
       <div class="loop">🔁 <strong>Do not exit this milestone until every box above is checked.</strong> If any command fails, fix the cause and re-run.</div>
     </section>
@@ -818,6 +818,14 @@ flowchart LR
     <details open>
       <summary>2026-10-04 — Owner review applied: W01-Q1–Q7 decided as recommended</summary>
       <p>A <code>plan-sota-review v1</code> block exported 2026-10-04 carried seven verdicts, no proposed statuses and no annotations. Every verdict took the recommended option, so no task, field, gate or dependency changed. Recorded: M4 waits for G01-F (Q1), K1 lives in <code>awsf start</code> and G01-S is not taken (Q2), <code>awsf confirm</code> is the attested field's source (Q3), <code>prove</code> and <code>intake</code> are exempt (Q4), the suite is every configured gate at the exact base (Q5), <code>unknown</code> counts as no cause (Q6), and the guard denies five spellings (Q7). Section A of the build prompts and the ticket README record G01-S as not taken. Section B and the tickets are unchanged, since their prompts already assume these options. No marker moved. Built on: anthropic:claude-opus-5-5.</p>
+    </details>
+    <details open>
+      <summary>2026-10-05 — M1 causes delivered; earned markers and returned handoffs recorded</summary>
+      <p>T01, T02 and T03 were delivered together by the approved accumulating milestone shift: T01 at <code>e074fe2</code>, T02 at <code>58784ed</code>, and T03 at <code>4c75e11</code>, from approved base <code>dca882d</code>. Each predecessor was host-committed and passed all configured gates before the next ticket built; separate canonical landings were not required inside the selection. Independent review accepted the accumulated diff, the owner exercised and attested <code>w01-m1</code>, and the owner authorized its local fast-forward landing. This owner-side bookkeeping commit earns only the deep plan's M1 header and T01–T03 rows, with those three ticket states changed to <code>done</code> in the same commit. M2–M4, the whole-workstream Validation checklist, and the spine's W01 completion remain unearned; W01 stays <code>[wip]</code>.</p>
+      <p>Gate evidence: the unchanged base passed 2645 unit tests and 347 journeys, typecheck and lint. The host ran unit, typecheck, lint and journeys at each delivered ticket head: all twelve commands exited zero. Unit totals were 2648, 2652 and 2654 respectively; each head passed 347 journeys. At the final head the host measured about 168 seconds for unit, 52 for typecheck, 1 for lint and 739 for journeys. No gate configuration or timeout changed. The mounted-checkout baseline exceeded the unit gate's limit; an identical clean native-filesystem unit baseline passed within the existing bound before provider work began. Contract and simulation layers are not claimed by these four configured gate rows; their whole-workstream checks remain open.</p>
+      <p>The owner exercise confirmed that missing cancel input refuses before prompting, and that a confirmed cancel leaves a durable reason and exactly one owner attribution without spending a provider call. The original exercise checker read attribution journal wrappers incorrectly; this was a preparation defect, not a missing cancellation cause. Read-only verification of the already-recorded evidence corrected the check. The cancellation was not rerun or reattributed.</p>
+      <p>Returned findings are persisted above the canonical prompts in T02, T03, T13 and W02. Two accepted, non-blocking review findings remain explicit: the unfiltered JSON cause ledger includes proving-ground replays while default text is production-scoped, and the dashboard attribution-panel comment names a removed refusal class and a former BLOCKED-only CLI rule. Other returned follow-ups include flag-incomplete cancel advice, protected driving-document examples requiring owner updates, and the dashboard panel's still-BLOCKED-only command composer. This bookkeeping fixes none of those code or protected-document findings, performs no historical attribution backfill, and changes no build prompt.</p>
+      <p>Implementation provenance: three builder results were route-attributed to <code>gpt-6-sol</code> at extra-high effort, not provider-stream-confirmed identities. The accepted independent review was stream-authoritative <code>claude-opus-5-5</code> at high effort. The first review stream ended with <code>E_TERMINAL_MISSING</code>; the host's single permitted review retry produced acceptance. No provider root cause is inferred. Reviewers did not run Git or the suite themselves; gate counts and commit identities were checked from host evidence and Git separately. W01-Q1–Q7 and G01-F, G01-G and G01-C are unchanged by this delivery.</p>
     </details>
   </section>
 
