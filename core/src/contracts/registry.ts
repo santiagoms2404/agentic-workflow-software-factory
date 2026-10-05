@@ -28,6 +28,7 @@ import {
 import { PublishOutputSchema, PUBLISH_OUTPUT_SCHEMA_ID, type PublishOutput } from "./publish-output.ts";
 import { IntakeOutputSchema, INTAKE_OUTPUT_SCHEMA_ID, type IntakeOutput } from "./intake-output.ts";
 import { PlanContextSchema, PLAN_CONTEXT_SCHEMA_ID, type PlanContext } from "./plan-context.ts";
+import { NextStepsSchema, NEXT_STEPS_SCHEMA_ID } from "./next-steps.ts";
 import { PlanOutputSchema, PLAN_OUTPUT_SCHEMA_ID, type PlanOutput } from "./plan-output.ts";
 import { ProvingGroundItemSchema, PROVING_GROUND_ITEM_SCHEMA_ID } from "./proving-ground.ts";
 import { ReviewContextSchema, REVIEW_CONTEXT_SCHEMA_ID, type ReviewContext } from "./review-context.ts";
@@ -99,6 +100,7 @@ export const RECORD_SCHEMAS = {
   [ATTRIBUTION_RECORD_SCHEMA_ID]: AttributionRecordSchema,
   [PROVING_GROUND_ITEM_SCHEMA_ID]: ProvingGroundItemSchema,
   [DECISION_RECORD_SCHEMA_ID]: DecisionRecordSchema,
+  [NEXT_STEPS_SCHEMA_ID]: NextStepsSchema,
 } as const;
 
 export class UnknownEnvelopeSchemaError extends Error {
