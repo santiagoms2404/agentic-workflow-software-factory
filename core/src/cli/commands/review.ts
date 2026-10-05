@@ -38,6 +38,7 @@
 // This file owns only what is L25's: eligibility, the owner's reason, the
 // display, the edge, and the halt.
 
+import { renderHeadroomAdvice, renderOwnerAlternatives } from "../../lifecycle/renderer.ts";
 import { registeredAdapter } from "../../adapters/registry.ts";
 import { writeSystemPromptFile } from "../../adapters/system-prompt-file.ts";
 import type { AwsfConfig } from "../../config/schema.ts";
@@ -57,7 +58,6 @@ import { buildReviewWorkflow } from "../../workflow/recipes/build-review.ts";
 import { simpleSdlcWorkflow } from "../../workflow/recipes/simple-sdlc.ts";
 import type { OwnerTerminal } from "../tty.ts";
 import {
-  nextActionFor,
   nextRevision,
   persistAttempt,
   readAttempt,
@@ -161,7 +161,7 @@ export class ReviewNotReplaceable extends Error {
   constructor(verdict: string, phaseKey: string, taskId: string) {
     super(
       `the recorded review ${JSON.stringify(phaseKey)} carries a passing review_evidence_present row, so its ${verdict} verdict is not replaceable; ` +
-        `accept a finding with \`awsf rework ${taskId} "<concrete defect>"\`, land it, or cancel — a replacement review is not a verdict appeal`,
+        `${renderOwnerAlternatives(taskId)} — a replacement review is not a verdict appeal`,
     );
     this.name = "ReviewNotReplaceable";
     this.verdict = verdict;
@@ -179,8 +179,7 @@ export class ReviewHeadroomInsufficient extends Error {
   constructor(remaining: number, tier: number, taskId: string) {
     super(
       `a replacement review needs two calls of headroom — one for the review and one for its single permitted retry — and this T${tier} attempt has ${remaining}; ` +
-        `insufficient headroom, so nothing was spent and \`awsf raise ${taskId} --calls ${Math.max(1, 2 - remaining)} --reason "<why>"\`, ` +
-        `\`awsf land ${taskId}\` or \`awsf cancel ${taskId}\` remain`,
+        `insufficient headroom; ${renderHeadroomAdvice(taskId, Math.max(1, 2 - remaining))}`,
     );
     this.name = "ReviewHeadroomInsufficient";
   }
@@ -581,7 +580,7 @@ async function runReviewCommand(options: ReviewCommandOptions): Promise<ReviewCo
   ): Promise<void> => {
     const at = infra.now();
     const seq = transitionOrdinal++;
-    await persist("attempt.transitioned", { lifecycleState: to, lastActivityAt: at, nextAction: nextActionFor(to, status.taskId), ...update }, {
+    await persist("attempt.transitioned", { lifecycleState: to, lastActivityAt: at, ...update }, {
       type: "transition", id: `${status.sessionId}:${edgeId}:${seq}`, seq,
       from, to, actor, edgeId, reasonSource: source, reasonCode: code, reasonDetail: detail, spawnSite, at,
     });
@@ -681,7 +680,6 @@ async function runReviewCommand(options: ReviewCommandOptions): Promise<ReviewCo
         budget: budget.snapshot(), process: null,
         blocker: { code: "sqlite-projection-failed", detail: failure.message, ahead: null, behind: null },
         lastActivityAt: recoveryAt, lastActivity: "replacement review advancement held at REVIEWING until observability rebuild",
-        nextAction: "run `awsf db rebuild`, then rerun advancement",
       });
       return { status, confirmed: true };
     }
@@ -743,7 +741,6 @@ async function runReviewCommand(options: ReviewCommandOptions): Promise<ReviewCo
       lifecycleState: "BLOCKED", budget: budget.snapshot(), process: null,
       blocker: { code: reason2.code, detail: reason2.detail, ahead: null, behind: null },
       lastActivityAt: recoveryAt, lastActivity: reason2.detail,
-      nextAction: nextActionFor("BLOCKED", status.taskId),
     }, {
       type: "transition", id: `${status.sessionId}:L17:${seq}`, seq,
       from: "REVIEWING", to: "BLOCKED", actor: "host", edgeId: l17.edge,
@@ -824,7 +821,6 @@ async function reconcileStaleReservation(
       blocker: { code, detail, ahead: null, behind: null },
       lastActivityAt: at,
       lastActivity: detail,
-      nextAction: nextActionFor("BLOCKED", status.taskId),
     }),
   }, options.projectRecord);
 }

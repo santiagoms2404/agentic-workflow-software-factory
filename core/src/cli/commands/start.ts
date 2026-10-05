@@ -1,3 +1,4 @@
+import { renderHeadroomAdvice } from "../../lifecycle/renderer.ts";
 import { readFile, realpath } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { registeredAdapter } from "../../adapters/registry.ts";
@@ -22,7 +23,6 @@ import { verifiedTargetSeed, validateSeedStartup } from "../../workflow/candidat
 import { parseVisualBinding, recordVisualBinding, verifyVisualReferences, type VerifiedVisualReferences } from "../../workflow/visual-references.ts";
 import type { VisualReferenceBinding } from "../../contracts/visual-references.ts";
 import {
-  nextActionFor,
   nextRevision,
   persistAttempt,
   readAttempt,
@@ -126,7 +126,6 @@ async function blockDraft(
         lifecycleState: decision.to,
         lastActivityAt: at,
         lastActivity: detail,
-        nextAction: nextActionFor(decision.to, current.taskId),
         blocker: { code: "preflight-failed", detail, ahead: null, behind: null },
       }),
     },
@@ -188,7 +187,7 @@ export async function startCommand(options: StartCommandOptions): Promise<Attemp
         `${String(minimumCallsFor(recipe) + correctionsFundableFor(recipe, ceiling))}, ` +
         `so corrections fundable = ${String(correctionsFundableFor(recipe, ceiling))}. ` +
         `The first envelope defect would be terminal on its first occurrence. ` +
-        `Run \`awsf raise ${current.taskId} --calls ${String(headroom.callsNeeded)} --reason "<why>"\` and start again; ` +
+        `${renderHeadroomAdvice(current.taskId, headroom.callsNeeded, "DRAFT")}; start again; ` +
         `the attempt stays DRAFT and no call has been spent.`,
     );
   }
@@ -267,7 +266,6 @@ export async function startCommand(options: StartCommandOptions): Promise<Attemp
       worktree: managed.path,
       lastActivityAt: failedAt,
       lastActivity: detail,
-      nextAction: nextActionFor(decision.to, current.taskId),
       blocker: { code: "preflight-failed", detail, ahead: null, behind: null },
     });
     await persistAttempt(
@@ -311,7 +309,6 @@ export async function startCommand(options: StartCommandOptions): Promise<Attemp
     worktree: managed.path,
     lastActivityAt: now,
     lastActivity: `L1 prepared detached worktree at ${managed.path}`,
-    nextAction: nextActionFor(decision.to, current.taskId),
   });
   return persistAttempt(
     options.attemptDir,

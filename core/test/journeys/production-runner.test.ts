@@ -127,7 +127,7 @@ test(`O1 ${granted ? "A2 grant " : ""}${routed ? "selected-route " : ""}${scenar
       writeFileSync(join(options.attemptDir, "journal.jsonl"), original);
       writeFileSync(join(options.attemptDir, "status.json"), JSON.stringify(stable));
     }
-    await assert.rejects(runProductionCommand(options), /use awsf resume/);
+    await assert.rejects(runProductionCommand(options), /awsf resume.*--reason/);
     for (const bad of ["", "   ", "x".repeat(16_385)]) await assert.rejects(resumeProductionCommand({ ...options, instruction: bad, reason: "quota recovered", terminal }), /owner instruction/);
     await assert.rejects(resumeProductionCommand({ ...options, reason: "quota recovered", terminal }), /quota.*below/);
     mode = "unknown";

@@ -22,7 +22,6 @@ import {
   type LandingSummary,
 } from "../../persistence/landing-summary.ts";
 import {
-  nextActionFor,
   nextRevision,
   persistAttempt,
   readAttempt,
@@ -161,7 +160,6 @@ async function persistBlocked(
     lifecycleState: decision.to,
     lastActivityAt: now,
     lastActivity: `L24 blocked landing: ${error.message}`,
-    nextAction: nextActionFor(decision.to, status.taskId),
     blocker: {
       code: error.code,
       detail: error.message,
@@ -215,7 +213,6 @@ async function finish(
       lifecycleState: decision.to,
       lastActivityAt: now,
       lastActivity: `L23 verified canonical HEAD ${outcome.headSha} and a clean checkout`,
-      nextAction: nextActionFor(decision.to, status.taskId),
       blocker: null,
     });
     return persistAttempt(
@@ -334,7 +331,6 @@ async function landUnderLease(options: LandCommandOptions): Promise<LandCommandR
     lifecycleState: decision.to,
     lastActivityAt: now,
     lastActivity: `L20 human approved exact candidate ${current.candidateSha}; LANDING persisted before Git mutation`,
-    nextAction: nextActionFor(decision.to, current.taskId),
     landingApproval: {
       candidateSha: current.candidateSha,
       summary: inspection.summary,

@@ -31,7 +31,6 @@
 
 import {
   isTerminalStatus,
-  nextActionFor,
   nextRevision,
   persistAttempt,
   readAttempt,
@@ -39,6 +38,7 @@ import {
   type AttemptStatus,
   type CeilingGrant,
 } from "./attempt.ts";
+import { renderSealedAdvice } from "../../lifecycle/renderer.ts";
 import { REDACTED_VALUE, scrubCredentialString } from "../../policy/redaction.ts";
 import { MAX_CALL_CEILING, assertCeiling, ceilingFor } from "../../state/tiers.ts";
 import type { OwnerTerminal } from "../tty.ts";
@@ -105,7 +105,7 @@ export class CeilingRaiseAttemptNotLive extends Error {
   constructor(state: string, taskId: string) {
     super(
       `attempt is ${state}, which is terminal: a ceiling is raised while its attempt is LIVE, and this one has ended; ` +
-        `run \`awsf retry ${taskId}\` to open the next attempt, which carries both the spend and the grants, then raise it`,
+        renderSealedAdvice(taskId),
     );
     this.name = "CeilingRaiseAttemptNotLive";
   }
@@ -202,7 +202,6 @@ export async function raiseCommand(options: RaiseCommandOptions): Promise<RaiseC
     lastActivityAt: at,
     lastActivity: `owner raised the call ceiling ${from} -> ${to}: ${reason}`,
     // The lifecycle did not move, so neither does the recommendation.
-    nextAction: nextActionFor(current.lifecycleState, current.taskId),
   });
   const persisted = await persistAttempt(options.attemptDir, current.revision, {
     kind: "attempt.updated",

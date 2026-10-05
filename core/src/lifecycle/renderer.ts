@@ -1,0 +1,125 @@
+import type { NextSteps, NextStep } from "../contracts/next-steps.ts";
+import { nextSteps, type NextStepsInput } from "./next-steps.ts";
+import type { TaskState } from "../state/task-machine.ts";
+
+/** Display argv as copyable tokens; placeholders still need real values. */
+export function renderCommand(argv: readonly string[]): string {
+  return `\`${argv.map(token => /^[A-Za-z0-9._/:-]+$/u.test(token) ? token : `'${token.replaceAll("'", "'\\''")}'`).join(" ")}\``;
+}
+
+/** Measured command-specific context, persisted only for new advice. Not authorization. */
+export type NextAdvice =
+  | { readonly kind: "adoption-grant"; readonly repeatArgv: readonly string[] }
+  | { readonly kind: "ceiling-pause"; readonly minimumCeiling: number; readonly maximumCeiling: number };
+
+export interface AdviceContext {
+  readonly advice?: NextAdvice | null;
+  readonly candidateSha?: string | null;
+  readonly gatesPass?: boolean;
+  readonly workflow?: string;
+  readonly recovery?: { readonly kind: string; readonly ticket?: string } | null;
+  readonly process?: unknown;
+  readonly budget?: { readonly callsReserved: number; readonly ceiling?: number };
+  readonly blocker?: { readonly code: string } | null;
+}
+
+function command(model: NextSteps, verb: string): string | null {
+  const step = model.steps.find(step => step.verb === verb);
+  return step === undefined ? null : renderCommand(step.argv);
+}
+
+function selected(model: NextSteps, verbs: readonly string[]): string[] {
+  return verbs.flatMap(verb => { const value = command(model, verb); return value === null ? [] : [value]; });
+}
+
+/** The one lifecycle sentence source. Unavailable edges never supply advice. */
+export function renderNextAction(model: NextSteps, context: AdviceContext = {}): string {
+  if (context.blocker?.code === "sqlite-projection-failed") return "run `awsf db rebuild`, then retry advancement";
+  if (context.advice?.kind === "adoption-grant" && model.state === "GATING") {
+    return `after ${renderDegradationAdvice(model.taskId)}, ${renderAdoptionAction(context.advice.repeatArgv)}; ${command(model, "watch")}`;
+  }
+  const recovery = context.recovery;
+  if (recovery != null && ["PREPARED", "RUNNING", "GATING", "REVIEWING"].includes(model.state) &&
+      context.process == null && (context.budget?.callsReserved ?? 0) === 0) {
+    const resume = renderCommand(["awsf", "resume", model.taskId, "--project", model.project, "--attempt", String(model.attempt), "--reason", "<why>"]);
+    const ticket = recovery.ticket === undefined ? "" : ` at ticket ${recovery.ticket}`;
+    if (recovery.kind === "ceiling-pause") {
+      const advice = context.advice?.kind === "ceiling-pause" ? context.advice : null;
+      if (advice !== null && advice.minimumCeiling > advice.maximumCeiling) return `ceiling-paused${ticket}; no ceiling grant can fund the rest: ${advice.minimumCeiling} exceeds MAX_CALL_CEILING (${advice.maximumCeiling})`;
+      const short = advice === null || context.budget?.ceiling === undefined ? null : Math.max(0, advice.minimumCeiling - context.budget.ceiling);
+      if (short === 0) return `ceiling funded${ticket}; run ${resume}`;
+      const raise = model.steps.find(step => step.verb === "raise");
+      const grant = raise === undefined ? "a task-scoped ceiling grant" : renderCommand(raise.argv.map(token => token === "<n>" && short !== null ? String(short) : token));
+      return `ceiling-paused${ticket}; the owner must fund the remaining work with ${grant}, then run ${resume}`;
+    }
+    if (recovery.kind === "ticket-block") return `ticket-blocked${ticket}; the owner fixes the cause, then runs ${resume} to re-measure the same candidate`;
+    return `${recovery.kind}; run ${resume} to continue the saved boundary`;
+  }
+  if (model.state === "AWAITING_OWNER") {
+    if (context.workflow === "prove" || context.workflow === "intake") return `inspect the retained findings, then run ${command(model, "cancel")}; this workflow never lands`;
+    if (context.candidateSha === null && context.gatesPass && (context.workflow === "scout" || context.workflow === "plan")) {
+      return `inspect the retained awsf.${context.workflow}-output/v1 envelope, then run ${command(model, "cancel")} when finished; no candidate can be landed`;
+    }
+  }
+  const actions = model.steps.filter(step => step.kind !== "read").map(step => renderCommand(step.argv));
+  if (model.state === "BLOCKED" || model.state === "CANCELLED") {
+    const retry = renderCommand(["awsf", "retry", model.taskId, "--project", model.project]);
+    return `inspect the sealed attempt; ${actions.length === 0 ? "" : `owner attribution: ${actions.join(" or ")}; `}run ${retry} only if the task should continue`;
+  }
+  if (model.state === "LANDING") return `wait for persisted landing completion; recover with ${renderCommand(["awsf", "land", model.taskId, "--project", model.project, "--attempt", String(model.attempt)])}`;
+  const wait = model.waits.length === 0 ? "" : `host transitions: ${model.waits.map(wait => `${wait.edge} to ${wait.to}`).join(", ")}`;
+  const sentence = actions.length === 0 ? "no state-changing CLI action is listed" : `run ${actions.join(" or ")}`;
+  return `${sentence}${wait === "" ? "" : `; ${wait}`}; inspect with ${command(model, "watch") ?? command(model, "status")}`;
+}
+
+/** Structural input keeps the renderer pure and independent of CLI persistence. */
+export function renderAttemptNextAction(status: Omit<NextStepsInput, "state"> & AdviceContext & { readonly lifecycleState: TaskState }): string {
+  return renderNextAction(nextSteps({ ...status, state: status.lifecycleState }), status);
+}
+
+export function renderNextSteps(model: NextSteps, context: AdviceContext = {}): readonly string[] {
+  const stepLine = (step: NextStep): string =>
+    `Step ${step.kind === "edge" ? `${step.edge} to ${step.to}` : step.kind}: ${renderCommand(step.argv)} — ${step.who}${step.interactive ? ", interactive" : ""}${step.spendsCalls ? ", spends calls" : ""}`;
+  return [renderNextAction(model, context), ...model.steps.map(stepLine),
+    ...model.waits.map(wait => `Wait ${wait.edge} to ${wait.to}: host — implemented task transition`),
+    ...model.unavailable.map(edge => `Unavailable ${edge.edge} to ${edge.to}: ${edge.reason}; machine actors ${edge.actors.join(", ")}. ${edge.detail}`)];
+}
+
+/** Error paths sometimes have only a task id, not a loaded attempt. */
+export function renderHeadroomAdvice(taskId: string, calls: number, state: TaskState = "AWAITING_OWNER"): string {
+  const model = nextSteps({ project: "<project>", taskId, attempt: 1, revision: 0, state });
+  const raise = model.steps.find(step => step.verb === "raise");
+  const advice = raise === undefined ? "no ceiling grant is available on this sealed attempt" :
+    renderCommand(raise.argv.map(token => token === "<n>" ? String(calls) : token));
+  return `nothing was spent; ${advice}, ${selected(model, ["land", "cancel"]).join(" or ")} remain (replace the project and attempt selectors with the actual values)`;
+}
+
+export function renderSealedAdvice(taskId: string): string {
+  return `run ${renderCommand(["awsf", "retry", taskId])} to open the next attempt; prior spend and ceiling grants carry forward`;
+}
+
+export function renderOwnerAlternatives(taskId: string): string {
+  const model = nextSteps({ project: "<project>", taskId, attempt: 1, revision: 0, state: "AWAITING_OWNER" });
+  return `consider ${selected(model, ["land", "cancel", "raise"]).join(" or ")}; command-specific guards apply (replace the project and attempt selectors with the actual values)`;
+}
+
+export function renderAdoptionAction(argv: readonly string[]): string { return `run ${renderCommand(argv)}`; }
+export function renderWatchAdvice(taskId: string): string { return `inspect changes with ${renderCommand(["awsf", "watch", taskId])}`; }
+export function renderStatusAdvice(taskId: string): string { return `refresh with ${renderCommand(["awsf", "status", taskId])}`; }
+export function renderOwnerGateAdvice(taskId: string): string { return `it waits for the owner; ${renderCommand(["awsf", "land", taskId])} needs an interactive terminal`; }
+export function renderProjectionAdvice(): string { return "run `awsf db rebuild`"; }
+export function renderNewAdvice(taskId: string): string { return `run ${renderCommand(["awsf", "new", taskId, "..."])}`; }
+export function renderPreviewAdvice(taskId: string): string { return `run ${renderCommand(["awsf", "preview", taskId])} again`; }
+export function renderRegistrationAdvice(): string { return "run `awsf project register --catalog <path> --repository <id>=<path>` first"; }
+export function renderDegradationAdvice(taskId: string): string { return `the owner may allow degraded review with ${renderCommand(["awsf", "degrade-review", taskId, "--reason", "<why>"])}`; }
+
+/** Prove's owner exercise uses the documented npm launcher and replaceable placeholders. */
+export function renderProveActions(model: NextSteps): { readonly commands: { readonly start: string; readonly cancel: string }; readonly lines: readonly string[] } {
+  const written = (verb: string): string => {
+    const step = model.steps.find(step => step.verb === verb);
+    if (step === undefined) throw new Error(`no implemented ${verb} step at ${model.state}`);
+    return `npm run awsf -- ${step.argv.slice(1).map(token => token === "<why>" ? '"<why>"' : token).join(" ")}`;
+  };
+  const commands = { start: written("start"), cancel: written("cancel") };
+  return { commands, lines: [`Start it: ${commands.start}`, `Cancel it once its evidence is read: ${commands.cancel}`] };
+}

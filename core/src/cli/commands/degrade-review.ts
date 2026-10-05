@@ -36,6 +36,7 @@ import {
   type AttemptStatus,
   type ReviewDegradation,
 } from "./attempt.ts";
+import { renderSealedAdvice } from "../../lifecycle/renderer.ts";
 import { REVIEW_OUTPUT_SCHEMA_ID } from "../../contracts/review-output.ts";
 import { REDACTED_VALUE, scrubCredentialString } from "../../policy/redaction.ts";
 import { compiledWorkflow, workflowRecipe } from "../../workflow/catalog.ts";
@@ -71,7 +72,7 @@ export class ReviewDegradeAttemptNotLive extends Error {
   constructor(state: string, taskId: string) {
     super(
       `attempt is ${state}, which is terminal: a review is degraded while its attempt is LIVE, and this one has ended; ` +
-        `run \`awsf retry ${taskId}\` to open the next attempt, then degrade that one if it still needs it`,
+        renderSealedAdvice(taskId),
     );
     this.name = "ReviewDegradeAttemptNotLive";
   }
@@ -166,7 +167,6 @@ export async function degradeReviewCommand(
     // The lifecycle did not move. Keep the attempt's specific instruction
     // (including a pending adoption's exact repeat command), not a generic
     // recommendation for its lifecycle state.
-    nextAction: current.nextAction,
   });
   const persisted = await persistAttempt(options.attemptDir, current.revision, {
     kind: "attempt.updated",

@@ -15,7 +15,6 @@ import {
   assertGroupId,
   assertPlanRef,
   latestAttemptNumber,
-  nextActionFor,
   persistAttempt,
   taskRoot,
   type AttemptProjector,
@@ -154,7 +153,7 @@ export async function newCommand(options: NewCommandOptions): Promise<{ attemptD
     model: null,
     lastActivityAt: now,
     lastActivity: options.lastActivity ?? "attempt recorded; no worktree or provider exists yet",
-    nextAction: nextActionFor("DRAFT", options.taskId),
+    nextAction: "", // persistAttempt renders the complete new record
     gatesPass: false,
     requiredReviewPresent: false,
     journeyApproved: false,

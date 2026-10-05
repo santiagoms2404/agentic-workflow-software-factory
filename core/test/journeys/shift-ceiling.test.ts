@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { renderAttemptNextAction, renderHeadroomAdvice } from "../../src/lifecycle/renderer.ts";
 import { test } from "node:test";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -228,7 +229,9 @@ test("a shift that cannot fund its next ticket's correction stops before it, and
     assert.equal(paused.recovery?.ticket, "T02", "the checkpoint names the ticket it stopped before");
     assert.deepEqual(paused.recovery?.prefix.map((entry) => entry.phaseKey), ["t01-brief", "t01-build", "t01-tests", "t02-brief"]);
     assert.match(paused.lastActivity, /ceiling stop before ticket T02 \(t02-build\)/u);
-    assert.match(paused.nextAction, /ceiling-paused before ticket T02; the owner runs `awsf raise fixture-shift-m1 --calls 1/u);
+    assert.equal(paused.nextAction, renderAttemptNextAction(paused));
+    assert.match(paused.nextAction, /ceiling-paused at ticket T02.*awsf raise fixture-shift-m1.*--calls 1.*--reason/u);
+    assert.match(paused.nextAction, /awsf resume fixture-shift-m1.*--reason/u);
     assert.deepEqual(launches, ["T01", "T01"], "ticket 1 and its one paid correction, and nothing after the stop");
     assert.equal(paused.budget.callsSpent, 2);
     assert.equal(paused.budget.callsReserved, 0);
@@ -255,7 +258,8 @@ test("a shift that cannot fund its next ticket's correction stops before it, and
     const terminal = { interactive: true, write: () => {}, confirm: async () => true };
     await assert.rejects(resumeProductionCommand({ ...options, reason: "continue the shift", terminal }), (error: Error) =>
       error instanceof CallCeilingExceeded &&
-      /resume of fixture-shift-m1 before ticket T02 \(t02-build\): needs 1 more call\(s\) from the owner's `awsf raise fixture-shift-m1`/u.test(error.message));
+      /resume of fixture-shift-m1 before ticket T02 \(t02-build\):/u.test(error.message) &&
+      error.message.includes(renderHeadroomAdvice(paused.taskId, 1, paused.lifecycleState)));
     assert.deepEqual(launches, ["T01", "T01"]);
     await assert.rejects(raiseCommand({ attemptDir: fixture.attemptDir, calls: 1, reason: "fund ticket 2's correction round",
       terminal: { ...terminal, interactive: false } }), CeilingRaiseNotInteractive);

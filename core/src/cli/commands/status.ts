@@ -1,3 +1,4 @@
+import { renderStatusAdvice, renderWatchAdvice } from "../../lifecycle/renderer.ts";
 import { join } from "node:path";
 import { ceilingFor } from "../../state/tiers.ts";
 import type { AttemptEvidence } from "../../observability/attempt-evidence.ts";
@@ -12,7 +13,7 @@ import { declaredContinuation, type TaskRelation } from "../../persistence/task-
 
 function phaseLine(status: AttemptStatus): string {
   if (status.phase === null) return "Phase: none — no phase is active; follow Next action";
-  return `Phase: ${status.phase.name} ${status.phase.state} — inspect changes with \`awsf watch ${status.taskId}\``;
+  return `Phase: ${status.phase.name} ${status.phase.state} — ${renderWatchAdvice(status.taskId)}`;
 }
 
 function roundLine(status: AttemptStatus): string {
@@ -51,10 +52,10 @@ export function formatStatus(status: AttemptStatus): readonly string[] {
     roundLine(status),
     `Calls: ${status.budget.callsSpent}/${ceiling} spent, ${status.budget.callsReserved} reserved — ${remaining} call(s) remain${raised}`,
     modelLine(status),
-    `Last activity: ${status.lastActivityAt} — ${status.lastActivity}; refresh with \`awsf status ${status.taskId}\``,
+    `Last activity: ${status.lastActivityAt} — ${status.lastActivity}; ${renderStatusAdvice(status.taskId)}`,
     `Budget: auto ${status.budget.correctionsAuto}/${status.budget.allowance.auto}, owner ${status.budget.correctionsOwner}/${status.budget.allowance.owner} per phase — intra-phase corrections, refreshed each phase`,
     `Owner re-entries: ${status.budget.ownerReentries}/${status.budget.allowance.ownerReentries} this attempt — request owner rework or a replacement review only while this remains`,
-    `Next action: ${status.nextAction} — this is the only recommended state-changing command`,
+    `Next action: ${status.nextAction} — command-specific guards still apply`,
   ]);
 }
 

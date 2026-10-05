@@ -38,7 +38,6 @@ import {
 } from "../../state/task-machine.ts";
 import type { OwnerTerminal } from "../tty.ts";
 import {
-  nextActionFor,
   nextRevision,
   persistAttempt,
   readAttempt,
@@ -274,7 +273,7 @@ export async function publishCommand(options: PublishCommandOptions): Promise<Pu
   // and the attempt is still LANDED. Nothing is undone — inventing a revert
   // push would be a second unapproved mutation, not a repair. This is handled
   // the way `recoverLanding` handles its own residual, by leaving exactly one
-  // honest interpretation: rerun `awsf publish` on the same revision. The
+  // honest interpretation: repeat publication on the same revision. The
   // observation then reports the remote already at the candidate, the same
   // fourteen rows authorize, the push reports `already-current`, and this
   // transition completes.
@@ -284,7 +283,6 @@ export async function publishCommand(options: PublishCommandOptions): Promise<Pu
     lifecycleState: decision.to,
     lastActivityAt: now,
     lastActivity: `L27 published ${candidateSha} to ${remoteName}/${branch}: ${run.outcomes.join(", ") || "no ref update reported"}`,
-    nextAction: nextActionFor(decision.to, current.taskId),
     blocker: null,
   });
   const result = { outcome: "published" as const, status: published, outcomes: run.outcomes };

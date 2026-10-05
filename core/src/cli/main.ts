@@ -28,6 +28,8 @@ import { previewCommand } from "./commands/preview.ts";
 import { initCommand } from "./commands/init.ts";
 import { listProjects, registerProject, showProject, verifyRegisteredProject } from "./commands/project.ts";
 import { landCommand } from "./commands/land.ts";
+import { renderAttemptNextAction, renderDegradationAdvice } from "../lifecycle/renderer.ts";
+import { nextCommand } from "./commands/next.ts";
 import { newCommand } from "./commands/new.ts";
 import { PlanRefUnknown, resolvePlanRef } from "./commands/plan-ref.ts";
 import { relateCommand } from "./commands/relate.ts";
@@ -61,7 +63,7 @@ import { assertShiftAdmission, assessShiftAdmission, parseMilestoneSelection, se
 
 /** The complete owner-facing command table; documentation reconciles against it. */
 export const CLI_COMMANDS = Object.freeze([
-  "init", "project", "new", "seed", "start", "run", "resume", "status", "watch", "rework", "review", "raise", "grant", "degrade-review", "attribute", "prove", "journey", "preview", "land", "publish", "cancel", "retry",
+  "init", "project", "new", "seed", "start", "run", "resume", "next", "status", "watch", "rework", "review", "raise", "grant", "degrade-review", "attribute", "prove", "journey", "preview", "land", "publish", "cancel", "retry",
   "relate", "doctor", "gc", "dash", "routes", "metrics", "metrics export", "db rebuild", "ticket", "backlog", "quota", "stage", "workflows", "shift plan", "group",
 ]);
 
@@ -389,7 +391,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         });
         await shadowStop(created.attemptDir, config, configPath, env);
         out(`${status.lifecycleState}: ${status.nextAction}`);
-        out(`Validated intake candidate for ${id}; inspect it, then run awsf land ${taskId}.`);
+        out(`Validated intake result for ${id}; ${renderAttemptNextAction(status)}`);
         return status.lifecycleState === "AWAITING_OWNER" ? 0 : 1;
       } finally {
         projection.close();
@@ -536,6 +538,19 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
     const config = loadConfig(await readFile(configPath, "utf8"));
     const project = parsed.flags.project ?? config.project.slug;
     const selectedAttempt = parsed.flags.attempt === undefined ? undefined : Number(parsed.flags.attempt);
+    // next is intentionally before projection construction, which can write SQLite.
+    if (command === "next") {
+      const allowed = new Set(["attempt", "json", "project", "state-root", "config"]);
+      if (parsed.positionals.length !== 1 || parsed.repositories.length !== 0 || parsed.files.length !== 0 ||
+          parsed.routes.length !== 0 || parsed.milestones.length !== 0 || Object.keys(parsed.flags).some(flag => !allowed.has(flag))) {
+        throw new Error("usage: awsf next <task> [--attempt n] [--json]");
+      }
+      const located = await locateAttempt(stateRoot, project, taskId, selectedAttempt);
+      const result = await nextCommand(located.attemptDir);
+      if (parsed.flags.json === "true") out(JSON.stringify(result.model));
+      else for (const line of result.lines) out(line);
+      return 0;
+    }
     const projection = createDashboardProjection(stateRoot, err);
 
     try {
@@ -627,7 +642,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
           `Review independence: ${collapsed.reviewPhaseId} and ${collapsed.workerPhaseId} both resolve to ` +
             `${collapsed.provider}, so this attempt buys a review from the provider that wrote the candidate.`,
         );
-        out(`The run refuses that until the owner allows it: awsf degrade-review ${taskId} --reason "<why>"`);
+        out(`The run refuses that until the owner allows it: ${renderDegradationAdvice(taskId)}`);
       }
       out(result.status.nextAction);
       return 0;

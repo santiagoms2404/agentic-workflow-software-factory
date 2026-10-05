@@ -9,7 +9,6 @@ import {
   assertGroupId,
   isTerminalStatus,
   latestAttemptNumber,
-  nextActionFor,
   persistAttempt,
   readAttempt,
   taskRoot,
@@ -70,7 +69,7 @@ export async function retryCommand(options: RetryCommandOptions): Promise<{ atte
     baseSha: null,
     candidateSha: null,
     ...(prior.seed === undefined ? {} : { seed: null }),
-    recovery: null, activeOperation: null,
+    recovery: null, activeOperation: null, advice: null,
     phase: null,
     budget: {
       ...prior.budget,
@@ -104,7 +103,7 @@ export async function retryCommand(options: RetryCommandOptions): Promise<{ atte
     model: null,
     lastActivityAt: now,
     lastActivity: `retry minted attempt ${attempt}; carried ${prior.budget.callsSpent} spent call(s) from attempt ${prior.attempt}`,
-    nextAction: nextActionFor("DRAFT", prior.taskId),
+    nextAction: "", // persistAttempt renders the new attempt, never the prior record
     gatesPass: false,
     requiredReviewPresent: false,
     journeyApproved: false,
