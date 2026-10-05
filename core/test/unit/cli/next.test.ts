@@ -43,6 +43,16 @@ for (const state of TASK_STATES) {
       const model: unknown = JSON.parse(output[0]!);
       assertNextSteps(model);
       assert.deepEqual(model, nextSteps({ ...status, state }));
+      // w01-m3's owner exercise, on synthetic records only; no owner act is executed.
+      if (state === "DRAFT") {
+        assert.equal(model.steps.find(step => step.verb === "start")?.who, "driver");
+        assert.equal(model.steps.find(step => step.verb === "cancel")?.who, "owner");
+      }
+      if (state === "AWAITING_OWNER") {
+        for (const verb of ["land", "journey", "rework", "review", "cancel"]) {
+          assert.equal(model.steps.find(step => step.verb === verb)?.who, "owner", verb);
+        }
+      }
       output.length = 0;
       assert.equal(await invoke(["--attempt", "1"]), 0, errors.join("\n"));
       assert.deepEqual(output, renderNextSteps(model, status));
@@ -98,6 +108,35 @@ test("renderer separates unavailable explanations and gives flag-complete cancel
     assert.match(text, /awsf cancel stub.*--cause.*--reason/);
     assert.doesNotMatch(text, /L10|L16|awsf rework.*(?:L10|L16)/);
     assert.equal(renderNextSteps(model).length, 1 + model.steps.length + model.waits.length + model.unavailable.length);
+  }
+});
+
+function assertUnavailableRendering(model: ReturnType<typeof nextSteps>, lines: readonly string[]): void {
+  // Commands and waits are separate from informational explanations. In these
+  // states no implemented CLI edge goes to RUNNING, so rework is not advice.
+  assert.doesNotMatch(lines[0]!, /L10|L16|awsf (?:rework|run)\b/u);
+  for (const edge of model.unavailable) {
+    const informational = lines.filter(line => line.startsWith(`Unavailable ${edge.edge} `));
+    assert.equal(informational.length, 1);
+    assert.ok(informational[0]!.includes(edge.detail));
+    assert.ok(informational[0]!.includes(`machine actors ${edge.actors.join(", ")}`));
+    assert.doesNotMatch(informational[0]!, /`awsf\b/u);
+    assert.equal(lines.some(line => new RegExp(`^(?:Step|Wait) ${edge.edge}\\b`, "u").test(line)), false);
+  }
+}
+
+test("unavailable rendering exposes explanations, never recommendations, with planted defects", () => {
+  for (const state of ["GATING", "REVIEWING"] as const) {
+    const model = nextSteps({ project: "fixture", taskId: "stub", attempt: 2, revision: 3, state });
+    const lines = renderNextSteps(model);
+    assertUnavailableRendering(model, lines);
+    for (const planted of [
+      ["run `awsf rework stub`", ...lines.slice(1)],
+      ["wait for L10 or L16", ...lines.slice(1)],
+      [...lines, `Wait ${model.unavailable[0]!.edge} to RUNNING: host`],
+      lines.filter(line => !line.startsWith("Unavailable ")),
+      lines.map(line => line.startsWith("Unavailable ") ? line.replace(model.unavailable[0]!.detail, "") : line),
+    ]) assert.throws(() => assertUnavailableRendering(model, planted), { name: "AssertionError" });
   }
 });
 

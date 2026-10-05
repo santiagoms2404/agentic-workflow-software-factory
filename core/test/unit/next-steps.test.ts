@@ -3,7 +3,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { Value } from "@sinclair/typebox/value";
-import { assertNextSteps, NEXT_STEPS_SCHEMA_ID, NextStepsSchema } from "../../src/contracts/next-steps.ts";
+import { OWNER_ACTS } from "../../../docs/driving/marimba/marimba-guard-rules.mts";
+import { assertNextSteps, NEXT_STEPS_SCHEMA_ID, NextStepsSchema, type NextSteps } from "../../src/contracts/next-steps.ts";
 import { ENVELOPE_SCHEMAS, RECORD_SCHEMAS, isEnvelopeSchemaId } from "../../src/contracts/registry.ts";
 import { EDGE_INVOCATIONS, NON_TRANSITION_ACTS, OWNER_ACT_COMMANDS, nextSteps, type NextStepsInput } from "../../src/lifecycle/next-steps.ts";
 import { LEGAL_EDGES, TASK_STATES, type TaskState } from "../../src/state/task-machine.ts";
@@ -19,51 +20,164 @@ function ownerActsIn(source: string): string[] {
     source.slice(arm.index, arms[index + 1]?.index ?? source.length).includes("processOwnerTerminal()") ? [arm[1]] : []);
 }
 
+// Used unchanged for real outputs and planted defects: a mutation must fail the
+// same property that protects production, not a separate assertion about the mutant.
+function assertInventory(output: NextSteps): void {
+  const state = output.state;
+  const implemented = output.steps.filter(step => step.kind === "edge");
+  const entries = [...implemented, ...output.waits, ...output.unavailable];
+  assert.deepEqual(entries.map(entry => entry.edge).sort(), LEGAL_EDGES.filter(edge => edge.from === state).map(edge => edge.id).sort(), state);
+  assert.equal(new Set(entries.map(entry => entry.edge)).size, entries.length, state);
+  assert.equal(Value.Check(NextStepsSchema, output), true, state);
+  assertNextSteps(JSON.parse(JSON.stringify(output)));
+  for (const edge of LEGAL_EDGES.filter(edge => edge.from === state)) {
+    const entry = entries.find(entry => entry.edge === edge.id)!;
+    assert.equal(entry.to, edge.to);
+    const invocation = EDGE_INVOCATIONS[edge.id];
+    if (invocation.kind === "cli") {
+      const step = implemented.find(step => step.edge === edge.id)!;
+      assert.equal(step.verb, invocation.verb);
+      assert.equal(step.spendsCalls, edge.spawnSite);
+      assert.equal(step.who, (OWNER_ACT_COMMANDS as readonly string[]).includes(step.verb) ? "owner" : "driver");
+      assert.equal(step.interactive, edge.interactive || step.who === "owner");
+      assert.ok(edge.actors.includes(invocation.provenance.actor));
+    } else if (invocation.kind === "host-internal") {
+      assert.equal(output.waits.find(wait => wait.edge === edge.id)?.who, "host");
+      assert.equal(invocation.provenance.actor, "host");
+      assert.ok(edge.actors.includes("host"));
+    } else {
+      const unavailable = output.unavailable.find(value => value.edge === edge.id)!;
+      assert.deepEqual(unavailable.actors, edge.actors);
+      assert.equal(unavailable.reason, "not-implemented");
+      assert.match(unavailable.detail, /\S/u);
+      for (const property of ["verb", "argv", "who"]) assert.equal(Object.hasOwn(unavailable, property), false);
+    }
+  }
+  for (const step of output.steps) {
+    assert.equal(step.who, (OWNER_ACT_COMMANDS as readonly string[]).includes(step.verb) ? "owner" : "driver");
+    if (step.kind !== "edge") {
+      assert.equal(step.interactive, step.who === "owner");
+      assert.equal(step.spendsCalls, false);
+    }
+    assert.deepEqual(step.requires, []);
+    assert.deepEqual(step.argv.slice(0, 7), ["awsf", step.verb, output.taskId, "--project", output.project, "--attempt", String(output.attempt)]);
+  }
+}
+
 test("next steps partition the machine edges exactly once and validate for every state", () => {
   assert.deepEqual(Object.keys(EDGE_INVOCATIONS).sort(), LEGAL_EDGES.map(edge => edge.id).sort());
+  for (const state of TASK_STATES) assertInventory(nextSteps(inputFor(state)));
+});
+
+test("the inventory property rejects missing, extra and duplicate edges in every populated state", () => {
   for (const state of TASK_STATES) {
-    const output = nextSteps(inputFor(state));
-    const implemented = output.steps.filter(step => step.kind === "edge");
-    const entries = [...implemented, ...output.waits, ...output.unavailable];
-    assert.deepEqual(entries.map(entry => entry.edge).sort(), LEGAL_EDGES.filter(edge => edge.from === state).map(edge => edge.id).sort(), state);
-    assert.equal(new Set(entries.map(entry => entry.edge)).size, entries.length, state);
-    assert.equal(Value.Check(NextStepsSchema, output), true, state);
-    assertNextSteps(JSON.parse(JSON.stringify(output)));
-    for (const edge of LEGAL_EDGES.filter(edge => edge.from === state)) {
-      const entry = entries.find(entry => entry.edge === edge.id)!;
-      assert.equal(entry.to, edge.to);
-      const invocation = EDGE_INVOCATIONS[edge.id];
-      if (invocation.kind === "cli") {
-        const step = implemented.find(step => step.edge === edge.id)!;
-        assert.equal(step.verb, invocation.verb);
-        assert.equal(step.spendsCalls, edge.spawnSite);
-        assert.equal(step.who, (OWNER_ACT_COMMANDS as readonly string[]).includes(step.verb) ? "owner" : "driver");
-        assert.equal(step.interactive, edge.interactive || step.who === "owner");
-        assert.ok(edge.actors.includes(invocation.provenance.actor));
-      } else if (invocation.kind === "host-internal") {
-        assert.equal(output.waits.find(wait => wait.edge === edge.id)?.who, "host");
-        assert.equal(invocation.provenance.actor, "host");
-        assert.ok(edge.actors.includes("host"));
-      } else {
-        assert.deepEqual(output.unavailable.find(value => value.edge === edge.id)?.actors, edge.actors);
-      }
+    const original = nextSteps(inputFor(state));
+    for (const bucket of ["steps", "waits", "unavailable"] as const) {
+      const index = original[bucket].findIndex(entry => "edge" in entry);
+      if (index === -1) continue;
+      const missing = structuredClone(original);
+      missing[bucket].splice(index, 1);
+      assert.throws(() => assertInventory(missing), { name: "AssertionError" }, `${state}/${bucket}: missing`);
+      const duplicate = structuredClone(original);
+      // Cloning the entire output avoids mutating the machine or invocation table.
+      duplicate[bucket].splice(index, 0, duplicate[bucket][index]! as never);
+      assert.throws(() => assertInventory(duplicate), { name: "AssertionError" }, `${state}/${bucket}: duplicate`);
     }
-    for (const step of output.steps) {
-      assert.deepEqual(step.requires, []);
-      assert.deepEqual(step.argv.slice(0, 7), ["awsf", step.verb, output.taskId, "--project", output.project, "--attempt", String(output.attempt)]);
+    const extra = structuredClone(original);
+    const foreign = LEGAL_EDGES.find(edge => edge.from !== state)!;
+    extra.waits.push({ edge: foreign.id, to: foreign.to, who: "host" });
+    assert.throws(() => assertInventory(extra), { name: "AssertionError" }, `${state}: foreign edge`);
+  }
+});
+
+test("inventory checks reject actor, executable owner and destination drift", () => {
+  for (const state of TASK_STATES) {
+    const original = nextSteps(inputFor(state));
+    for (const [index, step] of original.steps.entries()) {
+      const planted = structuredClone(original);
+      planted.steps[index]!.who = step.who === "owner" ? "driver" : "owner";
+      assert.throws(() => assertInventory(planted), { name: "AssertionError" });
+    }
+    for (const [index] of original.waits.entries()) {
+      const planted = structuredClone(original);
+      Object.assign(planted.waits[index]!, { who: "owner" });
+      assert.throws(() => assertInventory(planted), { name: "AssertionError" });
+    }
+    for (const [index] of original.unavailable.entries()) {
+      const planted = structuredClone(original);
+      planted.unavailable[index]!.actors = ["human"];
+      assert.throws(() => assertInventory(planted), { name: "AssertionError" });
+    }
+    const wrongDestination = structuredClone(original);
+    const entry = [...wrongDestination.steps.filter(step => step.kind === "edge"), ...wrongDestination.waits, ...wrongDestination.unavailable][0];
+    if (entry !== undefined) {
+      entry.to = TASK_STATES.find(value => value !== entry.to)!;
+      assert.throws(() => assertInventory(wrongDestination), { name: "AssertionError" });
     }
   }
 });
 
-test("the current owner-act table equals the main.ts owner-terminal arms without duplicates", () => {
-  const main = readFileSync(join(repoRoot(), "core/src/cli/main.ts"), "utf8");
+function assertOwnerParity(commands: readonly string[], main: string, guard: readonly string[]): void {
   const derived = ownerActsIn(main);
-  assert.ok(derived.length > 0);
-  assert.equal(new Set(OWNER_ACT_COMMANDS).size, OWNER_ACT_COMMANDS.length);
-  assert.deepEqual([...OWNER_ACT_COMMANDS].sort(), derived.sort());
+  assert.ok(derived.length > 0, "owner-terminal derivation must not be vacuous");
+  assert.equal(new Set(commands).size, commands.length);
+  assert.deepEqual(new Set(commands), new Set(derived));
+  assert.deepEqual(new Set(commands), new Set(guard));
+}
+
+test("the current owner-act table equals the main.ts owner-terminal arms and guard", () => {
+  const main = readFileSync(join(repoRoot(), "core/src/cli/main.ts"), "utf8");
+  assertOwnerParity(OWNER_ACT_COMMANDS, main, OWNER_ACTS);
   // Prove the derivation reads the terminal, not a remembered list or a verb name.
   assert.deepEqual(ownerActsIn('case "invented": { terminal: processOwnerTerminal() } default:'), ["invented"]);
   assert.deepEqual(ownerActsIn('case "land": { readOnly() } default:'), []);
+});
+
+test("owner parity rejects a missing or invented act on any of its three surfaces", () => {
+  const main = readFileSync(join(repoRoot(), "core/src/cli/main.ts"), "utf8");
+  for (const commands of [OWNER_ACT_COMMANDS.slice(1), [...OWNER_ACT_COMMANDS, "invented"], [...OWNER_ACT_COMMANDS, OWNER_ACT_COMMANDS[0]]]) {
+    assert.throws(() => assertOwnerParity(commands, main, OWNER_ACTS), { name: "AssertionError" });
+  }
+  assert.throws(() => assertOwnerParity(OWNER_ACT_COMMANDS, main.replaceAll("processOwnerTerminal()", "readOnly()"), OWNER_ACTS), { name: "AssertionError" });
+  assert.throws(() => assertOwnerParity(OWNER_ACT_COMMANDS, `${main}\ncase "invented": processOwnerTerminal(); default:`, OWNER_ACTS), { name: "AssertionError" });
+  for (const guard of [OWNER_ACTS.slice(1), [...OWNER_ACTS, "invented"]]) {
+    assert.throws(() => assertOwnerParity(OWNER_ACT_COMMANDS, main, guard), { name: "AssertionError" });
+  }
+});
+
+// Availability is independently pinned, not inferred only from EDGE_INVOCATIONS:
+// changing that table to fabricate a caller must not make these checks pass.
+function assertUnavailableCorrections(output: NextSteps): void {
+  const id = output.state === "GATING" ? "L10" : "L16";
+  assert.equal(EDGE_INVOCATIONS[id].kind, "unavailable");
+  const entry = output.unavailable.find(value => value.edge === id);
+  assert.ok(entry, `${id} must be unavailable`);
+  assert.equal(output.steps.some(step => step.kind === "edge" && step.edge === id), false);
+  assert.equal(output.waits.some(wait => wait.edge === id), false);
+  assert.equal(entry.reason, "not-implemented");
+  assert.match(entry.detail, /\S/u);
+  assert.deepEqual(entry.actors, LEGAL_EDGES.find(edge => edge.id === id)!.actors);
+  for (const property of ["verb", "argv", "who"]) assert.equal(Object.hasOwn(entry, property), false);
+}
+
+test("L10 and L16 cannot become fake commands or fake host waits even with complete coverage", () => {
+  for (const state of ["GATING", "REVIEWING"] as const) {
+    const original = nextSteps(inputFor(state));
+    assertUnavailableCorrections(original);
+    const edge = original.unavailable[0]!;
+    for (const kind of ["command", "wait"] as const) {
+      const planted = structuredClone(original);
+      planted.unavailable = planted.unavailable.filter(value => value.edge !== edge.edge);
+      if (kind === "command") planted.steps.push({ kind: "edge", edge: edge.edge, to: edge.to, verb: "rework", argv: ["awsf", "rework", original.taskId], who: "owner", interactive: true, spendsCalls: true, requires: [] });
+      else planted.waits.push({ edge: edge.edge, to: edge.to, who: "host" });
+      assertNextSteps(planted); // Structural validity and coverage alone are insufficient.
+      assert.throws(() => assertUnavailableCorrections(planted), { name: "AssertionError" });
+    }
+    const actors = structuredClone(original);
+    actors.unavailable[0]!.actors = ["human"];
+    assertNextSteps(actors);
+    assert.throws(() => assertUnavailableCorrections(actors), { name: "AssertionError" });
+  }
 });
 
 test("unimplemented task edges remain explanatory and reject executable properties", () => {
