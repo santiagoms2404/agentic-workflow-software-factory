@@ -239,7 +239,7 @@ async function cancelledBuild(world: SeedWorld): Promise<{ readonly sourceDir: s
   await start(sourceDir, world);
   const built = await run(sourceDir, world);
   assert.equal(built.lifecycleState, "AWAITING_OWNER", built.blocker?.detail);
-  const status = (await cancelCommand({ attemptDir: sourceDir, terminal: owner() })).status;
+  const status = (await cancelCommand({ attemptDir: sourceDir, terminal: owner(), cause: "owner", reason: "Stop source attempt" })).status;
   assert.equal(status.lifecycleState, "CANCELLED");
   return { sourceDir, status };
 }
@@ -334,7 +334,7 @@ test("a cancelled integrated target is itself an exact seed source: its continua
     assert.equal(adopted.status?.lifecycleState, "AWAITING_OWNER", adopted.status?.blocker?.detail);
     const merge = assertIntegrated(world, adopted.status, head, original.candidateSha!);
     const integratedDir = adopted.attemptDir!;
-    assert.equal((await cancelCommand({ attemptDir: integratedDir, terminal: owner() })).status.lifecycleState, "CANCELLED");
+    assert.equal((await cancelCommand({ attemptDir: integratedDir, terminal: owner(), cause: "owner", reason: "Stop integrated attempt" })).status.lifecycleState, "CANCELLED");
     const integratedBytes = sourceBytes(integratedDir);
     const originalBytes = sourceBytes(sourceDir);
     const mergesBefore = mergesOf(world.repository, original.candidateSha!);
@@ -388,7 +388,7 @@ test("seeding from an integrated target refuses a decline, a source withdrawn du
     const adopted = await adoptIntegrated(world, sourceDir, spend());
     assert.equal(adopted.status?.lifecycleState, "AWAITING_OWNER", adopted.status?.blocker?.detail);
     const merge = assertIntegrated(world, adopted.status, head, original.candidateSha!);
-    await cancelCommand({ attemptDir: adopted.attemptDir!, terminal: owner() });
+    await cancelCommand({ attemptDir: adopted.attemptDir!, terminal: owner(), cause: "owner", reason: "Stop adopted attempt" });
     const options = { ...world.seedOptions, targetTaskId: "continued", sourceTaskId: "integrated", candidateSha: merge, request: "extend the integrated merge" };
     const continued = join(world.stateRoot, "projects", world.config.project.slug, "tasks", "continued");
     const retained = `${sourceDir}.retained`;
@@ -591,7 +591,7 @@ test("cancelling an integrated target leaves its source exact, and a new continu
     const first = await adoptCommand(adoptOptions(world, meter, { targetTaskId: "first-integrated" }));
     assert.equal(first.status?.lifecycleState, "AWAITING_OWNER", first.status?.blocker?.detail);
     const firstMerge = assertIntegrated(world, first.status, world.head, world.candidate);
-    assert.equal((await cancelCommand({ attemptDir: first.attemptDir!, terminal: owner() })).status.lifecycleState, "CANCELLED");
+    assert.equal((await cancelCommand({ attemptDir: first.attemptDir!, terminal: owner(), cause: "owner", reason: "Stop first attempt" })).status.lifecycleState, "CANCELLED");
     assert.deepEqual(sourceBytes(world.sourceDir), bytes);
 
     const second = await adoptCommand(adoptOptions(world, meter, { targetTaskId: "second-integrated" }, { now: () => "2026-09-27T01:00:00.000Z" }));
@@ -652,7 +652,7 @@ test("a cancelled integrated target passes seed inspection on its exact merge an
   try {
     const adopted = await adoptCommand(adoptOptions(world, spend()));
     const merge = assertIntegrated(world, adopted.status, world.head, world.candidate);
-    await cancelCommand({ attemptDir: adopted.attemptDir!, terminal: owner() });
+    await cancelCommand({ attemptDir: adopted.attemptDir!, terminal: owner(), cause: "owner", reason: "Stop adopted attempt" });
     const inspected = await inspectSeedSource(adopted.attemptDir!, world.repository, { project: PROJECT, taskId: "integrated", attempt: 1, candidateSha: merge });
     assert.deepEqual({ baseSha: inspected.baseSha, candidateSha: inspected.candidateSha }, { baseSha: world.head, candidateSha: merge });
   } finally {
@@ -727,7 +727,7 @@ for (const scenario of SEED_SOURCE_REFUSALS) {
         runCommand: () => { meter.gates += 1; return { status: exit, stdout: "fresh gate\n", stderr: "", error: null }; },
       }));
       const targetDir = adopted.attemptDir!;
-      if (adopted.status?.lifecycleState === "AWAITING_OWNER" && scenario.live !== true) await cancelCommand({ attemptDir: targetDir, terminal: owner() });
+      if (adopted.status?.lifecycleState === "AWAITING_OWNER" && scenario.live !== true) await cancelCommand({ attemptDir: targetDir, terminal: owner(), cause: "owner", reason: "Stop target attempt" });
       if (scenario.tamper !== undefined) rewriteAdoption(targetDir, (adoption) => { scenario.tamper!(adoption, world); });
       if (scenario.rewrite !== undefined) rewriteJournal(targetDir, scenario.rewrite);
       await scenario.setup?.(world);

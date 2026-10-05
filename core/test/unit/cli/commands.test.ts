@@ -8,6 +8,12 @@ import { main } from "../../../src/cli/main.ts";
 import { toConfigSnapshotJson } from "../../../src/config/effective-config.ts";
 import { loadConfig } from "../../../src/config/load.ts";
 import { cancelCommand } from "../../../src/cli/commands/cancel.ts";
+import { createDashboardProjection } from "../../../src/cli/commands/dashboard-projection.ts";
+import { openDatabase } from "../../../src/observability/sqlite.ts";
+import { readTaskAttributions, attributionsFilePath } from "../../../src/persistence/task-attributions.ts";
+import { scanJournal } from "../../../src/persistence/replay.ts";
+import { journalFilePath } from "../../../src/persistence/platform-paths.ts";
+import type { AttemptEvent } from "../../../src/cli/commands/attempt.ts";
 import { AlreadyInState } from "../../../src/state/errors.ts";
 import { SealedAttempt } from "../../../src/persistence/attempt-lock.ts";
 import { locateAttempt, nextRevision, persistAttempt, readAttempt, taskRoot } from "../../../src/cli/commands/attempt.ts";
@@ -362,6 +368,7 @@ test("new, start, status, cancel, and retry preserve the lifecycle and task-life
     const cancelled = await cancelCommand({
       attemptDir: created.attemptDir,
       terminal: { ...yesTerminal, write: (line: string) => disclosure.push(line) },
+      cause: "owner", reason: "No longer needed after review",
       now: () => "2026-08-07T00:02:00.000Z",
     });
     assert.match(disclosure.join("\n"), /Spend written off: 2 of 5 call\(s\) already spent/u);
@@ -370,6 +377,17 @@ test("new, start, status, cancel, and retry preserve the lifecycle and task-life
     assert.match(disclosure.join("\n"), /Cost: 0 new provider calls; no live process is recorded/u);
     assert.match(disclosure.join("\n"), /^Task: agentic-workflow-software-factory\/.+ attempt 1, T2, PREPARED$/mu);
     assert.equal(cancelled.status.lifecycleState, "CANCELLED");
+    assert.match(disclosure.join("\n"), /Cause on record: owner\nReason on record: No longer needed after review/u);
+    assert.deepEqual(await readTaskAttributions(taskRoot(stateRoot, created.status.project, created.status.taskId)), [{
+      schema: "awsf.attribution/v1", project: created.status.project, taskId: created.status.taskId,
+      attempt: 1, cause: "owner", reason: "No longer needed after review", at: "2026-08-07T00:02:00.000Z",
+    }]);
+    const journal = await scanJournal<AttemptEvent>(journalFilePath(created.attemptDir));
+    assert.equal(journal.ok, true);
+    if (!journal.ok) throw new Error("journal unreadable");
+    const transition = journal.records.at(-1)?.event.evidence;
+    assert.equal(transition?.type, "transition");
+    if (transition?.type === "transition") assert.equal(transition.reasonDetail, "No longer needed after review");
     assert.deepEqual(cancelled.report.survivors, []);
     await assert.rejects(
       persistAttempt(created.attemptDir, cancelled.status.revision, {
@@ -529,6 +547,130 @@ test("a registered boolean flag reads its value spelling instead of eating the t
   }
 });
 
+test("cancel refuses missing, invalid and credential-shaped input without prompting, signalling or writing", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-cancel-input-"));
+  try {
+    const repo = repository(root);
+    const stateRoot = join(root, "state");
+    const created = await newCommand({ stateRoot, project: "project", taskId: "cancel-input",
+      repository: repo, request: "validate cancellation", workflow: "build", tier: 1 });
+    let prompts = 0;
+    let signals = 0;
+    let projections = 0;
+    const terminal = { interactive: true, write: () => { prompts += 1; }, confirm: async () => { prompts += 1; return true; } };
+    const cancel = (cause: string, reason: string) => cancelCommand({
+      attemptDir: created.attemptDir, cause, reason, terminal,
+      terminate: async () => { signals += 1; return { termSent: false, killSent: false, survivors: [], terminated: true, skipped: null }; },
+      projectRecord: () => { projections += 1; }, projectAttribution: () => { projections += 1; },
+    });
+    const before = readFileSync(journalFilePath(created.attemptDir));
+    for (const [cause, reason] of [["", "because"], ["not-a-cause", "because"], ["owner", ""],
+      ["owner", "  "], ["owner", "Authorization: Bearer abcdefghijklmnopqrstuvwxyz123456"]]) {
+      await assert.rejects(cancel(cause!, reason!));
+      assert.deepEqual(readFileSync(journalFilePath(created.attemptDir)), before);
+      assert.equal(existsSync(attributionsFilePath(taskRoot(stateRoot, "project", "cancel-input"))), false);
+    }
+    assert.deepEqual([prompts, signals, projections], [0, 0, 0]);
+    assert.equal((await readAttempt(created.attemptDir)).lifecycleState, "DRAFT");
+
+    const errors: string[] = [];
+    for (const flags of [[], ["--cause", "owner"], ["--reason", "because"],
+      ["--cause", "wrong", "--reason", "because"]]) {
+      assert.equal(await main({ argv: ["cancel", "cancel-input", "--state-root", stateRoot, ...flags],
+        cwd: resolve("."), terminal, writeOut: () => {}, writeError: (line) => errors.push(line) }), 1);
+    }
+    assert.deepEqual(readFileSync(journalFilePath(created.attemptDir)), before);
+    assert.deepEqual([prompts, signals, projections], [0, 0, 0]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("confirmed CLI cancel projects exactly one attribution event after the transition", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-cancel-projection-"));
+  try {
+    const repo = repository(root);
+    const stateRoot = join(root, "state");
+    const projection = createDashboardProjection(stateRoot);
+    const created = await newCommand({ stateRoot, project: "agentic-workflow-software-factory", taskId: "cancel-projected",
+      repository: repo, request: "project cancellation", workflow: "build", tier: 1,
+      projectRecord: projection.project });
+    projection.close();
+    const errors: string[] = [];
+    assert.equal(await main({ argv: ["cancel", "cancel-projected", "--state-root", stateRoot,
+      "--cause", "owner", "--reason", "No longer required"], cwd: resolve("."), terminal: yesTerminal,
+      writeOut: () => {}, writeError: (line) => errors.push(line) }), 0, errors.join("\n"));
+    const db = openDatabase(join(stateRoot, "awsf.db"), { readonly: true });
+    try {
+      const transitions = db.prepare("SELECT reason_detail FROM transitions WHERE session_id = ? AND to_state = 'CANCELLED'")
+        .all(created.status.sessionId) as unknown as Array<{ reason_detail: string }>;
+      const events = db.prepare("SELECT payload_json FROM events WHERE session_id = ? AND type = 'attribution'")
+        .all(created.status.sessionId) as unknown as Array<{ payload_json: string }>;
+      assert.deepEqual(transitions.map((row) => row.reason_detail), ["No longer required"]);
+      assert.equal(events.length, 1);
+      assert.equal(JSON.parse(events[0]!.payload_json).cause, "owner");
+      assert.equal(JSON.parse(events[0]!.payload_json).reason, "No longer required");
+      assert.equal((await readTaskAttributions(taskRoot(stateRoot, created.status.project, created.status.taskId))).length, 1);
+    } finally { db.close(); }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("a declined cancel writes nothing; a confirmed RUNNING cancel terminates before recording once", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-cancel-confirm-"));
+  try {
+    const repo = repository(root);
+    const stateRoot = join(root, "state");
+    const created = await newCommand({ stateRoot, project: "project", taskId: "cancel-confirm",
+      repository: repo, request: "record cause", workflow: "build", tier: 1 });
+    const before = readFileSync(journalFilePath(created.attemptDir));
+    let signals = 0;
+    const decline = await cancelCommand({ attemptDir: created.attemptDir, cause: "unknown", reason: "Not yet known",
+      terminal: { interactive: true, write: () => {}, confirm: async () => false },
+      terminate: async () => { signals += 1; throw new Error("must not signal"); } });
+    assert.equal(decline.status.lifecycleState, "DRAFT");
+    assert.deepEqual(readFileSync(journalFilePath(created.attemptDir)), before);
+    assert.equal(signals, 0);
+    assert.equal(existsSync(attributionsFilePath(taskRoot(stateRoot, "project", "cancel-confirm"))), false);
+
+    const running = await persistAttempt(created.attemptDir, created.status.revision, { kind: "attempt.updated",
+      next: nextRevision(created.status, { lifecycleState: "RUNNING" }) });
+    const order: string[] = [];
+    const result = await cancelCommand({ attemptDir: created.attemptDir, cause: "driver", reason: "  Missing   pre-call check  ",
+      terminal: yesTerminal, now: () => "2026-10-04T00:00:00.000Z",
+      terminate: async () => { order.push("terminate"); return { termSent: true, killSent: false, survivors: [], terminated: true, skipped: null }; },
+      projectRecord: () => { order.push("transition"); }, projectAttribution: () => { order.push("attribution"); } });
+    assert.equal(result.status.lifecycleState, "CANCELLED");
+    assert.deepEqual(order, ["terminate", "transition", "attribution"]);
+    assert.equal(result.status.revision, running.revision + 1);
+    assert.deepEqual((await readTaskAttributions(taskRoot(stateRoot, "project", "cancel-confirm"))).map((r) =>
+      [r.cause, r.reason]), [["driver", "Missing pre-call check"]]);
+    const journal = await scanJournal<AttemptEvent>(journalFilePath(created.attemptDir));
+    if (!journal.ok) throw new Error(journal.detail);
+    const evidence = journal.records.at(-1)?.event.evidence;
+    assert.equal(evidence?.type, "transition");
+    if (evidence?.type === "transition") assert.equal(evidence.reasonDetail, "Missing pre-call check");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a failed attribution append leaves a durable CANCELLED attempt without a cause record", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-cancel-append-"));
+  try {
+    const repo = repository(root);
+    const stateRoot = join(root, "state");
+    const created = await newCommand({ stateRoot, project: "project", taskId: "append-fails",
+      repository: repo, request: "exercise interrupted append", workflow: "build", tier: 1 });
+    mkdirSync(attributionsFilePath(taskRoot(stateRoot, "project", "append-fails")));
+    await assert.rejects(cancelCommand({ attemptDir: created.attemptDir, cause: "unknown", reason: "Cause to investigate",
+      terminal: yesTerminal }));
+    assert.equal((await readAttempt(created.attemptDir)).lifecycleState, "CANCELLED");
+    const journal = await scanJournal<AttemptEvent>(journalFilePath(created.attemptDir));
+    if (!journal.ok) throw new Error(journal.detail);
+    assert.equal(journal.records.at(-1)?.event.evidence?.type, "transition");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 test("cancel still refuses a RUNNING attempt with no process unless it is parked at a settled checkpoint", async () => {
   const root = mkdtempSync(join(tmpdir(), "awsf-cli-cancel-running-"));
   try {
@@ -545,7 +687,7 @@ test("cancel still refuses a RUNNING attempt with no process unless it is parked
       next: nextRevision(created.status, { lifecycleState: "RUNNING", process: null, recovery: null }),
     });
     await assert.rejects(
-      cancelCommand({ attemptDir: created.attemptDir, terminal: yesTerminal }),
+      cancelCommand({ attemptDir: created.attemptDir, terminal: yesTerminal, cause: "owner", reason: "Stopped safely" }),
       /RUNNING attempt has no recorded process identity; refusing to claim an empty survivor list/u,
     );
     assert.equal((await readAttempt(created.attemptDir)).revision, running.revision, "nothing was written");

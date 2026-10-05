@@ -353,7 +353,7 @@ export async function proveCommand(options: ProveCommandOptions): Promise<ProveC
   });
   const commands = {
     start: `${AWSF_INVOCATION} start ${taskId} --project ${project}`,
-    cancel: `${AWSF_INVOCATION} cancel ${taskId} --project ${project}`,
+    cancel: `${AWSF_INVOCATION} cancel ${taskId} --project ${project} --cause <cause> --reason "<why>"`,
   };
   options.terminal.write(`Created ${project}/${taskId} attempt ${String(created.status.attempt)} in DRAFT. Nothing has started.`);
   options.terminal.write(`Start it: ${commands.start}`);

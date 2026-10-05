@@ -172,7 +172,8 @@ test("awsf prove creates a replay that runs from its pinned base to AWAITING_OWN
       assert.equal(owner.prompts.length, 1, "land asked nothing");
 
       // Cancelled through the command it printed, and land still refuses by name.
-      const cancelled = await cli(fixture, printedArgv(owner.lines, "Cancel it once its evidence is read: "), owner);
+      const cancelArgv = printedArgv(owner.lines, "Cancel it once its evidence is read: ");
+      const cancelled = await cli(fixture, cancelArgv.map((part) => part === "<cause>" ? "owner" : part === '"<why>"' ? "Replay evidence read" : part), owner);
       assert.equal(cancelled.code, 0, cancelled.err.join("\n"));
       assert.deepEqual(cancelled.out, ["CANCELLED: survivors []"]);
       assert.equal((await readAttempt(attemptDir)).lifecycleState, "CANCELLED");

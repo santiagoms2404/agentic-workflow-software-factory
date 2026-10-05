@@ -1,3 +1,7 @@
+import { dirname } from "node:path";
+import { ATTRIBUTION_RECORD_SCHEMA_ID, isAttributionCause, type AttributionRecord } from "../../contracts/attribution-record.ts";
+import { appendTaskAttribution } from "../../persistence/task-attributions.ts";
+import { assertAttributeReason, AttributeUnknownCause } from "./attribute.ts";
 import { runSystemCommand } from "../../execution/transport-broker.ts";
 import { assertNoExecutionController } from "../../execution/operation-lease.ts";
 import { createHostController } from "../../execution/process-controller.ts";
@@ -17,7 +21,10 @@ import {
 export interface CancelCommandOptions {
   readonly attemptDir: string;
   readonly terminal: OwnerTerminal;
+  readonly cause: string;
+  readonly reason: string;
   readonly terminate?: (status: AttemptStatus) => Promise<TerminationReport>;
+  readonly projectAttribution?: (record: AttributionRecord) => void;
   readonly now?: () => string;
   readonly projectRecord?: AttemptProjector;
 }
@@ -52,6 +59,10 @@ async function terminateRecorded(status: AttemptStatus, attemptDir: string): Pro
 }
 
 export async function cancelCommand(options: CancelCommandOptions): Promise<{ status: AttemptStatus; report: TerminationReport }> {
+  // Validate before the owner sees a prompt or the recorded tree receives a signal.
+  if (!isAttributionCause(options.cause)) throw new AttributeUnknownCause(options.cause);
+  const cause = options.cause;
+  const reason = assertAttributeReason(options.reason);
   const current = await readAttempt(options.attemptDir);
   const cancellable = ["DRAFT", "PREPARED", "RUNNING", "GATING", "REVIEWING", "AWAITING_OWNER"] as const;
   // Invalid states and a piped human are rejected by the ordered machine before
@@ -82,6 +93,8 @@ export async function cancelCommand(options: CancelCommandOptions): Promise<{ st
   options.terminal.write(`Candidate: ${current.candidateSha ?? "none — nothing has been built to lose"}${current.candidateSha === null ? "" : ` (gates ${current.gatesPass ? "passed" : "not passed"}, review ${current.requiredReviewPresent ? "present" : "absent"}, journey ${current.journeyApproved ? "approved" : "not approved"})`}`);
   options.terminal.write(`Owner re-entries: ${current.budget.ownerReentries}/${current.budget.allowance.ownerReentries} used — the remainder dies with this attempt.`);
   options.terminal.write(`Cost: 0 new provider calls; ${tree}.`);
+  options.terminal.write(`Cause on record: ${cause}`);
+  options.terminal.write(`Reason on record: ${reason}`);
   options.terminal.write("Confirming seals this attempt as CANCELLED: its candidate cannot be landed, its gates and review cannot be reused, and continuing the task requires awsf retry with prior spend carried forward.");
   const confirmed = await options.terminal.confirm(`Cancel ${current.taskId} attempt ${current.attempt}?`);
   if (!confirmed) return { status: current, report: noTree() };
@@ -95,7 +108,7 @@ export async function cancelCommand(options: CancelCommandOptions): Promise<{ st
     to: "CANCELLED",
     actor: "human",
     tier: current.tier,
-    reason: { source: "human", detail: "explicit CLI cancellation" },
+    reason: { source: "human", detail: reason },
     interactive: true,
     budget: current.budget,
     ...(current.lifecycleState === "RUNNING"
@@ -110,13 +123,26 @@ export async function cancelCommand(options: CancelCommandOptions): Promise<{ st
     lastActivity: `cancelled; TERM ${report.termSent ? "sent" : "not sent"}, KILL ${report.killSent ? "sent" : "not sent"}, survivors [${report.survivors.join(", ")}]`,
     nextAction: nextActionFor(decision.to, current.taskId),
   });
-  return {
-    status: await persistAttempt(
-      options.attemptDir,
-      current.revision,
-      { kind: "attempt.transitioned", next },
-      options.projectRecord,
-    ),
-    report,
+  const status = await persistAttempt(
+    options.attemptDir,
+    current.revision,
+    { kind: "attempt.transitioned", next, evidence: {
+      type: "transition", id: `${current.sessionId}:${decision.edge}:${String(next.revision)}`,
+      seq: next.revision, from: current.lifecycleState, to: "CANCELLED", actor: "human",
+      edgeId: decision.edge, reasonSource: "human", reasonCode: null, reasonDetail: reason,
+      spawnSite: false, at: now,
+    } },
+    options.projectRecord,
+  );
+  // The attempt is sealed now. The cause lives in the task-scoped journal, so
+  // an interrupted append leaves a visible cancel without a record, not a
+  // record for an attempt that never cancelled.
+  const record: AttributionRecord = {
+    schema: ATTRIBUTION_RECORD_SCHEMA_ID,
+    project: status.project, taskId: status.taskId, attempt: status.attempt,
+    cause, reason, at: now,
   };
+  await appendTaskAttribution(dirname(options.attemptDir), record);
+  options.projectAttribution?.(record);
+  return { status, report };
 }

@@ -921,10 +921,16 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         return result.status.lifecycleState === "PUBLISHED" ? 0 : 1;
       }
       case "cancel": {
+        const cause = parsed.flags.cause ?? "";
+        const reason = parsed.flags.reason ?? "";
+        if (cause.trim().length === 0 || reason.trim().length === 0) {
+          throw new Error('usage: awsf cancel <task> --cause <model|factory|environment|driver|owner|unknown> --reason "<why>"');
+        }
         const result = await cancelCommand({
-          attemptDir: located.attemptDir,
+          attemptDir: located.attemptDir, cause, reason,
           terminal: options.terminal ?? processOwnerTerminal(),
           projectRecord: projection.project,
+          projectAttribution: projection.projectAttribution,
         });
         out(`${result.status.lifecycleState}: survivors [${result.report.survivors.join(", ")}]`);
         return result.status.lifecycleState === "CANCELLED" ? 0 : 1;

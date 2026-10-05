@@ -244,7 +244,7 @@ async function blockedAndCancelledShift(red: string) {
   // The production cancel, with no injected terminator: a ticket block parks
   // the shift with every call settled and no process, and no controller holds
   // the lease, so the empty survivor list is a record, not a guess.
-  const cancelled = await cancelCommand({ attemptDir: sourceDir, terminal, projectRecord: projection.project });
+  const cancelled = await cancelCommand({ attemptDir: sourceDir, terminal, cause: "owner", reason: "Stop the blocked shift", projectRecord: projection.project, projectAttribution: projection.projectAttribution });
   assert.equal(cancelled.status.lifecycleState, "CANCELLED");
   assert.deepEqual(cancelled.report.survivors, []);
   const commits = git(blocked.worktree!, "rev-list", "--reverse", `${blocked.baseSha!}..HEAD`).split("\n");
@@ -452,7 +452,7 @@ async function integratedShiftPrefix() {
   assert.equal(adopted.status!.baseSha, head);
   assert.deepEqual(git(world.canonical, "rev-list", "--parents", "-n", "1", merge).split(" "), [merge, head, completedTip],
     "the merge carries the completed T02 commit over canonical HEAD");
-  assert.equal((await cancelCommand({ attemptDir: adopted.attemptDir!, terminal })).status.lifecycleState, "CANCELLED");
+  assert.equal((await cancelCommand({ attemptDir: adopted.attemptDir!, terminal, cause: "owner", reason: "End adopted shift" })).status.lifecycleState, "CANCELLED");
   return { ...world, first, completedTip, head, merge, tailDir: adopted.attemptDir! };
 }
 

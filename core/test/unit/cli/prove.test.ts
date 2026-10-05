@@ -254,7 +254,7 @@ test("a confirmed replay is a DRAFT task carrying its record and its arm's route
     assert.ok(owner.lines.includes(`Arm: ${ARM}, recorded as --route reviewer=${ARM}`), owner.lines.join("\n"));
     const commands = {
       start: `npm run awsf -- start replay-a --project ${w.project}`,
-      cancel: `npm run awsf -- cancel replay-a --project ${w.project}`,
+      cancel: `npm run awsf -- cancel replay-a --project ${w.project} --cause <cause> --reason "<why>"`,
     };
     assert.deepEqual(result.commands, commands);
     assert.ok(owner.lines.includes(`Start it: ${commands.start}`), owner.lines.join("\n"));
