@@ -287,7 +287,9 @@ interface ProtectedHit {
 function protectedHits(facts: ProtectedPathsFacts): ProtectedHit[] {
   const tokens = [...extractPathTokens(facts.request)];
   // A --where entry is scanned even where the request does not spell it, so a
-  // protected write can never escape the plan by being left out of the text.
+  // protected path it names is planned though the text leaves it out. A glob
+  // that only overlaps a protected glob (core/src/*/*.ts over core/src/state/**)
+  // is no hit; the run's path policy is what refuses that write.
   for (const entry of facts.where) {
     if (invalidPath(entry) === null) tokens.push({ text: entry, candidates: [entry] });
   }

@@ -148,9 +148,9 @@ test("a missing landed record runs every gate once in the baseline worktree; lat
     assert.match(renderPreflightLines(second).join("\n"),
       /^Suite: reused the passing gate rows of first attempt 1's driver preflight at .*, measured at this base under the current gate configuration; no gate ran\.$/mu);
 
-    const other = await draft(box, "other-task", REQUEST.replace("an example", "another"));
+    const other = await draft(box, "other-task", REQUEST.replace("an example", "another"), { continuesTask: "first" });
     const reused = await preflightCommand(options(box, other.attemptDir, gateRunner(calls)));
-    assert.equal(calls.length, 2, "another task in the project at the same base runs no gate either");
+    assert.equal(calls.length, 2, "a task continuing it at the same base runs no gate either");
     assert.match(reused.suite.reused ?? "", /^first attempt 1's driver preflight at /u);
 
     const moved = commit(box.repository, "second.txt", "moved\n");
@@ -302,6 +302,42 @@ test("an earlier preflight record is reused only when it is the passing suite at
     const again = await preflightCommand(options(box, created.attemptDir, gateRunner(calls)));
     assert.equal(calls.length, 6, "the record under the new digest is reused");
     assert.equal(again.suite.reused, `earlier attempt 1's driver preflight at ${changed.record.at}`);
+  } finally { box.close(); }
+});
+
+test("the earlier-preflight scan reads only the journals of this task and its continuation chain", async () => {
+  const box = fixture("scan");
+  try {
+    const calls: Call[] = [];
+    const created = await draft(box, "scanned");
+    const first = await preflightCommand(options(box, created.attemptDir, gateRunner(calls)));
+    const unrelated = await draft(box, "unrelated", REQUEST.replace("an example", "an unrelated"));
+    const theirs = await preflightCommand(options(box, unrelated.attemptDir, gateRunner(calls)));
+    assert.equal(calls.length, 4, "an unrelated task's passing record at the base is not reused");
+    assert.equal(theirs.suite.reused, null);
+    const corrupt = await draft(box, "corrupt", REQUEST.replace("an example", "a corrupt"));
+    writeFileSync(join(corrupt.attemptDir, "journal.jsonl"), "{not json\n");
+    const unreadable = await draft(box, "unreadable", REQUEST.replace("an example", "an unreadable"));
+    chmodSync(join(unreadable.attemptDir, "journal.jsonl"), 0o000);
+
+    const read: string[] = [];
+    const reader = async (attemptDir: string) => {
+      read.push(resolve(attemptDir));
+      return readAttemptEvidence(attemptDir);
+    };
+    const second = await preflightCommand(options(box, created.attemptDir, gateRunner(calls), { readEvidence: reader }));
+    assert.deepEqual(read, [resolve(created.attemptDir)], "no unrelated journal is read: not the sound, the corrupt or the unreadable one");
+    assert.equal(calls.length, 4, "a second preflight of the same task at the same base runs no gate");
+    assert.equal(second.suite.reused, `scanned attempt 1's driver preflight at ${first.record.at}`);
+
+    const child = await draft(box, "child", REQUEST.replace("an example", "a child"), { continuesTask: "scanned" });
+    const continued = await preflightCommand(options(box, child.attemptDir, gateRunner(calls)));
+    assert.equal(calls.length, 4, "a continuing task reuses its ancestor's record");
+    read.length = 0;
+    const third = await preflightCommand(options(box, created.attemptDir, gateRunner(calls), { readEvidence: reader }));
+    assert.deepEqual(read.sort(), [resolve(child.attemptDir), resolve(created.attemptDir)].sort(), "a descendant's journal is read too");
+    assert.equal(third.suite.reused, `child attempt 1's driver preflight at ${continued.record.at}`);
+    chmodSync(join(unreadable.attemptDir, "journal.jsonl"), 0o600);
   } finally { box.close(); }
 });
 

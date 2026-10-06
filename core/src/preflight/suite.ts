@@ -5,10 +5,10 @@
 // Reused when a landed attempt's candidate IS that base and it measured every
 // configured gate under the same digest: after a factory landing, the landed
 // candidate's rows are the base's rows, so nothing runs. Failing that, reused
-// from an earlier driver-preflight record of any task in the project whose rows
-// are one passing row per configured gate at exactly the base under the same
-// digest: after a direct commit the suite costs one host run per base, not one
-// per preflight. Otherwise every configured gate runs once in the project's
+// from an earlier driver-preflight record of this task or its continuation
+// chain whose rows are one passing row per configured gate at exactly the base
+// under the same digest: after a direct commit the suite costs one host run per
+// base, not one per preflight. Otherwise every configured gate runs once in the project's
 // baseline worktree, through the transport broker, with the configured
 // timeout. A gathering that cannot produce rows says why in the host's words;
 // `evaluateSuite` turns that into the refusal.
@@ -61,7 +61,7 @@ export function landedSuiteRows(landed: LandedMeasurement, baseSha: string, conf
   return ordered.every((row) => row !== undefined) ? Object.freeze(ordered as SuiteGateRow[]) : null;
 }
 
-/** An earlier driver-preflight record of any task in the project, read from its attempt's journal. */
+/** An earlier driver-preflight record of this task or its continuation chain, read from its attempt's journal. */
 export interface PreflightMeasurement {
   readonly label: string;
   readonly record: DriverPreflightRecord;

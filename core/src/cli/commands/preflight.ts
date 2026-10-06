@@ -88,6 +88,8 @@ export interface PreflightCommandOptions {
   readonly now?: () => string;
   /** Test seam for the gate commands; production runs them through the transport broker. */
   readonly runCommand?: GateCommandRunner;
+  /** Test seam for the journal reads the suite scan makes; production reads each attempt's journal. */
+  readonly readEvidence?: (attemptDir: string) => Promise<readonly AttemptEvidence[]>;
 }
 
 export interface PreflightCommandResult {
@@ -206,7 +208,7 @@ interface JournalFacts {
   readonly duplicate: DuplicateFacts;
   readonly priorSessions: readonly string[];
   readonly landed: readonly LandedMeasurement[];
-  /** Every driver-preflight record of any task in the project, this one included, newest first. */
+  /** Every driver-preflight record of this task and of the tasks in its continuation chain, newest first. */
   readonly earlier: readonly PreflightMeasurement[];
 }
 
@@ -214,24 +216,42 @@ interface JournalFacts {
  * What the journal says about the other tasks: their requests and plan refs
  * for `duplicate`, the sessions of earlier attempts and continued tasks for
  * `prior-attempts`, and for `suite` the landed attempts whose candidate is the
- * base and every earlier preflight record in the project, this task's own too.
+ * base and every earlier preflight record of this task and its continuation
+ * chain. No other attempt's journal is read: the scan does not grow with the
+ * project's history.
  */
-async function journalFacts(stateRoot: string, status: AttemptStatus, baseSha: string): Promise<JournalFacts> {
+async function journalFacts(
+  stateRoot: string,
+  status: AttemptStatus,
+  baseSha: string,
+  readEvidence: (attemptDir: string) => Promise<readonly AttemptEvidence[]>,
+): Promise<JournalFacts> {
   const project = status.project;
   const continued = await ancestors(stateRoot, project, status.taskId);
   const chain = new Set(continued);
   const others: TaskRequestFact[] = [];
-  const landed: LandedMeasurement[] = [];
-  const earlier: PreflightMeasurement[] = [];
+  const tasks: Array<readonly [string, AttemptStatus[]]> = [];
   for (const taskId of await taskIds(stateRoot, project)) {
     const statuses = await attemptStatuses(stateRoot, project, taskId);
+    tasks.push([taskId, statuses]);
+    if (taskId === status.taskId) continue;
+    const latest = statuses.at(-1);
+    if (latest === undefined) continue;
+    if ((await ancestors(stateRoot, project, taskId)).includes(status.taskId)) chain.add(taskId);
+    others.push({ taskId, requestDigest: normalizedRequestDigest(latest.request), planRef: latest.planRef, latestState: latest.lifecycleState });
+  }
+  const landed: LandedMeasurement[] = [];
+  const earlier: PreflightMeasurement[] = [];
+  for (const [taskId, statuses] of tasks) {
+    const related = taskId === status.taskId || chain.has(taskId);
     for (const attempt of statuses) {
-      const label = `${taskId} attempt ${String(attempt.attempt)}`;
       const atBase = (attempt.lifecycleState === "LANDED" || attempt.lifecycleState === "PUBLISHED") && attempt.candidateSha === baseSha;
+      if (!atBase && !related) continue;
+      const label = `${taskId} attempt ${String(attempt.attempt)}`;
       const dir = join(taskRoot(stateRoot, project, taskId), String(attempt.attempt));
       let evidence: readonly AttemptEvidence[];
       try {
-        evidence = await readAttemptEvidence(dir);
+        evidence = await readEvidence(dir);
       } catch (error) {
         // A journal that cannot be read offers no preflight record to reuse,
         // so the suite runs; a landed attempt at the base is refused as before.
@@ -239,15 +259,11 @@ async function journalFacts(stateRoot: string, status: AttemptStatus, baseSha: s
         evidence = [];
       }
       if (atBase) landed.push({ label, candidateSha: baseSha, evidence });
+      if (!related) continue;
       for (const entry of evidence) {
         if (entry.type === "driver-preflight") earlier.push({ label: `${label}'s driver preflight at ${entry.record.at}`, record: entry.record });
       }
     }
-    if (taskId === status.taskId) continue;
-    const latest = statuses.at(-1);
-    if (latest === undefined) continue;
-    if ((await ancestors(stateRoot, project, taskId)).includes(status.taskId)) chain.add(taskId);
-    others.push({ taskId, requestDigest: normalizedRequestDigest(latest.request), planRef: latest.planRef, latestState: latest.lifecycleState });
   }
   const priorSessions = (await priorAttemptStatuses(stateRoot, status)).map((attempt) => attempt.sessionId);
   return {
@@ -301,7 +317,7 @@ export async function preflightCommand(options: PreflightCommandOptions): Promis
   const writers = writingPhases(recipe, config);
   const shift = current.workflow === SHIFT_WORKFLOW_ID ? { builderWrites: [...new Set(writers.flatMap((writer) => writer.writes))] } : null;
   const baseSha = await pinnedBase(options.attemptDir, current);
-  const journal = await journalFacts(options.stateRoot, current, baseSha);
+  const journal = await journalFacts(options.stateRoot, current, baseSha, options.readEvidence ?? readAttemptEvidence);
   const suite = await gatherSuite(journal.landed, journal.earlier, {
     repository: current.repository, worktreeRoot: resolve(options.worktreeRoot), project: current.project, baseSha, config,
     outputDir: join(options.attemptDir, "raw"), ...(options.runCommand === undefined ? {} : { runCommand: options.runCommand }),
