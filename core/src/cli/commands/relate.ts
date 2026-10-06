@@ -27,6 +27,7 @@
 // made deliberately; replacing it silently would make the edge unauditable, and
 // correcting one is a separate explicit act that does not exist yet.
 
+import { renderNewAdvice } from "../../lifecycle/renderer.ts";
 import { latestAttemptNumber, locateAttempt, readAttempt, taskRoot } from "./attempt.ts";
 import {
   appendTaskRelation,
@@ -189,7 +190,7 @@ export async function relateCommand(options: RelateCommandOptions): Promise<Rela
   // which is no longer a refusal.
   const root = taskRoot(options.stateRoot, project, taskId);
   const attempts = await latestAttemptNumber(root);
-  if (attempts === null) throw new Error(`no attempt exists for ${project}/${taskId}; run \`awsf new ${taskId} ...\``);
+  if (attempts === null) throw new Error(`no attempt exists for ${project}/${taskId}; ${renderNewAdvice(taskId)}`);
   if (await latestAttemptNumber(taskRoot(options.stateRoot, project, prior)) === null) {
     throw new RelateMissingPredecessor(project, taskId, prior);
   }

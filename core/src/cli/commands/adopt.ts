@@ -61,7 +61,6 @@ import { simpleSdlcWorkflow } from "../../workflow/recipes/simple-sdlc.ts";
 import type { OwnerTerminal } from "../tty.ts";
 import {
   latestAttemptNumber,
-  nextActionFor,
   nextRevision,
   persistAttempt,
   readAttempt,
@@ -244,19 +243,14 @@ function gateKind(gateId: GateId): "pure" | "filesystem" | "git" | "subprocess" 
   return gateId === "journey_passes" ? "journey" : "pure";
 }
 
-function shellArg(value: string): string {
-  return `'${value.replaceAll("'", "'\\''")}'`;
-}
-
-/** Replay every target-defining selection, not the source's original route. */
-function repeatAdoptionAction(options: AdoptCommandOptions, source: AttemptStatus): string {
-  const argv = ["awsf retry", shellArg(source.taskId), "--attempt", String(source.attempt), "--adopt-as", shellArg(options.targetTaskId),
-    "--request", shellArg(options.request.trim()), "--config", shellArg(options.configPath),
-    "--state-root", shellArg(options.stateRoot), "--worktree-root", shellArg(options.worktreeRoot),
-    ...(options.groupId === undefined ? [] : ["--group", shellArg(options.groupId)]),
-    ...(options.routes ?? []).flatMap((route) => ["--route", shellArg(route)]),
+/** Persist target-defining tokens, not a hand-written sentence or the source route. */
+function repeatAdoptionArgv(options: AdoptCommandOptions, source: AttemptStatus): readonly string[] {
+  return ["awsf", "retry", source.taskId, "--attempt", String(source.attempt), "--adopt-as", options.targetTaskId,
+    "--request", options.request.trim(), "--config", options.configPath,
+    "--state-root", options.stateRoot, "--worktree-root", options.worktreeRoot,
+    ...(options.groupId === undefined ? [] : ["--group", options.groupId]),
+    ...(options.routes ?? []).flatMap(route => ["--route", route]),
   ];
-  return `run \`${argv.join(" ")}\``;
 }
 
 function bounded(value: string, maximum = 2_000): string {
@@ -530,7 +524,7 @@ async function createTarget(
     lastActivityAt: now,
     lastActivity: `created immutable continuation from sealed ${candidate.source.taskId} attempt ${String(candidate.source.attempt)} candidate ${candidate.candidateSha}` +
       (integration === null ? "" : `, integrated onto ${pair.baseSha} as ${pair.candidateSha}`),
-    nextAction: `wait for fresh gates and review of ${pair.candidateSha}`,
+    nextAction: "", // persistAttempt renders the initial inventory
     gatesPass: false,
     requiredReviewPresent: false,
     journeyApproved: false,
@@ -737,7 +731,6 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
     await persist("attempt.transitioned", {
       lifecycleState: to,
       lastActivityAt: at,
-      nextAction: nextActionFor(to, status.taskId),
       ...update,
     }, {
       type: "transition",
@@ -1062,7 +1055,7 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
     lastActivity: pendingGrant
       ? `fresh gates passed; awaiting explicit owner review-degradation grant for ${pair.candidateSha}`
       : `fresh current gates passed against adopted candidate ${pair.candidateSha}`,
-    ...(pendingGrant ? { nextAction: `after \`awsf degrade-review ${status.taskId} --reason "<why>"\`, ${repeatAdoptionAction(options, candidate.source)}` } : {}),
+    advice: pendingGrant ? { kind: "adoption-grant", repeatArgv: repeatAdoptionArgv(options, candidate.source) } : null,
   }, { type: "phase", phase: phase("SUCCEEDED") });
   if (pendingGrant) {
     await writeRunReport(attemptDir, status, await readAttemptEvidence(attemptDir));
@@ -1197,7 +1190,6 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
       phase: null,
       blocker: null,
       lastActivity: `fresh ${reviewLabel} review on ${route.model.provider} returned ${output.verdict} with ${String(output.findings.length)} finding(s)`,
-      nextAction: `run \`awsf journey ${status.taskId}\` at a TTY, then \`awsf land ${status.taskId}\` for fresh owner authorization`,
     });
   } catch (error) {
     await writeQueue;

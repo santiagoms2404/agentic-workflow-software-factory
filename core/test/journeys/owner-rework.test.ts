@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { renderAttemptNextAction } from "../../src/lifecycle/renderer.ts";
 import { test } from "node:test";
 import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
@@ -801,7 +802,8 @@ test("process-backed L19 repairs candidate A, commits B on top, projects fresh e
     assert.equal(status.budget.callsSpent, 2);
     assert.equal(status.budget.callsReserved, 0);
     assert.equal(status.budget.ownerReentries, 1);
-    assert.match(status.nextAction, /awsf rework .*<concrete defect>/);
+    assert.equal(status.nextAction, renderAttemptNextAction(status));
+    assert.match(status.nextAction, /awsf rework .*<defect>/);
     assert.notEqual(status.candidateSha, fixture.candidateA);
     assert.equal(git(status.worktree!, "rev-parse", `${status.candidateSha}^`), fixture.candidateA);
     assert.equal(readFileSync(join(status.worktree!, "core", "src", "generated.ts"), "utf8"), "export const generated = true;\n");

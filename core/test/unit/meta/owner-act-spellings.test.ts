@@ -56,6 +56,31 @@ test("document coverage rejects planted new launchers instead of accepting their
   }
 });
 
+test("separator-bearing unknown prefixes are extracted whole and remain uncovered", () => {
+  const prefixes = [
+    "pnpm awsf --", "npx awsf --", "yarn awsf --", "just awsf --",
+    "node --experimental-strip-types core/src/cli/main.ts --",
+    "node --import tsx core/src/cli/main.ts --",
+  ];
+  for (const prefix of prefixes) {
+    const line = `${prefix} land T01`;
+    assert.deepEqual(invocationPrefixes(line), [prefix], line);
+    assert.equal(spellingForPrefix(prefix), undefined, line);
+    for (const fixture of [`\`\`\`bash\n$ ${line}\n\`\`\``, `<pre><code>${line}</code></pre>`]) {
+      const lines = shellFenceLines(fixture);
+      assert.deepEqual(uncoveredPrefixes(lines), [prefix], line);
+      assert.throws(() => assertCovered(lines), /no owner-act matrix spelling/u);
+    }
+    // A supported suffix after a real shell separator is a distinct invocation,
+    // never a substitute for the unknown prefix before it.
+    assert.deepEqual(invocationPrefixes(`${line} && awsf status T01`), [prefix, "awsf"]);
+    assert.deepEqual(uncoveredPrefixes([`${line} && awsf status T01`]), [prefix]);
+  }
+  assert.equal(OWNER_ACT_SPELLINGS.length, 7);
+  assert.equal(OWNER_ACT_SPELLINGS.filter(row => row.knownGapF17).length, 5);
+  assert.equal(OWNER_ACT_ROWS.filter(row => row.expected === null).length, 60);
+});
+
 test("the document scanner covers console and HTML fences, prefix directories, and ignores comments/prose", () => {
   const specimen = [
     "Prose: `yarn awsf land T01` is not a shell claim.",

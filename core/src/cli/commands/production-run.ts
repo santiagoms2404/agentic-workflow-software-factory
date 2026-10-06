@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, statSync, promises as fs } from "node:fs";
+import { renderHeadroomAdvice, renderAttemptNextAction } from "../../lifecycle/renderer.ts";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { recoveryDigest, recoveryBudgetDigest, type AcceptedPhase, type BoundaryQuota, type PhaseRecovery } from "../../contracts/phase-recovery.ts";
@@ -178,7 +179,6 @@ import {
 } from "../../workflow/prove/compile.ts";
 import { bindProveRecipe } from "../../workflow/prove/bind.ts";
 import {
-  nextActionFor,
   nextRevision,
   persistAttempt,
   readAttempt,
@@ -1150,7 +1150,6 @@ async function settleExitedReview(
       blocker: { code, detail, ahead: null, behind: null },
       lastActivityAt: now,
       lastActivity: detail,
-      nextAction: nextActionFor("BLOCKED", status.taskId),
     }),
   }, options.projectRecord);
 }
@@ -1249,7 +1248,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       : "an interrupted protected host effect is retained; reconcile it before resuming this workflow");
   }
   if (recovery === undefined) {
-    if (status.recovery != null) throw new Error("saved phase completion or quota anchor exists; use awsf resume");
+    if (status.recovery != null) throw new Error(`saved phase completion or quota anchor exists; ${renderAttemptNextAction(status)}`);
     const recoveredReview = await settleExitedReview(options, status, infra.now());
     if (recoveredReview !== null) return recoveredReview;
     if (status.lifecycleState !== "PREPARED") throw new Error(`production run requires PREPARED, got ${status.lifecycleState}`);
@@ -1525,7 +1524,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     status = await persistAttempt(options.attemptDir, status.revision, {
       kind: "attempt.transitioned",
       evidence: { type: "transition", id: `${status.sessionId}:${status.revision + 1}`, seq: status.revision + 1, from: "PREPARED", to: "BLOCKED", actor: "host", edgeId: decision.edge, reasonSource: "process", reasonCode: reason.code, reasonDetail: reason.detail, spawnSite: false, at: now },
-      next: nextRevision(status, { lifecycleState: "BLOCKED", blocker: { code: reason.code, detail: reason.detail, ahead: null, behind: null }, lastActivityAt: now, lastActivity: reason.detail, nextAction: nextActionFor("BLOCKED", status.taskId) }),
+      next: nextRevision(status, { lifecycleState: "BLOCKED", blocker: { code: reason.code, detail: reason.detail, ahead: null, behind: null }, lastActivityAt: now, lastActivity: reason.detail }),
     }, options.projectRecord);
     return status;
   }
@@ -1582,7 +1581,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
   const persistTransition = async (from: TaskState, to: TaskState, edgeId: EdgeId, source: string, code: string | null, detail: string | null, spawnSite: boolean, update: Partial<AttemptStatus>, protectedConsumption?: import("../../contracts/protected-grant.ts").ProtectedGrantConsumption): Promise<void> => {
     const at = infra.now();
     transitionSeq += 1;
-    await persist("attempt.transitioned", { lifecycleState: to, lastActivityAt: at, nextAction: nextActionFor(to, status.taskId), ...update }, {
+    await persist("attempt.transitioned", { lifecycleState: to, lastActivityAt: at, ...update }, {
       type: "transition", id: `${status.sessionId}:transition:${transitionSeq}`, seq: transitionSeq,
       from, to, actor: "host", edgeId, reasonSource: source, reasonCode: code, reasonDetail: detail,
       spawnSite, at, ...(protectedConsumption === undefined ? {} : { protectedConsumption }),
@@ -2935,17 +2934,14 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
         budget.allowance.auto === 0 || prefix.length !== index) return false;
     const initialCalls = compiled.phases.slice(index).filter((candidate) => candidate.kind === "agent").length;
     if (budget.remaining >= initialCalls + 1) return false;
-    const short = initialCalls + 1 - budget.remaining;
     const checkpoint = await checkpointAt("ceiling-pause", null);
     if (checkpoint === null) throw new Error("ceiling boundary has unsettled execution; no pause permitted");
     await verifyRecoveryWorktree(status, checkpoint, await verifyCandidateLedgerVerdict(options.attemptDir, options.config, status, checkpoint));
     const detail = `ceiling stop before ticket ${ticket} (${phase.id}): ${String(budget.committed)} of ${String(budget.ceiling)} calls spent; ` +
       `${ticket}, every ticket after it and the review need ${String(initialCalls)} call(s), and ${ticket}'s declared correction round needs 1 more`;
-    const remedy = budget.ceiling + short > MAX_CALL_CEILING
-      ? `no awsf raise can fund it, because ${String(budget.ceiling + short)} exceeds MAX_CALL_CEILING (${String(MAX_CALL_CEILING)})`
-      : `the owner runs \`awsf raise ${status.taskId} --calls ${String(short)} --reason "<why>"\` at a TTY, then \`awsf resume ${status.taskId} --reason "<why>"\``;
     await persist("attempt.updated", { recovery: checkpoint, phase: null, process: null, budget: budget.snapshot(),
-      lastActivity: detail, lastActivityAt: infra.now(), nextAction: `ceiling-paused before ticket ${ticket}; ${remedy}` },
+      advice: { kind: "ceiling-pause", minimumCeiling: budget.committed + initialCalls + 1, maximumCeiling: MAX_CALL_CEILING },
+      lastActivity: detail, lastActivityAt: infra.now() },
       { type: "ceiling-pause", checkpoint });
     return true;
   };
@@ -2980,8 +2976,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     const reason = `ticket ${ticket} (${phase.id}) blocked the shift: ${detail}`;
     await persist("attempt.updated", { recovery: checkpoint, phase: null, process: null, budget: budget.snapshot(),
       blocker: { code: "phase-abort", detail: reason, ahead: null, behind: null, source },
-      lastActivity: reason, lastActivityAt: infra.now(),
-      nextAction: `ticket-blocked at ${ticket}; the owner fixes the cause, then runs \`awsf resume ${status.taskId} --reason "<why>"\` to re-measure ${ticket} against the same candidate` },
+      lastActivity: reason, lastActivityAt: infra.now() },
       { type: "ticket-block", checkpoint, phaseKey: phase.id, source, detail: reason });
     return true;
   };
@@ -3100,7 +3095,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       if (checkpoint === null) throw new Error("quota boundary has unsettled execution; no pause or refund permitted");
       await verifyRecoveryWorktree(status, checkpoint, await verifyCandidateLedgerVerdict(options.attemptDir, options.config, status, checkpoint));
       await persist("attempt.updated", { recovery: checkpoint, phase: null, process: null, budget: budget.snapshot(),
-        lastActivity: detail, lastActivityAt: infra.now(), nextAction: `quota-paused before ${next.id}; run awsf resume ${status.taskId} --reason "quota recovered"` },
+        lastActivity: detail, lastActivityAt: infra.now() },
         { type: "quota-pause", checkpoint });
       return true;
     }
@@ -3508,9 +3503,6 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
         lastActivity: readOnlyResult === null
           ? `all T${status.tier} production phases and gates passed; awaiting owner`
           : `read-only ${readOnlyResult.schema} result passed every gate; awaiting owner inspection`,
-        ...(readOnlyResult === null ? {} : {
-          nextAction: `inspect the retained ${readOnlyResult.schema} envelope, then run \`awsf cancel ${status.taskId}\` when finished`,
-        }),
       });
       return status;
     }
@@ -3608,10 +3600,6 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       requiredReviewPresent: true, journeyApproved: false, protectedApprovalsValid: true, blocker: null,
       phase: null,
       lastActivity: `${reviewDescription} returned ${reviewOutput.verdict} with ${reviewOutput.findings.length} finding(s)`,
-      // A replay is measurement, never delivery (Q7): its one way out is cancel.
-      nextAction: status.workflow === PROVE_WORKFLOW_ID
-        ? `read the replay's findings, then run \`awsf cancel ${status.taskId}\`; a replay never lands`
-        : `run \`awsf journey ${status.taskId}\` at a TTY, then \`awsf land ${status.taskId}\``,
     });
     return status;
   } catch (error) {
@@ -3624,7 +3612,6 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       await persist("attempt.updated", {
         budget: budget.snapshot(), blocker: { code: "sqlite-projection-failed", detail: error instanceof Error ? error.message : String(error), ahead: null, behind: null },
         lastActivityAt: infra.now(), lastActivity: "advancement held at GATING until observability rebuild",
-        nextAction: "run `awsf db rebuild`, then retry advancement",
       });
       return status;
     }
@@ -3681,7 +3668,7 @@ async function persistReadableRunReport(
 export async function runProductionCommand(options: ProductionRunOptions): Promise<AttemptStatus> {
   return withExecutionLease(options.attemptDir, async () => {
     const status = await readAttempt(options.attemptDir);
-    if (status.recovery != null) throw new Error("saved phase result or quota anchor exists; use awsf resume");
+    if (status.recovery != null) throw new Error(`saved phase result or quota anchor exists; ${renderAttemptNextAction(status)}`);
   }, async operationId => persistReadableRunReport(options, await executeProductionCommand(options, operationId)));
 }
 
@@ -3730,7 +3717,7 @@ async function preflightRecovery(options: ProductionRunOptions): Promise<Recover
     const where = next === undefined ? "" : ` before ${ticket === null ? next.id : `ticket ${ticket} (${next.id})`}`;
     const remedy = error.ceiling + short > MAX_CALL_CEILING
       ? `no awsf raise can fund the rest, because ${String(error.ceiling + short)} exceeds MAX_CALL_CEILING (${String(MAX_CALL_CEILING)})`
-      : `needs ${String(short)} more call(s) from the owner's \`awsf raise ${status.taskId}\` at a TTY before it can continue`;
+      : renderHeadroomAdvice(status.taskId, short, status.lifecycleState);
     throw new CallCeilingExceeded({ from: null, to: null, subject: `resume of ${status.taskId}${where}: ${remedy}`,
       tier: error.tier, ceiling: error.ceiling, requested: error.requested, committed: error.committed });
   }
@@ -3883,7 +3870,7 @@ async function reconcileRetainedProtectedEffect(
         const detail = `reconciled the interrupted protected candidate ${binding.candidateSha} (${verdict.outcome})`;
         status = await persistAttempt(options.attemptDir, status.revision, { kind: "attempt.updated",
           next: nextRevision(status, { candidateSha: binding.candidateSha, lastActivityAt: now(),
-            lastActivity: detail, nextAction: `inspect ${binding.candidateSha}, then land it or issue a fresh grant` }),
+            lastActivity: detail }),
           evidence: { type: "protected-candidate", binding } }, options.projectRecord);
       } });
     return { confirmed: true, status };

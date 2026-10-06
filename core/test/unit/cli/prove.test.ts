@@ -10,6 +10,8 @@
 // `awsf prove` arm gate G18-B registered in `main.ts`.
 
 import assert from "node:assert/strict";
+import { nextSteps } from "../../../src/lifecycle/next-steps.ts";
+import { renderProveActions } from "../../../src/lifecycle/renderer.ts";
 import { test } from "node:test";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -252,10 +254,9 @@ test("a confirmed replay is a DRAFT task carrying its record and its arm's route
     assert.match(owner.prompts[0]!, /^Create replay replay-a: probe-01 on claude\/anthropic\/claude:opus@high, repetition 1, place 1\?$/);
     assert.ok(owner.lines.includes(`Reason on record: ${REASON}`), owner.lines.join("\n"));
     assert.ok(owner.lines.includes(`Arm: ${ARM}, recorded as --route reviewer=${ARM}`), owner.lines.join("\n"));
-    const commands = {
-      start: `npm run awsf -- start replay-a --project ${w.project}`,
-      cancel: `npm run awsf -- cancel replay-a --project ${w.project} --cause <cause> --reason "<why>"`,
-    };
+    const { commands } = renderProveActions(nextSteps({ ...status, state: status.lifecycleState }));
+    assert.match(commands.cancel, /--cause <cause> --reason "<why>"/);
+    assert.match(commands.start, /--attempt 1/);
     assert.deepEqual(result.commands, commands);
     assert.ok(owner.lines.includes(`Start it: ${commands.start}`), owner.lines.join("\n"));
     assert.ok(owner.lines.includes(`Cancel it once its evidence is read: ${commands.cancel}`), owner.lines.join("\n"));

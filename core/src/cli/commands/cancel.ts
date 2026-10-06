@@ -10,7 +10,6 @@ import { ceilingFor } from "../../state/tiers.ts";
 import { transition } from "../../state/task-machine.ts";
 import type { OwnerTerminal } from "../tty.ts";
 import {
-  nextActionFor,
   nextRevision,
   persistAttempt,
   readAttempt,
@@ -121,7 +120,6 @@ export async function cancelCommand(options: CancelCommandOptions): Promise<{ st
     process: null,
     lastActivityAt: now,
     lastActivity: `cancelled; TERM ${report.termSent ? "sent" : "not sent"}, KILL ${report.killSent ? "sent" : "not sent"}, survivors [${report.survivors.join(", ")}]`,
-    nextAction: nextActionFor(decision.to, current.taskId),
   });
   const status = await persistAttempt(
     options.attemptDir,

@@ -5,7 +5,6 @@ import { join } from "node:path";
 import { commitAsHost } from "../../git/commit.ts";
 import { transition } from "../../state/task-machine.ts";
 import {
-  nextActionFor,
   nextRevision,
   persistAttempt,
   readAttempt,
@@ -52,7 +51,6 @@ async function advance(
     } : {}),
     lastActivityAt: new Date().toISOString(),
     lastActivity: `stub simple-sdlc reached ${decision.to} through ${decision.edge}`,
-    nextAction: nextActionFor(decision.to, current.taskId),
   });
   return persistAttempt(
     attemptDir,

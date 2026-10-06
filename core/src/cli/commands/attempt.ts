@@ -2,6 +2,7 @@
 // only its atomically replaced projection.
 
 import { readdir } from "node:fs/promises";
+import { renderAttemptNextAction, renderNewAdvice, type NextAdvice } from "../../lifecycle/renderer.ts";
 import { join } from "node:path";
 import { CANDIDATE_REF_STATES, writeCandidateRef } from "../../git/candidate-ref.ts";
 import { AttemptLock, SealedAttempt, runWriteProtocol } from "../../persistence/attempt-lock.ts";
@@ -156,6 +157,8 @@ export interface AttemptStatus {
   readonly lastActivityAt: string;
   readonly lastActivity: string;
   readonly nextAction: string;
+  /** Optional measured rendering context; historical records need no backfill. */
+  readonly advice?: NextAdvice | null;
   readonly gatesPass: boolean;
   readonly requiredReviewPresent: boolean;
   readonly journeyApproved: boolean;
@@ -352,6 +355,8 @@ export async function persistAttempt(
   event: AttemptEvent,
   project?: AttemptProjector,
 ): Promise<AttemptStatus> {
+  // Only new writes render advice. Readers and historical journal bytes stay untouched.
+  event = { ...event, next: withRenderedAdvice(event.next) };
   keepCandidateReachable(event);
   const journal = new Journal<AttemptEvent>(journalFilePath(attemptDir));
   const lock = new AttemptLock(lockFilePath(attemptDir));
@@ -426,28 +431,22 @@ export async function locateAttempt(
   const root = taskRoot(stateRoot, project, taskId);
   const selected = attempt ?? await latestAttemptNumber(root);
   if (selected === null || !Number.isInteger(selected) || selected < 1) {
-    throw new Error(`no attempt exists for ${project}/${taskId}; run \`awsf new ${taskId} ...\``);
+    throw new Error(`no attempt exists for ${project}/${taskId}; ${renderNewAdvice(taskId)}`);
   }
   return { attemptDir: join(root, String(selected)), attempt: selected };
 }
 
-export function nextRevision(status: AttemptStatus, update: Partial<AttemptStatus>): AttemptStatus {
-  const revision = status.revision + 1;
-  return { ...status, ...update, revision, lastSourceSeq: revision };
+function withRenderedAdvice(status: AttemptStatus): AttemptStatus {
+  // Do not add an optional context property to ordinary or terminal status shapes.
+  const { advice, ...withoutAdvice } = status;
+  const next = advice == null ? withoutAdvice : status;
+  return { ...next, nextAction: renderAttemptNextAction(next) };
 }
 
-export function nextActionFor(state: TaskState, taskId: string): string {
-  switch (state) {
-    case "DRAFT": return `run \`awsf start ${taskId}\``;
-    case "PREPARED": return `run \`awsf run ${taskId}\``;
-    case "RUNNING": return `run \`awsf watch ${taskId}\` or \`awsf cancel ${taskId}\``;
-    case "GATING": return `inspect gate output with \`awsf watch ${taskId}\``;
-    case "REVIEWING": return `wait for the mandatory review; use \`awsf watch ${taskId}\``;
-    case "AWAITING_OWNER": return `run \`awsf rework ${taskId} "<concrete defect>"\`, \`awsf land ${taskId}\`, or \`awsf cancel ${taskId}\``;
-    case "LANDING": return `rerun \`awsf land ${taskId}\` to recover the persisted landing`;
-    case "LANDED": return "no action required; the approved candidate is canonical HEAD";
-    case "PUBLISHED": return "no action required; the landed candidate is published";
-    case "BLOCKED": return `resolve the blocker, then run \`awsf retry ${taskId}\``;
-    case "CANCELLED": return `run \`awsf retry ${taskId}\` only if the task should resume`;
-  }
+export function nextRevision(status: AttemptStatus, update: Partial<AttemptStatus>): AttemptStatus {
+  const revision = status.revision + 1;
+  const next = { ...status,
+    ...(update.lifecycleState !== undefined && update.lifecycleState !== status.lifecycleState ? { advice: null } : {}),
+    ...update, revision, lastSourceSeq: revision };
+  return withRenderedAdvice(next);
 }

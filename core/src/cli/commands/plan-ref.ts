@@ -13,6 +13,7 @@
 // an unknown stem is refused with the candidates it read, rather than recorded
 // as a label pointing at nothing.
 
+import { renderRegistrationAdvice } from "../../lifecycle/renderer.ts";
 import { readFile } from "node:fs/promises";
 import { basename, resolve } from "node:path";
 import { loadCatalog } from "../../registry/catalog.ts";
@@ -23,7 +24,7 @@ export class PlanRefNoCatalog extends Error {
   constructor(catalogPath: string) {
     super(
       `--plan needs a registered plan to name, and no catalog exists at ${JSON.stringify(catalogPath)}; ` +
-        "run `awsf project register --catalog <path> --repository <id>=<path>` first",
+        renderRegistrationAdvice(),
     );
     this.name = "PlanRefNoCatalog";
   }

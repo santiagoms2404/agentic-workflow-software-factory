@@ -9,6 +9,7 @@
 // nothing is started, and no clock is read: the owner gate is dated by the
 // transition that reached it, never by how long ago that was. The preview line
 // reads what `awsf preview` recorded; the readout never builds or serves.
+import { renderOwnerGateAdvice, renderPreviewAdvice } from "../../lifecycle/renderer.ts";
 import type { AcceptedPhase } from "../../contracts/phase-recovery.ts";
 import { BLOCKING_SEVERITIES, type ReviewOutput } from "../../contracts/review-output.ts";
 import type { TestOutput } from "../../contracts/test-output.ts";
@@ -136,7 +137,7 @@ function previewLine(input: ShiftReadoutInput): string[] {
   }
   const { record, serving } = preview;
   if (record.candidateSha !== status.candidateSha) {
-    return [`Preview: recorded for ${short(record.candidateSha)}, not this candidate — run \`awsf preview ${task}\` again`];
+    return [`Preview: recorded for ${short(record.candidateSha)}, not this candidate — ${renderPreviewAdvice(task)}`];
   }
   const head = `Preview: delivery ${record.posture}`;
   if (record.form === "named-not-built") return [`${head} — named, not built (${record.recordedAt}): ${record.reason}`];
@@ -153,7 +154,7 @@ function ownerGateLine(input: ShiftReadoutInput): string[] {
   const reached = input.evidence.findLast((entry) => entry.type === "transition" && entry.to === "AWAITING_OWNER");
   const at = reached?.type === "transition" ? reached.at : "an unrecorded time";
   return [
-    `Owner gate: AWAITING_OWNER since ${at} — it waits for the owner; \`awsf land ${input.status.taskId}\` needs an interactive terminal`,
+    `Owner gate: AWAITING_OWNER since ${at} — ${renderOwnerGateAdvice(input.status.taskId)}`,
   ];
 }
 

@@ -1,6 +1,7 @@
 // Read-only operator diagnosis. This command deliberately has no repair path:
 // a finding is evidence for the owner, not permission to alter an attempt.
 
+import { renderProjectionAdvice } from "../../lifecycle/renderer.ts";
 import { access } from "node:fs/promises";
 import { join } from "node:path";
 import { discoverAttempts } from "../../observability/rebuild.ts";
@@ -71,7 +72,7 @@ export async function doctorCommand(stateRoot: string): Promise<DoctorReport> {
       try {
         for (const session of listSessions(db, { archived: false, limit: 10_000 })) {
           if (session.observability_degraded === 1) {
-            findings.push(`degraded session ${session.session_id}: run \`awsf db rebuild\``);
+            findings.push(`degraded session ${session.session_id}: ${renderProjectionAdvice()}`);
           }
         }
       } finally { closeDatabase(db); }

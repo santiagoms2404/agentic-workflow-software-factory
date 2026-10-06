@@ -168,7 +168,6 @@ export async function journeyCommand(options: JourneyCommandOptions): Promise<Jo
         journeyApproved: true,
         lastActivityAt: at,
         lastActivity: `owner attested journey ${trimmedId} against ${status.candidateSha}`,
-        nextAction: `run \`awsf land ${status.taskId}\` at a TTY`,
       }),
       evidence: {
         type: "gate",

@@ -1,3 +1,4 @@
+import { renderProjectionAdvice } from "../../lifecycle/renderer.ts";
 import { join } from "node:path";
 import {
   assertAdvancementPermitted,
@@ -49,7 +50,7 @@ export function createDashboardProjection(
 
   const reportUnavailable = (sessionId: string): void => {
     degraded.add(sessionId);
-    notice(`sqlite-projection-failed: session ${sessionId} is journaled but its dashboard projection is unavailable; run \`awsf db rebuild\`.`);
+    notice(`sqlite-projection-failed: session ${sessionId} is journaled but its dashboard projection is unavailable; ${renderProjectionAdvice()}.`);
   };
 
   return {
@@ -74,7 +75,7 @@ export function createDashboardProjection(
         // The declaration is already durable in the task's own journal. A
         // projection that cannot be written makes the screen stale, never the
         // record wrong, and `awsf db rebuild` reads the same file this did.
-        notice(`sqlite-projection-failed: ${relation.project}/${relation.taskId} declared a continuation that is journaled but not projected; run \`awsf db rebuild\`.`);
+        notice(`sqlite-projection-failed: ${relation.project}/${relation.taskId} declared a continuation that is journaled but not projected; ${renderProjectionAdvice()}.`);
       }
     },
     projectAttribution(record): void {
@@ -83,7 +84,7 @@ export function createDashboardProjection(
       } catch {
         // Durable first, projected second, exactly as a relation: the record is
         // in the task's own journal, and `awsf db rebuild` reads that file.
-        notice(`sqlite-projection-failed: ${record.project}/${record.taskId} attempt ${record.attempt} has an attribution that is journaled but not projected; run \`awsf db rebuild\`.`);
+        notice(`sqlite-projection-failed: ${record.project}/${record.taskId} attempt ${record.attempt} has an attribution that is journaled but not projected; ${renderProjectionAdvice()}.`);
       }
     },
     projectDecision(record): void {
@@ -91,7 +92,7 @@ export function createDashboardProjection(
         projectDecision(database(), record);
       } catch {
         // Durable first, projected second: the record is in the task's decisions.jsonl.
-        notice(`sqlite-projection-failed: ${record.project}/${record.taskId} has decision ${record.id} journaled but not projected; run \`awsf db rebuild\`.`);
+        notice(`sqlite-projection-failed: ${record.project}/${record.taskId} has decision ${record.id} journaled but not projected; ${renderProjectionAdvice()}.`);
       }
     },
     assertAdvancement(sessionId, to): void {
@@ -120,7 +121,7 @@ export function createDashboardProjection(
         // against the dashboard's concurrent readonly WAL connection.
         db.close();
       } catch {
-        notice("sqlite-projection-failed: the dashboard writer did not close cleanly; run `awsf db rebuild`.");
+        notice(`sqlite-projection-failed: the dashboard writer did not close cleanly; ${renderProjectionAdvice()}.`);
       } finally {
         db = null;
       }

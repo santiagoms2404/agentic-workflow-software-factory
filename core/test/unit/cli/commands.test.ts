@@ -4,6 +4,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { renderHeadroomAdvice } from "../../../src/lifecycle/renderer.ts";
 import { main } from "../../../src/cli/main.ts";
 import { toConfigSnapshotJson } from "../../../src/config/effective-config.ts";
 import { loadConfig } from "../../../src/config/load.ts";
@@ -444,7 +445,12 @@ test("a recipe whose declared correction round no call can pay for is refused at
     await assert.rejects(
       startCommand({ attemptDir: created.attemptDir, worktreeRoot, configPath,
         preflight: () => ({ adapter: true, sandbox: true, observability: true }) }),
-      /declares a correction round on 1 cold phase\(s\) \(scout\).*corrections fundable = 0.*awsf raise unfundable-correction --calls 1 --reason/su,
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, /declares a correction round on 1 cold phase\(s\) \(scout\).*corrections fundable = 0/su);
+        assert.ok(error.message.includes(renderHeadroomAdvice(created.status.taskId, 1, "DRAFT")));
+        return true;
+      },
     );
 
     // The refusal has to leave `raise` legal. A BLOCKED attempt is terminal and

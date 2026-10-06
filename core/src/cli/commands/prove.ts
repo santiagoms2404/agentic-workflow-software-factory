@@ -25,6 +25,8 @@
 // replay of a triple as `replay-duplicated` and a repeated place as
 // `order-invalid`, so both are refused here rather than discovered there.
 
+import { nextSteps } from "../../lifecycle/next-steps.ts";
+import { renderProveActions } from "../../lifecycle/renderer.ts";
 import { randomInt } from "node:crypto";
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
@@ -46,7 +48,7 @@ import { selectWorkflow } from "./workflows.ts";
 const MAX_REASON = 2_000;
 
 /** `awsf` is the package's bin, not on the owner's PATH, so printed commands run through the root script (T11 C13). */
-const AWSF_INVOCATION = "npm run awsf --";
+
 
 export class ProveNotInteractive extends Error {
   constructor(taskId: string) {
@@ -351,12 +353,8 @@ export async function proveCommand(options: ProveCommandOptions): Promise<ProveC
     ...(options.now === undefined ? {} : { now: options.now }),
     ...(options.sessionId === undefined ? {} : { sessionId: options.sessionId }),
   });
-  const commands = {
-    start: `${AWSF_INVOCATION} start ${taskId} --project ${project}`,
-    cancel: `${AWSF_INVOCATION} cancel ${taskId} --project ${project} --cause <cause> --reason "<why>"`,
-  };
+  const { commands, lines } = renderProveActions(nextSteps({ ...created.status, state: created.status.lifecycleState }));
   options.terminal.write(`Created ${project}/${taskId} attempt ${String(created.status.attempt)} in DRAFT. Nothing has started.`);
-  options.terminal.write(`Start it: ${commands.start}`);
-  options.terminal.write(`Cancel it once its evidence is read: ${commands.cancel}`);
+  for (const line of lines) options.terminal.write(line);
   return { confirmed: true, status: created.status, replay, commands };
 }

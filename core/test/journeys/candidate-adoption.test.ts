@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { renderAttemptNextAction } from "../../src/lifecycle/renderer.ts";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -312,7 +313,9 @@ test("same-provider adoption waits live at zero calls for an owner grant, then r
     assert.equal(pending.reusedTarget, false);
     assert.equal(pending.status?.reviewDegradation, null, "the source grant does not transfer");
     const repeat = pending.status!.nextAction;
-    assert.match(repeat, /after `awsf degrade-review pending-target --reason "<why>"`, run `awsf retry 'generic-source' --attempt 1 --adopt-as 'pending-target'/);
+    assert.equal(repeat, renderAttemptNextAction(pending.status!));
+    assert.match(repeat, /awsf degrade-review pending-target.*--reason/);
+    assert.match(repeat, /awsf retry generic-source --attempt 1 --adopt-as pending-target/);
     assert.ok(repeat.includes("--route 'reviewer=codex/openai-codex/target-review@high'"));
     assert.deepEqual(pending.status?.routeOverrides, { reviewer: { adapter: "codex", provider: "openai-codex", model: "target-review", effort: "high" } });
     assert.equal(gates, 1);

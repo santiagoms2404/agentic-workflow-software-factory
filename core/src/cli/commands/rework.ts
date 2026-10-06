@@ -21,6 +21,7 @@ import type {
   TransportBroker,
 } from "../../adapters/interface.ts";
 import { AdapterError, reservationIdOf } from "../../adapters/interface.ts";
+import { renderHeadroomAdvice, renderOwnerAlternatives } from "../../lifecycle/renderer.ts";
 import { registeredAdapter } from "../../adapters/registry.ts";
 import { assertPrivateSystemPrompt, writeSystemPromptFile } from "../../adapters/system-prompt-file.ts";
 import { toConfigSnapshotJson } from "../../config/effective-config.ts";
@@ -78,7 +79,6 @@ import { buildReviewWorkflow } from "../../workflow/recipes/build-review.ts";
 import { simpleSdlcWorkflow } from "../../workflow/recipes/simple-sdlc.ts";
 import type { OwnerTerminal } from "../tty.ts";
 import {
-  nextActionFor,
   nextRevision,
   persistAttempt,
   readAttempt,
@@ -221,7 +221,7 @@ export class ReworkTierUnsupported extends Error {
   constructor(tier: number, workflow: string, recipeTier: number, taskId: string) {
     super(
       `this attempt records tier ${tier} but workflow ${JSON.stringify(workflow)} is a tier-${recipeTier} recipe, ` +
-        `so owner rework cannot tell which branch it bought; cancel and \`awsf retry ${taskId}\` under the intended tier`,
+        `so owner rework cannot tell which branch it bought; ${renderOwnerAlternatives(taskId)}; a fresh attempt must use the intended tier`,
     );
     this.name = "ReworkTierUnsupported";
     this.tier = tier;
@@ -242,9 +242,7 @@ export class ReworkHeadroomInsufficient extends Error {
   constructor(remaining: number, required: number, tier: number, taskId: string) {
     super(
       `a T${tier} owner rework needs ${required} calls of headroom — one for the builder, one for the review, and one for its single permitted retry — ` +
-        `and this attempt has ${remaining}; insufficient headroom, so nothing was spent and ` +
-        `\`awsf raise ${taskId} --calls ${Math.max(1, required - remaining)} --reason "<why>"\`, ` +
-        `\`awsf land ${taskId}\` or \`awsf cancel ${taskId}\` remain`,
+        `and this attempt has ${remaining}; insufficient headroom; ${renderHeadroomAdvice(taskId, Math.max(1, required - remaining))}`,
     );
     this.name = "ReworkHeadroomInsufficient";
   }
@@ -857,7 +855,7 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
   ): Promise<void> => {
     const at = infra.now();
     const seq = transitionOrdinal++;
-    await persist("attempt.transitioned", { lifecycleState: to, lastActivityAt: at, nextAction: nextActionFor(to, status.taskId), ...update }, {
+    await persist("attempt.transitioned", { lifecycleState: to, lastActivityAt: at, ...update }, {
       type: "transition", ...(amendment === undefined ? {} : { ownerAmendment: amendment }), id: `${status.sessionId}:${edgeId}:${seq}`, seq,
       from, to, actor, edgeId, reasonSource: source, reasonCode: code, reasonDetail: detail, spawnSite, at,
     });
@@ -1421,7 +1419,6 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
         requiredReviewPresent: true, journeyApproved: false, protectedApprovalsValid: true,
         blocker: null, phase: null, process: null,
         lastActivity: `${reviewRoute!.provenance.review.mode === "same-provider-degraded" ? "DEGRADED same-provider" : "opposite-provider"} review on ${reviewRoute!.model.provider} of reworked candidate ${candidate} returned ${reviewOutput.verdict} with ${String(reviewOutput.findings.length)} finding(s)`,
-        nextAction: `run \`awsf journey ${status.taskId}\` at a TTY, then \`awsf land ${status.taskId}\``,
       });
     return { status, confirmed: true };
   } catch (error) {
@@ -1530,7 +1527,6 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
           lifecycleState: "BLOCKED", budget: budget.snapshot(), process: null,
           blocker: { code: reason.code, detail: reason.detail, ahead: null, behind: null },
           lastActivityAt: recoveryAt, lastActivity: reason.detail,
-          nextAction: nextActionFor("BLOCKED", status.taskId),
         }, {
           type: "transition", id: `${status.sessionId}:L8:${seq}`, seq,
           from: "RUNNING", to: "BLOCKED", actor: "host", edgeId: l8.edge,
@@ -1557,7 +1553,6 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
           budget: budget.snapshot(), process: null,
           blocker: { code: "sqlite-projection-failed", detail: failure.message, ahead: null, behind: null },
           lastActivityAt: recoveryAt, lastActivity: "owner rework review advancement held at REVIEWING until observability rebuild",
-          nextAction: "run `awsf db rebuild`, then rerun advancement",
         });
         return { status, confirmed: true };
       }
@@ -1615,7 +1610,6 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
         lifecycleState: "BLOCKED", budget: budget.snapshot(), process: null,
         blocker: { code: reason.code, detail: reason.detail, ahead: null, behind: null },
         lastActivityAt: recoveryAt, lastActivity: reason.detail,
-        nextAction: nextActionFor("BLOCKED", status.taskId),
       }, {
         type: "transition", id: `${status.sessionId}:L17:${seq}`, seq,
         from: "REVIEWING", to: "BLOCKED", actor: "host", edgeId: l17.edge,
@@ -1628,7 +1622,6 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
       await recoverPersist("attempt.updated", {
         budget: budget.snapshot(), blocker: { code: "sqlite-projection-failed", detail: failure.message, ahead: null, behind: null },
         lastActivityAt: recoveryAt, lastActivity: "owner rework advancement held at GATING until observability rebuild",
-        nextAction: "run `awsf db rebuild`, then retry advancement",
       });
       return { status, confirmed: true };
     }

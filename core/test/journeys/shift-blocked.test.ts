@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { renderAttemptNextAction } from "../../src/lifecycle/renderer.ts";
 import { test } from "node:test";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -267,7 +268,8 @@ test("a red gate on ticket 3 of 6 blocks the shift there, keeps the prefix, rese
     assert.equal(blocked.blocker?.code, "phase-abort");
     assert.equal(blocked.blocker?.source, "gate", "the suite ran and measured the candidate red");
     assert.match(blocked.blocker!.detail, /^ticket T03 \(t03-tests\) blocked the shift: gate commands_pass is red on [0-9a-f]{40}: test exited 1$/u);
-    assert.match(blocked.nextAction, /ticket-blocked at T03; the owner fixes the cause, then runs `awsf resume fixture-shift-m1/u);
+    assert.equal(blocked.nextAction, renderAttemptNextAction(blocked));
+    assert.match(blocked.nextAction, /ticket-blocked at ticket T03.*awsf resume fixture-shift-m1.*--reason/u);
     const accepted = ["t01-brief", "t01-build", "t01-tests", "t02-brief", "t02-build", "t02-tests", "t03-brief", "t03-build"];
     assert.deepEqual(blocked.recovery?.prefix.map((entry) => entry.phaseKey), accepted, "the prefix is durable up to ticket 3's build");
     assert.deepEqual(launches, ["T01", "T02", "T03"], "ticket 3 was neither skipped nor retried, and nothing after it launched");
