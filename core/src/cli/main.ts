@@ -30,6 +30,7 @@ import { listProjects, registerProject, showProject, verifyRegisteredProject } f
 import { landCommand } from "./commands/land.ts";
 import { renderAttemptNextAction, renderDegradationAdvice } from "../lifecycle/renderer.ts";
 import { nextCommand } from "./commands/next.ts";
+import { preflightCommand, renderPreflightLines } from "./commands/preflight.ts";
 import { newCommand } from "./commands/new.ts";
 import { PlanRefUnknown, resolvePlanRef } from "./commands/plan-ref.ts";
 import { relateCommand } from "./commands/relate.ts";
@@ -63,7 +64,7 @@ import { assertShiftAdmission, assessShiftAdmission, parseMilestoneSelection, se
 
 /** The complete owner-facing command table; documentation reconciles against it. */
 export const CLI_COMMANDS = Object.freeze([
-  "init", "project", "new", "seed", "start", "run", "resume", "next", "status", "watch", "rework", "review", "raise", "grant", "degrade-review", "attribute", "prove", "journey", "preview", "land", "publish", "cancel", "retry",
+  "init", "project", "new", "seed", "preflight", "start", "run", "resume", "next", "status", "watch", "rework", "review", "raise", "grant", "degrade-review", "attribute", "prove", "journey", "preview", "land", "publish", "cancel", "retry",
   "relate", "doctor", "gc", "dash", "routes", "metrics", "metrics export", "db rebuild", "ticket", "backlog", "quota", "stage", "workflows", "shift plan", "group",
 ]);
 
@@ -86,6 +87,10 @@ interface ParsedArgs {
    * as one flat list before that split runs.
    */
   readonly milestones: readonly string[];
+  /** Repeatable: `awsf preflight`'s three driver inputs, each kept in the order written. */
+  readonly where: readonly string[];
+  readonly read: readonly string[];
+  readonly consulted: readonly string[];
 }
 
 function parseArgs(args: readonly string[]): ParsedArgs {
@@ -95,6 +100,7 @@ function parseArgs(args: readonly string[]): ParsedArgs {
   const files: string[] = [];
   const routes: string[] = [];
   const milestones: string[] = [];
+  const lists = { where: [] as string[], read: [] as string[], consulted: [] as string[] };
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index] ?? "";
     if (!arg.startsWith("--")) {
@@ -109,6 +115,7 @@ function parseArgs(args: readonly string[]): ParsedArgs {
       else if (key === "route") routes.push(value);
       else if (key === "file") files.push(value);
       else if (key === "milestone") milestones.push(value);
+      else if (Object.hasOwn(lists, key)) lists[key as keyof typeof lists].push(value);
       else flags[key] = value;
       continue;
     }
@@ -132,10 +139,11 @@ function parseArgs(args: readonly string[]): ParsedArgs {
     else if (key === "route") routes.push(value);
     else if (key === "file") files.push(value);
     else if (key === "milestone") milestones.push(value);
+    else if (Object.hasOwn(lists, key)) lists[key as keyof typeof lists].push(value);
     else flags[key] = value;
     index += 1;
   }
-  return { positionals, flags, repositories, routes, files, milestones };
+  return { positionals, flags, repositories, routes, files, milestones, ...lists };
 }
 
 /** The shift selection both `awsf shift plan` and `awsf new --workflow shift` read, and the tier it derives. */
@@ -706,6 +714,28 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         out(`Prepared ${taskId} at ${status.baseSha}.`);
         out(status.nextAction);
         return 0;
+      }
+      case "preflight": {
+        // Not an owner act: no owner terminal is constructed here, and no flag
+        // can mark a field passed. Every K1 field is measured by the command.
+        const allowed = new Set(["attempt", "json", "project", "state-root", "config", "worktree-root"]);
+        if (parsed.positionals.length !== 1 || parsed.repositories.length !== 0 || parsed.files.length !== 0 ||
+            parsed.routes.length !== 0 || parsed.milestones.length !== 0 || Object.keys(parsed.flags).some(flag => !allowed.has(flag))) {
+          throw new Error("usage: awsf preflight <task> --where <glob>... [--read <path>...] [--consulted <session-id>...] [--json]");
+        }
+        const result = await preflightCommand({
+          attemptDir: located.attemptDir,
+          stateRoot,
+          worktreeRoot: resolve(parsed.flags["worktree-root"] ?? env.AWSF_WORKTREE_ROOT ?? defaultWorktreeRoot(stateRoot)),
+          configPath,
+          where: parsed.where,
+          read: parsed.read,
+          consulted: parsed.consulted,
+          projectRecord: projection.project,
+        });
+        if (parsed.flags.json === "true") out(JSON.stringify(result.record));
+        else for (const line of renderPreflightLines(result)) out(line);
+        return result.measuredPassed ? 0 : 1;
       }
       case "run": {
         if (parsed.flags.stub === "true") {

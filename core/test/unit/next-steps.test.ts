@@ -223,18 +223,21 @@ test("next is a registered host record, disjoint from agent-output envelopes", (
 });
 
 test("non-transition acts follow their own command state checks and reads work on terminal states", () => {
-  assert.deepEqual(NON_TRANSITION_ACTS.map(act => act.verb), ["raise", "grant", "journey", "attribute", "status", "watch"]);
+  assert.deepEqual(NON_TRANSITION_ACTS.map(act => act.verb), ["preflight", "raise", "grant", "journey", "attribute", "status", "watch"]);
   for (const state of TASK_STATES) {
     const acts = nextSteps(inputFor(state)).steps.filter(step => step.kind !== "edge");
     const verbs = acts.map(act => act.verb);
+    assert.equal(verbs.includes("preflight"), state === "DRAFT", state);
     assert.equal(verbs.includes("raise"), !["LANDED", "PUBLISHED", "BLOCKED", "CANCELLED"].includes(state), state);
     assert.equal(verbs.includes("grant"), state === "PREPARED", state);
     assert.equal(verbs.includes("journey"), state === "AWAITING_OWNER", state);
     assert.equal(verbs.includes("attribute"), state === "BLOCKED" || state === "CANCELLED", state);
     assert.ok(verbs.includes("status") && verbs.includes("watch"), state);
     for (const act of acts) {
-      assert.equal(act.who, act.kind === "read" ? "driver" : "owner");
-      assert.equal(act.interactive, act.kind !== "read");
+      // preflight is the driver's act: it measures, and takes no owner terminal.
+      const driverAct = act.kind === "read" || act.verb === "preflight";
+      assert.equal(act.who, driverAct ? "driver" : "owner");
+      assert.equal(act.interactive, !driverAct);
       assert.equal(act.spendsCalls, false);
       assert.equal(Object.hasOwn(act, "edge"), false);
     }

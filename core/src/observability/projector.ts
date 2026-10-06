@@ -504,6 +504,16 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
         .run(`${sessionId}:candidate-adoption`, sessionId, sourceSeq, sourceSeq,
           stringifyRedacted(evidence.adoption), evidence.adoption.verifiedAt);
       return;
+    case "driver-preflight":
+      // One session-level row per record, keyed by its journal position, so a
+      // second preflight of the same attempt is a second row and a rebuild
+      // replays each to the same id.
+      db.prepare(`INSERT OR IGNORE INTO events
+        (event_id, session_id, phase_id, first_source_seq, last_source_seq, type, name,
+         payload_json, started_at) VALUES (?, ?, NULL, ?, ?, 'notice', 'driver preflight', ?, ?)`)
+        .run(`${sessionId}:driver-preflight:${sourceSeq}`, sessionId, sourceSeq, sourceSeq,
+          stringifyRedacted(evidence.record), evidence.record.at);
+      return;
     case "transition":
       db.prepare(`INSERT OR IGNORE INTO transitions
         (transition_id, session_id, seq, from_state, to_state, actor, edge_id, reason_source,

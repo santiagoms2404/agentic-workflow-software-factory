@@ -115,6 +115,11 @@ export type AttemptEvidence =
   | { readonly type: "visual-reference-inspection"; readonly phaseId: string; readonly runId: string; readonly observations: readonly import("../contracts/visual-references.ts").VisualObservation[]; readonly at: string }
   | { readonly type: "owner-amendment-delivery"; readonly amendmentId: string; readonly amendmentDigest: string; readonly phaseId: string; readonly logicalTurnId: string; readonly originalInputDigest: string; readonly composedDigest: string; readonly at: string }
   | { readonly type: "candidate-adoption"; readonly adoption: CandidateAdoptionEvidence }
+  /**
+   * What `awsf preflight` measured for this DRAFT attempt, appended whether or
+   * not every K1 field passed. Session-level: it moves no lifecycle edge.
+   */
+  | { readonly type: "driver-preflight"; readonly record: import("../contracts/driver-preflight.ts").DriverPreflightRecord }
   | { readonly type: "rework-instruction-delivery"; readonly phaseId: string; readonly delivery: import("../contracts/owner-amendment.ts").OwnerAmendmentDelivery; readonly at: string }
   | { readonly type: "transition"; readonly protectedConsumption?: import("../contracts/protected-grant.ts").ProtectedGrantConsumption; readonly ownerAmendment?: import("../contracts/owner-amendment.ts").ReworkOwnerAmendment; readonly id: string; readonly seq: number; readonly from: TaskState; readonly to: TaskState; readonly actor: "host" | "owner" | "human"; readonly edgeId: string; readonly reasonSource: string; readonly reasonCode: string | null; readonly reasonDetail: string | null; readonly spawnSite: boolean; readonly at: string }
   | { readonly type: "phase"; readonly phase: PhaseEvidenceRecord }
