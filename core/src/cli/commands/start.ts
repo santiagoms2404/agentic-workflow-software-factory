@@ -1,8 +1,17 @@
-import { renderHeadroomAdvice } from "../../lifecycle/renderer.ts";
+import { renderHeadroomAdvice, renderK1RefusalAdvice } from "../../lifecycle/renderer.ts";
 import { readFile, realpath } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { registeredAdapter } from "../../adapters/registry.ts";
 import { loadConfig } from "../../config/load.ts";
+import {
+  assertPreflightRefusedRecord,
+  PREFLIGHT_REFUSED_SCHEMA_ID,
+  type FreshnessRefusal,
+  type K1FieldId,
+  type PreflightRefusedRecord,
+} from "../../contracts/driver-preflight.ts";
+import { evaluateFreshness, type FreshnessFailure } from "../../preflight/fields.ts";
+import { gatherFreshness, K1_EXEMPT_WORKFLOWS } from "./preflight.ts";
 import { runGit, systemGitRunner } from "../../git/changes.ts";
 import { createWorktree, seedWorktreePaths } from "../../git/worktrees.ts";
 import { transition } from "../../state/task-machine.ts";
@@ -26,6 +35,7 @@ import {
   nextRevision,
   persistAttempt,
   readAttempt,
+  taskRoot,
   type AttemptProjector,
   type AttemptStatus,
 } from "./attempt.ts";
@@ -133,6 +143,63 @@ async function blockDraft(
   );
 }
 
+/** K1's freshness rule refused L1. The attempt is still DRAFT and no call is reserved. */
+export class StartPreflightRefused extends Error {
+  readonly refusal: FreshnessRefusal;
+  readonly field: K1FieldId | null;
+  readonly reason: string;
+  constructor(status: AttemptStatus, refusal: FreshnessFailure) {
+    const subject = refusal.field === null ? `the preflight record (${refusal.refusal})` : `field ${refusal.field}`;
+    super(
+      `awsf start refused ${status.taskId} attempt ${String(status.attempt)}: K1 ${subject}: ${refusal.reason}. ` +
+        `${renderK1RefusalAdvice(status, refusal.field)}. The attempt stays DRAFT and no call has been reserved.`,
+    );
+    this.name = "StartPreflightRefused";
+    this.refusal = refusal.refusal;
+    this.field = refusal.field;
+    this.reason = refusal.reason;
+  }
+}
+
+/** The state root an attempt directory sits under: `<root>/projects/<project>/tasks/<task>/<attempt>`. */
+function stateRootOf(attemptDir: string, status: AttemptStatus): string {
+  const root = resolve(attemptDir, "..", "..", "..", "..", "..");
+  const expected = join(taskRoot(root, status.project, status.taskId), String(status.attempt));
+  if (expected !== resolve(attemptDir)) {
+    throw new Error(`attempt directory ${JSON.stringify(attemptDir)} is not ${status.project}/${status.taskId} attempt ${String(status.attempt)} under a state root`);
+  }
+  return root;
+}
+
+/**
+ * Applies K1's freshness rule. A refusal appends one preflight-refused record,
+ * as an update that keeps the attempt DRAFT, and throws; no edge is requested.
+ */
+async function enforceK1(options: StartCommandOptions, current: AttemptStatus, config: ReturnType<typeof loadConfig>): Promise<void> {
+  const facts = await gatherFreshness({
+    attemptDir: options.attemptDir, stateRoot: stateRootOf(options.attemptDir, current),
+    worktreeRoot: resolve(options.worktreeRoot), status: current, config,
+  });
+  const refusal = evaluateFreshness(facts);
+  if (refusal.passed) return;
+  const at = (options.now ?? ((): string => new Date().toISOString()))();
+  const record: PreflightRefusedRecord = {
+    schema: PREFLIGHT_REFUSED_SCHEMA_ID, project: current.project, taskId: current.taskId, attempt: current.attempt,
+    sessionId: current.sessionId, refusal: refusal.refusal, field: refusal.field, reason: refusal.reason,
+    preflightAt: facts.record?.at ?? null, at,
+  };
+  assertPreflightRefusedRecord(record);
+  await persistAttempt(options.attemptDir, current.revision, {
+    kind: "attempt.updated",
+    next: nextRevision(current, {
+      lastActivityAt: at,
+      lastActivity: `K1 refused L1: ${refusal.field ?? refusal.refusal}`,
+    }),
+    evidence: { type: "preflight-refused", record },
+  }, options.projectRecord);
+  throw new StartPreflightRefused(current, refusal);
+}
+
 /** Materialize and persist L1. Provider launch remains the workflow host's L4. */
 export async function startCommand(options: StartCommandOptions): Promise<AttemptStatus> {
   const current = await readAttempt(options.attemptDir);
@@ -158,6 +225,9 @@ export async function startCommand(options: StartCommandOptions): Promise<Attemp
   if (!config.workflows.enabled.includes(current.workflow)) {
     throw new Error(`workflow ${current.workflow} is not enabled by ${configPath}`);
   }
+  // K1, before the recipe is bound, before any L2, worktree or adapter. Every
+  // caller passes here: no option of this command reaches past it.
+  if (!K1_EXEMPT_WORKFLOWS.includes(current.workflow)) await enforceK1(options, current, config);
   let recipe = workflowRecipe(current.workflow);
   if (recipe === null) {
     const compiled = compiledWorkflow(current.workflow);

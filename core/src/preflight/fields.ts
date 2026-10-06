@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto";
 import {
+  FRESHNESS_REFUSALS,
   K1_FIELD_IDS,
   k1FieldKind,
+  type FreshnessRefusal,
   requestPathsDigest,
   type DriverPreflightRecord,
   type K1FieldId,
@@ -231,6 +233,9 @@ export interface WriteBoundaryFacts {
  * be inside what a shift builder can write.
  */
 export function evaluateWriteBoundary(facts: WriteBoundaryFacts): FieldVerdict {
+  // A recipe with no writing phase (scout, plan) writes nothing, so there is
+  // nothing to declare; any entry it is given is still checked and refused below.
+  if (facts.where.length === 0 && facts.writers.length === 0 && facts.shift === null) return PASS;
   if (facts.where.length === 0) {
     return verdict(["no --where entry was given; pass every path the task may write, spelled as the request's Where line spells it"]);
   }
@@ -558,12 +563,16 @@ export function evaluatePreflightFields(facts: PreflightFacts): PreflightEvaluat
 
 // ---------------------------------------------------------------- freshness
 
-export const FRESHNESS_REFUSALS = ["no-record", "other-attempt", "stale-base", "stale-config", "stale-request", "field-failed"] as const;
-export type FreshnessRefusal = (typeof FRESHNESS_REFUSALS)[number];
+export { FRESHNESS_REFUSALS, type FreshnessRefusal };
 
-export type FreshnessVerdict =
-  | { readonly passed: true }
-  | { readonly passed: false; readonly refusal: FreshnessRefusal; readonly field: K1FieldId | null; readonly reason: string };
+export interface FreshnessFailure {
+  readonly passed: false;
+  readonly refusal: FreshnessRefusal;
+  readonly field: K1FieldId | null;
+  readonly reason: string;
+}
+
+export type FreshnessVerdict = { readonly passed: true } | FreshnessFailure;
 
 export interface FreshnessFacts {
   /** The attempt's latest driver-preflight record, or null when none is journaled. */
@@ -582,33 +591,31 @@ export interface FreshnessFacts {
   readonly confirmations: readonly RequestConfirmationRecord[];
 }
 
-function stale(refusal: FreshnessRefusal, reason: string): FreshnessVerdict {
+function stale(refusal: FreshnessRefusal, reason: string): FreshnessFailure {
   return Object.freeze({ passed: false, refusal, field: null, reason });
 }
 
 /**
- * K1's freshness rule at `awsf start`. The record must be this attempt's and
- * bound to the current base, configuration and request; then each field in K1's
- * order must pass: the recorded result for the fields measured once, the
- * re-measured facts for `git-storage` and `duplicate`, and a confirmation bound
- * to the record's request and paths. The suite is never re-run here. The first
- * stale binding or failing field is the refusal.
+ * Every refusal K1's freshness rule finds, in its order. A missing or stale
+ * record is the only refusal, because its field results describe other facts;
+ * otherwise each failing field in K1's order is one. Empty when L1 may fire.
  */
-export function evaluateFreshness(facts: FreshnessFacts): FreshnessVerdict {
+export function freshnessRefusals(facts: FreshnessFacts): readonly FreshnessFailure[] {
   const { record, current } = facts;
-  if (record === null) return stale("no-record", "no driver preflight record is journaled for this attempt");
+  if (record === null) return [stale("no-record", "no driver preflight record is journaled for this attempt")];
   if (record.project !== current.project || record.taskId !== current.taskId || record.attempt !== current.attempt) {
-    return stale("other-attempt", `the preflight record is for ${record.taskId} attempt ${String(record.attempt)}, not ${current.taskId} attempt ${String(current.attempt)}`);
+    return [stale("other-attempt", `the preflight record is for ${record.taskId} attempt ${String(record.attempt)}, not ${current.taskId} attempt ${String(current.attempt)}`)];
   }
   if (record.baseSha !== current.baseSha) {
-    return stale("stale-base", `the base moved from ${record.baseSha} to ${current.baseSha} since the preflight record was measured`);
+    return [stale("stale-base", `the base moved from ${record.baseSha} to ${current.baseSha} since the preflight record was measured`)];
   }
   if (record.configDigest !== current.configDigest) {
-    return stale("stale-config", "the configuration changed since the preflight record was measured");
+    return [stale("stale-config", "the configuration changed since the preflight record was measured")];
   }
   if (record.requestDigest !== current.requestDigest) {
-    return stale("stale-request", "the request was edited since the preflight record was measured");
+    return [stale("stale-request", "the request was edited since the preflight record was measured")];
   }
+  const failures: FreshnessFailure[] = [];
   const recorded = new Map(record.fields.map((field) => [field.id, field]));
   for (const id of K1_FIELD_IDS) {
     let outcome: FieldVerdict;
@@ -629,7 +636,42 @@ export function evaluateFreshness(facts: FreshnessFacts): FreshnessVerdict {
         ? { passed: false, reason: `the preflight record holds no result for ${id}` }
         : field.passed ? PASS : { passed: false, reason: field.reason };
     }
-    if (!outcome.passed) return Object.freeze({ passed: false, refusal: "field-failed", field: id, reason: outcome.reason });
+    if (!outcome.passed) failures.push(Object.freeze({ passed: false, refusal: "field-failed", field: id, reason: outcome.reason }));
   }
-  return Object.freeze({ passed: true });
+  return Object.freeze(failures);
+}
+
+/**
+ * K1's freshness rule at `awsf start`. The record must be this attempt's and
+ * bound to the current base, configuration and request; then each field in K1's
+ * order must pass: the recorded result for the fields measured once, the
+ * re-measured facts for `git-storage` and `duplicate`, and a confirmation bound
+ * to the record's request and paths. The suite is never re-run here. The first
+ * stale binding or failing field is the refusal.
+ */
+export function evaluateFreshness(facts: FreshnessFacts): FreshnessVerdict {
+  return freshnessRefusals(facts)[0] ?? Object.freeze({ passed: true });
+}
+
+// ---------------------------------------------------------------- K2's requires
+
+/** What K2's L1 step names when no single K1 field applies: the preflight record itself. */
+export const PREFLIGHT_RECORD_REQUIREMENT = "preflight-record";
+
+export interface K1Requirement {
+  readonly check: "K1";
+  readonly field: K1FieldId | typeof PREFLIGHT_RECORD_REQUIREMENT;
+  /** `missing`, `failed`, the stale binding's kind, or `stale` for a confirmation bound to other words. */
+  readonly status: string;
+}
+
+/** One requirement per refusal, for the L1 step's `requires`. */
+export function k1Requirements(refusals: readonly FreshnessFailure[], confirmations: FreshnessFacts["confirmations"]): readonly K1Requirement[] {
+  return refusals.map((refusal) => {
+    if (refusal.field === null) {
+      return { check: "K1", field: PREFLIGHT_RECORD_REQUIREMENT, status: refusal.refusal === "no-record" ? "missing" : refusal.refusal };
+    }
+    if (refusal.field === "confirmation") return { check: "K1", field: "confirmation", status: confirmations.length === 0 ? "missing" : "stale" };
+    return { check: "K1", field: refusal.field, status: "failed" };
+  });
 }

@@ -27,7 +27,7 @@ import { createDashboardProjection } from "../../src/cli/commands/dashboard-proj
 import { newCommand } from "../../src/cli/commands/new.ts";
 import { resumeProductionCommand, runProductionCommand } from "../../src/cli/commands/production-run.ts";
 import { CeilingRaiseNotInteractive, raiseCommand } from "../../src/cli/commands/raise.ts";
-import { startCommand } from "../../src/cli/commands/start.ts";
+import { k1Request, startUnderK1 } from "../fixtures/k1-preflight.ts";
 import { statusCommand } from "../../src/cli/commands/status.ts";
 import type { CallBudget, Reservation } from "../../src/execution/call-budget.ts";
 import type { BrokerOptions } from "../../src/execution/transport-broker.ts";
@@ -194,9 +194,9 @@ async function world() {
   });
   const projection = createDashboardProjection(stateRoot);
   const created = await newCommand({ stateRoot, project: config.project.slug, taskId: "fixture-shift-m1", repository: canonical,
-    request: "run milestone M1 of the fixture shift", workflow: "shift", tier: 2, shift: manifest,
+    request: k1Request("run milestone M1 of the fixture shift", "core/src/widget.ts"), workflow: "shift", tier: 2, shift: manifest,
     callCeilings: callCeilingsOf(config.risk.call_ceiling), configSnapshotJson: JSON.stringify(config), projectRecord: projection.project });
-  await startCommand({ attemptDir: created.attemptDir, worktreeRoot: join(root, "worktrees"), configPath,
+  await startUnderK1({ attemptDir: created.attemptDir, worktreeRoot: join(root, "worktrees"), configPath,
     preflight: () => ({ adapter: true, sandbox: true, observability: true }), projectRecord: projection.project });
   return { root, canonical, stateRoot, config, configPath, projection, attemptDir: created.attemptDir };
 }

@@ -30,7 +30,7 @@ import { createDashboardProjection } from "../../src/cli/commands/dashboard-proj
 import { newCommand } from "../../src/cli/commands/new.ts";
 import { runProductionCommand } from "../../src/cli/commands/production-run.ts";
 import { readAttemptEvidence } from "../../src/cli/commands/review-record.ts";
-import { startCommand } from "../../src/cli/commands/start.ts";
+import { k1Request, startUnderK1 } from "../fixtures/k1-preflight.ts";
 import { runSystemCommand, type BrokerOptions } from "../../src/execution/transport-broker.ts";
 import { journalFilePath, statusFilePath } from "../../src/persistence/platform-paths.ts";
 import { ticketFileDigest } from "../../src/persistence/plan-ticket-body.ts";
@@ -218,9 +218,9 @@ async function startedShift() {
   });
   const projection = createDashboardProjection(stateRoot);
   const created = await newCommand({ stateRoot, project: config.project.slug, taskId: "fixture-shift-m1", repository: canonical,
-    request: "run milestone M1 of the adoption fixture", workflow: "shift", tier: 2, shift: manifest,
+    request: k1Request("run milestone M1 of the adoption fixture", "core/src/widget.ts"), workflow: "shift", tier: 2, shift: manifest,
     callCeilings: callCeilingsOf(config.risk.call_ceiling), configSnapshotJson: JSON.stringify(config), projectRecord: projection.project });
-  await startCommand({ attemptDir: created.attemptDir, worktreeRoot: join(root, "worktrees"), configPath,
+  await startUnderK1({ attemptDir: created.attemptDir, worktreeRoot: join(root, "worktrees"), configPath,
     preflight: () => ({ adapter: true, sandbox: true, observability: true }), projectRecord: projection.project });
   return { root, canonical, stateRoot, config, configPath, projection, manifest, sourceDir: created.attemptDir };
 }
@@ -462,7 +462,7 @@ function seedTail(world: ShiftPrefixWorld, candidateSha: string, quiescence?: Pr
   return seedCommand({
     stateRoot: world.stateRoot, project: world.config.project.slug, repository: world.canonical,
     targetTaskId: SEEDED, sourceTaskId: TAIL, sourceAttempt: 1, candidateSha,
-    request: "build T03 and T04 of fixture-shift-adopt M1 on the adopted T01-T02 merge", workflow: "build-review",
+    request: k1Request("build T03 and T04 of fixture-shift-adopt M1 on the adopted T01-T02 merge", "core/src/widget.ts"), workflow: "build-review",
     config: world.config, configPath: world.configPath, terminal, now: () => AT,
     ...(quiescence === undefined ? {} : { quiescence }),
   });
@@ -650,7 +650,7 @@ test("a shift's T01-T02 prefix, stopped by a lost T03 stream and integrated over
       const seed = seeded.status?.seed;
       assert.deepEqual({ source: seed?.source.taskId, base: seed?.integrationBaseSha, candidate: seed?.seedCandidateSha },
         { source: TAIL, base: world.head, candidate: world.merge });
-      const started = await startCommand({ attemptDir: seeded.attemptDir!, worktreeRoot: join(world.root, "targets"),
+      const started = await startUnderK1({ attemptDir: seeded.attemptDir!, worktreeRoot: join(world.root, "targets"),
         configPath: world.configPath, preflight: () => ({ adapter: true, sandbox: true, observability: true }) });
       assert.equal(started.lifecycleState, "PREPARED", started.blocker?.detail);
       assert.equal(git(started.worktree!, "rev-parse", "HEAD"), world.merge);

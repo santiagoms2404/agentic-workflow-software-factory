@@ -29,7 +29,7 @@ import type {
 import type { BrokerOptions } from "../../src/execution/transport-broker.ts";
 import { createDashboardProjection } from "../../src/cli/commands/dashboard-projection.ts";
 import { newCommand } from "../../src/cli/commands/new.ts";
-import { startCommand } from "../../src/cli/commands/start.ts";
+import { k1Request, startUnderK1 } from "../fixtures/k1-preflight.ts";
 import { runProductionCommand } from "../../src/cli/commands/production-run.ts";
 import { journeyCommand, JourneyEvidenceRejected, JourneyNotApplicable } from "../../src/cli/commands/journey.ts";
 import { landCommand } from "../../src/cli/commands/land.ts";
@@ -266,10 +266,10 @@ async function fixture(
   const projection = createDashboardProjection(stateRoot);
   const created = await newCommand({
     stateRoot, project: config.project.slug, taskId: `fixture-t2-${tier}-${workflow}`, repository: canonical,
-    request: "write one bounded source", workflow, tier,
+    request: k1Request("write one bounded source", "core/src/example.ts"), workflow, tier,
     configSnapshotJson: JSON.stringify(config), projectRecord: projection.project,
   });
-  await startCommand({
+  await startUnderK1({
     attemptDir: created.attemptDir, worktreeRoot: join(root, "worktrees"), configPath,
     preflight: () => ({ adapter: true, sandbox: true, observability: true }),
     projectRecord: projection.project,

@@ -66,6 +66,11 @@ export interface NextStepsInput {
   readonly recovery?: { readonly kind: string } | null;
   readonly process?: unknown;
   readonly budget?: { readonly callsReserved: number };
+  /**
+   * K1's measured requirements for L1, one per missing, stale or failing field,
+   * as the caller gathered them. Absent means unmeasured, not satisfied.
+   */
+  readonly k1?: readonly { readonly check: string; readonly field: string; readonly status: string }[];
 }
 
 interface NonTransitionAct {
@@ -81,6 +86,7 @@ const liveStates = TASK_STATES.filter(state => !(TERMINAL_STATES as readonly Tas
 /** State eligibility is an inventory, not proof that command-specific guards pass. */
 export const NON_TRANSITION_ACTS: readonly NonTransitionAct[] = [
   { kind: "act", verb: "preflight", states: ["DRAFT"], args: ["--where", "<glob>"], detail: "preflight.ts: DRAFT only; appends one driver-preflight record whether or not its fields pass; not an owner act" },
+  { kind: "act", verb: "confirm", states: ["DRAFT"], args: [], detail: "confirm.ts: DRAFT only, after a driver-preflight record; the owner's attestation of the request and its --where and --read, which start's K1 check requires" },
   { kind: "act", verb: "raise", states: liveStates, args: ["--calls", "<n>", "--reason", "<why>"], detail: "raise.ts: isTerminalStatus refuses terminal attempts" },
   { kind: "act", verb: "grant", states: liveStates, args: ["--phase", "<phase>", "--file", "<path>", "--reason", "<why>"], detail: "grant.ts: PREPARED or quota-pause/completed-phase recovery, no process and no reserved calls; recovery is not a lifecycle state" },
   { kind: "act", verb: "journey", states: ["AWAITING_OWNER"], args: ["--journey", "<id>", "--sha", "<revision exercised>"], detail: "journey.ts: AWAITING_OWNER; also requires T2 and a candidate" },
@@ -110,7 +116,8 @@ export function nextSteps(input: NextStepsInput): NextSteps {
       case "cli":
         output.steps.push({ kind: "edge", edge: edge.id, to: edge.to, verb: invocation.verb,
           argv: argvFor(input, invocation.verb, invocation.args), who: isOwner(invocation.verb) ? "owner" : "driver",
-          interactive: isOwner(invocation.verb) || edge.interactive, spendsCalls: edge.spawnSite, requires: [] });
+          interactive: isOwner(invocation.verb) || edge.interactive, spendsCalls: edge.spawnSite,
+          requires: edge.id === "L1" ? (input.k1 ?? []).map(entry => ({ check: entry.check, field: entry.field, status: entry.status })) : [] });
         break;
       case "host-internal":
         output.waits.push({ edge: edge.id, to: edge.to, who: "host" });

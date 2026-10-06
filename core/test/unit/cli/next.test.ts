@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { main } from "../../../src/cli/main.ts";
 import { nextCommand } from "../../../src/cli/commands/next.ts";
-import { startCommand } from "../../../src/cli/commands/start.ts";
+import { k1Request, startUnderK1 } from "../../fixtures/k1-preflight.ts";
 import { runStubCommand } from "../../../src/cli/commands/run.ts";
 import { newCommand } from "../../../src/cli/commands/new.ts";
 import { nextRevision, persistAttempt, readAttempt } from "../../../src/cli/commands/attempt.ts";
@@ -49,11 +49,15 @@ for (const state of TASK_STATES) {
       assert.equal(await invoke(["--json"]), 0, errors.join("\n"));
       const model: unknown = JSON.parse(output[0]!);
       assertNextSteps(model);
-      assert.deepEqual(model, nextSteps({ ...status, state }));
+      // At DRAFT next measures K1 with reads only; this attempt has no preflight record.
+      const k1 = state === "DRAFT" ? [{ check: "K1", field: "preflight-record", status: "missing" }] : undefined;
+      assert.deepEqual(model, nextSteps({ ...status, state, ...(k1 === undefined ? {} : { k1 }) }));
       // w01-m3's owner exercise, on synthetic records only; no owner act is executed.
       if (state === "DRAFT") {
         assert.equal(model.steps.find(step => step.verb === "start")?.who, "driver");
         assert.equal(model.steps.find(step => step.verb === "cancel")?.who, "owner");
+        assert.equal(model.steps.find(step => step.verb === "preflight")?.who, "driver");
+        assert.equal(model.steps.find(step => step.verb === "confirm")?.who, "owner");
       }
       if (state === "AWAITING_OWNER") {
         for (const verb of ["land", "journey", "rework", "review", "cancel"]) {
@@ -63,7 +67,9 @@ for (const state of TASK_STATES) {
       output.length = 0;
       assert.equal(await invoke(["--attempt", "1"]), 0, errors.join("\n"));
       assert.deepEqual(output, renderNextSteps(model, status));
-      assert.equal(output[0], status.nextAction);
+      // The persisted sentence is rendered without K1's measurement; next adds it at DRAFT.
+      if (state === "DRAFT") assert.equal(output[0], `start is refused until K1 clears: preflight-record missing; ${status.nextAction}`);
+      else assert.equal(output[0], status.nextAction);
       assert.deepEqual(bytes(root), before, "next must not create a DB, lock, journal row or status revision");
       for (const id of ["L10", "L16"].filter(id => model.unavailable.some(edge => edge.edge === id))) {
         assert.ok(output.some(line => line.startsWith(`Unavailable ${id} `)));
@@ -159,9 +165,9 @@ test("real offline stub transitions persist the same rendered action next reads"
       "commit", "-m", "test: seed offline next exercise"], { stdio: "ignore" });
     mkdirSync(join(repository, "node_modules"));
     const created = await newCommand({ stateRoot: join(root, "state"), project: "agentic-workflow-software-factory", taskId: "stub",
-      repository, request: "exercise next without providers", workflow: "simple-sdlc", tier: 2 });
+      repository, request: k1Request("exercise next without providers", "core/src/example.ts"), workflow: "simple-sdlc", tier: 2 });
     assert.equal((await nextCommand(created.attemptDir)).lines[0], created.status.nextAction);
-    const prepared = await startCommand({ attemptDir: created.attemptDir, worktreeRoot: join(root, "worktrees"),
+    const prepared = await startUnderK1({ attemptDir: created.attemptDir, worktreeRoot: join(root, "worktrees"),
       configPath: resolve("awsf.config.yaml"), preflight: () => ({ adapter: true, sandbox: true, observability: true }) });
     assert.equal((await nextCommand(created.attemptDir)).lines[0], prepared.nextAction);
     const states: string[] = [];

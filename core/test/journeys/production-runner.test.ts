@@ -41,7 +41,7 @@ import { raiseCommand } from "../../src/cli/commands/raise.ts";
 import { correctionHeadroom } from "../../src/cli/commands/workflows.ts";
 import { WORKFLOW_RECIPES, workflowRecipe } from "../../src/workflow/catalog.ts";
 import { writePlacement } from "../../src/registry/placement.ts";
-import { startCommand } from "../../src/cli/commands/start.ts";
+import { k1RequestFor, startUnderK1 } from "../fixtures/k1-preflight.ts";
 import { statusCommand } from "../../src/cli/commands/status.ts";
 import { runProductionCommand, resumeProductionCommand, ProductionConfigSnapshotMismatch, ProductionWorkflowUnsupported } from "../../src/cli/commands/production-run.ts";
 import type { PhaseRouteOverrides } from "../../src/workflow/route-flags.ts";
@@ -63,7 +63,7 @@ test(`O1 ${granted ? "A2 grant " : ""}${routed ? "selected-route " : ""}${scenar
     adapters: { ...config.adapters, ...(routed ? { secondary: config.adapters.codex! } : {}) },
     ...(granted ? { policy: { ...config.policy, protected_paths: [...config.policy.protected_paths, "core/src/generated.ts"] } } : {}),
     routing: { ...config.routing, quota_stop: { default: { minutes: 30, probe_timeout_ms: 1000 } } } }), 1,
-    "write one bounded source", () => {}, routed ? { builder: { adapter: "secondary", provider: "openai-codex", effort: "low" } } : {});
+    undefined, () => {}, routed ? { builder: { adapter: "secondary", provider: "openai-codex", effort: "low" } } : {});
   try {
     const prepared = await readAttempt(world.created.attemptDir);
     if (granted) await grantCommand({ attemptDir: world.created.attemptDir, config: world.config, configPath: world.configPath, stateRoot: world.stateRoot,
@@ -767,7 +767,7 @@ async function fixture(
   commandExit = 0,
   configure: (config: AwsfConfig) => AwsfConfig = (config) => config,
   tier: 0 | 1 | 2 = 1,
-  request = "write one bounded source",
+  request?: string,
   seed: (canonical: string) => void = () => {},
   routeOverrides: PhaseRouteOverrides = {},
 ) {
@@ -795,7 +795,9 @@ async function fixture(
   mkdirSync(resolve(sharedPrompt, ".."), { recursive: true });
   writeFileSync(sharedPrompt, readFileSync(resolve("prompts/shared/headless-role.md"), "utf8"));
   const projection = createDashboardProjection(stateRoot);
-  const created = await newCommand({ stateRoot, project: config.project.slug, taskId: `fixture-${workflow}`, repository: canonical, request, workflow, tier, routeOverrides, configSnapshotJson: JSON.stringify(config), projectRecord: projection.project });
+  const created = await newCommand({ stateRoot, project: config.project.slug, taskId: `fixture-${workflow}`, repository: canonical,
+    request: request ?? k1RequestFor("write one bounded source", workflow, config.agents),
+    workflow, tier, routeOverrides, configSnapshotJson: JSON.stringify(config), projectRecord: projection.project });
   // scout, plan and design-to-plan need every call their ceiling allows, so
   // `awsf start` refuses their unfundable correction round. Take the owner's
   // own remedy — which is also what proves the remedy works.
@@ -808,7 +810,7 @@ async function fixture(
       projectRecord: projection.project,
     });
   }
-  await startCommand({ attemptDir: created.attemptDir, worktreeRoot: join(root, "worktrees"), configPath, preflight: () => ({ adapter: true, sandbox: true, observability: true }), projectRecord: projection.project });
+  await startUnderK1({ attemptDir: created.attemptDir, worktreeRoot: join(root, "worktrees"), configPath, preflight: () => ({ adapter: true, sandbox: true, observability: true }), projectRecord: projection.project });
   return { root, canonical, stateRoot, config, configPath, projection, created };
 }
 
@@ -2493,7 +2495,8 @@ test("unsupported production workflow fails before lifecycle mutation", async ()
 
 for (const recipe of WORKFLOW_RECIPES) {
   test(`production ${recipe.id} composes the owner's recorded request into its first agent prompt`, async () => {
-    const request = `carry this verbatim into ${recipe.id}'s first agent`;
+    const request = k1RequestFor(`carry this verbatim into ${recipe.id}'s first agent`, recipe.id,
+      loadConfig(readFileSync(resolve("awsf.config.yaml"), "utf8")).agents);
     // Two routes need more than the generic fixture supplies, and neither has
     // anything to do with A1: `intake` is the one configured `same-session`
     // agent and the scripted adapter reports `none`; `design-to-plan`'s host

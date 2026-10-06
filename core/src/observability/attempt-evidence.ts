@@ -126,6 +126,12 @@ export type AttemptEvidence =
    * lifecycle edge.
    */
   | { readonly type: "request-confirmation"; readonly record: import("../contracts/driver-preflight.ts").RequestConfirmationRecord }
+  /**
+   * `awsf start`'s K1 refusal of L1, naming the field or the stale binding.
+   * Session-level: the attempt stays DRAFT and reserves nothing, so this record
+   * is the only trace the refusal leaves.
+   */
+  | { readonly type: "preflight-refused"; readonly record: import("../contracts/driver-preflight.ts").PreflightRefusedRecord }
   | { readonly type: "rework-instruction-delivery"; readonly phaseId: string; readonly delivery: import("../contracts/owner-amendment.ts").OwnerAmendmentDelivery; readonly at: string }
   | { readonly type: "transition"; readonly protectedConsumption?: import("../contracts/protected-grant.ts").ProtectedGrantConsumption; readonly ownerAmendment?: import("../contracts/owner-amendment.ts").ReworkOwnerAmendment; readonly id: string; readonly seq: number; readonly from: TaskState; readonly to: TaskState; readonly actor: "host" | "owner" | "human"; readonly edgeId: string; readonly reasonSource: string; readonly reasonCode: string | null; readonly reasonDetail: string | null; readonly spawnSite: boolean; readonly at: string }
   | { readonly type: "phase"; readonly phase: PhaseEvidenceRecord }

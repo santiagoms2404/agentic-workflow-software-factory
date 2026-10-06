@@ -33,7 +33,7 @@ import {
   runProductionCommand,
   type ProductionInfrastructure,
 } from "../../../src/cli/commands/production-run.ts";
-import { startCommand } from "../../../src/cli/commands/start.ts";
+import { k1Request, startUnderK1 } from "../../fixtures/k1-preflight.ts";
 import type { BrokerOptions } from "../../../src/execution/transport-broker.ts";
 import type { AttemptEvidence } from "../../../src/observability/attempt-evidence.ts";
 import {
@@ -241,7 +241,8 @@ function fixtureConfig(thresholdMinutes: number): AwsfConfig {
           harness: { adapter: "claude", continuity: "none" as const },
         }
       : agent),
-    gates: {},
+    // K1's suite field needs one configured gate to show the base is green.
+    gates: { test: { argv: ["node", "-e", "process.exit(0)"], timeout_seconds: 10 } },
   };
 }
 
@@ -323,14 +324,14 @@ async function world(clock: FakeClock, thresholdMinutes = FIVE_MINUTES): Promise
     project: config.project.slug,
     taskId: "quota-boundary",
     repository,
-    request: "Prove the phase-boundary quota stop offline.",
+    request: k1Request("Prove the phase-boundary quota stop offline.", "core/src/quota-boundary.ts"),
     workflow: "plan-build-test",
     tier: 1,
     configSnapshotJson: toConfigSnapshotJson(config),
     now: clock.now,
     sessionId: () => "00000000-0000-4000-8000-000000000017",
   });
-  const prepared = await startCommand({
+  const prepared = await startUnderK1({
     attemptDir: created.attemptDir,
     worktreeRoot: join(root, "worktrees"),
     configPath,
@@ -459,6 +460,8 @@ test("an uncrossed fixture run records every boundary snapshot, reaches GATING, 
       ["--provider", "claude", "--json"],
       ["--version"],
       ["--provider", "claude", "--json"],
+      // The one configured gate, through the same command seam, at the tests phase.
+      ["-e", "process.exit(0)"],
     ]);
   } finally {
     rmSync(fixture.root, { recursive: true, force: true });

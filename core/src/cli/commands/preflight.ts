@@ -35,6 +35,7 @@ import {
   evaluatePreflightFields,
   normalizedRequestDigest,
   type DuplicateFacts,
+  type FreshnessFacts,
   type StorageMode,
   type TaskRequestFact,
   type WritingPhase,
@@ -130,7 +131,7 @@ function writingPhases(recipe: WorkflowRecipe, config: AwsfConfig): WritingPhase
 }
 
 /** The base L1 would pin, exactly as `awsf start` resolves it: a replay's, a seed's integration base, or HEAD. */
-async function pinnedBase(attemptDir: string, status: AttemptStatus): Promise<string> {
+export async function pinnedBase(attemptDir: string, status: AttemptStatus): Promise<string> {
   const seed = await verifiedTargetSeed(attemptDir, status);
   return status.replay?.baseSha ?? seed?.integrationBaseSha ?? runGit(systemGitRunner(status.repository), ["rev-parse", "HEAD"]).trim();
 }
@@ -212,6 +213,43 @@ interface JournalFacts {
   readonly earlier: readonly PreflightMeasurement[];
 }
 
+interface TaskScan {
+  /** This task's continuation chain, in both directions. */
+  readonly chain: ReadonlySet<string>;
+  readonly others: readonly TaskRequestFact[];
+  readonly tasks: ReadonlyArray<readonly [string, AttemptStatus[]]>;
+}
+
+/** Every task's status files, never a journal: the chain and the other tasks' requests and plan refs. */
+async function scanTasks(stateRoot: string, status: AttemptStatus): Promise<TaskScan> {
+  const project = status.project;
+  const chain = new Set(await ancestors(stateRoot, project, status.taskId));
+  const others: TaskRequestFact[] = [];
+  const tasks: Array<readonly [string, AttemptStatus[]]> = [];
+  for (const taskId of await taskIds(stateRoot, project)) {
+    const statuses = await attemptStatuses(stateRoot, project, taskId);
+    tasks.push([taskId, statuses]);
+    if (taskId === status.taskId) continue;
+    const latest = statuses.at(-1);
+    if (latest === undefined) continue;
+    if ((await ancestors(stateRoot, project, taskId)).includes(status.taskId)) chain.add(taskId);
+    others.push({ taskId, requestDigest: normalizedRequestDigest(latest.request), planRef: latest.planRef, latestState: latest.lifecycleState });
+  }
+  return { chain, others, tasks };
+}
+
+function duplicateOf(status: AttemptStatus, scan: TaskScan): DuplicateFacts {
+  return {
+    taskId: status.taskId, chain: [...scan.chain].sort(), requestDigest: normalizedRequestDigest(status.request),
+    planRef: status.planRef, others: [...scan.others],
+  };
+}
+
+/** The facts `duplicate` judges, re-measured from the same status scan preflight makes. */
+export async function duplicateFacts(stateRoot: string, status: AttemptStatus): Promise<DuplicateFacts> {
+  return duplicateOf(status, await scanTasks(stateRoot, status));
+}
+
 /**
  * What the journal says about the other tasks: their requests and plan refs
  * for `duplicate`, the sessions of earlier attempts and continued tasks for
@@ -227,19 +265,8 @@ async function journalFacts(
   readEvidence: (attemptDir: string) => Promise<readonly AttemptEvidence[]>,
 ): Promise<JournalFacts> {
   const project = status.project;
-  const continued = await ancestors(stateRoot, project, status.taskId);
-  const chain = new Set(continued);
-  const others: TaskRequestFact[] = [];
-  const tasks: Array<readonly [string, AttemptStatus[]]> = [];
-  for (const taskId of await taskIds(stateRoot, project)) {
-    const statuses = await attemptStatuses(stateRoot, project, taskId);
-    tasks.push([taskId, statuses]);
-    if (taskId === status.taskId) continue;
-    const latest = statuses.at(-1);
-    if (latest === undefined) continue;
-    if ((await ancestors(stateRoot, project, taskId)).includes(status.taskId)) chain.add(taskId);
-    others.push({ taskId, requestDigest: normalizedRequestDigest(latest.request), planRef: latest.planRef, latestState: latest.lifecycleState });
-  }
+  const scan = await scanTasks(stateRoot, status);
+  const { chain, tasks } = scan;
   const landed: LandedMeasurement[] = [];
   const earlier: PreflightMeasurement[] = [];
   for (const [taskId, statuses] of tasks) {
@@ -267,10 +294,7 @@ async function journalFacts(
   }
   const priorSessions = (await priorAttemptStatuses(stateRoot, status)).map((attempt) => attempt.sessionId);
   return {
-    duplicate: {
-      taskId: status.taskId, chain: [...chain].sort(), requestDigest: normalizedRequestDigest(status.request),
-      planRef: status.planRef, others,
-    },
+    duplicate: duplicateOf(status, scan),
     priorSessions: [...new Set(priorSessions)].sort(),
     landed,
     earlier: earlier.sort((left, right) => left.record.at < right.record.at ? 1 : left.record.at > right.record.at ? -1 : 0),
@@ -280,6 +304,51 @@ async function journalFacts(
 /** This attempt's request-confirmation records, oldest first, as its journal holds them. */
 async function attemptConfirmations(attemptDir: string): Promise<RequestConfirmationRecord[]> {
   return (await readAttemptEvidence(attemptDir)).flatMap((evidence) => evidence.type === "request-confirmation" ? [evidence.record] : []);
+}
+
+/**
+ * The workflows K1 does not bind, by the id the host recorded (W01-Q4): a
+ * replay re-runs a recorded request at a pinned base, and intake writes only a
+ * ticket card from the owner's own idea text. Never chosen by a flag.
+ */
+export const K1_EXEMPT_WORKFLOWS: readonly string[] = [PROVE_WORKFLOW_ID, "intake"];
+
+export interface FreshnessGathering {
+  readonly attemptDir: string;
+  readonly stateRoot: string;
+  readonly worktreeRoot: string;
+  readonly status: AttemptStatus;
+  readonly config: AwsfConfig;
+}
+
+/**
+ * K1's freshness facts for one DRAFT attempt, gathered as `awsf preflight`
+ * gathers them: the attempt's latest driver-preflight record and its own
+ * confirmations from its journal, the base and configuration digest L1 would
+ * bind, and `git-storage` and `duplicate` re-measured. Reads only. Without a
+ * record nothing else is measured, because the rule refuses on that alone.
+ */
+export async function gatherFreshness(options: FreshnessGathering): Promise<FreshnessFacts> {
+  const { status } = options;
+  const evidence = await readAttemptEvidence(options.attemptDir);
+  const record = evidence.flatMap((entry) => entry.type === "driver-preflight" ? [entry.record] : []).at(-1) ?? null;
+  const confirmations = evidence.flatMap((entry) => entry.type === "request-confirmation" ? [entry.record] : []);
+  const current = {
+    project: status.project, taskId: status.taskId, attempt: status.attempt,
+    configDigest: preflightConfigDigest(options.config), requestDigest: requestTextDigest(status.request),
+  };
+  if (record === null) {
+    return {
+      record, confirmations, current: { ...current, baseSha: "" }, gitStorage: { entries: [] },
+      duplicate: { taskId: status.taskId, chain: [], requestDigest: normalizedRequestDigest(status.request), planRef: status.planRef, others: [] },
+    };
+  }
+  return {
+    record, confirmations,
+    current: { ...current, baseSha: await pinnedBase(options.attemptDir, status) },
+    gitStorage: { entries: await measureGitStorage(status.repository, options.worktreeRoot) },
+    duplicate: await duplicateFacts(options.stateRoot, status),
+  };
 }
 
 /** One line per K1 field, the suite's source, where a failed gate's output is kept, and the rendered next action. */

@@ -9,7 +9,7 @@ import type { IntakeOutput } from "../../src/contracts/intake-output.ts";
 import { parseEnvelope } from "../../src/contracts/parse-envelope.ts";
 import { newCommand } from "../../src/cli/commands/new.ts";
 import { runStubCommand } from "../../src/cli/commands/run.ts";
-import { startCommand } from "../../src/cli/commands/start.ts";
+import { k1Request, startUnderK1 } from "../fixtures/k1-preflight.ts";
 import { TicketStore } from "../../src/persistence/ticket-store.ts";
 
 function git(repository: string, ...argv: string[]): string {
@@ -72,11 +72,12 @@ test("vague intent becomes a ready ticket that drives a zero-spend stub run", as
       project: "agentic-workflow-software-factory",
       taskId: ticket.id,
       repository,
-      request: ticket.outcome,
+      // The ready ticket's own fields, laid out as K1's four request lines.
+      request: k1Request(ticket.outcome, "core/src/release-notes.ts", ticket.acceptance.join(" "), ticket.non_goals.join(" ")),
       workflow: ticket.workflow,
       tier: ticket.tier,
     });
-    await startCommand({
+    await startUnderK1({
       attemptDir: created.attemptDir,
       worktreeRoot,
       configPath,

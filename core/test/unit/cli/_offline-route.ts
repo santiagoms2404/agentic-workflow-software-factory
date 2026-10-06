@@ -36,12 +36,12 @@ import { raiseCommand } from "../../../src/cli/commands/raise.ts";
 import { correctionHeadroom } from "../../../src/cli/commands/workflows.ts";
 import { workflowRecipe } from "../../../src/workflow/catalog.ts";
 import { loadConfig } from "../../../src/config/load.ts";
-import { startCommand } from "../../../src/cli/commands/start.ts";
+import { k1Request, startUnderK1 } from "../../fixtures/k1-preflight.ts";
 import type { BrokerOptions } from "../../../src/execution/transport-broker.ts";
 import { writePlacement } from "../../../src/registry/placement.ts";
 
 export const STUB_PROVIDER = resolve("core/test/fixtures/providers/stub/stub-provider.mjs");
-export const REQUEST = "Make design claims traceable into rendered tickets.";
+export const REQUEST = k1Request("Make design claims traceable into rendered tickets.", "nothing in the repository; the host renders the plan");
 export const STEM = "generated-plan";
 
 /** The three roles `design-to-plan` reaches; the default fixture routing set. */
@@ -79,7 +79,8 @@ export function fixtureConfig(options: FixtureConfigOptions = {}): AwsfConfig {
           harness: { adapter: "stub", continuity: "none" as const },
         }
       : agent),
-    gates: {},
+    // K1's suite field needs one configured gate to show the base is green.
+    gates: { test: { argv: ["node", "-e", "process.exit(0)"], timeout_seconds: 10 } },
   };
 }
 
@@ -320,7 +321,7 @@ export async function prepareTask(input: PrepareTaskInput): Promise<PreparedTask
     input.workflow,
     input.projectRecord,
   );
-  const prepared = await startCommand({
+  const prepared = await startUnderK1({
     attemptDir: created.attemptDir,
     worktreeRoot: input.worktreeRoot,
     configPath: input.configPath,

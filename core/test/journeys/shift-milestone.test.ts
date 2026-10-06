@@ -32,6 +32,7 @@ import { runSystemCommand, type BrokerOptions } from "../../src/execution/transp
 import { readCandidateRef } from "../../src/git/candidate-ref.ts";
 import { attemptDir as attemptDirectory } from "../../src/persistence/platform-paths.ts";
 import { ticketFileDigest } from "../../src/persistence/plan-ticket-body.ts";
+import { k1Request, prepareK1 } from "../fixtures/k1-preflight.ts";
 import { minimumCallsFor } from "../../src/workflow/catalog.ts";
 import { bindShiftRecipe, shiftTicketCandidates } from "../../src/workflow/shift/bind.ts";
 import { serializeShiftRecipe, ShiftTicketDigestMismatch, type ShiftRecipe } from "../../src/workflow/shift/compile.ts";
@@ -250,7 +251,7 @@ test("one milestone runs from selection to AWAITING_OWNER once, with the readout
 
     // AC-1: one selection act seals the manifest onto the attempt. The done
     // M0 dependency is outside the selection and admitted; nothing else is.
-    const created = await cli(fixture.canonical, ["new", TASK, "run milestone M1 of the fixture plan", "--workflow", "shift",
+    const created = await cli(fixture.canonical, ["new", TASK, k1Request("run milestone M1 of the fixture plan", "core/src/widget.ts"), "--workflow", "shift",
       "--plan", PLAN, "--milestone", "M1", ...common]);
     assert.equal(created.code, 0, created.err.join("\n"));
     const attemptDir = attemptDirectory(fixture.stateRoot, PROJECT, TASK, "1");
@@ -288,6 +289,18 @@ test("one milestone runs from selection to AWAITING_OWNER once, with the readout
     await assert.rejects(bindShiftRecipe(fixture.canonical, manifest, { prompts }), ShiftTicketDigestMismatch);
     writeFileSync(t02, original);
 
+    // K1: --stub skips nothing. Start refuses until the driver's preflight and
+    // the owner's confirmation are recorded, and then prepares the shift.
+    const refused = await cli(fixture.canonical, ["start", TASK, "--stub", "true", "--worktree-root", fixture.worktreeRoot, ...common]);
+    assert.equal(refused.code, 1);
+    assert.ok(refused.err.some((line) => line.includes("K1 the preflight record (no-record)")), refused.err.join("\n"));
+    // Projected as the CLI's preflight and confirm arms project them.
+    const k1Projection = createDashboardProjection(fixture.stateRoot);
+    try {
+      await prepareK1({ attemptDir, configPath: fixture.configPath, worktreeRoot: fixture.worktreeRoot, projectRecord: k1Projection.project });
+    } finally {
+      k1Projection.close();
+    }
     const started = await cli(fixture.canonical, ["start", TASK, "--stub", "true", "--worktree-root", fixture.worktreeRoot, ...common]);
     assert.equal(started.code, 0, started.err.join("\n"));
 

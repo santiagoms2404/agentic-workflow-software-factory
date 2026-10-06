@@ -20,6 +20,7 @@ import { runProductionCommand } from "../../src/cli/commands/production-run.ts";
 import { readAttemptEvidence } from "../../src/cli/commands/review-record.ts";
 import { seedCommand } from "../../src/cli/commands/seed.ts";
 import { startCommand } from "../../src/cli/commands/start.ts";
+import { k1Request, prepareK1, startUnderK1 } from "../fixtures/k1-preflight.ts";
 import type { OwnerTerminal } from "../../src/cli/tty.ts";
 import { runGit, systemGitRunner } from "../../src/git/changes.ts";
 import { HOST_AUTHOR } from "../../src/git/commit.ts";
@@ -228,7 +229,7 @@ function run(attemptDir: string, world: SeedWorld, prompts: string[] = [], write
 }
 
 function start(attemptDir: string, world: SeedWorld) {
-  return startCommand({ attemptDir, configPath: world.configPath, worktreeRoot: join(world.root, "targets"),
+  return startUnderK1({ attemptDir, configPath: world.configPath, worktreeRoot: join(world.root, "targets"),
     preflight: () => ({ adapter: true, sandbox: true, observability: true }) });
 }
 
@@ -342,7 +343,7 @@ test("a cancelled integrated target is itself an exact seed source: its continua
     // The selection is the integrated target's exact merge, not its source's candidate.
     const lines: string[] = [];
     const seeded = await seedCommand({ ...world.seedOptions, targetTaskId: "continued", sourceTaskId: "integrated", candidateSha: merge,
-      request: "extend the integrated merge", terminal: owner(lines) });
+      request: k1Request("extend the integrated merge", AUTHORED), terminal: owner(lines) });
     assert.equal(seeded.confirmed, true);
     const seed = seeded.status?.seed;
     assert.deepEqual({ source: seed?.source.taskId, lifecycle: seed?.source.lifecycle, base: seed?.integrationBaseSha, candidate: seed?.seedCandidateSha },
@@ -389,7 +390,7 @@ test("seeding from an integrated target refuses a decline, a source withdrawn du
     assert.equal(adopted.status?.lifecycleState, "AWAITING_OWNER", adopted.status?.blocker?.detail);
     const merge = assertIntegrated(world, adopted.status, head, original.candidateSha!);
     await cancelCommand({ attemptDir: adopted.attemptDir!, terminal: owner(), cause: "owner", reason: "Stop adopted attempt" });
-    const options = { ...world.seedOptions, targetTaskId: "continued", sourceTaskId: "integrated", candidateSha: merge, request: "extend the integrated merge" };
+    const options = { ...world.seedOptions, targetTaskId: "continued", sourceTaskId: "integrated", candidateSha: merge, request: k1Request("extend the integrated merge", AUTHORED) };
     const continued = join(world.stateRoot, "projects", world.config.project.slug, "tasks", "continued");
     const retained = `${sourceDir}.retained`;
     const withdrawn = /integration source target attempt 1: no such sealed attempt beside the target/u;
@@ -407,9 +408,12 @@ test("seeding from an integrated target refuses a decline, a source withdrawn du
     assert.equal(seeded.confirmed, true);
     await assert.rejects(seedCommand({ ...options, terminal: owner() }), /target already exists/u);
 
+    // K1's records are written while the source is present, so startup itself re-reads it.
+    await prepareK1({ attemptDir: seeded.attemptDir!, configPath: world.configPath, worktreeRoot: join(world.root, "targets") });
     renameSync(sourceDir, retained);
     const bytes = sourceBytes(seeded.attemptDir!);
-    await assert.rejects(start(seeded.attemptDir!, world), withdrawn);
+    await assert.rejects(startCommand({ attemptDir: seeded.attemptDir!, configPath: world.configPath, worktreeRoot: join(world.root, "targets"),
+      preflight: () => ({ adapter: true, sandbox: true, observability: true }) }), withdrawn);
     assert.deepEqual(sourceBytes(seeded.attemptDir!), bytes, "a refused startup writes nothing");
     assert.equal(refs(world.repository), refsBefore);
     renameSync(retained, sourceDir);

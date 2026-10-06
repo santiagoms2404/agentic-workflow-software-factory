@@ -3,7 +3,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { seedCommand } from "../../src/cli/commands/seed.ts";
-import { startCommand } from "../../src/cli/commands/start.ts";
+import { startUnderK1 } from "../fixtures/k1-preflight.ts";
 import { runProductionCommand } from "../../src/cli/commands/production-run.ts";
 import { nextRevision, persistAttempt, readAttempt } from "../../src/cli/commands/attempt.ts";
 import { retryCommand } from "../../src/cli/commands/retry.ts";
@@ -31,7 +31,7 @@ async function buildTarget(instruction?: string) {
   assert.equal(initial.budget.callsReserved, 0);
   assert.equal(initial.gatesPass || initial.requiredReviewPresent || initial.journeyApproved || initial.protectedApprovalsValid, false);
   assert.equal(initial.landingApproval, null);
-  const prepared = await startCommand({ attemptDir: dir, configPath: world.configPath, worktreeRoot: join(world.root, "targets"),
+  const prepared = await startUnderK1({ attemptDir: dir, configPath: world.configPath, worktreeRoot: join(world.root, "targets"),
     preflight: () => ({ adapter: true, sandbox: true, observability: true }), projectRecord: projection.project });
   assert.equal(git(prepared.worktree!, "rev-parse", "HEAD"), world.candidateSha);
   assert.equal(prepared.baseSha, world.baseSha);
@@ -90,7 +90,7 @@ test("seeded target executes its explicit builder and reviewer routes end to end
     builder: { adapter: "codex", provider: "openai-codex", model: "seed-builder", effort: "high" },
     reviewer: { adapter: "claude", provider: "anthropic", model: "seed-reviewer", effort: "low" },
   });
-  await startCommand({ attemptDir: dir, configPath: world.configPath, worktreeRoot: join(world.root, "targets"),
+  await startUnderK1({ attemptDir: dir, configPath: world.configPath, worktreeRoot: join(world.root, "targets"),
     preflight: () => ({ adapter: true, sandbox: true, observability: true }) });
   const status = await runProductionCommand({ attemptDir: dir, stateRoot: world.stateRoot, config: world.config, configPath: world.configPath,
     infrastructure: { adapterFor: (_entry, id) => new SeedAdapter(id, []), createBroker: fakeSeedBroker, sandboxProbe: () => false } });
@@ -154,7 +154,7 @@ test("8C rejects a substituted amendment at the actual adapter input before GO",
   const world = await seedFixture();
   const created = await seedCommand({ ...world.seedOptions, instruction: "Check the inherited constant." });
   const dir = created.attemptDir!;
-  await startCommand({ attemptDir: dir, configPath: world.configPath, worktreeRoot: join(world.root, "targets"), preflight: () => ({ adapter: true, sandbox: true, observability: true }) });
+  await startUnderK1({ attemptDir: dir, configPath: world.configPath, worktreeRoot: join(world.root, "targets"), preflight: () => ({ adapter: true, sandbox: true, observability: true }) });
   let launches = 0;
   const result = await runProductionCommand({ attemptDir: dir, stateRoot: world.stateRoot, config: world.config, configPath: world.configPath,
     infrastructure: { adapterFor: (_entry, id) => new SeedAdapter(id, [], { dropInstruction: true }),
@@ -173,7 +173,7 @@ test("retry of a seeded target drops seed and amendment authority and prepares f
     configSnapshotJson: toConfigSnapshotJson(world.config), allowance: world.config.risk.correction_allowance });
   assert.equal(retried.status.seed, null);
   assert.equal(retried.status.baseSha, null);
-  const prepared = await startCommand({ attemptDir: retried.attemptDir, configPath: world.configPath, worktreeRoot: join(world.root, "targets"),
+  const prepared = await startUnderK1({ attemptDir: retried.attemptDir, configPath: world.configPath, worktreeRoot: join(world.root, "targets"),
     preflight: () => ({ adapter: true, sandbox: true, observability: true }) });
   assert.equal(git(prepared.worktree!, "rev-parse", "HEAD"), world.baseSha);
   assert.equal(existsSync(join(prepared.worktree!, INHERITED)), false);
@@ -183,7 +183,7 @@ test("simple-sdlc keeps inherited documentation outside builder/documenter claim
   const world = await seedFixture({ inherited: "docs/inherited.md" });
   const created = await seedCommand({ ...world.seedOptions, workflow: "simple-sdlc", instruction: "Preserve the inherited documentation." });
   const dir = created.attemptDir!;
-  await startCommand({ attemptDir: dir, configPath: world.configPath, worktreeRoot: join(world.root, "targets"),
+  await startUnderK1({ attemptDir: dir, configPath: world.configPath, worktreeRoot: join(world.root, "targets"),
     preflight: () => ({ adapter: true, sandbox: true, observability: true }) });
   const prompts: string[] = [];
   const result = await runProductionCommand({ attemptDir: dir, stateRoot: world.stateRoot, config: world.config, configPath: world.configPath,
@@ -203,7 +203,7 @@ test("source worktree dirty bytes are neither copied nor needed", async () => {
   writeFileSync(join(world.sourceTree, INHERITED), "uncommitted source bytes must not transfer\n");
   const before = readFileSync(join(world.sourceTree, INHERITED));
   const created = await seedCommand(world.seedOptions);
-  const prepared = await startCommand({ attemptDir: created.attemptDir!, configPath: world.configPath, worktreeRoot: join(world.root, "targets"),
+  const prepared = await startUnderK1({ attemptDir: created.attemptDir!, configPath: world.configPath, worktreeRoot: join(world.root, "targets"),
     preflight: () => ({ adapter: true, sandbox: true, observability: true }) });
   assert.equal(readFileSync(join(prepared.worktree!, INHERITED), "utf8"), "export const inherited = 1;\n");
   assert.deepEqual(readFileSync(join(world.sourceTree, INHERITED)), before);

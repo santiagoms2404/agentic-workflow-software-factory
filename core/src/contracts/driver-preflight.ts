@@ -18,9 +18,14 @@ import { stringUnion } from "./typebox.ts";
 // the owner-terminal act `awsf confirm`. It binds to the exact request text and
 // to the `--where` and `--read` lists, so editing either after confirmation
 // leaves it bound to other words.
+//
+// `awsf.preflight-refused/v1` is what `awsf start` journals when K1's freshness
+// rule refuses L1: the refusal kind, the field when one applies, and the
+// reason. The attempt stays DRAFT, so the record is the refusal's only trace.
 
 export const DRIVER_PREFLIGHT_SCHEMA_ID = "awsf.driver-preflight/v1";
 export const REQUEST_CONFIRMATION_SCHEMA_ID = "awsf.request-confirmation/v1";
+export const PREFLIGHT_REFUSED_SCHEMA_ID = "awsf.preflight-refused/v1";
 
 /**
  * K1's field ids, in the K1 table's order, as frozen by the G01-F Amendment
@@ -129,6 +134,32 @@ export const RequestConfirmationRecordSchema = Type.Object(
 );
 export type RequestConfirmationRecord = Static<typeof RequestConfirmationRecordSchema>;
 
+/**
+ * Why K1's freshness rule refused. Every kind but `field-failed` is a stale or
+ * missing binding of the record itself, which names no K1 field.
+ */
+export const FRESHNESS_REFUSALS = ["no-record", "other-attempt", "stale-base", "stale-config", "stale-request", "field-failed"] as const;
+export type FreshnessRefusal = (typeof FRESHNESS_REFUSALS)[number];
+
+export const PreflightRefusedRecordSchema = Type.Object(
+  {
+    schema: Type.Literal(PREFLIGHT_REFUSED_SCHEMA_ID),
+    project: id,
+    taskId: id,
+    attempt: Type.Integer({ minimum: 1 }),
+    sessionId: id,
+    refusal: stringUnion(FRESHNESS_REFUSALS),
+    /** The K1 field that refused; null exactly when the record's own binding did. */
+    field: Type.Union([stringUnion(K1_FIELD_IDS), Type.Null()]),
+    reason,
+    /** When the refused preflight record was measured; null when none was journaled. */
+    preflightAt: Type.Union([id, Type.Null()]),
+    at: id,
+  },
+  { additionalProperties: false, $id: PREFLIGHT_REFUSED_SCHEMA_ID, title: "PreflightRefusedRecord" },
+);
+export type PreflightRefusedRecord = Static<typeof PreflightRefusedRecordSchema>;
+
 function sha256(text: string): string {
   return createHash("sha256").update(text, "utf8").digest("hex");
 }
@@ -165,5 +196,16 @@ export function assertRequestConfirmationRecord(value: unknown): asserts value i
   if (!Value.Check(RequestConfirmationRecordSchema, value)) {
     const first = [...Value.Errors(RequestConfirmationRecordSchema, value)][0];
     throw new Error(`invalid ${REQUEST_CONFIRMATION_SCHEMA_ID} record${first === undefined ? "" : ` at ${first.path}: ${first.message}`}`);
+  }
+}
+
+export function assertPreflightRefusedRecord(value: unknown): asserts value is PreflightRefusedRecord {
+  if (!Value.Check(PreflightRefusedRecordSchema, value)) {
+    const first = [...Value.Errors(PreflightRefusedRecordSchema, value)][0];
+    throw new Error(`invalid ${PREFLIGHT_REFUSED_SCHEMA_ID} record${first === undefined ? "" : ` at ${first.path}: ${first.message}`}`);
+  }
+  // A field is named exactly when one failed; a stale binding names none.
+  if ((value.refusal === "field-failed") !== (value.field !== null)) {
+    throw new Error(`invalid ${PREFLIGHT_REFUSED_SCHEMA_ID} record at /field: ${value.refusal} ${value.field === null ? "requires" : "takes no"} field`);
   }
 }

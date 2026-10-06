@@ -137,6 +137,13 @@ test("write-boundary refuses no entry, an invalid entry, an entry absent from th
   refused(evaluateWriteBoundary(boundary({ request: "Ask: x", where: ["core/src/**"] })), /cannot be checked against the request: the request has no Where: line/u);
 });
 
+test("write-boundary asks nothing of a recipe with no writing phase, and still refuses any entry it is given", () => {
+  assert.deepEqual(evaluateWriteBoundary(boundary({ where: [], writers: [] })), { passed: true });
+  refused(evaluateWriteBoundary(boundary({ writers: [] })), /outside the writes of every writing role on this recipe \(none\)/u);
+  // A shift always carries a builder, so an empty --where on one is still refused.
+  refused(evaluateWriteBoundary(boundary({ where: [], writers: [], shift: SHIFT })), /no --where entry was given/u);
+});
+
 test("write-boundary does not read a glob as covered by a narrower writes glob it merely spells inside", () => {
   const narrow: WritingPhase = { phase: "builder", writes: ["core/src/*"] };
   refused(evaluateWriteBoundary(boundary({ request: request("core/src/**"), where: ["core/src/**"], writers: [narrow] })), /outside the writes/u);

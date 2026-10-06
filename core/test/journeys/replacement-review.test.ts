@@ -49,7 +49,7 @@ import {
   reviewCommand,
   type ReviewInfrastructure,
 } from "../../src/cli/commands/review.ts";
-import { startCommand } from "../../src/cli/commands/start.ts";
+import { k1Request, startUnderK1 } from "../fixtures/k1-preflight.ts";
 import type { BrokerOptions } from "../../src/execution/transport-broker.ts";
 import { CorrectionAllowanceExhausted, InteractiveOwnerRequired } from "../../src/state/errors.ts";
 import { InvalidReviewInversion } from "../../src/workflow/review-routing.ts";
@@ -182,14 +182,14 @@ async function world(options: {
 
   const projection = createDashboardProjection(stateRoot);
   const workflow = options.workflow ?? "build-review";
-  const request = "write one bounded generated source";
+  const request = k1Request("write one bounded generated source", SOURCE);
   const created = await newCommand({
     stateRoot, project: config.project.slug, taskId: `replacement-${workflow}`, repository: canonical,
     request, workflow, tier: 2, configSnapshotJson: toConfigSnapshotJson(config),
     callCeilings: callCeilingsOf(config.risk.call_ceiling),
     allowance: config.risk.correction_allowance, projectRecord: projection.project,
   });
-  const prepared = await startCommand({
+  const prepared = await startUnderK1({
     attemptDir: created.attemptDir, worktreeRoot: join(root, "worktrees"), configPath,
     preflight: () => ({ adapter: true, sandbox: true, observability: true }), projectRecord: projection.project,
   });

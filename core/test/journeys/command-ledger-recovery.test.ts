@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { loadConfig } from "../../src/config/load.ts";
 import { newCommand } from "../../src/cli/commands/new.ts";
-import { startCommand } from "../../src/cli/commands/start.ts";
+import { k1Request, startUnderK1 } from "../fixtures/k1-preflight.ts";
 import { readAttempt, nextRevision, persistAttempt } from "../../src/cli/commands/attempt.ts";
 import type { AttemptEvidence } from "../../src/observability/attempt-evidence.ts";
 import { argvDigest, gateConfigDigest, gatesConfigDigest, COMMAND_LEDGER_PROTOCOL_VERSION } from "../../src/contracts/command-ledger.ts";
@@ -43,9 +43,9 @@ async function world() {
   const configPath = join(root, "awsf.config.yaml");
   writeFileSync(configPath, configText);
   const created = await newCommand({ stateRoot, project: config.project.slug, taskId: "fixture-command-ledger",
-    repository: canonical, request: "measure one candidate", workflow: "build", tier: 1,
+    repository: canonical, request: k1Request("measure one candidate", "core/src/example.ts"), workflow: "build", tier: 1,
     routeOverrides: {}, configSnapshotJson: JSON.stringify(config) });
-  await startCommand({ attemptDir: created.attemptDir, worktreeRoot: join(root, "worktrees"), configPath,
+  await startUnderK1({ attemptDir: created.attemptDir, worktreeRoot: join(root, "worktrees"), configPath,
     preflight: () => ({ adapter: true, sandbox: true, observability: true }) });
   const status = await readAttempt(created.attemptDir);
   const candidate = git(status.worktree!, "rev-parse", "HEAD");

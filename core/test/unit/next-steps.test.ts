@@ -223,11 +223,12 @@ test("next is a registered host record, disjoint from agent-output envelopes", (
 });
 
 test("non-transition acts follow their own command state checks and reads work on terminal states", () => {
-  assert.deepEqual(NON_TRANSITION_ACTS.map(act => act.verb), ["preflight", "raise", "grant", "journey", "attribute", "status", "watch"]);
+  assert.deepEqual(NON_TRANSITION_ACTS.map(act => act.verb), ["preflight", "confirm", "raise", "grant", "journey", "attribute", "status", "watch"]);
   for (const state of TASK_STATES) {
     const acts = nextSteps(inputFor(state)).steps.filter(step => step.kind !== "edge");
     const verbs = acts.map(act => act.verb);
     assert.equal(verbs.includes("preflight"), state === "DRAFT", state);
+    assert.equal(verbs.includes("confirm"), state === "DRAFT", state);
     assert.equal(verbs.includes("raise"), !["LANDED", "PUBLISHED", "BLOCKED", "CANCELLED"].includes(state), state);
     assert.equal(verbs.includes("grant"), state === "PREPARED", state);
     assert.equal(verbs.includes("journey"), state === "AWAITING_OWNER", state);
@@ -249,6 +250,25 @@ test("non-transition acts follow their own command state checks and reads work o
     assert.equal(grants({ ...inputFor("RUNNING"), recovery: { kind }, budget: { callsReserved: 1 } }).length, 0);
   }
   assert.equal(grants({ ...inputFor("RUNNING"), recovery: { kind: "ceiling-pause" } }).length, 0);
+});
+
+test("K1's measured requirements fill only the L1 step's requires, and confirm is the owner's at DRAFT", () => {
+  const k1 = [{ check: "K1", field: "suite", status: "failed" }, { check: "K1", field: "confirmation", status: "missing" }];
+  for (const state of TASK_STATES) {
+    const output = nextSteps({ ...inputFor(state), k1 });
+    assert.equal(Value.Check(NextStepsSchema, output), true, state);
+    for (const step of output.steps) {
+      assert.deepEqual(step.requires, step.kind === "edge" && step.edge === "L1" ? k1 : [], `${state}/${step.verb}`);
+    }
+  }
+  const draft = nextSteps({ ...inputFor("DRAFT"), k1 });
+  const confirm = draft.steps.find(step => step.verb === "confirm")!;
+  assert.deepEqual([confirm.kind, confirm.who, confirm.interactive, confirm.spendsCalls], ["act", "owner", true, false]);
+  // Unmeasured is not satisfied, and never invents a requirement.
+  assert.deepEqual(nextSteps(inputFor("DRAFT")).steps.find(step => step.verb === "start")!.requires, []);
+  // The model shares no array with its input.
+  draft.steps.find(step => step.verb === "start")!.requires.pop();
+  assert.equal(k1.length, 2);
 });
 
 test("cancel advice carries cause and reason placeholders on every implemented cancel edge", () => {

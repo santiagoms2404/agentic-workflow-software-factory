@@ -25,6 +25,7 @@ import { retryCommand } from "../../../src/cli/commands/retry.ts";
 import { startCommand } from "../../../src/cli/commands/start.ts";
 import { formatStatusEvidence, statusCommand } from "../../../src/cli/commands/status.ts";
 import type { AttemptEvidence } from "../../../src/observability/attempt-evidence.ts";
+import { k1Request, prepareK1, startUnderK1 } from "../../fixtures/k1-preflight.ts";
 
 function git(repository: string, ...argv: string[]): string {
   return execFileSync("git", ["-C", repository, ...argv], { encoding: "utf8" }).trim();
@@ -51,10 +52,16 @@ test("a missing configured seed fails actionably before PREPARED", async () => {
     const stateRoot = join(root, "state");
     const created = await newCommand({
       stateRoot, project: "agentic-workflow-software-factory", taskId: "missing-seed",
-      repository: repo, request: "prove preparation refusal", workflow: "build", tier: 1,
+      repository: repo, request: k1Request("prove preparation refusal", "core/src/example.ts"), workflow: "build", tier: 1,
     });
     const configPath = join(root, "awsf.config.yaml");
     writeFileSync(configPath, readFileSync(resolve("awsf.config.yaml"), "utf8").replace("seed_paths: [node_modules]", "seed_paths: [missing-cache]"));
+    // K1 passes while the seed source exists, ignored without a commit; it goes missing before start.
+    writeFileSync(join(repo, ".git", "info", "exclude"), "missing-cache/\n");
+    mkdirSync(join(repo, "missing-cache"));
+    writeFileSync(join(repo, "missing-cache", "entry"), "cache\n");
+    await prepareK1({ attemptDir: created.attemptDir, configPath, worktreeRoot: join(root, "worktrees") });
+    rmSync(join(repo, "missing-cache"), { recursive: true, force: true });
     await assert.rejects(
       startCommand({
         attemptDir: created.attemptDir,
@@ -93,10 +100,12 @@ test("start rejects a missing configured prompt before worktree creation or adap
       project: "agentic-workflow-software-factory",
       taskId: "missing-prompt",
       repository: repo,
-      request: "refuse before spending a call",
+      request: k1Request("refuse before spending a call", "core/src/example.ts"),
       workflow: "build",
       tier: 1,
     });
+    // K1 measures no prompt, so it passes; the configured prompt check refuses after it.
+    await prepareK1({ attemptDir: created.attemptDir, configPath, worktreeRoot: join(root, "baseline") });
 
     await assert.rejects(
       startCommand({
@@ -290,7 +299,7 @@ test("new, start, status, cancel, and retry preserve the lifecycle and task-life
       project: "agentic-workflow-software-factory",
       taskId: "T21-unit",
       repository: repo,
-      request: "exercise owner commands",
+      request: k1Request("exercise owner commands", "core/src/example.ts"),
       workflow: "build-review",
       tier: 2,
       configSnapshotJson: JSON.stringify({ gates: { test: { argv: ["npm", "run", "old-test"] } } }),
@@ -304,7 +313,7 @@ test("new, start, status, cancel, and retry preserve the lifecycle and task-life
       attempt: 1,
     });
 
-    const prepared = await startCommand({
+    const prepared = await startUnderK1({
       attemptDir: created.attemptDir,
       worktreeRoot: join(root, "worktrees"),
       configPath: resolve("awsf.config.yaml"),
@@ -439,9 +448,11 @@ test("a recipe whose declared correction round no call can pay for is refused at
     writeFileSync(configPath, readFileSync(resolve("awsf.config.yaml"), "utf8"));
     const created = await newCommand({
       stateRoot, project: "agentic-workflow-software-factory", taskId: "unfundable-correction",
-      repository: repo, request: "prove the headroom refusal", workflow: "scout", tier: 0,
+      repository: repo, request: k1Request("prove the headroom refusal", "nothing; a scout writes no file"), workflow: "scout", tier: 0,
     });
     const worktreeRoot = join(root, "worktrees");
+    // The headroom check follows K1, so K1's records come first, measured outside this root.
+    await prepareK1({ attemptDir: created.attemptDir, configPath, worktreeRoot: join(root, "baseline") });
     await assert.rejects(
       startCommand({ attemptDir: created.attemptDir, worktreeRoot, configPath,
         preflight: () => ({ adapter: true, sandbox: true, observability: true }) }),
@@ -488,9 +499,10 @@ test("a route with spare headroom, and a warm route with none, both start unchan
     ] as const) {
       const created = await newCommand({
         stateRoot, project: "agentic-workflow-software-factory", taskId,
-        repository: repo, request: "prove the headroom check admits this route", workflow, tier,
+        repository: repo, request: k1Request("prove the headroom check admits this route", "core/src/example.ts"), workflow, tier,
       });
-      const prepared = await startCommand({
+      // Intake is exempt from K1 by its workflow id; the build route is not.
+      const prepared = await (workflow === "intake" ? startCommand : startUnderK1)({
         attemptDir: created.attemptDir, worktreeRoot: join(root, "worktrees", taskId), configPath,
         preflight: () => ({ adapter: true, sandbox: true, observability: true }),
       });

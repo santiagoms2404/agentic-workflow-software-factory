@@ -48,7 +48,7 @@ import {
   reworkCommand,
   type ReworkInfrastructure,
 } from "../../src/cli/commands/rework.ts";
-import { startCommand } from "../../src/cli/commands/start.ts";
+import { k1Request, startUnderK1 } from "../fixtures/k1-preflight.ts";
 import type { BrokerOptions } from "../../src/execution/transport-broker.ts";
 import { agentsForSession, gatesForSession, getSession, phasesForSession, routesForSession, transitionsForSession } from "../../src/observability/queries.ts";
 import { openDatabase } from "../../src/observability/sqlite.ts";
@@ -182,14 +182,14 @@ async function world(options: {
 
   const projection = createDashboardProjection(stateRoot);
   const workflow = options.workflow ?? "build-review";
-  const request = "write one bounded generated source";
+  const request = k1Request("write one bounded generated source", SOURCE);
   const created = await newCommand({
     stateRoot, project: config.project.slug, taskId: `rework-t2-${workflow}`, repository: canonical,
     request, workflow, tier: options.tier ?? 2, configSnapshotJson: toConfigSnapshotJson(config),
     callCeilings: callCeilingsOf(config.risk.call_ceiling),
     allowance: config.risk.correction_allowance, projectRecord: projection.project,
   });
-  const prepared = await startCommand({
+  const prepared = await startUnderK1({
     attemptDir: created.attemptDir, worktreeRoot: join(root, "worktrees"), configPath,
     preflight: () => ({ adapter: true, sandbox: true, observability: true }), projectRecord: projection.project,
   });

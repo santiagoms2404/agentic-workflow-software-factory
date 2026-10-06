@@ -523,6 +523,15 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
         .run(`${sessionId}:request-confirmation:${sourceSeq}`, sessionId, sourceSeq, sourceSeq,
           stringifyRedacted(evidence.record), evidence.record.at);
       return;
+    case "preflight-refused":
+      // Keyed by journal position: each refused start is its own row, and the
+      // attempt's lifecycle row is untouched because the attempt stays DRAFT.
+      db.prepare(`INSERT OR IGNORE INTO events
+        (event_id, session_id, phase_id, first_source_seq, last_source_seq, type, name,
+         payload_json, started_at) VALUES (?, ?, NULL, ?, ?, 'notice', 'preflight refused', ?, ?)`)
+        .run(`${sessionId}:preflight-refused:${sourceSeq}`, sessionId, sourceSeq, sourceSeq,
+          stringifyRedacted(evidence.record), evidence.record.at);
+      return;
     case "transition":
       db.prepare(`INSERT OR IGNORE INTO transitions
         (transition_id, session_id, seq, from_state, to_state, actor, edge_id, reason_source,

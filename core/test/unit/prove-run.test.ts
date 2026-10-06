@@ -39,10 +39,14 @@ async function runReplay(fixture: World, taskId: string, routeOverrides: Readonl
     configSnapshotJson: toConfigSnapshotJson(fixture.config), callCeilings: callCeilingsOf(fixture.config.risk.call_ceiling),
     allowance: fixture.config.risk.correction_allowance,
   });
+  // A replay is exempt from K1 by its recorded workflow id (W01-Q4): it starts
+  // with no driver-preflight or confirmation record, and nothing is refused.
   const prepared = await startCommand({
     attemptDir: created.attemptDir, worktreeRoot: fixture.worktreeRoot, configPath: fixture.configPath,
     preflight: () => ({ adapter: true, sandbox: true, observability: true }),
   });
+  assert.equal((await readAttemptEvidence(created.attemptDir)).some((entry) =>
+    entry.type === "driver-preflight" || entry.type === "request-confirmation" || entry.type === "preflight-refused"), false);
   const launches: string[] = [];
   const brokered: string[] = [];
   const commands: (readonly string[])[] = [];

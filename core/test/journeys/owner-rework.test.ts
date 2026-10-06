@@ -30,7 +30,7 @@ import {
   OwnerReworkDefectRequired,
   type ReworkInfrastructure,
 } from "../../src/cli/commands/rework.ts";
-import { startCommand } from "../../src/cli/commands/start.ts";
+import { k1Request, startUnderK1 } from "../fixtures/k1-preflight.ts";
 import { loadConfig } from "../../src/config/load.ts";
 import { toConfigSnapshotJson } from "../../src/config/effective-config.ts";
 import { ProcessTransportBroker, type BrokerOptions } from "../../src/execution/transport-broker.ts";
@@ -113,11 +113,12 @@ async function world(options: { commandExit?: number; workflow?: "build" | "plan
   const projection = createDashboardProjection(stateRoot);
   const created = await newCommand({
     stateRoot, project: config.project.slug, taskId: `rework-${options.workflow ?? "build"}`,
-    repository: canonical, request: options.request ?? "write the bounded generated source", workflow: options.workflow ?? "build", tier: 1,
+    repository: canonical, request: k1Request(options.request ?? "write the bounded generated source", "core/src/generated.ts"),
+    workflow: options.workflow ?? "build", tier: 1,
     configSnapshotJson: toConfigSnapshotJson(config), allowance: config.risk.correction_allowance,
     projectRecord: projection.project,
   });
-  const prepared = await startCommand({
+  const prepared = await startUnderK1({
     attemptDir: created.attemptDir, worktreeRoot: join(root, "worktrees"), configPath,
     preflight: () => ({ adapter: true, sandbox: true, observability: true }), projectRecord: projection.project,
   });

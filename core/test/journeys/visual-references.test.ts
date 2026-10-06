@@ -26,7 +26,7 @@ import type { BrokerOptions } from "../../src/execution/transport-broker.ts";
 import { PiCodexAdapter } from "../../src/adapters/pi-codex.ts";
 import { createDashboardProjection } from "../../src/cli/commands/dashboard-projection.ts";
 import { newCommand } from "../../src/cli/commands/new.ts";
-import { startCommand } from "../../src/cli/commands/start.ts";
+import { k1Request, startUnderK1 } from "../fixtures/k1-preflight.ts";
 import { resumeProductionCommand, runProductionCommand, type ProductionInfrastructure } from "../../src/cli/commands/production-run.ts";
 import { raiseCommand } from "../../src/cli/commands/raise.ts";
 import { correctionHeadroom } from "../../src/cli/commands/workflows.ts";
@@ -245,7 +245,7 @@ async function world(options: WorldOptions = {}) {
   const workflow = options.workflow ?? "build";
   const projection = createDashboardProjection(stateRoot);
   const created = await newCommand({ stateRoot, project: config.project.slug, taskId: `visual-${workflow}`, repository: canonical,
-    request: "write one bounded source that matches the bound references", workflow, tier: workflow === "build-review" ? 2 : 1,
+    request: k1Request("write one bounded source that matches the bound references", "core/src/example.ts"), workflow, tier: workflow === "build-review" ? 2 : 1,
     configSnapshotJson: JSON.stringify(config), projectRecord: projection.project });
   const headroom = correctionHeadroom(config, workflowRecipe(workflow)!);
   if (headroom.unfundable) {
@@ -257,7 +257,7 @@ async function world(options: WorldOptions = {}) {
     bindingPath = join(root, "owner binding.yaml");
     writeFileSync(bindingPath, JSON.stringify(bindingFor(library, undefined, options.phases ?? ["builder"])));
   }
-  await startCommand({ attemptDir: created.attemptDir, worktreeRoot: join(root, "worktrees"), configPath,
+  await startUnderK1({ attemptDir: created.attemptDir, worktreeRoot: join(root, "worktrees"), configPath,
     preflight: () => ({ adapter: true, sandbox: true, observability: true }), projectRecord: projection.project,
     ...(bindingPath === undefined ? {} : { visualReferences: bindingPath }) });
   options.beforeRun?.(library);

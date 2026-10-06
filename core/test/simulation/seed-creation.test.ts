@@ -6,6 +6,8 @@ import { seedCommand } from "../../src/cli/commands/seed.ts";
 import { startCommand } from "../../src/cli/commands/start.ts";
 import { newCommand } from "../../src/cli/commands/new.ts";
 import { seedFixture } from "../fixtures/seeded-continuation.ts";
+import { prepareK1 } from "../fixtures/k1-preflight.ts";
+import { AttemptWorktreeExists } from "../../src/git/worktrees.ts";
 
 // These are isolated crash-cut stores. No retained factory attempt is opened.
 test("seed creation journal survives a missing status projection without becoming an ordinary task", async () => {
@@ -51,7 +53,9 @@ test("worktree collision after seed creation is a refusal that retains existing 
   const path = join(root, created.status!.sessionId);
   mkdirSync(path, { recursive: true });
   writeFileSync(join(path, "partial.txt"), "retained foreign bytes");
+  // K1's records are in place, so the refusal is the collision's own.
+  await prepareK1({ attemptDir: created.attemptDir!, configPath: world.configPath, worktreeRoot: join(world.root, "baseline") });
   await assert.rejects(startCommand({ attemptDir: created.attemptDir!, configPath: world.configPath, worktreeRoot: root,
-    preflight: () => ({ adapter: true, sandbox: true, observability: true }) }));
+    preflight: () => ({ adapter: true, sandbox: true, observability: true }) }), AttemptWorktreeExists);
   assert.equal(readFileSync(join(path, "partial.txt"), "utf8"), "retained foreign bytes");
 });

@@ -45,7 +45,7 @@ import type {
 import { type BrokerOptions } from "../../src/execution/transport-broker.ts";
 import { createDashboardProjection } from "../../src/cli/commands/dashboard-projection.ts";
 import { newCommand } from "../../src/cli/commands/new.ts";
-import { startCommand } from "../../src/cli/commands/start.ts";
+import { k1Request, startUnderK1 } from "../fixtures/k1-preflight.ts";
 import { runProductionCommand } from "../../src/cli/commands/production-run.ts";
 import { readAttempt } from "../../src/cli/commands/attempt.ts";
 import { publicApiValue } from "../../src/api/responses.ts";
@@ -418,10 +418,10 @@ async function fixture(direction: Direction, configure: (config: AwsfConfig) => 
   const projection = createDashboardProjection(stateRoot);
   const created = await newCommand({
     stateRoot, project: config.project.slug, taskId: `fixture-correction-${direction}`, repository: canonical,
-    request: "write one bounded source", workflow: "build-review", tier: 2,
+    request: k1Request("write one bounded source", "core/src/example.ts"), workflow: "build-review", tier: 2,
     configSnapshotJson: JSON.stringify(config), projectRecord: projection.project,
   });
-  await startCommand({
+  await startUnderK1({
     attemptDir: created.attemptDir, worktreeRoot: join(root, "worktrees"), configPath,
     preflight: () => ({ adapter: true, sandbox: true, observability: true }),
     projectRecord: projection.project,

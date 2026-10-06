@@ -549,13 +549,16 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
     const selectedAttempt = parsed.flags.attempt === undefined ? undefined : Number(parsed.flags.attempt);
     // next is intentionally before projection construction, which can write SQLite.
     if (command === "next") {
-      const allowed = new Set(["attempt", "json", "project", "state-root", "config"]);
+      const allowed = new Set(["attempt", "json", "project", "state-root", "config", "worktree-root"]);
       if (parsed.positionals.length !== 1 || parsed.repositories.length !== 0 || parsed.files.length !== 0 ||
           parsed.routes.length !== 0 || parsed.milestones.length !== 0 || Object.keys(parsed.flags).some(flag => !allowed.has(flag))) {
         throw new Error("usage: awsf next <task> [--attempt n] [--json]");
       }
       const located = await locateAttempt(stateRoot, project, taskId, selectedAttempt);
-      const result = await nextCommand(located.attemptDir);
+      const result = await nextCommand(located.attemptDir, {
+        stateRoot, config,
+        worktreeRoot: resolve(parsed.flags["worktree-root"] ?? env.AWSF_WORKTREE_ROOT ?? defaultWorktreeRoot(stateRoot)),
+      });
       if (parsed.flags.json === "true") out(JSON.stringify(result.model));
       else for (const line of result.lines) out(line);
       return 0;
@@ -708,6 +711,8 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
           attemptDir: located.attemptDir,
           worktreeRoot: resolve(parsed.flags["worktree-root"] ?? env.AWSF_WORKTREE_ROOT ?? defaultWorktreeRoot(stateRoot)),
           configPath,
+          // --stub replaces only the adapter's availability probe. K1 runs before
+          // it inside startCommand, and no flag of this arm reaches past K1.
           ...(parsed.flags.stub === "true" ? { preflight: () => ({ adapter: true, sandbox: true, observability: true }) } : {}),
           ...(parsed.flags["visual-references"] === undefined ? {} : { visualReferences: parsed.flags["visual-references"] }),
           projectRecord: projection.project,

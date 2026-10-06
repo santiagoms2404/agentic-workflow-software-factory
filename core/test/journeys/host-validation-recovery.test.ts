@@ -17,7 +17,7 @@ import { changesSinceBase, runGit, systemGitRunner } from "../../src/git/changes
 import { HOST_AUTHOR, commitAsHost } from "../../src/git/commit.ts";
 import { hostCommitContentDigest } from "../../src/git/commit-reconcile.ts";
 import { newCommand } from "../../src/cli/commands/new.ts";
-import { startCommand } from "../../src/cli/commands/start.ts";
+import { k1Request, startUnderK1 } from "../fixtures/k1-preflight.ts";
 import { persistAttempt, readAttempt, type AttemptStatus } from "../../src/cli/commands/attempt.ts";
 import type { AttemptEvidence, PhaseEvidenceRecord } from "../../src/observability/attempt-evidence.ts";
 import { inspectPhaseRecovery, verifyRecoveryWorktree } from "../../src/workflow/phase-recovery.ts";
@@ -56,9 +56,9 @@ async function world() {
   const configPath = join(root, "awsf.config.yaml");
   writeFileSync(configPath, configText);
   const created = await newCommand({ stateRoot, project: config.project.slug, taskId: "fixture-host-validation",
-    repository: canonical, request: "write one bounded source", workflow: "build", tier: 1,
+    repository: canonical, request: k1Request("write one bounded source", "core/src/example.ts"), workflow: "build", tier: 1,
     routeOverrides: {}, configSnapshotJson: JSON.stringify(config) });
-  await startCommand({ attemptDir: created.attemptDir, worktreeRoot: join(root, "worktrees"), configPath,
+  await startUnderK1({ attemptDir: created.attemptDir, worktreeRoot: join(root, "worktrees"), configPath,
     preflight: () => ({ adapter: true, sandbox: true, observability: true }) });
   return { root, canonical, stateRoot, configPath, attemptDir: created.attemptDir,
     dispose: () => rmSync(root, { recursive: true, force: true }) };

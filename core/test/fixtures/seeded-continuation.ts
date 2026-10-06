@@ -11,6 +11,7 @@ import { runSystemCommand, type BrokerOptions } from "../../src/execution/transp
 import { isTaskEdgeRegistration, reservationIdOf, type HarnessAdapter, type ModelRequest, type ProcessSpec, type TransportBroker, type BrokerProcessRegistration, type ProcessTransport } from "../../src/adapters/interface.ts";
 import type { NormalizedEvent } from "../../src/contracts/normalized-events.ts";
 import type { SeedCommandOptions } from "../../src/cli/commands/seed.ts";
+import { k1Request } from "./k1-preflight.ts";
 
 export const AT = "2026-09-01T00:00:00.000Z";
 export const INHERITED = "core/src/inherited.ts";
@@ -83,7 +84,7 @@ export async function seedFixture(options: { inherited?: string; sealed?: "BLOCK
     landingApproval: { candidateSha, summary: "source assurance", approvedAt: AT } });
   const lines: string[] = [];
   const seedOptions: SeedCommandOptions = { stateRoot, project: config.project.slug, repository, targetTaskId: "target",
-    sourceTaskId: "source", sourceAttempt: 1, candidateSha, request: "add one target-authored change", workflow: "build-review",
+    sourceTaskId: "source", sourceAttempt: 1, candidateSha, request: k1Request("add one target-authored change", AUTHORED), workflow: "build-review",
     config, configPath, terminal: { interactive: true, write: (line) => { lines.push(line); }, confirm: async () => true }, now: () => AT };
   return { root, repository, sourceTree, stateRoot, baseSha, candidateSha, sourceDir: created.attemptDir,
     source, config, configPath, seedOptions, lines };

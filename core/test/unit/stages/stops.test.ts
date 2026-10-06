@@ -23,7 +23,7 @@ import { newCommand } from "../../../src/cli/commands/new.ts";
 import { registerProject } from "../../../src/cli/commands/project.ts";
 import { runProductionCommand } from "../../../src/cli/commands/production-run.ts";
 import { fundCorrections } from "../cli/_offline-route.ts";
-import { startCommand } from "../../../src/cli/commands/start.ts";
+import { k1Request, startUnderK1 } from "../../fixtures/k1-preflight.ts";
 import { readAttempt } from "../../../src/cli/commands/attempt.ts";
 import { createDashboardProjection } from "../../../src/cli/commands/dashboard-projection.ts";
 import { loadConfig } from "../../../src/config/load.ts";
@@ -44,7 +44,7 @@ import { LEGAL_EDGES, TERMINAL_STATES, type TaskState } from "../../../src/state
 import { STAGES, type StageId } from "../../../src/stages/contract.ts";
 
 const STUB_PROVIDER = resolve("core/test/fixtures/providers/stub/stub-provider.mjs");
-const REQUEST = "Make design claims traceable into rendered tickets.";
+const REQUEST = k1Request("Make design claims traceable into rendered tickets.", "nothing in the repository; the host renders the plan");
 const PLAN_STEM = "generated-plan";
 
 interface Boundary {
@@ -263,7 +263,8 @@ function fixtureConfig(): AwsfConfig {
       thinking: "none" as const,
       harness: { adapter: "stub", continuity: "none" as const },
     })),
-    gates: {},
+    // K1's suite field needs one configured gate to show the base is green.
+    gates: { test: { argv: ["node", "-e", "process.exit(0)"], timeout_seconds: 10 } },
   };
 }
 
@@ -355,14 +356,15 @@ async function workflowWorld(
     project: config.project.slug,
     taskId: workflow === "design-to-plan" ? PLAN_STEM : "generated-build",
     repository: world.canonical,
-    request: REQUEST,
+    // A design-to-plan writes no repository file; a plan-build-test's builder does.
+    request: workflow === "design-to-plan" ? REQUEST : k1Request("Build the generated plan's first ticket.", "core/src/generated.ts"),
     workflow,
     tier: 1,
     configSnapshotJson: toConfigSnapshotJson(config),
     projectRecord: world.projection.project,
   });
   await fundCorrections(created.attemptDir, config, workflow, world.projection.project);
-  const prepared = await startCommand({
+  const prepared = await startUnderK1({
     attemptDir: created.attemptDir,
     worktreeRoot: join(world.root, "worktrees"),
     configPath,

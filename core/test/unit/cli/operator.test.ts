@@ -9,7 +9,7 @@ import { createDashboardProjection } from "../../../src/cli/commands/dashboard-p
 import { newCommand } from "../../../src/cli/commands/new.ts";
 import { nextRevision, persistAttempt, readAttempt } from "../../../src/cli/commands/attempt.ts";
 import { runStubCommand } from "../../../src/cli/commands/run.ts";
-import { startCommand } from "../../../src/cli/commands/start.ts";
+import { k1Request, startUnderK1 } from "../../fixtures/k1-preflight.ts";
 import { landCommand } from "../../../src/cli/commands/land.ts";
 import { execFileSync } from "node:child_process";
 import { get, type Server } from "node:http";
@@ -215,8 +215,8 @@ test("the fixture simple-sdlc reaches the interactive owner boundary without a p
     execFileSync("git", ["-C", canonical, "-c", "user.name=Santiago Marin", "-c", "user.email=santiagomarinsuarez@me.com", "commit", "-m", "test: seed stub sdlc"], { stdio: "ignore" });
     mkdirSync(join(canonical, "node_modules", "fixture"), { recursive: true });
     writeFileSync(join(canonical, "node_modules", "fixture", "index.js"), "dependency\n");
-    const created = await newCommand({ stateRoot: join(root, "state"), project: "agentic-workflow-software-factory", taskId: "T22", repository: canonical, request: "stub", workflow: "simple-sdlc", tier: 2 });
-    await startCommand({ attemptDir: created.attemptDir, worktreeRoot: join(root, "worktrees"), configPath: "awsf.config.yaml", preflight: () => ({ adapter: true, sandbox: true, observability: true }) });
+    const created = await newCommand({ stateRoot: join(root, "state"), project: "agentic-workflow-software-factory", taskId: "T22", repository: canonical, request: k1Request("stub", "core/src/example.ts"), workflow: "simple-sdlc", tier: 2 });
+    await startUnderK1({ attemptDir: created.attemptDir, worktreeRoot: join(root, "worktrees"), configPath: "awsf.config.yaml", preflight: () => ({ adapter: true, sandbox: true, observability: true }) });
     const status = await runStubCommand(created.attemptDir);
     assert.equal(status.lifecycleState, "AWAITING_OWNER");
     assert.ok(status.candidateSha !== null);
@@ -241,10 +241,10 @@ test("the bounded fixture window is RUNNING in WAL and rebuild preserves its fin
     writeFileSync(join(canonical, "node_modules", "fixture", "index.js"), "dependency\n");
     const created = await newCommand({
       stateRoot, project: "agentic-workflow-software-factory", taskId: "T26-live",
-      repository: canonical, request: "bounded live fixture", workflow: "simple-sdlc", tier: 2,
+      repository: canonical, request: k1Request("bounded live fixture", "core/src/example.ts"), workflow: "simple-sdlc", tier: 2,
       projectRecord: projection.project,
     });
-    await startCommand({
+    await startUnderK1({
       attemptDir: created.attemptDir,
       worktreeRoot: join(root, "worktrees"),
       configPath: "awsf.config.yaml",
@@ -274,7 +274,9 @@ test("the bounded fixture window is RUNNING in WAL and rebuild preserves its fin
     const rebuilt = openDatabase(join(stateRoot, "awsf.db"), { readonly: true });
     try {
       assert.equal(getSession(rebuilt, created.status.sessionId)?.lifecycle_state, "AWAITING_OWNER");
-      assert.equal(pollEvents(rebuilt, created.status.sessionId, 0).length, 0, "CLI records are not fake provider events");
+      // K1's two host records are session notices; nothing else is, and no provider event is faked.
+      assert.deepEqual(pollEvents(rebuilt, created.status.sessionId, 0).map((event) => [event.type, event.name]),
+        [["notice", "driver preflight"], ["notice", "request confirmation"]], "CLI records are not fake provider events");
       assert.equal(projectionHealth(rebuilt).journalMode, "wal");
     } finally { rebuilt.close(); }
   } finally {

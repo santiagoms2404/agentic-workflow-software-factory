@@ -77,8 +77,10 @@ import {
   installPrompts,
   plan,
   prepareTask,
+  REQUEST,
   review,
 } from "../unit/cli/_offline-route.ts";
+import { k1Request } from "../fixtures/k1-preflight.ts";
 
 const SLUG = "five-stage-journey";
 const REPOSITORY_ID = "canonical";
@@ -87,8 +89,9 @@ const BUILD_TASK = "five-stage-build";
 const BUILT_FILE = "core/src/generated.ts";
 const BRANCH = "published";
 const ROLES = ["designer", "architecture-reviewer", "planner", "builder"] as const;
-const PLAN_REQUEST = "Make design claims traceable into rendered tickets.";
-const BUILD_REQUEST = "Write one bounded source file the host can gate.";
+// The canned design answers the offline route's recorded request, in K1's four lines.
+const PLAN_REQUEST = REQUEST;
+const BUILD_REQUEST = k1Request("Write one bounded source file the host can gate.", "core/src/generated.ts");
 const REPOSITORY_ROOT = join(import.meta.dirname, "..", "..", "..");
 const W11_PLAN = "specs/awsf-v2-w11-five-stage-ladder.html";
 const FIXTURE_ROOT = join(REPOSITORY_ROOT, "core", "test", "fixtures", "stages");

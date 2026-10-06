@@ -15,6 +15,7 @@ import { sealShiftManifest } from "../../../src/contracts/shift-selection-record
 import type { AttemptEvidence } from "../../../src/observability/attempt-evidence.ts";
 import { ticketFileDigest } from "../../../src/persistence/plan-ticket-body.ts";
 import { seedFixture, git } from "../../fixtures/seeded-continuation.ts";
+import { prepareK1, startUnderK1 } from "../../fixtures/k1-preflight.ts";
 
 for (const variant of ["accepted", "wrong-phase", "wrong-round", "not-succeeded"] as const) {
   test(`seed recognizes atomic builder completion: ${variant}`, async () => {
@@ -218,17 +219,20 @@ test("removed seed projection and assurance-transfer fields are rejected", async
   const world = await seedFixture();
   const created = await seedCommand(world.seedOptions);
   assert.throws(() => assertCandidateSeed({ ...created.status!.seed, sourceApprovalsCopied: true }), /assurance-transfer/);
-  const status = { ...created.status!, seed: null };
+  // K1's records are written before the tamper, so start reaches the seed check.
+  await prepareK1({ attemptDir: created.attemptDir!, configPath: world.configPath, worktreeRoot: join(world.root, "baseline") });
+  const status = { ...(await readAttempt(created.attemptDir!)), seed: null };
   writeFileSync(join(created.attemptDir!, "status.json"), JSON.stringify(status));
   await assert.rejects(verifiedTargetSeed(created.attemptDir!, status), /status does not equal/);
   await assert.rejects(startCommand({ attemptDir: created.attemptDir!, configPath: world.configPath, worktreeRoot: join(world.root, "targets"),
-    preflight: () => ({ adapter: true, sandbox: true, observability: true }) }));
+    preflight: () => ({ adapter: true, sandbox: true, observability: true }) }), /status does not equal/);
   assert.equal(existsSync(join(world.root, "targets")), false);
 });
 
 test("startup refuses changed source provenance and never creates a target worktree", async () => {
   const world = await seedFixture();
   const created = await seedCommand(world.seedOptions);
+  await prepareK1({ attemptDir: created.attemptDir!, configPath: world.configPath, worktreeRoot: join(world.root, "baseline") });
   const path = join(world.sourceDir, "journal.jsonl");
   writeFileSync(path, readFileSync(path, "utf8") + "\n");
   await assert.rejects(startCommand({ attemptDir: created.attemptDir!, configPath: world.configPath, worktreeRoot: join(world.root, "targets"),
@@ -269,7 +273,7 @@ test("normal creation cannot turn an existing seeded task into an unseeded task"
 test("PREPARED validation refuses a moved seeded target HEAD before provider lookup", async () => {
   const world = await seedFixture();
   const created = await seedCommand(world.seedOptions);
-  const prepared = await startCommand({ attemptDir: created.attemptDir!, configPath: world.configPath, worktreeRoot: join(world.root, "targets"),
+  const prepared = await startUnderK1({ attemptDir: created.attemptDir!, configPath: world.configPath, worktreeRoot: join(world.root, "targets"),
     preflight: () => ({ adapter: true, sandbox: true, observability: true }) });
   git(prepared.worktree!, "checkout", "--detach", world.baseSha);
   let lookups = 0;

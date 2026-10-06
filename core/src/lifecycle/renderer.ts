@@ -69,7 +69,22 @@ export function renderNextAction(model: NextSteps, context: AdviceContext = {}):
   if (model.state === "LANDING") return `wait for persisted landing completion; recover with ${renderCommand(["awsf", "land", model.taskId, "--project", model.project, "--attempt", String(model.attempt)])}`;
   const wait = model.waits.length === 0 ? "" : `host transitions: ${model.waits.map(wait => `${wait.edge} to ${wait.to}`).join(", ")}`;
   const sentence = actions.length === 0 ? "no state-changing CLI action is listed" : `run ${actions.join(" or ")}`;
-  return `${sentence}${wait === "" ? "" : `; ${wait}`}; inspect with ${command(model, "watch") ?? command(model, "status")}`;
+  const held = model.steps.find(step => step.kind === "edge" && step.edge === "L1")?.requires ?? [];
+  const k1 = held.length === 0 ? "" : `start is refused until K1 clears: ${held.map(entry => `${entry.field} ${entry.status}`).join(", ")}; `;
+  return `${k1}${sentence}${wait === "" ? "" : `; ${wait}`}; inspect with ${command(model, "watch") ?? command(model, "status")}`;
+}
+
+/**
+ * K1's refusal of L1 and the command that clears it. The confirmation is the
+ * owner's act; every other field or stale binding is cleared by measuring the
+ * attempt again, after which changed paths or request text need a fresh
+ * confirmation. The attempt is still DRAFT, so start is retried afterwards.
+ */
+export function renderK1RefusalAdvice(selector: AdviceSelector, field: string | null): string {
+  const model = selectorModel(selector, "DRAFT");
+  const [preflight, confirm, start] = ["preflight", "confirm", "start"].map(verb => command(model, verb) ?? `\`awsf ${verb}\``);
+  if (field === "confirmation") return `the owner confirms the request and paths with ${confirm} at an interactive terminal; then run ${start} again`;
+  return `fix the cause and run ${preflight} again; if the request or its paths changed, the owner confirms them with ${confirm}; then run ${start} again`;
 }
 
 /** Structural input keeps the renderer pure and independent of CLI persistence. */
