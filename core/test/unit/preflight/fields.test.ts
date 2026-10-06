@@ -192,12 +192,45 @@ test("protected-paths scans every --where entry, even one the request does not s
   assert.deepEqual(outcome.plan, [{ path: "core/src/policy/path-policy.ts", phase: "builder" }]);
 });
 
+/** The protected globs under core/src, which a `core/src/**` --where covers whole. */
+const UNDER_CORE_SRC = PROTECTED.filter((glob) => glob.startsWith("core/src/")).sort();
+
 test("a --read entry wins over a --where glob that merely covers the protected path", () => {
   const facts = guarded({ request: request("core/src/**", "core/src/state/guards.ts is read only."), where: ["core/src/**"] });
-  assert.deepEqual(evaluateProtectedPaths(facts).plan, [{ path: "core/src/state/guards.ts", phase: "builder" }], "covered by where and not read: a write");
+  const covered = UNDER_CORE_SRC.map((path) => ({ path, phase: "builder" }));
+  assert.deepEqual(evaluateProtectedPaths(facts).plan, [...covered, { path: "core/src/state/guards.ts", phase: "builder" }].sort((left, right) => left.path < right.path ? -1 : 1),
+    "covered by where and not read: a write");
   const read = evaluateProtectedPaths({ ...facts, read: ["core/src/state/guards.ts"] });
   assert.deepEqual(read.verdict, { passed: true });
-  assert.deepEqual(read.plan, []);
+  assert.deepEqual(read.plan, covered, "reading one file leaves the protected globs the where entry covers as writes");
+});
+
+test("a --where glob broader than a protected glob is a protected hit for that glob, cleared only by --read", () => {
+  assert.deepEqual(UNDER_CORE_SRC, ["core/src/execution/transport-broker.ts", "core/src/observability/migrations/**", "core/src/policy/**", "core/src/state/**"]);
+  const facts = guarded({ request: request("core/src/**"), where: ["core/src/**"] });
+
+  const onShift = evaluateProtectedPaths({ ...facts, shift: SHIFT });
+  for (const glob of UNDER_CORE_SRC) {
+    refused(onShift.verdict, new RegExp(`${glob.replace(/[.*]/gu, "\\$&")} is protected by .* and in --where on a shift; a shift cannot write a protected path`, "u"));
+  }
+  assert.deepEqual(onShift.plan, []);
+
+  const fixer: WritingPhase = { phase: "fixer", writes: ["core/**"] };
+  const written = evaluateProtectedPaths({ ...facts, writers: [BUILDER, fixer, DOCUMENTER] });
+  assert.deepEqual(written.verdict, { passed: true });
+  assert.deepEqual(written.plan, UNDER_CORE_SRC.flatMap((path) => [{ path, phase: "builder" }, { path, phase: "fixer" }]),
+    "one grant requirement per covered protected glob and each phase whose role writes it");
+
+  for (const shift of [null, SHIFT]) {
+    const read = evaluateProtectedPaths({ ...facts, read: UNDER_CORE_SRC, shift });
+    assert.deepEqual(read.verdict, { passed: true });
+    assert.deepEqual(read.plan, []);
+  }
+  const partly = evaluateProtectedPaths({ ...facts, read: UNDER_CORE_SRC.slice(1), shift: SHIFT });
+  refused(partly.verdict, /^core\/src\/execution\/transport-broker\.ts is protected by .* on a shift; a shift cannot write a protected path$/u);
+
+  assert.deepEqual(evaluateProtectedPaths(guarded({ request: request("core/src/cli/**"), where: ["core/src/cli/**"] })).plan, [],
+    "a --where glob that covers no protected glob adds no hit");
 });
 
 test("protected-paths refuses a path named exactly in both lists, an invalid --read, and a write no role can be granted", () => {

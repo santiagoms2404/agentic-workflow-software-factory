@@ -1,7 +1,9 @@
 // `awsf preflight` (specs/awsf-v3-w01-driver-checks.html, task 9) on synthetic
-// repositories: the suite is reused from a landed candidate at the base or run
-// once in the project's one baseline worktree, a dirty baseline is refused and
-// left as it is, and every measured field's refusal reaches the journal.
+// repositories: the suite is reused from a landed candidate at the base, then
+// from an earlier passing preflight record at the base, or run once in the
+// project's one baseline worktree; a dirty baseline is refused and left as it
+// is; every measured field's refusal reaches the journal; and the confirmation
+// field reads the attempt's own confirmation records.
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -11,6 +13,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { main } from "../../../src/cli/main.ts";
 import { nextRevision, persistAttempt, readAttempt, type AttemptStatus } from "../../../src/cli/commands/attempt.ts";
+import { confirmCommand } from "../../../src/cli/commands/confirm.ts";
 import { createDashboardProjection } from "../../../src/cli/commands/dashboard-projection.ts";
 import { newCommand } from "../../../src/cli/commands/new.ts";
 import { rebuildCommand } from "../../../src/cli/commands/operator.ts";
@@ -27,7 +30,7 @@ import { assertDriverPreflightRecord, K1_FIELD_IDS, type DriverPreflightRecord, 
 import type { AttemptEvidence } from "../../../src/observability/attempt-evidence.ts";
 import { openDatabase } from "../../../src/observability/sqlite.ts";
 import { baselineWorktreeName } from "../../../src/preflight/baseline-worktree.ts";
-import type { GateCommandRunner } from "../../../src/preflight/suite.ts";
+import { preflightSuiteRows, type GateCommandRunner } from "../../../src/preflight/suite.ts";
 
 const PROJECT = "agentic-workflow-software-factory";
 const REQUEST = [
@@ -114,7 +117,7 @@ function field(record: DriverPreflightRecord, id: K1FieldId) {
   return found;
 }
 
-test("a missing landed record runs every gate once in the baseline worktree, and later runs reuse that worktree", async () => {
+test("a missing landed record runs every gate once in the baseline worktree; later runs reuse its rows at that base and its worktree at the next", async () => {
   const box = fixture("baseline");
   try {
     const created = await draft(box, "first");
@@ -135,15 +138,28 @@ test("a missing landed record runs every gate once in the baseline worktree, and
     assert.equal(first.status.budget.callsReserved, 0);
     assert.ok(existsSync(join(created.attemptDir, "raw", "preflight-test.txt")));
 
-    const second = await preflightCommand(options(box, created.attemptDir, gateRunner(calls)));
-    assert.equal(calls.length, 4, "a second run at the same base runs every gate once more, in the same tree");
-    assert.equal(second.suite.baseline?.path, box.baseline);
-    assert.equal(second.suite.baseline?.created, false);
-    assert.deepEqual(second.suite.baseline?.seeded, [], "a seed path already present is kept");
+    const second = await preflightCommand(options(box, created.attemptDir, gateRunner(calls), { read: ["AGENTS.md"] }));
+    assert.equal(calls.length, 2, "a second run at the same base runs no gate");
+    assert.equal(second.suite.baseline, null);
+    assert.equal(second.suite.reusedFrom, "driver-preflight");
+    assert.equal(second.suite.reused, `first attempt 1's driver preflight at ${first.record.at}`);
+    assert.deepEqual(second.record.suite, first.record.suite, "the reused rows keep their source, SHA and digest");
+    assert.equal(field(second.record, "suite").passed, true);
+    assert.match(renderPreflightLines(second).join("\n"),
+      /^Suite: reused the passing gate rows of first attempt 1's driver preflight at .*, measured at this base under the current gate configuration; no gate ran\.$/mu);
+
+    const other = await draft(box, "other-task", REQUEST.replace("an example", "another"));
+    const reused = await preflightCommand(options(box, other.attemptDir, gateRunner(calls)));
+    assert.equal(calls.length, 2, "another task in the project at the same base runs no gate either");
+    assert.match(reused.suite.reused ?? "", /^first attempt 1's driver preflight at /u);
 
     const moved = commit(box.repository, "second.txt", "moved\n");
     const third = await preflightCommand(options(box, created.attemptDir, gateRunner(calls)));
+    assert.equal(calls.length, 4, "a new base runs every gate once");
+    assert.equal(third.suite.reused, null);
+    assert.equal(third.suite.baseline?.path, box.baseline);
     assert.equal(third.suite.baseline?.created, false);
+    assert.deepEqual(third.suite.baseline?.seeded, [], "a seed path already present is kept");
     assert.equal(git(box.baseline, "rev-parse", "HEAD").trim(), moved, "the same tree is re-pointed at the new base");
     assert.ok(third.record.suite?.rows.every((row) => row.sha === moved));
     assert.ok(calls.every((call) => call.cwd === box.baseline), "no gate ever runs in the owner's checkout");
@@ -193,6 +209,12 @@ test("a reused suite runs no gate when a landed candidate is the base under the 
     assert.equal(result.suite.reused, "landed attempt 1");
     assert.equal(field(result.record, "suite").passed, true);
     assert.match(renderPreflightLines(result).join("\n"), /reused the gate rows of landed attempt 1/u);
+
+    const later = await draft(box, "later", REQUEST.replace("an example", "a later"));
+    const preferred = await preflightCommand(options(box, later.attemptDir, gateRunner(calls)));
+    assert.deepEqual(calls, []);
+    assert.equal(preferred.suite.reusedFrom, "landed-attempt");
+    assert.equal(preferred.suite.reused, "landed attempt 1", "landed rows are preferred over an earlier preflight record at the same base");
   } finally { box.close(); }
 
   const changed = fixture("reuse-digest");
@@ -215,7 +237,8 @@ test("a dirty baseline worktree is refused, not cleaned, and the refusal is stil
   try {
     const created = await draft(box, "dirty");
     const calls: Call[] = [];
-    await preflightCommand(options(box, created.attemptDir, gateRunner(calls)));
+    // A red first run, so the second has no passing record to reuse and must use the baseline.
+    await preflightCommand(options(box, created.attemptDir, gateRunner(calls, (gateId) => gateId === "lint" ? 1 : 0)));
     const stray = join(box.baseline, "stray.txt");
     writeFileSync(stray, "left by hand\n");
     const refused = await preflightCommand(options(box, created.attemptDir, gateRunner(calls)));
@@ -238,6 +261,69 @@ test("a dirty baseline worktree is refused, not cleaned, and the refusal is stil
     assert.match(field(result.record, "suite").reason ?? "", /gate test left it dirty in the baseline worktree/u);
     assert.ok(existsSync(join(dirtying.baseline, "artifact.txt")));
   } finally { dirtying.close(); }
+});
+
+test("an earlier preflight record is reused only when it is the passing suite at the base under the current gate digest", async () => {
+  const box = fixture("earlier");
+  try {
+    const calls: Call[] = [];
+    const created = await draft(box, "earlier");
+    const red = await preflightCommand(options(box, created.attemptDir, gateRunner(calls, (gateId) => gateId === "lint" ? 1 : 0)));
+    assert.equal(field(red.record, "suite").passed, false);
+    const rerun = await preflightCommand(options(box, created.attemptDir, gateRunner(calls)));
+    assert.equal(calls.length, 4, "a red earlier record is never reused: every gate runs again");
+    assert.equal(rerun.suite.reused, null);
+    assert.equal(field(rerun.record, "suite").passed, true);
+
+    // The record-level rule, on the green record's own rows: anything but one
+    // passing row per configured gate at the base under the current digest is refused.
+    const config = loadConfig(readFileSync(box.configPath, "utf8"));
+    const green = rerun.record.suite;
+    assert.ok(green !== null);
+    const rows = green.rows;
+    const measure = (suite: DriverPreflightRecord["suite"]) =>
+      preflightSuiteRows({ label: "earlier", record: { ...rerun.record, suite } }, rerun.record.baseSha, config);
+    assert.deepEqual(measure(green), rows);
+    assert.equal(measure(null), null, "no rows");
+    assert.equal(measure({ ...green, rows: rows.slice(1) }), null, "partial");
+    assert.equal(measure({ ...green, rows: [rows[0]!, rows[0]!] }), null, "a gate twice in place of another");
+    assert.equal(measure({ ...green, rows: [...rows, { ...rows[0]!, gateId: "journeys" }] }), null, "a row for an unconfigured gate");
+    assert.equal(measure({ ...green, rows: rows.map((row) => ({ ...row, sha: "f".repeat(40) })) }), null, "another SHA");
+    assert.equal(measure({ ...green, rows: rows.map((row) => ({ ...row, gatesConfigDigest: "e".repeat(64) })) }), null, "another gate digest");
+    assert.equal(measure({ ...green, rows: rows.map((row, index) => index === 1 ? { ...row, passed: false, exitCode: 1 } : row) }), null, "red");
+
+    const lint = "lint: { argv: [npm, run, lint], timeout_seconds: 300 }";
+    writeFileSync(box.configPath, readFileSync(box.configPath, "utf8").replace(lint, lint.replace("300", "301")));
+    const changed = await preflightCommand(options(box, created.attemptDir, gateRunner(calls)));
+    assert.equal(calls.length, 6, "a record under another gate digest is stale: every gate runs again");
+    assert.equal(changed.suite.reused, null);
+    assert.notEqual(changed.record.suite?.rows[0]?.gatesConfigDigest, rows[0]!.gatesConfigDigest);
+
+    const again = await preflightCommand(options(box, created.attemptDir, gateRunner(calls)));
+    assert.equal(calls.length, 6, "the record under the new digest is reused");
+    assert.equal(again.suite.reused, `earlier attempt 1's driver preflight at ${changed.record.at}`);
+  } finally { box.close(); }
+});
+
+test("a preflight after the owner's matching confirmation reports it passed, and a later path change reports it refused", async () => {
+  const box = fixture("confirmed");
+  try {
+    const created = await draft(box, "confirmed");
+    const before = await preflightCommand(options(box, created.attemptDir, gateRunner([])));
+    assert.match(field(before.record, "confirmation").reason ?? "", /no owner confirmation of this request is recorded/u);
+    const owner = await confirmCommand({ stateRoot: box.stateRoot, project: PROJECT, taskId: "confirmed",
+      terminal: { interactive: true, write: () => undefined, confirm: () => Promise.resolve(true) } });
+    assert.equal(owner.confirmed, true);
+
+    const matching = await preflightCommand(options(box, created.attemptDir, gateRunner([])));
+    assert.equal(field(matching.record, "confirmation").passed, true);
+    assert.ok(renderPreflightLines(matching).includes("confirmation: pass"));
+    assert.equal(matching.measuredPassed, true);
+
+    const moved = await preflightCommand(options(box, created.attemptDir, gateRunner([]), { read: ["AGENTS.md"] }));
+    assert.match(field(moved.record, "confirmation").reason ?? "", /bound to other --where or --read paths: the paths changed after they were confirmed/u);
+    assert.equal(moved.measuredPassed, true, "the exit status still depends on the measured fields only");
+  } finally { box.close(); }
 });
 
 test("each measured field's refusal is recorded, and --read resolves a protected path named as context", async () => {

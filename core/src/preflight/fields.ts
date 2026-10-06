@@ -59,12 +59,12 @@ function invalidPath(path: string): string | null {
  * Whether a writes glob covers an entry, which may itself be a glob. The entry
  * must match literally and, when it holds a wildcard, so must its deepest
  * expansion: `core/src/**` is not inside `core/src/*`, though its spelling is.
- * Case-sensitive, as `awsf grant` matches role writes.
+ * Case-sensitive by default, as `awsf grant` matches role writes.
  */
-function covers(entry: string, glob: string): boolean {
-  if (!matches(entry, glob, true)) return false;
+function covers(entry: string, glob: string, caseSensitive = true): boolean {
+  if (!matches(entry, glob, caseSensitive)) return false;
   if (!/[*?]/u.test(entry)) return true;
-  return matches(entry.replace(/\*\*/gu, `${PROBE}/${PROBE}`).replace(/\*/gu, PROBE).replace(/\?/gu, "p"), glob, true);
+  return matches(entry.replace(/\*\*/gu, `${PROBE}/${PROBE}`).replace(/\*/gu, PROBE).replace(/\?/gu, "p"), glob, caseSensitive);
 }
 
 // ---------------------------------------------------------------- request-shape
@@ -300,13 +300,23 @@ function protectedHits(facts: ProtectedPathsFacts): ProtectedHit[] {
       }
     }
   }
+  // A --where glob broader than a protected glob writes all of it, though no
+  // spelling falls under it: `core/src/**` over `core/src/state/**`. The
+  // protected glob itself is then the hit, matched as widely as the scan.
+  for (const entry of facts.where) {
+    if (invalidPath(entry) !== null) continue;
+    for (const glob of facts.protectedPaths) {
+      if (!hits.has(glob) && covers(glob, entry, false)) hits.set(glob, { token: glob, path: glob, glob });
+    }
+  }
   return [...hits.values()].sort((left, right) => left.path < right.path ? -1 : left.path > right.path ? 1 : 0);
 }
 
 /**
- * Every path-shaped token in the whole request that matches a protected glob
- * must be classified: in `--read` it is only read; in `--where` it becomes a
- * grant requirement for each phase whose role writes it. Read wins over a
+ * Every path-shaped token in the whole request that matches a protected glob,
+ * and every protected glob a `--where` entry covers, must be classified: in
+ * `--read` it is only read; in `--where` it becomes a grant requirement for
+ * each phase whose role writes it, and on a shift a refusal. Read wins over a
  * `--where` glob that merely covers the path; naming the same path exactly in
  * both lists is a contradiction.
  */
