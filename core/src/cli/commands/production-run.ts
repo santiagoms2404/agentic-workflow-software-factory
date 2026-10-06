@@ -3717,7 +3717,7 @@ async function preflightRecovery(options: ProductionRunOptions): Promise<Recover
     const where = next === undefined ? "" : ` before ${ticket === null ? next.id : `ticket ${ticket} (${next.id})`}`;
     const remedy = error.ceiling + short > MAX_CALL_CEILING
       ? `no awsf raise can fund the rest, because ${String(error.ceiling + short)} exceeds MAX_CALL_CEILING (${String(MAX_CALL_CEILING)})`
-      : renderHeadroomAdvice(status.taskId, short, status.lifecycleState);
+      : renderHeadroomAdvice(status, short, status.lifecycleState);
     throw new CallCeilingExceeded({ from: null, to: null, subject: `resume of ${status.taskId}${where}: ${remedy}`,
       tier: error.tier, ceiling: error.ceiling, requested: error.requested, committed: error.committed });
   }

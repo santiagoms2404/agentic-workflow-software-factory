@@ -1,6 +1,7 @@
 // Managed execution trees live under the machine-local Q8 root, never in state or the canonical checkout.
 import { existsSync, promises as fs } from "node:fs";
 import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
+import { renderRestartAdvice } from "../lifecycle/renderer.ts";
 import { matchesPathGlob, normalizeRepositoryPath } from "../policy/path-policy.ts";
 import { runGit, systemGitRunner, type GitRunner } from "./changes.ts";
 
@@ -242,7 +243,8 @@ export class AttemptWorktreeExists extends Error {
         "An interrupted `awsf start` leaves it behind while the attempt record stays DRAFT, " +
         "so no phase ran and no provider call was spent. " +
         "AWSF exposes no path that clears a tree, by design (AGENTS.md invariant 8): " +
-        "clear it yourself with Git, then run `awsf start` again. " +
+        // The tree is named by session id alone, so every start selector stays a placeholder.
+        `clear it yourself with Git, then ${renderRestartAdvice({ taskId: "<task>" })}. ` +
         "docs/driving/skills/awsf/references/gotchas.md carries the exact recovery.",
     );
     this.name = "AttemptWorktreeExists";

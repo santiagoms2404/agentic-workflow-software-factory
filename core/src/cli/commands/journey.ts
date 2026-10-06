@@ -72,7 +72,7 @@ export interface JourneyCommandResult {
 export async function journeyCommand(options: JourneyCommandOptions): Promise<JourneyCommandResult> {
   const status = await readAttempt(options.attemptDir);
   // A journey attests delivery to an end user, and a replay delivers nothing.
-  if (status.workflow === PROVE_WORKFLOW_ID) throw new ReplayNotDeliverable(status.taskId, "journey");
+  if (status.workflow === PROVE_WORKFLOW_ID) throw new ReplayNotDeliverable(status, "journey");
   if (status.tier < 2) {
     throw new JourneyNotApplicable(`tier ${status.tier} never buys an end-user journey; only T2 landings require one`);
   }

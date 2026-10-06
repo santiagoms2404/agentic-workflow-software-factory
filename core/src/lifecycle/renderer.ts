@@ -56,7 +56,7 @@ export function renderNextAction(model: NextSteps, context: AdviceContext = {}):
     return `${recovery.kind}; run ${resume} to continue the saved boundary`;
   }
   if (model.state === "AWAITING_OWNER") {
-    if (context.workflow === "prove" || context.workflow === "intake") return `inspect the retained findings, then run ${command(model, "cancel")}; this workflow never lands`;
+    if (context.workflow === "prove") return `inspect the retained findings, then run ${command(model, "cancel")}; this workflow never lands`;
     if (context.candidateSha === null && context.gatesPass && (context.workflow === "scout" || context.workflow === "plan")) {
       return `inspect the retained awsf.${context.workflow}-output/v1 envelope, then run ${command(model, "cancel")} when finished; no candidate can be landed`;
     }
@@ -85,22 +85,40 @@ export function renderNextSteps(model: NextSteps, context: AdviceContext = {}): 
     ...model.unavailable.map(edge => `Unavailable ${edge.edge} to ${edge.to}: ${edge.reason}; machine actors ${edge.actors.join(", ")}. ${edge.detail}`)];
 }
 
-/** Error paths sometimes have only a task id, not a loaded attempt. */
-export function renderHeadroomAdvice(taskId: string, calls: number, state: TaskState = "AWAITING_OWNER"): string {
-  const model = nextSteps({ project: "<project>", taskId, attempt: 1, revision: 0, state });
+/** Whose advice it is. A selector the caller does not hold renders as a placeholder, never a guessed value. */
+export interface AdviceSelector { readonly project?: string; readonly taskId: string; readonly attempt?: number }
+
+function selectorModel(selector: AdviceSelector, state: TaskState): NextSteps {
+  const model = nextSteps({ project: selector.project ?? "<project>", taskId: selector.taskId, attempt: selector.attempt ?? 0, revision: 0, state });
+  if (selector.attempt !== undefined) return model;
+  return { ...model, steps: model.steps.map(step => ({ ...step, argv: step.argv.map((token, index) => step.argv[index - 1] === "--attempt" ? "<attempt>" : token) })) };
+}
+
+export function renderHeadroomAdvice(selector: AdviceSelector, calls: number, state: TaskState = "AWAITING_OWNER"): string {
+  const model = selectorModel(selector, state);
   const raise = model.steps.find(step => step.verb === "raise");
   const advice = raise === undefined ? "no ceiling grant is available on this sealed attempt" :
     renderCommand(raise.argv.map(token => token === "<n>" ? String(calls) : token));
-  return `nothing was spent; ${advice}, ${selected(model, ["land", "cancel"]).join(" or ")} remain (replace the project and attempt selectors with the actual values)`;
+  return `nothing was spent; ${advice}, ${selected(model, ["land", "cancel"]).join(" or ")} remain`;
 }
 
 export function renderSealedAdvice(taskId: string): string {
   return `run ${renderCommand(["awsf", "retry", taskId])} to open the next attempt; prior spend and ceiling grants carry forward`;
 }
 
-export function renderOwnerAlternatives(taskId: string): string {
-  const model = nextSteps({ project: "<project>", taskId, attempt: 1, revision: 0, state: "AWAITING_OWNER" });
-  return `consider ${selected(model, ["land", "cancel", "raise"]).join(" or ")}; command-specific guards apply (replace the project and attempt selectors with the actual values)`;
+/** Owner-gate alternatives in the caller's order; verbs the model does not offer are dropped. */
+export function renderOwnerAlternatives(selector: AdviceSelector, verbs: readonly string[] = ["land", "cancel", "raise"]): string {
+  return `consider ${selected(selectorModel(selector, "AWAITING_OWNER"), verbs).join(" or ")}; command-specific guards apply`;
+}
+
+/** A replay ends by cancellation, never delivery; a state without a cancel step gets no cancel advice. */
+export function renderReplayAdvice(model: NextSteps): string {
+  const cancel = command(model, "cancel");
+  return cancel === null ? `no cancel is legal at ${model.state}` : `run ${cancel} once its evidence is read`;
+}
+
+export function renderRestartAdvice(selector: AdviceSelector): string {
+  return `run ${command(selectorModel(selector, "DRAFT"), "start")} again`;
 }
 
 export function renderAdoptionAction(argv: readonly string[]): string { return `run ${renderCommand(argv)}`; }

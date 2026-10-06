@@ -448,7 +448,7 @@ test("a recipe whose declared correction round no call can pay for is refused at
       (error: unknown) => {
         assert.ok(error instanceof Error);
         assert.match(error.message, /declares a correction round on 1 cold phase\(s\) \(scout\).*corrections fundable = 0/su);
-        assert.ok(error.message.includes(renderHeadroomAdvice(created.status.taskId, 1, "DRAFT")));
+        assert.ok(error.message.includes(renderHeadroomAdvice(created.status, 1, "DRAFT")));
         return true;
       },
     );

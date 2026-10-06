@@ -259,7 +259,7 @@ test("a shift that cannot fund its next ticket's correction stops before it, and
     await assert.rejects(resumeProductionCommand({ ...options, reason: "continue the shift", terminal }), (error: Error) =>
       error instanceof CallCeilingExceeded &&
       /resume of fixture-shift-m1 before ticket T02 \(t02-build\):/u.test(error.message) &&
-      error.message.includes(renderHeadroomAdvice(paused.taskId, 1, paused.lifecycleState)));
+      error.message.includes(renderHeadroomAdvice(paused, 1, paused.lifecycleState)));
     assert.deepEqual(launches, ["T01", "T01"]);
     await assert.rejects(raiseCommand({ attemptDir: fixture.attemptDir, calls: 1, reason: "fund ticket 2's correction round",
       terminal: { ...terminal, interactive: false } }), CeilingRaiseNotInteractive);

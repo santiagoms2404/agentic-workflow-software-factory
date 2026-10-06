@@ -21,7 +21,7 @@ import type {
   TransportBroker,
 } from "../../adapters/interface.ts";
 import { AdapterError, reservationIdOf } from "../../adapters/interface.ts";
-import { renderHeadroomAdvice, renderOwnerAlternatives } from "../../lifecycle/renderer.ts";
+import { renderHeadroomAdvice, renderOwnerAlternatives, type AdviceSelector } from "../../lifecycle/renderer.ts";
 import { registeredAdapter } from "../../adapters/registry.ts";
 import { assertPrivateSystemPrompt, writeSystemPromptFile } from "../../adapters/system-prompt-file.ts";
 import { toConfigSnapshotJson } from "../../config/effective-config.ts";
@@ -218,10 +218,10 @@ export class ReworkRouteMismatch extends Error {
  */
 export class ReworkTierUnsupported extends Error {
   readonly tier: number;
-  constructor(tier: number, workflow: string, recipeTier: number, taskId: string) {
+  constructor(tier: number, workflow: string, recipeTier: number, attempt: AdviceSelector) {
     super(
       `this attempt records tier ${tier} but workflow ${JSON.stringify(workflow)} is a tier-${recipeTier} recipe, ` +
-        `so owner rework cannot tell which branch it bought; ${renderOwnerAlternatives(taskId)}; a fresh attempt must use the intended tier`,
+        `so owner rework cannot tell which branch it bought; ${renderOwnerAlternatives(attempt)}; a fresh attempt must use the intended tier`,
     );
     this.name = "ReworkTierUnsupported";
     this.tier = tier;
@@ -239,10 +239,10 @@ export class ReworkTierUnsupported extends Error {
  * call too late to prevent it.
  */
 export class ReworkHeadroomInsufficient extends Error {
-  constructor(remaining: number, required: number, tier: number, taskId: string) {
+  constructor(remaining: number, required: number, tier: number, attempt: AdviceSelector) {
     super(
       `a T${tier} owner rework needs ${required} calls of headroom — one for the builder, one for the review, and one for its single permitted retry — ` +
-        `and this attempt has ${remaining}; insufficient headroom; ${renderHeadroomAdvice(taskId, Math.max(1, required - remaining))}`,
+        `and this attempt has ${remaining}; insufficient headroom; ${renderHeadroomAdvice(attempt, Math.max(1, required - remaining))}`,
     );
     this.name = "ReworkHeadroomInsufficient";
   }
@@ -438,7 +438,7 @@ function validateAttempt(status: AttemptStatus, config: AwsfConfig): WorkflowRec
     throw new ProductionWorkflowUnsupported(status.workflow, "not enabled by the effective config");
   }
   const recipeTier = t2?.tier ?? 1;
-  if (status.tier !== recipeTier) throw new ReworkTierUnsupported(status.tier, status.workflow, recipeTier, status.taskId);
+  if (status.tier !== recipeTier) throw new ReworkTierUnsupported(status.tier, status.workflow, recipeTier, status);
   if (config.project.slug !== status.project) throw new Error("attempt and config project do not match");
   if (toConfigSnapshotJson(config) !== status.configSnapshotJson) throw new ProductionConfigSnapshotMismatch();
   return t2 ?? null;
@@ -695,7 +695,7 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
   if (recipe !== null) {
     const required = 1 + REVIEW_HEADROOM_CALLS;
     if (remainingCalls < required) {
-      throw new ReworkHeadroomInsufficient(remainingCalls, required, status.tier, status.taskId);
+      throw new ReworkHeadroomInsufficient(remainingCalls, required, status.tier, status);
     }
   }
   options.terminal.write(`Candidate SHA: ${firstInspection.candidate}`);

@@ -11,6 +11,9 @@ import { ReviewOutputSchema } from "../../contracts/review-output.ts";
 import type { PhaseRouteSelection } from "../../contracts/route-selection.ts";
 import { TestOutputSchema } from "../../contracts/test-output.ts";
 import { parseRouteArm, type RouteArm } from "../../contracts/route-arm.ts";
+import { nextSteps, type NextStepsInput } from "../../lifecycle/next-steps.ts";
+import { renderReplayAdvice } from "../../lifecycle/renderer.ts";
+import type { TaskState } from "../../state/task-machine.ts";
 import type { Tier } from "../../state/tiers.ts";
 import { assertEarnedDescription, type WorkflowRecipe } from "../compiler.ts";
 import type { LocalPhaseDefinition, PhaseDefinition } from "../phase.ts";
@@ -120,11 +123,11 @@ export class ReplayConfinementUnavailable extends Error {
 export class ReplayNotDeliverable extends Error {
   readonly taskId: string;
 
-  constructor(taskId: string, act: "land" | "journey") {
-    super(`task ${taskId} is a proving-ground replay: a replay is measurement, never delivery, so \`awsf ${act}\` ` +
-      `refuses it; run \`awsf cancel ${taskId}\` once its evidence is read`);
+  constructor(status: Omit<NextStepsInput, "state"> & { readonly lifecycleState: TaskState }, act: "land" | "journey") {
+    super(`task ${status.taskId} is a proving-ground replay: a replay is measurement, never delivery, so \`awsf ${act}\` ` +
+      `refuses it; ${renderReplayAdvice(nextSteps({ ...status, state: status.lifecycleState }))}`);
     this.name = "ReplayNotDeliverable";
-    this.taskId = taskId;
+    this.taskId = status.taskId;
   }
 }
 

@@ -187,7 +187,7 @@ export async function startCommand(options: StartCommandOptions): Promise<Attemp
         `${String(minimumCallsFor(recipe) + correctionsFundableFor(recipe, ceiling))}, ` +
         `so corrections fundable = ${String(correctionsFundableFor(recipe, ceiling))}. ` +
         `The first envelope defect would be terminal on its first occurrence. ` +
-        `${renderHeadroomAdvice(current.taskId, headroom.callsNeeded, "DRAFT")}; start again; ` +
+        `${renderHeadroomAdvice(current, headroom.callsNeeded, "DRAFT")}; start again; ` +
         `the attempt stays DRAFT and no call has been spent.`,
     );
   }

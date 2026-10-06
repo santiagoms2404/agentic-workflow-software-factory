@@ -7,6 +7,8 @@ import { persistAttempt, readAttempt, type AttemptStatus } from "../../../src/cl
 import { landCommand } from "../../../src/cli/commands/land.ts";
 import { processOwnerTerminal } from "../../../src/cli/tty.ts";
 import { ReplayRecordSchema } from "../../../src/contracts/proving-ground.ts";
+import { nextSteps } from "../../../src/lifecycle/next-steps.ts";
+import { renderReplayAdvice } from "../../../src/lifecycle/renderer.ts";
 import { ShiftManifestSchema, ShiftManifestTicketSchema } from "../../../src/contracts/shift-selection-record.ts";
 import { DETERMINISTIC_REASON_SOURCES, InteractiveOwnerRequired, NonDeterministicEvidence } from "../../../src/state/errors.ts";
 import { LEGAL_EDGES, transition, type BudgetState } from "../../../src/state/task-machine.ts";
@@ -202,7 +204,10 @@ test("`awsf land` refuses a replay by name at an owner's terminal before it asks
       let prompts = 0;
       await assert.rejects(landCommand({
         attemptDir, terminal: { interactive: true, write: () => {}, confirm: async () => { prompts += 1; return true; } },
-      }), (error: unknown) => error instanceof ReplayNotDeliverable && error.message.includes(`awsf cancel ${status.taskId}`), lifecycleState);
+      }), (error: unknown) => error instanceof ReplayNotDeliverable &&
+        error.message.endsWith(renderReplayAdvice(nextSteps({ ...status, state: lifecycleState }))) &&
+        // Cancel is advised only where the model offers it.
+        error.message.includes(`awsf cancel ${status.taskId}`) === (lifecycleState === "AWAITING_OWNER"), lifecycleState);
       assert.equal(prompts, 0, `${lifecycleState}: the refusal comes before any confirmation`);
       const after = await readAttempt(attemptDir);
       assert.deepEqual([after.lifecycleState, after.revision], [lifecycleState, status.revision], `${lifecycleState}: the refusal wrote nothing`);

@@ -245,7 +245,7 @@ async function landUnderLease(options: LandCommandOptions): Promise<LandCommandR
   const current = await readAttempt(options.attemptDir);
   // Before every other check, and whatever the state: no path from a replay
   // reaches LANDING, so no replay's candidate can become canonical (Q7).
-  if (current.workflow === PROVE_WORKFLOW_ID) throw new ReplayNotDeliverable(current.taskId, "land");
+  if (current.workflow === PROVE_WORKFLOW_ID) throw new ReplayNotDeliverable(current, "land");
   if (current.lifecycleState === "LANDING") {
     // Approval is already durable. Re-prompting would create two human gates;
     // recovery instead proves the one approved SHA or blocks.

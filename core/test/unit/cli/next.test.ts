@@ -10,10 +10,17 @@ import { startCommand } from "../../../src/cli/commands/start.ts";
 import { runStubCommand } from "../../../src/cli/commands/run.ts";
 import { newCommand } from "../../../src/cli/commands/new.ts";
 import { nextRevision, persistAttempt, readAttempt } from "../../../src/cli/commands/attempt.ts";
+import { ReviewHeadroomInsufficient, ReviewNotReplaceable } from "../../../src/cli/commands/review.ts";
+import { ReworkHeadroomInsufficient, ReworkTierUnsupported } from "../../../src/cli/commands/rework.ts";
+import { AttemptWorktreeExists } from "../../../src/git/worktrees.ts";
 import { nextSteps } from "../../../src/lifecycle/next-steps.ts";
-import { renderAttemptNextAction, renderNextAction, renderNextSteps } from "../../../src/lifecycle/renderer.ts";
-import { assertNextSteps } from "../../../src/contracts/next-steps.ts";
+import {
+  renderAttemptNextAction, renderCommand, renderHeadroomAdvice, renderNextAction, renderNextSteps, renderOwnerAlternatives,
+  renderRestartAdvice,
+} from "../../../src/lifecycle/renderer.ts";
+import { assertNextSteps, type NextSteps } from "../../../src/contracts/next-steps.ts";
 import { TASK_STATES } from "../../../src/state/task-machine.ts";
+import { ReplayNotDeliverable } from "../../../src/workflow/prove/compile.ts";
 
 function bytes(root: string): unknown {
   return readdirSync(root, { withFileTypes: true }).map(entry => [entry.name,
@@ -187,4 +194,64 @@ test("recovery and replay advice are rendered from facts, never bare cancellatio
   assert.match(replay, /awsf cancel stub.*--cause.*--reason/);
   assert.doesNotMatch(replay, /awsf (land|journey|resume)/);
   assert.match(renderNextAction(running, { blocker: { code: "sqlite-projection-failed" } }), /awsf db rebuild/);
+});
+
+function argvOf(model: NextSteps, verb: string): string {
+  const step = model.steps.find(step => step.verb === verb);
+  assert.ok(step !== undefined, `no ${verb} step at ${model.state}`);
+  return renderCommand(step.argv);
+}
+
+test("only a prove replay is told it never lands; intake gets the landable owner-gate advice", () => {
+  const owner = nextSteps({ project: "fixture", taskId: "stub", attempt: 2, revision: 3, state: "AWAITING_OWNER" });
+  const prove = renderNextAction(owner, { workflow: "prove", candidateSha: "abc", gatesPass: true });
+  assert.match(prove, /this workflow never lands/);
+  assert.ok(prove.includes(argvOf(owner, "cancel")));
+  for (const workflow of ["intake", "build-review"]) {
+    const action = renderNextAction(owner, { workflow, candidateSha: "abc", gatesPass: true });
+    assert.doesNotMatch(action, /never lands/, workflow);
+    for (const verb of ["land", "journey", "cancel"]) assert.ok(action.includes(argvOf(owner, verb)), `${workflow} ${verb}`);
+  }
+  assert.equal(renderNextAction(owner, { workflow: "intake", candidateSha: "abc", gatesPass: true }),
+    renderNextAction(owner, { workflow: "build-review", candidateSha: "abc", gatesPass: true }));
+});
+
+test("owner advice carries the loaded project and attempt, never a guessed attempt", () => {
+  const attempt = { project: "fixture", taskId: "stub", attempt: 3 };
+  const owner = nextSteps({ ...attempt, revision: 0, state: "AWAITING_OWNER" });
+  const headroom = renderHeadroomAdvice(attempt, 2);
+  assert.ok(headroom.includes(renderCommand(owner.steps.find(step => step.verb === "raise")!.argv.map(token => token === "<n>" ? "2" : token))));
+  for (const text of [headroom, renderOwnerAlternatives(attempt),
+    new ReviewHeadroomInsufficient(1, 2, attempt).message, new ReworkHeadroomInsufficient(1, 3, 2, attempt).message,
+    new ReworkTierUnsupported(1, "build-review", 2, attempt).message]) {
+    assert.match(text, /--project fixture --attempt 3\b/u);
+    assert.doesNotMatch(text, /<project>|<attempt>|--attempt (?!3\b)/u);
+  }
+  // Only a site with no loaded attempt keeps placeholders, and never a concrete number.
+  const restart = new AttemptWorktreeExists("/trees/session", true).message;
+  assert.ok(restart.includes(renderRestartAdvice({ taskId: "<task>" })));
+  assert.match(restart, /awsf start '<task>' --project '<project>' --attempt '<attempt>'/u);
+  assert.doesNotMatch(restart, /--attempt \d/u);
+});
+
+test("a non-replaceable review offers rework first, then land or cancel, from the model", () => {
+  const attempt = { project: "fixture", taskId: "stub", attempt: 3 };
+  const owner = nextSteps({ ...attempt, revision: 0, state: "AWAITING_OWNER" });
+  const message = new ReviewNotReplaceable("request-changes", "review", attempt).message;
+  const [rework, land, cancel] = ["rework", "land", "cancel"].map(verb => message.indexOf(argvOf(owner, verb)));
+  assert.match(argvOf(owner, "rework"), /^`awsf rework stub --project fixture --attempt 3 '<defect>'`$/u);
+  assert.ok(rework! >= 0 && rework! < land! && land! < cancel!, message);
+  assert.doesNotMatch(message, /awsf raise/u);
+});
+
+test("replay refusals render the model's cancel argv, with its cause and reason placeholders", () => {
+  const status = { project: "fixture", taskId: "replay", attempt: 3, revision: 4 };
+  const owner = nextSteps({ ...status, state: "AWAITING_OWNER" });
+  for (const act of ["land", "journey"] as const) {
+    const message = new ReplayNotDeliverable({ ...status, lifecycleState: "AWAITING_OWNER" }, act).message;
+    assert.ok(message.includes(argvOf(owner, "cancel")), message);
+    assert.match(message, /awsf cancel replay --project fixture --attempt 3 --cause '<cause>' --reason '<why>'/u);
+  }
+  const cancelled = new ReplayNotDeliverable({ ...status, lifecycleState: "CANCELLED" }, "land").message;
+  assert.doesNotMatch(cancelled, /awsf cancel/u);
 });

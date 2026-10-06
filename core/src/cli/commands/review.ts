@@ -38,7 +38,7 @@
 // This file owns only what is L25's: eligibility, the owner's reason, the
 // display, the edge, and the halt.
 
-import { renderHeadroomAdvice, renderOwnerAlternatives } from "../../lifecycle/renderer.ts";
+import { renderHeadroomAdvice, renderOwnerAlternatives, type AdviceSelector } from "../../lifecycle/renderer.ts";
 import { registeredAdapter } from "../../adapters/registry.ts";
 import { writeSystemPromptFile } from "../../adapters/system-prompt-file.ts";
 import type { AwsfConfig } from "../../config/schema.ts";
@@ -158,10 +158,10 @@ export class ReviewReasonRequired extends Error {
  */
 export class ReviewNotReplaceable extends Error {
   readonly verdict: string;
-  constructor(verdict: string, phaseKey: string, taskId: string) {
+  constructor(verdict: string, phaseKey: string, attempt: AdviceSelector) {
     super(
       `the recorded review ${JSON.stringify(phaseKey)} carries a passing review_evidence_present row, so its ${verdict} verdict is not replaceable; ` +
-        `${renderOwnerAlternatives(taskId)} — a replacement review is not a verdict appeal`,
+        `${renderOwnerAlternatives(attempt, ["rework", "land", "cancel"])} — a replacement review is not a verdict appeal`,
     );
     this.name = "ReviewNotReplaceable";
     this.verdict = verdict;
@@ -176,10 +176,10 @@ export class ReviewNotReplaceable extends Error {
  * stranded in REVIEWING having taken no L17 either. Refusing costs nothing.
  */
 export class ReviewHeadroomInsufficient extends Error {
-  constructor(remaining: number, tier: number, taskId: string) {
+  constructor(remaining: number, tier: number, attempt: AdviceSelector) {
     super(
       `a replacement review needs two calls of headroom — one for the review and one for its single permitted retry — and this T${tier} attempt has ${remaining}; ` +
-        `insufficient headroom; ${renderHeadroomAdvice(taskId, Math.max(1, 2 - remaining))}`,
+        `insufficient headroom; ${renderHeadroomAdvice(attempt, Math.max(1, 2 - remaining))}`,
     );
     this.name = "ReviewHeadroomInsufficient";
   }
@@ -435,7 +435,7 @@ async function runReviewCommand(options: ReviewCommandOptions): Promise<ReviewCo
 
   // §5.4 — two calls of headroom or nothing happens at all.
   const remainingCalls = ceilingFor(status.tier, status.budget.ceiling) - status.budget.callsSpent - status.budget.callsReserved;
-  if (remainingCalls < REVIEW_HEADROOM_CALLS) throw new ReviewHeadroomInsufficient(remainingCalls, status.tier, status.taskId);
+  if (remainingCalls < REVIEW_HEADROOM_CALLS) throw new ReviewHeadroomInsufficient(remainingCalls, status.tier, status);
 
   const evidenceRecords = await readAttemptEvidence(options.attemptDir);
   const reviews = recordedReviews(evidenceRecords, status.sessionId);
@@ -446,7 +446,7 @@ async function runReviewCommand(options: ReviewCommandOptions): Promise<ReviewCo
   // The eligibility narrowing, at zero cost. A passing evidence row means the
   // review is not replaceable at all — the owner's reason cannot make it one.
   if (superseded.evidenceDefect === null) {
-    throw new ReviewNotReplaceable(superseded.output.verdict, superseded.phaseKey, status.taskId);
+    throw new ReviewNotReplaceable(superseded.output.verdict, superseded.phaseKey, status);
   }
 
   const inspection = inspectCandidate(status);
