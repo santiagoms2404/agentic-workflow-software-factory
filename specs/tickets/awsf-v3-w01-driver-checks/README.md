@@ -96,4 +96,4 @@ After each landed ticket, the owner makes one commit: the task rows and the mile
 the plan, the ticket's `state`, the Handoff entries the builder returned, and a dated Amendment
 (invariant 12). A milestone stays `[wip]` until every task in it is `[x]`. Only T13's landing moves
 the spine's Milestone M1 / W01 marker and `../awsf-v3-plan/W01.md`, in that same commit. Current
-plan-aligned states: **T01–T07 `done`; T08–T13 `todo`** (M1–M3 `[x]`; M4 and M5 `[]`).
+plan-aligned states: **T01–T10 `done`; T11–T13 `todo`** (M1–M4 `[x]`; M5 `[]`).
