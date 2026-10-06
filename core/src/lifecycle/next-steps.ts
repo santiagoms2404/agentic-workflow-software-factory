@@ -4,7 +4,7 @@ import { LEGAL_EDGES, TASK_STATES, TERMINAL_STATES, type Actor, type EdgeId, typ
 /** Kept equal to main.ts's owner-terminal arms by a source-derived test. */
 export const OWNER_ACT_COMMANDS = [
   "prove", "resume", "rework", "review", "grant", "raise", "degrade-review",
-  "attribute", "journey", "land", "publish", "cancel",
+  "attribute", "journey", "land", "publish", "cancel", "confirm",
 ] as const;
 
 type Provenance = { readonly module: string; readonly callSite: string; readonly actor: Actor };

@@ -39,6 +39,7 @@ import { grantCommand } from "./commands/grant.ts";
 import { raiseCommand } from "./commands/raise.ts";
 import { degradeReviewCommand } from "./commands/degrade-review.ts";
 import { attributeCommand } from "./commands/attribute.ts";
+import { confirmCommand } from "./commands/confirm.ts";
 import { proveCommand } from "./commands/prove.ts";
 import { routesListCommand } from "./commands/routes.ts";
 import { METRICS_USAGE, metricsCommand } from "./commands/metrics.ts";
@@ -64,7 +65,7 @@ import { assertShiftAdmission, assessShiftAdmission, parseMilestoneSelection, se
 
 /** The complete owner-facing command table; documentation reconciles against it. */
 export const CLI_COMMANDS = Object.freeze([
-  "init", "project", "new", "seed", "preflight", "start", "run", "resume", "next", "status", "watch", "rework", "review", "raise", "grant", "degrade-review", "attribute", "prove", "journey", "preview", "land", "publish", "cancel", "retry",
+  "init", "project", "new", "seed", "preflight", "confirm", "start", "run", "resume", "next", "status", "watch", "rework", "review", "raise", "grant", "degrade-review", "attribute", "prove", "journey", "preview", "land", "publish", "cancel", "retry",
   "relate", "doctor", "gc", "dash", "routes", "metrics", "metrics export", "db rebuild", "ticket", "backlog", "quota", "stage", "workflows", "shift plan", "group",
 ]);
 
@@ -878,6 +879,29 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         }
         out(`${taskId} may now buy a same-provider review; the grant and your reason are journalled.`);
         out(result.status.nextAction);
+        return 0;
+      }
+      case "confirm": {
+        // The owner's attestation of a DRAFT attempt's request and its --where
+        // and --read (K1's confirmation field). No flag can stand in for the
+        // terminal; confirmCommand refuses a non-interactive one before it reads.
+        const allowed = new Set(["attempt", "project", "state-root", "config"]);
+        if (parsed.positionals.length !== 1 || parsed.repositories.length !== 0 || parsed.files.length !== 0 ||
+            parsed.routes.length !== 0 || parsed.milestones.length !== 0 || parsed.where.length !== 0 ||
+            parsed.read.length !== 0 || parsed.consulted.length !== 0 || Object.keys(parsed.flags).some(flag => !allowed.has(flag))) {
+          throw new Error("usage: awsf confirm <task> [--attempt <n>]");
+        }
+        const result = await confirmCommand({
+          stateRoot, project, taskId, attempt: located.attempt,
+          terminal: options.terminal ?? processOwnerTerminal(),
+          projectRecord: projection.project,
+        });
+        if (!result.confirmed) {
+          out(`Confirmation declined; ${project}/${taskId} attempt ${located.attempt} has no new confirmation and nothing was recorded.`);
+          return 1;
+        }
+        out(`${project}/${taskId} attempt ${located.attempt}: the request and its --where and --read are confirmed; the record is journalled.`);
+        out("Editing the request or re-running preflight with other paths leaves this confirmation bound to the old words.");
         return 0;
       }
       case "attribute": {

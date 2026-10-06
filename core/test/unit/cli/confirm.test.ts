@@ -1,7 +1,7 @@
 // `awsf confirm` — the owner's confirmation of a DRAFT attempt's request and
 // paths (specs/awsf-v3-w01-driver-checks.html, task 10), driven through
-// confirmCommand with a fake owner terminal; it is not wired into main.ts
-// until gate G01-C.
+// confirmCommand with a fake owner terminal, and through its main.ts arm,
+// which gate G01-C wired.
 //
 // Under test: a non-interactive terminal is refused before anything is read; a
 // decline writes nothing; a yes writes exactly one record bound to the request
@@ -15,7 +15,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import {
   nextRevision,
   persistAttempt,
@@ -46,6 +46,7 @@ import {
   type DriverPreflightRecord,
   type RequestConfirmationRecord,
 } from "../../../src/contracts/driver-preflight.ts";
+import { main } from "../../../src/cli/main.ts";
 import { openDatabase } from "../../../src/observability/sqlite.ts";
 import { appendTaskAttribution } from "../../../src/persistence/task-attributions.ts";
 import { evaluateFreshness, type FreshnessFacts } from "../../../src/preflight/fields.ts";
@@ -360,5 +361,46 @@ test("an attempt that moved while the question was open is not confirmed", async
     });
     await assert.rejects(confirmCommand(options(box, "moved", { terminal: moving })), /attempt revision changed/u);
     assert.deepEqual(await confirmations(created.attemptDir), []);
+  } finally { box.close(); }
+});
+
+test("the main.ts arm (gate G01-C) takes the owner terminal, records on yes, and records nothing when declined or piped", async () => {
+  const box = sandbox("arm");
+  try {
+    const created = await draft(box, "arm-task");
+    await preflight(created.attemptDir);
+    const run = async (owner: OwnerTerminal, ...extra: string[]) => {
+      const out: string[] = [];
+      const errors: string[] = [];
+      const code = await main({
+        argv: ["confirm", "arm-task", "--state-root", box.stateRoot, "--config", resolve("awsf.config.yaml"), ...extra],
+        cwd: resolve("."), terminal: owner, writeOut: (line) => out.push(line), writeError: (line) => errors.push(line),
+      });
+      return { code, out, errors };
+    };
+
+    const piped = await run(untouchable());
+    assert.notEqual(piped.code, 0);
+    assert.match(piped.errors.join("\n"), /interactive owner terminal/u);
+    assert.deepEqual(await confirmations(created.attemptDir), []);
+
+    const declined = await run(terminal(false));
+    assert.equal(declined.code, 1);
+    assert.deepEqual(await confirmations(created.attemptDir), []);
+
+    const flagged = await run(terminal(true), "--where", "core/src/example.ts");
+    assert.notEqual(flagged.code, 0, "confirm takes no path of its own; it binds the preflight's");
+    assert.match(flagged.errors.join("\n"), /usage: awsf confirm/u);
+    assert.deepEqual(await confirmations(created.attemptDir), []);
+
+    const lines: string[] = [];
+    const confirmed = await run(terminal(true, true, lines));
+    assert.equal(confirmed.code, 0, confirmed.errors.join("\n"));
+    assert.ok(lines.some((line) => line.startsWith("Ask: add an example module")));
+    const records = await confirmations(created.attemptDir);
+    assert.equal(records.length, 1);
+    const status = await readAttempt(created.attemptDir);
+    assert.equal(records[0]!.requestDigest, requestTextDigest(status.request));
+    assert.equal(records[0]!.pathsDigest, requestPathsDigest(["core/src/example.ts"], []));
   } finally { box.close(); }
 });

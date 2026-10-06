@@ -11,14 +11,13 @@
 // the request text and to those two path lists; on no it writes nothing. No
 // flag records a confirmation without the terminal.
 //
-// It is built UNREGISTERED. boundary-claims derives the owner acts from the
-// main.ts arms that construct processOwnerTerminal() and requires the guard's
-// verbs to equal them, so an arm without its guard verb turns it red. Gate
-// G01-C wires it in one owner commit: the main.ts arm, CLI_COMMANDS, the
-// owner-act table in core/src/lifecycle/next-steps.ts, the cheatsheet's
-// commands and owner-acts lines, and the `confirm` verb in the guard
-// (delegation-guard.sh, marimba-guard-rules.mts, marimba-guard.test.ts) with
-// the driving documents that enumerate owner acts.
+// It was built unregistered (task 10), because boundary-claims derives the
+// owner acts from the main.ts arms that construct processOwnerTerminal() and
+// requires the guard's verbs to equal them. Gate G01-C wired it in one owner
+// commit: the main.ts arm, CLI_COMMANDS, the owner-act table in
+// core/src/lifecycle/next-steps.ts, the cheatsheet's commands and owner-acts
+// lines, the `confirm` verb in delegation-guard.sh and marimba-guard-rules.mts,
+// and the driving documents that enumerate owner acts.
 //
 // The write is bound to the revision the owner was shown. If the request, a
 // preflight record or anything else on the attempt moved while the question

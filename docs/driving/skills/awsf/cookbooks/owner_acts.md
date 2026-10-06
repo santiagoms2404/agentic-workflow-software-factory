@@ -1,7 +1,7 @@
 # Owner acts
 
-Twelve commands are the owner's and not yours: `journey`, `land`, `cancel`,
-`rework`, `review`, `degrade-review`, `attribute`, `prove`, `raise`, `publish`, `resume`, `grant`. This document
+Thirteen commands are the owner's and not yours: `journey`, `land`, `cancel`,
+`rework`, `review`, `degrade-review`, `attribute`, `prove`, `raise`, `publish`, `resume`, `grant`, `confirm`. This document
 is about **which one the evidence supports** and **what to hand the owner before
 they decide**. It is not a table
 of what each one costs, and the reason is at the bottom.
@@ -12,7 +12,7 @@ Prepare and explain. Never perform, and never recommend performing one without
 the evidence its edge requires.
 
 This is not merely a convention you could talk yourself out of — the lifecycle
-refuses a non-interactive invocation. Every one of the twelve requires an
+refuses a non-interactive invocation. Every one of the thirteen requires an
 interactive owner terminal, and a piped or redirected standard input is
 refused by its CLI guard or the normative machine *before* any process can receive a signal and
 before any call is reserved. That refusal is a terminal-shape check, not the
@@ -111,6 +111,15 @@ attempt wins and the earlier ones stay. Prepare it by naming the attempt, the
 heuristic's cause, and the evidence that points elsewhere; never record one to
 make a route look better.
 
+**`confirm`** is the owner's confirmation of a DRAFT attempt's request:
+`awsf confirm TASK [--attempt N]`. It binds to the exact request text and to the
+`--where` and `--read` of the attempt's latest `awsf preflight` record, so run
+preflight first; confirm refuses without one. It is K1's only attested field:
+the host measures the others, and nothing you run can mark this one. Prepare it
+by running preflight, reading every refused field with the owner, and saying
+which paths are written and which are only read. Never suggest confirming a
+request whose measured fields still refuse.
+
 **`prove`** creates one proving-ground replay:
 `awsf prove TASK --item ID --arm "ADAPTER/PROVIDER/MODEL@EFFORT" --rep N [--order K] --reason "WHY"`.
 It measures one route arm on one frozen corpus item, at the item's pinned base,
@@ -164,7 +173,7 @@ The same shape every time, and it is short:
 - the handle — task, attempt, lifecycle state, calls spent against the ceiling;
 - what the evidence says, with the phase's claim and the host's measurement kept
   distinct;
-- which of the twelve the evidence supports, which it does not, and why;
+- which of the thirteen the evidence supports, which it does not, and why;
 - what remains — calls, correction rounds, and the attempt-scoped owner re-entry
   allowance, which is what several of these draw on and which does not refresh
   within an attempt.

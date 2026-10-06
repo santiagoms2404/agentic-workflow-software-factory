@@ -570,7 +570,7 @@ npm run typecheck</pre>
   <p><strong>Nothing expires while you decide.</strong> A candidate waiting for a person stays waiting. Closing the session, shutting the machine, or coming back tomorrow changes nothing about the job&rsquo;s recorded state &mdash; the session was the thing driving, never the thing holding. And a candidate you never sign for changes nothing at all, which is exactly what makes the worked example safe for the next person to run.</p>
 
   <h3>The eight acts that are yours</h3>
-  <p>Twelve acts belong to the owner, each with its own eligibility: <code>land</code>, <code>cancel</code>, <code>rework</code>, <code>review</code>, <code>degrade-review</code>, <code>attribute</code>, <code>prove</code>, <code>journey</code>, <code>raise</code>, <code>publish</code>, <code>resume</code> and <code>grant</code>. What makes them one set is not what they do, because they do quite different things. It is who may do them. <strong>Each is a decision a person takes, and each is refused to an assistant.</strong></p>
+  <p>Thirteen acts belong to the owner, each with its own eligibility: <code>land</code>, <code>cancel</code>, <code>rework</code>, <code>review</code>, <code>degrade-review</code>, <code>attribute</code>, <code>prove</code>, <code>journey</code>, <code>raise</code>, <code>publish</code>, <code>resume</code>, <code>grant</code> and <code>confirm</code>. What makes them one set is not what they do, because they do quite different things. It is who may do them. <strong>Each is a decision a person takes, and each is refused to an assistant.</strong></p>
 
   <p><em>Refused</em> is the exact word, and this is the place to use leg 5&rsquo;s distinction on something that matters. The refusal is a thing that stops, not a record that reports: the surface marimba runs through denies the call before the act can begin. So it holds whether or not the assistant has read any instruction, agrees with it, or has been talked round to a different view. What you will see instead is marimba preparing the act, explaining it, and stopping. <strong>That stop is the machine, not the manners.</strong></p>
 
@@ -667,6 +667,7 @@ npm run awsf -- land TASK</pre>
     <li><code>new</code></li>
     <li><code>seed</code></li>
     <li><code>preflight</code></li>
+    <li><code>confirm</code></li>
     <li><code>start</code></li>
     <li><code>run</code></li>
     <li><code>resume</code></li>
@@ -823,6 +824,7 @@ npm run awsf -- land TASK</pre>
     <li><code>journey</code></li>
     <li><code>raise</code></li>
     <li><code>publish</code></li>
+    <li><code>confirm</code></li>
   </ul>
 
   <p><strong>So &ldquo;can I just tell marimba to land it?&rdquo; has one answer: no, and not because it is being careful.</strong> It will prepare the act, show you what it would do, and stop. What you do with that is the whole of leg 6.</p>
@@ -831,6 +833,7 @@ npm run awsf -- land TASK</pre>
     <li><b><code>land</code></b>Merges the candidate into the base branch. The approval is made durable before Git moves, because a merge can be replayed and a lost approval cannot be reconstructed.</li>
     <li><b><code>cancel</code></b><code>awsf cancel &lt;task&gt; --cause &lt;model|factory|environment|driver|owner|unknown&gt; --reason "&lt;why&gt;"</code> ends the attempt and records its cause and reason. Nothing is undone in your checkout; the record stays readable. <code>unknown</code> is allowed when the cause is not yet known.</li>
     <li><b><code>attribute</code></b><code>awsf attribute &lt;task&gt; --attempt &lt;n&gt; --cause &lt;model|factory|environment|driver|owner|unknown&gt; --reason "&lt;why&gt;"</code> records the owner&rsquo;s cause for a BLOCKED or CANCELLED attempt. <code>driver</code> means a pre-call check would have refused the run, not that its model was at fault.</li>
+    <li><b><code>confirm</code></b><code>awsf confirm &lt;task&gt; [--attempt &lt;n&gt;]</code> is your confirmation of a DRAFT attempt&rsquo;s request and of the <code>--where</code> and <code>--read</code> its latest <code>awsf preflight</code> recorded. It shows the four request lines, those paths, each consulted prior attempt and every field&rsquo;s result, then asks. Editing the request or re-running preflight with other paths leaves the confirmation bound to the old words. It refuses an attempt with no preflight record.</li>
     <li><b><code>rework</code></b>Sends the candidate back for another round. This one launches a worker, so it is one of the acts that spends. <code>awsf rework TASK "Concrete defect" [--instruction "Additional guidance"]</code> keeps the mandatory defect separate from the optional, owner-confirmed supplement. The supplement changes neither the one-turn builder limit nor review, budget or write authority.</li>
     <li><b><code>review</code></b>Buys one replacement second opinion on an unchanged candidate. It is available only when the recorded review is defective as evidence, so it cannot be used to shop for a verdict you like better.</li>
     <li><b><code>journey</code></b>Your attestation that you ran the built software yourself and it worked. Nothing inside the factory can answer that question, which is why the answer has to enter through a person &mdash; and why this act cannot pass itself.</li>
