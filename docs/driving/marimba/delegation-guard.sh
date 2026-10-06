@@ -117,7 +117,7 @@ EOF
 if [ -n "${cmd:-}" ]; then
   for verb in land cancel rework review degrade-review attribute prove journey raise publish resume grant; do
     case " $cmd " in
-      *"awsf $verb"*)
+      *"awsf $verb"*|*" awsf -- $verb "*|*" awsf --silent -- $verb "*|*"cli/main.ts $verb "*)
         deny "\`awsf $verb\` is an owner act and is denied in a driving session." \
 "Prepare it and explain it: the handle, what the evidence supports, and what remains. The owner runs it themselves. The TTY prompt is a terminal-shape check, not an authorization boundary, so this fence is the one that holds."
         ;;

@@ -4,12 +4,12 @@ import { OWNER_ACTS } from "../../../../docs/driving/marimba/marimba-guard-rules
 export const OWNER_ACT_SPELLINGS = [
   { id: "direct", prefix: "awsf", knownGapF17: false },
   { id: "just", prefix: "just awsf", knownGapF17: false },
-  // KNOWN GAP F17: G01-G must flip these five spellings to denial in BOTH harnesses.
-  { id: "npm", prefix: "npm run awsf --", knownGapF17: true },
-  { id: "npm-script-silent", prefix: "npm run awsf --silent --", knownGapF17: true },
-  { id: "npm-prefix", prefix: "npm --prefix <dir> run awsf --", knownGapF17: true },
-  { id: "npm-run-silent", prefix: "npm run --silent awsf --", knownGapF17: true },
-  { id: "node", prefix: "node --experimental-strip-types core/src/cli/main.ts", knownGapF17: true },
+  // F17 closed by G01-G: these five spellings are denied in BOTH harnesses.
+  { id: "npm", prefix: "npm run awsf --", knownGapF17: false },
+  { id: "npm-script-silent", prefix: "npm run awsf --silent --", knownGapF17: false },
+  { id: "npm-prefix", prefix: "npm --prefix <dir> run awsf --", knownGapF17: false },
+  { id: "npm-run-silent", prefix: "npm run --silent awsf --", knownGapF17: false },
+  { id: "node", prefix: "node --experimental-strip-types core/src/cli/main.ts", knownGapF17: false },
 ] as const;
 
 export const OWNER_ACT_ROWS = OWNER_ACTS.flatMap((act) => OWNER_ACT_SPELLINGS.map((spelling) => ({

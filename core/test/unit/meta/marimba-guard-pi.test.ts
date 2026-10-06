@@ -180,7 +180,8 @@ for (const row of OWNER_ACT_ROWS) {
 test("owner-act matrix catches a planted removed owner-rule match through rules and pi binding", async () => {
   const source = stripTypeScriptTypes(readFileSync(join(MARIMBA_DIR, "marimba-guard-rules.mts"), "utf8"))
     .replace(/\bexport /gu, "")
-    .replace("normalized.includes(`awsf ${act}`)", "false");
+    .replace("normalized.includes(`awsf ${act}`)", "false")
+    .replace("normalized.includes(`${form} ${act} `)", "false");
   const mutant = runInNewContext(`${source}\nownerActViolation`) as typeof ownerActViolation;
   const handler = bindingHandlers({}, mutant).get("tool_call")!;
   for (const row of OWNER_ACT_ROWS.filter((candidate) => candidate.expected !== null)) {

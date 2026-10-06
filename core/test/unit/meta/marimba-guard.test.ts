@@ -383,7 +383,10 @@ for (const row of GUARD_ROWS) {
 
 test("shell matrix catches a planted removed owner-act case without editing the protected guard", async () => {
   const original = readFileSync(GUARD, "utf8");
-  const mutant = original.replace('*"awsf $verb"*)', '*"planted-never-an-owner-act $verb"*)');
+  const mutant = original.replace(
+    '*"awsf $verb"*|*" awsf -- $verb "*|*" awsf --silent -- $verb "*|*"cli/main.ts $verb "*)',
+    '*"planted-never-an-owner-act $verb"*)',
+  );
   assert.notEqual(mutant, original, "the planted mutation must reach the real case arm");
   const script = join(STUB_BIN, "mutant-owner-guard.sh");
   writeFileSync(script, mutant);

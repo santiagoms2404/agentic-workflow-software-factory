@@ -99,10 +99,28 @@ export function normalizeCommand(command: string): string {
   return ` ${command.split(/\s+/u).filter(Boolean).join(" ")} `;
 }
 
+/**
+ * The forms an owner act also takes after a separator or an entry point (G01-G).
+ *
+ * `awsf -- <act>` and `awsf --silent -- <act>` are every npm spelling the
+ * driving docs teach (`npm run awsf -- <act>`, `npm run awsf --silent -- <act>`,
+ * `npm --prefix <dir> run awsf -- <act>`, `npm run --silent awsf -- <act>`), and
+ * `cli/main.ts <act>` is a direct `node … core/src/cli/main.ts <act>`. Each is
+ * matched after `normalizeCommand`, the same text-only way as the substring
+ * rule, and closed by a space after the act. The npm forms are also padded in
+ * front. The entry-point form is not, because a path such as
+ * `core/src/cli/main.ts` puts a `/` before `cli`, never a space. The
+ * over-denial grows by the same shape: a grep for "awsf -- land" is refused
+ * too.
+ */
+const OWNER_ACT_SEPARATED_FORMS = [" awsf --", " awsf --silent --", "cli/main.ts"] as const;
+
 /** The owner act a shell command invokes, or null. Reads text, never intent. */
 export function ownerActViolation(command: string): string | null {
   const normalized = normalizeCommand(command);
-  return OWNER_ACTS.find((act) => normalized.includes(`awsf ${act}`)) ?? null;
+  return OWNER_ACTS.find((act) =>
+    normalized.includes(`awsf ${act}`) ||
+    OWNER_ACT_SEPARATED_FORMS.some((form) => normalized.includes(`${form} ${act} `))) ?? null;
 }
 
 /** Whether a tool name is delegation-shaped and must be refused. */
