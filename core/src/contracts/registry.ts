@@ -7,6 +7,12 @@ import {
 import { AttributionRecordSchema, ATTRIBUTION_RECORD_SCHEMA_ID } from "./attribution-record.ts";
 import { BuildOutputSchema, BUILD_OUTPUT_SCHEMA_ID, type BuildOutput } from "./build-output.ts";
 import { DecisionRecordSchema, DECISION_RECORD_SCHEMA_ID } from "./decision-record.ts";
+import {
+  DriverPreflightRecordSchema,
+  DRIVER_PREFLIGHT_SCHEMA_ID,
+  RequestConfirmationRecordSchema,
+  REQUEST_CONFIRMATION_SCHEMA_ID,
+} from "./driver-preflight.ts";
 import { DesignContextSchema, DESIGN_CONTEXT_SCHEMA_ID, type DesignContext } from "./design-context.ts";
 import {
   DesignOutputSchema,
@@ -101,6 +107,8 @@ export const RECORD_SCHEMAS = {
   [PROVING_GROUND_ITEM_SCHEMA_ID]: ProvingGroundItemSchema,
   [DECISION_RECORD_SCHEMA_ID]: DecisionRecordSchema,
   [NEXT_STEPS_SCHEMA_ID]: NextStepsSchema,
+  [DRIVER_PREFLIGHT_SCHEMA_ID]: DriverPreflightRecordSchema,
+  [REQUEST_CONFIRMATION_SCHEMA_ID]: RequestConfirmationRecordSchema,
 } as const;
 
 export class UnknownEnvelopeSchemaError extends Error {

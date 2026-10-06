@@ -8,6 +8,7 @@ export * from "./ticket.ts";
 export * from "./shift-selection-record.ts";
 export * from "./attribution-record.ts";
 export * from "./next-steps.ts";
+export * from "./driver-preflight.ts";
 export * from "./envelope-base.ts";
 export * from "./plan-output.ts";
 export * from "./build-output.ts";
