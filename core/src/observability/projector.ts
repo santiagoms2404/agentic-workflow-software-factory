@@ -514,6 +514,15 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
         .run(`${sessionId}:driver-preflight:${sourceSeq}`, sessionId, sourceSeq, sourceSeq,
           stringifyRedacted(evidence.record), evidence.record.at);
       return;
+    case "request-confirmation":
+      // Keyed by journal position like the preflight row: a later confirmation
+      // of edited text is a second row, and the earlier one stays on file.
+      db.prepare(`INSERT OR IGNORE INTO events
+        (event_id, session_id, phase_id, first_source_seq, last_source_seq, type, name,
+         payload_json, started_at) VALUES (?, ?, NULL, ?, ?, 'notice', 'request confirmation', ?, ?)`)
+        .run(`${sessionId}:request-confirmation:${sourceSeq}`, sessionId, sourceSeq, sourceSeq,
+          stringifyRedacted(evidence.record), evidence.record.at);
+      return;
     case "transition":
       db.prepare(`INSERT OR IGNORE INTO transitions
         (transition_id, session_id, seq, from_state, to_state, actor, edge_id, reason_source,

@@ -184,6 +184,15 @@ async function attemptStatuses(stateRoot: string, project: string, taskId: strin
   return statuses;
 }
 
+/** This task's earlier attempts and every attempt of the tasks it continues: the attempts `--consulted` must name. */
+export async function priorAttemptStatuses(stateRoot: string, status: AttemptStatus): Promise<AttemptStatus[]> {
+  const continued = await ancestors(stateRoot, status.project, status.taskId);
+  return [
+    ...(await attemptStatuses(stateRoot, status.project, status.taskId, status.attempt)),
+    ...(await Promise.all(continued.map((taskId) => attemptStatuses(stateRoot, status.project, taskId)))).flat(),
+  ];
+}
+
 interface JournalFacts {
   readonly duplicate: DuplicateFacts;
   readonly priorSessions: readonly string[];
@@ -216,10 +225,7 @@ async function journalFacts(stateRoot: string, status: AttemptStatus, baseSha: s
       }
     }
   }
-  const priorSessions = [
-    ...(await attemptStatuses(stateRoot, project, status.taskId, status.attempt)),
-    ...(await Promise.all(continued.map((taskId) => attemptStatuses(stateRoot, project, taskId)))).flat(),
-  ].map((attempt) => attempt.sessionId);
+  const priorSessions = (await priorAttemptStatuses(stateRoot, status)).map((attempt) => attempt.sessionId);
   return {
     duplicate: {
       taskId: status.taskId, chain: [...chain].sort(), requestDigest: normalizedRequestDigest(status.request),
