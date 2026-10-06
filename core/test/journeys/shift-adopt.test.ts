@@ -428,7 +428,7 @@ async function integratedShiftPrefix() {
 
   const turn = lostTurn(readFileSync(journalFilePath(world.sourceDir), "utf8").trimEnd().split("\n").map((line) => JSON.parse(line) as JournalLine));
   assert.deepEqual({ status: turn["status"], exitCode: turn["exitCode"], exitSignal: turn["exitSignal"], ended: turn["endedAt"] !== null },
-    { status: "FAILED", exitCode: null, exitSignal: null, ended: true }, "the lost turn is settled only by its identity and the census");
+    { status: "FAILED", exitCode: 0, exitSignal: null, ended: true }, "the lost turn is FAILED, carrying the exit its transport reported");
 
   mkdirSync(join(world.canonical, "docs"), { recursive: true });
   writeFileSync(join(world.canonical, "docs", "canonical.md"), "canonical advance\n");
@@ -603,7 +603,11 @@ const SHIFT_SEED_REFUSALS: readonly ShiftSeedRefusal[] = [
     apply: (world) => rewriteJournal(world.sourceDir, (records) => { lostTurn(records)["endedAt"] = null; }),
     quiescence: () => "quiescent", expected: UNSETTLED },
   { name: "a turn recorded EXITED with neither exit code nor signal",
-    apply: (world) => rewriteJournal(world.sourceDir, (records) => { lostTurn(records)["status"] = "EXITED"; }),
+    apply: (world) => rewriteJournal(world.sourceDir, (records) => {
+      const turn = lostTurn(records);
+      turn["status"] = "EXITED";
+      turn["exitCode"] = null;
+    }),
     quiescence: () => "quiescent", expected: UNSETTLED },
 ];
 

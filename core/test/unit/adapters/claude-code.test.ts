@@ -1170,3 +1170,77 @@ test("the adapter's own identity check is the module rule, reachable through the
   );
   assert.throws(() => adapter().assertSameSession(first, { ...first, sessionId: null }), AdapterError);
 });
+
+// ---------------------------------------------------------------------------
+// A stream that ends without a terminal explains itself.
+// ---------------------------------------------------------------------------
+
+const DELTA_LINE = JSON.stringify({
+  type: "stream_event",
+  event: { type: "content_block_delta", delta: { type: "text_delta", text: "partial" } },
+});
+
+test("a missing terminal names the exit code the process reported", async () => {
+  const events = await replayText(`${INIT_LINE}\n${DELTA_LINE}\n`, { exit: { code: 137, signal: null } });
+  const terminal = events.at(-1);
+  assert.equal(terminal?.kind === "run.failed" ? terminal.errorCode : null, "E_TERMINAL_MISSING");
+  assert.ok(terminal?.kind === "run.failed" && terminal.message.includes("exited with code 137"), terminal?.kind === "run.failed" ? terminal.message : "");
+  assert.deepEqual(validateEventSequence(events), []);
+});
+
+test("a missing terminal names the signal that ended the process", async () => {
+  const events = await replayText(`${INIT_LINE}\n${DELTA_LINE}\n`, { exit: { code: null, signal: "SIGKILL" } });
+  const terminal = events.at(-1);
+  assert.equal(terminal?.kind === "run.failed" ? terminal.errorCode : null, "E_TERMINAL_MISSING");
+  assert.ok(terminal?.kind === "run.failed" && terminal.message.includes("signal SIGKILL"));
+});
+
+test("a missing terminal says when no exit was observed within the bounded wait", async () => {
+  const events = await replayText(`${INIT_LINE}\n${DELTA_LINE}\n`, {
+    exit: "never",
+    stderr: "provider went quiet",
+  });
+  const terminal = events.at(-1);
+  assert.equal(terminal?.kind === "run.failed" ? terminal.errorCode : null, "E_TERMINAL_MISSING");
+  const message = terminal?.kind === "run.failed" ? terminal.message : "";
+  // `adapter()` waits 25 ms, the same wait a held terminal gets.
+  assert.ok(message.includes("neither an exit code nor a signal was observed within 25 ms"), message);
+  assert.ok(message.includes("provider went quiet"), "the stderr explanation is still carried");
+});
+
+test("a cancelled run with no terminal is still a cancellation, not a missing terminal", async () => {
+  const controller = new AbortController();
+  controller.abort(new Error("owner stop"));
+  const events = await replayText(`${INIT_LINE}\n${DELTA_LINE}\n`, { signal: controller.signal, exit: "never" });
+  assert.equal(events.at(-1)?.kind, "run.cancelled");
+});
+
+test("an unrecognized system subtype becomes one notice with a bounded excerpt", async () => {
+  const hook = JSON.stringify({
+    type: "system",
+    subtype: "api_retry",
+    detail: "y".repeat(1000),
+    session_id: "s-regression",
+  });
+  const status = JSON.stringify({ type: "system", subtype: "status", status: "requesting" });
+  const events = await replayText(
+    `${INIT_LINE}\n${status}\n${hook}\n` +
+      `${JSON.stringify({ type: "result", is_error: false, usage: { input_tokens: 1, output_tokens: 1 } })}\n`,
+  );
+  const notices = only(events, "notice");
+  assert.equal(notices.length, 1, "init and status stay silent; the unknown subtype is one notice");
+  assert.equal(notices[0]?.code, "unknown-provider-event");
+  assert.ok(notices[0]?.message.includes('"api_retry"'));
+  assert.ok(notices[0]?.detail?.startsWith('{"type":"system","subtype":"api_retry"'));
+  assert.equal(notices[0]?.detail?.length, 200);
+  assert.equal(only(events, "model.resolved").length, 1);
+  assert.equal(events.at(-1)?.kind, "run.completed");
+  assert.deepEqual(validateEventSequence(events), []);
+});
+
+test("a system line with no subtype is noticed rather than dropped", async () => {
+  const events = await replayText(`${INIT_LINE}\n${JSON.stringify({ type: "system" })}\n`);
+  const notices = only(events, "notice").filter((n) => n.code === "unknown-provider-event");
+  assert.equal(notices.length, 1);
+  assert.ok(notices[0]?.message.includes("null"));
+});

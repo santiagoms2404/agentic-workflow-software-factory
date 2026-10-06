@@ -107,7 +107,7 @@ import {
   runMandatoryReview,
 } from "../../workflow/review-routing.ts";
 import type { AttemptEvent, AttemptStatus } from "./attempt.ts";
-import { ProductionRouteUnavailable, ProductionWorkflowUnsupported, isReviewTransportFailure } from "./production-run.ts";
+import { ProductionRouteUnavailable, ProductionWorkflowUnsupported, isReviewTransportFailure, observedExitCode } from "./production-run.ts";
 import {
   assertPromptCompositionCurrent,
   type RecordedRoute,
@@ -930,6 +930,8 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
         text: turnPrompt, lineCount: turnPrompt.split(/\r?\n/).length, at: infra.now(),
       });
       const permission = openPermission();
+      /** This turn's process only; `state.activeTransport` may still name an earlier turn's. */
+      let turnTransport: ProcessTransport | null = null;
       const capturingBroker: TransportBroker = {
         startProcess: async (registration, spec, signal) => {
           const launchGrant = permission.sandbox(spec);
@@ -957,6 +959,7 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
           // without an immutable materialization.
           runOptions.assertBeforeGo?.();
           state.activeTransport = await broker.startProcess(registration, finalSpec, signal);
+          turnTransport = state.activeTransport;
           return state.activeTransport;
         },
       };
@@ -983,7 +986,10 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
         }
       }
       const endedAt = infra.now();
-      if (state.observed !== null) state.observed = { ...state.observed, endedAt };
+      if (state.observed !== null) {
+        const exitCode = terminal?.kind === "run.failed" ? await observedExitCode(turnTransport) : state.observed.exitCode;
+        state.observed = { ...state.observed, exitCode, endedAt };
+      }
       // The reviewer's own words are not swept, for the reason the prompt is
       // not: it is reading the candidate and quoting it back, and the runner
       // retains the identical output from the identical phase unswept.

@@ -40,6 +40,7 @@ import {
   type ObservedProviderSession,
   type ObservedToolImage,
   type BrokerProcessRegistration,
+  type ProcessExit,
   type ProcessSpec,
   type ProcessTransport,
   type TransportBroker,
@@ -641,11 +642,25 @@ export class ClaudeCodeAdapter implements ContinuityCapableAdapter {
       yield* sequencer.cancel(cancellationReason(signal, null));
       return;
     }
+    // The same bounded wait `#settleHeld` uses, so the failure says how the
+    // process ended — or that nobody saw it end.
+    const exit = await awaitExit(transport, this.#exitWaitMs);
     yield* sequencer.fail(
       "E_TERMINAL_MISSING",
-      `the provider's stream ended without a terminal event${stderrSuffix(stderr)}`,
+      `the provider's stream ended without a terminal event; ${describeExit(exit, this.#exitWaitMs)}` +
+        stderrSuffix(stderr),
     );
   }
+}
+
+/** How the process ended, as observed — never a guessed code. */
+function describeExit(exit: ProcessExit | null, waitMs: number): string {
+  if (exit === null) {
+    return `neither an exit code nor a signal was observed within ${String(waitMs)} ms`;
+  }
+  if (exit.code !== null) return `the process exited with code ${String(exit.code)}`;
+  if (exit.signal !== null) return `the process was ended by signal ${exit.signal}`;
+  return "the process exited, but reported neither an exit code nor a signal";
 }
 
 /** What the run was cancelled for: the caller's own reason wherever there is one. */

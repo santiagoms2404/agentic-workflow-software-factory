@@ -26,6 +26,7 @@ import type {
 } from "../../adapters/interface.ts";
 import { AdapterError, isContinuityCapable } from "../../adapters/interface.ts";
 import { registeredAdapter } from "../../adapters/registry.ts";
+import { awaitExit } from "../../adapters/stream/transport-loop.ts";
 import { writeSystemPromptFile } from "../../adapters/system-prompt-file.ts";
 import { toConfigSnapshotJson } from "../../config/effective-config.ts";
 import { composeOwnerAmendment, composeOwnerAmendmentChain, createOwnerAmendment, ownerAmendmentDeliveryAction, ownerText, type OwnerAmendmentDelivery } from "../../contracts/owner-amendment.ts";
@@ -995,6 +996,17 @@ export function isReviewTransportFailure(error: unknown): boolean {
   // Quota is structurally never a retry, and a permission or contract failure
   // would fail identically the second time at the cost of another call.
   return ["E_TERMINAL_MISSING", "E_BACKEND_FAILURE", "E_TRANSPORT"].includes(error.code);
+}
+
+/**
+ * The exit code a provider process has ALREADY reported, without waiting for
+ * one. The adapter owns the bounded wait for the exit; once its stream has
+ * ended the exit was either observed or it was not, and `null` stays "not
+ * observed" rather than becoming a guessed code.
+ */
+export async function observedExitCode(transport: ProcessTransport | null | undefined): Promise<number | null> {
+  if (transport === null || transport === undefined) return null;
+  return (await awaitExit(transport, 0))?.code ?? null;
 }
 
 const COLD_ENVELOPE_GATE_IDS: ReadonlySet<GateId> = new Set([
@@ -2571,7 +2583,8 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
           if (!stopped.terminated || stopped.survivors.length > 0 || stopped.skipped !== null) throw new Error("completed provider turn has unresolved descendants");
         }
         const endedAt = infra.now();
-        const exitCode = terminal?.kind === "run.completed" ? terminal.exitCode : null;
+        const exitCode = terminal?.kind === "run.completed" ? terminal.exitCode
+          : terminal?.kind === "run.failed" ? await observedExitCode(turnLaunch.transport) : null;
         if (turnLaunch.record !== undefined) {
           await persist("attempt.updated", { process: null, lastActivityAt: endedAt }, {
             type: "process", phaseId: phaseDb, adapterId: route.adapterId, role: route.agent.name,

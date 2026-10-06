@@ -166,7 +166,7 @@ export class ClaudeStreamDecoder {
 
     switch (parsed.type) {
       case "system":
-        return [...out, ...this.#system(parsed, sequencer)];
+        return [...out, ...this.#system(parsed, text, sequencer)];
       case "stream_event":
         return [...out, ...this.#streamEvent(parsed, sequencer)];
       case "assistant":
@@ -257,10 +257,19 @@ export class ClaudeStreamDecoder {
     this.#deltaUsage = state;
   }
 
-  #system(line: ClaudeLine, sequencer: EventSequencer): readonly NormalizedEvent[] {
+  #system(line: ClaudeLine, text: string, sequencer: EventSequencer): readonly NormalizedEvent[] {
     // `system/status` ("requesting", …) is recognized and carries no normalized
     // meaning; a notice per status line would bury the stream it describes.
-    if (line.subtype !== "init") return [];
+    if (line.subtype === "status") return [];
+    // Any other subtype is something the CLI said that this decoder does not
+    // read, and a run that later ends without a terminal may have said why here.
+    if (line.subtype !== "init") {
+      return sequencer.notice(
+        "unknown-provider-event",
+        `the Claude CLI emitted an unrecognized system subtype ${JSON.stringify(line.subtype ?? null)}`,
+        text.slice(0, 200),
+      );
+    }
     const model = typeof line.model === "string" ? line.model : "";
     this.#session.resolvedModel = model.length > 0 ? model : null;
     return sequencer.resolveModel({

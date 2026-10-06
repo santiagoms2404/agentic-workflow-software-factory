@@ -2,7 +2,7 @@
 // projection of. Append-only, fsynced before the write protocol's next step
 // may run, byte-prefix immutable by construction.
 
-import { mkdir, open, readFile, type FileHandle } from "node:fs/promises";
+import { mkdir, open, type FileHandle } from "node:fs/promises";
 import { dirname } from "node:path";
 import { scrubCredentials, stringifyRedacted } from "../policy/redaction.ts";
 
@@ -57,18 +57,82 @@ class AppendOnlyLog {
   }
 }
 
-async function lastSourceSeq(path: string): Promise<number> {
-  let text: string;
+/** How many bytes of the journal's tail one read takes. */
+export const TAIL_CHUNK_BYTES = 64 * 1024;
+
+const NEWLINE = 0x0a;
+
+/** The part of a `FileHandle` a tail read uses. */
+export interface TailHandle {
+  stat(): Promise<{ size: number }>;
+  read(buffer: Buffer, offset: number, length: number, position: number): Promise<{ bytesRead: number }>;
+  close(): Promise<void>;
+}
+
+export interface LastSourceSeqOptions {
+  chunkBytes?: number;
+  /** Opens the journal for reading. Injected so a test can count the bytes read. */
+  open?: (path: string) => Promise<TailHandle>;
+}
+
+/**
+ * The `source_seq` of the journal's last non-empty line, or 0 when there is
+ * none (missing, empty, or newline-only file).
+ *
+ * Read backwards from the end in bounded chunks, never the whole file: every
+ * status write constructs a fresh `Journal`, so a whole-file read here made
+ * each write cost the size of the journal. The bytes read are the trailing
+ * newlines, the last line, and at most one chunk more. A malformed last line
+ * still throws from `JSON.parse`.
+ */
+export async function lastSourceSeq(path: string, options: LastSourceSeqOptions = {}): Promise<number> {
+  const chunkBytes = options.chunkBytes ?? TAIL_CHUNK_BYTES;
+  if (!Number.isSafeInteger(chunkBytes) || chunkBytes < 1) {
+    throw new RangeError(`tail chunk size must be a positive integer, got ${String(chunkBytes)}`);
+  }
+  let handle: TailHandle;
   try {
-    text = await readFile(path, "utf8");
+    handle = await (options.open ?? ((target: string) => open(target, "r")))(path);
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return 0;
     throw err;
   }
-  const lines = text.split("\n").filter((line) => line.length > 0);
-  const lastLine = lines[lines.length - 1];
-  if (lastLine === undefined) return 0;
-  return (JSON.parse(lastLine) as JournalRecord<unknown>).source_seq;
+  try {
+    const { size } = await handle.stat();
+    // The last line's bytes, in reverse chunk order.
+    const pieces: Buffer[] = [];
+    let found = false;
+    let position = size;
+    while (position > 0) {
+      const length = Math.min(chunkBytes, position);
+      position -= length;
+      const chunk = Buffer.alloc(length);
+      await readFully(handle, chunk, position);
+      let last = length - 1;
+      if (!found) {
+        while (last >= 0 && chunk[last] === NEWLINE) last -= 1;
+        if (last < 0) continue;
+        found = true;
+      }
+      const newline = chunk.lastIndexOf(NEWLINE, last);
+      pieces.push(chunk.subarray(newline + 1, last + 1));
+      if (newline >= 0) break;
+    }
+    if (!found) return 0;
+    const lastLine = Buffer.concat(pieces.reverse()).toString("utf8");
+    return (JSON.parse(lastLine) as JournalRecord<unknown>).source_seq;
+  } finally {
+    await handle.close();
+  }
+}
+
+async function readFully(handle: TailHandle, buffer: Buffer, position: number): Promise<void> {
+  let offset = 0;
+  while (offset < buffer.length) {
+    const { bytesRead } = await handle.read(buffer, offset, buffer.length - offset, position + offset);
+    if (bytesRead === 0) throw new Error("journal shrank while its tail was being read");
+    offset += bytesRead;
+  }
 }
 
 /**
