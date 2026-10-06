@@ -66,11 +66,11 @@ disagreed would be refused.
 | `T08` | M4 | — | G01-F | The preflight record and its fields |
 | `T09` | M4 | `T06`, `T08` | — | awsf preflight measures, reuses or runs the suite, and journals the record |
 | `T10` | M4 | `T08`, `T09` | G01-C after it | awsf confirm, built unregistered |
-| `T11` | M4 | `T06`, `T09`, `T10` | G01-C at its base | awsf start refuses L1 without a fresh record and a confirmation |
-| `T12` | M4 | `T09`, `T11` | — | The runner refuses a writing phase that lacks its recorded grant |
-| `T13` | M4 | `T03`, `T04`, `T07`, `T11`, `T12` | G01-G landed | Testing Strategy for M4, the forensics map, and the workstream's closing duties |
+| `T11` | M5 | `T06`, `T09`, `T10` | G01-C at its base | awsf start refuses L1 without a fresh record and a confirmation |
+| `T12` | M5 | `T09`, `T11` | — | The runner refuses a writing phase that lacks its recorded grant |
+| `T13` | M5 | `T03`, `T04`, `T07`, `T11`, `T12` | G01-G landed | Testing Strategy for M4, the forensics map, and the workstream's closing duties |
 
-M1, M2 and M3 have no dependency on each other and can run in any order. M4 waits for G01-F.
+M1, M2 and M3 have no dependency on each other and can run in any order. M4 waits for G01-F; M5 waits for G01-C.
 
 ## K2 availability
 
@@ -96,4 +96,4 @@ After each landed ticket, the owner makes one commit: the task rows and the mile
 the plan, the ticket's `state`, the Handoff entries the builder returned, and a dated Amendment
 (invariant 12). A milestone stays `[wip]` until every task in it is `[x]`. Only T13's landing moves
 the spine's Milestone M1 / W01 marker and `../awsf-v3-plan/W01.md`, in that same commit. Current
-plan-aligned states: **T01–T03 and T05–T07 `done`; T04 and T08–T13 `todo`** (M1 and M3 `[x]`; M2 and M4 `[]`).
+plan-aligned states: **T01–T03 and T05–T07 `done`; T04 and T08–T13 `todo`** (M1 and M3 `[x]`; M2, M4 and M5 `[]`).

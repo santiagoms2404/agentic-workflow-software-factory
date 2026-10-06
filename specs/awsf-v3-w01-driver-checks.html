@@ -149,9 +149,9 @@ section.phase .sub { font-size:13px; }
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-10-03</dd>
-        <dt>modified</dt>     <dd>2026-10-03 (authored, awaiting owner review), 2026-10-04 (owner review applied: W01-Q1–Q7 decided; deep plan approved), 2026-10-05 (M1 delivered; owner-side markers and returned handoffs recorded), 2026-10-05 (K2 distinguishes implemented invocations from unavailable machine edges), 2026-10-05 (M3 delivered; owner-side markers and returned handoffs recorded)</dd>
+        <dt>modified</dt>     <dd>2026-10-03 (authored, awaiting owner review), 2026-10-04 (owner review applied: W01-Q1–Q7 decided; deep plan approved), 2026-10-05 (M1 delivered; owner-side markers and returned handoffs recorded), 2026-10-05 (K2 distinguishes implemented invocations from unavailable machine edges), 2026-10-05 (M3 delivered; owner-side markers and returned handoffs recorded), 2026-10-05 (M4 split at G01-C into M4 and M5)</dd>
         <dt>commits</dt>      <dd>authoring: e1507e2; owner approval: recorded by this dated Amendment and its commit; approval SHA: dca882d; M1 delivery: T01 e074fe2, T02 58784ed, T03 4c75e11; M3 delivery: T05 95048a2, T06 9a3f352, T07 d5cd026, integrated as 76feb2e, review findings fixed in 4d7487f</dd>
-        <dt>agent name</dt>   <dd>claude-opus-5-5; marimba (owner-side bookkeeping preparation only), marimba (K2 amendment preparation only), marimba (M3 bookkeeping preparation only)</dd>
+        <dt>agent name</dt>   <dd>claude-opus-5-5; marimba (owner-side bookkeeping preparation only), marimba (K2 amendment preparation only), marimba (M3 bookkeeping and M4 split preparation only)</dd>
         <dt>session id</dt>   <dd>not recorded: AGENTS.md invariant 1 keeps live session state out of every committed file</dd>
         <dt>back refs</dt>    <dd>./awsf-v3-plan.html (§ Workstreams → Milestone M1 → W01, Questionable Q1, Notes), ./tickets/awsf-v3-plan/W01.md (the meta-prompt this plan answers), ./awsf-v3-intent.md (Terms K1 and K2, decisions 13 and 14), ./awsf-v3-assessment-and-direction.md (N3, F17, A10, A12), ../AGENTS.md (the thirteen invariants), ./design/awsf-v3-plan/frame-index.json (workstreamFrames.W01: mp-s2, mp-s3, mp-s4, mp-s5), the machine-local forensics draft ~/marimba-lab/forensics/2026-10-01-stops.md (not committed)</dd>
         <dt>forward refs</dt> <dd>./awsf-v3-w01-driver-checks-build-prompts.md (§ Section B, the prompt source the invariant-12 fence pairs against), ./tickets/awsf-v3-w01-driver-checks/ (README, T01–T13), ./awsf-v3-w02-trap-suite.html (not yet authored; receives this plan's handoff)</dd>
@@ -378,7 +378,8 @@ sequenceDiagram
         <tr><td>M1 causes</td><td>T01–T03</td><td>managed, build-review per ticket</td><td>owner approval of this plan</td></tr>
         <tr><td>M2 guard</td><td>T04</td><td>managed, build-review</td><td>owner approval; <span class="gate">G01-G</span> lands before or after T04</td></tr>
         <tr><td>M3 K2</td><td>T05–T07</td><td>managed, build-review per ticket</td><td>owner approval</td></tr>
-        <tr><td>M4 K1</td><td>T08–T13</td><td>managed, build-review per ticket</td><td><span class="gate">G01-F</span> before T08; <span class="gate">G01-C</span> between T10 and T11</td></tr>
+        <tr><td>M4 K1, built</td><td>T08–T10</td><td>managed, build-review per ticket or one milestone shift</td><td><span class="gate">G01-F</span> before T08</td></tr>
+        <tr><td>M5 K1, enforced</td><td>T11–T13</td><td>managed, build-review per ticket</td><td><span class="gate">G01-C</span> landed before T11; T13 also waits for T04</td></tr>
       </tbody>
     </table>
 
@@ -542,7 +543,7 @@ flowchart LR
 
     <!-- ================= M4 ================= -->
     <section class="phase">
-      <h3><code class="status">[]</code> Milestone M4: K1, the driver preflight record <span class="wtag">managed</span> <span class="wtag raise">gates G01-F, G01-C</span></h3>
+      <h3><code class="status">[]</code> Milestone M4: K1, the driver preflight record <span class="wtag">managed</span> <span class="wtag raise">gate G01-F</span></h3>
       <p>The host measures, the owner confirms, <code>awsf start</code> refuses until both agree, and the runner checks the one fact that cannot exist before PREPARED.</p>
       <figure>
         <pre class="mermaid">
@@ -584,6 +585,13 @@ stateDiagram-v2
         <li><code class="status">[]</code> Not registered in <code>main.ts</code>: G01-C wires it, with its guard verb, in one owner commit</li>
         <li><code class="status">[]</code> Tests drive the command function with a fake owner terminal: non-interactive refused, declined writes nothing, confirmed writes one record</li>
       </ul>
+
+      <div class="loop">🔁 <strong>Do not exit this milestone until every box above is checked.</strong></div>
+    </section>
+    <!-- ================= M5 ================= -->
+    <section class="phase">
+      <h3><code class="status">[]</code> Milestone M5: K1 enforced, and the workstream's close <span class="wtag">managed</span> <span class="wtag raise">gate G01-C</span></h3>
+      <p><code>awsf start</code> and the runner enforce the record M4 built, and task 13 closes the workstream against the forensics list. It begins only after G01-C has landed.</p>
 
       <h4>11. <code>awsf start</code> refuses L1 without a fresh record and a confirmation</h4>
       <p class="sub">Serves <code class="serves">AC-6</code> · <code class="serves">INV-1</code> · <code class="serves">INV-2</code></p>
@@ -841,6 +849,11 @@ flowchart LR
       <p>The exact candidate <code>d5cd026</code> was then adopted as <code>v3-w01-m3-k2-review</code>. The host wrote its integration merge onto <code>833f8dc</code> as <code>76feb2e</code>. The adoption gates passed: 2945 unit tests, 347 journeys, typecheck and lint. The independent Claude review covered K2 and F1 and returned <em>concern</em> with four findings, each confirmed against the candidate by the driving session. HIGH: intake was told it never lands. MEDIUM: the prose fence swept only <code>core/src/cli</code>. LOW: rework was dropped from non-replaceable review advice. LOW: a hard-coded <code>--attempt 1</code>. The adoption had no owner re-entry, so the owner landed <code>76feb2e</code> and the follow-up <code>m3-advice-fixes</code> fixed all four at <code>4d7487f</code>. Its gates passed: 2949 unit tests, 347 journeys, typecheck and lint. That review was same-provider by owner grant, and the driving session read the full diff as the independent check. The owner attested journeys <code>m3-next-steps-unit-tests</code> on <code>76feb2e</code> and <code>m3-advice-fixes-unit-tests</code> on <code>4d7487f</code>, running the M3 unit tests in each managed worktree, and authorized both local fast-forward landings. The builders' suggested <code>awsf next</code> walkthrough on stub attempts was not performed as a separate owner exercise.</p>
       <p>Gate evidence: the base passed 2900 unit tests. The heads passed 2908 (T05), 2924 (T06) and 2931 (T07), with 347 journeys at each. No gate configuration or timeout changed. Contract and simulation layers are not claimed by these rows; the whole-workstream Validation checks remain open.</p>
       <p>This owner-side bookkeeping commit earns only the M3 header and the rows of tasks 5–7, with tickets T05–T07 moved to <code>done</code> in the same commit. M2 stays <code>[]</code>: G01-G has not landed, and T04 remains <code>todo</code> with its five <code>knownGapF17</code> flags and 60 expected allow rows per surface unchanged. M4, the Validation checklist and the spine's W01 marker remain unearned; W01 stays <code>[wip]</code>. Returned handoffs are recorded on T11, T13, W05 and W08.</p>
+    </details>
+    <details open>
+      <summary>2026-10-05 — M4 split at G01-C into M4 (T08–T10) and M5 (T11–T13)</summary>
+      <p>M4 held two owner gates. G01-F stands before T08. G01-C is an owner commit that must land between T10 and T11. A milestone shift cannot pause for an owner commit inside its selection. Shift admission also requires every dependency outside the selection to be <code>done</code> (<code>core/src/workflow/shift/select.ts</code>), and T13 depends on T04, which waits for G01-G. As written, no shift could carry any part of M4. This plan already rejected grouping parts behind one another's gates ("a shared milestone would hold a finished part's marker behind another part's gate"), and the same reasoning applies here.</p>
+      <p>The owner split M4 at G01-C. M4 is now tasks 8–10: the record, <code>awsf preflight</code> and the unregistered <code>awsf confirm</code>, gated by G01-F. The new M5 is tasks 11–13: the start refusal, the runner's grant check, and the testing strategy and closing duties, gated by G01-C. T13 keeps its dependency on T04. No task, row, field, dependency, gate, decision or acceptance bar changed. Only the milestone boundary and its marker moved. T11–T13 move to <code>milestone: M5</code>. In the canonical prompts and their ticket copies, which change together and stay byte-identical, the "milestone M4" lines for tasks 11–13 now read M5, "M4's acceptance" for tasks 11–12 reads M5's, task 13 earns M5's marker, and K1's field ids are used by every M4 and M5 ticket. Task titles are unchanged; task 13's title "Testing Strategy for M4" now covers K1 across M4 and M5. Diagrams and decision text that say "M4" for K1 as a whole now mean M4 and M5. Only task 13's landing still earns the spine's W01 marker.</p>
     </details>
   </section>
 

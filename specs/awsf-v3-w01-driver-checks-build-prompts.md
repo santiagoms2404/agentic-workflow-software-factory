@@ -52,7 +52,7 @@ have no verb, argv or executable who; neither the renderer, a lease nor a later 
 that explanation into an action. L10 and L16 currently require this classification. Implementing
 those edges is separate scope, not permission granted by T05.
 
-**K1's field ids**, used by every M4 ticket: `suite`, `write-boundary`, `protected-paths`,
+**K1's field ids**, used by every M4 and M5 ticket: `suite`, `write-boundary`, `protected-paths`,
 `git-storage`, `duplicate`, `request-shape`, `prior-attempts` (measured) and `confirmation`
 (attested). The plan's K1 table defines each.
 
@@ -905,7 +905,7 @@ ROUTING
   This ticket edits many tests. If awsf workflows shows corrections fundable of 1 or less for
   its route, prepare an awsf raise for the owner before start.
 
-TASK 11 of 13. Plan: specs/awsf-v3-w01-driver-checks.html, milestone M4, task 11.
+TASK 11 of 13. Plan: specs/awsf-v3-w01-driver-checks.html, milestone M5, task 11.
 REPOSITORY: this checkout (AWSF). One repository.
 
 EXECUTION
@@ -963,7 +963,7 @@ BUILDER READY
     npm run typecheck and npm run lint exit 0.
 
 OWNER ACCEPTANCE
-  None for this ticket alone. M4's acceptance is task 13's list. From this landing on, the
+  None for this ticket alone. M5's acceptance is task 13's list. From this landing on, the
   owner confirms each new task with awsf confirm before it starts.
 
 COMMIT
@@ -990,7 +990,7 @@ ROUTING
   Managed (default): host configuration owns the route, the review inversion and the effort.
   Manual (a logged exception): Opus 5.5 at high, or codex:gpt-6-sol at high, by live quota.
 
-TASK 12 of 13. Plan: specs/awsf-v3-w01-driver-checks.html, milestone M4, task 12.
+TASK 12 of 13. Plan: specs/awsf-v3-w01-driver-checks.html, milestone M5, task 12.
 REPOSITORY: this checkout (AWSF). One repository.
 
 EXECUTION
@@ -1042,7 +1042,7 @@ BUILDER READY
     npm run typecheck and npm run lint exit 0.
 
 OWNER ACCEPTANCE
-  None for this ticket alone. M4's acceptance is task 13's list.
+  None for this ticket alone. M5's acceptance is task 13's list.
 
 COMMIT
   Managed: leave the tree for the host and put the proposed message in your envelope.
@@ -1068,7 +1068,7 @@ ROUTING
   Managed (default): host configuration owns the route, the review inversion and the effort.
   Manual (a logged exception): Opus 5.5 at high, or codex:gpt-6-sol at high, by live quota.
 
-TASK 13 of 13. Plan: specs/awsf-v3-w01-driver-checks.html, milestone M4, task 13.
+TASK 13 of 13. Plan: specs/awsf-v3-w01-driver-checks.html, milestone M5, task 13.
 REPOSITORY: this checkout (AWSF). One repository.
 
 EXECUTION
@@ -1130,7 +1130,7 @@ COMMIT
   Never name an agent, model or tool in an identity, a message or a trailer.
 
 MARKERS
-  Owner-side, after this ticket's candidate lands: task 13's rows and Milestone M4's marker in
+  Owner-side, after this ticket's candidate lands: task 13's rows and Milestone M5's marker in
   specs/awsf-v3-w01-driver-checks.html and this ticket's state, and the spine's Milestone M1
   (W01) rows in specs/awsf-v3-plan.html with specs/tickets/awsf-v3-plan/W01.md's state, all in
   one commit with a dated Amendment in each plan (invariants 2 and 12). Return the evidence.
