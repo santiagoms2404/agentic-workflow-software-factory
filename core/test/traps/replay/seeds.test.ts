@@ -313,7 +313,17 @@ for (const seed of SEEDS.filter(seed => seed.replay !== null)) {
   });
 }
 
-test("every refusal and gap has a registered replay; no accidental skipped or todo pin", () => {
-  assert.equal(SEEDS.filter(seed => seed.outcome === "refused" || seed.outcome === "gap").length, 12);
-  for (const seed of SEEDS) if (seed.outcome === "refused" || seed.outcome === "gap") assert.ok(seed.replay && REPLAYS[seed.replay], seed.id);
+test("every refusal and gap has a registered replay or G02-S's explicit T11 placement handoff", () => {
+  const candidates = SEEDS.filter(seed => seed.outcome === "refused" || seed.outcome === "gap");
+  assert.equal(candidates.length, 14);
+  const pendingPlacement = candidates.filter(seed => seed.replay === null);
+  assert.deepEqual(pendingPlacement.map(seed => seed.id), ["S21", "S24"]);
+  for (const seed of pendingPlacement) {
+    // G02-S confirmed these from the blocker details after T01. T11 owns
+    // their replay and refusal; this ticket only corrects the ledger.
+    assert.equal(seed.outcome, "gap");
+    assert.equal(seed.pendingTask, "T11");
+    assert.match(seed.evidence, /placement\.yaml/u);
+  }
+  for (const seed of candidates.filter(seed => seed.replay !== null)) assert.ok(REPLAYS[seed.replay!], seed.id);
 });

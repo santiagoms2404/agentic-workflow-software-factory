@@ -17,7 +17,13 @@ test("the seed ledger contains the plan's 47 stops, 11 live gotchas and four dis
     assert.ok(Number.isFinite(Date.parse(seed.date)), seed.id);
     assert.ok(seed.evidence.trim().length > 0, seed.id);
     if (seed.outcome === "gap") {
-      assert.ok(seed.replay, seed.id);
+      // G02-S confirmed placement from recorded ENOENT evidence, not a T01
+      // replay. T11 owns its replay and new refusal; do not invent one here.
+      if (seed.id === "S21" || seed.id === "S24") {
+        assert.equal(seed.replay, null, seed.id);
+        assert.equal(seed.pendingTask, "T11", seed.id);
+        assert.match(seed.evidence, /placement\.yaml/u, seed.id);
+      } else assert.ok(seed.replay, seed.id);
       assert.ok(seed.pendingTask, seed.id);
     }
     if (seed.outcome === "refused") assert.ok(seed.replay, seed.id);

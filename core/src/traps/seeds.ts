@@ -1,8 +1,8 @@
 // Sealed historical references only. No runtime file or provider output is a fixture.
 // Sources: W02 Notes, W01 Notes and 2026-10-07 Amendments, the forensics
-// draft dated 2026-10-01, and gotchas.md's Live table. G02-S is still required.
-// An observation date is NOT a claimed terminal timestamp. The published plan
-// omits exact dates for its newer rows; do not invent them or infer them from Git.
+// draft dated 2026-10-01, gotchas.md's Live table, and the owner's G02-S
+// Amendment dated 2026-10-07. Terminal days are confirmed by that Amendment;
+// a gotcha's observation date is NOT a claimed terminal timestamp.
 export type SeedOutcome = "refused" | "gap" | "fixed" | "after-spend" | "owner" | "unexplained" | "not-a-stop";
 export type SeedSource =
   | { readonly project: string; readonly task: string; readonly attempt: number }
@@ -54,12 +54,12 @@ export const SEEDS: readonly Seed[] = [
   stop(18, "task-3.5", 1, "09-06", "quota-exhausted", "T2", "after-spend", "Draft explicitly says ChatGPT Plus limit hit mid-run, not an exhausted starting window; phase-boundary quota pause is mitigation."),
   stop(19, "task-3.5", 2, "09-07", "review-inconsistent", null, "after-spend", "Draft: replacement review inconsistent; a review must be generated first."),
   stop(20, "task-8a-recovery-adoption", 1, "09-07", "cancel", null, "unexplained", "Draft: cancelled in builder without a reason."),
-  stop(21, "marimba-lifecycle-timeout-fence", 1, "09-07", "phase-abort", "T5", "unexplained", "Draft only says ENOENT on a state-root file, without naming the file. No fixing commit/regression can be tied to that missing precondition; G02-S must supply the filename before calling it fixed or trappable."),
+  stop(21, "marimba-lifecycle-timeout-fence", 1, "09-07", "phase-abort", "T5", "gap", "G02-S: ENOENT on the project's placement.yaml in the state root, with 0 calls spent. Only composeProductionDesignContext in production-run.ts reads placement today; new, preflight and start do not. T11 will refuse missing or unreadable placement before start.", null, "T11"),
   stop(22, "task-8a-recovery-adoption-continuation", 1, "09-08", "quota-exhausted", "T2", "after-spend", "Draft: Codex usage limit, second quota stop in two days; no exhausted-at-start observation is recorded."),
   stop(23, "task-8a-recovery-adoption-continuation", 2, "09-08", "review-inconsistent", null, "after-spend", "Draft: replacement review inconsistent, a generated-output condition."),
-  stop(24, "task-8b-protected-quota-foundation", 1, "09-08", "phase-abort", "T5", "unexplained", "Draft: same unnamed state-root ENOENT as S21. No exact file or fixing regression is recorded; cannot silently substitute placement.yaml for it."),
+  stop(24, "task-8b-protected-quota-foundation", 1, "09-08", "phase-abort", "T5", "gap", "G02-S: the same ENOENT on placement.yaml as S21, with 0 calls spent; the file was written at 2026-09-08T21:12Z, four minutes after this stop. T11 will refuse missing or unreadable placement before start.", null, "T11"),
   stop(25, "task-8b-protected-quota-foundation", 2, "09-08", "phase-abort", null, "after-spend", "Draft: plan-context terminal gate failure at round 0; no evidence identifies a gate defect or a pre-call missing input."),
-  stop(26, "task-8b-…-continuation", 1, "09-08", "phase-abort", null, "after-spend", "Draft records this abbreviated task name and the same round-0 output gate failure as S25; exact task spelling needs G02-S, not inference."),
+  stop(26, "task-8b-protected-quota-foundation-continuation", 1, "09-08", "phase-abort", null, "after-spend", "G02-S confirms the full task name; the same round-0 output gate failure as S25 is after-spend."),
   stop(27, "w16-m1-shift", 1, "09-26", "permission-breach", "T3", "gap", "W01 map: malformed request and declared specs/ writes refuse in K1; a well-shaped Where omitting the plan write demanded by its ticket still reaches the builder (shift replay).", "shift", "T10"),
   stop(28, "w18-m1", 1, "09-27", "cancel", null, "unexplained", "Draft: no reason recorded."),
   stop(29, "w18-m1-continuation", 1, "09-27", "phase-abort", null, "after-spend", "Draft: claude-code stream ended without a terminal event after launch. 833f8dc improves diagnosis, not prediction of provider failure."),
@@ -70,17 +70,17 @@ export const SEEDS: readonly Seed[] = [
   stop(34, "review-transport-diagnostics", 1, "10-01", "permission-breach", "T3", "refused", "W01 map names unclassified transport-broker.ts; protected-paths replay asserts StartPreflightRefused, DRAFT, no tree and zero reservations. Declaring the write instead requires its grant.", "protected-paths"),
   stop(35, "review-transport-diagnostics", 2, "10-01", "phase-abort", null, "fixed", "07b20f9 fixes broker-resolved bwrap verification; core/test/unit/workflow/protected-grants.test.ts: A2 accepts durable host broker-resolved Linux bwrap proof and refuses altered evidence. 7bc48b5 aligns the fake in core/test/journeys/production-runner.test.ts: A2 exact protected grant completes build."),
   stop(36, "review-transport-diagnostics", 3, "10-01", "phase-abort", "T4", "refused", "Draft: DrvFs index lock mode 777; git-storage replay changes common-dir/root modes and asserts the named K1 refusal with no reservation.", "git-storage"),
-  stop(37, "w01-m1-owner-check-20261005-023132", 1, null, "cancel", null, "owner", "W02 Notes: cancelled acceptance exercise; observation date only, not a supplied terminal date."),
-  stop(38, "v3-w01-m2-m3", 1, null, "phase-abort", null, "after-spend", "W02 Notes only establish head_advanced failed at round 0. No selection/base comparison proves the selected work was already done; a no-op generated reply also fails this gate after spend."),
-  stop(39, "v3-w01-m3-k2", 1, null, "quota-exhausted", "T2", "after-spend", "W02 Notes: mid-run quota exhaustion, mitigated by phase-boundary pause; terminal date not published."),
-  stop(40, "v3-w01-m3-k2", 2, null, "review-unavailable", null, "fixed", "833f8dc fixes full-journal source_seq reads (W01 closing Amendment); core/test/unit/persistence/journal.test.ts: lastSourceSeq reads only the tail of a journal far larger than one chunk."),
-  stop(41, "v3-w01-m4-k1", 1, null, "quota-exhausted", "T2", "after-spend", "W02 Notes: mid-run quota exhaustion; W01 closing Amendment says the M4 shift review was lost to the five-hour window."),
-  stop(42, "v3-w01-m5-k1", 1, null, "quota-exhausted", "T2", "gap", "W01 2026-10-07 Amendment: five-hour window refused the first build call; exhausted quota at run start still reaches stub GO in the quota replay.", "quota", "T09"),
-  stop(43, "v3-w01-m5-k1", 2, null, "quota-exhausted", "T2", "after-spend", "W01 closing Amendment: T11 and T12 built before the same window refused T13's first call; not the first call of the attempt."),
-  stop(44, "v3-w01-m5-t11-t12", 1, null, "cancel", null, "owner", "W01 closing Amendment: owner cancelled the first adoption target after interruption during gates."),
-  stop(45, "v3-w01-m5-t13", 1, null, "cancel", null, "owner", "W02 Notes records an owner cancel, not a deterministic pre-call factory fault."),
-  stop(46, "T30.1", 1, null, "review-malformed", null, "after-spend", "W02 Notes: malformed generated review; no pre-call condition supplied.", null, null, "fusion-harness"),
-  stop(47, "t30-herdr-visible-fusion-corrected", 1, null, "phase-abort", "T6", "after-spend", "W02 Notes: suspected red base only (as S01); no base gate observation establishes that precondition.", null, null, "fusion-harness"),
+  stop(37, "w01-m1-owner-check-20261005-023132", 1, "10-05", "cancel", null, "owner", "W02 Notes: cancelled acceptance exercise; G02-S confirms terminal day 2026-10-05."),
+  stop(38, "v3-w01-m2-m3", 1, "10-05", "phase-abort", null, "after-spend", "W02 Notes only establish head_advanced failed at round 0. No selection/base comparison proves the selected work was already done; a no-op generated reply also fails this gate after spend."),
+  stop(39, "v3-w01-m3-k2", 1, "10-05", "quota-exhausted", "T2", "after-spend", "W02 Notes: mid-run quota exhaustion, mitigated by phase-boundary pause; G02-S confirms terminal day 2026-10-05."),
+  stop(40, "v3-w01-m3-k2", 2, "10-06", "review-unavailable", null, "fixed", "833f8dc fixes full-journal source_seq reads (W01 closing Amendment); core/test/unit/persistence/journal.test.ts: lastSourceSeq reads only the tail of a journal far larger than one chunk."),
+  stop(41, "v3-w01-m4-k1", 1, "10-06", "quota-exhausted", "T2", "after-spend", "W02 Notes: mid-run quota exhaustion; W01 closing Amendment says the M4 shift review was lost to the five-hour window."),
+  stop(42, "v3-w01-m5-k1", 1, "10-06", "quota-exhausted", "T2", "gap", "W01 2026-10-07 Amendment: five-hour window refused the first build call; exhausted quota at run start still reaches stub GO in the quota replay.", "quota", "T09"),
+  stop(43, "v3-w01-m5-k1", 2, "10-07", "quota-exhausted", "T2", "after-spend", "W01 closing Amendment: T11 and T12 built before the same window refused T13's first call; not the first call of the attempt."),
+  stop(44, "v3-w01-m5-t11-t12", 1, "10-07", "cancel", null, "owner", "W01 closing Amendment: owner cancelled the first adoption target after interruption during gates."),
+  stop(45, "v3-w01-m5-t13", 1, "10-07", "cancel", null, "owner", "W02 Notes records an owner cancel, not a deterministic pre-call factory fault."),
+  stop(46, "T30.1", 1, "08-15", "review-malformed", null, "after-spend", "W02 Notes: malformed generated review; no pre-call condition supplied.", null, null, "fusion-harness"),
+  stop(47, "t30-herdr-visible-fusion-corrected", 1, "08-13", "phase-abort", "T6", "after-spend", "W02 Notes: suspected red base only (as S01); no base gate observation establishes that precondition.", null, null, "fusion-harness"),
   gotcha("G01", null, "fixed", "Live gotcha is stale: 31a1a97 adds T2 owner rework; core/test/journeys/owner-rework-t2.test.ts: the builder gets the defect and the reviewer gets the candidate; neither the defect nor the superseded verdict reaches the reviewer."),
   gotcha("G02", "config-snapshot", "refused", "Config snapshot mismatch refuses before owner rework reserves anything (configuration replay).", "configuration"),
   gotcha("G03", null, "not-a-stop", "retry.ts intentionally carries callsSpent and task raises; retry itself is not the later insufficient-budget stop."),
