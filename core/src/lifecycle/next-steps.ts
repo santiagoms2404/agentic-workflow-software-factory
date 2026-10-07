@@ -75,8 +75,10 @@ export interface NextStepsInput {
    * The protected grant the next writing phase owes, as the caller measured it
    * from the preflight plan and the recorded grants. Absent or null leaves the
    * grant step generic. It names the phase and the paths, never a grant's files.
+   * A `grantId` means the phase already holds its one grant, which cannot be
+   * widened on this attempt, so no grant step is offered.
    */
-  readonly grantOwed?: { readonly phase: string; readonly paths: readonly string[] } | null;
+  readonly grantOwed?: { readonly phase: string; readonly paths: readonly string[]; readonly grantId?: string | null } | null;
 }
 
 interface NonTransitionAct {
@@ -146,6 +148,7 @@ export function nextSteps(input: NextStepsInput): NextSteps {
     if (act.verb === "grant" &&
         (!(input.state === "PREPARED" || input.recovery?.kind === "quota-pause" || input.recovery?.kind === "completed-phase") ||
          (input.process !== undefined && input.process !== null) || (input.budget?.callsReserved ?? 0) !== 0)) continue;
+    if (act.verb === "grant" && input.grantOwed?.grantId != null) continue;
     const owed = act.verb === "grant" ? input.grantOwed ?? null : null;
     const step: NextStep = { kind: act.kind, verb: act.verb, argv: argvFor(input, act.verb, owed === null ? act.args : grantArgs(owed)),
       who: isOwner(act.verb) ? "owner" : "driver", interactive: isOwner(act.verb), spendsCalls: false,

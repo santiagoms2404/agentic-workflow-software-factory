@@ -18,12 +18,15 @@ import { createDashboardProjection } from "../../../src/cli/commands/dashboard-p
 import { newCommand } from "../../../src/cli/commands/new.ts";
 import { rebuildCommand } from "../../../src/cli/commands/operator.ts";
 import {
+  duplicateFacts,
   PreflightAttemptNotDraft,
   preflightCommand,
   renderPreflightLines,
   type PreflightCommandOptions,
 } from "../../../src/cli/commands/preflight.ts";
 import { readAttemptEvidence } from "../../../src/cli/commands/review-record.ts";
+import { sealShiftManifest } from "../../../src/contracts/shift-selection-record.ts";
+import { evaluateDuplicate } from "../../../src/preflight/fields.ts";
 import { loadConfig } from "../../../src/config/load.ts";
 import { gatesConfigDigest } from "../../../src/contracts/command-ledger.ts";
 import { assertDriverPreflightRecord, K1_FIELD_IDS, type DriverPreflightRecord, type K1FieldId } from "../../../src/contracts/driver-preflight.ts";
@@ -338,6 +341,36 @@ test("the earlier-preflight scan reads only the journals of this task and its co
     assert.deepEqual(read.sort(), [resolve(child.attemptDir), resolve(created.attemptDir)].sort(), "a descendant's journal is read too");
     assert.equal(third.suite.reused, `child attempt 1's driver preflight at ${continued.record.at}`);
     chmodSync(join(unreadable.attemptDir, "journal.jsonl"), 0o600);
+  } finally { box.close(); }
+});
+
+test("the duplicate scan carries each task's shift ticket ids from its status files, so an earlier milestone of a plan does not refuse a later one", async () => {
+  const box = fixture("shift-scan");
+  try {
+    const shift = (milestone: string, ids: readonly string[]) => sealShiftManifest({ plan: "v3-w01", milestones: [milestone],
+      tickets: ids.map((id) => ({ id, path: `specs/v3-w01/${id}.md`, digest: id.toLowerCase().charCodeAt(2).toString(16).padStart(64, "0") })) });
+    const shiftTask = (taskId: string, milestone: string, ids: readonly string[]) => newCommand({ stateRoot: box.stateRoot, project: PROJECT, taskId,
+      repository: box.repository, request: REQUEST.replace("an example", taskId), workflow: "shift", tier: 2, planRef: "v3-w01", shift: shift(milestone, ids) });
+    await shiftTask("v3-w01-m1", "M1", ["T01", "T02"]);
+    const later = await shiftTask("v3-w01-m2", "M2", ["T03"]);
+    const overlapping = await shiftTask("v3-w01-m2-again", "M2", ["T02", "T03"]);
+    const plain = await newCommand({ stateRoot: box.stateRoot, project: PROJECT, taskId: "plain", repository: box.repository,
+      request: REQUEST.replace("an example", "a plain"), workflow: "build-review", tier: 2, planRef: "v3-w01" });
+    // The status scan reads status files alone: an unreadable journal is never opened.
+    for (const created of [later, overlapping, plain]) chmodSync(join(created.attemptDir, "journal.jsonl"), 0o000);
+
+    const facts = await duplicateFacts(box.stateRoot, later.status);
+    assert.deepEqual(facts.tickets, ["T03"]);
+    assert.deepEqual(facts.others.map((other) => [other.taskId, other.tickets]),
+      [["plain", null], ["v3-w01-m1", ["T01", "T02"]], ["v3-w01-m2-again", ["T02", "T03"]]]);
+    const verdict = evaluateDuplicate(facts);
+    assert.equal(verdict.passed, false);
+    if (!verdict.passed) {
+      assert.match(verdict.reason, /task v3-w01-m2-again .* the same plan ref v3-w01/u);
+      assert.doesNotMatch(verdict.reason, /v3-w01-m1|task plain/u, "a disjoint milestone and a task with no selection are not duplicates");
+    }
+    assert.deepEqual(evaluateDuplicate(await duplicateFacts(box.stateRoot, plain.status)), { passed: true }, "the plan ref alone does not match a task that carries a selection");
+    for (const created of [later, overlapping, plain]) chmodSync(join(created.attemptDir, "journal.jsonl"), 0o600);
   } finally { box.close(); }
 });
 

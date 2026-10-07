@@ -21,6 +21,13 @@ export interface AdviceContext {
   readonly process?: unknown;
   readonly budget?: { readonly callsReserved: number; readonly ceiling?: number };
   readonly blocker?: { readonly code: string } | null;
+  /** The phase's one recorded grant, measured as missing a planned path; it cannot be widened, so no grant step is listed. */
+  readonly grantUnwidenable?: { readonly phase: string; readonly grantId: string; readonly paths: readonly string[] } | null;
+}
+
+/** What a phase's one recorded grant means once it misses a planned path. */
+function unwidenableGrant(owed: { readonly phase: string; readonly grantId: string }): string {
+  return `the recorded grant ${owed.grantId} is ${owed.phase}'s one grant and cannot be widened on this attempt`;
 }
 
 function command(model: NextSteps, verb: string): string | null {
@@ -60,6 +67,8 @@ export function renderNextAction(model: NextSteps, context: AdviceContext = {}):
       return `ceiling-paused${ticket}; the owner must fund the remaining work with ${grant}, then run ${resume}`;
     }
     if (recovery.kind === "ticket-block") return `ticket-blocked${ticket}; the owner fixes the cause, then runs ${resume} to re-measure the same candidate`;
+    const spent = context.grantUnwidenable;
+    if (spent != null) return `${recovery.kind}; ${spent.phase}'s protected grant misses ${spent.paths.join(", ")}, and ${unwidenableGrant(spent)}`;
     const owed = owedGrant(model);
     if (owed !== null) return `${recovery.kind}; ${owed.phase} owes a protected grant for ${owed.paths.join(", ")}: the owner decides on ${owed.grant}, then run ${resume}`;
     return `${recovery.kind}; run ${resume} to continue the saved boundary`;
@@ -81,7 +90,9 @@ export function renderNextAction(model: NextSteps, context: AdviceContext = {}):
   const held = model.steps.find(step => step.kind === "edge" && step.edge === "L1")?.requires ?? [];
   const k1 = held.length === 0 ? "" : `start is refused until K1 clears: ${held.map(entry => `${entry.field} ${entry.status}`).join(", ")}; `;
   const owed = owedGrant(model);
-  const grant = owed === null ? "" : `run is refused until ${owed.phase}'s protected grant covers ${owed.paths.join(", ")}; `;
+  const spent = context.grantUnwidenable;
+  const grant = spent != null ? `run is refused: ${spent.phase}'s protected grant misses ${spent.paths.join(", ")}, and ${unwidenableGrant(spent)}; `
+    : owed === null ? "" : `run is refused until ${owed.phase}'s protected grant covers ${owed.paths.join(", ")}; `;
   return `${k1}${grant}${sentence}${wait === "" ? "" : `; ${wait}`}; inspect with ${command(model, "watch") ?? command(model, "status")}`;
 }
 
@@ -93,7 +104,7 @@ export function renderNextAction(model: NextSteps, context: AdviceContext = {}):
  */
 export function renderGrantRefusalAdvice(selector: AdviceSelector, owed: { readonly phase: string; readonly grantId: string | null },
   boundary: "before-l4" | "phase-boundary"): string {
-  if (owed.grantId !== null) return `the recorded grant ${owed.grantId} is ${owed.phase}'s one grant and cannot be widened on this attempt`;
+  if (owed.grantId !== null) return unwidenableGrant({ phase: owed.phase, grantId: owed.grantId });
   const state: TaskState = boundary === "before-l4" ? "PREPARED" : "RUNNING";
   const model = nextSteps({ project: selector.project ?? "<project>", taskId: selector.taskId, attempt: selector.attempt ?? 0, revision: 0, state,
     recovery: boundary === "phase-boundary" ? { kind: "completed-phase" } : null, process: null, budget: { callsReserved: 0 },

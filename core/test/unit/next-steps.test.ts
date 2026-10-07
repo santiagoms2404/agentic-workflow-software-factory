@@ -313,6 +313,23 @@ test("the next action names the owed grant before run at PREPARED and before res
   assert.doesNotMatch(renderNextAction(nextSteps(inputFor("PREPARED"))), /refused/);
 });
 
+test("a phase's one recorded grant that misses a planned path lists no grant step and the next action says it cannot be widened", () => {
+  const grantOwed = { phase: "builder", paths: ["core/src/state/**"], grantId: "g-1" };
+  const grantUnwidenable = { phase: "builder", grantId: "g-1", paths: grantOwed.paths };
+  const boundary = { ...inputFor("RUNNING"), recovery: { kind: "completed-phase" }, process: null, budget: { callsReserved: 0 } };
+  for (const input of [inputFor("PREPARED"), boundary]) {
+    const model = nextSteps({ ...input, grantOwed });
+    assert.equal(Value.Check(NextStepsSchema, model), true, input.state);
+    assert.equal(model.steps.some(step => step.verb === "grant"), false, `${input.state} lists no grant step`);
+    const action = renderNextAction(model, { ...input, grantUnwidenable });
+    assert.match(action, /builder's protected grant misses core\/src\/state\/\*\*/);
+    assert.ok(action.includes("the recorded grant g-1 is builder's one grant and cannot be widened on this attempt"), action);
+    assert.doesNotMatch(action, /awsf grant|owes a protected grant|covers/);
+  }
+  // A grant that is merely owed (no recorded id) keeps its step.
+  assert.equal(nextSteps({ ...inputFor("PREPARED"), grantOwed: { ...grantOwed, grantId: null } }).steps.some(step => step.verb === "grant"), true);
+});
+
 test("the grant refusal advice names the owner's grant and the step that follows, and never offers to widen a recorded grant", () => {
   const selector = { project: "fixture-project", taskId: "fixture-task", attempt: 2 };
   assert.equal(renderGrantRefusalAdvice(selector, { phase: "builder", grantId: null }, "before-l4"),

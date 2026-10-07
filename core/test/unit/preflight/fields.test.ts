@@ -41,6 +41,7 @@ import {
   type PreflightFacts,
   type ProtectedPathsFacts,
   type SuiteFacts,
+  type TaskRequestFact,
   type WriteBoundaryFacts,
   type WritingPhase,
 } from "../../../src/preflight/fields.ts";
@@ -343,6 +344,30 @@ test("duplicate refuses a live or landed task with the same request or the same 
     /task U \(latest attempt LANDED\) already carries the same plan ref specs\/p\.html#t8/u);
   refused(evaluateDuplicate(duplicate({ others: [{ taskId: "U", requestDigest: digest, planRef: "specs/p.html#t8", latestState: "AWAITING_OWNER" }] })),
     /the same request and plan ref/u);
+});
+
+test("duplicate on a shared plan ref compares the shift selections: a common ticket, or neither side selecting, and never a mixed pair", () => {
+  const digest = normalizedRequestDigest(REQUEST);
+  const other = (tickets: readonly string[] | null | undefined, requestDigest = "0".repeat(64)): TaskRequestFact =>
+    ({ taskId: "U", requestDigest, planRef: "p", ...(tickets === undefined ? {} : { tickets }), latestState: "LANDED" });
+  const judge = (mine: readonly string[] | null | undefined, theirs: readonly string[] | null | undefined, requestDigest?: string): FieldVerdict =>
+    evaluateDuplicate(duplicate({ planRef: "p", ...(mine === undefined ? {} : { tickets: mine }), others: [other(theirs, requestDigest)] }));
+  // Two shift tasks of one plan with disjoint selections: an earlier milestone does not refuse a later one.
+  assert.deepEqual(judge(["T05", "T06"], ["T01", "T02"]), { passed: true });
+  // Overlapping selections select the same work.
+  refused(judge(["T02", "T06"], ["T01", "T02"]), /task U \(latest attempt LANDED\) already carries the same plan ref p/u);
+  // Neither carries a selection: the plan ref alone counts, whether absent or null.
+  refused(judge(null, null), /the same plan ref p/u);
+  refused(judge(undefined, undefined), /the same plan ref p/u);
+  // A mixed pair never matches on the plan ref alone, in either direction.
+  assert.deepEqual(judge(["T01"], null), { passed: true });
+  assert.deepEqual(judge(null, ["T01"]), { passed: true });
+  assert.deepEqual(judge(["T01"], undefined), { passed: true });
+  // The same request is a duplicate whatever the selections.
+  for (const [mine, theirs] of [[["T05"], ["T01"]], [["T01"], null], [null, ["T01"]], [null, null]] as const) {
+    refused(judge(mine, theirs, digest), /already carries the same request/u);
+  }
+  refused(judge(["T01"], ["T01"], digest), /the same request and plan ref p/u);
 });
 
 test("the duplicate digest ignores re-wrapping and nothing else", () => {

@@ -34,11 +34,12 @@ async function k1At(attemptDir: string, status: AttemptStatus, context: NextK1Co
 /**
  * The protected grant the next unsettled writing phase owes, measured as the
  * runner measures it: the latest preflight record's plan against the recorded
- * grants. Null when none is owed, when the phase already holds its one grant
- * (no second can be issued), or when a fact cannot be read, which leaves the
- * grant step generic rather than claiming a requirement.
+ * grants. Null when none is owed or when a fact cannot be read, which leaves
+ * the grant step generic rather than claiming a requirement. When the phase
+ * already holds its one grant and it misses a planned path, `grantId` names
+ * it: no second can be issued, so next lists no grant step and says so.
  */
-async function grantOwedNow(attemptDir: string, status: AttemptStatus, config: AwsfConfig): Promise<{ readonly phase: string; readonly paths: readonly string[] } | null> {
+async function grantOwedNow(attemptDir: string, status: AttemptStatus, config: AwsfConfig): Promise<{ readonly phase: string; readonly paths: readonly string[]; readonly grantId: string | null } | null> {
   const recipe = workflowRecipe(status.workflow);
   if (recipe === null) return null;
   try {
@@ -48,7 +49,7 @@ async function grantOwedNow(attemptDir: string, status: AttemptStatus, config: A
     const settled = new Set((status.recovery?.prefix ?? []).map((accepted) => accepted.phaseKey));
     const pending = writingPhases(recipe, config.agents).map((writer) => writer.phase).filter((phase) => !settled.has(phase));
     const owed = grantOwedAt(preflight.record.protectedPlan, grants, pending);
-    return owed === null || owed.grantId !== null ? null : { phase: owed.phase, paths: owed.paths };
+    return owed === null ? null : { phase: owed.phase, paths: owed.paths, grantId: owed.grantId };
   } catch {
     return null;
   }
@@ -63,5 +64,6 @@ export async function nextCommand(attemptDir: string, k1?: NextK1Context): Promi
   const model = nextSteps({ ...status, state: status.lifecycleState, ...(measured ? { k1: await k1At(attemptDir, status, k1) } : {}),
     ...(grantOwed === undefined ? {} : { grantOwed }) });
   assertNextSteps(model);
-  return { model, lines: renderNextSteps(model, status) };
+  const grantUnwidenable = grantOwed?.grantId == null ? undefined : { phase: grantOwed.phase, grantId: grantOwed.grantId, paths: grantOwed.paths };
+  return { model, lines: renderNextSteps(model, grantUnwidenable === undefined ? status : { ...status, grantUnwidenable }) };
 }

@@ -432,6 +432,8 @@ export interface TaskRequestFact {
   readonly taskId: string;
   readonly requestDigest: string;
   readonly planRef: string | null;
+  /** The ids of the tickets the task's latest attempt selected as a shift; null or absent when it carries no shift selection. */
+  readonly tickets?: readonly string[] | null;
   /** The lifecycle state of the task's latest attempt. */
   readonly latestState: TaskState;
 }
@@ -443,6 +445,8 @@ export interface DuplicateFacts {
   /** `normalizedRequestDigest` of this task's request. */
   readonly requestDigest: string;
   readonly planRef: string | null;
+  /** The ids of the tickets this task's shift selects; null or absent when it carries no shift selection. */
+  readonly tickets?: readonly string[] | null;
   /** Every other task in the project. */
   readonly others: readonly TaskRequestFact[];
 }
@@ -450,13 +454,25 @@ export interface DuplicateFacts {
 /** A latest attempt that ended BLOCKED or CANCELLED leaves its task neither live nor landed. */
 const NOT_LIVE_OR_LANDED: readonly TaskState[] = ["BLOCKED", "CANCELLED"];
 
-/** No other task outside the continuation chain with the same request or plan ref, whose latest attempt is live or landed. */
+/**
+ * Whether two tasks sharing a plan ref select overlapping work. A shift's plan
+ * ref is the bare plan stem, so it alone cannot tell one milestone from
+ * another: two shift selections overlap exactly when they select a common
+ * ticket, two tasks without a selection overlap on the plan ref alone, and a
+ * task with a selection never overlaps one without.
+ */
+function selectsOverlappingWork(mine: readonly string[] | null | undefined, theirs: readonly string[] | null | undefined): boolean {
+  if (mine == null || theirs == null) return mine == null && theirs == null;
+  return mine.some((ticket) => theirs.includes(ticket));
+}
+
+/** No other task outside the continuation chain with the same request, or the same plan ref over overlapping work, whose latest attempt is live or landed. */
 export function evaluateDuplicate(facts: DuplicateFacts): FieldVerdict {
   const problems: string[] = [];
   for (const other of facts.others) {
     if (other.taskId === facts.taskId || facts.chain.includes(other.taskId) || NOT_LIVE_OR_LANDED.includes(other.latestState)) continue;
     const sameRequest = other.requestDigest === facts.requestDigest;
-    const samePlan = facts.planRef !== null && other.planRef === facts.planRef;
+    const samePlan = facts.planRef !== null && other.planRef === facts.planRef && selectsOverlappingWork(facts.tickets, other.tickets);
     if (!sameRequest && !samePlan) continue;
     const what = sameRequest && samePlan ? `the same request and plan ref ${facts.planRef ?? ""}` : sameRequest ? "the same request" : `the same plan ref ${facts.planRef ?? ""}`;
     problems.push(`task ${other.taskId} (latest attempt ${other.latestState}) already carries ${what}; continue that task or change this request`);

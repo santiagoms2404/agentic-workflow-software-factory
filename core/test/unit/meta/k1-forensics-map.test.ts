@@ -8,7 +8,7 @@ import { repoRoot } from "./_walk.ts";
 // W01 task 13: the forensics map in the plan's Notes, re-checked against the
 // eight driver rows the owner confirmed at G01-F (2026-10-05). Every row is
 // either refused by a named test, which must still exist under that name, or
-// out of K1's reach with a taker that matches the plan's own table. The plan
+// out of K1's reach with a taker and a reason that match the plan's own table. The plan
 // is read, never written: if the owner corrects a row, this test fails until
 // the map below says the same.
 
@@ -43,12 +43,28 @@ const IN_REACH: Readonly<Record<string, { readonly fields: readonly string[]; re
   },
 };
 
-/** The rows decided at run time. K1 has no field for them; each names the workstream that takes it. */
-const OUT_OF_REACH: Readonly<Record<string, string>> = {
-  "11": "W02", "14": "W02", "17": "W02", "18": "W02, W06", "22": "W02, W06",
+/** The rows decided at run time. K1 has no field for them; each names the workstream that takes it and the plan's reason it is out of reach. */
+const OUT_OF_REACH: Readonly<Record<string, { readonly taker: string; readonly reason: string }>> = {
+  "11": {
+    taker: "W02",
+    reason: "The failure is in the run's launch environment. The blocker shows claude searched on npm's node_modules/.bin PATH. " +
+      "ClaudeCodeAdapter.isAvailable() validates the name and never resolves it (core/src/adapters/claude-code.ts:345–354).",
+  },
+  "14": { taker: "W02", reason: "A route-and-request rule over an open factory defect, not a preparation fact" },
+  "17": { taker: "W02", reason: "as #11" },
+  "18": { taker: "W02, W06", reason: "Quota moves between start and run; it is measured where calls are reserved" },
+  "22": { taker: "W02, W06", reason: "as #18" },
 };
 
-interface PlanRow { readonly id: string; readonly attempt: string; readonly trap: string; readonly k1: string; readonly taker: string }
+interface PlanRow {
+  readonly id: string;
+  readonly attempt: string;
+  readonly trap: string;
+  readonly k1: string;
+  /** The "Out of K1's reach because" cell. */
+  readonly reason: string;
+  readonly taker: string;
+}
 
 const plain = (cell: string): string => cell.replace(/<[^>]*>/gu, "").replace(/&lt;/gu, "<").replace(/&gt;/gu, ">").replace(/&amp;/gu, "&").replace(/\s+/gu, " ").trim();
 
@@ -58,7 +74,7 @@ function planRows(): PlanRow[] {
   const table = notes.slice(0, notes.indexOf("</table>"));
   return [...table.matchAll(/<tr>((?:<td>[\s\S]*?<\/td>){6})<\/tr>/gu)].map((row) => {
     const cells = [...row[1]!.matchAll(/<td>([\s\S]*?)<\/td>/gu)].map((cell) => plain(cell[1]!));
-    return { id: cells[0]!, attempt: cells[1]!, trap: cells[2]!, k1: cells[3]!, taker: cells[5]! };
+    return { id: cells[0]!, attempt: cells[1]!, trap: cells[2]!, k1: cells[3]!, reason: cells[4]!, taker: cells[5]! };
   });
 }
 
@@ -84,12 +100,13 @@ test("every row K1 reaches names K1 fields, and each is refused by tests that st
   }
 });
 
-test("every row outside K1's reach has no K1 field and the taker the plan names", () => {
+test("every row outside K1's reach has no K1 field and the taker and reason the plan names", () => {
   const rows = new Map(planRows().map((row) => [row.id, row]));
-  for (const [id, taker] of Object.entries(OUT_OF_REACH)) {
+  for (const [id, expected] of Object.entries(OUT_OF_REACH)) {
     const row = rows.get(id)!;
     assert.equal(row.k1, "—", `row #${id} now claims a K1 field: ${row.k1}`);
-    assert.equal(row.taker, taker, `row #${id}`);
+    assert.equal(row.taker, expected.taker, `row #${id}`);
+    assert.equal(row.reason, expected.reason, `row #${id}'s reason in the plan no longer matches the map`);
   }
 });
 

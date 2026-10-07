@@ -211,6 +211,11 @@ interface TaskScan {
   readonly tasks: ReadonlyArray<readonly [string, AttemptStatus[]]>;
 }
 
+/** The ticket ids a shift attempt selected, read from its status; null when it carries no selection. */
+function selectedTickets(status: AttemptStatus): string[] | null {
+  return status.shift == null ? null : status.shift.tickets.map((ticket) => ticket.id);
+}
+
 /** Every task's status files, never a journal: the chain and the other tasks' requests and plan refs. */
 async function scanTasks(stateRoot: string, status: AttemptStatus): Promise<TaskScan> {
   const project = status.project;
@@ -224,7 +229,10 @@ async function scanTasks(stateRoot: string, status: AttemptStatus): Promise<Task
     const latest = statuses.at(-1);
     if (latest === undefined) continue;
     if ((await ancestors(stateRoot, project, taskId)).includes(status.taskId)) chain.add(taskId);
-    others.push({ taskId, requestDigest: normalizedRequestDigest(latest.request), planRef: latest.planRef, latestState: latest.lifecycleState });
+    others.push({
+      taskId, requestDigest: normalizedRequestDigest(latest.request), planRef: latest.planRef, tickets: selectedTickets(latest),
+      latestState: latest.lifecycleState,
+    });
   }
   return { chain, others, tasks };
 }
@@ -232,7 +240,7 @@ async function scanTasks(stateRoot: string, status: AttemptStatus): Promise<Task
 function duplicateOf(status: AttemptStatus, scan: TaskScan): DuplicateFacts {
   return {
     taskId: status.taskId, chain: [...scan.chain].sort(), requestDigest: normalizedRequestDigest(status.request),
-    planRef: status.planRef, others: [...scan.others],
+    planRef: status.planRef, tickets: selectedTickets(status), others: [...scan.others],
   };
 }
 

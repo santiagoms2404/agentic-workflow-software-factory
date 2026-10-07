@@ -919,6 +919,32 @@ test("T12 build-review planning a protected builder path refuses before L4 with 
   } finally { world.projection.close(); rmSync(world.root, { recursive: true, force: true }); }
 });
 
+test("T12 awsf next at PREPARED says a recorded grant that misses a planned path cannot be widened, and lists no grant step", async () => {
+  const world = await fixture("build-review", 0, config => config, 2,
+    k1Request("write two bounded sources", "core/src/generated.ts core/src/second.ts"), () => {}, {},
+    text => protecting("core/src/generated.ts")(protecting("core/src/second.ts")(text)));
+  try {
+    const dir = world.created.attemptDir;
+    const preflight = (await readAttemptEvidence(dir)).findLast(evidence => evidence.type === "driver-preflight");
+    assert.deepEqual(preflight?.type === "driver-preflight" ? preflight.record.protectedPlan.map(entry => entry.path).sort() : null,
+      ["core/src/generated.ts", "core/src/second.ts"]);
+    const context = { stateRoot: world.stateRoot, worktreeRoot: join(world.root, "worktrees"), config: world.config };
+    assert.equal((await nextCommand(dir, context)).model.steps.find(step => step.verb === "grant")?.requires.length, 2, "nothing is recorded yet, so the grant is owed");
+
+    const granted = await grantCommand({ attemptDir: dir, config: world.config, configPath: world.configPath, stateRoot: world.stateRoot,
+      phase: "builder", files: ["core/src/generated.ts"], reason: "Create the first source only.", sandboxProbe: () => true, terminal: owner, projectRecord: world.projection.project });
+    assert.equal(granted.confirmed, true);
+    const grantId = readProtectedState(dir).grants[0]!.id;
+    const before = readFileSync(join(dir, "journal.jsonl"));
+    const next = await nextCommand(dir, context);
+    assert.equal(next.model.steps.some(step => step.verb === "grant"), false, "a phase's one grant cannot be widened, so no grant step is offered");
+    assert.match(next.lines[0]!, /^run is refused: builder's protected grant misses core\/src\/second\.ts, and the recorded grant \S+ is builder's one grant and cannot be widened on this attempt; /);
+    assert.ok(next.lines[0]!.includes(`the recorded grant ${grantId} is`));
+    assert.equal(next.lines.some(line => /awsf grant|Step act: `awsf grant/.test(line)), false);
+    assert.deepEqual(readFileSync(join(dir, "journal.jsonl")), before, "next writes nothing");
+  } finally { world.projection.close(); rmSync(world.root, { recursive: true, force: true }); }
+});
+
 test("T12 a build-review plan with no protected path runs unchanged and owes no grant", async () => {
   const world = await fixture("build-review", 0, config => config, 2);
   try {
