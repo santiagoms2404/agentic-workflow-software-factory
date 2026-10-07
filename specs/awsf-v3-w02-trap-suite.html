@@ -149,7 +149,7 @@ section.phase .sub { font-size:13px; }
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-10-07</dd>
-        <dt>modified</dt>     <dd>2026-10-07 (authored, awaiting owner review), 2026-10-07 (owner review applied: W02-Q1–Q8 decided), 2026-10-07 (deep plan approved by the owner)</dd>
+        <dt>modified</dt>     <dd>2026-10-07 (authored, awaiting owner review), 2026-10-07 (owner review applied: W02-Q1–Q8 decided), 2026-10-07 (deep plan approved by the owner), 2026-10-07 (ticketFrames added to the design index)</dd>
         <dt>commits</dt>      <dd>authoring and owner approval: recorded by the 2026-10-07 approval Amendment and its commit; authoring base e32e892, committed on 60d01d5</dd>
         <dt>agent name</dt>   <dd>claude-opus-5-5</dd>
         <dt>session id</dt>   <dd>not recorded: AGENTS.md invariant 1 keeps live session state out of every committed file</dd>
@@ -895,6 +895,10 @@ flowchart LR
     <details open>
       <summary>2026-10-07 — Owner approval of the deep plan and factory-managed implementation</summary>
       <p>The owner approved this deep plan, its build prompts and its ticket set. W02-Q1–Q8 remain decided as recommended. The spine's W02 marker and ticket state move together to <code>[wip]</code> and <code>wip</code> in the approval commit, which also commits this plan for the first time. No implementation checklist row is marked complete by approval. Factory-managed implementation follows the Execution section, starting with T01 and gate G02-S; M5 may run in parallel. Built on: anthropic:claude-opus-5-5.</p>
+    </details>
+    <details open>
+      <summary>2026-10-07 — ticketFrames added to the design index</summary>
+      <p>On the owner's instruction, <code>specs/design/awsf-v3-plan/frame-index.json</code> gains the <code>ticketFrames</code> this plan proposed in Notes: T05–T07 → <code>mp-s3-blocked</code>, <code>mp-s5-checks</code>; T13–T15 → <code>mp-s5-checks</code>. The index still validates against <code>VisualReferenceIndexSchema</code>, and <code>selectedFrameIds</code> resolves each of the six for an attempt created with <code>--plan awsf-v3-w02-trap-suite</code>. They remain data-shape references; W02 builds no UI. One limit is recorded for later deep plans: <code>selectedFrameIds</code> looks up <code>ticketFrames</code> by the bare ticket id, and every v3 deep plan shares this one index, so a later plan whose T05–T07 or T13–T15 need different frames collides with these keys. W01's proposed mapping was never added, so nothing collides today. No marker, ticket state or prompt changed.</p>
     </details>
   </section>
 

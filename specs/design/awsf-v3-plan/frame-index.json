@@ -78,6 +78,29 @@
       "mp-s16b-phone"
     ]
   },
+  "ticketFrames": {
+    "T05": [
+      "mp-s3-blocked",
+      "mp-s5-checks"
+    ],
+    "T06": [
+      "mp-s3-blocked",
+      "mp-s5-checks"
+    ],
+    "T07": [
+      "mp-s3-blocked",
+      "mp-s5-checks"
+    ],
+    "T13": [
+      "mp-s5-checks"
+    ],
+    "T14": [
+      "mp-s5-checks"
+    ],
+    "T15": [
+      "mp-s5-checks"
+    ]
+  },
   "comparison": [
     "Glass: about 42 soft dots of 46-53 px at 14% opacity and 4 brighter dots at 17%, under a 165-degree tint and a 118-degree sheen with a 1 px top highlight. No constellation lines.",
     "Layout: the dashboard tab bar with Marimba active, then one centred column about 760-880 px wide. The header is a title, a mono status line and icon links. No side rail.",

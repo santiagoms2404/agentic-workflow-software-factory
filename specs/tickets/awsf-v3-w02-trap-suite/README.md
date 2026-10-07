@@ -93,8 +93,8 @@ T02 and T03 have landed. M6 waits for everything.
 W02 builds no UI. Frames `mp-s3-blocked` and `mp-s5-checks` in
 [`../../design/awsf-v3-plan/frame-index.json`](../../design/awsf-v3-plan/frame-index.json) show
 W02's data inside W08's panel: the K5 card reads `awsf traps --json`, the Doctor card reads
-`awsf doctor --json`. They are data-shape references only, never visual acceptance. Proposed
-`ticketFrames` for the owner to add: T05–T07 → mp-s3, mp-s5; T13–T15 → mp-s5.
+`awsf doctor --json`. They are data-shape references only, never visual acceptance. Its
+`ticketFrames` map T05–T07 → mp-s3, mp-s5 and T13–T15 → mp-s5 (added 2026-10-07).
 
 ## Post-landing responsibilities
 
