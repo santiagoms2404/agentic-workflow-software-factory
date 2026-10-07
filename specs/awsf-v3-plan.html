@@ -323,7 +323,7 @@ flowchart TB
 
     <!-- ================= W01 ================= -->
     <section class="phase">
-      <h3><code class="status">[wip]</code> Milestone M1: W01 — Driver checks <span class="chip pa">Phase A</span><span class="xlabel">X1</span></h3>
+      <h3><code class="status">[x]</code> Milestone M1: W01 — Driver checks <span class="chip pa">Phase A</span><span class="xlabel">X1</span></h3>
       <p class="deep-plan"><a href="awsf-v3-w01-driver-checks.html">Deep plan: AWSF v3 W01 — Driver checks</a> <span class="muted">authored and approved by the owner, 2026-10-04</span></p>
       <p><em>Exists because 8 of 27 blocked runs were stops a mechanical check would have refused, and 35 of 36 stops carry no cause.</em> It moves the driver's preflight and its next-step reasoning into L1.</p>
       <h4>1. W01 — Driver checks</h4>
@@ -341,11 +341,11 @@ flowchart TB
       </div>
       <ul class="checklist">
         <li><code class="status">[x]</code> Deep plan <code>awsf-v3-w01-driver-checks.html</code> authored with its build prompts and ticket set, and approved by the owner</li>
-        <li><code class="status">[]</code> The guard fix and any state-machine change landed as owner commits before the builds that need them</li>
-        <li><code class="status">[]</code> K1 refuses DRAFT→PREPARED without a valid preflight record, with each measured field checked by the host</li>
-        <li><code class="status">[]</code> K2 is the single source of the next step, and the prose <code>nextAction</code> is derived from it</li>
-        <li><code class="status">[]</code> Every cancel and stop carries a cause, including <code>driver</code></li>
-        <li><code class="status">[]</code> The deep plan's own milestones all reach <code>[x]</code></li>
+        <li><code class="status">[x]</code> The guard fix and any state-machine change landed as owner commits before the builds that need them</li>
+        <li><code class="status">[x]</code> K1 refuses DRAFT→PREPARED without a valid preflight record, with each measured field checked by the host</li>
+        <li><code class="status">[x]</code> K2 is the single source of the next step, and the prose <code>nextAction</code> is derived from it</li>
+        <li><code class="status">[x]</code> Every cancel and stop carries a cause, including <code>driver</code></li>
+        <li><code class="status">[x]</code> The deep plan's own milestones all reach <code>[x]</code></li>
       </ul>
       <div class="loop">🔁 <strong>The acceptance bar is the forensics list.</strong> Every confirmed driver-preventable stop from the review must be refused by K1 or recorded as out of K1's reach with its reason.</div>
     </section>
@@ -984,6 +984,10 @@ stateDiagram-v2
   <!-- ===== AMENDMENTS ===== -->
   <section id="amendments">
     <h2>Amendments</h2>
+    <details open>
+      <summary>2026-10-07 — W01 closed</summary>
+      <p>All five milestones of <code>awsf-v3-w01-driver-checks.html</code> reached <code>[x]</code>, and its Validation checklist passed on main at <code>6662a98</code>. The deep plan's 2026-10-07 Amendment holds the closing record. W01 moves to <code>[x]</code>, with <code>W01.md</code> moving to <code>done</code> in this same commit. Its checklist rows are earned as follows. The guard fix landed as owner commit <code>0deaf58</code> (G01-G) and the confirm wiring as <code>f5c566a</code> (G01-C), and no state-machine change was needed, because K1 lives in <code>awsf start</code> (W01-Q2). K1 refuses L1 without a fresh record and the owner's confirmation (T11), proved per field by T13's journeys. K2 derives the next step and the prose <code>nextAction</code> (M3, T11). Every cancel takes a cause and a reason, and the twelve runs <code>awsf metrics</code> lists without a cause all predate M1. The acceptance bar holds: each confirmed driver-preventable stop in the forensics map is refused by K1 or recorded as out of its reach with its reason and taker. Open findings carry forward as listed in the deep plan's Amendment, chiefly <code>duplicate</code> keying on the plan stem, which refuses later tasks created with <code>--plan</code>.</p>
+    </details>
     <details open>
       <summary>2026-10-04 — W01 deep plan approved</summary>
       <p>The owner approved <code>awsf-v3-w01-driver-checks.html</code>, its build prompts and its thirteen-ticket set. Its seven Questionables remain decided as recorded on 2026-10-04. W01 moves to <code>[wip]</code>, with its spine ticket moving to <code>wip</code> in this same commit. Only the authored-and-approved checklist row is complete; no implementation acceptance is claimed. Implementation remains factory-managed by default, subject to the deep plan's owner gates.</p>
