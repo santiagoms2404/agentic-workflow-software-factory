@@ -88,3 +88,51 @@ export const PENDING: readonly PendingEntry[] = [
   { task: "T11", seeds: ["S21", "S24"] },
   { task: "T12", seeds: ["C5-baseline", "C8-adopt", "C8-later-grant"] },
 ];
+
+export interface BlockerCoverage {
+  readonly edge: string;
+  readonly code: string;
+  readonly target: { readonly family: string } | { readonly kind: NoTrapKind };
+  readonly evidence: string;
+}
+
+// Closed, explicit (edge, code) coverage, not generated from the vocabulary:
+// adding a state blocker must force a new classification in the unit fence.
+// A code can also describe a pre-call subshape (for example S17's launch
+// environment); those confirmed seeds remain pending above. These rows classify
+// the lifecycle edge's general fault, not an assertion that every subshape is
+// already trapped. L21's recovery from AWAITING_OWNER and L24's landing
+// follow build/review calls; their later record/Git faults are after-spend.
+export const BLOCKER_COVERAGE: readonly BlockerCoverage[] = [
+  { edge: "L2", code: "preflight-failed", target: { family: "suite" }, evidence: "K1 measures configured gates at the base before preparation (TR-01)." },
+  { edge: "L5", code: "crash", target: { kind: "after-spend" }, evidence: "A running process can crash after GO; launch-environment seeds are separately pending T08." },
+  { edge: "L5", code: "silence", target: { kind: "after-spend" }, evidence: "Silence is observed over an already released process." },
+  { edge: "L5", code: "quota-exhausted", target: { kind: "after-spend" }, evidence: "A provider reports exhaustion after GO; S42's initially exhausted shape is pending T09." },
+  { edge: "L5", code: "phase-abort", target: { kind: "after-spend" }, evidence: "The running phase fails its output contract after its call." },
+  { edge: "L5", code: "permission-breach", target: { kind: "after-spend" }, evidence: "Actual writes are inspected after the phase; planned protected writes are TR-09." },
+  { edge: "L5", code: "budget-exhausted", target: { kind: "after-spend" }, evidence: "Continuation cannot buy another call after consuming its budget." },
+  { edge: "L8", code: "crash", target: { kind: "after-spend" }, evidence: "A released running process crashes." },
+  { edge: "L8", code: "silence", target: { kind: "after-spend" }, evidence: "A released running process becomes silent." },
+  { edge: "L8", code: "quota-exhausted", target: { kind: "after-spend" }, evidence: "The phase-boundary quota pause mitigates mid-run exhaustion." },
+  { edge: "L8", code: "phase-abort", target: { kind: "after-spend" }, evidence: "A later phase returns invalid output after its call." },
+  { edge: "L8", code: "permission-breach", target: { kind: "after-spend" }, evidence: "The gate inspects a running phase's actual writes." },
+  { edge: "L8", code: "budget-exhausted", target: { kind: "after-spend" }, evidence: "The ongoing attempt has consumed its call budget." },
+  { edge: "L13", code: "correction-budget-exhausted", target: { kind: "after-spend" }, evidence: "Invalid output has already spent the correction allowance." },
+  { edge: "L17", code: "review-unavailable", target: { kind: "after-spend" }, evidence: "Mandatory review transport fails after the build call." },
+  { edge: "L17", code: "review-malformed", target: { kind: "after-spend" }, evidence: "The review reply is malformed after the review call." },
+  { edge: "L17", code: "review-evidence-invalid", target: { kind: "after-spend" }, evidence: "Host checks the returned review evidence after the review call." },
+  { edge: "L17", code: "review-inconsistent", target: { kind: "after-spend" }, evidence: "Host finds a contradiction in the returned review." },
+  { edge: "L17", code: "quota-exhausted", target: { kind: "after-spend" }, evidence: "Review-time exhaustion follows the build call." },
+  { edge: "L17", code: "silence", target: { kind: "after-spend" }, evidence: "The released review process becomes silent." },
+  { edge: "L17", code: "phase-abort", target: { kind: "after-spend" }, evidence: "The released review phase aborts." },
+  { edge: "L17", code: "permission-breach", target: { kind: "after-spend" }, evidence: "Host finds forbidden writes by the review process." },
+  { edge: "L17", code: "budget-exhausted", target: { kind: "after-spend" }, evidence: "Review continuation has consumed its funded calls." },
+  { edge: "L21", code: "record-corrupt", target: { kind: "after-spend" }, evidence: "Recovery from AWAITING_OWNER reads a damaged record after build/review calls." },
+  { edge: "L21", code: "unknown-state", target: { kind: "after-spend" }, evidence: "Recovery from AWAITING_OWNER cannot resolve state after build/review calls." },
+  { edge: "L21", code: "ambiguous-pid", target: { kind: "after-spend" }, evidence: "Recovery from AWAITING_OWNER cannot identify a process after build/review calls." },
+  { edge: "L21", code: "unreadable-worktree", target: { kind: "after-spend" }, evidence: "Recovery from AWAITING_OWNER cannot inspect the candidate after build/review calls." },
+  { edge: "L24", code: "non-fast-forward", target: { kind: "after-spend" }, evidence: "Landing checks canonical ancestry after build and review." },
+  { edge: "L24", code: "dirty-canonical-tree", target: { kind: "after-spend" }, evidence: "Landing checks current canonical cleanliness after build and review." },
+  { edge: "L24", code: "git-failure", target: { kind: "after-spend" }, evidence: "Git fails during owner-approved landing after provider calls." },
+  { edge: "L24", code: "ambiguous-recovery", target: { kind: "after-spend" }, evidence: "An interrupted landing cannot be reconciled after the candidate was built." },
+];
