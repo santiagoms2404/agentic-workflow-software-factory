@@ -1,0 +1,1146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plan: AWSF v3 W02 — Trap suite</title>
+<style>
+/* W02 deep plan: the v3 spine's stylesheet as W01 carries it, unchanged. AWSF dashboard "Forest" palette, mirrored from dashboard/src/styles/dashboard.css
+   and dashboard/src/theme.ts so the plan reads as part of the product it plans.
+   Dark is the default; light follows the reader's colour scheme. The review layer
+   reuses --bg / --fg / --muted / --accent. Mermaid mirrors the same hex values. */
+:root {
+  --bg:#051F20; --panel:#0B2B26; --panel-2:#163832; --border:#235347;
+  --dim:#8EB69B; --text:#DAF1DE;
+  --green:#71D6A0; --red:#FF8278; --blue:#74BDE8; --amber:#E4B75F;
+  --cyan:#62C2AA; --purple:#A8C7B5; --violet:#8AAFA4; --accent:#ADB9EE; --select-all:#C9A6DD;
+
+  --panel-3:color-mix(in srgb, var(--bg) 64%, var(--panel));
+  --border-soft:color-mix(in srgb, var(--border) 34%, transparent);
+  --surface:linear-gradient(180deg, color-mix(in srgb, var(--panel) 96%, var(--panel-2)),
+            color-mix(in srgb, var(--panel-3) 98%, var(--bg)));
+
+  --sans:"Segoe UI", "Helvetica Neue", system-ui, sans-serif;
+  --mono:ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --radius:16px;
+
+  /* aliases the review layer reads */
+  --fg:var(--text); --muted:var(--dim);
+  --maxw:1120px;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg:#DAF1DE; --panel:#EAF7EE; --panel-2:#C6E4CF; --border:#8EB69B;
+    --dim:#235347; --text:#051F20;
+    --green:#16683F; --red:#A3332F; --blue:#1D5E86; --amber:#714907;
+    --cyan:#176E66; --purple:#5B4768; --violet:#4F6574; --accent:#454A87; --select-all:#6B4A86;
+  }
+}
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body { margin:0; background:var(--bg); color:var(--text); font-family:var(--sans);
+  font-size:17px; line-height:1.6; -webkit-font-smoothing:antialiased; }
+main { max-width:var(--maxw); margin:0 auto; padding:44px 16px 160px; }
+h1,h2,h3,h4,h5 { line-height:1.25; font-weight:650; letter-spacing:-.01em; }
+h1 { font-size:32px; margin:0 0 8px; }
+h2 { font-size:23px; margin:56px 0 14px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+h3 { font-size:19px; margin:32px 0 8px; }
+h4 { font-size:16px; margin:22px 0 8px; color:var(--accent); }
+h5 { font-size:12px; margin:0 0 6px; letter-spacing:.08em; text-transform:uppercase; color:var(--dim); }
+p { margin:0 0 14px; }
+a { color:var(--accent); }
+::selection { background:color-mix(in srgb, var(--accent) 35%, transparent); }
+strong { font-weight:650; }
+em { color:var(--dim); }
+small, .muted { color:var(--dim); }
+
+code { font-family:var(--mono); font-size:.84em; background:var(--panel-2); border:1px solid var(--border-soft);
+  border-radius:6px; padding:1px 5px; }
+pre { background:var(--panel); border:1px solid var(--border-soft); border-radius:12px; padding:14px 16px;
+  overflow-x:auto; font-family:var(--mono); font-size:13px; line-height:1.55; }
+pre code { background:none; border:none; padding:0; }
+
+table { width:100%; border-collapse:collapse; margin:12px 0 18px; font-size:14px; display:block; overflow-x:auto; }
+th, td { padding:8px 10px; border:1px solid var(--border-soft); text-align:left; vertical-align:top; }
+th { background:var(--panel-2); color:var(--dim); font-weight:600; font-size:12px; letter-spacing:.04em; text-transform:uppercase; }
+td.num { font-variant-numeric:tabular-nums; text-align:right; white-space:nowrap; }
+
+.sub { color:var(--dim); margin:0 0 6px; }
+.meta { margin:14px 0 0; font-size:14px; }
+.meta summary { cursor:pointer; color:var(--dim); font-family:var(--mono); font-size:13px; }
+.meta dl { display:grid; grid-template-columns:130px 1fr; gap:6px 14px; margin:12px 0 0; padding:14px;
+  background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--radius); }
+.meta dt { color:var(--accent); font-family:var(--mono); font-size:12px; }
+.meta dd { margin:0; color:var(--dim); font-family:var(--mono); font-size:12px; overflow-wrap:anywhere; }
+
+figure { margin:26px 0; text-align:center; }
+figure svg, figure .mermaid { max-width:100%; height:auto; }
+figure .mermaid { background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--radius);
+  padding:18px 12px; overflow-x:auto; color:var(--dim); font-size:13px; }
+figcaption { color:var(--dim); font-size:14px; margin-top:10px; }
+
+.card { background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--radius);
+  padding:14px 18px; margin:14px 0; font-size:15px; }
+.card.rule { border-left:3px solid var(--accent); }
+.card.warn { border-left:3px solid var(--amber); }
+
+.tag { display:inline-block; font-family:var(--mono); font-size:11px; letter-spacing:.05em; text-transform:uppercase;
+  padding:1px 7px; border-radius:999px; margin-right:6px; border:1px solid var(--border); color:var(--dim); }
+.tag.new { color:var(--accent); border-color:color-mix(in srgb, var(--accent) 45%, transparent); }
+.files ul { list-style:none; padding:0; }
+.files li { padding:5px 0; border-bottom:1px solid var(--border-soft); font-size:15px; }
+
+/* Phase chips: free hues only, never a status colour. */
+.chip { display:inline-block; font-family:var(--mono); font-size:11px; letter-spacing:.06em; text-transform:uppercase;
+  padding:2px 9px; border-radius:999px; margin-left:8px; vertical-align:2px; border:1px solid currentColor; }
+.chip.pa { color:var(--cyan); } .chip.pb { color:var(--purple); }
+.chip.pc { color:var(--violet); } .chip.pd { color:var(--accent); }
+.xlabel { font-family:var(--mono); font-size:12px; color:var(--dim); margin-left:6px; vertical-align:2px; }
+
+.phase { background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--radius);
+  padding:22px 22px 16px; margin:28px 0; }
+.phase > h3 { margin-top:0; }
+.status { color:var(--dim); }
+.deep-plan { margin:2px 0 12px; font-size:14px; font-family:var(--mono); }
+.deep-plan a { text-decoration:none; border-bottom:1px dotted var(--accent); }
+.deep-plan .muted { font-family:var(--sans); font-style:italic; }
+.taskmeta { font-size:14px; }
+.taskmeta th { width:150px; text-transform:none; letter-spacing:0; font-size:13px; }
+.checklist { list-style:none; padding:0; margin:8px 0 14px; }
+.checklist li { padding:4px 0; font-size:15px; }
+.checklist li .status { margin-right:6px; }
+.loop { border:1px dashed var(--border); border-radius:12px; padding:10px 14px; margin:14px 0 4px; font-size:14px; }
+.gate { font-family:var(--mono); color:var(--accent); }
+.waiting { color:var(--amber); font-family:var(--mono); font-size:11px; letter-spacing:.06em; margin-right:6px; }
+
+#questionables details, #amendments details { background:var(--surface); border:1px solid var(--border-soft);
+  border-radius:12px; padding:10px 14px; margin:10px 0; }
+#questionables summary, #amendments summary { cursor:pointer; font-weight:600; font-size:15px; }
+.qa-answer { margin:10px 0 2px; font-size:15px; color:var(--dim); }
+.qdecided { color:var(--green); font-family:var(--mono); font-size:11px; letter-spacing:.06em; margin-right:6px; }
+.decided { margin:10px 0 0; padding:8px 12px; font-size:15px; border-left:3px solid var(--green); border-radius:0 8px 8px 0; background:color-mix(in srgb, var(--green) 8%, transparent); }
+.qa-answer.rec { color:var(--text); border-left:3px solid var(--accent); padding-left:10px; }
+
+@media (max-width:720px) {
+  .meta dl { grid-template-columns:1fr; }
+  h1 { font-size:26px; }
+  .phase { padding:16px 14px 10px; }
+}
+
+/* W01 additions: milestone tags, open Questionables, the identifier spine. */
+.wtag { display:inline-block; font-family:var(--mono); font-size:10px; letter-spacing:.06em; text-transform:uppercase;
+  padding:1px 7px; border-radius:999px; margin-left:8px; vertical-align:2px; border:1px solid var(--border); color:var(--dim); }
+.wtag.raise { color:var(--amber); border-color:color-mix(in srgb, var(--amber) 45%, transparent); }
+.qopen { color:var(--amber); font-family:var(--mono); font-size:11px; letter-spacing:.06em; margin-right:6px; }
+.qdone { color:var(--green); font-family:var(--mono); font-size:11px; letter-spacing:.06em; margin-right:6px; }
+dl.spine dt { margin-top:10px; } dl.spine dd { margin:4px 0 0 0; font-size:15px; }
+section.phase .sub { font-size:13px; }
+</style>
+</head>
+<body>
+<main>
+
+  <!-- ===== HEADER + UPDATABLE METADATA ===== -->
+  <header>
+    <h1>Plan: AWSF v3 W02 — Trap suite</h1>
+    <p class="sub">Every past stop becomes a test that rebuilds its conditions and proves the factory now refuses it before any provider call, and every future stop must name its test or say why none can exist. <code>awsf doctor</code> learns to report the environment facts behind the stops a test cannot reach.</p>
+    <p class="sub"><strong>This is a deep plan for spine workstream W02.</strong> Authoring it wrote no code, called no provider, created no worktree, changed no protected path and moved no marker. Every marker below starts <code>[]</code>.</p>
+    <details class="meta">
+      <summary>Metadata</summary>
+      <dl>
+        <dt>created</dt>      <dd>2026-10-07</dd>
+        <dt>modified</dt>     <dd>2026-10-07 (authored, awaiting owner review), 2026-10-07 (owner review applied: W02-Q1–Q8 decided), 2026-10-07 (deep plan approved by the owner)</dd>
+        <dt>commits</dt>      <dd>authoring and owner approval: recorded by the 2026-10-07 approval Amendment and its commit; authoring base e32e892, committed on 60d01d5</dd>
+        <dt>agent name</dt>   <dd>claude-opus-5-5</dd>
+        <dt>session id</dt>   <dd>not recorded: AGENTS.md invariant 1 keeps live session state out of every committed file</dd>
+        <dt>back refs</dt>    <dd>./awsf-v3-plan.html (§ Workstreams → Milestone M2 → W02, gate GR, Questionables Q2 and Q13, Notes), ./tickets/awsf-v3-plan/W02.md (the meta-prompt this plan answers, Handoff C1–C8), ./awsf-v3-w01-driver-checks.html (K1's fields, the cause vocabulary, the forensics map, the 2026-10-07 closing Amendment), ./awsf-v3-intent.md (Terms K5, decision 13), ./awsf-v3-assessment-and-direction.md ("To prevent future friction"), ../AGENTS.md (invariants 3, 4, 6 and 10), ./design/awsf-v3-plan/frame-index.json (workstreamFrames.W02: mp-s3-blocked, mp-s5-checks), the machine-local forensics draft ~/marimba-lab/forensics/2026-10-01-stops.md (not committed)</dd>
+        <dt>forward refs</dt> <dd>./awsf-v3-w02-trap-suite-build-prompts.md (§ Section B, the prompt source the invariant-12 fence pairs against), ./tickets/awsf-v3-w02-trap-suite/ (README, T01–T16)</dd>
+      </dl>
+    </details>
+  </header>
+
+  <figure>
+    <pre class="mermaid">
+flowchart LR
+  S["A stop"] --> C["Cause record<br/>names a trap or a reason"]
+  C --> K["Trap catalogue"]
+  K --> T["test:traps<br/>stub adapter, zero calls"]
+  T --> M["Mutant<br/>refusal removed"]
+  M -->|"must turn red"| T
+    </pre>
+    <figcaption>K5 in one line. A stop is either caught by a trap that refuses its conditions before any provider call, proven by a mutant that removes the refusal, or carries a recorded reason no trap can exist.</figcaption>
+  </figure>
+
+  <!-- ===== IN PLAIN LANGUAGE ===== -->
+  <section id="plain-language">
+    <h2>In Plain Language</h2>
+    <p>This section explains the whole plan without technical vocabulary. Everything after it says the same things precisely, for the people and machines building it.</p>
+
+    <h3>What this is about</h3>
+    <p>The owner's software factory has stopped 47 real jobs so far. Some stopped for reasons nobody could have seen in advance. Many stopped for reasons that were visible before the job spent anything: a tool the job needed could not be found, the paid allowance was already used up, the job was asked to change a file it is not allowed to touch. A few of those reasons repeated, sometimes within hours, because nothing remembered the first one. The previous piece of work taught the factory to refuse a badly prepared job and made every new stop carry a written cause. Nothing yet turns a past stop into a lasting check, and the factory's health check does not look at the machine it runs on.</p>
+
+    <h3>Why now</h3>
+    <p>The next pieces of work let the factory do more without the owner watching: a deputy that answers routine questions overnight, a rule for which paid service runs which job, a new steering program. The owner decided that none of that freedom arrives until the factory refuses every mistake it has already made. This plan is that condition. Seven later pieces of work wait for it.</p>
+
+    <h3>What we are building</h3>
+    <p>Think of a flight school's simulator. Each time a real flight was aborted, an instructor recreates that flight's conditions in the simulator and checks that the aircraft's own systems now stop the take-off before the engines start. Each recreated scenario is kept and replayed on every new version of the aircraft. To be sure the scenario really tests something, the instructor also replays it once with the relevant warning light unplugged, and the scenario must then fail. Every new aborted flight goes into the log with either the name of its scenario or a written reason no scenario can catch it, such as a storm that arrived mid-flight. Alongside the simulator, the ground crew's checklist gains the questions behind the aborts that cannot be simulated: is the fuel truck here, does the pilot hold a valid licence, how much allowance is left, are old aircraft cluttering the hangar, and has finished paperwork been filed. The checklist only reports. It never fixes anything on its own.</p>
+
+    <h3>How we will know it worked</h3>
+    <p>Every past stop has been recreated and sorted: caught by a named check, or out of reach with a reason the owner agreed to. Every check refuses before anything is spent, and each one fails when its refusal is removed. Every stop after the agreed cut-off date names its check or its reason, and the factory says plainly when one does not. The health check names each machine fact it reads. Some things are deliberately not part of this: catching mistakes the factory has never made, stopping a job that runs out of allowance halfway through, choosing which paid service runs a job, and repairing anything the health check finds.</p>
+  </section>
+
+  <!-- ===== PURPOSE ===== -->
+  <section id="purpose">
+    <h2>Purpose</h2>
+    <p>Build K5, the trap suite, and the environment checks in <code>awsf doctor</code>, from the spine's W02 block. W02's <code>[x]</code> is gate GR (decision 13): until it lands, no workstream that widens what runs without the owner lands any of that widening. Seven workstreams wait on it (W05, W06, W07's agent-driven half, W08, W10, W13, W14), so "every known trap" must be defined so that it can close.</p>
+    <p>W02 adds refusals, tests and read-only reports. It widens nothing, so GR does not bind its own landings.</p>
+    <table>
+      <thead><tr><th>Spine target this moves</th><th>Baseline</th><th>v3 target</th><th>W02's share</th></tr></thead>
+      <tbody>
+        <tr><td>Driver-preventable stops</td><td class="num">8 of 27</td><td class="num">0 on known traps</td><td>every catalogued stop shape is refused before any provider call, and each refusal is proven by a mutant</td></tr>
+        <tr><td>Land rate</td><td class="num">25%</td><td class="num">≥ 70%</td><td>stops caught before spend become refusals the driver fixes in place; quota stops (6 of the 47) refuse at run start instead of mid-run where the shape allows</td></tr>
+        <tr><td>Stops and cancels with a cause</td><td class="num">1 of 36</td><td class="num">all</td><td>every cause after the cut also names its trap or the reason none is possible</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ===== PROBLEM ===== -->
+  <section id="problem">
+    <h2>Problem</h2>
+    <p><strong>A stop teaches nothing durable today.</strong> Read on 2026-10-07 at <code>e32e892</code>:</p>
+    <ul>
+      <li><strong>Stops repeat.</strong> The forensics draft records the same rework defect stopping #12 and then #14 six hours later, and the same design-to-plan ENOENT stopping #21 and then #24 a day later. Since the draft, 4 of the 6 new blocks are <code>quota-exhausted</code>, and one of them (<code>v3-w01-m5-k1#1</code>) was refused by a Claude five-hour window that was already exhausted at its first build call. Nothing turns a stop into a check.</li>
+      <li><strong>The quota pause exists and is off.</strong> <code>production-run.ts</code> probes quota at every phase boundary and pauses below <code>routing.quota_stop</code>, and the resume path refuses below it (around line 3815). <code>awsf.config.yaml</code>'s <code>routing</code> block has no <code>quota_stop</code>, so this project never pauses, and nothing checks quota before the first phase reserves a call.</li>
+      <li><strong>The launch environment is never checked.</strong> <code>ClaudeCodeAdapter.isAvailable()</code> validates the executable name and never resolves it (<code>core/src/adapters/claude-code.ts:346–355</code>), so #11 and #17 blocked with <code>ExecutableNotFound "claude"</code> after the run had started, while the owner's own terminal could run the same command. <code>resolveExecutable</code> in <code>transport-broker.ts</code> already does the search the broker will do.</li>
+      <li><strong>A layer nobody runs lets a regression land.</strong> 07b20f9 (2026-10-01) made the protected execution proof require the resolved <code>bwrap</code> path the real broker records. The journeys' fake broker recorded a bare <code>bwrap</code>, so all 31 protected-grant journeys went BLOCKED, and the commit landed because this project's gates then ran <code>test:unit</code>, <code>typecheck</code> and <code>lint</code> only. 7bc48b5 fixed the fake the same day, and Q13 made <code>journeys</code> a landing gate on 2026-10-02. The lesson for traps is double: a trap that only passes is not evidence until something proves it can fail, and a layer that no gate runs protects nothing.</li>
+      <li><strong>Doctor does not look at the machine.</strong> <code>doctorCommand</code> (<code>core/src/cli/commands/doctor.ts</code>, 105 lines) reports locks, recorded PIDs, recovery controllers, degraded sessions and the projection, plus W19's Jev row. It never reads Git storage, provider CLIs, logins, quota, branches, worktrees or plan markers. On 2026-10-02 the checkout held 22 local branches and 226 linked worktrees, 153 under the factory root. It has no repair path, by design, and keeps none.</li>
+      <li><strong>No cause names a trap.</strong> <code>awsf.attribution/v1</code> carries cause and reason only (<code>core/src/contracts/attribution-record.ts</code>). Four attribution records exist on the owner's state root: one <code>factory</code> (2026-09-29) and three <code>owner</code> on cancels since M1 landed. None of the 6 blocks since the draft has one.</li>
+    </ul>
+    <figure>
+      <pre class="mermaid">
+flowchart LR
+  A["Stop"] --> B["Owner diagnoses<br/>by hand"]
+  B --> C["Fix or workaround<br/>in a session"]
+  C -.->|"no test kept"| D["Same shape<br/>stops again"]
+  D --> B
+      </pre>
+      <figcaption>Today a stop's lesson lives in a session's memory or a driving document. The same shape can stop the next run.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ===== SOLUTION ===== -->
+  <section id="solution">
+    <h2>Solution</h2>
+    <p>Six milestones, ordered by what unblocks what. M1 is the spine's cheapest unused upgrade, done first so real stops shape the format.</p>
+    <ul>
+      <li><strong>M1, replay.</strong> Rebuild each seed stop's preconditions on the stub adapter and pin what the factory does today: refused before any call, a pinned gap that reaches a call, or not reproducible with its reason. The owner confirms the resulting seed ledger at gate G02-S.</li>
+      <li><strong>M2, the format and the layer.</strong> The catalogue, the harness, the mutation check and the refusal markers that tie a trap to the code that refuses; the existing refusals (K1's eight fields, the runner's grant check) adopted as the first traps; the code half of a <code>traps</code> landing gate. The owner wires the npm script and the gate at G02-L.</li>
+      <li><strong>M3, causes name their trap.</strong> <code>awsf.attribution/v2</code> carries a trap link, <code>awsf attribute</code> and <code>awsf cancel</code> take it, and <code>awsf traps</code> reports every stop since the cut that lacks one or names a trap that does not exist.</li>
+      <li><strong>M4, new refusals.</strong> The out-of-K1 families W01 handed over: the launch environment (#11, #17), quota at run start (#42 and its family), a shift ticket demanding a path the shift cannot write (#27's remainder), the known open defects (#12, #14), and every other seed G02-S confirms as trappable.</li>
+      <li><strong>M5, doctor.</strong> Rows for Git storage, provider CLIs and logins, quota windows, stale branches and worktrees with the baseline worktree, and open markers on landed work. Read-only; spawns go through the broker.</li>
+      <li><strong>M6, GR.</strong> The closing record against the catalogue's cut and the post-cut rule. W02's <code>[x]</code> opens GR.</li>
+    </ul>
+    <figure>
+      <pre class="mermaid">
+flowchart LR
+  M1["M1 replay"] --> G1{"G02-S<br/>owner confirms seeds"}
+  G1 --> M2["M2 format, layer"]
+  M2 --> GL{"G02-L<br/>owner wires gate"}
+  M2 --> M3["M3 trap links"]
+  M2 --> M4["M4 new refusals"]
+  M5["M5 doctor"] --> M6
+  GL --> M6["M6 GR"]
+  M3 --> M6
+  M4 --> M6
+      </pre>
+      <figcaption>M5 depends on nothing else in W02 and can run first or in parallel. GR opens only at M6.</figcaption>
+    </figure>
+
+    <h3>Decisions already taken</h3>
+    <p>These are constraints this plan applies. It reopens none of them.</p>
+    <ul>
+      <li><strong>Q2 (decided 2026-10-02).</strong> A separate <code>test:traps</code> layer on the stub adapter. Every cause record names a trap id or the reason none is possible, and a cause naming a missing trap is red. How this plan makes the "red" mechanical without a test reading runtime state, and without a red base stalling K1, is W02-Q2.</li>
+      <li><strong>Q13 (decided and landed 2026-10-02).</strong> <code>test:journeys</code> is a full landing gate with a 2,400 s timeout: <code>journeys</code> is in <code>KNOWN_GATE_IDS</code> and the cheatsheet, <code>awsf.config.yaml</code>'s gates run it and <code>awsf.project.yaml</code> records it, and every test config that copies the shipped gates deletes it. W02 keeps it green and adds no exception. A trap gate, if the owner takes W02-Q5, follows the same path: the code half first (task 4), then the owner's config commit (G02-L).</li>
+      <li><strong>Decision 13 and gate GR.</strong> W02's completion opens GR. M6 states the condition and nothing earlier earns it.</li>
+      <li><strong>Decision 7 and gate GM.</strong> This plan's authoring is a manual, logged exception (Amendments). Its implementation tasks default to managed execution, each prepared under K1.</li>
+      <li><strong>Gate GA.</strong> Every protected-path change is the owner's commit, proposed one at a time (Execution section).</li>
+      <li><strong>W01's cause semantics (W01-Q6).</strong> A stop has a cause when an owner record or the host heuristic names something other than <code>unknown</code>. The trap link is a second field beside the cause, never a replacement for it.</li>
+    </ul>
+
+    <h3>The trap, defined</h3>
+    <div class="card rule">
+      <h5>A trap is four things that agree</h5>
+      <strong>(1) A catalogue entry</strong> in <code>core/src/traps/catalogue.ts</code>: id <code>TR-NN</code>, family, title, the seed stops it covers, and where it refuses. <strong>(2) A trap test</strong> in <code>core/test/traps/</code> that rebuilds the seed's preconditions in a synthetic repository and state root, drives the production CLI or runner on the stub adapter, and asserts the named refusal with zero calls reserved, zero adapter invocations and the attempt still DRAFT or PREPARED. <strong>(3) One refusal marker</strong> in <code>core/src</code>, a <code>// trap-refusal-begin TR-NN</code> … <code>// trap-refusal-end TR-NN</code> pair around the code that refuses. <strong>(4) A mutant</strong>: the harness copies the source to a scratch directory, deletes the marked block, runs the trap against the copy, and requires it to fail. A trap without a passing mutant is not counted.
+    </div>
+    <p>A seed that cannot have a trap gets a <strong>no-trap entry</strong> instead: the seed, one reason kind and its evidence. The kinds are closed:</p>
+    <table>
+      <thead><tr><th>Reason kind</th><th>Means</th><th>Example seed</th></tr></thead>
+      <tbody>
+        <tr><td><code>fixed</code></td><td>The stop came from a factory defect that has been removed. Cites the fixing commit and the regression test that keeps it removed.</td><td>#5 InvalidReviewInversion, fixed in 1aafbe5</td></tr>
+        <tr><td><code>after-spend</code></td><td>The condition only arises after provider calls began: model output, a mid-run quota exhaustion, a provider outage during review. Names any mitigation, such as the phase-boundary pause.</td><td>#10 planner emitted no valid envelope</td></tr>
+        <tr><td><code>owner</code></td><td>An owner decision, such as cancelling to replace a task.</td><td><code>v3-w01-m5-t13#1</code></td></tr>
+        <tr><td><code>unexplained</code></td><td>No recorded evidence names a cause, typically a cancel from before M1 made reasons mandatory.</td><td>#13, cancelled with no reason</td></tr>
+        <tr><td><code>not-a-stop</code></td><td>For live gotchas only: surprising behaviour that never stops a run.</td><td>gotcha 6, <code>awsf gc</code> never deletes</td></tr>
+      </tbody>
+    </table>
+
+    <h3>The population and the cut</h3>
+    <p>A <strong>stop</strong> is an attempt, in any registered project's state root, whose lifecycle state is BLOCKED or CANCELLED and whose workflow is not <code>prove</code>. Prove replays are the proving ground: 99 CANCELLED and 1 BLOCKED on 2026-10-07, created by owner acts at pinned bases to replay recorded requests. This answers handoff C2: the JSON cause ledger includes them, and the trap population never does.</p>
+    <p>The <strong>cut</strong> (W02-Q1) is proposed at 2026-10-07T23:59:59Z. Measured on the owner's state roots at authoring: AWSF 45 stops (33 BLOCKED, 12 CANCELLED) and <code>fusion-harness</code> 2 BLOCKED, so 47 seeds, plus the 11 live gotchas of <code>docs/driving/skills/awsf/references/gotchas.md</code> and the handoff's live gotchas (C5, C8). Every seed is a trap's seed or a no-trap entry. Every stop after the cut must carry a trap link in its cause record, naming a trap id or a no-trap reason. The seed ledger and its proposed classification are in Notes; task 1 verifies each row, and G02-S confirms them.</p>
+  </section>
+
+  <!-- ===== RELEVANT FILES ===== -->
+  <section id="files" class="files">
+    <h2>Relevant Files</h2>
+
+    <h3>Existing Files</h3>
+    <ul>
+      <li><span class="tag">existing</span> <code>core/test/journeys/k1-driver-checks.test.ts</code>, <code>core/test/fixtures/k1-preflight.ts</code> — one journey per K1 field and four stale journeys; <code>prepareK1</code> and <code>startUnderK1</code> reach a confirmed DRAFT before one fact is broken (C7). The first traps adopt them</li>
+      <li><span class="tag">existing</span> <code>core/test/journeys/production-runner.test.ts</code> — drives the production runner on stub routes with a fake broker that records <code>bwrap</code> the way the real one does (7bc48b5); the harness for run-time traps</li>
+      <li><span class="tag">existing</span> <code>core/src/adapters/stub.ts</code>, <code>core/src/adapters/claude-code.ts</code>, <code>pi-codex.ts</code>, <code>pi-openrouter.ts</code>, <code>antigravity.ts</code> — <code>isAvailable()</code> per adapter; task 8 makes each resolve its executable</li>
+      <li><span class="tag">existing</span> <code>core/src/cli/commands/production-run.ts</code> — reserves calls, probes quota at phase boundaries (around 3054–3130), resumes under a quota check (around 3815), refuses a writing phase without its grant (W01 T12)</li>
+      <li><span class="tag">existing</span> <code>core/src/quota/probe.ts</code>, <code>readout.ts</code>, <code>routes.ts</code>, <code>core/src/cli/commands/quota.ts</code> — the one quota probe (<code>quota-axi</code>) and its readout; doctor and task 9 reuse them</li>
+      <li><span class="tag">existing</span> <code>core/src/preflight/fields.ts</code>, <code>core/src/cli/commands/preflight.ts</code>, <code>start.ts</code> — K1's evaluators, refusal texts (C6) and the baseline worktree (<code>core/src/preflight/baseline-worktree.ts</code>, C5)</li>
+      <li><span class="tag">existing</span> <code>core/src/contracts/attribution-record.ts</code>, <code>core/src/cli/commands/attribute.ts</code>, <code>cancel.ts</code>, <code>core/src/persistence/task-attributions.ts</code>, <code>core/src/metrics/causes.ts</code> — the cause record and its readers (C1, C3)</li>
+      <li><span class="tag">existing</span> <code>core/src/cli/commands/doctor.ts</code>, <code>core/src/decision/jev-doctor.ts</code> — today's doctor and the precedent for an added row</li>
+      <li><span class="tag">existing</span> <code>core/src/state/errors.ts</code> — <code>EDGE_BLOCKER_CODES</code>, the closed per-edge stop vocabulary the coverage fence reads. Protected, read only</li>
+      <li><span class="tag">existing</span> <code>core/src/execution/transport-broker.ts</code> — <code>resolveExecutable</code> and <code>runSystemCommand</code>, the only process boundary (invariants 3, 4). Protected, imported only</li>
+      <li><span class="tag">existing</span> <code>core/src/config/schema.ts</code> — <code>KNOWN_GATE_IDS</code>; and the twelve test configs that copy <code>awsf.config.yaml</code> and delete the gates they cannot run (spine Amendment, 2026-10-02)</li>
+      <li><span class="tag">existing</span> <code>core/test/unit/meta/</code> — the fences a trap, a doctor probe and a new gate must satisfy: <code>child-process-fence</code>, <code>no-shell-true</code>, <code>no-destructive-paths</code>, <code>quota-fence</code>, <code>junk-drawer</code>, <code>cheatsheet-reconciliation</code>, <code>doc-reconciliation</code>, <code>k1-forensics-map</code></li>
+      <li><span class="tag">existing</span> <code>docs/driving/skills/awsf/references/gotchas.md</code> — the eleven live gotchas, a seed source. Protected</li>
+      <li><span class="tag">existing</span> <code>package.json</code> — the test layer scripts; written by no role, so the <code>test:traps</code> script is the owner's (G02-L)</li>
+      <li><span class="tag">existing</span> <code>awsf.config.yaml</code>, <code>awsf.project.yaml</code> — gates, <code>routing</code>; protected</li>
+      <li><span class="tag">existing</span> <code>specs/design/awsf-v3-plan/frame-index.json</code> — frames <code>mp-s3-blocked</code> and <code>mp-s5-checks</code> show W02's data inside W08's panel; data-shape references only</li>
+    </ul>
+
+    <h3>New Files</h3>
+    <ul>
+      <li><span class="tag new">new</span> <code>specs/awsf-v3-w02-trap-suite.html</code> — this plan</li>
+      <li><span class="tag new">new</span> <code>specs/awsf-v3-w02-trap-suite-build-prompts.md</code> and <code>specs/tickets/awsf-v3-w02-trap-suite/</code> (README, T01–T16) — the execution surface</li>
+      <li><span class="tag new">new</span> <code>core/src/traps/seeds.ts</code> — the seed ledger, one row per population stop up to the cut and per live gotcha (task 1)</li>
+      <li><span class="tag new">new</span> <code>core/src/traps/catalogue.ts</code>, <code>core/src/traps/population.ts</code> — trap and no-trap entries, the cut, the population rule (task 2)</li>
+      <li><span class="tag new">new</span> <code>core/test/traps/_harness.ts</code>, <code>core/test/traps/_mutate.ts</code>, <code>core/test/traps/TR-NN-&lt;slug&gt;.test.ts</code> — the layer (tasks 3–4, then one file per trap)</li>
+      <li><span class="tag new">new</span> <code>core/test/unit/meta/trap-catalogue.test.ts</code> — the catalogue fence, inside <code>test:unit</code> so it gates from the day it lands (task 3)</li>
+      <li><span class="tag new">new</span> <code>core/src/contracts/traps-readout.ts</code>, <code>core/src/cli/commands/traps.ts</code> — <code>awsf traps [--json]</code> (task 6)</li>
+      <li><span class="tag new">new</span> <code>core/src/doctor/</code> — one pure module per doctor row plus <code>awsf.doctor/v1</code> for <code>--json</code> (tasks 13–14)</li>
+    </ul>
+  </section>
+
+  <!-- ===== IDENTIFIER SPINE ===== -->
+  <section id="spine">
+    <h2>Identifier Spine</h2>
+    <p>Identifiers are unique within this plan. Every declaration is served by at least one task, and each ticket's <code>serves</code> mirrors its task's set. The invariant-12 fence compares them.</p>
+    <dl class="spine">
+      <dt><code class="inv">INV-1</code></dt>
+      <dd><strong>Refused before any provider call.</strong> Every trap asserts its named refusal, zero calls reserved, zero adapter invocations, no worktree for a preparation-time refusal, and an attempt that stays DRAFT or PREPARED. A check that stops a run after a call is a mitigation, catalogued as <code>after-spend</code>, never a trap.</dd>
+      <dt><code class="inv">INV-2</code></dt>
+      <dd><strong>A trap is proven by its mutant.</strong> Deleting its marked refusal block from a scratch copy of the source turns the trap red. The mutant runs inside <code>test:traps</code>, and a trap without a passing mutant is not counted.</dd>
+      <dt><code class="inv">INV-3</code></dt>
+      <dd><strong>One catalogue, total over the population.</strong> Each trap id appears exactly once in the catalogue, once as a test file and once as a refusal marker pair in <code>core/src</code>. Every population stop up to the cut, and every live gotcha, is a trap's seed or a no-trap entry with one closed reason kind and its evidence. Every <code>EDGE_BLOCKER_CODES</code> pair is covered by a trap or a no-trap kind.</dd>
+      <dt><code class="inv">INV-4</code></dt>
+      <dd><strong>Doctor reads and never repairs.</strong> No write, lock, delete or prune. Every process it starts goes through <code>runSystemCommand</code> with an argv array, and it never starts a provider CLI. A finding is evidence for the owner, not permission.</dd>
+      <dt><code class="inv">INV-5</code></dt>
+      <dd><strong>No task writes a protected path or <code>package.json</code>.</strong> The <code>test:traps</code> script, any gate, <code>routing.quota_stop</code> and the driving documents land as owner commits under GA (G02-L, G02-Q, G02-D).</dd>
+      <dt><code class="inv">INV-6</code></dt>
+      <dd><strong>The journal is the only evidence store.</strong> Trap links ride the attribution record and its <code>events</code> row. The readout derives from the journal and the catalogue. No migration, no committed runtime file, no name matching <code>/manifest|receipt/i</code>. The seed ledger names sealed historical attempts and copies none of their bytes.</dd>
+      <dt><code class="inv">INV-7</code></dt>
+      <dd><strong>No bypass.</strong> No flag, environment variable or option reachable from the CLI disables a refusal. The mutant is built from source in a scratch copy, so the shipped code carries no switch.</dd>
+      <dt><code class="ac">AC-1</code></dt>
+      <dd>Every population stop up to the cut, and every live gotcha, is replayed or reasoned on the stub adapter and pinned as refused today, a gap that reaches a provider call, or not reproducible with its reason, and the owner has confirmed the ledger.</dd>
+      <dt><code class="ac">AC-2</code></dt>
+      <dd><code>test:traps</code> runs every catalogued trap, each refused before any provider call and each with a passing mutant, and the catalogue fence holds in <code>test:unit</code>.</dd>
+      <dt><code class="ac">AC-3</code></dt>
+      <dd>Every cause record written after task 5 lands names a trap id or a no-trap reason, and <code>awsf traps</code> lists every stop since the cut without a link or naming a trap the catalogue lacks, exiting 1 while any exists.</dd>
+      <dt><code class="ac">AC-4</code></dt>
+      <dd>The out-of-K1 families are refused before any provider call: an unresolvable executable in the launch environment, an exhausted or below-threshold quota window at run start, a shift ticket demanding a path the shift cannot write, a known open defect's route, and every other seed G02-S confirmed as trappable.</dd>
+      <dt><code class="ac">AC-5</code></dt>
+      <dd><code>awsf doctor</code> reports, by name, Git storage, provider CLIs present and logged in, quota windows, stale branches and worktrees with the baseline worktree, and open markers on landed work, in text and in <code>--json</code>.</dd>
+      <dt><code class="ac">AC-6</code></dt>
+      <dd>GR: every catalogued trap is refused with its mutant, every stop since the cut has a trap link and none names a missing trap, doctor reports each check, and unit, contract, simulation, journeys and traps are green.</dd>
+    </dl>
+  </section>
+
+  <!-- ===== EXECUTION ===== -->
+  <section id="execution">
+    <h2>Execution, owner gates and fences</h2>
+    <p><strong>Managed by default</strong> (decision 7). Each ticket runs as one <code>build-review</code> attempt, so a provider other than the builder's reviews it. <code>awsf new</code> derives the tier. K1 binds every start: the driver runs <code>awsf preflight</code>, the owner runs <code>awsf confirm</code>, then <code>awsf start</code>. External prerequisites must have landed. In an owner-approved accumulating shift, a selected predecessor is satisfied by its host-committed, gate-passing head in the same managed worktree; it needs neither a separate landing nor a marker change mid-shift. No ticket touches a protected path, so any milestone may run as one shift where the sizing fits. Manual execution is the logged exception, for a factory that cannot carry the work.</p>
+    <p><strong>A red trap at the base stops the factory.</strong> Once G02-L makes <code>traps</code> a gate, K1's <code>suite</code> field requires it green at every base. A trap that turns red on <code>main</code> therefore refuses every start, the fix included, and that fix is a direct session logged as a decision-7 exception, as W01's R3 already provides. No bypass flag is built for it (INV-7). The coverage signal of W02-Q2 is kept out of every gate for the same reason.</p>
+
+    <table>
+      <thead><tr><th>Milestone</th><th>Tickets</th><th>How</th><th>Before it starts</th></tr></thead>
+      <tbody>
+        <tr><td>M1 replay</td><td>T01</td><td>managed, build-review</td><td>owner approval of this plan</td></tr>
+        <tr><td>M2 format and layer</td><td>T02–T04</td><td>managed, build-review per ticket or one shift</td><td>G02-S recorded</td></tr>
+        <tr><td>M3 trap links</td><td>T05–T07</td><td>managed, build-review per ticket or one shift</td><td>T02 landed</td></tr>
+        <tr><td>M4 new refusals</td><td>T08–T12</td><td>managed, build-review per ticket</td><td>G02-S recorded, T03 landed</td></tr>
+        <tr><td>M5 doctor</td><td>T13–T15</td><td>managed, build-review per ticket or one shift</td><td>owner approval; independent of M1–M4</td></tr>
+        <tr><td>M6 GR</td><td>T16</td><td>managed, build-review</td><td>G02-L and G02-D landed; G02-Q per W02-Q7</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Who writes what</h3>
+    <table>
+      <thead><tr><th>Actor</th><th>Writes</th><th>Never</th></tr></thead>
+      <tbody>
+        <tr><td>Builder (managed)</td><td><code>core/src/**</code> outside protected paths, <code>core/test/**</code>, <code>dashboard/**</code>, <code>prompts/**</code>, <code>docs/cheatsheet.html</code></td><td><code>specs/**</code>, <code>package.json</code>, <code>AGENTS.md</code>, <code>awsf.config.yaml</code>, <code>awsf.project.yaml</code>, <code>core/src/state/**</code>, <code>core/src/policy/**</code>, <code>core/src/observability/migrations/**</code>, <code>core/src/execution/transport-broker.ts</code>, <code>docs/driving/**</code>, a root <code>.claude/</code></td></tr>
+        <tr><td>Host</td><td>gates, candidate commits, K1 and the new refusals</td><td>landing</td></tr>
+        <tr><td>Owner</td><td>G02-S, G02-L, G02-Q, G02-D, every <code>awsf confirm</code>, attribution with trap links, landing, the bookkeeping commit after each landing</td><td>—</td></tr>
+        <tr><td>Marimba</td><td>nothing in the repository; prepares requests, runs <code>awsf preflight</code>, <code>start</code>, <code>run</code>, <code>traps</code> and <code>doctor</code>, prepares owner acts</td><td><code>awsf confirm</code>, <code>attribute</code>, <code>cancel</code> and every other owner act</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Owner gates</h3>
+    <div class="card rule">
+      <h5>G02-S — the seed ledger, after T01 and before T02</h5>
+      The owner confirms or corrects every row of the seed ledger T01 lands: each stop's classification (refused today, a pinned gap, or a no-trap kind) and the trap family it joins. The prompt names this the owner's: the forensics draft is unconfirmed beyond its eight <code>driver</code> rows (W01's G01-F), and the 39 other seeds have never been read by the owner. Recorded as a dated Amendment of this plan in the owner's bookkeeping commit. If a confirmed row adds a trappable family M4 does not hold, the same Amendment adds its task before T12 starts.
+    </div>
+    <div class="card rule">
+      <h5>G02-L — the trap layer wired, an owner commit under GA, after T04</h5>
+      <strong>Change.</strong> <code>package.json</code> gains <code>"test:traps": "node --experimental-strip-types --test \"core/test/traps/**/*.test.ts\""</code> and <code>npm test</code> chains it like the other layers. If the owner takes W02-Q5's recommendation, <code>awsf.config.yaml</code>'s <code>gates</code> gains <code>traps: { argv: [npm, run, test:traps], timeout_seconds: &lt;twice T04's measured time&gt; }</code> and <code>awsf.project.yaml</code> records it. <strong>Blocks today.</strong> No role writes <code>package.json</code>, and the gate files are protected. <strong>Replacement guarantee.</strong> T04 lands the code half first, as Q13 did: <code>traps</code> in <code>KNOWN_GATE_IDS</code>, a deletion line in every test config that copies the shipped gates, the cheatsheet's gate list. <strong>Cost.</strong> T04's measured runtime on every landing and every K1 suite run after a direct commit. <strong>Alternative that avoids the amendment.</strong> Put the trap files under <code>core/test/journeys/</code>, which the journeys gate already runs; it gives up Q2's separate layer and its own count.
+    </div>
+    <div class="card warn">
+      <h5>G02-Q — <code>routing.quota_stop</code>, an owner commit under GA, only if W02-Q7 takes a threshold</h5>
+      <strong>Change.</strong> <code>awsf.config.yaml</code>'s <code>routing</code> gains <code>quota_stop</code> with a default threshold in minutes of runway, and per-adapter values if wanted. <strong>Blocks today.</strong> The phase-boundary pause and task 9's below-threshold refusal are both off without it; the refusal of a window already reported exhausted needs no configuration. <strong>Replacement guarantee.</strong> Task 9's traps run on their own test configuration with a threshold set, so the mechanism is proven whether or not the owner sets one. <strong>Cost.</strong> One quota probe per phase boundary (2.5 s default timeout) and a pause when runway is short. <strong>Alternative.</strong> W02-Q7's "exhausted only" option, which needs no config.
+    </div>
+    <div class="card warn">
+      <h5>G02-D — the driving documents, owner commits under GA, after T05 and before T16</h5>
+      <code>docs/driving/**</code> is protected. The cancel and attribute examples in the <code>awsf</code> skill and its cookbooks gain the trap link; <code>gotchas.md</code> entries gain the trap id or no-trap kind task 1 assigned them. W01's M1 left cancel examples stale for the same reason, so this gate is named rather than discovered.
+    </div>
+    <p><strong>Not needed.</strong> No migration: trap links ride the attribution <code>events</code> row through <code>projector.ts</code>. No <code>AGENTS.md</code> change. No change to <code>core/src/state/**</code>: the coverage fence reads <code>EDGE_BLOCKER_CODES</code> and adds nothing to it. No new owner act: <code>awsf traps</code> and <code>awsf doctor</code> are read-only, and <code>attribute</code> and <code>cancel</code> keep their verbs, so the guard and <code>boundary-claims</code> are untouched.</p>
+    <p><strong>Owner-side, named and not ticketed.</strong> Attributing each stop after the cut with its trap link (an owner act per attempt). Re-attributing the six post-draft blocks once T05 lands. Choosing a trap id for a new stop kind before its trap exists (W02-Q2).</p>
+
+    <h3>Fences this plan meets</h3>
+    <table>
+      <thead><tr><th>Fence</th><th>Where W02 meets it</th><th>Resolution</th></tr></thead>
+      <tbody>
+        <tr><td>child-process-fence, no-shell-true (invariants 3, 4)</td><td>doctor's Git and quota probes; the mutation runner</td><td>doctor uses <code>runSystemCommand</code> and <code>resolveExecutable</code>; the mutation runner lives in <code>core/test/</code>, which the fence does not scan, and still passes argv arrays with no shell</td></tr>
+        <tr><td>no-destructive-paths, invariant 8</td><td>stale branches and worktrees</td><td>listed, never removed; the scratch copy for a mutant is a test-side temporary directory</td></tr>
+        <tr><td>quota-fence</td><td>task 9's run-start quota refusal</td><td>a refusal in the run's start, never in route resolution, and nothing under <code>core/src/workflow/</code> imports the quota module; the refusal chooses no route</td></tr>
+        <tr><td>sqlite-write-fence, invariant 6</td><td>trap links</td><td>projected by <code>projector.ts</code> into <code>events</code></td></tr>
+        <tr><td>junk-drawer, invariant 10</td><td>seeds, catalogue, readouts</td><td><code>seeds.ts</code>, <code>catalogue.ts</code>, <code>awsf.traps/v1</code>, <code>awsf.doctor/v1</code>; no name matches <code>/manifest|receipt/i</code></td></tr>
+        <tr><td>no-credentials-in-fixtures, invariant 9</td><td>the T5 trap needs credential-shaped gate output</td><td>built at test time from fragments, never a literal in a committed file</td></tr>
+        <tr><td>cheatsheet-reconciliation, doc-reconciliation</td><td><code>awsf traps</code>, <code>doctor --json</code>, new flags, the <code>traps</code> gate id</td><td>the builder updates <code>docs/cheatsheet.html</code> in the same ticket; driving documents at G02-D</td></tr>
+        <tr><td>k1-forensics-map</td><td>the seed ledger supersedes its out-of-reach rows' takers</td><td>the map stays; task 12 points each W02 row at its trap id</td></tr>
+        <tr><td>dependency-allowlist, invariant 7</td><td>everything</td><td>no package</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ===== IMPLEMENTATION PHASES ===== -->
+  <div id="phases">
+    <h2>Implementation Phases</h2>
+    <p><strong>IMPORTANT:</strong> Execute every milestone and task in order, top to bottom, subject to each ticket's <code>depends_on</code>.</p>
+    <p>Status markers: <code>[]</code> idle · <code>[wip]</code> in progress · <code>[x]</code> complete · <code>[f]</code> failed. All start as <code>[]</code>. No builder writes them. After a ticket's candidate lands, the owner moves that task's rows and its ticket's <code>state</code> together in one bookkeeping commit with a dated Amendment (invariants 2 and 12). A milestone stays <code>[wip]</code> until every task in it is <code>[x]</code>. Only task 16's landing earns the spine's W02 marker, in that same commit with <code>tickets/awsf-v3-plan/W02.md</code>.</p>
+
+    <!-- ================= M1 ================= -->
+    <section class="phase">
+      <h3><code class="status">[]</code> Milestone M1: Replay the seeds <span class="wtag">managed</span> <span class="wtag raise">gate G02-S</span></h3>
+      <p>The spine's cheapest unused upgrade, first: real stops shape the format. The task's code is tests and one data module, so testing shares the task.</p>
+      <figure>
+        <pre class="mermaid">
+stateDiagram-v2
+  [*] --> Seed
+  Seed --> Refused: refused before a call today
+  Seed --> Gap: reaches a call today
+  Seed --> NoTrap: cannot be rebuilt before spend
+  Gap --> Refused: an M4 task flips it
+  NoTrap --> [*]: reason kind and evidence
+  Refused --> [*]: adopted as a trap in M2 or M4
+        </pre>
+        <figcaption>Every seed ends in one of two places: a trap, or a no-trap entry with its reason.</figcaption>
+      </figure>
+
+      <h4>1. Replay the seed stops on the stub adapter and pin today's outcome</h4>
+      <p class="sub">Serves <code class="serves">AC-1</code> · <code class="serves">INV-1</code> · <code class="serves">INV-6</code></p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>core/src/traps/seeds.ts</code>: one row per population stop up to the cut and per live gotcha, each with its source (project, task, attempt; or gotcha number), date, recorded blocker code, family, outcome (<code>refused</code>, <code>gap</code>, or a no-trap kind) and the evidence line</li>
+        <li><code class="status">[]</code> For each seed whose preconditions can be rebuilt before spend, a replay test under <code>core/test/traps/replay/</code> that builds them in a synthetic repository and state root on the stub adapter and asserts today's outcome: the named refusal with zero calls reserved, or <code>KNOWN GAP</code>, asserting that a provider call is reached</li>
+        <li><code class="status">[]</code> For each seed that cannot be rebuilt before spend, the no-trap kind and the evidence that rules a trap out, such as the blocker's own detail or the fixing commit and its regression test</li>
+        <li><code class="status">[]</code> The population is computed, not typed: a test applies the population rule to a synthetic state root and gets exactly the rows the rule selects, prove replays excluded</li>
+        <li><code class="status">[]</code> The proposed classification in this plan's Notes is checked row by row, and every disagreement is returned with its evidence for G02-S</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> exit 0, and the replay tests run with <code>node --experimental-strip-types --test "core/test/traps/**/*.test.ts"</code></li>
+        <li><code class="status">[]</code> G02-S recorded: the owner's confirmed ledger is a dated Amendment of this plan</li>
+      </ul>
+      <div class="loop">🔁 <strong>Do not exit this milestone until every box above is checked, including the owner's G02-S.</strong> No owner run data is copied into a fixture: preconditions are rebuilt from the recorded blocker text.</div>
+    </section>
+
+    <!-- ================= M2 ================= -->
+    <section class="phase">
+      <h3><code class="status">[]</code> Milestone M2: The trap format and the layer <span class="wtag">managed</span> <span class="wtag raise">gate G02-L</span></h3>
+      <p>The catalogue, the harness, the mutant and the markers that make a trap four agreeing things, and the first traps built from refusals that already exist.</p>
+      <figure>
+        <pre class="mermaid">
+flowchart LR
+  E["catalogue entry<br/>TR-NN"] --- T["trap test<br/>core/test/traps"]
+  E --- R["refusal marker<br/>core/src"]
+  T -->|"green on source"| OK["counted"]
+  R -->|"block deleted"| MU["mutant copy"]
+  MU -->|"trap must fail"| OK
+        </pre>
+        <figcaption>The fence in <code>test:unit</code> checks the three links; <code>test:traps</code> runs the trap and its mutant.</figcaption>
+      </figure>
+
+      <h4>2. The trap catalogue and its population rule</h4>
+      <p class="sub">Serves <code class="serves">AC-2</code> · <code class="serves">INV-3</code> · <code class="serves">INV-6</code></p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>core/src/traps/catalogue.ts</code>: <code>TRAP_CUT</code>, trap entries (id <code>TR-NN</code>, family, title, seeds, refusal point: <code>k1-field</code>, <code>start</code>, <code>run-before-l4</code>, <code>owner-act</code> or <code>shift-admission</code>, and the refusal's error or record name) and no-trap entries (seed, reason kind, evidence)</li>
+        <li><code class="status">[]</code> <code>NO_TRAP_KINDS</code>: <code>fixed</code>, <code>after-spend</code>, <code>owner</code>, <code>unexplained</code>, <code>not-a-stop</code>, each defined in the module's comment as the Solution section defines it</li>
+        <li><code class="status">[]</code> <code>core/src/traps/population.ts</code>: the pure population rule over projected attempt facts (registered project, BLOCKED or CANCELLED, workflow not <code>prove</code>, terminal at or before the cut), shared by the seed ledger's test and <code>awsf traps</code></li>
+        <li><code class="status">[]</code> The ledger's confirmed rows become catalogue entries: each <code>refused</code> seed joins a trap, each no-trap seed becomes a no-trap entry, and each <code>gap</code> seed is listed under the M4 task that will flip it</li>
+        <li><code class="status">[]</code> Tests: ids unique and contiguous, every seed in exactly one entry, every no-trap kind from the closed set</li>
+      </ul>
+
+      <h4>3. The harness, the mutant, and the catalogue fence</h4>
+      <p class="sub">Serves <code class="serves">AC-2</code> · <code class="serves">INV-1</code> · <code class="serves">INV-2</code> · <code class="serves">INV-3</code> · <code class="serves">INV-7</code></p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>core/test/traps/_harness.ts</code>: a synthetic repository and state root, this checkout's configuration with offline gates, stub routes, the production runner's fake broker, and one assertion helper for INV-1 (refusal name, <code>callsReserved</code> 0, adapter invocations 0, state DRAFT or PREPARED, no attempt worktree for a preparation-time refusal)</li>
+        <li><code class="status">[]</code> <code>core/test/traps/_mutate.ts</code>: copies the source tree a trap imports to a scratch directory with <code>node_modules</code> linked, deletes the lines between one <code>// trap-refusal-begin TR-NN</code> and its <code>// trap-refusal-end TR-NN</code>, runs that trap's file against the copy with an argv array and no shell, and requires a non-zero exit whose failure names the trap's refusal assertion</li>
+        <li><code class="status">[]</code> Each trap file's last test runs its own mutant (W02-Q4), so <code>test:traps</code> proves INV-2 on every run</li>
+        <li><code class="status">[]</code> <code>core/test/unit/meta/trap-catalogue.test.ts</code>: each catalogue trap id has exactly one test file and exactly one marker pair in <code>core/src</code>; each marker names a catalogued trap; no marker pair is nested, unbalanced or inside a protected path; every <code>EDGE_BLOCKER_CODES</code> pair is covered by a trap's family or a no-trap kind</li>
+        <li><code class="status">[]</code> A planted unmarked refusal, a duplicate id, a marker with no entry and an entry with no test each fail the fence</li>
+      </ul>
+
+      <h4>4. Testing Strategy for M2: the first traps from existing refusals, and the gate's code half</h4>
+      <p class="sub">Serves <code class="serves">AC-2</code> · <code class="serves">INV-1</code> · <code class="serves">INV-2</code> · <code class="serves">INV-5</code></p>
+      <p>The existing refusals become the first traps, so the format is proven on code that already works before M4 adds new refusals.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> K1's eight field journeys (C7) adopted as traps, one per field: <code>suite</code> (#1 and #15 if G02-S confirms a red base), <code>write-boundary</code> and <code>request-shape</code> (#27), <code>protected-paths</code> (#34), <code>git-storage</code> (#36), <code>duplicate</code> (T7), <code>prior-attempts</code>, <code>confirmation</code>, each with markers around its evaluator's refusal and a passing mutant. The four stale journeys stay journeys: they guard K1's freshness, not a recorded stop</li>
+        <li><code class="status">[]</code> The runner's grant check (W01 T12) adopted as the trap for #34's run-time half, refused before L4 with the attempt PREPARED</li>
+        <li><code class="status">[]</code> Every live gotcha G02-S classified as an existing refusal (gotchas 1, 2 and 9 are proposed) adopted the same way</li>
+        <li><code class="status">[]</code> The gate's code half: <code>traps</code> in <code>KNOWN_GATE_IDS</code>, a deletion line for it in every test config that copies the shipped gates, <code>gate|traps</code> and its prose in <code>docs/cheatsheet.html</code>, with the unit tests that bind every configured gate passing on a configuration that has it</li>
+        <li><code class="status">[]</code> <code>node --experimental-strip-types --test "core/test/traps/**/*.test.ts"</code> green, wall time measured on this host and returned for G02-L's timeout</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run test:journeys</code>, <code>npm run typecheck</code> and <code>npm run lint</code> exit 0</li>
+        <li><code class="status">[]</code> G02-L landed: <code>npm run test:traps</code> exists, and the gate per W02-Q5 (the owner's commit)</li>
+      </ul>
+      <div class="loop">🔁 <strong>Do not exit this milestone until every box above is checked.</strong> A trap that has never failed against its mutant is not a trap.</div>
+    </section>
+
+    <!-- ================= M3 ================= -->
+    <section class="phase">
+      <h3><code class="status">[]</code> Milestone M3: Causes name their trap <span class="wtag">managed</span></h3>
+      <p>Q2's second half. A stop becomes a trap through its cause record, and a gap is a number the factory reports.</p>
+      <figure>
+        <pre class="mermaid">
+sequenceDiagram
+  participant O as Owner
+  participant A as attribute or cancel
+  participant J as Journal
+  participant R as awsf traps
+  O->>A: cause, reason, trap link
+  A->>J: awsf.attribution/v2
+  R->>J: stops since the cut
+  R-->>O: unlinked or missing trap, exit 1
+        </pre>
+        <figcaption>The red signal reads the journal, so it lives in a read-only command, never in a hermetic test (W02-Q2).</figcaption>
+      </figure>
+
+      <h4>5. The trap link on the cause record</h4>
+      <p class="sub">Serves <code class="serves">AC-3</code> · <code class="serves">INV-6</code></p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>awsf.attribution/v2</code>: v1's fields plus a required <code>trap</code>, either <code>{ kind: "trap", id }</code> with a well-formed <code>TR-NN</code> or <code>{ kind: "none", reason, because }</code> with a no-trap kind and text; v1 records stay readable and count as pre-link</li>
+        <li><code class="status">[]</code> <code>awsf attribute</code> and <code>awsf cancel</code> take <code>--trap TR-NN</code> or <code>--no-trap &lt;kind&gt; "&lt;why&gt;"</code>, validated before the prompt and before any signal, with the same credential check as <code>--reason</code>; which causes may omit it follows W02-Q3</li>
+        <li><code class="status">[]</code> The prompt shows the link beside the cause and reason; a declined act writes nothing</li>
+        <li><code class="status">[]</code> The projector writes the link into the existing attribution <code>events</code> row; <code>awsf db rebuild</code> reproduces it; <code>core/src/metrics/causes.ts</code> and the dashboard's mirrored types read v1 and v2</li>
+        <li><code class="status">[]</code> Every test and journey that cancels or attributes passes a link; the cheatsheet and both usage strings show the flags</li>
+      </ul>
+
+      <h4>6. <code>awsf traps</code>, the coverage readout</h4>
+      <p class="sub">Serves <code class="serves">AC-3</code> · <code class="serves">INV-3</code> · <code class="serves">INV-6</code></p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>awsf traps [--json]</code>: read-only, registered in <code>CLI_COMMANDS</code> and the cheatsheet, not an owner act; reads the catalogue and every registered project's state root through the population rule</li>
+        <li><code class="status">[]</code> <code>awsf.traps/v1</code> (<code>core/src/contracts/traps-readout.ts</code>): the cut, catalogue counts by trap and by no-trap kind, the stops since the cut split into linked to a catalogued trap, linked to a no-trap reason, linked to a trap the catalogue lacks, and unlinked, each listed by project, task and attempt; and the next free trap id</li>
+        <li><code class="status">[]</code> Exit 1 while any stop since the cut is unlinked or names a missing trap; exit 0 otherwise. The text form says which, and that the command reports and never repairs</li>
+        <li><code class="status">[]</code> The latest gate rows of the newest landed attempt per project report whether <code>traps</code> passed at that base, so the K5 frame's "traps refused" row has a source that is not a fresh test run</li>
+      </ul>
+
+      <h4>7. Testing Strategy for M3</h4>
+      <p class="sub">Serves <code class="serves">AC-3</code> · <code class="serves">INV-6</code></p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Tests: an attribute or cancel with no link where one is required, a malformed id, an unknown no-trap kind, or a credential-shaped reason is refused with nothing written and no signal sent</li>
+        <li><code class="status">[]</code> A synthetic state root with one stop of each kind (pre-cut, post-cut linked, post-cut unlinked, post-cut naming <code>TR-99</code>, a prove replay) yields exactly the readout's expected lists and exit code</li>
+        <li><code class="status">[]</code> A v1 record and a v2 record for the same attempt: the latest wins, as W18 D4 already rules</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run test:journeys</code>, <code>npm run test:traps</code>, <code>npm run typecheck</code> and <code>npm run lint</code> exit 0</li>
+      </ul>
+      <div class="loop">🔁 <strong>Do not exit this milestone until every box above is checked.</strong></div>
+    </section>
+
+    <!-- ================= M4 ================= -->
+    <section class="phase">
+      <h3><code class="status">[]</code> Milestone M4: New refusals for the out-of-K1 families <span class="wtag">managed</span></h3>
+      <p>The families W01 handed over (C8), each refused at the earliest point that can see its precondition, each a trap with its mutant. Each task flips its seeds' <code>KNOWN GAP</code> pins from task 1.</p>
+
+      <h4>8. The launch environment: an executable that does not resolve refuses before L4</h4>
+      <p class="sub">Serves <code class="serves">AC-4</code> · <code class="serves">INV-1</code> · <code class="serves">INV-7</code></p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Every adapter's <code>isAvailable()</code> resolves its executable with <code>resolveExecutable</code> against the environment the broker will hand the child, and reports the name, the PATH searched and any obstruction it found (C8: #11, #17)</li>
+        <li><code class="status">[]</code> Before L4, the runner asks every adapter the recipe's phases will use, not only the first, and refuses with the attempt PREPARED and zero calls reserved when one does not resolve</li>
+        <li><code class="status">[]</code> The trap rebuilds #17's shape: a PATH that holds <code>claude</code> for the owner's shell and not for the launch environment</li>
+        <li><code class="status">[]</code> The stub adapter keeps resolving nothing, so every other test is unaffected</li>
+      </ul>
+
+      <h4>9. Quota at run start: an exhausted window refuses before L4</h4>
+      <p class="sub">Serves <code class="serves">AC-4</code> · <code class="serves">INV-1</code></p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Before L4, one quota probe over the routes the recipe's phases will use; a window the probe reports exhausted or rejected refuses with the attempt PREPARED, zero calls reserved, and the reset time in the reason (#42's shape)</li>
+        <li><code class="status">[]</code> Per W02-Q7, a window below <code>routing.quota_stop</code>'s threshold refuses the same way when a threshold is configured; an unavailable probe does not refuse and is journaled as unknown</li>
+        <li><code class="status">[]</code> The refusal lives in the run's start, never in route resolution, and chooses no route: the quota fence stays green unchanged</li>
+        <li><code class="status">[]</code> Mid-run exhaustion stays <code>after-spend</code> in the catalogue, naming the phase-boundary pause as its mitigation (#18, #22, #39, #41, #43)</li>
+      </ul>
+
+      <h4>10. A shift ticket that demands a path the shift cannot write</h4>
+      <p class="sub">Serves <code class="serves">AC-4</code> · <code class="serves">INV-1</code></p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> For a shift, K1's path scan also reads each selected ticket's <code>DO</code> block: every path-shaped token outside the shift builder's reach must be classified with <code>--read</code>, or <code>write-boundary</code> refuses naming the ticket and the token (#27's remainder, C8)</li>
+        <li><code class="status">[]</code> The same tokenizer and the same <code>--read</code> rule as <code>protected-paths</code>, so a read-only mention is one flag, not a code change</li>
+        <li><code class="status">[]</code> The trap rebuilds #27's shape: a ticket whose DO block names a <code>specs/</code> path, selected into a shift</li>
+      </ul>
+
+      <h4>11. Known open defects refused before spend</h4>
+      <p class="sub">Serves <code class="serves">AC-4</code> · <code class="serves">INV-1</code></p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> For each open factory defect a seed hit and task 1 found still open, a refusal at the first point that can see its precondition: proposed, <code>awsf rework</code> refuses before its first call when the recorded gate output it would carry is credential-shaped, and advises cancel and a new task (#12, #14)</li>
+        <li><code class="status">[]</code> A defect task 1 found fixed becomes a <code>fixed</code> no-trap entry citing its commit and regression test instead (proposed for #21 and #24, to be verified)</li>
+        <li><code class="status">[]</code> Credential-shaped test input is assembled at run time from fragments, never committed as a literal (invariant 9)</li>
+      </ul>
+
+      <h4>12. The confirmed remainder, and Testing Strategy for M4</h4>
+      <p class="sub">Serves <code class="serves">AC-4</code> · <code class="serves">INV-1</code> · <code class="serves">INV-2</code> · <code class="serves">INV-3</code></p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Every other seed G02-S confirmed as trappable has its refusal and trap, or, with the owner's recorded agreement, a no-trap entry with its reason</li>
+        <li><code class="status">[]</code> No <code>KNOWN GAP</code> pin remains under <code>core/test/traps/replay/</code>; each replay test that pinned one is now its trap, or deleted with its seed's no-trap entry</li>
+        <li><code class="status">[]</code> <code>core/test/unit/meta/k1-forensics-map.test.ts</code>'s W02 rows each name their trap id or no-trap kind</li>
+        <li><code class="status">[]</code> Every M4 trap's mutant fails; every refusal leaves the attempt PREPARED (or DRAFT for K1) with zero calls reserved</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run test:journeys</code>, <code>npm run test:traps</code>, <code>npm run typecheck</code> and <code>npm run lint</code> exit 0</li>
+      </ul>
+      <div class="loop">🔁 <strong>Do not exit this milestone until every box above is checked.</strong> If G02-S added a family, its task is in this milestone before task 12 starts.</div>
+    </section>
+
+    <!-- ================= M5 ================= -->
+    <section class="phase">
+      <h3><code class="status">[]</code> Milestone M5: Doctor's environment and repository rows <span class="wtag">managed</span></h3>
+      <p>Each row reports the fact behind a stop shape a trap cannot reach from inside a test: the real machine. Doctor stays read-only and keeps its exit rule for every existing finding.</p>
+      <figure>
+        <pre class="mermaid">
+flowchart LR
+  D["awsf doctor"] --> S["storage<br/>mode reads"]
+  D --> X["executables<br/>PATH resolution"]
+  D --> Q["providers, quota<br/>one quota-axi probe"]
+  D --> G["branches, worktrees<br/>git via broker"]
+  D --> K["markers<br/>tickets vs landings"]
+        </pre>
+        <figcaption>Five sources. Only the quota probe and the Git reads start a process, both through the broker.</figcaption>
+      </figure>
+
+      <h4>13. Doctor's environment rows: storage, executables, logins and quota</h4>
+      <p class="sub">Serves <code class="serves">AC-5</code> · <code class="serves">INV-4</code></p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>storage</code>: the Git common directory, the worktree root and the state root, measured with K1's <code>git-storage</code> mode signature (C6's DrvFs text)</li>
+        <li><code class="status">[]</code> <code>executables</code>: each configured adapter's executable, <code>git</code>, <code>bwrap</code> and <code>quota-axi</code>, resolved with <code>resolveExecutable</code> against doctor's environment, with no process started</li>
+        <li><code class="status">[]</code> <code>providers</code> and <code>quota</code>: one <code>quota-axi</code> probe through the existing <code>probeQuota</code>, giving each provider's login state (W02-Q8) and each route's windows, runway and reset, against any configured threshold</li>
+        <li><code class="status">[]</code> Each row is a pure module under <code>core/src/doctor/</code> over gathered facts, returning ok, warn or finding with its detail; which states are findings follows W02-Q6</li>
+        <li><code class="status">[]</code> <code>awsf doctor --json</code> emits <code>awsf.doctor/v1</code>, one object per row by name, for the panel W08 builds (frame <code>mp-s5-checks</code>)</li>
+      </ul>
+
+      <h4>14. Doctor's repository rows: branches, worktrees, the baseline, and open markers</h4>
+      <p class="sub">Serves <code class="serves">AC-5</code> · <code class="serves">INV-4</code></p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>branches</code>: local branches whose tip the default branch contains, or whose task's attempts are all terminal, through <code>git for-each-ref</code> by <code>runSystemCommand</code></li>
+        <li><code class="status">[]</code> <code>worktrees</code>: linked worktrees in total, under the factory root, belonging to a terminal attempt, and belonging to no attempt, from <code>git worktree list --porcelain</code></li>
+        <li><code class="status">[]</code> <code>baseline</code>: the project's <code>awsf-baseline-&lt;project&gt;</code> tree present, its HEAD against the default branch, dirty or foreign, and its <code>node_modules</code> older than the repository's lockfile, the stale-seed gotcha (C5)</li>
+        <li><code class="status">[]</code> <code>markers</code>: landed shift attempts whose selected tickets are not <code>done</code> in the registered plan's ticket set, and landed attempts with a plan ref but no ticket selection, counted as unmapped</li>
+        <li><code class="status">[]</code> Nothing is listed for removal and nothing is removed; <code>awsf gc</code> keeps its own list</li>
+      </ul>
+
+      <h4>15. Testing Strategy for M5</h4>
+      <p class="sub">Serves <code class="serves">AC-5</code> · <code class="serves">INV-4</code></p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Fixtures: Git storage whose stat reads 0777 on every entry, a PATH missing a configured CLI, a stale branch, a worktree with no attempt, a dirty baseline, a landed shift with a <code>todo</code> ticket; each row reports by name, text and JSON alike</li>
+        <li><code class="status">[]</code> A fence: <code>doctor.ts</code> and <code>core/src/doctor/**</code> import no write, append, rename, remove or lock API, and start no process except through <code>runSystemCommand</code></li>
+        <li><code class="status">[]</code> The existing doctor tests and the Jev row are unchanged in meaning; the exit code changes only as W02-Q6 decides</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run test:journeys</code>, <code>npm run typecheck</code> and <code>npm run lint</code> exit 0</li>
+      </ul>
+      <div class="loop">🔁 <strong>Do not exit this milestone until every box above is checked.</strong> Doctor has no repair path, and gains none.</div>
+    </section>
+
+    <!-- ================= M6 ================= -->
+    <section class="phase">
+      <h3><code class="status">[]</code> Milestone M6: GR — the catalogue holds at the cut and after it <span class="wtag">managed</span> <span class="wtag raise">opens gate GR</span></h3>
+      <p><strong>W02's <code>[x]</code> opens gate GR, and nothing earlier does.</strong> Its condition, from decision 13: the trap suite refuses every known trap. "Known" is the catalogue at the cut plus every stop since it, each linked to a trap or a recorded reason. Seven workstreams wait on this marker, so it is earned only by the closing record below. Testing shares the task.</p>
+
+      <h4>16. The GR record, and the workstream's closing duties</h4>
+      <p class="sub">Serves <code class="serves">AC-6</code> · <code class="serves">INV-2</code> · <code class="serves">INV-3</code> · <code class="serves">INV-4</code></p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>npm run test:traps</code> green: every catalogued trap refused before any provider call, every mutant red, the count recorded</li>
+        <li><code class="status">[]</code> <code>awsf traps</code> on the owner's state roots exits 0: every stop since the cut is linked, none to a missing trap. The owner's attributions that make it so are owner acts, done before this ticket's candidate is judged</li>
+        <li><code class="status">[]</code> <code>awsf doctor</code> on the owner's machine reports every M5 row by name; its findings are listed for the owner, not fixed</li>
+        <li><code class="status">[]</code> G02-L and G02-D landed, and G02-Q if W02-Q7 took a threshold</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run test:contract</code>, <code>npm run test:sim</code>, <code>npm run test:journeys</code>, <code>npm run test:traps</code>, <code>npm run typecheck</code> and <code>npm run lint</code> exit 0, each run alone</li>
+        <li><code class="status">[]</code> The closing record for the owner's Amendment: each task's final state, landing SHAs, gate counts, the catalogue's size by trap and by no-trap kind, decisions taken, surprises, and the handoff findings for W05–W08 and W10–W14</li>
+      </ul>
+      <div class="loop">🔁 <strong>GR opens here and nowhere else.</strong> If a stop after the cut names a trap that does not exist yet, this task waits for that trap, or the owner re-links the stop with a reason.</div>
+    </section>
+  </div>
+
+  <!-- ===== GLOBAL VALIDATION ===== -->
+  <section id="validation">
+    <h2>Validation Commands</h2>
+    <p>Run these to validate the whole workstream. All are offline except the two read-only commands on the owner's state roots.</p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/ticket-plan-sync.test.ts</code> — this plan and its tickets agree</li>
+      <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/trap-catalogue.test.ts</code> — catalogue, tests and markers agree, and every stop code is covered</li>
+      <li><code class="status">[]</code> <code>npm run test:traps</code> — every trap refused, every mutant red</li>
+      <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run test:contract</code>, <code>npm run test:sim</code> and <code>npm run test:journeys</code> — green, counts recorded against the base</li>
+      <li><code class="status">[]</code> <code>npm run typecheck</code> and <code>npm run lint</code> — exit 0</li>
+      <li><code class="status">[]</code> <code>awsf traps</code> — exits 0 on the owner's state roots</li>
+      <li><code class="status">[]</code> <code>awsf doctor --json</code> — names every row of AC-5</li>
+    </ul>
+    <div class="loop">🔁 <strong>The workstream is not complete until every box is checked and every command passes.</strong> A step that cannot be completed is marked <code>[f]</code> with its reason.</div>
+  </section>
+
+  <!-- ===== QUESTIONABLES ===== -->
+  <section id="questionables">
+    <h2>Questionables</h2>
+    <p>Eight decisions were the owner's. The owner took the recommendation on each, 2026-10-07. Spine Q2 and Q13 are decided and applied above, not reopened. W02-Q2 settles how Q2's wording is made mechanical, not whether it holds.</p>
+    <figure>
+      <pre class="mermaid">
+flowchart LR
+  Q1["Q1 cut"] --> M1
+  Q4["Q4 mutant"] --> M2
+  Q5["Q5 gate"] --> M2
+  Q2["Q2 red signal"] --> M3
+  Q3["Q3 which causes"] --> M3
+  Q7["Q7 quota rule"] --> M4
+  Q6["Q6 exit code"] --> M5
+  Q8["Q8 login"] --> M5
+      </pre>
+      <figcaption>Where each decision lands. Q1 must be answered before task 1 starts; the rest by their milestone.</figcaption>
+    </figure>
+
+    <details data-review-options="2026-10-07, all registered projects (recommended)|2026-10-01, the forensics draft's 36 AWSF stops|The day the trap link lands">
+      <summary><span class="qdecided">DECIDED</span> W02-Q1 — Where is the catalogue's dated cut, and which projects' stops are in its population?</summary>
+      <p class="decided"><b>Decided 2026-10-07:</b> the cut is 2026-10-07T23:59:59Z, over every registered project's non-prove stops: 47 seeds (AWSF 45, <code>fusion-harness</code> 2) plus the live gotchas. Owner verdict via an exported <code>plan-sota-review v1</code> block, taking the recommendation.</p>
+      <p class="qa-answer rec"><strong>Recommendation (taken):</strong> 2026-10-07T23:59:59Z, over every registered project's non-prove stops: 47 seeds measured at authoring (AWSF 45, <code>fusion-harness</code> 2), plus the live gotchas. It is fixed now, so G02-S confirms a closed list. Stops between the cut and task 5's landing have no trap link yet; <code>awsf traps</code> lists them, and the owner links each once task 5 lands.</p>
+      <p class="qa-answer">The forensics cut is the only list anyone has read, but it is AWSF-only and leaves out 11 stops already on record, 4 of them quota stops, the largest family since. A cut at the link's landing removes the interim but moves while W02 is built, so G02-S would confirm a list that keeps growing. Smart Health's state root held no attempts on 2026-10-07; its stops join the population by rule once it has any.</p>
+    </details>
+
+    <details data-review-options="Two halves: a catalogue fence in test:unit, and awsf traps exits 1 on the journal (recommended)|Commit a stop ledger the fence reads|A test that reads the owner's state root">
+      <summary><span class="qdecided">DECIDED</span> W02-Q2 — How is Q2's "a cause naming a missing trap is a red test" made mechanical?</summary>
+      <p class="decided"><b>Decided 2026-10-07:</b> two halves. The catalogue fence in <code>test:unit</code> keeps catalogue, tests, markers and mutants in agreement; <code>awsf traps</code> exits 1 over the journal while any stop since the cut is unlinked or names a missing trap. Neither half is a gate on coverage. Owner verdict via an exported <code>plan-sota-review v1</code> block, taking the recommendation.</p>
+      <p class="qa-answer rec"><strong>Recommendation (taken):</strong> two halves. In <code>test:unit</code>, the catalogue fence is red when a catalogued trap lacks its test, marker or mutant, or a stop code lacks coverage. Over the journal, <code>awsf traps</code> exits 1 while any stop since the cut is unlinked or names a trap the catalogue lacks, and doctor shows the same count. The owner may name a trap id that does not exist yet (the readout offers the next free one), which is exactly the visible gap Q2 wanted, and the trap's own ticket clears it.</p>
+      <p class="qa-answer">A hermetic test cannot see cause records: they live in the state root, never in a committed file (invariants 1 and 10). Committing a stop ledger would let a test see them, but every new stop would then turn the base red, and K1's <code>suite</code> field refuses every start on a red base, including the start of the task that builds the missing trap. A test that reads the owner's state root passes or fails by machine, and would be red in every managed worktree and in CI.</p>
+    </details>
+
+    <details data-review-options="Every cause except owner names one; owner records a fixed reason (recommended)|Every cause names one explicitly|Only driver, factory and environment name one">
+      <summary><span class="qdecided">DECIDED</span> W02-Q3 — Which cause records must name a trap link explicitly?</summary>
+      <p class="decided"><b>Decided 2026-10-07:</b> every cause except <code>owner</code> names <code>--trap</code> or <code>--no-trap</code>; an <code>owner</code> cause records a fixed host-written <code>owner</code> reason. Owner verdict via an exported <code>plan-sota-review v1</code> block, taking the recommendation.</p>
+      <p class="qa-answer rec"><strong>Recommendation (taken):</strong> every cause except <code>owner</code> needs <code>--trap</code> or <code>--no-trap</code>. An <code>owner</code> cause records <code>{ kind: "none", because: "owner" }</code> with its reason as the text, written by the host. Three of the four attribution records on file are owner cancels, so this keeps the commonest act as it is, and Q2's "every cause names a trap or a reason" still holds record by record.</p>
+      <p class="qa-answer">Every cause explicit is uniform and adds a flag to each owner cancel. Restricting it to driver, factory and environment leaves <code>model</code> and <code>unknown</code> stops unlinked, and several "model" stops in the draft (#25, #26) are low-confidence and may be gate defects a trap could catch.</p>
+    </details>
+
+    <details data-review-options="Source mutant from refusal markers, on every test:traps run (recommended)|An injected refusal seam the tests switch off|Mutants only in the closing task">
+      <summary><span class="qdecided">DECIDED</span> W02-Q4 — How is "a removed refusal turns its trap red" checked, and how often?</summary>
+      <p class="decided"><b>Decided 2026-10-07:</b> a source mutant built from the refusal markers in a scratch copy, run by every <code>test:traps</code> run. Owner verdict via an exported <code>plan-sota-review v1</code> block, taking the recommendation.</p>
+      <p class="qa-answer rec"><strong>Recommendation (taken):</strong> each refusal sits between marker comments; the harness copies the source to a scratch directory, deletes the marked block, and runs the trap against the copy on every <code>test:traps</code> run. The shipped code carries no switch, so INV-7 holds. Cost: roughly one extra trap run per trap, measured in task 4 before G02-L sets the timeout.</p>
+      <p class="qa-answer">A seam the tests can switch off is cheaper and faster, and it is a bypass in the shipped code that any caller of the function can reach; W01 rejected exactly that for K1. Mutating only at the close proves each trap once and never again, which is the 07b20f9 pattern of a check nothing keeps running.</p>
+    </details>
+
+    <details data-review-options="A separate traps gate, code half first (recommended)|Run the trap files inside the journeys gate|No gate: CI and doctor only">
+      <summary><span class="qdecided">DECIDED</span> W02-Q5 — Is <code>test:traps</code> a landing gate?</summary>
+      <p class="decided"><b>Decided 2026-10-07:</b> <code>test:traps</code> becomes a separate <code>traps</code> landing gate: task 4 lands the code half, then the owner's G02-L commit. Owner verdict via an exported <code>plan-sota-review v1</code> block, taking the recommendation.</p>
+      <p class="qa-answer rec"><strong>Recommendation (taken):</strong> yes, a separate <code>traps</code> gate, by the Q13 path: task 4 lands the code half, then the owner's G02-L commit adds the script and the gate with twice the measured time as its timeout. A trap is a regression test for a stop; one that does not run at landing protects nothing, which is how 07b20f9 landed.</p>
+      <p class="qa-answer">Inside journeys, the trap files ride an existing gate with no config change, at the price of Q2's separate count and journeys' 20-minute runtime on every trap edit. No gate leaves traps to CI, which runs after landing. Either way K1's <code>suite</code> field runs every configured gate, so a gate also adds its time to a preflight after any direct commit.</p>
+    </details>
+
+    <details data-review-options="Run-stopping conditions are findings; the rest warn (recommended)|Every non-ok row is a finding|Environment rows never change the exit code">
+      <summary><span class="qdecided">DECIDED</span> W02-Q6 — Which new doctor rows make <code>awsf doctor</code> exit 1?</summary>
+      <p class="decided"><b>Decided 2026-10-07:</b> only run-stopping conditions are doctor findings (DrvFs storage, an unresolvable configured executable or <code>bwrap</code>, a logged-out provider, an unavailable quota probe); every other new row warns. Owner verdict via an exported <code>plan-sota-review v1</code> block, taking the recommendation.</p>
+      <p class="qa-answer rec"><strong>Recommendation (taken):</strong> a finding is a condition that would stop or refuse a run now: Git storage with the DrvFs signature, a configured adapter's executable or <code>bwrap</code> unresolvable, a provider logged out, the quota probe unavailable. Low quota, stale branches and worktrees, a stale baseline and open markers warn, and leave the exit code as it is. Gotcha 4 already teaches that exit 1 from doctor means "something to read".</p>
+      <p class="qa-answer">Making every non-ok row a finding turns doctor red after every landing until the bookkeeping commit, and permanently while 226 worktrees exist, so its exit code stops meaning anything. Never changing it keeps scripts stable and hides a missing CLI behind exit 0.</p>
+    </details>
+
+    <details data-review-options="Refuse exhausted windows always; a threshold only when configured (recommended)|Refuse below a threshold, owner sets it (G02-Q required)|Refuse only exhausted windows">
+      <summary><span class="qdecided">DECIDED</span> W02-Q7 — What makes the run-start quota check refuse?</summary>
+      <p class="decided"><b>Decided 2026-10-07:</b> an exhausted or rejected window always refuses at run start; a below-threshold window refuses only when the owner sets <code>routing.quota_stop</code> (G02-Q stays optional); an unavailable probe never refuses. Owner verdict via an exported <code>plan-sota-review v1</code> block, taking the recommendation.</p>
+      <p class="qa-answer rec"><strong>Recommendation (taken):</strong> a window the probe reports exhausted or rejected always refuses; that needs no configuration and is never wrong, and it is #42's exact shape. A below-threshold window refuses only when the owner sets <code>routing.quota_stop</code> (G02-Q, optional). An unavailable probe never refuses; it is journaled as unknown and doctor reports it.</p>
+      <p class="qa-answer">A required threshold catches more stops before spend (#43's T13 might have been refused at its boundary) and needs the owner to calibrate a number that W06's route policy will later own. Exhausted-only is simplest and leaves the existing phase-boundary pause off in this project.</p>
+    </details>
+
+    <details data-review-options="quota-axi's provider status (recommended)|Spawn each CLI's own status command|Presence only">
+      <summary><span class="qdecided">DECIDED</span> W02-Q8 — How does doctor know a provider CLI is logged in?</summary>
+      <p class="decided"><b>Decided 2026-10-07:</b> doctor reads login state from <code>quota-axi</code>'s provider status and starts no provider CLI; a route whose login it cannot read is reported as not measured. Owner verdict via an exported <code>plan-sota-review v1</code> block, taking the recommendation.</p>
+      <p class="qa-answer rec"><strong>Recommendation (taken):</strong> from the provider status <code>quota-axi</code> already reads from local auth sources, in the one probe the quota row makes. Doctor starts no provider CLI and reads no credential itself. Task 13 must verify that pi's ChatGPT login is what <code>quota-axi</code>'s <code>codex</code> status reads; if it is not, the row says "not measured" for that route rather than guessing.</p>
+      <p class="qa-answer">Each CLI's own status command is the most direct, and it starts provider processes from doctor, with their own startup cost and failure modes, for every configured adapter. Presence alone is what #11 and #17 already had: the executable existed and the run still could not start.</p>
+    </details>
+  </section>
+
+  <!-- ===== NOTES ===== -->
+  <section id="notes">
+    <h2>Notes</h2>
+
+    <h3>The seed ledger, proposed</h3>
+    <p>Read on 2026-10-07 from the forensics draft and the owner's state roots (status files only, read-only). The outcome column is a proposal: task 1 verifies each row by replay and G02-S confirms it. "Gap" means a replay is expected to reach a provider call today. Family codes T1–T7 are the forensics draft's trap families, not ticket ids.</p>
+    <table>
+      <thead><tr><th>#</th><th>Attempt</th><th>Code</th><th>Family</th><th>Proposed outcome</th><th>Taken by</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>pilot-1-sandbox-survey#1</td><td>phase-abort</td><td>T6?</td><td>refused by K1 <code>suite</code> if a red base; else <code>after-spend</code></td><td>task 1 decides, task 4</td></tr>
+        <tr><td>2, 3, 4</td><td>pilot-1-sandbox-survey#2, #3; -claude#1</td><td>cancel</td><td>—</td><td><code>unexplained</code></td><td>task 2</td></tr>
+        <tr><td>5</td><td>backlog-plan-cards#1</td><td>phase-abort</td><td>T5</td><td><code>fixed</code>, 1aafbe5</td><td>task 2</td></tr>
+        <tr><td>6, 7, 10</td><td>backlog-plan-view#1, -2#1, grouped-view#1</td><td>phase-abort</td><td>—</td><td><code>after-spend</code> (planner output)</td><td>task 2</td></tr>
+        <tr><td>8</td><td>dashboard-backlog-plan-view#1</td><td>permission-breach</td><td>T3</td><td>gap or <code>after-spend</code>: the documenter's <code>docs/**</code> covers protected <code>docs/driving/**</code></td><td>task 1 decides</td></tr>
+        <tr><td>9, 19, 23</td><td>dashboard-backlog-plans#1; task-3.5#2; task-8a-…-continuation#2</td><td>review-*</td><td>—</td><td><code>after-spend</code> (review output)</td><td>task 2</td></tr>
+        <tr><td>11, 17</td><td>backlog-plan-grouped-view#2; stack-tone-modes-and-default-run#2</td><td>phase-abort</td><td>T1</td><td>gap</td><td>task 8</td></tr>
+        <tr><td>12, 14</td><td>backlog-view-corrections#1; backlog-literal-selection-and-masking#1</td><td>phase-abort</td><td>T5</td><td>gap</td><td>task 11</td></tr>
+        <tr><td>13, 16, 20, 28, 31, 32</td><td>six cancels before M1</td><td>cancel</td><td>—</td><td><code>unexplained</code></td><td>task 2</td></tr>
+        <tr><td>15</td><td>sessions-workflow-and-state-filters#1</td><td>phase-abort</td><td>T6?</td><td>as #1</td><td>task 1 decides</td></tr>
+        <tr><td>18, 22</td><td>task-3.5#1; task-8a-recovery-adoption-continuation#1</td><td>quota-exhausted</td><td>T2</td><td><code>after-spend</code> unless the window was already exhausted at start</td><td>task 1 decides, task 9</td></tr>
+        <tr><td>21, 24</td><td>marimba-lifecycle-timeout-fence#1; task-8b-protected-quota-foundation#1</td><td>phase-abort</td><td>T5</td><td><code>fixed</code> if task 1 finds the ENOENT removed; else gap</td><td>task 11</td></tr>
+        <tr><td>25, 26</td><td>task-8b-…#2; task-8b-…-continuation#1</td><td>phase-abort</td><td>—</td><td><code>after-spend</code> unless the round-0 gate failure is a gate defect</td><td>task 1 decides</td></tr>
+        <tr><td>27</td><td>w16-m1-shift#1</td><td>permission-breach</td><td>T3</td><td>refused in part by K1; remainder gap</td><td>tasks 4, 10</td></tr>
+        <tr><td>29</td><td>w18-m1-continuation#1</td><td>phase-abort</td><td>—</td><td><code>after-spend</code> (stream ended without a terminal event)</td><td>task 2</td></tr>
+        <tr><td>30</td><td>w18-stale-prefix-integration-fix#1</td><td>phase-abort</td><td>—</td><td><code>after-spend</code>; rework has no correction round</td><td>task 2</td></tr>
+        <tr><td>33</td><td>w18-m5-advisory-export#1</td><td>review-unavailable</td><td>—</td><td><code>after-spend</code> (provider outage during review)</td><td>task 2</td></tr>
+        <tr><td>34</td><td>review-transport-diagnostics#1</td><td>permission-breach</td><td>T3</td><td>refused: K1 <code>protected-paths</code>, then the grant check</td><td>task 4</td></tr>
+        <tr><td>35</td><td>review-transport-diagnostics#2</td><td>phase-abort</td><td>—</td><td><code>fixed</code>, 07b20f9 and 7bc48b5</td><td>task 2</td></tr>
+        <tr><td>36</td><td>review-transport-diagnostics#3</td><td>phase-abort</td><td>T4</td><td>refused: K1 <code>git-storage</code></td><td>task 4</td></tr>
+        <tr><td>37</td><td>w01-m1-owner-check-20261005-023132#1</td><td>cancel</td><td>—</td><td><code>owner</code> (acceptance exercise)</td><td>task 2</td></tr>
+        <tr><td>38</td><td>v3-w01-m2-m3#1</td><td>phase-abort</td><td>?</td><td>gap if the selection held work already on its base (<code>head_advanced</code> failed at round 0)</td><td>task 1 decides</td></tr>
+        <tr><td>39, 41, 43</td><td>v3-w01-m3-k2#1; v3-w01-m4-k1#1; v3-w01-m5-k1#2</td><td>quota-exhausted</td><td>T2</td><td><code>after-spend</code>, mitigated by the phase-boundary pause</td><td>task 9</td></tr>
+        <tr><td>40</td><td>v3-w01-m3-k2#2</td><td>review-unavailable</td><td>—</td><td><code>fixed</code>, 833f8dc</td><td>task 2</td></tr>
+        <tr><td>42</td><td>v3-w01-m5-k1#1</td><td>quota-exhausted</td><td>T2</td><td>gap: the window was exhausted at the first call</td><td>task 9</td></tr>
+        <tr><td>44, 45</td><td>v3-w01-m5-t11-t12#1; v3-w01-m5-t13#1</td><td>cancel</td><td>—</td><td><code>owner</code></td><td>task 2</td></tr>
+        <tr><td>46</td><td>fusion-harness T30.1#1</td><td>review-malformed</td><td>—</td><td><code>after-spend</code></td><td>task 2</td></tr>
+        <tr><td>47</td><td>fusion-harness t30-herdr-visible-fusion-corrected#1</td><td>phase-abort</td><td>T6?</td><td>as #1</td><td>task 1 decides</td></tr>
+      </tbody>
+    </table>
+    <p>Rows 1–36 keep the draft's numbering. Rows 37–45 are the AWSF stops after it, and 46–47 are <code>fusion-harness</code>'s, which the AWSF-only draft did not read; both are numbered here. Proposed totals: refused today 3 (#27 in part, #34, #36), gaps 6 to 10, <code>fixed</code> 3 to 5, <code>owner</code> 3, <code>unexplained</code> 9, the rest <code>after-spend</code>. Quota is the largest family: 6 stops, one of them a gap.</p>
+    <p><strong>Live gotchas</strong> (<code>gotchas.md</code>, proposed): 1, 2 and 9 are existing refusals and become traps in task 4; 3, 4, 5, 6, 8 and 10 are <code>not-a-stop</code>; 7 (everything resolved from the working directory, no mechanical guard) and 11 (an interrupted <code>awsf start</code> leaves a tree the retry cannot create) are gaps for task 1 to replay. From the handoff (C5, C8): the stale baseline <code>node_modules</code> is a doctor row (task 14); a <code>retry --adopt-as</code> target that bypasses K1, an interrupted adoption left GATING, and a later phase's grant accepted at PREPARED are gaps for task 1. <code>awsf start --stub true</code> is closed and stays out (C7). <code>duplicate</code> keying on the plan stem was fixed in e32e892 and stays out.</p>
+
+    <h3>Handoff findings for W05–W08 and W10–W14, dated 2026-10-07</h3>
+    <p>For the owner to persist in those tickets' Handoff sections when this plan is approved. Each holds once M2 lands; until then the format is this plan's proposal.</p>
+    <ul>
+      <li><strong>The trap format.</strong> A trap is a catalogue entry in <code>core/src/traps/catalogue.ts</code> (<code>TR-NN</code>, family, seeds, refusal point), one test <code>core/test/traps/TR-NN-&lt;slug&gt;.test.ts</code> built on <code>core/test/traps/_harness.ts</code>, and one <code>// trap-refusal-begin/end TR-NN</code> marker pair in <code>core/src</code>. It asserts the named refusal, zero calls reserved, zero adapter invocations, and an attempt still DRAFT or PREPARED, and its mutant must fail. A stop shape that only arises after spend gets a no-trap entry of kind <code>after-spend</code> with its mitigation.</li>
+      <li><strong>Where it runs.</strong> <code>npm run test:traps</code>, a landing gate once G02-L lands (per W02-Q5). The catalogue fence runs in <code>test:unit</code>. A red trap on <code>main</code> refuses every K1 start, so a trap must be deterministic and offline.</li>
+      <li><strong>How each deep plan adds traps.</strong> The task that introduces a new refusal or a new stop shape adds its catalogue entry, trap and markers in the same ticket, and its milestone's testing task lists the ids. A new <code>EDGE_BLOCKER_CODES</code> code (an owner commit to <code>core/src/state/**</code>) turns the coverage fence red until a trap or a no-trap kind covers it, so the deep plan that asks for the code also plans its coverage. Spine requirement (g) is met this way.</li>
+      <li><strong>W05 (authority).</strong> A leased Delegate act that the host refuses is a refusal, not a stop; a refusal that fires before any call is trappable with the same harness. No Delegate act may attribute or name a trap link: <code>attribute</code> and <code>cancel</code> stay owner acts.</li>
+      <li><strong>W06 (routing).</strong> Task 9's run-start quota refusal chooses no route. When W06's policy chooses routes from quota, it owns the threshold, and <code>routing.quota_stop</code> (G02-Q) is the value it should supersede rather than duplicate. Mid-run exhaustion stays <code>after-spend</code>; failover is W06's.</li>
+      <li><strong>W07 (validator).</strong> A validator verdict that blocks a candidate is a new stop shape, after spend by construction: a no-trap entry naming the validator check, unless the precondition is visible before the build.</li>
+      <li><strong>W08 (harness).</strong> Frame <code>mp-s5-checks</code>'s K5 card reads <code>awsf traps --json</code> (<code>awsf.traps/v1</code>): "traps refused" is the newest landed attempt's <code>traps</code> gate row, "seeded up to" is the cut, "stops since the cut with a trap" is linked over total. Its Doctor card reads <code>awsf doctor --json</code> (<code>awsf.doctor/v1</code>), row by name. K3 must never emit <code>--trap</code> or <code>--no-trap</code>: they ride owner acts.</li>
+      <li><strong>W10 (data loop).</strong> The seed ledger and trap links are labels decision 2 admits: owner-confirmed classifications of stops. The trap suite is one of the suites the local model is compared on, since it runs on the stub adapter.</li>
+      <li><strong>W11 (readiness).</strong> The dev-environment category reuses doctor's row modules under <code>core/src/doctor/</code> for any project's checkout.</li>
+      <li><strong>W12 (Mac host).</strong> The VM host is accepted when doctor's <code>storage</code>, <code>executables</code> and <code>providers</code> rows are ok there and <code>test:traps</code> is green on it. <code>bwrap</code> resolving is part of <code>executables</code>.</li>
+      <li><strong>W13 (deploy) and W14 (monitor).</strong> A staging publish that fails, and a monitor signal that pulls a task back, are new stop shapes for their deep plans to catalogue, as trap or <code>after-spend</code>, under the rule above.</li>
+    </ul>
+
+    <h3>Measured while authoring</h3>
+    <ul>
+      <li>Base: <code>main</code> at e32e892, clean. <code>npm run test:unit</code> with this plan's files in place: 3071/3071 passed, exit 0, 769 s on this host. That is past the <code>test</code> gate's 600 s timeout in <code>awsf.config.yaml</code>, as W01 also measured (639 s). Not W02's to fix; named for the owner.</li>
+      <li>Stops on the owner's state roots (status files, read-only): AWSF 33 BLOCKED and 12 CANCELLED outside <code>prove</code>; <code>prove</code> 99 CANCELLED and 1 BLOCKED; <code>fusion-harness</code> 2 BLOCKED; <code>smart-health-platform</code> none. Since the forensics draft: 6 blocks (4 <code>quota-exhausted</code>, 1 <code>phase-abort</code>, 1 <code>review-unavailable</code>) and 3 cancels.</li>
+      <li>Attribution records: 4, in <code>attributions.jsonl</code> under four tasks: one <code>factory</code> (2026-09-29), three <code>owner</code> (2026-10-05 to 2026-10-07).</li>
+      <li><code>awsf.config.yaml</code>: gates <code>test</code>, <code>typecheck</code>, <code>lint</code>, <code>journeys</code>; <code>routing</code> has <code>default_worker</code>, <code>review</code> and <code>no_fallback</code>, and no <code>quota_stop</code>. The builder writes <code>core/src/**</code>, <code>core/test/**</code>, <code>dashboard/**</code>, <code>prompts/**</code> and <code>docs/cheatsheet.html</code>; no role writes <code>package.json</code>.</li>
+      <li><code>EDGE_BLOCKER_CODES</code> (<code>core/src/state/errors.ts</code>) closes the stop vocabulary per edge: L2, L5, L8, L13, L17, L21, L24.</li>
+      <li>CI installs <code>bubblewrap</code> before the journeys run (<code>.github/workflows/ci.yml</code>), so the protected journeys no longer depend on the runner image.</li>
+    </ul>
+
+    <h3>Risks</h3>
+    <table>
+      <thead><tr><th>Risk</th><th>Why it is real</th><th>What this plan does</th></tr></thead>
+      <tbody>
+        <tr><td><strong>R1: GR never opens</strong></td><td>"Every known trap" moves as stops arrive (spine R2).</td><td>A fixed cut, and a post-cut rule the owner can always satisfy with a trap or a reason.</td></tr>
+        <tr><td><strong>R2: a red trap stops the factory</strong></td><td>K1's <code>suite</code> runs every gate at the base.</td><td>Traps are offline and deterministic; the coverage signal stays out of gates (W02-Q2); a red base is fixed by a logged direct session, never a bypass.</td></tr>
+        <tr><td><strong>R3: the layer is slow</strong></td><td>Each trap builds a repository and runs its mutant.</td><td>Task 4 measures before G02-L sets a timeout; a K1 preflight after a factory landing reuses the landed rows.</td></tr>
+        <tr><td><strong>R4: a marker drifts from its refusal</strong></td><td>A refactor can move the refusal out of its markers.</td><td>The mutant then stays green, and the trap fails its own mutant check.</td></tr>
+        <tr><td><strong>R5: the seed list is a draft</strong></td><td>39 of the 47 seeds have never been confirmed.</td><td>G02-S before the format is fixed.</td></tr>
+        <tr><td><strong>R6: owner workload</strong></td><td>Each post-cut stop needs an owner attribution with a link.</td><td>W02-Q3 keeps owner cancels as they are; the readout lists exactly what is missing.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>What these mechanisms do not cover</h3>
+    <ul>
+      <li><strong>A trap</strong> refuses a known shape. A stop of a new shape is unprotected until its trap lands, and a stop that arises after spend is never refused.</li>
+      <li><strong>The mutant</strong> proves the trap depends on the marked block. It does not prove the block is the only refusal, or that the trap's preconditions match the real stop's.</li>
+      <li><strong>The coverage fence</strong> covers stop codes, not causes: <code>phase-abort</code> spans many shapes, so one covering entry does not mean every <code>phase-abort</code> is trapped.</li>
+      <li><strong>Doctor</strong> reports what it reads at that moment. A login can lapse and a window can close between doctor and the run, which is why task 9 checks at run start.</li>
+      <li><strong>The launch-environment check</strong> resolves the executable. It does not prove the executable starts, is authenticated, or is the version the adapter expects.</li>
+    </ul>
+
+    <h3>Rejected while authoring</h3>
+    <ul>
+      <li><strong>A test that fails on an unlinked stop.</strong> It must read runtime state, and red, it would freeze K1 for every start (W02-Q2).</li>
+      <li><strong>A refusal switch for mutants.</strong> Any caller could reach it (W02-Q4, INV-7).</li>
+      <li><strong>Traps for after-spend stops.</strong> A check after the first call is a mitigation; calling it a trap would let GR open on stops that still spend.</li>
+      <li><strong>Doctor that prunes worktrees.</strong> The prompt forbids a repair path, and invariant 8 forbids an auto-delete path.</li>
+      <li><strong>Folding the trap layer into journeys by default.</strong> Q2 decided a separate layer; it stays G02-L's stated alternative.</li>
+      <li><strong>Spawning provider CLIs from doctor.</strong> W02-Q8.</li>
+    </ul>
+
+    <h3>Corrections for the spine, not applied here</h3>
+    <p>This session writes only new files, so the owner applies these in the approving commit.</p>
+    <ul>
+      <li><strong>ticketFrames.</strong> Proposed for <code>frame-index.json</code>: T05–T07 → <code>mp-s3-blocked</code>, <code>mp-s5-checks</code>; T13–T15 → <code>mp-s5-checks</code>. Data-shape references only; W02 builds no UI.</li>
+      <li><strong>W02's checklist row for Q13</strong> can read "still green" against G02-L's landing rather than W02's close, since Q13 landed before this plan.</li>
+    </ul>
+  </section>
+
+  <!-- ===== AMENDMENTS ===== -->
+  <section id="amendments">
+    <h2>Amendments</h2>
+    <details open>
+      <summary>2026-10-07 — Authored in a direct session, a logged exception under gate GM</summary>
+      <p>No factory role can write <code>specs/*.html</code> until W03 lands, so this deep plan, its build prompts and its ticket set were authored in a manual session on <code>main</code> at e32e892 (spine gate GM, Q11's direct-session rule). It wrote only new files under <code>specs/</code>, called no provider and moved no marker. It read the owner's state roots read-only to measure the population. The ticket/plan sync fence passed 15/15 with the new set, and failed as expected on a planted prompt drift and a duplicate task number, both reverted. <code>npm run test:unit</code>: 3071/3071. Its implementation tasks default to managed execution under K1. Eight Questionables (W02-Q1–W02-Q8) await the owner. Built on: anthropic:claude-opus-5-5.</p>
+    </details>
+    <details open>
+      <summary>2026-10-07 — Owner review applied: W02-Q1–Q8 decided as recommended</summary>
+      <p>A <code>plan-sota-review v1</code> block exported 2026-10-07T18:36Z carried eight verdicts, no proposed statuses and no annotations. Every verdict took the recommended option, so no task, field, gate, dependency or identifier changed. Recorded: the cut is 2026-10-07 over every registered project's non-prove stops (Q1); the red signal is the catalogue fence plus <code>awsf traps</code> exiting 1 over the journal (Q2); every cause but <code>owner</code> names a trap link (Q3); mutants are built from refusal markers on every <code>test:traps</code> run (Q4); <code>traps</code> becomes a separate landing gate through G02-L (Q5); only run-stopping doctor rows are findings (Q6); exhausted windows always refuse at run start and a threshold only when configured, so G02-Q stays optional (Q7); login state comes from <code>quota-axi</code> (Q8). Section A of the build prompts and the ticket README now record the decisions as taken. Section B and the tickets are unchanged, since their prompts already assume these options. No marker moved; the deep plan's approval, which moves the spine's W02 marker to <code>[wip]</code>, is a separate owner act. Built on: anthropic:claude-opus-5-5.</p>
+    </details>
+    <details open>
+      <summary>2026-10-07 — Owner approval of the deep plan and factory-managed implementation</summary>
+      <p>The owner approved this deep plan, its build prompts and its ticket set. W02-Q1–Q8 remain decided as recommended. The spine's W02 marker and ticket state move together to <code>[wip]</code> and <code>wip</code> in the approval commit, which also commits this plan for the first time. No implementation checklist row is marked complete by approval. Factory-managed implementation follows the Execution section, starting with T01 and gate G02-S; M5 may run in parallel. Built on: anthropic:claude-opus-5-5.</p>
+    </details>
+  </section>
+
+</main>
+
+<!-- ===== PLAN-SOTA REVIEW LAYER v1 — FIXED MACHINERY, COPY VERBATIM =====
+     Not a placeholder: reproduce this <style> + <script> pair exactly in every plan.
+     Annotations, Questionable verdicts, and proposed phase statuses persist to
+     localStorage (key: plan filename). The browser NEVER writes this file; canonical
+     []/[wip]/[x]/[f] markers stay agent-owned. Export produces a `plan-sota-review v1`
+     block (clipboard + visible box) and, when running under Lavish Editor, queues it
+     once via window.lavish.queuePrompt(). -->
+<style>
+  .rv-btn { font: 600 11px/1 system-ui, sans-serif; padding: 3px 9px; border-radius: 999px;
+    border: 1px solid var(--muted, #8884); background: transparent; color: var(--fg, inherit);
+    cursor: pointer; opacity: .55; vertical-align: middle; margin-left: 8px; }
+  .rv-btn:hover { opacity: 1; border-color: var(--accent, #7c6cf0); }
+  .rv-btn.rv-on { opacity: 1; background: var(--accent, #7c6cf0); color: var(--bg, #fff); border-color: transparent; }
+  .rv-note-box { display: block; margin: 8px 0; padding: 8px 12px; border: 1px dashed var(--accent, #7c6cf0);
+    border-radius: 8px; font-size: 13px; min-height: 1.5em; background: color-mix(in srgb, var(--accent, #7c6cf0) 6%, transparent); outline: none; }
+  .rv-note-box:empty::before { content: attr(data-ph); opacity: .5; font-style: italic; }
+  .rv-note-box[hidden] { display: none; }
+  .rv-verdict { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 10px 0 2px; }
+  .rv-verdict-tag { font: 700 10px/1 system-ui, sans-serif; letter-spacing: .08em; opacity: .6; margin-right: 2px; }
+  .rv-status-chip { font: 600 11px/1 ui-monospace, monospace; margin-left: 10px; padding: 3px 9px;
+    border-radius: 999px; border: 1px dotted var(--muted, #8884); background: transparent;
+    color: var(--fg, inherit); cursor: pointer; opacity: .6; }
+  .rv-status-chip:hover { opacity: 1; }
+  .rv-status-chip.rv-on { opacity: 1; border-style: solid; border-color: var(--accent, #7c6cf0); color: var(--accent, #7c6cf0); }
+  #rv-drawer { position: fixed; right: 16px; bottom: 16px; z-index: 9999; font: 13px/1.45 system-ui, sans-serif;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  #rv-pill { font: 700 12px/1 system-ui, sans-serif; padding: 10px 16px; border-radius: 999px; border: none;
+    cursor: pointer; background: var(--accent, #7c6cf0); color: var(--bg, #fff); box-shadow: 0 4px 16px #0004; }
+  #rv-panel { width: min(420px, calc(100vw - 32px)); max-height: 60vh; overflow: auto; padding: 14px;
+    border-radius: 12px; border: 1px solid var(--muted, #8884); background: var(--bg, #fff);
+    color: var(--fg, inherit); box-shadow: 0 8px 32px #0005; }
+  #rv-panel h4 { margin: 0 0 8px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; opacity: .7; }
+  #rv-list { margin: 0 0 10px; padding: 0; list-style: none; font-size: 12px; }
+  #rv-list li { padding: 3px 0; border-bottom: 1px solid #8882; overflow-wrap: anywhere; }
+  #rv-out { width: 100%; min-height: 140px; margin-top: 10px; font: 11px/1.5 ui-monospace, monospace;
+    border: 1px solid var(--muted, #8884); border-radius: 8px; padding: 8px; background: transparent; color: inherit; }
+  #rv-msg { font-size: 11px; opacity: .75; margin-top: 6px; }
+  @media print { #rv-drawer { display: none; } }
+</style>
+<script>
+(function () {
+  'use strict';
+  var FILE = decodeURIComponent(location.pathname.split('/').pop() || 'plan.html');
+  var KEY = 'plan-sota-review:' + FILE;
+  var LEGACY_KEY = 'planf3-review:' + FILE; // pre-rename state; read once, never written
+  var PROPOSE = ['', '[]', '[wip]', '[x]', '[f]'];
+  var state = { a: {}, v: {}, s: {} }, persisted = true;
+  try { state = JSON.parse(localStorage.getItem(KEY) || localStorage.getItem(LEGACY_KEY) || 'null') || state; } catch (e) { persisted = false; }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); persisted = true; }
+    catch (e) { persisted = false; }
+    refresh();
+  }
+  function el(tag, cls, txt) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (txt) n.textContent = txt;
+    if (tag === 'button') { n.type = 'button'; n.setAttribute('data-lavish-action', ''); }
+    return n;
+  }
+  function clean(t) { return String(t || '').replace(/\|/g, '/').replace(/\s*\r?\n\s*/g, ' >> ').trim(); }
+  var registry = []; // {key, label, kind: 'section'|'phase'|'q'}
+
+  function noteBox(key, host, placeholder) {
+    var box = el('div', 'rv-note-box');
+    box.contentEditable = 'true';
+    box.setAttribute('data-ph', placeholder || 'Type your note for the agent…');
+    box.hidden = !(state.a[key]);
+    if (state.a[key]) box.textContent = state.a[key];
+    box.addEventListener('input', function () {
+      var t = box.textContent.trim();
+      if (t) state.a[key] = t; else delete state.a[key];
+      save();
+    });
+    host.appendChild(box);
+    return box;
+  }
+  function annotable(key, label, heading, host, kind) {
+    registry.push({ key: key, label: label, kind: kind });
+    var box = noteBox(key, host);
+    heading.insertAdjacentElement('afterend', box);
+    var btn = el('button', 'rv-btn' + (state.a[key] ? ' rv-on' : ''), '✎ note');
+    btn.addEventListener('click', function () {
+      box.hidden = !box.hidden;
+      if (!box.hidden) box.focus();
+    });
+    heading.appendChild(btn);
+    box.addEventListener('input', function () { btn.classList.toggle('rv-on', !!state.a[key]); });
+  }
+
+  // Sections
+  Array.prototype.forEach.call(document.querySelectorAll('main > section[id]'), function (sec) {
+    var h = sec.querySelector('h2'); if (!h) return;
+    annotable('#' + sec.id, h.textContent.trim(), h, sec, 'section');
+  });
+  // Phases: annotation + proposed-status chip
+  Array.prototype.forEach.call(document.querySelectorAll('#phases .phase'), function (ph, i) {
+    var h = ph.querySelector('h3'); if (!h) return;
+    var key = 'phase-' + (i + 1);
+    var label = h.textContent.replace(/^\s*\[[^\]]*\]\s*/, '').trim();
+    annotable(key, label, h, ph, 'phase');
+    var chip = el('button', 'rv-status-chip' + (state.s[key] ? ' rv-on' : ''));
+    chip.textContent = state.s[key] ? 'propose ' + state.s[key] : 'propose…';
+    chip.title = 'Cycle a PROPOSED status (exported as feedback — the file marker is only changed by the agent)';
+    chip.addEventListener('click', function () {
+      var next = PROPOSE[(PROPOSE.indexOf(state.s[key] || '') + 1) % PROPOSE.length];
+      if (next) state.s[key] = next; else delete state.s[key];
+      chip.textContent = next ? 'propose ' + next : 'propose…';
+      chip.classList.toggle('rv-on', !!next);
+      save();
+    });
+    h.appendChild(chip);
+  });
+  // Questionables: verdict / option buttons + note
+  Array.prototype.forEach.call(document.querySelectorAll('#questionables details'), function (d, i) {
+    var key = 'q-' + (i + 1);
+    var summary = d.querySelector('summary');
+    var label = summary ? summary.textContent.trim().slice(0, 120) : key;
+    registry.push({ key: key, label: label, kind: 'q' });
+    var opts = (d.getAttribute('data-review-options') || '').split('|').map(function (s) { return s.trim(); }).filter(Boolean);
+    if (!opts.length) opts = ['APPROVE', 'REJECT', 'REVISE', 'DEFER'];
+    var row = el('div', 'rv-verdict');
+    row.appendChild(el('span', 'rv-verdict-tag', 'YOUR CALL'));
+    opts.forEach(function (opt) {
+      var b = el('button', 'rv-btn' + ((state.v[key] || {}).c === opt ? ' rv-on' : ''), opt);
+      b.addEventListener('click', function () {
+        if ((state.v[key] || {}).c === opt) { delete state.v[key]; }
+        else { state.v[key] = { c: opt }; }
+        Array.prototype.forEach.call(row.querySelectorAll('.rv-btn'), function (x) {
+          x.classList.toggle('rv-on', x.textContent === ((state.v[key] || {}).c || null));
+        });
+        qbox.hidden = !state.v[key] && !state.a[key];
+        save();
+      });
+      row.appendChild(b);
+    });
+    d.appendChild(row);
+    var qbox = noteBox(key, d, 'Why / what to change instead…');
+    if (state.v[key]) qbox.hidden = false;
+  });
+
+  // Drawer
+  var drawer = el('div'); drawer.id = 'rv-drawer';
+  var panel = el('div'); panel.id = 'rv-panel'; panel.hidden = true;
+  var pill = el('button'); pill.id = 'rv-pill';
+  pill.addEventListener('click', function () { panel.hidden = !panel.hidden; });
+  var list = el('ul'); list.id = 'rv-list';
+  var actions = el('div');
+  var exportBtn = el('button', 'rv-btn rv-on', 'Export Feedback');
+  var clearBtn = el('button', 'rv-btn', 'Clear review');
+  var out = el('textarea'); out.id = 'rv-out'; out.readOnly = true; out.hidden = true;
+  var msg = el('div'); msg.id = 'rv-msg';
+  var head = el('h4', null, 'Review — pending feedback');
+  actions.appendChild(exportBtn); actions.appendChild(clearBtn);
+  panel.appendChild(head); panel.appendChild(list); panel.appendChild(actions);
+  panel.appendChild(out); panel.appendChild(msg);
+  drawer.appendChild(panel); drawer.appendChild(pill);
+  document.body.appendChild(drawer);
+
+  function findLabel(key) {
+    for (var i = 0; i < registry.length; i++) if (registry[i].key === key) return registry[i].label;
+    return key;
+  }
+  function refresh() {
+    var n = Object.keys(state.a).length + Object.keys(state.v).length + Object.keys(state.s).length;
+    pill.textContent = '✎ Review (' + n + ')';
+    list.textContent = '';
+    Object.keys(state.v).forEach(function (k) { list.appendChild(el('li', null, '[verdict] ' + findLabel(k) + ' → ' + state.v[k].c)); });
+    Object.keys(state.s).forEach(function (k) { list.appendChild(el('li', null, '[status] ' + findLabel(k) + ' → propose ' + state.s[k])); });
+    Object.keys(state.a).forEach(function (k) { list.appendChild(el('li', null, '[note] ' + findLabel(k) + ': ' + state.a[k].slice(0, 90))); });
+    if (!n) list.appendChild(el('li', null, 'Nothing yet — click ✎ note on any section, a verdict on a Questionable, or propose… on a phase.'));
+    if (!persisted) msg.textContent = '⚠ localStorage unavailable — review state lives only in this tab.';
+  }
+  function buildExport() {
+    var L = ['plan-sota-review v1', 'plan: ' + FILE, 'title: ' + clean(document.title), 'exported: ' + new Date().toISOString(), ''];
+    var vk = Object.keys(state.v), sk = Object.keys(state.s), ak = Object.keys(state.a);
+    L.push('## verdicts');
+    vk.length ? vk.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | ' + clean(state.v[k].c) + ' | note: ' + (clean(state.a[k]) || '-'));
+    }) : L.push('- (none)');
+    L.push('', '## statuses');
+    sk.length ? sk.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | propose ' + state.s[k]);
+    }) : L.push('- (none)');
+    L.push('', '## annotations');
+    var solo = ak.filter(function (k) { return !state.v[k]; });
+    solo.length ? solo.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | ' + clean(state.a[k]));
+    }) : L.push('- (none)');
+    return L.join('\n');
+  }
+  exportBtn.addEventListener('click', function () {
+    var text = buildExport();
+    out.hidden = false; out.value = text;
+    out.focus(); out.select();
+    function done(m) { msg.textContent = m; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done('Copied — paste it into your next agent session.'); },
+        function () { done('Clipboard blocked — copy from the box below.'); });
+    } else {
+      try { done(document.execCommand('copy') ? 'Copied — paste it into your next agent session.' : 'Clipboard blocked — copy from the box below.'); }
+      catch (e) { done('Clipboard blocked — copy from the box below.'); }
+    }
+    if (window.lavish && typeof window.lavish.queuePrompt === 'function') {
+      window.lavish.queuePrompt(text, { tag: 'plan-sota-review', queueKey: 'plan-sota-review' });
+      msg.textContent += ' Also queued to the agent via Lavish.';
+    }
+  });
+  clearBtn.addEventListener('click', function () {
+    if (!confirm('Clear all review state for this plan?')) return;
+    state = { a: {}, v: {}, s: {} };
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    location.reload();
+  });
+  refresh();
+})();
+</script>
+
+<!-- Mermaid runtime — renders every <pre class="mermaid"> block. Only external reference in the file. -->
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  // Mirrors the :root palette: Forest dark by default, Forest light when the reader prefers it.
+  const light = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+  const p = light
+    ? { bg: '#DAF1DE', panel: '#EAF7EE', panel2: '#C6E4CF', border: '#8EB69B', dim: '#235347', text: '#051F20' }
+    : { bg: '#051F20', panel: '#0B2B26', panel2: '#163832', border: '#235347', dim: '#8EB69B', text: '#DAF1DE' };
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      background: p.bg,
+      primaryColor: p.panel2,
+      primaryBorderColor: p.border,
+      primaryTextColor: p.text,
+      textColor: p.text,
+      lineColor: p.dim,
+      secondaryColor: p.panel,
+      tertiaryColor: p.panel,
+      fontFamily: '"Segoe UI", "Helvetica Neue", system-ui, sans-serif'
+    }
+  });
+</script>
+</body>
+</html>

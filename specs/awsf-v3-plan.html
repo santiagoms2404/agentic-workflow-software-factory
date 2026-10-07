@@ -352,8 +352,8 @@ flowchart TB
 
     <!-- ================= W02 ================= -->
     <section class="phase">
-      <h3><code class="status">[]</code> Milestone M2: W02 — Trap suite <span class="chip pa">Phase A</span><span class="xlabel">X2</span></h3>
-      <p class="deep-plan"><a href="awsf-v3-w02-trap-suite.html">Deep plan: AWSF v3 W02 — Trap suite</a> <span class="muted">not yet authored</span></p>
+      <h3><code class="status">[wip]</code> Milestone M2: W02 — Trap suite <span class="chip pa">Phase A</span><span class="xlabel">X2</span></h3>
+      <p class="deep-plan"><a href="awsf-v3-w02-trap-suite.html">Deep plan: AWSF v3 W02 — Trap suite</a> <span class="muted">authored and approved by the owner, 2026-10-07</span></p>
       <p><em>Exists because every past stop should become a refusal with a test, and because a regression can land through a layer no gate runs.</em> Its completion is gate GR.</p>
       <h4>2. W02 — Trap suite</h4>
       <table class="taskmeta">
@@ -369,7 +369,7 @@ flowchart TB
         Each trap fails when its refusal is removed (a mutation check, not just a green run). Zero reserved provider calls per trap. Doctor checks run against fixture Git storage, a missing CLI and a stale branch. The full suite, journeys included, stays green.
       </div>
       <ul class="checklist">
-        <li><code class="status">[]</code> Deep plan <code>awsf-v3-w02-trap-suite.html</code> authored with its build prompts and ticket set, and approved by the owner</li>
+        <li><code class="status">[x]</code> Deep plan <code>awsf-v3-w02-trap-suite.html</code> authored with its build prompts and ticket set, and approved by the owner</li>
         <li><code class="status">[]</code> Q2 applied as decided, and Q13's journeys gate (landed 2026-10-02) still green</li>
         <li><code class="status">[]</code> Every catalogued trap is refused before any provider call, and a removed refusal turns its trap red</li>
         <li><code class="status">[]</code> <code>awsf doctor</code> reports Git storage, provider CLIs, quota, stale branches and open markers on landed work</li>
@@ -984,6 +984,10 @@ stateDiagram-v2
   <!-- ===== AMENDMENTS ===== -->
   <section id="amendments">
     <h2>Amendments</h2>
+    <details open>
+      <summary>2026-10-07 — W02 deep plan approved</summary>
+      <p>The owner approved <code>awsf-v3-w02-trap-suite.html</code>, its build prompts and its sixteen-ticket set. Its eight Questionables (W02-Q1–Q8) remain decided as recommended on 2026-10-07, including the catalogue's cut at 2026-10-07 over every registered project's non-prove stops. W02 moves to <code>[wip]</code>, with its spine ticket moving to <code>wip</code> in this same commit. Only the authored-and-approved checklist row is complete; no implementation acceptance is claimed, and gate GR stays closed until W02's final milestone lands. Implementation remains factory-managed by default, under K1, subject to the deep plan's owner gates G02-S, G02-L, G02-D and the optional G02-Q.</p>
+    </details>
     <details open>
       <summary>2026-10-07 — W01 closed</summary>
       <p>All five milestones of <code>awsf-v3-w01-driver-checks.html</code> reached <code>[x]</code>, and its Validation checklist passed on main at <code>6662a98</code>. The deep plan's 2026-10-07 Amendment holds the closing record. W01 moves to <code>[x]</code>, with <code>W01.md</code> moving to <code>done</code> in this same commit. Its checklist rows are earned as follows. The guard fix landed as owner commit <code>0deaf58</code> (G01-G) and the confirm wiring as <code>f5c566a</code> (G01-C), and no state-machine change was needed, because K1 lives in <code>awsf start</code> (W01-Q2). K1 refuses L1 without a fresh record and the owner's confirmation (T11), proved per field by T13's journeys. K2 derives the next step and the prose <code>nextAction</code> (M3, T11). Every cancel takes a cause and a reason, and the twelve runs <code>awsf metrics</code> lists without a cause all predate M1. The acceptance bar holds: each confirmed driver-preventable stop in the forensics map is refused by K1 or recorded as out of its reach with its reason and taker. Open findings carry forward as listed in the deep plan's Amendment, chiefly <code>duplicate</code> keying on the plan stem, which refuses later tasks created with <code>--plan</code>.</p>
