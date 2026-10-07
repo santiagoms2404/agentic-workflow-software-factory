@@ -32,6 +32,13 @@ function selected(model: NextSteps, verbs: readonly string[]): string[] {
   return verbs.flatMap(verb => { const value = command(model, verb); return value === null ? [] : [value]; });
 }
 
+/** The grant step's owed phase and paths, when the caller measured one; the step itself stays the owner's. */
+function owedGrant(model: NextSteps): { readonly phase: string; readonly paths: readonly string[]; readonly grant: string } | null {
+  const step = model.steps.find(step => step.verb === "grant" && step.requires.length > 0);
+  const phase = step?.argv[step.argv.indexOf("--phase") + 1];
+  return step === undefined || phase === undefined ? null : { phase, paths: step.requires.map(entry => entry.field), grant: renderCommand(step.argv) };
+}
+
 /** The one lifecycle sentence source. Unavailable edges never supply advice. */
 export function renderNextAction(model: NextSteps, context: AdviceContext = {}): string {
   if (context.blocker?.code === "sqlite-projection-failed") return "run `awsf db rebuild`, then retry advancement";
@@ -53,6 +60,8 @@ export function renderNextAction(model: NextSteps, context: AdviceContext = {}):
       return `ceiling-paused${ticket}; the owner must fund the remaining work with ${grant}, then run ${resume}`;
     }
     if (recovery.kind === "ticket-block") return `ticket-blocked${ticket}; the owner fixes the cause, then runs ${resume} to re-measure the same candidate`;
+    const owed = owedGrant(model);
+    if (owed !== null) return `${recovery.kind}; ${owed.phase} owes a protected grant for ${owed.paths.join(", ")}: the owner decides on ${owed.grant}, then run ${resume}`;
     return `${recovery.kind}; run ${resume} to continue the saved boundary`;
   }
   if (model.state === "AWAITING_OWNER") {
@@ -71,7 +80,29 @@ export function renderNextAction(model: NextSteps, context: AdviceContext = {}):
   const sentence = actions.length === 0 ? "no state-changing CLI action is listed" : `run ${actions.join(" or ")}`;
   const held = model.steps.find(step => step.kind === "edge" && step.edge === "L1")?.requires ?? [];
   const k1 = held.length === 0 ? "" : `start is refused until K1 clears: ${held.map(entry => `${entry.field} ${entry.status}`).join(", ")}; `;
-  return `${k1}${sentence}${wait === "" ? "" : `; ${wait}`}; inspect with ${command(model, "watch") ?? command(model, "status")}`;
+  const owed = owedGrant(model);
+  const grant = owed === null ? "" : `run is refused until ${owed.phase}'s protected grant covers ${owed.paths.join(", ")}; `;
+  return `${k1}${grant}${sentence}${wait === "" ? "" : `; ${wait}`}; inspect with ${command(model, "watch") ?? command(model, "status")}`;
+}
+
+/**
+ * The runner's refusal of a writing phase that owes a planned protected grant,
+ * and what clears it. Issuing the grant is the owner's act at a terminal; the
+ * runner names it and never issues one. A phase takes one grant, so a recorded
+ * grant that misses a planned path cannot be widened on this attempt.
+ */
+export function renderGrantRefusalAdvice(selector: AdviceSelector, owed: { readonly phase: string; readonly grantId: string | null },
+  boundary: "before-l4" | "phase-boundary"): string {
+  if (owed.grantId !== null) return `the recorded grant ${owed.grantId} is ${owed.phase}'s one grant and cannot be widened on this attempt`;
+  const state: TaskState = boundary === "before-l4" ? "PREPARED" : "RUNNING";
+  const model = nextSteps({ project: selector.project ?? "<project>", taskId: selector.taskId, attempt: selector.attempt ?? 0, revision: 0, state,
+    recovery: boundary === "phase-boundary" ? { kind: "completed-phase" } : null, process: null, budget: { callsReserved: 0 },
+    grantOwed: { phase: owed.phase, paths: ["<planned>"] } });
+  const grant = command(model, "grant") ?? "`awsf grant`";
+  const again = boundary === "before-l4"
+    ? command(model, "run") ?? "`awsf run`"
+    : renderCommand(["awsf", "resume", selector.taskId, "--project", selector.project ?? "<project>", "--attempt", String(selector.attempt ?? "<attempt>"), "--reason", "<why>"]);
+  return `the owner decides on ${grant} at an interactive terminal; then run ${again}`;
 }
 
 /**

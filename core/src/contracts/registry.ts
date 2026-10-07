@@ -10,6 +10,8 @@ import { DecisionRecordSchema, DECISION_RECORD_SCHEMA_ID } from "./decision-reco
 import {
   DriverPreflightRecordSchema,
   DRIVER_PREFLIGHT_SCHEMA_ID,
+  GrantRefusedRecordSchema,
+  GRANT_REFUSED_SCHEMA_ID,
   PreflightRefusedRecordSchema,
   PREFLIGHT_REFUSED_SCHEMA_ID,
   RequestConfirmationRecordSchema,
@@ -112,6 +114,7 @@ export const RECORD_SCHEMAS = {
   [DRIVER_PREFLIGHT_SCHEMA_ID]: DriverPreflightRecordSchema,
   [REQUEST_CONFIRMATION_SCHEMA_ID]: RequestConfirmationRecordSchema,
   [PREFLIGHT_REFUSED_SCHEMA_ID]: PreflightRefusedRecordSchema,
+  [GRANT_REFUSED_SCHEMA_ID]: GrantRefusedRecordSchema,
 } as const;
 
 export class UnknownEnvelopeSchemaError extends Error {

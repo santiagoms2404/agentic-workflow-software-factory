@@ -532,6 +532,15 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
         .run(`${sessionId}:preflight-refused:${sourceSeq}`, sessionId, sourceSeq, sourceSeq,
           stringifyRedacted(evidence.record), evidence.record.at);
       return;
+    case "grant-refused":
+      // Keyed by journal position like a refused start: the runner moved no
+      // edge, so the lifecycle row is untouched and this row is the trace.
+      db.prepare(`INSERT OR IGNORE INTO events
+        (event_id, session_id, phase_id, first_source_seq, last_source_seq, type, name,
+         payload_json, started_at) VALUES (?, ?, NULL, ?, ?, 'notice', 'grant refused', ?, ?)`)
+        .run(`${sessionId}:grant-refused:${sourceSeq}`, sessionId, sourceSeq, sourceSeq,
+          stringifyRedacted(evidence.record), evidence.record.at);
+      return;
     case "transition":
       db.prepare(`INSERT OR IGNORE INTO transitions
         (transition_id, session_id, seq, from_state, to_state, actor, edge_id, reason_source,

@@ -38,8 +38,8 @@ import {
   type FreshnessFacts,
   type StorageMode,
   type TaskRequestFact,
-  type WritingPhase,
 } from "../../preflight/fields.ts";
+import { writingPhases } from "../../preflight/grant-plan.ts";
 import {
   gatherSuite,
   type GateCommandRunner,
@@ -119,15 +119,6 @@ async function attemptRecipe(status: AttemptStatus, config: AwsfConfig): Promise
   }
   if (status.shift == null) throw new CompiledWorkflowUnbound(compiled.id, `task ${status.taskId}`);
   return bindShiftRecipe(status.repository, status.shift, { prompts });
-}
-
-/** Each agent phase whose role writes the repository, keyed by phase id as `awsf grant` keys it. */
-function writingPhases(recipe: WorkflowRecipe, config: AwsfConfig): WritingPhase[] {
-  const agents = new Map(config.agents.map((agent) => [agent.name, agent]));
-  return recipe.phases.flatMap((phase) => {
-    const writes = phase.kind === "agent" ? agents.get(phase.owner)?.writes ?? [] : [];
-    return writes.length === 0 ? [] : [{ phase: phase.id, writes: [...writes] }];
-  });
 }
 
 /** The base L1 would pin, exactly as `awsf start` resolves it: a replay's, a seed's integration base, or HEAD. */
@@ -383,7 +374,7 @@ export async function preflightCommand(options: PreflightCommandOptions): Promis
     throw new Error(`config project ${config.project.slug} does not match attempt project ${current.project}`);
   }
   const recipe = await attemptRecipe(current, config);
-  const writers = writingPhases(recipe, config);
+  const writers = writingPhases(recipe, config.agents);
   const shift = current.workflow === SHIFT_WORKFLOW_ID ? { builderWrites: [...new Set(writers.flatMap((writer) => writer.writes))] } : null;
   const baseSha = await pinnedBase(options.attemptDir, current);
   const journal = await journalFacts(options.stateRoot, current, baseSha, options.readEvidence ?? readAttemptEvidence);

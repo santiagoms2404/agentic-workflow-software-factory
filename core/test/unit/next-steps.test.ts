@@ -7,6 +7,7 @@ import { OWNER_ACTS } from "../../../docs/driving/marimba/marimba-guard-rules.mt
 import { assertNextSteps, NEXT_STEPS_SCHEMA_ID, NextStepsSchema, type NextSteps } from "../../src/contracts/next-steps.ts";
 import { ENVELOPE_SCHEMAS, RECORD_SCHEMAS, isEnvelopeSchemaId } from "../../src/contracts/registry.ts";
 import { EDGE_INVOCATIONS, NON_TRANSITION_ACTS, OWNER_ACT_COMMANDS, nextSteps, type NextStepsInput } from "../../src/lifecycle/next-steps.ts";
+import { renderGrantRefusalAdvice, renderNextAction } from "../../src/lifecycle/renderer.ts";
 import { LEGAL_EDGES, TASK_STATES, type TaskState } from "../../src/state/task-machine.ts";
 import { repoRoot } from "./meta/_walk.ts";
 
@@ -269,6 +270,59 @@ test("K1's measured requirements fill only the L1 step's requires, and confirm i
   // The model shares no array with its input.
   draft.steps.find(step => step.verb === "start")!.requires.pop();
   assert.equal(k1.length, 2);
+});
+
+test("an owed protected grant names its phase and planned paths on the owner's grant step, and only where grant is legal", () => {
+  const grantOwed = { phase: "documenter", paths: ["docs/driving/**", "README.md"] };
+  const legal: NextStepsInput[] = [{ ...inputFor("PREPARED"), grantOwed },
+    { ...inputFor("RUNNING"), recovery: { kind: "completed-phase" }, process: null, budget: { callsReserved: 0 }, grantOwed }];
+  for (const input of legal) {
+    const output = nextSteps(input);
+    assert.equal(Value.Check(NextStepsSchema, output), true, input.state);
+    const grant = output.steps.filter(step => step.verb === "grant");
+    assert.equal(grant.length, 1, input.state);
+    assert.deepEqual([grant[0]!.kind, grant[0]!.who, grant[0]!.interactive, grant[0]!.spendsCalls], ["act", "owner", true, false]);
+    // The phase is filled; the files stay the owner's to choose.
+    assert.deepEqual(grant[0]!.argv.slice(-6), ["--phase", "documenter", "--file", "<path>", "--reason", "<why>"]);
+    assert.deepEqual(grant[0]!.requires, [
+      { check: "protected-paths", field: "docs/driving/**", status: "ungranted for documenter" },
+      { check: "protected-paths", field: "README.md", status: "ungranted for documenter" },
+    ]);
+    for (const step of output.steps.filter(step => step.verb !== "grant")) assert.deepEqual(step.requires, [], `${input.state}/${step.verb}`);
+  }
+  // An owed grant never makes grant legal where its own command refuses it.
+  assert.equal(nextSteps({ ...inputFor("RUNNING"), grantOwed }).steps.some(step => step.verb === "grant"), false);
+  assert.equal(nextSteps({ ...inputFor("RUNNING"), recovery: { kind: "completed-phase" }, budget: { callsReserved: 1 }, grantOwed }).steps.some(step => step.verb === "grant"), false);
+  // Absent or null stays the generic step.
+  for (const owed of [undefined, null]) {
+    const generic = nextSteps({ ...inputFor("PREPARED"), ...(owed === undefined ? {} : { grantOwed: owed }) }).steps.find(step => step.verb === "grant")!;
+    assert.deepEqual(generic.argv.slice(-6), ["--phase", "<phase>", "--file", "<path>", "--reason", "<why>"]);
+    assert.deepEqual(generic.requires, []);
+  }
+});
+
+test("the next action names the owed grant before run at PREPARED and before resume at a completed-phase boundary", () => {
+  const grantOwed = { phase: "builder", paths: ["core/src/state/**"] };
+  const prepared = renderNextAction(nextSteps({ ...inputFor("PREPARED"), grantOwed }));
+  assert.match(prepared, /^run is refused until builder's protected grant covers core\/src\/state\/\*\*; run `awsf run fixture-task /);
+  assert.match(prepared, /`awsf grant fixture-task --project fixture-project --attempt 2 --phase builder --file '<path>' --reason '<why>'`/);
+  const boundary = { ...inputFor("RUNNING"), recovery: { kind: "completed-phase" }, process: null, budget: { callsReserved: 0 } };
+  assert.match(renderNextAction(nextSteps({ ...boundary, grantOwed }), boundary),
+    /^completed-phase; builder owes a protected grant for core\/src\/state\/\*\*: the owner decides on `awsf grant .*--phase builder .*`, then run `awsf resume fixture-task /);
+  assert.equal(renderNextAction(nextSteps(boundary), boundary).startsWith("completed-phase; run `awsf resume"), true, "nothing owed leaves the advice unchanged");
+  assert.doesNotMatch(renderNextAction(nextSteps(inputFor("PREPARED"))), /refused/);
+});
+
+test("the grant refusal advice names the owner's grant and the step that follows, and never offers to widen a recorded grant", () => {
+  const selector = { project: "fixture-project", taskId: "fixture-task", attempt: 2 };
+  assert.equal(renderGrantRefusalAdvice(selector, { phase: "builder", grantId: null }, "before-l4"),
+    "the owner decides on `awsf grant fixture-task --project fixture-project --attempt 2 --phase builder --file '<path>' --reason '<why>'` at an interactive terminal; " +
+    "then run `awsf run fixture-task --project fixture-project --attempt 2`");
+  assert.match(renderGrantRefusalAdvice(selector, { phase: "documenter", grantId: null }, "phase-boundary"),
+    /--phase documenter .* at an interactive terminal; then run `awsf resume fixture-task --project fixture-project --attempt 2 --reason '<why>'`$/);
+  const widened = renderGrantRefusalAdvice(selector, { phase: "builder", grantId: "g-1" }, "before-l4");
+  assert.equal(widened, "the recorded grant g-1 is builder's one grant and cannot be widened on this attempt");
+  assert.doesNotMatch(widened, /awsf grant/);
 });
 
 test("cancel advice carries cause and reason placeholders on every implemented cancel edge", () => {

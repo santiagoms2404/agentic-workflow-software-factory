@@ -1,5 +1,7 @@
 import { existsSync, readFileSync, statSync, promises as fs } from "node:fs";
-import { renderHeadroomAdvice, renderAttemptNextAction } from "../../lifecycle/renderer.ts";
+import { renderHeadroomAdvice, renderAttemptNextAction, renderGrantRefusalAdvice } from "../../lifecycle/renderer.ts";
+import { assertGrantRefusedRecord, GRANT_REFUSED_SCHEMA_ID, type GrantRefusalBoundary, type GrantRefusedRecord } from "../../contracts/driver-preflight.ts";
+import { grantOwedFor, writingPhases, type GrantOwed } from "../../preflight/grant-plan.ts";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { recoveryDigest, recoveryBudgetDigest, type AcceptedPhase, type BoundaryQuota, type PhaseRecovery } from "../../contracts/phase-recovery.ts";
@@ -402,6 +404,33 @@ export class ProductionConfigSnapshotMismatch extends Error {
   constructor() {
     super("current effective config differs from the durable attempt snapshot; cancel and retry under the intended config before execution");
     this.name = "ProductionConfigSnapshotMismatch";
+  }
+}
+
+/**
+ * A writing phase owes the protected grant its preflight planned (task 12).
+ * Thrown only after the refusal is journaled and with no call reserved: before
+ * L4 the attempt is still PREPARED; at a later phase it is RUNNING at the
+ * resumable boundary before that phase. No lifecycle edge is requested.
+ */
+export class ProtectedGrantRefused extends Error {
+  readonly phase: string;
+  readonly paths: readonly string[];
+  readonly boundary: GrantRefusalBoundary;
+  readonly callsSpent: number;
+  constructor(status: AttemptStatus, owed: GrantOwed, boundary: GrantRefusalBoundary, callsSpent: number) {
+    const where = boundary === "before-l4" ? "before L4" : `at the boundary before phase ${owed.phase}`;
+    const missing = owed.grantId === null ? `no grant for ${owed.phase} is recorded` : `its recorded grant covers none of them`;
+    const state = boundary === "before-l4"
+      ? "The attempt stays PREPARED and no call has been reserved."
+      : `The ${String(callsSpent)} call(s) the attempt has spent stay spent; it stays RUNNING at this resumable boundary and no call is reserved for ${owed.phase}.`;
+    super(`awsf run refused ${status.taskId} attempt ${String(status.attempt)} ${where}: phase ${owed.phase} writes planned protected path(s) ` +
+      `${owed.paths.join(", ")} and ${missing}. ${renderGrantRefusalAdvice(status, owed, boundary)}. ${state}`);
+    this.name = "ProtectedGrantRefused";
+    this.phase = owed.phase;
+    this.paths = owed.paths;
+    this.boundary = boundary;
+    this.callsSpent = callsSpent;
   }
 }
 
@@ -1318,6 +1347,35 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
   // of the host, so the corpus, the plan and every other checkout are absent.
   // Every other workflow keeps the host-wide read-only root, byte for byte.
   const confinement: SandboxConfinement = status.workflow === PROVE_WORKFLOW_ID ? "worktree" : "host";
+  // K1's protected-path plan, from the attempt's latest driver-preflight record
+  // (none for a K1-exempt workflow), checked against the grants recorded when
+  // this run began. Each writing phase owes its planned grant before it
+  // reserves a call; the first one's is checked here, before L4.
+  const preflightEvidence = (await readAttemptEvidence(options.attemptDir)).findLast((evidence) => evidence.type === "driver-preflight");
+  const preflight = preflightEvidence?.type === "driver-preflight" ? preflightEvidence.record : null;
+  const recordedGrants = protectedState.grants.map((grant) => ({ id: grant.id, phase: grant.subject.phaseKey, files: grant.files.map((file) => file.path) }));
+  const writers = writingPhases(recipe, options.config.agents).map((writer) => writer.phase);
+  /** Only a phase the plan names can owe a grant, so `preflight` is present whenever this returns one. */
+  const grantOwed = (phase: string): GrantOwed | null => preflight === null ? null : grantOwedFor(preflight.protectedPlan, recordedGrants, phase);
+  const grantRefusal = (owed: GrantOwed, boundary: GrantRefusalBoundary, callsSpent: number): GrantRefusedRecord => {
+    const record: GrantRefusedRecord = { schema: GRANT_REFUSED_SCHEMA_ID, project: status.project, taskId: status.taskId, attempt: status.attempt,
+      sessionId: status.sessionId, phase: owed.phase, paths: [...owed.paths], grantId: owed.grantId, boundary, callsSpent, preflightAt: preflight!.at,
+      reason: `phase ${owed.phase} writes planned protected path(s) ${owed.paths.join(", ")} and ` +
+        `${owed.grantId === null ? "no grant for it is recorded" : `its recorded grant ${owed.grantId} covers none of them`}`,
+      at: infra.now() };
+    assertGrantRefusedRecord(record);
+    return record;
+  };
+  if (recovery === undefined) {
+    const owed = writers[0] === undefined ? null : grantOwed(writers[0]);
+    if (owed !== null) {
+      const record = grantRefusal(owed, "before-l4", status.budget.callsSpent);
+      status = await persistAttempt(options.attemptDir, status.revision, { kind: "attempt.updated",
+        next: nextRevision(status, { lastActivityAt: record.at, lastActivity: `run refused before L4: ${owed.phase} owes a protected grant` }),
+        evidence: { type: "grant-refused", record } }, options.projectRecord);
+      throw new ProtectedGrantRefused(status, owed, "before-l4", record.callsSpent);
+    }
+  }
   try {
     // A replay measures its arm, so the arm must be the attempt's own route
     // for the phase it measures, whole, before any adapter is asked anything.
@@ -3239,6 +3297,21 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
           reviewPhase = { phase, ordinal: index + 1 };
           continue;
         }
+        // A writing phase that owes its planned grant stops before its
+        // reservation. A saved reply already holds its call and is exempt. The
+        // stop leaves the boundary's own checkpoint in place, which is where
+        // `awsf grant` is legal and from which `awsf resume` continues.
+        const owed = writers.includes(phase.id) && savedResult?.phaseKey !== phase.id ? grantOwed(phase.id) : null;
+        if (owed !== null) {
+          if (status.recovery == null || status.recovery.prefix.length !== index || prefix.length !== index ||
+              status.process !== null || budget.outstanding().length > 0) {
+            throw new Error(`phase ${owed.phase} owes a protected grant, but the run holds no quiescent resumable boundary before it`);
+          }
+          const record = grantRefusal(owed, "phase-boundary", budget.snapshot().callsSpent);
+          await persist("attempt.updated", { phase: null, process: null, budget: budget.snapshot(), lastActivityAt: record.at,
+            lastActivity: `run stopped before ${owed.phase}: it owes a protected grant` }, { type: "grant-refused", record });
+          throw new ProtectedGrantRefused(status, owed, "phase-boundary", record.callsSpent);
+        }
         if (agentOrdinal > 0 && savedResult?.phaseKey !== phase.id && await ceilingPauseBefore(phase, index)) return status;
         agentOrdinal += 1;
         const reservation = savedResult?.phaseKey === phase.id ? budget.restoreReservation(savedResult.reservation) : agentOrdinal === 1 && firstReservation !== null
@@ -3603,6 +3676,9 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     });
     return status;
   } catch (error) {
+    // A grant refusal was journaled at a quiescent boundary with nothing
+    // reserved. It moves no edge, so it never reaches the blocking path below.
+    if (error instanceof ProtectedGrantRefused) throw error;
     // Only positive local non-delegation permits a refund. A thrown broker call may have launched a process.
     for (const reservation of budget.outstanding()) {
       if (!brokerDelegatedReservations.has(reservation.id)) budget.releaseOnRegistrationFailure(reservation.id);

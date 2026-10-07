@@ -41,9 +41,11 @@ import { raiseCommand } from "../../src/cli/commands/raise.ts";
 import { correctionHeadroom } from "../../src/cli/commands/workflows.ts";
 import { WORKFLOW_RECIPES, workflowRecipe } from "../../src/workflow/catalog.ts";
 import { writePlacement } from "../../src/registry/placement.ts";
-import { k1RequestFor, startUnderK1 } from "../fixtures/k1-preflight.ts";
+import { k1Request, k1RequestFor, startUnderK1 } from "../fixtures/k1-preflight.ts";
+import { nextCommand } from "../../src/cli/commands/next.ts";
+import { readAttemptEvidence } from "../../src/cli/commands/review-record.ts";
 import { statusCommand } from "../../src/cli/commands/status.ts";
-import { runProductionCommand, resumeProductionCommand, ProductionConfigSnapshotMismatch, ProductionWorkflowUnsupported } from "../../src/cli/commands/production-run.ts";
+import { runProductionCommand, resumeProductionCommand, ProductionConfigSnapshotMismatch, ProductionWorkflowUnsupported, ProtectedGrantRefused } from "../../src/cli/commands/production-run.ts";
 import type { PhaseRouteOverrides } from "../../src/workflow/route-flags.ts";
 import { nextRevision, persistAttempt, readAttempt, type AttemptProjector } from "../../src/cli/commands/attempt.ts";
 import type { AttemptEvidence } from "../../src/observability/attempt-evidence.ts";
@@ -770,6 +772,8 @@ async function fixture(
   request?: string,
   seed: (canonical: string) => void = () => {},
   routeOverrides: PhaseRouteOverrides = {},
+  /** Edits the configuration file itself, which `awsf preflight` and `awsf start` read; `configure` must agree with it. */
+  editConfigText: (text: string) => string = (text) => text,
 ) {
   const root = mkdtempSync(join(tmpdir(), "awsf-production-runner-"));
   const canonical = join(root, "canonical");
@@ -779,7 +783,7 @@ async function fixture(
   git(canonical, "add", "README.md");
   git(canonical, "-c", "user.name=Santiago Marin", "-c", "user.email=santiagomarinsuarez@me.com", "commit", "-m", "test: seed production runner");
   seed(canonical);
-  const configText = configTextWithCommand(commandExit);
+  const configText = editConfigText(configTextWithCommand(commandExit));
   const config = configure(loadConfig(configText));
   const configPath = join(root, "awsf.config.yaml");
   writeFileSync(configPath, configText);
@@ -847,6 +851,151 @@ for (const workflow of ["build", "plan-build-test", "simple-sdlc"] as const) {
     } finally { rmSync(world.root, { recursive: true, force: true }); }
   });
 }
+
+// Task 12 (specs/awsf-v3-w01-driver-checks.html): the runner refuses a writing
+// phase whose preflight planned a protected path and whose grant is not recorded.
+const owner = { interactive: true, write: () => {}, confirm: async () => true };
+const grantRefusals = async (attemptDir: string) => (await readAttemptEvidence(attemptDir)).flatMap(evidence => evidence.type === "grant-refused" ? [evidence.record] : []);
+/** Protects one more path in the configuration file, which preflight plans from and the run's snapshot is loaded from. */
+const protecting = (path: string) => (text: string): string => {
+  assert.match(text, /\n {4}- docs\/driving\/\*\*\n/u);
+  return text.replace("\n    - docs/driving/**\n", `\n    - docs/driving/**\n    - ${path}\n`);
+};
+
+test("T12 build-review planning a protected builder path refuses before L4 with no call reserved, and runs after the owner's grant", async () => {
+  const world = await fixture("build-review", 0, config => config, 2, undefined, () => {}, {}, protecting("core/src/generated.ts"));
+  try {
+    const dir = world.created.attemptDir;
+    const prepared = await readAttempt(dir);
+    let calls = 0;
+    const options = { attemptDir: dir, stateRoot: world.stateRoot, config: world.config, configPath: world.configPath,
+      projectRecord: world.projection.project, assertAdvancement: world.projection.assertAdvancement, assertLaunchProjection: world.projection.assertLaunchPermitted,
+      infrastructure: { adapterFor: (_entry: AdapterEntry, id: string) => new ScriptedAdapter(id, prepared.worktree!, () => { calls++; }), createBroker: fakeBroker, sandboxProbe: () => true } };
+    await assert.rejects(runProductionCommand(options), (error: unknown) => {
+      assert.ok(error instanceof ProtectedGrantRefused, String(error));
+      assert.equal(error.boundary, "before-l4");
+      assert.equal(error.phase, "builder");
+      assert.deepEqual(error.paths, ["core/src/generated.ts"]);
+      assert.match(error.message, /before L4: phase builder writes planned protected path\(s\) core\/src\/generated\.ts and no grant for builder is recorded/);
+      assert.match(error.message, /`awsf grant fixture-build-review --project \S+ --attempt 1 --phase builder --file '<path>' --reason '<why>'`/);
+      assert.match(error.message, /then run `awsf run fixture-build-review/);
+      assert.match(error.message, /stays PREPARED and no call has been reserved/);
+      return true;
+    });
+    const refused = await readAttempt(dir);
+    assert.equal(refused.lifecycleState, "PREPARED");
+    assert.equal(refused.budget.callsReserved, 0);
+    assert.equal(refused.budget.callsSpent, 0);
+    assert.equal(calls, 0);
+    assert.equal(refused.revision, prepared.revision + 1, "the refusal is one journaled update and nothing else");
+    const [record, ...rest] = await grantRefusals(dir);
+    assert.equal(rest.length, 0);
+    assert.deepEqual({ ...record!, at: "", preflightAt: "" }, { schema: "awsf.grant-refused/v1", project: prepared.project, taskId: prepared.taskId, attempt: 1,
+      sessionId: prepared.sessionId, phase: "builder", paths: ["core/src/generated.ts"], grantId: null, boundary: "before-l4", callsSpent: 0, preflightAt: "",
+      reason: "phase builder writes planned protected path(s) core/src/generated.ts and no grant for it is recorded", at: "" });
+    assert.equal((await readAttemptEvidence(dir)).some(evidence => evidence.type === "transition" && evidence.from === "PREPARED"), false);
+    const db = openDatabase(join(world.stateRoot, "awsf.db"), { readonly: true });
+    try { assert.equal(pollEvents(db, prepared.sessionId, 0).filter(event => event.name === "grant refused").length, 1); } finally { db.close(); }
+    assert.equal(readProtectedState(dir).grants.length, 0, "the refusal issues no grant");
+
+    const context = { stateRoot: world.stateRoot, worktreeRoot: join(world.root, "worktrees"), config: world.config };
+    const owed = await nextCommand(dir, context);
+    const grantStep = owed.model.steps.find(step => step.verb === "grant");
+    assert.equal(grantStep?.who, "owner");
+    assert.equal(grantStep?.interactive, true);
+    assert.deepEqual(grantStep?.argv.slice(-6), ["--phase", "builder", "--file", "<path>", "--reason", "<why>"]);
+    assert.deepEqual(grantStep?.requires, [{ check: "protected-paths", field: "core/src/generated.ts", status: "ungranted for builder" }]);
+    assert.match(owed.lines[0]!, /^run is refused until builder's protected grant covers core\/src\/generated\.ts; run /);
+
+    await grantCommand({ attemptDir: dir, config: world.config, configPath: world.configPath, stateRoot: world.stateRoot,
+      phase: "builder", files: ["core/src/generated.ts"], reason: "Create exactly the generated source.", sandboxProbe: () => true, terminal: owner, projectRecord: world.projection.project });
+    assert.deepEqual((await nextCommand(dir, context)).model.steps.find(step => step.verb === "grant")?.requires, [], "a covered plan owes nothing");
+    const status = await runProductionCommand(options);
+    assert.equal(status.lifecycleState, "AWAITING_OWNER", JSON.stringify(status.blocker));
+    assert.equal(calls, 2);
+    assert.equal(status.budget.callsSpent, 2);
+    assert.equal(readProtectedState(dir).consumptions.length, 1);
+    assert.equal((await grantRefusals(dir)).length, 1);
+  } finally { world.projection.close(); rmSync(world.root, { recursive: true, force: true }); }
+});
+
+test("T12 a build-review plan with no protected path runs unchanged and owes no grant", async () => {
+  const world = await fixture("build-review", 0, config => config, 2);
+  try {
+    const dir = world.created.attemptDir;
+    const prepared = await readAttempt(dir);
+    const preflight = (await readAttemptEvidence(dir)).findLast(evidence => evidence.type === "driver-preflight");
+    assert.deepEqual(preflight?.type === "driver-preflight" ? preflight.record.protectedPlan : null, []);
+    const next = await nextCommand(dir, { stateRoot: world.stateRoot, worktreeRoot: join(world.root, "worktrees"), config: world.config });
+    assert.deepEqual(next.model.steps.find(step => step.verb === "grant")?.argv.slice(-6), ["--phase", "<phase>", "--file", "<path>", "--reason", "<why>"]);
+    let calls = 0;
+    const status = await runProductionCommand({ attemptDir: dir, stateRoot: world.stateRoot, config: world.config, configPath: world.configPath,
+      projectRecord: world.projection.project, assertAdvancement: world.projection.assertAdvancement, assertLaunchProjection: world.projection.assertLaunchPermitted,
+      infrastructure: { adapterFor: (_entry: AdapterEntry, id: string) => new ScriptedAdapter(id, prepared.worktree!, () => { calls++; }), createBroker: fakeBroker, sandboxProbe: () => false } });
+    assert.equal(status.lifecycleState, "AWAITING_OWNER", JSON.stringify(status.blocker));
+    assert.equal(calls, 2);
+    assert.deepEqual(await grantRefusals(dir), []);
+  } finally { world.projection.close(); rmSync(world.root, { recursive: true, force: true }); }
+});
+
+test("T12 a later writing phase that owes its grant stops at its own boundary and reports the calls already spent", async () => {
+  const world = await fixture("simple-sdlc", 0, config => config, 2,
+    k1Request("write one bounded source and document it", "core/src/generated.ts README.md"), () => {}, {}, protecting("README.md"));
+  try {
+    const dir = world.created.attemptDir;
+    const prepared = await readAttempt(dir);
+    const preflight = (await readAttemptEvidence(dir)).findLast(evidence => evidence.type === "driver-preflight");
+    assert.deepEqual(preflight?.type === "driver-preflight" ? preflight.record.protectedPlan : null, [{ path: "README.md", phase: "documenter" }]);
+    let calls = 0;
+    const options = { attemptDir: dir, stateRoot: world.stateRoot, config: world.config, configPath: world.configPath,
+      projectRecord: world.projection.project, assertAdvancement: world.projection.assertAdvancement, assertLaunchProjection: world.projection.assertLaunchPermitted,
+      infrastructure: { adapterFor: (_entry: AdapterEntry, id: string) => new ScriptedAdapter(id, prepared.worktree!, () => { calls++; }), createBroker: fakeBroker, sandboxProbe: () => true } };
+    await assert.rejects(runProductionCommand(options), (error: unknown) => {
+      assert.ok(error instanceof ProtectedGrantRefused, String(error));
+      assert.equal(error.boundary, "phase-boundary");
+      assert.equal(error.phase, "documenter");
+      assert.equal(error.callsSpent, 2);
+      assert.match(error.message, /at the boundary before phase documenter: phase documenter writes planned protected path\(s\) README\.md/);
+      assert.match(error.message, /--phase documenter --file '<path>'/);
+      assert.match(error.message, /then run `awsf resume fixture-simple-sdlc/);
+      assert.match(error.message, /The 2 call\(s\) the attempt has spent stay spent; it stays RUNNING at this resumable boundary and no call is reserved for documenter/);
+      return true;
+    });
+    assert.equal(calls, 2, "planner and builder ran; the documenter never launched");
+    const stopped = await readAttempt(dir);
+    assert.equal(stopped.lifecycleState, "RUNNING");
+    assert.equal(stopped.recovery?.kind, "completed-phase");
+    assert.deepEqual(stopped.recovery?.prefix.map(entry => entry.phaseKey), ["request", "planner", "builder", "tests"]);
+    assert.equal(stopped.budget.callsSpent, 2);
+    assert.equal(stopped.budget.callsReserved, 0);
+    assert.equal(stopped.process, null);
+    const [record, ...rest] = await grantRefusals(dir);
+    assert.equal(rest.length, 0);
+    assert.equal(record?.boundary, "phase-boundary");
+    assert.equal(record?.callsSpent, 2);
+    assert.deepEqual(record?.paths, ["README.md"]);
+    assert.equal((await readAttemptEvidence(dir)).some(evidence => evidence.type === "transition" && evidence.from === "RUNNING"), false, "no edge out of RUNNING");
+
+    const context = { stateRoot: world.stateRoot, worktreeRoot: join(world.root, "worktrees"), config: world.config };
+    const next = await nextCommand(dir, context);
+    const grantStep = next.model.steps.find(step => step.verb === "grant");
+    assert.equal(grantStep?.who, "owner");
+    assert.deepEqual(grantStep?.argv.slice(-6), ["--phase", "documenter", "--file", "<path>", "--reason", "<why>"]);
+    assert.deepEqual(grantStep?.requires, [{ check: "protected-paths", field: "README.md", status: "ungranted for documenter" }]);
+    assert.match(next.lines[0]!, /^completed-phase; documenter owes a protected grant for README\.md: the owner decides on `awsf grant .*--phase documenter.*`, then run `awsf resume /);
+
+    // The grant is legal at this boundary, and it binds the HEAD the builder moved.
+    const granted = await grantCommand({ attemptDir: dir, config: world.config, configPath: world.configPath, stateRoot: world.stateRoot,
+      phase: "documenter", files: ["README.md"], reason: "Document the generated source.", sandboxProbe: () => true, terminal: owner, projectRecord: world.projection.project });
+    assert.equal(granted.confirmed, true);
+    assert.equal(readProtectedState(dir).grants[0]?.subject.preWriteHeadSha, stopped.recovery?.worktreeHeadSha);
+    const resumed = await resumeProductionCommand({ ...options, reason: "the owner granted the documenter its planned path", terminal: owner });
+    assert.equal(resumed.status.lifecycleState, "AWAITING_OWNER", JSON.stringify(resumed.status.blocker));
+    assert.equal(calls, 4, "the documenter and the reviewer ran after the grant");
+    assert.equal(readProtectedState(dir).consumptions.length, 1);
+    assert.equal((await grantRefusals(dir)).length, 1);
+  } finally { world.projection.close(); rmSync(world.root, { recursive: true, force: true }); }
+});
 
 for (const failure of ["decline", "noninteractive", "host", "outside-writes", "no-sandbox", "alias", "drift"] as const) {
   test(`A2 protected issuance ${failure} is inert`, async () => {

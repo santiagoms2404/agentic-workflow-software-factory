@@ -71,6 +71,12 @@ export interface NextStepsInput {
    * as the caller gathered them. Absent means unmeasured, not satisfied.
    */
   readonly k1?: readonly { readonly check: string; readonly field: string; readonly status: string }[];
+  /**
+   * The protected grant the next writing phase owes, as the caller measured it
+   * from the preflight plan and the recorded grants. Absent or null leaves the
+   * grant step generic. It names the phase and the paths, never a grant's files.
+   */
+  readonly grantOwed?: { readonly phase: string; readonly paths: readonly string[] } | null;
 }
 
 interface NonTransitionAct {
@@ -97,6 +103,15 @@ export const NON_TRANSITION_ACTS: readonly NonTransitionAct[] = [
 
 function isOwner(verb: string): boolean {
   return (OWNER_ACT_COMMANDS as readonly string[]).includes(verb);
+}
+
+/**
+ * Only the phase the grant is owed to is filled. The files stay a placeholder,
+ * with the planned paths in `requires`: which exact files a grant names, and
+ * whether to issue it at all, is the owner's act.
+ */
+function grantArgs(owed: { readonly phase: string }): string[] {
+  return ["--phase", owed.phase, "--file", "<path>", "--reason", "<why>"];
 }
 
 function argvFor(input: NextStepsInput, verb: string, args: readonly string[]): string[] {
@@ -131,8 +146,10 @@ export function nextSteps(input: NextStepsInput): NextSteps {
     if (act.verb === "grant" &&
         (!(input.state === "PREPARED" || input.recovery?.kind === "quota-pause" || input.recovery?.kind === "completed-phase") ||
          (input.process !== undefined && input.process !== null) || (input.budget?.callsReserved ?? 0) !== 0)) continue;
-    const step: NextStep = { kind: act.kind, verb: act.verb, argv: argvFor(input, act.verb, act.args),
-      who: isOwner(act.verb) ? "owner" : "driver", interactive: isOwner(act.verb), spendsCalls: false, requires: [] };
+    const owed = act.verb === "grant" ? input.grantOwed ?? null : null;
+    const step: NextStep = { kind: act.kind, verb: act.verb, argv: argvFor(input, act.verb, owed === null ? act.args : grantArgs(owed)),
+      who: isOwner(act.verb) ? "owner" : "driver", interactive: isOwner(act.verb), spendsCalls: false,
+      requires: owed === null ? [] : owed.paths.map(path => ({ check: "protected-paths", field: path, status: `ungranted for ${owed.phase}` })) };
     output.steps.push(step);
   }
   return output;

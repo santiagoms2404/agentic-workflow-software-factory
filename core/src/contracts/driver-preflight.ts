@@ -22,10 +22,16 @@ import { stringUnion } from "./typebox.ts";
 // `awsf.preflight-refused/v1` is what `awsf start` journals when K1's freshness
 // rule refuses L1: the refusal kind, the field when one applies, and the
 // reason. The attempt stays DRAFT, so the record is the refusal's only trace.
+//
+// `awsf.grant-refused/v1` is what the runner journals when a writing phase
+// owes a protected grant the preflight planned and none covering it is
+// recorded (task 12): the phase, the uncovered paths, where it stopped and the
+// calls already spent. The refusal moves no lifecycle edge.
 
 export const DRIVER_PREFLIGHT_SCHEMA_ID = "awsf.driver-preflight/v1";
 export const REQUEST_CONFIRMATION_SCHEMA_ID = "awsf.request-confirmation/v1";
 export const PREFLIGHT_REFUSED_SCHEMA_ID = "awsf.preflight-refused/v1";
+export const GRANT_REFUSED_SCHEMA_ID = "awsf.grant-refused/v1";
 
 /**
  * K1's field ids, in the K1 table's order, as frozen by the G01-F Amendment
@@ -160,6 +166,39 @@ export const PreflightRefusedRecordSchema = Type.Object(
 );
 export type PreflightRefusedRecord = Static<typeof PreflightRefusedRecordSchema>;
 
+/**
+ * Where the runner stopped. `before-l4`: the first writing phase, with the
+ * attempt still PREPARED. `phase-boundary`: a later writing phase, at the
+ * resumable boundary before its reservation.
+ */
+export const GRANT_REFUSAL_BOUNDARIES = ["before-l4", "phase-boundary"] as const;
+export type GrantRefusalBoundary = (typeof GRANT_REFUSAL_BOUNDARIES)[number];
+
+export const GrantRefusedRecordSchema = Type.Object(
+  {
+    schema: Type.Literal(GRANT_REFUSED_SCHEMA_ID),
+    project: id,
+    taskId: id,
+    attempt: Type.Integer({ minimum: 1 }),
+    sessionId: id,
+    /** The recipe phase id the grant is owed to, as `awsf grant --phase` names it. */
+    phase: id,
+    /** The planned protected paths no recorded grant file covers. */
+    paths: Type.Array(id, { minItems: 1 }),
+    /** The phase's recorded grant when it exists but covers none of `paths`; null when none is recorded. */
+    grantId: Type.Union([id, Type.Null()]),
+    boundary: stringUnion(GRANT_REFUSAL_BOUNDARIES),
+    /** The attempt ledger's spent calls when it stopped, carried spend included. No call is reserved at either boundary. */
+    callsSpent: Type.Integer({ minimum: 0 }),
+    /** When the driver-preflight record that planned the grant was measured. */
+    preflightAt: id,
+    reason,
+    at: id,
+  },
+  { additionalProperties: false, $id: GRANT_REFUSED_SCHEMA_ID, title: "GrantRefusedRecord" },
+);
+export type GrantRefusedRecord = Static<typeof GrantRefusedRecordSchema>;
+
 function sha256(text: string): string {
   return createHash("sha256").update(text, "utf8").digest("hex");
 }
@@ -207,5 +246,12 @@ export function assertPreflightRefusedRecord(value: unknown): asserts value is P
   // A field is named exactly when one failed; a stale binding names none.
   if ((value.refusal === "field-failed") !== (value.field !== null)) {
     throw new Error(`invalid ${PREFLIGHT_REFUSED_SCHEMA_ID} record at /field: ${value.refusal} ${value.field === null ? "requires" : "takes no"} field`);
+  }
+}
+
+export function assertGrantRefusedRecord(value: unknown): asserts value is GrantRefusedRecord {
+  if (!Value.Check(GrantRefusedRecordSchema, value)) {
+    const first = [...Value.Errors(GrantRefusedRecordSchema, value)][0];
+    throw new Error(`invalid ${GRANT_REFUSED_SCHEMA_ID} record${first === undefined ? "" : ` at ${first.path}: ${first.message}`}`);
   }
 }
