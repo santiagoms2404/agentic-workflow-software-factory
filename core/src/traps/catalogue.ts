@@ -76,6 +76,8 @@ export const TRAPS: readonly TrapEntry[] = [
     refusalPoint: "run-before-l4", refusal: "ProductionQuotaRefused" },
   { id: "TR-15", family: "quota-threshold", title: "A configured quota threshold refuses before L4", seeds: [],
     refusalPoint: "run-before-l4", refusal: "ProductionQuotaRefused" },
+  { id: "TR-16", family: "shift-ticket-paths", title: "Selected ticket DO paths must fit the shift or be read-only", seeds: ["S27"],
+    refusalPoint: "k1-field", refusal: "awsf.preflight-refused/v1" },
 ];
 
 function isNoTrapKind(outcome: Seed["outcome"]): outcome is NoTrapKind {
@@ -87,10 +89,9 @@ export const NO_TRAPS: readonly NoTrapEntry[] = SEEDS.flatMap(seed =>
   isNoTrapKind(seed.outcome) ? [{ seed: seed.id, kind: seed.outcome, evidence: seed.evidence }] : []);
 
 // Gaps have no trap id yet: M4 supplies the refusal before assigning an id.
-// S27's K1 subshapes are TR-02/TR-06, but its unresolved ticket-demand shape
-// is assigned here only, rather than counted twice as already trapped.
+// S27's outer-request subshapes remain TR-02/TR-06; TR-16 owns its
+// selected-ticket shape without duplicating the ledger assignment.
 export const PENDING: readonly PendingEntry[] = [
-  { task: "T10", seeds: ["S27"] },
   { task: "T11", seeds: ["S21", "S24"] },
   { task: "T12", seeds: ["C5-baseline", "C8-adopt", "C8-later-grant"] },
 ];

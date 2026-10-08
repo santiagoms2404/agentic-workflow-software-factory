@@ -31,6 +31,7 @@ import { newCommand } from "../../src/cli/commands/new.ts";
 import { runProductionCommand } from "../../src/cli/commands/production-run.ts";
 import { readAttemptEvidence } from "../../src/cli/commands/review-record.ts";
 import { k1Request, startUnderK1 } from "../fixtures/k1-preflight.ts";
+import { registerShiftPlan } from "../fixtures/shift-plan.ts";
 import { runSystemCommand, type BrokerOptions } from "../../src/execution/transport-broker.ts";
 import { journalFilePath, statusFilePath } from "../../src/persistence/platform-paths.ts";
 import { ticketFileDigest } from "../../src/persistence/plan-ticket-body.ts";
@@ -183,6 +184,7 @@ async function startedShift() {
   const stateRoot = join(root, "state");
   execFileSync("git", ["init", "-b", "main", canonical], { stdio: "ignore" });
   writeFileSync(join(canonical, "README.md"), "base\n");
+  registerShiftPlan(canonical, loadConfig(readFileSync(resolve("awsf.config.yaml"), "utf8")).project.slug, PLAN);
   const directory = join(canonical, "specs", "tickets", PLAN);
   mkdirSync(directory, { recursive: true });
   for (const id of TICKETS) writeFileSync(join(directory, `${id}.md`), ticketSource(id));

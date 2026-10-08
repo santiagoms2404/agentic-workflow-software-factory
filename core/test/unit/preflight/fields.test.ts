@@ -70,7 +70,7 @@ const REQUEST_34 = [
 const PROTECTED = loadConfig(readFileSync(resolve("awsf.config.yaml"), "utf8")).policy.protected_paths;
 const BUILDER: WritingPhase = { phase: "builder", writes: ["core/src/**", "core/test/**", "dashboard/**", "prompts/**", "docs/cheatsheet.html"] };
 const DOCUMENTER: WritingPhase = { phase: "documenter", writes: ["README.md", "docs/**"] };
-const SHIFT = { builderWrites: BUILDER.writes };
+const SHIFT = { builderWrites: BUILDER.writes, tickets: [] };
 
 function refused(outcome: FieldVerdict, pattern: RegExp): void {
   assert.equal(outcome.passed, false, "expected a refusal");
@@ -117,7 +117,7 @@ test("the token scan finds paths and file names through prose punctuation, and s
 // ---------------------------------------------------------------- write-boundary
 
 function boundary(overrides: Partial<WriteBoundaryFacts> = {}): WriteBoundaryFacts {
-  return { request: REQUEST, where: ["core/src/preflight/**", "core/test/**"], writers: [BUILDER], shift: null, ...overrides };
+  return { request: REQUEST, where: ["core/src/preflight/**", "core/test/**"], read: [], protectedPaths: PROTECTED, writers: [BUILDER], shift: null, ...overrides };
 }
 
 test("write-boundary passes entries the Where line spells verbatim and a writing role covers", () => {

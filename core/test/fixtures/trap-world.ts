@@ -20,6 +20,7 @@ import { fakeBroker } from "./recording-broker.ts";
 import { sealShiftManifest } from "../../src/contracts/shift-selection-record.ts";
 import { ticketFileDigest } from "../../src/persistence/plan-ticket-body.ts";
 import { k1Request, prepareK1 } from "./k1-preflight.ts";
+import { registerShiftPlan } from "./shift-plan.ts";
 
 export const AT = "2026-10-07T12:00:00Z";
 export const OWNER = { interactive: true, write: () => {}, confirm: async () => true };
@@ -116,8 +117,9 @@ export class ReplayStub implements HarnessAdapter {
 export async function draft(b: Box, request = k1Request("replay a sealed seed", "core/src/example.ts"), workflow = "build", shift = false) {
   let selection;
   if (shift) {
+    registerShiftPlan(b.repository, b.config.project.slug, "synthetic");
     const path = "specs/tickets/synthetic/T01.md";
-    const text = "---\nid: T01\ntitle: Write the forbidden plan\nmilestone: M1\nstate: todo\ndepends_on: []\n---\n# T01\n\n## Build prompt\n\n```\nWrite specs/synthetic.html.\n```\n";
+    const text = "---\nid: T01\ntitle: Write the forbidden plan\nmilestone: M1\nstate: todo\ndepends_on: []\n---\n# T01\n\n## Build prompt\n\n```\nDO\n  Write specs/synthetic.html.\n\nDO NOT\n  Change anything else.\n```\n";
     mkdirSync(dirname(join(b.repository, path)), { recursive: true });
     writeFileSync(join(b.repository, path), text);
     commit(b.repository);

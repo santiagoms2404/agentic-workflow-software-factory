@@ -221,11 +221,15 @@ export interface WritingPhase {
 export interface ShiftFacts {
   /** The configured `writes` of the builder role every shift ticket's build runs as. */
   readonly builderWrites: readonly string[];
+  /** Only the selected tickets' DO blocks, read from the registered plan store. */
+  readonly tickets: readonly { readonly id: string; readonly doBlock: string }[];
 }
 
 export interface WriteBoundaryFacts {
   readonly request: string;
   readonly where: readonly string[];
+  readonly read: readonly string[];
+  readonly protectedPaths: readonly string[];
   readonly writers: readonly WritingPhase[];
   readonly shift: ShiftFacts | null;
 }
@@ -265,6 +269,25 @@ export function evaluateWriteBoundary(facts: WriteBoundaryFacts): FieldVerdict {
     if (!facts.writers.some((writer) => writer.writes.some((glob) => covers(entry, glob)))) {
       const roles = facts.writers.map((writer) => writer.phase).join(", ") || "none";
       problems.push(`--where ${entry} is outside the writes of every writing role on this recipe (${roles}); no phase could write it`);
+    }
+  }
+  if (facts.shift !== null) {
+    for (const ticket of facts.shift.tickets) {
+      for (const token of extractPathTokens(ticket.doBlock)) {
+        const protectedPaths = [...new Set(token.candidates.flatMap(candidate => facts.protectedPaths.flatMap(glob => {
+          const path = protectedSpelling(candidate, glob);
+          return path === null ? covers(glob, candidate, false) ? [glob] : [] : [path];
+        })))];
+        const outsideWrites = !token.candidates.some(candidate => facts.shift!.builderWrites.some(glob => covers(candidate, glob)));
+        const classified = protectedPaths.length > 0
+          ? protectedPaths.every(path => facts.read.some(entry => classifies(entry, path)))
+          : token.candidates.some(path => facts.read.some(entry => classifies(entry, path)));
+        // trap-refusal-begin TR-16
+        if ((outsideWrites || protectedPaths.length > 0) && !classified) {
+          problems.push(`ticket ${ticket.id} DO token ${token.text} is outside what a shift builder can write; classify it with --read if it is only read`);
+        }
+        // trap-refusal-end TR-16
+      }
     }
   }
   return verdict(problems);

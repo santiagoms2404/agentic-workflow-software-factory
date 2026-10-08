@@ -28,6 +28,7 @@ import { newCommand } from "../../src/cli/commands/new.ts";
 import { resumeProductionCommand, runProductionCommand } from "../../src/cli/commands/production-run.ts";
 import { CeilingRaiseNotInteractive, raiseCommand } from "../../src/cli/commands/raise.ts";
 import { k1Request, startUnderK1 } from "../fixtures/k1-preflight.ts";
+import { registerShiftPlan } from "../fixtures/shift-plan.ts";
 import { statusCommand } from "../../src/cli/commands/status.ts";
 import type { CallBudget, Reservation } from "../../src/execution/call-budget.ts";
 import type { BrokerOptions } from "../../src/execution/transport-broker.ts";
@@ -162,6 +163,7 @@ async function world() {
   const stateRoot = join(root, "state");
   execFileSync("git", ["init", "-b", "main", canonical], { stdio: "ignore" });
   writeFileSync(join(canonical, "README.md"), "base\n");
+  registerShiftPlan(canonical, loadConfig(readFileSync(resolve("awsf.config.yaml"), "utf8")).project.slug, PLAN);
   const directory = join(canonical, "specs", "tickets", PLAN);
   mkdirSync(directory, { recursive: true });
   for (const id of TICKETS) writeFileSync(join(directory, `${id}.md`), ticketSource(id));

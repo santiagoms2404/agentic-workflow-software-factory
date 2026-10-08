@@ -17,6 +17,7 @@ import { k1Request, refusals } from "../../fixtures/k1-preflight.ts";
 import { AT, OWNER, assertCalled, box, commit, draft, git, prepare, run, start, update, type Box } from "./fixture.ts";
 import { launchEnvironmentRefusal } from "../../fixtures/launch-environment.ts";
 import { runStartQuota } from "../../fixtures/run-start-quota.ts";
+import { shiftTicketPathRefusal } from "../../fixtures/shift-ticket-paths.ts";
 
 async function assertNoCall(b: Box, attemptDir: string, lifecycleState = "DRAFT") {
   const status = await readAttempt(attemptDir);
@@ -60,19 +61,7 @@ async function quota() {
 }
 
 async function shift() {
-  const b = box();
-  try {
-    const created = await draft(b, k1Request("run the selected ticket", "core/src/example.ts"), "shift", true);
-    await prepare(b, created.attemptDir);
-    await start(b, created.attemptDir);
-    const status = await run(b, created.attemptDir);
-    assertCalled(b, status);
-    const prompt = (await readAttemptEvidence(created.attemptDir)).find(entry => entry.type === "compiled-prompt" && entry.name === "user");
-    assert.ok(prompt && prompt.type === "compiled-prompt");
-    assert.match(prompt.text, /Write specs\/synthetic.html/u);
-    // KNOWN GAP T10: the ticket's required plan write is outside the shift's
-    // boundary although the outer request's Where passed K1.
-  } finally { b.close(); }
+  await shiftTicketPathRefusal(); // S27 now proves TR-16's K1 refusal before preparation.
 }
 
 test("S27 partial refusal: its original one-line request cannot prepare a shift", async () => {

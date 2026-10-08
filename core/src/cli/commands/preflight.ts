@@ -40,6 +40,7 @@ import {
   type TaskRequestFact,
 } from "../../preflight/fields.ts";
 import { writingPhases } from "../../preflight/grant-plan.ts";
+import { readShiftTicketDoBlocks } from "../../preflight/shift-tickets.ts";
 import {
   gatherSuite,
   type GateCommandRunner,
@@ -383,7 +384,10 @@ export async function preflightCommand(options: PreflightCommandOptions): Promis
   }
   const recipe = await attemptRecipe(current, config);
   const writers = writingPhases(recipe, config.agents);
-  const shift = current.workflow === SHIFT_WORKFLOW_ID ? { builderWrites: [...new Set(writers.flatMap((writer) => writer.writes))] } : null;
+  const shift = current.workflow === SHIFT_WORKFLOW_ID ? {
+    builderWrites: config.agents.find(agent => agent.name === "builder")?.writes ?? [],
+    tickets: await readShiftTicketDoBlocks(current.repository, current.shift!),
+  } : null;
   const baseSha = await pinnedBase(options.attemptDir, current);
   const journal = await journalFacts(options.stateRoot, current, baseSha, options.readEvidence ?? readAttemptEvidence);
   const suite = await gatherSuite(journal.landed, journal.earlier, {

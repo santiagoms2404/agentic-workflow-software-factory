@@ -714,6 +714,7 @@ npm run awsf -- land TASK</pre>
 
   <h3>Preflight</h3>
   <p><code>awsf preflight TASK --where GLOB... [--read PATH...] [--consulted SESSION...] [--json]</code> measures a DRAFT attempt and appends one <code>awsf.driver-preflight/v1</code> record, whether or not every field passes. It is not an owner act and takes no owner terminal. <code>--where</code>, <code>--read</code> and <code>--consulted</code> are inputs the host checks against the request, the configuration and the journal; none of them marks a field passed. The suite reuses a landed attempt&rsquo;s gate rows when its candidate is the base, and otherwise runs every configured gate once in the project&rsquo;s baseline worktree, which is created once, re-pointed only when clean, and never removed. Text prints one line per field; JSON prints the record.</p>
+  <p>For a shift, <code>write-boundary</code> also scans each selected ticket&rsquo;s <code>DO</code> block in the registered plan store. A path outside the builder&rsquo;s reach, including a protected path, must be classified with <code>--read</code>; the refusal names the ticket and token. Other prompt sections are not scanned.</p>
   <pre>npm run awsf -- preflight TASK --where core/src/example.ts</pre>
 
   <h3>One command, three spellings</h3>
