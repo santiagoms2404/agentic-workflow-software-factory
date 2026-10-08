@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { after, test } from "node:test";
 import { appendFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
@@ -16,7 +16,17 @@ import { Journal } from "../../../src/persistence/journal.ts";
 import { journalFilePath } from "../../../src/persistence/platform-paths.ts";
 import { writePlacement } from "../../../src/registry/placement.ts";
 import { TRAPS, TRAP_CUT } from "../../../src/traps/catalogue.ts";
-import { readTrapsReadout, trapsExitCode } from "../../../src/traps/readout.ts";
+import { readTrapsReadout as readCurrentTrapsReadout, trapsExitCode } from "../../../src/traps/readout.ts";
+
+// Exact serialized outputs captured from the original reader on every existing successful fixture read.
+const baselineReadouts: string[] = JSON.parse(readFileSync(new URL("./readout.snapshot.json", import.meta.url), "utf8"));
+let fixtureRead = 0;
+async function readTrapsReadout(stateRoot: string) {
+  const model = await readCurrentTrapsReadout(stateRoot);
+  assert.equal(JSON.stringify(model), baselineReadouts[fixtureRead++], "fixture readout bytes are unchanged");
+  return model;
+}
+after(() => assert.equal(fixtureRead, baselineReadouts.length, "all baseline fixture readouts were checked"));
 
 const PRE = "2026-10-07T12:00:00.000Z";
 const POST = "2026-10-08T12:00:00.000Z";
@@ -252,6 +262,7 @@ test("empty roots and fully linked roots exit zero with valid JSON, without crea
   try {
     const absent = join(box.root, "absent");
     const before = snapshot(box.root);
+    await readTrapsReadout(absent);
     const result = await trapsCommand(absent);
     assert.equal(result.exitCode, 0);
     assert.equal(Value.Check(TrapsReadoutSchema, result.model), true);
@@ -262,6 +273,7 @@ test("empty roots and fully linked roots exit zero with valid JSON, without crea
     const json: string[] = [];
     assert.equal(await main({ argv: ["traps", "--json", "--state-root", box.stateRoot], cwd: box.root, env: {}, writeOut: line => json.push(line) }), 0);
     assert.equal(Value.Check(TrapsReadoutSchema, JSON.parse(json[0]!)), true);
+    assert.equal(json[0], JSON.stringify(await readTrapsReadout(box.stateRoot)));
   } finally { box.close(); }
 });
 

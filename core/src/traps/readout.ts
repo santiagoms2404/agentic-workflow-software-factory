@@ -3,6 +3,7 @@ import { join } from "node:path";
 import type { AttemptEvent, AttemptStatus } from "../cli/commands/attempt.ts";
 import { ATTRIBUTION_RECORD_SCHEMA_ID, type AttributionRecord } from "../contracts/attribution-record.ts";
 import { assertTrapsReadout, TRAPS_READOUT_SCHEMA_ID, type TrapsReadout } from "../contracts/traps-readout.ts";
+import type { JournalRecord } from "../persistence/journal.ts";
 import { journalFilePath } from "../persistence/platform-paths.ts";
 import { scanJournal } from "../persistence/replay.ts";
 import { readTaskAttributions } from "../persistence/task-attributions.ts";
@@ -13,21 +14,27 @@ import { isStopSinceCut } from "./population.ts";
 /** The transition evidence owns time. Legacy transitions without evidence use their journal stamp, never lastActivityAt. */
 export function transitionAt(events: readonly (AttemptEvent & { readonly recordedAt?: string })[], state: string): string | null {
   const event = events.findLast(event => event.kind === "attempt.transitioned" && event.next.lifecycleState === state);
+  return transitionTime(event, state, event?.recordedAt);
+}
+
+function transitionTime(event: AttemptEvent | undefined, state: string, recordedAt?: string): string | null {
   if (event?.evidence?.type === "transition" && event.evidence.to === state) return event.evidence.at;
-  return event?.recordedAt ?? null;
+  return recordedAt ?? null;
 }
 
 interface AttemptFacts {
   readonly status: AttemptStatus;
-  readonly events: readonly AttemptEvent[];
+  readonly terminalAt: string | null;
+  readonly landedAt: string | null;
+  readonly traps: { readonly passed: boolean | null; readonly sha: string | null };
   readonly attribution: AttributionRecord | null;
 }
 
-/** Latest commands_pass row for the landed candidate, not another round or an older attempt. */
-function trapsGate(facts: AttemptFacts): { passed: boolean | null; sha: string | null } {
-  const row = facts.events.findLast(event => event.evidence?.type === "gate"
+/** Latest commands_pass row for the final candidate, not another round or an older attempt. */
+function trapsGate(status: AttemptStatus, records: readonly JournalRecord<AttemptEvent>[]): AttemptFacts["traps"] {
+  const row = records.findLast(({ event }) => event.evidence?.type === "gate"
     && event.evidence.gateId === "commands_pass"
-    && event.evidence.candidateSha === facts.status.candidateSha)?.evidence;
+    && event.evidence.candidateSha === status.candidateSha)?.event.evidence;
   if (row?.type !== "gate") return { passed: null, sha: null };
   const checks = row.checks.filter(check => check.item.startsWith("traps:"));
   if (checks.length === 0) return { passed: null, sha: null };
@@ -41,8 +48,7 @@ export function buildTrapsReadout(projects: readonly string[], attempts: readonl
   const ordered = [...attempts].sort((a, b) => a.status.project.localeCompare(b.status.project)
     || a.status.taskId.localeCompare(b.status.taskId) || a.status.attempt - b.status.attempt);
   for (const facts of ordered) {
-    const { status, attribution } = facts;
-    const terminalAt = transitionAt(facts.events, status.lifecycleState);
+    const { status, attribution, terminalAt } = facts;
     if (!isStopSinceCut({ ...status, terminalAt }, registered, TRAP_CUT)) continue;
     const item = { project: status.project, taskId: status.taskId, attempt: status.attempt,
       terminalAt: terminalAt!, lifecycleState: status.lifecycleState as "BLOCKED" | "CANCELLED" };
@@ -67,11 +73,11 @@ export function buildTrapsReadout(projects: readonly string[], attempts: readonl
     projects: [...projects].sort().map(project => {
       const landed = ordered.filter(facts => facts.status.project === project
         && (facts.status.lifecycleState === "LANDED" || facts.status.lifecycleState === "PUBLISHED")
-        && transitionAt(facts.events, "LANDED") !== null)
-        .sort((a, b) => Date.parse(transitionAt(b.events, "LANDED")!) - Date.parse(transitionAt(a.events, "LANDED")!))[0];
+        && facts.landedAt !== null)
+        .sort((a, b) => Date.parse(b.landedAt!) - Date.parse(a.landedAt!))[0];
       return { project, newestLanded: landed === undefined ? null : {
-        taskId: landed.status.taskId, attempt: landed.status.attempt, landedAt: transitionAt(landed.events, "LANDED")!,
-        baseSha: landed.status.baseSha, candidateSha: landed.status.candidateSha, traps: trapsGate(landed),
+        taskId: landed.status.taskId, attempt: landed.status.attempt, landedAt: landed.landedAt!,
+        baseSha: landed.status.baseSha, candidateSha: landed.status.candidateSha, traps: landed.traps,
       } };
     }),
   };
@@ -88,8 +94,23 @@ async function directories(path: string): Promise<string[]> {
   }
 }
 
+/** Reduce within this call so no journal records survive into the next scan. */
+async function readAttemptFacts(path: string): Promise<Omit<AttemptFacts, "attribution">> {
+  const scan = await scanJournal<AttemptEvent>(path);
+  if (!scan.ok) throw new Error(`attempt journal corrupt at ${scan.badKey}`);
+  if (scan.tornTail !== null) throw new Error(`interrupted attempt append at ${path}; reports and never repairs`);
+  const status = scan.records.at(-1)?.event.next;
+  if (status === undefined) throw new Error(`no attempt journal records at ${path}`);
+  const at = (state: string) => {
+    const record = scan.records.findLast(({ event }) => event.kind === "attempt.transitioned" && event.next.lifecycleState === state);
+    return transitionTime(record?.event, state, record?.recorded_at);
+  };
+  return { status, terminalAt: status.lifecycleState === "BLOCKED" || status.lifecycleState === "CANCELLED"
+    ? at(status.lifecycleState) : null, landedAt: at("LANDED"), traps: trapsGate(status, scan.records) };
+}
+
 /** Journals and placement only: no lock, SQLite, clock, repair, subprocess or provider. */
-export async function readTrapsReadout(stateRoot: string): Promise<TrapsReadout> {
+export async function readTrapsReadout(stateRoot: string, build: typeof buildTrapsReadout = buildTrapsReadout): Promise<TrapsReadout> {
   const projects: string[] = [];
   const attempts: AttemptFacts[] = [];
   for (const project of await directories(join(stateRoot, "projects"))) {
@@ -108,21 +129,17 @@ export async function readTrapsReadout(stateRoot: string): Promise<TrapsReadout>
       for (const attempt of await directories(taskRoot)) {
         if (!/^[1-9][0-9]*$/.test(attempt)) continue;
         const path = journalFilePath(join(taskRoot, attempt));
-        const scan = await scanJournal<AttemptEvent>(path);
-        if (!scan.ok) throw new Error(`attempt journal corrupt at ${scan.badKey}`);
-        if (scan.tornTail !== null) throw new Error(`interrupted attempt append at ${path}; reports and never repairs`);
-        const events = scan.records.map(record => ({ ...record.event, recordedAt: record.recorded_at }));
-        const status = events.at(-1)?.next;
-        if (status === undefined) throw new Error(`no attempt journal records at ${path}`);
+        const facts = await readAttemptFacts(path);
+        const { status } = facts;
         if (status.project !== project || status.taskId !== taskId || status.attempt !== Number(attempt)) {
           throw new Error(`attempt identity disagrees with directory at ${path}`);
         }
-        attempts.push({ status, events, attribution: attributions.findLast(record => record.attempt === status.attempt
+        attempts.push({ ...facts, attribution: attributions.findLast(record => record.attempt === status.attempt
           && record.project === project && record.taskId === taskId) ?? null });
       }
     }
   }
-  return buildTrapsReadout(projects, attempts);
+  return build(projects, attempts);
 }
 
 export function trapsExitCode(model: TrapsReadout): 0 | 1 {
