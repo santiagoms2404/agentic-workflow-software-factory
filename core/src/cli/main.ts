@@ -19,7 +19,9 @@ import { processOwnerTerminal, type OwnerTerminal } from "./tty.ts";
 import { adoptCommand } from "./commands/adopt.ts";
 import { backlogCommand } from "./commands/backlog.ts";
 import { cancelCommand } from "./commands/cancel.ts";
-import { doctorCommand, withJevRow } from "./commands/doctor.ts";
+import { doctorCommand } from "./commands/doctor.ts";
+import { gatherDoctorRows } from "../doctor/gather.ts";
+import { buildDoctorReport } from "../doctor/report.ts";
 import { jevDoctorRow } from "../decision/jev-doctor.ts";
 import { dashCommand, gcCommand, rebuildCommand } from "./commands/operator.ts";
 import { createDashboardProjection } from "./commands/dashboard-projection.ts";
@@ -294,11 +296,12 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       return result.exitCode;
     }
     if (command === "doctor") {
-      const report = withJevRow(
+      const report = buildDoctorReport(
         await doctorCommand(stateRoot),
         await jevDoctorRow({ catalogPath: resolve(cwd, "awsf.project.yaml"), env }),
+        await gatherDoctorRows({ cwd, stateRoot, env: commandEnvironment(env) }),
       );
-      for (const line of report.lines) out(line);
+      for (const line of parsed.flags.json === "true" ? [JSON.stringify(report)] : report.lines) out(line);
       return report.healthy ? 0 : 1;
     }
     if (command === "gc") {

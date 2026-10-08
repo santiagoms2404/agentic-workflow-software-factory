@@ -11,6 +11,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { main } from "../../src/cli/main.ts";
+import { unconfiguredDoctorEnvironment } from "../fixtures/doctor-environment.ts";
 import { createDashboardProjection } from "../../src/cli/commands/dashboard-projection.ts";
 import { taskRoot } from "../../src/cli/commands/attempt.ts";
 import { newCommand } from "../../src/cli/commands/new.ts";
@@ -152,9 +153,10 @@ test("awsf doctor shows the Jev row: the switch, the key as set or unset and not
   const root = mkdtempSync(join(tmpdir(), "awsf-decision-doctor-"));
   t.mock.method(globalThis, "fetch", () => { throw new Error("doctor must make no network call"); });
   try {
+    const toolEnvironment = unconfiguredDoctorEnvironment(root);
     const doctor = async (env: NodeJS.ProcessEnv): Promise<{ code: number; jev: string[] }> => {
       const out: string[] = [];
-      const code = await main({ argv: ["doctor", "--state-root", join(root, "state")], cwd: root, env, writeOut: (line) => out.push(line) });
+      const code = await main({ argv: ["doctor", "--state-root", join(root, "state")], cwd: root, env: { ...toolEnvironment, ...env }, writeOut: (line) => out.push(line) });
       return { code, jev: out.filter((line) => line.includes("jev") || line.includes(JEV_KEY_ENV) || line.includes(KEY)) };
     };
     writeFileSync(join(root, "awsf.project.yaml"), `${CATALOG}\ndecision:\n  jev: off`);

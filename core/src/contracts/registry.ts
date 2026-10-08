@@ -47,6 +47,7 @@ import { ScoutOutputSchema, SCOUT_OUTPUT_SCHEMA_ID, type ScoutOutput } from "./s
 import { ShiftManifestSchema, SHIFT_MANIFEST_SCHEMA_ID } from "./shift-selection-record.ts";
 import { TestOutputSchema, TEST_OUTPUT_SCHEMA_ID, type TestOutput } from "./test-output.ts";
 import { TrapsReadoutSchema, TRAPS_READOUT_SCHEMA_ID } from "./traps-readout.ts";
+import { DoctorReadoutSchema, DOCTOR_READOUT_SCHEMA_ID } from "./doctor-readout.ts";
 
 /**
  * Every wire envelope schema, keyed by its schema id.
@@ -114,6 +115,7 @@ export const RECORD_SCHEMAS = {
   [DECISION_RECORD_SCHEMA_ID]: DecisionRecordSchema,
   [NEXT_STEPS_SCHEMA_ID]: NextStepsSchema,
   [TRAPS_READOUT_SCHEMA_ID]: TrapsReadoutSchema,
+  [DOCTOR_READOUT_SCHEMA_ID]: DoctorReadoutSchema,
   [DRIVER_PREFLIGHT_SCHEMA_ID]: DriverPreflightRecordSchema,
   [REQUEST_CONFIRMATION_SCHEMA_ID]: RequestConfirmationRecordSchema,
   [PREFLIGHT_REFUSED_SCHEMA_ID]: PreflightRefusedRecordSchema,
