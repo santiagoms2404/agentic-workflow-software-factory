@@ -70,6 +70,8 @@ export const TRAPS: readonly TrapEntry[] = [
     refusalPoint: "run-before-l4", refusal: "E_BACKEND_FAILURE" },
   { id: "TR-12", family: "interrupted-start", title: "An interrupted attempt tree is retained, not overwritten", seeds: ["G11"],
     refusalPoint: "start", refusal: "AttemptWorktreeExists" },
+  { id: "TR-13", family: "launch-environment", title: "Every phase's executable must resolve in its launch PATH", seeds: ["S11", "S17"],
+    refusalPoint: "run-before-l4", refusal: "ProductionExecutableUnavailable" },
 ];
 
 function isNoTrapKind(outcome: Seed["outcome"]): outcome is NoTrapKind {
@@ -84,7 +86,6 @@ export const NO_TRAPS: readonly NoTrapEntry[] = SEEDS.flatMap(seed =>
 // S27's K1 subshapes are TR-02/TR-06, but its unresolved ticket-demand shape
 // is assigned here only, rather than counted twice as already trapped.
 export const PENDING: readonly PendingEntry[] = [
-  { task: "T08", seeds: ["S11", "S17"] },
   { task: "T09", seeds: ["S42"] },
   { task: "T10", seeds: ["S27"] },
   { task: "T11", seeds: ["S21", "S24"] },
@@ -107,7 +108,7 @@ export interface BlockerCoverage {
 // follow build/review calls; their later record/Git faults are after-spend.
 export const BLOCKER_COVERAGE: readonly BlockerCoverage[] = [
   { edge: "L2", code: "preflight-failed", target: { family: "suite" }, evidence: "K1 measures configured gates at the base before preparation (TR-01)." },
-  { edge: "L5", code: "crash", target: { kind: "after-spend" }, evidence: "A running process can crash after GO; launch-environment seeds are separately pending T08." },
+  { edge: "L5", code: "crash", target: { kind: "after-spend" }, evidence: "A running process can crash after GO; TR-13 refuses the launch-environment seeds before L4." },
   { edge: "L5", code: "silence", target: { kind: "after-spend" }, evidence: "Silence is observed over an already released process." },
   { edge: "L5", code: "quota-exhausted", target: { kind: "after-spend" }, evidence: "A provider reports exhaustion after GO; S42's initially exhausted shape is pending T09." },
   { edge: "L5", code: "phase-abort", target: { kind: "after-spend" }, evidence: "The running phase fails its output contract after its call." },

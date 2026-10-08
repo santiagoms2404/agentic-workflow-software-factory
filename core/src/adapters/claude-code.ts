@@ -46,6 +46,7 @@ import {
   type TransportBroker,
 } from "./interface.ts";
 import { filterEnv } from "./env.ts";
+import { executableAvailability } from "./availability.ts";
 import { assertPrivateSystemPrompt } from "./system-prompt-file.ts";
 import { resolvePermissionProfile } from "../policy/permission-profiles.ts";
 import { ClaudeStreamDecoder, type ClaudeSessionRecord } from "./claude-code-stream.ts";
@@ -335,23 +336,9 @@ export class ClaudeCodeAdapter implements ContinuityCapableAdapter {
     this.#exitWaitMs = options.exitWaitMs ?? DEFAULT_EXIT_WAIT_MS;
   }
 
-  /**
-   * Available if the executable is a name the broker can resolve.
-   *
-   * Deliberately does NOT run `claude --version`: an availability check that
-   * spawns is a provider process the host never registered, and this adapter is
-   * not allowed to start one. Whether the binary actually exists is the
-   * broker's answer to give, at launch, where a failure is already a run.
-   */
-  async isAvailable(): Promise<Availability> {
-    if (this.#executable.length === 0 || /[\s/\\]/.test(this.#executable)) {
-      return {
-        status: "blocked",
-        code: "E_INVALID_REQUEST",
-        detail: `${JSON.stringify(this.#executable)} is not a resolvable executable name`,
-      };
-    }
-    return { status: "available" };
+  /** Resolve without spawning, against the descriptor's own launch environment. */
+  async isAvailable(_signal?: AbortSignal, env = process.env): Promise<Availability> {
+    return executableAvailability(this.id, this.#executable, env);
   }
 
   /**

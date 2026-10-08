@@ -26,7 +26,7 @@ export function adapterFor(entry: AdapterEntry, runtime?: AwsfConfig["runtime"])
         ...(limits === undefined ? {} : { limits }),
       });
     case "antigravity":
-      return new AntigravityAdapter();
+      return new AntigravityAdapter(entry.executable === undefined ? {} : { executable: entry.executable });
     // The fixture adapter requires test-owned absolute paths, and composite
     // fusion is v1.1 scope. Neither can be manufactured from durable config.
     case "fixture":

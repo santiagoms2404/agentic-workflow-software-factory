@@ -18,17 +18,26 @@ import {
   type TransportBroker,
 } from "./interface.ts";
 import type { NormalizedEvent } from "../contracts/normalized-events.ts";
+import { executableAvailability } from "./availability.ts";
 
 export const ANTIGRAVITY_ADAPTER_ID = "antigravity";
 
 export class AntigravityAdapter implements HarnessAdapter {
   readonly id = ANTIGRAVITY_ADAPTER_ID;
+  readonly #executable: string;
 
-  async isAvailable(_signal?: AbortSignal): Promise<Availability> {
+  constructor(options: { executable?: string } = {}) {
+    this.#executable = options.executable ?? "agy";
+  }
+
+  async isAvailable(_signal?: AbortSignal, env = process.env): Promise<Availability> {
+    const resolution = executableAvailability(this.id, this.#executable, env);
     return {
+      ...resolution,
       status: "blocked",
       code: "E_ADAPTER_UNVERIFIED",
-      detail: "agy has no captured, reviewed machine-parseable stream; see antigravity.ts verification procedure",
+      detail: "agy has no captured, reviewed machine-parseable stream; see antigravity.ts verification procedure" +
+        (resolution.status === "blocked" ? `; ${resolution.detail}` : ""),
     };
   }
 

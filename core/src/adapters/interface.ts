@@ -60,6 +60,11 @@ export interface Availability {
   /** `E_ADAPTER_UNVERIFIED` for an adapter that ships with an empty slot. */
   code?: string;
   detail?: string;
+  /** Executable resolution facts, absent for adapters without a provider executable. */
+  executable?: string;
+  path?: string;
+  resolved?: string;
+  obstructions?: readonly string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -447,7 +452,7 @@ export type SandboxConfinement = "host" | "worktree";
 
 export interface HarnessAdapter {
   readonly id: string;
-  isAvailable(signal?: AbortSignal): Promise<Availability>;
+  isAvailable(signal?: AbortSignal, env?: Readonly<Record<string, string | undefined>>): Promise<Availability>;
   getModelInfo(model: string): Promise<ModelInfo>;
   /** Pure — descriptor tests assert exact argv without starting anything. */
   buildSpec(request: ModelRequest): ProcessSpec;

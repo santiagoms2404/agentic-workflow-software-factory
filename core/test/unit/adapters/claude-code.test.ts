@@ -360,8 +360,8 @@ test("an unpriceable route renders `— subscription`, never `$0.00`", () => {
 });
 
 test("the adapter never spawns to answer `isAvailable`", async () => {
-  assert.deepEqual(await adapter().isAvailable(), { status: "available" });
-  const blocked = await new ClaudeCodeAdapter({ executable: "/usr/bin/claude" }).isAvailable();
+  assert.equal((await new ClaudeCodeAdapter({ executable: process.execPath }).isAvailable(undefined, { PATH: "" })).status, "available");
+  const blocked = await new ClaudeCodeAdapter({ executable: "synthetic-missing-claude" }).isAvailable(undefined, { PATH: "" });
   assert.equal(blocked.status, "blocked");
 });
 

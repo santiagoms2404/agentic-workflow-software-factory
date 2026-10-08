@@ -358,8 +358,8 @@ test("an estimate is rendered as an estimate, and a subscription as a dash", () 
 });
 
 test("the adapter never spawns to answer `isAvailable`", async () => {
-  assert.deepEqual(await adapter().isAvailable(), { status: "available" });
-  const blocked = await new PiCodexAdapter({ executable: "/usr/bin/pi" }).isAvailable();
+  assert.equal((await new PiCodexAdapter({ executable: process.execPath }).isAvailable(undefined, { PATH: "" })).status, "available");
+  const blocked = await new PiCodexAdapter({ executable: "synthetic-missing-pi" }).isAvailable(undefined, { PATH: "" });
   assert.equal(blocked.status, "blocked");
 });
 

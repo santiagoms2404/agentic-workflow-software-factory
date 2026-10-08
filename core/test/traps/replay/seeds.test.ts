@@ -2,9 +2,8 @@ import assert from "node:assert/strict";
 import { chmodSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { ClaudeCodeAdapter } from "../../../src/adapters/claude-code.ts";
 import { PiCodexAdapter } from "../../../src/adapters/pi-codex.ts";
-import { resolveExecutable, runSystemCommand } from "../../../src/execution/transport-broker.ts";
+import { runSystemCommand } from "../../../src/execution/transport-broker.ts";
 import { readAttempt, nextRevision, persistAttempt } from "../../../src/cli/commands/attempt.ts";
 import { StartPreflightRefused } from "../../../src/cli/commands/start.ts";
 import { reworkCommand } from "../../../src/cli/commands/rework.ts";
@@ -16,7 +15,8 @@ import { baselineWorktreeName } from "../../../src/preflight/baseline-worktree.t
 import { prepareBaselineWorktree } from "../../../src/preflight/baseline-worktree.ts";
 import { SEEDS, type Seed } from "../../../src/traps/seeds.ts";
 import { k1Request, refusals } from "../../fixtures/k1-preflight.ts";
-import { AT, OWNER, ReplayStub, assertCalled, box, commit, draft, git, prepare, run, start, update, type Box } from "./fixture.ts";
+import { AT, OWNER, assertCalled, box, commit, draft, git, prepare, run, start, update, type Box } from "./fixture.ts";
+import { launchEnvironmentRefusal } from "../../fixtures/launch-environment.ts";
 
 async function assertNoCall(b: Box, attemptDir: string, lifecycleState = "DRAFT") {
   const status = await readAttempt(attemptDir);
@@ -51,33 +51,7 @@ async function k1(seed: Seed) {
 }
 
 async function launch() {
-  const b = box();
-  try {
-    // Exact availability behaviour from the real launch adapter; no live CLI,
-    // credentials or owner's PATH are read. The execution half remains stubbed.
-    const executable = "synthetic-missing-claude";
-    const availability = new ClaudeCodeAdapter({ executable });
-    assert.throws(() => resolveExecutable(executable, { PATH: b.root }), /ExecutableNotFound/u);
-    assert.deepEqual(await availability.isAvailable(), { status: "available" });
-    const created = await draft(b, k1Request("replay missing claude in the launch environment", "core/src/example.ts"), "simple-sdlc");
-    await prepare(b, created.attemptDir);
-    await start(b, created.attemptDir);
-    const status = await run(b, created.attemptDir, { ...b.infrastructure,
-      adapterFor: (_entry, id) => {
-        const adapter = new class extends ReplayStub {
-          override isAvailable() { return availability.isAvailable(); }
-          override buildSpec(request: Parameters<ReplayStub["buildSpec"]>[0]) {
-            return { ...super.buildSpec(request), executable, env: { PATH: b.root } };
-          }
-        }(id);
-        b.adapters.push(adapter);
-        return adapter;
-      } });
-    assertCalled(b, status);
-    assert.ok("edge" in b.calls[0]!);
-    assert.equal(b.calls[0]!.edge, "L4");
-    // KNOWN GAP T08: resolving this executable before L4 must replace today's GO.
-  } finally { b.close(); }
+  await launchEnvironmentRefusal(); // S11/S17 now assert TR-13's before-L4 refusal.
 }
 
 async function quota() {

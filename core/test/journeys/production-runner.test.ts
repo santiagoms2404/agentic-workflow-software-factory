@@ -2192,17 +2192,19 @@ test("build-review still accepts builder=A, reviewer=B before launch", async () 
   }
 });
 
-test("unavailable configured adapter blocks before provider launch", async () => {
+test("unavailable configured adapter refuses PREPARED before provider launch", async () => {
   const world = await fixture("build");
   let launches = 0;
   try {
     const prepared = await readAttempt(world.created.attemptDir);
-    const status = await runProductionCommand({
+    await assert.rejects(runProductionCommand({
       attemptDir: world.created.attemptDir, stateRoot: world.stateRoot, config: world.config, configPath: world.configPath,
       projectRecord: world.projection.project,
       infrastructure: { adapterFor: (_entry: AdapterEntry, id: string) => new UnavailableAdapter(id, prepared.worktree!, () => { launches += 1; }) },
-    });
-    assert.equal(status.lifecycleState, "BLOCKED");
+    }), { name: "ProductionExecutableUnavailable" });
+    const status = await readAttempt(world.created.attemptDir);
+    assert.deepEqual(status, prepared);
+    assert.equal(status.lifecycleState, "PREPARED");
     assert.equal(status.budget.callsSpent, 0);
     assert.equal(status.budget.callsReserved, 0);
     assert.equal(launches, 0);

@@ -23,7 +23,12 @@ const baselineReadouts: string[] = JSON.parse(readFileSync(new URL("./readout.sn
 let fixtureRead = 0;
 async function readTrapsReadout(stateRoot: string) {
   const model = await readCurrentTrapsReadout(stateRoot);
-  assert.equal(JSON.stringify(model), baselineReadouts[fixtureRead++], "fixture readout bytes are unchanged");
+  const baseline = JSON.parse(baselineReadouts[fixtureRead++]!);
+  // T08 intentionally advances the catalogue; journal-derived bytes stay pinned.
+  baseline.catalogue.traps = 13;
+  baseline.catalogue.byTrap.push({ id: "TR-13", seeds: 2 });
+  baseline.nextFreeTrapId = "TR-14";
+  assert.equal(JSON.stringify(model), JSON.stringify(baseline), "fixture journal readout bytes are unchanged");
   return model;
 }
 after(() => assert.equal(fixtureRead, baselineReadouts.length, "all baseline fixture readouts were checked"));
@@ -134,11 +139,11 @@ test("owner-shaped registered roots return exact four coverage lists, counts, ne
         trap: { kind: "trap", id: "TR-99" } }],
       unlinked: [{ project: "awsf", taskId: "unlinked", attempt: 1, terminalAt: POST, lifecycleState: "CANCELLED", preLink: false }],
     });
-    assert.equal(model.catalogue.traps, 12);
+    assert.equal(model.catalogue.traps, 13);
     assert.deepEqual(model.catalogue.byTrap, TRAPS.map(trap => ({ id: trap.id, seeds: trap.seeds.length })));
     assert.equal(model.catalogue.noTraps, 48);
     assert.deepEqual(model.catalogue.byNoTrapKind, { fixed: 4, "after-spend": 25, owner: 3, unexplained: 9, "not-a-stop": 7 });
-    assert.equal(model.nextFreeTrapId, "TR-13");
+    assert.equal(model.nextFreeTrapId, "TR-14");
     assert.deepEqual(model.projects, [
       { project: "awsf", newestLanded: { taskId: "landed", attempt: 1, landedAt: POST, baseSha: BASE, candidateSha: CANDIDATE, traps: { passed: true, sha: CANDIDATE } } },
       { project: "empty", newestLanded: null }, { project: "fusion", newestLanded: null },

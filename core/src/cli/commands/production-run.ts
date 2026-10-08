@@ -393,6 +393,17 @@ export class ProductionRouteUnavailable extends Error {
   }
 }
 
+export class ProductionExecutableUnavailable extends ProductionRouteUnavailable {
+  readonly phase: string;
+  readonly path: string;
+  constructor(adapterId: string, phase: string, path: string, detail: string) {
+    super(adapterId, `phase ${JSON.stringify(phase)} refused before launch; PATH=${JSON.stringify(path)}; ${detail}`);
+    this.name = "ProductionExecutableUnavailable";
+    this.phase = phase;
+    this.path = path;
+  }
+}
+
 export class ProductionRepositoryMismatch extends Error {
   constructor(detail: string) {
     super(`prepared repository identity mismatch: ${detail}`);
@@ -1424,8 +1435,13 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       }
       const adapter = infra.adapterFor(entry, agent.harness.adapter, options.config);
       if (adapter === null) throw new ProductionRouteUnavailable(agent.harness.adapter, "adapter kind has no production binding");
-      const available = await adapter.isAvailable();
-      if (available.status !== "available") throw new ProductionRouteUnavailable(agent.harness.adapter, available.detail ?? available.code ?? "blocked");
+      const available = await adapter.isAvailable(undefined, HOST.process.env);
+      // trap-refusal-begin TR-13
+      if (available.status !== "available") {
+        throw new ProductionExecutableUnavailable(agent.harness.adapter, phase.id,
+          available.path ?? HOST.process.env.PATH ?? "", available.detail ?? available.code ?? "blocked");
+      }
+      // trap-refusal-end TR-13
       const model = await adapter.getModelInfo(agent.model);
       // A bound phase must reach the model through a demonstrated image route
       // with its read tool intact — checked on the EFFECTIVE route, after any
@@ -1582,7 +1598,8 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       }
     }
   } catch (error) {
-    if (recovery !== undefined) throw error;
+    // An unavailable launch environment is a refusal, not a sealed failed attempt.
+    if (error instanceof ProductionExecutableUnavailable || recovery !== undefined) throw error;
     const now = infra.now();
     const reason = closestBlocker(error);
     const decision = transition({
