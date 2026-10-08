@@ -11,6 +11,9 @@ import { prepareReview, resolveReviewRoute, type ReviewPhaseInfrastructure } fro
 import { buildReviewWorkflow } from "../../../src/workflow/recipes/build-review.ts";
 import { assertReviewDelivery } from "../../fixtures/assert-review-delivery.ts";
 import { reviewDeliveryFixture } from "../../fixtures/review-diff-delivery.ts";
+import { reviewEvidencePresent } from "../../../src/gates/review.ts";
+import { sha256 } from "../../../src/workflow/review-evidence.ts";
+import { reviewDiffPrompt } from "../../../src/workflow/review-diff-delivery.ts";
 
 class DescriptorObserver extends ClaudeCodeAdapter {
   requests: ModelRequest[] = [];
@@ -21,8 +24,9 @@ class DescriptorObserver extends ClaudeCodeAdapter {
   }
 }
 
-test("replacement and owner-rework prepare full readonly deliveries and Claude argv before any GO", async () => {
-  const world = await reviewDeliveryFixture();
+test("replacement and owner-rework preserve literal replacement sequences in delivered context before any GO", async () => {
+  const sequences = ["$&", "$$", "$'", "$`"];
+  const world = await reviewDeliveryFixture(false, `after ${sequences.join(" ")}\n`);
   try {
     const configPath = resolve("awsf.config.yaml");
     const config = loadConfig(readFileSync(configPath, "utf8").replaceAll("interrupted_turn: true", "interrupted_turn: false"));
@@ -41,6 +45,12 @@ test("replacement and owner-rework prepare full readonly deliveries and Claude a
         intent: context, testOutput: context.testOutput, workerProvider: "openai-codex" });
       const request = adapter.requests.at(-1)!;
       assert.equal(prepared.context.diffTruncated, true);
+      for (const sequence of sequences) assert.ok(prepared.context.diff.includes(sequence));
+      const serialized = JSON.stringify(prepared.context, null, 2);
+      assert.ok(request.prompt.includes(serialized), `${generation}: the context reaches the compiled prompt byte for byte`);
+      assert.ok(request.prompt.includes(reviewDiffPrompt(prepared.context)));
+      assert.equal(reviewEvidencePresent({ ...world.composed.expectation, context: prepared.context,
+        compiledPrompt: request.prompt, digest: sha256 }).passed, true);
       assert.deepEqual(request.readOnlyRoots, [prepared.context.diffDelivery!.directory]);
       const spec = adapter.buildSpec(request);
       assert.deepEqual(spec.argv.slice(-2), ["--add-dir", prepared.context.diffDelivery!.directory]);

@@ -358,6 +358,9 @@ export function reviewEvidencePresent(gate: ReviewEvidenceGateContext): GateRepo
   const missing = difference(gate.changedFiles, context.changedFiles);
   const extra = difference(context.changedFiles, gate.changedFiles);
   const hunks = context.diff.split("\n").filter((line) => line.startsWith("@@ ")).length;
+  const delivered = gate.fullDiffDelivered === true && context.diffDelivery !== undefined &&
+    sameSet(context.diffDelivery.files.map(file => file.path), gate.changedFiles) &&
+    context.diffDelivery.files.every(file => file.bytes > 0);
 
   report.check("review context composed", true, `${String(utf8ByteLength(serialized))} byte(s) of evidence`);
   report.check("candidate SHA exact", context.candidateSha === gate.candidateSha, `expected=${gate.candidateSha}; context=${context.candidateSha}`);
@@ -375,8 +378,8 @@ export function reviewEvidencePresent(gate: ReviewEvidenceGateContext): GateRepo
   );
   report.check(
     "a changed candidate carries at least one hunk",
-    context.changedFiles.length === 0 || hunks > 0,
-    `${String(hunks)} hunk header(s) in the bounded diff`,
+    context.changedFiles.length === 0 || hunks > 0 || (delivered && gate.fullDiffHasHunks === true),
+    `${context.changedFiles.length} changed file(s); ${String(hunks)} inline hunk(s); full diff delivered=${String(delivered)}`,
   );
   // The half that two matching fields could never prove: the evidence was not
   // merely composed, it was serialized into the prompt this phase was given.

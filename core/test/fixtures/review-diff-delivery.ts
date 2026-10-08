@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { composeReviewEvidence } from "../../src/workflow/review-evidence.ts";
 
-export async function reviewDeliveryFixture(singleFile = false) {
+export async function reviewDeliveryFixture(singleFile = false, smallFileContent = "after\n") {
   const root = mkdtempSync(join(tmpdir(), "awsf-full-review-"));
   const repository = join(root, "repository");
   const worktree = join(root, "worktree");
@@ -21,7 +21,7 @@ export async function reviewDeliveryFixture(singleFile = false) {
   const baseSha = git(repository, "rev-parse", "HEAD").trim();
   git(repository, "worktree", "add", "--detach", worktree, "HEAD");
   if (!singleFile) {
-    writeFileSync(join(worktree, "small.ts"), "after\n");
+    writeFileSync(join(worktree, "small.ts"), smallFileContent);
     writeFileSync(join(worktree, "partial.ts"), ["after", ...Array.from({ length: 100 }, (_, i) => `context ${i}`), "end", "large addition ".repeat(15_000), ""].join("\n"));
     writeFileSync(join(worktree, 'quote " tab\t newline\n ü.ts'), "unusual filename\n");
     writeFileSync(join(worktree, "literal[1].ts"), "literal pathspec\n");

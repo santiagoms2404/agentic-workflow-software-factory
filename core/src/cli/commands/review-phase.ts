@@ -788,8 +788,8 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
     deliveryContext = await redeliverReviewDiff(composed.context, { attemptDir: subject.attemptDir,
       runId: `${subject.sessionId}:${phaseKey}:run${turn === 0 ? "" : `-${String(turn + 1)}`}`,
       worktree: subject.worktree, repository: subject.repository, stateRoot: subject.stateRoot });
-    prompt = prompt.replace(JSON.stringify(composed.context, null, 2), JSON.stringify(deliveryContext, null, 2))
-      .replace(reviewDiffPrompt(composed.context), reviewDiffPrompt(deliveryContext));
+    prompt = prompt.split(JSON.stringify(composed.context, null, 2)).join(JSON.stringify(deliveryContext, null, 2))
+      .split(reviewDiffPrompt(composed.context)).join(reviewDiffPrompt(deliveryContext));
     const retained = await openRetainedColdTurn({ agent: route.agent, adapter: route.adapter,
       store: continuity, phaseKey, round: turn, runtimeDir });
     const request = { ...buildPhaseRequest({ agent: route.agent, prompt, systemPromptPath, cwd: subject.worktree,

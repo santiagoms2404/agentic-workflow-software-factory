@@ -6,7 +6,7 @@ import { reviewDeliveryFixture } from "../../fixtures/review-diff-delivery.ts";
 import { sha256 } from "../../../src/workflow/review-evidence.ts";
 import { deliverReviewDiff, redeliverReviewDiff, reviewDiffPrompt } from "../../../src/workflow/review-diff-delivery.ts";
 import { boundReviewDiff } from "../../../src/gates/review-diff.ts";
-import { reviewEvidenceFitness } from "../../../src/gates/review.ts";
+import { reviewEvidenceFitness, reviewEvidencePresent } from "../../../src/gates/review.ts";
 import { parseEnvelope } from "../../../src/contracts/parse-envelope.ts";
 import { validReviewContext } from "../contracts/fixtures.ts";
 
@@ -48,14 +48,33 @@ test("full per-path delivery reproduces the retained diff byte for byte, includi
   } finally { world.cleanup(); }
 });
 
-test("even a single hunk larger than the inline cap is fit when the host proved full delivery", async () => {
+test("a single hunk larger than the inline cap passes fitness and evidence-present only with host-proved delivery", async () => {
   const world = await reviewDeliveryFixture(true);
   try {
     assert.equal(world.composed.context.diff, "");
     assert.deepEqual(world.composed.context.diffOmittedFiles, ["huge.ts"]);
-    assert.equal(reviewEvidenceFitness(world.composed.context, world.composed.expectation).passed, true);
-    assert.equal(reviewEvidenceFitness(world.composed.context, { ...world.composed.expectation, fullDiffDelivered: false }).passed, false,
-      "delivery metadata alone is not host proof");
+    assert.equal(world.retained.split("\n").filter(line => line.startsWith("@@ ")).length, 1);
+    const context = world.composed.context;
+    const compiledPrompt = `Host evidence:\n${JSON.stringify(context, null, 2)}\n${reviewDiffPrompt(context)}`;
+    for (const expectation of [world.composed.expectation,
+      { ...world.composed.expectation, fullDiffDelivered: false },
+      { ...world.composed.expectation, fullDiffHasHunks: false },
+    ]) {
+      const expected = expectation.fullDiffDelivered === true && expectation.fullDiffHasHunks === true;
+      assert.equal(reviewEvidenceFitness(context, expectation).passed, expected);
+      assert.equal(reviewEvidencePresent({ ...expectation, context, compiledPrompt, digest: sha256 }).passed, expected);
+    }
+    for (const diffDelivery of [undefined,
+      { ...context.diffDelivery!, files: [] },
+      { ...context.diffDelivery!, files: context.diffDelivery!.files.map(file => ({ ...file, bytes: 0 })) },
+    ]) {
+      const incomplete = { ...context };
+      if (diffDelivery === undefined) delete incomplete.diffDelivery;
+      else incomplete.diffDelivery = diffDelivery;
+      assert.equal(reviewEvidenceFitness(incomplete, world.composed.expectation).passed, false);
+      assert.equal(reviewEvidencePresent({ ...world.composed.expectation, context: incomplete,
+        compiledPrompt: JSON.stringify(incomplete, null, 2), digest: sha256 }).passed, false);
+    }
   } finally { world.cleanup(); }
 });
 
