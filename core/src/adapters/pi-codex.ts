@@ -579,11 +579,9 @@ export class PiCodexAdapter implements ContinuityCapableAdapter {
       const facts = readPiSessionFile(join(ref.storeDir, name), ref.providerSessionId);
       if (facts !== null) found.push(facts);
     }
-    // trap-refusal-begin TR-11
     if (found.length === 0) {
       return refuse(`no session in the host-owned store carries the expected id`);
     }
-    // trap-refusal-end TR-11
     if (found.length > 1) {
       // Two files claiming one id is not a state the host may pick a winner
       // from: pi's own lookup takes the most recently modified, and a

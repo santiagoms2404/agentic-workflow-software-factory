@@ -71,6 +71,8 @@ import {
   type AttemptStatus,
 } from "./attempt.ts";
 import { requestOutput } from "./production-run.ts";
+import { newCommand } from "./new.ts";
+import { enforceK1 } from "./start.ts";
 import { readAttemptEvidence, recordedReviews, recordedRoutes } from "./review-record.ts";
 import {
   REVIEW_HEADROOM_CALLS,
@@ -464,6 +466,13 @@ function integrate(candidate: SealedCandidate, committedAt: string): { readonly 
   return { pair: { baseSha: integration.integrationBaseSha, candidateSha: integration.integratedCandidateSha }, integration };
 }
 
+async function enforceAdoptionK1(options: AdoptCommandOptions, attemptDir: string, status: AttemptStatus): Promise<void> {
+  // trap-refusal-begin TR-19
+  await enforceK1({ attemptDir, worktreeRoot: options.worktreeRoot, configPath: options.configPath,
+    ...(options.projectRecord === undefined ? {} : { projectRecord: options.projectRecord }) }, status, options.config);
+  // trap-refusal-end TR-19
+}
+
 async function createTarget(
   options: AdoptCommandOptions,
   candidate: SealedCandidate,
@@ -473,11 +482,13 @@ async function createTarget(
   if (options.targetTaskId === candidate.source.taskId) {
     throw new CandidateAdoptionRejected("the adoption target must be a distinct task");
   }
-  const root = taskRoot(options.stateRoot, candidate.source.project, options.targetTaskId);
-  if (await latestAttemptNumber(root) !== null) {
-    throw new CandidateAdoptionRejected(`target ${candidate.source.project}/${options.targetTaskId} already exists`);
-  }
-  const sessionId = infra.sessionId();
+  const dir = attemptDirectory(options.stateRoot, candidate.source.project, options.targetTaskId, "1");
+  const draft = await readAttempt(dir);
+  if (draft.lifecycleState !== "DRAFT") throw new CandidateAdoptionRejected("target is no longer DRAFT");
+  // Re-measure under the current anchor after the owner confirmation, before
+  // integration objects, trees, gates or provider reservations can be created.
+  await enforceAdoptionK1(options, dir, draft);
+  const sessionId = draft.sessionId;
   const now = infra.now();
   const { pair, integration } = integrate(candidate, now);
   const worktree = createWorktree({
@@ -492,7 +503,6 @@ async function createTarget(
     seedPaths: options.config.runtime.seed_paths,
     protectedPaths: options.config.policy.protected_paths,
   });
-  const dir = attemptDirectory(options.stateRoot, candidate.source.project, options.targetTaskId, "1");
   const budget = adoptionBudget(options.config);
   const status: AttemptStatus = {
     schema: "awsf/attempt-status/v1",
@@ -532,8 +542,8 @@ async function createTarget(
     process: null,
     landingApproval: null,
     blocker: null,
-    revision: 1,
-    lastSourceSeq: 1,
+    revision: draft.revision + 1,
+    lastSourceSeq: draft.lastSourceSeq + 1,
   };
   const adoption: CandidateAdoptionEvidence = {
     sourceProject: candidate.source.project,
@@ -555,8 +565,8 @@ async function createTarget(
   return {
     attemptDir: dir,
     pair,
-    status: await persistAttempt(dir, null, {
-      kind: "attempt.created",
+    status: await persistAttempt(dir, draft.revision, {
+      kind: "attempt.updated",
       next: status,
       evidence: { type: "candidate-adoption", adoption },
     }, options.projectRecord),
@@ -585,10 +595,28 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
   assertRoutesReachWorkflow(routeOverrides, candidate.recipe.id);
   const targetRoot = taskRoot(options.stateRoot, candidate.source.project, options.targetTaskId);
   const existing = await latestAttemptNumber(targetRoot);
-  const resumeDir = existing === 1 ? attemptDirectory(options.stateRoot, candidate.source.project, options.targetTaskId, "1") : null;
-  const resumed = resumeDir === null ? null : await readAttempt(resumeDir);
+  const targetDir = attemptDirectory(options.stateRoot, candidate.source.project, options.targetTaskId, "1");
+  const target = existing === null ? (await newCommand({ stateRoot: options.stateRoot,
+    project: candidate.source.project, taskId: options.targetTaskId, continuesTask: candidate.source.taskId,
+    repository: candidate.source.repository, request: options.request.trim(), workflow: candidate.recipe.id, tier: 2,
+    configSnapshotJson: toConfigSnapshotJson(options.config), routeOverrides,
+    callCeilings: callCeilingsOf(options.config.risk.call_ceiling), allowance: options.config.risk.correction_allowance,
+    ...(options.groupId === undefined ? {} : { groupId: options.groupId }),
+    ...(candidate.source.planRef === null ? {} : { planRef: candidate.source.planRef }),
+    ...(options.projectRecord === undefined ? {} : { projectRecord: options.projectRecord }), now: infra.now, sessionId: infra.sessionId })).status
+    : existing === 1 ? await readAttempt(targetDir) : null;
+  const fresh = target?.lifecycleState === "DRAFT";
+  if (fresh) {
+    if (target.continuesTask !== candidate.source.taskId || target.request !== options.request.trim() ||
+        target.configSnapshotJson !== toConfigSnapshotJson(options.config) || !isDeepStrictEqual(target.routeOverrides, routeOverrides)) {
+      throw new CandidateAdoptionRejected(`target ${candidate.source.project}/${options.targetTaskId} already exists and is not this pending adoption (DRAFT intent or route differs)`);
+    }
+    await enforceAdoptionK1(options, targetDir, target);
+  }
+  const resumeDir = fresh ? null : existing === 1 ? targetDir : null;
+  const resumed = fresh ? null : target;
   let resumedPair: TargetPair | null = null;
-  if (existing !== null) {
+  if (existing !== null && !fresh) {
     const targetEvidence = resumeDir === null ? [] : await readAttemptEvidence(resumeDir);
     const adoption = targetEvidence.find((record) => record.type === "candidate-adoption");
     const grant = targetEvidence.find((record) => record.type === "review-degradation" &&

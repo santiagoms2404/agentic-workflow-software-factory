@@ -9,11 +9,13 @@
 // checkout, and only after a clean-tree check: a dirty tree is refused and never
 // cleaned, because whatever made it dirty may be the evidence somebody needs.
 
-import { existsSync } from "node:fs";
-import { realpath } from "node:fs/promises";
+import { createReadStream, existsSync } from "node:fs";
+import { lstat, readdir, readlink, realpath } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import { assertClean, runGit, systemGitRunner, type GitRunner } from "../git/changes.ts";
 import { createWorktree, seedWorktreePaths, worktreePath } from "../git/worktrees.ts";
+import { normalizeRepositoryPath } from "../policy/path-policy.ts";
 
 /** The tree's directory name under the worktree root: never a session id, so no attempt can claim it. */
 export function baselineWorktreeName(project: string): string {
@@ -54,6 +56,32 @@ export interface BaselineWorktree {
   readonly seeded: readonly string[];
 }
 
+export class BaselineSeedStale extends Error {
+  constructor(path: string) {
+    super(`baseline seed ${JSON.stringify(path)} differs from the repository seed; inspect and restore it by hand, then run preflight again. Nothing was cleared or refreshed.`);
+    this.name = "BaselineSeedStale";
+  }
+}
+
+// Compare bytes rather than directory dates: edits inside an ignored directory
+// need not change its date. Symlinks are compared, never followed.
+async function seedDigest(path: string): Promise<string> {
+  const hash = createHash("sha256");
+  async function visit(path: string, name: string): Promise<void> {
+    const entry = await lstat(path);
+    hash.update(JSON.stringify([name, entry.mode & 0o777, entry.isDirectory() ? "directory" : entry.isSymbolicLink() ? "link" : "file"]));
+    if (entry.isSymbolicLink()) hash.update(JSON.stringify(await readlink(path)));
+    else if (entry.isDirectory()) for (const child of (await readdir(path)).sort()) await visit(resolve(path, child), `${name}/${child}`);
+    else {
+      const bytes = createHash("sha256");
+      for await (const chunk of createReadStream(path)) bytes.update(chunk);
+      hash.update(bytes.digest("hex"));
+    }
+  }
+  await visit(path, "");
+  return hash.digest("hex");
+}
+
 function commonDir(runner: GitRunner): string {
   return runGit(runner, ["rev-parse", "--path-format=absolute", "--git-common-dir"]).trim();
 }
@@ -62,14 +90,15 @@ function commonDir(runner: GitRunner): string {
  * Creates the baseline worktree at the base, or re-points the existing one.
  *
  * Re-pointing checks, in order, that the path is the top of a worktree sharing
- * this repository's Git directory, that it is clean, and only then checks the
- * base out detached. Seed paths are copied only where they are still missing:
- * an ignored seed path a gate depends on survives the checkout, and nothing in
- * core/src may delete it to copy it again.
+ * this repository's Git directory, that it is clean, and that retained seed
+ * bytes still match the repository, before checking the base out detached.
+ * Seed paths are copied only where missing; differing retained bytes refuse,
+ * and nothing in core/src deletes or refreshes them.
  */
 export async function prepareBaselineWorktree(request: BaselineWorktreeRequest): Promise<BaselineWorktree> {
   const repositoryGit = systemGitRunner(request.repository);
   const root = resolve(request.root);
+  const seedPaths = request.seedPaths.map(normalizeRepositoryPath);
   const name = baselineWorktreeName(request.project);
   const path = worktreePath(root, name);
   const head = runGit(repositoryGit, ["rev-parse", `${request.baseSha}^{commit}`]).trim();
@@ -88,12 +117,21 @@ export async function prepareBaselineWorktree(request: BaselineWorktreeRequest):
       throw new BaselineWorktreeForeign(path, "it belongs to another repository");
     }
     assertClean(path, "before", tree);
+    for (const seed of seedPaths) {
+      const retained = resolve(path, seed);
+      const source = resolve(request.repository, seed);
+      // trap-refusal-begin TR-18
+      if (existsSync(retained) && (!existsSync(source) || await seedDigest(retained) !== await seedDigest(source))) {
+        throw new BaselineSeedStale(retained);
+      }
+      // trap-refusal-end TR-18
+    }
     runGit(tree, ["checkout", "--quiet", "--detach", head]);
   }
   const tree = systemGitRunner(path);
   const observed = runGit(tree, ["rev-parse", "HEAD"]).trim();
   if (observed !== head) throw new Error(`the baseline worktree holds ${observed} after the checkout, not the base ${head}`);
-  const missing = request.seedPaths.filter((seed) => !existsSync(resolve(path, seed)));
+  const missing = seedPaths.filter((seed) => !existsSync(resolve(path, seed)));
   const seeded = missing.length === 0 ? [] : await seedWorktreePaths({
     repository: request.repository, worktree: path, seedPaths: missing, protectedPaths: request.protectedPaths,
   });

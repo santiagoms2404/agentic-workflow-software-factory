@@ -46,12 +46,9 @@ test("no-trap reasons use the closed vocabulary and retain the confirmed evidenc
   }
 });
 
-test("pending gaps stay under the confirmed M4 tasks, not prematurely assigned trap ids", () => {
-  assert.deepEqual(PENDING, [
-    { task: "T12", seeds: ["C5-baseline", "C8-adopt", "C8-later-grant"] },
-  ]);
-  assert.equal(new Set(PENDING.map(entry => entry.task)).size, PENDING.length);
-  assert.equal(PENDING.flatMap(entry => entry.seeds).length, 3);
+test("M4 closes all confirmed pending gaps", () => {
+  assert.deepEqual(PENDING, []);
+  assert.equal(SEEDS.filter(seed => seed.outcome === "gap" || seed.pendingTask !== null).length, 0);
 });
 
 test("TRAP_CUT parses as the same instant used by the one population rule", () => {
@@ -71,8 +68,9 @@ test("the catalogue assigns all eight K1 fields and the four complementary exist
     ["TR-11", "E_BACKEND_FAILURE"], ["TR-12", "AttemptWorktreeExists"],
     ["TR-13", "ProductionExecutableUnavailable"], ["TR-14", "ProductionQuotaRefused"],
     ["TR-15", "ProductionQuotaRefused"], ["TR-17", "StartPlacementRefused"],
+    ["TR-19", "StartPreflightRefused"], ["TR-20", "ProtectedGrantBoundaryRefused"],
   ]);
-  assert.deepEqual(TRAPS.flatMap(trap => trap.seeds).sort(), ["G02", "G09", "G11", "S11", "S17", "S21", "S24", "S27", "S34", "S36", "S42"]);
+  assert.deepEqual(TRAPS.flatMap(trap => trap.seeds).sort(), ["C5-baseline", "C8-adopt", "C8-later-grant", "G02", "G09", "G11", "S11", "S17", "S21", "S24", "S27", "S34", "S36", "S42"]);
   // S34's two refusal points and S27's partial K1 coverage do not duplicate
   // their ledger assignment; S01/S15/S47 and G01 remain no-trap entries.
   for (const seed of ["S01", "S15", "S47", "G01"]) assert.ok(NO_TRAPS.some(entry => entry.seed === seed));
@@ -99,5 +97,5 @@ test("the ledger applies the dated G02-S corrections without changing its 62-row
   assert.equal(SEEDS.filter(seed => "project" in seed.source && seed.dateBasis === "terminal-day").length, 47);
   const totals = Object.fromEntries(["refused", "gap", ...NO_TRAP_KINDS].map(kind =>
     [kind, SEEDS.filter(seed => seed.outcome === kind).length]));
-  assert.deepEqual(totals, { refused: 11, gap: 3, fixed: 4, "after-spend": 25, owner: 3, unexplained: 9, "not-a-stop": 7 });
+  assert.deepEqual(totals, { refused: 14, gap: 0, fixed: 4, "after-spend": 25, owner: 3, unexplained: 9, "not-a-stop": 7 });
 });

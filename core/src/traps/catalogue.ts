@@ -80,6 +80,12 @@ export const TRAPS: readonly TrapEntry[] = [
     refusalPoint: "k1-field", refusal: "awsf.preflight-refused/v1" },
   { id: "TR-17", family: "missing-placement", title: "Design context needs a readable placement before preparation", seeds: ["S21", "S24"],
     refusalPoint: "start", refusal: "StartPlacementRefused" },
+  { id: "TR-18", family: "stale-baseline", title: "Retained baseline seeds must match the repository", seeds: ["C5-baseline"],
+    refusalPoint: "k1-field", refusal: "awsf.preflight-refused/v1" },
+  { id: "TR-19", family: "adoption-k1", title: "A fresh adoption target must pass K1", seeds: ["C8-adopt"],
+    refusalPoint: "start", refusal: "StartPreflightRefused" },
+  { id: "TR-20", family: "grant-boundary", title: "A protected grant names the next writing phase", seeds: ["C8-later-grant"],
+    refusalPoint: "owner-act", refusal: "ProtectedGrantBoundaryRefused" },
 ];
 
 function isNoTrapKind(outcome: Seed["outcome"]): outcome is NoTrapKind {
@@ -93,9 +99,7 @@ export const NO_TRAPS: readonly NoTrapEntry[] = SEEDS.flatMap(seed =>
 // Gaps have no trap id yet: M4 supplies the refusal before assigning an id.
 // S27's outer-request subshapes remain TR-02/TR-06; TR-16 owns its
 // selected-ticket shape without duplicating the ledger assignment.
-export const PENDING: readonly PendingEntry[] = [
-  { task: "T12", seeds: ["C5-baseline", "C8-adopt", "C8-later-grant"] },
-];
+export const PENDING: readonly PendingEntry[] = [];
 
 export interface BlockerCoverage {
   readonly edge: string;
@@ -107,7 +111,7 @@ export interface BlockerCoverage {
 // Closed, explicit (edge, code) coverage, not generated from the vocabulary:
 // adding a state blocker must force a new classification in the unit fence.
 // A code can also describe a pre-call subshape (for example S17's launch
-// environment); those confirmed seeds remain pending above. These rows classify
+// environment); those confirmed seeds have their own traps above. These rows classify
 // the lifecycle edge's general fault, not an assertion that every subshape is
 // already trapped. L21's recovery from AWAITING_OWNER and L24's landing
 // follow build/review calls; their later record/Git faults are after-spend.

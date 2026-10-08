@@ -9,8 +9,9 @@ import { toConfigSnapshotJson } from "../../src/config/effective-config.ts";
 import type { AwsfConfig } from "../../src/config/schema.ts";
 import type { ModelRequest, ProcessSpec } from "../../src/adapters/interface.ts";
 import type { CandidateAdoptionEvidence } from "../../src/contracts/candidate-adoption.ts";
-import { adoptCommand, type AdoptCommandOptions } from "../../src/cli/commands/adopt.ts";
-import { nextRevision, persistAttempt, type AttemptStatus } from "../../src/cli/commands/attempt.ts";
+import { type AdoptCommandOptions } from "../../src/cli/commands/adopt.ts";
+import { adoptUnderK1 as adoptCommand } from "../fixtures/adopt-k1.ts";
+import { nextRevision, persistAttempt, readAttempt, type AttemptStatus } from "../../src/cli/commands/attempt.ts";
 import { cancelCommand } from "../../src/cli/commands/cancel.ts";
 import { degradeReviewCommand } from "../../src/cli/commands/degrade-review.ts";
 import { journeyCommand } from "../../src/cli/commands/journey.ts";
@@ -198,7 +199,7 @@ function adoptOptions(
   const targetTaskId = overrides.targetTaskId ?? "integrated";
   return {
     sourceAttemptDir: world.sourceDir, stateRoot: world.stateRoot, targetTaskId,
-    request: "adopt the sealed candidate over the advanced canonical HEAD", worktreeRoot: join(world.root, "worktrees"),
+    request: k1Request("adopt the sealed candidate over the advanced canonical HEAD", "core/src/**"), worktreeRoot: join(world.root, "worktrees"),
     terminal: owner(meter.lines), config: world.config, configPath: resolve("awsf.config.yaml"),
     ...overrides,
     infrastructure: {
@@ -250,7 +251,7 @@ function adoptIntegrated(world: SeedWorld, sourceDir: string, meter: Spend, line
   onGate: (cwd: string) => void = () => {}) {
   return adoptCommand({
     sourceAttemptDir: sourceDir, stateRoot: world.stateRoot, targetTaskId: "integrated",
-    request: "land the cancelled candidate over the advanced canonical HEAD", worktreeRoot: join(world.root, "targets"),
+    request: k1Request("land the cancelled candidate over the advanced canonical HEAD", "core/src/**"), worktreeRoot: join(world.root, "targets"),
     terminal: owner(lines), config: world.config, configPath: world.configPath,
     infrastructure: {
       adapterFor: (_entry, id) => new ReviewAdapter(id, meter.prompts), createBroker: fakeSeedBroker, sandboxProbe: () => false,
@@ -505,10 +506,15 @@ for (const scenario of REFUSALS) {
       const bytes = sourceBytes(world.sourceDir);
       const refsBefore = refs(world.repository);
       const meter = spend();
+      let clockCalls = 0;
       const options = adoptOptions(world, meter, {
         ...(scenario.targetTaskId === undefined ? {} : { targetTaskId: scenario.targetTaskId }),
         ...(scenario.confirm === undefined ? {} : { terminal: owner(meter.lines, () => scenario.confirm!(world)) }),
-      }, scenario.sessionId === undefined ? {} : { sessionId: () => scenario.sessionId!(world) });
+      }, scenario.sessionId === undefined ? {} : { now: () => {
+        clockCalls++;
+        if (clockCalls === 2) scenario.sessionId!(world);
+        return AT;
+      } });
 
       if (scenario.expected === null) {
         const declined = await adoptCommand(options);
@@ -519,8 +525,13 @@ for (const scenario of REFUSALS) {
       }
       assert.equal(meter.gates, 0);
       assert.equal(meter.prompts.length, 0);
-      if (targetJournal === null) assert.equal(existsSync(targetDir), scenario.targetTaskId === "stale-source");
-      else assert.deepEqual(readFileSync(journalFilePath(join(targetDir, "1"))), targetJournal);
+      if (targetJournal === null && existsSync(targetDir) && scenario.targetTaskId !== "stale-source") {
+        const status = await readAttempt(join(targetDir, "1"));
+        assert.equal(status.lifecycleState, "DRAFT");
+        assert.equal(status.worktree, null);
+        assert.equal(status.budget.callsSpent, 0);
+      }
+      else if (targetJournal !== null) assert.deepEqual(readFileSync(journalFilePath(join(targetDir, "1"))), targetJournal);
       if (scenario.races !== "source") assert.deepEqual(sourceBytes(world.sourceDir), bytes);
       if (scenario.races === undefined) assert.equal(refs(world.repository), refsBefore);
       assert.equal(git(world.repository, "rev-parse", `${world.candidate}^{commit}`), world.candidate);
@@ -634,7 +645,7 @@ function rewriteJournal(targetDir: string, change: (records: JournalLine[]) => v
 }
 
 function rewriteAdoption(targetDir: string, change: (adoption: CandidateAdoptionEvidence) => void): void {
-  rewriteJournal(targetDir, (records) => { change(records[0]!.event.evidence!["adoption"] as CandidateAdoptionEvidence); });
+  rewriteJournal(targetDir, (records) => { change(records.find(record => record.event.evidence?.["type"] === "candidate-adoption")!.event.evidence!["adoption"] as CandidateAdoptionEvidence); });
 }
 
 function succeededGates(record: JournalLine): boolean {
@@ -703,7 +714,7 @@ const SEED_SOURCE_REFUSALS: readonly SeedSourceRefusal[] = [
     tamper: (adoption) => { Object.assign(adoption, { sourceEvidenceCopied: true }); },
     expected: /adoption evidence is not exactly one valid host creation record/u },
   { name: "a replayed second adoption record",
-    rewrite: (records) => { records.at(-1)!.event.evidence = records[0]!.event.evidence!; },
+    rewrite: (records) => { records.at(-1)!.event.evidence = records.find(record => record.event.evidence?.["type"] === "candidate-adoption")!.event.evidence!; },
     expected: /adoption evidence is not exactly one valid host creation record/u },
   { name: "a gates-pass status whose host phase record is gone",
     rewrite: (records) => { delete records.find(succeededGates)!.event.evidence; },

@@ -1277,6 +1277,21 @@ export async function productionRecoveryBinding(options: Pick<ProductionRunOptio
       maxCorrections: phase.maxCorrections, gates: phase.gates.map(gate => gate.id) })) });
 }
 
+export async function assertProtectedGrantBoundary(options: Pick<ProductionRunOptions, "config" | "configPath">, status: AttemptStatus, phaseKey: string): Promise<void> {
+  const recipe = await attemptRecipe(options, status);
+  const nextAgent = recipe?.phases.slice(status.recovery?.prefix.length ?? 0).find(candidate =>
+    candidate.kind === "agent" && options.config.agents.some(agent => agent.name === candidate.owner && agent.writes.length > 0));
+  // A grant pins the next writing phase, not a later writer across a call
+  // that can move its pre-write HEAD. Read-only phases change no granted bytes.
+  // trap-refusal-begin TR-20
+  if (nextAgent?.id !== phaseKey) {
+    const error = new Error(`protected grant must name the next writing phase ${JSON.stringify(nextAgent?.id)}, not later phase ${JSON.stringify(phaseKey)}; run to its quiescent boundary first`);
+    error.name = "ProtectedGrantBoundaryRefused";
+    throw error;
+  }
+  // trap-refusal-end TR-20
+}
+
 export async function protectedGrantSubject(options: Pick<ProductionRunOptions, "config" | "configPath">, status: AttemptStatus, phaseKey: string): Promise<import("../../contracts/protected-grant.ts").ProtectedGrantSubject> {
   const recipe = await attemptRecipe(options, status);
   const ordinal = recipe?.phases.findIndex(phase => phase.id === phaseKey) ?? -1;
@@ -4064,6 +4079,27 @@ export async function resumeProductionCommand(options: ProductionRunOptions & { 
   if (!options.terminal.interactive) throw new Error("resume requires owner confirmation at a TTY");
   const current = await readAttempt(options.attemptDir);
   const recipe = await attemptRecipe(options, current);
+  // Re-prove any retained conversation before recovery can reserve or spend.
+  // This also refuses a pre-GO interrupted start whose private locator survived
+  // but whose provider store did not. No provider is launched by this proof.
+  const retained = new ContinuityStore({ path: continuityFilePath(options.attemptDir) });
+  await retained.load();
+  const infra = { ...DEFAULT_INFRASTRUCTURE, ...options.infrastructure };
+  // trap-refusal-begin TR-11
+  for (const phase of recipe?.phases ?? []) {
+    if (phase.kind !== "agent" || current.recovery?.prefix.some(entry => entry.phaseKey === phase.id)) continue;
+    const record = retained.get(continuityHandle(phase.id));
+    if (record === undefined) continue;
+    const role = options.config.agents.find(agent => agent.name === phase.owner)!;
+    const agent = requestedPhaseRoute(options.config, phase.id, role, current.routeOverrides).agent;
+    const entry = options.config.adapters[agent.harness.adapter];
+    const adapter = entry === undefined ? null : infra.adapterFor(entry, agent.harness.adapter, options.config);
+    if (adapter === null || !isContinuityCapable(adapter) || record.adapter !== adapter.id || record.model !== agent.model) {
+      throw new Error("resume refused: retained conversation route changed");
+    }
+    adapter.assertResumable(retained.ref(record.handle), { cwd: current.worktree ?? current.repository });
+  }
+  // trap-refusal-end TR-11
   if (current.lifecycleState === "AWAITING_OWNER" && current.recovery?.prefix.length === recipe?.phases.length) {
     const proved = await inspectPhaseRecovery(options.attemptDir);
     if (proved.status.revision !== current.revision) throw new Error("completed status is stale");

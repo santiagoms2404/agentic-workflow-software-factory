@@ -69,9 +69,6 @@ test(`O1 ${granted ? "A2 grant " : ""}${routed ? "selected-route " : ""}${scenar
     undefined, () => {}, routed ? { builder: { adapter: "secondary", provider: "openai-codex", effort: "low" } } : {});
   try {
     const prepared = await readAttempt(world.created.attemptDir);
-    if (granted) await grantCommand({ attemptDir: world.created.attemptDir, config: world.config, configPath: world.configPath, stateRoot: world.stateRoot,
-      phase: "builder", files: ["core/src/generated.ts"], reason: "Authorize one phase after quota readmission.", sandboxProbe: () => true,
-      terminal: { interactive: true, write: () => {}, confirm: async () => true } });
     let mode: "low" | "healthy" | "unknown" = "low";
     let launched = 0;
     const actualInputs: string[] = [];
@@ -110,6 +107,9 @@ test(`O1 ${granted ? "A2 grant " : ""}${routed ? "selected-route " : ""}${scenar
     const paused = await runProductionCommand(options);
     assert.equal(paused.lifecycleState, "RUNNING", paused.blocker?.detail);
     assert.equal(paused.recovery?.kind, "quota-pause");
+    if (granted) await grantCommand({ attemptDir: world.created.attemptDir, config: world.config, configPath: world.configPath, stateRoot: world.stateRoot,
+      phase: "builder", files: ["core/src/generated.ts"], reason: "Authorize one phase after quota readmission.", sandboxProbe: () => true,
+      terminal: { interactive: true, write: () => {}, confirm: async () => true } });
     if (granted) assert.equal(readProtectedState(world.created.attemptDir).consumptions.length, 0, "quota refusal never consumes an unstarted grant");
     if (routed) assert.equal(paused.recovery.quota?.adapterId, "secondary");
     assert.deepEqual(paused.recovery?.prefix.map(entry => entry.phaseKey), ["request", "planner"]);

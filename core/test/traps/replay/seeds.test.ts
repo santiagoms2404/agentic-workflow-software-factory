@@ -2,23 +2,17 @@ import assert from "node:assert/strict";
 import { chmodSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { PiCodexAdapter } from "../../../src/adapters/pi-codex.ts";
-import { readAttempt, nextRevision, persistAttempt } from "../../../src/cli/commands/attempt.ts";
+import { readAttempt } from "../../../src/cli/commands/attempt.ts";
 import { StartPreflightRefused } from "../../../src/cli/commands/start.ts";
 import { reworkCommand } from "../../../src/cli/commands/rework.ts";
-import { grantCommand } from "../../../src/cli/commands/grant.ts";
-import { adoptCommand } from "../../../src/cli/commands/adopt.ts";
-import { readProtectedState } from "../../../src/workflow/protected-grants.ts";
-import { readAttemptEvidence } from "../../../src/cli/commands/review-record.ts";
-import { baselineWorktreeName } from "../../../src/preflight/baseline-worktree.ts";
-import { prepareBaselineWorktree } from "../../../src/preflight/baseline-worktree.ts";
 import { SEEDS, type Seed } from "../../../src/traps/seeds.ts";
 import { k1Request, refusals } from "../../fixtures/k1-preflight.ts";
-import { AT, OWNER, assertCalled, box, commit, draft, git, prepare, run, start, update, type Box } from "./fixture.ts";
+import { OWNER, box, draft, git, prepare, start, update, type Box } from "./fixture.ts";
 import { launchEnvironmentRefusal } from "../../fixtures/launch-environment.ts";
 import { runStartQuota } from "../../fixtures/run-start-quota.ts";
 import { shiftTicketPathRefusal } from "../../fixtures/shift-ticket-paths.ts";
 import { placementRefusal } from "../../fixtures/missing-placement.ts";
+import { adoptionRefusal, baselineRefusal, continuityRefusal, laterGrantRefusal } from "../../fixtures/trap-remainder.ts";
 
 async function assertNoCall(b: Box, attemptDir: string, lifecycleState = "DRAFT") {
   const status = await readAttempt(attemptDir);
@@ -52,19 +46,6 @@ async function k1(seed: Seed) {
   } finally { b.close(); }
 }
 
-async function launch() {
-  await launchEnvironmentRefusal(); // S11/S17 now assert TR-13's before-L4 refusal.
-}
-
-async function quota() {
-  // S42's far-away reset does not make a zero allowance usable (TR-14).
-  await runStartQuota({ id: "TR-14", condition: "exhausted" });
-}
-
-async function shift() {
-  await shiftTicketPathRefusal(); // S27 now proves TR-16's K1 refusal before preparation.
-}
-
 test("S27 partial refusal: its original one-line request cannot prepare a shift", async () => {
   const b = box();
   try {
@@ -82,30 +63,11 @@ async function interruptedStart() {
   try {
     const created = await draft(b);
     await prepare(b, created.attemptDir);
-    // The untracked-directory half of the documented interruption. Create only
-    // in this test root; no tree is cleared to make the real start succeed.
     const tree = join(b.worktreeRoot, created.status.sessionId);
     mkdirSync(tree);
     writeFileSync(join(tree, "retained.txt"), "interrupted seeding evidence\n");
     await assert.rejects(start(b, created.attemptDir), { name: "AttemptWorktreeExists" });
     assert.equal(readFileSync(join(tree, "retained.txt"), "utf8"), "interrupted seeding evidence\n");
-    await assertNoCall(b, created.attemptDir);
-  } finally { b.close(); }
-}
-
-async function continuity() {
-  const b = box();
-  try {
-    const created = await draft(b);
-    const store = join(b.root, "host-owned-session-store");
-    mkdirSync(store);
-    assert.throws(() => new PiCodexAdapter().assertResumable({ providerSessionId: "synthetic-unknown-session", storeDir: store },
-      { cwd: b.repository }), (error: unknown) => {
-      assert.ok(error instanceof Error && "code" in error);
-      assert.equal(error.code, "E_BACKEND_FAILURE");
-      assert.match(error.message, /no session in the host-owned store/u);
-      return true;
-    });
     await assertNoCall(b, created.attemptDir);
   } finally { b.close(); }
 }
@@ -132,117 +94,28 @@ async function cwd() {
     const created = await draft(b);
     assert.equal(created.status.repository, b.repository);
     await assertNoCall(b, created.attemptDir);
-    // G07 is not a run-stopping fault. Caller intent about a different directory
-    // is not machine evidence; no known-gap provider-call pin is claimed here.
-  } finally { b.close(); }
-}
-
-async function baseline() {
-  const b = box(config => { config.runtime.seed_paths = ["node_modules"]; });
-  try {
-    const seed = join(b.repository, "node_modules");
-    mkdirSync(seed);
-    writeFileSync(join(seed, "base-result.txt"), "green");
-    const baseSha = git(b.repository, "rev-parse", "HEAD");
-    const request = { repository: b.repository, root: b.worktreeRoot, project: b.config.project.slug, baseSha,
-      seedPaths: ["node_modules"], protectedPaths: b.config.policy.protected_paths };
-    await prepareBaselineWorktree(request);
-    writeFileSync(join(seed, "base-result.txt"), "red");
-    const kept = await prepareBaselineWorktree(request);
-    assert.deepEqual(kept.seeded, []);
-    assert.equal(readFileSync(join(kept.path, "node_modules/base-result.txt"), "utf8"), "green");
-    assert.equal(readFileSync(join(seed, "base-result.txt"), "utf8"), "red");
-    const created = await draft(b);
-    let measurements = 0;
-    await prepare(b, created.attemptDir, { runCommand: (_executable, _argv, options) => {
-      measurements++;
-      assert.ok(typeof options !== "number");
-      assert.equal(options.cwd, join(b.worktreeRoot, baselineWorktreeName(b.config.project.slug)));
-      const bytes = readFileSync(join(options.cwd, "node_modules/base-result.txt"), "utf8");
-      return { status: bytes === "green" ? 0 : 1, stdout: "", stderr: "", error: null };
-    } });
-    assert.equal(measurements, 1);
-    await start(b, created.attemptDir);
-    assertCalled(b, await run(b, created.attemptDir));
-    // KNOWN GAP T12: stale ignored seeds can falsely measure a passing base.
-    // T14 reporting alone cannot turn this GO into a pre-spend refusal.
-  } finally { b.close(); }
-}
-
-async function laterGrant() {
-  const b = box();
-  try {
-    const created = await draft(b, k1Request("build the module; only read docs/driving/example.md", "core/src/example.ts"), "simple-sdlc");
-    await prepare(b, created.attemptDir, { read: ["docs/driving/example.md"] });
-    await start(b, created.attemptDir);
-    const granted = await grantCommand({ attemptDir: created.attemptDir, stateRoot: b.stateRoot, config: b.config,
-      configPath: b.configPath, phase: "documenter", files: ["docs/driving/example.md"],
-      reason: "Synthetic later-phase scope", terminal: OWNER, sandboxProbe: () => true, projectRecord: b.projection.project });
-    assert.equal(granted.confirmed, true);
-    assert.equal(granted.status.lifecycleState, "PREPARED");
-    assert.equal(granted.status.budget.callsReserved, 0);
-    assert.equal(b.calls.length, 0);
-    assert.equal(readProtectedState(created.attemptDir).grants[0]!.subject.phaseKey, "documenter");
-    assertCalled(b, await run(b, created.attemptDir, { ...b.infrastructure, sandboxProbe: () => true }));
-    assert.equal(readProtectedState(created.attemptDir).consumptions.length, 0, "the later grant was not consumed by the first phase");
-    // KNOWN GAP T12: refuse a later-phase grant at PREPARED, not a live owner grant.
-  } finally { b.close(); }
-}
-
-async function adoption() {
-  const b = box();
-  try {
-    const created = await draft(b, k1Request("make a synthetic donor", "core/src/example.ts"), "build-review");
-    await prepare(b, created.attemptDir);
-    const prepared = await start(b, created.attemptDir);
-    mkdirSync(join(prepared.worktree!, "core/src"), { recursive: true });
-    writeFileSync(join(prepared.worktree!, "core/src/example.ts"), "export const example = true;\n");
-    const candidateSha = commit(prepared.worktree!, "test: synthetic donor candidate");
-    const phaseId = `${prepared.sessionId}:builder`;
-    const completed = await persistAttempt(created.attemptDir, prepared.revision, { kind: "attempt.updated",
-      next: nextRevision(prepared, { candidateSha, gatesPass: true }), evidence: {
-        type: "transition", id: "synthetic-l7", seq: 1, from: "RUNNING", to: "GATING", actor: "host",
-        edgeId: "L7", reasonSource: "git", reasonCode: null, reasonDetail: null, spawnSite: false, at: AT,
-      } }, b.projection.project);
-    const donor = completed;
-    await persistAttempt(created.attemptDir, donor.revision, { kind: "attempt.updated", next: nextRevision(donor, {
-      lifecycleState: "CANCELLED", blocker: { code: "phase-abort", detail: "synthetic sealed donor", source: "record", ahead: null, behind: null },
-    }), evidence: {
-      type: "agent", phaseId, agent: "builder", adapterId: "codex", provider: "openai-codex", color: null,
-      requestedModel: "synthetic-model", resolvedModel: "synthetic-model", modelProvenance: "route-attributed", contextWindow: null,
-      usageAuthority: "provider", usage: { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0,
-        reasoningTokens: 0, reasoningRelation: "unknown" }, contextTokens: 2, costUsd: null, costAuthority: "unavailable", at: AT,
-    } }, b.projection.project);
-    const adopted = await adoptCommand({ sourceAttemptDir: created.attemptDir, stateRoot: b.stateRoot,
-      targetTaskId: "synthetic-target", request: "one line, deliberately not K1's four-line owner request",
-      worktreeRoot: b.worktreeRoot, config: b.config, configPath: b.configPath, terminal: OWNER,
-      projectRecord: b.projection.project, infrastructure: { ...b.infrastructure, pidIsLive: () => false } });
-    assert.ok(adopted.status && adopted.attemptDir);
-    assert.equal(b.calls.length, 2, "today mandatory review retries its unavailable stub once");
-    assert.equal(adopted.status.budget.callsSpent, 2);
-    assert.equal(adopted.status.budget.callsReserved, 0);
-    assert.equal(b.adapters.reduce((count, adapter) => count + adapter.launches, 0), 2);
-    assert.equal(adopted.status.blocker?.code, "review-unavailable");
-    assert.equal((await readAttemptEvidence(adopted.attemptDir)).filter(entry => entry.type === "driver-preflight").length, 0);
-    // KNOWN GAP T12: adoption's fresh target reaches a review without K1.
+    // G07 has no predicate measuring the caller's intent and is not a stop.
   } finally { b.close(); }
 }
 
 const REPLAYS: Record<string, (seed: Seed) => Promise<void>> = {
-  "protected-paths": k1, "git-storage": k1, launch, quota, shift, configuration, continuity,
-  "interrupted-start": interruptedStart, cwd, baseline, "later-grant": laterGrant, adoption,
+  "protected-paths": k1, "git-storage": k1, launch: async () => { await launchEnvironmentRefusal(); },
+  quota: async () => { await runStartQuota({ id: "TR-14", condition: "exhausted" }); }, shift: () => shiftTicketPathRefusal(),
+  configuration, continuity: continuityRefusal, "interrupted-start": interruptedStart, cwd,
+  baseline: baselineRefusal, "later-grant": laterGrantRefusal, adoption: adoptionRefusal,
   placement: () => placementRefusal(),
 };
 for (const seed of SEEDS.filter(seed => seed.replay !== null)) {
-  test(`${seed.id}: ${seed.outcome === "gap" ? `KNOWN GAP ${seed.pendingTask}` : seed.outcome} — ${seed.replay}`, async () => {
+  test(`${seed.id}: ${seed.outcome} — ${seed.replay}`, async () => {
     const replay = REPLAYS[seed.replay!];
     assert.ok(replay, `missing replay for ${seed.id}`);
     await replay(seed);
   });
 }
 
-test("every refusal and gap has a registered replay", () => {
-  const candidates = SEEDS.filter(seed => seed.outcome === "refused" || seed.outcome === "gap");
+test("every refusal has a registered replay and no gap remains", () => {
+  assert.equal(SEEDS.filter(seed => seed.outcome === "gap").length, 0);
+  const candidates = SEEDS.filter(seed => seed.outcome === "refused");
   assert.equal(candidates.length, 14);
   for (const seed of candidates) assert.ok(seed.replay && REPLAYS[seed.replay], seed.id);
 });

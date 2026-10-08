@@ -23,7 +23,8 @@ import { CandidateAdoptionEvidenceSchema } from "../../src/contracts/candidate-a
 import type { NormalizedEvent } from "../../src/contracts/normalized-events.ts";
 import type { ReviewOutput } from "../../src/contracts/review-output.ts";
 import { sealShiftManifest, type ShiftManifest } from "../../src/contracts/shift-selection-record.ts";
-import { adoptCommand, CandidateAdoptionRejected } from "../../src/cli/commands/adopt.ts";
+import { CandidateAdoptionRejected } from "../../src/cli/commands/adopt.ts";
+import { adoptUnderK1 as adoptCommand } from "../fixtures/adopt-k1.ts";
 import { readAttempt } from "../../src/cli/commands/attempt.ts";
 import { cancelCommand } from "../../src/cli/commands/cancel.ts";
 import { createDashboardProjection } from "../../src/cli/commands/dashboard-projection.ts";
@@ -266,7 +267,7 @@ test("a sealed shift is adopted into build-review at its last completed ticket, 
     lines.length = 0;
     const result = await adoptCommand({
       sourceAttemptDir: fixture.sourceDir, stateRoot: fixture.stateRoot, targetTaskId: "fixture-shift-m1-tail",
-      request: "finish T03 and T04 of fixture-shift-adopt M1 on the adopted T01-T02 candidate",
+      request: k1Request("finish T03 and T04 of fixture-shift-adopt M1 on the adopted T01-T02 candidate", "core/src/**"),
       routes: ["reviewer=claude/anthropic/shift-target-review@high"],
       worktreeRoot: join(fixture.root, "worktrees"), terminal, config: fixture.config, configPath: fixture.configPath,
       projectRecord: fixture.projection.project, assertAdvancement: fixture.projection.assertAdvancement,
@@ -445,7 +446,7 @@ async function integratedShiftPrefix() {
 
   const adopted = await adoptCommand({
     sourceAttemptDir: world.sourceDir, stateRoot: world.stateRoot, targetTaskId: TAIL,
-    request: "carry the adopted T01-T02 prefix of fixture-shift-adopt M1 over the advanced canonical HEAD",
+    request: k1Request("carry the adopted T01-T02 prefix of fixture-shift-adopt M1 over the advanced canonical HEAD", "core/src/**"),
     routes: ["reviewer=claude/anthropic/shift-target-review@high"],
     worktreeRoot: join(world.root, "worktrees"), terminal, config: world.config, configPath: world.configPath,
     infrastructure: { adapterFor, createBroker: broker, runCommand: runSystemCommand, pidIsLive: () => false, now: () => AT },
@@ -538,7 +539,7 @@ const SHIFT_SEED_REFUSALS: readonly ShiftSeedRefusal[] = [
     expected: source("missing completed builder or settled call evidence") },
   { name: "a recorded ticket run the source never completed",
     apply: (world) => rewriteJournal(world.tailDir, (records) => {
-      const adoption = records[0]!.event.evidence!["adoption"] as CandidateAdoptionEvidence;
+      const adoption = records.find(record => record.event.evidence?.["type"] === "candidate-adoption")!.event.evidence!["adoption"] as CandidateAdoptionEvidence;
       adoption.shift = { ...adoption.shift!, completedTickets: ["T01", "T02", "T03"], remainingTickets: ["T04"] };
     }),
     expected: source("the completed ticket prefix is not the exact one the adoption recorded") },
@@ -561,7 +562,7 @@ const SHIFT_SEED_REFUSALS: readonly ShiftSeedRefusal[] = [
     expected: source("the source shift cannot be rebuilt from its recorded selection at its base: ticket T02 has no blob") },
   { name: "a changed source revision",
     apply: (world) => rewriteJournal(world.tailDir, (records) => {
-      (records[0]!.event.evidence!["adoption"] as CandidateAdoptionEvidence).sourceRevision += 1;
+      (records.find(record => record.event.evidence?.["type"] === "candidate-adoption")!.event.evidence!["adoption"] as CandidateAdoptionEvidence).sourceRevision += 1;
     }),
     expected: source("not the exact sealed revision the adoption recorded") },
   { name: "a changed source status",
@@ -574,7 +575,7 @@ const SHIFT_SEED_REFUSALS: readonly ShiftSeedRefusal[] = [
     expected: source("status does not equal the final journal revision") },
   { name: "a recorded source candidate short of the completed prefix",
     apply: (world) => rewriteJournal(world.tailDir, (records) => {
-      (records[0]!.event.evidence!["adoption"] as CandidateAdoptionEvidence).candidateSha = world.first;
+      (records.find(record => record.event.evidence?.["type"] === "candidate-adoption")!.event.evidence!["adoption"] as CandidateAdoptionEvidence).candidateSha = world.first;
     }),
     expected: /recorded integration is not the host's exact merge/u },
   { name: "the completed prefix commit selected instead of the merge", select: (world) => world.completedTip,

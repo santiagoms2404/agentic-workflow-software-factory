@@ -4,7 +4,7 @@ import { toConfigSnapshotJson } from "../../config/effective-config.ts";
 import type { AwsfConfig } from "../../config/schema.ts";
 import type { OwnerTerminal } from "../tty.ts";
 import { readAttempt, nextRevision, persistAttempt, type AttemptProjector } from "./attempt.ts";
-import { protectedGrantSubject } from "./production-run.ts";
+import { assertProtectedGrantBoundary, protectedGrantSubject } from "./production-run.ts";
 import { assertNoExecutionController, withExecutionLease } from "../../execution/operation-lease.ts";
 import { assertProtectedGrant, protectedFactDigest, type ProtectedGrant } from "../../contracts/protected-grant.ts";
 import { recoveryDigest } from "../../contracts/phase-recovery.ts";
@@ -28,6 +28,7 @@ export async function grantCommand(options: {
   if (toConfigSnapshotJson(options.config) !== current.configSnapshotJson) throw new Error("protected grant configuration changed");
   const facts = readProtectedState(options.attemptDir);
   if (recoveryDigest(facts.status) !== recoveryDigest(current) || facts.grants.some(grant => grant.subject.phaseKey === phase) || current.recovery?.prefix.some(value => value.phaseKey === phase)) throw new Error("protected grant phase is already authorized or completed");
+  await assertProtectedGrantBoundary(options, current, phase);
   const subject = await protectedGrantSubject(options, current, phase);
   const agent = options.config.agents.find(agent => agent.name === phase);
   if (agent === undefined) throw new Error("protected grant phase has no exact writing role");

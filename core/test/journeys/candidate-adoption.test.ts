@@ -26,10 +26,11 @@ import type { BrokerOptions } from "../../src/execution/transport-broker.ts";
 import { runGit, systemGitRunner } from "../../src/git/changes.ts";
 import {
   CandidateAdoptionRejected,
-  adoptCommand,
   inspectSealedCandidate,
 } from "../../src/cli/commands/adopt.ts";
 import { nextRevision, persistAttempt, readAttempt, type AttemptStatus } from "../../src/cli/commands/attempt.ts";
+import { adoptUnderK1 as adoptCommand } from "../fixtures/adopt-k1.ts";
+import { k1Request } from "../fixtures/k1-preflight.ts";
 import { journeyCommand } from "../../src/cli/commands/journey.ts";
 import { landCommand } from "../../src/cli/commands/land.ts";
 import { journalFilePath, statusFilePath } from "../../src/persistence/platform-paths.ts";
@@ -268,7 +269,7 @@ test("adoption rejects duplicate and unreachable target routes without touching 
     const config = loadConfig(readFileSync(resolve("awsf.config.yaml"), "utf8"));
     const sourceBytes = readFileSync(journalFilePath(fixture.sourceDir));
     const options = { sourceAttemptDir: fixture.sourceDir, stateRoot: fixture.stateRoot,
-      targetTaskId: "route-refused", request: "fresh request", worktreeRoot: join(root, "worktrees"),
+      targetTaskId: "route-refused", request: k1Request("fresh request", "core/src/**"), worktreeRoot: join(root, "worktrees"),
       terminal: terminal([]), config, configPath: resolve("awsf.config.yaml"),
       infrastructure: { pidIsLive: () => false } };
     await assert.rejects(adoptCommand({ ...options, routes: ["reviewer=@high", "reviewer=@low"] }), /twice/);
@@ -293,7 +294,7 @@ test("same-provider adoption waits live at zero calls for an owner grant, then r
     const terminalWithCount: OwnerTerminal = { interactive: true, write: () => {}, confirm: async () => { confirmations++; return true; } };
     const options = {
       sourceAttemptDir: fixture.sourceDir, stateRoot: fixture.stateRoot, targetTaskId: "pending-target",
-      request: "fresh same-provider candidate review", routes: ["reviewer=codex/openai-codex/target-review@high"],
+      request: k1Request("fresh same-provider candidate review", "core/src/**"), routes: ["reviewer=codex/openai-codex/target-review@high"],
       worktreeRoot: join(root, "worktrees"), terminal: terminalWithCount, config,
       configPath: resolve("awsf.config.yaml"), infrastructure: {
         adapterFor: (_entry: unknown, id: string) => {
@@ -378,7 +379,7 @@ test("a generic blocked candidate enters only a distinct continuation, fails fre
       sourceAttemptDir: fixture.sourceDir,
       stateRoot: fixture.stateRoot,
       targetTaskId: "generic-continuation",
-      request: "finish the generic candidate under fresh owner intent",
+      request: k1Request("finish the generic candidate under fresh owner intent", "core/src/**"),
       worktreeRoot: join(root, "worktrees"),
       terminal: terminal(lines),
       config,
@@ -406,7 +407,7 @@ test("a generic blocked candidate enters only a distinct continuation, fails fre
     assert.deepEqual(readFileSync(journalFilePath(fixture.sourceDir)), before.journal);
     assert.deepEqual(readFileSync(statusFilePath(fixture.sourceDir)), before.status);
     assert.match(lines.join("\n"), /No source request, attempt bytes, calls, gates, reviews, journeys, protected approvals, landing approval, or provider session transfer/);
-    assert.equal(result.status?.request, "finish the generic candidate under fresh owner intent");
+    assert.equal(result.status?.request, k1Request("finish the generic candidate under fresh owner intent", "core/src/**"));
 
     const targetEvidence = readFileSync(journalFilePath(result.attemptDir!), "utf8");
     assert.match(targetEvidence, /"type":"candidate-adoption"/);
@@ -439,7 +440,7 @@ test("a simple-sdlc candidate is revalidated against every recipe writer's curre
       sourceAttemptDir: fixture.sourceDir,
       stateRoot: fixture.stateRoot,
       targetTaskId: "multi-writer-continuation",
-      request: "adopt the implementation and its documentation",
+      request: k1Request("adopt the implementation and its documentation", "core/src/** docs/*"),
       worktreeRoot: join(root, "worktrees"),
       terminal: terminal([]),
       config,
@@ -508,7 +509,7 @@ test("configured commands do not execute when a fresh structural policy gate fai
       sourceAttemptDir: fixture.sourceDir,
       stateRoot: fixture.stateRoot,
       targetTaskId: "structurally-refused-continuation",
-      request: "refuse protected candidate execution",
+      request: k1Request("refuse protected candidate execution", "core/src/**"),
       worktreeRoot: join(root, "worktrees"),
       terminal: terminal([]),
       config,
@@ -542,8 +543,8 @@ test("a gate that dirties the immutable candidate prevents every later configure
       ...loaded,
       runtime: { ...loaded.runtime, seed_paths: [] },
       gates: {
-        first: { argv: ["fixture-first"], timeout_seconds: 1 },
-        second: { argv: ["fixture-second"], timeout_seconds: 1 },
+        test: { argv: ["fixture-first"], timeout_seconds: 1 },
+        typecheck: { argv: ["fixture-second"], timeout_seconds: 1 },
       },
     };
     const calls: string[] = [];
@@ -551,7 +552,7 @@ test("a gate that dirties the immutable candidate prevents every later configure
       sourceAttemptDir: fixture.sourceDir,
       stateRoot: fixture.stateRoot,
       targetTaskId: "mutating-gate-continuation",
-      request: "refuse mutation by a configured gate",
+      request: k1Request("refuse mutation by a configured gate", "core/src/**"),
       worktreeRoot: join(root, "worktrees"),
       terminal: terminal([]),
       config,
@@ -571,8 +572,8 @@ test("a gate that dirties the immutable candidate prevents every later configure
 
     assert.equal(result.status?.lifecycleState, "BLOCKED");
     assert.deepEqual(calls, ["fixture-first"]);
-    assert.match(result.status?.blocker?.detail ?? "", /first moved or dirtied the candidate/u);
-    assert.equal(existsSync(join(result.attemptDir!, "raw", "command-adoption-tests-second-0.txt")), false);
+    assert.match(result.status?.blocker?.detail ?? "", /test moved or dirtied the candidate/u);
+    assert.equal(existsSync(join(result.attemptDir!, "raw", "command-adoption-tests-typecheck-0.txt")), false);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -594,7 +595,7 @@ test("credential-shaped fresh gate output is rejected before retention, journali
       sourceAttemptDir: fixture.sourceDir,
       stateRoot: fixture.stateRoot,
       targetTaskId: "credential-continuation",
-      request: "adopt only credential-safe candidate evidence",
+      request: k1Request("adopt only credential-safe candidate evidence", "core/src/**"),
       worktreeRoot: join(root, "worktrees"),
       terminal: terminal([]),
       config,
@@ -653,7 +654,7 @@ test("a gates-pass adoption buys a fresh opposite-provider review, then requires
       sourceAttemptDir: fixture.sourceDir,
       stateRoot: fixture.stateRoot,
       targetTaskId: "successful-continuation",
-      request: "complete fresh assurance for the adopted candidate",
+      request: k1Request("complete fresh assurance for the adopted candidate", "core/src/**"),
       worktreeRoot: join(root, "worktrees"),
       terminal: terminal([]),
       config,

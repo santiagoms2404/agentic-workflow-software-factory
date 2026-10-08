@@ -185,7 +185,7 @@ function stateRootOf(attemptDir: string, status: AttemptStatus): string {
  * Applies K1's freshness rule. A refusal appends one preflight-refused record,
  * as an update that keeps the attempt DRAFT, and throws; no edge is requested.
  */
-async function enforceK1(options: StartCommandOptions, current: AttemptStatus, config: ReturnType<typeof loadConfig>): Promise<void> {
+export async function enforceK1(options: StartCommandOptions, current: AttemptStatus, config: ReturnType<typeof loadConfig>): Promise<void> {
   const facts = await gatherFreshness({
     attemptDir: options.attemptDir, stateRoot: stateRootOf(options.attemptDir, current),
     worktreeRoot: resolve(options.worktreeRoot), status: current, config,

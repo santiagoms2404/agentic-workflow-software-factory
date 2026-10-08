@@ -287,7 +287,8 @@ async function assertIntegrationSource(targetDir: string, adoption: CandidateAdo
  */
 async function assertIntegratedAdoption(dir: string, target: AttemptStatus, records: AttemptRecords, candidateSha: string,
   repository: string, quiescence: ProcessQuiescence): Promise<void> {
-  const created = records[0]?.event;
+  const materializedAt = records.findIndex(record => record.event.evidence?.type === "candidate-adoption");
+  const created = records[materializedAt]?.event;
   const evidence = created?.evidence;
   if (created === undefined || evidence?.type !== "candidate-adoption" || !Value.Check(CandidateAdoptionEvidenceSchema, evidence.adoption) ||
       records.filter((record) => record.event.evidence?.type === "candidate-adoption").length !== 1) {
@@ -299,11 +300,16 @@ async function assertIntegratedAdoption(dir: string, target: AttemptStatus, reco
     throw new CandidateSeedRejected(`adoption target carries its source's candidate unchanged; seed from ${adoption.sourceTaskId} attempt ${String(adoption.sourceAttempt)} instead`);
   }
   const opened = created.next;
-  if (created.kind !== "attempt.created" || opened.lifecycleState !== "GATING" || opened.gatesPass || opened.continuesTask !== adoption.sourceTaskId ||
+  const draftPrefix = records.slice(0, materializedAt);
+  const validOrigin = created.kind === "attempt.created" && materializedAt === 0 ||
+    created.kind === "attempt.updated" && materializedAt > 0 && draftPrefix[0]?.event.kind === "attempt.created" &&
+    draftPrefix.every(record => record.event.next.lifecycleState === "DRAFT" && record.event.next.worktree === null &&
+      record.event.next.candidateSha === null && record.event.next.budget.callsSpent === 0 && record.event.next.budget.callsReserved === 0);
+  if (!validOrigin || opened.lifecycleState !== "GATING" || opened.gatesPass || opened.continuesTask !== adoption.sourceTaskId ||
       opened.budget.callsSpent !== 0 || opened.budget.callsReserved !== 0 ||
       adoption.sourceProject !== target.project || adoption.targetTaskId !== target.taskId || adoption.sourceTaskId !== target.continuesTask ||
       integration.integratedCandidateSha !== candidateSha || integration.integrationBaseSha !== target.baseSha ||
-      records.some((record) => record.event.next.baseSha !== integration.integrationBaseSha || record.event.next.candidateSha !== candidateSha)) {
+      records.slice(materializedAt).some((record) => record.event.next.baseSha !== integration.integrationBaseSha || record.event.next.candidateSha !== candidateSha)) {
     throw new CandidateSeedRejected("no exact host-created integration candidate binding");
   }
   // The host's recorded measurement, not the status it left: the adoption-tests
@@ -340,7 +346,7 @@ export async function inspectSeedSource(dir: string, repository: string, expecte
   const read = await readSealedAttempt(dir, repository, expected);
   const source = read.status;
   const processes = processesOf(read.records);
-  if (read.records[0]?.event.evidence?.type === "candidate-adoption") {
+  if (read.records.some(record => record.event.evidence?.type === "candidate-adoption")) {
     // An adoption target runs no builder, so it has no L7 and may have no process.
     await assertIntegratedAdoption(dir, source, read.records, expected.candidateSha, repository, quiescence);
     if (source.budget.callsSpent < settledCallsOf(processes)) throw new CandidateSeedRejected("missing settled call evidence");

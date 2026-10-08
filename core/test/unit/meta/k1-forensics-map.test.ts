@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { K1_FIELD_IDS } from "../../../src/contracts/driver-preflight.ts";
 import { repoRoot } from "./_walk.ts";
+import { NO_TRAPS, TRAPS } from "../../../src/traps/catalogue.ts";
 
 // W01 task 13: the forensics map in the plan's Notes, re-checked against the
 // eight driver rows the owner confirmed at G01-F (2026-10-05). Every row is
@@ -55,6 +56,22 @@ const OUT_OF_REACH: Readonly<Record<string, { readonly taker: string; readonly r
   "18": { taker: "W02, W06", reason: "Quota moves between start and run; it is measured where calls are reserved" },
   "22": { taker: "W02, W06", reason: "as #18" },
 };
+
+// W02's final, seed-specific disposition; the W01 taker/reason text below
+// remains the owner's historical map and is not rewritten by this ticket.
+const W02 = {
+  "11": "TR-13", "14": "after-spend", "17": "TR-13",
+  "18": "after-spend", "22": "after-spend", "27": "TR-16",
+} as const;
+
+test("each W02 forensics row names its final trap or no-trap kind", () => {
+  assert.deepEqual(Object.keys(W02).sort(), [...Object.keys(OUT_OF_REACH), "27"].sort());
+  for (const [id, target] of Object.entries(W02)) {
+    const seed = `S${id}`;
+    if (target.startsWith("TR-")) assert.ok(TRAPS.some(trap => trap.id === target && trap.seeds.includes(seed)), seed);
+    else assert.equal(NO_TRAPS.find(entry => entry.seed === seed)?.kind, target, seed);
+  }
+});
 
 interface PlanRow {
   readonly id: string;
