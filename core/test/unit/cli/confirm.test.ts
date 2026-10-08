@@ -288,7 +288,7 @@ test("each consulted attempt is shown with its blocker and its cause, when recor
     });
     await appendTaskAttribution(taskRoot(box.stateRoot, PROJECT, "parent"), {
       schema: ATTRIBUTION_RECORD_SCHEMA_ID, project: PROJECT, taskId: "parent", attempt: 1,
-      cause: "driver", reason: "the request named the protected path as its target", at: AT,
+      cause: "driver", reason: "the request named the protected path as its target", at: AT, trap: { kind: "trap", id: "TR-03" },
     });
     const sibling = await draft(box, "sibling", { request: REQUEST.replace("an example", "a sibling") });
     await persistAttempt(sibling.attemptDir, sibling.status.revision, {

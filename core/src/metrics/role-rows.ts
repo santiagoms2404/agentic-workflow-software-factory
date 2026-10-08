@@ -12,6 +12,7 @@
 // carried as the verdict the run recorded and never read as evidence of
 // quality: a reviewer that misses defects produces the same clean review.
 
+import { assertTrapLink } from "../contracts/attribution-record.ts";
 import { readShiftTaskClasses } from "./task-class.ts";
 import type { TicketTaskClass } from "../contracts/ticket.ts";
 import type { DatabaseSync } from "../observability/sqlite.ts";
@@ -465,12 +466,14 @@ function ownerAttributions(db: DatabaseSync): Map<string, OwnerAttribution> {
     WHERE type = 'attribution' ORDER BY session_id, event_row`).all() as unknown as Array<{ session_id: string; payload_json: string }>;
   const latest = new Map<string, OwnerAttribution>();
   for (const row of rows) {
-    const payload = JSON.parse(row.payload_json) as { cause?: unknown; reason?: unknown; at?: unknown };
+    const payload = JSON.parse(row.payload_json) as { cause?: unknown; reason?: unknown; at?: unknown; trap?: unknown };
     if (!(ATTRIBUTIONS as readonly unknown[]).includes(payload.cause)) continue;
+    if (payload.trap !== undefined) assertTrapLink(payload.trap);
     latest.set(row.session_id, {
       cause: payload.cause as Attribution,
       reason: typeof payload.reason === "string" ? payload.reason : "",
       at: typeof payload.at === "string" ? payload.at : "",
+      ...(payload.trap === undefined ? {} : { trap: payload.trap }),
     });
   }
   return latest;

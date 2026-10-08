@@ -30,6 +30,8 @@ import {
   ATTRIBUTION_CAUSES,
   ATTRIBUTION_RECORD_SCHEMA_ID,
   isAttributionCause,
+  assertTrapLink,
+  type TrapLink,
   type AttributionRecord,
 } from "../../contracts/attribution-record.ts";
 import { appendTaskAttribution, attemptAttribution } from "../../persistence/task-attributions.ts";
@@ -90,6 +92,8 @@ export interface AttributeCommandOptions {
   readonly attempt: number;
   readonly cause: string;
   readonly reason: string;
+  readonly trap?: string;
+  readonly noTrap?: { readonly because: string; readonly reason: string };
   readonly terminal: OwnerTerminal;
   /** Projects the record onto the attempt's session, as `projectRelation` does for `awsf relate`. */
   readonly projectAttribution?: (record: AttributionRecord) => void;
@@ -108,11 +112,27 @@ export interface AttributeCommandResult {
 export function assertAttributeReason(reason: string): string {
   const normalized = reason.trim().replace(/\s+/gu, " ");
   if (normalized.length === 0) throw new AttributeReasonRequired();
-  const bounded = normalized.length <= MAX_REASON ? normalized : normalized.slice(0, MAX_REASON);
-  if (scrubCredentialString(bounded) !== bounded || bounded.includes(REDACTED_VALUE)) {
+  if (scrubCredentialString(normalized) !== normalized || normalized.includes(REDACTED_VALUE)) {
     throw new AttributeCredentialRejected("owner attribution reason");
   }
-  return bounded;
+  return normalized.length <= MAX_REASON ? normalized : normalized.slice(0, MAX_REASON);
+}
+
+/** W02-Q3: only owner may omit the link; a missing catalogue id is deliberately admissible. */
+export function attributeTrapLink(options: Pick<AttributeCommandOptions, "cause" | "trap" | "noTrap">, reason: string): TrapLink {
+  if (options.trap !== undefined && options.noTrap !== undefined) throw new Error("--trap and --no-trap are mutually exclusive");
+  if (options.trap === undefined && options.noTrap === undefined && options.cause !== "owner") {
+    throw new Error("this cause requires --trap TR-NN or --no-trap <kind> \"<why>\"");
+  }
+  const link: unknown = options.trap !== undefined ? { kind: "trap", id: options.trap }
+    : { kind: "none", because: options.noTrap?.because ?? "owner",
+      reason: options.noTrap === undefined ? reason : assertAttributeReason(options.noTrap.reason) };
+  assertTrapLink(link);
+  return link;
+}
+
+export function trapLinkText(link: TrapLink): string {
+  return link.kind === "trap" ? link.id : `none (${link.because}): ${link.reason}`;
 }
 
 async function readNamedAttempt(options: AttributeCommandOptions, root: string): Promise<AttemptStatus> {
@@ -135,6 +155,7 @@ export async function attributeCommand(options: AttributeCommandOptions): Promis
   if (!isAttributionCause(options.cause)) throw new AttributeUnknownCause(options.cause);
   const cause = options.cause;
   const reason = assertAttributeReason(options.reason);
+  const trap = attributeTrapLink(options, reason);
 
   const root = taskRoot(options.stateRoot, project, taskId);
   const status = await readNamedAttempt(options, root);
@@ -153,13 +174,14 @@ export async function attributeCommand(options: AttributeCommandOptions): Promis
     : `On record: ${previous.cause} (${previous.at}): ${previous.reason}`);
   options.terminal.write(`New attribution: ${cause}`);
   options.terminal.write(`Reason on record: ${reason}`);
+  options.terminal.write(`Trap link: ${trapLinkText(trap)}`);
   options.terminal.write("Only a model-attributed block counts against the route that ran it. This record gives this attempt its cause; the attempt itself is not reopened, and any earlier record stays on file.");
   const confirmed = await options.terminal.confirm(`Attribute ${taskId} attempt ${attempt} (${status.lifecycleState}) to ${cause}?`);
   if (!confirmed) return { confirmed: false, record: null, previous };
 
   const at = (options.now ?? ((): string => new Date().toISOString()))();
   const record: AttributionRecord = {
-    schema: ATTRIBUTION_RECORD_SCHEMA_ID, project, taskId, attempt, cause, reason, at,
+    schema: ATTRIBUTION_RECORD_SCHEMA_ID, project, taskId, attempt, cause, reason, at, trap,
   };
   // Durable first, projected second: the record is the journal's, and a
   // projection that cannot be written degrades the screen, never the record.

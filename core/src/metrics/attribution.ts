@@ -7,7 +7,7 @@
 // Only a `model` block counts against a route (W18 F5, D4). The owner's
 // journaled override takes precedence over this value where one exists.
 
-import { ATTRIBUTION_CAUSES, type AttributionCause } from "../contracts/attribution-record.ts";
+import { ATTRIBUTION_CAUSES, type AttributionCause, type TrapLink } from "../contracts/attribution-record.ts";
 
 /** The effective attribution's vocabulary, which is the owner record's. The heuristic never answers `owner`; only the owner's override can. */
 export const ATTRIBUTIONS = ATTRIBUTION_CAUSES;
@@ -132,6 +132,8 @@ export interface OwnerAttribution {
   readonly cause: Attribution;
   readonly reason: string;
   readonly at: string;
+  /** Absent on v1 projections: recorded before the trap link existed, not a no-trap assertion. */
+  readonly trap?: TrapLink;
 }
 
 export type AttributionSource = "owner" | "heuristic";

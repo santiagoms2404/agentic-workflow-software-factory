@@ -35,6 +35,8 @@ import { rebuildCommand } from "../../../src/cli/commands/operator.ts";
 import { ENVELOPE_SCHEMAS, RECORD_SCHEMAS } from "../../../src/contracts/registry.ts";
 import {
   ATTRIBUTION_RECORD_SCHEMA_ID,
+  ATTRIBUTION_RECORD_V1_SCHEMA_ID,
+  AttributionRecordV1Schema,
   AttributionRecordSchema,
   assertAttributionRecord,
 } from "../../../src/contracts/attribution-record.ts";
@@ -86,7 +88,7 @@ function options(
   overrides: Partial<AttributeCommandOptions> = {},
 ): AttributeCommandOptions {
   return {
-    stateRoot: box.stateRoot, project: PROJECT, taskId, attempt: 1, cause: "factory", reason: REASON,
+    stateRoot: box.stateRoot, project: PROJECT, taskId, attempt: 1, cause: "factory", reason: REASON, trap: "TR-01",
     terminal: terminal(true), now: () => "2026-09-28T10:00:00.000Z", ...overrides,
   };
 }
@@ -98,8 +100,9 @@ function nothingWritten(box: { stateRoot: string }, taskId: string): void {
 test("the record is registered as a host record and never as a wire envelope", () => {
   assert.equal(RECORD_SCHEMAS[ATTRIBUTION_RECORD_SCHEMA_ID], AttributionRecordSchema);
   assert.equal(Object.hasOwn(ENVELOPE_SCHEMAS, ATTRIBUTION_RECORD_SCHEMA_ID), false);
-  assert.equal(AttributionRecordSchema.$id, "awsf.attribution/v1");
-  const base = { schema: ATTRIBUTION_RECORD_SCHEMA_ID, project: PROJECT, taskId: "legacy", attempt: 1,
+  assert.equal(AttributionRecordSchema.$id, "awsf.attribution/v2");
+  assert.equal(RECORD_SCHEMAS[ATTRIBUTION_RECORD_V1_SCHEMA_ID], AttributionRecordV1Schema);
+  const base = { schema: ATTRIBUTION_RECORD_V1_SCHEMA_ID, project: PROJECT, taskId: "legacy", attempt: 1,
     reason: REASON, at: "2026-09-28T10:00:00.000Z" };
   assert.doesNotThrow(() => assertAttributionRecord({ ...base, cause: "model" }), "old records remain valid");
   assert.doesNotThrow(() => assertAttributionRecord({ ...base, cause: "driver" }));
@@ -200,8 +203,8 @@ test("the record goes beside the attempt directories and the sealed attempt stay
     const result = await attributeCommand(options(box, "sealed-task", { terminal: terminal(true, true, lines) }));
     assert.equal(result.confirmed, true);
     assert.deepEqual(result.record, {
-      schema: "awsf.attribution/v1", project: PROJECT, taskId: "sealed-task", attempt: 1,
-      cause: "factory", reason: REASON, at: "2026-09-28T10:00:00.000Z",
+      schema: "awsf.attribution/v2", project: PROJECT, taskId: "sealed-task", attempt: 1,
+      cause: "factory", reason: REASON, at: "2026-09-28T10:00:00.000Z", trap: { kind: "trap", id: "TR-01" },
     });
     assert.ok(lines.some((line) => line.includes("No owner attribution is on record")));
 
@@ -285,6 +288,7 @@ test("a driver attribution of a CANCELLED attempt writes one record and event, a
     assert.equal(live.length, 1);
     assert.equal(live[0]!.session_id, "cancelled-task-session");
     assert.equal(JSON.parse(live[0]!.payload_json).cause, "driver");
+    assert.deepEqual(JSON.parse(live[0]!.payload_json).trap, { kind: "trap", id: "TR-01" });
     const report = await rebuildCommand(box.stateRoot);
     assert.equal(report.ok, true, report.ok ? undefined : report.reason);
     assert.deepEqual(rows(), live);

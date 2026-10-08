@@ -4,7 +4,7 @@ import {
   ARCHITECTURE_REVIEW_OUTPUT_SCHEMA_ID,
   type ArchitectureReviewOutput,
 } from "./architecture-review-output.ts";
-import { AttributionRecordSchema, ATTRIBUTION_RECORD_SCHEMA_ID } from "./attribution-record.ts";
+import { AttributionRecordSchema, AttributionRecordV1Schema, ATTRIBUTION_RECORD_V1_SCHEMA_ID, ATTRIBUTION_RECORD_SCHEMA_ID } from "./attribution-record.ts";
 import { BuildOutputSchema, BUILD_OUTPUT_SCHEMA_ID, type BuildOutput } from "./build-output.ts";
 import { DecisionRecordSchema, DECISION_RECORD_SCHEMA_ID } from "./decision-record.ts";
 import {
@@ -107,6 +107,7 @@ export const ENVELOPE_SCHEMA_IDS = Object.keys(ENVELOPE_SCHEMAS) as EnvelopeSche
  */
 export const RECORD_SCHEMAS = {
   [SHIFT_MANIFEST_SCHEMA_ID]: ShiftManifestSchema,
+  [ATTRIBUTION_RECORD_V1_SCHEMA_ID]: AttributionRecordV1Schema,
   [ATTRIBUTION_RECORD_SCHEMA_ID]: AttributionRecordSchema,
   [PROVING_GROUND_ITEM_SCHEMA_ID]: ProvingGroundItemSchema,
   [DECISION_RECORD_SCHEMA_ID]: DecisionRecordSchema,

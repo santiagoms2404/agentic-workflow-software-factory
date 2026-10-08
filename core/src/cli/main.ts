@@ -92,6 +92,7 @@ interface ParsedArgs {
   readonly where: readonly string[];
   readonly read: readonly string[];
   readonly consulted: readonly string[];
+  readonly noTrap?: { readonly because: string; readonly reason: string };
 }
 
 function parseArgs(args: readonly string[]): ParsedArgs {
@@ -102,6 +103,7 @@ function parseArgs(args: readonly string[]): ParsedArgs {
   const routes: string[] = [];
   const milestones: string[] = [];
   const lists = { where: [] as string[], read: [] as string[], consulted: [] as string[] };
+  let noTrap: ParsedArgs["noTrap"];
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index] ?? "";
     if (!arg.startsWith("--")) {
@@ -109,6 +111,18 @@ function parseArgs(args: readonly string[]): ParsedArgs {
       continue;
     }
     const equals = arg.indexOf("=");
+    const linkKey = equals > 2 ? arg.slice(2, equals) : arg.slice(2);
+    if (linkKey === "no-trap") {
+      if (noTrap !== undefined) throw new Error("--no-trap may be given only once");
+      const because = equals > 2 ? arg.slice(equals + 1) : args[++index];
+      const reason = args[++index];
+      if (because === undefined || because.startsWith("--") || reason === undefined || reason.startsWith("--")) {
+        throw new Error('--no-trap requires <kind> "<why>"');
+      }
+      noTrap = { because, reason };
+      continue;
+    }
+    if (linkKey === "trap" && flags.trap !== undefined) throw new Error("--trap may be given only once");
     if (equals > 2) {
       const key = arg.slice(2, equals);
       const value = arg.slice(equals + 1);
@@ -144,7 +158,8 @@ function parseArgs(args: readonly string[]): ParsedArgs {
     else flags[key] = value;
     index += 1;
   }
-  return { positionals, flags, repositories, routes, files, milestones, ...lists };
+  return { positionals, flags, repositories, routes, files, milestones, ...lists,
+    ...(noTrap === undefined ? {} : { noTrap }) };
 }
 
 /** The shift selection both `awsf shift plan` and `awsf new --workflow shift` read, and the tier it derives. */
@@ -913,11 +928,13 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         const cause = parsed.flags["cause"] ?? "";
         const reason = parsed.flags["reason"] ?? "";
         if (parsed.flags.attempt === undefined || cause.trim().length === 0 || reason.trim().length === 0) {
-          throw new Error('usage: awsf attribute <task> --attempt <n> --cause <model|factory|environment|driver|owner|unknown> --reason "<why>"');
+          throw new Error('usage: awsf attribute <task> --attempt <n> --cause <model|factory|environment|driver|owner|unknown> --reason "<why>" [--trap TR-NN | --no-trap <kind> "<why>"]');
         }
         const attempt = Number(parsed.flags.attempt);
         const result = await attributeCommand({
           stateRoot, project, taskId, attempt, cause, reason,
+          ...(parsed.flags.trap === undefined ? {} : { trap: parsed.flags.trap }),
+          ...(parsed.noTrap === undefined ? {} : { noTrap: parsed.noTrap }),
           terminal: options.terminal ?? processOwnerTerminal(),
           projectAttribution: projection.projectAttribution,
         });
@@ -998,10 +1015,12 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         const cause = parsed.flags.cause ?? "";
         const reason = parsed.flags.reason ?? "";
         if (cause.trim().length === 0 || reason.trim().length === 0) {
-          throw new Error('usage: awsf cancel <task> --cause <model|factory|environment|driver|owner|unknown> --reason "<why>"');
+          throw new Error('usage: awsf cancel <task> --cause <model|factory|environment|driver|owner|unknown> --reason "<why>" [--trap TR-NN | --no-trap <kind> "<why>"]');
         }
         const result = await cancelCommand({
           attemptDir: located.attemptDir, cause, reason,
+          ...(parsed.flags.trap === undefined ? {} : { trap: parsed.flags.trap }),
+          ...(parsed.noTrap === undefined ? {} : { noTrap: parsed.noTrap }),
           terminal: options.terminal ?? processOwnerTerminal(),
           projectRecord: projection.project,
           projectAttribution: projection.projectAttribution,

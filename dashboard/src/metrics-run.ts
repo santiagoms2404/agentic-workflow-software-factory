@@ -336,17 +336,24 @@ export function commandReady(cause: MetricsAttribution | null, reason: string): 
   return cause !== null && reason.trim().length > 0;
 }
 
+/** Mirrored attribution/v2 link; no trap field on a v1 owner record means pre-link. */
+export type AttributionTrapLink = { readonly kind: "trap"; readonly id: string }
+  | { readonly kind: "none"; readonly because: "fixed" | "after-spend" | "owner" | "unexplained" | "not-a-stop"; readonly reason: string };
+export type LinkedMetricsRun = Omit<MetricsRun, "ownerAttribution"> & {
+  readonly ownerAttribution: (NonNullable<MetricsRun["ownerAttribution"]> & { readonly trap?: AttributionTrapLink }) | null;
+};
+
 export interface AttributionPanel {
   readonly blocked: BlockedAt;
   readonly heuristic: MetricsAttribution | null;
   /** The owner's latest record, shown with its reason and date. */
-  readonly override: { readonly cause: MetricsAttribution; readonly reason: string; readonly date: string } | null;
+  readonly override: { readonly cause: MetricsAttribution; readonly reason: string; readonly date: string; readonly trap?: AttributionTrapLink } | null;
   readonly inForce: MetricsAttribution | null;
   readonly source: "owner" | "heuristic" | null;
 }
 
 /** `null` unless the run is BLOCKED: only a blocked attempt can be attributed (`AttributeAttemptNotBlocked`). */
-export function attributionPanel(run: MetricsRun): AttributionPanel | null {
+export function attributionPanel(run: LinkedMetricsRun): AttributionPanel | null {
   if (run.stateGroup !== "BLOCKED") return null;
   return {
     blocked: blockedAt(run),

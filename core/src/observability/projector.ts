@@ -10,7 +10,7 @@ import { isPersistableKind } from "../contracts/normalized-events.ts";
 import type { DatabaseSync } from "./sqlite.ts";
 import type { AttemptEvidence, RecordedAgentPurpose } from "./attempt-evidence.ts";
 import type { RouteSelectionProvenance } from "../contracts/route-selection.ts";
-import { attributionRecordDigest, type AttributionRecord } from "../contracts/attribution-record.ts";
+import { assertAttributionRecord, attributionRecordDigest, type AttributionRecord } from "../contracts/attribution-record.ts";
 import type { ReplayRecord } from "../contracts/proving-ground.ts";
 import type { DecisionRecord } from "../contracts/decision-record.ts";
 import { resolvePhaseRoute } from "./phase-route.ts";
@@ -247,6 +247,7 @@ export function projectTaskRelation(
  * durable in the task's file, and the next rebuild places it.
  */
 export function projectAttribution(db: DatabaseSync, record: AttributionRecord): void {
+  assertAttributionRecord(record);
   const row = db.prepare("SELECT session_id FROM sessions WHERE project_slug = ? AND task_id = ? AND attempt = ?")
     .get(scrubCredentialString(record.project), scrubCredentialString(record.taskId), record.attempt) as
     | { session_id: string } | undefined;
@@ -255,7 +256,8 @@ export function projectAttribution(db: DatabaseSync, record: AttributionRecord):
     (event_id, session_id, phase_id, first_source_seq, last_source_seq, type, name,
      payload_json, started_at) VALUES (?, ?, NULL, 1, 1, 'attribution', 'owner attribution recorded', ?, ?)`)
     .run(`${row.session_id}:attribution:${attributionRecordDigest(record)}`, row.session_id,
-      stringifyRedacted({ attempt: record.attempt, cause: record.cause, reason: record.reason, at: record.at }), record.at);
+      stringifyRedacted({ attempt: record.attempt, cause: record.cause, reason: record.reason, at: record.at,
+        ...(record.schema === "awsf.attribution/v2" ? { trap: record.trap } : {}) }), record.at);
 }
 
 /**

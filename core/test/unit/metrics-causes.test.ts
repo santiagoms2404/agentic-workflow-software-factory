@@ -37,7 +37,7 @@ test("projection-only cause ledger counts each heuristic outcome and each record
     const db = openDatabase(dbPath);
     const record = (id: string, attempt: number, cause: AttributionCause, at = AT): void => {
       projectAttribution(db, { schema: ATTRIBUTION_RECORD_SCHEMA_ID, project: "causes", taskId: `task-${id}`, attempt,
-        cause, reason: "synthetic owner reason", at });
+        cause, reason: "synthetic owner reason", at, trap: { kind: "trap", id: "TR-01" } });
     };
     try {
       // A case for each DISTINCT heuristic answer, plus an unknown with no phase.

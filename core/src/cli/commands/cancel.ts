@@ -1,7 +1,7 @@
 import { dirname } from "node:path";
 import { ATTRIBUTION_RECORD_SCHEMA_ID, isAttributionCause, type AttributionRecord } from "../../contracts/attribution-record.ts";
 import { appendTaskAttribution } from "../../persistence/task-attributions.ts";
-import { assertAttributeReason, AttributeUnknownCause } from "./attribute.ts";
+import { assertAttributeReason, attributeTrapLink, trapLinkText, AttributeUnknownCause } from "./attribute.ts";
 import { runSystemCommand } from "../../execution/transport-broker.ts";
 import { assertNoExecutionController } from "../../execution/operation-lease.ts";
 import { createHostController } from "../../execution/process-controller.ts";
@@ -22,6 +22,8 @@ export interface CancelCommandOptions {
   readonly terminal: OwnerTerminal;
   readonly cause: string;
   readonly reason: string;
+  readonly trap?: string;
+  readonly noTrap?: { readonly because: string; readonly reason: string };
   readonly terminate?: (status: AttemptStatus) => Promise<TerminationReport>;
   readonly projectAttribution?: (record: AttributionRecord) => void;
   readonly now?: () => string;
@@ -62,6 +64,7 @@ export async function cancelCommand(options: CancelCommandOptions): Promise<{ st
   if (!isAttributionCause(options.cause)) throw new AttributeUnknownCause(options.cause);
   const cause = options.cause;
   const reason = assertAttributeReason(options.reason);
+  const trap = attributeTrapLink(options, reason);
   const current = await readAttempt(options.attemptDir);
   const cancellable = ["DRAFT", "PREPARED", "RUNNING", "GATING", "REVIEWING", "AWAITING_OWNER"] as const;
   // Invalid states and a piped human are rejected by the ordered machine before
@@ -94,6 +97,7 @@ export async function cancelCommand(options: CancelCommandOptions): Promise<{ st
   options.terminal.write(`Cost: 0 new provider calls; ${tree}.`);
   options.terminal.write(`Cause on record: ${cause}`);
   options.terminal.write(`Reason on record: ${reason}`);
+  options.terminal.write(`Trap link: ${trapLinkText(trap)}`);
   options.terminal.write("Confirming seals this attempt as CANCELLED: its candidate cannot be landed, its gates and review cannot be reused, and continuing the task requires awsf retry with prior spend carried forward.");
   const confirmed = await options.terminal.confirm(`Cancel ${current.taskId} attempt ${current.attempt}?`);
   if (!confirmed) return { status: current, report: noTree() };
@@ -138,7 +142,7 @@ export async function cancelCommand(options: CancelCommandOptions): Promise<{ st
   const record: AttributionRecord = {
     schema: ATTRIBUTION_RECORD_SCHEMA_ID,
     project: status.project, taskId: status.taskId, attempt: status.attempt,
-    cause, reason, at: now,
+    cause, reason, at: now, trap,
   };
   await appendTaskAttribution(dirname(options.attemptDir), record);
   options.projectAttribution?.(record);

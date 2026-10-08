@@ -13,7 +13,7 @@
 // owner's judgement.
 
 import { join } from "node:path";
-import { assertAttributionRecord, type AttributionRecord } from "../contracts/attribution-record.ts";
+import { ATTRIBUTION_RECORD_SCHEMA_ID, assertAttributionRecord, type AttributionRecord } from "../contracts/attribution-record.ts";
 import { Journal } from "./journal.ts";
 import { scanJournal } from "./replay.ts";
 
@@ -47,6 +47,7 @@ export async function attemptAttribution(taskRoot: string, attempt: number): Pro
 
 export async function appendTaskAttribution(taskRoot: string, record: AttributionRecord): Promise<void> {
   assertAttributionRecord(record);
+  if (record.schema !== ATTRIBUTION_RECORD_SCHEMA_ID) throw new Error("new attributions require awsf.attribution/v2 and a validated trap link");
   const journal = new Journal<AttributionRecord>(attributionsFilePath(taskRoot));
   try {
     await journal.append(record);

@@ -317,7 +317,7 @@ test("a full stub journey: new, preflight, confirm, start, run and a cancel with
     assert.equal(bareCancel.code, 1);
     assert.match(bareCancel.err.join("\n"), /usage: awsf cancel <task> --cause/u);
     assert.equal((await readAttempt(attemptDir)).lifecycleState, "AWAITING_OWNER", "a refused cancel moves nothing");
-    const cancelled = await cli(b, ["cancel", taskId, "--cause", cause, "--reason", reason], scriptedOwner());
+    const cancelled = await cli(b, ["cancel", taskId, "--cause", cause, "--reason", reason, "--trap", "TR-01"], scriptedOwner());
     assert.equal(cancelled.code, 0, cancelled.err.join("\n"));
     assert.deepEqual(cancelled.out, ["CANCELLED: survivors []"]);
     assert.equal((await readAttempt(attemptDir)).lifecycleState, "CANCELLED");

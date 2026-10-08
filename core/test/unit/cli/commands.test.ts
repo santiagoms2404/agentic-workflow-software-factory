@@ -390,8 +390,9 @@ test("new, start, status, cancel, and retry preserve the lifecycle and task-life
     assert.equal(cancelled.status.lifecycleState, "CANCELLED");
     assert.match(disclosure.join("\n"), /Cause on record: owner\nReason on record: No longer needed after review/u);
     assert.deepEqual(await readTaskAttributions(taskRoot(stateRoot, created.status.project, created.status.taskId)), [{
-      schema: "awsf.attribution/v1", project: created.status.project, taskId: created.status.taskId,
+      schema: "awsf.attribution/v2", project: created.status.project, taskId: created.status.taskId,
       attempt: 1, cause: "owner", reason: "No longer needed after review", at: "2026-08-07T00:02:00.000Z",
+      trap: { kind: "none", because: "owner", reason: "No longer needed after review" },
     }]);
     const journal = await scanJournal<AttemptEvent>(journalFilePath(created.attemptDir));
     assert.equal(journal.ok, true);
@@ -648,7 +649,7 @@ test("a declined cancel writes nothing; a confirmed RUNNING cancel terminates be
       repository: repo, request: "record cause", workflow: "build", tier: 1 });
     const before = readFileSync(journalFilePath(created.attemptDir));
     let signals = 0;
-    const decline = await cancelCommand({ attemptDir: created.attemptDir, cause: "unknown", reason: "Not yet known",
+    const decline = await cancelCommand({ attemptDir: created.attemptDir, cause: "unknown", reason: "Not yet known", noTrap: { because: "unexplained", reason: "Not yet known" },
       terminal: { interactive: true, write: () => {}, confirm: async () => false },
       terminate: async () => { signals += 1; throw new Error("must not signal"); } });
     assert.equal(decline.status.lifecycleState, "DRAFT");
@@ -659,7 +660,7 @@ test("a declined cancel writes nothing; a confirmed RUNNING cancel terminates be
     const running = await persistAttempt(created.attemptDir, created.status.revision, { kind: "attempt.updated",
       next: nextRevision(created.status, { lifecycleState: "RUNNING" }) });
     const order: string[] = [];
-    const result = await cancelCommand({ attemptDir: created.attemptDir, cause: "driver", reason: "  Missing   pre-call check  ",
+    const result = await cancelCommand({ attemptDir: created.attemptDir, cause: "driver", reason: "  Missing   pre-call check  ", trap: "TR-99",
       terminal: yesTerminal, now: () => "2026-10-04T00:00:00.000Z",
       terminate: async () => { order.push("terminate"); return { termSent: true, killSent: false, survivors: [], terminated: true, skipped: null }; },
       projectRecord: () => { order.push("transition"); }, projectAttribution: () => { order.push("attribution"); } });
@@ -686,7 +687,7 @@ test("a failed attribution append leaves a durable CANCELLED attempt without a c
     const created = await newCommand({ stateRoot, project: "project", taskId: "append-fails",
       repository: repo, request: "exercise interrupted append", workflow: "build", tier: 1 });
     mkdirSync(attributionsFilePath(taskRoot(stateRoot, "project", "append-fails")));
-    await assert.rejects(cancelCommand({ attemptDir: created.attemptDir, cause: "unknown", reason: "Cause to investigate",
+    await assert.rejects(cancelCommand({ attemptDir: created.attemptDir, cause: "unknown", reason: "Cause to investigate", noTrap: { because: "unexplained", reason: "Cause to investigate" },
       terminal: yesTerminal }));
     assert.equal((await readAttempt(created.attemptDir)).lifecycleState, "CANCELLED");
     const journal = await scanJournal<AttemptEvent>(journalFilePath(created.attemptDir));
