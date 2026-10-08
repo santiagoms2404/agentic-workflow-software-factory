@@ -12,6 +12,18 @@ export interface PopulationAttempt {
   readonly terminalAt: string | null;
 }
 
+/** Shared stop definition; the dated seed and live coverage views only differ at the cut. */
+export function isRegisteredStop(attempt: PopulationAttempt, registeredProjects: ReadonlySet<string>): boolean {
+  return registeredProjects.has(attempt.project)
+    && (attempt.lifecycleState === "BLOCKED" || attempt.lifecycleState === "CANCELLED")
+    && attempt.workflow !== "prove"
+    && attempt.terminalAt !== null && Number.isFinite(Date.parse(attempt.terminalAt));
+}
+
+export function isStopSinceCut(attempt: PopulationAttempt, registeredProjects: ReadonlySet<string>, cut: string = SEED_CUT): boolean {
+  return isRegisteredStop(attempt, registeredProjects) && Date.parse(attempt.terminalAt!) > Date.parse(cut);
+}
+
 export function isPopulationStop(
   attempt: PopulationAttempt,
   registeredProjects: ReadonlySet<string>,
@@ -19,10 +31,8 @@ export function isPopulationStop(
 ): boolean {
   const terminal = attempt.terminalAt === null ? NaN : Date.parse(attempt.terminalAt);
   const boundary = Date.parse(cut);
-  return registeredProjects.has(attempt.project)
-    && (attempt.lifecycleState === "BLOCKED" || attempt.lifecycleState === "CANCELLED")
-    && attempt.workflow !== "prove"
-    && Number.isFinite(terminal) && Number.isFinite(boundary) && terminal <= boundary;
+  return isRegisteredStop(attempt, registeredProjects)
+    && Number.isFinite(boundary) && terminal <= boundary;
 }
 
 export function selectPopulation<T extends PopulationAttempt>(

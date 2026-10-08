@@ -47,6 +47,7 @@ import { METRICS_EXPORT_USAGE, metricsExportCommand } from "./commands/metrics-e
 import { advisoryRole, metricsAdviceCommand } from "./commands/metrics-advisory.ts";
 import { assertRoutesReachWorkflow, formatRouteOverride, parseRouteFlags, predictSameProviderReviewFor } from "../workflow/route-flags.ts";
 import { quotaCommand } from "./commands/quota.ts";
+import { TRAPS_USAGE, trapsCommand } from "./commands/traps.ts";
 import { stageCommand } from "./commands/stage.ts";
 import { locateAttempt, readAttempt } from "./commands/attempt.ts";
 import { recordShadowProposal } from "../delegate/shadow.ts";
@@ -66,7 +67,7 @@ import { assertShiftAdmission, assessShiftAdmission, parseMilestoneSelection, se
 /** The complete owner-facing command table; documentation reconciles against it. */
 export const CLI_COMMANDS = Object.freeze([
   "init", "project", "new", "seed", "preflight", "confirm", "start", "run", "resume", "next", "status", "watch", "rework", "review", "raise", "grant", "degrade-review", "attribute", "prove", "journey", "preview", "land", "publish", "cancel", "retry",
-  "relate", "doctor", "gc", "dash", "routes", "metrics", "metrics export", "db rebuild", "ticket", "backlog", "quota", "stage", "workflows", "shift plan", "group",
+  "relate", "doctor", "traps", "gc", "dash", "routes", "metrics", "metrics export", "db rebuild", "ticket", "backlog", "quota", "stage", "workflows", "shift plan", "group",
 ]);
 
 const USAGE = `usage: awsf init [path] --project <slug>\n       awsf <${CLI_COMMANDS.join("|")}> [task] [options]`;
@@ -281,6 +282,16 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       if (options.writeOut) options.writeOut(text);
       else process.stdout.write(text);
       return 0;
+    }
+    if (command === "traps") {
+      if (parsed.positionals.length > 0 || Object.keys(parsed.flags).some(key => key !== "json" && key !== "state-root")
+        || parsed.noTrap !== undefined || parsed.repositories.length > 0 || parsed.files.length > 0 || parsed.routes.length > 0
+        || parsed.milestones.length > 0 || parsed.where.length > 0 || parsed.read.length > 0 || parsed.consulted.length > 0) {
+        throw new Error(TRAPS_USAGE);
+      }
+      const result = await trapsCommand(stateRoot);
+      for (const line of parsed.flags.json === "true" ? [JSON.stringify(result.model)] : result.lines) out(line);
+      return result.exitCode;
     }
     if (command === "doctor") {
       const report = withJevRow(

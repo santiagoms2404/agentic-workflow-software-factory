@@ -688,6 +688,7 @@ npm run awsf -- land TASK</pre>
     <li><code>retry</code></li>
     <li><code>relate</code></li>
     <li><code>doctor</code></li>
+    <li><code>traps</code></li>
     <li><code>gc</code></li>
     <li><code>dash</code></li>
     <li><code>routes</code></li>
@@ -702,6 +703,10 @@ npm run awsf -- land TASK</pre>
     <li><code>shift plan</code></li>
     <li><code>group</code></li>
   </ul>
+
+  <h3>Trap coverage</h3>
+  <p><code>awsf traps [--json] [--state-root PATH]</code> reads every registered project's non-prove BLOCKED and CANCELLED attempts whose terminal transition is after the cut. JSON is the <code>awsf.traps/v1</code> readout: catalogue counts, four coverage lists, the next free trap id and the newest landed attempt's traps gate measurement per project. It exits 1 while any stop is unlinked or names a missing trap, otherwise 0. It reports and never repairs: no writes, lock, owner terminal or trap-layer execution.</p>
+  <pre>npm run awsf -- traps --json</pre>
 
   <h3>Legal next steps</h3>
   <p><code>awsf next TASK [--attempt n] [--json]</code> reads the attempt without writing it or taking an owner terminal. JSON is the <code>awsf.next/v1</code> record: implemented CLI steps, implemented host transitions (waits), and unavailable machine edges. Text prints the rendered next action and one line per entry. L10 and L16 are unavailable: their machine actors and explanations are information, never commands, automatic waits or authority. Command placeholders need real values and command-specific guards still apply. Historical nextAction text is not rewritten.</p>
