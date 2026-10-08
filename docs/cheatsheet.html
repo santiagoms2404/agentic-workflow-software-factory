@@ -849,7 +849,7 @@ npm run awsf -- land TASK</pre>
 <section id="reference-workflows-and-gates">
   <p class="eyebrow">Reference &middot; class 5 of 6</p>
   <h2>Workflows and gates</h2>
-  <p class="secstatus"><span class="dot built"></span>The routes this project enables and the checks it runs, read through the configuration loader.</p>
+  <p class="secstatus"><span class="dot built"></span>The enabled routes and the gate ids the configuration loader accepts.</p>
 
   <p>Two different things out of one file, <code>awsf.config.yaml</code> &mdash; and read through the loader that decides what the factory will actually accept, rather than by reading the YAML by eye.</p>
 
@@ -868,6 +868,7 @@ npm run awsf -- land TASK</pre>
     <li><code>gate|typecheck</code></li>
     <li><code>gate|lint</code></li>
     <li><code>gate|journeys</code></li>
+    <li><code>gate|traps</code></li>
   </ul>
 
   <h3>A workflow is the route</h3>
@@ -884,8 +885,8 @@ npm run awsf -- land TASK</pre>
   </ul>
 
   <h3>A gate is a check this project runs against the candidate</h3>
-  <p>Four are configured here: <code>test</code> runs the project&rsquo;s unit suite, <code>typecheck</code> runs its typechecker, <code>lint</code> runs its linter, and <code>journeys</code> runs its end-to-end journeys, which take about twenty minutes. Each has a command and a timeout, and the host runs all of them against the candidate rather than trusting the worker&rsquo;s account of having run them.</p>
-  <p class="warnnote"><strong>This list is what leg 4&rsquo;s green sentence is worth.</strong> &ldquo;All configured commands passed&rdquo; is a statement about exactly these four, and a project that configures none gets the same sentence with nothing at all behind it. The list is the thing to read; the sentence only reports on it.</p>
+  <p>The accepted gate ids above are not a claim that every gate is configured. <code>test</code> runs the project&rsquo;s unit suite, <code>typecheck</code> runs its typechecker, <code>lint</code> runs its linter, and <code>journeys</code> runs its end-to-end journeys. <code>traps</code> runs the refusal traps and their source-deletion mutants. Its code is ready; the owner adds its npm script, command and measured timeout at G02-L. Only entries in <code>awsf.config.yaml</code>&rsquo;s <code>gates</code> run against the candidate.</p>
+  <p class="warnnote"><strong>The configured list is what leg 4&rsquo;s green sentence is worth.</strong> &ldquo;All configured commands passed&rdquo; reports only on the commands actually configured, not on every accepted id above. A project that configures none gets the same sentence with nothing at all behind it. Read the configuration and the gate evidence rather than trusting the worker&rsquo;s account.</p>
 </section>
 
 <section id="reference-risk-tiers">

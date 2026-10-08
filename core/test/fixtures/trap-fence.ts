@@ -65,10 +65,6 @@ export function assertCatalogueFence(input: {
   blockers: Readonly<Record<string, readonly string[]>>;
   coverage: readonly BlockerCoverage[];
   protectedPaths?: readonly string[];
-  /** T03 only: exact T02 entries await T04 adoption, not M4 gaps.
-   * Callers must explicitly supply this list; strict validation is the default.
-   */
-  awaitingAdoption?: readonly string[];
 }): void {
   const ids = input.traps.map(trap => trap.id);
   if (new Set(ids).size !== ids.length) throw new Error("duplicate trap id");
@@ -89,7 +85,6 @@ export function assertCatalogueFence(input: {
   for (const id of ids) {
     const markerCount = pairs.filter(pair => pair.id === id).length;
     const testCount = tests.filter(testId => testId === id).length;
-    if (input.awaitingAdoption?.includes(id) && markerCount === 0 && testCount === 0) continue;
     if (testCount !== 1) throw new Error(`entry with ${testCount} tests: ${id}`);
     if (markerCount !== 1) throw new Error(`entry with ${markerCount} marker pairs: ${id}`);
   }

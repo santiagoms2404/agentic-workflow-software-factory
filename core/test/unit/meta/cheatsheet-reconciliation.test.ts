@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { CLI_COMMANDS } from "../../../src/cli/main.ts";
 import { loadConfig } from "../../../src/config/load.ts";
+import { KNOWN_GATE_IDS } from "../../../src/config/schema.ts";
 import { LEGAL_EDGES, TASK_STATES } from "../../../src/state/task-machine.ts";
 import { DEFAULT_CALL_CEILINGS, TIERS } from "../../../src/state/tiers.ts";
 import { AWSF_CLI, JUST_TARGET, NPM_RUN, commandsIn, justRecipes } from "./_driving.ts";
@@ -32,8 +33,8 @@ import { repoRoot } from "./_walk.ts";
 //
 // Canonical VALUE forms are produced below: commands, states, and owner acts
 // use their source strings; edges use
-// `ID|FROM->TO|actors=A,B|spawn=BOOLEAN|interactive=BOOLEAN`; configured items
-// use `workflow|ID` or `gate|ID`; tiers use `Tn|default=CALLS`.
+// `ID|FROM->TO|actors=A,B|spawn=BOOLEAN|interactive=BOOLEAN`; enabled workflows
+// use `workflow|ID`, loader-accepted gates use `gate|ID`; tiers use `Tn|default=CALLS`.
 //
 // INDEX AND SELF-CONTAINMENT: Q10 removed the generator. Its hand-written
 // index is now the one part of this single-file document that can silently
@@ -68,12 +69,14 @@ interface FactClass {
 }
 
 function configFacts(): readonly string[] {
-  // The loader, rather than a second YAML parser, defines what configuration
-  // the factory actually admits. The fence must compare against that result.
+  // Enabled workflows come through the loader. The gate list documents the
+  // loader's accepted vocabulary, including the code-ready traps id before
+  // the owner's G02-L config commit. The adjacent prose explicitly distinguishes
+  // accepted ids from commands actually configured; no pending id runs a gate.
   const config = loadConfig(readFileSync(CONFIG_PATH, "utf8"));
   return [
     ...config.workflows.enabled.map((id) => `workflow|${id}`),
-    ...Object.keys(config.gates).map((id) => `gate|${id}`),
+    ...KNOWN_GATE_IDS.map((id) => `gate|${id}`),
   ];
 }
 

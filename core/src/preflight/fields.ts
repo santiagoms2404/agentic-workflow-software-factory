@@ -119,7 +119,10 @@ export function parseRequestLines(request: string): RequestParse {
 
 export function evaluateRequestShape(request: string): FieldVerdict {
   const parsed = parseRequestLines(request);
-  return parsed.ok ? PASS : verdict([parsed.reason]);
+  // trap-refusal-begin TR-06
+  if (!parsed.ok) return verdict([parsed.reason]);
+  // trap-refusal-end TR-06
+  return PASS;
 }
 
 // ---------------------------------------------------------------- path tokens
@@ -250,7 +253,9 @@ export function evaluateWriteBoundary(facts: WriteBoundaryFacts): FieldVerdict {
       continue;
     }
     if (!stated.has(entry)) {
+      // trap-refusal-begin TR-02
       problems.push(`--where ${entry} does not appear verbatim in the request's Where line; add it there or drop it`);
+      // trap-refusal-end TR-02
       continue;
     }
     if (facts.shift !== null && !facts.shift.builderWrites.some((glob) => covers(entry, glob))) {
@@ -339,7 +344,9 @@ export function evaluateProtectedPaths(facts: ProtectedPathsFacts): ProtectedPat
     const writes = facts.where.filter((entry) => classifies(entry, hit.path));
     const reads = facts.read.some((entry) => classifies(entry, hit.path));
     if (writes.length === 0 && !reads) {
+      // trap-refusal-begin TR-03
       problems.push(`${named} is protected by ${hit.glob} and unclassified; pass it with --read if the task only reads it, or with --where if it writes it`);
+      // trap-refusal-end TR-03
     } else if (reads && writes.some((entry) => entry === hit.path || entry === hit.token)) {
       problems.push(`${hit.path} is named in both --where and --read; a protected path is either written or only read`);
     } else if (!reads && facts.shift !== null) {
@@ -389,7 +396,9 @@ export function evaluateSuite(facts: SuiteFacts): FieldVerdict {
     else if (rows.length > 1) problems.push(`gate ${gateId} has ${String(rows.length)} rows; exactly one is expected`);
     else if (row.sha !== facts.baseSha) problems.push(`gate ${gateId} ran at ${row.sha}, not at the base ${facts.baseSha}`);
     else if (row.gatesConfigDigest !== facts.gatesConfigDigest) problems.push(`gate ${gateId} ran under another gate configuration than the current one: the gate set changed`);
+    // trap-refusal-begin TR-01
     else if (!row.passed) problems.push(`gate ${gateId} failed at the base ${facts.baseSha} (exit ${row.exitCode === null ? "none" : String(row.exitCode)}); the base is red`);
+    // trap-refusal-end TR-01
   }
   return verdict(problems);
 }
@@ -412,12 +421,14 @@ export function evaluateGitStorage(facts: GitStorageFacts): FieldVerdict {
   if (facts.entries.length === 0) return verdict(["no file mode was measured for the Git directory or the worktree root"]);
   const unreadable = facts.entries.filter((entry) => entry.mode === null);
   if (unreadable.length > 0) return verdict([`the mode of ${unreadable.map((entry) => entry.path).join(", ")} could not be read`]);
+  // trap-refusal-begin TR-04
   if (facts.entries.every((entry) => ((entry.mode ?? 0) & 0o777) === 0o777)) {
     return verdict([
       `every measured entry (${facts.entries.map((entry) => entry.path).join(", ")}) reads mode 0777, the signature of a DrvFs-mounted drive; ` +
         "the Git directory and the worktree root must be on a filesystem that holds file modes",
     ]);
   }
+  // trap-refusal-end TR-04
   return PASS;
 }
 
@@ -475,7 +486,9 @@ export function evaluateDuplicate(facts: DuplicateFacts): FieldVerdict {
     const samePlan = facts.planRef !== null && other.planRef === facts.planRef && selectsOverlappingWork(facts.tickets, other.tickets);
     if (!sameRequest && !samePlan) continue;
     const what = sameRequest && samePlan ? `the same request and plan ref ${facts.planRef ?? ""}` : sameRequest ? "the same request" : `the same plan ref ${facts.planRef ?? ""}`;
+    // trap-refusal-begin TR-05
     problems.push(`task ${other.taskId} (latest attempt ${other.latestState}) already carries ${what}; continue that task or change this request`);
+    // trap-refusal-end TR-05
   }
   return verdict(problems);
 }
@@ -499,9 +512,11 @@ export function evaluatePriorAttempts(facts: PriorAttemptsFacts): FieldVerdict {
   if (missing.length > 0) {
     problems.push(`--consulted lacks ${missing.join(", ")}, which the journal holds for this task's earlier attempts or the tasks it continues; read each and pass it`);
   }
+  // trap-refusal-begin TR-07
   if (unknown.length > 0) {
     problems.push(`--consulted names ${unknown.join(", ")}, which the journal does not hold for this task's earlier attempts or the tasks it continues`);
   }
+  // trap-refusal-end TR-07
   return verdict(problems);
 }
 
@@ -522,13 +537,17 @@ export interface ConfirmationFacts {
 export function evaluateConfirmation(facts: ConfirmationFacts): FieldVerdict {
   const own = facts.confirmations.filter((record) =>
     record.project === facts.project && record.taskId === facts.taskId && record.attempt === facts.attempt);
-  if (own.some((record) => record.requestDigest === facts.requestDigest && record.pathsDigest === facts.pathsDigest)) return PASS;
-  const latest = own.at(-1);
-  if (latest === undefined) return verdict(["no owner confirmation of this request is recorded for this attempt"]);
-  if (latest.requestDigest !== facts.requestDigest) {
-    return verdict(["the owner's confirmation is bound to other request text: the request changed after it was confirmed"]);
+  // trap-refusal-begin TR-08
+  if (!own.some((record) => record.requestDigest === facts.requestDigest && record.pathsDigest === facts.pathsDigest)) {
+    const latest = own.at(-1);
+    if (latest === undefined) return verdict(["no owner confirmation of this request is recorded for this attempt"]);
+    if (latest.requestDigest !== facts.requestDigest) {
+      return verdict(["the owner's confirmation is bound to other request text: the request changed after it was confirmed"]);
+    }
+    return verdict(["the owner's confirmation is bound to other --where or --read paths: the paths changed after they were confirmed"]);
   }
-  return verdict(["the owner's confirmation is bound to other --where or --read paths: the paths changed after they were confirmed"]);
+  // trap-refusal-end TR-08
+  return PASS;
 }
 
 // ---------------------------------------------------------------- the record's fields

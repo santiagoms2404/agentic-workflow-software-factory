@@ -260,12 +260,14 @@ export function createWorktree(request: WorktreeRequest, runner = systemGitRunne
   const head = runGit(runner, ["rev-parse", request.baseSha]).trim();
   // Diagnose before asking Git, so the failure names the condition rather than
   // repeating git's message about a path.
+  // trap-refusal-begin TR-12
   if (existsSync(path)) {
     const tracked = runGit(runner, ["worktree", "list", "--porcelain"])
       .split(/\r?\n/)
       .some((line) => line.startsWith("worktree ") && resolve(line.slice("worktree ".length)) === resolve(path));
     throw new AttemptWorktreeExists(path, tracked);
   }
+  // trap-refusal-end TR-12
   runGit(runner, ["worktree", "add", "--detach", path, head]);
   return Object.freeze({ attemptId: request.attemptId, path, head });
 }

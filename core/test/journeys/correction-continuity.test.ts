@@ -360,7 +360,8 @@ function configText(): string {
     )
     .replace("  typecheck: { argv: [npm, run, typecheck], timeout_seconds: 300 }\n", "")
     .replace("  lint: { argv: [npm, run, lint], timeout_seconds: 300 }\n", "")
-    .replace("  journeys: { argv: [npm, run, test:journeys], timeout_seconds: 2400 }\n", "");
+    .replace("  journeys: { argv: [npm, run, test:journeys], timeout_seconds: 2400 }\n", "")
+    .replace(/^ {2}traps:.*\n/gmu, "");
 }
 
 /**

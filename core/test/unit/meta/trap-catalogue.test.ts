@@ -12,17 +12,11 @@ import { runMutant } from "../../traps/_mutate.ts";
 import { repoRoot } from "./_walk.ts";
 
 const ROOT = repoRoot();
-// T02 describes these existing refusals; T03 may not adopt real traps.
-// T04 MUST remove this exact bootstrap list when it adds their tests/markers.
-// It is NOT a pending-gap allowance: PENDING is restricted to M4 task ids.
-const T04_ADOPTION = ["TR-01", "TR-02", "TR-03", "TR-04", "TR-05", "TR-06", "TR-07", "TR-08", "TR-09", "TR-10", "TR-11", "TR-12"];
-
 test("trap catalogue, source markers, test files and blocker vocabulary agree", () => {
   const protectedPaths = loadConfig(readFileSync(join(ROOT, "awsf.config.yaml"), "utf8")).policy.protected_paths;
   assertCatalogueFence({ traps: TRAPS, pending: PENDING, sources: treeFiles(ROOT, "core/src"),
     tests: treeFiles(ROOT, "core/test/traps").map(file => file.path).filter(path => /\/TR-.*\.test\.ts$/u.test(path)),
-    blockers: EDGE_BLOCKER_CODES, coverage: BLOCKER_COVERAGE, protectedPaths: [...PROTECTED_TRAP_PATHS, ...protectedPaths],
-    awaitingAdoption: T04_ADOPTION });
+    blockers: EDGE_BLOCKER_CODES, coverage: BLOCKER_COVERAGE, protectedPaths: [...PROTECTED_TRAP_PATHS, ...protectedPaths] });
 });
 
 const trap: TrapEntry = { id: "TR-01", family: "demo", title: "Test-only refusal", seeds: [],
@@ -44,8 +38,7 @@ test("the strict fence accepts a complete demonstration and refuses a duplicate 
 test("the fence refuses a marker with no entry and an entry with no test", () => {
   assert.throws(() => assertCatalogueFence({ ...planted(), traps: [] }), /marker with no entry/u);
   assert.throws(() => assertCatalogueFence({ ...planted(), tests: [] }), /entry with 0 tests/u);
-  // Even T03's bootstrap may not admit an invented entry lacking a test.
-  assert.throws(() => assertCatalogueFence({ ...planted(), traps: [trap, { ...trap, id: "TR-02" }], awaitingAdoption: ["TR-01"] }), /entry with 0 tests: TR-02/u);
+  assert.throws(() => assertCatalogueFence({ ...planted(), traps: [trap, { ...trap, id: "TR-02" }] }), /entry with 0 tests: TR-02/u);
 });
 test("the fence refuses an unmarked test and a newly uncovered blocker pair", () => {
   assert.throws(() => assertCatalogueFence({ ...planted(), sources: [] }), /entry with 0 marker pairs/u);

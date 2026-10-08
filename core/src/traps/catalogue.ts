@@ -37,8 +37,8 @@ export interface PendingEntry {
   readonly seeds: readonly string[];
 }
 
-// Entries describe refusals that exist today. T04 supplies their tests and
-// markers; until then an entry alone is not a proven trap. Empty seed lists
+// Entries describe refusals that exist today, proven by T04's tests, markers
+// and source-deletion mutants. Empty seed lists
 // are K1 field journeys (or S34's complementary run-time shape), not invented
 // historical stops. Each ledger key is assigned exactly once.
 export const TRAPS: readonly TrapEntry[] = [
@@ -62,7 +62,9 @@ export const TRAPS: readonly TrapEntry[] = [
   // second ledger assignment: a planned protected write needs a grant at L4.
   { id: "TR-09", family: "protected-grant", title: "A planned protected write needs a grant before L4", seeds: [],
     refusalPoint: "run-before-l4", refusal: "ProtectedGrantRefused" },
-  { id: "TR-10", family: "config-snapshot", title: "Owner rework refuses a changed configuration", seeds: ["G02"],
+  // The same marked comparison guards owner rework and the before-L4 run.
+  // Its run-time half proves INV-1 while the owner-act test retains its anchor.
+  { id: "TR-10", family: "config-snapshot", title: "Owner rework and run refuse a changed configuration", seeds: ["G02"],
     refusalPoint: "owner-act", refusal: "ProductionConfigSnapshotMismatch" },
   { id: "TR-11", family: "continuity", title: "Resume needs the host-owned session store", seeds: ["G09"],
     refusalPoint: "run-before-l4", refusal: "E_BACKEND_FAILURE" },

@@ -171,7 +171,8 @@ function configText(t2: number): string {
     .replace("test: { argv: [npm, run, test:unit], timeout_seconds: 600 }", `test: { argv: [node, ${GATE[0]}, ${GATE[1]}], timeout_seconds: 10 }`)
     .replace("  typecheck: { argv: [npm, run, typecheck], timeout_seconds: 300 }\n", "")
     .replace("  lint: { argv: [npm, run, lint], timeout_seconds: 300 }\n", "")
-    .replace("  journeys: { argv: [npm, run, test:journeys], timeout_seconds: 2400 }\n", "");
+    .replace("  journeys: { argv: [npm, run, test:journeys], timeout_seconds: 2400 }\n", "")
+    .replace(/^ {2}traps:.*\n/gmu, "");
 }
 
 function world() {

@@ -407,6 +407,17 @@ export class ProductionConfigSnapshotMismatch extends Error {
   }
 }
 
+/** The existing snapshot comparison, shared by run and owner rework so G02's
+ * owner-act shape and its PREPARED, before-L4 shape delete the same refusal.
+ */
+export function assertProductionConfigSnapshot(config: AwsfConfig, snapshotJson: string): void {
+  // trap-refusal-begin TR-10
+  if (toConfigSnapshotJson(config) !== snapshotJson) {
+    throw new ProductionConfigSnapshotMismatch();
+  }
+  // trap-refusal-end TR-10
+}
+
 /**
  * A writing phase owes the protected grant its preflight planned (task 12).
  * Thrown only after the refusal is journaled and with no call reserved: before
@@ -1296,9 +1307,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
   }
   if (status.worktree === null || status.baseSha === null) throw new Error("PREPARED attempt has no managed worktree or base SHA");
   if (options.config.project.slug !== status.project) throw new Error("attempt and config project do not match");
-  if (toConfigSnapshotJson(options.config) !== status.configSnapshotJson) {
-    throw new ProductionConfigSnapshotMismatch();
-  }
+  assertProductionConfigSnapshot(options.config, status.configSnapshotJson);
 
   const seed = recovery === undefined ? await verifiedTargetSeed(options.attemptDir, status) : assertSeedTarget(status);
   if (seed !== null && recovery === undefined) await validateSeedStartup(seed, status, options.config, options.configPath, options.attemptDir);
@@ -1366,6 +1375,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     assertGrantRefusedRecord(record);
     return record;
   };
+  // trap-refusal-begin TR-09
   if (recovery === undefined) {
     const owed = writers[0] === undefined ? null : grantOwed(writers[0]);
     if (owed !== null) {
@@ -1376,6 +1386,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       throw new ProtectedGrantRefused(status, owed, "before-l4", record.callsSpent);
     }
   }
+  // trap-refusal-end TR-09
   try {
     // A replay measures its arm, so the arm must be the attempt's own route
     // for the phase it measures, whole, before any adapter is asked anything.

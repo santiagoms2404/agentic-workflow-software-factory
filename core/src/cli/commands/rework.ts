@@ -24,7 +24,6 @@ import { AdapterError, reservationIdOf } from "../../adapters/interface.ts";
 import { renderHeadroomAdvice, renderOwnerAlternatives, type AdviceSelector } from "../../lifecycle/renderer.ts";
 import { registeredAdapter } from "../../adapters/registry.ts";
 import { assertPrivateSystemPrompt, writeSystemPromptFile } from "../../adapters/system-prompt-file.ts";
-import { toConfigSnapshotJson } from "../../config/effective-config.ts";
 import { injectOutputSchema } from "../../contracts/json-schema.ts";
 import { parseEnvelope } from "../../contracts/parse-envelope.ts";
 import { wrapEnvelope } from "../../contracts/stored-envelope.ts";
@@ -88,7 +87,7 @@ import {
   type AttemptStatus,
 } from "./attempt.ts";
 import {
-  ProductionConfigSnapshotMismatch,
+  assertProductionConfigSnapshot,
   ProductionRouteUnavailable,
   ProductionWorkflowUnsupported,
   requestOutput,
@@ -440,7 +439,7 @@ function validateAttempt(status: AttemptStatus, config: AwsfConfig): WorkflowRec
   const recipeTier = t2?.tier ?? 1;
   if (status.tier !== recipeTier) throw new ReworkTierUnsupported(status.tier, status.workflow, recipeTier, status);
   if (config.project.slug !== status.project) throw new Error("attempt and config project do not match");
-  if (toConfigSnapshotJson(config) !== status.configSnapshotJson) throw new ProductionConfigSnapshotMismatch();
+  assertProductionConfigSnapshot(config, status.configSnapshotJson);
   return t2 ?? null;
 }
 

@@ -43,6 +43,7 @@ export function box(configure: (config: AwsfConfig) => void = () => {}) {
   for (const agent of config.agents) agent.harness.interrupted_turn = false;
   // Explicitly discard journeys as every synthetic config copying shipped gates does.
   delete config.gates.journeys;
+  delete config.gates.traps;
   delete config.gates.typecheck;
   delete config.gates.lint;
   config.gates.test = { argv: ["node", "-e", "process.exit(0)"], timeout_seconds: 10 };
