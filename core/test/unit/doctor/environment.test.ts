@@ -9,7 +9,7 @@ import { loadConfig } from "../../../src/config/load.ts";
 import { DoctorReadoutSchema } from "../../../src/contracts/doctor-readout.ts";
 import { ENVELOPE_SCHEMAS, RECORD_SCHEMAS } from "../../../src/contracts/registry.ts";
 import { executablesRow } from "../../../src/doctor/executables.ts";
-import { gatherDoctorRows } from "../../../src/doctor/gather.ts";
+import { gatherDoctorRows, type EnvironmentRows } from "../../../src/doctor/gather.ts";
 import { providersRow } from "../../../src/doctor/providers.ts";
 import { quotaDiagnostics, quotaRow } from "../../../src/doctor/quota.ts";
 import { buildDoctorReport } from "../../../src/doctor/report.ts";
@@ -52,6 +52,27 @@ test("storage uses K1's all-0777 signature, reports roots, and warns when unread
   assert.equal(storageRow({ ...facts, gitEntries: [{ path: "HEAD", mode: 0o644 }] }).status, "ok");
   assert.equal(storageRow({ ...facts, gitEntries: [{ path: "HEAD", mode: null }] }).status, "warn");
   assert.equal(storageRow({ ...facts, gitEntries: [{ path: "HEAD", mode: 0o644 }], stateEntry: { path: "state", mode: 0o777 } }).status, "finding");
+});
+
+test("DrvFs and missing-CLI fixtures keep every row named in text and JSON and produce W02-Q6 findings", () => {
+  const ok: EnvironmentRows["storage"] = { status: "ok", detail: ["synthetic healthy fact"] };
+  const healthy: EnvironmentRows = { storage: ok, executables: ok, providers: ok, quota: ok, coverage: ok,
+    branches: ok, worktrees: ok, baseline: ok, markers: ok };
+  const storage = storageRow({ commonDirectory: "/synthetic/git", worktreeRoot: "/synthetic/tree", stateRoot: "/synthetic/state",
+    gitEntries: ["HEAD", "config", "tree"].map(path => ({ path, mode: 0o777 })), stateEntry: { path: "state", mode: 0o700 } });
+  const executables = executablesRow([{ name: "adapter custom", executable: "missing-cli", resolved: null }]);
+  for (const [name, row] of Object.entries({ storage, executables })) {
+    const report = buildDoctorReport(existing, jev, { ...healthy, [name]: row });
+    const json = JSON.parse(JSON.stringify(report));
+    assert.equal(Value.Check(DoctorReadoutSchema, json), true);
+    assert.equal(report.healthy, false);
+    assert.equal(json.rows[name].status, "finding");
+    for (const rowName of Object.keys(healthy)) {
+      assert.ok(Object.hasOwn(json.rows, rowName), `JSON row ${rowName}`);
+      assert.ok(report.lines.some(line => line.startsWith(`${rowName}: `)), `text row ${rowName}`);
+    }
+    assert.ok(report.lines.includes(`finding: ${name}`));
+  }
 });
 
 test("unresolvable configured CLI is a finding; resolved executables are descriptive", () => {
