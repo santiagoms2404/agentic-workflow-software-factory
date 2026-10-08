@@ -3,7 +3,6 @@ import { chmodSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "
 import { join } from "node:path";
 import { test } from "node:test";
 import { PiCodexAdapter } from "../../../src/adapters/pi-codex.ts";
-import { runSystemCommand } from "../../../src/execution/transport-broker.ts";
 import { readAttempt, nextRevision, persistAttempt } from "../../../src/cli/commands/attempt.ts";
 import { StartPreflightRefused } from "../../../src/cli/commands/start.ts";
 import { reworkCommand } from "../../../src/cli/commands/rework.ts";
@@ -17,6 +16,7 @@ import { SEEDS, type Seed } from "../../../src/traps/seeds.ts";
 import { k1Request, refusals } from "../../fixtures/k1-preflight.ts";
 import { AT, OWNER, assertCalled, box, commit, draft, git, prepare, run, start, update, type Box } from "./fixture.ts";
 import { launchEnvironmentRefusal } from "../../fixtures/launch-environment.ts";
+import { runStartQuota } from "../../fixtures/run-start-quota.ts";
 
 async function assertNoCall(b: Box, attemptDir: string, lifecycleState = "DRAFT") {
   const status = await readAttempt(attemptDir);
@@ -55,45 +55,8 @@ async function launch() {
 }
 
 async function quota() {
-  const b = box(config => {
-    config.routing.quota_stop = { default: { minutes: 30, probe_timeout_ms: 1000 } };
-    const builder = config.agents.find(agent => agent.name === "builder")!;
-    const planner = config.agents.find(agent => agent.name === "planner")!;
-    builder.harness.adapter = "claude";
-    builder.model = planner.model;
-  });
-  try {
-    const created = await draft(b);
-    await prepare(b, created.attemptDir);
-    await start(b, created.attemptDir);
-    let probes = 0;
-    // Existing canned probe data is not owner runtime output. Make all windows
-    // exhausted locally; the test's question is whether the FIRST GO checks it.
-    const data = JSON.parse(readFileSync("core/test/fixtures/quota-axi/derived-exhausted-now.json", "utf8"));
-    data.generatedAt = AT;
-    // Reset is far away although usable allowance is already zero. Today's
-    // threshold compares time-to-reset, not the exhausted percentage.
-    for (const provider of data.providers) for (const window of provider.windows) window.resetsAt = "2026-10-08T12:00:00Z";
-    const command: typeof runSystemCommand = (executable, argv) => {
-      assert.equal(executable, "/synthetic/quota-axi");
-      if (argv[0] === "--version") return { status: 0, stdout: "quota-axi 0.1.29", stderr: "", error: null };
-      probes++;
-      return { status: 0, stdout: JSON.stringify(data), stderr: "", error: null };
-    };
-    const status = await runProductionWithQuota(b, created.attemptDir, command);
-    assertCalled(b, status);
-    assert.equal(probes, 1, "the request-to-builder boundary probes but does not refuse exhausted allowance");
-    const snapshots = (await readAttemptEvidence(created.attemptDir)).filter(entry => entry.type === "quota-snapshot");
-    assert.ok(snapshots.some(entry => entry.type === "quota-snapshot" && entry.effectivePercentRemaining === 0));
-    // KNOWN GAP T09: exhausted-at-start and configured threshold refuse before L4.
-  } finally { b.close(); }
-}
-// Keep the infrastructure typed by the production API rather than widening the fixture seam.
-async function runProductionWithQuota(b: Box, attemptDir: string, command: typeof runSystemCommand) {
-  const { runProductionCommand } = await import("../../../src/cli/commands/production-run.ts");
-  return runProductionCommand({ attemptDir, stateRoot: b.stateRoot, config: b.config, configPath: b.configPath,
-    projectRecord: b.projection.project, infrastructure: { ...b.infrastructure,
-      resolveExecutable: () => "/synthetic/quota-axi", runCommand: command } });
+  // S42's far-away reset does not make a zero allowance usable (TR-14).
+  await runStartQuota({ id: "TR-14", condition: "exhausted" });
 }
 
 async function shift() {

@@ -72,6 +72,10 @@ export const TRAPS: readonly TrapEntry[] = [
     refusalPoint: "start", refusal: "AttemptWorktreeExists" },
   { id: "TR-13", family: "launch-environment", title: "Every phase's executable must resolve in its launch PATH", seeds: ["S11", "S17"],
     refusalPoint: "run-before-l4", refusal: "ProductionExecutableUnavailable" },
+  { id: "TR-14", family: "quota-start", title: "An exhausted or rejected window refuses before L4", seeds: ["S42"],
+    refusalPoint: "run-before-l4", refusal: "ProductionQuotaRefused" },
+  { id: "TR-15", family: "quota-threshold", title: "A configured quota threshold refuses before L4", seeds: [],
+    refusalPoint: "run-before-l4", refusal: "ProductionQuotaRefused" },
 ];
 
 function isNoTrapKind(outcome: Seed["outcome"]): outcome is NoTrapKind {
@@ -86,7 +90,6 @@ export const NO_TRAPS: readonly NoTrapEntry[] = SEEDS.flatMap(seed =>
 // S27's K1 subshapes are TR-02/TR-06, but its unresolved ticket-demand shape
 // is assigned here only, rather than counted twice as already trapped.
 export const PENDING: readonly PendingEntry[] = [
-  { task: "T09", seeds: ["S42"] },
   { task: "T10", seeds: ["S27"] },
   { task: "T11", seeds: ["S21", "S24"] },
   { task: "T12", seeds: ["C5-baseline", "C8-adopt", "C8-later-grant"] },
@@ -110,7 +113,7 @@ export const BLOCKER_COVERAGE: readonly BlockerCoverage[] = [
   { edge: "L2", code: "preflight-failed", target: { family: "suite" }, evidence: "K1 measures configured gates at the base before preparation (TR-01)." },
   { edge: "L5", code: "crash", target: { kind: "after-spend" }, evidence: "A running process can crash after GO; TR-13 refuses the launch-environment seeds before L4." },
   { edge: "L5", code: "silence", target: { kind: "after-spend" }, evidence: "Silence is observed over an already released process." },
-  { edge: "L5", code: "quota-exhausted", target: { kind: "after-spend" }, evidence: "A provider reports exhaustion after GO; S42's initially exhausted shape is pending T09." },
+  { edge: "L5", code: "quota-exhausted", target: { kind: "after-spend" }, evidence: "The phase-boundary quota pause mitigates exhaustion after GO; TR-14 refuses S42's initially exhausted shape." },
   { edge: "L5", code: "phase-abort", target: { kind: "after-spend" }, evidence: "The running phase fails its output contract after its call." },
   { edge: "L5", code: "permission-breach", target: { kind: "after-spend" }, evidence: "Actual writes are inspected after the phase; planned protected writes are TR-09." },
   { edge: "L5", code: "budget-exhausted", target: { kind: "after-spend" }, evidence: "Continuation cannot buy another call after consuming its budget." },

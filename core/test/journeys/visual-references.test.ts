@@ -493,6 +493,7 @@ test("V1 an owner instruction resumed into a bound builder carries the same visu
     routing: { ...config.routing, quota_stop: { default: { minutes: 30, probe_timeout_ms: 1000 } } } }) });
   try {
     let mode: "low" | "healthy" = "low";
+    let probes = 0;
     const quota: Partial<ProductionInfrastructure> = {
       now: () => "2026-08-24T20:26:39.429Z",
       resolveExecutable: () => "/fixture/quota-axi",
@@ -500,7 +501,8 @@ test("V1 an owner instruction resumed into a bound builder carries the same visu
         if (executable !== "/fixture/quota-axi") return runSystemCommand(executable, argv, opts);
         if (argv[0] === "--version") return { status: 0, stdout: "quota-axi 0.1.29", stderr: "", error: null };
         const data = JSON.parse(readFileSync(resolve("core/test/fixtures/quota-axi/nominal.json"), "utf8"));
-        if (mode === "low") data.providers[1].windows[0].resetsAt = "2026-08-24T20:27:39.429Z";
+        // Start is healthy; the planner-to-builder boundary crosses later.
+        if (probes++ > 0 && mode === "low") data.providers[1].windows[0].resetsAt = "2026-08-24T20:27:39.429Z";
         return { status: 0, stdout: JSON.stringify(data), stderr: "", error: null };
       }) satisfies typeof runSystemCommand,
     };

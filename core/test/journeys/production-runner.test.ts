@@ -101,7 +101,8 @@ test(`O1 ${granted ? "A2 grant " : ""}${routed ? "selected-route " : ""}${scenar
           if (argv[0] === "--version") return { status: 0, stdout: "quota-axi 0.1.29", stderr: "", error: null };
           probes++;
           const data = JSON.parse(readFileSync(resolve("core/test/fixtures/quota-axi/nominal.json"), "utf8"));
-          if (mode === "low") data.providers[1].windows[0].resetsAt = "2026-08-24T20:27:39.429Z";
+          // Start is healthy; the later boundary (and resume) sees low quota.
+          if (probes > 1 && mode === "low") data.providers[1].windows[0].resetsAt = "2026-08-24T20:27:39.429Z";
           if (mode === "unknown") data.providers[1].state = { status: "stale", stale: true };
           return { status: 0, stdout: JSON.stringify(data), stderr: "", error: null };
         }) satisfies typeof runSystemCommand },
@@ -300,6 +301,7 @@ test("resume supplements survive another quota pause and reach later review as i
   try {
     const prepared = await readAttempt(world.created.attemptDir);
     let low: "builder" | "documenter" | null = "builder";
+    let probes = 0;
     const prompts: string[] = [];
     const options = { attemptDir: world.created.attemptDir, stateRoot: world.stateRoot, config: world.config, configPath: world.configPath,
       projectRecord: world.projection.project, assertAdvancement: world.projection.assertAdvancement, assertLaunchProjection: world.projection.assertLaunchPermitted,
@@ -313,7 +315,8 @@ test("resume supplements survive another quota pause and reach later review as i
           if (executable !== "/fixture/quota-axi") return runSystemCommand(executable, argv, opts);
           if (argv[0] === "--version") return { status: 0, stdout: "quota-axi 0.1.29", stderr: "", error: null };
           const data = JSON.parse(readFileSync(resolve("core/test/fixtures/quota-axi/nominal.json"), "utf8"));
-          if (low !== null) for (const window of data.providers[low === "builder" ? 1 : 0].windows) window.resetsAt = "2026-08-24T20:27:39.429Z";
+          // This journey exercises a crossing after start, not start refusal.
+          if (probes++ > 0 && low !== null) for (const window of data.providers[low === "builder" ? 1 : 0].windows) window.resetsAt = "2026-08-24T20:27:39.429Z";
           return { status: 0, stdout: JSON.stringify(data), stderr: "", error: null };
         }) satisfies typeof runSystemCommand,
       } };

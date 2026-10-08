@@ -6,6 +6,10 @@ export interface QuotaScopeReadout {
   readonly scope: string | null;
   readonly effectivePercentRemaining: number | null;
   readonly minutesToReset: number | null;
+  /** Identity and exact reset instant of the semantic binding window. */
+  readonly windowId: string | null;
+  readonly resetsAt: string | null;
+  readonly rejected: boolean;
 }
 
 export interface QuotaProviderReadout {
@@ -131,7 +135,7 @@ function minutesForBindingWindow(
   return Math.max(0, Math.ceil((resetMs - nowMs) / 60_000));
 }
 
-function parseScope(
+function parseScopeFigure(
   raw: unknown,
   index: number,
   stateStatus: string | null,
@@ -140,7 +144,7 @@ function parseScope(
   nowMs: number | null,
   providerPath: string,
   faults: string[],
-): QuotaScopeReadout {
+): Omit<QuotaScopeReadout, "windowId" | "resetsAt" | "rejected"> {
   const path = `${providerPath}.quotaSemantics.effectiveAvailability[${String(index)}]`;
   if (!isObject(raw)) {
     faults.push(`${path} was not an object — recorded as unavailable`);
@@ -152,11 +156,11 @@ function parseScope(
 
   // Freshness and semantic resolution are structural payload facts. Raw
   // windows remain diagnostic data and cannot override either one.
-  if (stateStatus !== "fresh" || semanticsStatus !== "known" || effectiveStatus !== "known") {
+  if (stateStatus !== "fresh" || semanticsStatus !== "known" || (effectiveStatus !== "known" && effectiveStatus !== "rejected")) {
     return { scope, effectivePercentRemaining: null, minutesToReset: null };
   }
 
-  const percentage = raw["effectivePercentRemaining"];
+  const percentage = effectiveStatus === "rejected" ? 0 : raw["effectivePercentRemaining"];
   if (typeof percentage !== "number" || !Number.isFinite(percentage) || percentage < 0 || percentage > 100) {
     faults.push(`${path}.effectivePercentRemaining was ${JSON.stringify(percentage)}, which is not a percentage — recorded as unavailable`);
     return { scope, effectivePercentRemaining: null, minutesToReset: null };
@@ -187,6 +191,24 @@ function parseScope(
     effectivePercentRemaining: percentage,
     minutesToReset: minutesForBindingWindow(rawWindows, bindingId, nowMs, `${providerPath}.windows`, faults),
   };
+}
+
+function parseScope(
+  raw: unknown, index: number, stateStatus: string | null, semanticsStatus: string | null,
+  rawWindows: readonly unknown[], nowMs: number | null, providerPath: string, faults: string[],
+): QuotaScopeReadout {
+  const figure = parseScopeFigure(raw, index, stateStatus, semanticsStatus, rawWindows, nowMs, providerPath, faults);
+  // Only the semantic binding chooses a window; raw percentages never do.
+  let windowId: string | null = null;
+  let resetsAt: string | null = null;
+  if (figure.minutesToReset !== null && isObject(raw) && isObject(raw["runway"])) {
+    const runway = raw["runway"];
+    windowId = limitingWindowId(raw, runway, String(runway["status"]), providerPath, []);
+    const window = rawWindows.find((value): value is JsonObject => isObject(value) && value["id"] === windowId);
+    resetsAt = typeof window?.["resetsAt"] === "string" ? window["resetsAt"] : null;
+  }
+  return { ...figure, windowId, resetsAt,
+    rejected: stateStatus === "fresh" && semanticsStatus === "known" && isObject(raw) && raw["status"] === "rejected" };
 }
 
 function parseProvider(

@@ -429,6 +429,24 @@ export function assertProductionConfigSnapshot(config: AwsfConfig, snapshotJson:
   // trap-refusal-end TR-10
 }
 
+/** A known starting window refuses without moving lifecycle or reserving calls. */
+export class ProductionQuotaRefused extends Error {
+  readonly code = "E_RUN_START_QUOTA";
+  readonly provider: string;
+  readonly window: string;
+  readonly resetsAt: string;
+  readonly condition: "exhausted" | "rejected" | "below-threshold";
+  constructor(provider: string, window: string, resetsAt: string,
+    condition: "exhausted" | "rejected" | "below-threshold") {
+    super(`run refused before L4: provider ${provider}, window ${window}, ${condition}; resets at ${resetsAt}. The attempt stays PREPARED; no call is reserved.`);
+    this.name = "ProductionQuotaRefused";
+    this.provider = provider;
+    this.window = window;
+    this.resetsAt = resetsAt;
+    this.condition = condition;
+  }
+}
+
 /**
  * A writing phase owes the protected grant its preflight planned (task 12).
  * Thrown only after the refusal is journaled and with no call reserved: before
@@ -1621,6 +1639,64 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     prepareProtectedConsumption(options.attemptDir, await protectedGrantSubject(options, status, grant.subject.phaseKey), "preflight", "preflight");
   }
   if (preflightOnly) return status;
+  // Route resolution is complete. Observe only those routes this recipe will
+  // use, once, before the call ledger exists; never rank, replace or retry one.
+  if (recovery === undefined) {
+    const usedAdapters = new Set([...routes.values()].map(route => route.adapterId));
+    const startRoutes = mapConfiguredQuotaRoutes(options.config).filter(route => usedAdapters.has(route.adapterId));
+    const measurable = startRoutes.filter(route => route.providers.length > 0);
+    if (measurable.length > 0) {
+      const configuredStop = options.config.routing.quota_stop;
+      const observedAt = infra.now();
+      let reportedFailure: string | null = null;
+      const probe = await probeQuota({
+        runCommand: infra.runCommand, resolveExecutable: infra.resolveExecutable,
+        routes: configuredQuotaProbeRoutes(measurable), purpose: "phase-boundary",
+        timeouts: {
+          interactivePreflightMs: DEFAULT_QUOTA_PROBE_TIMEOUTS.interactivePreflightMs,
+          phaseBoundaryMs: Math.max(...measurable.map(route =>
+            (configuredStop?.by_adapter?.[route.adapterId] ?? configuredStop?.default)?.probe_timeout_ms
+              ?? DEFAULT_QUOTA_PROBE_TIMEOUTS.phaseBoundaryMs)),
+        },
+        options: { cwd: status.worktree, env: HOST.process.env, maxBuffer: options.config.runtime.max_output_bytes },
+        now: observedAt, journalFailure: failure => { reportedFailure = failure.reasonCode; },
+        retainFailureBytes: retainQuotaFailureInAttempt(options.attemptDir, "before-l4"),
+      });
+      const readout = buildQuotaReadout({ routes: measurable, probeResult: probe,
+        defaultThreshold: configuredStop?.default ?? null,
+        ...(configuredStop?.by_adapter === undefined ? {} : { thresholdsByAdapter: configuredStop.by_adapter }) });
+      for (const row of readout.rows) {
+        status = await persistAttempt(options.attemptDir, status.revision, { kind: "attempt.updated",
+          next: nextRevision(status, {}), evidence: { type: "quota-snapshot", attribution: "none", scope: "account-window",
+            completedPhaseKey: "before-l4", nextPhaseKey: compiled.phases.find(phase => routes.get(phase.id)?.adapterId === row.adapterId)!.id,
+            effectivePercentRemaining: row.effectivePercentRemaining, minutesToReset: row.minutesToReset,
+            reasonCode: reportedFailure ?? row.reasonCode, resolvedVersion: probe.resolvedVersion } }, options.projectRecord);
+      }
+      // An unavailable gauge has no comparable figure, even if it retained
+      // partial data. Known scopes include multi-scope/composite routes.
+      if (probe.availability === "known") {
+        for (const route of measurable) for (const provider of probe.readout.providers) {
+          if (provider.provider === null || !route.providers.some(name => name === provider.provider)) continue;
+          for (const scope of provider.scopes) {
+            if (scope.windowId === null || scope.resetsAt === null) continue;
+            // trap-refusal-begin TR-14
+            if (scope.rejected || scope.effectivePercentRemaining === 0) {
+              throw new ProductionQuotaRefused(provider.provider, scope.windowId, scope.resetsAt,
+                scope.rejected ? "rejected" : "exhausted");
+            }
+            // trap-refusal-end TR-14
+            const threshold = configuredStop?.by_adapter?.[route.adapterId] ?? configuredStop?.default;
+            const figure = knownMinuteFigure(scope.minutesToReset);
+            // trap-refusal-begin TR-15
+            if (threshold !== undefined && figure !== null && isBelowQuotaStopThreshold(figure, threshold.minutes)) {
+              throw new ProductionQuotaRefused(provider.provider, scope.windowId, scope.resetsAt, "below-threshold");
+            }
+            // trap-refusal-end TR-15
+          }
+        }
+      }
+    }
+  }
   const budget = new CallBudget({
     taskId: status.taskId,
     tier: status.tier,

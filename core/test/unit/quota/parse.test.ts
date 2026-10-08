@@ -28,6 +28,9 @@ test("nominal quota is read from effective availability and its named binding wi
   assert.equal(claude?.scope, "all_models");
   assert.equal(claude?.effectivePercentRemaining, 33);
   assert.equal(claude?.minutesToReset, 2314);
+  assert.equal(claude?.windowId, "seven_day");
+  assert.equal(claude?.resetsAt, "2026-08-26T10:59:59.916830+00:00");
+  assert.equal(claude?.rejected, false);
 
   const codex = provider(readout, "codex").scopes[0];
   assert.equal(codex?.effectivePercentRemaining, 66);
@@ -59,6 +62,8 @@ test("state and semantic statuses structurally withhold stale and unresolved fig
     assert.equal(item.quotaSemanticsStatus, "unknown");
     assert.equal(item.scopes[0]?.effectivePercentRemaining, null);
     assert.equal(item.scopes[0]?.minutesToReset, null);
+    assert.equal(item.scopes[0]?.windowId, null);
+    assert.equal(item.scopes[0]?.resetsAt, null);
   }
 
   const partial = parseQuotaReadout(fixture("derived-semantics-partial.json"), CAPTURE_NOW);
@@ -88,6 +93,21 @@ test("reported zero remains data and is not confused with an unknown minute figu
   const codex = provider(readout, "codex").scopes[0];
   assert.equal(codex?.effectivePercentRemaining, 0);
   assert.equal(codex?.minutesToReset, 8833);
+});
+
+test("a structurally known rejected scope retains its binding window and reset", () => {
+  const raw = mutableFixture();
+  const semantics = raw.providers[0]?.["quotaSemantics"] as Record<string, unknown>;
+  const scope = (semantics["effectiveAvailability"] as Array<Record<string, unknown>>)[0]!;
+  scope["status"] = "rejected";
+  delete scope["effectivePercentRemaining"];
+  const result = parseQuotaReadout(JSON.stringify(raw), CAPTURE_NOW);
+  assert.deepEqual(result.faults, []);
+  const rejected = provider(result.readout, "claude").scopes[0]!;
+  assert.equal(rejected.rejected, true);
+  assert.equal(rejected.effectivePercentRemaining, 0);
+  assert.equal(rejected.windowId, "seven_day");
+  assert.equal(rejected.minutesToReset, 2314);
 });
 
 test("an auth-required state retains its reason and remedy without inventing a window", () => {

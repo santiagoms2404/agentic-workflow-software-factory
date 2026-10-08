@@ -262,18 +262,19 @@ function quotaPayload(minutesToReset: number): string {
   return JSON.stringify(payload);
 }
 
-function quotaCommands(payload: string): {
+function quotaCommands(payload: string, startPayload = payload): {
   readonly runCommand: ProductionInfrastructure["runCommand"];
   readonly calls: Array<{ argv: readonly string[]; timeoutMs: number }>;
 } {
   const calls: Array<{ argv: readonly string[]; timeoutMs: number }> = [];
+  let probes = 0;
   return {
     calls,
     runCommand: (_executable, argv, options) => {
       calls.push({ argv: [...argv], timeoutMs: options.timeoutMs });
       return argv[0] === "--version"
         ? { status: 0, stdout: "quota-axi 0.1.29\n", stderr: "", error: null }
-        : { status: 0, stdout: payload, stderr: "", error: null };
+        : { status: 0, stdout: probes++ === 0 ? startPayload : payload, stderr: "", error: null };
     },
   };
 }
@@ -439,10 +440,11 @@ test("an uncrossed fixture run records every boundary snapshot, reaches GATING, 
     const records = journalRecords(fixture.attemptDir);
     const snapshots = evidenceOfType(records, "quota-snapshot");
     const transitions = evidenceOfType(records, "transition");
-    assert.equal(snapshots.length, 3, "four compiled phases have exactly three boundaries");
+    assert.equal(snapshots.length, 4, "one start snapshot and three phase boundaries");
     assert.deepEqual(
       snapshots.map((snapshot) => [snapshot.completedPhaseKey, snapshot.nextPhaseKey]),
       [
+        ["before-l4", "planner"],
         ["request", "planner"],
         ["planner", "builder"],
         ["builder", "tests"],
@@ -454,6 +456,8 @@ test("an uncrossed fixture run records every boundary snapshot, reaches GATING, 
     assert.equal(adapter.launches, 2);
     assert.equal(existsSync(fixture.sideEffectPath), false, "the stub provider executable never runs");
     assert.deepEqual(commands.calls.map((call) => call.argv), [
+      ["--version"],
+      ["--provider", "claude", "--json"],
       ["--version"],
       ["--provider", "claude", "--json"],
       ["--version"],
@@ -472,7 +476,8 @@ test("a crossed boundary records L26 and advancing the injected clock cannot res
   const clock = fakeClock(context);
   const fixture = await world(clock);
   const adapter = new CandidateWritingStubAdapter(fixture.sideEffectPath);
-  const commands = quotaCommands(quotaPayload(4));
+  // The starting reading is usable; quota crosses only at the boundary.
+  const commands = quotaCommands(quotaPayload(4), quotaPayload(10));
   try {
     const status = await runProductionCommand({
       attemptDir: fixture.attemptDir,
