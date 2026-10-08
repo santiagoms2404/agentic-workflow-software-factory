@@ -128,6 +128,20 @@ test("main doctor journey: every AC-5 row in text and JSON; stale branch, unowne
   assert.ok(text.lines.some(line => line.startsWith("matrix: ")));
 });
 
+test("main doctor journey: a missing disabled adapter is descriptive, but cannot hide a missing enabled CLI", async t => {
+  const world = await setup(t);
+  unlinkSync(join(world.bin, "agy"));
+  const disabled = await diagnose(world, true);
+  assert.equal(disabled.code, 0);
+  const row = modelOf(disabled.lines).rows.executables;
+  assert.equal(row.status, "ok");
+  assert.match(row.detail.join("\n"), /adapter antigravity \(disabled\): agy unresolvable/);
+  unlinkSync(join(world.bin, "claude"));
+  const enabled = await diagnose(world, true);
+  assert.equal(enabled.code, 1);
+  assert.equal(modelOf(enabled.lines).rows.executables.status, "finding");
+});
+
 test("main doctor journey: missing configured CLI, logged-out provider and unavailable quota each exit 1 without writes or provider execution", async t => {
   const world = await setup(t);
   unlinkSync(join(world.bin, "claude"));

@@ -431,20 +431,25 @@ export function assertProductionConfigSnapshot(config: AwsfConfig, snapshotJson:
   // trap-refusal-end TR-10
 }
 
-/** A known starting window refuses without moving lifecycle or reserving calls. */
+/** A known starting scope refuses without moving lifecycle or reserving calls. */
 export class ProductionQuotaRefused extends Error {
   readonly code = "E_RUN_START_QUOTA";
   readonly provider: string;
-  readonly window: string;
-  readonly resetsAt: string;
+  readonly window: string | null;
+  readonly resetsAt: string | null;
+  readonly scope: string | null;
   readonly condition: "exhausted" | "rejected" | "below-threshold";
-  constructor(provider: string, window: string, resetsAt: string,
-    condition: "exhausted" | "rejected" | "below-threshold") {
-    super(`run refused before L4: provider ${provider}, window ${window}, ${condition}; resets at ${resetsAt}. The attempt stays PREPARED; no call is reserved.`);
+  constructor(provider: string, window: string | null, resetsAt: string | null,
+    condition: "exhausted" | "rejected" | "below-threshold", scope: string | null = null) {
+    const measurement = window === null || resetsAt === null
+      ? "window and reset were not measured"
+      : `window ${window}; resets at ${resetsAt}`;
+    super(`run refused before L4: provider ${provider}, scope ${scope ?? "not measured"}, ${condition}; ${measurement}. The attempt stays PREPARED; no call is reserved.`);
     this.name = "ProductionQuotaRefused";
     this.provider = provider;
     this.window = window;
     this.resetsAt = resetsAt;
+    this.scope = scope;
     this.condition = condition;
   }
 }
@@ -1698,18 +1703,18 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
         for (const route of measurable) for (const provider of probe.readout.providers) {
           if (provider.provider === null || !route.providers.some(name => name === provider.provider)) continue;
           for (const scope of provider.scopes) {
-            if (scope.windowId === null || scope.resetsAt === null) continue;
             // trap-refusal-begin TR-14
             if (scope.rejected || scope.effectivePercentRemaining === 0) {
               throw new ProductionQuotaRefused(provider.provider, scope.windowId, scope.resetsAt,
-                scope.rejected ? "rejected" : "exhausted");
+                scope.rejected ? "rejected" : "exhausted", scope.scope);
             }
             // trap-refusal-end TR-14
+            if (scope.windowId === null || scope.resetsAt === null) continue;
             const threshold = configuredStop?.by_adapter?.[route.adapterId] ?? configuredStop?.default;
             const figure = knownMinuteFigure(scope.minutesToReset);
             // trap-refusal-begin TR-15
             if (threshold !== undefined && figure !== null && isBelowQuotaStopThreshold(figure, threshold.minutes)) {
-              throw new ProductionQuotaRefused(provider.provider, scope.windowId, scope.resetsAt, "below-threshold");
+              throw new ProductionQuotaRefused(provider.provider, scope.windowId, scope.resetsAt, "below-threshold", scope.scope);
             }
             // trap-refusal-end TR-15
           }
@@ -3986,7 +3991,17 @@ async function prepareResumeInstruction(options: ProductionRunOptions, inspected
   const bundle = await readProductionPromptPair(options.configPath, agent);
   const compiled = compileWorkflowStructure({ ...recipe, phases: recipe.phases.map(phase => phase.id === definition.id ? { ...phase, prompt: bundle.userPrompt } : phase) });
   const phase = compiled.phases[ordinal - 1] as CompiledAgentPhase;
-  const previous = [...inspected.envelopes.values()].at(-1) ?? null;
+  let previous = [...inspected.envelopes.values()].at(-1) ?? null;
+  if (phase.schemaId === REVIEW_OUTPUT_SCHEMA_ID && previous?.schema === REVIEW_CONTEXT_SCHEMA_ID) {
+    const context = previous as ReviewContext;
+    const location = { attemptDir: options.attemptDir, runId: `${inspected.status.sessionId}:${phase.id}:run`,
+      worktree: inspected.status.worktree!, repository: inspected.status.repository, stateRoot: options.stateRoot };
+    // Launch uses this same run identity. Delivery is immutable and reuses its
+    // retained index, so confirmation and launch bind the same prompt bytes.
+    previous = context.diffDelivery === undefined
+      ? await attachReviewDelivery(context, location)
+      : await redeliverReviewDiff(context, location);
+  }
   const design = [...inspected.envelopes.values()].find(value => value.schema === DESIGN_CONTEXT_SCHEMA_ID) as DesignContext | undefined;
   // A bound phase's launch appends its visual block, and the instruction's
   // digest has to be of the input that will actually launch. The paths are a

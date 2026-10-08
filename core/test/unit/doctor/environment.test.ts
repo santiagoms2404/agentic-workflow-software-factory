@@ -80,6 +80,19 @@ test("unresolvable configured CLI is a finding; resolved executables are descrip
   assert.equal(executablesRow([{ name: "git", executable: "git", resolved: "/synthetic/git" }]).status, "ok");
 });
 
+test("disabled executable facts never warn or hide any required missing executable", () => {
+  const disabled = { name: "adapter disabled", executable: "missing-cli", resolved: null, enabled: false };
+  const row = executablesRow([disabled]);
+  assert.equal(row.status, "ok");
+  assert.deepEqual(row.detail, ["adapter disabled (disabled): missing-cli unresolvable"]);
+  for (const name of ["adapter enabled", "git", "bwrap", "quota-axi"]) {
+    const required = { name, executable: "missing-cli", resolved: null };
+    for (const facts of [[disabled, required], [required, disabled]]) {
+      assert.equal(executablesRow(facts).status, "finding", name);
+    }
+  }
+});
+
 test("login is measured from status only; pi login is never inferred from Codex", () => {
   const healthy = providersRow(routes, result("nominal"));
   assert.ok(healthy.detail.some(line => line.includes("login=logged in")));

@@ -13,6 +13,7 @@ import type { BuildOutput } from "../../src/contracts/build-output.ts";
 import type { DocumentOutput } from "../../src/contracts/document-output.ts";
 import type { IntakeOutput } from "../../src/contracts/intake-output.ts";
 import type { PlanOutput } from "../../src/contracts/plan-output.ts";
+import { recoveryDigest } from "../../src/contracts/phase-recovery.ts";
 import type { ReviewOutput } from "../../src/contracts/review-output.ts";
 import type { ScoutOutput } from "../../src/contracts/scout-output.ts";
 import type { NormalizedEvent } from "../../src/contracts/normalized-events.ts";
@@ -361,7 +362,7 @@ test("resume supplements survive another quota pause and reach later review as i
   } finally { world.projection.close(); rmSync(world.root, { recursive: true, force: true }); }
 });
 
-for (const fault of ["none", "broker-uncertain", "after-submission"] as const) {
+for (const fault of ["none", "legacy-context", "broker-uncertain", "after-submission"] as const) {
   test(`resume instruction targets an unstarted review: ${fault}`, async () => {
     const world = await fixture("build-review", 0, config => config, 2);
     try {
@@ -370,7 +371,17 @@ for (const fault of ["none", "broker-uncertain", "after-submission"] as const) {
         infrastructure: { adapterFor: (_entry: AdapterEntry, id: string) => new ScriptedAdapter(id, prepared.worktree!, () => {}), createBroker: fakeBroker, sandboxProbe: () => false } };
       assert.equal((await runProductionCommand(options)).lifecycleState, "AWAITING_OWNER");
       const journalPath = join(options.attemptDir, "journal.jsonl");
-      const records = readFileSync(journalPath, "utf8").trim().split("\n").map(line => JSON.parse(line));
+      let records = readFileSync(journalPath, "utf8").trim().split("\n").map(line => JSON.parse(line));
+      if (fault === "legacy-context") {
+        const context = records.find(record => record.event.evidence?.type === "envelope" &&
+          record.event.evidence.envelope.payload?.schema === "awsf.review-context/v1").event.evidence.envelope;
+        const oldDigest = recoveryDigest(context);
+        assert.ok(context.payload.diffDelivery, "modern fixture has a delivery to remove");
+        delete context.payload.diffDelivery;
+        const legacyDigest = recoveryDigest(context);
+        // Rebind this synthetic history as a pre-delivery host would have done.
+        records = JSON.parse(JSON.stringify(records, (key, value) => key === "envelopeDigest" && value === oldDigest ? legacyDigest : value));
+      }
       const cut = records.findLastIndex(record => record.event.evidence?.type === "phase-accepted" && record.event.evidence.phase.key === "review-context");
       assert.ok(cut > 0);
       // Isolated crash fixture before L11. The completed builder, tests and candidate remain unchanged.
@@ -391,6 +402,7 @@ for (const fault of ["none", "broker-uncertain", "after-submission"] as const) {
             const delegate = fakeBroker(input);
             return { startProcess: (registration, spec, signal) => {
               delegated++;
+              if (fault === "legacy-context") assert.match(spec.stdin ?? "", /## Full change \(read-only files\)/);
               if (fault === "broker-uncertain") throw new AdapterError("fixture", "E_BACKEND_FAILURE", "broker lost launch acknowledgement");
               return delegate.startProcess(registration, spec, signal);
             } };
@@ -403,7 +415,7 @@ for (const fault of ["none", "broker-uncertain", "after-submission"] as const) {
       assert.equal(result.status.budget.callsSpent, fault === "broker-uncertain" ? 1 : 2);
       assert.equal(result.status.budget.callsReserved, fault === "broker-uncertain" ? 1 : 0);
       const stable = readFileSync(journalPath, "utf8");
-      if (fault === "none") {
+      if (fault === "none" || fault === "legacy-context") {
         assert.equal(result.status.lifecycleState, "AWAITING_OWNER", result.status.blocker?.detail);
         assert.equal((await resumeProductionCommand(resume)).status.revision, result.status.revision);
       } else {

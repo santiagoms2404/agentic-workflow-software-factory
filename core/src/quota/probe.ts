@@ -249,7 +249,10 @@ function structuralFailure(parsed: ParsedQuotaReadout): QuotaProbeFailure | null
       provider.stateStatus !== "fresh" ||
       provider.quotaSemanticsStatus !== "known" ||
       provider.scopes.length === 0 ||
-      provider.scopes.some((scope) => scope.minutesToReset === null),
+      // Effective availability and runway are independent measurements. A
+      // known rejected/zero scope must not become an unavailable probe merely
+      // because there is no comparable minute figure.
+      provider.scopes.some((scope) => scope.effectivePercentRemaining === null && !scope.rejected),
     )
     .map((provider) => provider.provider);
   if (parsed.readout.providers.length === 0) unresolved.push(null);

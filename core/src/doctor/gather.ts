@@ -73,16 +73,16 @@ export async function gatherDoctorRows(input: GatherDoctorInput): Promise<Enviro
   const configured = await configuration(input);
   const routes = configured.config === null ? [] : mapConfiguredQuotaRoutes(configured.config);
   const facts: ExecutableFact[] = [];
-  const measure = (name: string, executable: string): ExecutableFact => {
+  const measure = (name: string, executable: string, enabled = true): ExecutableFact => {
     let resolved: string | null = null;
     try { resolved = resolver(executable, input.env); } catch { /* An absence is reported, never repaired. */ }
-    const fact = { name, executable, resolved };
+    const fact = { name, executable, resolved, enabled };
     facts.push(fact);
     return fact;
   };
   for (const [id, adapter] of Object.entries(configured.config?.adapters ?? {})) {
     const executable = adapter.executable ?? DEFAULT_EXECUTABLES[adapter.kind];
-    if (executable !== undefined) measure(`adapter ${id}${adapter.enabled === false ? " (disabled)" : ""}`, executable);
+    if (executable !== undefined) measure(`adapter ${id}`, executable, adapter.enabled !== false);
   }
   const git = measure("git", "git");
   const bwrap = measure("bwrap", "bwrap");

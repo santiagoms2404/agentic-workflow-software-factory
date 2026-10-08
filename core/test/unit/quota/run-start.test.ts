@@ -6,6 +6,15 @@ for (const unavailable of ["missing", "timeout", "stale", "unparseable"] as cons
     await runStartQuota({ id: "TR-14", unavailable, allow: true });
   });
 }
+for (const unknownBinding of ["unknown-runway", "no-single-window", "missing-reset"] as const) {
+  test(`TR-15 requires a measured minute figure: ${unknownBinding}`, async () => {
+    await runStartQuota({ id: "TR-15", condition: "below-threshold", threshold: 10000, unknownBinding, allow: true });
+  });
+  test(`an unavailable probe with an exhausted ${unknownBinding} scope still does not refuse`, async () => {
+    await runStartQuota({ id: "TR-14", unavailable: "stale", unknownBinding, allow: true });
+  });
+}
+
 test("an unused exhausted configured route is never probed or refused", async () => {
   await runStartQuota({ id: "TR-14", unusedExhausted: true, allow: true });
 });

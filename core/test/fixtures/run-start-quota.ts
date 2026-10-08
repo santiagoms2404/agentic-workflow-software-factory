@@ -16,6 +16,7 @@ export interface StartQuotaScenario {
   readonly secondRoute?: boolean;
   readonly byAdapter?: boolean;
   readonly multipleScopes?: boolean;
+  readonly unknownBinding?: "unknown-runway" | "no-single-window" | "missing-reset";
   readonly allow?: boolean;
 }
 
@@ -48,6 +49,11 @@ export async function runStartQuota(scenario: StartQuotaScenario) {
         const exhausted = provider.provider === (scenario.unusedExhausted ? "codex" : "claude");
         if (exhausted && scenario.condition !== "below-threshold") scope.effectivePercentRemaining = 0;
         if (exhausted && scenario.condition === "rejected") scope.status = "rejected";
+        if (exhausted && scenario.unknownBinding === "unknown-runway") scope.runway = { status: "unknown" };
+        if (exhausted && scenario.unknownBinding === "no-single-window") scope.limitingWindowIds = [];
+        if (exhausted && scenario.unknownBinding === "missing-reset") {
+          for (const window of provider.windows) window.resetsAt = null;
+        }
       }
       if (scenario.unavailable === "stale") provider.state.status = "stale";
       if (scenario.multipleScopes && provider.provider === "claude") {
@@ -90,9 +96,16 @@ export async function runStartQuota(scenario: StartQuotaScenario) {
       assert.ok(failure instanceof ProductionQuotaRefused, label);
       assert.equal(failure.condition, scenario.condition ?? "exhausted", label);
       assert.equal(failure.provider, "claude", label);
-      assert.equal(failure.window, "seven_day", label);
-      assert.equal(failure.resetsAt, resetsAt, label);
-      assert.match(failure.message, /before L4.*provider claude.*window seven_day.*resets at/u, label);
+      if (scenario.unknownBinding === undefined) {
+        assert.equal(failure.window, "seven_day", label);
+        assert.equal(failure.resetsAt, resetsAt, label);
+        assert.match(failure.message, /before L4.*provider claude.*window seven_day.*resets at/u, label);
+      } else {
+        assert.equal(failure.window, null, label);
+        assert.equal(failure.resetsAt, null, label);
+        assert.equal(failure.scope, "all_models", label);
+        assert.match(failure.message, /before L4.*provider claude.*scope all_models.*window and reset were not measured/u, label);
+      }
       assert.equal(status.lifecycleState, "PREPARED", label);
       assert.equal(status.worktree, prepared.worktree, label);
       assert.deepEqual(readdirSync(world.worktreeRoot), trees, `${label}: no new tree`);

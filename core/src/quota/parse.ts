@@ -96,10 +96,9 @@ function limitingWindowId(
   if (strings.length !== ids.length) {
     faults.push(`${path}.limitingWindowIds contained a non-string id — minutes to reset recorded as null`);
   }
-  if (strings.length !== 1 || strings.length !== ids.length) {
-    faults.push(`${path}.limitingWindowIds did not name exactly one binding window — minutes to reset recorded as null`);
-    return null;
-  }
+  // A valid composite scope need not have one binding window. Its effective
+  // percentage remains known even when a single reset cannot be measured.
+  if (strings.length !== 1 || strings.length !== ids.length) return null;
   return strings[0] ?? null;
 }
 
@@ -123,6 +122,7 @@ function minutesForBindingWindow(
   }
 
   const resetsAt = matches[0]?.["resetsAt"];
+  if (resetsAt === undefined || resetsAt === null) return null;
   if (typeof resetsAt !== "string") {
     faults.push(`${path}.${bindingWindowId}.resetsAt was not a string — minutes to reset recorded as null`);
     return null;
