@@ -149,8 +149,8 @@ section.phase .sub { font-size:13px; }
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-10-07</dd>
-        <dt>modified</dt>     <dd>2026-10-07 (authored, awaiting owner review), 2026-10-07 (owner review applied: W02-Q1–Q8 decided), 2026-10-07 (deep plan approved by the owner), 2026-10-07 (ticketFrames added to the design index), 2026-10-07 (T01 landed; G02-S recorded; M1 complete), 2026-10-08 (M2 shift landed: T02 and T03 done, T04 awaiting G02-L), 2026-10-08 (G02-L landed; M2 complete)</dd>
-        <dt>commits</dt>      <dd>authoring and owner approval: recorded by the 2026-10-07 approval Amendment and its commit; authoring base e32e892, committed on 60d01d5; T01 candidate 20dba5c, landed by fast-forward; G02-S in the owner commit after it; M2 shift a952bc6, 6ba4a0e, 234fea6, landed by fast-forward; bookkeeping and G02-L as two owner commits after it</dd>
+        <dt>modified</dt>     <dd>2026-10-07 (authored, awaiting owner review), 2026-10-07 (owner review applied: W02-Q1–Q8 decided), 2026-10-07 (deep plan approved by the owner), 2026-10-07 (ticketFrames added to the design index), 2026-10-07 (T01 landed; G02-S recorded; M1 complete), 2026-10-08 (M2 shift landed: T02 and T03 done, T04 awaiting G02-L), 2026-10-08 (G02-L landed; M2 complete), 2026-10-08 (M3 shift landed: T05–T07 done; M3 complete)</dd>
+        <dt>commits</dt>      <dd>authoring and owner approval: recorded by the 2026-10-07 approval Amendment and its commit; authoring base e32e892, committed on 60d01d5; T01 candidate 20dba5c, landed by fast-forward; G02-S in the owner commit after it; M2 shift a952bc6, 6ba4a0e, 234fea6, landed by fast-forward; bookkeeping and G02-L as two owner commits after it; M3 shift c0c0007, 6ef0f6f, b2710fe, landed by fast-forward; bookkeeping and G02-D as two owner commits after it</dd>
         <dt>agent name</dt>   <dd>claude-opus-5-5</dd>
         <dt>session id</dt>   <dd>not recorded: AGENTS.md invariant 1 keeps live session state out of every committed file</dd>
         <dt>back refs</dt>    <dd>./awsf-v3-plan.html (§ Workstreams → Milestone M2 → W02, gate GR, Questionables Q2 and Q13, Notes), ./tickets/awsf-v3-plan/W02.md (the meta-prompt this plan answers, Handoff C1–C8), ./awsf-v3-w01-driver-checks.html (K1's fields, the cause vocabulary, the forensics map, the 2026-10-07 closing Amendment), ./awsf-v3-intent.md (Terms K5, decision 13), ./awsf-v3-assessment-and-direction.md ("To prevent future friction"), ../AGENTS.md (invariants 3, 4, 6 and 10), ./design/awsf-v3-plan/frame-index.json (workstreamFrames.W02: mp-s3-blocked, mp-s5-checks), the machine-local forensics draft ~/marimba-lab/forensics/2026-10-01-stops.md (not committed)</dd>
@@ -517,7 +517,7 @@ flowchart LR
 
     <!-- ================= M3 ================= -->
     <section class="phase">
-      <h3><code class="status">[]</code> Milestone M3: Causes name their trap <span class="wtag">managed</span></h3>
+      <h3><code class="status">[x]</code> Milestone M3: Causes name their trap <span class="wtag">managed</span></h3>
       <p>Q2's second half. A stop becomes a trap through its cause record, and a gap is a number the factory reports.</p>
       <figure>
         <pre class="mermaid">
@@ -537,29 +537,29 @@ sequenceDiagram
       <h4>5. The trap link on the cause record</h4>
       <p class="sub">Serves <code class="serves">AC-3</code> · <code class="serves">INV-6</code></p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>awsf.attribution/v2</code>: v1's fields plus a required <code>trap</code>, either <code>{ kind: "trap", id }</code> with a well-formed <code>TR-NN</code> or <code>{ kind: "none", reason, because }</code> with a no-trap kind and text; v1 records stay readable and count as pre-link</li>
-        <li><code class="status">[]</code> <code>awsf attribute</code> and <code>awsf cancel</code> take <code>--trap TR-NN</code> or <code>--no-trap &lt;kind&gt; "&lt;why&gt;"</code>, validated before the prompt and before any signal, with the same credential check as <code>--reason</code>; which causes may omit it follows W02-Q3</li>
-        <li><code class="status">[]</code> The prompt shows the link beside the cause and reason; a declined act writes nothing</li>
-        <li><code class="status">[]</code> The projector writes the link into the existing attribution <code>events</code> row; <code>awsf db rebuild</code> reproduces it; <code>core/src/metrics/causes.ts</code> and the dashboard's mirrored types read v1 and v2</li>
-        <li><code class="status">[]</code> Every test and journey that cancels or attributes passes a link; the cheatsheet and both usage strings show the flags</li>
+        <li><code class="status">[x]</code> <code>awsf.attribution/v2</code>: v1's fields plus a required <code>trap</code>, either <code>{ kind: "trap", id }</code> with a well-formed <code>TR-NN</code> or <code>{ kind: "none", reason, because }</code> with a no-trap kind and text; v1 records stay readable and count as pre-link</li>
+        <li><code class="status">[x]</code> <code>awsf attribute</code> and <code>awsf cancel</code> take <code>--trap TR-NN</code> or <code>--no-trap &lt;kind&gt; "&lt;why&gt;"</code>, validated before the prompt and before any signal, with the same credential check as <code>--reason</code>; which causes may omit it follows W02-Q3</li>
+        <li><code class="status">[x]</code> The prompt shows the link beside the cause and reason; a declined act writes nothing</li>
+        <li><code class="status">[x]</code> The projector writes the link into the existing attribution <code>events</code> row; <code>awsf db rebuild</code> reproduces it; <code>core/src/metrics/causes.ts</code> and the dashboard's mirrored types read v1 and v2</li>
+        <li><code class="status">[x]</code> Every test and journey that cancels or attributes passes a link; the cheatsheet and both usage strings show the flags</li>
       </ul>
 
       <h4>6. <code>awsf traps</code>, the coverage readout</h4>
       <p class="sub">Serves <code class="serves">AC-3</code> · <code class="serves">INV-3</code> · <code class="serves">INV-6</code></p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>awsf traps [--json]</code>: read-only, registered in <code>CLI_COMMANDS</code> and the cheatsheet, not an owner act; reads the catalogue and every registered project's state root through the population rule</li>
-        <li><code class="status">[]</code> <code>awsf.traps/v1</code> (<code>core/src/contracts/traps-readout.ts</code>): the cut, catalogue counts by trap and by no-trap kind, the stops since the cut split into linked to a catalogued trap, linked to a no-trap reason, linked to a trap the catalogue lacks, and unlinked, each listed by project, task and attempt; and the next free trap id</li>
-        <li><code class="status">[]</code> Exit 1 while any stop since the cut is unlinked or names a missing trap; exit 0 otherwise. The text form says which, and that the command reports and never repairs</li>
-        <li><code class="status">[]</code> The latest gate rows of the newest landed attempt per project report whether <code>traps</code> passed at that base, so the K5 frame's "traps refused" row has a source that is not a fresh test run</li>
+        <li><code class="status">[x]</code> <code>awsf traps [--json]</code>: read-only, registered in <code>CLI_COMMANDS</code> and the cheatsheet, not an owner act; reads the catalogue and every registered project's state root through the population rule</li>
+        <li><code class="status">[x]</code> <code>awsf.traps/v1</code> (<code>core/src/contracts/traps-readout.ts</code>): the cut, catalogue counts by trap and by no-trap kind, the stops since the cut split into linked to a catalogued trap, linked to a no-trap reason, linked to a trap the catalogue lacks, and unlinked, each listed by project, task and attempt; and the next free trap id</li>
+        <li><code class="status">[x]</code> Exit 1 while any stop since the cut is unlinked or names a missing trap; exit 0 otherwise. The text form says which, and that the command reports and never repairs</li>
+        <li><code class="status">[x]</code> The latest gate rows of the newest landed attempt per project report whether <code>traps</code> passed at that base, so the K5 frame's "traps refused" row has a source that is not a fresh test run</li>
       </ul>
 
       <h4>7. Testing Strategy for M3</h4>
       <p class="sub">Serves <code class="serves">AC-3</code> · <code class="serves">INV-6</code></p>
       <ul class="checklist">
-        <li><code class="status">[]</code> Tests: an attribute or cancel with no link where one is required, a malformed id, an unknown no-trap kind, or a credential-shaped reason is refused with nothing written and no signal sent</li>
-        <li><code class="status">[]</code> A synthetic state root with one stop of each kind (pre-cut, post-cut linked, post-cut unlinked, post-cut naming <code>TR-99</code>, a prove replay) yields exactly the readout's expected lists and exit code</li>
-        <li><code class="status">[]</code> A v1 record and a v2 record for the same attempt: the latest wins, as W18 D4 already rules</li>
-        <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run test:journeys</code>, <code>npm run test:traps</code>, <code>npm run typecheck</code> and <code>npm run lint</code> exit 0</li>
+        <li><code class="status">[x]</code> Tests: an attribute or cancel with no link where one is required, a malformed id, an unknown no-trap kind, or a credential-shaped reason is refused with nothing written and no signal sent</li>
+        <li><code class="status">[x]</code> A synthetic state root with one stop of each kind (pre-cut, post-cut linked, post-cut unlinked, post-cut naming <code>TR-99</code>, a prove replay) yields exactly the readout's expected lists and exit code</li>
+        <li><code class="status">[x]</code> A v1 record and a v2 record for the same attempt: the latest wins, as W18 D4 already rules</li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code>, <code>npm run test:journeys</code>, <code>npm run test:traps</code>, <code>npm run typecheck</code> and <code>npm run lint</code> exit 0</li>
       </ul>
       <div class="loop">🔁 <strong>Do not exit this milestone until every box above is checked.</strong></div>
     </section>
@@ -922,6 +922,11 @@ flowchart LR
     <details open>
       <summary>2026-10-08 — G02-L landed: the trap layer is a landing gate; M2 complete</summary>
       <p>Owner commit under GA, per W02-Q5. <code>package.json</code> gains <code>test:traps</code>, and <code>npm test</code> chains it as a fifth layer. <code>awsf.config.yaml</code> and <code>awsf.project.yaml</code> gain <code>traps: { argv: [npm, run, test:traps], timeout_seconds: 600 }</code>, the unit gate's value. Measured: 46.6 s in the builder's worktree, 88 s on an exported copy, and 177 s when run after the full unit and journeys suites on this host; twice the first measurement (the plan's rule) would sit at the edge of the third, so the timeout takes the unit gate's headroom instead. The cheatsheet fence goes back to reconciling <code>gate|ID</code> with the configured gates, closing the M2 review's low finding, and the cheatsheet's gate prose names the five configured gates. T04's deletion lines keep the test configurations that copy the shipped gates unaffected. Before commit, on a copy at this content: <code>test:unit</code>, <code>test:journeys</code>, <code>test:traps</code>, <code>typecheck</code> and <code>lint</code> all exit 0. Every K1 preflight after this commit runs five gates, since the gate configuration digest changed. T04 is done and M2 is complete.</p>
+    </details>
+    <details open>
+      <summary>2026-10-08 — M3 shift landed: T05–T07 done; M3 complete</summary>
+      <p>T05–T07 landed as one shift (c0c0007, 6ef0f6f, b2710fe; builder codex/openai-codex/gpt-6.1-sol at high, reviewer claude/anthropic/claude-opus-5-5 at medium; 6 of 10 calls with one owner raise of 5: three builds, one correction each for T05 and T06, one review of the accumulated diff, which accepted with no findings). T05 made the cause record <code>awsf.attribution/v2</code> with a required trap link, W02-Q3 as decided: every cause but <code>owner</code> names <code>--trap</code> or <code>--no-trap</code>, and an owner cause with no link records <code>none/owner</code> with its reason. The link is validated before the prompt and before any signal, and again by the durable writer and the projector; new writes must be v2, and v1 records stay readable, project without a link and count as pre-link. T06 added <code>awsf traps [--json]</code> and <code>awsf.traps/v1</code>, read-only, taking each stop's time from its terminal transition. T07 added the refusal, readout and latest-wins tests, and a stub cancel journey through <code>main</code>. Unit baselines before edits were 3090, 3095 and 3103; at the final head the gates ran 3105 unit, 149 contract, 98 simulation, 365 journeys and 44 traps, with typecheck and lint, each suite run alone.</p>
+      <p>Beyond the gates, the driving session re-ran test:traps (44), test:contract (149), typecheck and the 75 new and changed unit tests on an exported copy of the candidate, all passing, and ran <code>awsf traps</code> against a copy of the owner's state root holding only placements, attribution files and attempt journals (182 journals, 2.0 GB). At node's default heap it aborted with a JavaScript heap out-of-memory error after 225 s, because <code>readTrapsReadout</code> holds every event of every journal until it builds the readout. With a 3.2 GB heap it finished in 251 s, exited 0 and changed no file: 0 stops since the cut, 12 traps, 48 no-trap seeds, next free id TR-13, and the newest landed attempt (the M2 shift, which predates G02-L) reported as traps not measured. Every M3 row holds as written; the memory bound is a defect of scale that no fixture reaches, and an owner rework could not take it, since a shift attempt has no rework binding. It goes to a separate task before M4, and the handoffs to T13 and T16 record it.</p>
     </details>
   </section>
 
