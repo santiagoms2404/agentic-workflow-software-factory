@@ -92,11 +92,12 @@ for (const schemaId of SCHEMA_IDS) {
     }
   });
 
-  test(`${schemaId}: every property is required — no optional wire fields`, () => {
+  test(`${schemaId}: every property is required except backward-compatible host review delivery`, () => {
     const schema = ENVELOPE_SCHEMAS[schemaId];
     const properties = Object.keys(schema.properties as Record<string, unknown>).sort();
     const required = [...((schema.required ?? []) as string[])].sort();
-    assert.deepEqual(required, properties);
+    const optional = properties.filter(property => !required.includes(property));
+    assert.deepEqual(optional, schemaId === "awsf.review-context/v1" ? ["diffDelivery"] : []);
   });
 }
 

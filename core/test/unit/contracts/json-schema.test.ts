@@ -57,7 +57,8 @@ for (const schemaId of ENVELOPE_SCHEMA_IDS) {
     for (const key of (emitted["required"] as string[]) ?? []) {
       assert.ok(key in fixture, `${schemaId} fixture is missing required field ${key}`);
     }
-    assert.deepEqual(Object.keys(fixture).sort(), Object.keys(emitted["properties"] as object).sort());
+    const optional = schemaId === "awsf.review-context/v1" ? ["diffDelivery"] : [];
+    assert.deepEqual(Object.keys(fixture).sort(), Object.keys(emitted["properties"] as object).filter(key => !optional.includes(key)).sort());
   });
 }
 

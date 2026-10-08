@@ -1,3 +1,5 @@
+import { join } from "node:path";
+import type { NormalizedEvent } from "../contracts/normalized-events.ts";
 import { MAX_ENVELOPE_BYTES } from "../contracts/parse-envelope.ts";
 import type { ReviewContext } from "../contracts/review-context.ts";
 import { BLOCKING_SEVERITIES, type ReviewFinding, type ReviewOutput } from "../contracts/review-output.ts";
@@ -14,6 +16,9 @@ export interface ReviewGateContext {
   readonly candidatePaths: readonly string[];
   /** Host-composed candidate evidence. Required for the Q2 omitted-evidence rule. */
   readonly reviewContext: ReviewContext | null;
+  /** Only the host's normalized events for this run may discharge a limitation. */
+  readonly observedEvents?: readonly NormalizedEvent[];
+  readonly runId?: string;
 }
 
 export interface ReviewFindingSpecificity {
@@ -72,21 +77,50 @@ function omittedEvidencePaths(context: ReviewContext): readonly string[] {
   // hide a path that diffOmittedFiles or an inline marker still proves omitted.
   const paths = new Set(context.limitationRequiredFiles ?? []);
   for (const path of context.diffOmittedFiles) paths.add(path);
-  const marker = /^\*\*\* awsf: \d+ of \d+ hunk\(s\) omitted from (.+)$/gm;
+  for (const file of context.diffDelivery?.files ?? []) if (file.inlineOmitted || file.inlineTruncated) paths.add(file.path);
+  const marker = /^\*\*\* awsf: \d+ of \d+ hunk\(s\) omitted from /gm;
   for (const match of context.diff.matchAll(marker)) {
-    const path = match[1]?.trim();
+    const remainder = context.diff.slice(match.index! + match[0].length);
+    // New deliveries give exact Git paths, including embedded newline bytes.
+    // Still derive markers independently: inconsistent retained status flags
+    // cannot hide a path that the inline diff proves partial.
+    const exact = (context.diffDelivery?.files ?? []).map(file => file.path)
+      .sort((a, b) => b.length - a.length).find(path => remainder.startsWith(`${path}\n`));
+    const path = exact ?? remainder.split("\n", 1)[0]?.trim();
     if (path !== undefined && path.length > 0) paths.add(path);
   }
   return Object.freeze([...paths].sort());
 }
 
-function hasRequiredEvidenceLimitation(output: ReviewOutput, context: ReviewContext): {
+function observedDeliveredReads(context: ReviewContext, events: readonly NormalizedEvent[], runId: string | undefined): ReadonlySet<string> {
+  const read = new Set<string>();
+  if (runId === undefined || context.diffDelivery === undefined) return read;
+  for (const event of events) {
+    if (event.runId !== runId || event.kind !== "tool.requested" || event.name.toLowerCase() !== "read") continue;
+    // Match an actual path value, never a substring (file.diff.extra), a grep,
+    // a text.delta, or the reviewer's assertion in its output envelope.
+    let input: unknown;
+    try { input = JSON.parse(event.inputSummary); } catch { input = event.inputSummary; }
+    const values = typeof input === "string" ? [input] : input !== null && typeof input === "object"
+      ? Object.values(input) : [];
+    for (const file of context.diffDelivery.files) {
+      if (values.includes(join(context.diffDelivery.directory, file.file))) read.add(file.path);
+    }
+  }
+  return read;
+}
+
+function hasRequiredEvidenceLimitation(output: ReviewOutput, context: ReviewContext,
+  events: readonly NormalizedEvent[] = [], runId?: string): {
   readonly required: boolean;
   readonly ok: boolean;
   readonly paths: readonly string[];
 } {
-  const paths = omittedEvidencePaths(context);
-  const required = context.diffTruncated || context.diffOmittedChars > 0 || paths.length > 0;
+  const omitted = omittedEvidencePaths(context);
+  const read = observedDeliveredReads(context, events, runId);
+  const paths = omitted.filter(path => !read.has(path));
+  // Retained bounded contexts with no attributable paths still fail closed.
+  const required = paths.length > 0 || (omitted.length === 0 && (context.diffTruncated || context.diffOmittedChars > 0));
   if (!required) return { required, ok: true, paths };
   const affected = new Set(output.limitations.flatMap((limitation) => limitation.affectedFiles));
   const named = paths.every((path) => affected.has(path));
@@ -143,7 +177,7 @@ export function verdictConsistent(output: ReviewOutput, context: ReviewGateConte
   const outside = output.findings.filter((finding) => !candidatePaths.has(finding.file));
   const evidenceLimitation = context.reviewContext === null
     ? null
-    : hasRequiredEvidenceLimitation(output, context.reviewContext);
+    : hasRequiredEvidenceLimitation(output, context.reviewContext, context.observedEvents, context.runId);
 
   report.check("reviewed SHA exact", output.reviewedSha === context.candidateSha, `expected=${context.candidateSha}; reviewed=${output.reviewedSha}`);
   report.check(
@@ -215,6 +249,9 @@ export interface ReviewEvidenceExpectation {
   readonly fullDiffSha256: string;
   /** Whether the full diff removes any line, so a bounded copy that dropped every deletion is caught. */
   readonly fullDiffRemovesLines: boolean;
+  /** Host verified all delivered per-path bytes against the full retained diff. */
+  readonly fullDiffDelivered?: boolean;
+  readonly fullDiffHasHunks?: boolean;
 }
 
 function sameSet(left: readonly string[], right: readonly string[]): boolean {
@@ -243,6 +280,9 @@ export function reviewEvidenceFitness(
   const extra = difference(context.changedFiles, expected.changedFiles);
   const hunks = context.diff.split("\n").filter((line) => line.startsWith("@@ ")).length;
   const bytes = utf8ByteLength(JSON.stringify(context));
+  const delivered = expected.fullDiffDelivered === true && context.diffDelivery !== undefined &&
+    sameSet(context.diffDelivery.files.map(file => file.path), expected.changedFiles) &&
+    context.diffDelivery.files.every(file => file.bytes > 0);
 
   report.check("request is recorded", context.request.trim().length > 0, `${context.request.trim().length} character(s)`);
   report.check(
@@ -261,12 +301,12 @@ export function reviewEvidenceFitness(
   );
   report.check(
     "a changed candidate carries at least one hunk",
-    context.changedFiles.length === 0 || hunks > 0,
-    `${context.changedFiles.length} changed file(s); ${String(hunks)} hunk header(s) in the bounded diff`,
+    context.changedFiles.length === 0 || hunks > 0 || (delivered && expected.fullDiffHasHunks === true),
+    `${context.changedFiles.length} changed file(s); ${String(hunks)} inline hunk(s); full diff delivered=${String(delivered)}`,
   );
   report.check(
     "deletions survived bounding",
-    !expected.fullDiffRemovesLines || diffRemovesLines(context.diff),
+    !expected.fullDiffRemovesLines || diffRemovesLines(context.diff) || delivered,
     expected.fullDiffRemovesLines
       ? `the candidate removes lines; the bounded diff ${diffRemovesLines(context.diff) ? "shows removals" : "shows none"}`
       : "the candidate removes no line",

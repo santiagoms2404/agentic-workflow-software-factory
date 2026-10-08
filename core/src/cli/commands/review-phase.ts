@@ -63,6 +63,7 @@ import {
 import { parseEnvelope } from "../../contracts/parse-envelope.ts";
 import type { PlanOutput } from "../../contracts/plan-output.ts";
 import { REVIEW_CONTEXT_SCHEMA_ID, type ReviewContext } from "../../contracts/review-context.ts";
+import { redeliverReviewDiff, reviewDiffPrompt } from "../../workflow/review-diff-delivery.ts";
 import { REVIEW_OUTPUT_SCHEMA_ID, type ReviewOutput } from "../../contracts/review-output.ts";
 import { wrapEnvelope, type StoredEnvelope } from "../../contracts/stored-envelope.ts";
 import type { TestOutput } from "../../contracts/test-output.ts";
@@ -725,6 +726,8 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
     candidateSha: subject.candidateSha,
     intent: options.intent,
     testOutput: options.testOutput,
+    delivery: { attemptDir: subject.attemptDir, runId: `${subject.sessionId}:${phaseKey}:run`,
+      worktree: subject.worktree, repository: subject.repository, stateRoot: subject.stateRoot },
     // Generation-qualified like every other identity: a retained diff any
     // earlier review was judged against is evidence and is never rewritten.
     diffRef: join("raw", `review-context-${subject.candidateSha}-${generation}.diff`),
@@ -746,7 +749,8 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
   // the request the owner recorded, and the production runner hands the
   // identical bytes to the identical reviewer. A sweep here would refuse to
   // review a candidate whose source it had already allowed.
-  const renderedPrompt = compiledReviewer.renderPrompt(composed.context as unknown as EnvelopeBase);
+  const renderedPrompt = compiledReviewer.renderPrompt(composed.context as unknown as EnvelopeBase) + reviewDiffPrompt(composed.context);
+  let deliveryContext = composed.context;
 
   const runtimeDir = join(subject.attemptDir, "private", phaseKey);
   await mkdir(runtimeDir, { recursive: true, mode: 0o700 });
@@ -761,6 +765,7 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
     tools: route.agent.tools.allow,
     writes: route.agent.writes,
     protectedPaths: config.policy.protected_paths,
+    readOnlyRoots: [deliveryContext.diffDelivery!.directory],
     providerWritableRoots: route.adapter.providerWritableRoots?.(HOST.process.env) ?? [],
     ...(infra.sandboxProbe === undefined ? {} : { sandboxProbe: infra.sandboxProbe }),
   });
@@ -777,16 +782,22 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
    */
   const continuity = new ContinuityStore({ path: join(runtimeDir, "continuity.json") });
   let nextColdTurn = 0;
-  type ReviewTurnPreflight = { request: ModelRequest; grant: SandboxGrant; spec: ProcessSpec; continuityHandle: string | null };
+  type ReviewTurnPreflight = { request: ModelRequest; grant: SandboxGrant; spec: ProcessSpec; continuityHandle: string | null; context: ReviewContext };
   const preflightFor = async (prompt: string): Promise<ReviewTurnPreflight> => {
+    const turn = nextColdTurn++;
+    deliveryContext = await redeliverReviewDiff(composed.context, { attemptDir: subject.attemptDir,
+      runId: `${subject.sessionId}:${phaseKey}:run${turn === 0 ? "" : `-${String(turn + 1)}`}`,
+      worktree: subject.worktree, repository: subject.repository, stateRoot: subject.stateRoot });
+    prompt = prompt.replace(JSON.stringify(composed.context, null, 2), JSON.stringify(deliveryContext, null, 2))
+      .replace(reviewDiffPrompt(composed.context), reviewDiffPrompt(deliveryContext));
     const retained = await openRetainedColdTurn({ agent: route.agent, adapter: route.adapter,
-      store: continuity, phaseKey, round: nextColdTurn++, runtimeDir });
-    const request = buildPhaseRequest({ agent: route.agent, prompt, systemPromptPath, cwd: subject.worktree,
+      store: continuity, phaseKey, round: turn, runtimeDir });
+    const request = { ...buildPhaseRequest({ agent: route.agent, prompt, systemPromptPath, cwd: subject.worktree,
       env: HOST.process.env,
       ...(retained === null ? {} : { continuity: { ref: retained.ref, turn: "open" as const } }),
-    });
+    }), readOnlyRoots: [deliveryContext.diffDelivery!.directory] };
     const grant = openPermission().sandbox(route.adapter.buildSpec(request));
-    return { request, grant, spec: preflightDescriptor(route, request, grant.spec), continuityHandle: retained?.handle ?? null };
+    return { request, grant, spec: preflightDescriptor(route, request, grant.spec), continuityHandle: retained?.handle ?? null, context: deliveryContext };
   };
   // The actual final descriptor, including the materialized private path,
   // validated before the caller's spawn edge can become durable.
@@ -924,6 +935,7 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
       // `INSERT OR IGNORE` on envelope id.
       const round = attempt - 1;
       const request = turnPreflight.request;
+      turnPrompt = request.prompt;
       const runId = `${subject.sessionId}:${phaseKey}:run${attempt === 1 ? "" : `-${String(attempt)}`}`;
       await persist("attempt.updated", {}, {
         type: "compiled-prompt", phaseId: phaseDb, name: round === 0 ? "user" : `user-round-${String(round)}`,
@@ -1053,7 +1065,7 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
         writesWithinGlobs(mutations, route.agent.writes),
         reviewEvidencePresent({
           ...composed.expectation,
-          context: composed.context,
+          context: turnPreflight.context,
           // The prompt THIS turn sent. A contract retry appends to it and the
           // gate is a containment check, so the composed evidence still has to
           // be provably inside whatever actually reached the provider.
@@ -1063,7 +1075,9 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
         ...(payload === null ? [] : [verdictConsistent(payload, {
           candidateSha: subject.candidateSha,
           candidatePaths: candidatePathsBetween(subject.worktree, subject.baseSha, subject.candidateSha),
-          reviewContext: composed.context,
+          reviewContext: turnPreflight.context,
+          observedEvents: events,
+          runId,
         })]),
       ];
       for (const report of structural) await persistGate(report, round);

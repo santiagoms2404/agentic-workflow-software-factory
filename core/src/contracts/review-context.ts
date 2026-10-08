@@ -16,9 +16,9 @@ import { SHA_PATTERN, TestOutputSchema } from "./test-output.ts";
 //               quality and cannot judge whether this is the requested change,
 //               which is the only thing a T2 review is mandatory for.
 //   identity  — the exact tree under review, host-observed, never agent-claimed.
-//   diff      — the bounded change itself. `readonly` grants read/grep/find/ls
-//               and NOT exec (`policy/permission-profiles.ts:10-14`), so the
-//               reviewer cannot run `git diff`; this is that capability.
+//   diff      — the bounded inline change plus optional full-diff file delivery.
+//               `readonly` grants read/grep/find/ls and NOT exec; the reviewer
+//               reads delivered files instead of running `git diff`.
 //   evidence  — the COMPLETE `TestOutput` of the last code phase, nested whole.
 //               Curating it is how fields get lost; nesting cannot lose one.
 
@@ -44,6 +44,21 @@ export const REVIEW_CONTEXT_STAT_MAX_CHARS = 8_000;
 
 /** Lowercase hex SHA-256 of the FULL diff — the bounded copy is never the digest's subject. */
 export const SHA256_PATTERN = "^[0-9a-f]{64}$";
+
+export const ReviewDiffDeliverySchema = Type.Object({
+  directory: Type.String({ minLength: 1 }),
+  indexFile: WorktreeRelativePath,
+  indexSha256: Type.String({ pattern: SHA256_PATTERN }),
+  files: Type.Array(Type.Object({
+    path: WorktreeRelativePath,
+    file: WorktreeRelativePath,
+    bytes: Type.Integer({ minimum: 0 }),
+    inlineOmitted: Type.Boolean(),
+    inlineTruncated: Type.Boolean(),
+  }, { additionalProperties: false })),
+}, { additionalProperties: false });
+
+export type ReviewDiffDelivery = Static<typeof ReviewDiffDeliverySchema>;
 
 export const ReviewContextSchema = phaseEnvelope(
   REVIEW_CONTEXT_SCHEMA_ID,
@@ -79,13 +94,14 @@ export const ReviewContextSchema = phaseEnvelope(
     limitationRequiredFiles: Type.Array(WorktreeRelativePath, { uniqueItems: true }),
     /** Digest of the FULL diff, so a bounded copy can still be proved to be of that diff. */
     diffSha256: Type.String({ pattern: SHA256_PATTERN }),
+    /** Optional for retained contexts predating full-diff delivery. No index token is carried here. */
+    diffDelivery: Type.Optional(ReviewDiffDeliverySchema),
     /**
      * Attempt-relative path of the host-private full diff, mode 0600.
      *
-     * Host provenance only. It is NOT openable by the reviewer: the provider's
-     * cwd is the worktree while this resolves against the attempt directory, and
-     * handing a reviewer an absolute path into the attempt directory would work
-     * directly against the state-root mask the readonly widening added.
+     * Host provenance only. The raw authority remains behind the state-root
+     * mask. Only diffDelivery's separate, narrow input directory is rebound
+     * read-only into the reviewer namespace.
      */
     diffRef: Type.String({ minLength: 1 }),
 

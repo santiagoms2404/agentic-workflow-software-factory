@@ -19,6 +19,7 @@ import { loadConfig } from "../../src/config/load.ts";
 import type { AdapterEntry } from "../../src/config/schema.ts";
 import type { BuildOutput } from "../../src/contracts/build-output.ts";
 import type { NormalizedEvent } from "../../src/contracts/normalized-events.ts";
+import { assertReviewDelivery } from "../fixtures/assert-review-delivery.ts";
 import type { ReviewOutput } from "../../src/contracts/review-output.ts";
 import { main } from "../../src/cli/main.ts";
 import { readAttempt } from "../../src/cli/commands/attempt.ts";
@@ -116,6 +117,7 @@ class ShiftAdapter implements HarnessAdapter {
     const at = "2026-09-26T00:00:00.000Z";
     let text: string;
     if (request.prompt.includes("awsf.review-output/v1")) {
+      assertReviewDelivery(request);
       this.#launches.push(`review:${this.id}`);
       text = JSON.stringify(review(this.#worktree));
     } else {

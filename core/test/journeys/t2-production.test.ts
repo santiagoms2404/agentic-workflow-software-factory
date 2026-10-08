@@ -13,6 +13,7 @@ import { join, resolve } from "node:path";
 import type { AwsfConfig, AdapterEntry } from "../../src/config/schema.ts";
 import { loadConfig } from "../../src/config/load.ts";
 import type { BuildOutput } from "../../src/contracts/build-output.ts";
+import { assertReviewDelivery } from "../fixtures/assert-review-delivery.ts";
 import type { ReviewOutput } from "../../src/contracts/review-output.ts";
 import type { NormalizedEvent } from "../../src/contracts/normalized-events.ts";
 import { AdapterError, isTaskEdgeRegistration, reservationIdOf } from "../../src/adapters/interface.ts";
@@ -65,6 +66,7 @@ function review(reviewedSha: string, findings: ReviewOutput["findings"] = []): R
 
 type ReviewBehaviour =
   | { readonly kind: "accept" }
+  | { readonly kind: "read-delivery" }
   | { readonly kind: "concern" }
   | { readonly kind: "stale-sha" }
   | { readonly kind: "finding-outside" }
@@ -80,7 +82,7 @@ class RouteLog {
 }
 
 /** What the scripted builder does to the tree — an addition, or a removal only. */
-type BuilderBehaviour = "adds-a-file" | "deletes-a-file";
+type BuilderBehaviour = "adds-a-file" | "deletes-a-file" | "capped-diff";
 
 class ScriptedT2Adapter implements HarnessAdapter {
   readonly id: string;
@@ -147,7 +149,11 @@ class ScriptedT2Adapter implements HarnessAdapter {
     }
 
     let payload: BuildOutput | ReviewOutput;
+    let observedReads: string[] = [];
     if (reviewing) {
+      const delivery = assertReviewDelivery(request);
+      if (this.#behaviour.kind === "read-delivery") observedReads = delivery.index.files
+        .filter(file => file.inlineOmitted || file.inlineTruncated).map(file => join(delivery.directory, file.file));
       const candidate = this.#candidateSha() ?? "0".repeat(40);
       const reviewTurn = this.#reviewTurns++;
       if (this.#behaviour.kind === "stale-sha") payload = review("b".repeat(40));
@@ -188,14 +194,21 @@ class ScriptedT2Adapter implements HarnessAdapter {
       mkdirSync(join(this.#worktree, "core", "src"), { recursive: true });
       writeFileSync(join(this.#worktree, "core", "src", "generated.ts"), "export const generated = true;\n");
       payload = build();
+      if (this.#builds === "capped-diff") {
+        const huge = "core/src/huge.ts";
+        writeFileSync(join(this.#worktree, huge), `export const huge = '${"é".repeat(150_000)}';\n`);
+        payload = { ...payload, changedFiles: [SOURCE, huge] };
+      }
     }
 
     const runId = registration.runId;
     yield { kind: "run.started", seq: 1, runId, hostAt: AT, providerAt: null, adapter: this.id, requestedModel: request.model };
     yield { kind: "model.resolved", seq: 2, runId, hostAt: AT, providerAt: null, adapter: this.id, provider: this.#provider(), requestedModel: request.model, resolvedModel: `${request.model}-resolved`, provenance: "route-attributed" };
-    yield { kind: "text.delta", seq: 3, runId, hostAt: AT, providerAt: null, text: JSON.stringify(payload) };
-    yield { kind: "usage", seq: 4, runId, hostAt: AT, providerAt: null, usage: { inputTokens: 10, outputTokens: 20, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0, reasoningRelation: "included-in-output" } };
-    yield { kind: "run.completed", seq: 5, runId, hostAt: AT, providerAt: null, exitCode: 0 };
+    for (const [index, path] of observedReads.entries()) yield { kind: "tool.requested", seq: index + 3, runId,
+      hostAt: AT, providerAt: null, toolCallId: `t${index + 1}`, name: "Read", inputSummary: JSON.stringify({ file_path: path }) };
+    yield { kind: "text.delta", seq: 3 + observedReads.length, runId, hostAt: AT, providerAt: null, text: JSON.stringify(payload) };
+    yield { kind: "usage", seq: 4 + observedReads.length, runId, hostAt: AT, providerAt: null, usage: { inputTokens: 10, outputTokens: 20, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0, reasoningRelation: "included-in-output" } };
+    yield { kind: "run.completed", seq: 5 + observedReads.length, runId, hostAt: AT, providerAt: null, exitCode: 0 };
   }
 }
 
@@ -338,6 +351,21 @@ function terminal(answer: boolean, lines: string[] = []): OwnerTerminal {
   };
 }
 
+test("a review above the inline cap reads delivered omitted files and needs no omitted-file limitation", async () => {
+  const world = await fixture(2);
+  try {
+    const { status, log } = await withLiveCandidate(world, { kind: "read-delivery" }, "capped-diff")();
+    assert.equal(status.lifecycleState, "AWAITING_OWNER", status.blocker?.detail);
+    const prompt = log.prompts.at(-1)!;
+    assert.ok(prompt.includes('"diffTruncated": true'));
+    assert.ok(prompt.includes('"inlineOmitted": true'));
+    const db = openDatabase(join(world.stateRoot, "awsf.db"), { readonly: true });
+    try {
+      assert.equal(gatesForSession(db, status.sessionId).find(gate => gate.gate_id === "verdict_consistent")?.passed, 1);
+    } finally { db.close(); }
+  } finally { world.projection.close(); rmSync(world.root, { recursive: true, force: true }); }
+});
+
 test("a tier-2 build-review reaches the owner with the review provider inverse of the worker", async () => {
   const world = await fixture(2);
   try {
@@ -472,7 +500,7 @@ test("a candidate that only deletes lines shows the reviewer what it removed", a
   }
 });
 
-test("the full diff is retained host-private at 0600 and is never handed to the reviewer", async () => {
+test("the full diff authority remains host-private at 0600 while a separate delivery is named", async () => {
   const world = await fixture(2);
   try {
     const { status } = await withLiveCandidate(world, { kind: "accept" })();
@@ -480,13 +508,12 @@ test("the full diff is retained host-private at 0600 and is never handed to the 
     const absolute = join(world.created.attemptDir, relative);
     assert.equal(existsSync(absolute), true, "the complete diff is retained");
     assert.equal(statSync(absolute).mode & 0o777, 0o600, "host-private, like every other raw capture");
-    // The digest is what ties the bounded rendering to this file. The PATH is
-    // provenance for the host: it resolves against the attempt directory, which
-    // the reviewer's own namespace masks, so an absolute one would be both
-    // unopenable and a hole in that mask.
+    // The raw authority remains masked. Only the narrow delivery directory
+    // gets a read-only rebind, never the raw file or its enclosing state root.
     const prompt = reviewerPrompt(world.stateRoot, status.sessionId);
     assert.ok(prompt.includes(relative.split("\\").join("/")), "the reference is recorded as attempt-relative");
-    assert.equal(prompt.includes(world.created.attemptDir), false, "no absolute path into the attempt directory");
+    assert.equal(prompt.includes(absolute), false, "the host-private raw authority is not delivered");
+    assert.ok(prompt.includes(join(world.created.attemptDir, "private", "review-diffs")), "only the separate full-diff delivery is named");
     assert.ok(prompt.includes(createHash("sha256").update(readFileSync(absolute, "utf8"), "utf8").digest("hex")));
   } finally {
     world.projection.close();

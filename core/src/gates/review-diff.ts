@@ -34,6 +34,8 @@ export interface BoundedReviewDiff {
   readonly omittedChars: number;
   /** Files no hunk of which survived. Sorted, so the evidence is stable. */
   readonly omittedFiles: readonly string[];
+  /** Exact Git paths whose inline section lost hunks, without parsing marker prose. */
+  readonly partialFiles: readonly string[];
 }
 
 interface ParsedSection {
@@ -122,10 +124,10 @@ export function boundReviewDiff(
   const originalChars = parsed.reduce((sum, section) => sum + section.totalChars, 0);
   const whole = normalized.map((section) => section.text).join("");
   if (parsed.length === 0) {
-    return Object.freeze({ diff: "", truncated: false, omittedChars: 0, omittedFiles: Object.freeze([]) });
+    return Object.freeze({ diff: "", truncated: false, omittedChars: 0, omittedFiles: Object.freeze([]), partialFiles: Object.freeze([]) });
   }
   if (whole.length <= budget) {
-    return Object.freeze({ diff: whole, truncated: false, omittedChars: 0, omittedFiles: Object.freeze([]) });
+    return Object.freeze({ diff: whole, truncated: false, omittedChars: 0, omittedFiles: Object.freeze([]), partialFiles: Object.freeze([]) });
   }
 
   const kept = parsed.map(() => new Set<number>());
@@ -207,6 +209,7 @@ export function boundReviewDiff(
 
   const rendered: string[] = [];
   const omittedFiles: string[] = [];
+  const partialFiles: string[] = [];
   let shownChars = 0;
   for (const [index, section] of parsed.entries()) {
     const keptHunks = [...kept[index]!].sort((a, b) => a - b);
@@ -221,6 +224,7 @@ export function boundReviewDiff(
       shownChars += section.hunks[hunk]!.length;
     }
     if (keptHunks.length < section.hunks.length) {
+      partialFiles.push(section.path);
       rendered.push(partialMarker(section.path, section.hunks.length - keptHunks.length, section.hunks.length));
     }
   }
@@ -230,5 +234,6 @@ export function boundReviewDiff(
     truncated: true,
     omittedChars: Math.max(0, originalChars - shownChars),
     omittedFiles: Object.freeze(omittedFiles.sort()),
+    partialFiles: Object.freeze(partialFiles.sort()),
   });
 }

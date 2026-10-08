@@ -99,8 +99,10 @@ import {
   ReviewEvidenceUnfit,
   candidatePathsBetween,
   composeReviewEvidence as composeReviewContext,
+  attachReviewDelivery,
   sha256,
 } from "../../workflow/review-evidence.ts";
+import { redeliverReviewDiff, reviewDiffPrompt } from "../../workflow/review-diff-delivery.ts";
 import {
   InvalidReviewInversion,
   MandatoryReviewUnavailable,
@@ -917,6 +919,7 @@ function phaseGates(
   buildsCandidate: boolean,
   attributionBaseSha: string | null = null,
   protectedCapabilities: () => Promise<readonly ProtectedFilesCapability[]> = async () => [],
+  reviewObservation: () => { events: readonly NormalizedEvent[]; runId: string } = () => ({ events: [], runId: "" }),
 ): readonly GateDefinition[] {
   const observe = attributionBaseSha !== null && review === null
     ? (): readonly string[] => changesSinceBase(worktree, attributionBaseSha)
@@ -1028,6 +1031,8 @@ function phaseGates(
             candidateSha: review.candidateSha,
             candidatePaths: review.candidatePaths,
             reviewContext: review.evidence,
+            observedEvents: reviewObservation().events,
+            runId: reviewObservation().runId,
           }),
     });
     // A reviewer that edits is not a reviewer. `writes: []` makes any observed
@@ -2321,7 +2326,20 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     // needs its own run id; reusing one would collide with the retained raw
     // output and envelope of the attempt that failed.
     const runId = `${status.sessionId}:${phase.id}:run${attempt === 1 ? "" : `-${attempt}`}`;
+    if (reviewContext?.evidence !== null && reviewContext?.evidence !== undefined && restored === null) {
+      const location = { attemptDir: options.attemptDir, runId, worktree: status.worktree!,
+        repository: status.repository, stateRoot: options.stateRoot };
+      const evidence = reviewContext.evidence.diffDelivery === undefined
+        ? await attachReviewDelivery(reviewContext.evidence, location)
+        : await redeliverReviewDiff(reviewContext.evidence, location);
+      reviewContext = { ...reviewContext, evidence };
+      previous = evidence;
+    }
     const phaseDb = dbPhaseId(status.sessionId, phase.id);
+    const observedRunId = restored?.runId ?? runId;
+    let reviewObservation = { events: restored === null ? [] as NormalizedEvent[] : (recovery?.inspected.records ?? [])
+      .flatMap(row => row.event.evidence?.type === "normalized-event" && row.event.evidence.phaseId === phaseDb &&
+        row.event.evidence.event.runId === observedRunId ? [row.event.evidence.event] : []), runId: observedRunId };
     const registeredAt = infra.now();
     const launch: LaunchRecord = { phaseId: phaseDb, adapterId: route.adapterId, role: route.agent.name, registeredAt };
     launches.set(runId, launch);
@@ -2349,6 +2367,8 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       await assertRouteDeliversImages(route.adapter.id, { home: HOST.process.env.HOME, cwd: status.worktree! });
       visualDelivery = await deliverVisualReferences(fresh, deliveryDirectory(options.attemptDir, runId));
     }
+    const readOnlyRoots = [...(visualDelivery === null ? [] : [visualDelivery.directory]),
+      ...(reviewContext?.evidence?.diffDelivery === undefined ? [] : [reviewContext.evidence.diffDelivery.directory])];
     const openPermission = (): PermissionSession => openPermissionSession({
       canonicalRepository: status.repository,
       worktree: status.worktree!,
@@ -2358,7 +2378,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       tools: route.agent.tools.allow,
       writes: route.agent.writes,
       protectedPaths: options.config.policy.protected_paths,
-      ...(visualDelivery === null ? {} : { readOnlyRoots: [visualDelivery.directory] }),
+      readOnlyRoots,
       ...(confinement === "host"
         ? { providerWritableRoots: route.adapter.providerWritableRoots?.(HOST.process.env) ?? [] }
         : { confinement, providerReadableRoots: route.adapter.providerReadableRoots?.(HOST.process.env) ?? [],
@@ -2465,7 +2485,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     const rolePrompt = renderProductionRolePrompt(phase, previous, designContext, status.request, route.agent);
     const grantContext = protectedPromptContext(phaseGrant);
     const originalPrompt = rolePrompt + seedContext(status) + resumeInstructionContext(instructions) + grantContext +
-      (visualDelivery === null ? "" : visualReferencePrompt(visualDelivery));
+      (visualDelivery === null ? "" : visualReferencePrompt(visualDelivery)) + reviewDiffPrompt(reviewContext?.evidence ?? null);
     const amendment = phase.id === seed?.builderPhaseKey ? seed.ownerAmendment : null;
     const instruction = instructionFor(phase.id);
     if (instruction !== null) {
@@ -2512,6 +2532,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
             if (readProtectedState(options.attemptDir).bindings.length > 0) capabilities.push(await verifyProtectedPreservation(options.attemptDir, runGit(systemGitRunner(status.worktree!), ["rev-parse", "HEAD"]).trim(), protectedCapability));
             return capabilities;
           },
+          () => reviewObservation,
         ),
         ...(visualPhase ? [{
           id: "visual_references_inspected",
@@ -2717,12 +2738,13 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
             return transport;
           },
         };
-        const request = buildPhaseRequest({ agent: route.agent, prompt, systemPromptPath, cwd: status.worktree!,
+        const request = { ...buildPhaseRequest({ agent: route.agent, prompt, systemPromptPath, cwd: status.worktree!,
           env: HOST.process.env,
           ...(retainedColdTurn !== null ? { continuity: { ref: retainedColdTurn.ref, turn: "open" as const } }
             : conversationRef === null ? {} : { continuity: { ref: conversationRef, turn: turn === 0 ? "open" as const : "resume" as const } }),
-        });
+        }), readOnlyRoots };
         const events: NormalizedEvent[] = [];
+        reviewObservation = { events, runId: turnRunId };
         let output = "";
         let resolved: { model: string; provenance: ModelResolutionProvenance } | null = null;
         let terminal: NormalizedEvent | null = null;
@@ -3354,9 +3376,13 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
         }),
       },
       testOutput: lastTestOutput,
-      // The FULL diff, host-private at 0600. The reviewer is never given a path
-      // into the attempt directory — this is the host's copy, and the digest is
-      // what ties the bounded rendering the model saw to it.
+      ...(recovery !== undefined && reviewEvidence?.diffDelivery === undefined ? {} : {
+        delivery: { attemptDir: options.attemptDir,
+          runId: `${status.sessionId}:${compiled.phases.find(isReviewPhase)!.id}:run`,
+          worktree: status.worktree!, repository: status.repository, stateRoot: options.stateRoot },
+      }),
+      // The retained authority remains private at 0600. Only the separate
+      // per-run delivery directory is mounted into the reviewer sandbox.
       diffRef: join("raw", `review-context-${candidateSha}.diff`),
       retainFullDiff: async (relative, diff) => {
         const absolute = join(options.attemptDir, relative);
@@ -3969,7 +3995,8 @@ async function prepareResumeInstruction(options: ProductionRunOptions, inspected
   const visual = bound === null || !bound.phases.includes(phase.id) ? ""
     : visualReferencePrompt(plannedDelivery(bound, deliveryDirectory(options.attemptDir, `${inspected.status.sessionId}:${phase.id}:run`)));
   const originalPrompt = renderProductionRolePrompt(phase, previous, design ?? null, inspected.status.request, agent) +
-    seedContext(inspected.status) + resumeInstructionContext(inspected.instructions) + protectedPromptContext(protectedGrantForPhase(options.attemptDir, phase.id)) + visual;
+    seedContext(inspected.status) + resumeInstructionContext(inspected.instructions) + protectedPromptContext(protectedGrantForPhase(options.attemptDir, phase.id)) + visual +
+    reviewDiffPrompt(phase.schemaId === REVIEW_OUTPUT_SCHEMA_ID && previous?.schema === REVIEW_CONTEXT_SCHEMA_ID ? previous as ReviewContext : null);
   const seedAmendment = inspected.status.seed?.builderPhaseKey === phase.id ? inspected.status.seed.ownerAmendment : null;
   return { phaseKey: phase.id, ordinal, bundleDigest: recoveryDigest(bundle), originalPrompt, seedAmendment };
 }

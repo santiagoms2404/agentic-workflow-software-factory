@@ -455,6 +455,13 @@ export class ClaudeCodeAdapter implements ContinuityCapableAdapter {
       argv.push("--append-system-prompt-file", request.systemPromptPath);
     }
     argv.push(...permissionArgs(this.id, request.profile ?? DEFAULT_TOOL_PROFILE, request.tools));
+    // Claude's outside-working-directory Read needs approval; dontAsk denies
+    // unapproved access. Established offline from the installed CLI's permission
+    // diagnostics and --help (--add-dir: additional directories for tool access).
+    // These are ONLY the host-validated input mounts, never the worktree or an
+    // enclosing checkout/state root. The sandbox keeps them read-only regardless
+    // of Claude's working-directory permission semantics.
+    for (const root of request.readOnlyRoots ?? []) argv.push("--add-dir", root);
     return {
       executable: this.#executable,
       argv: Object.freeze(argv),

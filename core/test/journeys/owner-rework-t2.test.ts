@@ -35,6 +35,7 @@ import type { BuildOutput } from "../../src/contracts/build-output.ts";
 import type { EnvelopeBase } from "../../src/contracts/envelope-base.ts";
 import type { NormalizedEvent } from "../../src/contracts/normalized-events.ts";
 import type { PlanOutput } from "../../src/contracts/plan-output.ts";
+import { assertReviewDelivery } from "../fixtures/assert-review-delivery.ts";
 import type { ReviewContext } from "../../src/contracts/review-context.ts";
 import type { ReviewOutput } from "../../src/contracts/review-output.ts";
 import type { StoredEnvelope } from "../../src/contracts/stored-envelope.ts";
@@ -368,6 +369,7 @@ class ScriptedBuilder implements HarnessAdapter {
     this.launches.push(this.id);
     const isReview = request.prompt.includes('"const": "awsf.review-output/v1"');
     if (isReview) {
+      assertReviewDelivery(request);
       this.#reviewerPrompts.push(request.prompt);
       if (this.#reviewBehaviour === "transport-failure") {
         throw new AdapterError(this.id, "E_BACKEND_FAILURE", "scripted transport failure");
@@ -448,6 +450,7 @@ class ScriptedReviewer implements HarnessAdapter {
     await broker.startProcess(registration, this.buildSpec(request), signal);
     this.launches.push(this.id);
     this.prompts.push(request.prompt);
+    assertReviewDelivery(request);
     if (this.#behaviour === "transport-failure") throw new AdapterError(this.id, "E_BACKEND_FAILURE", "scripted transport failure");
     // Whatever the host actually committed, read from the tree the reviewer was
     // pointed at rather than from anything the test remembered.

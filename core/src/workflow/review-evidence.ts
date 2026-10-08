@@ -12,6 +12,7 @@
 // depends on which command is asking.
 
 import { createHash } from "node:crypto";
+import { deliverReviewDiff, type ReviewDeliveryLocation } from "./review-diff-delivery.ts";
 import { parseEnvelope } from "../contracts/parse-envelope.ts";
 import {
   REVIEW_CONTEXT_DIFF_MAX_CHARS,
@@ -81,9 +82,16 @@ function candidateDiff(
   }
   const sections = paths.map((path) => ({
     path,
-    text: runGit(git, ["diff", "--no-renames", range, "--", path]),
+    text: runGit(git, ["--literal-pathspecs", "diff", "--no-renames", range, "--", path]),
   }));
   return { whole, sections: Object.freeze(sections), stat, insertions, deletions };
+}
+
+export async function attachReviewDelivery(context: ReviewContext, location: ReviewDeliveryLocation): Promise<ReviewContext> {
+  const observed = candidateDiff(location.worktree, context.baseSha, context.candidateSha, context.changedFiles);
+  if (sha256(observed.whole) !== context.diffSha256) throw new Error("review delivery candidate changed");
+  return { ...context, diffDelivery: await deliverReviewDiff(location, observed.whole, observed.sections,
+    context.diffOmittedFiles, context.limitationRequiredFiles) };
 }
 
 /** A review context that could not be evidence never reaches a provider. */
@@ -120,6 +128,7 @@ export interface ReviewEvidenceRequest {
   readonly testOutput: TestOutput;
   /** Attempt-relative path of the host-private full diff, mode 0600. */
   readonly diffRef: string;
+  readonly delivery?: ReviewDeliveryLocation;
   /**
    * Retains the full diff privately and returns what is on disk afterwards.
    *
@@ -148,11 +157,7 @@ export async function composeReviewEvidence(request: ReviewEvidenceRequest): Pro
   const changedFiles = candidatePathsBetween(request.worktree, request.baseSha, request.candidateSha);
   const observed = candidateDiff(request.worktree, request.baseSha, request.candidateSha, changedFiles);
   const bounded = boundReviewDiff(observed.sections, REVIEW_CONTEXT_DIFF_MAX_CHARS);
-  const limitationRequiredFiles = new Set(bounded.omittedFiles);
-  for (const match of bounded.diff.matchAll(/^\*\*\* awsf: \d+ of \d+ hunk\(s\) omitted from (.+)$/gmu)) {
-    const path = match[1]?.trim();
-    if (path !== undefined && path.length > 0) limitationRequiredFiles.add(path);
-  }
+  const limitationRequiredFiles = new Set([...bounded.omittedFiles, ...bounded.partialFiles]);
   const onDisk = await request.retainFullDiff(request.diffRef, observed.whole);
   const context: ReviewContext = {
     schema: REVIEW_CONTEXT_SCHEMA_ID,
@@ -178,6 +183,8 @@ export async function composeReviewEvidence(request: ReviewEvidenceRequest): Pro
     limitationRequiredFiles: [...limitationRequiredFiles].sort(),
     diffSha256: sha256(observed.whole),
     diffRef: request.diffRef,
+    ...(request.delivery === undefined ? {} : { diffDelivery: await deliverReviewDiff(request.delivery,
+      observed.whole, observed.sections, bounded.omittedFiles, [...limitationRequiredFiles]) }),
     testOutput: request.testOutput,
   };
   const expectation: ReviewEvidenceExpectation = {
@@ -186,6 +193,8 @@ export async function composeReviewEvidence(request: ReviewEvidenceRequest): Pro
     changedFiles,
     fullDiffSha256: sha256(onDisk),
     fullDiffRemovesLines: diffRemovesLines(onDisk),
+    fullDiffHasHunks: /^@@ /mu.test(onDisk),
+    fullDiffDelivered: context.diffDelivery !== undefined,
   };
   const parsed = parseEnvelope(JSON.stringify(context), REVIEW_CONTEXT_SCHEMA_ID);
   if (!parsed.valid) {

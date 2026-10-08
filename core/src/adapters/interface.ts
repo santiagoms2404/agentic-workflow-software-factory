@@ -169,6 +169,8 @@ export interface ModelRequest {
   /** The prompt. It reaches the provider on stdin and nowhere else. */
   prompt: string;
   systemPromptPath?: string;
+  /** Host-validated read-only input mounts, not ambient checkout or state roots. */
+  readOnlyRoots?: readonly string[];
   cwd: string;
   env: Readonly<Record<string, string>>;
   effort?: string;
