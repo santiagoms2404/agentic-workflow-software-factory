@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { attributeCommand, type AttributeCommandOptions } from "../../../src/cli/commands/attribute.ts";
@@ -22,13 +22,16 @@ const PROJECT = "agentic-workflow-software-factory";
 const AT = "2026-10-08T10:00:00.000Z";
 const credential = (): string => `ghp_${"a".repeat(36)}`;
 
-function snapshot(root: string): Record<string, string> {
-  const files: Record<string, string> = {};
+function snapshot(root: string): Record<string, unknown> {
+  const files: Record<string, unknown> = {};
   const walk = (directory: string, prefix: string): void => {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
       const name = `${prefix}${entry.name}`;
-      if (entry.isDirectory()) { files[`${name}/`] = "directory"; walk(join(directory, entry.name), `${name}/`); }
-      else files[name] = readFileSync(join(directory, entry.name)).toString("base64");
+      const path = join(directory, entry.name);
+      const stat = statSync(path);
+      files[name] = { mode: stat.mode, mtimeMs: stat.mtimeMs, size: stat.size,
+        bytes: entry.isDirectory() ? null : readFileSync(path).toString("base64") };
+      if (entry.isDirectory()) walk(path, `${name}/`);
     }
   };
   walk(root, "");
@@ -42,8 +45,13 @@ for (const act of ["attribute", "cancel"] as const) {
     try {
       const created = await newCommand({ stateRoot, project: PROJECT, taskId: "link-test", repository: root,
         workflow: "build", tier: 1, request: "synthetic link validation" });
-      if (act === "attribute") await persistAttempt(created.attemptDir, created.status.revision, {
-        kind: "attempt.updated", next: nextRevision(created.status, { lifecycleState: "BLOCKED" }),
+      // A cancel must protect a recorded live-shaped tree, not just an empty DRAFT.
+      // The injected terminator is the only signal path; no actual process is targeted.
+      await persistAttempt(created.attemptDir, created.status.revision, {
+        kind: "attempt.updated", next: nextRevision(created.status, act === "attribute"
+          ? { lifecycleState: "BLOCKED" }
+          : { lifecycleState: "RUNNING", process: { pid: 424242, pgid: 424242,
+            startIdentity: "synthetic", startIdentitySource: "test" } }),
       });
       let prompts = 0;
       let signals = 0;
@@ -52,10 +60,11 @@ for (const act of ["attribute", "cancel"] as const) {
       const base = { stateRoot, project: PROJECT, taskId: "link-test", attempt: 1, attemptDir: created.attemptDir,
         cause: "factory", reason: "synthetic reason", terminal,
         projectAttribution: () => { projections++; }, projectRecord: () => { projections++; },
-        terminate: async () => { signals++; throw new Error("must not signal"); } };
+        terminate: async () => { signals++; return { termSent: true, killSent: false, survivors: [], terminated: true, skipped: null }; } };
       const before = snapshot(root);
       const bad: Partial<AttributeCommandOptions>[] = [
         {}, { trap: "TR-1" }, { trap: "TR-001" }, { trap: "TR-01\n" },
+        { trap: "TR-01", reason: credential() },
         { noTrap: { because: "unknown-kind", reason: "synthetic" } },
         { noTrap: { because: "fixed", reason: " " } },
         { noTrap: { because: "fixed", reason: credential() } },
@@ -73,6 +82,70 @@ for (const act of ["attribute", "cancel"] as const) {
       await (act === "attribute" ? attributeCommand(declined) : cancelCommand(declined));
       assert.deepEqual(snapshot(root), before);
       assert.deepEqual([signals, projections], [0, 0]);
+      // Positive control proves the same seams would signal/project a confirmed act.
+      await (act === "attribute" ? attributeCommand({ ...base, trap: "TR-99" }) : cancelCommand({ ...base, trap: "TR-99" }));
+      assert.deepEqual([signals, projections], act === "attribute" ? [0, 1] : [1, 2]);
+      const records = await readTaskAttributions(taskRoot(stateRoot, PROJECT, "link-test"));
+      assert.equal(records.length, 1);
+      assert.equal(records[0]?.schema, "awsf.attribution/v2");
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+}
+
+for (const act of ["attribute", "cancel"] as const) {
+  test(`main ${act}: refusals and declines create no journal, projection, lock or status change`, async () => {
+    const root = mkdtempSync(join(tmpdir(), "awsf-link-main-refusal-"));
+    const stateRoot = join(root, "state");
+    try {
+      const created = await newCommand({ stateRoot, project: PROJECT, taskId: "main-link", repository: root,
+        workflow: "build", tier: 1, request: "synthetic CLI link refusal" });
+      if (act === "attribute") await persistAttempt(created.attemptDir, created.status.revision, {
+        kind: "attempt.updated", next: nextRevision(created.status, { lifecycleState: "BLOCKED" }),
+      });
+      const before = snapshot(root);
+      const prompts: string[] = [];
+      let confirmations = 0;
+      const terminal = { interactive: true, write: (line: string) => prompts.push(line),
+        confirm: async () => { confirmations++; return false; } };
+      const cli = async (flags: readonly string[], owner = terminal) => {
+        const errors: string[] = [];
+        const code = await main({ cwd: resolve("."), env: {}, argv: [act, "main-link", "--state-root", stateRoot,
+          "--attempt", "1", "--cause", "factory", ...flags], terminal: owner,
+          writeOut: () => {}, writeError: line => errors.push(line) });
+        assert.deepEqual(snapshot(root), before, "even a missing SQLite file must stay absent");
+        return { code, errors };
+      };
+      const cases: readonly [readonly string[], RegExp][] = [
+        [["--reason", "synthetic"], /this cause requires --trap/],
+        [["--reason", "synthetic", "--trap", "TR-1"], /invalid trap link/],
+        [["--reason", "synthetic", "--no-trap", "unknown-kind", "why"], /invalid trap link/],
+        [["--reason", "synthetic", "--no-trap", "fixed", credential()], /credential-shaped/],
+        [["--reason", credential(), "--trap", "TR-01"], /credential-shaped/],
+        [["--reason", "synthetic", "--no-trap", "fixed"], /requires <kind>/],
+        [["--reason", "synthetic", "--trap", "TR-01", "--trap", "TR-99"], /only once/],
+        [["--reason", "synthetic", "--no-trap", "fixed", "why", "--no-trap", "owner", "why"], /only once/],
+        [["--reason", "synthetic", "--trap", "TR-01", "--no-trap", "fixed", "why"], /mutually exclusive/],
+      ];
+      for (const [flags, refusal] of cases) {
+        const result = await cli(flags);
+        assert.equal(result.code, 1);
+        assert.match(result.errors.join("\n"), refusal);
+        assert.equal(prompts.length, 0);
+        assert.equal(confirmations, 0);
+      }
+      assert.equal((await cli(["--reason", "synthetic", "--trap", "TR-99"], { ...terminal, interactive: false })).code, 1);
+      assert.equal(prompts.length, 0);
+      assert.equal(confirmations, 0);
+      for (const [flags, shown] of [
+        [["--trap", "TR-99"], "Trap link: TR-99"],
+        [["--no-trap", "fixed", "synthetic regression proof"], "Trap link: none (fixed): synthetic regression proof"],
+      ] as const) {
+        const result = await cli(["--reason", "synthetic", ...flags]);
+        assert.equal(result.code, 1);
+        assert.deepEqual(result.errors, []);
+        assert.ok(prompts.includes(shown));
+      }
+      assert.equal(confirmations, 2);
     } finally { rmSync(root, { recursive: true, force: true }); }
   });
 }
@@ -147,8 +220,17 @@ test("v1 remains readable, projects and counts as pre-link; v2 latest wins acros
     projection.close();
     assert.deepEqual(readOwner()?.trap, { kind: "trap", id: "TR-99" });
     assert.equal(readOwner()?.cause, "driver", "append order wins, not timestamp or schema version");
+    assert.deepEqual(readMetricsPayload(join(stateRoot, "awsf.db"), AT).causes.cancels, { total: 1, byCause: { driver: 1 } });
     assert.equal((await rebuildCommand(stateRoot)).ok, true);
     assert.deepEqual(readOwner()?.trap, { kind: "trap", id: "TR-99" });
+    assert.deepEqual(readMetricsPayload(join(stateRoot, "awsf.db"), AT).causes.cancels, { total: 1, byCause: { driver: 1 } });
+    const rebuilt = openDatabase(join(stateRoot, "awsf.db"), { readonly: true });
+    try {
+      const events = rebuilt.prepare("SELECT payload_json FROM events WHERE type = 'attribution' ORDER BY event_row").all() as { payload_json: string }[];
+      assert.equal(events.length, 2);
+      assert.equal(Object.hasOwn(JSON.parse(events[0]!.payload_json), "trap"), false, "v1 still projects as pre-link");
+      assert.deepEqual(JSON.parse(events[1]!.payload_json).trap, { kind: "trap", id: "TR-99" });
+    } finally { rebuilt.close(); }
     assert.equal((await readTaskAttributions(task)).length, 2);
     assert.equal(latest.previous?.schema, "awsf.attribution/v1");
   } finally { projection.close(); rmSync(root, { recursive: true, force: true }); }
@@ -160,13 +242,17 @@ test("writers and projector independently reject unchecked links before opening 
   try {
     const base = { schema: "awsf.attribution/v2", project: PROJECT, taskId: "synthetic", attempt: 1,
       cause: "factory", reason: "synthetic", at: AT };
-    for (const trap of [undefined, { kind: "trap", id: "bad" }, { kind: "none", because: "fixed", reason: credential() }]) {
+    for (const trap of [undefined, { kind: "trap", id: "bad" }, { kind: "trap", id: "TR-01", unchecked: true },
+      { kind: "none", because: "unknown-kind", reason: "synthetic" }, { kind: "none", because: "fixed", reason: " " },
+      { kind: "none", because: "fixed", reason: credential() }, { kind: "none", because: "fixed", reason: "[REDACTED]" }]) {
       const bad = { ...base, trap } as unknown as AttributionRecord;
       assert.throws(() => assertAttributionRecord(bad));
       await assert.rejects(appendTaskAttribution(join(root, "task"), bad));
       assert.throws(() => projectAttribution(db, bad));
       assert.equal(readdirSync(root).includes("task"), false);
     }
+    await assert.rejects(appendTaskAttribution(join(root, "task"), { ...base, schema: "awsf.attribution/v1" } as AttributionRecord), /new attributions require/);
+    assert.equal(readdirSync(root).includes("task"), false, "v1 is readable but cannot bypass the live link writer");
     assert.equal((db.prepare("SELECT count(*) AS n FROM events WHERE type = 'attribution'").get() as { n: number }).n, 0);
   } finally { db.close(); rmSync(root, { recursive: true, force: true }); }
 });

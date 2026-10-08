@@ -27,6 +27,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSyn
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { test } from "node:test";
+import { Value } from "@sinclair/typebox/value";
 import { nextRevision, persistAttempt, readAttempt } from "../../src/cli/commands/attempt.ts";
 import { createDashboardProjection } from "../../src/cli/commands/dashboard-projection.ts";
 import { newCommand } from "../../src/cli/commands/new.ts";
@@ -34,6 +35,9 @@ import { readAttemptEvidence } from "../../src/cli/commands/review-record.ts";
 import type { OwnerTerminal } from "../../src/cli/tty.ts";
 import { main } from "../../src/cli/main.ts";
 import { K1_FIELD_IDS, assertPreflightRefusedRecord, type K1FieldId } from "../../src/contracts/driver-preflight.ts";
+import { TrapsReadoutSchema, type TrapsReadout } from "../../src/contracts/traps-readout.ts";
+import { writePlacement } from "../../src/registry/placement.ts";
+import { readTaskAttributions } from "../../src/persistence/task-attributions.ts";
 import type { MetricsResponse } from "../../../dashboard/shared/types.ts";
 import { k1Request, prepareK1, recordedGates, refusals, scriptedOwner } from "../fixtures/k1-preflight.ts";
 
@@ -339,4 +343,72 @@ test("a full stub journey: new, preflight, confirm, start, run and a cancel with
     assert.equal(run?.attribution, cause);
     assert.equal(run?.attributionSource, "owner");
   } finally { b.close(); }
+});
+
+test("M3: stub cancels through main link a fixed reason and expose a missing trap without repairing it", async (context) => {
+  const b = box("trap-links");
+  const at = "2026-10-08T12:00:00.000Z";
+  context.mock.timers.enable({ apis: ["Date"], now: new Date(at) });
+  try {
+    await writePlacement(b.stateRoot, PROJECT, { version: "awsf.placement/v1", project: PROJECT,
+      repositories: { main: { path: b.repository } } });
+    const readout = async (code: number): Promise<TrapsReadout> => {
+      const json: string[] = [];
+      const errors: string[] = [];
+      const terminal = { interactive: false, write: () => assert.fail("readout asks no owner"),
+        confirm: async () => { assert.fail("readout asks no confirmation"); return false; } };
+      assert.equal(await main({ argv: ["traps", "--json", "--state-root", b.stateRoot], cwd: b.repository, env: {},
+        terminal, writeOut: line => json.push(line), writeError: line => errors.push(line) }), code, errors.join("\n"));
+      assert.deepEqual(errors, []);
+      assert.equal(json.length, 1);
+      const model = JSON.parse(json[0]!);
+      assert.equal(Value.Check(TrapsReadoutSchema, model), true);
+      return model as TrapsReadout;
+    };
+    for (const [taskId, flags, trap] of [
+      ["fixed-cancel", ["--no-trap", "fixed", "synthetic regression keeps the defect fixed"],
+        { kind: "none", because: "fixed", reason: "synthetic regression keeps the defect fixed" }],
+      ["missing-cancel", ["--trap", "TR-99"], { kind: "trap", id: "TR-99" }],
+    ] as const) {
+      const created = await cli(b, ["new", taskId, REQUEST, "--workflow", "simple-sdlc"]);
+      assert.equal(created.code, 0, created.err.join("\n"));
+      const attemptDir = join(b.stateRoot, "projects", PROJECT, "tasks", taskId, "1");
+      const projection = createDashboardProjection(b.stateRoot);
+      try { await prepareK1({ attemptDir, configPath: b.configPath, worktreeRoot: b.worktreeRoot,
+        confirm: false, projectRecord: projection.project }); } finally { projection.close(); }
+      for (const argv of [["confirm", taskId], ["start", taskId, "--stub", "true"], ["run", taskId, "--stub", "true"]]) {
+        const result = await cli(b, argv, scriptedOwner());
+        assert.equal(result.code, 0, result.err.join("\n"));
+      }
+      const before = await readAttempt(attemptDir);
+      assert.equal(before.lifecycleState, "AWAITING_OWNER");
+      assert.equal(before.budget.callsReserved, 0);
+      const owner = scriptedOwner();
+      const cancelled = await cli(b, ["cancel", taskId, "--cause", "factory", "--reason", "synthetic stop diagnosis", ...flags], owner);
+      assert.equal(cancelled.code, 0, cancelled.err.join("\n"));
+      const after = await readAttempt(attemptDir);
+      assert.equal(after.lifecycleState, "CANCELLED");
+      assert.equal(after.budget.callsSpent, before.budget.callsSpent, "the owner act buys no provider call");
+      const records = await readTaskAttributions(join(attemptDir, ".."));
+      assert.equal(records.length, 1);
+      assert.equal(records[0]?.schema, "awsf.attribution/v2");
+      if (records[0]?.schema !== "awsf.attribution/v2") throw new Error("missing v2 cancellation record");
+      assert.deepEqual(records[0].trap, trap);
+      const model = await readout(taskId === "fixed-cancel" ? 0 : 1);
+      assert.deepEqual(model.stops.linkedToTrap, []);
+      assert.deepEqual(model.stops.unlinked, []);
+      assert.deepEqual(model.stops.linkedToNoTrap, [{ project: PROJECT, taskId: "fixed-cancel", attempt: 1,
+        terminalAt: at, lifecycleState: "CANCELLED", trap: { kind: "none", because: "fixed", reason: "synthetic regression keeps the defect fixed" } }]);
+      assert.equal(model.stops.total, taskId === "fixed-cancel" ? 1 : 2);
+      assert.deepEqual(model.stops.missingTrap, taskId === "fixed-cancel" ? [] : [{ project: PROJECT,
+        taskId: "missing-cancel", attempt: 1, terminalAt: at, lifecycleState: "CANCELLED", trap: { kind: "trap", id: "TR-99" } }]);
+    }
+    const text: string[] = [];
+    assert.equal(await main({ argv: ["traps", "--state-root", b.stateRoot], cwd: b.repository, env: {},
+      writeOut: line => text.push(line), writeError: line => assert.fail(line) }), 1);
+    assert.ok(text.includes(`  ${PROJECT}/missing-cancel attempt 1 (CANCELLED, ${at}) · TR-99`));
+    assert.ok(text.includes("Coverage red: unlinked stops or missing traps remain (exit 1)."));
+    assert.ok(text.includes("awsf traps reports and never repairs. It writes nothing and never runs the trap layer."));
+    assert.deepEqual((await readout(1)).stops.missingTrap.map(item => item.taskId), ["missing-cancel"], "reading never repairs the gap");
+  } finally { context.mock.timers.reset(); b.close(); }
 });

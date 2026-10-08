@@ -114,6 +114,16 @@ test("owner-shaped registered roots return exact four coverage lists, counts, ne
     assert.deepEqual(identity(model.stops.unlinked), ["awsf/unlinked#1"]);
     assert.deepEqual(model.stops.missingTrap[0]?.trap, { kind: "trap", id: "TR-99" });
     assert.deepEqual(model.stops.linkedToNoTrap[0]?.trap, { kind: "none", because: "fixed", reason: "synthetic defect already fixed" });
+    assert.deepEqual(model.stops, {
+      total: 4,
+      linkedToTrap: [{ project: "awsf", taskId: "linked", attempt: 1, terminalAt: POST, lifecycleState: "BLOCKED",
+        trap: { kind: "trap", id: "TR-01" } }],
+      linkedToNoTrap: [{ project: "fusion", taskId: "no-trap", attempt: 1, terminalAt: POST, lifecycleState: "CANCELLED",
+        trap: { kind: "none", because: "fixed", reason: "synthetic defect already fixed" } }],
+      missingTrap: [{ project: "fusion", taskId: "missing", attempt: 1, terminalAt: POST, lifecycleState: "BLOCKED",
+        trap: { kind: "trap", id: "TR-99" } }],
+      unlinked: [{ project: "awsf", taskId: "unlinked", attempt: 1, terminalAt: POST, lifecycleState: "CANCELLED", preLink: false }],
+    });
     assert.equal(model.catalogue.traps, 12);
     assert.deepEqual(model.catalogue.byTrap, TRAPS.map(trap => ({ id: trap.id, seeds: trap.seeds.length })));
     assert.equal(model.catalogue.noTraps, 48);
@@ -141,6 +151,7 @@ test("main traps JSON and text need no config or owner terminal, write nothing, 
       writeOut: line => json.push(line), writeError: line => errors.push(line) }), 1);
     assert.equal(json.length, 1);
     assert.equal(Value.Check(TrapsReadoutSchema, JSON.parse(json[0]!)), true);
+    assert.deepEqual(JSON.parse(json[0]!), await readTrapsReadout(box.stateRoot));
     assert.equal(errors.length, 0);
     const text: string[] = [];
     assert.equal(await main({ argv: ["traps", "--state-root", box.stateRoot], cwd: box.root, env: {}, terminal,
@@ -200,6 +211,15 @@ test("v1 attribution is counted as pre-link and v2 latest wins without moving th
     assert.equal(model.stops.linkedToTrap.length, 1);
     assert.equal(model.stops.linkedToTrap[0]?.terminalAt, POST);
     assert.equal(trapsExitCode(model), 0);
+    // A historical v1 appended later still wins; neither schema version nor timestamp sorts records.
+    const latest = new Journal(join(facts.taskRoot, "attributions.jsonl"));
+    try { await latest.append({ schema: "awsf.attribution/v1", project: "awsf", taskId: "legacy", attempt: 1,
+      cause: "driver", reason: "synthetic later historical judgement", at: PRE }); } finally { await latest.close(); }
+    const reversed = await readTrapsReadout(box.stateRoot);
+    assert.deepEqual(reversed.stops.linkedToTrap, []);
+    assert.deepEqual(reversed.stops.unlinked, [{ project: "awsf", taskId: "legacy", attempt: 1,
+      terminalAt: POST, lifecycleState: "BLOCKED", preLink: true }]);
+    assert.equal(trapsExitCode(reversed), 1);
   } finally { box.close(); }
 });
 
