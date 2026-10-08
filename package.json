@@ -14,11 +14,12 @@
     "awsf": "core/src/cli/main.ts"
   },
   "scripts": {
-    "test": "npm run test:unit; u=$?; npm run test:contract; c=$?; npm run test:sim; s=$?; npm run test:journeys; j=$?; echo \"layers: unit=$u contract=$c sim=$s journeys=$j\"; exit $((u|c|s|j))",
+    "test": "npm run test:unit; u=$?; npm run test:contract; c=$?; npm run test:sim; s=$?; npm run test:journeys; j=$?; npm run test:traps; t=$?; echo \"layers: unit=$u contract=$c sim=$s journeys=$j traps=$t\"; exit $((u|c|s|j|t))",
     "test:unit": "node --experimental-strip-types --test \"core/test/unit/**/*.test.ts\"",
     "test:contract": "node --experimental-strip-types --test \"core/test/contract/**/*.test.ts\"",
     "test:sim": "node --experimental-strip-types --test \"core/test/simulation/**/*.test.ts\"",
     "test:journeys": "node --experimental-strip-types --test \"core/test/journeys/**/*.test.ts\"",
+    "test:traps": "node --experimental-strip-types --test \"core/test/traps/**/*.test.ts\"",
     "awsf": "node --experimental-strip-types core/src/cli/main.ts",
     "dash": "npm --workspace dashboard run dev",
     "dash:build": "npm --workspace dashboard exec vite build",

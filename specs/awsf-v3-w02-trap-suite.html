@@ -149,7 +149,7 @@ section.phase .sub { font-size:13px; }
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-10-07</dd>
-        <dt>modified</dt>     <dd>2026-10-07 (authored, awaiting owner review), 2026-10-07 (owner review applied: W02-Q1–Q8 decided), 2026-10-07 (deep plan approved by the owner), 2026-10-07 (ticketFrames added to the design index), 2026-10-07 (T01 landed; G02-S recorded; M1 complete), 2026-10-08 (M2 shift landed: T02 and T03 done, T04 awaiting G02-L)</dd>
+        <dt>modified</dt>     <dd>2026-10-07 (authored, awaiting owner review), 2026-10-07 (owner review applied: W02-Q1–Q8 decided), 2026-10-07 (deep plan approved by the owner), 2026-10-07 (ticketFrames added to the design index), 2026-10-07 (T01 landed; G02-S recorded; M1 complete), 2026-10-08 (M2 shift landed: T02 and T03 done, T04 awaiting G02-L), 2026-10-08 (G02-L landed; M2 complete)</dd>
         <dt>commits</dt>      <dd>authoring and owner approval: recorded by the 2026-10-07 approval Amendment and its commit; authoring base e32e892, committed on 60d01d5; T01 candidate 20dba5c, landed by fast-forward; G02-S in the owner commit after it; M2 shift a952bc6, 6ba4a0e, 234fea6, landed by fast-forward; bookkeeping and G02-L as two owner commits after it</dd>
         <dt>agent name</dt>   <dd>claude-opus-5-5</dd>
         <dt>session id</dt>   <dd>not recorded: AGENTS.md invariant 1 keeps live session state out of every committed file</dd>
@@ -466,7 +466,7 @@ stateDiagram-v2
 
     <!-- ================= M2 ================= -->
     <section class="phase">
-      <h3><code class="status">[wip]</code> Milestone M2: The trap format and the layer <span class="wtag">managed</span> <span class="wtag raise">gate G02-L</span></h3>
+      <h3><code class="status">[x]</code> Milestone M2: The trap format and the layer <span class="wtag">managed</span> <span class="wtag raise">gate G02-L</span></h3>
       <p>The catalogue, the harness, the mutant and the markers that make a trap four agreeing things, and the first traps built from refusals that already exist.</p>
       <figure>
         <pre class="mermaid">
@@ -510,7 +510,7 @@ flowchart LR
         <li><code class="status">[x]</code> The gate's code half: <code>traps</code> in <code>KNOWN_GATE_IDS</code>, a deletion line for it in every test config that copies the shipped gates, <code>gate|traps</code> and its prose in <code>docs/cheatsheet.html</code>, with the unit tests that bind every configured gate passing on a configuration that has it</li>
         <li><code class="status">[x]</code> <code>node --experimental-strip-types --test "core/test/traps/**/*.test.ts"</code> green, wall time measured on this host and returned for G02-L's timeout</li>
         <li><code class="status">[x]</code> <code>npm run test:unit</code>, <code>npm run test:journeys</code>, <code>npm run typecheck</code> and <code>npm run lint</code> exit 0</li>
-        <li><code class="status">[]</code> G02-L landed: <code>npm run test:traps</code> exists, and the gate per W02-Q5 (the owner's commit)</li>
+        <li><code class="status">[x]</code> G02-L landed: <code>npm run test:traps</code> exists, and the gate per W02-Q5 (the owner's commit)</li>
       </ul>
       <div class="loop">🔁 <strong>Do not exit this milestone until every box above is checked.</strong> A trap that has never failed against its mutant is not a trap.</div>
     </section>
@@ -918,6 +918,10 @@ flowchart LR
       <summary>2026-10-08 — M2 shift landed: T02 and T03 done, T04 awaiting G02-L</summary>
       <p>T02–T04 landed as one shift (a952bc6, 6ba4a0e, 234fea6; builder codex/openai-codex/gpt-6.1-sol at high, reviewer claude/anthropic/claude-opus-5-5 at medium; 5 of 10 calls with one owner raise of 5: three builds, one T04 correction, one review of the accumulated diff). T02 applied the G02-S ledger corrections to <code>seeds.ts</code> (62 rows) and built <code>catalogue.ts</code>: TR-01–TR-12, the no-trap entries (fixed 4, after-spend 25, owner 3, unexplained 9, not-a-stop 7) and the pending gaps under T08–T12. T03 added the harness, the source mutant and the catalogue fence, which bites on a planted unmarked refusal, duplicate id, orphan marker and missing test. T04 adopted K1's eight fields (TR-01–TR-08), the runner's grant check (TR-09, #34's run-time half) and gotchas 2, 9 and 11 (TR-10–TR-12), not gotcha 1, which G02-S found fixed; the plan's row naming gotchas 1, 2 and 9 is checked on that basis. Every <code>core/src</code> change is a marker pair or an equivalent restructuring (request shape, confirmation, and the config snapshot comparison shared by run and rework); no refusal's behavior changed and no marker sits in a protected path. Host gates at the final head: 3090 unit, 364 journeys, typecheck and lint. No configured gate runs the trap layer yet, so the driving session ran it on the exported candidate: 44/44 with all 12 own-mutant tests, in 88 s (the builder measured 46.6 s in its worktree).</p>
       <p>The review accepted with two findings. Medium: TR-11 calls <code>PiCodexAdapter.assertResumable</code> directly, so its INV-1 checks run against a draft attempt that took no part in the refusal, and its marker wraps the store-without-the-session branch while ledger row G09 describes a missing store. Its mutant still fails, so it is a thin trap rather than a false one; handed to T12. Low: the cheatsheet fence was switched from configured gates to accepted gate ids so that <code>gate|traps</code> could be listed before G02-L; G02-L restores the configured-gate check. T04 stays <code>wip</code> and M2 <code>[wip]</code> until G02-L, the one unchecked row.</p>
+    </details>
+    <details open>
+      <summary>2026-10-08 — G02-L landed: the trap layer is a landing gate; M2 complete</summary>
+      <p>Owner commit under GA, per W02-Q5. <code>package.json</code> gains <code>test:traps</code>, and <code>npm test</code> chains it as a fifth layer. <code>awsf.config.yaml</code> and <code>awsf.project.yaml</code> gain <code>traps: { argv: [npm, run, test:traps], timeout_seconds: 600 }</code>, the unit gate's value. Measured: 46.6 s in the builder's worktree, 88 s on an exported copy, and 177 s when run after the full unit and journeys suites on this host; twice the first measurement (the plan's rule) would sit at the edge of the third, so the timeout takes the unit gate's headroom instead. The cheatsheet fence goes back to reconciling <code>gate|ID</code> with the configured gates, closing the M2 review's low finding, and the cheatsheet's gate prose names the five configured gates. T04's deletion lines keep the test configurations that copy the shipped gates unaffected. Before commit, on a copy at this content: <code>test:unit</code>, <code>test:journeys</code>, <code>test:traps</code>, <code>typecheck</code> and <code>lint</code> all exit 0. Every K1 preflight after this commit runs five gates, since the gate configuration digest changed. T04 is done and M2 is complete.</p>
     </details>
   </section>
 

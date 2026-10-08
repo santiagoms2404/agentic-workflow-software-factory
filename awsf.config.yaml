@@ -130,6 +130,7 @@ gates:
   typecheck: { argv: [npm, run, typecheck], timeout_seconds: 300 }
   lint: { argv: [npm, run, lint], timeout_seconds: 300 }
   journeys: { argv: [npm, run, test:journeys], timeout_seconds: 2400 }
+  traps: { argv: [npm, run, test:traps], timeout_seconds: 600 }
 
 risk:
   default: T1
