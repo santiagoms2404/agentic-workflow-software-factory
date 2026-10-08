@@ -18,8 +18,9 @@ import { executablesRow, type ExecutableFact } from "./executables.ts";
 import { providersRow } from "./providers.ts";
 import { quotaRow, quotaDiagnostics } from "./quota.ts";
 import { storageRow } from "./storage.ts";
+import { gatherRepositoryRows, type RepositoryRows } from "./repository.ts";
 
-export type EnvironmentRows = Pick<DoctorReadout["rows"], "storage" | "executables" | "providers" | "quota" | "coverage">;
+export type EnvironmentRows = Pick<DoctorReadout["rows"], "storage" | "executables" | "providers" | "quota" | "coverage"> & RepositoryRows;
 export interface GatherDoctorInput {
   readonly cwd: string;
   readonly stateRoot: string;
@@ -136,5 +137,6 @@ export async function gatherDoctorRows(input: GatherDoctorInput): Promise<Enviro
   try { coverage = coverageRow(await readTrapsReadout(input.stateRoot)); }
   catch { coverage = { status: "finding", detail: ["coverage not measured: unreadable trap evidence; no repair performed"] }; }
   return scrubCredentials({ storage, executables: executableRow, providers: providersRow(routes, result),
-    quota: quotaRow(routes, result, configured.config?.routing.quota_stop, latencyMs, diagnostics), coverage });
+    quota: quotaRow(routes, result, configured.config?.routing.quota_stop, latencyMs, diagnostics), coverage,
+    ...await gatherRepositoryRows({ ...input, cwd: configured.cwd, config: configured.config }) });
 }

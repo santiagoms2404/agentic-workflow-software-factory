@@ -14,7 +14,8 @@ export const DoctorReadoutSchema = Type.Object({
   rows: Type.Object({
     existing: DoctorRowSchema, jev: DoctorRowSchema, storage: DoctorRowSchema,
     executables: DoctorRowSchema, providers: DoctorRowSchema, quota: DoctorRowSchema,
-    coverage: DoctorRowSchema,
+    coverage: DoctorRowSchema, branches: DoctorRowSchema, worktrees: DoctorRowSchema,
+    baseline: DoctorRowSchema, markers: DoctorRowSchema,
   }, closed),
   lines: Type.Array(Type.String()),
 }, { ...closed, $id: DOCTOR_READOUT_SCHEMA_ID, title: "DoctorReadout" });

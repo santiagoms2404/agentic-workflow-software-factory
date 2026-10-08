@@ -107,7 +107,7 @@ test("gatherer uses one sandboxed quota probe, renders every row, writes nothing
         return { status: 0, error: null, stderr: "", stdout: argv.includes("--version") ? "0.1.29" : fixture("derived-exhausted-now") };
       },
     });
-    assert.equal(invocations.length, 4, "two read-only git queries, quota version and one JSON probe");
+    assert.equal(invocations.length, 6, "four read-only git queries, quota version and one JSON probe");
     assert.equal(rows.quota.status, "warn");
     assert.match(rows.quota.detail[0]!, /latency=\d+ ms/);
     assert.deepEqual(snapshot(root), before, "including absence of state root and quota retention files");
@@ -158,8 +158,8 @@ test("doctor main emits named text and JSON rows, findings exit 1, and leaves al
         assert.equal(lines.length, 1);
         const model = JSON.parse(lines[0]!);
         assert.equal(Value.Check(DoctorReadoutSchema, model), true);
-        assert.deepEqual(Object.keys(model.rows), ["existing", "jev", "storage", "executables", "providers", "quota", "coverage"]);
-      } else for (const name of ["jev", "storage", "executables", "providers", "quota", "coverage"]) assert.ok(lines.some(line => line.startsWith(`${name}: `)));
+        assert.deepEqual(Object.keys(model.rows), ["existing", "jev", "storage", "executables", "providers", "quota", "coverage", "branches", "worktrees", "baseline", "markers"]);
+      } else for (const name of ["jev", "storage", "executables", "providers", "quota", "coverage", "branches", "worktrees", "baseline", "markers"]) assert.ok(lines.some(line => line.startsWith(`${name}: `)));
       assert.deepEqual(snapshot(root), before);
     }
     const lines: string[] = [];
