@@ -19,6 +19,8 @@ trap is worse than an absent one.
 
 ### 1. Owner rework is refused above the middle tier
 
+**Trap link.** none — `fixed`. The seed ledger (G02-S) found this entry stale: 31a1a97 made owner rework serve tier 2, and `core/test/journeys/owner-rework-t2.test.ts` proves it. It leaves the refusal list.
+
 **Symptom.** `awsf rework` refuses a top-tier attempt outright, before anything
 is spent, and points you at cancel and retry instead.
 
@@ -33,6 +35,8 @@ re-runs the whole pipeline including its opposite-provider review and carries th
 spend forward — see entry 3 before you suggest it.
 
 ### 2. Owner acts refuse after the configuration changed under them
+
+**Trap link.** TR-10 — `core/test/traps/TR-10-config-snapshot.test.ts` fails if this refusal is removed.
 
 **Symptom.** `awsf rework` or `awsf review` refuses with a configuration-snapshot
 complaint on an attempt that was fine an hour ago.
@@ -50,6 +54,8 @@ configuration, or start a new attempt. Note that `awsf retry` takes a **fresh**
 snapshot rather than refusing, which is why retry works where rework does not.
 
 ### 3. Retry does not refund; it carries the spend forward
+
+**Trap link.** none — `not-a-stop`. Retry carries the spend by design; the later insufficient-budget stop is its own refusal.
 
 **Symptom.** A retried attempt runs out of calls almost immediately, or refuses a
 replacement review for insufficient headroom.
@@ -70,6 +76,8 @@ reconciled by re-running the command that left it, not by retrying past it.
 
 ### 4. A non-zero exit does not mean something went wrong
 
+**Trap link.** none — `not-a-stop`. An exit code alone is not a stop.
+
 **Symptom.** A wrapper script or a session treats exit 1 as an error and reports
 a failure that did not happen.
 
@@ -85,11 +93,14 @@ fault. `core/src/cli/main.ts` is the whole story, and it is short:
 | `awsf land` · `awsf cancel` | the attempt did not reach the state that act targets, decline included |
 | `awsf doctor` | any finding at all was reported |
 | `awsf db rebuild` | the rebuild was refused and the candidate retained |
+| `awsf traps` | a stop since the cut is unlinked or names a trap the catalogue lacks |
 
 **Guard.** Read the state and the printed lines, never the code alone. This is
 also why a driving session should not wrap these commands in shell conditionals.
 
 ### 5. The diagnosis command reports and never repairs
+
+**Trap link.** none — `not-a-stop`. A finding is evidence, not a run.
 
 **Symptom.** `awsf doctor` exits non-zero on a stale lock left by a killed
 session, and nothing you do makes it green.
@@ -105,6 +116,8 @@ the sort of thing a session is tempted to clean up before mentioning.
 
 ### 6. `awsf gc` never deletes anything
 
+**Trap link.** none — `not-a-stop`. Listing without deleting is enforced by a meta-test.
+
 **Symptom.** Disk usage is unchanged after running it.
 
 **Cause.** It lists cleanup candidates and that is all; no delete operation
@@ -117,6 +130,8 @@ owner's decision, made with an ordinary file manager, and only after the evidenc
 in it is no longer wanted.
 
 ### 7. Everything is resolved from the working directory
+
+**Trap link.** none — `not-a-stop`. Wrong-directory creation spends nothing, and no check can measure the caller's intent.
 
 **Symptom.** A task is created against the wrong repository, or picks up a
 configuration you did not mean, and the mistake is permanent because attempts are
@@ -135,6 +150,8 @@ formality.
 
 ### 8. Piped standard input refuses every owner act
 
+**Trap link.** none — `not-a-stop`. Piped standard input creates no BLOCKED or CANCELLED attempt.
+
 **Symptom.** `awsf land`, `cancel`, `journey`, `rework`, `review`,
 `degrade-review`, `attribute`, `prove`, `raise`, `publish`, `resume`, `grant` or `confirm` refuses when run from a script,
 a pipe, or any non-terminal context.
@@ -151,6 +168,8 @@ supplies one and clears it. The fence that actually holds the line is the
 per-invocation tool-surface denial marimba's hook performs.
 
 ### 9. The two provider routes fail in opposite directions on an unknown session
+
+**Trap link.** TR-11 — `core/test/traps/TR-11-continuity.test.ts` fails if this refusal is removed.
 
 **Symptom.** A correction on one route refuses before launching, while the same
 condition on the other route would have produced a conversation with no memory of
@@ -177,6 +196,8 @@ bills like a continuation.
 
 ### 10. Every phase starts failed
 
+**Trap link.** none — `not-a-stop`. A phase that has not completed is not a halt.
+
 **Symptom.** An attempt appears to have several failed phases and looks much
 worse than it is.
 
@@ -191,6 +212,8 @@ success state is a claim about the work. Do not dress up a partial run as a
 success — and do not report a partial run as a disaster either.
 
 ### 11. An interrupted `awsf start` leaves a tree the retry cannot create
+
+**Trap link.** TR-12 — `core/test/traps/TR-12-interrupted-start.test.ts` fails if this refusal is removed.
 
 **Symptom.** `awsf start` is interrupted — a timeout, a Ctrl-C, a killed
 session — while it is seeding. The next `awsf start` refuses with

@@ -65,6 +65,14 @@ review and the attestation are all genuinely present, rather than by asking.
 retained evidence, but the decision to stop is the owner's, and the case for it
 has to be made from what was read, not from impatience. Read
 `read_a_blocked_attempt.md` first, always.
+`awsf cancel TASK --cause model|factory|environment|driver|owner|unknown --reason "WHY" [--trap TR-NN | --no-trap KIND "WHY"]`.
+Every cause except `owner` must name a trap link: `--trap TR-NN` for the trap
+that would have refused the stop (a well-formed id the catalogue lacks is
+accepted, and `awsf traps` reports it as a gap), or `--no-trap` with one of
+`fixed`, `after-spend`, `owner`, `unexplained` or `not-a-stop` and why. An
+`owner` cause with no link records `none/owner` with its reason. The link is
+checked before the prompt and before any signal, and a declined act writes
+nothing. Prepare it by naming the trap, or the kind and the evidence for it.
 
 **`rework`** re-runs one writable builder phase against the same candidate with a
 defect you describe. It is the right act when the build is wrong in a way you can
@@ -101,7 +109,12 @@ review independent, by construction. `select_a_route.md` has the rest of the
 routing picture.
 
 **`attribute`** records whose fault one BLOCKED attempt was:
-`awsf attribute TASK --attempt N --cause model|factory|environment|owner|unknown --reason "WHY"`.
+`awsf attribute TASK --attempt N --cause model|factory|environment|driver|owner|unknown --reason "WHY" [--trap TR-NN | --no-trap KIND "WHY"]`.
+The trap link follows the same rule as `cancel`'s. `driver` means a check
+before the first provider call would have refused the run, not that its model
+was at fault. `awsf traps` lists every stop since the cut that is still
+unlinked or names a missing trap, and exits 1 while any remains; it reads and
+never writes, so run it yourself and bring its list to the owner.
 The route metrics count a block against a route only when it is the model's, and
 the factory's heuristic reads that from the code the run blocked on, which the
 owner can know to be wrong (a ticket's own wording can cause a PermissionBreach).
@@ -126,7 +139,8 @@ It measures one route arm on one frozen corpus item, at the item's pinned base,
 and creates the task in DRAFT without spawning anything. It prints the start and
 cancel commands. A replay is **measurement, never delivery**: `awsf land` and
 `awsf journey` refuse it by name, and it ends by `awsf cancel` once its evidence
-is read. Prepare it by naming the item, the arm, the repetition and its place in
+is read. A replay is never counted as a stop by `awsf traps`, so its cancel
+fits `--cause owner`, which needs no link. Prepare it by naming the item, the arm, the repetition and its place in
 the order, and what the replay costs: every review replay runs the configured
 gates and then one review call. Never name a task after the defect it seeds;
 `awsf prove` refuses a task id that names a seeded defect class.
