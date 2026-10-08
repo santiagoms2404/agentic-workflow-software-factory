@@ -742,7 +742,7 @@ function configTextWithCommand(exitCode = 0): string {
 }
 
 async function fixture(
-  workflow: "scout" | "plan" | "build" | "plan-build-test" | "build-review" | "simple-sdlc" | "intake",
+  workflow: "scout" | "plan" | "build" | "plan-build-test" | "build-review" | "simple-sdlc" | "intake" | "design-to-plan",
   commandExit = 0,
   configure: (config: AwsfConfig) => AwsfConfig = (config) => config,
   tier: 0 | 1 | 2 = 1,
@@ -789,6 +789,12 @@ async function fixture(
       reason: `fixture funds ${String(headroom.callsNeeded)} cold correction on ${workflow}`,
       terminal: { interactive: true, write: () => {}, confirm: async () => true },
       projectRecord: projection.project,
+    });
+  }
+  if (workflow === "design-to-plan") {
+    await writePlacement(stateRoot, config.project.slug, {
+      version: "awsf.placement/v1", project: config.project.slug,
+      repositories: { primary: { path: canonical } }, worktree_root: join(root, "worktrees"),
     });
   }
   await startUnderK1({ attemptDir: created.attemptDir, worktreeRoot: join(root, "worktrees"), configPath, preflight: () => ({ adapter: true, sandbox: true, observability: true }), projectRecord: projection.project });
@@ -2686,14 +2692,6 @@ for (const recipe of WORKFLOW_RECIPES) {
       },
     );
     try {
-      if (recipe.id === "design-to-plan") {
-        await writePlacement(world.stateRoot, world.config.project.slug, {
-          version: "awsf.placement/v1",
-          project: world.config.project.slug,
-          repositories: { primary: { path: world.canonical } },
-          worktree_root: join(world.root, "worktrees"),
-        });
-      }
       const prepared = await readAttempt(world.created.attemptDir);
       const prompts: string[] = [];
       // The blocker, when there is one, is what makes a failure here readable.

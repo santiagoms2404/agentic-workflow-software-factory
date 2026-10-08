@@ -24,6 +24,7 @@ import {
   workflowRecipe,
 } from "../../workflow/catalog.ts";
 import { composePromptBundle } from "../../workflow/prompt-composition.ts";
+import { readPlacement } from "../../registry/placement.ts";
 import { bindProveRecipe } from "../../workflow/prove/bind.ts";
 import { PROVE_WORKFLOW_ID } from "../../workflow/prove/compile.ts";
 import { bindShiftRecipe } from "../../workflow/shift/bind.ts";
@@ -161,6 +162,15 @@ export class StartPreflightRefused extends Error {
   }
 }
 
+/** Placement is a required input to the recipe's host-owned design context. */
+export class StartPlacementRefused extends Error {
+  constructor(status: AttemptStatus) {
+    super(`awsf start refused ${status.taskId}: the project's placement.yaml is missing or unreadable as a valid placement. ` +
+      "Restore the registered project's placement and start again. The attempt stays DRAFT, with no tree or call reserved.");
+    this.name = "StartPlacementRefused";
+  }
+}
+
 /** The state root an attempt directory sits under: `<root>/projects/<project>/tasks/<task>/<attempt>`. */
 function stateRootOf(attemptDir: string, status: AttemptStatus): string {
   const root = resolve(attemptDir, "..", "..", "..", "..", "..");
@@ -243,6 +253,16 @@ export async function startCommand(options: StartCommandOptions): Promise<Attemp
       recipe = await bindShiftRecipe(current.repository, current.shift, { prompts });
     }
   }
+  // trap-refusal-begin TR-17
+  if (recipe.phases.some(phase => phase.schemaId === "awsf.design-context/v1")) {
+    try {
+      await readPlacement(stateRootOf(options.attemptDir, current), current.project);
+    } catch {
+      // Never echo malformed placement bytes or turn this repairable input into L2.
+      throw new StartPlacementRefused(current);
+    }
+  }
+  // trap-refusal-end TR-17
   // Zero cost, and deliberately BEFORE the worktree and BEFORE any adapter is
   // contacted. It also deliberately does NOT block the DRAFT: `awsf raise` is
   // legal on a live attempt and terminal on a BLOCKED one, so blocking here

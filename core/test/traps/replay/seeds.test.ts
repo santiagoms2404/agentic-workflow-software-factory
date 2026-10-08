@@ -18,6 +18,7 @@ import { AT, OWNER, assertCalled, box, commit, draft, git, prepare, run, start, 
 import { launchEnvironmentRefusal } from "../../fixtures/launch-environment.ts";
 import { runStartQuota } from "../../fixtures/run-start-quota.ts";
 import { shiftTicketPathRefusal } from "../../fixtures/shift-ticket-paths.ts";
+import { placementRefusal } from "../../fixtures/missing-placement.ts";
 
 async function assertNoCall(b: Box, attemptDir: string, lifecycleState = "DRAFT") {
   const status = await readAttempt(attemptDir);
@@ -230,6 +231,7 @@ async function adoption() {
 const REPLAYS: Record<string, (seed: Seed) => Promise<void>> = {
   "protected-paths": k1, "git-storage": k1, launch, quota, shift, configuration, continuity,
   "interrupted-start": interruptedStart, cwd, baseline, "later-grant": laterGrant, adoption,
+  placement: () => placementRefusal(),
 };
 for (const seed of SEEDS.filter(seed => seed.replay !== null)) {
   test(`${seed.id}: ${seed.outcome === "gap" ? `KNOWN GAP ${seed.pendingTask}` : seed.outcome} — ${seed.replay}`, async () => {
@@ -239,17 +241,8 @@ for (const seed of SEEDS.filter(seed => seed.replay !== null)) {
   });
 }
 
-test("every refusal and gap has a registered replay or G02-S's explicit T11 placement handoff", () => {
+test("every refusal and gap has a registered replay", () => {
   const candidates = SEEDS.filter(seed => seed.outcome === "refused" || seed.outcome === "gap");
   assert.equal(candidates.length, 14);
-  const pendingPlacement = candidates.filter(seed => seed.replay === null);
-  assert.deepEqual(pendingPlacement.map(seed => seed.id), ["S21", "S24"]);
-  for (const seed of pendingPlacement) {
-    // G02-S confirmed these from the blocker details after T01. T11 owns
-    // their replay and refusal; this ticket only corrects the ledger.
-    assert.equal(seed.outcome, "gap");
-    assert.equal(seed.pendingTask, "T11");
-    assert.match(seed.evidence, /placement\.yaml/u);
-  }
-  for (const seed of candidates.filter(seed => seed.replay !== null)) assert.ok(REPLAYS[seed.replay!], seed.id);
+  for (const seed of candidates) assert.ok(seed.replay && REPLAYS[seed.replay], seed.id);
 });

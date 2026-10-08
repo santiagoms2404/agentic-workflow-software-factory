@@ -980,10 +980,11 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
     let resolved: { model: string; provenance: ModelResolutionProvenance } | null = null;
     let terminal: NormalizedEvent | null = null;
     for await (const event of route.adapter.execute(request, capturingBroker, registration, controller.signal)) {
-      const safeEvent = credentialSafeValue(event, "provider event");
+      // Accumulate original deltas before scrubbing: a shape can span any boundary.
+      if (event.kind === "text.delta") output += event.text;
+      const safeEvent = scrubCredentials(event);
       routeEventExact(safeEvent, route);
       events.push(safeEvent);
-      if (safeEvent.kind === "text.delta") output += safeEvent.text;
       if (safeEvent.kind === "model.resolved") resolved = { model: safeEvent.resolvedModel, provenance: safeEvent.provenance };
       const outcome = observedProcessOutcome(safeEvent, safeEvent.hostAt);
       if (outcome !== null) {
@@ -993,10 +994,15 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
     }
     const endedAt = infra.now();
     if (observedProcess !== null) observedProcess = { ...observedProcess, endedAt };
-    // Deltas may split a credential shape across arbitrary stream boundaries.
-    // Validate the reassembled output before any provider event is journaled.
-    credentialSafeText(output, "provider output");
-    for (const event of events) {
+    // Provider output is evidence, not owner input. Scrub rather than abort.
+    // Consolidate text into the last delta so retained fragments cannot reassemble
+    // a credential that no individual delta matched. Keep the event order/metadata.
+    output = scrubCredentialString(output);
+    const lastTextDelta = events.findLastIndex(event => event.kind === "text.delta");
+    for (const [index, retained] of events.entries()) {
+      const event = retained.kind === "text.delta"
+        ? { ...retained, text: index === lastTextDelta ? output : "" }
+        : retained;
       if (!isPersistableKind(event.kind)) continue;
       await persist("attempt.updated", { lastActivityAt: event.hostAt, lastActivity: `${phaseKey}: ${event.kind}` }, {
         type: "normalized-event", phaseId, event,

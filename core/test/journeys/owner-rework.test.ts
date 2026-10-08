@@ -42,6 +42,7 @@ import type { AwsfConfig } from "../../src/config/schema.ts";
 import { composePromptBundle } from "../../src/workflow/prompt-composition.ts";
 import { PromptCompositionMismatch } from "../../src/cli/commands/review-record.ts";
 import type { OwnerTerminal } from "../../src/cli/tty.ts";
+import { REDACTED_VALUE } from "../../src/policy/redaction.ts";
 
 const PROVIDER = resolve("core/test/fixtures/providers/codex/production-runner-fixture.mjs");
 const DEFECT = "remove the duplicate whitespace before const in core/src/generated.ts";
@@ -312,7 +313,8 @@ class EvidenceAdapter extends AvailableAdapter {
 
 class CredentialOutputAdapter extends AvailableAdapter {
   readonly credential: string;
-  constructor(credential: string) { super(); this.credential = credential; }
+  readonly format: "whole" | "split" | "malformed";
+  constructor(credential: string, format: "whole" | "split" | "malformed") { super(); this.credential = credential; this.format = format; }
   override async *execute(
     request: ModelRequest,
     broker: TransportBroker,
@@ -325,10 +327,21 @@ class CredentialOutputAdapter extends AvailableAdapter {
     const requestedModel = request.model.replace(/^codex:/, "");
     yield { kind: "run.started" as const, seq: 1, runId: registration.runId, hostAt: at, providerAt: null, adapter: this.id, requestedModel };
     yield { kind: "model.resolved" as const, seq: 2, runId: registration.runId, hostAt: at, providerAt: null, adapter: this.id, provider: "openai-codex", requestedModel, resolvedModel: requestedModel, provenance: "route-attributed" as const };
-    const middle = Math.floor(this.credential.length / 2);
-    yield { kind: "text.delta" as const, seq: 3, runId: registration.runId, hostAt: at, providerAt: null, text: this.credential.slice(0, middle) };
-    yield { kind: "text.delta" as const, seq: 4, runId: registration.runId, hostAt: at, providerAt: null, text: this.credential.slice(middle) };
-    yield { kind: "run.completed" as const, seq: 5, runId: registration.runId, hostAt: at, providerAt: null, exitCode: 0 };
+    writeFileSync(join(request.cwd, "core/src/generated.ts"), "export const generated = true;\n");
+    const payload: BuildOutput = {
+      schema: "awsf.build-output/v1", producerStatus: "success", summary: `repaired whitespace; observed ${this.credential}`,
+      artifacts: [{ path: "core/src/generated.ts", kind: "source", description: "repaired source" }],
+      changedFiles: ["core/src/generated.ts"], implementationNotes: [], commandsRun: [],
+      notesForNextPhase: "owner inspection", proposedCommitMessage: "fix: whitespace",
+    };
+    const output = this.format === "malformed" ? this.credential : JSON.stringify(payload);
+    const middle = output.indexOf(this.credential) + Math.floor(this.credential.length / 2);
+    const chunks = this.format === "whole" ? [output] : [output.slice(0, middle), output.slice(middle)];
+    let seq = 3;
+    for (const text of chunks) yield { kind: "text.delta" as const, seq: seq++, runId: registration.runId, hostAt: at, providerAt: null, text };
+    yield { kind: "notice" as const, seq: seq++, runId: registration.runId, hostAt: at, providerAt: null,
+      code: "non-json-output", message: `synthetic notice ${this.credential}`, detail: null };
+    yield { kind: "run.completed" as const, seq, runId: registration.runId, hostAt: at, providerAt: null, exitCode: 0 };
   }
 }
 
@@ -429,10 +442,10 @@ test("credential-shaped owner and retained inputs fail before confirmation with 
   }
 });
 
-test("credential-shaped provider output split across deltas reaches no raw, journal, error, argv, or API boundary", async () => {
+for (const format of ["whole", "split", "malformed"] as const) test(`credential-shaped provider output is scrubbed before persistence: ${format}`, async () => {
   const credential = ["ghp", "ProviderOutputVerifier123456789"].join("_");
   const fixture = await world();
-  const adapter = new CredentialOutputAdapter(credential);
+  const adapter = new CredentialOutputAdapter(credential, format);
   try {
     const result = await reworkCommand({
       attemptDir: fixture.attemptDir, stateRoot: fixture.stateRoot, defect: DEFECT, terminal: terminal(true),
@@ -440,12 +453,29 @@ test("credential-shaped provider output split across deltas reaches no raw, jour
       projectRecord: fixture.projection.project,
       infrastructure: infra(adapter, (options) => releasedBroker(options)),
     });
-    assert.equal(result.status.lifecycleState, "BLOCKED");
+    assert.equal(result.status.lifecycleState, format === "malformed" ? "BLOCKED" : "AWAITING_OWNER");
     assert.equal(result.status.budget.callsSpent, 2);
     assert.equal(result.status.budget.callsReserved, 0);
-    assert.equal(result.status.blocker?.detail.includes(credential), false);
-    assert.match(result.status.blocker?.detail ?? "", /OwnerReworkCredentialRejected/);
-    assert.equal(existsSync(join(fixture.attemptDir, "raw", "owner-rework-1.txt")), false);
+    assert.equal(adapter.launches, 1);
+    assert.equal(result.status.blocker?.detail.includes(credential) ?? false, false);
+    assert.doesNotMatch(result.status.blocker?.detail ?? "", /OwnerReworkCredentialRejected/);
+    const raw = readFileSync(join(fixture.attemptDir, "raw", "owner-rework-1.txt"), "utf8");
+    assert.ok(raw.includes(REDACTED_VALUE));
+    if (format !== "malformed") {
+      const stored = JSON.parse(readFileSync(join(fixture.attemptDir, "envelopes", "owner-rework-1.json"), "utf8")) as StoredEnvelope<BuildOutput>;
+      assert.equal(stored.valid, true);
+      assert.equal(stored.payload?.summary, `repaired whitespace; observed ${REDACTED_VALUE}`);
+      assert.notEqual(result.status.candidateSha, fixture.candidateA);
+      assert.equal(result.status.gatesPass, true);
+    }
+    const journalRows = readFileSync(join(fixture.attemptDir, "journal.jsonl"), "utf8").trim().split("\n");
+    const deltas = journalRows.map(line => JSON.parse(line) as { event: { evidence?: AttemptEvidence } })
+      .flatMap(row => row.event.evidence?.type === "normalized-event" && row.event.evidence.event.kind === "text.delta"
+        ? [row.event.evidence.event.text] : []);
+    assert.equal(deltas.join(""), raw, "journal deltas reconstruct only scrubbed output");
+    const retained = filesUnder(fixture.attemptDir).map(file => readFileSync(file, "utf8")).join("\n");
+    assert.equal(retained.includes(credential.slice(0, 12)), false, "no split credential prefix retained");
+    assert.equal(retained.includes(credential.slice(12)), false, "no split credential suffix retained");
     for (const file of filesUnder(fixture.attemptDir)) {
       assert.equal(readFileSync(file).includes(credential), false, `credential reached ${file}`);
     }

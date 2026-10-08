@@ -48,11 +48,10 @@ test("no-trap reasons use the closed vocabulary and retain the confirmed evidenc
 
 test("pending gaps stay under the confirmed M4 tasks, not prematurely assigned trap ids", () => {
   assert.deepEqual(PENDING, [
-    { task: "T11", seeds: ["S21", "S24"] },
     { task: "T12", seeds: ["C5-baseline", "C8-adopt", "C8-later-grant"] },
   ]);
   assert.equal(new Set(PENDING.map(entry => entry.task)).size, PENDING.length);
-  assert.equal(PENDING.flatMap(entry => entry.seeds).length, 5);
+  assert.equal(PENDING.flatMap(entry => entry.seeds).length, 3);
 });
 
 test("TRAP_CUT parses as the same instant used by the one population rule", () => {
@@ -71,9 +70,9 @@ test("the catalogue assigns all eight K1 fields and the four complementary exist
     ["TR-09", "ProtectedGrantRefused"], ["TR-10", "ProductionConfigSnapshotMismatch"],
     ["TR-11", "E_BACKEND_FAILURE"], ["TR-12", "AttemptWorktreeExists"],
     ["TR-13", "ProductionExecutableUnavailable"], ["TR-14", "ProductionQuotaRefused"],
-    ["TR-15", "ProductionQuotaRefused"],
+    ["TR-15", "ProductionQuotaRefused"], ["TR-17", "StartPlacementRefused"],
   ]);
-  assert.deepEqual(TRAPS.flatMap(trap => trap.seeds).sort(), ["G02", "G09", "G11", "S11", "S17", "S27", "S34", "S36", "S42"]);
+  assert.deepEqual(TRAPS.flatMap(trap => trap.seeds).sort(), ["G02", "G09", "G11", "S11", "S17", "S21", "S24", "S27", "S34", "S36", "S42"]);
   // S34's two refusal points and S27's partial K1 coverage do not duplicate
   // their ledger assignment; S01/S15/S47 and G01 remain no-trap entries.
   for (const seed of ["S01", "S15", "S47", "G01"]) assert.ok(NO_TRAPS.some(entry => entry.seed === seed));
@@ -86,8 +85,9 @@ test("the ledger applies the dated G02-S corrections without changing its 62-row
   assert.equal(row26.source.task, "task-8b-protected-quota-foundation-continuation");
   for (const id of ["S21", "S24"]) {
     const seed = SEEDS.find(row => row.id === id)!;
-    assert.equal(seed.outcome, "gap");
-    assert.equal(seed.pendingTask, "T11");
+    assert.equal(seed.outcome, "refused");
+    assert.equal(seed.pendingTask, null);
+    assert.equal(seed.replay, "placement");
     assert.match(seed.evidence, /placement\.yaml/u);
   }
   const terminalDays = ["10-05", "10-05", "10-05", "10-06", "10-06", "10-06", "10-07", "10-07", "10-07", "08-15", "08-13"];
@@ -99,5 +99,5 @@ test("the ledger applies the dated G02-S corrections without changing its 62-row
   assert.equal(SEEDS.filter(seed => "project" in seed.source && seed.dateBasis === "terminal-day").length, 47);
   const totals = Object.fromEntries(["refused", "gap", ...NO_TRAP_KINDS].map(kind =>
     [kind, SEEDS.filter(seed => seed.outcome === kind).length]));
-  assert.deepEqual(totals, { refused: 9, gap: 5, fixed: 4, "after-spend": 25, owner: 3, unexplained: 9, "not-a-stop": 7 });
+  assert.deepEqual(totals, { refused: 11, gap: 3, fixed: 4, "after-spend": 25, owner: 3, unexplained: 9, "not-a-stop": 7 });
 });
